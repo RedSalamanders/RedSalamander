@@ -14,7 +14,7 @@ Primary files:
 
 - Produce an MSIX installer for **Release x64** builds.
 - Include **RedSalamander.exe**, **RedSalamanderMonitor.exe**, plugins, and runtime dependencies.
-- Keep packaging **deterministic** and driven by the `x64\Release` output.
+- Keep packaging **deterministic** and driven by the `.build\x64\Release` output.
 - Enable **optional signing** in CI with secrets.
 - Support **per-user** install (default) and **per-machine** provisioning.
 
@@ -27,7 +27,7 @@ Primary files:
 ## Package Contents
 
 The packaging project includes files from:
-- `x64\Release\**\*` (drives plugins + runtime dependencies)
+- `.build\x64\Release\**\*` (drives plugins + runtime dependencies)
 
 Excluded from the package:
 - Debug and link artifacts (`*.pdb`, `*.lib`, `*.exp`, `*.ilk`, `*.iobj`, `*.ipdb`).
@@ -66,7 +66,7 @@ Or build/package separately:
 - `msbuild Installer\msix\RedSalamanderInstaller.wapproj /p:Configuration=Release /p:Platform=x64`
 
 The MSIX output is written to:
-- `AppPackages\`
+- `.build\AppPackages\`
 
 ### CI build
 

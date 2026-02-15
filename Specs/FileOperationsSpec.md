@@ -748,7 +748,7 @@ Instrumentation (recommended, debug-only):
 - [x] File ops: cancel latency, limiter target vs achieved throughput, progress callback frequency (`FileOps.PreCalc`, `FileOps.Operation`, `FileOps.CancelLatency`).
 - [x] Enumeration: peak buffer size, fallback usage, trim events (`FileSystem.DirectoryOps.Enumerate`, `FileSystem.DirectoryOps.TrimBuffer`).
 - [x] Debug-only end-to-end self-test runner:
-  - run: `x64\\Debug\\RedSalamander.exe --fileops-selftest`
+  - run: `.\.build\x64\Debug\RedSalamander.exe --fileops-selftest`
   - log: `%TEMP%\\RedSalamander.FileOpsSelfTest.log`
   - exit code: `0` pass / `1` fail
 

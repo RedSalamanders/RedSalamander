@@ -24,7 +24,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 .\build.ps1 -Rebuild
 ```
 
-Output: `x64\Debug\` or `x64\Release\`
+Output: `.build\<Platform>\<Configuration>\` (e.g. `.build\x64\Debug\`, `.build\ARM64\Release\`)
 
 ## Architecture
 

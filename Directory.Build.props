@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <!--
+      Centralize build output paths under .build\ so we never create x64/ARM64 intermediates
+      inside source folders (ProjectDir\...\x64\Debug etc).
+
+      Note: MSBuild sets $(SolutionDir) only when building a .sln. When building a single .vcxproj,
+      $(SolutionDir) is usually empty; fall back to the repo root (this file's directory).
+    -->
+    <SolutionDir Condition="'$(SolutionDir)'==''">$(MSBuildThisFileDirectory)</SolutionDir>
+
+    <RSBuildRoot>$(SolutionDir).build\</RSBuildRoot>
+
+    <!-- Avoid affecting msbuild invocations under any vcpkg install/build tree. -->
+    <RSIsVcpkgTree Condition="$([System.String]::Copy('$(MSBuildProjectDirectory)').ToLowerInvariant().Contains('\\vcpkg_installed\\'))">true</RSIsVcpkgTree>
+    <RSIsVcpkgTree Condition="$([System.String]::Copy('$(MSBuildProjectDirectory)').ToLowerInvariant().EndsWith('\\vcpkg_installed'))">true</RSIsVcpkgTree>
+    <RSIsVcpkgTree Condition="'$(RSIsVcpkgTree)'==''">false</RSIsVcpkgTree>
+
+    <!-- vcpkg manifest mode: keep installs under .build\ too -->
+    <VcpkgManifestRoot Condition="'$(RSIsVcpkgTree)'!='true' and '$(VcpkgManifestRoot)'==''">$(SolutionDir)</VcpkgManifestRoot>
+    <VcpkgInstalledDir Condition="'$(RSIsVcpkgTree)'!='true'">$(RSBuildRoot)vcpkg_installed\</VcpkgInstalledDir>
+
+    <!-- Map VS platform to vcpkg triplet (used in ExternalIncludePath / manual copy steps) -->
+    <RSVcpkgTriplet Condition="'$(RSIsVcpkgTree)'!='true' and '$(Platform)'=='x64'">x64-windows</RSVcpkgTriplet>
+    <RSVcpkgTriplet Condition="'$(RSIsVcpkgTree)'!='true' and '$(Platform)'=='ARM64'">arm64-windows</RSVcpkgTriplet>
+    <RSVcpkgTriplet Condition="'$(RSIsVcpkgTree)'!='true' and '$(RSVcpkgTriplet)'=='' and '$(VCPKG_DEFAULT_TRIPLET)'!=''">$(VCPKG_DEFAULT_TRIPLET)</RSVcpkgTriplet>
+    <RSVcpkgTriplet Condition="'$(RSIsVcpkgTree)'!='true' and '$(RSVcpkgTriplet)'==''">x64-windows</RSVcpkgTriplet>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <RSProjectRelativeDir>$([MSBuild]::MakeRelative($(SolutionDir), $(MSBuildProjectDirectory)))</RSProjectRelativeDir>
+    <RSProjectRelativeDir Condition="'$(RSProjectRelativeDir)'==''">$(MSBuildProjectName)</RSProjectRelativeDir>
+
+    <!-- Plugins are loaded from a dedicated Plugins\ directory in the output folder -->
+    <RSOutSubdir />
+    <RSOutSubdir Condition="$([System.String]::Copy('$(MSBuildProjectDirectory)').ToLowerInvariant().Contains('\\plugins\\'))">Plugins\</RSOutSubdir>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RSIsVcpkgTree)'!='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
+    <OutDir>$(RSBuildRoot)$(Platform)\$(Configuration)\$(RSOutSubdir)</OutDir>
+    <IntDir>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntDir>
+  </PropertyGroup>
+
+  <!-- Desktop Bridge packaging project (wapproj) -->
+  <PropertyGroup Condition="'$(RSIsVcpkgTree)'!='true' and '$(MSBuildProjectExtension)'=='.wapproj'">
+    <BaseIntermediateOutputPath>$(RSBuildRoot)Intermediate\</BaseIntermediateOutputPath>
+    <IntermediateOutputPath>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntermediateOutputPath>
+    <BaseOutputPath>$(RSBuildRoot)Intermediate\</BaseOutputPath>
+    <OutputPath>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</OutputPath>
+  </PropertyGroup>
+</Project>

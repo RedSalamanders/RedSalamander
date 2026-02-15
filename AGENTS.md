@@ -100,8 +100,10 @@ All Windows resources MUST use WIL RAII wrappers. Manual cleanup (`DestroyIcon`,
 
 ### Output Locations
 ```text
-x64\Debug\*.exe, *.dll       # Debug builds
-x64\Release\*.exe, *.dll     # Release builds
+.build\x64\Debug\*.exe, *.dll       # Debug builds
+.build\x64\Release\*.exe, *.dll     # Release builds
+.build\ARM64\Debug\*.exe, *.dll     # Debug builds
+.build\ARM64\Release\*.exe, *.dll   # Release builds
 ```
 
 ## Build

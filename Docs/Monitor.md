@@ -16,8 +16,8 @@ One-time setup (adds you to **Performance Log Users**):
 
 Then sign out/in (or reboot) and start the monitor:
 
-- `x64\Release\RedSalamanderMonitor.exe` (Release)
-- `x64\Debug\RedSalamanderMonitor.exe` (Debug)
+- `.build\x64\Release\RedSalamanderMonitor.exe` (Release)
+- `.build\x64\Debug\RedSalamanderMonitor.exe` (Debug)
 
 To undo:
 
@@ -32,4 +32,3 @@ To undo:
 - **Find** (`Ctrl+F`, then `F3` / `Shift+F3`)
 - **Always on top** option
 - Theming consistent with the main app (View → Theme)
-

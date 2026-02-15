@@ -31,7 +31,7 @@ jobs:
       CONFIGURATION: Release
       PLATFORM: x64
       VCPKG_ROOT: ${{ github.workspace }}\vcpkg
-      VCPKG_INSTALLED_DIR: ${{ github.workspace }}\vcpkg_installed
+      VCPKG_INSTALLED_DIR: ${{ github.workspace }}\.build\vcpkg_installed
       VCPKG_DEFAULT_TRIPLET: x64-windows
       BUILD_MSIX: ${{ github.event_name == 'workflow_dispatch' && inputs.build_msix }}
     steps:
@@ -117,7 +117,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            vcpkg_installed
+            .build/vcpkg_installed
             vcpkg\downloads
           key: ${{ runner.os }}-vcpkg-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json') }}
 
@@ -219,8 +219,8 @@ jobs:
       - name: Install dependencies
         shell: pwsh
         run: |
-          # Match local layout: vcpkg_installed\x64-windows
-          .\vcpkg\vcpkg.exe install --triplet x64-windows --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root "$env:GITHUB_WORKSPACE\\vcpkg_installed"
+          # Match local layout: .build\vcpkg_installed\x64-windows
+          .\vcpkg\vcpkg.exe install --triplet x64-windows --x-manifest-root $env:GITHUB_WORKSPACE --x-install-root "$env:GITHUB_WORKSPACE\\.build\\vcpkg_installed"
 
       - name: Enable vcpkg MSBuild integration
         shell: pwsh
@@ -232,10 +232,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $dest = Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed\\x64-windows"
+          $dest = Join-Path $env:GITHUB_WORKSPACE ".build\\vcpkg_installed\\x64-windows"
           $expected = Join-Path $dest "include\\wil\\com.h"
           if (Test-Path $expected) {
-            Write-Host "vcpkg_installed already contains WIL headers."
+            Write-Host ".build\\vcpkg_installed already contains WIL headers."
             exit 0
           }
 
@@ -249,8 +249,8 @@ jobs:
             Write-Host "Expected WIL header not found at: $expected" -ForegroundColor Yellow
             Write-Host "Searched install roots:" -ForegroundColor Yellow
             $candidates | ForEach-Object { Write-Host "  - $_" }
-            Write-Host "vcpkg_installed contents:" -ForegroundColor Yellow
-            Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed") -ErrorAction SilentlyContinue | Select-Object Name
+            Write-Host ".build\\vcpkg_installed contents:" -ForegroundColor Yellow
+            Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE ".build\\vcpkg_installed") -ErrorAction SilentlyContinue | Select-Object Name
             Write-Host "vcpkg contents:" -ForegroundColor Yellow
             Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE "vcpkg") -ErrorAction SilentlyContinue | Select-Object Name
             throw "vcpkg install root not found to normalize."
@@ -273,7 +273,7 @@ jobs:
           $ErrorActionPreference = "Stop"
           Write-Host "Workspace: $env:GITHUB_WORKSPACE"
           Write-Host "PWD: $(Get-Location)"
-          $incRoot = Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed\\x64-windows\\include"
+          $incRoot = Join-Path $env:GITHUB_WORKSPACE ".build\\vcpkg_installed\\x64-windows\\include"
           Write-Host "Include root: $incRoot"
           Write-Host "Has wil\\com.h: $(Test-Path (Join-Path $incRoot 'wil\\com.h'))"
           Write-Host "Has wil\\resource.h: $(Test-Path (Join-Path $incRoot 'wil\\resource.h'))"
@@ -293,7 +293,7 @@ jobs:
           # CI runners don't always include Visual Studio's vcpkg MSBuild integration component.
           # Provide vcpkg include/lib paths explicitly so compilation and linking can resolve dependencies.
           $vcpkgTriplet = "x64-windows"
-          $vcpkgRoot = Join-Path $env:GITHUB_WORKSPACE "vcpkg_installed\\$vcpkgTriplet"
+          $vcpkgRoot = Join-Path $env:GITHUB_WORKSPACE ".build\\vcpkg_installed\\$vcpkgTriplet"
           $incRoot = Join-Path $vcpkgRoot "include"
           $libRoot = Join-Path $vcpkgRoot "lib"
           $binRoot = Join-Path $vcpkgRoot "bin"
@@ -344,11 +344,11 @@ jobs:
           $stageDir = Join-Path $env:RUNNER_TEMP "RedSalamanderPortable"
           if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
           New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
-
-          $releaseDir = Join-Path $env:PLATFORM $env:CONFIGURATION
+          
+          $releaseDir = Join-Path (".build\\{0}" -f $env:PLATFORM) $env:CONFIGURATION
           if (-not (Test-Path $releaseDir)) {
             Write-Host "Available build output directories:" -ForegroundColor Yellow
-            Get-ChildItem -Path $env:PLATFORM -Directory -ErrorAction SilentlyContinue | Select-Object Name
+            Get-ChildItem -Path (".build\\{0}" -f $env:PLATFORM) -Directory -ErrorAction SilentlyContinue | Select-Object Name
             throw "Build output directory not found: $releaseDir"
           }
 
@@ -367,18 +367,18 @@ jobs:
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $zipPath
 
-          $msiFiles = Get-ChildItem -Path "AppPackages" -Filter *.msi -Recurse -ErrorAction SilentlyContinue
+          $msiFiles = Get-ChildItem -Path ".build\\AppPackages" -Filter *.msi -Recurse -ErrorAction SilentlyContinue
           if (-not $msiFiles) {
-            throw "No MSI artifacts found under AppPackages."
+            throw "No MSI artifacts found under .build\\AppPackages."
           }
           foreach ($msiFile in $msiFiles) {
             Copy-Item $msiFile.FullName -Destination $outDir -Force
           }
 
           if ($env:BUILD_MSIX -eq "true") {
-            $msixFiles = Get-ChildItem -Path "AppPackages" -Filter *.msix -Recurse -ErrorAction SilentlyContinue
+            $msixFiles = Get-ChildItem -Path ".build\\AppPackages" -Filter *.msix -Recurse -ErrorAction SilentlyContinue
             if (-not $msixFiles) {
-              throw "BUILD_MSIX=true but no MSIX artifacts found under AppPackages."
+              throw "BUILD_MSIX=true but no MSIX artifacts found under .build\\AppPackages."
             }
             foreach ($msixFile in $msixFiles) {
               Copy-Item $msixFile.FullName -Destination $outDir -Force

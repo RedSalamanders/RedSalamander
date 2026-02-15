@@ -38,8 +38,8 @@ Use the `build.ps1` PowerShell script for easy building:
 ```
 
 **Build Script Parameters:**
-- `-Configuration` : `Debug` (default) or `Release`
-- `-Platform` : `x64` (default) 
+- `-Configuration` : `Debug` (default), `Release`, or `ASan Debug`
+- `-Platform` : `x64` (default) or `ARM64`
 - `-ProjectName` : Specific project name (builds entire solution if not specified)
 - `-Clean` : Perform clean build
 - `-Rebuild` : Rebuild all projects
@@ -64,8 +64,10 @@ The solution contains the following projects:
 
 Built executables and libraries are located in:
 ```text
-x64\Debug\     (Debug builds)
-x64\Release\   (Release builds)
+.build\x64\Debug\     (Debug builds)
+.build\x64\Release\   (Release builds)
+.build\ARM64\Debug\   (Debug builds)
+.build\ARM64\Release\ (Release builds)
 ```
 
 ### MSIX Installer
@@ -85,7 +87,7 @@ msbuild Installer\msix\RedSalamanderInstaller.wapproj /p:Configuration=Release /
 
 MSIX output is written to:
 ```text
-AppPackages\
+.build\AppPackages\
 ```
 
 See `Specs/InstallerMsixSpec.md` for signing and deployment details.
@@ -100,7 +102,7 @@ Build Release + MSI in one command (requires WiX Toolset v6+):
 
 MSI output is written to:
 ```text
-AppPackages\
+.build\AppPackages\
 ```
 
 See `Specs/InstallerMsiSpec.md` for details.
@@ -126,8 +128,11 @@ make them instantly available.
 
 Install all libraries from `vcpkg.json`:
 
-```shell
-vcpkg.exe install
+```powershell
+.\vcpkg-install.ps1
+
+# ARM64:
+.\vcpkg-install.ps1 -Platform ARM64
 ```
 
 ### Adding New Libraries
@@ -173,8 +178,8 @@ Run the helper script once to add your account to the local **Performance Log Us
 
 Then **sign out/in (or reboot)** so your access token picks up the new group membership, and launch:
 
-- `x64\Debug\RedSalamanderMonitor.exe` (Debug), or
-- `x64\Release\RedSalamanderMonitor.exe` (Release)
+- `.build\x64\Debug\RedSalamanderMonitor.exe` (Debug), or
+- `.build\x64\Release\RedSalamanderMonitor.exe` (Release)
 
 To undo the change later:
 

@@ -99,22 +99,22 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
@@ -127,7 +127,7 @@
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMCURL_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -138,13 +138,13 @@
     </Link>
     <PostBuildEvent>
       <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libcurl-d.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libssh2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libssl-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\zlibd1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlicommon.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcurl-d.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssh2.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
@@ -155,7 +155,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" 
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMCURL_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -166,13 +166,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" 
     </Link>
     <PostBuildEvent>
       <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libcurl-d.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libssh2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libssl-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\zlibd1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlicommon.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcurl-d.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssh2.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
@@ -183,7 +183,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" 
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMCURL_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -194,13 +194,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" 
     </Link>
     <PostBuildEvent>
       <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libcurl-d.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libssh2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libssl-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\zlibd1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlicommon.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcurl-d.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssh2.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
@@ -211,7 +211,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" 
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;FILESYSTEMCURL_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -222,13 +222,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" 
     </Link>
     <PostBuildEvent>
       <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libcurl-d.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libssh2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libssl-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\zlibd1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlicommon.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcurl-d.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssh2.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libssl-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\libcrypto-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlicommon.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -241,7 +241,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" 
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;FILESYSTEMCURL_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -252,13 +252,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\brotlidec.dll" 
     </Link>
     <PostBuildEvent>
       <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\libcurl.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\libssh2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\libssl-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\libcrypto-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\zlib1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\brotlicommon.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\brotlidec.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcurl.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssh2.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssl-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcrypto-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\zlib1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlicommon.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
@@ -271,7 +271,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\brotlidec.dll" "$(Out
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;FILESYSTEMCURL_EXPORTS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -282,13 +282,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\brotlidec.dll" "$(Out
     </Link>
     <PostBuildEvent>
       <Command>if exist "$(OutDir)brotlienc.dll" del /Q "$(OutDir)brotlienc.dll"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\libcurl.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\libssh2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\libssl-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\libcrypto-3-x64.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\zlib1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\brotlicommon.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\brotlidec.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcurl.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssh2.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libssl-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\libcrypto-3-x64.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\zlib1.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlicommon.dll" "$(OutDir)"
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\brotlidec.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

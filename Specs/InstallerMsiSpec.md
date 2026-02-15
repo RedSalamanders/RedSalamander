@@ -13,7 +13,7 @@ Primary files:
 
 - Produce an MSI installer for **Release x64** builds.
 - Install to **`Program Files`** (per-machine install, requires admin).
-- Include the **shipping runtime** from `x64\Release\` (apps + plugins + runtime dependencies), excluding:
+- Include the **shipping runtime** from `.build\x64\Release\` (apps + plugins + runtime dependencies), excluding:
   - build artifacts (`*.pdb`, `*.lib`, `*.exp`, `*.ilk`, `*.iobj`, `*.ipdb`, `*.pch`)
   - non-shipping executables (PoC/test `*.exe` other than `RedSalamander.exe` and `RedSalamanderMonitor.exe`)
   - `asan.supp`
@@ -47,7 +47,7 @@ Or build/package separately:
 - `Installer\msi\build-msi-symbols.ps1 -Configuration Release -Platform x64`
 
 MSI output is written to:
-- `AppPackages\`
+- `.build\AppPackages\`
 
 ## Symbols MSI (PDB)
 

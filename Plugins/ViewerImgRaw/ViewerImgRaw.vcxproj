@@ -99,22 +99,22 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
-    <OutDir>$(SolutionDir)$(Platform)\$(Configuration)\Plugins\</OutDir>
+    <OutDir>$(SolutionDir).build\$(Platform)\$(Configuration)\Plugins\</OutDir>
   </PropertyGroup>
   <PropertyGroup Label="Vcpkg">
     <VcpkgEnableManifest>true</VcpkgEnableManifest>
@@ -128,7 +128,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -138,13 +138,13 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\raw_rd.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\jasperd.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\zlibd1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(OutDir)"</Command>
+      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\raw_rd.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jasperd.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jpeg8.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\turbojpeg.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\lcms2-2.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\yyjson.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
@@ -156,7 +156,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -166,13 +166,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\raw_rd.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\jasperd.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\zlibd1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(OutDir)"</Command>
+      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\raw_rd.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jasperd.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jpeg8.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\turbojpeg.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\lcms2-2.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\yyjson.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
@@ -184,7 +184,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -194,13 +194,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\raw_rd.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\jasperd.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\zlibd1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(OutDir)"</Command>
+      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\raw_rd.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jasperd.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jpeg8.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\turbojpeg.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\lcms2-2.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\yyjson.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
@@ -212,7 +212,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -222,13 +222,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\raw_rd.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\jasperd.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\zlibd1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(OutDir)"</Command>
+      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\raw_rd.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jasperd.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\jpeg8.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\turbojpeg.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\lcms2-2.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\yyjson.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -242,7 +242,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -252,13 +252,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\debug\bin\yyjson.dll" "$(
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\raw_r.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\jasper.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\zlib1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\yyjson.dll" "$(OutDir)"</Command>
+      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\raw_r.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\jasper.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\jpeg8.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\turbojpeg.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\lcms2-2.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\zlib1.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\yyjson.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
@@ -272,7 +272,7 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\yyjson.dll" "$(OutDir
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <OpenMPSupport>true</OpenMPSupport>
-      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
       <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
       <AdditionalIncludeDirectories>$(SolutionDir)Common;$(SolutionDir)RedSalamander</AdditionalIncludeDirectories>
@@ -282,13 +282,13 @@ xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\yyjson.dll" "$(OutDir
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
     <PostBuildEvent>
-      <Command>xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\raw_r.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\jasper.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\jpeg8.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\turbojpeg.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\lcms2-2.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\zlib1.dll" "$(OutDir)"
-xcopy /Y /D "$(SolutionDir)vcpkg_installed\x64-windows\bin\yyjson.dll" "$(OutDir)"</Command>
+      <Command>xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\raw_r.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\jasper.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\jpeg8.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\turbojpeg.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\lcms2-2.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\zlib1.dll" "$(OutDir)"
+xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\yyjson.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

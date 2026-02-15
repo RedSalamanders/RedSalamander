@@ -2,10 +2,12 @@
 .SYNOPSIS
     Build RedSalamander solution
 .DESCRIPTION
-    Builds the entire RedSalamander solution in Debug (default) or Release configuration.
+    Builds the entire RedSalamander solution in Debug (default), Release, or ASan Debug configuration.
     Optionally builds a specific project if ProjectName is provided.
 .PARAMETER Configuration
-    Build configuration: Debug or Release (default: Debug)
+    Build configuration: Debug, Release, or ASan Debug (default: Debug)
+.PARAMETER Platform
+    Target platform: x64 or ARM64 (default: x64)
 .PARAMETER ProjectName
     Specific project to build. If not specified, builds the entire solution.
     Examples: "RedSalamander", "RedSalamanderMonitor", "Common"
@@ -40,11 +42,11 @@
 [CmdletBinding()]
 param(
     [Parameter(HelpMessage = "Build configuration (Debug or Release)")]
-    [ValidateSet("Debug", "Release")]
+    [ValidateSet("Debug", "Release", "ASan Debug")]
     [string]$Configuration = "Debug",
     
-    [Parameter(HelpMessage = "Target platform (x64)")]
-    [ValidateSet("x64")]
+    [Parameter(HelpMessage = "Target platform (x64 or ARM64)")]
+    [ValidateSet("x64", "ARM64")]
     [string]$Platform = "x64",
     
     [Parameter(HelpMessage = "Specific project to build (builds entire solution if not specified)")]
@@ -501,7 +503,7 @@ function Stop-BuildOutputProcess {
     }
 }
 
-$buildOutputDir = Join-Path -Path $SolutionDir -ChildPath "$Platform\\$Configuration"
+$buildOutputDir = Join-Path -Path $SolutionDir -ChildPath (".build\\{0}\\{1}" -f $Platform, $Configuration)
 Stop-BuildOutputProcess -ProcessName "RedSalamander.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamander.exe")
 Stop-BuildOutputProcess -ProcessName "RedSalamanderMonitor.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamanderMonitor.exe")
 
@@ -542,10 +544,10 @@ try {
     if ($ProjectName) {
         # Show specific project output
         $outputCandidates = @(
-            "x64\$Configuration\$ProjectName.exe",
-            "x64\$Configuration\$ProjectName.dll",
-            "x64\$Configuration\Plugins\$ProjectName.exe",
-            "x64\$Configuration\Plugins\$ProjectName.dll"
+            ".build\\$Platform\\$Configuration\\$ProjectName.exe",
+            ".build\\$Platform\\$Configuration\\$ProjectName.dll",
+            ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.exe",
+            ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.dll"
         )
 
         foreach ($candidate in $outputCandidates) {
@@ -560,7 +562,7 @@ try {
         # Show output paths for main executables
         $mainProjects = @("RedSalamander", "RedSalamanderMonitor")
         foreach ($project in $mainProjects) {
-            $outputPath = "x64\$Configuration\$project.exe"
+            $outputPath = ".build\\$Platform\\$Configuration\\$project.exe"
             if (Test-Path $outputPath) {
                 $fileSize = (Get-Item $outputPath).Length
                 $fileSizeMB = [math]::Round($fileSize / 1MB, 2)
@@ -635,7 +637,7 @@ try {
         $msixStopwatch.Stop()
         Write-Host "MSIX packaging completed successfully! ($($msixStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
 
-        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath "AppPackages"
+        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
         if (Test-Path $appPackagesDir) {
             $msixFiles = Get-ChildItem -Path $appPackagesDir -Filter *.msix -Recurse -ErrorAction SilentlyContinue |
                 Sort-Object -Property LastWriteTime -Descending |
@@ -708,7 +710,7 @@ try {
         $msiSymbolsStopwatch.Stop()
         Write-Host "MSI symbols packaging completed successfully! ($($msiSymbolsStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
 
-        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath "AppPackages"
+        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
         if (Test-Path $appPackagesDir) {
             $msiFiles = Get-ChildItem -Path $appPackagesDir -Filter *.msi -Recurse -ErrorAction SilentlyContinue |
                 Sort-Object -Property LastWriteTime -Descending |

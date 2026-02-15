@@ -31,16 +31,18 @@ metadata:
 
 | Parameter | Values | Default |
 |-----------|--------|---------|
-| `-Configuration` | Debug, Release | Debug |
-| `-Platform` | x64 | x64 |
+| `-Configuration` | Debug, Release, ASan Debug | Debug |
+| `-Platform` | x64, ARM64 | x64 |
 | `-ProjectName` | RedSalamander, RedSalamanderMonitor, Common, FileSystem | All projects |
 | `-Clean` | Switch | False |
 | `-Rebuild` | Switch | False |
 
 ## Output Locations
 
-- Debug: `x64\Debug\*.exe, *.dll`
-- Release: `x64\Release\*.exe, *.dll`
+- Debug: `.build\x64\Debug\*.exe, *.dll`
+- Release: `.build\x64\Release\*.exe, *.dll`
+- Debug (ARM64): `.build\ARM64\Debug\*.exe, *.dll`
+- Release (ARM64): `.build\ARM64\Release\*.exe, *.dll`
 
 ## Build Order (Dependencies)
 

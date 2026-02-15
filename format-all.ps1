@@ -1,7 +1,7 @@
 # Format all C++ files, excluding build/package directories
 Get-ChildItem -Recurse -Include *.cpp,*.h |
     Where-Object { 
-        $_.FullName -notmatch '\\(packages|vcpkg_installed|\.vs|Debug|Release|x64|out|\.git)\\' 
+        $_.FullName -notmatch '\\(packages|vcpkg_installed|\.vs|\.build|Debug|Release|x64|out|\.git)\\' 
     } |
     ForEach-Object {
         Write-Host "Formatting: $($_.Name)" -ForegroundColor Cyan
