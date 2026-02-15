@@ -1,13 +1,52 @@
 # RedSalamander
 
-A Windows-based C++ application featuring advanced text visualization, real-time debugging, and high-performance graphics rendering.
+RedSalamander is a Windows dual-pane file manager with:
+
+- A fast DirectX-based folder view
+- Virtual file systems (archives, FTP/SFTP/SCP/IMAP, S3, …)
+- Viewer plugins (Text/Hex, Images/RAW, WebView2-based viewers, …)
+- A themed Preferences experience (themes, plugins, shortcuts, associations)
+
+![RedSalamander main window](Docs/res/main-window.png)
+
+[User Documentation](Docs/README.md)
+
+## Why another file manager?
+
+This project is a tribute to Servant Salamander and especially [Open Salamander](https://github.com/OpenSalamander/salamander).
+Thanks to the Open Salamander contributors:
+
+- David Andrš
+- Lukáš Cerman
+- Jakub Červený
+- Tomáš Jelínek
+- Milan Kaše
+- Tomáš Kopal
+- Jan Patera
+- Martin Přikryl
+- Juraj Rojko
+- Jan Ryšavý
+- Petr Šolín
+
+You've done an amazing job.
+
+Open Salamander appears to be quiet these days, so I wanted to start fresh with a modern, themeable, plugin-based successor.
+
+RedSalamander is not yet at the level of other file managers. This is a work in progress.
+
+Enjoy!
+
+## For Developers
+
+RedSalamander is a Windows-native C++23 application featuring advanced text visualization, real-time debugging (ETW), and high-performance graphics rendering (DirectX / Direct2D / DirectWrite).
 
 ## Building the Project
 
 ### Prerequisites
-- **Visual Studio 2026** (or later) with "Desktop development with C++" workload
-- **vcpkg** for package management
-- **Windows 11** (x64)
+
+- **Visual Studio 2026** with C++ toolset **v145** (Desktop development with C++)
+- **vcpkg** (manifest mode) for dependencies
+- **Windows 10/11**
 
 ### Quick Start
 
@@ -16,11 +55,17 @@ A Windows-based C++ application featuring advanced text visualization, real-time
 Use the `build.ps1` PowerShell script for easy building:
 
 ```powershell
+# One-time: install dependencies (writes to .build\vcpkg_installed)
+.\vcpkg-install.ps1
+
 # Build entire solution in Debug configuration (default)
 .\build.ps1
 
 # Build in Release configuration
 .\build.ps1 -Configuration Release
+
+# Build for ARM64
+.\build.ps1 -Platform ARM64
 
 # Build specific project only
 .\build.ps1 -ProjectName RedSalamanderMonitor
@@ -38,6 +83,7 @@ Use the `build.ps1` PowerShell script for easy building:
 ```
 
 **Build Script Parameters:**
+
 - `-Configuration` : `Debug` (default), `Release`, or `ASan Debug`
 - `-Platform` : `x64` (default) or `ARM64`
 - `-ProjectName` : Specific project name (builds entire solution if not specified)
@@ -46,13 +92,14 @@ Use the `build.ps1` PowerShell script for easy building:
 
 #### Visual Studio Build
 
-1. Open `RedSalamander.sln` in Visual Studio 2022
-2. Select configuration (Debug/Release) and platform (x64)
+1. Open `RedSalamander.sln` in Visual Studio 2026
+2. Select configuration (Debug/Release) and platform (x64/ARM64)
 3. Build → Build Solution (Ctrl+Shift+B)
 
 ### Solution Structure
 
 The solution contains the following projects:
+
 - **RedSalamander**: Main application
 - **RedSalamanderMonitor**: Monitoring application with advanced text rendering
 - **Common**: Shared library with utilities
@@ -63,12 +110,15 @@ The solution contains the following projects:
 ### Output
 
 Built executables and libraries are located in:
+
 ```text
 .build\x64\Debug\     (Debug builds)
 .build\x64\Release\   (Release builds)
 .build\ARM64\Debug\   (Debug builds)
 .build\ARM64\Release\ (Release builds)
 ```
+
+All build outputs and intermediate files are written under `.build\` to keep the source tree clean.
 
 ### MSIX Installer
 
@@ -86,6 +136,7 @@ msbuild Installer\msix\RedSalamanderInstaller.wapproj /p:Configuration=Release /
 ```
 
 MSIX output is written to:
+
 ```text
 .build\AppPackages\
 ```
@@ -101,32 +152,18 @@ Build Release + MSI in one command (requires WiX Toolset v6+):
 ```
 
 MSI output is written to:
+
 ```text
 .build\AppPackages\
 ```
 
 See `Specs/InstallerMsiSpec.md` for details.
 
-## VCPKG Integration
+## vcpkg
 
-### Enable User-Wide Integration
+### Installing dependencies
 
-This makes MSBuild aware of vcpkg's installation path:
-
-```shell
-vcpkg.exe integrate install
-```
-
-This outputs:
-```text
-All MSBuild C++ projects can now #include any installed libraries. 
-Linking will be handled automatically. Installing new libraries will 
-make them instantly available.
-```
-
-### Installing Dependencies
-
-Install all libraries from `vcpkg.json`:
+Install all libraries from `vcpkg.json` into `.build\vcpkg_installed`:
 
 ```powershell
 .\vcpkg-install.ps1
@@ -135,15 +172,23 @@ Install all libraries from `vcpkg.json`:
 .\vcpkg-install.ps1 -Platform ARM64
 ```
 
+### (Optional) Enable user-wide MSBuild integration
+
+If your Visual Studio/MSBuild setup does not pick up vcpkg manifest dependencies automatically, enable vcpkg's MSBuild integration:
+
+```powershell
+vcpkg.exe integrate install
+```
+
 ### Adding New Libraries
 
 To add a new library:
 
-```shell
+```powershell
 vcpkg.exe add port <library-name>
 ```
 
-This will download and build the library, making it available for use in your projects.
+Then re-run `.\vcpkg-install.ps1`.
 
 ### Using vcpkg in Visual Studio
 
@@ -158,7 +203,7 @@ This will download and build the library, making it available for use in your pr
 ## Technology Stack
 
 - **Language**: C++23
-- **Build System**: MSBuild / Visual Studio 2022
+- **Build System**: MSBuild / Visual Studio 2026 (v145)
 - **Package Manager**: vcpkg
 - **Graphics**: Direct2D, DirectWrite, Direct3D 11, DXGI
 - **Platform**: Windows 10/11 (Unicode UTF-16)
@@ -200,6 +245,7 @@ Note: `RedSalamanderMonitor.exe` has its own built-in ETW listener and does not 
 ## Additional Documentation
 
 - **Docs/**: User documentation (start at `Docs/README.md`)
+- `Docs/RemoteFileSystems.md`: Remote file systems (FTP/SFTP/SCP/IMAP)
 - **AGENTS.md**: Comprehensive development guidelines for AI assistants and developers
 - **.github/copilot-instructions.md**: GitHub Copilot specific guidelines
 - **Specs/**: Detailed specifications for various components
@@ -207,9 +253,3 @@ Note: `RedSalamanderMonitor.exe` has its own built-in ETW listener and does not 
 ## License
 
 See `LICENSE.txt` for license information.
-
-## User Documentations
-
-See the `Docs/` folder for user manuals and guides:
-- `Docs/RemoteFileSystems.md` (FTP/SFTP/SCP/IMAP)
-	
