@@ -1,0 +1,17 @@
+Encoding: CP437 (DOS US) - no BOM
+File: cp437.txt
+Line endings: CRLF
+Purpose: Box drawing + CP437-specific glyphs available in this mapping.
+---
+01: Blocks: ш ╡ ╠ ╟
+02: Box: здбд©
+03: Box: Ё Ё Ё
+04: Box: цдед╢
+05: Box: Ё Ё Ё
+06: Box: юдады
+07: Accents: └ ■ │ ▌ ≥   А ╓ ╔ ┤ ─
+08: Greek: Ю А Б Ц Д
+09: Math: Я С Р В Л Ш
+10: Note: Some IBM-PC symbols map to control bytes and are not used here.
+11: PATH: C:\Temp\ViewerText\cp437.txt
+12: End marker: EOF

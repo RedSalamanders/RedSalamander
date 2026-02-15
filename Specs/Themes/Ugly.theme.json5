@@ -1,0 +1,81 @@
+// ThemeDefinition (JSON5) for RedSalamander SettingsStore
+// Copy this object into your settings file under: theme.themes[]
+// Then select it by setting: theme.currentThemeId : "user/ugly"
+// this theme is ugllly on purpose :)
+// the goal is to noit have two colors that are similar next to each other
+// Enjoy!
+{
+  "id": "user/ugly",
+  "name": "Ugly",
+  "baseThemeId": "builtin/light",
+  "colors": {
+    // App-level
+    "app.accent"                      : "#FF1493",
+    "window.background"               : "#2e0fdc",
+
+    // FolderView
+    "folderView.background"           : "#000A1F",
+    "folderView.errorBackground"      : "#44FF0088",
+    "folderView.errorText"            : "#FF0066",
+    "folderView.focusBorder"          : "#00FFFF",
+    "folderView.gridLines"            : "#663399",
+    "folderView.infoBackground"       : "#440099FF",
+    "folderView.infoText"             : "#00BFFF",
+    "folderView.itemBackgroundFocused": "#446A0DAD",
+    "folderView.itemBackgroundHovered": "#447FFF00",
+    "folderView.itemBackgroundNormal" : "#00000000",
+    "folderView.itemBackgroundSelected": "#FF6600",
+    "folderView.itemBackgroundSelectedInactive": "#A6FF6600",
+    "folderView.textDisabled"         : "#808080",
+    "folderView.textNormal"           : "#00FF00",
+    "folderView.textSelected"         : "#ffea00",
+    "folderView.textSelectedInactive" : "#ffea00",
+    "folderView.warningBackground"    : "#44FFFF33",
+    "folderView.warningText"          : "#4400ff",
+
+    // Menu
+    "menu.background"                 : "#8B0000",
+    "menu.border"                     : "#00CED1",
+    "menu.disabledText"               : "#B8860B",
+    "menu.selectionBg"                : "#32CD32",
+    "menu.separator"                  : "#9370DB",
+    "menu.text"                       : "#FFFF00",
+    "menu.selectionText"              : "#000000",
+
+    // Navigation
+    "navigation.accent"               : "#1E90FF",
+    "navigation.background"           : "#2F4F2F",
+    "navigation.backgroundHover"      : "#556B00",
+    "navigation.backgroundPressed"    : "#A0522D",
+    "navigation.separator"            : "#DC143C",
+    "navigation.text"                 : "#DCDCDC",
+    "navigation.progressOk"           : "#1E90FF",
+    "navigation.progressWarn"         : "#FF0066",
+    "navigation.progressBackground"   : "#00CED1",
+
+    // File Operations popup
+    "fileOps.progressBackground"      : "#00CED1",
+    "fileOps.progressTotal"           : "#FF1493",
+    "fileOps.progressItem"            : "#1E90FF",
+    "fileOps.graphBackground"         : "#3300CED1",
+    "fileOps.graphGrid"               : "#449370DB",
+    "fileOps.graphLimit"              : "#CCB8860B",
+    "fileOps.graphLine"               : "#FF1493",
+    "fileOps.scrollbarTrack"          : "#1900CED1",
+    "fileOps.scrollbarThumb"          : "#6600CED1",
+
+    // Monitor (ColorTextView)
+    "monitor.textView.bg": "#080400",
+    "monitor.textView.fg": "#FFE8C2",
+    "monitor.textView.caret": "#FF7A18",
+    "monitor.textView.selection": "#33FF7A18",
+    "monitor.textView.searchHighlight": "#33FFD166",
+    "monitor.textView.gutterBg": "#120A00",
+    "monitor.textView.gutterFg": "#C7A27A",
+    "monitor.textView.metaText": "#C7A27A",
+    "monitor.textView.metaError": "#FF4D4D",
+    "monitor.textView.metaWarning": "#FFD166",
+    "monitor.textView.metaInfo": "#FF7A18",
+    "monitor.textView.metaDebug": "#C7A27A",
+  },
+}

@@ -1,0 +1,11 @@
+Encoding: OEM 863 (French Canadian) - no BOM
+File: cp863.txt
+Purpose: French accents + punctuation in OEM 863.
+---
+01: Francais: Ou est l'hopital? J'ai faim; j'aime le cafe.
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Accents: cafe, deja, voila, Noel, garcon.
+06: Symbols: $ # @ &
+07: End marker: EOF

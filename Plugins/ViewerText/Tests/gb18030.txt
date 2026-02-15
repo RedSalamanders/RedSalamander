@@ -1,0 +1,10 @@
+Encoding: GB18030 (CP54936) - no BOM
+File: gb18030.txt
+Line endings: CRLF
+Purpose: Validate GB18030 mapping.
+---
+01: Chinese: 中文
+02: Chinese: 汉字 / 漢字
+03: Extension: 𠀀 𠀁 𠀂
+04: PATH: C:\Temp\ViewerText\gb18030.txt
+05: End marker: EOF

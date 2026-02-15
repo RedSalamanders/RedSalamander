@@ -1,0 +1,14 @@
+Encoding: CP860 (DOS Portuguese) - no BOM
+File: cp860.txt
+Line endings: CRLF
+Purpose: Portuguese OEM accents (Ñ î á † Ç ° ¢ £ É à ì Ö).
+---
+01: Words: aáÑo, coraáÑo, naáÑo, pÑo, maáÑ.
+02: Names: JoÑo, Gonáalo, SÑo TomÇ e Pr°ncipe.
+03: Places: Lisboa, Porto, Aáores, Madeira.
+04: Vowels: † Ç ° ¢ £  Ö ä ç ï ó  É à ì  Ñ î  á
+05: Sentence: ë noite, vovì Kowalsky và JoÑo pegar f°gado e maáÑ.
+06: Sentence: A ligeira raposa marrom saltou sobre o cÑo preguiáoso.
+07: Punctuation: ≠ ® Æ Ø
+08: PATH: C:\Temp\ViewerText\cp860.txt
+09: End marker: EOF

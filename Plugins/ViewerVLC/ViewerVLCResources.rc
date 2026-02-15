@@ -1,0 +1,25 @@
+#include <windows.h>
+#include "resource.h"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERVLC_NAME "VLC"
+    IDS_VIEWERVLC_DESCRIPTION "Play video files using VLC media player (libVLC)."
+    IDS_VIEWERVLC_WINDOW_CAPTION "VLC Viewer"
+    IDS_VIEWERVLC_BUTTON_PLAY "Play"
+    IDS_VIEWERVLC_BUTTON_PAUSE "Pause"
+    IDS_VIEWERVLC_BUTTON_STOP "Stop"
+    IDS_VIEWERVLC_BUTTON_SNAPSHOT_ELLIPSIS "Snapshot..."
+    IDS_VIEWERVLC_LABEL_TIME_UNKNOWN "--:-- / --:--"
+    IDS_VIEWERVLC_MISSING_TITLE "VLC media player is required."
+    IDS_VIEWERVLC_MISSING_BODY "Install VLC media player or set the VLC installation folder in Preferences > Plugins > VLC Viewer."
+    IDS_VIEWERVLC_MISSING_LINK "<a href=""https://www.videolan.org/vlc/"">Download VLC media player</a>"
+    IDS_VIEWERVLC_MISSING_LINK_LABEL "Download VLC media player"
+    IDS_VIEWERVLC_FILEDLG_FILTER_PNG "PNG Files (*.png)\0*.png\0All Files (*.*)\0*.*\0"
+    IDS_VIEWERVLC_FILEDLG_TITLE_SNAPSHOT "Save snapshot"
+END

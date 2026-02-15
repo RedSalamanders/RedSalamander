@@ -1,0 +1,9 @@
+Encoding: ISO-8859-13 (Baltic) - no BOM
+File: iso-8859-13.txt
+Line endings: CRLF
+Purpose: Validate ISO-8859-13 mapping (Baltic).
+---
+01: Baltic: ÀÈÆËÁĞØÛŞ àèæëáğøûş
+02: Latvian: Rîga, Ârpus, Èetri, Çrglis
+03: PATH: C:\Temp\ViewerText\iso-8859-13.txt
+04: End marker: EOF

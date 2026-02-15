@@ -1,0 +1,9 @@
+Encoding: Mac Cyrillic (x-mac-cyrillic) - no BOM
+File: mac-cyrillic.txt
+Line endings: CRLF
+Purpose: Validate Mac Cyrillic mapping.
+---
+01: Cyrillic: Привет мир
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: PATH: C:\Temp\ViewerText\mac-cyrillic.txt
+04: End marker: EOF

@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "shell",
+			"label": "Red Build",
+			"command": "${workspaceFolder}/build.ps1",
+			"args": [
+				"-Configuration",
+				"Debug"
+			],
+			"group": "build",
+            // Use the standard MS compiler pattern to detect errors, warnings and infos
+            "problemMatcher": "$msCompile",
+		}
+	]
+}

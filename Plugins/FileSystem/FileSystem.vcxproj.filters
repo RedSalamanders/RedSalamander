@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="FileSystem.cpp" />
+    <ClCompile Include="FileSystem.DirectoryOps.cpp" />
+    <ClCompile Include="FileSystem.FileOps.cpp" />
+    <ClCompile Include="FileSystem.Menu.cpp" />
+    <ClCompile Include="FileSystem.Path.cpp" />
+    <ClCompile Include="FileSystem.Watch.cpp" />
+    <ClCompile Include="Factory.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="FileSystem.h" />
+    <ClInclude Include="FileSystem.Internal.h" />
+  </ItemGroup>
+</Project>

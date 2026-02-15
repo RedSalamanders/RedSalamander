@@ -1,0 +1,9 @@
+Encoding: Mac Greek (x-mac-greek) - no BOM
+File: mac-greek.txt
+Line endings: CRLF
+Purpose: Validate Mac Greek mapping.
+---
+01: Greek: єбминЫтб лЮуне
+02: Greek: °µЎў бвзд
+03: PATH: C:\Temp\ViewerText\mac-greek.txt
+04: End marker: EOF

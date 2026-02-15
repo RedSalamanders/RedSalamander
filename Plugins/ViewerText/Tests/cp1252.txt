@@ -1,0 +1,25 @@
+Encoding: CP1252 (Windows-1252) - no BOM
+File: cp1252.txt
+Line endings: CRLF
+Purpose: Show CP1252 vs ISO-8859-1 (0x80–0x9F) + Euro.
+---
+01: French: Portez ce vieux whisky au juge blond qui fume.
+02: German: Falsches Üben von Xylophonmusik quält jeden größeren Zwerg.
+03: Spanish: El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío.
+04: Scandinavian: smörgåsbord, blåbär, fjäll, Ångström.
+05: Accents: café naïve façade jalapeño año Niño.
+06: Currency: € £ ¥ ¢
+07: Quotes: “smart quotes”, ‘single quotes’.
+08: Dashes: – en dash, — em dash, … ellipsis.
+09: Bullets: • item one • item two • item three.
+10: Symbols: ™ © ® § ¶
+11: Ligatures: Œ œ  |  Y-diaeresis: Ÿ
+12: CP1252 0x80..0x9F: €‚ƒ„…†‡ˆ‰Š‹ŒŽ
+13: CP1252 0x80..0x9F: ‘’“”•–—˜™š›œžŸ
+14: Math: ± × ÷  (<= >= != as ASCII)
+15: Note: open this file as ISO-8859-1 to see C1 controls for 0x80..0x9F.
+16: Test set A: € – — “café” …
+17: Test set B: ™ © ® •
+18: Test set C: Œ œ Ÿ Š š Ž ž
+19: PATH: C:\Temp\ViewerText\cp1252.txt
+20: End marker: EOF

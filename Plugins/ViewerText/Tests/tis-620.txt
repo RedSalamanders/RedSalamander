@@ -1,0 +1,9 @@
+Encoding: TIS-620 (Thai) - no BOM
+File: tis-620.txt
+Purpose: TIS-620 is commonly mapped to Windows-874.
+---
+01: Thai: สวัสดีชาวโลก
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: End marker: EOF

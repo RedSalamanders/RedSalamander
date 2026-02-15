@@ -1,0 +1,9 @@
+Encoding: EUC-CN (CP51936) - no BOM
+File: euc-cn.txt
+Line endings: CRLF
+Purpose: Validate EUC-CN mapping.
+---
+01: Chinese: ÖÐÎÄ
+02: Chinese: ºº×Ö
+03: PATH: C:\Temp\ViewerText\euc-cn.txt
+04: End marker: EOF

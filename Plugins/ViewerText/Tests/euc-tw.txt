@@ -1,0 +1,10 @@
+Encoding: Chinese Traditional (EUC-TW) - no BOM
+File: euc-tw.txt
+Purpose: EUC-TW sample (may be pruned on some Windows installs).
+---
+01: Chinese: É£Çï¡¢ÅàÒÌ
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>".,;:?
+04: Path: C:\Temp\ViewerText\euc-tw.txt
+05: Chinese: ôíüÕÄãÅÆ
+06: End marker: EOF

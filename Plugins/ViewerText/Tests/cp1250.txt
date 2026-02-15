@@ -1,0 +1,11 @@
+Encoding: Windows-1250 (Central European) - no BOM
+File: cp1250.txt
+Purpose: Windows-1250 diacritics.
+---
+01: Polish: Za¿ó³æ gêœl¹ jaŸñ.
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Czech: Pøíliš luouèkı kùò úpìl ïábelské ódy.
+06: Slovak: Kàde¾ ïat¾ov uèí koòa ra kôru.
+07: End marker: EOF

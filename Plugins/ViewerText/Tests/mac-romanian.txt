@@ -1,0 +1,9 @@
+Encoding: Mac Romanian (x-mac-romanian) - no BOM
+File: mac-romanian.txt
+Line endings: CRLF
+Purpose: Validate Mac Romanian mapping.
+---
+01: Romanian: Þar¾, ¿coal¾, ¾”‰
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: PATH: C:\Temp\ViewerText\mac-romanian.txt
+04: End marker: EOF

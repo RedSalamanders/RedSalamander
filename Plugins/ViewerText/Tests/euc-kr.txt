@@ -1,0 +1,10 @@
+Encoding: Korean (EUC-KR/CP949) - no BOM
+File: euc-kr.txt
+Purpose: Korean sample.
+---
+01: Korean: 안녕하세요 세계
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Korean: 한글 테스트
+06: End marker: EOF

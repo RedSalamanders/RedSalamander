@@ -1,0 +1,9 @@
+Encoding: ISO-8859-9 (Turkish) - no BOM
+File: iso-8859-9.txt
+Line endings: CRLF
+Purpose: Validate ISO-8859-9 mapping (Turkish).
+---
+01: Turkish: Ýstanbul, ý, Ý, þ, Þ, ð, Ð, ç, ö, ü
+02: Turkish pangram: Pijamalý hasta yaðýz þoföre çabucak güvendi.
+03: PATH: C:\Temp\ViewerText\iso-8859-9.txt
+04: End marker: EOF

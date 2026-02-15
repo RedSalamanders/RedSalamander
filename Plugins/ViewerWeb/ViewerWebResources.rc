@@ -1,0 +1,83 @@
+#include <windows.h>
+#include "resource.h"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_VIEWERWEB_MENU MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "Save &As...\tCtrl+S", IDM_VIEWERWEB_FILE_SAVE_AS
+        MENUITEM "&Refresh\tF5", IDM_VIEWERWEB_FILE_REFRESH
+        POPUP "Other &Files"
+        BEGIN
+            MENUITEM "&Next\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
+            MENUITEM "&Previous\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
+            MENUITEM "&First\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
+            MENUITEM "&Last\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit\tEsc", IDM_VIEWERWEB_FILE_EXIT
+    END
+    POPUP "&Search"
+    BEGIN
+        MENUITEM "&Find...\tCtrl+F", IDM_VIEWERWEB_SEARCH_FIND
+        MENUITEM "Find &Next\tF3", IDM_VIEWERWEB_SEARCH_FIND_NEXT
+        MENUITEM "Find &Previous\tShift+F3", IDM_VIEWERWEB_SEARCH_FIND_PREVIOUS
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "Zoom &In\tCtrl++", IDM_VIEWERWEB_VIEW_ZOOM_IN
+        MENUITEM "Zoom &Out\tCtrl+-", IDM_VIEWERWEB_VIEW_ZOOM_OUT
+        MENUITEM "Zoom &Reset\tCtrl+0", IDM_VIEWERWEB_VIEW_ZOOM_RESET
+        MENUITEM SEPARATOR
+        MENUITEM "Toggle &DevTools\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
+    END
+    POPUP "&Tools"
+    BEGIN
+        MENUITEM "Copy &URL\tCtrl+L", IDM_VIEWERWEB_TOOLS_COPY_URL
+        MENUITEM "Open in &Browser\tCtrl+Enter", IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL
+        MENUITEM SEPARATOR
+        MENUITEM "&Expand All (JSON)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
+        MENUITEM "&Collapse All (JSON)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL
+        MENUITEM SEPARATOR
+        MENUITEM "Toggle Markdown &Source\tCtrl+`", IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE
+    END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERWEB_NAME "Web Viewer"
+    IDS_VIEWERWEB_DESCRIPTION "WebView2-based viewer for HTML and PDF files."
+
+    IDS_VIEWERJSON_NAME "JSON Viewer"
+    IDS_VIEWERJSON_DESCRIPTION "WebView2-based JSON/JSON5 viewer with folding and syntax highlighting."
+
+    IDS_VIEWERMARKDOWN_NAME "Markdown Viewer"
+    IDS_VIEWERMARKDOWN_DESCRIPTION "WebView2-based Markdown viewer with syntax highlighting."
+
+    IDS_VIEWERWEB_ERROR_TITLE "ViewerWeb"
+    IDS_VIEWERWEB_ERROR_WEBVIEW2_RUNTIME_MISSING "Microsoft Edge WebView2 Runtime is not installed."
+    IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED "WebView2 initialization failed."
+    IDS_VIEWERWEB_STATUS_LOADING "Loading..."
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Embedded web assets
+//
+
+IDR_VIEWERWEB_JSONEDITOR_JS RCDATA "Assets\\jsoneditor-minimalist.min.js"
+IDR_VIEWERWEB_JSONEDITOR_CSS RCDATA "Assets\\jsoneditor.min.css"
+IDR_VIEWERWEB_JSONEDITOR_ICONS_SVG RCDATA "Assets\\jsoneditor-icons.svg"
+IDR_VIEWERWEB_MARKDOWNIT_JS RCDATA "Assets\\markdown-it.min.js"
+IDR_VIEWERWEB_HIGHLIGHT_JS RCDATA "Assets\\highlight.min.js"
+

@@ -1,0 +1,29 @@
+﻿Encoding: Unicode sample (UTF-8/UTF-16/UTF-32) - BOM/no-BOM variants
+File: utf*-*.txt
+Line endings: CRLF
+Purpose: ViewerText BOM detection + Unicode rendering in Text/Hex.
+---
+01: Latin: café naïve façade jalapeño año Niño
+02: Currency: € £ ¥ ₩ ₽
+03: Quotes/dash: “smart quotes” – en dash — em dash … ellipsis
+04: Greek: Ελληνικά ΑΒΓΔ Ωμέγα π
+05: Cyrillic: Привет мир
+06: Hebrew: שלום עולם
+07: Arabic: مرحبا بالعالم
+08: Devanagari: नमस्ते दुनिया
+09: Thai: สวัสดีชาวโลก
+10: CJK: 漢字 日本語 한글
+11: Emoji: 😀 😁 😂 🤖 🐍
+12: ZWJ: 👩‍💻  🧑‍🚀
+13: Combining: é ä ô (é ä ô)
+14: Math: ∑ ∫ √ ∞ ≈ ≤ ≥ ≠
+15: Arrows: ← ↑ → ↓  ⇐ ⇑ ⇒ ⇓
+16: Box: ┌─┬─┐  ├─┼─┤  └─┴─┘
+17: Misc: © ® ™ •
+18: IPA-ish: ʃ ʒ ŋ θ ð
+19: Vietnamese: Tôi ăn phở bò.
+20: Turkish: İstanbul, İzmir, Çeşme, şeker.
+21: Romanian: Țară, școală, înger.
+22: Polish: Zażółć gęślą jaźń.
+23: Ukrainian: Україна
+24: End marker: EOF

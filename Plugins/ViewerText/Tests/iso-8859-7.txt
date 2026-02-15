@@ -1,0 +1,9 @@
+Encoding: ISO-8859-7 (Greek) - no BOM
+File: iso-8859-7.txt
+Line endings: CRLF
+Purpose: Validate ISO-8859-7 mapping (Greek).
+---
+01: Greek: Καλημέρα κόσμε
+02: Greek: ΑΒΓΔ αβγδ
+03: PATH: C:\Temp\ViewerText\iso-8859-7.txt
+04: End marker: EOF

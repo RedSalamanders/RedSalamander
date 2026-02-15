@@ -1,0 +1,19 @@
+Encoding: ISO-8859-15 (Latin-9) - no BOM
+File: iso-8859-15.txt
+Line endings: CRLF
+Purpose: Latin-9 adds Euro and OE ligatures (differs from ISO-8859-1).
+---
+01: Latin: café naïve façade jalapeño año Niño.
+02: Euro: ¤  ¤1.50  ¤100  ¤uro
+03: Ligatures: ¼uvre, c½ur, s½ur (¼/½).
+04: Czech-ish: ¦koda, ´i¸ka, ¸i¸ka (¦/¨/´/¸).
+05: Y-diaeresis: ¾
+06: Currency: ¤ £ ¥ ¢
+07: Punctuation: ¡ ¿ « »
+08: Math: ± × ÷
+09: Note: U+00A4 currency sign is not present in ISO-8859-15.
+10: Note: U+00BC/U+00BD/U+00BE are replaced by ¼/½/¾ in ISO-8859-15.
+11: Plain quotes: "Hello" and 'world' and - hyphen-minus
+12: Brackets: ( ) [ ] { } < >
+13: PATH: C:\Temp\ViewerText\iso-8859-15.txt
+14: End marker: EOF

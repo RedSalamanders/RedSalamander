@@ -1,0 +1,10 @@
+Encoding: Windows-1254 (Turkish) - no BOM
+File: cp1254.txt
+Purpose: Turkish dotted/dotless I.
+---
+01: Turkish: Ýstanbul, Ýzmir, Çeþme, þeker.
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Letters: Ð ð Þ þ Ý ý Ö ö Ü ü Ç ç
+06: End marker: EOF

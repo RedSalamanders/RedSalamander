@@ -1,0 +1,11 @@
+Encoding: Windows-1251 (Cyrillic) - no BOM
+File: cp1251.txt
+Purpose: Cyrillic Windows code page.
+---
+01: Russian: Привет мир
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Ukrainian: Україна
+06: Bulgarian: Здравей свят
+07: End marker: EOF

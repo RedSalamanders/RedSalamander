@@ -1,0 +1,293 @@
+// Microsoft Visual C++ generated resource script.
+//
+#pragma code_page(65001)
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#ifndef APSTUDIO_INVOKED
+#include "targetver.h"
+#endif
+#define APSTUDIO_HIDDEN_SYMBOLS
+#include "windows.h"
+#undef APSTUDIO_HIDDEN_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (United States) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+#ifdef _DEBUG
+IDI_REDSALAMANDERMONITOR ICON                    "res\\logo_background_debug.ico"
+
+IDI_SMALL               ICON                    "res\\logo_background_debug.ico"
+#else
+IDI_REDSALAMANDERMONITOR ICON                    "res\\logo_background.ico"
+
+IDI_SMALL               ICON                    "res\\logo_background.ico"
+#endif
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDC_REDSALAMANDERMONITOR MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&New\tCtrl+N",                IDM_FILE_NEW
+        MENUITEM "&Open...\tCtrl+O",            IDM_FILE_OPEN
+        MENUITEM "Save &As...",                 IDM_FILE_SAVE_AS
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                       IDM_EXIT
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "&Copy\tCtrl+C",               IDM_EDIT_COPY
+        MENUITEM SEPARATOR
+        MENUITEM "&Find...\tCtrl+F",            IDM_EDIT_FIND
+        MENUITEM "Find &Next\tF3",              IDM_EDIT_FIND_NEXT
+        MENUITEM "Find &Previous\tShift+F3",    IDM_EDIT_FIND_PREV
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Toolbar",                    IDM_VIEW_TOOLBAR
+        MENUITEM "&Line Numbers",               IDM_VIEW_LINE_NUMBERS
+        MENUITEM SEPARATOR
+        POPUP "&Theme"
+        BEGIN
+            MENUITEM "High &Contrast (System)",     IDM_VIEW_THEME_HIGH_CONTRAST, GRAYED
+            MENUITEM SEPARATOR
+            MENUITEM "&System",                     IDM_VIEW_THEME_SYSTEM
+            MENUITEM "&Light",                      IDM_VIEW_THEME_LIGHT
+            MENUITEM "&Dark",                       IDM_VIEW_THEME_DARK
+            MENUITEM "&Rainbow",                    IDM_VIEW_THEME_RAINBOW
+            MENUITEM "High &Contrast (App)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP
+        END
+    END
+    POPUP "&Option"
+    BEGIN
+        MENUITEM "&Always On Top",              IDM_OPTION_TOP
+        MENUITEM "Auto &Scroll\tEnd",           IDM_OPTION_AUTO_SCROLL
+        MENUITEM SEPARATOR
+        MENUITEM "Show &Process ID/Thread ID",  IDM_OPTION_ID
+        MENUITEM SEPARATOR
+        POPUP "Active &Filter"
+        BEGIN
+            MENUITEM "Show &Text",              IDM_FILTER_TEXT, CHECKED
+            MENUITEM "Show &Errors",            IDM_FILTER_ERROR, CHECKED
+            MENUITEM "Show &Warnings",          IDM_FILTER_WARNING, CHECKED
+            MENUITEM "Show &Info",              IDM_FILTER_INFO, CHECKED
+            MENUITEM "Show &Debug",             IDM_FILTER_DEBUG, CHECKED
+            MENUITEM SEPARATOR
+            MENUITEM "Preset: Errors Only",     IDM_FILTER_PRESET_ERRORS_ONLY
+            MENUITEM "Preset: Errors+Warnings", IDM_FILTER_PRESET_ERRORS_WARNINGS
+            MENUITEM "Preset: Errors+Debug",    IDM_FILTER_PRESET_ERRORS_DEBUG
+            MENUITEM "Preset: All Types",       IDM_FILTER_PRESET_ALL
+        END
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&About ...",                  IDM_ABOUT
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDR_MAINFRAME           BITMAP                  "res\\toolbar.bmp"
+
+IDB_TOOLBAR             BITMAP                  "res\\toolbar_big.bmp"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Accelerator
+//
+
+IDC_REDSALAMANDERMONITOR ACCELERATORS
+BEGIN
+    "?",            IDM_ABOUT,              ASCII,  ALT
+    "/",            IDM_ABOUT,              ASCII,  ALT
+    "F",            IDM_EDIT_FIND,          VIRTKEY, CONTROL
+    VK_F3,          IDM_EDIT_FIND_NEXT,     VIRTKEY
+    VK_F3,          IDM_EDIT_FIND_PREV,     VIRTKEY, SHIFT
+    VK_END,         IDM_OPTION_AUTO_SCROLL, VIRTKEY
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_ABOUTBOX DIALOGEX 0, 0, 170, 62
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "About RedSalamanderMonitor"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    ICON            IDI_REDSALAMANDERMONITOR,IDC_STATIC,14,14,21,20
+    LTEXT           "RedSalamanderMonitor, Version 1.0",IDC_STATIC,42,14,114,8,SS_NOPREFIX
+    LTEXT           "Copyright (c) 2025",IDC_STATIC,42,26,114,8
+    DEFPUSHBUTTON   "OK",IDOK,113,41,50,14,WS_GROUP
+END
+
+IDD_MODAL_MESSAGE DIALOGEX 0, 0, 360, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION ""
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_MODAL_MESSAGE_TEXT,"Edit",WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,7,7,346,128
+    DEFPUSHBUTTON   "",IDOK,303,142,50,14,WS_GROUP
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO
+BEGIN
+    IDD_ABOUTBOX, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 163
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 55
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// RT_MANIFEST
+//
+
+1                       RT_MANIFEST             "res\\exe.manifest"
+
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE 
+BEGIN
+    "#ifndef APSTUDIO_INVOKED\r\n"
+    "#include ""targetver.h""\r\n"
+    "#endif\r\n"
+    "#define APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "#include ""windows.h""\r\n"
+    "#undef APSTUDIO_HIDDEN_SYMBOLS\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// PNG
+//
+
+IDB_TOOLBAR_PNG         PNG                     "res\\toolbar.png"
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_APP_TITLE           "Red Salamander Monitor"
+    IDS_NOT_RUNNING         "RedSalamander Bug Reporter (RedSalamanderMonitor.exe) is not running. RedSalamander will not be able to handle potential crashes. Please restart RedSalamander."
+    IDS_CAPTION_ERROR "Error"
+    IDS_CAPTION_OPEN "Open"
+    IDS_CAPTION_PRINT "Print"
+    IDS_CAPTION_ETW_WARNING "ETW Listener Warning"
+    IDS_BTN_OK              "OK"
+    IDS_FIND_LABEL "Find:"
+    IDS_FIND_CASE_LABEL "Aa"
+    IDS_FIND_FROM_CURRENT_POSITION "Current Position"
+    IDS_FIND_FROM_TOP "Top"
+    IDS_FIND_FROM_BOTTOM "Bottom"
+    IDS_MSG_OPEN_FAILED_READ "Failed to read file or file is empty."
+    IDS_MSG_CREATE_COLORTEXTVIEW_FAILED "Failed to create ColorTextView."
+    IDS_MSG_INSTANCE_GUARD_FAILED "Unable to create the Red Salamander Monitor instance guard."
+    IDS_MSG_PRINT_NOT_IMPLEMENTED "Printing is not implemented yet."
+    IDS_MSG_ETW_STARTED "ETW Listener started successfully - real-time event monitoring active"
+    IDS_FMT_ETW_START_FAILED "ETW Listener failed to start: {}"
+    IDS_MSG_ETW_ELEVATE_PROMPT "Red Salamander Monitor could not start its ETW listener with the current privileges.\n\nRestart as Administrator now?\n\n(Select No to continue without real-time ETW monitoring. To avoid UAC prompts, add your user to the Performance Log Users group and sign out/in.)"
+    IDS_FATAL_ERROR_CAPTION "Red Salamander Monitor - Fatal Error"
+    IDS_FATAL_EXCEPTION_FMT "Fatal Exception in RedSalamanderMonitor\n\nException: {0} (0x{1:08X})\n\nThe application will now terminate."
+    IDS_FILE_FILTER_OPEN "Text Files (*.txt;*.log)\0*.txt;*.log\0All Files (*.*)\0*.*\0\0"
+    IDS_FILE_FILTER_SAVE "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0\0"
+    IDS_FILE_DEFAULT_EXT_TXT "txt"
+    IDS_FILTER_TYPE_TEXT "Text"
+    IDS_FILTER_TYPE_ERROR "Error"
+    IDS_FILTER_TYPE_WARNING "Warning"
+    IDS_FILTER_TYPE_INFO "Info"
+    IDS_FILTER_TYPE_DEBUG "Debug"
+    IDS_STATUS_FILTER_ALL "Filter: All"
+    IDS_STATUS_FILTER_NONE "Filter: None"
+    IDS_STATUS_FILTER_ONE_FMT "Filter: {}"
+    IDS_STATUS_FILTER_MULTI_PREFIX "Filter: "
+    IDS_STATUS_VISIBLE_FMT "Visible: {:L}"
+    IDS_STATUS_TOTAL_FMT "Total: {:L}"
+    IDS_STATUS_ETW_RECEIVED_FMT "ETW Received: {:L}"
+    IDS_STATUS_FILTER_MULTI_JOINER "+"
+    IDS_STATUS_AUTOSCROLL_ON "Auto: On"
+    IDS_STATUS_AUTOSCROLL_OFF "Auto: Off"
+    IDS_SAMPLE_TEXT "ColorTextView initialized successfully!\nThis is the right panel.\n"
+    IDC_REDSALAMANDERMONITOR "REDSALAMANDERMONITOR"
+END
+
+#endif    // English (United States) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED

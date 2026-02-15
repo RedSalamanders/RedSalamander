@@ -1,0 +1,746 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:redsalamander:settings-store:9",
+  "title": "RedSalamander Settings Store (v9)",
+  "type": "object",
+  "required": ["schemaVersion"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "type": "integer", "const": 9 },
+    "windows": {
+      "type": "object",
+      "title": "Windows",
+      "description": "Per-window placement persisted across sessions (position, size, state, and DPI).",
+      "default": {},
+      "patternProperties": {
+        "^[A-Za-z0-9_.-]{1,64}$": { "$ref": "#/$defs/windowPlacement" }
+      },
+      "additionalProperties": false
+    },
+    "theme": { "$ref": "#/$defs/themeSettings" },
+    "plugins": { "$ref": "#/$defs/pluginsSettings" },
+    "mainMenu": { "$ref": "#/$defs/mainMenuSettings" },
+    "startup": { "$ref": "#/$defs/startupSettings" },
+    "cache": { "$ref": "#/$defs/cacheSettings" },
+    "folders": { "$ref": "#/$defs/foldersSettings" },
+    "monitor": { "$ref": "#/$defs/monitorSettings" },
+    "shortcuts": { "$ref": "#/$defs/shortcutsSettings" },
+    "extensions": { "$ref": "#/$defs/extensionsSettings" },
+    "connections": { "$ref": "#/$defs/connectionsSettings" },
+    "fileOperations": { "$ref": "#/$defs/fileOperationsSettings" },
+    "compareDirectories": { "$ref": "#/$defs/compareDirectoriesSettings" }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "pluginId": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.\\-/]{0,127}$"
+    },
+    "commandId": {
+      "type": "string",
+      "pattern": "^cmd\\/[A-Za-z0-9][A-Za-z0-9_.\\-/]{0,127}$"
+    },
+    "shortcutKey": {
+      "type": "string",
+      "anyOf": [
+        { "pattern": "^F([1-9]|1[0-9]|2[0-4])$" },
+        { "pattern": "^[A-Z0-9]$" },
+        {
+          "enum": [
+            "Backspace",
+            "Tab",
+            "Enter",
+            "Return",
+            "Space",
+            "PageUp",
+            "PageDown",
+            "End",
+            "Home",
+            "Left",
+            "Up",
+            "Right",
+            "Down",
+            "Insert",
+            "Delete",
+            "Escape"
+          ]
+        },
+        { "pattern": "^VK_[0-9A-Fa-f]{2}$" }
+      ]
+    },
+    "shortcutBinding": {
+      "type": "object",
+      "title": "Shortcut Binding",
+      "description": "Defines a single keyboard shortcut binding.",
+      "required": ["vk", "commandId"],
+      "properties": {
+        "vk": { "$ref": "#/$defs/shortcutKey", "title": "Key", "description": "The key name (e.g. F1, Tab, VK_2E)." },
+        "ctrl": { "type": "boolean", "title": "Ctrl", "description": "Whether Ctrl is required." },
+        "alt": { "type": "boolean", "title": "Alt", "description": "Whether Alt is required." },
+        "shift": { "type": "boolean", "title": "Shift", "description": "Whether Shift is required." },
+        "commandId": { "$ref": "#/$defs/commandId", "title": "Command", "description": "The command identifier (cmd/...)."}
+      },
+      "additionalProperties": false
+    },
+    "shortcutsSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Keyboard Shortcuts",
+      "description": "Keyboard shortcuts configuration (Function bar and Folder view).",
+      "x-ui-pane": "Keyboard",
+      "x-ui-control": "custom",
+      "x-ui-order": 0,
+      "properties": {
+        "functionBar": {
+          "type": "array",
+          "default": [],
+          "title": "Function Bar Shortcuts",
+          "description": "Shortcut bindings active when using the function bar.",
+          "items": { "$ref": "#/$defs/shortcutBinding" }
+        },
+        "folderView": {
+          "type": "array",
+          "default": [],
+          "title": "Folder View Shortcuts",
+          "description": "Shortcut bindings active when interacting with the folder view.",
+          "items": { "$ref": "#/$defs/shortcutBinding" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "extensionsSettings": {
+      "type": "object",
+      "default": {},
+      "x-ui-pane": "Viewers",
+      "x-ui-control": "custom",
+      "x-ui-order": 0,
+      "properties": {
+        "openWithFileSystemByExtension": {
+          "type": "object",
+          "default": {},
+          "title": "File System by Extension",
+          "description": "Maps a file extension (lowercase, with leading dot like \".7z\") to a virtual file system plugin ID.",
+          "patternProperties": {
+            "^\\.[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$": { "$ref": "#/$defs/pluginId" }
+          },
+          "additionalProperties": false
+        },
+        "openWithViewerByExtension": {
+          "type": "object",
+          "default": {},
+          "title": "Viewer by Extension",
+          "description": "Maps a file extension (lowercase, with leading dot like \".txt\") to a viewer plugin ID used when opening files in a viewer (F3).",
+          "patternProperties": {
+            "^\\.[A-Za-z0-9][A-Za-z0-9_.-]{0,31}$": { "$ref": "#/$defs/pluginId" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "pluginsSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Plugins",
+      "description": "Plugin manager settings (enabled/disabled plugins, custom plugin paths, and per-plugin configuration).",
+      "x-ui-pane": "Plugins",
+      "x-ui-control": "custom",
+      "x-ui-order": 0,
+      "properties": {
+        "currentFileSystemPluginId": {
+          "$ref": "#/$defs/pluginId",
+          "default": "builtin/file-system",
+          "title": "Current File System Plugin",
+          "description": "Active file system plugin ID."
+        },
+        "customPluginPaths": {
+          "type": "array",
+          "default": [],
+          "title": "Custom Plugin Paths",
+          "description": "Absolute paths to custom plugin DLLs (outside the application folder).",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "disabledPluginIds": {
+          "type": "array",
+          "default": [],
+          "title": "Disabled Plugins",
+          "description": "Plugin IDs disabled by the user.",
+          "items": { "$ref": "#/$defs/pluginId" }
+        },
+        "configurationByPluginId": {
+          "type": "object",
+          "default": {},
+          "title": "Plugin Configuration",
+          "description": "Per-plugin configuration objects keyed by plugin ID.",
+          "patternProperties": {
+            "^[A-Za-z0-9][A-Za-z0-9_.\\-/]{0,127}$": { "type": "object", "additionalProperties": true }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "colorHex": {
+      "type": "string",
+      "pattern": "^#([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8})$",
+      "title": "Color",
+      "description": "Hex color string (#RRGGBB or #AARRGGBB)."
+    },
+    "windowBounds": {
+      "type": "object",
+      "title": "Window Bounds",
+      "description": "Window bounds in device-independent pixels.",
+      "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": { "type": "integer", "title": "X", "description": "Left position." },
+        "y": { "type": "integer", "title": "Y", "description": "Top position." },
+        "width": { "type": "integer", "minimum": 1, "title": "Width", "description": "Window width." },
+        "height": { "type": "integer", "minimum": 1, "title": "Height", "description": "Window height." }
+      },
+      "additionalProperties": false
+    },
+    "windowPlacement": {
+      "type": "object",
+      "title": "Window Placement",
+      "description": "Saved window placement (state, bounds, DPI).",
+      "required": ["state", "bounds"],
+      "properties": {
+        "state": { "type": "string", "enum": ["normal", "maximized"], "title": "State", "description": "Normal or maximized." },
+        "bounds": { "$ref": "#/$defs/windowBounds", "title": "Bounds", "description": "Saved bounds for the window." },
+        "dpi": { "type": "integer", "minimum": 1, "title": "DPI", "description": "DPI used when saving bounds." }
+      },
+      "additionalProperties": false
+    },
+    "themeId": {
+      "type": "string",
+      "pattern": "^(builtin/(system|light|dark|rainbow|highContrast)|user/[A-Za-z0-9][A-Za-z0-9_.-]{0,63})$",
+      "title": "Theme Id",
+      "description": "Builtin theme id (builtin/*) or user theme id (user/*)."
+    },
+    "builtinThemeId": {
+      "type": "string",
+      "enum": ["builtin/system", "builtin/light", "builtin/dark", "builtin/rainbow", "builtin/highContrast"],
+      "title": "Builtin Theme Id",
+      "description": "Identifier of a builtin theme."
+    },
+    "themeDefinition": {
+      "type": "object",
+      "title": "Theme Definition",
+      "description": "A user-defined theme that overrides color keys on top of a builtin base theme.",
+      "required": ["id", "name", "baseThemeId", "colors"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^user/[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$",
+          "title": "Id",
+          "description": "Unique theme id (must start with user/)."
+        },
+        "name": { "type": "string", "minLength": 1, "maxLength": 64, "title": "Name", "description": "Display name for the theme." },
+        "baseThemeId": { "$ref": "#/$defs/builtinThemeId", "title": "Base Theme", "description": "Builtin theme used as a base for this theme." },
+        "colors": {
+          "type": "object",
+          "default": {},
+          "title": "Color Overrides",
+          "description": "Map of color keys to hex color values (#RRGGBB or #AARRGGBB).",
+          "properties": {
+            "app.accent": { "$ref": "#/$defs/colorHex" },
+            "window.background": { "$ref": "#/$defs/colorHex" },
+
+            "menu.background": { "$ref": "#/$defs/colorHex" },
+            "menu.text": { "$ref": "#/$defs/colorHex" },
+            "menu.disabledText": { "$ref": "#/$defs/colorHex" },
+            "menu.selectionBg": { "$ref": "#/$defs/colorHex" },
+            "menu.selectionText": { "$ref": "#/$defs/colorHex" },
+            "menu.separator": { "$ref": "#/$defs/colorHex" },
+            "menu.border": { "$ref": "#/$defs/colorHex" },
+
+            "navigation.background": { "$ref": "#/$defs/colorHex" },
+            "navigation.backgroundHover": { "$ref": "#/$defs/colorHex" },
+            "navigation.backgroundPressed": { "$ref": "#/$defs/colorHex" },
+            "navigation.text": { "$ref": "#/$defs/colorHex" },
+            "navigation.separator": { "$ref": "#/$defs/colorHex" },
+            "navigation.accent": { "$ref": "#/$defs/colorHex" },
+            "navigation.progressOk": { "$ref": "#/$defs/colorHex" },
+            "navigation.progressWarn": { "$ref": "#/$defs/colorHex" },
+            "navigation.progressBackground": { "$ref": "#/$defs/colorHex" },
+
+            "folderView.background": { "$ref": "#/$defs/colorHex" },
+            "folderView.itemBackgroundNormal": { "$ref": "#/$defs/colorHex" },
+            "folderView.itemBackgroundHovered": { "$ref": "#/$defs/colorHex" },
+            "folderView.itemBackgroundSelected": { "$ref": "#/$defs/colorHex" },
+            "folderView.itemBackgroundSelectedInactive": { "$ref": "#/$defs/colorHex" },
+            "folderView.itemBackgroundFocused": { "$ref": "#/$defs/colorHex" },
+            "folderView.textNormal": { "$ref": "#/$defs/colorHex" },
+            "folderView.textSelected": { "$ref": "#/$defs/colorHex" },
+            "folderView.textSelectedInactive": { "$ref": "#/$defs/colorHex" },
+            "folderView.textDisabled": { "$ref": "#/$defs/colorHex" },
+            "folderView.focusBorder": { "$ref": "#/$defs/colorHex" },
+            "folderView.gridLines": { "$ref": "#/$defs/colorHex" },
+            "folderView.errorBackground": { "$ref": "#/$defs/colorHex" },
+            "folderView.errorText": { "$ref": "#/$defs/colorHex" },
+            "folderView.warningBackground": { "$ref": "#/$defs/colorHex" },
+            "folderView.warningText": { "$ref": "#/$defs/colorHex" },
+            "folderView.infoBackground": { "$ref": "#/$defs/colorHex" },
+            "folderView.infoText": { "$ref": "#/$defs/colorHex" },
+
+            "monitor.textView.bg": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.fg": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.caret": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.selection": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.searchHighlight": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.gutterBg": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.gutterFg": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.metaText": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.metaError": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.metaWarning": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.metaInfo": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.metaDebug": { "$ref": "#/$defs/colorHex" },
+
+            "fileOps.progressBackground": { "$ref": "#/$defs/colorHex" },
+            "fileOps.progressTotal": { "$ref": "#/$defs/colorHex" },
+            "fileOps.progressItem": { "$ref": "#/$defs/colorHex" },
+            "fileOps.graphBackground": { "$ref": "#/$defs/colorHex" },
+            "fileOps.graphGrid": { "$ref": "#/$defs/colorHex" },
+            "fileOps.graphLimit": { "$ref": "#/$defs/colorHex" },
+            "fileOps.graphLine": { "$ref": "#/$defs/colorHex" },
+            "fileOps.scrollbarTrack": { "$ref": "#/$defs/colorHex" },
+            "fileOps.scrollbarThumb": { "$ref": "#/$defs/colorHex" }
+          },
+          "patternProperties": {
+            "^[A-Za-z0-9_.-]{1,64}$": { "$ref": "#/$defs/colorHex" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "themeSettings": {
+      "type": "object",
+      "title": "Theme",
+      "description": "Theme selection and user theme definitions.",
+      "x-ui-pane": "Themes",
+      "x-ui-control": "custom",
+      "x-ui-order": 0,
+      "properties": {
+        "currentThemeId": { "$ref": "#/$defs/themeId", "default": "builtin/system", "title": "Current Theme", "description": "Id of the active theme." },
+        "themes": {
+          "type": "array",
+          "default": [],
+          "title": "Themes",
+          "description": "User theme definitions stored in settings.",
+          "items": { "$ref": "#/$defs/themeDefinition" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "folderSlot": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,64}$"
+    },
+    "folderDisplayMode": {
+      "type": "string",
+      "enum": ["brief", "detailed"],
+      "default": "brief",
+      "title": "Display Mode",
+      "description": "How folder items are displayed."
+    },
+    "folderSortBy": {
+      "type": "string",
+      "enum": ["none", "name", "extension", "time", "size", "attributes"],
+      "default": "name",
+      "title": "Sort By",
+      "description": "Primary sort key for folder items."
+    },
+    "folderSortDirection": {
+      "type": "string",
+      "enum": ["ascending", "descending"],
+      "default": "ascending",
+      "title": "Sort Direction",
+      "description": "Ascending or descending sort direction."
+    },
+    "folderViewSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Folder View",
+      "description": "Folder pane view settings (display mode, sorting, status bar).",
+      "properties": {
+        "display": { "$ref": "#/$defs/folderDisplayMode", "title": "Display", "description": "Brief or detailed view." },
+        "sortBy": { "$ref": "#/$defs/folderSortBy", "title": "Sort By", "description": "How items are sorted." },
+        "sortDirection": { "$ref": "#/$defs/folderSortDirection", "title": "Direction", "description": "Ascending or descending sort direction." },
+        "statusBarVisible": { "type": "boolean", "default": true, "title": "Status Bar", "description": "Whether the status bar is visible." }
+      },
+      "additionalProperties": false
+    },
+    "folderLayoutSettings": {
+      "type": "object",
+      "default": {},
+      "properties": {
+        "splitRatio": { "type": "number", "minimum": 0.0, "maximum": 1.0, "default": 0.5 },
+        "zoomedPane": { "$ref": "#/$defs/folderSlot" },
+        "zoomRestoreSplitRatio": { "type": "number", "minimum": 0.0, "maximum": 1.0 }
+      },
+      "additionalProperties": false
+    },
+    "folderItem": {
+      "type": "object",
+      "required": ["slot", "current"],
+      "properties": {
+        "slot": { "$ref": "#/$defs/folderSlot" },
+        "current": { "type": "string", "minLength": 1 },
+        "view": { "$ref": "#/$defs/folderViewSettings" }
+      },
+      "additionalProperties": false
+    },
+    "foldersSettings": {
+      "type": "object",
+      "title": "Folders",
+      "description": "Folders pane settings (active pane, view defaults, layout, and history).",
+      "x-ui-pane": "Panes",
+      "x-ui-control": "custom",
+      "x-ui-order": 0,
+      "required": ["items"],
+      "properties": {
+        "active": { "$ref": "#/$defs/folderSlot" },
+        "layout": { "$ref": "#/$defs/folderLayoutSettings" },
+        "historyMax": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20, "title": "History Size", "description": "Maximum number of folders kept in history." },
+        "history": {
+          "type": "array",
+          "default": [],
+          "maxItems": 50,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "items": {
+          "type": "array",
+          "default": [],
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/folderItem" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "directoryInfoCacheSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Directory Info Cache",
+      "description": "Cache limits and watcher settings for directory info.",
+      "properties": {
+        "maxBytes": {
+          "title": "Max Bytes",
+          "description": "Maximum size of the directory info cache (accepts integer KiB or a string like '256 MB').",
+          "x-ui-pane": "Advanced",
+          "x-ui-order": 100,
+          "x-ui-control": "custom",
+          "x-ui-section": "Cache",
+          "oneOf": [
+            { "type": "integer", "minimum": 1 },
+            { "type": "string", "pattern": "^\\s*[0-9]+\\s*([kK][bB]|[mM][bB]|[gG][bB])?\\s*$" }
+          ]
+        },
+        "maxWatchers": {
+          "type": "integer",
+          "minimum": 0,
+          "title": "Max Watchers",
+          "description": "Maximum number of folder watchers used by the cache.",
+          "x-ui-pane": "Advanced",
+          "x-ui-order": 110,
+          "x-ui-control": "custom",
+          "x-ui-section": "Cache"
+        },
+        "mruWatched": {
+          "type": "integer",
+          "minimum": 0,
+          "title": "MRU Watched",
+          "description": "Maximum number of recently watched folders stored in the cache.",
+          "x-ui-pane": "Advanced",
+          "x-ui-order": 120,
+          "x-ui-control": "custom",
+          "x-ui-section": "Cache"
+        }
+      },
+      "additionalProperties": false
+    },
+    "cacheSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Cache",
+      "description": "Cache settings for the application.",
+      "properties": {
+        "directoryInfo": { "$ref": "#/$defs/directoryInfoCacheSettings" }
+      },
+      "additionalProperties": false
+    },
+    "fileOperationsSettings": {
+      "type": "object",
+      "default": {},
+      "title": "File Operations",
+      "description": "Global file operation behavior and diagnostics retention settings.",
+      "properties": {
+        "autoDismissSuccess": {
+          "type": "boolean",
+          "default": false,
+          "title": "Auto-dismiss Success",
+          "description": "Automatically dismiss completed successful file-operation tasks."
+        },
+        "maxDiagnosticsLogFiles": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 365,
+          "default": 14,
+          "title": "Max Diagnostics Log Files",
+          "description": "Maximum number of file-operation diagnostics log files kept on disk.",
+          "x-ui-pane": "Advanced",
+          "x-ui-order": 130,
+          "x-ui-control": "custom",
+          "x-ui-section": "File Operations"
+        },
+        "diagnosticsInfoEnabled": {
+          "type": "boolean",
+          "default": false,
+          "title": "Diagnostics: Info",
+          "description": "Include info-level file-operation diagnostics in the per-day diagnostics log (Debug builds default to true; Release builds default to false).",
+          "x-ui-pane": "Advanced",
+          "x-ui-order": 131,
+          "x-ui-control": "custom",
+          "x-ui-section": "File Operations"
+        },
+        "diagnosticsDebugEnabled": {
+          "type": "boolean",
+          "default": false,
+          "title": "Diagnostics: Debug",
+          "description": "Include debug-level file-operation diagnostics in the per-day diagnostics log (Debug builds default to true; Release builds default to false).",
+          "x-ui-pane": "Advanced",
+          "x-ui-order": 132,
+          "x-ui-control": "custom",
+          "x-ui-section": "File Operations"
+        },
+        "maxIssueReportFiles": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 60,
+          "title": "Max Issue Report Files",
+          "description": "Maximum number of exported file-operation issue reports kept on disk (advanced JSON-only setting)."
+        },
+        "maxDiagnosticsInMemory": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 256,
+          "title": "Max Diagnostics In Memory",
+          "description": "Maximum number of diagnostics entries retained in memory (advanced JSON-only setting)."
+        },
+        "maxDiagnosticsPerFlush": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 64,
+          "title": "Max Diagnostics Per Flush",
+          "description": "Minimum pending diagnostics batch threshold before periodic flush (advanced JSON-only setting)."
+        },
+        "diagnosticsFlushIntervalMs": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5000,
+          "title": "Diagnostics Flush Interval (ms)",
+          "description": "Periodic diagnostics flush interval in milliseconds (advanced JSON-only setting)."
+        },
+        "diagnosticsCleanupIntervalMs": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 900000,
+          "title": "Diagnostics Cleanup Interval (ms)",
+          "description": "Interval between diagnostics log cleanup passes in milliseconds (advanced JSON-only setting)."
+        }
+      },
+      "additionalProperties": false
+    },
+    "compareDirectoriesSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Compare Directories",
+      "description": "Settings for the Compare Directories command.",
+      "properties": {
+        "compareSize": { "type": "boolean", "default": false, "title": "Compare Size" },
+        "compareDateTime": { "type": "boolean", "default": false, "title": "Compare Date and Time" },
+        "compareAttributes": { "type": "boolean", "default": false, "title": "Compare Attributes" },
+        "compareContent": { "type": "boolean", "default": false, "title": "Compare Content" },
+        "compareSubdirectories": { "type": "boolean", "default": false, "title": "Compare Subdirectories" },
+        "compareSubdirectoryAttributes": { "type": "boolean", "default": false, "title": "Compare Attributes of Subdirectories" },
+        "selectSubdirsOnlyInOnePane": { "type": "boolean", "default": true, "title": "Select Unique Subdirectories" },
+        "ignoreFiles": { "type": "boolean", "default": false, "title": "Ignore Files" },
+        "ignoreFilesPatterns": {
+          "type": "string",
+          "default": "",
+          "title": "Ignore File Patterns",
+          "description": "Wildcard patterns separated by ';' (e.g. *.obj;*.pdb)."
+        },
+        "ignoreDirectories": { "type": "boolean", "default": false, "title": "Ignore Directories" },
+        "ignoreDirectoriesPatterns": {
+          "type": "string",
+          "default": "",
+          "title": "Ignore Directory Patterns",
+          "description": "Wildcard patterns separated by ';' (e.g. .git;node_modules)."
+        },
+        "showIdenticalItems": { "type": "boolean", "default": false, "title": "Show Identical Items" }
+      },
+      "additionalProperties": false
+    },
+    "monitorMenuState": {
+      "type": "object",
+      "title": "Monitor Menu",
+      "description": "UI state for the Monitor window.",
+      "properties": {
+        "toolbarVisible": { "type": "boolean", "default": true, "title": "Toolbar", "description": "Show or hide the Monitor toolbar." },
+        "lineNumbersVisible": { "type": "boolean", "default": true, "title": "Line Numbers", "description": "Show or hide line numbers in the Monitor." },
+        "alwaysOnTop": { "type": "boolean", "default": false, "title": "Always On Top", "description": "Keep the Monitor window above other windows." },
+        "showIds": { "type": "boolean", "default": true, "title": "Show Ids", "description": "Show numeric ids for messages (useful for debugging)." },
+        "autoScroll": { "type": "boolean", "default": true, "title": "Auto Scroll", "description": "Scroll automatically as new messages arrive." }
+      },
+      "additionalProperties": false
+    },
+    "monitorFilterPreset": {
+      "type": "string",
+      "title": "Monitor Filter Preset",
+      "description": "Named preset describing which message types are shown.",
+      "enum": ["custom", "errorsOnly", "errorsWarnings", "allTypes"],
+      "default": "custom"
+    },
+    "monitorFilterSettings": {
+      "type": "object",
+      "title": "Monitor Filter",
+      "description": "Filter applied to Monitor messages.",
+      "properties": {
+        "mask": { "type": "integer", "minimum": 0, "maximum": 31, "default": 31, "title": "Mask", "description": "Bitmask of enabled message types (0..31)." },
+        "preset": { "$ref": "#/$defs/monitorFilterPreset", "title": "Preset", "description": "Named preset filter." }
+      },
+      "additionalProperties": false
+    },
+    "monitorSettings": {
+      "type": "object",
+      "title": "Monitor",
+      "description": "Preferences for the Monitor window.",
+      "x-ui-pane": "Advanced",
+      "x-ui-control": "custom",
+      "x-ui-order": 0,
+      "properties": {
+        "menu": { "$ref": "#/$defs/monitorMenuState", "title": "Menu", "description": "Monitor menu and toolbar settings." },
+        "filter": { "$ref": "#/$defs/monitorFilterSettings", "title": "Filter", "description": "Monitor message filter settings." }
+      },
+      "additionalProperties": false
+    },
+    "mainMenuSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Main Menu",
+      "description": "Main menu and function bar visibility settings.",
+      "properties": {
+        "menuBarVisible": {
+          "type": "boolean",
+          "default": true,
+          "title": "Menu Bar",
+          "description": "Show or hide the main menu bar.",
+          "x-ui-pane": "General",
+          "x-ui-order": 10,
+          "x-ui-control": "toggle",
+          "x-ui-section": "Display"
+        },
+        "functionBarVisible": {
+          "type": "boolean",
+          "default": true,
+          "title": "Function Bar",
+          "description": "Show or hide the function bar.",
+          "x-ui-pane": "General",
+          "x-ui-order": 20,
+          "x-ui-control": "toggle",
+          "x-ui-section": "Display"
+        }
+      },
+      "additionalProperties": false
+    },
+    "startupSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Startup",
+      "description": "Startup behavior preferences.",
+      "properties": {
+        "showSplash": {
+          "type": "boolean",
+          "default": true,
+          "title": "Splash screen",
+          "description": "Show a splash screen when startup takes longer than 300ms.",
+          "x-ui-pane": "General",
+          "x-ui-order": 30,
+          "x-ui-control": "custom",
+          "x-ui-section": "Startup"
+        }
+      },
+      "additionalProperties": false
+    },
+    "connectionAuthMode": {
+      "type": "string",
+      "title": "Authentication Mode",
+      "default": "password",
+      "enum": ["anonymous", "password", "sshKey"]
+    },
+    "connectionProfile": {
+      "type": "object",
+      "title": "Connection Profile",
+      "description": "A single saved remote connection (non-secret fields only).",
+      "required": ["id", "name", "pluginId", "host"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "title": "Id",
+          "description": "Stable internal GUID (used for WinCred storage; not used for /@conn: navigation).",
+          "pattern": "^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$"
+        },
+        "name": { "type": "string", "title": "Name", "minLength": 1 },
+        "pluginId": { "$ref": "#/$defs/pluginId", "title": "Plugin" },
+        "host": { "type": "string", "title": "Host", "minLength": 1, "description": "Host name (trimmed on save)." },
+        "port": { "type": "integer", "title": "Port", "minimum": 0, "maximum": 65535, "default": 0 },
+        "initialPath": { "type": "string", "title": "Initial Path", "default": "/" },
+        "userName": { "type": "string", "title": "User Name", "default": "" },
+        "authMode": { "$ref": "#/$defs/connectionAuthMode" },
+        "savePassword": { "type": "boolean", "title": "Save Password", "default": false },
+        "requireWindowsHello": {
+          "type": "boolean",
+          "title": "Require Windows Hello",
+          "default": true,
+          "description": "Hidden expert setting; when true, Windows Hello verification is required before secrets are released."
+        },
+        "extra": {
+          "type": "object",
+          "title": "Extra",
+          "description": "Plugin-specific non-secret fields. Known keys: sshPrivateKey, sshKnownHosts (SFTP/SCP); ignoreSslTrust (IMAP).",
+          "default": {},
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "connectionsSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Connections",
+      "description": "Saved connections managed by Connection Manager.",
+      "properties": {
+        "bypassWindowsHello": {
+          "type": "boolean",
+          "default": false,
+          "title": "Bypass Windows Hello",
+          "description": "When true, Windows Hello verification is skipped even if a connection profile requires it."
+        },
+        "windowsHelloReauthTimeoutMinute": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 0,
+          "title": "Windows Hello Reauth Timeout (minutes)",
+          "description": "How long a successful Windows Hello verification is reused for a given connection. 0 = re-ask every time."
+        },
+        "items": {
+          "type": "array",
+          "default": [],
+          "items": { "$ref": "#/$defs/connectionProfile" }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

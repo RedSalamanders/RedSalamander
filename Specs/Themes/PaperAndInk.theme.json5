@@ -1,0 +1,78 @@
+// ThemeDefinition (JSON5) for RedSalamander SettingsStore
+// Copy this object into your settings file under: theme.themes[]
+// Then select it by setting: theme.currentThemeId = "user/paper-and-ink"
+{
+  "id": "user/paper-and-ink",
+  "name": "Paper & Ink",
+  "baseThemeId": "builtin/light",
+  "colors": {
+    // App-level
+    "app.accent": "#1F6FEB", // crisp blue ink
+    "window.background": "#FAFAF7", // warm paper
+
+    // Menu
+    "menu.background": "#FAFAF7",
+    "menu.text": "#111111",
+    "menu.disabledText": "#777777",
+    "menu.selectionBg": "#1F6FEB",
+    "menu.selectionText": "#FFFFFF",
+    "menu.separator": "#E2E2DA",
+    "menu.border": "#E2E2DA",
+
+    // Navigation
+    "navigation.background": "#F0F0EA",
+    "navigation.backgroundHover": "#E6E6DE",
+    "navigation.backgroundPressed": "#DADAD1",
+    "navigation.text": "#111111",
+    "navigation.separator": "#D0D0C8",
+    "navigation.accent": "#1F6FEB",
+    "navigation.progressOk": "#1F6FEB",
+    "navigation.progressWarn": "#D11A2A",
+    "navigation.progressBackground": "#E2E2DA",
+
+    // File Operations popup
+    "fileOps.progressBackground": "#E2E2DA",
+    "fileOps.progressTotal": "#1F6FEB",
+    "fileOps.progressItem": "#1F6FEB",
+    "fileOps.graphBackground": "#33E2E2DA",
+    "fileOps.graphGrid": "#55E2E2DA",
+    "fileOps.graphLimit": "#CC777777",
+    "fileOps.graphLine": "#1F6FEB",
+    "fileOps.scrollbarTrack": "#11E2E2DA",
+    "fileOps.scrollbarThumb": "#55E2E2DA",
+
+    // FolderView
+    "folderView.background": "#FFFFFF",
+    "folderView.itemBackgroundNormal": "#00000000",
+    "folderView.itemBackgroundHovered": "#331F6FEB", // translucent accent wash
+    "folderView.itemBackgroundSelected": "#1F6FEB",
+    "folderView.itemBackgroundSelectedInactive": "#A61F6FEB",
+    "folderView.itemBackgroundFocused": "#331F6FEB",
+    "folderView.textNormal": "#111111",
+    "folderView.textSelected": "#FFFFFF",
+    "folderView.textSelectedInactive": "#111111",
+    "folderView.textDisabled": "#777777",
+    "folderView.focusBorder": "#1F6FEB",
+    "folderView.gridLines": "#E2E2DA",
+    "folderView.errorBackground": "#33D11A2A",
+    "folderView.errorText": "#D11A2A",
+    "folderView.warningBackground": "#33B45309",
+    "folderView.warningText": "#B45309",
+    "folderView.infoBackground": "#331F6FEB",
+    "folderView.infoText": "#1F6FEB",
+
+    // Monitor (ColorTextView)
+    "monitor.textView.bg": "#FFFFFF",
+    "monitor.textView.fg": "#111111",
+    "monitor.textView.caret": "#1F6FEB",
+    "monitor.textView.selection": "#331F6FEB",
+    "monitor.textView.searchHighlight": "#33FFD500",
+    "monitor.textView.gutterBg": "#F0F0EA",
+    "monitor.textView.gutterFg": "#6B6B6B",
+    "monitor.textView.metaText": "#4A4A4A",
+    "monitor.textView.metaError": "#D11A2A",
+    "monitor.textView.metaWarning": "#B45309",
+    "monitor.textView.metaInfo": "#1F6FEB",
+    "monitor.textView.metaDebug": "#6B6B6B",
+  },
+}

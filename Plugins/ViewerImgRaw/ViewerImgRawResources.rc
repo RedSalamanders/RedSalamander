@@ -1,0 +1,91 @@
+#include <windows.h>
+#include "resource.h"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_VIEWERRAW_MENU MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&Refresh\tF5", IDM_VIEWERRAW_FILE_REFRESH
+        MENUITEM SEPARATOR
+        MENUITEM "&Export...\tCtrl+S", IDM_VIEWERRAW_FILE_EXPORT
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit\tEsc", IDM_VIEWERRAW_FILE_EXIT
+    END
+    POPUP "&Other Files"
+    BEGIN
+        MENUITEM "&Next\tRight, PgDn, Space", IDM_VIEWERRAW_OTHER_NEXT
+        MENUITEM "&Previous\tLeft, PgUp, Backspace", IDM_VIEWERRAW_OTHER_PREVIOUS
+        MENUITEM "&First\tHome", IDM_VIEWERRAW_OTHER_FIRST
+        MENUITEM "&Last\tEnd", IDM_VIEWERRAW_OTHER_LAST
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Fit to Window\tCtrl+F, Double Click", IDM_VIEWERRAW_VIEW_FIT
+        MENUITEM "&Actual Size (100%)\t1, Ctrl+Double Click", IDM_VIEWERRAW_VIEW_ACTUAL_SIZE
+        MENUITEM "Toggle Fit/100%\tF", IDM_VIEWERRAW_VIEW_TOGGLE_FIT_100
+        MENUITEM SEPARATOR
+        MENUITEM "Zoom &In\t+", IDM_VIEWERRAW_VIEW_ZOOM_IN
+        MENUITEM "Zoom &Out\t-", IDM_VIEWERRAW_VIEW_ZOOM_OUT
+        MENUITEM "Zoom &Reset\t0", IDM_VIEWERRAW_VIEW_ZOOM_RESET
+        MENUITEM SEPARATOR
+        POPUP "&Transform"
+        BEGIN
+            MENUITEM "Rotate &Clockwise\tR", IDM_VIEWERRAW_VIEW_ROTATE_CW
+            MENUITEM "Rotate &Counterclockwise\tCtrl+R, Shift+R", IDM_VIEWERRAW_VIEW_ROTATE_CCW
+            MENUITEM SEPARATOR
+            MENUITEM "Flip &Horizontal\tH", IDM_VIEWERRAW_VIEW_FLIP_HORIZONTAL
+            MENUITEM "Flip &Vertical\tV", IDM_VIEWERRAW_VIEW_FLIP_VERTICAL
+            MENUITEM SEPARATOR
+            MENUITEM "&Reset Orientation\tO", IDM_VIEWERRAW_VIEW_RESET_ORIENTATION
+        END
+        POPUP "&Adjust"
+        BEGIN
+            MENUITEM "Brightness +\tCtrl+Alt+Up", IDM_VIEWERRAW_VIEW_BRIGHTNESS_INCREASE
+            MENUITEM "Brightness -\tCtrl+Alt+Down", IDM_VIEWERRAW_VIEW_BRIGHTNESS_DECREASE
+            MENUITEM "Contrast +\tCtrl+Alt+Right", IDM_VIEWERRAW_VIEW_CONTRAST_INCREASE
+            MENUITEM "Contrast -\tCtrl+Alt+Left", IDM_VIEWERRAW_VIEW_CONTRAST_DECREASE
+            MENUITEM "Gamma +\tCtrl+Alt+PgUp", IDM_VIEWERRAW_VIEW_GAMMA_INCREASE
+            MENUITEM "Gamma -\tCtrl+Alt+PgDn", IDM_VIEWERRAW_VIEW_GAMMA_DECREASE
+            MENUITEM SEPARATOR
+            MENUITEM "&Grayscale\tG", IDM_VIEWERRAW_VIEW_TOGGLE_GRAYSCALE
+            MENUITEM "&Negative\tN", IDM_VIEWERRAW_VIEW_TOGGLE_NEGATIVE
+        END
+        MENUITEM SEPARATOR
+        POPUP "Image &Source"
+        BEGIN
+            MENUITEM "&RAW (decoded)", IDM_VIEWERRAW_VIEW_SOURCE_RAW
+            MENUITEM "&Thumbnail", IDM_VIEWERRAW_VIEW_SOURCE_THUMBNAIL
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "Show &Exif Overlay\tI", IDM_VIEWERRAW_VIEW_SHOW_EXIF_OVERLAY
+    END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERRAW_NAME "Image"
+    IDS_VIEWERRAW_DESCRIPTION "Image viewer (WIC + LibRaw)"
+    IDS_VIEWERRAW_TITLE_FORMAT "{0} - Image"
+    IDS_VIEWERRAW_STATUS_LOADING "Loading..."
+    IDS_VIEWERRAW_STATUS_ERROR "Failed to load image."
+    IDS_VIEWERRAW_STATUS_NO_IMAGE "No image."
+    IDS_VIEWERRAW_DIALOG_EXPORT_TITLE "Export image"
+    IDS_VIEWERRAW_DIALOG_FILTER_JPEG "JPEG image (*.jpg;*.jpeg)"
+    IDS_VIEWERRAW_DIALOG_FILTER_PNG "PNG image (*.png)"
+    IDS_VIEWERRAW_DIALOG_FILTER_TIFF "TIFF image (*.tif;*.tiff)"
+    IDS_VIEWERRAW_DIALOG_FILTER_BMP "Bitmap image (*.bmp;*.dib)"
+    IDS_VIEWERRAW_DIALOG_FILTER_GIF "GIF image (*.gif)"
+    IDS_VIEWERRAW_DIALOG_FILTER_JXR "JPEG XR image (*.jxr;*.wdp;*.hdp)"
+    IDS_VIEWERRAW_EXPORT_NO_IMAGE "No image to export."
+    IDS_VIEWERRAW_EXPORT_UNSUPPORTED_EXTENSION "Unsupported export extension. Use .png, .jpg/.jpeg, .tif/.tiff, .bmp/.dib, .gif, or .jxr/.wdp/.hdp."
+END

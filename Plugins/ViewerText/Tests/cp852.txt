@@ -1,0 +1,11 @@
+Encoding: OEM 852 (Central European) - no BOM
+File: cp852.txt
+Purpose: Polish/Czech/Slovak diacritics in OEM 852.
+---
+01: Polish: Za¾¢ˆ† g©˜l¥ ja«ä.
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Czech: Pý¡liç §luœouŸkì k…å £pØl Ô belsk‚ ¢dy.
+06: Slovak: Kêde– Ôat–ov uŸ¡ koåa §raœ k“ru.
+07: End marker: EOF

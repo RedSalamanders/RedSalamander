@@ -1,0 +1,18 @@
+Encoding: CP850 (DOS Latin-1) - no BOM
+File: cp850.txt
+Line endings: CRLF
+Purpose: OEM Latin (CP850) vs CP437/CP1252.
+---
+01: German: ™š „” á
+02: Cities: Mnchen, K”ln, Zrich, Dsseldorf.
+03: Spanish: a¤o, se¤or, jalape¤o, pi¤ata.
+04: French: Voil…! d‚j… vu; touch‚; fianc‚e.
+05: French: fa‡ade, gar‡on, crŠme br–l‚e.
+06: Nordic: ’   ‘ › †
+07: Mixed: € ‡  š ” ™ „ 
+08: Currency: ½ œ ¾
+09: Punctuation: ­ ¨ ® ¯
+10: Math: ñ  ö
+11: Line art: Û ² ± °
+12: PATH: C:\Temp\ViewerText\cp850.txt
+13: End marker: EOF

@@ -1,0 +1,9 @@
+Encoding: Mac Turkish (x-mac-turkish) - no BOM
+File: mac-turkish.txt
+Line endings: CRLF
+Purpose: Validate Mac Turkish mapping.
+---
+01: Turkish: ‹stanbul, ﬂ, €, ç, ö, ü
+02: Turkish pangram: Pijamal› hasta ya€›z ﬂoföre çabucak güvendi.
+03: PATH: C:\Temp\ViewerText\mac-turkish.txt
+04: End marker: EOF

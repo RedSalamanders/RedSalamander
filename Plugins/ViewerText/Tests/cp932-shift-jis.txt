@@ -1,0 +1,10 @@
+Encoding: Japanese Shift JIS (CP932) - no BOM
+File: cp932-shift-jis.txt
+Purpose: Shift JIS Japanese text.
+---
+01: Japanese: 日本語のテキスト
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Kanji/Kana: 漢字 ひらがな カタカナ
+06: End marker: EOF

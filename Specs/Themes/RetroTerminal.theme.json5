@@ -1,0 +1,78 @@
+// ThemeDefinition (JSON5) for RedSalamander SettingsStore
+// Copy this object into your settings file under: theme.themes[]
+// Then select it by setting: theme.currentThemeId = "user/retro-terminal"
+{
+  "id": "user/retro-terminal",
+  "name": "Retro Terminal",
+  "baseThemeId": "builtin/dark",
+  "colors": {
+    // App-level
+    "app.accent": "#00FF7F", // phosphor green
+    "window.background": "#000000",
+
+    // Menu
+    "menu.background": "#000000",
+    "menu.text": "#00FF7F",
+    "menu.disabledText": "#00AA55",
+    "menu.selectionBg": "#00FF7F",
+    "menu.selectionText": "#000000",
+    "menu.separator": "#00331A",
+    "menu.border": "#00331A",
+
+    // Navigation
+    "navigation.background": "#000000",
+    "navigation.backgroundHover": "#001108",
+    "navigation.backgroundPressed": "#002211",
+    "navigation.text": "#00FF7F",
+    "navigation.separator": "#00331A",
+    "navigation.accent": "#00FF7F",
+    "navigation.progressOk": "#00FF7F",
+    "navigation.progressWarn": "#FF4D4D",
+    "navigation.progressBackground": "#00331A",
+
+    // File Operations popup
+    "fileOps.progressBackground": "#00331A",
+    "fileOps.progressTotal": "#00FF7F",
+    "fileOps.progressItem": "#00FF7F",
+    "fileOps.graphBackground": "#4000331A",
+    "fileOps.graphGrid": "#4000331A",
+    "fileOps.graphLimit": "#CC00AA55",
+    "fileOps.graphLine": "#00FF7F",
+    "fileOps.scrollbarTrack": "#1900331A",
+    "fileOps.scrollbarThumb": "#6600331A",
+
+    // FolderView
+    "folderView.background": "#000000",
+    "folderView.itemBackgroundNormal": "#00000000",
+    "folderView.itemBackgroundHovered": "#2200FF7F", // translucent phosphor glow
+    "folderView.itemBackgroundSelected": "#00FF7F",
+    "folderView.itemBackgroundSelectedInactive": "#A600FF7F",
+    "folderView.itemBackgroundFocused": "#2200FF7F",
+    "folderView.textNormal": "#00FF7F",
+    "folderView.textSelected": "#000000",
+    "folderView.textSelectedInactive": "#000000",
+    "folderView.textDisabled": "#00AA55",
+    "folderView.focusBorder": "#00FF7F",
+    "folderView.gridLines": "#002211",
+    "folderView.errorBackground": "#33FF0000",
+    "folderView.errorText": "#FF4D4D",
+    "folderView.warningBackground": "#33FFD166",
+    "folderView.warningText": "#FFD166",
+    "folderView.infoBackground": "#3300FF7F",
+    "folderView.infoText": "#00FF7F",
+
+    // Monitor (ColorTextView)
+    "monitor.textView.bg": "#000000",
+    "monitor.textView.fg": "#00FF7F",
+    "monitor.textView.caret": "#00FF7F",
+    "monitor.textView.selection": "#2200FF7F",
+    "monitor.textView.searchHighlight": "#33FFFF00",
+    "monitor.textView.gutterBg": "#001108",
+    "monitor.textView.gutterFg": "#00AA55",
+    "monitor.textView.metaText": "#00AA55",
+    "monitor.textView.metaError": "#FF4D4D",
+    "monitor.textView.metaWarning": "#FFD166",
+    "monitor.textView.metaInfo": "#00FF7F",
+    "monitor.textView.metaDebug": "#00AA55",
+  },
+}

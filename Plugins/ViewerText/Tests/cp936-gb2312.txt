@@ -1,0 +1,10 @@
+Encoding: Chinese Simplified (GB2312/CP936/GBK) - no BOM
+File: cp936-gb2312.txt
+Purpose: Simplified Chinese sample.
+---
+01: Chinese: 你好，世界
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Chinese: 中文简体
+06: End marker: EOF

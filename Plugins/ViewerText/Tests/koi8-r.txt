@@ -1,0 +1,9 @@
+Encoding: KOI8-R (Cyrillic) - no BOM
+File: koi8-r.txt
+Purpose: KOI8-R legacy Cyrillic.
+---
+01: Russian: Привет мир
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: End marker: EOF

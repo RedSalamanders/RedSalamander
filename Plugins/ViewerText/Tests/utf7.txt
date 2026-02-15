@@ -1,0 +1,9 @@
+Encoding: UTF-7 (CP65000) - no BOM
+File: utf7.txt
+Line endings: CRLF
+Purpose: Validate UTF-7 display +- Save As encoding.
+---
+01: ASCII: The quick brown fox jumps over the lazy dog. 0123456789
+02: Unicode: caf+AOk na+AO8-ve fa+AOc-ade +IBQ +A5oDsQO7A7cDvAOtA8EDsQ +IBQ +BB8EQAQ4BDIENQRC +IBQ +BekF3AXVBd0 +IBQ +BkUGMQYtBigGJw +IBQ +Ti1lhw +IBQ +1VytbcW0
+03: PATH: C:+AFw-Temp+AFw-ViewerText+AFw-utf7.txt
+04: End marker: EOF

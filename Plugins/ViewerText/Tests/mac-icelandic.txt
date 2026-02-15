@@ -1,0 +1,9 @@
+Encoding: Mac Icelandic (x-mac-icelandic) - no BOM
+File: mac-icelandic.txt
+Line endings: CRLF
+Purpose: Validate Mac Icelandic mapping.
+---
+01: Icelandic: ﬁjó›hátí›, ›, ﬂ, æ, ö
+02: Scandinavian: smörgåsbord, blåbär, fjäll, Ångström.
+03: PATH: C:\Temp\ViewerText\mac-icelandic.txt
+04: End marker: EOF

@@ -1,0 +1,9 @@
+Encoding: KOI8-U (Cyrillic/Ukrainian) - no BOM
+File: koi8-u.txt
+Line endings: CRLF
+Purpose: Validate KOI8-U mapping.
+---
+01: KOI8-U: Прив╕т св╕те
+02: Ukrainian: ╥ ╖ ╢ ╓ ╫ ╜
+03: PATH: C:\Temp\ViewerText\koi8-u.txt
+04: End marker: EOF

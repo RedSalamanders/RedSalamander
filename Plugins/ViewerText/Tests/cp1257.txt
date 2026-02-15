@@ -1,0 +1,11 @@
+Encoding: Windows-1257 (Baltic) - no BOM
+File: cp1257.txt
+Purpose: Baltic Windows code page.
+---
+01: Latvian: Èau! Kâ tev klâjas?
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Lithuanian: Àþuolas, ðaltibarðèiai.
+06: Estonian: Põder, jõgi, Õun.
+07: End marker: EOF

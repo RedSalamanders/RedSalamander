@@ -1,0 +1,9 @@
+Encoding: Mac Croatian (x-mac-croatian) - no BOM
+File: mac-croatian.txt
+Line endings: CRLF
+Purpose: Validate Mac Croatian mapping.
+---
+01: Croatian: ÈæÐð©¹®¾
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: PATH: C:\Temp\ViewerText\mac-croatian.txt
+04: End marker: EOF

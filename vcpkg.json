@@ -1,0 +1,70 @@
+{
+  "name": "red-salamander",
+  "description": "Red Salamander Project",
+  "homepage": "https://github.com/Redsalamanderse/RedSalamander",
+  "builtin-baseline": "0a434205c521ca43d66921271ae2a1d051e718a5",
+  "dependencies": [
+    {
+      "name": "7zip",
+      "version>=": "25.1"
+    },
+    {
+      "name": "unrar",
+      "version>=": "7.0.7"
+    },
+    {
+      "name": "wil",
+      "version>=": "1.0.250325.1"
+    },
+    {
+      "name": "yyjson",
+      "version>=": "0.12.0"
+    },
+    {
+      "name": "libraw",
+      "version>=": "0.22.0",
+      "features": [
+        "openmp",
+        "dng-lossy"
+      ]
+    },
+    {
+      "name": "libjpeg-turbo",
+      "version>=": "3.1.3"
+    },
+    {
+      "name": "pe-parse",
+      "version>=": "2.1.1"
+    },
+    {
+      "name": "curl",
+      "version>=": "8.18.0",
+      "features": [
+        "ssl",
+        "ssh",
+        "brotli"
+      ]
+    },
+    {
+      "name": "webview2",
+      "version>=": "1.0.3650.58"
+    },
+    {
+      "name": "aws-sdk-cpp",
+      "version>=": "1.11.724",
+      "features": [
+        "s3",
+        "s3-crt",
+        "s3tables"
+      ]
+    }
+  ],
+  "features": {
+    "tests": {
+      "description": "Dependencies required for testing",
+      "dependencies": [
+        "ms-gsl"
+      ]
+    }
+  }
+}

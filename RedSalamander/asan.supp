@@ -1,0 +1,16 @@
+# ASan suppressions for known Windows DLL issues.
+#
+# The Windows file dialogs and shell property providers can trigger an AddressSanitizer
+# heap-buffer-overflow report in SID comparison code on some systems. This is external
+# to Red Salamander and is suppressed to keep ASan usable for app-level debugging.
+
+heap-buffer-overflow:CAceList::DoesAceListHasMoreThanOneSidForAllow
+heap-buffer-overflow:CSmbShareEngine::GetItemSharingStatus
+heap-buffer-overflow:EqualSid
+heap-buffer-overflow:RtlEqualSid
+
+# When the overflow is reported inside ASan interceptors (e.g. memcmp), suppress based on the calling function.
+interceptor_via_fun:CAceList::DoesAceListHasMoreThanOneSidForAllow
+interceptor_via_fun:CSmbShareEngine::GetItemSharingStatus
+interceptor_via_fun:EqualSid
+interceptor_via_fun:RtlEqualSid

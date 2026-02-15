@@ -1,0 +1,16 @@
+Encoding: Mac Roman - no BOM
+File: mac-roman.txt
+Line endings: CRLF
+Purpose: Classic Mac encoding (compare vs CP1252).
+---
+01: Accents: café naïve façade jalapeño año Niño.
+02: Symbols: © ® ™ •
+03: Quotes/dash: “quotes” ‘single’ – en dash — em dash …
+04: Math: ≤ ≥ ≠ ≈ ∞ √
+05: Calculus: ∑ ∫ ∂
+06: Greek: π Ω µ
+07: Nordic: Æ Ø Å æ ø å
+08: Ligatures: Œ œ
+09: Punctuation: ¡ ¿ « »
+10: PATH: C:\Temp\ViewerText\mac-roman.txt
+11: End marker: EOF

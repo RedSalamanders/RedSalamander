@@ -1,0 +1,12 @@
+Encoding: OEM 858 (DOS Latin 1) - no BOM
+File: cp858.txt
+Purpose: OEM 858 vs OEM 850 (adds Euro sign).
+---
+01: Currency: Õ $ œ (Euro should be present).
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Accents: caf‚ na‹ve fa‡ade jalape¤o a¤o Ni¤o.
+06: Boxes: ÚÄÂÄ¿  ÃÄÅÄ´  ÀÄÁÄÙ
+07: Note: Open as CP850 to compare Euro handling.
+08: End marker: EOF

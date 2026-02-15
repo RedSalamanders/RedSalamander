@@ -1,0 +1,9 @@
+Encoding: ISO-2022-KR (CP50225) - no BOM
+File: iso-2022-kr.txt
+Line endings: CRLF
+Purpose: Validate ISO-2022-KR mapping.
+---
+01: Korean: 안녕하세요
+02: Korean: 한국어
+03: PATH: C:\Temp\ViewerText\iso-2022-kr.txt
+04: End marker: EOF

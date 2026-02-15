@@ -1,0 +1,392 @@
+#include <windows.h>
+#include "resource.h"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_VIEWERTEXT_MENU MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&Open...\tCtrl+O", IDM_VIEWER_FILE_OPEN
+        MENUITEM "Save &As...\tCtrl+S", IDM_VIEWER_FILE_SAVE_AS
+        MENUITEM "&Refresh\tF5", IDM_VIEWER_FILE_REFRESH
+        POPUP "Other &Files"
+        BEGIN
+            MENUITEM "&Next\tSpace, Ctrl+Down", IDM_VIEWER_OTHER_NEXT
+            MENUITEM "&Previous\tBackspace, Ctrl+Up", IDM_VIEWER_OTHER_PREVIOUS
+            MENUITEM "&First\tCtrl+Home", IDM_VIEWER_OTHER_FIRST
+            MENUITEM "&Last\tCtrl+End", IDM_VIEWER_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit\tEsc", IDM_VIEWER_FILE_EXIT
+    END
+    POPUP "&Search"
+    BEGIN
+        MENUITEM "&Find...\tCtrl+F", IDM_VIEWER_SEARCH_FIND
+        MENUITEM "Find &Next\tF3", IDM_VIEWER_SEARCH_FIND_NEXT
+        MENUITEM "Find &Previous\tShift+F3", IDM_VIEWER_SEARCH_FIND_PREVIOUS
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Text", IDM_VIEWER_VIEW_TEXT
+        MENUITEM "&Hex", IDM_VIEWER_VIEW_HEX
+        MENUITEM SEPARATOR
+        MENUITEM "Go to &Top\tHome", IDM_VIEWER_VIEW_GOTO_TOP
+        MENUITEM "Go to &Bottom\tEnd", IDM_VIEWER_VIEW_GOTO_BOTTOM
+        MENUITEM "&Go to offset...\tCtrl+G", IDM_VIEWER_VIEW_GOTO_OFFSET
+        MENUITEM "&Line numbers", IDM_VIEWER_VIEW_LINE_NUMBERS
+        MENUITEM "&Wrap", IDM_VIEWER_VIEW_WRAP
+    END
+    POPUP "&Encoding"
+    BEGIN
+        MENUITEM "&Next Encoding\tF8", IDM_VIEWER_ENCODING_NEXT
+        MENUITEM "&Previous Encoding\tShift+F8", IDM_VIEWER_ENCODING_PREVIOUS
+        MENUITEM SEPARATOR
+        MENUITEM "&ANSI", IDM_VIEWER_ENCODING_DISPLAY_ANSI
+        MENUITEM "UTF-&7", IDM_VIEWER_ENCODING_DISPLAY_UTF7
+        MENUITEM "UTF-&8", IDM_VIEWER_ENCODING_DISPLAY_UTF8
+        MENUITEM "UTF-8 &BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF8_BOM
+        MENUITEM "UTF-16 &BE BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF16BE_BOM
+        MENUITEM "UTF-16 &LE BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF16LE_BOM
+        MENUITEM "UTF-32 &BE BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF32BE_BOM
+        MENUITEM "UTF-32 &LE BOM", IDM_VIEWER_ENCODING_DISPLAY_UTF32LE_BOM
+        MENUITEM SEPARATOR
+        POPUP "Character &Set"
+        BEGIN
+            POPUP "&Arabic"
+            BEGIN
+                MENUITEM "iso-8859-6 : ISO 8859-6 Arabic", 28596
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1256 : Arabic (Windows)", 1256
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-arabic : Arabic (Mac)", 10004
+                MENUITEM SEPARATOR
+                MENUITEM "ASMO-708 : Arabic (ASMO 708)", 708
+                MENUITEM "Arabic (ASMO-449+, BCON V4)", 709
+                MENUITEM "Arabic - Transparent Arabic", 710
+                MENUITEM "DOS-720 : Arabic (DOS)", 720
+                MENUITEM "IBM864 : Arabic (864)", 864
+                MENUITEM SEPARATOR
+                MENUITEM "IBM420 : EBCDIC Arabic", 20420
+            END
+            POPUP "&Baltic"
+            BEGIN
+                MENUITEM "iso-8859-4 : ISO 8859-4 Baltic", 28594
+                MENUITEM "iso-8859-13 : ISO 8859-13 Estonian", 28603
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1257 : Baltic (Windows)", 1257
+                MENUITEM SEPARATOR
+                MENUITEM "ibm775 : Baltic (DOS)", 775
+            END
+            POPUP "&Central European"
+            BEGIN
+                MENUITEM "iso-8859-2 : Central European (ISO)", 28592
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1250 : Central European (Windows)", 1250
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-ce : Central European (Mac)", 10029
+                MENUITEM "x-mac-croatian : Croatian (Mac)", 10082
+                MENUITEM "x-mac-romanian : Romanian (Mac)", 10010
+                MENUITEM SEPARATOR
+                MENUITEM "ibm852 : Central European (DOS)", 852
+                MENUITEM SEPARATOR
+                MENUITEM "IBM870 : EBCDIC Multilingual Latin 2", 870
+            END
+            POPUP "&Chinese"
+            BEGIN
+                MENUITEM "x-cp50227 : Chinese Simplified (ISO 2022)", 50227
+                MENUITEM "ISO 2022 Traditional Chinese", 50229
+                MENUITEM SEPARATOR
+                MENUITEM "gb2312 : Chinese Simplified (GB2312)", 936
+                MENUITEM "big5 : Chinese Traditional (Big5)", 950
+                MENUITEM "x-cp20936 : Chinese Simplified (GB2312-80)", 20936
+                MENUITEM "EUC-CN : Chinese Simplified (EUC)", 51936
+                MENUITEM "EUC Traditional Chinese", 51950
+                MENUITEM "hz-gb-2312 : Chinese Simplified (HZ)", 52936
+                MENUITEM "GB18030 : Chinese Simplified (GB18030)", 54936
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-chinesesimp : Chinese Simplified (Mac)", 10008
+                MENUITEM "x-mac-chinesetrad : Chinese Traditional (Mac)", 10002
+                MENUITEM SEPARATOR
+                MENUITEM "x-Chinese_CNS : Chinese Traditional (CNS)", 20000
+                MENUITEM "x-cp20001 : TCA Taiwan", 20001
+                MENUITEM "x_Chinese-Eten : Chinese Traditional (Eten)", 20002
+                MENUITEM "x-cp20003 : IBM5550 Taiwan", 20003
+                MENUITEM "x-cp20004 : TeleText Taiwan", 20004
+                MENUITEM "x-cp20005 : Wang Taiwan", 20005
+                MENUITEM SEPARATOR
+                MENUITEM "EBCDIC Simplified Chinese Extended and Simplified Chinese", 50935
+                MENUITEM "EBCDIC Simplified Chinese", 50936
+                MENUITEM "EBCDIC US-Canada and Traditional Chinese", 50937
+            END
+            POPUP "&Cyrillic"
+            BEGIN
+                MENUITEM "iso-8859-5 : ISO 8859-5 Cyrillic", 28595
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1251 : Cyrillic (Windows)", 1251
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-cyrillic : Cyrillic (Mac)", 10007
+                MENUITEM "x-mac-ukrainian : Ukrainian (Mac)", 10017
+                MENUITEM SEPARATOR
+                MENUITEM "koi8-r : Cyrillic (KOI8-R)", 20866
+                MENUITEM "koi8-u : Cyrillic (KOI8-U)", 21866
+                MENUITEM "IBM855 : OEM Cyrillic (primarily Russian)", 855
+                MENUITEM "cp866 : Cyrillic (DOS)", 866
+                MENUITEM SEPARATOR
+                MENUITEM "IBM880 : EBCDIC Cyrillic Russian", 20880
+                MENUITEM "cp1025 : IBM EBCDIC Cyrillic Serbian-Bulgarian", 21025
+            END
+            POPUP "&Greek"
+            BEGIN
+                MENUITEM "iso-8859-7 : ISO 8859-7 Greek", 28597
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1253 : Greek (Windows)", 1253
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-greek : Greek (Mac)", 10006
+                MENUITEM SEPARATOR
+                MENUITEM "ibm737 : Greek (DOS)", 737
+                MENUITEM "ibm869 : Greek, Modern (DOS)", 869
+                MENUITEM SEPARATOR
+                MENUITEM "cp875 : IBM EBCDIC Greek Modern", 875
+                MENUITEM "IBM423 : EBCDIC Greek", 20423
+            END
+            POPUP "&Hebrew"
+            BEGIN
+                MENUITEM "iso-8859-8 : Hebrew (ISO-Visual)", 28598
+                MENUITEM "iso-8859-8-i : Hebrew (ISO-Logical)", 38598
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1255 : Hebrew (Windows)", 1255
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-hebrew : Hebrew (Mac)", 10005
+                MENUITEM SEPARATOR
+                MENUITEM "DOS-862 : Hebrew (DOS)", 862
+                MENUITEM SEPARATOR
+                MENUITEM "IBM424 : EBCDIC Hebrew", 20424
+            END
+            POPUP "&Indic / ISCII"
+            BEGIN
+                MENUITEM "x-iscii-de : ISCII Devanagari", 57002
+                MENUITEM "x-iscii-be : ISCII Bangla", 57003
+                MENUITEM "x-iscii-ta : ISCII Tamil", 57004
+                MENUITEM "x-iscii-te : ISCII Telugu", 57005
+                MENUITEM "x-iscii-as : ISCII Assamese", 57006
+                MENUITEM "x-iscii-or : ISCII Odia", 57007
+                MENUITEM "x-iscii-ka : ISCII Kannada", 57008
+                MENUITEM "x-iscii-ma : ISCII Malayalam", 57009
+                MENUITEM "x-iscii-gu : ISCII Gujarati", 57010
+                MENUITEM "x-iscii-pa : ISCII Punjabi", 57011
+            END
+            POPUP "&Japanese"
+            BEGIN
+                MENUITEM "iso-2022-jp : Japanese (JIS)", 50220
+                MENUITEM "csISO2022JP : Japanese (JIS-Allow 1 byte Kana)", 50221
+                MENUITEM "iso-2022-jp : Japanese (JIS-Allow 1 byte Kana - SO/SI)", 50222
+                MENUITEM SEPARATOR
+                MENUITEM "shift_jis : Japanese (Shift-JIS)", 932
+                MENUITEM "EUC-JP : Japanese (JIS 0208-1990 and 0212-1990)", 20932
+                MENUITEM "euc-jp : EUC Japanese", 51932
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-japanese : Japanese (Mac)", 10001
+                MENUITEM SEPARATOR
+                MENUITEM "IBM290 : EBCDIC Japanese Katakana Extended", 20290
+                MENUITEM "EBCDIC Japanese (Katakana) Extended", 50930
+                MENUITEM "EBCDIC US-Canada and Japanese", 50931
+                MENUITEM "EBCDIC Japanese (Latin) Extended and Japanese", 50939
+            END
+            POPUP "&Korean"
+            BEGIN
+                MENUITEM "iso-2022-kr : ISO 2022 Korean", 50225
+                MENUITEM SEPARATOR
+                MENUITEM "ks_c_5601-1987 : ANSI/OEM Korean (Unified Hangul Code)", 949
+                MENUITEM "Johab : Korean (Johab)", 1361
+                MENUITEM "euc-kr : EUC Korean", 51949
+                MENUITEM "x-cp20949 : Korean Wansung", 20949
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-korean : Korean (Mac)", 10003
+                MENUITEM SEPARATOR
+                MENUITEM "x-EBCDIC-KoreanExtended : IBM EBCDIC Korean Extended", 20833
+                MENUITEM "EBCDIC Korean Extended and Korean", 50933
+            END
+            POPUP "&Thai"
+            BEGIN
+                MENUITEM "windows-874 : Thai (Windows)", 874
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-thai : Thai (Mac)", 10021
+                MENUITEM SEPARATOR
+                MENUITEM "IBM-Thai : EBCDIC Thai", 20838
+            END
+            POPUP "&Turkish"
+            BEGIN
+                MENUITEM "iso-8859-9 : ISO 8859-9 Turkish", 28599
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1254 : Turkish (Windows)", 1254
+                MENUITEM SEPARATOR
+                MENUITEM "x-mac-turkish : Turkish (Mac)", 10081
+                MENUITEM SEPARATOR
+                MENUITEM "ibm857 : Turkish (DOS)", 857
+                MENUITEM SEPARATOR
+                MENUITEM "IBM1026 : EBCDIC Turkish (Latin 5)", 1026
+                MENUITEM "IBM905 : EBCDIC Turkish", 20905
+            END
+            POPUP "&Vietnamese"
+            BEGIN
+                MENUITEM "windows-1258 : Vietnamese (Windows)", 1258
+            END
+            POPUP "&Western European"
+            BEGIN
+                MENUITEM "us-ascii : US-ASCII (7-bit)", 20127
+                MENUITEM "iso-8859-1 : Western European (ISO)", 28591
+                MENUITEM "iso-8859-3 : ISO 8859-3 Latin 3", 28593
+                MENUITEM "iso-8859-15 : ISO 8859-15 Latin 9", 28605
+                MENUITEM "x-cp20269 : ISO 6937 Non-Spacing Accent", 20269
+                MENUITEM SEPARATOR
+                MENUITEM "windows-1252 : Western European (Windows)", 1252
+                MENUITEM SEPARATOR
+                MENUITEM "macintosh : Western European (Mac)", 10000
+                MENUITEM "x-mac-icelandic : Icelandic (Mac)", 10079
+                MENUITEM SEPARATOR
+                MENUITEM "IBM437 : OEM United States", 437
+                MENUITEM "ibm850 : Western European (DOS)", 850
+                MENUITEM "IBM00858 : OEM Multilingual Latin 1 + Euro symbol", 858
+                MENUITEM "IBM860 : Portuguese (DOS)", 860
+                MENUITEM "ibm861 : Icelandic (DOS)", 861
+                MENUITEM "IBM863 : French Canadian (DOS)", 863
+                MENUITEM "IBM865 : Nordic (DOS)", 865
+                MENUITEM "x-IA5 : Western European (IA5)", 20105
+                MENUITEM "x-IA5-German : IA5 German (7-bit)", 20106
+                MENUITEM "x-IA5-Norwegian : IA5 Norwegian (7-bit)", 20108
+                MENUITEM "x-IA5-Swedish : IA5 Swedish (7-bit)", 20107
+                MENUITEM "x-cp20261 : T.61", 20261
+                MENUITEM "x-Europa : Europa 3", 29001
+                MENUITEM SEPARATOR
+                POPUP "&EBCDIC"
+                BEGIN
+                    MENUITEM "IBM037 : EBCDIC US-Canada", 37
+                    MENUITEM "IBM500 : EBCDIC International", 500
+                    MENUITEM "IBM01047 : EBCDIC Latin 1/Open System", 1047
+                    MENUITEM "IBM01140 : EBCDIC (US-Canada-Euro)", 1140
+                    MENUITEM "IBM01141 : EBCDIC (Germany-Euro)", 1141
+                    MENUITEM "IBM01142 : EBCDIC (Denmark-Norway-Euro)", 1142
+                    MENUITEM "IBM01143 : EBCDIC (Finland-Sweden-Euro)", 1143
+                    MENUITEM "IBM01144 : EBCDIC (Italy-Euro)", 1144
+                    MENUITEM "IBM01145 : EBCDIC (Spain-Euro)", 1145
+                    MENUITEM "IBM01146 : EBCDIC (UK-Euro)", 1146
+                    MENUITEM "IBM01147 : EBCDIC (France-Euro)", 1147
+                    MENUITEM "IBM01148 : EBCDIC (International-Euro)", 1148
+                    MENUITEM "IBM01149 : EBCDIC (Icelandic-Euro)", 1149
+                    MENUITEM "IBM273 : EBCDIC Germany", 20273
+                    MENUITEM "IBM277 : EBCDIC Denmark-Norway", 20277
+                    MENUITEM "IBM278 : EBCDIC Finland-Sweden", 20278
+                    MENUITEM "IBM280 : EBCDIC Italy", 20280
+                    MENUITEM "IBM284 : EBCDIC Latin America-Spain", 20284
+                    MENUITEM "IBM285 : EBCDIC United Kingdom", 20285
+                    MENUITEM "IBM297 : EBCDIC France", 20297
+                    MENUITEM "IBM871 : EBCDIC Icelandic", 20871
+                    MENUITEM "IBM00924 : EBCDIC Latin 1/Open System (1047 + Euro symbol)", 20924
+                END
+            END
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Keep Original Encoding", IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL
+        MENUITEM "Convert on Save UTF-8 &BOM", IDM_VIEWER_ENCODING_SAVE_UTF8_BOM
+        MENUITEM "Convert on Save UTF-&8", IDM_VIEWER_ENCODING_SAVE_UTF8
+        MENUITEM "Convert on Save &ANSI", IDM_VIEWER_ENCODING_SAVE_ANSI
+        MENUITEM "Convert on Save UTF-16 &BE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16BE_BOM
+        MENUITEM "Convert on Save UTF-16 &LE BOM", IDM_VIEWER_ENCODING_SAVE_UTF16LE_BOM
+    END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDD_VIEWERTEXT_FIND DIALOGEX 0, 0, 210, 60
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Find"
+FONT 9, "MS Shell Dlg"
+BEGIN
+    LTEXT           "Find what:", -1, 7, 12, 50, 10
+    EDITTEXT        IDC_VIEWERTEXT_FIND_TEXT, 60, 10, 140, 14, ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK", IDOK, 110, 35, 45, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 160, 35, 45, 14
+END
+
+IDD_VIEWERTEXT_GOTO DIALOGEX 0, 0, 240, 70
+STYLE DS_SETFONT | DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Go to offset"
+FONT 9, "MS Shell Dlg"
+BEGIN
+    LTEXT           "Offset (decimal or 0x...):", -1, 7, 12, 120, 10
+    EDITTEXT        IDC_VIEWERTEXT_GOTO_OFFSET, 7, 26, 226, 14, ES_AUTOHSCROLL
+    DEFPUSHBUTTON   "OK", IDOK, 140, 48, 45, 14
+    PUSHBUTTON      "Cancel", IDCANCEL, 190, 48, 45, 14
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERTEXT_NAME "Text Viewer"
+    IDS_VIEWERTEXT_DESCRIPTION "Built-in viewer for text files (with hex mode)."
+    IDS_VIEWERTEXT_TITLE_FORMAT "{} - Viewer"
+    IDS_VIEWERTEXT_STATUS_FORMAT "Encoding: {}    Size: {}"
+    IDS_VIEWERTEXT_STATUS_TEXT_FORMAT "FS: {}    Detected: {}    Active: {}    Size: {}    Lines: {:L}-{:L} of {}"
+    IDS_VIEWERTEXT_STATUS_HEX_FORMAT "FS: {}    Detected: {}    Active: {}    Size: {}    Offsets: {}-{}"
+    IDS_VIEWERTEXT_STATUS_WITH_MESSAGE_FORMAT "{}    {}"
+    IDS_VIEWERTEXT_UNKNOWN "unknown"
+
+    IDS_VIEWERTEXT_CAPTION_ERROR "Viewer"
+    IDS_VIEWERTEXT_ERR_OPEN_FAILED "Failed to open file."
+    IDS_VIEWERTEXT_ERR_SAVE_FAILED "Failed to save file."
+
+    IDS_VIEWERTEXT_DIALOG_OPEN_TITLE "Open file"
+    IDS_VIEWERTEXT_DIALOG_SAVE_TITLE "Save file as"
+    IDS_VIEWERTEXT_DIALOG_FILTER_ALL_FILES "All files (*.*)"
+    IDS_VIEWERTEXT_SAVEAS_ENCODING_LABEL "Encoding:"
+
+    IDS_VIEWERTEXT_COL_OFFSET "Offset"
+    IDS_VIEWERTEXT_COL_HEX "Data"
+    IDS_VIEWERTEXT_COL_TEXT "Text"
+    IDS_VIEWERTEXT_COL_UNICODE "Unicode"
+    IDS_VIEWERTEXT_COL_HEX_WORD "Data (WORD)"
+    IDS_VIEWERTEXT_COL_HEX_DWORD "Data (DWORD)"
+    IDS_VIEWERTEXT_COL_HEX_QWORD "Data (QWORD)"
+
+    IDS_VIEWERTEXT_COL_OFFSET_HEX "Offset (HEX)"
+    IDS_VIEWERTEXT_COL_OFFSET_DEC "Offset (DEC)"
+    IDS_VIEWERTEXT_COL_TEXT_ANSI "Text (ANSI)"
+    IDS_VIEWERTEXT_COL_TEXT_UTF8 "Text (UTF-8)"
+    IDS_VIEWERTEXT_COL_TEXT_UTF16 "Text (UTF-16)"
+
+    IDS_VIEWERTEXT_MODE_TEXT "TEXT"
+    IDS_VIEWERTEXT_MODE_HEX "HEX"
+
+    IDS_VIEWERTEXT_ENCODING_UTF8 "UTF-8"
+    IDS_VIEWERTEXT_ENCODING_UTF16LE "UTF-16 LE"
+    IDS_VIEWERTEXT_ENCODING_UTF16BE "UTF-16 BE"
+    IDS_VIEWERTEXT_ENCODING_UTF32LE "UTF-32 LE"
+    IDS_VIEWERTEXT_ENCODING_UTF32BE "UTF-32 BE"
+    IDS_VIEWERTEXT_ENCODING_UNKNOWN "Unknown"
+
+    IDS_VIEWERTEXT_CODEPAGE_FORMAT "CP{}"
+    IDS_VIEWERTEXT_DETECTED_SUFFIX_BOM " (BOM)"
+    IDS_VIEWERTEXT_DETECTED_SUFFIX_GUESS " (guess)"
+
+    IDS_VIEWERTEXT_OFFSET_COL_FORMAT_32 "{0:08X}"
+    IDS_VIEWERTEXT_OFFSET_COL_FORMAT_64 "{0:016X}"
+    IDS_VIEWERTEXT_OFFSET_STATUS_FORMAT_32 "0x{0:08X} ({1:L})"
+    IDS_VIEWERTEXT_OFFSET_STATUS_FORMAT_64 "0x{0:016X} ({1:L})"
+    IDS_VIEWERTEXT_OFFSET_COL_DEC_FORMAT "{0:L}"
+    IDS_VIEWERTEXT_EMPTY_WATERMARK "EMPTY FILE"
+    IDS_VIEWERTEXT_MSG_SEARCH_WRAPPED "Search wrapped."
+    IDS_VIEWERTEXT_MSG_SEARCH_HEX_INVALID "Hex search expects a hex value like 0x43 or 0x435678."
+    IDS_VIEWERTEXT_MSG_LOADING "Loading..."
+    IDS_VIEWERTEXT_MSG_STREAM_TRUNCATED "Streaming view (scroll to load more)."
+END

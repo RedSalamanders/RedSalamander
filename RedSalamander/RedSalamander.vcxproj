@@ -1,0 +1,448 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="ASan Debug|ARM64">
+      <Configuration>ASan Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="ASan Debug|x64">
+      <Configuration>ASan Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>17.0</VCProjectVersion>
+    <Keyword>Win32Proj</Keyword>
+    <ProjectGuid>{d2b87eb8-e4d3-43b4-9610-407e297f8916}</ProjectGuid>
+    <RootNamespace>RedSalamander</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <VcpkgManifestRoot>$(SolutionDir)</VcpkgManifestRoot>
+    <VcpkgInstalledDir>$(SolutionDir)vcpkg_installed\</VcpkgInstalledDir>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <EnableASAN>true</EnableASAN>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <EnableASAN>true</EnableASAN>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Label="Vcpkg">
+    <VcpkgEnableManifest>true</VcpkgEnableManifest>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <MinimalRebuild>false</MinimalRebuild>
+      <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateManifest>true</GenerateManifest>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
+    </Manifest>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
+    <ClCompile>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <MinimalRebuild>false</MinimalRebuild>
+      <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateManifest>true</GenerateManifest>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
+    </Manifest>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
+    <ClCompile>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <MinimalRebuild>false</MinimalRebuild>
+      <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateManifest>true</GenerateManifest>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
+    </Manifest>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
+    <ClCompile>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <MinimalRebuild>false</MinimalRebuild>
+      <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateManifest>true</GenerateManifest>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
+    </Manifest>
+    <ResourceCompile>
+      <PreprocessorDefinitions>_DEBUG;DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <MinimalRebuild>false</MinimalRebuild>
+      <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateManifest>true</GenerateManifest>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
+    </Manifest>
+    <ResourceCompile />
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
+    <ClCompile>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <SDLCheck>true</SDLCheck>
+      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <ExternalIncludePath>$(SolutionDir)vcpkg_installed\x64-windows\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <MinimalRebuild>false</MinimalRebuild>
+      <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <GenerateManifest>true</GenerateManifest>
+    </Link>
+    <Manifest>
+      <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
+    </Manifest>
+    <ResourceCompile />
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="AppTheme.h" />
+    <ClInclude Include="CrashHandler.h" />
+    <ClInclude Include="DirectoryInfoCache.h" />
+    <ClInclude Include="FileSystemPluginManager.h" />
+    <ClInclude Include="FunctionBar.h" />
+    <ClInclude Include="Framework.h" />
+    <ClInclude Include="ConnectionSecrets.h" />
+    <ClInclude Include="ConnectionManagerDialog.h" />
+    <ClInclude Include="ConnectionCredentialPromptDialog.h" />
+    <ClInclude Include="WindowsHello.h" />
+    <ClInclude Include="ThemedInputFrames.h" />
+    <ClInclude Include="FolderView.h" />
+    <ClInclude Include="FolderViewInternal.h" />
+    <ClInclude Include="FolderWindow.h" />
+    <ClInclude Include="FolderWindow.FileOperationsInternal.h" />
+    <ClInclude Include="FolderWindow.FileOperations.IssuesPane.h" />
+    <ClInclude Include="FolderWindow.FileOperations.Popup.h" />
+    <ClInclude Include="FolderWindow.FileOperations.SelfTest.h" />
+    <ClInclude Include="FolderWindowInternal.h" />
+    <ClInclude Include="FolderWatcher.h" />
+    <ClInclude Include="HostServices.h" />
+    <ClInclude Include="IconCache.h" />
+    <ClInclude Include="Ui\\AlertOverlay.h" />
+    <ClInclude Include="Ui\\AlertOverlayWindow.h" />
+    <ClInclude Include="Ui\\AnimationDispatcher.h" />
+    <ClInclude Include="CommandRegistry.h" />
+    <ClInclude Include="CompareDirectoriesEngine.SelfTest.h" />
+    <ClInclude Include="CompareDirectoriesEngine.h" />
+    <ClInclude Include="CompareDirectoriesWindow.h" />
+    <ClInclude Include="ManagePluginsDialog.h" />
+    <ClInclude Include="NavigationView.h" />
+    <ClInclude Include="NavigationViewInternal.h" />
+    <ClInclude Include="Preferences.h" />
+    <ClInclude Include="Preferences.Dialog.h" />
+    <ClInclude Include="Preferences.Advanced.h" />
+    <ClInclude Include="Preferences.Editors.h" />
+    <ClInclude Include="Preferences.General.h" />
+    <ClInclude Include="Preferences.Mouse.h" />
+    <ClInclude Include="Preferences.Panes.h" />
+    <ClInclude Include="Preferences.Plugins.h" />
+    <ClInclude Include="Preferences.Plugin.Configuration.h" />
+    <ClInclude Include="Preferences.Keyboard.h" />
+    <ClInclude Include="Preferences.Themes.h" />
+    <ClInclude Include="Preferences.Viewers.h" />
+    <ClInclude Include="Preferences.Internal.h" />
+    <ClInclude Include="SettingsSchemaParser.h" />
+    <ClInclude Include="ShortcutsWindow.h" />
+    <ClInclude Include="RedSalamander.h" />
+    <ClInclude Include="resource.h" />
+    <ClInclude Include="ShortcutDefaults.h" />
+    <ClInclude Include="ShortcutManager.h" />
+    <ClInclude Include="ShortcutText.h" />
+    <ClInclude Include="SettingsSchemaExport.h" />
+    <ClInclude Include="ThemedControls.h" />
+    <ClInclude Include="SplashScreen.h" />
+    <ClInclude Include="StartupMetrics.h" />
+    <ClInclude Include="targetver.h" />
+    <ClInclude Include="WSLDistro.h" />
+    <ClInclude Include="ViewerPluginManager.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="AppTheme.cpp" />
+    <ClCompile Include="CrashHandler.cpp" />
+    <ClCompile Include="DirectoryInfoCache.cpp" />
+    <ClCompile Include="FileSystemPluginManager.cpp" />
+    <ClCompile Include="FunctionBar.cpp" />
+    <ClCompile Include="FolderView.cpp" />
+    <ClCompile Include="FolderView.DragDrop.cpp" />
+    <ClCompile Include="FolderView.Enumeration.cpp" />
+    <ClCompile Include="FolderView.ErrorOverlay.cpp" />
+    <ClCompile Include="FolderView.FileOps.cpp" />
+    <ClCompile Include="FolderView.Icons.cpp" />
+    <ClCompile Include="FolderView.Interaction.cpp" />
+    <ClCompile Include="FolderView.Layout.cpp" />
+    <ClCompile Include="FolderView.Menus.cpp" />
+    <ClCompile Include="FolderView.Rendering.cpp" />
+    <ClCompile Include="FolderView.Selection.cpp" />
+    <ClCompile Include="FolderWindow.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.Dialog.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.IssuesPane.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.Popup.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.SelfTest.cpp" />
+    <ClCompile Include="FolderWindow.FileOperations.State.cpp" />
+    <ClCompile Include="FolderWindow.ItemProperties.cpp" />
+    <ClCompile Include="FolderWindow.FileSystem.cpp" />
+    <ClCompile Include="FolderWindow.Interaction.cpp" />
+    <ClCompile Include="FolderWindow.Layout.cpp" />
+    <ClCompile Include="FolderWindow.SelectionSize.cpp" />
+    <ClCompile Include="FolderWindow.StatusBar.cpp" />
+    <ClCompile Include="FolderWindow.Viewers.cpp" />
+    <ClCompile Include="FolderWatcher.cpp" />
+    <ClCompile Include="ConnectionSecrets.cpp" />
+    <ClCompile Include="ConnectionManagerDialog.cpp" />
+    <ClCompile Include="ConnectionCredentialPromptDialog.cpp" />
+    <ClCompile Include="WindowsHello.cpp" />
+    <ClCompile Include="HostServices.cpp" />
+    <ClCompile Include="IconCache.cpp" />
+    <ClCompile Include="Ui\\AlertOverlayWindow.cpp" />
+    <ClCompile Include="CommandRegistry.cpp" />
+    <ClCompile Include="CompareDirectoriesEngine.SelfTest.cpp" />
+    <ClCompile Include="CompareDirectoriesEngine.cpp" />
+    <ClCompile Include="CompareDirectoriesWindow.cpp" />
+    <ClCompile Include="ManagePluginsDialog.cpp" />
+    <ClCompile Include="NavigationView.cpp" />
+    <ClCompile Include="NavigationView.Breadcrumb.cpp" />
+    <ClCompile Include="NavigationView.Edit.cpp" />
+    <ClCompile Include="NavigationView.FullPathPopup.cpp" />
+    <ClCompile Include="NavigationView.Interaction.cpp" />
+    <ClCompile Include="NavigationView.Menus.cpp" />
+    <ClCompile Include="NavigationView.Rendering.cpp" />
+    <ClCompile Include="Preferences.cpp" />
+    <ClCompile Include="Preferences.Dialog.cpp" />
+    <ClCompile Include="Preferences.Internal.cpp" />
+    <ClCompile Include="Preferences.Advanced.cpp" />
+    <ClCompile Include="Preferences.Editors.cpp" />
+    <ClCompile Include="Preferences.General.cpp" />
+    <ClCompile Include="Preferences.Mouse.cpp" />
+    <ClCompile Include="Preferences.Panes.cpp" />
+    <ClCompile Include="Preferences.Plugins.cpp" />
+    <ClCompile Include="Preferences.Plugin.Configuration.cpp" />
+    <ClCompile Include="Preferences.Keyboard.cpp" />
+    <ClCompile Include="Preferences.Themes.cpp" />
+    <ClCompile Include="Preferences.Viewers.cpp" />
+    <ClCompile Include="StartupMetrics.cpp" />
+    <ClCompile Include="SettingsSchemaParser.cpp" />
+    <ClCompile Include="ShortcutsWindow.cpp" />
+    <ClCompile Include="RedSalamander.cpp" />
+    <ClCompile Include="SettingsSchemaExport.cpp" />
+    <ClCompile Include="ThemedControls.cpp" />
+    <ClCompile Include="ThemedInputFrames.cpp" />
+    <ClCompile Include="ShortcutDefaults.cpp" />
+    <ClCompile Include="ShortcutManager.cpp" />
+    <ClCompile Include="ShortcutText.cpp" />
+    <ClCompile Include="SplashScreen.cpp" />
+    <ClCompile Include="ViewerPluginManager.cpp" />
+    <ClCompile Include="WSLDistro.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="RedSalamander.rc" />
+    <ResourceCompile Include="FolderViewResources.rc" />
+    <ResourceCompile Include="PluginManagerResources.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="res\logo.ico" />
+    <Image Include="res\logo.png" />
+    <Image Include="res\logo2.png" />
+    <Image Include="res\logo256.png" />
+    <Image Include="res\logo2_background.png" />
+    <Image Include="res\logo_background.ico" />
+    <Image Include="res\RedSalamander.ico" />
+    <Image Include="res\small.ico" />
+    <Image Include="res\wsl_debian.png" />
+    <Image Include="res\wsl_fedora.png" />
+    <Image Include="res\wsl_linux_black.png" />
+    <Image Include="res\wsl_ubuntu.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Common\Common\Common.vcxproj">
+      <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="CopyPredefinedThemes" AfterTargets="Build">
+    <PropertyGroup>
+      <ThemeSourceDir>$(MSBuildThisFileDirectory)..\Specs\Themes</ThemeSourceDir>
+      <ThemeDestinationDir>$(TargetDir)Themes\</ThemeDestinationDir>
+    </PropertyGroup>
+    <ItemGroup>
+      <ThemeFiles Include="$(ThemeSourceDir)\*.theme.json5" />
+    </ItemGroup>
+    <MakeDir Directories="$(ThemeDestinationDir)" />
+    <Copy SourceFiles="@(ThemeFiles)" DestinationFolder="$(ThemeDestinationDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopySettingsStoreSchema" AfterTargets="Build">
+    <PropertyGroup>
+      <SettingsSchemaSourceFile>$(MSBuildThisFileDirectory)..\Specs\SettingsStore.schema.json</SettingsSchemaSourceFile>
+    </PropertyGroup>
+    <Copy SourceFiles="$(SettingsSchemaSourceFile)" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <Target Name="CopyAsanSuppressions" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)asan.supp" DestinationFolder="$(TargetDir)" SkipUnchangedFiles="true" />
+  </Target>
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

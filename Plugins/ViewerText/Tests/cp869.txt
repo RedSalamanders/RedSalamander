@@ -1,0 +1,9 @@
+Encoding: OEM 869 (Greek) - no BOM
+File: cp869.txt
+Purpose: DOS Greek.
+---
+01: Greek: µײובזכײ ה¢לזÞ
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: End marker: EOF

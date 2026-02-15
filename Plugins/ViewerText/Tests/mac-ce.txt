@@ -1,0 +1,9 @@
+Encoding: Mac Central European (x-mac-ce) - no BOM
+File: mac-ce.txt
+Line endings: CRLF
+Purpose: Validate Mac Central European (Latin 2) mapping.
+---
+01: Latin 2: „‰¢üÁîÛåáèñë ˆ‹«¸Ä—Şæäéóì
+02: Czech: PŞ’liä ìluéou‹kù kóË œpl “‡belsk —dy.
+03: PATH: C:\Temp\ViewerText\mac-ce.txt
+04: End marker: EOF

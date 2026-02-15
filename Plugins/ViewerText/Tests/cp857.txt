@@ -1,0 +1,9 @@
+Encoding: OEM 857 (Turkish) - no BOM
+File: cp857.txt
+Purpose: DOS Turkish.
+---
+01: Turkish: òstanbul, òzmir, Äeüme, üeker.
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: End marker: EOF

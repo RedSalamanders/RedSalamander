@@ -1,0 +1,9 @@
+Encoding: ISO-8859-8 (Hebrew Visual) - no BOM
+File: iso-8859-8.txt
+Line endings: CRLF
+Purpose: Validate ISO-8859-8 mapping (Hebrew visual).
+---
+01: Hebrew: שלום עולם
+02: Hebrew: שלום
+03: PATH: C:\Temp\ViewerText\iso-8859-8.txt
+04: End marker: EOF

@@ -1,0 +1,9 @@
+Encoding: ISO-8859-6 (Arabic) - no BOM
+File: iso-8859-6.txt
+Line endings: CRLF
+Purpose: Validate ISO-8859-6 mapping (Arabic).
+---
+01: Arabic: Â—Õ»« »«‰Ÿ«‰Â
+02: Arabic: «‰”‰«Â Ÿ‰Í„Â
+03: PATH: C:\Temp\ViewerText\iso-8859-6.txt
+04: End marker: EOF

@@ -1,0 +1,49 @@
+#include "resource.h"
+
+#include <windows.h>
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_VIEWERPE_MENU MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "Export as &Text...\tCtrl+S", IDM_VIEWERPE_FILE_EXPORT_TEXT
+        MENUITEM "Export as &Markdown...\tCtrl+Shift+S", IDM_VIEWERPE_FILE_EXPORT_MARKDOWN
+        MENUITEM "&Refresh\tF5", IDM_VIEWERPE_FILE_REFRESH
+        POPUP "Other &Files"
+        BEGIN
+            MENUITEM "&Next\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
+            MENUITEM "&Previous\tBackspace, Ctrl+Up", IDM_VIEWERPE_OTHER_PREVIOUS
+            MENUITEM "&First\tCtrl+Home", IDM_VIEWERPE_OTHER_FIRST
+            MENUITEM "&Last\tCtrl+End", IDM_VIEWERPE_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit\tEsc", IDM_VIEWERPE_FILE_EXIT
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "Go to &Top\tHome", IDM_VIEWERPE_VIEW_GOTO_TOP
+        MENUITEM "Go to &Bottom\tEnd", IDM_VIEWERPE_VIEW_GOTO_BOTTOM
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERPE_NAME "PE Viewer"
+    IDS_VIEWERPE_DESCRIPTION "Portable Executable (PE) header and section viewer."
+    IDS_VIEWERPE_STATUS_LOADING "Loading..."
+    IDS_VIEWERPE_ERROR_NO_FILEIO "This file system does not support reading files for this viewer."
+    IDS_VIEWERPE_ERROR_OPEN_FAILED "Failed to open the file."
+    IDS_VIEWERPE_ERROR_TOO_LARGE "File is too large to parse as a PE file."
+    IDS_VIEWERPE_ERROR_READ_FAILED "Failed to read the file."
+    IDS_VIEWERPE_ERROR_PARSE_FAILED "Failed to parse the PE file."
+    IDS_VIEWERPE_EXPORT_DIALOG_TITLE "Export PE report"
+    IDS_VIEWERPE_EXPORT_FILTER_TEXT "Text files (*.txt)"
+    IDS_VIEWERPE_EXPORT_FILTER_MARKDOWN "Markdown files (*.md)"
+    IDS_VIEWERPE_EXPORT_ERROR_NO_REPORT "No report is available to export yet."
+    IDS_VIEWERPE_EXPORT_ERROR_FAILED "Failed to export the report."
+END

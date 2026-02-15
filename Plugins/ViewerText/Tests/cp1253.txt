@@ -1,0 +1,10 @@
+Encoding: Windows-1253 (Greek) - no BOM
+File: cp1253.txt
+Purpose: Greek Windows code page.
+---
+01: Greek: Καλημέρα κόσμε
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Greek: Ελληνικά ΑΒΓΔ Ωμέγα
+06: End marker: EOF

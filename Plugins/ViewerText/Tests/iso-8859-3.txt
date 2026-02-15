@@ -1,0 +1,10 @@
+Encoding: ISO-8859-3 (Latin 3) - no BOM
+File: iso-8859-3.txt
+Line endings: CRLF
+Purpose: Validate ISO-8859-3 mapping (Latin 3).
+---
+01: Maltese: ¡a¿-¯ebbuõ  (¡ ± ¯ ¿ Õ õ Å å)
+02: Esperanto: Æø¶¼þý
+03: French: café naïve façade
+04: PATH: C:\Temp\ViewerText\iso-8859-3.txt
+05: End marker: EOF

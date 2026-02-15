@@ -1,0 +1,10 @@
+Encoding: OEM 866 (Cyrillic) - no BOM
+File: cp866.txt
+Purpose: DOS Cyrillic.
+---
+01: Russian: Привет мир
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Ukrainian: Україна
+06: End marker: EOF

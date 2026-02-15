@@ -1,0 +1,78 @@
+// ThemeDefinition (JSON5) for RedSalamander SettingsStore
+// Copy this object into your settings file under: theme.themes[]
+// Then select it by setting: theme.currentThemeId = "user/solar-flare"
+{
+  "id": "user/solar-flare",
+  "name": "Solar Flare",
+  "baseThemeId": "builtin/rainbow",
+  "colors": {
+    // App-level
+    "app.accent": "#FF7A18", // flare orange
+    "window.background": "#120A00",
+
+    // Menu
+    "menu.background": "#120A00",
+    "menu.text": "#FFF3E0",
+    "menu.disabledText": "#C7A27A",
+    "menu.selectionBg": "#FF7A18",
+    "menu.selectionText": "#120A00",
+    "menu.separator": "#2B1500",
+    "menu.border": "#2B1500",
+
+    // Navigation
+    "navigation.background": "#1A0D00",
+    "navigation.backgroundHover": "#241200",
+    "navigation.backgroundPressed": "#2D1700",
+    "navigation.text": "#FFF3E0",
+    "navigation.separator": "#3B1F00",
+    "navigation.accent": "#FFD166", // solar gold
+    "navigation.progressOk": "#FF7A18",
+    "navigation.progressWarn": "#FF4D4D",
+    "navigation.progressBackground": "#2B1500",
+
+    // File Operations popup
+    "fileOps.progressBackground": "#2B1500",
+    "fileOps.progressTotal": "#FF7A18",
+    "fileOps.progressItem": "#FFD166",
+    "fileOps.graphBackground": "#402B1500",
+    "fileOps.graphGrid": "#402B1500",
+    "fileOps.graphLimit": "#CCC7A27A",
+    "fileOps.graphLine": "#FFD166",
+    "fileOps.scrollbarTrack": "#192B1500",
+    "fileOps.scrollbarThumb": "#662B1500",
+
+    // FolderView
+    "folderView.background": "#120A00",
+    "folderView.itemBackgroundNormal": "#00000000",
+    "folderView.itemBackgroundHovered": "#33FF7A18",
+    "folderView.itemBackgroundSelected": "#FF7A18",
+    "folderView.itemBackgroundSelectedInactive": "#A6FF7A18",
+    "folderView.itemBackgroundFocused": "#33FFD166",
+    "folderView.textNormal": "#FFE8C2",
+    "folderView.textSelected": "#120A00",
+    "folderView.textSelectedInactive": "#120A00",
+    "folderView.textDisabled": "#C7A27A",
+    "folderView.focusBorder": "#FFD166",
+    "folderView.gridLines": "#2B1500",
+    "folderView.errorBackground": "#33FF0000",
+    "folderView.errorText": "#FF4D4D",
+    "folderView.warningBackground": "#33FFD166",
+    "folderView.warningText": "#FFD166",
+    "folderView.infoBackground": "#33FF7A18",
+    "folderView.infoText": "#FF7A18",
+
+    // Monitor (ColorTextView)
+    "monitor.textView.bg": "#080400",
+    "monitor.textView.fg": "#FFE8C2",
+    "monitor.textView.caret": "#FF7A18",
+    "monitor.textView.selection": "#33FF7A18",
+    "monitor.textView.searchHighlight": "#33FFD166",
+    "monitor.textView.gutterBg": "#120A00",
+    "monitor.textView.gutterFg": "#C7A27A",
+    "monitor.textView.metaText": "#C7A27A",
+    "monitor.textView.metaError": "#FF4D4D",
+    "monitor.textView.metaWarning": "#FFD166",
+    "monitor.textView.metaInfo": "#FF7A18",
+    "monitor.textView.metaDebug": "#C7A27A",
+  },
+}

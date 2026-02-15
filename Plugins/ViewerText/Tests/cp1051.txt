@@ -1,0 +1,13 @@
+Encoding: CP1051 - no BOM
+File: cp1051.txt
+Line endings: CRLF
+Purpose: CP1051 sample (HP Roman-8).
+---
+01: Icelandic-ish: ðingvellir, ä, ð, ×, Î.
+02: Accents: à Ü å ç í Ä Å Õ Æ Ç.
+03: German: Ø Ú Û Ì Î Ï Þ.
+04: Spanish: · ¶ µ ´.
+05: Math: þ  (* / as ASCII; U+00D7 and U+00F7 not present).
+06: Punctuation: ¸ ¹ û ý
+07: PATH: C:\Temp\ViewerText\cp1051.txt
+08: End marker: EOF

@@ -1,0 +1,78 @@
+// ThemeDefinition (JSON5) for RedSalamander SettingsStore
+// Copy this object into your settings file under: theme.themes[]
+// Then select it by setting: theme.currentThemeId = "user/forest-mist"
+{
+  "id": "user/forest-mist",
+  "name": "Forest Mist",
+  "baseThemeId": "builtin/dark",
+  "colors": {
+    // App-level
+    "app.accent": "#2ECC71", // bright fern
+    "window.background": "#0C1411", // deep forest floor
+
+    // Menu
+    "menu.background": "#0C1411",
+    "menu.text": "#D7F7E7",
+    "menu.disabledText": "#6AAE8B",
+    "menu.selectionBg": "#2ECC71",
+    "menu.selectionText": "#0C1411",
+    "menu.separator": "#193026",
+    "menu.border": "#193026",
+
+    // Navigation
+    "navigation.background": "#0F1C17",
+    "navigation.backgroundHover": "#152922",
+    "navigation.backgroundPressed": "#1C352B",
+    "navigation.text": "#D7F7E7",
+    "navigation.separator": "#274C3B",
+    "navigation.accent": "#2ECC71",
+    "navigation.progressOk": "#2ECC71",
+    "navigation.progressWarn": "#FF4D4D",
+    "navigation.progressBackground": "#193026",
+
+    // File Operations popup
+    "fileOps.progressBackground": "#193026",
+    "fileOps.progressTotal": "#2ECC71",
+    "fileOps.progressItem": "#A3FFBF",
+    "fileOps.graphBackground": "#40193026",
+    "fileOps.graphGrid": "#40193026",
+    "fileOps.graphLimit": "#CC6AAE8B",
+    "fileOps.graphLine": "#A3FFBF",
+    "fileOps.scrollbarTrack": "#19193026",
+    "fileOps.scrollbarThumb": "#66193026",
+
+    // FolderView
+    "folderView.background": "#0C1411",
+    "folderView.itemBackgroundNormal": "#00000000",
+    "folderView.itemBackgroundHovered": "#332ECC71",
+    "folderView.itemBackgroundSelected": "#2ECC71",
+    "folderView.itemBackgroundSelectedInactive": "#A62ECC71",
+    "folderView.itemBackgroundFocused": "#332ECC71",
+    "folderView.textNormal": "#CFEBDD",
+    "folderView.textSelected": "#0C1411",
+    "folderView.textSelectedInactive": "#0C1411",
+    "folderView.textDisabled": "#6AAE8B",
+    "folderView.focusBorder": "#A3FFBF",
+    "folderView.gridLines": "#193026",
+    "folderView.errorBackground": "#33FF3355",
+    "folderView.errorText": "#FF4D4D",
+    "folderView.warningBackground": "#33FFD166",
+    "folderView.warningText": "#FFD166",
+    "folderView.infoBackground": "#332ECC71",
+    "folderView.infoText": "#2ECC71",
+
+    // Monitor (ColorTextView)
+    "monitor.textView.bg": "#08100D",
+    "monitor.textView.fg": "#CFEBDD",
+    "monitor.textView.caret": "#A3FFBF",
+    "monitor.textView.selection": "#332ECC71",
+    "monitor.textView.searchHighlight": "#33FFD166",
+    "monitor.textView.gutterBg": "#0C1411",
+    "monitor.textView.gutterFg": "#6AAE8B",
+    "monitor.textView.metaText": "#93C7AA",
+    "monitor.textView.metaError": "#FF4D4D",
+    "monitor.textView.metaWarning": "#FFD166",
+    "monitor.textView.metaInfo": "#2ECC71",
+    "monitor.textView.metaDebug": "#93C7AA",
+  },
+}

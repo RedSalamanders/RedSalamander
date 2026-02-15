@@ -1,0 +1,22 @@
+Encoding: ISO-8859-1 (Latin-1) - no BOM
+File: iso-8859-1.txt
+Line endings: CRLF
+Purpose: Compare Latin-1 vs CP1252 (C1 controls at 0x80-0x9F).
+---
+01: French: Portez ce vieux whisky au juge blond qui fume.
+02: German: Falsches Üben von Xylophonmusik quält jeden größeren Zwerg.
+03: Spanish: El pingüino Wenceslao hizo kilómetros bajo exhaustiva lluvia y frío.
+04: Accents: café naïve façade jalapeño año Niño.
+05: Scandinavian: smörgåsbord, blåbär, fjäll, Ångström.
+06: Currency: £ ¥ ¢ ¤ (no euro in ISO-8859-1).
+07: Punctuation: ¡ ¿ « »
+08: Math: ± × ÷
+09: Latin-1 upper: ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖ×ØÙÚÛÜİŞß
+10: Latin-1 lower: àáâãäåæçèéêëìíîïğñòóôõö÷øùúûüışÿ
+11: Names: Søren, François, García, Noël, Björn.
+12: Months: janvier février mars avril mai juin juillet août septembre octobre novembre décembre.
+13: Plain quotes: "Hello" and 'world' and - hyphen-minus
+14: Brackets: ( ) [ ] { } < >
+15: Note: bytes 0x80..0x9F are control codes (C1) here.
+16: PATH: C:\Temp\ViewerText\iso-8859-1.txt
+17: End marker: EOF

@@ -1,0 +1,25 @@
+Encoding: ASCII (CP20127) - no BOM
+File: ascii.txt
+Line endings: CRLF
+Purpose: Baseline + punctuation/whitespace checks.
+---
+01: The quick brown fox jumps over the lazy dog.
+02: Sphinx of black quartz, judge my vow.
+03: Pack my box with five dozen liquor jugs.
+04: How vexingly quick daft zebras jump!
+05: Bright vixens jump; dozy fowl quack.
+06: Digits: 0123456789
+07: Hex bytes: 00 01 02 03 04 05 06 07 08 09 0A 0B 0C 0D
+08: Symbols: !"#$%&'()*+,-./:;<=>?@[\]^_`{|}~
+09: Brackets: ( ) [ ] { } < >
+10: Quotes: "double" and 'single'
+11: Tabs: A	B	C	D
+12: CSV: one,two,three,4,5
+13: JSON: {"key":"value","n":123}
+14: INI: key=value
+15: PATH: C:\Temp\ViewerText\ascii.txt
+16: URL: https://example.com/path?x=1&y=2
+17: Email: test@example.com
+18: Whitespace: [space][space][tab]	[end]
+19: Newlines: CRLF expected in this file.
+20: End marker: EOF

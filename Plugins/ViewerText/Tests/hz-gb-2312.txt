@@ -1,0 +1,9 @@
+Encoding: HZ-GB-2312 (CP52936) - no BOM
+File: hz-gb-2312.txt
+Line endings: CRLF
+Purpose: Validate HZ-GB-2312 mapping.
+---
+01: Chinese: ~{VPND~}
+02: Chinese: ~{::WV~}
+03: PATH: C:\Temp\ViewerText\hz-gb-2312.txt
+04: End marker: EOF

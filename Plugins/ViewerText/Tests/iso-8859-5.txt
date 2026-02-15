@@ -1,0 +1,9 @@
+Encoding: ISO-8859-5 (Cyrillic) - no BOM
+File: iso-8859-5.txt
+Line endings: CRLF
+Purpose: Validate ISO-8859-5 mapping (Cyrillic).
+---
+01: Cyrillic: Привет мир
+02: Ukrainian: Привіт світе
+03: PATH: C:\Temp\ViewerText\iso-8859-5.txt
+04: End marker: EOF

@@ -1,0 +1,9 @@
+Encoding∫†Mac†Arabic†®x≠mac≠arabic©†≠†no†BOM
+File∫†mac≠arabicÆtxt
+Line†endings∫†CRLF
+Purpose∫†Validate†Mac†Arabic†mappingÆ
+≠≠≠
+01∫†Arabic∫†Â—Õ»«†»«‰Ÿ«‰Â
+02∫†ASCII∫†The†quick†brown†fox†jumps†over†the†lazy†dogÆ
+03∫†PATH∫†C∫‹Temp‹ViewerText‹mac≠arabicÆtxt
+04∫†End†marker∫†EOF

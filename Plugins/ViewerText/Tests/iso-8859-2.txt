@@ -1,0 +1,10 @@
+Encoding: ISO-8859-2 (Latin-2) - no BOM
+File: iso-8859-2.txt
+Purpose: ISO-8859-2 vs Windows-1250.
+---
+01: Polish: Za¿ó³æ gê¶l± ja¼ñ.
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Czech: Pøíli¹ ¾lu»ouèký kùò.
+06: End marker: EOF

@@ -1,0 +1,10 @@
+Encoding: OEM 775 (Baltic) - no BOM
+File: cp775.txt
+Purpose: DOS Baltic.
+---
+01: Latvian: ¶au! Kƒ tev klƒjas?
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Lithuanian: µØuolas, ÕaltibarÕÑiai.
+06: End marker: EOF

@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: vcpkg
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+    labels: [dependencies, vcpkg]
+    open-pull-requests-limit: 5
+    groups:
+      core-stack:
+        patterns:
+          - wil
+          - fmt
+          - spdlog
+          - yyjson
+          - ms-gsl*
+    allow:
+      - dependency-type: direct

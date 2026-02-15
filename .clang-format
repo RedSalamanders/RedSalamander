@@ -1,0 +1,143 @@
+Language: Cpp
+# Basic indentation settings from VS: TabSize=4, IndentSize=4, InsertTabs=true
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+UseCRLF: true
+
+# C++ Standard
+Standard: Latest
+
+# Column limit (keeping your existing setting)
+ColumnLimit: 160
+
+# Access modifiers (VS: IndentAccessSpecifiers=false)
+AccessModifierOffset: -4
+
+# Alignment settings
+AlignAfterOpenBracket: Align
+AlignArrayOfStructures: None
+AlignConsecutiveAssignments: Consecutive 
+AlignConsecutiveBitFields: None
+AlignConsecutiveDeclarations: None
+AlignConsecutiveMacros: None
+AlignEscapedNewlines: Right
+AlignOperands: Align
+AlignTrailingComments: true
+
+# Allow settings
+AllowAllArgumentsOnNextLine: true
+AllowAllConstructorInitializersOnNextLine: true
+AllowAllParametersOfDeclarationOnNextLine: true
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: true
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: All
+AllowShortLoopsOnASingleLine: false
+
+# Break settings
+AlwaysBreakAfterDefinitionReturnType: None
+AlwaysBreakAfterReturnType: None
+AlwaysBreakBeforeMultilineStrings: false
+AlwaysBreakTemplateDeclarations: MultiLine
+
+# Binary packing
+BinPackArguments: false
+BinPackParameters: false
+
+# Break before settings
+BreakBeforeBinaryOperators: None
+# VS: NewlineTypeBrace=2, NewlineNamespaceBrace=2, NewlineFunctionBrace=2, etc. (all set to 2 = Allman style)
+BreakBeforeBraces: Allman
+BreakBeforeConceptDeclarations: true
+BreakBeforeTernaryOperators: true
+# VS: SpaceBeforeConstructorColon=true
+BreakConstructorInitializers: BeforeColon
+# VS: SpaceBeforeInheritanceColon=true  
+BreakInheritanceList: BeforeColon
+BreakStringLiterals: true
+
+# Compact settings
+CompactNamespaces: false
+
+# Constructor settings
+PackConstructorInitializers: CurrentLine
+ConstructorInitializerIndentWidth: 4
+ContinuationIndentWidth: 4
+
+# C++11 style
+Cpp11BracedListStyle: true
+
+# Derive settings
+DerivePointerAlignment: false
+
+# Fix settings
+FixNamespaceComments: true
+
+# Include settings
+IncludeBlocks: Preserve
+
+# Indentation settings based on VS preferences
+IndentCaseBlocks: false
+IndentCaseLabels: true
+IndentExternBlock: AfterExternBlock
+IndentGotoLabels: true
+IndentPPDirectives: None
+IndentRequires: false
+IndentWrappedFunctionNames: false
+
+# Keep settings
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+
+# Namespace settings
+# VS: IndentNamespaceContents=true
+NamespaceIndentation: None
+
+# Pointer alignment
+# VS: PointerAlignment=1 (left)
+PointerAlignment: Left
+
+# Other settings
+ReflowComments: true
+SortIncludes: true
+SortUsingDeclarations: true
+
+# Spacing settings based on your VS configuration
+# VS: SpaceAfterCastParenthesis=false
+SpaceAfterCStyleCast: false
+SpaceAfterLogicalNot: true
+SpaceAfterTemplateKeyword: true
+# VS: SpaceAroundAssignmentOperator=2 (insert)
+SpaceBeforeAssignmentOperators: true
+SpaceBeforeCaseColon: false
+SpaceBeforeCpp11BracedList: false
+# VS: SpaceBeforeConstructorColon=true
+SpaceBeforeCtorInitializerColon: true
+# VS: SpaceBeforeInheritanceColon=true
+SpaceBeforeInheritanceColon: true
+# VS: SpaceBeforeControlBlockParenthesis=false, SpaceBeforeFunctionParenthesis=false
+SpaceBeforeParens: ControlStatements
+SpaceBeforeRangeBasedForLoopColon: true
+# VS: SpaceBeforeEmptyBracket=false
+SpaceBeforeSquareBrackets: false
+# VS: SpaceBetweenEmptyBraces=false
+SpaceInEmptyBlock: false
+# VS: SpaceBetweenEmptyFunctionParentheses=false
+SpaceInEmptyParentheses: false
+# VS: SpacesBeforeTrailingComments (not explicitly set, using default)
+SpacesBeforeTrailingComments: 1
+SpacesInAngles: false
+# VS: SpaceWithinCastParentheses=false
+SpacesInCStyleCastParentheses: false
+# VS: SpaceWithinControlBlockParentheses=false
+SpacesInConditionalStatement: false
+# VS: SpaceWithinInitListBraces=true
+SpacesInContainerLiterals: true
+# VS: SpaceWithinExpressionParentheses=false, SpaceWithinFunctionParentheses=false
+SpacesInParentheses: false
+# VS: SpaceWithinBrackets=false
+SpacesInSquareBrackets: false
+
+

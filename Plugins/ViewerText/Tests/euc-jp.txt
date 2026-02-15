@@ -1,0 +1,10 @@
+Encoding: Japanese EUC-JP - no BOM
+File: euc-jp.txt
+Purpose: EUC-JP Japanese text.
+---
+01: Japanese: 日本語のテキスト
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Kanji/Kana: 漢字 ひらがな カタカナ
+06: End marker: EOF

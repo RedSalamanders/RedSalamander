@@ -1,0 +1,9 @@
+Encoding: ISO-8859-4 (Baltic) - no BOM
+File: iso-8859-4.txt
+Line endings: CRLF
+Purpose: Validate ISO-8859-4 mapping (Baltic).
+---
+01: Baltic: ÀÈª«ÏÓ¦Ñ©Ş® àèº»ïó¶ñ¹ş¾
+02: Lithuanian: ±èêìç¹ùş¾ ¡ÈÊÌÇ©ÙŞ®
+03: PATH: C:\Temp\ViewerText\iso-8859-4.txt
+04: End marker: EOF

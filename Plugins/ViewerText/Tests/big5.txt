@@ -1,0 +1,10 @@
+Encoding: Chinese Traditional (Big5) - no BOM
+File: big5.txt
+Purpose: Traditional Chinese sample.
+---
+01: Chinese: 你好，世界
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: Chinese: 繁體中文
+06: End marker: EOF

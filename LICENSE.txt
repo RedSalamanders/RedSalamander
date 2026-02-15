@@ -1,0 +1,264 @@
+MIT License
+
+Copyright (c) 2026 RedSalamander
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Third-Party Licenses
+
+Red Salamander uses the following third-party libraries. Their license terms
+are reproduced below.
+
+-------------------------------------------------------------------------------
+
+### WIL (Windows Implementation Libraries)
+
+- Version: 1.0.250325.1+
+- License: MIT
+- Copyright (c) Microsoft Corporation. All rights reserved.
+
+https://github.com/microsoft/wil
+
+-------------------------------------------------------------------------------
+
+### yyjson
+
+- Version: 0.12.0
+- License: MIT
+- Copyright (c) 2020 YaoYuan <ibireme@gmail.com>
+
+https://github.com/ibireme/yyjson
+
+-------------------------------------------------------------------------------
+
+### pe-parse
+
+- Version: 2.1.1
+- License: MIT
+- Copyright (c) 2013 Andrew Ruef
+
+https://github.com/trailofbits/pe-parse
+
+-------------------------------------------------------------------------------
+
+### libjpeg-turbo
+
+- Version: 3.1.3
+- License: IJG License AND BSD-3-Clause (modified 3-clause BSD)
+- Copyright (C) 2009-2025 D. R. Commander. All Rights Reserved.
+- Copyright (C) 2015 Viktor Szathmary. All Rights Reserved.
+
+This software is based in part on the work of the Independent JPEG Group.
+
+https://github.com/libjpeg-turbo/libjpeg-turbo
+
+-------------------------------------------------------------------------------
+
+### LibRaw
+
+- Version: 0.22.0
+- License: LGPL-2.1-only OR CDDL-1.0 (dual-licensed, user may choose)
+- Copyright (C) LibRaw LLC
+
+https://www.libraw.org/
+
+-------------------------------------------------------------------------------
+
+### 7-Zip
+
+- Version: 25.01
+- License: GNU LGPL-2.1-or-later (most files), with BSD-3-Clause and
+  BSD-2-Clause for some components
+- Copyright (C) 1999-2025 Igor Pavlov
+
+Additional copyrights for bundled components:
+- LZFSE: Copyright (c) 2015-2016 Apple Inc. (BSD-3-Clause)
+- ZSTD: Copyright (c) Facebook, Inc. (BSD-3-Clause)
+- XXH64: Copyright (c) 2012-2021 Yann Collet (BSD-2-Clause)
+
+Note: RAR-related files (CPP/7zip/Compress/Rar*) are subject to the
+unRAR license restriction (see unRAR below).
+
+https://www.7-zip.org/
+
+-------------------------------------------------------------------------------
+
+### unRAR
+
+- Version: 7.0.7
+- License: unRAR freeware license
+- All copyrights to RAR and the utility UnRAR are exclusively owned by
+  Alexander L. Roshal.
+
+UnRAR source code may be used in any software to handle RAR archives without
+limitations free of charge, but cannot be used to develop RAR (WinRAR)
+compatible archiver and to re-create RAR compression algorithm, which is
+proprietary. Distribution of modified UnRAR source code in separate form or as
+a part of other software is permitted, provided that full text of this
+paragraph, starting from "UnRAR source code" words, is included in license, or
+in documentation if license is not available, and in source code comments of
+resulting package.
+
+https://www.rarlab.com/
+
+-------------------------------------------------------------------------------
+
+### curl
+
+- Version: 8.18.0
+- License: curl (MIT/X-style)
+- Copyright (c) 1996-2025 Daniel Stenberg <daniel@haxx.se>, and many
+  contributors.
+
+Permission to use, copy, modify, and distribute this software for any purpose
+with or without fee is hereby granted, provided that the above copyright notice
+and this permission notice appear in all copies.
+
+https://curl.se/
+
+-------------------------------------------------------------------------------
+
+### libssh2
+
+- Version: 1.11.1
+- License: BSD-3-Clause
+- Copyright (C) 2004-2007 Sara Golemon <sarag@libssh2.org>
+- Copyright (C) 2005-2006 Mikhail Gusarov
+- Copyright (C) 2006-2007 The Written Word, Inc.
+- Copyright (C) 2007 Eli Fant
+- Copyright (C) 2009-2023 Daniel Stenberg
+- Copyright (C) 2008-2009 Simon Josefsson
+- Copyright (C) 2000 Markus Friedl
+- Copyright (C) 2015 Microsoft Corp.
+
+https://libssh2.org/
+
+-------------------------------------------------------------------------------
+
+### OpenSSL
+
+- Version: 3.6.1
+- License: Apache-2.0
+- Copyright (c) 1998-2025 The OpenSSL Project Authors. All Rights Reserved.
+
+https://www.openssl.org/
+
+-------------------------------------------------------------------------------
+
+### Brotli
+
+- Version: 1.2.0
+- License: MIT
+- Copyright (c) 2009, 2010, 2013-2016 by the Brotli Authors.
+
+https://github.com/google/brotli
+
+-------------------------------------------------------------------------------
+
+### zlib
+
+- Version: 1.3.1
+- License: zlib License
+- Copyright (C) 1995-2022 Jean-loup Gailly and Mark Adler
+
+https://zlib.net/
+
+-------------------------------------------------------------------------------
+
+### JasPer
+
+- Version: 4.2.8
+- License: JasPer-2.0 (MIT-like permissive)
+- Copyright (c) 2001-2016 Michael David Adams
+- Copyright (c) 1999-2000 Image Power, Inc.
+- Copyright (c) 1999-2000 The University of British Columbia
+
+https://www.ece.uvic.ca/~frodo/jasper/
+
+-------------------------------------------------------------------------------
+
+### Little CMS (lcms2)
+
+- Version: 2.18
+- License: MIT
+- Copyright (c) 2023 Marti Maria Saguer
+
+https://www.littlecms.com/
+
+-------------------------------------------------------------------------------
+
+### WebView2
+
+- Version: 1.0.3650.58+
+- License: BSD-3-Clause
+- Copyright (C) Microsoft Corporation. All rights reserved.
+
+https://developer.microsoft.com/en-us/microsoft-edge/webview2/
+
+-------------------------------------------------------------------------------
+
+### AWS SDK for C++
+
+- Version: 1.11.724+
+- License: Apache-2.0
+- Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+
+Includes the following AWS C Runtime libraries, all licensed under Apache-2.0:
+- aws-crt-cpp
+- aws-c-common
+- aws-c-s3
+- aws-c-auth
+- aws-c-cal
+- aws-c-io
+- aws-c-http
+- aws-c-mqtt
+- aws-c-compression
+- aws-c-event-stream
+- aws-c-sdkutils
+- aws-checksums
+
+https://github.com/aws/aws-sdk-cpp
+
+-------------------------------------------------------------------------------
+
+### highlight.js (ViewerWeb plugin)
+
+- License: BSD-3-Clause
+- Copyright (c) 2006 Ivan Sagalaev. All rights reserved.
+
+https://highlightjs.org/
+
+-------------------------------------------------------------------------------
+
+### jsoneditor (ViewerWeb plugin)
+
+- License: Apache-2.0
+- Copyright (c) Jos de Jong
+
+https://github.com/josdejong/jsoneditor
+
+-------------------------------------------------------------------------------
+
+### markdown-it (ViewerWeb plugin)
+
+- License: MIT
+- Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin.
+
+https://github.com/markdown-it/markdown-it
+

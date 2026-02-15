@@ -1,0 +1,57 @@
+#include <windows.h>
+#include "resource.h"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDR_VIEWERSPACE_MENU MENU
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&Refresh\tF5", IDM_VIEWERSPACE_FILE_REFRESH
+        MENUITEM "&Up\tBackspace", IDM_VIEWERSPACE_NAV_UP
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit\tEsc", IDM_VIEWERSPACE_FILE_EXIT
+    END
+END
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// String Table
+//
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSPACE_NAME "Space"
+    IDS_VIEWERSPACE_DESCRIPTION "Treemap disk usage viewer"
+    IDS_VIEWERSPACE_TITLE_FORMAT "{0} - Space"
+    IDS_VIEWERSPACE_STATUS_SCANNING "Scanning..."
+    IDS_VIEWERSPACE_STATUS_QUEUED "Queued…"
+    IDS_VIEWERSPACE_STATUS_DONE "Done"
+    IDS_VIEWERSPACE_OTHER_BUCKET_FORMAT "Other items ({0:L} items)"
+    IDS_VIEWERSPACE_HEADER_FORMAT "{0} - {1}"
+    IDS_VIEWERSPACE_STATUS_NOT_STARTED "Not started"
+    IDS_VIEWERSPACE_STATUS_ERROR "Error"
+    IDS_VIEWERSPACE_STATUS_CANCELED "Canceled"
+    IDS_VIEWERSPACE_TOOLTIP_SHARE_UNKNOWN "-"
+    IDS_VIEWERSPACE_TOOLTIP_PERCENT_FORMAT "{0:.1Lf}%"
+    IDS_VIEWERSPACE_TOOLTIP_FORMAT_WITH_PATH "{0}\r\n{1}\r\nSize: {2}\r\nShare: {3}\r\nState: {4}"
+    IDS_VIEWERSPACE_TOOLTIP_FORMAT_NO_PATH "{0}\r\nSize: {1}\r\nShare: {2}\r\nState: {3}"
+    IDS_VIEWERSPACE_TOOLTIP_FORMAT_WITH_PATH_NO_STATE "{0}\r\n{1}\r\nSize: {2}\r\nShare: {3}"
+    IDS_VIEWERSPACE_TOOLTIP_FORMAT_NO_PATH_NO_STATE "{0}\r\nSize: {1}\r\nShare: {2}"
+    IDS_VIEWERSPACE_HEADER_SCANNING_FORMAT "Scanning {0} - {1}"
+    IDS_VIEWERSPACE_HEADER_PROCESSING_FORMAT "Processing: {0}"
+    IDS_VIEWERSPACE_HEADER_COUNTS_FORMAT "{0:L} items ({1:L} folders, {2:L} files)"
+    IDS_VIEWERSPACE_HEADER_SIZE_FORMAT "{0} ({1:L} bytes)"
+    IDS_VIEWERSPACE_AGGREGATE_FOLDERS_FILES_FORMAT "{0:L} folders, {1:L} files"
+    IDS_VIEWERSPACE_AGGREGATE_FOLDERS_FORMAT "{0:L} folders"
+    IDS_VIEWERSPACE_AGGREGATE_FILES_FORMAT "{0:L} files"
+    IDS_VIEWERSPACE_WATERMARK_SCAN_INCOMPLETE "Scan Incomplete"
+    IDS_VIEWERSPACE_WATERMARK_IN_PROGRESS "In Progress"
+    IDS_VIEWERSPACE_CONTEXT_FOCUS_IN_PANE "Focus in pane"
+    IDS_VIEWERSPACE_CONTEXT_ZOOM_IN "Zoom in"
+    IDS_VIEWERSPACE_CONTEXT_ZOOM_OUT "Zoom out"
+    IDS_VIEWERSPACE_OVERLAY_SCAN_COMPLETED "Scan completed"
+END

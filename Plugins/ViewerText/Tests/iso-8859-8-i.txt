@@ -1,0 +1,9 @@
+Encoding: ISO-8859-8-I (Hebrew Logical) - no BOM
+File: iso-8859-8-i.txt
+Line endings: CRLF
+Purpose: Validate ISO-8859-8-I mapping (Hebrew logical).
+---
+01: Hebrew (logical): שלום עולם
+02: Note: bytes are identical to ISO-8859-8; bidi handling differs.
+03: PATH: C:\Temp\ViewerText\iso-8859-8-i.txt
+04: End marker: EOF

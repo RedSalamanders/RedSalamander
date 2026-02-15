@@ -1,0 +1,9 @@
+Encoding: Japanese ISO-2022-JP - no BOM
+File: iso-2022-jp.txt
+Purpose: ISO-2022-JP escape-sequence encoding.
+---
+01: Japanese: 日本語のテキスト
+02: ASCII: The quick brown fox jumps over the lazy dog.
+03: ASCII: 0123456789  !@#$%^&*()  []{}  <>",.;:?
+04: Path: C:\Temp\ViewerText\
+05: End marker: EOF
