@@ -279,8 +279,8 @@ private:
     bool _allowEraseBkgnd = true;
 
     wil::unique_hwnd _hWnd;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _menuBackgroundBrush;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _menuFont;
+    wil::unique_hbrush _menuBackgroundBrush;
+    wil::unique_hfont _menuFont;
     std::vector<MenuItemData> _menuThemeItems;
 
     float _dpi = static_cast<float>(USER_DEFAULT_SCREEN_DPI);
@@ -355,7 +355,7 @@ private:
     std::wstring _viewPathText;
     std::vector<uint32_t> _navStack;
 
-    ScanState _overallState = ScanState::NotStarted;
+    ScanState _overallState           = ScanState::NotStarted;
     double _scanCompletedSinceSeconds = 0.0;
 
     uint64_t _scanProgressBytes    = 0;

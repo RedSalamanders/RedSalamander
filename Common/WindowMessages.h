@@ -59,8 +59,10 @@ inline constexpr UINT kHostExecuteInPane                  = WM_APP + 0x50D;
 inline constexpr UINT kAppStartupInputReady = WM_APP + 0x510;
 
 // Compare Directories
-inline constexpr UINT kCompareDirectoriesScanProgress = WM_APP + 0x521;
-inline constexpr UINT kCompareDirectoriesExecuteCommand = WM_APP + 0x522;
+inline constexpr UINT kCompareDirectoriesScanProgress    = WM_APP + 0x521;
+inline constexpr UINT kCompareDirectoriesExecuteCommand  = WM_APP + 0x522;
+inline constexpr UINT kCompareDirectoriesDecisionUpdated = WM_APP + 0x523;
+inline constexpr UINT kCompareDirectoriesContentProgress = WM_APP + 0x524;
 
 // Preferences
 inline constexpr UINT kPreferencesApplyComboThemeDeferred = WM_APP + 0x530;
@@ -70,12 +72,12 @@ inline constexpr UINT kSplashScreenSetText  = WM_APP + 0x6F0;
 inline constexpr UINT kSplashScreenRecenter = WM_APP + 0x6F1;
 
 // Plugin viewers (async work completion / progress)
-inline constexpr UINT kViewerTextAsyncOpenComplete      = WM_APP + 0x600;
-inline constexpr UINT kViewerPeAsyncParseComplete       = WM_APP + 0x601;
-inline constexpr UINT kViewerWebAsyncLoadComplete       = WM_APP + 0x602;
-inline constexpr UINT kViewerImgRawAsyncOpenComplete    = WM_APP + 0x603;
-inline constexpr UINT kViewerImgRawAsyncProgress        = WM_APP + 0x604;
-inline constexpr UINT kViewerImgRawAsyncExportComplete  = WM_APP + 0x605;
+inline constexpr UINT kViewerTextAsyncOpenComplete     = WM_APP + 0x600;
+inline constexpr UINT kViewerPeAsyncParseComplete      = WM_APP + 0x601;
+inline constexpr UINT kViewerWebAsyncLoadComplete      = WM_APP + 0x602;
+inline constexpr UINT kViewerImgRawAsyncOpenComplete   = WM_APP + 0x603;
+inline constexpr UINT kViewerImgRawAsyncProgress       = WM_APP + 0x604;
+inline constexpr UINT kViewerImgRawAsyncExportComplete = WM_APP + 0x605;
 
 // RedSalamanderMonitor / ColorTextView
 inline constexpr UINT kColorTextViewLayoutReady = WM_APP + 0x620;

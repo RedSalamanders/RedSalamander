@@ -94,7 +94,7 @@ void InstallFileComboEscClose(HWND combo) noexcept
     static_cast<void>(SetWindowSubclass(combo, FileComboEscCloseSubclassProc, kFileComboEscCloseSubclassId, 0));
 }
 
-wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> g_viewerImgRawMenuIconFont;
+wil::unique_hfont g_viewerImgRawMenuIconFont;
 UINT g_viewerImgRawMenuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
 bool g_viewerImgRawMenuIconFontValid = false;
 
@@ -449,10 +449,10 @@ struct ViewerImgRawClassBackgroundBrushState
     ViewerImgRawClassBackgroundBrushState(ViewerImgRawClassBackgroundBrushState&&)                 = delete;
     ViewerImgRawClassBackgroundBrushState& operator=(ViewerImgRawClassBackgroundBrushState&&)      = delete;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> activeBrush;
+    wil::unique_hbrush activeBrush;
     COLORREF activeColor = CLR_INVALID;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> pendingBrush;
+    wil::unique_hbrush pendingBrush;
     COLORREF pendingColor = CLR_INVALID;
 
     bool classRegistered = false;
@@ -489,7 +489,7 @@ void RequestViewerImgRawClassBackgroundColor(COLORREF color) noexcept
         return;
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> brush(CreateSolidBrush(color));
+    wil::unique_hbrush brush(CreateSolidBrush(color));
     if (! brush)
     {
         return;
@@ -1996,7 +1996,7 @@ void ViewerImgRaw::OnDrawMenuItem(DRAWITEMSTRUCT* draw) noexcept
         SelectClipRgn(draw->hDC, clipRgn.get());
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(fillColor));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
     FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
 
     if (data.separator)

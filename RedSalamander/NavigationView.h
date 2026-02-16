@@ -542,7 +542,7 @@ private:
     };
 
     std::vector<std::unique_ptr<MenuItemData>> _menuItemData;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _menuBackgroundBrush;
+    wil::unique_hbrush _menuBackgroundBrush;
     int _themedMenuMaxWidthPx           = 0;
     bool _themedMenuUseMiddleEllipsis   = false;
     bool _themedMenuUseEditSuggestStyle = false;
@@ -568,9 +568,9 @@ private:
     bool ExecuteDriveMenuAction(UINT menuId);
 
     // GDI resources (Sections 1 & 3) - managed with WIL
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _pathFont; // For Edit control
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _backgroundBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _borderBrush;
+    wil::unique_hfont _pathFont; // For Edit control
+    wil::unique_hbrush _backgroundBrush;
+    wil::unique_hbrush _borderBrush;
     wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> _borderPen;
 
     void UpdateEffectiveTheme() noexcept;
@@ -590,9 +590,9 @@ private:
     ModernDropdownKind _navDropdownKind = ModernDropdownKind::None;
     std::vector<std::filesystem::path> _navDropdownPaths;
     wil::unique_hwnd _navDropdownCombo;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _menuFont;
+    wil::unique_hfont _menuFont;
     UINT _menuFontDpi = USER_DEFAULT_SCREEN_DPI;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _menuIconFont;
+    wil::unique_hfont _menuIconFont;
     UINT _menuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
     bool _menuIconFontValid = false;
 

@@ -206,7 +206,7 @@ struct ItemPropertiesWindowState
     wil::unique_hwnd list;
     wil::unique_hwnd closeButton;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> backgroundBrush;
+    wil::unique_hbrush backgroundBrush;
 };
 
 void SetWindowThemeForMode(HWND hwnd, const AppTheme& theme) noexcept

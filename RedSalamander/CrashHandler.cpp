@@ -389,15 +389,16 @@ void WriteDumpAndMarker(EXCEPTION_POINTERS* exceptionPointers) noexcept
         }
 
         const std::filesystem::path dumpPath = BuildDumpPath(dir);
-        const HRESULT dumpHr                 = WriteMiniDumpFile(dumpPath, exceptionPointers);
-        if (FAILED(dumpHr))
-        {
-            return;
-        }
-
-        std::filesystem::path reportPath = dumpPath;
+        std::filesystem::path reportPath     = dumpPath;
         reportPath.replace_extension(L".txt");
         static_cast<void>(WriteCrashReportFile(reportPath, exceptionPointers));
+
+        const HRESULT dumpHr = WriteMiniDumpFile(dumpPath, exceptionPointers);
+        if (FAILED(dumpHr))
+        {
+            // Best-effort: even if the minidump fails, leave the report file behind for diagnostics.
+            return;
+        }
 
         const std::filesystem::path markerPath = GetCrashMarkerPath();
         static_cast<void>(WriteMarkerFile(markerPath, dumpPath.native()));

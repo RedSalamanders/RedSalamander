@@ -269,14 +269,14 @@ struct PreferencesDialogState
     bool pageHostIgnoreSize         = false;
 
     // Theme Resources (RAII-managed)
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> backgroundBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> cardBrush;
+    wil::unique_hbrush backgroundBrush;
+    wil::unique_hbrush cardBrush;
     COLORREF cardBackgroundColor = RGB(255, 255, 255);
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> inputBrush;
+    wil::unique_hbrush inputBrush;
     COLORREF inputBackgroundColor = RGB(255, 255, 255);
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> inputFocusedBrush;
+    wil::unique_hbrush inputFocusedBrush;
     COLORREF inputFocusedBackgroundColor = RGB(255, 255, 255);
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> inputDisabledBrush;
+    wil::unique_hbrush inputDisabledBrush;
     COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
     wil::unique_hfont italicFont;
     wil::unique_hfont boldFont;

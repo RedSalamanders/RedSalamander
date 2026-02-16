@@ -719,12 +719,12 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
     if (_fileOperationCompletedCallback)
     {
         FileOperationCompletedEvent e{};
-        e.operation        = task->GetOperation();
-        e.sourcePane       = sourcePane;
-        e.destinationPane  = destinationPane;
-        e.sourcePaths      = task->_sourcePaths;
+        e.operation         = task->GetOperation();
+        e.sourcePane        = sourcePane;
+        e.destinationPane   = destinationPane;
+        e.sourcePaths       = task->_sourcePaths;
         e.destinationFolder = task->GetDestinationFolder();
-        e.hr               = payload->hr;
+        e.hr                = payload->hr;
         _fileOperationCompletedCallback(e);
     }
 

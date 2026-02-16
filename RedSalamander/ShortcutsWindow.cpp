@@ -429,9 +429,9 @@ private:
     COLORREF _searchInputBackgroundColor         = RGB(255, 255, 255);
     COLORREF _searchInputFocusedBackgroundColor  = RGB(255, 255, 255);
     COLORREF _searchInputDisabledBackgroundColor = RGB(255, 255, 255);
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _searchInputBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _searchInputFocusedBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _searchInputDisabledBrush;
+    wil::unique_hbrush _searchInputBrush;
+    wil::unique_hbrush _searchInputFocusedBrush;
+    wil::unique_hbrush _searchInputDisabledBrush;
 
     Common::Settings::ShortcutsSettings _shortcuts;
     const ShortcutManager* _shortcutManager = nullptr;
@@ -439,9 +439,9 @@ private:
 
     Common::Settings::Settings* _settings = nullptr;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _backgroundBrush;
+    wil::unique_hbrush _backgroundBrush;
     UINT _dpi = USER_DEFAULT_SCREEN_DPI;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _uiFont;
+    wil::unique_hfont _uiFont;
 };
 
 ShortcutsWindow* g_shortcutsWindow = nullptr;
@@ -901,7 +901,7 @@ void ShortcutsWindow::OnHeaderPaint(HWND header) noexcept
         textColor = ChooseContrastingTextColor(bg);
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(bg));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(bg));
     FillRect(hdc.get(), &ps.rcPaint, bgBrush.get());
 
     HFONT fontToUse = reinterpret_cast<HFONT>(SendMessageW(header, WM_GETFONT, 0, 0));
@@ -915,7 +915,7 @@ void ShortcutsWindow::OnHeaderPaint(HWND header) noexcept
     const int paddingX = MulDiv(8, dpi, USER_DEFAULT_SCREEN_DPI);
 
     const COLORREF lineColor = _theme.menu.separator;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> lineBrush(CreateSolidBrush(lineColor));
+    wil::unique_hbrush lineBrush(CreateSolidBrush(lineColor));
 
     const int count = Header_GetItemCount(header);
     for (int i = 0; i < count; ++i)
@@ -1073,7 +1073,7 @@ LRESULT ShortcutsWindow::OnDrawItem(DRAWITEMSTRUCT* dis) noexcept
         bg                  = BlendColor(_theme.windowBackground, tint, 1, denom);
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(bg));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(bg));
     FillRect(dis->hDC, &rc, bgBrush.get());
 
     COLORREF textColor = selected ? ChooseContrastingTextColor(bg) : _theme.menu.text;
@@ -1155,7 +1155,7 @@ LRESULT ShortcutsWindow::OnDrawItem(DRAWITEMSTRUCT* dis) noexcept
     }
 
     HBRUSH highlightBrush = nullptr;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> ownedHighlightBrush;
+    wil::unique_hbrush ownedHighlightBrush;
     if (! trimmedQuery.empty() && ! _theme.highContrast)
     {
         ownedHighlightBrush.reset(CreateSolidBrush(highlightBg));

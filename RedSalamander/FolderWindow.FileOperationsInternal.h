@@ -125,7 +125,7 @@ struct FolderWindow::FileOperationState
 
         struct InFlightFileProgress
         {
-            const void* cookieKey            = nullptr;
+            const void* cookieKey             = nullptr;
             unsigned __int64 progressStreamId = 0;
             std::wstring sourcePath;
             unsigned __int64 totalBytes     = 0;
@@ -278,6 +278,7 @@ struct FolderWindow::FileOperationState
         std::atomic<unsigned __int64> _appliedSpeedLimitBytesPerSecond{0};
         std::atomic<unsigned __int64> _effectiveSpeedLimitBytesPerSecond{0};
         std::atomic<HRESULT> _resultHr{S_OK};
+        std::atomic<bool> _observedSkipAction{false};
 
         std::mutex _conflictMutex;
         std::condition_variable _conflictCv;

@@ -793,8 +793,8 @@ struct DialogState
 
     ThemedInputFrames::FrameStyle inputFrameStyle{};
 
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> boldFont;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> titleFont;
+    wil::unique_hfont boldFont;
+    wil::unique_hfont titleFont;
 
     std::vector<RECT> cards;
     std::wstring toggleOnLabel;

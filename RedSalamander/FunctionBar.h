@@ -83,11 +83,11 @@ private:
     std::array<std::wstring, 12> _labels{};
     std::wstring _modifierText;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _backgroundBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _pressedBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _hoverBrush;
+    wil::unique_hbrush _backgroundBrush;
+    wil::unique_hbrush _pressedBrush;
+    wil::unique_hbrush _hoverBrush;
     wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> _glyphPen;
     wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> _separatorPen;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _keyFont;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _textFont;
+    wil::unique_hfont _keyFont;
+    wil::unique_hfont _textFont;
 };

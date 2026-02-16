@@ -41,15 +41,15 @@ constexpr UINT kCmdTreemapContextFocusInPane = 0xC100u;
 constexpr UINT kCmdTreemapContextZoomIn      = 0xC101u;
 constexpr UINT kCmdTreemapContextZoomOut     = 0xC102u;
 
-constexpr UINT kCmdFolderViewContextOpen      = 33280u;
-constexpr UINT kCmdFolderViewContextOpenWith  = 33281u;
-constexpr UINT kCmdFolderViewContextDelete    = 33282u;
-constexpr UINT kCmdFolderViewContextRename    = 33283u;
-constexpr UINT kCmdFolderViewContextCopy      = 33284u;
-constexpr UINT kCmdFolderViewContextPaste     = 33285u;
+constexpr UINT kCmdFolderViewContextOpen       = 33280u;
+constexpr UINT kCmdFolderViewContextOpenWith   = 33281u;
+constexpr UINT kCmdFolderViewContextDelete     = 33282u;
+constexpr UINT kCmdFolderViewContextRename     = 33283u;
+constexpr UINT kCmdFolderViewContextCopy       = 33284u;
+constexpr UINT kCmdFolderViewContextPaste      = 33285u;
 constexpr UINT kCmdFolderViewContextProperties = 33286u;
-constexpr UINT kCmdFolderViewContextMove      = 33287u;
-constexpr UINT kCmdFolderViewContextViewSpace = 33288u;
+constexpr UINT kCmdFolderViewContextMove       = 33287u;
+constexpr UINT kCmdFolderViewContextViewSpace  = 33288u;
 
 constexpr UINT kFolderViewDebugCommandIdBase = 60000u;
 
@@ -63,7 +63,7 @@ constexpr double kAnimationDurationSeconds = 0.18;
 
 constexpr size_t kMaxLayoutItems = 600;
 
-wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> g_viewerSpaceMenuIconFont;
+wil::unique_hfont g_viewerSpaceMenuIconFont;
 UINT g_viewerSpaceMenuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
 bool g_viewerSpaceMenuIconFontValid = false;
 
@@ -103,10 +103,10 @@ struct ViewerSpaceClassBackgroundBrushState
     ViewerSpaceClassBackgroundBrushState(ViewerSpaceClassBackgroundBrushState&&)                 = delete;
     ViewerSpaceClassBackgroundBrushState& operator=(ViewerSpaceClassBackgroundBrushState&&)      = delete;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> activeBrush;
+    wil::unique_hbrush activeBrush;
     COLORREF activeColor = CLR_INVALID;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> pendingBrush;
+    wil::unique_hbrush pendingBrush;
     COLORREF pendingColor = CLR_INVALID;
 
     bool classRegistered = false;
@@ -143,7 +143,7 @@ void RequestViewerSpaceClassBackgroundColor(COLORREF color) noexcept
         return;
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> brush(CreateSolidBrush(color));
+    wil::unique_hbrush brush(CreateSolidBrush(color));
     if (! brush)
     {
         return;
@@ -323,7 +323,7 @@ COLORREF RainbowMenuSelectionColor(std::wstring_view seed, bool darkBase) noexce
     return RGB(toByte(c.r), toByte(c.g), toByte(c.b));
 }
 
-wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> CreateMenuFontForDpi(UINT dpi) noexcept
+wil::unique_hfont CreateMenuFontForDpi(UINT dpi) noexcept
 {
     NONCLIENTMETRICSW metrics{};
     metrics.cbSize = sizeof(metrics);
@@ -340,7 +340,7 @@ wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> CreateMenuFont
         metrics.lfMenuFont.lfWidth  = MulDiv(metrics.lfMenuFont.lfWidth, static_cast<int>(dpi), static_cast<int>(baseDpi));
     }
 
-    return wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject>(CreateFontIndirectW(&metrics.lfMenuFont));
+    return wil::unique_hfont(CreateFontIndirectW(&metrics.lfMenuFont));
 }
 
 bool IsAsciiAlpha(wchar_t ch) noexcept
@@ -475,8 +475,8 @@ std::wstring BuildTrailingEllipsisText(std::wstring_view text, IDWriteFactory* f
 
             if (prefixLen > 0 && prefixLen < text.size())
             {
-                const wchar_t last = text[prefixLen - 1];
-                const wchar_t next = text[prefixLen];
+                const wchar_t last             = text[prefixLen - 1];
+                const wchar_t next             = text[prefixLen];
                 const bool lastIsHighSurrogate = (last >= 0xD800 && last <= 0xDBFF);
                 const bool nextIsLowSurrogate  = (next >= 0xDC00 && next <= 0xDFFF);
                 if (lastIsHighSurrogate && nextIsLowSurrogate)
@@ -2217,17 +2217,15 @@ void ViewerSpace::OnPaint()
         }
     }
 
-    const D2D1_RECT_F treemapRc = D2D1::RectF(0.0f, headerHeight, DipFromPx(_clientSize.cx), DipFromPx(_clientSize.cy));
-    const D2D1_RECT_F treemapLayoutRc =
-        D2D1::RectF(kPaddingDip,
-                    kHeaderHeightDip + kPaddingDip,
-                    std::max(kPaddingDip, treemapRc.right - kPaddingDip),
-                    std::max(kHeaderHeightDip + kPaddingDip, treemapRc.bottom - kPaddingDip));
-    const float treemapLayoutAreaDip2 = RectArea(treemapLayoutRc);
+    const D2D1_RECT_F treemapRc                                = D2D1::RectF(0.0f, headerHeight, DipFromPx(_clientSize.cx), DipFromPx(_clientSize.cy));
+    const D2D1_RECT_F treemapLayoutRc                          = D2D1::RectF(kPaddingDip,
+                                                    kHeaderHeightDip + kPaddingDip,
+                                                    std::max(kPaddingDip, treemapRc.right - kPaddingDip),
+                                                    std::max(kHeaderHeightDip + kPaddingDip, treemapRc.bottom - kPaddingDip));
+    const float treemapLayoutAreaDip2                          = RectArea(treemapLayoutRc);
     static constexpr float kLargeTileAreaFractionWhileScanning = 0.10f;
     static constexpr float kLargeTileAreaFractionIdle          = 0.10f;
-    const float largeTileAreaFractionThreshold =
-        scanActive ? kLargeTileAreaFractionWhileScanning : kLargeTileAreaFractionIdle;
+    const float largeTileAreaFractionThreshold                 = scanActive ? kLargeTileAreaFractionWhileScanning : kLargeTileAreaFractionIdle;
 
     uint64_t viewBytes   = 0;
     const Node* viewNode = TryGetRealNode(_viewNodeId);
@@ -2491,25 +2489,24 @@ void ViewerSpace::OnPaint()
             }
         }
 
-        const bool expanded        = isRealDirectory && item.labelHeightDip > 0.0f;
+        const bool expanded = isRealDirectory && item.labelHeightDip > 0.0f;
 
         float directoryHeaderHeightDip = 0.0f;
         if (isRealDirectory)
         {
-            const float areaFraction = (treemapLayoutAreaDip2 > 1.0f) ? (area / treemapLayoutAreaDip2) : 0.0f;
+            const float areaFraction   = (treemapLayoutAreaDip2 > 1.0f) ? (area / treemapLayoutAreaDip2) : 0.0f;
             const bool wantsTallHeader = incompleteDirectory && areaFraction >= largeTileAreaFractionThreshold;
 
-            const float h     = std::max(0.0f, rc.bottom - rc.top);
-            const float baseHeaderHeightDip =
-                std::clamp(24.0f - static_cast<float>(item.depth) * 2.0f, 20.0f, 24.0f);
-            float desiredHeaderHeightDip = expanded ? std::max(item.labelHeightDip, baseHeaderHeightDip) : baseHeaderHeightDip;
+            const float h                   = std::max(0.0f, rc.bottom - rc.top);
+            const float baseHeaderHeightDip = std::clamp(24.0f - static_cast<float>(item.depth) * 2.0f, 20.0f, 24.0f);
+            float desiredHeaderHeightDip    = expanded ? std::max(item.labelHeightDip, baseHeaderHeightDip) : baseHeaderHeightDip;
             if (wantsTallHeader)
             {
-                const float twoLine = std::clamp(38.0f - static_cast<float>(item.depth) * 2.0f, 30.0f, 38.0f);
+                const float twoLine    = std::clamp(38.0f - static_cast<float>(item.depth) * 2.0f, 30.0f, 38.0f);
                 desiredHeaderHeightDip = std::max(desiredHeaderHeightDip, twoLine);
             }
             const float maxHeaderHeightDip = wantsTallHeader ? 44.0f : 24.0f;
-            desiredHeaderHeightDip = std::clamp(desiredHeaderHeightDip, 20.0f, maxHeaderHeightDip);
+            desiredHeaderHeightDip         = std::clamp(desiredHeaderHeightDip, 20.0f, maxHeaderHeightDip);
 
             if (h >= desiredHeaderHeightDip)
             {
@@ -2570,10 +2567,10 @@ void ViewerSpace::OnPaint()
             continue;
         }
 
-        const float tileW                 = std::max(0.0f, rc.right - rc.left);
-        const float tileH                 = std::max(0.0f, rc.bottom - rc.top);
-        const bool canShowAtLeastOneLine  = tileW >= 28.0f && tileH >= 20.0f;
-        const bool canShowTileLabels      = area >= labelAreaThresholdDip2 || canShowAtLeastOneLine;
+        const float tileW                = std::max(0.0f, rc.right - rc.left);
+        const float tileH                = std::max(0.0f, rc.bottom - rc.top);
+        const bool canShowAtLeastOneLine = tileW >= 28.0f && tileH >= 20.0f;
+        const bool canShowTileLabels     = area >= labelAreaThresholdDip2 || canShowAtLeastOneLine;
 
         D2D1::ColorF base         = baseColorForNode(nodeRef);
         const bool isScanningTile = nodeRef.isDirectory && ! nodeRef.isSynthetic && nodeRef.scanState == ScanState::Scanning;
@@ -2584,28 +2581,26 @@ void ViewerSpace::OnPaint()
         }
         const bool isRealDirectory = nodeRef.isDirectory && ! nodeRef.isSynthetic;
         const bool expanded        = isRealDirectory && item.labelHeightDip > 0.0f;
-        const bool isOtherBucket = nodeRef.isSynthetic;
-        const bool incomplete =
-            isRealDirectory &&
-            (nodeRef.scanState == ScanState::NotStarted || nodeRef.scanState == ScanState::Queued || nodeRef.scanState == ScanState::Scanning);
+        const bool isOtherBucket   = nodeRef.isSynthetic;
+        const bool incomplete      = isRealDirectory && (nodeRef.scanState == ScanState::NotStarted || nodeRef.scanState == ScanState::Queued ||
+                                                    nodeRef.scanState == ScanState::Scanning);
 
-        const float areaFraction = (treemapLayoutAreaDip2 > 1.0f) ? (area / treemapLayoutAreaDip2) : 0.0f;
+        const float areaFraction   = (treemapLayoutAreaDip2 > 1.0f) ? (area / treemapLayoutAreaDip2) : 0.0f;
         const bool wantsTallHeader = incomplete && areaFraction >= largeTileAreaFractionThreshold;
 
         float directoryHeaderHeightDip = 0.0f;
         if (isRealDirectory)
         {
-            const float h      = std::max(0.0f, rc.bottom - rc.top);
-            const float baseHeaderHeightDip =
-                std::clamp(24.0f - static_cast<float>(item.depth) * 2.0f, 20.0f, 24.0f);
-            float desiredHeaderHeightDip = expanded ? std::max(item.labelHeightDip, baseHeaderHeightDip) : baseHeaderHeightDip;
+            const float h                   = std::max(0.0f, rc.bottom - rc.top);
+            const float baseHeaderHeightDip = std::clamp(24.0f - static_cast<float>(item.depth) * 2.0f, 20.0f, 24.0f);
+            float desiredHeaderHeightDip    = expanded ? std::max(item.labelHeightDip, baseHeaderHeightDip) : baseHeaderHeightDip;
             if (wantsTallHeader)
             {
-                const float twoLine = std::clamp(38.0f - static_cast<float>(item.depth) * 2.0f, 30.0f, 38.0f);
+                const float twoLine    = std::clamp(38.0f - static_cast<float>(item.depth) * 2.0f, 30.0f, 38.0f);
                 desiredHeaderHeightDip = std::max(desiredHeaderHeightDip, twoLine);
             }
             const float maxHeaderHeightDip = wantsTallHeader ? 44.0f : 24.0f;
-            desiredHeaderHeightDip = std::clamp(desiredHeaderHeightDip, 20.0f, maxHeaderHeightDip);
+            desiredHeaderHeightDip         = std::clamp(desiredHeaderHeightDip, 20.0f, maxHeaderHeightDip);
 
             if (h >= desiredHeaderHeightDip)
             {
@@ -2614,11 +2609,9 @@ void ViewerSpace::OnPaint()
         }
         const bool hasDirectoryHeader = directoryHeaderHeightDip > 0.0f;
 
-        const std::wstring_view watermarkText =
-            scanActive ? std::wstring_view(_scanInProgressWatermarkText) : std::wstring_view(_scanIncompleteWatermarkText);
+        const std::wstring_view watermarkText = scanActive ? std::wstring_view(_scanInProgressWatermarkText) : std::wstring_view(_scanIncompleteWatermarkText);
 
-        const bool showStatusInHeader =
-            wantsTallHeader && hasDirectoryHeader && directoryHeaderHeightDip >= 32.0f && ! watermarkText.empty();
+        const bool showStatusInHeader = wantsTallHeader && hasDirectoryHeader && directoryHeaderHeightDip >= 32.0f && ! watermarkText.empty();
 
         if (incomplete && _watermarkFormat && _brushWatermark && ! watermarkText.empty() && ! showStatusInHeader)
         {
@@ -2801,7 +2794,7 @@ void ViewerSpace::OnPaint()
                 const float side = std::min(tileW, tileH);
                 const float size = std::clamp(side * 0.18f, 8.0f, 14.0f);
 
-                dogEarRc        = rc;
+                dogEarRc = rc;
                 dogEarRc.top += 2.0f;
                 dogEarRc.right -= 2.0f;
                 dogEarRc.left   = std::max(dogEarRc.left, dogEarRc.right - size);
@@ -2821,10 +2814,9 @@ void ViewerSpace::OnPaint()
                         {
                             revealFill = baseColorForNode(*parent);
 
-                            const bool parentRealDir = parent->isDirectory && ! parent->isSynthetic;
-                            const bool parentIncomplete =
-                                parentRealDir &&
-                                (parent->scanState == ScanState::NotStarted || parent->scanState == ScanState::Queued || parent->scanState == ScanState::Scanning);
+                            const bool parentRealDir    = parent->isDirectory && ! parent->isSynthetic;
+                            const bool parentIncomplete = parentRealDir && (parent->scanState == ScanState::NotStarted ||
+                                                                            parent->scanState == ScanState::Queued || parent->scanState == ScanState::Scanning);
                             if (parentIncomplete && ! highContrast)
                             {
                                 float dimT = darkMode ? 0.38f : 0.28f;
@@ -2859,18 +2851,16 @@ void ViewerSpace::OnPaint()
 
                     const D2D1::ColorF line = highContrast ? textColor : Mix(base, textColor, 0.52f);
                     _brushOutline->SetColor(D2D1::ColorF(line.r, line.g, line.b, highContrast ? 1.0f : 0.92f));
-                    _renderTarget->DrawLine(D2D1::Point2F(dogEarRc.left, dogEarRc.top),
-                                            D2D1::Point2F(dogEarRc.right, dogEarRc.bottom),
-                                            _brushOutline.get(),
-                                            1.1f);
+                    _renderTarget->DrawLine(
+                        D2D1::Point2F(dogEarRc.left, dogEarRc.top), D2D1::Point2F(dogEarRc.right, dogEarRc.bottom), _brushOutline.get(), 1.1f);
                 }
             }
 
-            D2D1_RECT_F nameRc   = labelRc;
-            D2D1_RECT_F statusRc = {};
-            D2D1_RECT_F sizeRc   = labelRc;
+            D2D1_RECT_F nameRc        = labelRc;
+            D2D1_RECT_F statusRc      = {};
+            D2D1_RECT_F sizeRc        = labelRc;
             const bool showStatusLine = showStatusInHeader && nodeRef.isDirectory;
-            bool showSize              = false;
+            bool showSize             = false;
 
             if (showStatusLine)
             {
@@ -2880,10 +2870,10 @@ void ViewerSpace::OnPaint()
                     const float nameH = std::clamp(availableH * 0.60f, 14.0f, availableH);
                     nameRc.bottom     = std::clamp(labelRc.top + nameH, labelRc.top, labelRc.bottom);
 
-                    statusRc      = labelRc;
-                    statusRc.top  = std::min(labelRc.bottom, nameRc.bottom + 1.0f);
-                    statusRc.top  = std::min(statusRc.top, statusRc.bottom);
-                    statusRc.left = nameRc.left;
+                    statusRc       = labelRc;
+                    statusRc.top   = std::min(labelRc.bottom, nameRc.bottom + 1.0f);
+                    statusRc.top   = std::min(statusRc.top, statusRc.bottom);
+                    statusRc.left  = nameRc.left;
                     statusRc.right = nameRc.right;
                 }
             }
@@ -2958,7 +2948,7 @@ void ViewerSpace::OnPaint()
             }
 
             _brushOutline->SetColor(D2D1::ColorF(accentColor.r, accentColor.g, accentColor.b, 1.0f));
-            const Node* node = resolveNode(item.nodeId);
+            const Node* node      = resolveNode(item.nodeId);
             const bool isFileTile = node != nullptr && ! node->isDirectory && ! node->isSynthetic;
             if (isFileTile)
             {
@@ -3152,8 +3142,8 @@ void ViewerSpace::OnPaint()
                             return;
                         }
 
-                        const float w = MeasureTextWidthDip(_dwriteFactory.get(), _headerInfoFormat.get(), text);
-                        const float maxW = std::max(0.0f, spinnerHostRc.right - spinnerHostRc.left);
+                        const float w     = MeasureTextWidthDip(_dwriteFactory.get(), _headerInfoFormat.get(), text);
+                        const float maxW  = std::max(0.0f, spinnerHostRc.right - spinnerHostRc.left);
                         const float lineW = std::clamp(w, 0.0f, maxW);
 
                         D2D1_RECT_F rc{};
@@ -3162,12 +3152,8 @@ void ViewerSpace::OnPaint()
                         rc.top    = top;
                         rc.bottom = top + height;
 
-                        _renderTarget->DrawTextW(text.data(),
-                                                 static_cast<UINT32>(text.size()),
-                                                 _headerInfoFormat.get(),
-                                                 rc,
-                                                 _brushText.get(),
-                                                 D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                        _renderTarget->DrawTextW(
+                            text.data(), static_cast<UINT32>(text.size()), _headerInfoFormat.get(), rc, _brushText.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
                     };
 
                     const float lineHeight = std::clamp(radius * 0.85f, 14.0f, 18.0f);
@@ -3191,7 +3177,7 @@ void ViewerSpace::OnPaint()
     if (! scanActive && _overallState == ScanState::Done && _scanCompletedSinceSeconds > 0.0 && _watermarkFormat && _brushText && _brushBackground)
     {
         static constexpr double kScanCompletedOverlaySeconds = 1.35;
-        const double elapsed                                = nowSeconds - _scanCompletedSinceSeconds;
+        const double elapsed                                 = nowSeconds - _scanCompletedSinceSeconds;
         if (elapsed >= 0.0 && elapsed < kScanCompletedOverlaySeconds)
         {
             const float t    = static_cast<float>(elapsed / kScanCompletedOverlaySeconds);
@@ -3220,12 +3206,8 @@ void ViewerSpace::OnPaint()
                 const float textAlpha           = (highContrast ? 1.0f : 0.92f) * fade;
                 _brushText->SetColor(D2D1::ColorF(oldTextColor.r, oldTextColor.g, oldTextColor.b, oldTextColor.a * textAlpha));
 
-                _renderTarget->DrawTextW(overlayText.c_str(),
-                                         static_cast<UINT32>(overlayText.size()),
-                                         _watermarkFormat.get(),
-                                         boxRc,
-                                         _brushText.get(),
-                                         D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                _renderTarget->DrawTextW(
+                    overlayText.c_str(), static_cast<UINT32>(overlayText.size()), _watermarkFormat.get(), boxRc, _brushText.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
 
                 _brushText->SetColor(oldTextColor);
             }
@@ -3629,11 +3611,12 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     }
 
     const size_t previousMenuThemeItemCount = _menuThemeItems.size();
-    auto menuCleanup                        = wil::scope_exit([&, previousMenuThemeItemCount]
-                                       {
-                                           DestroyMenu(rootMenu);
-                                           _menuThemeItems.resize(previousMenuThemeItemCount);
-                                       });
+    auto menuCleanup                        = wil::scope_exit(
+        [&, previousMenuThemeItemCount]
+        {
+            DestroyMenu(rootMenu);
+            _menuThemeItems.resize(previousMenuThemeItemCount);
+        });
 
     HMENU menu = GetSubMenu(rootMenu, 0);
     if (! menu)
@@ -3746,7 +3729,7 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
             const size_t lastSep      = trimmed.find_last_of(L"/\\");
             if (lastSep != std::wstring_view::npos && (lastSep + 1) < trimmed.size())
             {
-                const std::wstring_view leaf   = trimmed.substr(lastSep + 1);
+                const std::wstring_view leaf = trimmed.substr(lastSep + 1);
                 if (const std::optional<std::wstring> parent = TryGetParentPathForNavigationGeneric(trimmed); parent.has_value())
                 {
                     folderPathForCommand = parent.value();
@@ -3765,7 +3748,7 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 
         if (folderPath.empty())
         {
-            folderPath = folderPathForCommand;
+            folderPath           = folderPathForCommand;
             focusItemDisplayName = focusItemForCommand;
         }
     }
@@ -3778,22 +3761,14 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     const bool canExecuteLeafCmds = hostAvailable && ! folderPathForCommand.empty() && ! focusItemForCommand.empty();
     const bool canExecutePaste    = hostAvailable && ! folderPath.empty();
 
-    EnableMenuItem(menu,
-                   kCmdTreemapContextZoomIn,
-                   static_cast<UINT>(MF_BYCOMMAND | (canZoomIn ? MF_ENABLED : MF_GRAYED)));
-    EnableMenuItem(menu,
-                   kCmdTreemapContextZoomOut,
-                   static_cast<UINT>(MF_BYCOMMAND | (canZoomOut ? MF_ENABLED : MF_GRAYED)));
-    EnableMenuItem(menu,
-                   kCmdTreemapContextFocusInPane,
-                   static_cast<UINT>(MF_BYCOMMAND | (canFocusInPane ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu, kCmdTreemapContextZoomIn, static_cast<UINT>(MF_BYCOMMAND | (canZoomIn ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu, kCmdTreemapContextZoomOut, static_cast<UINT>(MF_BYCOMMAND | (canZoomOut ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu, kCmdTreemapContextFocusInPane, static_cast<UINT>(MF_BYCOMMAND | (canFocusInPane ? MF_ENABLED : MF_GRAYED)));
 
     const bool isDirectory = node->isDirectory;
 
     auto enableFolderCmd = [&](UINT commandId, bool enabled) noexcept
-    {
-        EnableMenuItem(menu, commandId, static_cast<UINT>(MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED)));
-    };
+    { EnableMenuItem(menu, commandId, static_cast<UINT>(MF_BYCOMMAND | (enabled ? MF_ENABLED : MF_GRAYED))); };
 
     enableFolderCmd(kCmdFolderViewContextOpen, canExecuteLeafCmds);
     enableFolderCmd(kCmdFolderViewContextOpenWith, canExecuteLeafCmds && ! isDirectory);
@@ -3831,12 +3806,8 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     }
 
     SetForegroundWindow(hwnd);
-    const UINT commandId = static_cast<UINT>(TrackPopupMenuEx(menu,
-                                           static_cast<UINT>(TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD),
-                                            screenPt.x,
-                                            screenPt.y,
-                                           hwnd,
-                                           nullptr));
+    const UINT commandId = static_cast<UINT>(
+        TrackPopupMenuEx(menu, static_cast<UINT>(TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD), screenPt.x, screenPt.y, hwnd, nullptr));
     PostMessageW(hwnd, WM_NULL, 0, 0);
 
     if (commandId == 0)
@@ -3870,10 +3841,10 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
         }
 
         HostPaneExecuteRequest request{};
-        request.version   = 1;
-        request.sizeBytes = sizeof(request);
-        request.flags     = HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW;
-        request.folderPath = folderPath.c_str();
+        request.version              = 1;
+        request.sizeBytes            = sizeof(request);
+        request.flags                = HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW;
+        request.folderPath           = folderPath.c_str();
         request.focusItemDisplayName = focusItemDisplayName.empty() ? nullptr : focusItemDisplayName.c_str();
         request.folderViewCommandId  = 0;
 
@@ -3897,10 +3868,10 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     }
 
     HostPaneExecuteRequest request{};
-    request.version   = 1;
-    request.sizeBytes = sizeof(request);
-    request.flags     = HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW;
-    request.folderPath = (commandId == kCmdFolderViewContextPaste) ? folderPath.c_str() : folderPathForCommand.c_str();
+    request.version              = 1;
+    request.sizeBytes            = sizeof(request);
+    request.flags                = HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW;
+    request.folderPath           = (commandId == kCmdFolderViewContextPaste) ? folderPath.c_str() : folderPathForCommand.c_str();
     request.focusItemDisplayName = (commandId == kCmdFolderViewContextPaste || focusItemForCommand.empty()) ? nullptr : focusItemForCommand.c_str();
     request.folderViewCommandId  = commandId;
 
@@ -4561,7 +4532,7 @@ void ViewerSpace::OnDrawMenuItem(DRAWITEMSTRUCT* draw) noexcept
         SelectClipRgn(draw->hDC, clipRgn.get());
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(fillColor));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
     FillRect(draw->hDC, &itemRect, bgBrush.get());
 
     const int dpi            = GetDeviceCaps(draw->hDC, LOGPIXELSX);
@@ -6520,11 +6491,10 @@ void ViewerSpace::RebuildLayout() noexcept
         return;
     }
 
-    const bool scanning = _scanActive.load();
+    const bool scanning                                         = _scanActive.load();
     static constexpr float kAutoExpandAreaFractionWhileScanning = 0.10f;
     static constexpr float kAutoExpandAreaFractionIdle          = 0.10f;
-    const float autoExpandAreaFractionThreshold =
-        scanning ? kAutoExpandAreaFractionWhileScanning : kAutoExpandAreaFractionIdle;
+    const float autoExpandAreaFractionThreshold                 = scanning ? kAutoExpandAreaFractionWhileScanning : kAutoExpandAreaFractionIdle;
 
     const uint8_t maxAutoExpandDepth = static_cast<uint8_t>(scanning ? 8u : 10u);
     const size_t maxDrawItems        = scanning ? 1400u : 2600u;
@@ -6534,7 +6504,7 @@ void ViewerSpace::RebuildLayout() noexcept
     constexpr float kMinExpandChildAreaDip2 = 110.0f * 80.0f;
     constexpr float kMinExpandChildSideDip  = 60.0f;
 
-    const D2D1_RECT_F rc = D2D1::RectF(kPaddingDip,
+    const D2D1_RECT_F rc     = D2D1::RectF(kPaddingDip,
                                        kHeaderHeightDip + kPaddingDip,
                                        std::max(kPaddingDip, width - kPaddingDip),
                                        std::max(kHeaderHeightDip + kPaddingDip, height - kPaddingDip));
@@ -6941,8 +6911,7 @@ void ViewerSpace::RebuildLayout() noexcept
         float label = 24.0f - static_cast<float>(depth) * 2.0f;
         label       = std::clamp(label, 20.0f, 24.0f);
 
-        const bool incomplete =
-            node.scanState == ScanState::NotStarted || node.scanState == ScanState::Queued || node.scanState == ScanState::Scanning;
+        const bool incomplete = node.scanState == ScanState::NotStarted || node.scanState == ScanState::Queued || node.scanState == ScanState::Scanning;
         if (incomplete && areaFraction >= autoExpandAreaFractionThreshold)
         {
             const float twoLineLabel = std::clamp(38.0f - static_cast<float>(depth) * 2.0f, 30.0f, 38.0f);

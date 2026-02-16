@@ -241,15 +241,15 @@ private:
     const unsigned __int64 baseCompleted = concurrentOverallBytes ? 0 : progress.completedBytes;
 
     TransferProgressContext downloadCtx{};
-    downloadCtx.progress           = &progress;
-    downloadCtx.sourcePath         = sourceFullPath;
-    downloadCtx.destinationPath    = destinationFullPath;
-    downloadCtx.baseCompletedBytes = baseCompleted;
+    downloadCtx.progress               = &progress;
+    downloadCtx.sourcePath             = sourceFullPath;
+    downloadCtx.destinationPath        = destinationFullPath;
+    downloadCtx.baseCompletedBytes     = baseCompleted;
     downloadCtx.concurrentOverallBytes = concurrentOverallBytes;
-    downloadCtx.itemTotalBytes     = expectedSizeBytes;
-    downloadCtx.isUpload           = false;
-    downloadCtx.scaleForCopy       = true;
-    downloadCtx.scaleForCopySecond = false;
+    downloadCtx.itemTotalBytes         = expectedSizeBytes;
+    downloadCtx.isUpload               = false;
+    downloadCtx.scaleForCopy           = true;
+    downloadCtx.scaleForCopySecond     = false;
 
     hr = CurlDownloadToFile(sourceConn, sourceRemotePath, tempFile.get(), nullptr, &downloadCtx);
     if (FAILED(hr))
@@ -277,16 +277,16 @@ private:
     }
 
     TransferProgressContext uploadCtx{};
-    uploadCtx.progress           = &progress;
-    uploadCtx.sourcePath         = sourceFullPath;
-    uploadCtx.destinationPath    = destinationFullPath;
-    uploadCtx.baseCompletedBytes = baseCompleted;
+    uploadCtx.progress               = &progress;
+    uploadCtx.sourcePath             = sourceFullPath;
+    uploadCtx.destinationPath        = destinationFullPath;
+    uploadCtx.baseCompletedBytes     = baseCompleted;
     uploadCtx.concurrentOverallBytes = concurrentOverallBytes;
     uploadCtx.lastConcurrentWireDone = concurrentOverallBytes ? fileSize : 0;
-    uploadCtx.itemTotalBytes     = fileSize;
-    uploadCtx.isUpload           = true;
-    uploadCtx.scaleForCopy       = true;
-    uploadCtx.scaleForCopySecond = true;
+    uploadCtx.itemTotalBytes         = fileSize;
+    uploadCtx.isUpload               = true;
+    uploadCtx.scaleForCopy           = true;
+    uploadCtx.scaleForCopySecond     = true;
 
     hr = CurlUploadFromFile(destinationConn, destinationRemotePath, tempFile.get(), fileSize, nullptr, &uploadCtx);
     if (FAILED(hr))
@@ -381,15 +381,8 @@ private:
             const std::wstring sourceSubFull        = EnsureTrailingSlashDisplay(sourceChildFull);
             const std::wstring destinationSubFull   = EnsureTrailingSlashDisplay(destinationChildFull);
 
-            hr = CopyDirectoryRecursive(sourceConn,
-                                        sourceSubRemote,
-                                        sourceSubFull,
-                                        destinationConn,
-                                        destinationSubRemote,
-                                        destinationSubFull,
-                                        flags,
-                                        progress,
-                                        concurrentOverallBytes);
+            hr = CopyDirectoryRecursive(
+                sourceConn, sourceSubRemote, sourceSubFull, destinationConn, destinationSubRemote, destinationSubFull, flags, progress, concurrentOverallBytes);
             if (FAILED(hr))
             {
                 return hr;
@@ -949,8 +942,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
         const std::wstring source = NormalizePluginPath(sourcePaths[index]);
         const std::wstring leaf(LeafName(source));
 
-        const std::wstring sourceDisplay = BuildDisplayPath(_protocol, source);
-        const std::wstring destDisplay   = JoinDisplayPath(destinationDisplayRoot, leaf);
+        const std::wstring sourceDisplay     = BuildDisplayPath(_protocol, source);
+        const std::wstring destDisplay       = JoinDisplayPath(destinationDisplayRoot, leaf);
         const std::wstring destinationRemote = JoinPluginPath(destinationRemoteRoot, leaf);
 
         hr = progress.ReportProgress(0, 0, sourceDisplay, destDisplay);

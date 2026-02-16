@@ -329,12 +329,8 @@ public:
         _enumerationCompletedCallback = std::move(callback);
     }
 
-    using DetailsTextProvider = std::function<std::wstring(const std::filesystem::path& folder,
-                                                           std::wstring_view displayName,
-                                                           bool isDirectory,
-                                                           uint64_t sizeBytes,
-                                                           int64_t lastWriteTime,
-                                                           DWORD fileAttributes)>;
+    using DetailsTextProvider = std::function<std::wstring(
+        const std::filesystem::path& folder, std::wstring_view displayName, bool isDirectory, uint64_t sizeBytes, int64_t lastWriteTime, DWORD fileAttributes)>;
 
     void SetDetailsTextProvider(DetailsTextProvider provider)
     {
@@ -483,7 +479,7 @@ private:
     FolderViewTheme _theme;
     MenuTheme _menuTheme;
     const ShortcutManager* _shortcutManager = nullptr;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _menuBackgroundBrush;
+    wil::unique_hbrush _menuBackgroundBrush;
 
     struct MenuItemData
     {
@@ -527,8 +523,8 @@ private:
     wil::com_ptr<ID2D1SolidColorBrush> _focusedBackgroundBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _focusBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _incrementalSearchHighlightBrush;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _menuFont;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _menuIconFont;
+    wil::unique_hfont _menuFont;
+    wil::unique_hfont _menuIconFont;
     UINT _menuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
     bool _menuIconFontValid = false;
     wil::com_ptr<ID2D1Bitmap> _placeholderFolderIcon; // Folder placeholder (48×48) with Fluent Design
@@ -777,7 +773,7 @@ private:
 
     struct PendingExternalCommand final
     {
-        UINT commandId = 0;
+        UINT commandId      = 0;
         uint64_t generation = 0;
         std::filesystem::path targetFolder;
         std::wstring expectedFocusDisplayName;
@@ -788,8 +784,8 @@ private:
     // Each request is "convert this icon once, then apply to N items".
     struct IconLoadRequest
     {
-        int iconIndex        = -1;
-        bool hasVisibleItems = false;
+        int iconIndex                = -1;
+        bool hasVisibleItems         = false;
         size_t firstVisibleItemIndex = static_cast<size_t>(-1);
         std::vector<size_t> itemIndices;
     };

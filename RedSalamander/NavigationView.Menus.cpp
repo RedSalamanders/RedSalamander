@@ -770,7 +770,7 @@ void NavigationView::OnDrawItem(DRAWITEMSTRUCT* dis)
         SelectClipRgn(dis->hDC, clipRgn.get());
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(bgColor));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(bgColor));
     FillRect(dis->hDC, &itemRect, bgBrush.get());
 
     const int dpi                   = static_cast<int>(_dpi);
@@ -807,7 +807,7 @@ void NavigationView::OnDrawItem(DRAWITEMSTRUCT* dis)
             if (selected || checked)
             {
                 const COLORREF highlightColor = ColorToCOLORREF(_theme.hoverHighlight);
-                wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> highlightBrush(CreateSolidBrush(highlightColor));
+                wil::unique_hbrush highlightBrush(CreateSolidBrush(highlightColor));
                 if (highlightBrush && highlightRect.right > highlightRect.left && highlightRect.bottom > highlightRect.top)
                 {
                     const int diameter = std::max(1, highlightRadius * 2);
@@ -829,7 +829,7 @@ void NavigationView::OnDrawItem(DRAWITEMSTRUCT* dis)
                 barRect.bottom = std::max(barRect.top, barRect.bottom - barInsetY);
 
                 const COLORREF accentColor = ColorToCOLORREF(_theme.accent);
-                wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> accentBrush(CreateSolidBrush(accentColor));
+                wil::unique_hbrush accentBrush(CreateSolidBrush(accentColor));
                 if (accentBrush && barRect.right > barRect.left && barRect.bottom > barRect.top)
                 {
                     const int diameter = std::max(1, barRadius * 2);

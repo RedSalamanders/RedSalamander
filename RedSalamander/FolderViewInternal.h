@@ -1127,7 +1127,12 @@ private:
         }
         // Copy the handle value now; don’t reference the local `data`.
         HGLOBAL h   = data.get();
-        auto unlock = wil::scope_exit([h]() { if(h) GlobalUnlock(h); });
+        auto unlock = wil::scope_exit(
+            [h]()
+            {
+                if (h)
+                    GlobalUnlock(h);
+            });
 
         auto* header                 = static_cast<Header*>(raw);
         header->version              = 1;

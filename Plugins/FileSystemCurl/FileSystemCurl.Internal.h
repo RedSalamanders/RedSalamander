@@ -6,8 +6,8 @@
 #include "Helpers.h"
 
 #include <algorithm>
-#include <atomic>
 #include <array>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -423,10 +423,10 @@ struct FileOperationProgress
     }
 
     [[nodiscard]] HRESULT ReportProgressWithCompletedBytes(unsigned __int64 overallCompletedBytes,
-                                                          unsigned __int64 currentItemTotalBytes,
-                                                          unsigned __int64 currentItemCompletedBytes,
-                                                          std::wstring_view currentSourcePath,
-                                                          std::wstring_view currentDestinationPath) noexcept
+                                                           unsigned __int64 currentItemTotalBytes,
+                                                           unsigned __int64 currentItemCompletedBytes,
+                                                           std::wstring_view currentSourcePath,
+                                                           std::wstring_view currentDestinationPath) noexcept
     {
         if (! callback)
         {
@@ -512,7 +512,7 @@ struct TransferProgressContext
     std::wstring_view sourcePath;
     std::wstring_view destinationPath;
 
-    unsigned __int64 baseCompletedBytes = 0;
+    unsigned __int64 baseCompletedBytes                   = 0;
     std::atomic<unsigned __int64>* concurrentOverallBytes = nullptr;
     unsigned __int64 lastConcurrentWireDone               = 0;
 

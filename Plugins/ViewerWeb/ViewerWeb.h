@@ -194,8 +194,8 @@ private:
     RECT _headerRect{};
     RECT _contentRect{};
 
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _uiFont;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _headerBrush;
+    wil::unique_hfont _uiFont;
+    wil::unique_hbrush _headerBrush;
 
     std::vector<MenuItemData> _menuThemeItems;
 

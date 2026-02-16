@@ -375,10 +375,10 @@ struct ViewerWebClassBackgroundBrushState
     ViewerWebClassBackgroundBrushState(ViewerWebClassBackgroundBrushState&&)                 = delete;
     ViewerWebClassBackgroundBrushState& operator=(ViewerWebClassBackgroundBrushState&&)      = delete;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> activeBrush;
+    wil::unique_hbrush activeBrush;
     COLORREF activeColor = CLR_INVALID;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> pendingBrush;
+    wil::unique_hbrush pendingBrush;
     COLORREF pendingColor = CLR_INVALID;
 
     bool classRegistered = false;
@@ -940,7 +940,7 @@ void ViewerWeb::OnPaint(HWND hwnd) noexcept
         RECT line               = _headerRect;
         line.top                = std::max(line.top, line.bottom - lineThickness);
         line.bottom             = std::max(line.bottom, line.top);
-        wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> brush(CreateSolidBrush(accent));
+        wil::unique_hbrush brush(CreateSolidBrush(accent));
         FillRect(hdc.get(), &line, brush.get());
     }
 
@@ -1188,7 +1188,7 @@ LRESULT ViewerWeb::OnDrawItem(HWND /*hwnd*/, DRAWITEMSTRUCT* draw) noexcept
             textColor = disabledFg;
         }
 
-        wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(fillColor));
+        wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
         FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
 
         if (data.separator)
@@ -1285,7 +1285,7 @@ LRESULT ViewerWeb::OnDrawItem(HWND /*hwnd*/, DRAWITEMSTRUCT* draw) noexcept
             text = BlendColor(fill, text, 160u);
         }
 
-        wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(fill));
+        wil::unique_hbrush bgBrush(CreateSolidBrush(fill));
         FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
 
         if (draw->itemID == static_cast<UINT>(-1))

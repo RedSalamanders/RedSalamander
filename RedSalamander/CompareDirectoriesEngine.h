@@ -1,17 +1,22 @@
 #pragma once
 
 #include <atomic>
+#include <condition_variable>
 #include <cstdint>
-#include <cwctype>
+#include <deque>
 #include <filesystem>
 #include <functional>
 #include <limits>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stop_token>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
+#include <vector>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -33,30 +38,7 @@ enum class ComparePane : uint8_t
     Right,
 };
 
-struct WStringViewNoCaseHash
-{
-    using is_transparent = void;
-
-    size_t operator()(std::wstring_view value) const noexcept
-    {
-        // Case-insensitive FNV-1a for UTF-16 (ordinal).
-        uint64_t hash = 14695981039346656037ull;
-        for (const wchar_t ch : value)
-        {
-            const wchar_t lower = static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
-            hash ^= static_cast<uint64_t>(lower);
-            hash *= 1099511628211ull;
-        }
-        return static_cast<size_t>(hash);
-    }
-
-    size_t operator()(const std::wstring& value) const noexcept
-    {
-        return (*this)(std::wstring_view{value});
-    }
-};
-
-struct WStringViewNoCaseEq
+struct WStringViewNoCaseLess
 {
     using is_transparent = void;
 
@@ -64,11 +46,12 @@ struct WStringViewNoCaseEq
     {
         if (left.size() > static_cast<size_t>(std::numeric_limits<int>::max()) || right.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
         {
-            return left == right;
+            return left < right;
         }
         const int leftLen  = static_cast<int>(left.size());
         const int rightLen = static_cast<int>(right.size());
-        return CompareStringOrdinal(left.data(), leftLen, right.data(), rightLen, TRUE) == CSTR_EQUAL;
+        const int cmp      = CompareStringOrdinal(left.data(), leftLen, right.data(), rightLen, TRUE);
+        return cmp == CSTR_LESS_THAN;
     }
 };
 
@@ -79,10 +62,11 @@ enum class CompareDirectoriesDiffBit : uint32_t
 
     TypeMismatch = 0x04u,
 
-    Size       = 0x08u,
-    DateTime   = 0x10u,
-    Attributes = 0x20u,
-    Content    = 0x40u,
+    Size           = 0x08u,
+    DateTime       = 0x10u,
+    Attributes     = 0x20u,
+    Content        = 0x40u,
+    ContentPending = 0x200u,
 
     SubdirAttributes = 0x80u,
     SubdirContent    = 0x100u,
@@ -109,9 +93,9 @@ struct CompareDirectoriesItemDecision
     bool existsLeft  = false;
     bool existsRight = false;
 
-    bool isDifferent  = false;
-    bool selectLeft   = false;
-    bool selectRight  = false;
+    bool isDifferent = false;
+    bool selectLeft  = false;
+    bool selectRight = false;
 
     uint32_t differenceMask = 0;
 
@@ -128,22 +112,29 @@ struct CompareDirectoriesFolderDecision
 {
     uint64_t version = 0;
     HRESULT hr       = S_OK;
-    std::unordered_map<std::wstring, CompareDirectoriesItemDecision, WStringViewNoCaseHash, WStringViewNoCaseEq> items;
+    std::map<std::wstring, CompareDirectoriesItemDecision, WStringViewNoCaseLess> items;
 };
 
 class CompareDirectoriesSession final : public std::enable_shared_from_this<CompareDirectoriesSession>
 {
 public:
-    using ScanProgressCallback = std::function<void(const std::filesystem::path& relativeFolder,
+    using ScanProgressCallback    = std::function<void(const std::filesystem::path& relativeFolder,
                                                     std::wstring_view currentEntryName,
                                                     uint64_t scannedFolders,
                                                     uint64_t scannedEntries,
                                                     uint32_t activeScans)>;
+    using ContentProgressCallback = std::function<void(const std::filesystem::path& relativeFolder,
+                                                    std::wstring_view entryName,
+                                                    uint64_t totalBytes,
+                                                    uint64_t completedBytes,
+                                                    uint64_t pendingContentCompares)>;
+    using DecisionUpdatedCallback = std::function<void()>;
 
     CompareDirectoriesSession(wil::com_ptr<IFileSystem> baseFileSystem,
                               std::filesystem::path leftRoot,
                               std::filesystem::path rightRoot,
                               Common::Settings::CompareDirectoriesSettings settings);
+    ~CompareDirectoriesSession();
 
     CompareDirectoriesSession(const CompareDirectoriesSession&)            = delete;
     CompareDirectoriesSession& operator=(const CompareDirectoriesSession&) = delete;
@@ -155,6 +146,8 @@ public:
     void Invalidate() noexcept;
     void InvalidateForAbsolutePath(const std::filesystem::path& absolutePath, bool includeSubtree) noexcept;
     void SetScanProgressCallback(ScanProgressCallback callback) noexcept;
+    void SetContentProgressCallback(ContentProgressCallback callback) noexcept;
+    void SetDecisionUpdatedCallback(DecisionUpdatedCallback callback) noexcept;
 
     [[nodiscard]] Common::Settings::CompareDirectoriesSettings GetSettings() const;
     [[nodiscard]] std::filesystem::path GetRoot(ComparePane pane) const;
@@ -171,9 +164,64 @@ public:
     [[nodiscard]] std::shared_ptr<const CompareDirectoriesFolderDecision> GetOrComputeDecision(const std::filesystem::path& relativeFolder);
 
 private:
+    struct ContentCompareKey
+    {
+        std::wstring leftPath;
+        std::wstring rightPath;
+        uint64_t leftSizeBytes     = 0;
+        uint64_t rightSizeBytes    = 0;
+        int64_t leftLastWriteTime  = 0;
+        int64_t rightLastWriteTime = 0;
+        DWORD leftFileAttributes   = 0;
+        DWORD rightFileAttributes  = 0;
+    };
+
+    struct ContentCompareKeyHash
+    {
+        size_t operator()(const ContentCompareKey& key) const noexcept;
+    };
+
+    struct ContentCompareKeyEq
+    {
+        bool operator()(const ContentCompareKey& a, const ContentCompareKey& b) const noexcept;
+    };
+
+    struct ContentCompareJob
+    {
+        uint64_t version = 0;
+        std::wstring folderKey;
+        std::filesystem::path relativeFolder;
+        std::wstring entryName;
+        ContentCompareKey key;
+        std::filesystem::path leftPath;
+        std::filesystem::path rightPath;
+    };
+
+    struct PendingContentCompareUpdate
+    {
+        uint64_t version           = 0;
+        uint64_t leftSizeBytes     = 0;
+        uint64_t rightSizeBytes    = 0;
+        int64_t leftLastWriteTime  = 0;
+        int64_t rightLastWriteTime = 0;
+        DWORD leftFileAttributes   = 0;
+        DWORD rightFileAttributes  = 0;
+        bool areEqual              = false;
+    };
+
     std::wstring MakeCacheKey(const std::filesystem::path& relativeFolder) const;
     void InvalidateForRelativePathLocked(const std::filesystem::path& relativePath, bool includeSubtree) noexcept;
     void NotifyScanProgress(const std::filesystem::path& relativeFolder, std::wstring_view currentEntryName, bool force) noexcept;
+    void NotifyContentProgress(const std::filesystem::path& relativeFolder,
+                               std::wstring_view entryName,
+                               uint64_t totalBytes,
+                               uint64_t completedBytes,
+                               bool force) noexcept;
+    void NotifyDecisionUpdated(bool force) noexcept;
+    void EnsureContentCompareWorkersLocked() noexcept;
+    void ClearContentCompareStateLocked() noexcept;
+    void ApplyPendingContentCompareUpdatesLocked(const std::wstring& folderKey) noexcept;
+    void ContentCompareWorker(std::stop_token stopToken) noexcept;
 
     wil::com_ptr<IFileSystem> _baseFileSystem;
     wil::com_ptr<IInformations> _baseInformations;
@@ -183,16 +231,30 @@ private:
     std::filesystem::path _leftRoot;
     std::filesystem::path _rightRoot;
     Common::Settings::CompareDirectoriesSettings _settings;
-    uint64_t _version = 1;
+    std::atomic_uint64_t _version{1};
     uint64_t _uiVersion = 1;
 
-    std::unordered_map<std::wstring, std::shared_ptr<const CompareDirectoriesFolderDecision>, WStringViewNoCaseHash, WStringViewNoCaseEq> _cache;
+    std::map<std::wstring, std::shared_ptr<const CompareDirectoriesFolderDecision>, WStringViewNoCaseLess> _cache;
 
     std::atomic_uint32_t _scanActiveScans{0};
     std::atomic_uint64_t _scanFoldersScanned{0};
     std::atomic_uint64_t _scanEntriesScanned{0};
     std::atomic_uint64_t _scanLastNotifyTickMs{0};
     std::atomic<std::shared_ptr<const ScanProgressCallback>> _scanProgressCallback;
+
+    std::atomic_uint64_t _contentComparePendingCompares{0};
+    std::atomic_uint64_t _contentLastNotifyTickMs{0};
+    std::atomic<std::shared_ptr<const ContentProgressCallback>> _contentProgressCallback;
+
+    std::atomic_uint64_t _decisionUpdatedLastNotifyTickMs{0};
+    std::atomic<std::shared_ptr<const DecisionUpdatedCallback>> _decisionUpdatedCallback;
+
+    std::unordered_map<ContentCompareKey, bool, ContentCompareKeyHash, ContentCompareKeyEq> _contentCompareCache;
+    std::unordered_map<ContentCompareKey, uint64_t, ContentCompareKeyHash, ContentCompareKeyEq> _contentCompareInFlight;
+    std::deque<ContentCompareJob> _contentCompareQueue;
+    std::map<std::wstring, std::map<std::wstring, PendingContentCompareUpdate, WStringViewNoCaseLess>, WStringViewNoCaseLess> _pendingContentCompareUpdates;
+    std::condition_variable _contentCompareCv;
+    std::vector<std::jthread> _contentCompareWorkers;
 };
 
 [[nodiscard]] wil::com_ptr<IFileSystem> CreateCompareDirectoriesFileSystem(ComparePane pane, std::shared_ptr<CompareDirectoriesSession> session) noexcept;

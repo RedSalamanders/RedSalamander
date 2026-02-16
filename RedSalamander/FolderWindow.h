@@ -150,9 +150,8 @@ public:
     void SetPaneEnumerationCompletedCallback(Pane pane, FolderView::EnumerationCompletedCallback callback);
     void SetPaneDetailsTextProvider(Pane pane, FolderView::DetailsTextProvider provider);
     void RefreshPaneDetailsText(Pane pane);
-    void SetPaneSelectionByDisplayNamePredicate(Pane pane,
-                                                const std::function<bool(std::wstring_view)>& shouldSelect,
-                                                bool clearExistingSelection = true) noexcept;
+    void
+    SetPaneSelectionByDisplayNamePredicate(Pane pane, const std::function<bool(std::wstring_view)>& shouldSelect, bool clearExistingSelection = true) noexcept;
 
     struct FileOperationCompletedEvent
     {
@@ -177,11 +176,8 @@ public:
 
     HRESULT ReloadFileSystemPlugins() noexcept;
     HRESULT SetFileSystemPluginForPane(Pane pane, std::wstring_view pluginId) noexcept;
-    HRESULT SetFileSystemInstanceForPane(Pane pane,
-                                         wil::com_ptr<IFileSystem> fileSystem,
-                                         std::wstring pluginId,
-                                         std::wstring pluginShortId,
-                                         std::wstring instanceContext) noexcept;
+    HRESULT SetFileSystemInstanceForPane(
+        Pane pane, wil::com_ptr<IFileSystem> fileSystem, std::wstring pluginId, std::wstring pluginShortId, std::wstring instanceContext) noexcept;
     [[maybe_unused]] std::wstring_view GetFileSystemPluginId(Pane pane) const noexcept;
 
     void DebugShowOverlaySample(Pane pane, FolderView::OverlaySeverity severity);
@@ -373,9 +369,9 @@ private:
     std::optional<Pane> _zoomedPane;
     bool _draggingSplitter    = false;
     int _splitterDragOffsetPx = 0;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _backgroundBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _splitterBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _splitterGripBrush;
+    wil::unique_hbrush _backgroundBrush;
+    wil::unique_hbrush _splitterBrush;
+    wil::unique_hbrush _splitterGripBrush;
 
     AppTheme _theme;
     uint32_t _statusBarRainbowHueDegrees = 0;

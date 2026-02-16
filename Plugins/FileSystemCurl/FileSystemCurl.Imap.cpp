@@ -3789,10 +3789,9 @@ ImapReadDirectoryEntries(const ConnectionInfo& conn, std::wstring_view pluginPat
         return hr;
     }
 
-    entries.erase(std::remove_if(entries.begin(),
-                                 entries.end(),
-                                 [](const FilesInformationCurl::Entry& entry) noexcept { return IsDotOrDotDotName(entry.name); }),
-                  entries.end());
+    entries.erase(
+        std::remove_if(entries.begin(), entries.end(), [](const FilesInformationCurl::Entry& entry) noexcept { return IsDotOrDotDotName(entry.name); }),
+        entries.end());
 
     if (! entries.empty() || listing.empty())
     {

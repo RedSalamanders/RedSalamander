@@ -8,7 +8,7 @@
 
 namespace
 {
-wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> g_viewerTextMenuIconFont;
+wil::unique_hfont g_viewerTextMenuIconFont;
 UINT g_viewerTextMenuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
 bool g_viewerTextMenuIconFontValid = false;
 
@@ -225,7 +225,7 @@ void ViewerText::OnDrawMenuItem(DRAWITEMSTRUCT* draw) noexcept
         SelectClipRgn(draw->hDC, clipRgn.get());
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(fillColor));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
     FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
 
     if (data.separator)

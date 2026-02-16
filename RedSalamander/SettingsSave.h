@@ -57,7 +57,7 @@ namespace SettingsSave
     if (result.compareDirectories.has_value())
     {
         const Common::Settings::CompareDirectoriesSettings defaults{};
-        const auto& compare = result.compareDirectories.value();
+        const auto& compare      = result.compareDirectories.value();
         const bool hasNonDefault = compare.compareSize != defaults.compareSize || compare.compareDateTime != defaults.compareDateTime ||
                                    compare.compareAttributes != defaults.compareAttributes || compare.compareContent != defaults.compareContent ||
                                    compare.compareSubdirectories != defaults.compareSubdirectories ||

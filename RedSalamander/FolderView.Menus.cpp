@@ -490,7 +490,7 @@ void FolderView::OnDrawItem(DRAWITEMSTRUCT* dis)
         SelectClipRgn(dis->hDC, clipRgn.get());
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(bgColor));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(bgColor));
     FillRect(dis->hDC, &itemRect, bgBrush.get());
 
     const int dpi                   = static_cast<int>(_dpi);

@@ -247,10 +247,10 @@ struct ConnectionsSettings
     uint32_t windowsHelloReauthTimeoutMinute = 10;
 };
 
- struct FileOperationsSettings
- {
-     bool autoDismissSuccess         = false;
-     uint32_t maxDiagnosticsLogFiles = 14;
+struct FileOperationsSettings
+{
+    bool autoDismissSuccess         = false;
+    uint32_t maxDiagnosticsLogFiles = 14;
     // Diagnostics verbosity: by default, Debug builds keep more context while Release builds stay lean.
 #if defined(_DEBUG) || defined(DEBUG)
     bool diagnosticsInfoEnabled  = true;
@@ -261,35 +261,35 @@ struct ConnectionsSettings
 #endif
     std::optional<uint32_t> maxIssueReportFiles;
     std::optional<uint32_t> maxDiagnosticsInMemory;
-     std::optional<uint32_t> maxDiagnosticsPerFlush;
-     std::optional<uint32_t> diagnosticsFlushIntervalMs;
-     std::optional<uint32_t> diagnosticsCleanupIntervalMs;
- };
+    std::optional<uint32_t> maxDiagnosticsPerFlush;
+    std::optional<uint32_t> diagnosticsFlushIntervalMs;
+    std::optional<uint32_t> diagnosticsCleanupIntervalMs;
+};
 
- struct CompareDirectoriesSettings
- {
-     bool compareSize       = false;
-     bool compareDateTime   = false;
-     bool compareAttributes = false;
-     bool compareContent    = false;
- 
-     bool compareSubdirectories          = false;
-     bool compareSubdirectoryAttributes  = false;
-     bool selectSubdirsOnlyInOnePane     = true;
- 
-     bool ignoreFiles       = false;
-     std::wstring ignoreFilesPatterns;
-     bool ignoreDirectories = false;
-     std::wstring ignoreDirectoriesPatterns;
- 
-     bool showIdenticalItems = false; // Show full list (not just differences).
- };
- 
- struct ExtensionsSettings
- {
-     // Map a file extension (lowercase, with leading dot like ".7z") to a file system plugin ID.
-     // Used by the host to open matching files as a virtual file system instead of ShellExecute.
-     std::unordered_map<std::wstring, std::wstring> openWithFileSystemByExtension{
+struct CompareDirectoriesSettings
+{
+    bool compareSize       = false;
+    bool compareDateTime   = false;
+    bool compareAttributes = false;
+    bool compareContent    = false;
+
+    bool compareSubdirectories         = false;
+    bool compareSubdirectoryAttributes = false;
+    bool selectSubdirsOnlyInOnePane    = true;
+
+    bool ignoreFiles = false;
+    std::wstring ignoreFilesPatterns;
+    bool ignoreDirectories = false;
+    std::wstring ignoreDirectoriesPatterns;
+
+    bool showIdenticalItems = false; // Show full list (not just differences).
+};
+
+struct ExtensionsSettings
+{
+    // Map a file extension (lowercase, with leading dot like ".7z") to a file system plugin ID.
+    // Used by the host to open matching files as a virtual file system instead of ShellExecute.
+    std::unordered_map<std::wstring, std::wstring> openWithFileSystemByExtension{
         // read / write
         {L".7z", L"builtin/file-system-7z"},
         {L".zip", L"builtin/file-system-7z"},
@@ -464,23 +464,23 @@ struct ShortcutsSettings
     std::vector<ShortcutBinding> folderView;
 };
 
- struct Settings
- {
-     uint32_t schemaVersion = 9;
-     std::unordered_map<std::wstring, WindowPlacement> windows;
-     ThemeSettings theme;
-     PluginsSettings plugins;
-     ExtensionsSettings extensions;
-     std::optional<ShortcutsSettings> shortcuts;
-     std::optional<MainMenuState> mainMenu;
-     std::optional<StartupSettings> startup;
-     std::optional<CacheSettings> cache;
-     std::optional<FoldersSettings> folders;
-     std::optional<MonitorSettings> monitor;
-     std::optional<ConnectionsSettings> connections;
-     std::optional<FileOperationsSettings> fileOperations;
-     std::optional<CompareDirectoriesSettings> compareDirectories;
- };
+struct Settings
+{
+    uint32_t schemaVersion = 9;
+    std::unordered_map<std::wstring, WindowPlacement> windows;
+    ThemeSettings theme;
+    PluginsSettings plugins;
+    ExtensionsSettings extensions;
+    std::optional<ShortcutsSettings> shortcuts;
+    std::optional<MainMenuState> mainMenu;
+    std::optional<StartupSettings> startup;
+    std::optional<CacheSettings> cache;
+    std::optional<FoldersSettings> folders;
+    std::optional<MonitorSettings> monitor;
+    std::optional<ConnectionsSettings> connections;
+    std::optional<FileOperationsSettings> fileOperations;
+    std::optional<CompareDirectoriesSettings> compareDirectories;
+};
 
 COMMON_API std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept;
 COMMON_API std::filesystem::path GetSettingsSchemaPath(std::wstring_view appId) noexcept;

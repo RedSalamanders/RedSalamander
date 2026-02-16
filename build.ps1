@@ -90,7 +90,7 @@ if ($Msix -or $Msi) {
 }
 
 # Script constants
-$SolutionFile = "RedSalamander.sln"
+$SolutionFile = Join-Path -Path $PSScriptRoot -ChildPath "RedSalamander.sln"
 
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host "RedSalamander Build Script" -ForegroundColor Cyan

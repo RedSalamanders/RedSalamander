@@ -33,7 +33,7 @@ struct SpeedLimitDialogState
     unsigned __int64 initialLimitBytesPerSecond = 0;
     unsigned __int64 resultLimitBytesPerSecond  = 0;
     AppTheme theme{};
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> backgroundBrush;
+    wil::unique_hbrush backgroundBrush;
     std::wstring hintText;
     bool showingValidationError = false;
 };
@@ -2054,11 +2054,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
             size_t activeInFlightCount = 0;
             for (size_t i = 0; i < task.inFlightFileCount; ++i)
             {
-                const auto& entry = task.inFlightFiles[i];
-                const bool active = entry.totalBytes == 0 || entry.completedBytes < entry.totalBytes;
-                const bool recentCompleted =
-                    ! active && entry.totalBytes > 0 && entry.completedBytes >= entry.totalBytes && entry.lastUpdateTick != 0 &&
-                    renderTick >= entry.lastUpdateTick && (renderTick - entry.lastUpdateTick) <= kCompletedInFlightGraceMs;
+                const auto& entry          = task.inFlightFiles[i];
+                const bool active          = entry.totalBytes == 0 || entry.completedBytes < entry.totalBytes;
+                const bool recentCompleted = ! active && entry.totalBytes > 0 && entry.completedBytes >= entry.totalBytes && entry.lastUpdateTick != 0 &&
+                                             renderTick >= entry.lastUpdateTick && (renderTick - entry.lastUpdateTick) <= kCompletedInFlightGraceMs;
                 if (active || recentCompleted)
                 {
                     ++activeInFlightCount;
@@ -2644,15 +2643,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 // During pre-calculation, show calculating info instead of speed
                 if (task.preCalcInProgress)
                 {
-                    const std::wstring sizeText   = FormatBytesCompact(task.preCalcTotalBytes);
-                    const unsigned __int64 totalItems = static_cast<unsigned __int64>(task.preCalcFileCount) +
-                                                        static_cast<unsigned __int64>(task.preCalcDirectoryCount);
-                    const std::wstring countsText = FormatStringResource(nullptr,
-                                                                         IDS_FMT_FILEOPS_FILES_FOLDERS,
-                                                                         totalItems,
-                                                                         task.preCalcFileCount,
-                                                                         task.preCalcDirectoryCount);
-                    const D2D1_RECT_F countsRc    = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
+                    const std::wstring sizeText = FormatBytesCompact(task.preCalcTotalBytes);
+                    const unsigned __int64 totalItems =
+                        static_cast<unsigned __int64>(task.preCalcFileCount) + static_cast<unsigned __int64>(task.preCalcDirectoryCount);
+                    const std::wstring countsText =
+                        FormatStringResource(nullptr, IDS_FMT_FILEOPS_FILES_FOLDERS, totalItems, task.preCalcFileCount, task.preCalcDirectoryCount);
+                    const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
                     _target->DrawTextW(countsText.data(), static_cast<UINT32>(countsText.size()), _bodyFormat.get(), countsRc, _subTextBrush.get());
                     textY += lineH;
 
@@ -2781,11 +2777,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     {
                         for (size_t j = 0; j < task.inFlightFileCount && activeInFlightCount < activeInFlightIndices.size(); ++j)
                         {
-                            const auto& entry = task.inFlightFiles[j];
-                            const bool active = entry.totalBytes == 0 || entry.completedBytes < entry.totalBytes;
-                            const bool recentCompleted =
-                                ! active && entry.totalBytes > 0 && entry.completedBytes >= entry.totalBytes && entry.lastUpdateTick != 0 &&
-                                nowTick >= entry.lastUpdateTick && (nowTick - entry.lastUpdateTick) <= kCompletedInFlightGraceMs;
+                            const auto& entry          = task.inFlightFiles[j];
+                            const bool active          = entry.totalBytes == 0 || entry.completedBytes < entry.totalBytes;
+                            const bool recentCompleted = ! active && entry.totalBytes > 0 && entry.completedBytes >= entry.totalBytes &&
+                                                         entry.lastUpdateTick != 0 && nowTick >= entry.lastUpdateTick &&
+                                                         (nowTick - entry.lastUpdateTick) <= kCompletedInFlightGraceMs;
                             if (active || recentCompleted)
                             {
                                 activeInFlightIndices[activeInFlightCount] = j;
@@ -2825,10 +2821,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             fileCompletedBytes = task.itemCompletedBytes;
                         }
 
-                        const float availableW   = std::max(0.0f, rightEdge - pathLeft);
-                        const float miniBarWMin  = DipsToPixels(40.0f, _dpi);
-                        const float minTextW     = DipsToPixels(48.0f, _dpi);
-                        float miniBarW           = std::min(miniBarWDesired, availableW);
+                        const float availableW     = std::max(0.0f, rightEdge - pathLeft);
+                        const float miniBarWMin    = DipsToPixels(40.0f, _dpi);
+                        const float minTextW       = DipsToPixels(48.0f, _dpi);
+                        float miniBarW             = std::min(miniBarWDesired, availableW);
                         const float maxBarWithText = std::max(0.0f, availableW - miniBarGap - minTextW);
                         if (maxBarWithText > 0.0f)
                         {
@@ -2987,9 +2983,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         return;
                     }
 
-                    float yPrompt                    = rc.top;
-                    const float maxW                 = std::max(0.0f, rc.right - rc.left);
-                    const float maxDetailsY          = rc.bottom;
+                    float yPrompt           = rc.top;
+                    const float maxW        = std::max(0.0f, rc.right - rc.left);
+                    const float maxDetailsY = rc.bottom;
 
                     std::wstring message = LoadStringResource(nullptr, conflictBucketToMessageId(task.conflict.bucket));
                     if (task.conflict.retryFailed)
@@ -3294,12 +3290,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             ID2D1Brush* applyBrush         = _textBrush ? _textBrush.get() : (_subTextBrush ? _subTextBrush.get() : nullptr);
                             if (applyFormat && applyBrush && ! applyText.empty())
                             {
-                                _target->DrawTextW(applyText.data(),
-                                                   static_cast<UINT32>(applyText.size()),
-                                                   applyFormat,
-                                                   labelRc,
-                                                   applyBrush,
-                                                   D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                _target->DrawTextW(
+                                    applyText.data(), static_cast<UINT32>(applyText.size()), applyFormat, labelRc, applyBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
                             }
 
                             PopupButton applyBtn{};

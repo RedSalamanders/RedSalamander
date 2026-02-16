@@ -158,7 +158,7 @@ uint32_t StableHash32(std::wstring_view text) noexcept;
 
 COLORREF RainbowMenuSelectionColor(std::wstring_view seed, bool darkBase) noexcept;
 COLORREF ChooseContrastingTextColor(COLORREF background) noexcept;
-wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> CreateMenuFontForDpi(UINT dpi) noexcept;
+wil::unique_hfont CreateMenuFontForDpi(UINT dpi) noexcept;
 
 AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed) noexcept;
 AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed, std::optional<D2D1::ColorF> accentOverride) noexcept;

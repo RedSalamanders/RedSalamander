@@ -2144,8 +2144,7 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
     if (ctx->scaleForCopy && ctx->itemTotalBytes > 0)
     {
         const unsigned __int64 offset = ctx->scaleForCopySecond ? ctx->itemTotalBytes : 0;
-        wireDone                      = offset > (std::numeric_limits<unsigned __int64>::max)() - phaseNow ? (std::numeric_limits<unsigned __int64>::max)()
-                                                                                                            : (offset + phaseNow);
+        wireDone = offset > (std::numeric_limits<unsigned __int64>::max)() - phaseNow ? (std::numeric_limits<unsigned __int64>::max)() : (offset + phaseNow);
     }
 
     unsigned __int64 overall = 0;
@@ -2158,7 +2157,7 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
     else
     {
         overall = ctx->baseCompletedBytes > (std::numeric_limits<unsigned __int64>::max)() - wireDone ? (std::numeric_limits<unsigned __int64>::max)()
-                                                                                                       : (ctx->baseCompletedBytes + wireDone);
+                                                                                                      : (ctx->baseCompletedBytes + wireDone);
     }
 
     // Cancellation check (even if we don't report progress this tick).

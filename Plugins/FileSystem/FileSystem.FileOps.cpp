@@ -49,9 +49,9 @@ struct ParallelOperationState
 
 struct OperationContext
 {
-    FileSystemOperation type      = FILESYSTEM_COPY;
-    IFileSystemCallback* callback = nullptr;
-    void* callbackCookie          = nullptr;
+    FileSystemOperation type          = FILESYSTEM_COPY;
+    IFileSystemCallback* callback     = nullptr;
+    void* callbackCookie              = nullptr;
     unsigned __int64 progressStreamId = 0;
     FileSystemOptions optionsState{};
     FileSystemOptions* options      = nullptr;
@@ -1109,11 +1109,11 @@ void InitializeOperationContext(OperationContext& context,
                                 unsigned long totalItems,
                                 FileSystemReparsePointPolicy reparsePointPolicy) noexcept
 {
-    context.type           = type;
-    context.callback       = callback;
-    context.callbackCookie = callback != nullptr ? cookie : nullptr;
+    context.type             = type;
+    context.callback         = callback;
+    context.callbackCookie   = callback != nullptr ? cookie : nullptr;
     context.progressStreamId = 0;
-    context.optionsState   = {};
+    context.optionsState     = {};
     if (options)
     {
         context.optionsState = *options;
@@ -2002,12 +2002,12 @@ struct DirectoryChildWorkItem
 };
 
 [[nodiscard]] HRESULT CopyDirectoryChildrenParallel(OperationContext& rootContext,
-                                                   const PathInfo& source,
-                                                   const PathInfo& destination,
-                                                   FileSystemFlags flags,
-                                                   FileSystemReparsePointPolicy reparsePointPolicy,
-                                                   unsigned int maxConcurrency,
-                                                   unsigned __int64* bytesCopied) noexcept
+                                                    const PathInfo& source,
+                                                    const PathInfo& destination,
+                                                    FileSystemFlags flags,
+                                                    FileSystemReparsePointPolicy reparsePointPolicy,
+                                                    unsigned int maxConcurrency,
+                                                    unsigned __int64* bytesCopied) noexcept
 {
     if (! bytesCopied)
     {
@@ -2040,8 +2040,7 @@ struct DirectoryChildWorkItem
 
     std::wstring searchPattern = AppendPath(source.extended, L"*");
     WIN32_FIND_DATAW data{};
-    wil::unique_hfind findHandle(
-        FindFirstFileExW(searchPattern.c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
+    wil::unique_hfind findHandle(FindFirstFileExW(searchPattern.c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
     if (! findHandle)
     {
         const DWORD error = GetLastError();
@@ -2114,7 +2113,7 @@ struct DirectoryChildWorkItem
     std::atomic<bool> hadFailure{false};
     std::atomic<bool> hadSkipped{false};
 
-    const std::wstring rootSource = rootContext.reparseRootSourcePath;
+    const std::wstring rootSource      = rootContext.reparseRootSourcePath;
     const std::wstring rootDestination = rootContext.reparseRootDestinationPath;
 
     std::vector<std::jthread> workers;
@@ -2126,18 +2125,12 @@ struct DirectoryChildWorkItem
             [&, streamId]() noexcept
             {
                 OperationContext context{};
-                InitializeOperationContext(context,
-                                           FILESYSTEM_COPY,
-                                           flags,
-                                           sharedOptionsState,
-                                           rootContext.callback,
-                                           rootContext.callbackCookie,
-                                           1,
-                                           reparsePointPolicy);
-                context.options           = sharedOptionsState;
-                context.parallel          = &parallel;
-                context.totalBytes        = 0; // let the host provide totals via pre-calc
-                context.progressStreamId  = streamId;
+                InitializeOperationContext(
+                    context, FILESYSTEM_COPY, flags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 1, reparsePointPolicy);
+                context.options                    = sharedOptionsState;
+                context.parallel                   = &parallel;
+                context.totalBytes                 = 0; // let the host provide totals via pre-calc
+                context.progressStreamId           = streamId;
                 context.reparseRootSourcePath      = rootSource;
                 context.reparseRootDestinationPath = rootDestination;
 
@@ -2164,7 +2157,7 @@ struct DirectoryChildWorkItem
                     childDestination.display  = AppendPath(destination.display, item.name);
                     childDestination.extended = AppendPath(destination.extended, item.name);
 
-                    HRESULT itemHr = S_OK;
+                    HRESULT itemHr              = S_OK;
                     unsigned __int64 childBytes = 0;
 
                     for (;;)
@@ -2217,9 +2210,7 @@ struct DirectoryChildWorkItem
                                 break;
                             case FileSystemIssueAction::Cancel:
                             case FileSystemIssueAction::None:
-                            default:
-                                parallel.cancelRequested.store(true, std::memory_order_release);
-                                return;
+                            default: parallel.cancelRequested.store(true, std::memory_order_release); return;
                         }
 
                         break;
@@ -3079,7 +3070,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
     unsigned int copyMoveMaxConcurrency             = 1u;
     {
         std::lock_guard lock(_stateMutex);
-        reparsePointPolicy = _reparsePointPolicy;
+        reparsePointPolicy     = _reparsePointPolicy;
         copyMoveMaxConcurrency = _copyMoveMaxConcurrency;
     }
 
@@ -3102,11 +3093,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
     unsigned __int64 bytesCopied = 0;
     HRESULT itemHr               = S_OK;
 
-    const unsigned int maxConcurrency = std::clamp(copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
-    const DWORD attributes            = GetFileAttributesW(source.extended.c_str());
-    const bool canParallelizeDirectory =
-        attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 && ! IsReparsePoint(attributes) && context.recursive &&
-        maxConcurrency > 1u;
+    const unsigned int maxConcurrency  = std::clamp(copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
+    const DWORD attributes             = GetFileAttributesW(source.extended.c_str());
+    const bool canParallelizeDirectory = attributes != INVALID_FILE_ATTRIBUTES && (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 &&
+                                         ! IsReparsePoint(attributes) && context.recursive && maxConcurrency > 1u;
 
     if (canParallelizeDirectory)
     {
@@ -3436,9 +3426,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
             {
                 OperationContext context{};
                 InitializeOperationContext(context, FILESYSTEM_COPY, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);
-                context.options    = &sharedOptionsState;
-                context.parallel   = &parallel;
-                context.totalBytes = 0; // let the host provide totals via pre-calc
+                context.options          = &sharedOptionsState;
+                context.parallel         = &parallel;
+                context.totalBytes       = 0; // let the host provide totals via pre-calc
                 context.progressStreamId = streamId;
 
                 for (;;)
@@ -3695,9 +3685,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItems(const wchar_t* const* sourcePath
             {
                 OperationContext context{};
                 InitializeOperationContext(context, FILESYSTEM_MOVE, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);
-                context.options    = &sharedOptionsState;
-                context.parallel   = &parallel;
-                context.totalBytes = 0; // let the host provide totals via pre-calc
+                context.options          = &sharedOptionsState;
+                context.parallel         = &parallel;
+                context.totalBytes       = 0; // let the host provide totals via pre-calc
                 context.progressStreamId = streamId;
 
                 for (;;)
@@ -3964,9 +3954,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
                     OperationContext context{};
                     // totalItems is 0 because the plugin does not know recursive totals; the host may provide totals via pre-calculation.
                     InitializeOperationContext(context, FILESYSTEM_DELETE, flags, &sharedOptionsState, callback, cookie, 0, reparsePointPolicy);
-                    context.options    = &sharedOptionsState;
-                    context.parallel   = &parallel;
-                    context.totalBytes = 0; // host pre-calc provides totals when available
+                    context.options          = &sharedOptionsState;
+                    context.parallel         = &parallel;
+                    context.totalBytes       = 0; // host pre-calc provides totals when available
                     context.progressStreamId = streamId;
 
                     for (;;)

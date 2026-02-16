@@ -77,9 +77,9 @@ struct PreferencesDialogHost final : PreferencesDialogState
     AdvancedPane _advancedPane;
 };
 
-constexpr UINT_PTR kPrefsWheelRouteSubclassId   = 2u;
-constexpr wchar_t kPrefsPageHostClassName[]     = L"RedSalamanderPrefsPageHost";
-constexpr wchar_t kPreferencesWindowId[]        = L"PreferencesWindow";
+constexpr UINT_PTR kPrefsWheelRouteSubclassId = 2u;
+constexpr wchar_t kPrefsPageHostClassName[]   = L"RedSalamanderPrefsPageHost";
+constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
 
 [[nodiscard]] HWND GetActivePrefsPaneWindow(const PreferencesDialogState& state) noexcept
 {
@@ -2702,10 +2702,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 HWND combo = reinterpret_cast<HWND>(lp);
                 if (combo)
                 {
-                    PostMessageW(hwnd,
-                                 WndMsg::kPreferencesApplyComboThemeDeferred,
-                                 reinterpret_cast<WPARAM>(combo),
-                                 static_cast<LPARAM>(notify));
+                    PostMessageW(hwnd, WndMsg::kPreferencesApplyComboThemeDeferred, reinterpret_cast<WPARAM>(combo), static_cast<LPARAM>(notify));
                 }
             }
 
