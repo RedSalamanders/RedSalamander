@@ -22,14 +22,15 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-#include <windowsx.h>
 #include <commctrl.h>
 #include <uxtheme.h>
+#include <windowsx.h>
 
 #include "CommandRegistry.h"
 #include "CompareDirectoriesEngine.h"
-#include "FolderWindow.h"
+#include "FluentIcons.h"
 #include "FolderView.h"
+#include "FolderWindow.h"
 #include "Helpers.h"
 #include "ShortcutManager.h"
 #include "ThemedControls.h"
@@ -43,31 +44,59 @@ namespace
 constexpr wchar_t kCompareDirectoriesWindowClassName[] = L"RedSalamander.CompareDirectoriesWindow";
 constexpr wchar_t kCompareDirectoriesWindowId[]        = L"CompareDirectoriesWindow";
 
-class CompareDirectoriesWindow;
-std::vector<CompareDirectoriesWindow*> g_compareDirectoriesWindows;
+// UI-thread-only registry for theme refresh.
+std::vector<HWND> g_compareDirectoriesWindows;
 
-constexpr UINT_PTR kLeftPathHeaderId  = 1001;
-constexpr UINT_PTR kRightPathHeaderId = 1002;
+wil::unique_hfont g_compareMenuIconFont;
+UINT g_compareMenuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
+bool g_compareMenuIconFontValid = false;
+
 constexpr UINT_PTR kScanProgressTextId = 1003;
 constexpr UINT_PTR kScanProgressBarId  = 1004;
 
-constexpr int kPathHeaderHeightDip      = 22;
 constexpr int kScanStatusHeightDip      = 22;
 constexpr int kScanStatusPaddingXDip    = 6;
 constexpr int kScanProgressBarWidthDip  = 160;
 constexpr int kScanProgressBarHeightDip = 10;
-constexpr int kSplitterWidthDip         = 6;
 constexpr int kSplitterGripDotSizeDip   = 2;
 constexpr int kSplitterGripDotGapDip    = 2;
 constexpr int kSplitterGripDotCount     = 3;
 constexpr float kMinSplitRatio          = 0.0f;
 constexpr float kMaxSplitRatio          = 1.0f;
 
+void EnsureCompareMenuIconFont(HWND hwnd, UINT dpi) noexcept
+{
+    if (dpi != g_compareMenuIconFontDpi || ! g_compareMenuIconFont)
+    {
+        g_compareMenuIconFont      = FluentIcons::CreateFontForDpi(dpi, FluentIcons::kDefaultSizeDip);
+        g_compareMenuIconFontDpi   = dpi;
+        g_compareMenuIconFontValid = false;
+
+        if (g_compareMenuIconFont && hwnd)
+        {
+            auto hdc = wil::GetDC(hwnd);
+            if (hdc)
+            {
+                g_compareMenuIconFontValid = FluentIcons::FontHasGlyph(hdc.get(), g_compareMenuIconFont.get(), FluentIcons::kChevronRightSmall);
+            }
+        }
+    }
+}
+
 struct ScanProgressPayload
 {
-    uint32_t activeScans  = 0;
-    uint64_t folderCount  = 0;
-    uint64_t entryCount   = 0;
+    uint32_t activeScans = 0;
+    uint64_t folderCount = 0;
+    uint64_t entryCount  = 0;
+    std::filesystem::path relativeFolder;
+    std::wstring entryName;
+};
+
+struct ContentProgressPayload
+{
+    uint64_t pendingContentCompares = 0;
+    uint64_t totalBytes             = 0;
+    uint64_t completedBytes         = 0;
     std::filesystem::path relativeFolder;
     std::wstring entryName;
 };
@@ -95,28 +124,6 @@ void SplitMenuText(std::wstring_view raw, std::wstring& outText, std::wstring& o
     }
 
     outText.assign(raw);
-}
-
-[[nodiscard]] COLORREF SplitterGripColor(const AppTheme& theme) noexcept
-{
-    if (theme.highContrast)
-    {
-        return theme.menu.text;
-    }
-
-    constexpr int kTowardTextWeight = 1;
-    constexpr int kDenom            = 4;
-    static_assert(kTowardTextWeight > 0 && kTowardTextWeight < kDenom);
-
-    const int baseWeight           = kDenom - kTowardTextWeight;
-    const COLORREF baseColor       = theme.menu.separator;
-    const COLORREF towardTextColor = theme.menu.text;
-
-    const int r = (static_cast<int>(GetRValue(baseColor)) * baseWeight + static_cast<int>(GetRValue(towardTextColor)) * kTowardTextWeight) / kDenom;
-    const int g = (static_cast<int>(GetGValue(baseColor)) * baseWeight + static_cast<int>(GetGValue(towardTextColor)) * kTowardTextWeight) / kDenom;
-    const int b = (static_cast<int>(GetBValue(baseColor)) * baseWeight + static_cast<int>(GetBValue(towardTextColor)) * kTowardTextWeight) / kDenom;
-
-    return RGB(static_cast<BYTE>(r), static_cast<BYTE>(g), static_cast<BYTE>(b));
 }
 
 [[nodiscard]] std::wstring FormatLocalTimeForDetails(int64_t fileTime) noexcept
@@ -345,6 +352,7 @@ struct CompareDetailsTextStrings
     std::wstring_view older;
     std::wstring_view attributesDiffer;
     std::wstring_view contentDiffer;
+    std::wstring_view contentComparing;
     std::wstring_view subdirAttributesDiffer;
     std::wstring_view subdirContentDiffer;
 };
@@ -354,18 +362,19 @@ struct CompareDetailsTextStrings
     static const CompareDetailsTextStrings strings = []() noexcept
     {
         CompareDetailsTextStrings value{};
-        value.identical               = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_IDENTICAL);
-        value.onlyInLeft              = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_ONLY_IN_LEFT);
-        value.onlyInRight             = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_ONLY_IN_RIGHT);
-        value.typeMismatch            = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_TYPE_MISMATCH);
-        value.bigger                  = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_BIGGER);
-        value.smaller                 = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_SMALLER);
-        value.newer                   = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_NEWER);
-        value.older                   = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_OLDER);
-        value.attributesDiffer        = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_ATTRIBUTES_DIFFER);
-        value.contentDiffer           = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_CONTENT_DIFFER);
-        value.subdirAttributesDiffer  = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_SUBDIR_ATTRIBUTES_DIFFER);
-        value.subdirContentDiffer     = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_SUBDIR_CONTENT_DIFFER);
+        value.identical              = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_IDENTICAL);
+        value.onlyInLeft             = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_ONLY_IN_LEFT);
+        value.onlyInRight            = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_ONLY_IN_RIGHT);
+        value.typeMismatch           = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_TYPE_MISMATCH);
+        value.bigger                 = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_BIGGER);
+        value.smaller                = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_SMALLER);
+        value.newer                  = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_NEWER);
+        value.older                  = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_OLDER);
+        value.attributesDiffer       = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_ATTRIBUTES_DIFFER);
+        value.contentDiffer          = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_CONTENT_DIFFER);
+        value.contentComparing       = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_CONTENT_COMPARING);
+        value.subdirAttributesDiffer = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_SUBDIR_ATTRIBUTES_DIFFER);
+        value.subdirContentDiffer    = LoadStringResourceView(nullptr, IDS_COMPARE_DETAILS_SUBDIR_CONTENT_DIFFER);
         return value;
     }();
 
@@ -379,8 +388,8 @@ public:
                              AppTheme theme,
                              const ShortcutManager* shortcuts,
                              wil::com_ptr<IFileSystem> baseFileSystem,
-    std::filesystem::path leftRoot,
-                              std::filesystem::path rightRoot) noexcept;
+                             std::filesystem::path leftRoot,
+                             std::filesystem::path rightRoot) noexcept;
 
     [[nodiscard]] bool Create(HWND owner) noexcept;
     void UpdateTheme(const AppTheme& theme) noexcept;
@@ -390,30 +399,29 @@ public:
     CompareDirectoriesWindow(CompareDirectoriesWindow&&)                 = delete;
     CompareDirectoriesWindow& operator=(CompareDirectoriesWindow&&)      = delete;
 
-  private:
-     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
-     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
-     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
- 
-     friend LRESULT CALLBACK CompareOptionsHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
-     friend LRESULT CALLBACK CompareOptionsWheelRouteSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
- 
-     bool OnCreate(HWND hwnd) noexcept;
-     void OnDestroy() noexcept;
-     void OnNcDestroy() noexcept;
-     void OnSize() noexcept;
+private:
+    static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
+    static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    static INT_PTR CALLBACK OptionsDlgProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam) noexcept;
+
+    friend LRESULT CALLBACK CompareOptionsHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
+    friend LRESULT CALLBACK CompareOptionsWheelRouteSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
+
+    bool OnCreate(HWND hwnd) noexcept;
+    void OnDestroy() noexcept;
+    void OnNcDestroy() noexcept;
+    void OnSize() noexcept;
     void OnDpiChanged(UINT newDpi, const RECT* newRect) noexcept;
     void OnCommand(UINT id) noexcept;
     LRESULT OnFunctionBarInvoke(WPARAM wParam, LPARAM lParam) noexcept;
     void OnPaint() noexcept;
-     LRESULT OnCtlColorStatic(HDC hdc, HWND control) noexcept;
-     void PrepareThemedMenu() noexcept;
-     void PrepareThemedMenuRecursive(HMENU menu,
-                                     bool topLevel,
-                                     std::vector<std::unique_ptr<CompareMenuItemData>>& itemData) noexcept;
-     void OnMeasureItem(MEASUREITEMSTRUCT* mis) noexcept;
-     void OnDrawItem(DRAWITEMSTRUCT* dis) noexcept;
-     void ShowSortMenuPopup(FolderWindow::Pane pane, POINT screenPoint) noexcept;
+    LRESULT OnCtlColorStatic(HDC hdc, HWND control) noexcept;
+    void PrepareThemedMenu() noexcept;
+    void PrepareThemedMenuRecursive(HMENU menu, bool topLevel, std::vector<std::unique_ptr<CompareMenuItemData>>& itemData) noexcept;
+    void OnMeasureItem(MEASUREITEMSTRUCT* mis) noexcept;
+    void OnDrawItem(DRAWITEMSTRUCT* dis) noexcept;
+    void ShowSortMenuPopup(FolderWindow::Pane pane, POINT screenPoint) noexcept;
 
     void OnLButtonDown(POINT pt) noexcept;
     void OnLButtonDblClk(POINT pt) noexcept;
@@ -425,6 +433,14 @@ public:
 
     void ApplyTheme() noexcept;
     void ApplyOptionsDialogTheme() noexcept;
+    [[nodiscard]] INT_PTR OnOptionsInitDialog(HWND dlg) noexcept;
+    [[nodiscard]] INT_PTR OnOptionsEraseBkgnd(HWND dlg, HDC hdc) noexcept;
+    [[nodiscard]] INT_PTR OnOptionsCommand(HWND dlg, WPARAM wParam, LPARAM lParam) noexcept;
+    [[nodiscard]] INT_PTR OnOptionsDrawItem(const DRAWITEMSTRUCT* dis) noexcept;
+    [[nodiscard]] INT_PTR OnOptionsCtlColorEdit(HDC hdc, HWND control) noexcept;
+    [[nodiscard]] INT_PTR OnOptionsCtlColorDlg(HDC hdc) noexcept;
+    [[nodiscard]] INT_PTR OnOptionsCtlColorStatic(HDC hdc, HWND control) noexcept;
+    [[nodiscard]] INT_PTR OnOptionsCtlColorBtn(HDC hdc, HWND control) noexcept;
     void CreateChildWindows(HWND hwnd) noexcept;
     void EnsureOptionsControlsCreated(HWND dlg) noexcept;
     void LayoutOptionsControls() noexcept;
@@ -445,24 +461,43 @@ public:
                                                               uint64_t sizeBytes,
                                                               int64_t lastWriteTime,
                                                               DWORD fileAttributes) noexcept;
-     void OnFolderWindowFileOperationCompleted(const FolderWindow::FileOperationCompletedEvent& e) noexcept;
-     LRESULT OnScanProgress(LPARAM lp) noexcept;
-     LRESULT OnExecuteShortcutCommand(LPARAM lp) noexcept;
-     void ExecuteShortcutCommand(std::wstring_view commandId) noexcept;
+    void OnFolderWindowFileOperationCompleted(const FolderWindow::FileOperationCompletedEvent& e) noexcept;
+    LRESULT OnScanProgress(LPARAM lp) noexcept;
+    LRESULT OnContentProgress(LPARAM lp) noexcept;
+    void UpdateProgressControls() noexcept;
+    LRESULT OnExecuteShortcutCommand(LPARAM lp) noexcept;
+    void ExecuteShortcutCommand(std::wstring_view commandId) noexcept;
 
     Common::Settings::CompareDirectoriesSettings GetEffectiveCompareSettings() const noexcept;
-     void LoadOptionsControlsFromSettings() noexcept;
-     void SaveOptionsControlsToSettings() noexcept;
-     void UpdateOptionsVisibility() noexcept;
-     void RefreshBothPanes() noexcept;
+    void LoadOptionsControlsFromSettings() noexcept;
+    void SaveOptionsControlsToSettings() noexcept;
+    void UpdateOptionsVisibility() noexcept;
+    void RefreshBothPanes() noexcept;
 
     wil::unique_hwnd _hWnd;
     wil::unique_hwnd _optionsDlg;
     wil::unique_hwnd _scanProgressText;
     wil::unique_hwnd _scanProgressBar;
-     wil::unique_hwnd _bannerTitle;
-     wil::unique_hwnd _bannerOptionsButton;
-     wil::unique_hwnd _bannerRescanButton;
+    wil::unique_hwnd _bannerTitle;
+    wil::unique_hwnd _bannerOptionsButton;
+    wil::unique_hwnd _bannerRescanButton;
+
+    struct BannerProgressState
+    {
+        uint32_t scanActiveScans = 0;
+        uint64_t scanFolderCount = 0;
+        uint64_t scanEntryCount  = 0;
+        std::filesystem::path scanRelativeFolder;
+        std::wstring scanEntryName;
+
+        uint64_t contentPendingCompares = 0;
+        uint64_t contentTotalBytes      = 0;
+        uint64_t contentCompletedBytes  = 0;
+        std::filesystem::path contentRelativeFolder;
+        std::wstring contentEntryName;
+    };
+
+    BannerProgressState _progress{};
 
     struct OptionsToggleCard
     {
@@ -504,8 +539,8 @@ public:
 
     OptionsUi _optionsUi{};
     std::vector<RECT> _optionsCards;
-    int _optionsScrollOffset = 0;
-    int _optionsScrollMax    = 0;
+    int _optionsScrollOffset   = 0;
+    int _optionsScrollMax      = 0;
     int _optionsWheelRemainder = 0;
 
     Common::Settings::Settings* _settings = nullptr;
@@ -541,36 +576,36 @@ public:
     // Layout
     SIZE _clientSize{};
     RECT _splitterRect{};
-    float _splitRatio = 0.5f;
+    float _splitRatio         = 0.5f;
     bool _draggingSplitter    = false;
     int _splitterDragOffsetPx = 0;
 
-     wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _uiFont;
-     wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _uiBoldFont;
-     wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _uiItalicFont;
-     wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _bannerTitleFont;
-     wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _backgroundBrush;
-     wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _splitterBrush;
-     wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _splitterGripBrush;
-     wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _menuBackgroundBrush;
-     wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _optionsBackgroundBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _optionsCardBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _optionsInputBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _optionsInputFocusedBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _optionsInputDisabledBrush;
+    wil::unique_hfont _uiFont;
+    wil::unique_hfont _uiBoldFont;
+    wil::unique_hfont _uiItalicFont;
+    wil::unique_hfont _bannerTitleFont;
+    wil::unique_hbrush _backgroundBrush;
+    wil::unique_hbrush _splitterBrush;
+    wil::unique_hbrush _splitterGripBrush;
+    wil::unique_hbrush _menuBackgroundBrush;
+    wil::unique_hbrush _optionsBackgroundBrush;
+    wil::unique_hbrush _optionsCardBrush;
+    wil::unique_hbrush _optionsInputBrush;
+    wil::unique_hbrush _optionsInputFocusedBrush;
+    wil::unique_hbrush _optionsInputDisabledBrush;
 
-    COLORREF _optionsInputBackgroundColor        = RGB(255, 255, 255);
-    COLORREF _optionsInputFocusedBackgroundColor = RGB(255, 255, 255);
+    COLORREF _optionsInputBackgroundColor         = RGB(255, 255, 255);
+    COLORREF _optionsInputFocusedBackgroundColor  = RGB(255, 255, 255);
     COLORREF _optionsInputDisabledBackgroundColor = RGB(255, 255, 255);
     ThemedInputFrames::FrameStyle _optionsFrameStyle{};
 
     std::vector<std::unique_ptr<CompareMenuItemData>> _menuItemData;
     std::vector<std::unique_ptr<CompareMenuItemData>> _popupMenuItemData;
 
-    bool _compareStarted = false;
-    bool _syncingPaths   = false;
-    UINT _dpi            = USER_DEFAULT_SCREEN_DPI;
-    int _restoreShowCmd  = SW_SHOWNORMAL;
+    bool _compareStarted    = false;
+    bool _syncingPaths      = false;
+    UINT _dpi               = USER_DEFAULT_SCREEN_DPI;
+    int _restoreShowCmd     = SW_SHOWNORMAL;
     bool _hasSavedPlacement = false;
 };
 
@@ -579,13 +614,13 @@ CompareDirectoriesWindow::CompareDirectoriesWindow(Common::Settings::Settings& s
                                                    const ShortcutManager* shortcuts,
                                                    wil::com_ptr<IFileSystem> baseFileSystem,
                                                    std::filesystem::path leftRoot,
-                                                   std::filesystem::path rightRoot) noexcept :
-    _settings(&settings),
-    _theme(std::move(theme)),
-    _shortcuts(shortcuts),
-    _baseFs(std::move(baseFileSystem)),
-    _leftRoot(std::move(leftRoot)),
-    _rightRoot(std::move(rightRoot))
+                                                   std::filesystem::path rightRoot) noexcept
+    : _settings(&settings),
+      _theme(std::move(theme)),
+      _shortcuts(shortcuts),
+      _baseFs(std::move(baseFileSystem)),
+      _leftRoot(std::move(leftRoot)),
+      _rightRoot(std::move(rightRoot))
 {
 }
 
@@ -684,6 +719,8 @@ LRESULT CompareDirectoriesWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
             break;
         }
         case WndMsg::kCompareDirectoriesScanProgress: return OnScanProgress(lp);
+        case WndMsg::kCompareDirectoriesContentProgress: return OnContentProgress(lp);
+        case WndMsg::kCompareDirectoriesDecisionUpdated: RefreshBothPanes(); return 0;
         case WndMsg::kCompareDirectoriesExecuteCommand: return OnExecuteShortcutCommand(lp);
     }
 
@@ -775,7 +812,7 @@ bool CompareDirectoriesWindow::Create(HWND owner) noexcept
 bool CompareDirectoriesWindow::OnCreate(HWND hwnd) noexcept
 {
     _dpi = GetDpiForWindow(hwnd);
-    g_compareDirectoriesWindows.push_back(this);
+    g_compareDirectoriesWindows.push_back(hwnd);
     if (_settings && _hasSavedPlacement)
     {
         _restoreShowCmd = WindowPlacementPersistence::Restore(*_settings, kCompareDirectoriesWindowId, hwnd);
@@ -784,9 +821,7 @@ bool CompareDirectoriesWindow::OnCreate(HWND hwnd) noexcept
     if (HMENU menu = GetMenu(hwnd))
     {
         const Common::Settings::CompareDirectoriesSettings s = GetEffectiveCompareSettings();
-        CheckMenuItem(menu,
-                      IDM_COMPARE_TOGGLE_IDENTICAL,
-                      static_cast<UINT>(MF_BYCOMMAND | (s.showIdenticalItems ? MF_CHECKED : MF_UNCHECKED)));
+        CheckMenuItem(menu, IDM_COMPARE_TOGGLE_IDENTICAL, static_cast<UINT>(MF_BYCOMMAND | (s.showIdenticalItems ? MF_CHECKED : MF_UNCHECKED)));
     }
 
     ApplyTheme();
@@ -807,9 +842,19 @@ void CompareDirectoriesWindow::OnDestroy() noexcept
     if (_session)
     {
         _session->SetScanProgressCallback({});
+        _session->SetContentProgressCallback({});
+        _session->SetDecisionUpdatedCallback({});
     }
 
-    _optionsUi           = {};
+    _folderWindow.SetShowSortMenuCallback({});
+    _folderWindow.SetPanePathChangedCallback({});
+    _folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {});
+    _folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Right, {});
+    _folderWindow.SetPaneDetailsTextProvider(FolderWindow::Pane::Left, {});
+    _folderWindow.SetPaneDetailsTextProvider(FolderWindow::Pane::Right, {});
+    _folderWindow.SetFileOperationCompletedCallback({});
+
+    _optionsUi = {};
     _optionsCards.clear();
     _optionsScrollOffset = 0;
     _optionsScrollMax    = 0;
@@ -825,7 +870,10 @@ void CompareDirectoriesWindow::OnDestroy() noexcept
 
 void CompareDirectoriesWindow::OnNcDestroy() noexcept
 {
-    std::erase(g_compareDirectoriesWindows, this);
+    if (_hWnd)
+    {
+        std::erase(g_compareDirectoriesWindows, _hWnd.get());
+    }
 
     if (_hWnd)
     {
@@ -847,13 +895,8 @@ void CompareDirectoriesWindow::OnDpiChanged(UINT newDpi, const RECT* newRect) no
 
     if (newRect && _hWnd)
     {
-        SetWindowPos(_hWnd.get(),
-                     nullptr,
-                     newRect->left,
-                     newRect->top,
-                     newRect->right - newRect->left,
-                     newRect->bottom - newRect->top,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(
+            _hWnd.get(), nullptr, newRect->left, newRect->top, newRect->right - newRect->left, newRect->bottom - newRect->top, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
     _folderWindow.OnDpiChanged(static_cast<float>(_dpi));
@@ -1029,6 +1072,10 @@ void CompareDirectoriesWindow::OnCommand(UINT id) noexcept
         }
         case IDM_COMPARE_OPTIONS: ShowOptionsPanel(true); break;
         case IDM_COMPARE_RESCAN:
+            if (_session && _settings && _settings->compareDirectories.has_value())
+            {
+                _session->SetSettings(_settings->compareDirectories.value());
+            }
             if (_session)
             {
                 _session->Invalidate();
@@ -1054,9 +1101,7 @@ void CompareDirectoriesWindow::OnCommand(UINT id) noexcept
             {
                 if (HMENU menu = GetMenu(_hWnd.get()))
                 {
-                    CheckMenuItem(menu,
-                                  IDM_COMPARE_TOGGLE_IDENTICAL,
-                                  static_cast<UINT>(MF_BYCOMMAND | (s.showIdenticalItems ? MF_CHECKED : MF_UNCHECKED)));
+                    CheckMenuItem(menu, IDM_COMPARE_TOGGLE_IDENTICAL, static_cast<UINT>(MF_BYCOMMAND | (s.showIdenticalItems ? MF_CHECKED : MF_UNCHECKED)));
                 }
             }
 
@@ -1385,9 +1430,7 @@ void CompareDirectoriesWindow::PrepareThemedMenu() noexcept
     DrawMenuBar(_hWnd.get());
 }
 
-void CompareDirectoriesWindow::PrepareThemedMenuRecursive(HMENU menu,
-                                                          bool topLevel,
-                                                          std::vector<std::unique_ptr<CompareMenuItemData>>& itemData) noexcept
+void CompareDirectoriesWindow::PrepareThemedMenuRecursive(HMENU menu, bool topLevel, std::vector<std::unique_ptr<CompareMenuItemData>>& itemData) noexcept
 {
     if (! menu || ! _menuBackgroundBrush)
     {
@@ -1488,13 +1531,12 @@ void CompareDirectoriesWindow::ShowSortMenuPopup(FolderWindow::Pane pane, POINT 
     const UINT idAttr = isLeft ? IDM_LEFT_SORT_ATTRIBUTES : IDM_RIGHT_SORT_ATTRIBUTES;
     const UINT idNone = isLeft ? IDM_LEFT_SORT_NONE : IDM_RIGHT_SORT_NONE;
 
+    AppendMenuW(menu.get(), MF_STRING, idNone, noneLabel.c_str());
     AppendMenuW(menu.get(), MF_STRING, idName, nameLabel.c_str());
     AppendMenuW(menu.get(), MF_STRING, idExt, extLabel.c_str());
     AppendMenuW(menu.get(), MF_STRING, idTime, timeLabel.c_str());
     AppendMenuW(menu.get(), MF_STRING, idSize, sizeLabel.c_str());
     AppendMenuW(menu.get(), MF_STRING, idAttr, attributesLabel.c_str());
-    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu.get(), MF_STRING, idNone, noneLabel.c_str());
 
     UINT checkId = idNone;
     switch (_folderWindow.GetSortBy(pane))
@@ -1506,7 +1548,7 @@ void CompareDirectoriesWindow::ShowSortMenuPopup(FolderWindow::Pane pane, POINT 
         case FolderView::SortBy::Attributes: checkId = idAttr; break;
         case FolderView::SortBy::None: checkId = idNone; break;
     }
-    CheckMenuItem(menu.get(), checkId, MF_BYCOMMAND | MF_CHECKED);
+    CheckMenuRadioItem(menu.get(), idName, idNone, checkId, MF_BYCOMMAND);
 
     if (_menuBackgroundBrush)
     {
@@ -1515,13 +1557,7 @@ void CompareDirectoriesWindow::ShowSortMenuPopup(FolderWindow::Pane pane, POINT 
     }
 
     SetForegroundWindow(_hWnd.get());
-    TrackPopupMenu(menu.get(),
-                   TPM_RIGHTALIGN | TPM_BOTTOMALIGN | TPM_RIGHTBUTTON,
-                   screenPoint.x,
-                   screenPoint.y,
-                   static_cast<int>(0u),
-                   _hWnd.get(),
-                   nullptr);
+    TrackPopupMenu(menu.get(), TPM_RIGHTALIGN | TPM_BOTTOMALIGN | TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, static_cast<int>(0u), _hWnd.get(), nullptr);
     PostMessageW(_hWnd.get(), WM_NULL, 0, 0);
 
     _popupMenuItemData.clear();
@@ -1565,7 +1601,7 @@ void CompareDirectoriesWindow::OnMeasureItem(MEASUREITEMSTRUCT* mis) noexcept
         return;
     }
 
-    HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    HFONT fontToUse               = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
     [[maybe_unused]] auto oldFont = wil::SelectObject(hdc.get(), fontToUse);
 
     SIZE textSize{};
@@ -1582,7 +1618,22 @@ void CompareDirectoriesWindow::OnMeasureItem(MEASUREITEMSTRUCT* mis) noexcept
 
     const int paddingX       = MulDiv(5, dpi, USER_DEFAULT_SCREEN_DPI);
     const int shortcutGap    = MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int checkAreaWidth = data->topLevel ? 0 : MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
+    const int checkAreaWidth = [&]() noexcept -> int
+    {
+        if (data->topLevel)
+        {
+            return 0;
+        }
+
+        const bool isSortItem = (mis->itemID >= static_cast<UINT>(IDM_LEFT_SORT_NAME) && mis->itemID <= static_cast<UINT>(IDM_LEFT_SORT_NONE)) ||
+                                (mis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && mis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE));
+        if (isSortItem)
+        {
+            return MulDiv(32, dpi, USER_DEFAULT_SCREEN_DPI);
+        }
+
+        return MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
+    }();
 
     int width = paddingX + checkAreaWidth + textSize.cx + paddingX;
     if (! data->shortcut.empty())
@@ -1633,7 +1684,7 @@ void CompareDirectoriesWindow::OnDrawItem(DRAWITEMSTRUCT* dis) noexcept
         textColor = _theme.menu.disabledText;
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(bgColor));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(bgColor));
     FillRect(dis->hDC, &dis->rcItem, bgBrush.get());
 
     const int dpi      = static_cast<int>(_dpi);
@@ -1650,7 +1701,22 @@ void CompareDirectoriesWindow::OnDrawItem(DRAWITEMSTRUCT* dis) noexcept
     }
 
     const int shortcutGap    = MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int checkAreaWidth = data->topLevel ? 0 : MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
+    const int checkAreaWidth = [&]() noexcept -> int
+    {
+        if (data->topLevel)
+        {
+            return 0;
+        }
+
+        const bool isSortItem = (dis->itemID >= static_cast<UINT>(IDM_LEFT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_LEFT_SORT_NONE)) ||
+                                (dis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE));
+        if (isSortItem)
+        {
+            return MulDiv(32, dpi, USER_DEFAULT_SCREEN_DPI);
+        }
+
+        return MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
+    }();
 
     RECT checkRect = dis->rcItem;
     checkRect.left += paddingX;
@@ -1661,21 +1727,105 @@ void CompareDirectoriesWindow::OnDrawItem(DRAWITEMSTRUCT* dis) noexcept
     textRect.right -= paddingX;
 
     SetBkMode(dis->hDC, TRANSPARENT);
-    HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    HFONT fontToUse               = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
     [[maybe_unused]] auto oldFont = wil::SelectObject(dis->hDC, fontToUse);
 
     SetTextColor(dis->hDC, textColor);
 
-    if (! data->topLevel && checked && checkRect.right > checkRect.left)
+    const bool isLeftSort  = dis->itemID >= static_cast<UINT>(IDM_LEFT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_LEFT_SORT_NONE);
+    const bool isRightSort = dis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE);
+    const bool isSortItem  = isLeftSort || isRightSort;
+
+    if (! data->topLevel && checkRect.right > checkRect.left)
     {
-        constexpr wchar_t kCheckMark[] = L"\u2713";
-        DrawTextW(dis->hDC, kCheckMark, 1, &checkRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        if (isSortItem)
+        {
+            EnsureCompareMenuIconFont(_hWnd.get(), static_cast<UINT>(_dpi));
+
+            const FolderWindow::Pane pane   = isLeftSort ? FolderWindow::Pane::Left : FolderWindow::Pane::Right;
+            const UINT baseId               = isLeftSort ? static_cast<UINT>(IDM_LEFT_SORT_NAME) : static_cast<UINT>(IDM_RIGHT_SORT_NAME);
+            const UINT offset               = dis->itemID - baseId;
+            const FolderView::SortBy sortBy = static_cast<FolderView::SortBy>(offset);
+
+            FolderView::SortDirection direction = FolderView::SortDirection::Ascending;
+            switch (sortBy)
+            {
+                case FolderView::SortBy::Time:
+                case FolderView::SortBy::Size: direction = FolderView::SortDirection::Descending; break;
+                case FolderView::SortBy::Name:
+                case FolderView::SortBy::Extension:
+                case FolderView::SortBy::Attributes:
+                case FolderView::SortBy::None: direction = FolderView::SortDirection::Ascending; break;
+            }
+
+            if (checked)
+            {
+                direction = _folderWindow.GetSortDirection(pane);
+            }
+
+            const bool useFluentIcons = g_compareMenuIconFontValid && g_compareMenuIconFont;
+
+            wchar_t glyph = 0;
+            if (useFluentIcons)
+            {
+                switch (sortBy)
+                {
+                    case FolderView::SortBy::Name: glyph = FluentIcons::kFont; break;
+                    case FolderView::SortBy::Extension: glyph = FluentIcons::kDocument; break;
+                    case FolderView::SortBy::Time: glyph = FluentIcons::kCalendar; break;
+                    case FolderView::SortBy::Size: glyph = FluentIcons::kHardDrive; break;
+                    case FolderView::SortBy::Attributes: glyph = FluentIcons::kTag; break;
+                    case FolderView::SortBy::None: glyph = FluentIcons::kClear; break;
+                }
+            }
+            else
+            {
+                switch (sortBy)
+                {
+                    case FolderView::SortBy::Name: glyph = L'\u2263'; break;
+                    case FolderView::SortBy::Extension: glyph = L'\u24D4'; break;
+                    case FolderView::SortBy::Time: glyph = L'\u23F1'; break;
+                    case FolderView::SortBy::Size: glyph = direction == FolderView::SortDirection::Ascending ? L'\u25F0' : L'\u25F2'; break;
+                    case FolderView::SortBy::Attributes: glyph = L'\u24B6'; break;
+                    case FolderView::SortBy::None: glyph = L' '; break;
+                }
+            }
+
+            RECT iconRect = checkRect;
+
+            const bool showArrow = checked && sortBy != FolderView::SortBy::None;
+            if (showArrow)
+            {
+                RECT arrowRect  = checkRect;
+                const int mid   = (checkRect.left + checkRect.right) / 2;
+                arrowRect.right = mid;
+                iconRect.left   = mid;
+
+                const wchar_t arrow = direction == FolderView::SortDirection::Ascending ? L'\u2191' : L'\u2193';
+                wchar_t arrowText[2]{arrow, 0};
+                DrawTextW(dis->hDC, arrowText, 1, &arrowRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
+
+            if (glyph != 0)
+            {
+                wchar_t glyphText[2]{glyph, 0};
+                const HFONT glyphFont              = useFluentIcons ? g_compareMenuIconFont.get() : fontToUse;
+                [[maybe_unused]] auto oldGlyphFont = wil::SelectObject(dis->hDC, glyphFont);
+                DrawTextW(dis->hDC, glyphText, 1, &iconRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
+        }
+        else if (checked)
+        {
+            constexpr wchar_t kCheckMark[] = L"\u2713";
+            DrawTextW(dis->hDC, kCheckMark, 1, &checkRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        }
     }
 
     if (! data->shortcut.empty())
     {
         RECT shortcutRect = textRect;
-        DrawTextW(dis->hDC, data->shortcut.c_str(), static_cast<int>(data->shortcut.size()), &shortcutRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_HIDEPREFIX);
+        DrawTextW(
+            dis->hDC, data->shortcut.c_str(), static_cast<int>(data->shortcut.size()), &shortcutRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_HIDEPREFIX);
 
         SIZE shortcutSize{};
         GetTextExtentPoint32W(dis->hDC, data->shortcut.c_str(), static_cast<int>(data->shortcut.size()), &shortcutSize);
@@ -1766,11 +1916,25 @@ bool CompareDirectoriesWindow::OnSetCursor(POINT pt) noexcept
 
 void CompareDirectoriesWindow::SetSplitRatio(float ratio) noexcept
 {
-    _splitRatio = std::clamp(ratio, kMinSplitRatio, kMaxSplitRatio);
+    const RECT oldSplitter = _splitterRect;
+    _splitRatio            = std::clamp(ratio, kMinSplitRatio, kMaxSplitRatio);
     Layout();
     if (_hWnd)
     {
-        InvalidateRect(_hWnd.get(), nullptr, TRUE);
+        RECT invalid = oldSplitter;
+        if (IsRectEmpty(&invalid))
+        {
+            invalid = _splitterRect;
+        }
+        else if (! IsRectEmpty(&_splitterRect))
+        {
+            UnionRect(&invalid, &invalid, &_splitterRect);
+        }
+
+        if (! IsRectEmpty(&invalid))
+        {
+            InvalidateRect(_hWnd.get(), &invalid, TRUE);
+        }
     }
 }
 
@@ -1801,7 +1965,7 @@ void CompareDirectoriesWindow::ApplyTheme() noexcept
             _uiItalicFont.reset(CreateFontIndirectW(&italic));
 
             // Slightly larger banner font for "Compare Folder" title (keep face/DPI scaling consistent).
-            LOGFONTW banner = bold;
+            LOGFONTW banner         = bold;
             const float bannerScale = 1.25f;
             banner.lfHeight         = static_cast<LONG>(std::lround(static_cast<float>(banner.lfHeight) * bannerScale));
             _bannerTitleFont.reset(CreateFontIndirectW(&banner));
@@ -1812,11 +1976,11 @@ void CompareDirectoriesWindow::ApplyTheme() noexcept
     _menuBackgroundBrush.reset(CreateSolidBrush(_theme.menu.background));
     _optionsBackgroundBrush.reset(CreateSolidBrush(_theme.windowBackground));
 
-    const COLORREF surface                     = ThemedControls::GetControlSurfaceColor(_theme);
+    const COLORREF surface = ThemedControls::GetControlSurfaceColor(_theme);
     _optionsCardBrush.reset(CreateSolidBrush(surface));
-    _optionsInputBackgroundColor               = ThemedControls::BlendColor(surface, _theme.windowBackground, _theme.dark ? 50 : 30, 255);
-    _optionsInputFocusedBackgroundColor        = ThemedControls::BlendColor(_optionsInputBackgroundColor, _theme.menu.text, _theme.dark ? 20 : 16, 255);
-    _optionsInputDisabledBackgroundColor       = ThemedControls::BlendColor(_theme.windowBackground, _optionsInputBackgroundColor, _theme.dark ? 70 : 40, 255);
+    _optionsInputBackgroundColor         = ThemedControls::BlendColor(surface, _theme.windowBackground, _theme.dark ? 50 : 30, 255);
+    _optionsInputFocusedBackgroundColor  = ThemedControls::BlendColor(_optionsInputBackgroundColor, _theme.menu.text, _theme.dark ? 20 : 16, 255);
+    _optionsInputDisabledBackgroundColor = ThemedControls::BlendColor(_theme.windowBackground, _optionsInputBackgroundColor, _theme.dark ? 70 : 40, 255);
     _optionsInputBrush.reset(CreateSolidBrush(_optionsInputBackgroundColor));
     _optionsInputFocusedBrush.reset(CreateSolidBrush(_optionsInputFocusedBackgroundColor));
     _optionsInputDisabledBrush.reset(CreateSolidBrush(_optionsInputDisabledBackgroundColor));
@@ -1911,14 +2075,14 @@ void CompareDirectoriesWindow::ApplyOptionsDialogTheme() noexcept
 
     struct EnumData
     {
-        HFONT font = nullptr;
+        HFONT font               = nullptr;
         const wchar_t* themeName = nullptr;
-        HWND optionsHost = nullptr;
+        HWND optionsHost         = nullptr;
     };
 
     EnumData data{};
-    data.font      = font;
-    data.themeName = themeName;
+    data.font        = font;
+    data.themeName   = themeName;
     data.optionsHost = _optionsUi.host;
 
     EnumChildWindows(
@@ -1970,6 +2134,263 @@ void CompareDirectoriesWindow::ApplyOptionsDialogTheme() noexcept
     RedrawWindow(_optionsDlg.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
+INT_PTR CALLBACK CompareDirectoriesWindow::OptionsDlgProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam) noexcept
+{
+    if (msg == WM_INITDIALOG)
+    {
+        auto* self = reinterpret_cast<CompareDirectoriesWindow*>(lParam);
+        SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(self));
+        return self ? self->OnOptionsInitDialog(dlg) : TRUE;
+    }
+
+    auto* self = reinterpret_cast<CompareDirectoriesWindow*>(GetWindowLongPtrW(dlg, DWLP_USER));
+    if (! self)
+    {
+        return FALSE;
+    }
+
+    switch (msg)
+    {
+        case WM_ERASEBKGND: return self->OnOptionsEraseBkgnd(dlg, reinterpret_cast<HDC>(wParam));
+        case WM_COMMAND: return self->OnOptionsCommand(dlg, wParam, lParam);
+        case WM_DRAWITEM: return self->OnOptionsDrawItem(reinterpret_cast<const DRAWITEMSTRUCT*>(lParam));
+        case WM_CTLCOLOREDIT: return self->OnOptionsCtlColorEdit(reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_CTLCOLORDLG: return self->OnOptionsCtlColorDlg(reinterpret_cast<HDC>(wParam));
+        case WM_CTLCOLORSTATIC: return self->OnOptionsCtlColorStatic(reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_CTLCOLORBTN: return self->OnOptionsCtlColorBtn(reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        default: break;
+    }
+
+    return FALSE;
+}
+
+INT_PTR CompareDirectoriesWindow::OnOptionsInitDialog(HWND dlg) noexcept
+{
+    const bool darkBackground = ChooseContrastingTextColor(_theme.windowBackground) == RGB(255, 255, 255);
+    const wchar_t* themeName  = _theme.highContrast ? L"" : (darkBackground ? L"DarkMode_Explorer" : L"Explorer");
+
+    SetWindowTheme(dlg, themeName, nullptr);
+    SendMessageW(dlg, WM_THEMECHANGED, 0, 0);
+
+    if (! _theme.highContrast)
+    {
+        ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
+        ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
+    }
+
+    EnsureOptionsControlsCreated(dlg);
+    return TRUE;
+}
+
+INT_PTR CompareDirectoriesWindow::OnOptionsEraseBkgnd(HWND dlg, HDC hdc) noexcept
+{
+    if (! _optionsBackgroundBrush)
+    {
+        return FALSE;
+    }
+
+    RECT rc{};
+    GetClientRect(dlg, &rc);
+    FillRect(hdc, &rc, _optionsBackgroundBrush.get());
+    return TRUE;
+}
+
+INT_PTR CompareDirectoriesWindow::OnOptionsCommand([[maybe_unused]] HWND dlg, WPARAM wParam, LPARAM lParam) noexcept
+{
+    const UINT controlId  = LOWORD(wParam);
+    const UINT notifyCode = HIWORD(wParam);
+    HWND hwndCtl          = reinterpret_cast<HWND>(lParam);
+
+    if (notifyCode == BN_CLICKED && hwndCtl)
+    {
+        const LONG_PTR style = GetWindowLongPtrW(hwndCtl, GWL_STYLE);
+        if ((style & BS_TYPEMASK) == BS_OWNERDRAW)
+        {
+            switch (controlId)
+            {
+                case IDC_CMP_SIZE:
+                case IDC_CMP_DATETIME:
+                case IDC_CMP_ATTRIBUTES:
+                case IDC_CMP_CONTENT:
+                case IDC_CMP_SUBDIRECTORIES:
+                case IDC_CMP_SUBDIR_ATTRIBUTES:
+                case IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE:
+                case IDC_CMP_IGNORE_FILES:
+                case IDC_CMP_IGNORE_DIRECTORIES:
+                {
+                    const bool toggledOn = GetTwoStateToggleState(hwndCtl, false);
+                    SetTwoStateToggleState(hwndCtl, false, ! toggledOn);
+                    break;
+                }
+                default: break;
+            }
+        }
+    }
+
+    switch (controlId)
+    {
+        case IDOK:
+            SaveOptionsControlsToSettings();
+            StartCompare();
+            return TRUE;
+        case IDCANCEL:
+            if (! _compareStarted)
+            {
+                PostMessageW(_hWnd.get(), WM_CLOSE, 0, 0);
+                return TRUE;
+            }
+            ShowOptionsPanel(false);
+            return TRUE;
+        case IDC_CMP_IGNORE_FILES:
+        case IDC_CMP_IGNORE_DIRECTORIES: UpdateOptionsVisibility(); return TRUE;
+        default: break;
+    }
+
+    return FALSE;
+}
+
+INT_PTR CompareDirectoriesWindow::OnOptionsDrawItem(const DRAWITEMSTRUCT* dis) noexcept
+{
+    if (! dis || dis->CtlType != ODT_BUTTON)
+    {
+        return FALSE;
+    }
+
+    const LONG_PTR style = dis->hwndItem ? GetWindowLongPtrW(dis->hwndItem, GWL_STYLE) : 0;
+    if ((style & BS_TYPEMASK) == BS_OWNERDRAW)
+    {
+        const UINT id       = dis->CtlID;
+        const bool isToggle = id == IDC_CMP_SIZE || id == IDC_CMP_DATETIME || id == IDC_CMP_ATTRIBUTES || id == IDC_CMP_CONTENT ||
+                              id == IDC_CMP_SUBDIRECTORIES || id == IDC_CMP_SUBDIR_ATTRIBUTES || id == IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE ||
+                              id == IDC_CMP_IGNORE_FILES || id == IDC_CMP_IGNORE_DIRECTORIES;
+        if (isToggle)
+        {
+            const bool toggledOn        = GetWindowLongPtrW(dis->hwndItem, GWLP_USERDATA) != 0;
+            const COLORREF surface      = ThemedControls::GetControlSurfaceColor(_theme);
+            const HFONT boldFont        = _uiBoldFont ? _uiBoldFont.get() : nullptr;
+            const std::wstring onLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
+            const std::wstring offLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
+            ThemedControls::DrawThemedSwitchToggle(*dis, _theme, surface, boldFont, onLabel, offLabel, toggledOn);
+            return TRUE;
+        }
+    }
+
+    ThemedControls::DrawThemedPushButton(*dis, _theme);
+    return TRUE;
+}
+
+INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorEdit(HDC hdc, HWND control) noexcept
+{
+    if (! _optionsInputBrush)
+    {
+        return FALSE;
+    }
+
+    const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
+    const bool focused = enabled && control && GetFocus() == control;
+    const COLORREF bg  = enabled ? (focused ? _optionsInputFocusedBackgroundColor : _optionsInputBackgroundColor) : _optionsInputDisabledBackgroundColor;
+
+    SetBkMode(hdc, OPAQUE);
+    SetBkColor(hdc, bg);
+    SetTextColor(hdc, enabled ? _theme.menu.text : _theme.menu.disabledText);
+
+    if (_theme.highContrast)
+    {
+        return reinterpret_cast<INT_PTR>(_optionsBackgroundBrush.get());
+    }
+
+    if (! enabled)
+    {
+        return reinterpret_cast<INT_PTR>(_optionsInputDisabledBrush.get());
+    }
+
+    return reinterpret_cast<INT_PTR>(focused && _optionsInputFocusedBrush ? _optionsInputFocusedBrush.get() : _optionsInputBrush.get());
+}
+
+INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorDlg(HDC hdc) noexcept
+{
+    if (! _optionsBackgroundBrush)
+    {
+        return FALSE;
+    }
+
+    SetBkMode(hdc, OPAQUE);
+    SetBkColor(hdc, _theme.windowBackground);
+    SetTextColor(hdc, _theme.menu.text);
+    return reinterpret_cast<INT_PTR>(_optionsBackgroundBrush.get());
+}
+
+INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorStatic(HDC hdc, HWND control) noexcept
+{
+    if (! _optionsBackgroundBrush)
+    {
+        return FALSE;
+    }
+
+    COLORREF textColor = _theme.menu.text;
+    if (control && IsWindowEnabled(control) == FALSE)
+    {
+        textColor = _theme.menu.disabledText;
+    }
+
+    if (_theme.systemHighContrast || _theme.highContrast)
+    {
+        SetBkMode(hdc, OPAQUE);
+        SetBkColor(hdc, _theme.windowBackground);
+        SetTextColor(hdc, textColor);
+        return reinterpret_cast<INT_PTR>(_optionsBackgroundBrush.get());
+    }
+
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, textColor);
+    SetBkColor(hdc, _theme.windowBackground);
+
+    HBRUSH brush = _optionsBackgroundBrush.get();
+    if (control && _optionsUi.host && _optionsCardBrush && ! _optionsCards.empty())
+    {
+        RECT rc{};
+        if (GetWindowRect(control, &rc) != FALSE)
+        {
+            MapWindowPoints(nullptr, _optionsUi.host, reinterpret_cast<POINT*>(&rc), 2);
+            for (const RECT& card : _optionsCards)
+            {
+                RECT intersect{};
+                if (IntersectRect(&intersect, &card, &rc) != FALSE)
+                {
+                    brush = _optionsCardBrush.get();
+                    break;
+                }
+            }
+        }
+    }
+
+    return reinterpret_cast<INT_PTR>(brush);
+}
+
+INT_PTR CompareDirectoriesWindow::OnOptionsCtlColorBtn(HDC hdc, HWND control) noexcept
+{
+    if (! _optionsBackgroundBrush)
+    {
+        return FALSE;
+    }
+
+    const LONG_PTR style = control ? GetWindowLongPtrW(control, GWL_STYLE) : 0;
+    const LONG_PTR type  = style & BS_TYPEMASK;
+
+    const bool themed = type == BS_CHECKBOX || type == BS_AUTOCHECKBOX || type == BS_RADIOBUTTON || type == BS_AUTORADIOBUTTON || type == BS_3STATE ||
+                        type == BS_AUTO3STATE || type == BS_GROUPBOX;
+    if (! themed)
+    {
+        return FALSE;
+    }
+
+    const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, enabled ? _theme.menu.text : _theme.menu.disabledText);
+    SetBkColor(hdc, _theme.windowBackground);
+    return reinterpret_cast<INT_PTR>(_optionsBackgroundBrush.get());
+}
+
 void CompareDirectoriesWindow::OnPanePathChanged(ComparePane pane, const std::optional<std::filesystem::path>& newPath) noexcept
 {
     SyncOtherPanePath(pane, newPath);
@@ -1979,23 +2400,16 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
 {
     FolderView::RegisterWndClass(GetModuleHandleW(nullptr));
 
-    const HINSTANCE instance = GetModuleHandleW(nullptr);
-    _bannerTitle.reset(CreateWindowExW(0,
-                                       L"Static",
-                                       L"Compare Folder",
-                                       WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOPREFIX,
-                                       0,
-                                       0,
-                                       10,
-                                       10,
-                                       hwnd,
-                                       nullptr,
-                                       instance,
-                                       nullptr));
+    const HINSTANCE instance             = GetModuleHandleW(nullptr);
+    const std::wstring bannerTitleText   = LoadStringResource(nullptr, IDS_COMPARE_BANNER_TITLE);
+    const std::wstring bannerOptionsText = LoadStringResource(nullptr, IDS_COMPARE_BANNER_OPTIONS_ELLIPSIS);
+    const std::wstring bannerRescanText  = LoadStringResource(nullptr, IDS_COMPARE_BANNER_RESCAN);
+    _bannerTitle.reset(CreateWindowExW(
+        0, L"Static", bannerTitleText.c_str(), WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOPREFIX, 0, 0, 10, 10, hwnd, nullptr, instance, nullptr));
 
     _bannerOptionsButton.reset(CreateWindowExW(0,
                                                L"Button",
-                                               L"Options...",
+                                               bannerOptionsText.c_str(),
                                                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
                                                0,
                                                0,
@@ -2008,7 +2422,7 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
 
     _bannerRescanButton.reset(CreateWindowExW(0,
                                               L"Button",
-                                              L"Rescan",
+                                              bannerRescanText.c_str(),
                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
                                               0,
                                               0,
@@ -2026,29 +2440,19 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
     }
 
     _scanProgressText.reset(CreateWindowExW(0,
-                                           L"Static",
-                                           L"",
-                                           WS_CHILD | SS_LEFT | SS_NOPREFIX | SS_PATHELLIPSIS,
-                                           0,
-                                           0,
-                                           10,
-                                           10,
-                                           hwnd,
-                                           reinterpret_cast<HMENU>(kScanProgressTextId),
-                                           instance,
-                                           nullptr));
-    _scanProgressBar.reset(CreateWindowExW(0,
-                                          PROGRESS_CLASSW,
-                                          nullptr,
-                                          WS_CHILD | PBS_MARQUEE,
-                                          0,
-                                          0,
-                                          10,
-                                          10,
-                                          hwnd,
-                                          reinterpret_cast<HMENU>(kScanProgressBarId),
-                                          instance,
-                                          nullptr));
+                                            L"Static",
+                                            L"",
+                                            WS_CHILD | SS_LEFT | SS_NOPREFIX | SS_PATHELLIPSIS,
+                                            0,
+                                            0,
+                                            10,
+                                            10,
+                                            hwnd,
+                                            reinterpret_cast<HMENU>(kScanProgressTextId),
+                                            instance,
+                                            nullptr));
+    _scanProgressBar.reset(CreateWindowExW(
+        0, PROGRESS_CLASSW, nullptr, WS_CHILD | PBS_MARQUEE, 0, 0, 10, 10, hwnd, reinterpret_cast<HMENU>(kScanProgressBarId), instance, nullptr));
 
     if (_scanProgressText)
     {
@@ -2062,8 +2466,7 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
     _folderWindow.Create(hwnd, 0, 0, 10, 10);
     _folderWindow.SetSettings(_settings);
     _folderWindow.SetShortcutManager(_shortcuts);
-    _folderWindow.SetShowSortMenuCallback(
-        [this](FolderWindow::Pane pane, POINT screenPoint) noexcept { ShowSortMenuPopup(pane, screenPoint); });
+    _folderWindow.SetShowSortMenuCallback([this](FolderWindow::Pane pane, POINT screenPoint) noexcept { ShowSortMenuPopup(pane, screenPoint); });
 
     bool functionBarVisible = true;
     if (_settings && _settings->mainMenu.has_value())
@@ -2072,290 +2475,41 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
     }
     _folderWindow.SetFunctionBarVisible(functionBarVisible);
 
-    _folderWindow.SetPanePathChangedCallback(
-        [this](FolderWindow::Pane pane, const std::optional<std::filesystem::path>& pluginPath)
-        { OnPanePathChanged(pane == FolderWindow::Pane::Left ? ComparePane::Left : ComparePane::Right, pluginPath); });
+    _folderWindow.SetPanePathChangedCallback([this](FolderWindow::Pane pane, const std::optional<std::filesystem::path>& pluginPath)
+                                             { OnPanePathChanged(pane == FolderWindow::Pane::Left ? ComparePane::Left : ComparePane::Right, pluginPath); });
 
-    _folderWindow.SetPaneEnumerationCompletedCallback(
-        FolderWindow::Pane::Left, [this](const std::filesystem::path& folder) { ApplySelectionForFolder(ComparePane::Left, folder); });
-    _folderWindow.SetPaneEnumerationCompletedCallback(
-        FolderWindow::Pane::Right, [this](const std::filesystem::path& folder) { ApplySelectionForFolder(ComparePane::Right, folder); });
+    _folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
+                                                      [this](const std::filesystem::path& folder) { ApplySelectionForFolder(ComparePane::Left, folder); });
+    _folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Right,
+                                                      [this](const std::filesystem::path& folder) { ApplySelectionForFolder(ComparePane::Right, folder); });
 
-    _folderWindow.SetPaneDetailsTextProvider(FolderWindow::Pane::Left,
-                                            [this](const std::filesystem::path& folder,
-                                                   std::wstring_view displayName,
-                                                   bool isDirectory,
-                                                   uint64_t sizeBytes,
-                                                   int64_t lastWriteTime,
-                                                   DWORD fileAttributes) noexcept -> std::wstring
-                                            { return BuildDetailsTextForCompareItem(ComparePane::Left, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
+    _folderWindow.SetPaneDetailsTextProvider(
+        FolderWindow::Pane::Left,
+        [this](const std::filesystem::path& folder,
+               std::wstring_view displayName,
+               bool isDirectory,
+               uint64_t sizeBytes,
+               int64_t lastWriteTime,
+               DWORD fileAttributes) noexcept -> std::wstring
+        { return BuildDetailsTextForCompareItem(ComparePane::Left, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
 
-    _folderWindow.SetPaneDetailsTextProvider(FolderWindow::Pane::Right,
-                                            [this](const std::filesystem::path& folder,
-                                                   std::wstring_view displayName,
-                                                   bool isDirectory,
-                                                   uint64_t sizeBytes,
-                                                   int64_t lastWriteTime,
-                                                   DWORD fileAttributes) noexcept -> std::wstring
-                                            { return BuildDetailsTextForCompareItem(ComparePane::Right, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
+    _folderWindow.SetPaneDetailsTextProvider(
+        FolderWindow::Pane::Right,
+        [this](const std::filesystem::path& folder,
+               std::wstring_view displayName,
+               bool isDirectory,
+               uint64_t sizeBytes,
+               int64_t lastWriteTime,
+               DWORD fileAttributes) noexcept -> std::wstring
+        { return BuildDetailsTextForCompareItem(ComparePane::Right, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
 
     _folderWindow.SetFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) { OnFolderWindowFileOperationCompleted(e); });
 
 #pragma warning(push)
     // pointer or reference to potentially throwing function passed to 'extern "C"' function
 #pragma warning(disable : 5039)
-    _optionsDlg.reset(CreateDialogParamW(GetModuleHandleW(nullptr),
-                                         MAKEINTRESOURCEW(IDD_COMPARE_DIRECTORIES_OPTIONS),
-                                         hwnd,
-                                         [](HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam) noexcept -> INT_PTR
-                                         {
-                                             auto* self = reinterpret_cast<CompareDirectoriesWindow*>(GetWindowLongPtrW(dlg, DWLP_USER));
-
-                                             switch (msg)
-                                             {
-                                                  case WM_INITDIALOG:
-                                                      self = reinterpret_cast<CompareDirectoriesWindow*>(lParam);
-                                                      SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(self));
-                                                      if (self)
-                                                      {
-                                                          const bool darkBackground =
-                                                              ChooseContrastingTextColor(self->_theme.windowBackground) == RGB(255, 255, 255);
-                                                          const wchar_t* themeName =
-                                                              self->_theme.highContrast ? L"" : (darkBackground ? L"DarkMode_Explorer" : L"Explorer");
-
-                                                          SetWindowTheme(dlg, themeName, nullptr);
-                                                          SendMessageW(dlg, WM_THEMECHANGED, 0, 0);
-
-                                                           if (! self->_theme.highContrast)
-                                                           {
-                                                               ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
-                                                               ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
-                                                           }
- 
-                                                           self->EnsureOptionsControlsCreated(dlg);
-                                                       }
-                                                       return TRUE;
-                                                 case WM_ERASEBKGND:
-                                                     if (! self || ! self->_optionsBackgroundBrush)
-                                                     {
-                                                         return FALSE;
-                                                     }
-                                                     {
-                                                         RECT rc{};
-                                                         GetClientRect(dlg, &rc);
-                                                         FillRect(reinterpret_cast<HDC>(wParam), &rc, self->_optionsBackgroundBrush.get());
-                                                         return TRUE;
-                                                     }
-                                                 case WM_COMMAND:
-                                                     if (! self)
-                                                     {
-                                                         return FALSE;
-                                                     }
-
-                                                     {
-                                                         const UINT controlId  = LOWORD(wParam);
-                                                         const UINT notifyCode = HIWORD(wParam);
-                                                         HWND hwndCtl          = reinterpret_cast<HWND>(lParam);
-
-                                                         if (notifyCode == BN_CLICKED && hwndCtl)
-                                                         {
-                                                             const LONG_PTR style = GetWindowLongPtrW(hwndCtl, GWL_STYLE);
-                                                             if ((style & BS_TYPEMASK) == BS_OWNERDRAW)
-                                                             {
-                                                                 switch (controlId)
-                                                                 {
-                                                                     case IDC_CMP_SIZE:
-                                                                     case IDC_CMP_DATETIME:
-                                                                     case IDC_CMP_ATTRIBUTES:
-                                                                     case IDC_CMP_CONTENT:
-                                                                     case IDC_CMP_SUBDIRECTORIES:
-                                                                     case IDC_CMP_SUBDIR_ATTRIBUTES:
-                                                                     case IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE:
-                                                                     case IDC_CMP_IGNORE_FILES:
-                                                                     case IDC_CMP_IGNORE_DIRECTORIES:
-                                                                     {
-                                                                         const bool toggledOn = GetTwoStateToggleState(hwndCtl, false);
-                                                                         SetTwoStateToggleState(hwndCtl, false, ! toggledOn);
-                                                                         break;
-                                                                     }
-                                                                 }
-                                                             }
-                                                         }
-
-                                                         switch (controlId)
-                                                     {
-                                                         case IDOK:
-                                                             self->SaveOptionsControlsToSettings();
-                                                             self->StartCompare();
-                                                             return TRUE;
-                                                          case IDCANCEL:
-                                                              if (! self->_compareStarted)
-                                                              {
-                                                                  PostMessageW(self->_hWnd.get(), WM_CLOSE, 0, 0);
-                                                                  return TRUE;
-                                                              }
-                                                              self->ShowOptionsPanel(false);
-                                                              return TRUE;
-                                                          case IDC_CMP_IGNORE_FILES:
-                                                          case IDC_CMP_IGNORE_DIRECTORIES:
-                                                              self->UpdateOptionsVisibility();
-                                                              return TRUE;
-                                                      }
-                                                     }
-                                                     break;
-                                                 case WM_DRAWITEM:
-                                                     if (! self)
-                                                     {
-                                                         return FALSE;
-                                                     }
-                                                     if (const auto* dis = reinterpret_cast<const DRAWITEMSTRUCT*>(lParam); dis && dis->CtlType == ODT_BUTTON)
-                                                     {
-                                                         const LONG_PTR style = dis->hwndItem ? GetWindowLongPtrW(dis->hwndItem, GWL_STYLE) : 0;
-                                                         if ((style & BS_TYPEMASK) == BS_OWNERDRAW)
-                                                         {
-                                                             const UINT id = dis->CtlID;
-                                                             const bool isToggle =
-                                                                 id == IDC_CMP_SIZE || id == IDC_CMP_DATETIME || id == IDC_CMP_ATTRIBUTES || id == IDC_CMP_CONTENT ||
-                                                                 id == IDC_CMP_SUBDIRECTORIES || id == IDC_CMP_SUBDIR_ATTRIBUTES ||
-                                                                 id == IDC_CMP_SELECT_SUBDIRS_ONLY_ONE_PANE || id == IDC_CMP_IGNORE_FILES || id == IDC_CMP_IGNORE_DIRECTORIES;
-                                                             if (isToggle)
-                                                             {
-                                                                 const bool toggledOn   = GetWindowLongPtrW(dis->hwndItem, GWLP_USERDATA) != 0;
-                                                                 const COLORREF surface = ThemedControls::GetControlSurfaceColor(self->_theme);
-                                                                 const HFONT boldFont   = self->_uiBoldFont ? self->_uiBoldFont.get() : nullptr;
-                                                                 const std::wstring onLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
-                                                                 const std::wstring offLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
-                                                                 ThemedControls::DrawThemedSwitchToggle(
-                                                                     *dis, self->_theme, surface, boldFont, onLabel, offLabel, toggledOn);
-                                                                 return TRUE;
-                                                             }
-                                                         }
-
-                                                         ThemedControls::DrawThemedPushButton(*dis, self->_theme);
-                                                         return TRUE;
-                                                     }
-                                                     break;
-                                                 case WM_CTLCOLOREDIT:
-                                                     if (! self || ! self->_optionsInputBrush)
-                                                     {
-                                                         return FALSE;
-                                                     }
-                                                     {
-                                                         HDC hdc        = reinterpret_cast<HDC>(wParam);
-                                                         HWND control   = reinterpret_cast<HWND>(lParam);
-                                                         const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
-                                                         const bool focused = enabled && control && GetFocus() == control;
-                                                         const COLORREF bg  = enabled ? (focused ? self->_optionsInputFocusedBackgroundColor : self->_optionsInputBackgroundColor)
-                                                                                      : self->_optionsInputDisabledBackgroundColor;
-
-                                                         SetBkMode(hdc, OPAQUE);
-                                                         SetBkColor(hdc, bg);
-                                                         SetTextColor(hdc, enabled ? self->_theme.menu.text : self->_theme.menu.disabledText);
-
-                                                         if (self->_theme.highContrast)
-                                                         {
-                                                             return reinterpret_cast<INT_PTR>(self->_optionsBackgroundBrush.get());
-                                                         }
-
-                                                         if (! enabled)
-                                                         {
-                                                             return reinterpret_cast<INT_PTR>(self->_optionsInputDisabledBrush.get());
-                                                         }
-                                                         return reinterpret_cast<INT_PTR>(
-                                                             focused && self->_optionsInputFocusedBrush ? self->_optionsInputFocusedBrush.get() : self->_optionsInputBrush.get());
-                                                     }
-                                                case WM_CTLCOLORDLG:
-                                                    if (! self || ! self->_optionsBackgroundBrush)
-                                                    {
-                                                        return FALSE;
-                                                    }
-                                                    {
-                                                        HDC hdc = reinterpret_cast<HDC>(wParam);
-                                                        SetBkMode(hdc, OPAQUE);
-                                                        SetBkColor(hdc, self->_theme.windowBackground);
-                                                        SetTextColor(hdc, self->_theme.menu.text);
-                                                        return reinterpret_cast<INT_PTR>(self->_optionsBackgroundBrush.get());
-                                                    }
-                                                case WM_CTLCOLORSTATIC:
-                                                    if (! self || ! self->_optionsBackgroundBrush)
-                                                    {
-                                                        return FALSE;
-                                                    }
-
-                                                    {
-                                                        HDC hdc      = reinterpret_cast<HDC>(wParam);
-                                                        HWND control = reinterpret_cast<HWND>(lParam);
-
-                                                        COLORREF textColor = self->_theme.menu.text;
-                                                        if (control && IsWindowEnabled(control) == FALSE)
-                                                        {
-                                                            textColor = self->_theme.menu.disabledText;
-                                                        }
-
-                                                        if (self->_theme.systemHighContrast || self->_theme.highContrast)
-                                                        {
-                                                            SetBkMode(hdc, OPAQUE);
-                                                            SetBkColor(hdc, self->_theme.windowBackground);
-                                                            SetTextColor(hdc, textColor);
-                                                            return reinterpret_cast<INT_PTR>(self->_optionsBackgroundBrush.get());
-                                                        }
-
-                                                        SetBkMode(hdc, TRANSPARENT);
-                                                        SetTextColor(hdc, textColor);
-                                                        SetBkColor(hdc, self->_theme.windowBackground);
-
-                                                        HBRUSH brush = self->_optionsBackgroundBrush.get();
-                                                        if (control && self->_optionsUi.host && self->_optionsCardBrush && ! self->_optionsCards.empty())
-                                                        {
-                                                            RECT rc{};
-                                                            if (GetWindowRect(control, &rc))
-                                                            {
-                                                                MapWindowPoints(nullptr, self->_optionsUi.host, reinterpret_cast<POINT*>(&rc), 2);
-                                                                for (const RECT& card : self->_optionsCards)
-                                                                {
-                                                                    RECT intersect{};
-                                                                    if (IntersectRect(&intersect, &card, &rc) != FALSE)
-                                                                    {
-                                                                        brush = self->_optionsCardBrush.get();
-                                                                        break;
-                                                                    }
-                                                                }
-                                                            }
-                                                        }
-
-                                                        return reinterpret_cast<INT_PTR>(brush);
-                                                    }
-                                                case WM_CTLCOLORBTN:
-                                                    if (! self || ! self->_optionsBackgroundBrush)
-                                                    {
-                                                        return FALSE;
-                                                    }
-
-                                                    {
-                                                        HDC hdc      = reinterpret_cast<HDC>(wParam);
-                                                        HWND control = reinterpret_cast<HWND>(lParam);
-
-                                                        const LONG_PTR style = control ? GetWindowLongPtrW(control, GWL_STYLE) : 0;
-                                                        const LONG_PTR type  = style & BS_TYPEMASK;
-
-                                                        const bool themed = type == BS_CHECKBOX || type == BS_AUTOCHECKBOX || type == BS_RADIOBUTTON ||
-                                                                            type == BS_AUTORADIOBUTTON || type == BS_3STATE || type == BS_AUTO3STATE || type == BS_GROUPBOX;
-                                                        if (! themed)
-                                                        {
-                                                            return FALSE;
-                                                        }
-
-                                                        const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
-                                                        SetBkMode(hdc, TRANSPARENT);
-                                                        SetTextColor(hdc, enabled ? self->_theme.menu.text : self->_theme.menu.disabledText);
-                                                        SetBkColor(hdc, self->_theme.windowBackground);
-                                                        return reinterpret_cast<INT_PTR>(self->_optionsBackgroundBrush.get());
-                                                    }
-                                            }
-
-                                            return FALSE;
-                                        },
-                                        reinterpret_cast<LPARAM>(this)));
+    _optionsDlg.reset(
+        CreateDialogParamW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_COMPARE_DIRECTORIES_OPTIONS), hwnd, OptionsDlgProc, reinterpret_cast<LPARAM>(this)));
 #pragma warning(pop)
 
     if (_optionsDlg)
@@ -2366,14 +2520,9 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
     }
 }
 
-LRESULT CALLBACK CompareOptionsHostSubclassProc(HWND hwnd,
-                                                UINT msg,
-                                                WPARAM wp,
-                                                LPARAM lp,
-                                                UINT_PTR subclassId,
-                                                DWORD_PTR refData) noexcept
+LRESULT CALLBACK CompareOptionsHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept
 {
-    auto* self = reinterpret_cast<CompareDirectoriesWindow*>(refData);
+    auto* self     = reinterpret_cast<CompareDirectoriesWindow*>(refData);
     const HWND dlg = GetParent(hwnd);
 
     switch (msg)
@@ -2535,12 +2684,7 @@ LRESULT CALLBACK CompareOptionsHostSubclassProc(HWND hwnd,
     return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
-LRESULT CALLBACK CompareOptionsWheelRouteSubclassProc(HWND hwnd,
-                                                     UINT msg,
-                                                     WPARAM wp,
-                                                     LPARAM lp,
-                                                     UINT_PTR subclassId,
-                                                     DWORD_PTR refData) noexcept
+LRESULT CALLBACK CompareOptionsWheelRouteSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept
 {
     auto* self = reinterpret_cast<CompareDirectoriesWindow*>(refData);
     if (! self)
@@ -2602,18 +2746,7 @@ void CompareDirectoriesWindow::EnsureOptionsControlsCreated(HWND dlg) noexcept
 
     const HINSTANCE instance = GetModuleHandleW(nullptr);
 
-    _optionsUi.host = CreateWindowExW(WS_EX_CONTROLPARENT,
-                                     L"Static",
-                                     L"",
-                                     WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-                                     0,
-                                     0,
-                                     10,
-                                     10,
-                                     dlg,
-                                     nullptr,
-                                     instance,
-                                     nullptr);
+    _optionsUi.host = CreateWindowExW(WS_EX_CONTROLPARENT, L"Static", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP, 0, 0, 10, 10, dlg, nullptr, instance, nullptr);
     if (_optionsUi.host)
     {
         const wchar_t* hostTheme = _theme.highContrast ? L"" : (_theme.dark ? L"DarkMode_Explorer" : L"Explorer");
@@ -2634,26 +2767,15 @@ void CompareDirectoriesWindow::EnsureOptionsControlsCreated(HWND dlg) noexcept
     constexpr DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
     constexpr DWORD wrapStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
 
-    const DWORD toggleStyle =
-        static_cast<DWORD>(WS_CHILD | WS_VISIBLE | WS_TABSTOP | (_theme.highContrast ? BS_AUTOCHECKBOX : BS_OWNERDRAW));
+    const DWORD toggleStyle = static_cast<DWORD>(WS_CHILD | WS_VISIBLE | WS_TABSTOP | (_theme.highContrast ? BS_AUTOCHECKBOX : BS_OWNERDRAW));
 
     const auto makeStatic = [&](DWORD style) noexcept -> HWND
     { return CreateWindowExW(0, L"Static", L"", style, 0, 0, 10, 10, _optionsUi.host, nullptr, instance, nullptr); };
 
     const auto makeToggle = [&](int id) noexcept -> HWND
     {
-        const HWND toggle = CreateWindowExW(0,
-                                            L"Button",
-                                            L"",
-                                            toggleStyle,
-                                            0,
-                                            0,
-                                            10,
-                                            10,
-                                            _optionsUi.host,
-                                            reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),
-                                            instance,
-                                            nullptr);
+        const HWND toggle = CreateWindowExW(
+            0, L"Button", L"", toggleStyle, 0, 0, 10, 10, _optionsUi.host, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), instance, nullptr);
         if (toggle && ! _theme.highContrast)
         {
             ThemedControls::EnableOwnerDrawButton(_optionsUi.host, id);
@@ -2669,8 +2791,7 @@ void CompareDirectoriesWindow::EnsureOptionsControlsCreated(HWND dlg) noexcept
         const bool customFrames = ! _theme.highContrast;
         if (customFrames)
         {
-            outFrame =
-                CreateWindowExW(0, L"Static", L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0, 10, 10, _optionsUi.host, nullptr, instance, nullptr);
+            outFrame = CreateWindowExW(0, L"Static", L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0, 10, 10, _optionsUi.host, nullptr, instance, nullptr);
         }
 
         DWORD editStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL;
@@ -2678,18 +2799,8 @@ void CompareDirectoriesWindow::EnsureOptionsControlsCreated(HWND dlg) noexcept
         editStyle &= ~ES_WANTRETURN;
 
         const DWORD editExStyle = customFrames ? 0 : WS_EX_CLIENTEDGE;
-        outEdit                 = CreateWindowExW(editExStyle,
-                                  L"Edit",
-                                  L"",
-                                  editStyle,
-                                  0,
-                                  0,
-                                  10,
-                                  10,
-                                  _optionsUi.host,
-                                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(editId)),
-                                  instance,
-                                  nullptr);
+        outEdit                 = CreateWindowExW(
+            editExStyle, L"Edit", L"", editStyle, 0, 0, 10, 10, _optionsUi.host, reinterpret_cast<HMENU>(static_cast<INT_PTR>(editId)), instance, nullptr);
 
         if (customFrames && outFrame && outEdit)
         {
@@ -2934,10 +3045,10 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
 
     auto computeToggleCardHeight = [&](int contentW, std::wstring_view descText, int toggleW) noexcept -> int
     {
-        const int textW     = std::max(0, contentW - 2 * cardPaddingX - cardGapX - toggleW);
-        const int descH     = MeasureStaticTextHeight(_optionsUi.host, infoFont, textW, descText);
-        const int contentH  = std::max(0, titleHeight + cardGapY + descH);
-        const int cardH     = std::max(rowHeight + 2 * cardPaddingY, contentH + 2 * cardPaddingY);
+        const int textW    = std::max(0, contentW - 2 * cardPaddingX - cardGapX - toggleW);
+        const int descH    = MeasureStaticTextHeight(_optionsUi.host, infoFont, textW, descText);
+        const int contentH = std::max(0, titleHeight + cardGapY + descH);
+        const int cardH    = std::max(rowHeight + 2 * cardPaddingY, contentH + 2 * cardPaddingY);
         return cardH;
     };
 
@@ -2981,7 +3092,8 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         y += sectionSpacing;
         y += headerHeight + gapY;
         y += computeIgnoreCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC), toggleW, ignoreFilesOn) + cardSpacingY;
-        y += computeIgnoreCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC), toggleW, ignoreDirsOn) + cardSpacingY;
+        y += computeIgnoreCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC), toggleW, ignoreDirsOn) +
+             cardSpacingY;
 
         return y;
     };
@@ -2989,7 +3101,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     const int viewportW = std::max(0l, hostClient.right - hostClient.left);
     const int viewportH = std::max(0l, hostClient.bottom - hostClient.top);
 
-    int contentHeight    = computeContentHeight(viewportW);
+    int contentHeight       = computeContentHeight(viewportW);
     const bool wantsVScroll = viewportH > 0 && contentHeight > viewportH;
 
     LONG_PTR styleNow    = GetWindowLongPtrW(_optionsUi.host, GWL_STYLE);
@@ -3020,9 +3132,9 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     const int viewportW2 = std::max(0l, hostClient.right - hostClient.left);
     const int viewportH2 = std::max(0l, hostClient.bottom - hostClient.top);
 
-    contentHeight         = computeContentHeight(viewportW2);
-    _optionsScrollMax     = (viewportH2 > 0) ? std::max(0, contentHeight - viewportH2) : 0;
-    _optionsScrollOffset  = std::clamp(_optionsScrollOffset, 0, _optionsScrollMax);
+    contentHeight        = computeContentHeight(viewportW2);
+    _optionsScrollMax    = (viewportH2 > 0) ? std::max(0, contentHeight - viewportH2) : 0;
+    _optionsScrollOffset = std::clamp(_optionsScrollOffset, 0, _optionsScrollMax);
     if (_optionsScrollMax <= 0)
     {
         _optionsScrollOffset = 0;
@@ -3132,12 +3244,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         y += cardH + cardSpacingY;
     };
 
-    const auto layoutIgnoreCard = [&](const OptionsIgnoreCard& card,
-                                      UINT titleId,
-                                      UINT descId,
-                                      bool visible,
-                                      bool showEdit,
-                                      int& y) noexcept
+    const auto layoutIgnoreCard = [&](const OptionsIgnoreCard& card, UINT titleId, UINT descId, bool visible, bool showEdit, int& y) noexcept
     {
         showIgnoreCardControls(card, visible, showEdit);
         if (! visible)
@@ -3177,11 +3284,8 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
             const int innerPadding = (! _theme.highContrast && card.frame) ? framePadding : 0;
 
             positionScrollable(card.frame, editX, editTop, editW, rowHeight);
-            positionScrollable(card.edit,
-                               editX + innerPadding,
-                               editTop + innerPadding,
-                               std::max(1, editW - 2 * innerPadding),
-                               std::max(1, rowHeight - 2 * innerPadding));
+            positionScrollable(
+                card.edit, editX + innerPadding, editTop + innerPadding, std::max(1, editW - 2 * innerPadding), std::max(1, rowHeight - 2 * innerPadding));
             SendMessageW(card.edit, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
             ThemedControls::CenterEditTextVertically(card.edit);
         }
@@ -3206,28 +3310,14 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
 
     y += sectionSpacing;
     layoutSectionHeader(_optionsUi.headerAdvanced, IDS_COMPARE_OPTIONS_SECTION_ADVANCED, y);
-    layoutToggleCard(_optionsUi.compareSubdirAttributes,
-                     IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE,
-                     IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC,
-                     true,
-                     y);
-    layoutToggleCard(
-        _optionsUi.selectSubdirsOnlyInOnePane, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC, true, y);
+    layoutToggleCard(_optionsUi.compareSubdirAttributes, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC, true, y);
+    layoutToggleCard(_optionsUi.selectSubdirsOnlyInOnePane, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC, true, y);
 
     y += sectionSpacing;
     layoutSectionHeader(_optionsUi.headerIgnore, IDS_COMPARE_OPTIONS_SECTION_IGNORE, y);
-    layoutIgnoreCard(_optionsUi.ignoreFiles,
-                     IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE,
-                     IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC,
-                     true,
-                     ignoreFilesOn,
-                     y);
-    layoutIgnoreCard(_optionsUi.ignoreDirectories,
-                     IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE,
-                     IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC,
-                     true,
-                     ignoreDirsOn,
-                     y);
+    layoutIgnoreCard(_optionsUi.ignoreFiles, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC, true, ignoreFilesOn, y);
+    layoutIgnoreCard(
+        _optionsUi.ignoreDirectories, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC, true, ignoreDirsOn, y);
 
     InvalidateRect(_optionsUi.host, nullptr, TRUE);
 }
@@ -3250,11 +3340,14 @@ void CompareDirectoriesWindow::Layout() noexcept
 
     _clientSize = {w, h};
 
-    const int dpi           = static_cast<int>(_dpi);
-    const int bannerHeight  = std::clamp(MulDiv(42, dpi, USER_DEFAULT_SCREEN_DPI), 0, h);
-    const bool showStatus   = (_scanProgressText && IsWindowVisible(_scanProgressText.get()) != 0) || (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0);
-    const int statusHeight  = showStatus ? std::clamp(MulDiv(kScanStatusHeightDip, dpi, USER_DEFAULT_SCREEN_DPI), 0, std::max(0, h - bannerHeight)) : 0;
-    const int contentHeight = std::max(0, h - bannerHeight - statusHeight);
+    const int dpi              = static_cast<int>(_dpi);
+    const int bannerBaseHeight = std::clamp(MulDiv(42, dpi, USER_DEFAULT_SCREEN_DPI), 0, h);
+    const bool showStatus =
+        (_scanProgressText && IsWindowVisible(_scanProgressText.get()) != 0) || (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0);
+    const int statusHeight =
+        showStatus ? std::clamp(MulDiv(kScanStatusHeightDip, dpi, USER_DEFAULT_SCREEN_DPI), 0, std::max(0, h - bannerBaseHeight)) : 0;
+    const int bannerHeight  = bannerBaseHeight + statusHeight;
+    const int contentHeight = std::max(0, h - bannerHeight);
 
     const UINT flags = SWP_NOZORDER | SWP_NOACTIVATE;
 
@@ -3264,7 +3357,7 @@ void CompareDirectoriesWindow::Layout() noexcept
     const int buttonW        = std::max(1, MulDiv(110, dpi, USER_DEFAULT_SCREEN_DPI));
     const int buttonH        = std::max(1, MulDiv(28, dpi, USER_DEFAULT_SCREEN_DPI));
     const int buttonGap      = std::max(0, MulDiv(10, dpi, USER_DEFAULT_SCREEN_DPI));
-    const int buttonY        = std::max(0, bannerPaddingY + (std::max(0, bannerHeight - (2 * bannerPaddingY) - buttonH) / 2));
+    const int buttonY        = std::max(0, bannerPaddingY + (std::max(0, bannerBaseHeight - (2 * bannerPaddingY) - buttonH) / 2));
 
     int rightX = std::max(0, w - bannerPaddingX);
     if (_bannerRescanButton)
@@ -3282,7 +3375,7 @@ void CompareDirectoriesWindow::Layout() noexcept
     if (_bannerTitle)
     {
         const int titleW = std::max(0, rightX - bannerPaddingX);
-        SetWindowPos(_bannerTitle.get(), nullptr, bannerPaddingX, 0, titleW, bannerHeight, flags);
+        SetWindowPos(_bannerTitle.get(), nullptr, bannerPaddingX, 0, titleW, bannerBaseHeight, flags);
     }
 
     if (const HWND fw = _folderWindow.GetHwnd())
@@ -3292,7 +3385,7 @@ void CompareDirectoriesWindow::Layout() noexcept
 
     if (showStatus && (_scanProgressText || _scanProgressBar))
     {
-        const int statusTop = bannerHeight + contentHeight;
+        const int statusTop = bannerBaseHeight;
         const int paddingX  = std::max(0, MulDiv(kScanStatusPaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI));
 
         int progressBarW = std::max(1, MulDiv(kScanProgressBarWidthDip, dpi, USER_DEFAULT_SCREEN_DPI));
@@ -3344,7 +3437,7 @@ void CompareDirectoriesWindow::EnsureCompareSession() noexcept
     }
 
     Common::Settings::CompareDirectoriesSettings settings = GetEffectiveCompareSettings();
-    _session = std::make_shared<CompareDirectoriesSession>(_baseFs, _leftRoot, _rightRoot, settings);
+    _session                                              = std::make_shared<CompareDirectoriesSession>(_baseFs, _leftRoot, _rightRoot, settings);
     if (_hWnd)
     {
         const HWND hwnd = _hWnd.get();
@@ -3360,13 +3453,45 @@ void CompareDirectoriesWindow::EnsureCompareSession() noexcept
                     return;
                 }
 
-                auto payload          = std::make_unique<ScanProgressPayload>();
-                payload->activeScans  = activeScans;
-                payload->folderCount  = scannedFolders;
-                payload->entryCount   = scannedEntries;
+                auto payload            = std::make_unique<ScanProgressPayload>();
+                payload->activeScans    = activeScans;
+                payload->folderCount    = scannedFolders;
+                payload->entryCount     = scannedEntries;
                 payload->relativeFolder = relativeFolder;
-                payload->entryName    = std::wstring(currentEntryName);
+                payload->entryName      = std::wstring(currentEntryName);
                 static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesScanProgress, 0, std::move(payload)));
+            });
+
+        _session->SetContentProgressCallback(
+            [hwnd](const std::filesystem::path& relativeFolder,
+                   std::wstring_view entryName,
+                   uint64_t totalBytes,
+                   uint64_t completedBytes,
+                   uint64_t pendingContentCompares) noexcept
+            {
+                if (! hwnd)
+                {
+                    return;
+                }
+
+                auto payload                   = std::make_unique<ContentProgressPayload>();
+                payload->pendingContentCompares = pendingContentCompares;
+                payload->totalBytes             = totalBytes;
+                payload->completedBytes         = completedBytes;
+                payload->relativeFolder         = relativeFolder;
+                payload->entryName              = std::wstring(entryName);
+                static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesContentProgress, 0, std::move(payload)));
+            });
+
+        _session->SetDecisionUpdatedCallback(
+            [hwnd]() noexcept
+            {
+                if (! hwnd || IsWindow(hwnd) == 0)
+                {
+                    return;
+                }
+
+                PostMessageW(hwnd, WndMsg::kCompareDirectoriesDecisionUpdated, 0, 0);
             });
     }
 
@@ -3394,22 +3519,17 @@ void CompareDirectoriesWindow::StartCompare() noexcept
         return;
     }
 
-    static_cast<void>(_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Left,
-                                                                 _fsLeft,
-                                                                 std::wstring(L"builtin/file-system"),
-                                                                 std::wstring(L"file"),
-                                                                 std::wstring{}));
-    static_cast<void>(_folderWindow.SetFileSystemInstanceForPane(FolderWindow::Pane::Right,
-                                                                 _fsRight,
-                                                                 std::wstring(L"builtin/file-system"),
-                                                                 std::wstring(L"file"),
-                                                                 std::wstring{}));
+    static_cast<void>(_folderWindow.SetFileSystemInstanceForPane(
+        FolderWindow::Pane::Left, _fsLeft, std::wstring(L"builtin/file-system"), std::wstring(L"file"), std::wstring{}));
+    static_cast<void>(_folderWindow.SetFileSystemInstanceForPane(
+        FolderWindow::Pane::Right, _fsRight, std::wstring(L"builtin/file-system"), std::wstring(L"file"), std::wstring{}));
 
     _folderWindow.SetStatusBarVisible(FolderWindow::Pane::Left, true);
     _folderWindow.SetStatusBarVisible(FolderWindow::Pane::Right, true);
 
     _folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Detailed);
     _folderWindow.SetDisplayMode(FolderWindow::Pane::Right, FolderView::DisplayMode::Detailed);
+    _folderWindow.SetSplitRatio(0.5f);
 
     _compareStarted = true;
     ShowOptionsPanel(false);
@@ -3501,7 +3621,7 @@ void CompareDirectoriesWindow::SyncOtherPanePath(ComparePane changedPane, const 
         return;
     }
 
-    const ComparePane other = changedPane == ComparePane::Left ? ComparePane::Right : ComparePane::Left;
+    const ComparePane other              = changedPane == ComparePane::Left ? ComparePane::Right : ComparePane::Left;
     const std::filesystem::path otherAbs = _session->ResolveAbsolute(other, relOpt.value());
 
     _syncingPaths = true;
@@ -3558,19 +3678,19 @@ void CompareDirectoriesWindow::ApplySelectionForFolder(ComparePane pane, const s
 }
 
 std::wstring CompareDirectoriesWindow::BuildDetailsTextForCompareItem(ComparePane pane,
-                                                                     const std::filesystem::path& folder,
-                                                                     std::wstring_view displayName,
-                                                                     bool isDirectory,
-                                                                     uint64_t sizeBytes,
-                                                                     int64_t lastWriteTime,
-                                                                     DWORD fileAttributes) noexcept
+                                                                      const std::filesystem::path& folder,
+                                                                      std::wstring_view displayName,
+                                                                      bool isDirectory,
+                                                                      uint64_t sizeBytes,
+                                                                      int64_t lastWriteTime,
+                                                                      DWORD fileAttributes) noexcept
 {
     if (! _compareStarted || ! _session)
     {
         return {};
     }
 
-    DetailsDecisionCache& cache = pane == ComparePane::Left ? _detailsCacheLeft : _detailsCacheRight;
+    DetailsDecisionCache& cache     = pane == ComparePane::Left ? _detailsCacheLeft : _detailsCacheRight;
     const uint64_t currentUiVersion = _session->GetUiVersion();
 
     if (cache.sessionUiVersion != currentUiVersion || cache.folder != folder)
@@ -3638,8 +3758,7 @@ std::wstring CompareDirectoriesWindow::BuildDetailsTextForCompareItem(ComparePan
 
         if (HasFlag(diffMask, CompareDirectoriesDiffBit::Size))
         {
-            const bool thisBigger =
-                pane == ComparePane::Left ? (item.leftSizeBytes > item.rightSizeBytes) : (item.rightSizeBytes > item.leftSizeBytes);
+            const bool thisBigger = pane == ComparePane::Left ? (item.leftSizeBytes > item.rightSizeBytes) : (item.rightSizeBytes > item.leftSizeBytes);
             appendToken(thisBigger ? strings.bigger : strings.smaller);
         }
 
@@ -3658,6 +3777,11 @@ std::wstring CompareDirectoriesWindow::BuildDetailsTextForCompareItem(ComparePan
         if (HasFlag(diffMask, CompareDirectoriesDiffBit::Content))
         {
             appendToken(strings.contentDiffer);
+        }
+
+        if (HasFlag(diffMask, CompareDirectoriesDiffBit::ContentPending))
+        {
+            appendToken(strings.contentComparing);
         }
 
         if (HasFlag(diffMask, CompareDirectoriesDiffBit::SubdirAttributes))
@@ -3733,17 +3857,81 @@ LRESULT CompareDirectoriesWindow::OnScanProgress(LPARAM lp) noexcept
         return 0;
     }
 
-    if (! _scanProgressText || ! _scanProgressBar)
+    _progress.scanActiveScans    = payload->activeScans;
+    _progress.scanFolderCount    = payload->folderCount;
+    _progress.scanEntryCount     = payload->entryCount;
+    _progress.scanRelativeFolder = std::move(payload->relativeFolder);
+    _progress.scanEntryName      = std::move(payload->entryName);
+
+    if (_progress.scanActiveScans == 0u)
+    {
+        _progress.scanFolderCount    = 0;
+        _progress.scanEntryCount     = 0;
+        _progress.scanRelativeFolder.clear();
+        _progress.scanEntryName.clear();
+    }
+
+    UpdateProgressControls();
+    return 0;
+}
+
+LRESULT CompareDirectoriesWindow::OnContentProgress(LPARAM lp) noexcept
+{
+    auto payload = TakeMessagePayload<ContentProgressPayload>(lp);
+    if (! payload)
     {
         return 0;
     }
 
-    if (payload->activeScans > 0u)
+    _progress.contentPendingCompares = payload->pendingContentCompares;
+    _progress.contentTotalBytes      = payload->totalBytes;
+    _progress.contentCompletedBytes  = payload->completedBytes;
+    _progress.contentRelativeFolder  = std::move(payload->relativeFolder);
+    _progress.contentEntryName       = std::move(payload->entryName);
+
+    if (_progress.contentPendingCompares == 0u)
     {
-        std::filesystem::path displayPath = payload->relativeFolder;
-        if (! payload->entryName.empty())
+        _progress.contentTotalBytes     = 0;
+        _progress.contentCompletedBytes = 0;
+        _progress.contentRelativeFolder.clear();
+        _progress.contentEntryName.clear();
+    }
+
+    UpdateProgressControls();
+    return 0;
+}
+
+void CompareDirectoriesWindow::UpdateProgressControls() noexcept
+{
+    if (! _scanProgressText || ! _scanProgressBar)
+    {
+        return;
+    }
+
+    const bool show = _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u;
+    const bool wasVisible =
+        (IsWindowVisible(_scanProgressText.get()) != 0) || (IsWindowVisible(_scanProgressBar.get()) != 0);
+
+    if (! show)
+    {
+        SendMessageW(_scanProgressBar.get(), PBM_SETMARQUEE, FALSE, 0);
+        SetWindowTextW(_scanProgressText.get(), L"");
+        ShowWindow(_scanProgressBar.get(), SW_HIDE);
+        ShowWindow(_scanProgressText.get(), SW_HIDE);
+        if (wasVisible)
         {
-            displayPath /= std::filesystem::path(payload->entryName);
+            Layout();
+        }
+        return;
+    }
+
+    std::wstring scanText;
+    if (_progress.scanActiveScans > 0u)
+    {
+        std::filesystem::path displayPath = _progress.scanRelativeFolder;
+        if (! _progress.scanEntryName.empty())
+        {
+            displayPath /= std::filesystem::path(_progress.scanEntryName);
         }
 
         std::wstring pathText;
@@ -3756,30 +3944,78 @@ LRESULT CompareDirectoriesWindow::OnScanProgress(LPARAM lp) noexcept
             pathText = displayPath.wstring();
         }
 
-        const std::wstring message = FormatStringResource(nullptr, IDS_FMT_COMPARE_SCAN_STATUS, pathText, payload->folderCount, payload->entryCount);
-        SetWindowTextW(_scanProgressText.get(), message.c_str());
-
-        const bool needLayout = IsWindowVisible(_scanProgressText.get()) == 0 || IsWindowVisible(_scanProgressBar.get()) == 0;
-        ShowWindow(_scanProgressText.get(), SW_SHOW);
-        ShowWindow(_scanProgressBar.get(), SW_SHOW);
-        SendMessageW(_scanProgressBar.get(), PBM_SETMARQUEE, TRUE, 30);
-        if (needLayout)
-        {
-            Layout();
-        }
-        return 0;
+        scanText = FormatStringResource(nullptr, IDS_FMT_COMPARE_SCAN_STATUS, pathText, _progress.scanFolderCount, _progress.scanEntryCount);
     }
 
-    SendMessageW(_scanProgressBar.get(), PBM_SETMARQUEE, FALSE, 0);
-    SetWindowTextW(_scanProgressText.get(), L"");
-    const bool needLayout = IsWindowVisible(_scanProgressText.get()) != 0 || IsWindowVisible(_scanProgressBar.get()) != 0;
-    ShowWindow(_scanProgressBar.get(), SW_HIDE);
-    ShowWindow(_scanProgressText.get(), SW_HIDE);
-    if (needLayout)
+    std::wstring contentText;
+    if (_progress.contentPendingCompares > 0u && ! _progress.contentEntryName.empty())
+    {
+        std::filesystem::path displayPath = _progress.contentRelativeFolder;
+        if (! _progress.contentEntryName.empty())
+        {
+            displayPath /= std::filesystem::path(_progress.contentEntryName);
+        }
+
+        std::wstring pathText;
+        if (displayPath.empty())
+        {
+            pathText = L".";
+        }
+        else
+        {
+            pathText = displayPath.wstring();
+        }
+
+        const std::wstring completedText = FormatBytesCompact(_progress.contentCompletedBytes);
+        if (_progress.contentTotalBytes > 0u)
+        {
+            const std::wstring totalText = FormatBytesCompact(_progress.contentTotalBytes);
+            contentText                  = FormatStringResource(nullptr, IDS_FMT_COMPARE_CONTENT_STATUS, pathText, completedText, totalText);
+        }
+        else
+        {
+            contentText = FormatStringResource(nullptr, IDS_FMT_COMPARE_CONTENT_STATUS_UNKNOWN, pathText, completedText);
+        }
+    }
+
+    std::wstring message;
+    if (! scanText.empty())
+    {
+        message = std::move(scanText);
+    }
+    if (! contentText.empty())
+    {
+        if (! message.empty())
+        {
+            message.append(L" \u2022 ");
+        }
+        message.append(contentText);
+    }
+
+    SetWindowTextW(_scanProgressText.get(), message.c_str());
+
+    if (_progress.contentPendingCompares > 0u && _progress.contentTotalBytes > 0u)
+    {
+        const long double total = std::max<long double>(1.0L, static_cast<long double>(_progress.contentTotalBytes));
+        const long double completed = std::clamp(static_cast<long double>(_progress.contentCompletedBytes), 0.0L, total);
+        const long double ratio = completed / total;
+        const int pos           = static_cast<int>(std::clamp(ratio * 1000.0L, 0.0L, 1000.0L));
+
+        SendMessageW(_scanProgressBar.get(), PBM_SETMARQUEE, FALSE, 0);
+        SendMessageW(_scanProgressBar.get(), PBM_SETRANGE32, 0, 1000);
+        SendMessageW(_scanProgressBar.get(), PBM_SETPOS, static_cast<WPARAM>(pos), 0);
+    }
+    else
+    {
+        SendMessageW(_scanProgressBar.get(), PBM_SETMARQUEE, TRUE, 30);
+    }
+
+    ShowWindow(_scanProgressText.get(), SW_SHOW);
+    ShowWindow(_scanProgressBar.get(), SW_SHOW);
+    if (! wasVisible)
     {
         Layout();
     }
-    return 0;
 }
 
 LRESULT CompareDirectoriesWindow::OnExecuteShortcutCommand(LPARAM lp) noexcept
@@ -3855,10 +4091,11 @@ void CompareDirectoriesWindow::SaveOptionsControlsToSettings() noexcept
     s.compareSubdirectoryAttributes = GetTwoStateToggleState(_optionsUi.compareSubdirAttributes.toggle, _theme.highContrast);
     s.selectSubdirsOnlyInOnePane    = GetTwoStateToggleState(_optionsUi.selectSubdirsOnlyInOnePane.toggle, _theme.highContrast);
 
-    s.ignoreFiles               = GetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast);
-    s.ignoreDirectories         = GetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast);
-    s.ignoreFilesPatterns       = _optionsUi.ignoreFiles.edit ? GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_FILES_PATTERNS) : std::wstring{};
-    s.ignoreDirectoriesPatterns = _optionsUi.ignoreDirectories.edit ? GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_DIRECTORIES_PATTERNS) : std::wstring{};
+    s.ignoreFiles         = GetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast);
+    s.ignoreDirectories   = GetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast);
+    s.ignoreFilesPatterns = _optionsUi.ignoreFiles.edit ? GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_FILES_PATTERNS) : std::wstring{};
+    s.ignoreDirectoriesPatterns =
+        _optionsUi.ignoreDirectories.edit ? GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_DIRECTORIES_PATTERNS) : std::wstring{};
 
     _settings->compareDirectories = std::move(s);
 }
@@ -3883,20 +4120,27 @@ bool ShowCompareDirectoriesWindow(HWND owner,
                                   std::filesystem::path leftRoot,
                                   std::filesystem::path rightRoot) noexcept
 {
-    auto* window = new CompareDirectoriesWindow(settings, theme, shortcuts, std::move(baseFileSystem), std::move(leftRoot), std::move(rightRoot));
+    auto window = std::make_unique<CompareDirectoriesWindow>(settings, theme, shortcuts, std::move(baseFileSystem), std::move(leftRoot), std::move(rightRoot));
     if (! window->Create(owner))
     {
-        delete window;
         return false;
     }
 
+    static_cast<void>(window.release());
     return true;
 }
 
 void UpdateCompareDirectoriesWindowsTheme(const AppTheme& theme) noexcept
 {
-    for (CompareDirectoriesWindow* window : g_compareDirectoriesWindows)
+    const auto windows = g_compareDirectoriesWindows;
+    for (HWND hwnd : windows)
     {
+        if (! hwnd || IsWindow(hwnd) == FALSE)
+        {
+            continue;
+        }
+
+        auto* window = reinterpret_cast<CompareDirectoriesWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
         if (window)
         {
             window->UpdateTheme(theme);

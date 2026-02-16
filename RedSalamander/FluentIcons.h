@@ -57,7 +57,7 @@ inline constexpr wchar_t kFallbackWarning      = L'\u26A0'; // ⚠
 inline constexpr wchar_t kFallbackError        = L'\u2716'; // ✖
 inline constexpr wchar_t kFallbackSort         = L'\u21C5'; // ⇅
 
-[[nodiscard]] inline wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> CreateFontForDpi(UINT dpi, int sizeDip) noexcept
+[[nodiscard]] inline wil::unique_hfont CreateFontForDpi(UINT dpi, int sizeDip) noexcept
 {
     const int heightPx = -MulDiv(sizeDip, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
 
@@ -69,7 +69,7 @@ inline constexpr wchar_t kFallbackSort         = L'\u21C5'; // ⇅
     lf.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
     wcsncpy_s(lf.lfFaceName, kFontFamily.data(), _TRUNCATE);
 
-    return wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject>(CreateFontIndirectW(&lf));
+    return wil::unique_hfont(CreateFontIndirectW(&lf));
 }
 
 [[nodiscard]] inline bool FontHasGlyph(HDC hdc, HFONT font, wchar_t ch) noexcept

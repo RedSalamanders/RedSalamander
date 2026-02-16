@@ -596,9 +596,7 @@ INT_PTR CALLBACK SplashDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
             InvalidateRect(hwnd, nullptr, FALSE);
             return static_cast<INT_PTR>(TRUE);
         }
-        case WndMsg::kSplashScreenRecenter:
-            CenterOverOwner(hwnd, g_owner.load(std::memory_order_acquire));
-            return static_cast<INT_PTR>(TRUE);
+        case WndMsg::kSplashScreenRecenter: CenterOverOwner(hwnd, g_owner.load(std::memory_order_acquire)); return static_cast<INT_PTR>(TRUE);
     }
 
     return static_cast<INT_PTR>(FALSE);

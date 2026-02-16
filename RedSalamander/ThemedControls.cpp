@@ -229,12 +229,12 @@ void CenterEditTextVertically(HWND edit) noexcept
 
 namespace
 {
-constexpr wchar_t kModernComboBoxClassName[]         = L"RedSalamanderModernComboBox";
-constexpr wchar_t kModernComboPopupClassName[]       = L"RedSalamanderModernComboPopup";
-constexpr UINT_PTR kModernComboListSubclassId        = 1u;
-constexpr int kModernComboMaxVisibleItems            = 8;
-constexpr UINT_PTR kModernComboTypeResetTimerId      = 1u;
-constexpr UINT kModernComboTypeResetMs               = 1200u;
+constexpr wchar_t kModernComboBoxClassName[]    = L"RedSalamanderModernComboBox";
+constexpr wchar_t kModernComboPopupClassName[]  = L"RedSalamanderModernComboPopup";
+constexpr UINT_PTR kModernComboListSubclassId   = 1u;
+constexpr int kModernComboMaxVisibleItems       = 8;
+constexpr UINT_PTR kModernComboTypeResetTimerId = 1u;
+constexpr UINT kModernComboTypeResetMs          = 1200u;
 struct ModernComboItem
 {
     std::wstring text;

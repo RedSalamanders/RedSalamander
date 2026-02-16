@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <string_view>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -24,4 +25,7 @@ bool IsRunning() noexcept;
 
 // Returns true if the self-test finished with a failure.
 bool DidFail() noexcept;
+
+// Returns the failure message when DidFail() is true (best-effort; empty otherwise).
+std::wstring_view FailureMessage() noexcept;
 } // namespace FileOperationsSelfTest

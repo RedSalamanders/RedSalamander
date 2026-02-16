@@ -1280,10 +1280,10 @@ struct ViewerTextClassBackgroundBrushState
     ViewerTextClassBackgroundBrushState(ViewerTextClassBackgroundBrushState&&)                 = delete;
     ViewerTextClassBackgroundBrushState& operator=(ViewerTextClassBackgroundBrushState&&)      = delete;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> activeBrush;
+    wil::unique_hbrush activeBrush;
     COLORREF activeColor = CLR_INVALID;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> pendingBrush;
+    wil::unique_hbrush pendingBrush;
     COLORREF pendingColor = CLR_INVALID;
 
     bool viewerClassRegistered   = false;
@@ -1322,7 +1322,7 @@ void RequestViewerTextClassBackgroundColor(COLORREF color) noexcept
         return;
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> brush(CreateSolidBrush(color));
+    wil::unique_hbrush brush(CreateSolidBrush(color));
     if (! brush)
     {
         return;
@@ -2197,7 +2197,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
                 const int requiredWide = MultiByteToWideChar(displayCodePage, 0, reinterpret_cast<LPCCH>(bytes.data()), srcLen, nullptr, 0);
                 if (requiredWide <= 0)
                 {
-                    auto  lastError = Debug::ErrorWithLastError(
+                    auto lastError = Debug::ErrorWithLastError(
                         L"ViewerText: MultiByteToWideChar failed to calculate required buffer size for '{}' (hr=0x{:08X}).", path.c_str(), result->hr);
                     result->hr = HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_INVALID_DATA);
                     return;
@@ -2208,8 +2208,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
                     MultiByteToWideChar(displayCodePage, 0, reinterpret_cast<LPCCH>(bytes.data()), srcLen, result->textBuffer.data(), requiredWide);
                 if (written <= 0)
                 {
-                    auto  lastError = Debug::ErrorWithLastError(
-                        L"ViewerText: MultiByteToWideChar failed to convert data for '{}' (hr=0x{:08X}).", path.c_str(), result->hr);
+                    auto lastError =
+                        Debug::ErrorWithLastError(L"ViewerText: MultiByteToWideChar failed to convert data for '{}' (hr=0x{:08X}).", path.c_str(), result->hr);
                     result->hr = HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_INVALID_DATA);
                     return;
                 }
@@ -3575,7 +3575,7 @@ void ViewerText::OnPaint()
     line.top    = _headerRect.bottom - lineThickness;
     line.bottom = _headerRect.bottom;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> accentBrush(CreateSolidBrush(accent));
+    wil::unique_hbrush accentBrush(CreateSolidBrush(accent));
     FillRect(hdc.get(), &line, accentBrush.get());
 
     SetBkMode(hdc.get(), TRANSPARENT);
@@ -3610,7 +3610,7 @@ void ViewerText::OnPaint()
     }
 
     const COLORREF modeBg = BlendColor(_uiHeaderBg, accent, alpha);
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> modeBrush(CreateSolidBrush(modeBg));
+    wil::unique_hbrush modeBrush(CreateSolidBrush(modeBg));
     FillRect(hdc.get(), &modeRc, modeBrush.get());
     FrameRect(hdc.get(), &modeRc, accentBrush.get());
 
@@ -3665,20 +3665,20 @@ void ViewerText::OnPaint()
             OffsetRect(&drawRc, -centerX, -centerY);
 
             const int fontHeight = -MulDiv(static_cast<int>(kWatermarkFontSizeDip), dpiInt, USER_DEFAULT_SCREEN_DPI);
-            wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> stampFont(CreateFontW(fontHeight,
-                                                                                                    0,
-                                                                                                    0,
-                                                                                                    0,
-                                                                                                    FW_SEMIBOLD,
-                                                                                                    FALSE,
-                                                                                                    FALSE,
-                                                                                                    FALSE,
-                                                                                                    DEFAULT_CHARSET,
-                                                                                                    OUT_DEFAULT_PRECIS,
-                                                                                                    CLIP_DEFAULT_PRECIS,
-                                                                                                    CLEARTYPE_QUALITY,
-                                                                                                    DEFAULT_PITCH | FF_DONTCARE,
-                                                                                                    L"Segoe UI"));
+            wil::unique_hfont stampFont(CreateFontW(fontHeight,
+                                                    0,
+                                                    0,
+                                                    0,
+                                                    FW_SEMIBOLD,
+                                                    FALSE,
+                                                    FALSE,
+                                                    FALSE,
+                                                    DEFAULT_CHARSET,
+                                                    OUT_DEFAULT_PRECIS,
+                                                    CLIP_DEFAULT_PRECIS,
+                                                    CLEARTYPE_QUALITY,
+                                                    DEFAULT_PITCH | FF_DONTCARE,
+                                                    L"Segoe UI"));
             if (stampFont)
             {
                 auto oldStamp = wil::SelectObject(hdc.get(), stampFont.get());
@@ -4203,7 +4203,7 @@ void ViewerText::OnDrawFileComboItem(DRAWITEMSTRUCT* draw) noexcept
         textColor = BlendColor(fillColor, textColor, 120u);
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(fillColor));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
     FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
 
     int itemId = static_cast<int>(draw->itemID);

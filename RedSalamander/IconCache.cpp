@@ -28,8 +28,8 @@
 namespace
 {
 constexpr std::wstring_view kDirectoryExtensionKey = L"<directory>";
-constexpr std::wstring_view kWslLocalhostPrefix = L"\\\\wsl.localhost\\";
-constexpr std::wstring_view kWslDollarPrefix    = L"\\\\wsl$\\";
+constexpr std::wstring_view kWslLocalhostPrefix    = L"\\\\wsl.localhost\\";
+constexpr std::wstring_view kWslDollarPrefix       = L"\\\\wsl$\\";
 
 [[nodiscard]] std::wstring NormalizeExtensionKey(std::wstring_view extension)
 {
@@ -267,7 +267,7 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
     if (bitmap)
     {
         const D2D1_SIZE_U pixelSize = bitmap->GetPixelSize();
-        const size_t bytes = static_cast<size_t>(pixelSize.width) * static_cast<size_t>(pixelSize.height) * 4u;
+        const size_t bytes          = static_cast<size_t>(pixelSize.width) * static_cast<size_t>(pixelSize.height) * 4u;
 
         // Store in cache with LRU tracking
         std::lock_guard lock(_mutex);
@@ -728,7 +728,7 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, 
     if (bitmap)
     {
         const D2D1_SIZE_U pixelSize = bitmap->GetPixelSize();
-        const size_t bytes = static_cast<size_t>(pixelSize.width) * static_cast<size_t>(pixelSize.height) * 4u;
+        const size_t bytes          = static_cast<size_t>(pixelSize.width) * static_cast<size_t>(pixelSize.height) * 4u;
 
         // Store in cache with LRU tracking
         std::lock_guard lock(_mutex);

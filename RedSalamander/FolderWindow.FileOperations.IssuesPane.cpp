@@ -179,7 +179,7 @@ private:
     bool _inThemeChange        = false;
     bool _inTitleBarThemeApply = false;
     AppTheme _theme{};
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _backgroundBrush;
+    wil::unique_hbrush _backgroundBrush;
     wil::unique_hwnd _list;
     std::vector<IssuesRow> _rows;
 };

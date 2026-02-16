@@ -137,8 +137,8 @@ struct DialogState
     Common::Settings::Settings* settings       = nullptr;
     std::wstring appId;
     AppTheme theme{};
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> backgroundBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> selectionBrush;
+    wil::unique_hbrush backgroundBrush;
+    wil::unique_hbrush selectionBrush;
     HWND list = nullptr;
     std::vector<PluginListItem> listItems;
 };
@@ -168,7 +168,7 @@ void PaintPluginsListHeader(HWND header, const DialogState& state) noexcept
         textColor = ChooseContrastingTextColor(bg);
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(bg));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(bg));
     FillRect(hdc.get(), &ps.rcPaint, bgBrush.get());
 
     HFONT fontToUse = reinterpret_cast<HFONT>(SendMessageW(header, WM_GETFONT, 0, 0));
@@ -185,7 +185,7 @@ void PaintPluginsListHeader(HWND header, const DialogState& state) noexcept
     const int paddingX       = MulDiv(8, dpi, USER_DEFAULT_SCREEN_DPI);
 
     const COLORREF lineColor = state.theme.menu.separator;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> lineBrush(CreateSolidBrush(lineColor));
+    wil::unique_hbrush lineBrush(CreateSolidBrush(lineColor));
 
     const int count = Header_GetItemCount(header);
     for (int i = 0; i < count; ++i)
@@ -827,8 +827,8 @@ struct PluginConfigDialogState
     std::string configurationJsonUtf8;
     PluginConfigCommitMode commitMode = PluginConfigCommitMode::ApplyToPluginsAndPersist;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> backgroundBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> inputBrush;
+    wil::unique_hbrush backgroundBrush;
+    wil::unique_hbrush inputBrush;
     COLORREF inputBackgroundColor = RGB(255, 255, 255);
     wil::unique_hfont commentFont;
     wil::unique_hfont boldFont;

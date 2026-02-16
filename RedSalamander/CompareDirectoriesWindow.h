@@ -15,11 +15,11 @@ struct IFileSystem;
 class ShortcutManager;
 
 [[nodiscard]] bool ShowCompareDirectoriesWindow(HWND owner,
-                                               Common::Settings::Settings& settings,
-                                               const AppTheme& theme,
-                                               const ShortcutManager* shortcuts,
-                                               wil::com_ptr<IFileSystem> baseFileSystem,
-                                               std::filesystem::path leftRoot,
-                                               std::filesystem::path rightRoot) noexcept;
+                                                Common::Settings::Settings& settings,
+                                                const AppTheme& theme,
+                                                const ShortcutManager* shortcuts,
+                                                wil::com_ptr<IFileSystem> baseFileSystem,
+                                                std::filesystem::path leftRoot,
+                                                std::filesystem::path rightRoot) noexcept;
 
 void UpdateCompareDirectoriesWindowsTheme(const AppTheme& theme) noexcept;

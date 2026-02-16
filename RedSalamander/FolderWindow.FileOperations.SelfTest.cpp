@@ -241,10 +241,10 @@ bool HasTimedOut(const SelfTestState& state, ULONGLONG nowTick, ULONGLONG timeou
 void Fail(std::wstring_view message) noexcept
 {
     SelfTestState& state = GetState();
+    state.failureMessage = std::wstring(message);
+    state.step           = SelfTestState::Step::Failed;
     state.failed.store(true, std::memory_order_release);
     state.done.store(true, std::memory_order_release);
-    state.step           = SelfTestState::Step::Failed;
-    state.failureMessage = std::wstring(message);
     AppendLog(std::format(L"FAIL: {}", state.failureMessage));
     Debug::Error(L"FileOpsSelfTest FAILED: {}", state.failureMessage);
 }
@@ -481,10 +481,35 @@ std::filesystem::path GetTempRootPath() noexcept
 
 bool RecreateEmptyDirectory(const std::filesystem::path& path) noexcept
 {
-    std::error_code ec;
-    std::filesystem::remove_all(path, ec);
-    ec.clear();
-    return std::filesystem::create_directories(path, ec);
+    if (path.empty())
+    {
+        return false;
+    }
+
+    constexpr int kMaxAttempts = 120; // ~6s total (50ms slices) for AV/indexer churn
+    for (int attempt = 0; attempt < kMaxAttempts; ++attempt)
+    {
+        std::error_code ec;
+        static_cast<void>(std::filesystem::remove_all(path, ec));
+
+        ec.clear();
+        static_cast<void>(std::filesystem::create_directories(path, ec));
+        if (ec)
+        {
+            ::Sleep(50);
+            continue;
+        }
+
+        const bool empty = std::filesystem::is_empty(path, ec);
+        if (! ec && empty)
+        {
+            return true;
+        }
+
+        ::Sleep(50);
+    }
+
+    return false;
 }
 
 std::vector<std::filesystem::path> CollectFiles(const std::filesystem::path& dir, size_t maxCount) noexcept
@@ -529,9 +554,41 @@ size_t CountFiles(const std::filesystem::path& dir) noexcept
 
 bool WriteTestFile(const std::filesystem::path& path, size_t bytes) noexcept
 {
-    wil::unique_handle h(CreateFileW(path.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    std::error_code ec;
+    const std::filesystem::path parent = path.parent_path();
+    if (! parent.empty())
+    {
+        std::filesystem::create_directories(parent, ec);
+    }
+
+    DWORD lastError = 0;
+    wil::unique_handle h;
+    for (int attempt = 0; attempt < 20; ++attempt)
+    {
+        h.reset(CreateFileW(
+            path.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+        if (h)
+        {
+            break;
+        }
+
+        lastError = GetLastError();
+        if (lastError == ERROR_ACCESS_DENIED)
+        {
+            static_cast<void>(SetFileAttributesW(path.c_str(), FILE_ATTRIBUTE_NORMAL));
+        }
+
+        if (lastError != ERROR_SHARING_VIOLATION && lastError != ERROR_LOCK_VIOLATION && lastError != ERROR_ACCESS_DENIED)
+        {
+            break;
+        }
+
+        ::Sleep(50);
+    }
+
     if (! h)
     {
+        SetLastError(lastError);
         return false;
     }
 
@@ -3368,7 +3425,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
-                if (TryGetConflictPromptCopy(task).has_value())
+                const auto prompt = TryGetConflictPromptCopy(task);
+                if (prompt.has_value() && prompt->applyToAllChecked)
                 {
                     return false;
                 }
@@ -3813,8 +3871,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
                 state.lockedFileHandle.reset();
 
+                const std::filesystem::path dstCopiedDir = dstDir / srcDir.filename();
+
                 std::error_code ec;
-                const auto okSize = std::filesystem::file_size(dstDir / okFile.filename(), ec);
+                const auto okSize = std::filesystem::file_size(dstCopiedDir / okFile.filename(), ec);
                 if (ec || okSize != 4096u)
                 {
                     Fail(L"Skip-continues directory copy did not copy the expected ok.bin file.");
@@ -3822,7 +3882,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 }
 
                 ec.clear();
-                const bool lockedExists = std::filesystem::exists(dstDir / lockedFile.filename(), ec);
+                const bool lockedExists = std::filesystem::exists(dstCopiedDir / lockedFile.filename(), ec);
                 if (ec)
                 {
                     Fail(L"Skip-continues directory copy destination exists check failed.");
@@ -4202,10 +4262,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
 
             // Validate recycle-bin delete failure returns specific per-item error (not generic E_FAIL).
-            const std::filesystem::path recycleLocked = state.tempRoot / L"recyclebin-locked.bin";
+            const std::filesystem::path recycleLocked = state.tempRoot / std::format(L"recyclebin-locked-{}.bin", GetTickCount64());
             if (! WriteTestFile(recycleLocked, 1024))
             {
-                Fail(L"Failed to create recycle-bin locked test file.");
+                Fail(std::format(L"Failed to create recycle-bin locked test file (err={}).", GetLastError()));
                 return true;
             }
 
@@ -5500,6 +5560,11 @@ bool FileOperationsSelfTest::DidFail() noexcept
     return GetState().failed.load(std::memory_order_acquire);
 }
 
+std::wstring_view FileOperationsSelfTest::FailureMessage() noexcept
+{
+    return GetState().failureMessage;
+}
+
 #else
 
 void FileOperationsSelfTest::Start(HWND /*mainWindow*/) noexcept
@@ -5519,6 +5584,10 @@ bool FileOperationsSelfTest::IsRunning() noexcept
 bool FileOperationsSelfTest::DidFail() noexcept
 {
     return false;
+}
+std::wstring_view FileOperationsSelfTest::FailureMessage() noexcept
+{
+    return {};
 }
 
 #endif // _DEBUG

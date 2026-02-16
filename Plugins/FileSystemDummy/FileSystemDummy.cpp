@@ -2155,9 +2155,9 @@ HRESULT BuildFileInfoBuffer(const std::vector<DummyEntry>& entries, std::vector<
 #pragma warning(disable : 4625 4626)
 struct OperationContext
 {
-    FileSystemOperation type      = FILESYSTEM_COPY;
-    IFileSystemCallback* callback = nullptr;
-    void* callbackCookie          = nullptr;
+    FileSystemOperation type          = FILESYSTEM_COPY;
+    IFileSystemCallback* callback     = nullptr;
+    void* callbackCookie              = nullptr;
     unsigned __int64 progressStreamId = 0;
     FileSystemOptions optionsState{};
     FileSystemOptions* options                  = nullptr;
@@ -2183,18 +2183,18 @@ struct OperationContext
 #pragma warning(pop)
 
 void InitializeOperationContext(OperationContext& context,
-                                 FileSystemOperation type,
-                                 FileSystemFlags flags,
-                                 const FileSystemOptions* options,
-                                 IFileSystemCallback* callback,
-                                 void* cookie,
-                                 unsigned long totalItems) noexcept
+                                FileSystemOperation type,
+                                FileSystemFlags flags,
+                                const FileSystemOptions* options,
+                                IFileSystemCallback* callback,
+                                void* cookie,
+                                unsigned long totalItems) noexcept
 {
-    context.type           = type;
-    context.callback       = callback;
-    context.callbackCookie = callback != nullptr ? cookie : nullptr;
+    context.type             = type;
+    context.callback         = callback;
+    context.callbackCookie   = callback != nullptr ? cookie : nullptr;
     context.progressStreamId = callback != nullptr ? static_cast<unsigned __int64>(GetCurrentThreadId()) : 0;
-    context.optionsState   = {};
+    context.optionsState     = {};
     if (options)
     {
         context.optionsState = *options;
@@ -4997,7 +4997,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
         std::scoped_lock lock(_mutex);
 
         DummyNode* rootNode = nullptr;
-        const HRESULT hr    = ResolvePath(normalized, &rootNode, false, true);
+        const HRESULT hr    = ResolvePath(normalized, &rootNode, false, false);
         if (FAILED(hr))
         {
             result->status = hr;

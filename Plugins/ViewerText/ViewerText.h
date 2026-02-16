@@ -389,11 +389,11 @@ private:
     wil::unique_hicon _windowIconSmall;
     wil::unique_hicon _windowIconBig;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _backgroundBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _headerBrush;
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _statusBrush;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _uiFont;
-    wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> _monoFont;
+    wil::unique_hbrush _backgroundBrush;
+    wil::unique_hbrush _headerBrush;
+    wil::unique_hbrush _statusBrush;
+    wil::unique_hfont _uiFont;
+    wil::unique_hfont _monoFont;
 
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<IDWriteFactory> _dwriteFactory;

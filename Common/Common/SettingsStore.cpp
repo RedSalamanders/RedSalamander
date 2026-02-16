@@ -3813,7 +3813,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
     if (settings.compareDirectories)
     {
         const Common::Settings::CompareDirectoriesSettings defaults{};
-        const auto& compare = settings.compareDirectories.value();
+        const auto& compare     = settings.compareDirectories.value();
         const bool wroteCompare = compare.compareSize != defaults.compareSize || compare.compareDateTime != defaults.compareDateTime ||
                                   compare.compareAttributes != defaults.compareAttributes || compare.compareContent != defaults.compareContent ||
                                   compare.compareSubdirectories != defaults.compareSubdirectories ||

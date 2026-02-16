@@ -748,7 +748,7 @@ struct CreateDirectoryDialogState
     std::wstring initialName;
     std::wstring folderName;
     AppTheme theme{};
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> backgroundBrush;
+    wil::unique_hbrush backgroundBrush;
     bool showingValidationMessage = false;
 };
 
@@ -1437,13 +1437,10 @@ std::wstring_view FolderWindow::GetFileSystemPluginId(Pane pane) const noexcept
     return state.pluginId;
 }
 
-HRESULT FolderWindow::SetFileSystemInstanceForPane(Pane pane,
-                                                   wil::com_ptr<IFileSystem> fileSystem,
-                                                   std::wstring pluginId,
-                                                   std::wstring pluginShortId,
-                                                   std::wstring instanceContext) noexcept
+HRESULT FolderWindow::SetFileSystemInstanceForPane(
+    Pane pane, wil::com_ptr<IFileSystem> fileSystem, std::wstring pluginId, std::wstring pluginShortId, std::wstring instanceContext) noexcept
 {
-    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    PaneState& state       = pane == Pane::Left ? _leftPane : _rightPane;
     const PaneState& other = pane == Pane::Left ? _rightPane : _leftPane;
 
     state.folderView.CancelPendingEnumeration();
@@ -1451,11 +1448,11 @@ HRESULT FolderWindow::SetFileSystemInstanceForPane(Pane pane,
     wil::unique_hmodule previousModule = std::move(state.fileSystemModule);
     wil::com_ptr<IFileSystem> previous = std::move(state.fileSystem);
 
-    state.fileSystem       = std::move(fileSystem);
+    state.fileSystem = std::move(fileSystem);
     state.fileSystemModule.reset();
-    state.pluginId         = std::move(pluginId);
-    state.pluginShortId    = std::move(pluginShortId);
-    state.instanceContext  = std::move(instanceContext);
+    state.pluginId        = std::move(pluginId);
+    state.pluginShortId   = std::move(pluginShortId);
+    state.instanceContext = std::move(instanceContext);
     state.currentPath.reset();
     state.updatingPath = false;
 
@@ -1473,9 +1470,9 @@ HRESULT FolderWindow::SetFileSystemInstanceForPane(Pane pane,
 }
 
 HRESULT FolderWindow::ExecuteInActivePane(const std::filesystem::path& folderPath,
-                                         std::wstring_view focusItemDisplayName,
-                                         unsigned int folderViewCommandId,
-                                         bool activateWindow) noexcept
+                                          std::wstring_view focusItemDisplayName,
+                                          unsigned int folderViewCommandId,
+                                          bool activateWindow) noexcept
 {
     if (folderPath.empty())
     {

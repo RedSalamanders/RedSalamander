@@ -1178,8 +1178,8 @@ void FolderView::RememberFocusedItemForFolder(const std::filesystem::path& folde
 }
 
 void FolderView::QueueCommandAfterNextEnumeration(UINT commandId,
-                                                 const std::filesystem::path& targetFolder,
-                                                 std::wstring_view expectedFocusDisplayName) noexcept
+                                                  const std::filesystem::path& targetFolder,
+                                                  std::wstring_view expectedFocusDisplayName) noexcept
 {
     if (commandId == 0 || targetFolder.empty())
     {
@@ -1188,8 +1188,8 @@ void FolderView::QueueCommandAfterNextEnumeration(UINT commandId,
     }
 
     PendingExternalCommand pending{};
-    pending.commandId   = commandId;
-    pending.generation  = 0;
+    pending.commandId    = commandId;
+    pending.generation   = 0;
     pending.targetFolder = targetFolder;
     if (! expectedFocusDisplayName.empty())
     {
@@ -1390,10 +1390,11 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
                 continue;
             }
 
-            std::wstring details = _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+            std::wstring details =
+                _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
             if (details != item.detailsText)
             {
-                item.detailsText    = std::move(details);
+                item.detailsText = std::move(details);
                 item.detailsLayout.reset();
                 item.detailsMetrics = {};
             }

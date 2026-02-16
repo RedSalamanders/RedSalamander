@@ -6,7 +6,7 @@ namespace
 {
 constexpr int kStatusBarFocusLineHeightDip = 2;
 
-wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> g_statusBarIconFont;
+wil::unique_hfont g_statusBarIconFont;
 UINT g_statusBarIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
 bool g_statusBarIconFontValid = false;
 
@@ -201,14 +201,14 @@ void PaintStatusBar(HWND hwnd, HDC hdc) noexcept
     const bool has0 = SendMessageW(hwnd, SB_GETRECT, 0, reinterpret_cast<LPARAM>(&part0)) != 0;
     const bool has1 = SendMessageW(hwnd, SB_GETRECT, 1, reinterpret_cast<LPARAM>(&part1)) != 0;
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(theme.menu.background));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(theme.menu.background));
     FillRect(hdc, &client, bgBrush.get());
 
     const bool hot = GetPropW(hwnd, kStatusBarSortHotProp) != nullptr;
     if (hot && has1)
     {
         const COLORREF hotBg = BlendColor(theme.menu.background, theme.menu.selectionBg, 1, 2);
-        wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> hotBrush(CreateSolidBrush(hotBg));
+        wil::unique_hbrush hotBrush(CreateSolidBrush(hotBg));
         FillRect(hdc, &part1, hotBrush.get());
 
         RECT frame              = part1;
@@ -217,7 +217,7 @@ void PaintStatusBar(HWND hwnd, HDC hdc) noexcept
         frame.top               = std::min(frame.bottom, frame.top + focusLineSize);
         frame.left              = std::min(frame.right, frame.left + 1);
 
-        wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> frameBrush(CreateSolidBrush(theme.menu.separator));
+        wil::unique_hbrush frameBrush(CreateSolidBrush(theme.menu.separator));
         FrameRect(hdc, &frame, frameBrush.get());
     }
 
@@ -227,7 +227,7 @@ void PaintStatusBar(HWND hwnd, HDC hdc) noexcept
     if (topLine.bottom > topLine.top)
     {
         const COLORREF lineColor = StatusBarFocusLineColor(theme, activePane, focusHueDegrees);
-        wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> lineBrush(CreateSolidBrush(lineColor));
+        wil::unique_hbrush lineBrush(CreateSolidBrush(lineColor));
         FillRect(hdc, &topLine, lineBrush.get());
     }
 
@@ -239,7 +239,7 @@ void PaintStatusBar(HWND hwnd, HDC hdc) noexcept
         sepRect.top   = std::min(part0.bottom, part0.top + focusLinePx);
         if (sepRect.right > sepRect.left && sepRect.bottom > sepRect.top)
         {
-            wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> sepBrush(CreateSolidBrush(theme.menu.separator));
+            wil::unique_hbrush sepBrush(CreateSolidBrush(theme.menu.separator));
             FillRect(hdc, &sepRect, sepBrush.get());
         }
     }

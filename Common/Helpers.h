@@ -255,7 +255,7 @@ inline thread_local bool g_themeEnabled        = false;
 inline thread_local bool g_themeUseDarkMode    = false;
 inline thread_local COLORREF g_themeBackground = RGB(255, 255, 255);
 inline thread_local COLORREF g_themeText       = RGB(0, 0, 0);
-inline thread_local wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> g_themeBrush;
+inline thread_local wil::unique_hbrush g_themeBrush;
 
 inline std::atomic_bool g_defaultThemeEnabled{false};
 inline std::atomic_bool g_defaultThemeUseDarkMode{false};

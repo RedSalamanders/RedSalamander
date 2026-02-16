@@ -1,7 +1,8 @@
 #include <algorithm>
-#include <atomic>
 #include <array>
+#include <atomic>
 #include <chrono>
+#include <cstddef>
 #include <cstring>
 #include <cwchar>
 #include <cwctype>
@@ -261,7 +262,7 @@ void ShowFatalErrorDialog(HWND owner, const wchar_t* caption, const wchar_t* mes
 }
 
 MenuTheme g_mainMenuTheme;
-wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> g_mainMenuBackgroundBrush;
+wil::unique_hbrush g_mainMenuBackgroundBrush;
 std::vector<std::unique_ptr<MainMenuItemData>> g_mainMenuItemData;
 HMENU g_mainMenuHandle       = nullptr;
 HMENU g_viewMenu             = nullptr;
@@ -269,8 +270,8 @@ HMENU g_viewThemeMenu        = nullptr;
 HMENU g_viewPluginsMenu      = nullptr;
 HMENU g_viewPaneMenu         = nullptr;
 HMENU g_openFileExplorerMenu = nullptr;
-wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> g_mainMenuFont;
-wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> g_mainMenuIconFont;
+wil::unique_hfont g_mainMenuFont;
+wil::unique_hfont g_mainMenuIconFont;
 UINT g_mainMenuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
 bool g_mainMenuIconFontValid = false;
 
@@ -289,6 +290,102 @@ constexpr UINT kFileOpsSelfTestTimerIntervalMs = 50u;
 bool g_runFileOpsSelfTest                      = false;
 bool g_runCompareDirectoriesSelfTest           = false;
 int g_selfTestExitCode                         = 0;
+
+[[nodiscard]] std::filesystem::path GetSelfTestTracePath() noexcept
+{
+    wchar_t buffer[MAX_PATH + 2]{};
+    const DWORD written = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, static_cast<DWORD>(std::size(buffer)));
+    if (written == 0 || written >= std::size(buffer))
+    {
+        return {};
+    }
+
+    std::filesystem::path dir(buffer);
+    dir /= L"RedSalamander";
+    dir /= L"SelfTest";
+
+    std::error_code ec;
+    std::filesystem::create_directories(dir, ec);
+    if (ec)
+    {
+        return {};
+    }
+
+    return dir / L"last_selftest_trace.txt";
+}
+
+void AppendSelfTestTraceLine(std::wstring_view message) noexcept
+{
+    if (! (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest))
+    {
+        return;
+    }
+
+    const std::filesystem::path path = GetSelfTestTracePath();
+    if (path.empty())
+    {
+        return;
+    }
+
+    wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! file)
+    {
+        return;
+    }
+
+    LARGE_INTEGER size{};
+    if (! GetFileSizeEx(file.get(), &size))
+    {
+        return;
+    }
+
+    if (size.QuadPart == 0)
+    {
+        const wchar_t bom = 0xFEFF;
+        DWORD written     = 0;
+        static_cast<void>(WriteFile(file.get(), &bom, sizeof(bom), &written, nullptr));
+    }
+
+    LARGE_INTEGER seek{};
+    seek.QuadPart = 0;
+    SetFilePointerEx(file.get(), seek, nullptr, FILE_END);
+
+    if (! message.empty())
+    {
+        const size_t bytes = message.size() * sizeof(wchar_t);
+        if (bytes <= static_cast<size_t>(std::numeric_limits<DWORD>::max()))
+        {
+            DWORD written = 0;
+            static_cast<void>(WriteFile(file.get(), message.data(), static_cast<DWORD>(bytes), &written, nullptr));
+        }
+    }
+
+    constexpr wchar_t kNewline[] = L"\r\n";
+    DWORD written                = 0;
+    static_cast<void>(WriteFile(file.get(), kNewline, sizeof(kNewline) - sizeof(wchar_t), &written, nullptr));
+    static_cast<void>(FlushFileBuffers(file.get()));
+}
+
+void AppendSelfTestTraceExitCode(std::wstring_view tag, int exitCode) noexcept
+{
+    try
+    {
+        std::array<wchar_t, 256> buffer{};
+        constexpr size_t cap = buffer.size() - 1;
+        const auto r         = std::format_to_n(buffer.data(), cap, L"{0}: exit={1}", tag, exitCode);
+        const size_t written = (r.size < cap) ? static_cast<size_t>(r.size) : cap;
+        buffer[written]      = L'\0';
+        AppendSelfTestTraceLine(std::wstring_view(buffer.data(), written));
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::format_error&)
+    {
+        AppendSelfTestTraceLine(tag);
+    }
+}
 #endif
 
 HMENU g_leftPaneMenu    = nullptr;
@@ -371,11 +468,32 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
 #ifdef _DEBUG
     if (timerId == kFileOpsSelfTestTimerId)
     {
+        static std::atomic<bool> tickInProgress{false};
+        if (tickInProgress.exchange(true, std::memory_order_acq_rel))
+        {
+            return 0;
+        }
+        const auto clearTickInProgress = wil::scope_exit([&] { tickInProgress.store(false, std::memory_order_release); });
+
         const bool done = FileOperationsSelfTest::Tick(hWnd);
         if (done)
         {
             KillTimer(hWnd, kFileOpsSelfTestTimerId);
             g_selfTestExitCode = FileOperationsSelfTest::DidFail() ? 1 : 0;
+            if (FileOperationsSelfTest::DidFail())
+            {
+                AppendSelfTestTraceLine(L"FileOpsSelfTest: FAIL");
+                const std::wstring_view message = FileOperationsSelfTest::FailureMessage();
+                if (! message.empty())
+                {
+                    AppendSelfTestTraceLine(message);
+                }
+            }
+            else
+            {
+                AppendSelfTestTraceLine(L"FileOpsSelfTest: PASS");
+            }
+            AppendSelfTestTraceExitCode(L"FileOpsSelfTest: end", g_selfTestExitCode);
             PostMessageW(hWnd, WM_CLOSE, 0, 0);
         }
         return 0;
@@ -873,6 +991,10 @@ void SaveAppSettings(HWND hWnd) noexcept
 
     g_folderWindow.CloseAllViewers();
     const auto pluginSchemas = CollectPluginConfigurationSchemas(g_settings);
+    if (g_hFolderWindow.exchange(nullptr, std::memory_order_acq_rel))
+    {
+        g_folderWindow.Destroy();
+    }
     FileSystemPluginManager::GetInstance().Shutdown(g_settings);
     ViewerPluginManager::GetInstance().Shutdown(g_settings);
 
@@ -2263,7 +2385,7 @@ void OnMeasureMainMenuItem(HWND hWnd, MEASUREITEMSTRUCT* mis)
                                 (mis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && mis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE));
         if (isSortItem)
         {
-            return MulDiv(28, dpiInt, USER_DEFAULT_SCREEN_DPI);
+            return MulDiv(32, dpiInt, USER_DEFAULT_SCREEN_DPI);
         }
 
         return MulDiv(20, dpiInt, USER_DEFAULT_SCREEN_DPI);
@@ -2436,7 +2558,7 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
         shortcutColor               = contrastText;
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(bgColor));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(bgColor));
     RECT itemRect = dis->rcItem;
     if (! data->topLevel)
     {
@@ -2471,7 +2593,7 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
                                 (dis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE));
         if (isSortItem)
         {
-            return MulDiv(28, dpi, USER_DEFAULT_SCREEN_DPI);
+            return MulDiv(32, dpi, USER_DEFAULT_SCREEN_DPI);
         }
 
         return MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
@@ -3469,9 +3591,16 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             return false;
         }
 
-        for (int i = 1; i < __argc; ++i)
+        int argc = 0;
+        wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
+        if (! argv || argc <= 1)
         {
-            const wchar_t* arg = __wargv[i];
+            return false;
+        }
+
+        for (int i = 1; i < argc; ++i)
+        {
+            const wchar_t* arg = argv.get()[i];
             if (! arg || arg[0] == L'\0')
             {
                 continue;
@@ -3649,10 +3778,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     // Main message loop:
     while (GetMessage(&msg, nullptr, 0, 0))
     {
-        const HWND root                = msg.hwnd ? GetAncestor(msg.hwnd, GA_ROOT) : nullptr;
-        const bool isMainWindowMessage = (root == *hWnd);
+        const HWND root                   = msg.hwnd ? GetAncestor(msg.hwnd, GA_ROOT) : nullptr;
+        const bool isMainWindowMessage    = (root == *hWnd);
         const bool isCompareWindowMessage = IsCompareDirectoriesWindowMessageRoot(root);
-        const HWND prefsDialog         = GetPreferencesDialogHandle();
+        const HWND prefsDialog            = GetPreferencesDialogHandle();
         if (prefsDialog && root == prefsDialog)
         {
             if (IsDialogMessageW(prefsDialog, &msg))
@@ -3789,7 +3918,14 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         }
     }
 
-    return static_cast<int>(msg.wParam);
+    const int exitCode = static_cast<int>(msg.wParam);
+#ifdef _DEBUG
+    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest)
+    {
+        AppendSelfTestTraceExitCode(L"RunApplication: message loop exit", exitCode);
+    }
+#endif
+    return exitCode;
 }
 
 namespace
@@ -3809,11 +3945,9 @@ void BuildFatalExceptionMessage(HINSTANCE hInstance, const wchar_t* exceptionNam
         return;
     }
 
-    const size_t max       = outMessageChars - 1;
-    const auto r           = std::format_to_n(outMessage, max, L"Fatal Exception ({0}, 0x{1:08X}).", exceptionName, static_cast<unsigned>(exceptionCode));
-    using SizeType         = decltype(r.size);
-    const SizeType cap     = static_cast<SizeType>(max);
-    const SizeType written = (r.size < 0) ? 0 : ((r.size > cap) ? cap : r.size);
+    const std::ptrdiff_t maxChars = static_cast<std::ptrdiff_t>(outMessageChars - 1);
+    const auto r = std::format_to_n(outMessage, maxChars, L"Fatal Exception ({0}, 0x{1:08X}).", exceptionName, static_cast<unsigned>(exceptionCode));
+    const std::ptrdiff_t written             = (r.size < 0) ? 0 : ((r.size > maxChars) ? maxChars : r.size);
     outMessage[static_cast<size_t>(written)] = L'\0';
 }
 } // namespace
@@ -3958,9 +4092,13 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
 
 #ifdef _DEBUG
     DBGOUT_INFO(L"RedSalamander started, version {}\n", VERSINFO_VERSION);
-    for (int i = 0; i < __argc; i++)
+
+    int argc = 0;
+    wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
+    for (int i = 0; argv && i < argc; ++i)
     {
-        DBGOUT_ERROR(L"  argv[{}] = ({})\n", i, __wargv[i]);
+        const wchar_t* arg = argv.get()[i];
+        DBGOUT_ERROR(L"  argv[{}] = ({})\n", i, arg ? arg : L"(null)");
     }
 
     // for (int j = 0; j < 1000; j++)
@@ -4213,7 +4351,9 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
     if (g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest)
     {
         Debug::Info(L"CompareSelfTest: running");
+        AppendSelfTestTraceLine(L"CompareSelfTest: begin");
         g_selfTestExitCode = CompareDirectoriesSelfTest::Run() ? 0 : 1;
+        AppendSelfTestTraceExitCode(L"CompareSelfTest: end", g_selfTestExitCode);
         PostMessageW(hWnd, WM_CLOSE, 0, 0);
     }
 
@@ -5441,6 +5581,14 @@ LRESULT OnMainWindowConnectionManagerConnect([[maybe_unused]] HWND hWnd, WPARAM 
 
 LRESULT OnMainWindowClose(HWND hWnd)
 {
+#ifdef _DEBUG
+    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest)
+    {
+        DestroyWindow(hWnd);
+        return 0;
+    }
+#endif
+
     if (! g_folderWindow.ConfirmCancelAllFileOperations(hWnd))
     {
         return 0;
@@ -5453,12 +5601,9 @@ LRESULT OnMainWindowClose(HWND hWnd)
 LRESULT OnMainWindowDestroy(HWND hWnd)
 {
     SaveAppSettings(hWnd);
-    if (g_hFolderWindow.exchange(nullptr, std::memory_order_acq_rel))
-    {
-        g_folderWindow.Destroy();
-    }
 
 #ifdef _DEBUG
+    AppendSelfTestTraceExitCode(L"OnMainWindowDestroy: PostQuitMessage", (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest) ? g_selfTestExitCode : 0);
     PostQuitMessage((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest) ? g_selfTestExitCode : 0);
 #else
     PostQuitMessage(0);
@@ -5510,13 +5655,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_DPICHANGED: return OnMainWindowDpiChanged(hWnd, static_cast<UINT>(HIWORD(wParam)), reinterpret_cast<const RECT*>(lParam));
         case WM_ERASEBKGND: return 1;
         case WM_DEVICECHANGE:
+        {
+            const HWND folderWindow = g_hFolderWindow.load(std::memory_order_acquire);
+            if (folderWindow)
             {
-                const HWND folderWindow = g_hFolderWindow.load(std::memory_order_acquire);
-                if (folderWindow)
-                {
-                    SendMessageW(folderWindow, WM_DEVICECHANGE, wParam, lParam);
-                }
+                SendMessageW(folderWindow, WM_DEVICECHANGE, wParam, lParam);
             }
+        }
             return DefWindowProcW(hWnd, message, wParam, lParam);
         case WM_CLOSE: return OnMainWindowClose(hWnd);
         case WM_SETTINGCHANGE:

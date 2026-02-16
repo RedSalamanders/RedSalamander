@@ -247,7 +247,7 @@ static D2D1::ColorF CompositeOverBackground(const D2D1::ColorF& overlay, const D
                         1.0f);
 }
 
-wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> CreateMenuFontForDpi(UINT dpi) noexcept
+wil::unique_hfont CreateMenuFontForDpi(UINT dpi) noexcept
 {
     NONCLIENTMETRICSW metrics{};
     metrics.cbSize = sizeof(metrics);
@@ -265,7 +265,7 @@ wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject> CreateMenuFont
         metrics.lfMenuFont.lfWidth  = MulDiv(metrics.lfMenuFont.lfWidth, static_cast<int>(dpi), static_cast<int>(baseDpi));
     }
 
-    return wil::unique_any<HFONT, decltype(&::DeleteObject), ::DeleteObject>(CreateFontIndirectW(&metrics.lfMenuFont));
+    return wil::unique_hfont(CreateFontIndirectW(&metrics.lfMenuFont));
 }
 
 static FolderViewTheme MakeFolderViewThemeLight(const D2D1::ColorF& accent) noexcept

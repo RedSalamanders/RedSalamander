@@ -40,7 +40,7 @@ void FolderView::QueueIconLoading()
 
     struct GroupBuild
     {
-        bool hasVisibleItems = false;
+        bool hasVisibleItems         = false;
         size_t firstVisibleItemIndex = static_cast<size_t>(-1);
         std::vector<size_t> itemIndices;
     };
@@ -122,10 +122,10 @@ void FolderView::QueueIconLoading()
         }
 
         IconLoadRequest request;
-        request.iconIndex       = iconIndex;
-        request.hasVisibleItems = group.hasVisibleItems;
+        request.iconIndex             = iconIndex;
+        request.hasVisibleItems       = group.hasVisibleItems;
         request.firstVisibleItemIndex = group.firstVisibleItemIndex;
-        request.itemIndices     = std::move(group.itemIndices);
+        request.itemIndices           = std::move(group.itemIndices);
 
         if (request.hasVisibleItems)
         {
@@ -263,8 +263,7 @@ void FolderView::BoostIconLoadingForVisibleRange()
             if (boosted)
             {
                 _iconLoadQueue = std::move(highPriority);
-                _iconLoadQueue.insert(
-                    _iconLoadQueue.end(), std::make_move_iterator(lowPriority.begin()), std::make_move_iterator(lowPriority.end()));
+                _iconLoadQueue.insert(_iconLoadQueue.end(), std::make_move_iterator(lowPriority.begin()), std::make_move_iterator(lowPriority.end()));
             }
             else
             {

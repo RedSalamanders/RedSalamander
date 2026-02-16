@@ -283,7 +283,7 @@ private:
     RECT _contentRect{};
     RECT _statusRect{};
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> _menuHeaderBrush;
+    wil::unique_hbrush _menuHeaderBrush;
     std::vector<MenuItemData> _menuThemeItems;
 
     wil::com_ptr<IFileSystem> _fileSystem;

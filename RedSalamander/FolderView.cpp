@@ -191,12 +191,11 @@ void FolderView::RefreshDetailsText()
             continue;
         }
 
-        std::wstring details =
-            _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+        std::wstring details = _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
         if (details != item.detailsText)
         {
-            anyChanged          = true;
-            item.detailsText    = std::move(details);
+            anyChanged       = true;
+            item.detailsText = std::move(details);
             item.detailsLayout.reset();
             item.detailsMetrics = {};
         }
@@ -586,7 +585,7 @@ void FolderView::OnPaint()
     if (! _d2dContext || (! _swapChain && ! _swapChainLegacy) || ! _d2dTarget)
     {
         HBRUSH fillBrush = _menuBackgroundBrush ? _menuBackgroundBrush.get() : nullptr;
-        wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> fallbackBrush;
+        wil::unique_hbrush fallbackBrush;
         if (! fillBrush)
         {
             auto toByte = [](float value) -> BYTE

@@ -1198,7 +1198,7 @@ LRESULT ViewerPE::OnDrawItem(DRAWITEMSTRUCT* draw) noexcept
         textColor = BlendColor(fillColor, textColor, 120u);
     }
 
-    wil::unique_any<HBRUSH, decltype(&::DeleteObject), ::DeleteObject> bgBrush(CreateSolidBrush(fillColor));
+    wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
     FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
 
     int itemId = static_cast<int>(draw->itemID);

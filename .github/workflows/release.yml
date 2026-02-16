@@ -311,10 +311,13 @@ jobs:
 
           if (Test-Path $binRoot) { $env:Path = "$binRoot;$env:Path" }
 
+          $buildScript = Join-Path $env:GITHUB_WORKSPACE "build.ps1"
+          if (-not (Test-Path $buildScript)) { throw "build.ps1 not found at: $buildScript" }
+
           if ($env:BUILD_MSIX -eq "true") {
-            .\build.ps1 -Configuration $env:CONFIGURATION -Platform $env:PLATFORM -Msix
+            & $buildScript -Configuration $env:CONFIGURATION -Platform $env:PLATFORM -Msix
           } else {
-            .\build.ps1 -Configuration $env:CONFIGURATION -Platform $env:PLATFORM
+            & $buildScript -Configuration $env:CONFIGURATION -Platform $env:PLATFORM
           }
 
       - name: Install WiX Toolset CLI (MSI)
@@ -325,12 +328,16 @@ jobs:
       - name: Build MSI
         shell: pwsh
         run: |
-          .\Installer\msi\build-msi.ps1 -Configuration $env:CONFIGURATION -Platform $env:PLATFORM
+          $msiScript = Join-Path $env:GITHUB_WORKSPACE "Installer\msi\build-msi.ps1"
+          if (-not (Test-Path $msiScript)) { throw "MSI build script not found at: $msiScript" }
+          & $msiScript -Configuration $env:CONFIGURATION -Platform $env:PLATFORM
 
       - name: Build Symbols MSI (PDB)
         shell: pwsh
         run: |
-          .\Installer\msi\build-msi-symbols.ps1 -Configuration $env:CONFIGURATION -Platform $env:PLATFORM
+          $msiSymbolsScript = Join-Path $env:GITHUB_WORKSPACE "Installer\msi\build-msi-symbols.ps1"
+          if (-not (Test-Path $msiSymbolsScript)) { throw "Symbols MSI build script not found at: $msiSymbolsScript" }
+          & $msiSymbolsScript -Configuration $env:CONFIGURATION -Platform $env:PLATFORM
 
       - name: Package artifacts
         shell: pwsh
@@ -345,10 +352,10 @@ jobs:
           if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
           New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
           
-          $releaseDir = Join-Path (".build\\{0}" -f $env:PLATFORM) $env:CONFIGURATION
+          $releaseDir = Join-Path $env:GITHUB_WORKSPACE (".build\\{0}\\{1}" -f $env:PLATFORM, $env:CONFIGURATION)
           if (-not (Test-Path $releaseDir)) {
             Write-Host "Available build output directories:" -ForegroundColor Yellow
-            Get-ChildItem -Path (".build\\{0}" -f $env:PLATFORM) -Directory -ErrorAction SilentlyContinue | Select-Object Name
+            Get-ChildItem -Path (Join-Path $env:GITHUB_WORKSPACE (".build\\{0}" -f $env:PLATFORM)) -Directory -ErrorAction SilentlyContinue | Select-Object Name
             throw "Build output directory not found: $releaseDir"
           }
 
@@ -367,7 +374,8 @@ jobs:
           if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
           Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $zipPath
 
-          $msiFiles = Get-ChildItem -Path ".build\\AppPackages" -Filter *.msi -Recurse -ErrorAction SilentlyContinue
+          $appPackages = Join-Path $env:GITHUB_WORKSPACE ".build\AppPackages"
+          $msiFiles = Get-ChildItem -Path $appPackages -Filter *.msi -Recurse -ErrorAction SilentlyContinue
           if (-not $msiFiles) {
             throw "No MSI artifacts found under .build\\AppPackages."
           }
@@ -376,7 +384,7 @@ jobs:
           }
 
           if ($env:BUILD_MSIX -eq "true") {
-            $msixFiles = Get-ChildItem -Path ".build\\AppPackages" -Filter *.msix -Recurse -ErrorAction SilentlyContinue
+            $msixFiles = Get-ChildItem -Path $appPackages -Filter *.msix -Recurse -ErrorAction SilentlyContinue
             if (-not $msixFiles) {
               throw "BUILD_MSIX=true but no MSIX artifacts found under .build\\AppPackages."
             }

@@ -331,7 +331,9 @@ class CurlStreamingReader final : public IFileReader
 {
 public:
     CurlStreamingReader(ConnectionInfo conn, std::wstring remotePath, unsigned __int64 sizeBytes) noexcept
-        : _conn(std::move(conn)), _remotePath(std::move(remotePath)), _sizeBytes(sizeBytes)
+        : _conn(std::move(conn)),
+          _remotePath(std::move(remotePath)),
+          _sizeBytes(sizeBytes)
     {
     }
 
@@ -352,11 +354,7 @@ public:
 
         try
         {
-            _worker = std::jthread(
-                [this](std::stop_token stopToken) noexcept
-                {
-                    WorkerMain(stopToken);
-                });
+            _worker = std::jthread([this](std::stop_token stopToken) noexcept { WorkerMain(stopToken); });
         }
         catch (const std::system_error&)
         {
@@ -462,7 +460,8 @@ public:
             }
         }
 
-        const unsigned __int64 newPos = (offset < 0) ? (base - (static_cast<unsigned __int64>(-(offset + 1)) + 1u)) : (base + static_cast<unsigned __int64>(offset));
+        const unsigned __int64 newPos =
+            (offset < 0) ? (base - (static_cast<unsigned __int64>(-(offset + 1)) + 1u)) : (base + static_cast<unsigned __int64>(offset));
 
         if (newPos == _positionBytes)
         {
@@ -796,7 +795,7 @@ private:
     std::atomic<uint64_t> _transferGeneration{0};
     std::atomic_bool _stopping{false};
 
-    bool _eof      = false;
+    bool _eof         = false;
     HRESULT _workerHr = S_OK;
 
     std::jthread _worker;
@@ -826,11 +825,7 @@ public:
 
         try
         {
-            _worker = std::jthread(
-                [this](std::stop_token stopToken) noexcept
-                {
-                    WorkerMain(stopToken);
-                });
+            _worker = std::jthread([this](std::stop_token stopToken) noexcept { WorkerMain(stopToken); });
         }
         catch (const std::system_error&)
         {
@@ -926,10 +921,7 @@ public:
 
             _cvWritable.wait(lock,
                              [&]() noexcept
-                             {
-                                 return _stopping.load(std::memory_order_acquire) || _closedForWrite || FAILED(_workerHr) ||
-                                        _bufferedBytes < _bufferCapacity;
-                             });
+                             { return _stopping.load(std::memory_order_acquire) || _closedForWrite || FAILED(_workerHr) || _bufferedBytes < _bufferCapacity; });
 
             if (_stopping.load(std::memory_order_acquire))
             {

@@ -12,4 +12,3 @@ namespace CompareDirectoriesSelfTest
 }
 
 #endif // _DEBUG
-

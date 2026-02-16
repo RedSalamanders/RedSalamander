@@ -767,8 +767,7 @@ public:
         }
 
         const bool activateWindow = (request->flags & HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW) != 0;
-        return g_folderWindow.ExecuteInActivePane(
-            std::filesystem::path(request->folderPath), focusName, request->folderViewCommandId, activateWindow);
+        return g_folderWindow.ExecuteInActivePane(std::filesystem::path(request->folderPath), focusName, request->folderViewCommandId, activateWindow);
     }
 
     bool TryHandleMessage(UINT message, WPARAM /*wParam*/, LPARAM lParam, LRESULT& result) noexcept
@@ -921,10 +920,7 @@ public:
 
             const bool activateWindow = (data->flags & HOST_PANE_EXECUTE_FLAG_ACTIVATE_WINDOW) != 0;
             const HRESULT hr          = g_folderWindow.ExecuteInActivePane(
-                std::filesystem::path(data->folderPath),
-                std::wstring_view(data->focusItemDisplayName),
-                data->folderViewCommandId,
-                activateWindow);
+                std::filesystem::path(data->folderPath), std::wstring_view(data->focusItemDisplayName), data->folderViewCommandId, activateWindow);
 
             result = static_cast<LRESULT>(hr);
             return true;
@@ -1193,7 +1189,7 @@ private:
             return E_POINTER;
         }
 
-        HWND hostWindow = nullptr;
+        HWND hostWindow           = nullptr;
         const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
         if (FAILED(hrHostReady))
         {
@@ -1246,7 +1242,7 @@ private:
         }
         *jsonUtf8 = nullptr;
 
-        HWND hostWindow = nullptr;
+        HWND hostWindow           = nullptr;
         const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
         if (FAILED(hrHostReady))
         {
@@ -1403,7 +1399,7 @@ private:
         }
         *secretOut = nullptr;
 
-        HWND hostWindow = nullptr;
+        HWND hostWindow           = nullptr;
         const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
         if (FAILED(hrHostReady))
         {
@@ -1682,7 +1678,7 @@ private:
             return S_OK;
         }
 
-        HWND hostWindow = nullptr;
+        HWND hostWindow           = nullptr;
         const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
         if (FAILED(hrHostReady))
         {
@@ -1807,7 +1803,7 @@ private:
         HRESULT hrShow = S_OK;
         if (request.scope == HOST_ALERT_SCOPE_APPLICATION)
         {
-            HWND hostWindow = nullptr;
+            HWND hostWindow           = nullptr;
             const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
             if (FAILED(hrHostReady))
             {
@@ -1881,7 +1877,7 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
     }
     *secretOut = nullptr;
 
-    HWND hostWindow = nullptr;
+    HWND hostWindow           = nullptr;
     const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
     if (FAILED(hrHostReady))
     {
@@ -1991,7 +1987,7 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
 
 HRESULT HostServices::ClearCachedConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind) noexcept
 {
-    HWND hostWindow = nullptr;
+    HWND hostWindow           = nullptr;
     const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
     if (FAILED(hrHostReady))
     {
@@ -2034,7 +2030,7 @@ HRESULT HostServices::ClearCachedConnectionSecretOnUiThread(const wchar_t* conne
 
 HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* connectionName, HWND ownerWindow) noexcept
 {
-    HWND hostWindow = nullptr;
+    HWND hostWindow           = nullptr;
     const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
     if (FAILED(hrHostReady))
     {
