@@ -1,0 +1,40 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package
+    Name="Red Salamander Symbols"
+    Manufacturer="Red Salamander"
+    Language="1033"
+    Version="$(var.ProductVersion)"
+    UpgradeCode="{3792C0D9-85FA-4363-8265-ABD1B8906E90}"
+    Scope="perMachine">
+
+    <MajorUpgrade
+      Schedule="afterInstallInitialize"
+      DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="RedSalamanderIcon" SourceFile="$(var.SolutionDir)RedSalamander\res\RedSalamander.ico" />
+    <Property Id="ARPPRODUCTICON" Value="RedSalamanderIcon" />
+
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+    <ui:WixUI Id="WixUI_InstallDir" />
+    <UIRef Id="WixUI_ErrorProgressText" />
+
+    <Feature Id="SymbolsFeature" Title="[ProductName]" Level="1">
+      <ComponentGroupRef Id="CG_RedSalamanderSymbols" />
+    </Feature>
+  </Package>
+
+  <Fragment>
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="RedSalamander" />
+    </StandardDirectory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="CG_RedSalamanderSymbols" Directory="INSTALLFOLDER">
+      <Files Include="$(var.StageDir)\**\*" />
+    </ComponentGroup>
+  </Fragment>
+</Wix>
+
