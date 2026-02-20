@@ -1,6 +1,7 @@
 #include "Framework.h"
 
 #include "Preferences.Advanced.h"
+#include "Preferences.CompareDirectories.h"
 #include "Preferences.Dialog.h"
 #include "Preferences.Editors.h"
 #include "Preferences.General.h"
@@ -74,6 +75,7 @@ struct PreferencesDialogHost final : PreferencesDialogState
     MousePane _mousePane;
     ThemesPane _themesPane;
     PluginsPane _pluginsPane;
+    CompareDirectoriesPane _compareDirectoriesPane;
     AdvancedPane _advancedPane;
 };
 
@@ -95,6 +97,7 @@ constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
         case PrefCategory::Mouse: return hostState._mousePane.Hwnd();
         case PrefCategory::Themes: return hostState._themesPane.Hwnd();
         case PrefCategory::Plugins: return hostState._pluginsPane.Hwnd();
+        case PrefCategory::CompareDirectories: return hostState._compareDirectoriesPane.Hwnd();
         case PrefCategory::Advanced: return hostState._advancedPane.Hwnd();
         default: return nullptr;
     }
@@ -415,7 +418,7 @@ struct CategoryInfo
     UINT descriptionId{};
 };
 
-constexpr std::array<CategoryInfo, 9> kCategories = {{
+constexpr std::array<CategoryInfo, 10> kCategories = {{
     {PrefCategory::General, IDS_PREFS_CAT_GENERAL, IDS_PREFS_CAT_GENERAL_DESC},
     {PrefCategory::Panes, IDS_PREFS_CAT_PANES, IDS_PREFS_CAT_PANES_DESC},
     {PrefCategory::Viewers, IDS_PREFS_CAT_VIEWERS, IDS_PREFS_CAT_VIEWERS_DESC},
@@ -424,6 +427,7 @@ constexpr std::array<CategoryInfo, 9> kCategories = {{
     {PrefCategory::Mouse, IDS_PREFS_CAT_MOUSE, IDS_PREFS_CAT_MOUSE_DESC},
     {PrefCategory::Themes, IDS_PREFS_CAT_THEMES, IDS_PREFS_CAT_THEMES_DESC},
     {PrefCategory::Plugins, IDS_PREFS_CAT_PLUGINS, IDS_PREFS_CAT_PLUGINS_DESC},
+    {PrefCategory::CompareDirectories, IDS_PREFS_CAT_COMPARE_DIRECTORIES, IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC},
     {PrefCategory::Advanced, IDS_PREFS_CAT_ADVANCED, IDS_PREFS_CAT_ADVANCED_DESC},
 }};
 
@@ -1021,11 +1025,11 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
     state.appliedOnce = true;
     SetDirty(dlg, state);
 
-    if (state.owner)
+    if (state.owner && IsWindow(state.owner) != FALSE)
     {
         PostMessageW(state.owner, WndMsg::kSettingsApplied, 0, 0);
     }
-    if (pluginsChanged && state.owner)
+    if (pluginsChanged && state.owner && IsWindow(state.owner) != FALSE)
     {
         PostMessageW(state.owner, WndMsg::kPluginsChanged, 0, 0);
     }
@@ -1535,6 +1539,7 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     hostState._mousePane.ResizeToHostClient(host);
     hostState._themesPane.ResizeToHostClient(host);
     hostState._pluginsPane.ResizeToHostClient(host);
+    hostState._compareDirectoriesPane.ResizeToHostClient(host);
     hostState._advancedPane.ResizeToHostClient(host);
 
     const UINT dpi     = GetDpiForWindow(host);
@@ -1550,16 +1555,17 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     const HFONT dialogFont = GetDialogFont(dlg ? dlg : host);
     EnsureFonts(state, dialogFont);
 
-    const bool showGeneral           = state.currentCategory == PrefCategory::General;
-    const bool showPanes             = state.currentCategory == PrefCategory::Panes;
-    const bool showViewers           = state.currentCategory == PrefCategory::Viewers;
-    const bool showEditors           = state.currentCategory == PrefCategory::Editors;
-    const bool showKeyboard          = state.currentCategory == PrefCategory::Keyboard;
-    const bool showMouse             = state.currentCategory == PrefCategory::Mouse;
-    const bool showThemes            = state.currentCategory == PrefCategory::Themes;
-    const bool showPlugins           = state.currentCategory == PrefCategory::Plugins;
-    const bool showAdvanced          = state.currentCategory == PrefCategory::Advanced;
-    const bool panesUseTwoStateCombo = state.theme.systemHighContrast;
+    const bool showGeneral            = state.currentCategory == PrefCategory::General;
+    const bool showPanes              = state.currentCategory == PrefCategory::Panes;
+    const bool showViewers            = state.currentCategory == PrefCategory::Viewers;
+    const bool showEditors            = state.currentCategory == PrefCategory::Editors;
+    const bool showKeyboard           = state.currentCategory == PrefCategory::Keyboard;
+    const bool showMouse              = state.currentCategory == PrefCategory::Mouse;
+    const bool showThemes             = state.currentCategory == PrefCategory::Themes;
+    const bool showPlugins            = state.currentCategory == PrefCategory::Plugins;
+    const bool showCompareDirectories = state.currentCategory == PrefCategory::CompareDirectories;
+    const bool showAdvanced           = state.currentCategory == PrefCategory::Advanced;
+    const bool panesUseTwoStateCombo  = state.theme.systemHighContrast;
 
     state.pageSettingCards.clear();
 
@@ -1696,6 +1702,44 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     setVisible(state.pluginsDetailsConfigFrame, showPluginsDetails);
     setVisible(state.pluginsDetailsConfigEdit, showPluginsDetails);
     setVisible(hostState._pluginsPane.Hwnd(), showPlugins);
+    setVisible(hostState._compareDirectoriesPane.Hwnd(), showCompareDirectories);
+    setVisible(state.advancedCompareDirectoriesHeader, showCompareDirectories);
+    setVisible(state.advancedCompareSizeLabel, showCompareDirectories);
+    setVisible(state.advancedCompareSizeToggle, showCompareDirectories);
+    setVisible(state.advancedCompareSizeDescription, showCompareDirectories);
+    setVisible(state.advancedCompareDateTimeLabel, showCompareDirectories);
+    setVisible(state.advancedCompareDateTimeToggle, showCompareDirectories);
+    setVisible(state.advancedCompareDateTimeDescription, showCompareDirectories);
+    setVisible(state.advancedCompareAttributesLabel, showCompareDirectories);
+    setVisible(state.advancedCompareAttributesToggle, showCompareDirectories);
+    setVisible(state.advancedCompareAttributesDescription, showCompareDirectories);
+    setVisible(state.advancedCompareContentLabel, showCompareDirectories);
+    setVisible(state.advancedCompareContentToggle, showCompareDirectories);
+    setVisible(state.advancedCompareContentDescription, showCompareDirectories);
+    setVisible(state.advancedCompareSubdirectoriesLabel, showCompareDirectories);
+    setVisible(state.advancedCompareSubdirectoriesToggle, showCompareDirectories);
+    setVisible(state.advancedCompareSubdirectoriesDescription, showCompareDirectories);
+    setVisible(state.advancedCompareSubdirectoryAttributesLabel, showCompareDirectories);
+    setVisible(state.advancedCompareSubdirectoryAttributesToggle, showCompareDirectories);
+    setVisible(state.advancedCompareSubdirectoryAttributesDescription, showCompareDirectories);
+    setVisible(state.advancedCompareSelectSubdirsOnlyInOnePaneLabel, showCompareDirectories);
+    setVisible(state.advancedCompareSelectSubdirsOnlyInOnePaneToggle, showCompareDirectories);
+    setVisible(state.advancedCompareSelectSubdirsOnlyInOnePaneDescription, showCompareDirectories);
+    setVisible(state.advancedCompareShowIdenticalLabel, showCompareDirectories);
+    setVisible(state.advancedCompareShowIdenticalToggle, showCompareDirectories);
+    setVisible(state.advancedCompareShowIdenticalDescription, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreFilesLabel, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreFilesToggle, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreFilesDescription, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreFilesPatternsLabel, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreFilesPatternsFrame, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreFilesPatternsEdit, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreDirectoriesLabel, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreDirectoriesToggle, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreDirectoriesDescription, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreDirectoriesPatternsLabel, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreDirectoriesPatternsFrame, showCompareDirectories);
+    setVisible(state.advancedCompareIgnoreDirectoriesPatternsEdit, showCompareDirectories);
     setVisible(hostState._advancedPane.Hwnd(), showAdvanced);
     setVisible(state.advancedConnectionsHelloHeader, showAdvanced);
     setVisible(state.advancedConnectionsBypassHelloLabel, showAdvanced);
@@ -1796,6 +1840,13 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     if (showPlugins)
     {
         PluginsPane::LayoutControls(host, state, x, y, width, margin, gapY, sectionY, dialogFont);
+        FinalizePreferencesPageHostLayout(host, state, margin, width);
+        return;
+    }
+
+    if (showCompareDirectories)
+    {
+        CompareDirectoriesPane::LayoutControls(host, state, x, y, width, margin, gapY, dialogFont);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
@@ -1906,6 +1957,10 @@ void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory catego
     if (category == PrefCategory::Plugins && state.pageHost)
     {
         PluginsPane::Refresh(state.pageHost, state);
+    }
+    if (category == PrefCategory::CompareDirectories && state.pageHost)
+    {
+        CompareDirectoriesPane::Refresh(state.pageHost, state);
     }
     if (category == PrefCategory::Advanced && state.pageHost)
     {
@@ -2060,6 +2115,7 @@ void CreatePageControls(HWND dlg, PreferencesDialogState& state) noexcept
     static_cast<void>(hostState._mousePane.EnsureCreated(state.pageHost));
     static_cast<void>(hostState._themesPane.EnsureCreated(state.pageHost));
     static_cast<void>(hostState._pluginsPane.EnsureCreated(state.pageHost));
+    static_cast<void>(hostState._compareDirectoriesPane.EnsureCreated(state.pageHost));
     static_cast<void>(hostState._advancedPane.EnsureCreated(state.pageHost));
 
     const HWND generalParent  = hostState._generalPane.Hwnd() ? hostState._generalPane.Hwnd() : state.pageHost;
@@ -2070,6 +2126,7 @@ void CreatePageControls(HWND dlg, PreferencesDialogState& state) noexcept
     const HWND mouseParent    = hostState._mousePane.Hwnd() ? hostState._mousePane.Hwnd() : state.pageHost;
     const HWND themesParent   = hostState._themesPane.Hwnd() ? hostState._themesPane.Hwnd() : state.pageHost;
     const HWND pluginsParent  = hostState._pluginsPane.Hwnd() ? hostState._pluginsPane.Hwnd() : state.pageHost;
+    const HWND compareParent  = hostState._compareDirectoriesPane.Hwnd() ? hostState._compareDirectoriesPane.Hwnd() : state.pageHost;
     const HWND advancedParent = hostState._advancedPane.Hwnd() ? hostState._advancedPane.Hwnd() : state.pageHost;
 
     const DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
@@ -2167,6 +2224,9 @@ void CreatePageControls(HWND dlg, PreferencesDialogState& state) noexcept
 
     // Plugins page (Phase 6 starter).
     PluginsPane::CreateControls(pluginsParent, state);
+
+    // Compare Directories page.
+    CompareDirectoriesPane::CreateControls(compareParent, state);
 
     // Advanced page (Phase 6 starter).
     AdvancedPane::CreateControls(advancedParent, state);
@@ -2639,7 +2699,12 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 dis->CtlID == IDC_PREFS_ADV_MONITOR_AUTO_SCROLL_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_TEXT_TOGGLE ||
                 dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_ERROR_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_WARNING_TOGGLE ||
                 dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_INFO_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_DEBUG_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_FILEOPS_DIAG_INFO_TOGGLE || dis->CtlID == IDC_PREFS_ADV_FILEOPS_DIAG_DEBUG_TOGGLE)
+                dis->CtlID == IDC_PREFS_ADV_FILEOPS_DIAG_INFO_TOGGLE || dis->CtlID == IDC_PREFS_ADV_FILEOPS_DIAG_DEBUG_TOGGLE ||
+                dis->CtlID == IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE ||
+                dis->CtlID == IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE ||
+                dis->CtlID == IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE ||
+                dis->CtlID == IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE ||
+                dis->CtlID == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE)
             {
                 const bool toggledOn        = GetWindowLongPtrW(dis->hwndItem, GWLP_USERDATA) != 0;
                 const COLORREF surface      = ThemedControls::GetControlSurfaceColor(state->theme);
@@ -2717,6 +2782,11 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
             }
 
             if (ThemesPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
+            {
+                return 0;
+            }
+
+            if (CompareDirectoriesPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
             {
                 return 0;
             }
@@ -3481,6 +3551,21 @@ PreferencesDialog::Show(HWND owner, std::wstring_view appId, Common::Settings::S
             SetForegroundWindow(existing);
             if (auto* state = GetState(existing))
             {
+                HWND effectiveOwner = owner;
+                if (effectiveOwner && IsWindow(effectiveOwner))
+                {
+                    effectiveOwner = GetAncestor(effectiveOwner, GA_ROOT);
+                }
+                else
+                {
+                    effectiveOwner = nullptr;
+                }
+
+                if (state->owner != effectiveOwner)
+                {
+                    state->owner = effectiveOwner;
+                    SetWindowLongPtrW(existing, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(effectiveOwner));
+                }
                 SelectCategory(existing, *state, initialCategory);
             }
             return true;
@@ -3527,8 +3612,8 @@ PreferencesDialog::Show(HWND owner, std::wstring_view appId, Common::Settings::S
 
     SetDirty(nullptr, *state);
 
-    const HWND dlg =
-        CreateDialogParamW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_PREFERENCES), nullptr, PreferencesDialogProc, reinterpret_cast<LPARAM>(state));
+    const HWND dlg = CreateDialogParamW(
+        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_PREFERENCES), effectiveOwner, PreferencesDialogProc, reinterpret_cast<LPARAM>(state));
 
     if (! dlg)
     {

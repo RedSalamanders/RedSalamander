@@ -1959,8 +1959,8 @@ HRESULT ViewerText::LoadTextToEdit(HWND hwnd, uint64_t startOffset, bool scrollT
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
 
-    unsigned __int64 newPosition = 0;
-    const HRESULT seekHr         = _fileReader->Seek(static_cast<__int64>(clampedStart), FILE_BEGIN, &newPosition);
+    uint64_t newPosition = 0;
+    const HRESULT seekHr = _fileReader->Seek(static_cast<__int64>(clampedStart), FILE_BEGIN, &newPosition);
     if (FAILED(seekHr))
     {
         Debug::Error(L"ViewerText: Seek(FILE_BEGIN, {}) failed for '{}' (hr=0x{:08X}).",

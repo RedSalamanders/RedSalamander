@@ -1927,8 +1927,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
         uint64_t bomBytes     = 0;
         uint64_t fileSize     = 0;
 
-        unsigned __int64 sizeBytes = 0;
-        const HRESULT sizeHr       = result->fileReader->GetSize(&sizeBytes);
+        uint64_t sizeBytes   = 0;
+        const HRESULT sizeHr = result->fileReader->GetSize(&sizeBytes);
         if (FAILED(sizeHr))
         {
             Debug::Error(L"ViewerText: GetSize failed for '{}' (hr=0x{:08X}).", path.c_str(), static_cast<unsigned long>(sizeHr));
@@ -1936,12 +1936,12 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
             return;
         }
 
-        fileSize = static_cast<uint64_t>(sizeBytes);
+        fileSize = sizeBytes;
 
         BYTE bom[4]{};
         unsigned long read = 0;
 
-        unsigned __int64 pos = 0;
+        uint64_t pos         = 0;
         const HRESULT seekHr = result->fileReader->Seek(0, FILE_BEGIN, &pos);
         if (FAILED(seekHr))
         {
@@ -2010,7 +2010,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
                     std::array<uint8_t, kProbeSize> probe{};
                     unsigned long probeRead = 0;
 
-                    unsigned __int64 probePos = 0;
+                    uint64_t probePos = 0;
                     if (SUCCEEDED(result->fileReader->Seek(0, FILE_BEGIN, &probePos)))
                     {
                         static_cast<void>(result->fileReader->Read(probe.data(), static_cast<unsigned long>(probe.size()), &probeRead));
@@ -2054,8 +2054,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
             return;
         }
 
-        unsigned __int64 newPosition = 0;
-        const HRESULT seekDataHr     = result->fileReader->Seek(static_cast<__int64>(clampedStart), FILE_BEGIN, &newPosition);
+        uint64_t newPosition     = 0;
+        const HRESULT seekDataHr = result->fileReader->Seek(static_cast<__int64>(clampedStart), FILE_BEGIN, &newPosition);
         if (FAILED(seekDataHr))
         {
             Debug::Error(L"ViewerText: Seek to data start offset failed (0x{:016X}) for '{}' (hr=0x{:08X}).",
@@ -2291,8 +2291,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
             {
                 result->hexBytes.resize(static_cast<size_t>(fileSize));
 
-                unsigned __int64 ignored = 0;
-                const HRESULT seekHexHr  = result->fileReader->Seek(0, FILE_BEGIN, &ignored);
+                uint64_t ignored        = 0;
+                const HRESULT seekHexHr = result->fileReader->Seek(0, FILE_BEGIN, &ignored);
                 if (FAILED(seekHexHr))
                 {
                     Debug::Warning(
@@ -2338,8 +2338,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
                 {
                     result->hexCache.resize(static_cast<size_t>(want));
 
-                    unsigned __int64 ignored = 0;
-                    const HRESULT seekHexHr  = result->fileReader->Seek(0, FILE_BEGIN, &ignored);
+                    uint64_t ignored        = 0;
+                    const HRESULT seekHexHr = result->fileReader->Seek(0, FILE_BEGIN, &ignored);
                     if (FAILED(seekHexHr))
                     {
                         Debug::Warning(L"ViewerText: Seek(FILE_BEGIN, 0) failed for HEX cache preload of '{}' (hr=0x{:08X}).",
@@ -2382,8 +2382,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
             {
                 result->hexBytes.resize(static_cast<size_t>(fileSize));
 
-                unsigned __int64 ignored = 0;
-                const HRESULT seekHexHr  = result->fileReader->Seek(0, FILE_BEGIN, &ignored);
+                uint64_t ignored        = 0;
+                const HRESULT seekHexHr = result->fileReader->Seek(0, FILE_BEGIN, &ignored);
                 if (FAILED(seekHexHr))
                 {
                     result->hexBytes.clear();
@@ -2430,8 +2430,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
                 {
                     result->hexCache.resize(static_cast<size_t>(want));
 
-                    unsigned __int64 ignored = 0;
-                    const HRESULT seekHexHr  = result->fileReader->Seek(static_cast<__int64>(aligned), FILE_BEGIN, &ignored);
+                    uint64_t ignored        = 0;
+                    const HRESULT seekHexHr = result->fileReader->Seek(static_cast<__int64>(aligned), FILE_BEGIN, &ignored);
                     if (FAILED(seekHexHr))
                     {
                         Debug::Error(L"ViewerText: Seek to offset 0x{:016X} failed for HEX cache fallback of '{}' (hr=0x{:08X}).",
@@ -5079,8 +5079,8 @@ void ViewerText::CommandSaveAs(HWND hwnd)
             return;
         }
 
-        unsigned __int64 ignored = 0;
-        const HRESULT seekHr     = reader->Seek(0, FILE_BEGIN, &ignored);
+        uint64_t ignored     = 0;
+        const HRESULT seekHr = reader->Seek(0, FILE_BEGIN, &ignored);
         if (FAILED(seekHr))
         {
             ShowInlineAlert(InlineAlertSeverity::Error, IDS_VIEWERTEXT_CAPTION_ERROR, IDS_VIEWERTEXT_ERR_SAVE_FAILED);
@@ -5798,20 +5798,20 @@ HRESULT ViewerText::DetectEncodingAndSize(const std::filesystem::path& path, Fil
         return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
     }
 
-    unsigned __int64 sizeBytes = 0;
-    const HRESULT sizeHr       = _fileReader->GetSize(&sizeBytes);
+    uint64_t sizeBytes   = 0;
+    const HRESULT sizeHr = _fileReader->GetSize(&sizeBytes);
     if (FAILED(sizeHr))
     {
         Debug::Error(L"ViewerText: GetSize failed for '{}' (hr=0x{:08X}).", path.c_str(), static_cast<unsigned long>(sizeHr));
         return sizeHr;
     }
 
-    fileSize = static_cast<uint64_t>(sizeBytes);
+    fileSize = sizeBytes;
 
     BYTE bom[4]{};
     unsigned long read = 0;
 
-    unsigned __int64 pos = 0;
+    uint64_t pos         = 0;
     const HRESULT seekHr = _fileReader->Seek(0, FILE_BEGIN, &pos);
     if (FAILED(seekHr))
     {

@@ -1,0 +1,100 @@
+name: CI
+
+"on":
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install clang-format
+        shell: pwsh
+        run: |
+          choco install llvm -y --no-progress
+          if ($LASTEXITCODE -notin 0,3010) { throw "LLVM install failed: $LASTEXITCODE" }
+
+      - name: Run format-all.ps1
+        shell: pwsh
+        run: .\format-all.ps1
+
+      - name: Commit formatting fixes
+        shell: pwsh
+        run: |
+          git diff --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "style: auto-format C++ sources`n`nApplied clang-format via format-all.ps1"
+            git push
+            Write-Host "Formatting fixes committed and pushed." -ForegroundColor Green
+          } else {
+            Write-Host "No formatting changes needed." -ForegroundColor Green
+          }
+
+  build:
+    uses: ./.github/workflows/build-reusable.yml
+    with:
+      upload_build_output: false
+
+  selftest-build:
+    uses: ./.github/workflows/build-reusable.yml
+    with:
+      configuration: Debug
+      platform: x64
+      upload_build_output: true
+
+  selftest:
+    runs-on: windows-latest
+    needs: selftest-build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download build output
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output-x64
+          path: .build/x64/Debug/
+
+      - name: Stage Themes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          if (Test-Path .\Themes) {
+            $dest = Join-Path $env:GITHUB_WORKSPACE ".build\x64\Debug\Themes"
+            New-Item -ItemType Directory -Path $dest -Force | Out-Null
+            Copy-Item -Path .\Themes\* -Destination $dest -Recurse -Force
+          }
+
+      - name: Run selftests
+        shell: pwsh
+        working-directory: .build/x64/Debug
+        run: .\RedSalamander.exe --compare-selftest --fileops-selftest --selftest-timeout-multiplier=2.0
+        timeout-minutes: 40
+
+      - name: Export LOCALAPPDATA
+        if: always()
+        shell: pwsh
+        run: |
+          "LOCALAPPDATA=$env:LOCALAPPDATA" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upload selftest artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: selftest-artifacts
+          path: ${{ env.LOCALAPPDATA }}\RedSalamander\SelfTest\
+          retention-days: 7

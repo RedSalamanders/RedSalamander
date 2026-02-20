@@ -1923,16 +1923,16 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
                 return;
             }
 
-            unsigned __int64 sizeBytes = 0;
-            hr                         = reader->GetSize(&sizeBytes);
+            uint64_t sizeBytes = 0;
+            hr                 = reader->GetSize(&sizeBytes);
             if (FAILED(hr) || sizeBytes == 0)
             {
                 postResult(hr, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_OPEN_FAILED), {});
                 return;
             }
 
-            if (sizeBytes > static_cast<unsigned __int64>((std::numeric_limits<std::uint32_t>::max)()) ||
-                sizeBytes > static_cast<unsigned __int64>((std::numeric_limits<size_t>::max)()))
+            if (sizeBytes > static_cast<uint64_t>((std::numeric_limits<std::uint32_t>::max)()) ||
+                sizeBytes > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
             {
                 postResult(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE), {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_TOO_LARGE), {});
                 return;

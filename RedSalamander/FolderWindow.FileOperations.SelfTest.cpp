@@ -1,6 +1,25 @@
 #include "FolderWindow.FileOperations.SelfTest.h"
 
+// FileOperations self-test — tick-driven async state machine.
+//
+// Architecture
+// ------------
+// The self-test runs as a cooperative state machine driven by the UI thread:
+//   1. The host creates a timer and calls Tick(hwnd) on each tick.
+//   2. Tick() advances the current step, starts async file-ops tasks, and
+//      polls for completion via NotifyTaskCompleted() callbacks.
+//   3. When Tick() returns true the run is complete (IsDone() == true).
+//
+// Active phase order
+// ------------------
+// kFileOpsPhaseOrder controls which Step enum values are exercised and in which
+// order.  Adding a new step to the enum alone does not run it — it must also be
+// appended to kFileOpsPhaseOrder.
+
 #ifdef _DEBUG
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027) // WIL move-only wrappers trigger deleted special member warnings in this TU
 
 #include <algorithm>
 #include <array>
@@ -21,6 +40,7 @@
 
 #include <AccCtrl.h>
 #include <AclAPI.h>
+#include <TlHelp32.h>
 #include <winioctl.h>
 
 #pragma warning(push)
@@ -34,6 +54,7 @@
 #include "FolderWindow.FileOperations.Popup.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.h"
+#include "SplashScreen.h"
 #include "WindowMessages.h"
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514) // Common/Helpers.h uses WIL types and triggers /Wall noise in this TU
@@ -54,13 +75,16 @@ struct WatchCallback;
 
 struct CompletedTaskInfo
 {
-    HRESULT hr                              = S_OK;
-    bool preCalcCompleted                   = false;
-    unsigned __int64 preCalcTotalBytes      = 0;
-    bool started                            = false;
-    unsigned long progressTotalItems        = 0;
-    unsigned long progressCompletedItems    = 0;
-    unsigned __int64 progressCompletedBytes = 0;
+    HRESULT hr                           = S_OK;
+    bool preCalcCompleted                = false;
+    bool preCalcSkipped                  = false;
+    uint64_t preCalcTotalBytes           = 0;
+    bool started                         = false;
+    unsigned long progressTotalItems     = 0;
+    unsigned long progressCompletedItems = 0;
+    uint64_t progressCompletedBytes      = 0;
+    unsigned long completedFiles         = 0;
+    unsigned long completedFolders       = 0;
 };
 
 struct SelfTestState
@@ -86,6 +110,7 @@ struct SelfTestState
         Phase7_WatcherChurn,
         Phase7_LargeDirectoryEnumeration,
         Phase7_ParallelCopyMoveKnobs,
+        Phase7_SharedPerItemScheduler,
         Phase7_ParallelDeleteKnobs,
         Phase8_TightDefaults_NoOverwrite,
         Phase8_InvalidDestinationRejected,
@@ -101,6 +126,7 @@ struct SelfTestState
         Phase11_CrossFileSystemBridge,
         Phase12_ReparsePointPolicy,
         Phase13_PostMortemDiagnostics,
+        Phase14_PopupHostLifetimeGuard,
         Cleanup_RestorePluginConfig,
         Done,
         Failed,
@@ -109,8 +135,17 @@ struct SelfTestState
     std::atomic<bool> running{false};
     std::atomic<bool> done{false};
     std::atomic<bool> failed{false};
-    Step step          = Step::Idle;
-    uint32_t stepState = 0;
+    Step step = Step::Idle;
+    SelfTest::SelfTestOptions options;
+    uint32_t stepState    = 0;
+    uint64_t runStartTick = 0;
+
+    std::vector<SelfTest::SelfTestCaseResult> phaseResults;
+    bool phaseInProgress     = false;
+    ULONGLONG phaseStartTick = 0;
+    bool phaseFailed         = false;
+    std::wstring phaseName;
+    std::wstring phaseFailureMessage;
 
     HWND mainWindow = nullptr;
 
@@ -151,7 +186,13 @@ struct SelfTestState
     bool autoDismissSuccessOriginal = false;
     ULONGLONG stepStartTick         = 0;
     ULONGLONG markerTick            = 0;
+    ULONGLONG lastProgressLogTick   = 0;
+    size_t baselineThreadCount      = 0;
     std::unordered_map<std::uint64_t, CompletedTaskInfo> completedTasks;
+
+    // Phase 14 — UI lifetime guard regression.
+    std::optional<std::uint64_t> phase14InfoTask;
+    std::atomic<bool> phase14ShutdownDone{false};
 };
 
 SelfTestState& GetState() noexcept
@@ -178,6 +219,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase7_WatcherChurn: return L"Phase7_WatcherChurn";
         case SelfTestState::Step::Phase7_LargeDirectoryEnumeration: return L"Phase7_LargeDirectoryEnumeration";
         case SelfTestState::Step::Phase7_ParallelCopyMoveKnobs: return L"Phase7_ParallelCopyMoveKnobs";
+        case SelfTestState::Step::Phase7_SharedPerItemScheduler: return L"Phase7_SharedPerItemScheduler";
         case SelfTestState::Step::Phase7_ParallelDeleteKnobs: return L"Phase7_ParallelDeleteKnobs";
         case SelfTestState::Step::Phase8_TightDefaults_NoOverwrite: return L"Phase8_TightDefaults_NoOverwrite";
         case SelfTestState::Step::Phase8_InvalidDestinationRejected: return L"Phase8_InvalidDestinationRejected";
@@ -193,6 +235,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase11_CrossFileSystemBridge: return L"Phase11_CrossFileSystemBridge";
         case SelfTestState::Step::Phase12_ReparsePointPolicy: return L"Phase12_ReparsePointPolicy";
         case SelfTestState::Step::Phase13_PostMortemDiagnostics: return L"Phase13_PostMortemDiagnostics";
+        case SelfTestState::Step::Phase14_PopupHostLifetimeGuard: return L"Phase14_PopupHostLifetimeGuard";
         case SelfTestState::Step::Cleanup_RestorePluginConfig: return L"Cleanup_RestorePluginConfig";
         case SelfTestState::Step::Done: return L"Done";
         case SelfTestState::Step::Failed: return L"Failed";
@@ -201,32 +244,94 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
     return L"(unknown)";
 }
 
+constexpr std::array<SelfTestState::Step, 29> kFileOpsPhaseOrder = {
+    {SelfTestState::Step::Setup,                                            // Environment setup and plugin loading
+     SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot,                 // Phase 5 — pre-calc: cancel releases the queued slot
+     SelfTestState::Step::Phase5_PreCalcSkipContinues,                      // Phase 5 — pre-calc: skip continues to the next item
+     SelfTestState::Step::Phase5_CancelQueuedTask,                          // Phase 5 — canceling a queued (not-yet-running) task
+     SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc,         // Phase 5 — mode switch parallel→wait mid-pre-calc
+     SelfTestState::Step::Phase5_SwitchWaitToParallelResume,                // Phase 5 — mode switch wait→parallel and resume
+     SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,                  // Phase 6 — popup resize and pause-button interaction
+     SelfTestState::Step::Phase6_DeleteBytesMeaningful,                     // Phase 6 — delete reports meaningful byte counts in progress
+     SelfTestState::Step::Phase7_WatcherChurn,                              // Phase 7 — directory watcher fires correctly under heavy churn
+     SelfTestState::Step::Phase7_LargeDirectoryEnumeration,                 // Phase 7 — enumerate a directory with many entries
+     SelfTestState::Step::Phase7_ParallelCopyMoveKnobs,                     // Phase 7 — speed limits and parallelism knobs for copy/move
+     SelfTestState::Step::Phase7_SharedPerItemScheduler,                    // Phase 7 — shared per-item scheduler across parallel tasks
+     SelfTestState::Step::Phase7_ParallelDeleteKnobs,                       // Phase 7 — speed limits and parallelism knobs for delete
+     SelfTestState::Step::Phase8_TightDefaults_NoOverwrite,                 // Phase 8 — no-overwrite default returns correct HRESULT
+     SelfTestState::Step::Phase8_InvalidDestinationRejected,                // Phase 8 — invalid destination is rejected before op starts
+     SelfTestState::Step::Phase8_PerItemOrchestration,                      // Phase 8 — per-item mode orchestrates items one by one
+     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly,   // Phase 9 — overwrite read-only via conflict prompt
+     SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache,          // Phase 9 — apply-to-all caching in conflict prompt UI
+     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap,           // Phase 9 — auto-cap on overwrite conflict
+     SelfTestState::Step::Phase9_ConflictPrompt_SkipAll,                    // Phase 9 — skip-all in conflict prompt
+     SelfTestState::Step::Phase9_ConflictPrompt_RetryCap,                   // Phase 9 — retry cap in conflict prompt
+     SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy, // Phase 9 — skip continues directory copy
+     SelfTestState::Step::Phase9_PerItemConcurrency,                        // Phase 9 — per-item mode with concurrent operations
+     SelfTestState::Step::Phase10_PermanentDeleteWithValidation,            // Phase 10 — permanent delete with post-delete validation
+     SelfTestState::Step::Phase11_CrossFileSystemBridge,                    // Phase 11 — copy/move across different file-system plugins
+     SelfTestState::Step::Phase12_ReparsePointPolicy,                       // Phase 12 — reparse-point (symlink/junction) handling policy
+     SelfTestState::Step::Phase13_PostMortemDiagnostics,                    // Phase 13 — post-mortem diagnostics on task failure
+     SelfTestState::Step::Phase14_PopupHostLifetimeGuard,                   // Phase 14 — popup host lifetime guard (no UAF on late input)
+     SelfTestState::Step::Cleanup_RestorePluginConfig}};                    // Restore plugin config and delete temp files
+
 void AppendLog(std::wstring_view message) noexcept
 {
-    wchar_t tempPath[MAX_PATH]{};
-    const DWORD len = GetTempPathW(static_cast<DWORD>(std::size(tempPath)), tempPath);
-    if (len == 0 || len >= std::size(tempPath))
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, std::format(L"[{}] {}", GetTickCount64(), message));
+    SelfTest::AppendSelfTestTrace(std::format(L"[{}] {}", GetTickCount64(), message));
+}
+
+void RecordCurrentPhase(SelfTestState& state, SelfTest::SelfTestCaseResult::Status status, std::wstring_view reason = {}) noexcept
+{
+    if (! state.phaseInProgress || state.phaseName.empty())
     {
         return;
     }
 
-    const std::filesystem::path logPath = std::filesystem::path(tempPath) / L"RedSalamander.FileOpsSelfTest.log";
+    const auto now            = GetTickCount64();
+    const uint64_t durationMs = (now >= state.phaseStartTick) ? (now - state.phaseStartTick) : 0;
 
-    wil::unique_handle file(CreateFileW(
-        logPath.c_str(), FILE_APPEND_DATA, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (! file)
+    SelfTest::SelfTestCaseResult item{};
+    item.name       = state.phaseName;
+    item.status     = status;
+    item.durationMs = durationMs;
+    if (! reason.empty())
+    {
+        item.reason = reason;
+    }
+
+    state.phaseResults.push_back(std::move(item));
+    state.phaseInProgress = false;
+    state.phaseName.clear();
+    state.phaseStartTick = 0;
+    state.phaseFailed    = false;
+    state.phaseFailureMessage.clear();
+}
+
+void BeginPhase(SelfTestState& state, SelfTestState::Step step) noexcept
+{
+    if (state.phaseInProgress)
+    {
+        RecordCurrentPhase(state, state.phaseFailed ? SelfTest::SelfTestCaseResult::Status::failed : SelfTest::SelfTestCaseResult::Status::passed);
+    }
+
+    if (step == SelfTestState::Step::Done || step == SelfTestState::Step::Failed || step == SelfTestState::Step::Idle)
     {
         return;
     }
 
-    const std::wstring line = std::format(L"[{}] {}\r\n", GetTickCount64(), message);
-    DWORD written           = 0;
-    static_cast<void>(WriteFile(file.get(), line.data(), static_cast<DWORD>(line.size() * sizeof(wchar_t)), &written, nullptr));
+    state.phaseInProgress = true;
+    state.phaseStartTick  = GetTickCount64();
+    state.phaseFailed     = false;
+    state.phaseFailureMessage.clear();
+    state.phaseName = StepToString(step);
 }
 
 void NextStep(SelfTestState& state, SelfTestState::Step next) noexcept
 {
     AppendLog(std::format(L"NextStep: {}", StepToString(next)));
+    SplashScreen::IfExistSetText(std::format(L"Self-test: {}", StepToString(next)));
+    BeginPhase(state, next);
     state.step          = next;
     state.stepStartTick = GetTickCount64();
     state.stepState     = 0;
@@ -235,18 +340,38 @@ void NextStep(SelfTestState& state, SelfTestState::Step next) noexcept
 
 bool HasTimedOut(const SelfTestState& state, ULONGLONG nowTick, ULONGLONG timeoutMs = kDefaultTimeoutMs) noexcept
 {
-    return nowTick >= state.stepStartTick && (nowTick - state.stepStartTick) > timeoutMs;
+    return nowTick >= state.stepStartTick && (nowTick - state.stepStartTick) > SelfTest::ScaleTimeout(timeoutMs);
 }
+
+void PerformCleanup(SelfTestState& state) noexcept;
 
 void Fail(std::wstring_view message) noexcept
 {
     SelfTestState& state = GetState();
+    if (state.done.load(std::memory_order_acquire))
+    {
+        return;
+    }
+
     state.failureMessage = std::wstring(message);
-    state.step           = SelfTestState::Step::Failed;
+    state.phaseFailed    = true;
+    if (state.phaseFailureMessage.empty())
+    {
+        state.phaseFailureMessage = message;
+    }
     state.failed.store(true, std::memory_order_release);
-    state.done.store(true, std::memory_order_release);
     AppendLog(std::format(L"FAIL: {}", state.failureMessage));
     Debug::Error(L"FileOpsSelfTest FAILED: {}", state.failureMessage);
+
+    // Record the current phase as failed, then run cleanup immediately. Many self-test call sites do
+    // `Fail(...); return true;` which would otherwise short-circuit the FSM and skip cleanup.
+    RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::failed, state.failureMessage);
+    BeginPhase(state, SelfTestState::Step::Cleanup_RestorePluginConfig);
+    PerformCleanup(state);
+    RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
+
+    state.step = SelfTestState::Step::Done;
+    state.done.store(true, std::memory_order_release);
 }
 
 FolderWindow* TryGetFolderWindow(HWND mainWindow) noexcept
@@ -273,6 +398,22 @@ FolderWindow::FileOperationState* TryGetFileOps(FolderWindow* folderWindow) noex
     }
 
     return folderWindow->DebugGetFileOperationState();
+}
+
+FolderView* TryGetFolderView(FolderWindow* folderWindow, FolderWindow::Pane pane) noexcept
+{
+    if (! folderWindow)
+    {
+        return nullptr;
+    }
+
+    const HWND hwnd = folderWindow->GetFolderViewHwnd(pane);
+    if (! hwnd)
+    {
+        return nullptr;
+    }
+
+    return reinterpret_cast<FolderView*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 }
 
 bool BackupPluginConfiguration(IInformations* info, std::string& outConfigUtf8) noexcept
@@ -304,6 +445,59 @@ bool SetPluginConfiguration(IInformations* info, std::string_view configUtf8) no
     owned.push_back('\0');
     const HRESULT hr = info->SetConfiguration(owned.c_str());
     return SUCCEEDED(hr);
+}
+
+void PerformCleanup(SelfTestState& state) noexcept
+{
+    if (state.fileOps)
+    {
+        state.fileOps->SetAutoDismissSuccess(state.autoDismissSuccessOriginal);
+    }
+
+    if (! state.localConfigOriginal.empty())
+    {
+        static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), state.localConfigOriginal));
+    }
+    if (! state.dummyConfigOriginal.empty())
+    {
+        static_cast<void>(SetPluginConfiguration(state.infoDummy.get(), state.dummyConfigOriginal));
+    }
+
+    state.directoryWatchCallback.reset();
+    state.directoryWatch.reset();
+
+    if (! state.tempRoot.empty())
+    {
+        std::error_code ec;
+        for (int i = 0; i < 3; ++i)
+        {
+            ec.clear();
+            static_cast<void>(std::filesystem::remove_all(state.tempRoot, ec));
+            if (! ec)
+            {
+                break;
+            }
+            ::Sleep(100);
+        }
+        if (ec)
+        {
+            Debug::Warning(L"FileOpsSelfTest: cleanup could not delete temp root: {}", state.tempRoot.wstring());
+        }
+    }
+
+    // Deterministically release COM/plugin state before COM is uninitialized (SelfTestState is intentionally leaked).
+    state.lockedFileHandle.reset();
+    state.fileOps      = nullptr;
+    state.folderWindow = nullptr;
+    state.fsLocal.reset();
+    state.infoLocal.reset();
+    state.fsDummy.reset();
+    state.infoDummy.reset();
+    state.dummyPaths.clear();
+    state.completedTasks.clear();
+    state.tempRoot.clear();
+    state.localConfigOriginal.clear();
+    state.dummyConfigOriginal.clear();
 }
 
 bool LoadPlugins(SelfTestState& state) noexcept
@@ -402,7 +596,7 @@ size_t GetDirectoryEntryCount(IFileSystem* fs, std::wstring_view path) noexcept
     return static_cast<size_t>(count);
 }
 
-unsigned __int64 GetDirectoryImmediateFileBytes(IFileSystem* fs, std::wstring_view path) noexcept
+uint64_t GetDirectoryImmediateFileBytes(IFileSystem* fs, std::wstring_view path) noexcept
 {
     if (! fs)
     {
@@ -423,13 +617,13 @@ unsigned __int64 GetDirectoryImmediateFileBytes(IFileSystem* fs, std::wstring_vi
         return 0;
     }
 
-    unsigned __int64 totalBytes = 0;
+    uint64_t totalBytes = 0;
     for (FileInfo* entry = head; entry;)
     {
         const bool isDirectory = (entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         if (! isDirectory && entry->EndOfFile > 0)
         {
-            totalBytes += static_cast<unsigned __int64>(entry->EndOfFile);
+            totalBytes += static_cast<uint64_t>(entry->EndOfFile);
         }
 
         if (entry->NextEntryOffset == 0)
@@ -470,13 +664,12 @@ bool EnsureDummyFolderExists(IFileSystem* fs, std::wstring_view destinationFolde
 
 std::filesystem::path GetTempRootPath() noexcept
 {
-    std::error_code ec;
-    std::filesystem::path base = std::filesystem::temp_directory_path(ec);
-    if (ec || base.empty())
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::FileOperations);
+    if (suiteRoot.empty())
     {
-        base = L"C:\\Temp";
+        return {};
     }
-    return base / L"RedSalamander.FileOpsSelfTest";
+    return suiteRoot / L"work";
 }
 
 bool RecreateEmptyDirectory(const std::filesystem::path& path) noexcept
@@ -683,6 +876,60 @@ bool CreateDeleteTree(const std::filesystem::path& root, int directories, int fi
     }
 
     return true;
+}
+
+[[nodiscard]] size_t GetProcessThreadCount() noexcept
+{
+    const DWORD pid = GetCurrentProcessId();
+
+    wil::unique_handle snapshot(CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0));
+    if (! snapshot)
+    {
+        return 0;
+    }
+
+    THREADENTRY32 entry{};
+    entry.dwSize = sizeof(entry);
+
+    size_t count = 0;
+    if (Thread32First(snapshot.get(), &entry))
+    {
+        do
+        {
+            if (entry.th32OwnerProcessID == pid)
+            {
+                ++count;
+            }
+            entry.dwSize = sizeof(entry);
+        } while (Thread32Next(snapshot.get(), &entry));
+    }
+
+    return count;
+}
+
+struct Phase14ShutdownWork final
+{
+    FolderWindow::FileOperationState* fileOps = nullptr;
+    std::atomic<bool>* done                  = nullptr;
+};
+
+void CALLBACK Phase14ShutdownCallback(PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+{
+    std::unique_ptr<Phase14ShutdownWork> work(static_cast<Phase14ShutdownWork*>(context));
+    if (! work)
+    {
+        return;
+    }
+
+    if (work->fileOps)
+    {
+        work->fileOps->Shutdown();
+    }
+
+    if (work->done)
+    {
+        work->done->store(true, std::memory_order_release);
+    }
 }
 
 struct ReparsePointHeader
@@ -1043,7 +1290,7 @@ StartFileOperationAndGetId(FolderWindow::FileOperationState* fileOps,
                            std::filesystem::path destinationFolder,
                            FileSystemFlags flags,
                            bool waitForOthers,
-                           unsigned __int64 initialSpeedLimitBytesPerSecond              = 0,
+                           uint64_t initialSpeedLimitBytesPerSecond                      = 0,
                            FolderWindow::FileOperationState::ExecutionMode executionMode = FolderWindow::FileOperationState::ExecutionMode::BulkItems,
                            bool requireConfirmation                                      = false,
                            wil::com_ptr<IFileSystem> destinationFileSystem               = nullptr) noexcept
@@ -1126,7 +1373,7 @@ struct WatchCallback final : public IFileSystemDirectoryWatchCallback
 
 } // namespace
 
-void FileOperationsSelfTest::Start(HWND mainWindow) noexcept
+void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOptions& options) noexcept
 {
     SelfTestState& state = GetState();
     if (state.running.exchange(true, std::memory_order_acq_rel))
@@ -1134,6 +1381,7 @@ void FileOperationsSelfTest::Start(HWND mainWindow) noexcept
         return;
     }
 
+    state.options = options;
     state.done.store(false, std::memory_order_release);
     state.failed.store(false, std::memory_order_release);
     state.failureMessage.clear();
@@ -1165,9 +1413,22 @@ void FileOperationsSelfTest::Start(HWND mainWindow) noexcept
     state.autoDismissSuccessOriginal = false;
     state.copyTaskStartTick          = 0;
     state.completedTasks.clear();
+    state.phase14InfoTask.reset();
+    state.phase14ShutdownDone.store(false, std::memory_order_release);
+
+    state.phaseResults.clear();
+    state.phaseInProgress = false;
+    state.phaseStartTick  = 0;
+    state.phaseFailed     = false;
+    state.phaseName.clear();
+    state.phaseFailureMessage.clear();
+
     state.step          = SelfTestState::Step::Setup;
-    state.stepStartTick = GetTickCount64();
+    state.runStartTick  = GetTickCount64();
+    state.stepStartTick = static_cast<ULONGLONG>(state.runStartTick);
     state.markerTick    = 0;
+    state.baselineThreadCount = 0;
+    BeginPhase(state, SelfTestState::Step::Setup);
     AppendLog(L"Start");
     Debug::Info(L"FileOpsSelfTest: started");
 }
@@ -1299,8 +1560,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
                     const std::vector<std::wstring> dirs = ListDirectories(state.fsDummy.get(), L"/", 64);
                     std::wstring bestCandidate;
-                    size_t bestChildren        = 0;
-                    unsigned __int64 bestBytes = 0;
+                    size_t bestChildren = 0;
+                    uint64_t bestBytes  = 0;
 
                     std::wstring firstNonEmpty;
                     size_t firstNonEmptyChildren = 0;
@@ -1325,7 +1586,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                             firstNonEmptyChildren = childCount;
                         }
 
-                        const unsigned __int64 bytes = GetDirectoryImmediateFileBytes(state.fsDummy.get(), candidate);
+                        const uint64_t bytes = GetDirectoryImmediateFileBytes(state.fsDummy.get(), candidate);
                         if (bytes > bestBytes)
                         {
                             bestCandidate = candidate;
@@ -2306,14 +2567,14 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             // Keep observing progress while the task exists (it is removed immediately on completion).
             if (auto* task = state.fileOps->FindTask(deleteTaskId))
             {
-                const bool preCalcDone       = task->_preCalcCompleted.load(std::memory_order_acquire);
-                const unsigned __int64 total = task->_preCalcTotalBytes.load(std::memory_order_acquire);
+                const bool preCalcDone = task->_preCalcCompleted.load(std::memory_order_acquire);
+                const uint64_t total   = task->_preCalcTotalBytes.load(std::memory_order_acquire);
                 if (preCalcDone && total > 0)
                 {
                     state.markerTick |= 1ull;
                 }
 
-                unsigned __int64 completedBytes = 0;
+                uint64_t completedBytes = 0;
                 {
                     std::scoped_lock lock(task->_progressMutex);
                     completedBytes = task->_progressCompletedBytes;
@@ -2523,7 +2784,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             {
                 if (state.copyKnobIndex >= concurrencies.size())
                 {
-                    NextStep(state, SelfTestState::Step::Phase7_ParallelDeleteKnobs);
+                    NextStep(state, SelfTestState::Step::Phase7_SharedPerItemScheduler);
                     return false;
                 }
 
@@ -2652,6 +2913,527 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
             ++state.copyKnobIndex;
             state.stepState = 1;
+            return false;
+        }
+        case SelfTestState::Step::Phase7_SharedPerItemScheduler:
+        {
+            const ULONGLONG nowTick = GetTickCount64();
+            if (HasTimedOut(state, nowTick, 240'000ull))
+            {
+                Fail(L"Phase7_SharedPerItemScheduler timed out.");
+                return true;
+            }
+
+            const std::filesystem::path srcDir = state.tempRoot / L"shared-sched-src";
+            const std::filesystem::path dstA   = state.tempRoot / L"shared-sched-dst-a";
+            const std::filesystem::path dstB   = state.tempRoot / L"shared-sched-dst-b";
+
+            constexpr int kFileCount         = 12;
+            constexpr size_t kFileBytes      = 2ull * 1024ull * 1024ull;
+            constexpr uint64_t kInitialLimit = 1ull * 1024ull * 1024ull;
+
+            const std::filesystem::path smallFolder = srcDir / L"a_folder";
+            const std::filesystem::path slowFolder  = srcDir / L"z_slow_dir";
+
+            const auto maybeLogProgress = [&]() noexcept
+            {
+                if (state.lastProgressLogTick != 0 && nowTick >= state.lastProgressLogTick && (nowTick - state.lastProgressLogTick) < 1000ull)
+                {
+                    return;
+                }
+                state.lastProgressLogTick = nowTick;
+
+                size_t selectionCount = 0;
+                if (state.folderWindow)
+                {
+                    if (FolderView* fv = TryGetFolderView(state.folderWindow, FolderWindow::Pane::Left))
+                    {
+                        selectionCount = fv->GetSelectedOrFocusedPathAttributes().size();
+                    }
+                }
+
+                const auto describeTask = [&](wchar_t name, const std::optional<std::uint64_t>& taskId) noexcept -> std::wstring
+                {
+                    if (! taskId.has_value())
+                    {
+                        return std::format(L"{}:none", name);
+                    }
+
+                    const std::uint64_t id = taskId.value();
+
+                    using Task = FolderWindow::FileOperationState::Task;
+                    Task* task = state.fileOps ? state.fileOps->FindTask(id) : nullptr;
+                    if (task)
+                    {
+                        unsigned int maxConc          = 0;
+                        size_t inFlight               = 0;
+                        unsigned long completedItems  = 0;
+                        unsigned long completedFiles  = 0;
+                        unsigned long completedFolders = 0;
+                        {
+                            std::scoped_lock lock(task->_progressMutex);
+                            maxConc          = task->_perItemMaxConcurrency;
+                            inFlight         = task->_perItemInFlightCallCount;
+                            completedItems   = task->_progressCompletedItems;
+                            completedFiles   = task->_completedTopLevelFiles;
+                            completedFolders = task->_completedTopLevelFolders;
+                        }
+
+                        const bool started        = task->HasStarted();
+                        const bool entered        = task->HasEnteredOperation();
+                        const bool waiting        = task->IsWaitingInQueue();
+                        const bool queuePaused    = task->IsQueuePaused();
+                        const bool paused         = task->IsPaused();
+                        const bool preCalcInProg  = task->_preCalcInProgress.load(std::memory_order_acquire);
+                        const bool preCalcSkipped = task->_preCalcSkipped.load(std::memory_order_acquire);
+                        const bool preCalcDone    = task->_preCalcCompleted.load(std::memory_order_acquire);
+
+                        return std::format(
+                            L"{}:{} started={} entered={} waiting={} qPaused={} paused={} preCalc(inProg={} skipped={} done={}) maxConc={} inFlight={} completedItems={} files={} folders={}",
+                            name,
+                            id,
+                            started ? 1 : 0,
+                            entered ? 1 : 0,
+                            waiting ? 1 : 0,
+                            queuePaused ? 1 : 0,
+                            paused ? 1 : 0,
+                            preCalcInProg ? 1 : 0,
+                            preCalcSkipped ? 1 : 0,
+                            preCalcDone ? 1 : 0,
+                            maxConc,
+                            inFlight,
+                            completedItems,
+                            completedFiles,
+                            completedFolders);
+                    }
+
+                    const auto it = state.completedTasks.find(id);
+                    if (it != state.completedTasks.end())
+                    {
+                        const CompletedTaskInfo& info = it->second;
+                        return std::format(L"{}:{} completed hr=0x{:08X} started={} preCalcSkipped={} items={} files={} folders={}",
+                                           name,
+                                           id,
+                                           static_cast<unsigned long>(info.hr),
+                                           info.started ? 1 : 0,
+                                           info.preCalcSkipped ? 1 : 0,
+                                           info.progressCompletedItems,
+                                           info.completedFiles,
+                                           info.completedFolders);
+                    }
+
+                    return std::format(L"{}:{} missing", name, id);
+                };
+
+                AppendLog(std::format(L"Phase7_SharedPerItemScheduler dbg stepState={} selection={} {} {}",
+                                      state.stepState,
+                                      selectionCount,
+                                      describeTask(L'A', state.taskA),
+                                      describeTask(L'B', state.taskB)));
+            };
+            maybeLogProgress();
+
+            if (state.stepState == 0)
+            {
+                state.fileOps->ApplyQueueMode(false);
+                state.taskA.reset();
+                state.taskB.reset();
+                state.markerTick           = 0;
+                state.baselineThreadCount  = 0;
+                state.lastProgressLogTick  = 0;
+
+                static_cast<void>(SetPluginConfiguration(
+                    state.infoLocal.get(),
+                    R"json({"copyMoveMaxConcurrency":8,"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048,"directorySizeDelayMs":1})json"));
+
+                if (! RecreateEmptyDirectory(srcDir) || ! RecreateEmptyDirectory(dstA) || ! RecreateEmptyDirectory(dstB))
+                {
+                    Fail(L"Failed to reset shared scheduler directories.");
+                    return true;
+                }
+
+                if (! CreateDeleteTree(slowFolder, 6, 50, 1))
+                {
+                    Fail(L"Failed to create slow directory tree for shared scheduler test.");
+                    return true;
+                }
+
+                if (! RecreateEmptyDirectory(smallFolder))
+                {
+                    Fail(L"Failed to create small folder for shared scheduler test.");
+                    return true;
+                }
+
+                if (! WriteTestFile(smallFolder / L"inside.bin", 1024))
+                {
+                    Fail(L"Failed to write small folder test file.");
+                    return true;
+                }
+
+                for (int i = 0; i < kFileCount; ++i)
+                {
+                    const std::filesystem::path file = srcDir / std::format(L"f_{:02}.bin", i);
+                    if (! WriteTestFile(file, kFileBytes))
+                    {
+                        Fail(L"Failed to write shared scheduler test file.");
+                        return true;
+                    }
+                }
+
+                if (! state.folderWindow)
+                {
+                    Fail(L"Missing FolderWindow for shared scheduler test.");
+                    return true;
+                }
+
+                FolderView* folderView = TryGetFolderView(state.folderWindow, FolderWindow::Pane::Left);
+                if (! folderView)
+                {
+                    Fail(L"Failed to locate left FolderView for shared scheduler test.");
+                    return true;
+                }
+
+                folderView->SetFolderPath(srcDir);
+
+                state.stepState = 1;
+                return false;
+            }
+
+            if (! state.folderWindow)
+            {
+                return false;
+            }
+
+            FolderView* folderView = TryGetFolderView(state.folderWindow, FolderWindow::Pane::Left);
+            if (! folderView)
+            {
+                return false;
+            }
+            const auto applySelection = [&]() noexcept
+            {
+                folderView->SetSelectionByDisplayNamePredicate(
+                    [&](std::wstring_view displayName) noexcept -> bool
+                    {
+                        if (displayName == L"a_folder" || displayName == L"z_slow_dir")
+                        {
+                            return true;
+                        }
+                        if (displayName.size() >= 6 && displayName.starts_with(L"f_") && displayName.ends_with(L".bin"))
+                        {
+                            return true;
+                        }
+                        return false;
+                    });
+            };
+
+            const size_t expectedSelectionCount = static_cast<size_t>(kFileCount + 2);
+
+            if (state.stepState == 1)
+            {
+                applySelection();
+
+                const std::vector<FolderView::PathAttributes> selected = folderView->GetSelectedOrFocusedPathAttributes();
+                if (selected.size() != expectedSelectionCount)
+                {
+                    return false;
+                }
+
+                std::vector<std::filesystem::path> sourcePaths;
+                sourcePaths.reserve(selected.size());
+                for (const auto& item : selected)
+                {
+                    sourcePaths.push_back(item.path);
+                }
+
+                state.baselineThreadCount = 0;
+
+                const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE |
+                                                                           FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+
+                state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                         FILESYSTEM_COPY,
+                                                         FolderWindow::Pane::Left,
+                                                         FolderWindow::Pane::Right,
+                                                         state.fsLocal,
+                                                         std::move(sourcePaths),
+                                                         dstA,
+                                                         flags,
+                                                         false,
+                                                         kInitialLimit,
+                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem);
+                if (! state.taskA.has_value())
+                {
+                    Fail(L"Failed to start shared scheduler copy task A.");
+                    return true;
+                }
+
+                state.markerTick = 0;
+                state.stepState  = 2;
+                return false;
+            }
+
+            if (state.stepState == 4)
+            {
+                if (! state.taskA.has_value() || ! state.taskB.has_value())
+                {
+                    return false;
+                }
+
+                const auto itA = state.completedTasks.find(state.taskA.value());
+                const auto itB = state.completedTasks.find(state.taskB.value());
+                if (itA == state.completedTasks.end() || itB == state.completedTasks.end())
+                {
+                    return false;
+                }
+
+                if (! itA->second.preCalcSkipped || ! itB->second.preCalcSkipped)
+                {
+                    Fail(L"Expected shared scheduler tasks to have pre-calc skipped.");
+                    return true;
+                }
+
+                const auto isCancelHr = [](HRESULT hr) noexcept -> bool
+                { return hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT; };
+
+                if (! isCancelHr(itA->second.hr) || ! isCancelHr(itB->second.hr))
+                {
+                    Fail(std::format(L"Expected shared scheduler tasks to be cancelled. A=0x{:08X} B=0x{:08X}",
+                                     static_cast<unsigned long>(itA->second.hr),
+                                     static_cast<unsigned long>(itB->second.hr)));
+                    return true;
+                }
+
+                NextStep(state, SelfTestState::Step::Phase7_ParallelDeleteKnobs);
+                return false;
+            }
+
+            if (! state.taskA.has_value())
+            {
+                return false;
+            }
+
+            using Task = FolderWindow::FileOperationState::Task;
+            Task* taskA = state.fileOps ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
+            Task* taskB = state.taskB.has_value() && state.fileOps ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
+            if (! taskA)
+            {
+                return false;
+            }
+
+            if (taskA->_preCalcInProgress.load(std::memory_order_acquire) && ! taskA->_preCalcSkipped.load(std::memory_order_acquire))
+            {
+                taskA->SkipPreCalculation();
+            }
+            if (taskB && taskB->_preCalcInProgress.load(std::memory_order_acquire) && ! taskB->_preCalcSkipped.load(std::memory_order_acquire))
+            {
+                taskB->SkipPreCalculation();
+            }
+
+            if (state.stepState == 2)
+            {
+                if (state.markerTick == 0 && taskA->HasStarted())
+                {
+                    state.markerTick = nowTick;
+                }
+
+                unsigned int maxConcA               = 0;
+                size_t inFlightA                    = 0;
+                unsigned long completedItemsA       = 0;
+                unsigned long completedFilesA       = 0;
+                unsigned long completedFoldersA     = 0;
+                {
+                    std::scoped_lock lock(taskA->_progressMutex);
+                    maxConcA           = taskA->_perItemMaxConcurrency;
+                    inFlightA          = taskA->_perItemInFlightCallCount;
+                    completedItemsA    = taskA->_progressCompletedItems;
+                    completedFilesA    = taskA->_completedTopLevelFiles;
+                    completedFoldersA  = taskA->_completedTopLevelFolders;
+                }
+
+                if (maxConcA <= 1u)
+                {
+                    return false;
+                }
+
+                if (inFlightA <= 1u)
+                {
+                    if (state.markerTick != 0 && nowTick >= state.markerTick && (nowTick - state.markerTick) > 15'000ull)
+                    {
+                        Fail(L"Expected >1 in-flight per-item calls for task A but did not observe them.");
+                        return true;
+                    }
+                    return false;
+                }
+
+                if (! state.taskB.has_value())
+                {
+                    state.baselineThreadCount = GetProcessThreadCount();
+                    if (state.baselineThreadCount == 0)
+                    {
+                        Fail(L"Failed to snapshot process thread count after starting task A.");
+                        return true;
+                    }
+
+                    applySelection();
+                    const std::vector<FolderView::PathAttributes> selected = folderView->GetSelectedOrFocusedPathAttributes();
+                    if (selected.size() != expectedSelectionCount)
+                    {
+                        return false;
+                    }
+
+                    std::vector<std::filesystem::path> sourcePaths;
+                    sourcePaths.reserve(selected.size());
+                    for (const auto& item : selected)
+                    {
+                        sourcePaths.push_back(item.path);
+                    }
+
+                    const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE |
+                                                                               FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+
+                    state.taskB = StartFileOperationAndGetId(state.fileOps,
+                                                             FILESYSTEM_COPY,
+                                                             FolderWindow::Pane::Left,
+                                                             FolderWindow::Pane::Right,
+                                                             state.fsLocal,
+                                                             std::move(sourcePaths),
+                                                             dstB,
+                                                             flags,
+                                                             false,
+                                                             kInitialLimit,
+                                                             FolderWindow::FileOperationState::ExecutionMode::PerItem);
+                    if (! state.taskB.has_value())
+                    {
+                        Fail(L"Failed to start shared scheduler copy task B.");
+                        return true;
+                    }
+
+                    state.markerTick = 0;
+                    state.stepState  = 3;
+                    return false;
+                }
+            }
+
+            if (state.stepState == 3)
+            {
+                if (! state.taskB.has_value())
+                {
+                    return false;
+                }
+
+                taskB = state.fileOps ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
+                if (! taskB)
+                {
+                    return false;
+                }
+
+                if (taskB->_preCalcInProgress.load(std::memory_order_acquire) && ! taskB->_preCalcSkipped.load(std::memory_order_acquire))
+                {
+                    taskB->SkipPreCalculation();
+                }
+
+                if (state.markerTick == 0 && taskA->HasStarted() && taskB->HasStarted())
+                {
+                    state.markerTick = nowTick;
+                }
+
+                unsigned int maxConcA               = 0;
+                unsigned int maxConcB               = 0;
+                size_t inFlightA                    = 0;
+                size_t inFlightB                    = 0;
+                unsigned long completedItemsA       = 0;
+                unsigned long completedItemsB       = 0;
+                unsigned long completedFilesA       = 0;
+                unsigned long completedFilesB       = 0;
+                unsigned long completedFoldersA     = 0;
+                unsigned long completedFoldersB     = 0;
+                {
+                    std::scoped_lock lock(taskA->_progressMutex);
+                    maxConcA           = taskA->_perItemMaxConcurrency;
+                    inFlightA          = taskA->_perItemInFlightCallCount;
+                    completedItemsA    = taskA->_progressCompletedItems;
+                    completedFilesA    = taskA->_completedTopLevelFiles;
+                    completedFoldersA  = taskA->_completedTopLevelFolders;
+                }
+                {
+                    std::scoped_lock lock(taskB->_progressMutex);
+                    maxConcB           = taskB->_perItemMaxConcurrency;
+                    inFlightB          = taskB->_perItemInFlightCallCount;
+                    completedItemsB    = taskB->_progressCompletedItems;
+                    completedFilesB    = taskB->_completedTopLevelFiles;
+                    completedFoldersB  = taskB->_completedTopLevelFolders;
+                }
+
+                if (maxConcA <= 1u || maxConcB <= 1u)
+                {
+                    return false;
+                }
+
+                if (inFlightA == 0u || inFlightB == 0u)
+                {
+                    if (state.markerTick != 0 && nowTick >= state.markerTick && (nowTick - state.markerTick) > 15'000ull)
+                    {
+                        Fail(L"Expected both tasks to have in-flight per-item calls but did not observe them.");
+                        return true;
+                    }
+                    return false;
+                }
+
+                if (state.baselineThreadCount != 0)
+                {
+                    const size_t threadsNow = GetProcessThreadCount();
+                    if (threadsNow == 0)
+                    {
+                        Fail(L"Failed to read process thread count during shared scheduler test.");
+                        return true;
+                    }
+
+                    const size_t delta = (threadsNow >= state.baselineThreadCount) ? (threadsNow - state.baselineThreadCount) : 0;
+                    constexpr size_t kMaxExpectedThreadDelta = 8;
+                    if (delta > kMaxExpectedThreadDelta)
+                    {
+                        Fail(std::format(L"Shared scheduler thread delta too high after starting task B: baseline={} now={} delta={}.",
+                                         state.baselineThreadCount,
+                                         threadsNow,
+                                         delta));
+                        return true;
+                    }
+
+                    state.baselineThreadCount = 0;
+                }
+
+                const bool skippedA = taskA->_preCalcSkipped.load(std::memory_order_acquire);
+                const bool skippedB = taskB->_preCalcSkipped.load(std::memory_order_acquire);
+                if (! skippedA || ! skippedB)
+                {
+                    return false;
+                }
+
+                if (completedItemsA == 0 || completedItemsB == 0)
+                {
+                    return false;
+                }
+
+                const uint64_t totalA = static_cast<uint64_t>(completedFilesA) + static_cast<uint64_t>(completedFoldersA);
+                const uint64_t totalB = static_cast<uint64_t>(completedFilesB) + static_cast<uint64_t>(completedFoldersB);
+                if (totalA != completedItemsA || totalB != completedItemsB)
+                {
+                    Fail(std::format(L"Skipped pre-calc counts mismatch: A items={} files={} folders={} / B items={} files={} folders={}",
+                                     completedItemsA,
+                                     completedFilesA,
+                                     completedFoldersA,
+                                     completedItemsB,
+                                     completedFilesB,
+                                     completedFoldersB));
+                    return true;
+                }
+
+                taskA->RequestCancel();
+                taskB->RequestCancel();
+                state.stepState = 4;
+                return false;
+            }
+
             return false;
         }
         case SelfTestState::Step::Phase7_ParallelDeleteKnobs:
@@ -2900,8 +3682,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return false;
                 }
 
-                unsigned long totalItems       = 0;
-                unsigned __int64 callbackCount = 0;
+                unsigned long totalItems = 0;
+                uint64_t callbackCount   = 0;
                 {
                     std::scoped_lock lock(task->_progressMutex);
                     totalItems    = task->_progressTotalItems;
@@ -2959,7 +3741,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
-                const unsigned __int64 expectedTotalBytes = static_cast<unsigned __int64>(kFileBytes) * 2ull;
+                const uint64_t expectedTotalBytes = static_cast<uint64_t>(kFileBytes) * 2ull;
                 if (it->second.preCalcTotalBytes != expectedTotalBytes || it->second.progressCompletedBytes != expectedTotalBytes)
                 {
                     Fail(std::format(L"Per-item byte aggregation mismatch: preCalc={} progress={} expected={}.",
@@ -3912,9 +4694,9 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             const std::filesystem::path srcDir = state.tempRoot / L"peritem-conc-src";
             const std::filesystem::path dstDir = state.tempRoot / L"peritem-conc-dst";
 
-            constexpr size_t kFileBytes            = 2ull * 1024ull * 1024ull;
-            constexpr unsigned __int64 kSpeedLimit = 1ull * 1024ull * 1024ull;
-            constexpr int kFileCount               = 4;
+            constexpr size_t kFileBytes    = 2ull * 1024ull * 1024ull;
+            constexpr uint64_t kSpeedLimit = 1ull * 1024ull * 1024ull;
+            constexpr int kFileCount       = 4;
 
             if (state.stepState == 0)
             {
@@ -4130,8 +4912,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
 
             // Validate file-root pre-calc contract on local filesystem (S_OK + fileCount=1).
-            const std::filesystem::path localSizeFile  = state.tempRoot / L"size-root-file.bin";
-            constexpr unsigned __int64 kLocalSizeBytes = 12'345ull;
+            const std::filesystem::path localSizeFile = state.tempRoot / L"size-root-file.bin";
+            constexpr uint64_t kLocalSizeBytes        = 12'345ull;
             if (! WriteTestFile(localSizeFile, kLocalSizeBytes))
             {
                 Fail(L"Failed to create local size-root file.");
@@ -4318,11 +5100,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             const std::filesystem::path moveDir  = state.tempRoot / L"bridge-move-src";
             const std::filesystem::path moveFile = moveDir / L"move.bin";
 
-            const std::wstring dummyCopyRoot                        = L"/bridge-copy";
-            const std::wstring dummyMoveRoot                        = L"/bridge-move";
-            constexpr size_t kBridgeConcurrencyFileBytes            = 2ull * 1024ull * 1024ull;
-            constexpr unsigned __int64 kBridgeConcurrencySpeedLimit = 1ull * 1024ull * 1024ull;
-            constexpr int kBridgeConcurrencyFileCount               = 4;
+            const std::wstring dummyCopyRoot                = L"/bridge-copy";
+            const std::wstring dummyMoveRoot                = L"/bridge-move";
+            constexpr size_t kBridgeConcurrencyFileBytes    = 2ull * 1024ull * 1024ull;
+            constexpr uint64_t kBridgeConcurrencySpeedLimit = 1ull * 1024ull * 1024ull;
+            constexpr int kBridgeConcurrencyFileCount       = 4;
 
             if (state.stepState == 0)
             {
@@ -4595,7 +5377,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
-                unsigned __int64 sizeBytes = 0;
+                uint64_t sizeBytes = 0;
                 if (FAILED(reader->GetSize(&sizeBytes)) || sizeBytes != 512ull)
                 {
                     Fail(L"Cross-filesystem overwrite test: destination file size mismatch.");
@@ -4751,7 +5533,37 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             const ULONGLONG nowTick = GetTickCount64();
             if (HasTimedOut(state, nowTick, 180'000ull))
             {
-                Fail(L"Phase12_ReparsePointPolicy timed out.");
+                const auto completed = [&](const std::optional<std::uint64_t>& taskId) noexcept -> bool
+                {
+                    if (! taskId.has_value())
+                    {
+                        return false;
+                    }
+                    return state.completedTasks.find(taskId.value()) != state.completedTasks.end();
+                };
+
+                const bool aDone = completed(state.taskA);
+                const bool bDone = completed(state.taskB);
+                const bool cDone = completed(state.taskC);
+
+                bool promptActive = false;
+                if (state.fileOps && state.taskA.has_value())
+                {
+                    if (auto* task = state.fileOps->FindTask(state.taskA.value()))
+                    {
+                        promptActive = TryGetConflictPromptCopy(task).has_value();
+                    }
+                }
+
+                Fail(std::format(L"Phase12_ReparsePointPolicy timed out (stepState={} taskA={} doneA={} taskB={} doneB={} taskC={} doneC={} promptActive={}).",
+                                 state.stepState,
+                                 state.taskA.value_or(0ull),
+                                 aDone ? 1 : 0,
+                                 state.taskB.value_or(0ull),
+                                 bDone ? 1 : 0,
+                                 state.taskC.value_or(0ull),
+                                 cDone ? 1 : 0,
+                                 promptActive ? 1 : 0));
                 return true;
             }
 
@@ -5466,6 +6278,113 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     }
                 }
 
+                NextStep(state, SelfTestState::Step::Phase14_PopupHostLifetimeGuard);
+                return false;
+            }
+
+            return false;
+        }
+        case SelfTestState::Step::Phase14_PopupHostLifetimeGuard:
+        {
+            const ULONGLONG nowTick = GetTickCount64();
+            if (HasTimedOut(state, nowTick, 30'000ull))
+            {
+                const HWND popup = FindWindowW(kPopupClassName.data(), nullptr);
+                Fail(std::format(L"Phase14_PopupHostLifetimeGuard timed out. stepState={} popup={} shutdownDone={}",
+                                 state.stepState,
+                                 popup != nullptr,
+                                 state.phase14ShutdownDone.load(std::memory_order_acquire)));
+                return true;
+            }
+
+            if (state.stepState == 0)
+            {
+                state.phase14ShutdownDone.store(false, std::memory_order_release);
+
+                FolderWindow::InformationalTaskUpdate update{};
+                update.kind  = FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories;
+                update.title = L"FileOpsSelfTest: Phase 14";
+
+                update.leftRoot  = L"/";
+                update.rightRoot = L"/";
+
+                update.scanActive          = true;
+                update.scanCurrentRelative = L"phase14";
+                update.scanFolderCount     = 1;
+                update.scanEntryCount      = 1;
+
+                update.finished = false;
+                update.resultHr = S_OK;
+
+                const uint64_t infoTaskId = state.fileOps ? state.fileOps->CreateOrUpdateInformationalTask(update) : 0;
+                if (infoTaskId == 0)
+                {
+                    Fail(L"Phase14_PopupHostLifetimeGuard failed to create an informational task.");
+                    return true;
+                }
+
+                state.phase14InfoTask = infoTaskId;
+                state.stepState       = 1;
+                return false;
+            }
+
+            const HWND popup = FindWindowW(kPopupClassName.data(), nullptr);
+
+            if (state.stepState == 1)
+            {
+                if (! popup)
+                {
+                    return false;
+                }
+
+                auto work     = std::make_unique<Phase14ShutdownWork>();
+                work->fileOps = state.fileOps;
+                work->done    = &state.phase14ShutdownDone;
+
+                if (! TrySubmitThreadpoolCallback(Phase14ShutdownCallback, work.get(), nullptr))
+                {
+                    Fail(L"Phase14_PopupHostLifetimeGuard could not submit shutdown callback.");
+                    return true;
+                }
+
+                static_cast<void>(work.release());
+                state.stepState = 2;
+                return false;
+            }
+
+            if (state.stepState == 2)
+            {
+                if (! state.phase14ShutdownDone.load(std::memory_order_acquire))
+                {
+                    return false;
+                }
+
+                const HWND popupAfterShutdown = FindWindowW(kPopupClassName.data(), nullptr);
+                if (! popupAfterShutdown)
+                {
+                    // Popup already self-closed after host lifetime ended; that's acceptable as long as we didn't crash.
+                    RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
+                    NextStep(state, SelfTestState::Step::Cleanup_RestorePluginConfig);
+                    return false;
+                }
+
+                FileOperationsPopupInternal::PopupSelfTestInvoke dismiss{};
+                dismiss.kind   = FileOperationsPopupInternal::PopupHitTest::Kind::TaskDismiss;
+                dismiss.taskId = state.phase14InfoTask.value_or(0);
+                static_cast<void>(InvokePopupSelfTest(popupAfterShutdown, dismiss));
+
+                state.stepState = 3;
+                return false;
+            }
+
+            if (state.stepState == 3)
+            {
+                if (FindWindowW(kPopupClassName.data(), nullptr))
+                {
+                    return false;
+                }
+
+                RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
                 NextStep(state, SelfTestState::Step::Cleanup_RestorePluginConfig);
                 return false;
             }
@@ -5474,46 +6393,20 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
         }
         case SelfTestState::Step::Cleanup_RestorePluginConfig:
         {
-            if (state.fileOps)
-            {
-                state.fileOps->SetAutoDismissSuccess(state.autoDismissSuccessOriginal);
-            }
-
-            if (! state.localConfigOriginal.empty())
-            {
-                static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), state.localConfigOriginal));
-            }
-            if (! state.dummyConfigOriginal.empty())
-            {
-                static_cast<void>(SetPluginConfiguration(state.infoDummy.get(), state.dummyConfigOriginal));
-            }
-
-            std::error_code ec;
-            state.directoryWatchCallback.reset();
-            state.directoryWatch.reset();
-
-            for (int i = 0; i < 3; ++i)
-            {
-                ec.clear();
-                static_cast<void>(std::filesystem::remove_all(state.tempRoot, ec));
-                if (! ec)
-                {
-                    break;
-                }
-                Sleep(100);
-            }
-            if (ec)
-            {
-                Debug::Warning(L"FileOpsSelfTest: cleanup could not delete temp root: {}", state.tempRoot.wstring());
-            }
+            PerformCleanup(state);
+            RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
 
             state.step = SelfTestState::Step::Done;
             state.done.store(true, std::memory_order_release);
-            Debug::Info(L"FileOpsSelfTest: PASS");
+            Debug::Info(L"FileOpsSelfTest: {}", state.failed.load(std::memory_order_acquire) ? L"FAIL" : L"PASS");
             return true;
         }
-        case SelfTestState::Step::Done:
-        case SelfTestState::Step::Failed: return true;
+        case SelfTestState::Step::Done: return true;
+        case SelfTestState::Step::Failed:
+        {
+            NextStep(state, SelfTestState::Step::Cleanup_RestorePluginConfig);
+            return false;
+        }
         case SelfTestState::Step::Idle:
         default: break;
     }
@@ -5536,6 +6429,7 @@ void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t taskId, HRESULT h
         if (auto* task = state.fileOps->FindTask(taskId))
         {
             info.preCalcCompleted  = task->_preCalcCompleted.load(std::memory_order_acquire);
+            info.preCalcSkipped    = task->_preCalcSkipped.load(std::memory_order_acquire);
             info.preCalcTotalBytes = task->_preCalcTotalBytes.load(std::memory_order_acquire);
             info.started           = task->HasStarted();
             {
@@ -5543,6 +6437,8 @@ void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t taskId, HRESULT h
                 info.progressTotalItems     = task->_progressTotalItems;
                 info.progressCompletedItems = task->_progressCompletedItems;
                 info.progressCompletedBytes = task->_progressCompletedBytes;
+                info.completedFiles         = task->_completedTopLevelFiles;
+                info.completedFolders       = task->_completedTopLevelFolders;
             }
         }
     }
@@ -5555,6 +6451,59 @@ bool FileOperationsSelfTest::IsRunning() noexcept
     return GetState().running.load(std::memory_order_acquire);
 }
 
+bool FileOperationsSelfTest::IsDone() noexcept
+{
+    return GetState().done.load(std::memory_order_acquire);
+}
+
+SelfTest::SelfTestSuiteResult FileOperationsSelfTest::GetSuiteResult() noexcept
+{
+    SelfTestState& state = GetState();
+
+    SelfTest::SelfTestSuiteResult result{};
+    result.suite = SelfTest::SelfTestSuite::FileOperations;
+
+    const ULONGLONG nowTick = GetTickCount64();
+    if (state.runStartTick != 0 && nowTick >= static_cast<ULONGLONG>(state.runStartTick))
+    {
+        result.durationMs = static_cast<uint64_t>(nowTick - static_cast<ULONGLONG>(state.runStartTick));
+    }
+
+    result.failureMessage = state.failureMessage;
+
+    result.cases.reserve(kFileOpsPhaseOrder.size());
+    for (const SelfTestState::Step step : kFileOpsPhaseOrder)
+    {
+        const std::wstring_view expected = StepToString(step);
+        const auto it                    = std::find_if(
+            state.phaseResults.begin(), state.phaseResults.end(), [&](const SelfTest::SelfTestCaseResult& item) noexcept { return item.name == expected; });
+        if (it != state.phaseResults.end())
+        {
+            result.cases.push_back(*it);
+            continue;
+        }
+
+        SelfTest::SelfTestCaseResult skipped{};
+        skipped.name       = std::wstring(expected);
+        skipped.status     = SelfTest::SelfTestCaseResult::Status::skipped;
+        skipped.durationMs = 0;
+        skipped.reason     = state.failed.load(std::memory_order_acquire) ? L"not reached (aborted due to failure)" : L"not reached";
+        result.cases.push_back(std::move(skipped));
+    }
+
+    for (const auto& item : result.cases)
+    {
+        switch (item.status)
+        {
+            case SelfTest::SelfTestCaseResult::Status::passed: ++result.passed; break;
+            case SelfTest::SelfTestCaseResult::Status::failed: ++result.failed; break;
+            case SelfTest::SelfTestCaseResult::Status::skipped: ++result.skipped; break;
+        }
+    }
+
+    return result;
+}
+
 bool FileOperationsSelfTest::DidFail() noexcept
 {
     return GetState().failed.load(std::memory_order_acquire);
@@ -5565,9 +6514,11 @@ std::wstring_view FileOperationsSelfTest::FailureMessage() noexcept
     return GetState().failureMessage;
 }
 
+#pragma warning(pop)
+
 #else
 
-void FileOperationsSelfTest::Start(HWND /*mainWindow*/) noexcept
+void FileOperationsSelfTest::Start(HWND /*mainWindow*/, const SelfTest::SelfTestOptions& /*options*/) noexcept
 {
 }
 bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
@@ -5580,6 +6531,14 @@ void FileOperationsSelfTest::NotifyTaskCompleted(std::uint64_t /*taskId*/, HRESU
 bool FileOperationsSelfTest::IsRunning() noexcept
 {
     return false;
+}
+bool FileOperationsSelfTest::IsDone() noexcept
+{
+    return false;
+}
+SelfTest::SelfTestSuiteResult FileOperationsSelfTest::GetSuiteResult() noexcept
+{
+    return {};
 }
 bool FileOperationsSelfTest::DidFail() noexcept
 {

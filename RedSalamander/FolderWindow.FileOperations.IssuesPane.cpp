@@ -8,6 +8,7 @@
 #include <bit>
 #include <commctrl.h>
 #include <format>
+#include <memory>
 #include <uxtheme.h>
 #include <vector>
 #include <windowsx.h>
@@ -149,6 +150,7 @@ public:
 
     FolderWindow::FileOperationState* fileOps = nullptr;
     FolderWindow* folderWindow                = nullptr;
+    std::weak_ptr<void> hostLifetime;
 
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -216,7 +218,7 @@ void FileOperationsIssuesPaneState::ApplyTheme(HWND hwnd) noexcept
         return;
     }
 
-    if (folderWindow)
+    if (folderWindow && hostLifetime.lock())
     {
         _theme = folderWindow->GetTheme();
         if (! _inTitleBarThemeApply)
@@ -310,7 +312,7 @@ void FileOperationsIssuesPaneState::EnsureColumns() noexcept
 std::vector<IssuesRow> FileOperationsIssuesPaneState::BuildRows() const
 {
     std::vector<IssuesRow> rows;
-    if (! fileOps)
+    if (! fileOps || ! hostLifetime.lock())
     {
         return rows;
     }
@@ -474,7 +476,7 @@ LRESULT FileOperationsIssuesPaneState::OnSize(HWND hwnd, UINT width, UINT height
         MoveWindow(_list.get(), x, y, w, h, TRUE);
     }
 
-    if (hwnd && fileOps)
+    if (hwnd && fileOps && hostLifetime.lock())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
@@ -591,10 +593,16 @@ LRESULT FileOperationsIssuesPaneState::OnNotify(NMHDR* header) noexcept
     return CDRF_DODEFAULT;
 }
 
-LRESULT FileOperationsIssuesPaneState::OnTimer(HWND /*hwnd*/, UINT_PTR timerId) noexcept
+LRESULT FileOperationsIssuesPaneState::OnTimer(HWND hwnd, UINT_PTR timerId) noexcept
 {
     if (timerId != kRefreshTimerId)
     {
+        return 0;
+    }
+
+    if (! hostLifetime.lock())
+    {
+        DestroyWindow(hwnd);
         return 0;
     }
 
@@ -604,7 +612,7 @@ LRESULT FileOperationsIssuesPaneState::OnTimer(HWND /*hwnd*/, UINT_PTR timerId) 
 
 LRESULT FileOperationsIssuesPaneState::OnMove(HWND hwnd) noexcept
 {
-    if (fileOps)
+    if (fileOps && hostLifetime.lock())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
@@ -613,7 +621,7 @@ LRESULT FileOperationsIssuesPaneState::OnMove(HWND hwnd) noexcept
 
 LRESULT FileOperationsIssuesPaneState::OnExitSizeMove(HWND hwnd) noexcept
 {
-    if (fileOps)
+    if (fileOps && hostLifetime.lock())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
@@ -628,7 +636,7 @@ LRESULT FileOperationsIssuesPaneState::OnShowWindow(HWND hwnd, BOOL visible) noe
         ApplyTheme(hwnd);
     }
 
-    if (fileOps)
+    if (fileOps && hostLifetime.lock())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
@@ -638,7 +646,7 @@ LRESULT FileOperationsIssuesPaneState::OnShowWindow(HWND hwnd, BOOL visible) noe
 
 LRESULT FileOperationsIssuesPaneState::OnClose(HWND hwnd) noexcept
 {
-    if (fileOps)
+    if (fileOps && hostLifetime.lock())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
@@ -686,7 +694,7 @@ LRESULT FileOperationsIssuesPaneState::OnNcDestroy(HWND hwnd) noexcept
 {
     KillTimer(hwnd, kRefreshTimerId);
 
-    if (fileOps)
+    if (fileOps && hostLifetime.lock())
     {
         fileOps->OnIssuesPaneDestroyed(hwnd);
     }
@@ -726,7 +734,7 @@ LRESULT FileOperationsIssuesPaneState::WndProc(HWND hwnd, UINT msg, WPARAM wp, L
         case WM_SETTINGCHANGE:
         case WM_SYSCOLORCHANGE: return OnThemeChanged(hwnd);
         case WM_NCACTIVATE:
-            if (folderWindow)
+            if (folderWindow && hostLifetime.lock())
             {
                 if (! _inTitleBarThemeApply)
                 {
@@ -766,9 +774,17 @@ LRESULT CALLBACK FileOperationsIssuesPaneState::WndProcThunk(HWND hwnd, UINT msg
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-HWND FileOperationsIssuesPane::Create(FolderWindow::FileOperationState* fileOps, FolderWindow* folderWindow, HWND ownerWindow) noexcept
+HWND FileOperationsIssuesPane::Create(FolderWindow::FileOperationState* fileOps,
+                                      FolderWindow* folderWindow,
+                                      HWND ownerWindow,
+                                      std::weak_ptr<void> hostLifetime) noexcept
 {
     if (! fileOps || ! folderWindow)
+    {
+        return nullptr;
+    }
+
+    if (hostLifetime.expired())
     {
         return nullptr;
     }
@@ -781,6 +797,7 @@ HWND FileOperationsIssuesPane::Create(FolderWindow::FileOperationState* fileOps,
     auto statePtr          = std::make_unique<FileOperationsIssuesPaneState>();
     statePtr->fileOps      = fileOps;
     statePtr->folderWindow = folderWindow;
+    statePtr->hostLifetime = std::move(hostLifetime);
 
     const UINT ownerDpi = ownerWindow ? GetDpiForWindow(ownerWindow) : USER_DEFAULT_SCREEN_DPI;
 

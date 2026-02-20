@@ -3,6 +3,7 @@
 #include "Framework.h"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <exception>
@@ -14,7 +15,7 @@
 #include <wil/com.h>
 #include <wil/resource.h>
 
-#include <wincodec.h>
+#include <commctrl.h>
 
 #include "Helpers.h"
 #include "Version.h"
@@ -25,6 +26,12 @@ namespace SplashScreen
 {
 namespace
 {
+// Constexpr RGB helper to avoid macro cast warnings with constexpr
+constexpr COLORREF MakeRGB(BYTE r, BYTE g, BYTE b) noexcept
+{
+    return static_cast<COLORREF>(r) | (static_cast<COLORREF>(g) << 8) | (static_cast<COLORREF>(b) << 16);
+}
+
 std::atomic<bool> g_threadStarted{false};
 wil::unique_event_nothrow g_closeEvent;
 std::atomic<HWND> g_hwnd{nullptr};
@@ -34,9 +41,85 @@ std::jthread g_workerThread;
 std::mutex g_textMutex;
 std::wstring g_statusText;
 
-wil::unique_hbitmap g_logoBitmap;
-SIZE g_logoSize{};
+wil::unique_hicon g_logoIcon;
 wil::unique_hfont g_titleFont;
+constexpr UINT_PTR kSplashDragChildSubclassId = 0xA200u;
+constexpr int kSplashLogoResourcePx           = 256;
+constexpr int kSplashLogoDesignDip            = 162;
+constexpr int kSplashContentOffsetDip         = 14;
+
+// Option 6: Moonlight Metal
+constexpr COLORREF kBgStart          = MakeRGB(15, 20, 27);
+constexpr COLORREF kBgEnd            = MakeRGB(34, 42, 51);
+constexpr COLORREF kFallbackRing     = MakeRGB(255, 206, 130);
+constexpr COLORREF kFallbackFrame    = MakeRGB(98, 108, 128);
+constexpr COLORREF kSeparator        = MakeRGB(182, 123, 50);
+constexpr COLORREF kBorder           = MakeRGB(74, 89, 104);
+constexpr COLORREF kTitleText        = MakeRGB(243, 247, 255);
+constexpr COLORREF kStatusText       = MakeRGB(207, 177, 137);
+constexpr COLORREF kSecondaryText    = MakeRGB(182, 150, 108);
+constexpr COLORREF kLogoFallbackText = MakeRGB(251, 243, 232);
+
+void StartSplashDrag(HWND hwnd) noexcept
+{
+    const HWND dragTarget = GetAncestor(hwnd, GA_ROOT);
+    if (! dragTarget)
+    {
+        return;
+    }
+
+    ReleaseCapture();
+    static_cast<void>(SendMessageW(dragTarget, WM_NCLBUTTONDOWN, HTCAPTION, 0));
+}
+
+LRESULT CALLBACK SplashChildDragProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR, DWORD_PTR) noexcept
+{
+    static_cast<void>(wParam);
+    static_cast<void>(lParam);
+    if (msg == WM_LBUTTONDOWN)
+    {
+        StartSplashDrag(hwnd);
+        return 0;
+    }
+
+    return DefSubclassProc(hwnd, msg, wParam, lParam);
+}
+
+void InstallSplashChildDrag(HWND splashWnd) noexcept
+{
+    constexpr std::array<int, 4> dragControlIds{{
+        IDC_SPLASH_REDSALAMANDER,
+        IDC_SPLASH_VERSION,
+        IDC_SPLASH_COPYRIGHT,
+        IDC_SPLASH_STATUS,
+    }};
+
+    for (const int id : dragControlIds)
+    {
+        if (HWND control = GetDlgItem(splashWnd, id))
+        {
+            static_cast<void>(SetWindowSubclass(control, SplashChildDragProc, kSplashDragChildSubclassId, 0));
+        }
+    }
+}
+
+void RemoveSplashChildDrag(HWND splashWnd) noexcept
+{
+    constexpr std::array<int, 4> dragControlIds{{
+        IDC_SPLASH_REDSALAMANDER,
+        IDC_SPLASH_VERSION,
+        IDC_SPLASH_COPYRIGHT,
+        IDC_SPLASH_STATUS,
+    }};
+
+    for (const int id : dragControlIds)
+    {
+        if (HWND control = GetDlgItem(splashWnd, id))
+        {
+            static_cast<void>(RemoveWindowSubclass(control, SplashChildDragProc, kSplashDragChildSubclassId));
+        }
+    }
+}
 
 [[nodiscard]] int ScaleDip(int dip, UINT dpi) noexcept
 {
@@ -122,224 +205,42 @@ void SetStatusText(std::wstring_view text) noexcept
     g_statusText.assign(text);
 }
 
-// AlphaBlend replacement (software, straight alpha)
-[[nodiscard]] BOOL BlitAlphaBlend(HDC hdcDest,
-                                  int xoriginDest,
-                                  int yoriginDest,
-                                  int wDest,
-                                  int hDest,
-                                  HDC hdcSrc,
-                                  int xoriginSrc,
-                                  int yoriginSrc,
-                                  int wSrc,
-                                  int hSrc,
-                                  BLENDFUNCTION ftn) noexcept
+[[nodiscard]] wil::unique_hicon TryLoadLogoIcon(HINSTANCE instance) noexcept
 {
-    if (! hdcDest || ! hdcSrc || wDest <= 0 || hDest <= 0 || wSrc <= 0 || hSrc <= 0)
-    {
-        return TRUE;
-    }
-    if (ftn.BlendOp != AC_SRC_OVER)
-    {
-        return FALSE;
-    }
+    const HINSTANCE currentInstance = instance ? instance : GetModuleHandleW(nullptr);
 
-    const bool useSrcAlpha     = (ftn.AlphaFormat & AC_SRC_ALPHA) != 0;
-    const uint32_t globalAlpha = ftn.SourceConstantAlpha;
-
-    BITMAPINFO bmi{};
-    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth       = wDest;
-    bmi.bmiHeader.biHeight      = -hDest; // top-down
-    bmi.bmiHeader.biPlanes      = 1;
-    bmi.bmiHeader.biBitCount    = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-
-    void* destBits = nullptr;
-    wil::unique_hbitmap destDib(CreateDIBSection(hdcDest, &bmi, DIB_RGB_COLORS, &destBits, nullptr, 0));
-    if (! destDib || ! destBits)
+    const auto tryLoadSizedIcon = [](HINSTANCE module, int resourceId) noexcept -> wil::unique_hicon
     {
-        return FALSE;
-    }
-
-    wil::unique_hdc destMem(CreateCompatibleDC(hdcDest));
-    if (! destMem)
-    {
-        return FALSE;
-    }
-    auto oldDestBmp = wil::SelectObject(destMem.get(), destDib.get());
-    if (! BitBlt(destMem.get(), 0, 0, wDest, hDest, hdcDest, xoriginDest, yoriginDest, SRCCOPY))
-    {
-        return FALSE;
-    }
-
-    void* srcBits = nullptr;
-    wil::unique_hbitmap srcDib(CreateDIBSection(hdcDest, &bmi, DIB_RGB_COLORS, &srcBits, nullptr, 0));
-    if (! srcDib || ! srcBits)
-    {
-        return FALSE;
-    }
-
-    wil::unique_hdc srcMem(CreateCompatibleDC(hdcDest));
-    if (! srcMem)
-    {
-        return FALSE;
-    }
-    auto oldSrcBmp = wil::SelectObject(srcMem.get(), srcDib.get());
-
-    const int prevStretch = SetStretchBltMode(srcMem.get(), HALFTONE);
-    const bool copyOk     = (wSrc == wDest && hSrc == hDest) ? BitBlt(srcMem.get(), 0, 0, wDest, hDest, hdcSrc, xoriginSrc, yoriginSrc, SRCCOPY)
-                                                             : StretchBlt(srcMem.get(), 0, 0, wDest, hDest, hdcSrc, xoriginSrc, yoriginSrc, wSrc, hSrc, SRCCOPY);
-    SetStretchBltMode(srcMem.get(), prevStretch);
-    if (! copyOk)
-    {
-        return FALSE;
-    }
-
-    auto* dst = static_cast<uint32_t*>(destBits);
-    auto* src = static_cast<uint32_t*>(srcBits);
-
-    for (int y = 0; y < hDest; ++y)
-    {
-        const auto rowOffset = static_cast<size_t>(y) * static_cast<size_t>(wDest);
-        for (int x = 0; x < wDest; ++x)
+        if (HICON icon = reinterpret_cast<HICON>(
+                LoadImageW(module, MAKEINTRESOURCEW(resourceId), IMAGE_ICON, kSplashLogoResourcePx, kSplashLogoResourcePx, LR_DEFAULTCOLOR)))
         {
-            const uint32_t s     = src[rowOffset + static_cast<size_t>(x)];
-            const uint8_t srcA   = useSrcAlpha ? static_cast<uint8_t>(s >> 24) : 255u;
-            const uint32_t alpha = (static_cast<uint32_t>(srcA) * globalAlpha + 127u) / 255u;
-            if (alpha == 0)
-            {
-                continue;
-            }
-
-            const uint32_t invA = 255u - alpha;
-
-            const uint8_t srcB = static_cast<uint8_t>(s);
-            const uint8_t srcG = static_cast<uint8_t>(s >> 8);
-            const uint8_t srcR = static_cast<uint8_t>(s >> 16);
-
-            const uint32_t d   = dst[rowOffset + static_cast<size_t>(x)];
-            const uint8_t dstB = static_cast<uint8_t>(d);
-            const uint8_t dstG = static_cast<uint8_t>(d >> 8);
-            const uint8_t dstR = static_cast<uint8_t>(d >> 16);
-
-            const uint8_t outB = static_cast<uint8_t>((static_cast<uint32_t>(srcB) * alpha + static_cast<uint32_t>(dstB) * invA + 127u) / 255u);
-            const uint8_t outG = static_cast<uint8_t>((static_cast<uint32_t>(srcG) * alpha + static_cast<uint32_t>(dstG) * invA + 127u) / 255u);
-            const uint8_t outR = static_cast<uint8_t>((static_cast<uint32_t>(srcR) * alpha + static_cast<uint32_t>(dstR) * invA + 127u) / 255u);
-
-            dst[rowOffset + static_cast<size_t>(x)] = (static_cast<uint32_t>(outR) << 16) | (static_cast<uint32_t>(outG) << 8) | outB | 0xFF000000u;
+            return wil::unique_hicon{icon};
         }
-    }
 
-    return BitBlt(hdcDest, xoriginDest, yoriginDest, wDest, hDest, destMem.get(), 0, 0, SRCCOPY) != 0;
-}
-
-[[nodiscard]] wil::unique_hbitmap TryLoadLogoPng(HINSTANCE instance, SIZE& outSize) noexcept
-{
-    outSize = {};
-
-    HRSRC resInfo = FindResourceW(instance, MAKEINTRESOURCEW(IDR_SPLASH_LOGO_PNG), L"PNG");
-    if (! resInfo)
-    {
         return nullptr;
-    }
+    };
 
-    HGLOBAL resData = LoadResource(instance, resInfo);
-    if (! resData)
+    if (auto splashIcon = tryLoadSizedIcon(currentInstance, IDI_SPLASH_LOGO_ICON); splashIcon)
     {
-        return nullptr;
+        return splashIcon;
     }
 
-    void* bytes           = LockResource(resData);
-    const DWORD byteCount = SizeofResource(instance, resInfo);
-    if (! bytes || byteCount == 0)
+    if (auto fallback = tryLoadSizedIcon(currentInstance, IDI_REDSALAMANDER); fallback)
     {
-        return nullptr;
+        return fallback;
     }
 
-    wil::com_ptr<IWICImagingFactory> factory;
-    HRESULT hr = CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&factory));
-    if (FAILED(hr) || ! factory)
+    if (auto fallbackFromMain = tryLoadSizedIcon(GetModuleHandleW(nullptr), IDI_REDSALAMANDER); fallbackFromMain)
     {
-        return nullptr;
+        return fallbackFromMain;
     }
 
-    wil::com_ptr<IWICStream> stream;
-    hr = factory->CreateStream(&stream);
-    if (FAILED(hr) || ! stream)
+    if (auto fallbackSmall = tryLoadSizedIcon(currentInstance, IDI_SMALL); fallbackSmall)
     {
-        return nullptr;
+        return fallbackSmall;
     }
 
-    hr = stream->InitializeFromMemory(static_cast<BYTE*>(bytes), byteCount);
-    if (FAILED(hr))
-    {
-        return nullptr;
-    }
-
-    wil::com_ptr<IWICBitmapDecoder> decoder;
-    hr = factory->CreateDecoderFromStream(stream.get(), nullptr, WICDecodeMetadataCacheOnLoad, &decoder);
-    if (FAILED(hr) || ! decoder)
-    {
-        return nullptr;
-    }
-
-    wil::com_ptr<IWICBitmapFrameDecode> frame;
-    hr = decoder->GetFrame(0, &frame);
-    if (FAILED(hr) || ! frame)
-    {
-        return nullptr;
-    }
-
-    UINT width  = 0;
-    UINT height = 0;
-    hr          = frame->GetSize(&width, &height);
-    if (FAILED(hr) || width == 0 || height == 0)
-    {
-        return nullptr;
-    }
-
-    wil::com_ptr<IWICFormatConverter> converter;
-    hr = factory->CreateFormatConverter(&converter);
-    if (FAILED(hr) || ! converter)
-    {
-        return nullptr;
-    }
-
-    hr = converter->Initialize(frame.get(), GUID_WICPixelFormat32bppBGRA, WICBitmapDitherTypeNone, nullptr, 0.0, WICBitmapPaletteTypeCustom);
-    if (FAILED(hr))
-    {
-        return nullptr;
-    }
-
-    BITMAPINFO bmi{};
-    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth       = static_cast<LONG>(width);
-    bmi.bmiHeader.biHeight      = -static_cast<LONG>(height); // top-down
-    bmi.bmiHeader.biPlanes      = 1;
-    bmi.bmiHeader.biBitCount    = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-
-    void* dibBits = nullptr;
-    wil::unique_hdc_window screen{GetDC(nullptr)};
-    wil::unique_hbitmap dib{CreateDIBSection(screen.get(), &bmi, DIB_RGB_COLORS, &dibBits, nullptr, 0)};
-    if (! dib || ! dibBits)
-    {
-        return nullptr;
-    }
-
-    const UINT stride      = width * 4u;
-    const UINT bytesToCopy = stride * height;
-    WICRect rect{0, 0, static_cast<INT>(width), static_cast<INT>(height)};
-    hr = converter->CopyPixels(&rect, stride, bytesToCopy, static_cast<BYTE*>(dibBits));
-    if (FAILED(hr))
-    {
-        return nullptr;
-    }
-
-    outSize.cx = static_cast<LONG>(width);
-    outSize.cy = static_cast<LONG>(height);
-    return dib;
+    return nullptr;
 }
 
 void PaintSplash(HWND hwnd, HDC hdc) noexcept
@@ -354,75 +255,82 @@ void PaintSplash(HWND hwnd, HDC hdc) noexcept
 
     const int width  = std::max(1, static_cast<int>(client.right - client.left));
     const int height = std::max(1, static_cast<int>(client.bottom - client.top));
+    const UINT dpi   = GetDpiForWindow(hwnd);
 
-    // Background: subtle dark vertical gradient (fast GDI line fill).
+    // Background: warm dark vertical gradient.
     auto oldPen   = wil::SelectObject(hdc, GetStockObject(DC_PEN));
     auto oldBrush = wil::SelectObject(hdc, GetStockObject(DC_BRUSH));
     for (int y = 0; y < height; ++y)
     {
         const double t = (height > 1) ? (static_cast<double>(y) / static_cast<double>(height - 1)) : 0.0;
-        const int r    = static_cast<int>(16.0 + (10.0 - 16.0) * t);
-        const int g    = static_cast<int>(16.0 + (10.0 - 16.0) * t);
-        const int b    = static_cast<int>(20.0 + (12.0 - 20.0) * t);
+        const int r    = GetRValue(kBgStart) + static_cast<int>((GetRValue(kBgEnd) - GetRValue(kBgStart)) * t);
+        const int g    = GetGValue(kBgStart) + static_cast<int>((GetGValue(kBgEnd) - GetGValue(kBgStart)) * t);
+        const int b    = GetBValue(kBgStart) + static_cast<int>((GetBValue(kBgEnd) - GetBValue(kBgStart)) * t);
 
-        SetDCPenColor(hdc, RGB(r, g, b));
+        const auto clampByte = [](int v) noexcept -> BYTE { return static_cast<BYTE>(std::clamp(v, 0, 255)); };
+        SetDCPenColor(hdc, MakeRGB(clampByte(r), clampByte(g), clampByte(b)));
         MoveToEx(hdc, 0, y, nullptr);
         LineTo(hdc, width, y);
     }
 
-    const UINT dpi     = GetDpiForWindow(hwnd);
-    const int paddingX = ScaleDip(20, dpi);
-    const int gapX     = ScaleDip(16, dpi);
-    const int logoSize = ScaleDip(96, dpi);
-
-    const int logoX   = paddingX;
-    const int logoY   = std::max(0, (height - logoSize) / 2);
-    const int centerX = logoX + (logoSize / 2);
-    const int centerY = logoY + (logoSize / 2);
-
-    // Warm radial highlight behind the logo (concentric circles).
+    // Moonlight Metal accents: faint diagonal panel.
     {
-        auto oldNoPen = wil::SelectObject(hdc, GetStockObject(NULL_PEN));
-
-        const int maxRadius = static_cast<int>(static_cast<double>(logoSize) * 0.9);
-        const int minRadius = static_cast<int>(static_cast<double>(logoSize) * 0.35);
-        const int steps     = 10;
-        for (int i = 0; i < steps; ++i)
+        const int panelRight = ScaleDip(340, dpi);
+        const std::array<POINT, 4> panelPts{
+            POINT{0, 0},
+            POINT{panelRight, 0},
+            POINT{ScaleDip(460, dpi), height},
+            POINT{0, height},
+        };
+        const COLORREF panelColor = MakeRGB(38, 50, 66);
+        auto panelBrush           = wil::unique_hbrush{CreateSolidBrush(panelColor)};
+        if (panelBrush)
         {
-            const double t   = static_cast<double>(i) / static_cast<double>(std::max(1, steps - 1)); // 0..1
-            const double inv = 1.0 - t;
-            const int radius = static_cast<int>(static_cast<double>(minRadius) + inv * static_cast<double>(maxRadius - minRadius));
-
-            const double intensity = inv * inv;
-            const int rr           = static_cast<int>(18.0 + intensity * 110.0);
-            const int gg           = static_cast<int>(12.0 + intensity * 45.0);
-            const int bb           = static_cast<int>(12.0 + intensity * 10.0);
-
-            SetDCBrushColor(hdc, RGB(rr, gg, bb));
-            Ellipse(hdc, centerX - radius, centerY - radius, centerX + radius, centerY + radius);
+            auto oldFillBrush = wil::SelectObject(hdc, panelBrush.get());
+            auto oldLinePen   = wil::SelectObject(hdc, GetStockObject(DC_PEN));
+            SetDCPenColor(hdc, panelColor);
+            Polygon(hdc, panelPts.data(), static_cast<int>(panelPts.size()));
         }
     }
 
-    // Logo (alpha blended).
-    if (g_logoBitmap && g_logoSize.cx > 0 && g_logoSize.cy > 0)
+    const int gapX     = ScaleDip(16, dpi);
+    const int logoSize = std::clamp(ScaleDip(kSplashLogoDesignDip, dpi), ScaleDip(96, dpi), 256);
+
+    const int logoX = -ScaleDip(38, dpi);
+    const int logoY = std::max(0, (height - logoSize) / 2);
+
+    if (g_logoIcon)
     {
-        wil::unique_hdc mem(CreateCompatibleDC(hdc));
-        if (mem)
+        DrawIconEx(hdc, logoX, logoY, g_logoIcon.get(), logoSize, logoSize, 0, nullptr, DI_NORMAL);
+    }
+    else
+    {
+        const int pad  = std::max(1, ScaleDip(8, dpi));
+        auto oldPen3   = wil::SelectObject(hdc, GetStockObject(DC_PEN));
+        auto oldBrush3 = wil::SelectObject(hdc, GetStockObject(NULL_BRUSH));
+        auto oldFont3  = wil::SelectObject(hdc, g_titleFont.get() ? g_titleFont.get() : GetStockObject(DEFAULT_GUI_FONT));
+        SetDCPenColor(hdc, kFallbackRing);
+        const int baseX = std::max(0, logoX);
+        const int baseY = std::max(0, logoY);
+        Ellipse(hdc, baseX, baseY, baseX + logoSize, baseY + logoSize);
+
+        SetDCPenColor(hdc, kFallbackFrame);
+        Rectangle(hdc, baseX + pad, baseY + pad, baseX + logoSize - pad, baseY + logoSize - pad);
+
+        if (logoSize > pad * 4)
         {
-            auto oldBmp = wil::SelectObject(mem.get(), g_logoBitmap.get());
-            BLENDFUNCTION blend{};
-            blend.BlendOp             = AC_SRC_OVER;
-            blend.SourceConstantAlpha = 255;
-            blend.AlphaFormat         = AC_SRC_ALPHA;
-            static_cast<void>(BlitAlphaBlend(hdc, logoX, logoY, logoSize, logoSize, mem.get(), 0, 0, g_logoSize.cx, g_logoSize.cy, blend));
+            SetTextColor(hdc, kLogoFallbackText);
+            const int oldBkMode = SetBkMode(hdc, TRANSPARENT);
+            TextOutW(hdc, baseX + pad, baseY + pad, L"RS", 2);
+            SetBkMode(hdc, oldBkMode);
         }
     }
 
     // Subtle separator between the logo and the text area.
     {
-        const int separatorX = logoX + logoSize + (gapX / 2);
+        const int separatorX = logoX + logoSize + (gapX / 2) + ScaleDip(kSplashContentOffsetDip, dpi);
         const int insetY     = ScaleDip(18, dpi);
-        SetDCPenColor(hdc, RGB(40, 40, 48));
+        SetDCPenColor(hdc, kSeparator);
         MoveToEx(hdc, separatorX, insetY, nullptr);
         LineTo(hdc, separatorX, std::max(insetY, height - insetY));
     }
@@ -430,7 +338,7 @@ void PaintSplash(HWND hwnd, HDC hdc) noexcept
     // Subtle 1px border.
     {
         auto oldBorderBrush = wil::SelectObject(hdc, GetStockObject(HOLLOW_BRUSH));
-        SetDCPenColor(hdc, RGB(48, 48, 56));
+        SetDCPenColor(hdc, kBorder);
         Rectangle(hdc, client.left, client.top, client.right, client.bottom);
     }
 }
@@ -446,8 +354,8 @@ INT_PTR CALLBACK SplashDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
         {
             // Size the window explicitly (DPI-aware) to keep the splash visually consistent.
             const UINT dpi     = GetDpiForWindow(hwnd);
-            const int widthPx  = ScaleDip(480, dpi);
-            const int heightPx = ScaleDip(200, dpi);
+            const int widthPx  = ScaleDip(560, dpi);
+            const int heightPx = ScaleDip(220, dpi);
             SetWindowPos(hwnd, nullptr, 0, 0, widthPx, heightPx, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
 
             // Rounded corners.
@@ -468,8 +376,8 @@ INT_PTR CALLBACK SplashDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
                 const int paddingX     = ScaleDip(20, dpi);
                 const int paddingY     = ScaleDip(18, dpi);
                 const int gapX         = ScaleDip(16, dpi);
-                const int logoSize     = ScaleDip(96, dpi);
-                const int textX        = paddingX + logoSize + gapX;
+                const int logoSize     = ScaleDip(162, dpi);
+                const int textX        = std::max(paddingX, -ScaleDip(38, dpi) + logoSize + gapX + ScaleDip(kSplashContentOffsetDip, dpi));
                 const int textWidth    = std::max(1, widthPx - textX - paddingX);
                 const int titleHeight  = ScaleDip(30, dpi);
                 const int metaHeight   = ScaleDip(18, dpi);
@@ -545,12 +453,14 @@ INT_PTR CALLBACK SplashDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
                 }
             }
 
+            InstallSplashChildDrag(hwnd);
             CenterOverOwner(hwnd, g_owner.load(std::memory_order_acquire));
             return static_cast<INT_PTR>(TRUE);
         }
         case WM_ERASEBKGND:
             // We paint a full custom background in WM_PAINT.
             return static_cast<INT_PTR>(TRUE);
+        case WM_LBUTTONDOWN: StartSplashDrag(hwnd); return static_cast<INT_PTR>(TRUE);
         case WM_PAINT:
         {
             wil::unique_hdc_paint dc = wil::BeginPaint(hwnd);
@@ -571,21 +481,22 @@ INT_PTR CALLBACK SplashDialogProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPa
 
                 if (ctl == GetDlgItem(hwnd, IDC_SPLASH_REDSALAMANDER))
                 {
-                    SetTextColor(hdc, RGB(250, 250, 252));
+                    SetTextColor(hdc, kTitleText);
                 }
                 else if (ctl == GetDlgItem(hwnd, IDC_SPLASH_STATUS))
                 {
-                    SetTextColor(hdc, RGB(230, 200, 160));
+                    SetTextColor(hdc, kStatusText);
                 }
                 else
                 {
-                    SetTextColor(hdc, RGB(200, 200, 208));
+                    SetTextColor(hdc, kSecondaryText);
                 }
             }
             return reinterpret_cast<INT_PTR>(GetStockObject(NULL_BRUSH));
         }
         case WM_CLOSE: DestroyWindow(hwnd); return static_cast<INT_PTR>(TRUE);
         case WM_DESTROY:
+            RemoveSplashChildDrag(hwnd);
             g_hwnd.store(nullptr, std::memory_order_release);
             PostQuitMessage(0);
             return static_cast<INT_PTR>(TRUE);
@@ -626,14 +537,9 @@ void ThreadMain(std::chrono::milliseconds delay, HINSTANCE instance) noexcept
             }
         });
 
-    if (! g_logoBitmap)
+    if (! g_logoIcon)
     {
-        SIZE size{};
-        if (auto bmp = TryLoadLogoPng(instance, size))
-        {
-            g_logoSize   = size;
-            g_logoBitmap = std::move(bmp);
-        }
+        g_logoIcon = TryLoadLogoIcon(instance);
     }
 
     // The dialog proc is written to be exception-free; suppress at call site for MSVC (-EHc).

@@ -600,12 +600,12 @@ namespace FileSystemCurlInternal
         namePart = namePart.substr(0, arrow);
     }
 
-    unsigned __int64 sizeBytes = 0;
+    uint64_t sizeBytes = 0;
     {
         unsigned long long parsed = 0;
         if (sscanf_s(std::string(sizeTok.value()).c_str(), "%llu", &parsed) == 1)
         {
-            sizeBytes = parsed;
+            sizeBytes = static_cast<uint64_t>(parsed);
         }
     }
 
@@ -1868,7 +1868,7 @@ void ApplyCommonCurlOptions(CURL* curl, const ConnectionInfo& conn, const FileSy
         curl_easy_setopt(curl, CURLOPT_SSH_KNOWNHOSTS, conn.sshKnownHosts.c_str());
     }
 
-    const unsigned __int64 limit = options ? options->bandwidthLimitBytesPerSecond : 0;
+    const uint64_t limit = options ? options->bandwidthLimitBytesPerSecond : 0;
     if (limit > 0)
     {
         if (forUpload)
@@ -2001,7 +2001,7 @@ namespace FileSystemCurlInternal
     return S_OK;
 }
 
-[[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, unsigned __int64& out) noexcept
+[[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, uint64_t& out) noexcept
 {
     out = 0;
 
@@ -2021,7 +2021,7 @@ namespace FileSystemCurlInternal
         return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
     }
 
-    out = static_cast<unsigned __int64>(size.QuadPart);
+    out = static_cast<uint64_t>(size.QuadPart);
     return S_OK;
 }
 
@@ -2054,36 +2054,36 @@ namespace FileSystemCurlInternal
 
 namespace FileSystemCurlInternal
 {
-[[nodiscard]] unsigned __int64 ClampCurlOffToUInt64(curl_off_t value) noexcept
+[[nodiscard]] uint64_t ClampCurlOffToUInt64(curl_off_t value) noexcept
 {
     if (value <= 0)
     {
         return 0;
     }
 
-    constexpr curl_off_t max = static_cast<curl_off_t>((std::numeric_limits<unsigned __int64>::max)());
+    constexpr curl_off_t max = (std::numeric_limits<curl_off_t>::max)();
     if (value > max)
     {
-        return (std::numeric_limits<unsigned __int64>::max)();
+        return (std::numeric_limits<uint64_t>::max)();
     }
 
-    return static_cast<unsigned __int64>(value);
+    return static_cast<uint64_t>(value);
 }
 
-[[nodiscard]] unsigned __int64 SaturatingAddToAtomic(std::atomic<unsigned __int64>& value, unsigned __int64 delta) noexcept
+[[nodiscard]] uint64_t SaturatingAddToAtomic(std::atomic<uint64_t>& value, uint64_t delta) noexcept
 {
     if (delta == 0)
     {
         return value.load(std::memory_order_acquire);
     }
 
-    unsigned __int64 current = value.load(std::memory_order_relaxed);
+    uint64_t current = value.load(std::memory_order_relaxed);
     for (;;)
     {
-        unsigned __int64 next = current;
-        if (current > (std::numeric_limits<unsigned __int64>::max)() - delta)
+        uint64_t next = current;
+        if (current > (std::numeric_limits<uint64_t>::max)() - delta)
         {
-            next = (std::numeric_limits<unsigned __int64>::max)();
+            next = (std::numeric_limits<uint64_t>::max)();
         }
         else
         {
@@ -2105,30 +2105,30 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
         return 0;
     }
 
-    const unsigned __int64 nowTick = GetTickCount64();
+    const uint64_t nowTick = GetTickCount64();
 
-    const unsigned __int64 phaseTotal = ClampCurlOffToUInt64(ctx->isUpload ? ultotal : dltotal);
-    const unsigned __int64 phaseNow   = ClampCurlOffToUInt64(ctx->isUpload ? ulnow : dlnow);
+    const uint64_t phaseTotal = ClampCurlOffToUInt64(ctx->isUpload ? ultotal : dltotal);
+    const uint64_t phaseNow   = ClampCurlOffToUInt64(ctx->isUpload ? ulnow : dlnow);
 
     if (ctx->itemTotalBytes == 0 && phaseTotal > 0)
     {
         ctx->itemTotalBytes = phaseTotal;
     }
 
-    unsigned __int64 itemDone  = phaseNow;
-    unsigned __int64 itemTotal = phaseTotal;
+    uint64_t itemDone  = phaseNow;
+    uint64_t itemTotal = phaseTotal;
 
     if (ctx->scaleForCopy && ctx->itemTotalBytes > 0)
     {
-        itemTotal                   = ctx->itemTotalBytes;
-        const unsigned __int64 half = itemTotal / 2u;
+        itemTotal           = ctx->itemTotalBytes;
+        const uint64_t half = itemTotal / 2u;
         if (! ctx->scaleForCopySecond)
         {
             itemDone = std::min(half, phaseNow / 2u);
         }
         else
         {
-            const unsigned __int64 extra = (itemTotal & 1u) != 0 ? 1u : 0u;
+            const uint64_t extra = (itemTotal & 1u) != 0 ? 1u : 0u;
             if (phaseNow >= itemTotal)
             {
                 itemDone = itemTotal;
@@ -2140,24 +2140,24 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
         }
     }
 
-    unsigned __int64 wireDone = phaseNow;
+    uint64_t wireDone = phaseNow;
     if (ctx->scaleForCopy && ctx->itemTotalBytes > 0)
     {
-        const unsigned __int64 offset = ctx->scaleForCopySecond ? ctx->itemTotalBytes : 0;
-        wireDone = offset > (std::numeric_limits<unsigned __int64>::max)() - phaseNow ? (std::numeric_limits<unsigned __int64>::max)() : (offset + phaseNow);
+        const uint64_t offset = ctx->scaleForCopySecond ? ctx->itemTotalBytes : 0;
+        wireDone              = offset > (std::numeric_limits<uint64_t>::max)() - phaseNow ? (std::numeric_limits<uint64_t>::max)() : (offset + phaseNow);
     }
 
-    unsigned __int64 overall = 0;
+    uint64_t overall = 0;
     if (ctx->concurrentOverallBytes)
     {
-        const unsigned __int64 delta = wireDone >= ctx->lastConcurrentWireDone ? (wireDone - ctx->lastConcurrentWireDone) : 0;
-        ctx->lastConcurrentWireDone  = wireDone;
-        overall                      = SaturatingAddToAtomic(*ctx->concurrentOverallBytes, delta);
+        const uint64_t delta        = wireDone >= ctx->lastConcurrentWireDone ? (wireDone - ctx->lastConcurrentWireDone) : 0;
+        ctx->lastConcurrentWireDone = wireDone;
+        overall                     = SaturatingAddToAtomic(*ctx->concurrentOverallBytes, delta);
     }
     else
     {
-        overall = ctx->baseCompletedBytes > (std::numeric_limits<unsigned __int64>::max)() - wireDone ? (std::numeric_limits<unsigned __int64>::max)()
-                                                                                                      : (ctx->baseCompletedBytes + wireDone);
+        overall = ctx->baseCompletedBytes > (std::numeric_limits<uint64_t>::max)() - wireDone ? (std::numeric_limits<uint64_t>::max)()
+                                                                                              : (ctx->baseCompletedBytes + wireDone);
     }
 
     // Cancellation check (even if we don't report progress this tick).
@@ -2191,10 +2191,10 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
     }
 
     // Soft bandwidth limiting with Sleep in the progress callback (enables dynamic updates from host).
-    const unsigned __int64 limit = ctx->progress->options.bandwidthLimitBytesPerSecond;
+    const uint64_t limit = ctx->progress->options.bandwidthLimitBytesPerSecond;
     if (limit > 0 && ctx->throttleStartTick != 0)
     {
-        const unsigned __int64 elapsedMs = nowTick - ctx->throttleStartTick;
+        const uint64_t elapsedMs = nowTick - ctx->throttleStartTick;
         if (elapsedMs > 0 && phaseNow > 0)
         {
             const double expectedMs = (static_cast<double>(phaseNow) * 1000.0) / static_cast<double>(limit);
@@ -2427,7 +2427,7 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
 [[nodiscard]] HRESULT CurlUploadFromFile(const ConnectionInfo& conn,
                                          std::wstring_view pluginPath,
                                          HANDLE file,
-                                         unsigned __int64 sizeBytes,
+                                         uint64_t sizeBytes,
                                          const FileSystemOptions* options,
                                          TransferProgressContext* progressCtx) noexcept
 {
@@ -2455,7 +2455,7 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
     curl_easy_setopt(curl.get(), CURLOPT_READDATA, file);
     curl_easy_setopt(curl.get(),
                      CURLOPT_INFILESIZE_LARGE,
-                     static_cast<curl_off_t>(std::min(sizeBytes, static_cast<unsigned __int64>((std::numeric_limits<curl_off_t>::max)()))));
+                     static_cast<curl_off_t>(std::min<uint64_t>(sizeBytes, static_cast<uint64_t>((std::numeric_limits<curl_off_t>::max)()))));
     curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
 
     if (progressCtx)

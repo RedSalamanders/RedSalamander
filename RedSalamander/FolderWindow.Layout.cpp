@@ -345,6 +345,69 @@ void FolderWindow::SetSplitRatio(float ratio)
     }
 }
 
+void FolderWindow::BeginViewWidthAdjust() noexcept
+{
+    if (_viewWidthAdjustActive)
+    {
+        return;
+    }
+
+    _viewWidthAdjustActive        = true;
+    _viewWidthAdjustRestoreRatio = _splitRatio;
+}
+
+void FolderWindow::CommitViewWidthAdjust() noexcept
+{
+    _viewWidthAdjustActive = false;
+}
+
+void FolderWindow::CancelViewWidthAdjust() noexcept
+{
+    if (! _viewWidthAdjustActive)
+    {
+        return;
+    }
+
+    const float restore = _viewWidthAdjustRestoreRatio;
+    _viewWidthAdjustActive = false;
+    SetSplitRatio(restore);
+}
+
+bool FolderWindow::HandleViewWidthAdjustKey(uint32_t vk) noexcept
+{
+    if (! _viewWidthAdjustActive)
+    {
+        return false;
+    }
+
+    constexpr int kStepPx = 16;
+    switch (vk)
+    {
+        case VK_LEFT:
+        {
+            const float widthPx = static_cast<float>(std::max<LONG>(1, _clientSize.cx));
+            const float delta   = static_cast<float>(-kStepPx) / widthPx;
+            SetSplitRatio(_splitRatio + delta);
+            return true;
+        }
+        case VK_RIGHT:
+        {
+            const float widthPx = static_cast<float>(std::max<LONG>(1, _clientSize.cx));
+            const float delta   = static_cast<float>(kStepPx) / widthPx;
+            SetSplitRatio(_splitRatio + delta);
+            return true;
+        }
+        case VK_RETURN:
+            CommitViewWidthAdjust();
+            return true;
+        case VK_ESCAPE:
+            CancelViewWidthAdjust();
+            return true;
+        default:
+            return false;
+    }
+}
+
 void FolderWindow::SetZoomState(std::optional<Pane> zoomedPane, std::optional<float> restoreSplitRatio)
 {
     if (zoomedPane.has_value())

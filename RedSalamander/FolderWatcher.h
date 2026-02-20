@@ -60,6 +60,6 @@ private:
     std::atomic<bool> _running{false};
     std::atomic<bool> _stopping{false};
     std::atomic<ULONGLONG> _lastOverflowLogTick{0};
-    std::atomic<unsigned __int64> _overflowCount{0};
+    std::atomic<uint64_t> _overflowCount{0};
     std::mutex _mutex;
 };

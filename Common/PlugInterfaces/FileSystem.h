@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <limits.h>
 #include <unknwn.h>
 #include <wchar.h>
@@ -61,7 +62,7 @@ struct FileSystemOptions
     // 0 = unlimited (use all available bandwidth).
     // Callbacks receive an in/out FileSystemOptions* so the host can tweak it on progress updates (e.g. changing the limit mid-flight).
     // Plugins MAY also write back an effective applied limit (e.g. internal clamping or combining with a plugin-specific cap).
-    unsigned __int64 bandwidthLimitBytesPerSecond;
+    uint64_t bandwidthLimitBytesPerSecond;
 };
 
 struct FileSystemRenamePair
@@ -118,8 +119,8 @@ struct FileSystemSearchMatch
 
 struct FileSystemSearchProgress
 {
-    unsigned __int64 scannedEntries;
-    unsigned __int64 matchedEntries;
+    uint64_t scannedEntries;
+    uint64_t matchedEntries;
     const wchar_t* currentPath;
 };
 #pragma warning(pop)
@@ -167,14 +168,14 @@ interface __declspec(novtable) IFileSystemCallback
     virtual HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation operationType,
                                                          unsigned long totalItems,
                                                          unsigned long completedItems,
-                                                         unsigned __int64 totalBytes,
-                                                         unsigned __int64 completedBytes,
+                                                         uint64_t totalBytes,
+                                                         uint64_t completedBytes,
                                                          const wchar_t* currentSourcePath,
                                                          const wchar_t* currentDestinationPath,
-                                                         unsigned __int64 currentItemTotalBytes,
-                                                         unsigned __int64 currentItemCompletedBytes,
+                                                         uint64_t currentItemTotalBytes,
+                                                         uint64_t currentItemCompletedBytes,
                                                          FileSystemOptions* options,
-                                                         unsigned __int64 progressStreamId,
+                                                         uint64_t progressStreamId,
                                                          void* cookie) noexcept = 0;
     // options may be nullptr; implementations must check before reading/writing to it.
     // Notes:
@@ -291,9 +292,9 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
 // - Implementations MUST be safe for large files (64-bit offsets/sizes).
 interface __declspec(uuid("b1d0c2b8-0e37-4d6f-8c2c-2cc4f0d1c6b8")) __declspec(novtable) IFileReader : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetSize(unsigned __int64* sizeBytes) noexcept                                      = 0;
-    virtual HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, unsigned __int64* newPosition) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE Read(void* buffer, unsigned long bytesToRead, unsigned long* bytesRead) noexcept   = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept                                            = 0;
+    virtual HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept       = 0;
+    virtual HRESULT STDMETHODCALLTYPE Read(void* buffer, unsigned long bytesToRead, unsigned long* bytesRead) noexcept = 0;
 };
 
 // Minimal Win32-like file writer for filesystem plugins.
@@ -302,7 +303,7 @@ interface __declspec(uuid("b1d0c2b8-0e37-4d6f-8c2c-2cc4f0d1c6b8")) __declspec(no
 // - Implementations MUST tolerate being released without Commit() (treat as abort / best-effort cleanup).
 interface __declspec(uuid("b6f0a9e1-8c8b-4b72-9f3e-2f2b4b8b9c41")) __declspec(novtable) IFileWriter : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetPosition(unsigned __int64* positionBytes) noexcept                                       = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetPosition(uint64_t* positionBytes) noexcept                                               = 0;
     virtual HRESULT STDMETHODCALLTYPE Write(const void* buffer, unsigned long bytesToWrite, unsigned long* bytesWritten) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE Commit() noexcept                                                                           = 0;
 };
@@ -339,10 +340,10 @@ interface __declspec(uuid("2c7c32b3-8a0f-4e25-8d3a-6a5f1d0a1e2c")) __declspec(no
 // Result structure for directory size computation.
 struct FileSystemDirectorySizeResult
 {
-    unsigned __int64 totalBytes;     // Total size in bytes (sum of file sizes).
-    unsigned __int64 fileCount;      // Number of files counted.
-    unsigned __int64 directoryCount; // Number of directories counted (excluding root).
-    HRESULT status;                  // S_OK, HRESULT_FROM_WIN32(ERROR_CANCELLED), or first error.
+    uint64_t totalBytes;     // Total size in bytes (sum of file sizes).
+    uint64_t fileCount;      // Number of files counted.
+    uint64_t directoryCount; // Number of directories counted (excluding root).
+    HRESULT status;          // S_OK, HRESULT_FROM_WIN32(ERROR_CANCELLED), or first error.
 };
 
 // Host callback for directory size computation progress.
@@ -353,12 +354,8 @@ struct FileSystemDirectorySizeResult
 //   and SHOULD reach progress checkpoints frequently enough for responsiveness.
 interface __declspec(novtable) IFileSystemDirectorySizeCallback
 {
-    virtual HRESULT STDMETHODCALLTYPE DirectorySizeProgress(unsigned __int64 scannedEntries,
-                                                            unsigned __int64 totalBytes,
-                                                            unsigned __int64 fileCount,
-                                                            unsigned __int64 directoryCount,
-                                                            const wchar_t* currentPath,
-                                                            void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE DirectorySizeProgress(
+        uint64_t scannedEntries, uint64_t totalBytes, uint64_t fileCount, uint64_t directoryCount, const wchar_t* currentPath, void* cookie) noexcept = 0;
 
     virtual HRESULT STDMETHODCALLTYPE DirectorySizeShouldCancel(BOOL * pCancel, void* cookie) noexcept = 0;
 };
@@ -610,7 +607,7 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
         }
     }
 
-    unsigned __int64 totalBytes = static_cast<unsigned __int64>(entryCount) * sizeof(const wchar_t*);
+    uint64_t totalBytes = static_cast<uint64_t>(entryCount) * sizeof(const wchar_t*);
     if (totalBytes > ULONG_MAX)
     {
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
@@ -633,19 +630,19 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
         }
 
         const unsigned long nameChars = entry->FileNameSize / wcharSizeBytes;
-        unsigned __int64 sourceChars  = static_cast<unsigned __int64>(sourceRootChars);
+        uint64_t sourceChars          = static_cast<uint64_t>(sourceRootChars);
         if (sourceNeedsSeparator)
         {
             sourceChars += 1u;
         }
 
-        sourceChars += static_cast<unsigned __int64>(nameChars);
+        sourceChars += static_cast<uint64_t>(nameChars);
         if (sourceChars > ULONG_MAX)
         {
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
 
-        unsigned __int64 sourceBytes = (sourceChars + 1u) * wcharSizeBytes;
+        uint64_t sourceBytes = (sourceChars + 1u) * wcharSizeBytes;
         totalBytes += sourceBytes;
         if (totalBytes > ULONG_MAX)
         {
@@ -682,7 +679,7 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
         return hr;
     }
 
-    const unsigned __int64 pathsBytes64 = static_cast<unsigned __int64>(entryCount) * sizeof(const wchar_t*);
+    const uint64_t pathsBytes64 = static_cast<uint64_t>(entryCount) * sizeof(const wchar_t*);
     if (pathsBytes64 > ULONG_MAX)
     {
         DestroyFileSystemArena(arena);
@@ -716,7 +713,7 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
         }
 
         sourceChars += nameChars;
-        const unsigned __int64 sourceBytes64 = (static_cast<unsigned __int64>(sourceChars) + 1u) * wcharSizeBytes;
+        const uint64_t sourceBytes64 = (static_cast<uint64_t>(sourceChars) + 1u) * wcharSizeBytes;
         if (sourceBytes64 > ULONG_MAX)
         {
             DestroyFileSystemArena(arena);

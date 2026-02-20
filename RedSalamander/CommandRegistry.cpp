@@ -7,7 +7,7 @@
 
 namespace
 {
-constexpr std::array<CommandInfo, 122> kCommands = {
+constexpr std::array<CommandInfo, 123> kCommands = {
     CommandInfo{L"cmd/app/about", IDS_CMD_ABOUT, IDS_CMD_DESC_ABOUT, IDM_ABOUT},
     CommandInfo{L"cmd/app/compare", IDS_CMD_COMPARE, IDS_CMD_DESC_COMPARE, IDM_APP_COMPARE},
     CommandInfo{L"cmd/app/exit", IDS_CMD_EXIT, IDS_CMD_DESC_EXIT, IDM_EXIT},
@@ -68,6 +68,7 @@ constexpr std::array<CommandInfo, 122> kCommands = {
     CommandInfo{L"cmd/pane/disconnect", IDS_CMD_DISCONNECT, IDS_CMD_DESC_DISCONNECT, IDM_PANE_DISCONNECT},
     CommandInfo{L"cmd/pane/display/brief", IDS_CMD_DISPLAY_BRIEF, IDS_CMD_DESC_DISPLAY_BRIEF, IDM_PANE_DISPLAY_BRIEF},
     CommandInfo{L"cmd/pane/display/detailed", IDS_CMD_DISPLAY_DETAILED, IDS_CMD_DESC_DISPLAY_DETAILED, IDM_PANE_DISPLAY_DETAILED},
+    CommandInfo{L"cmd/pane/display/extraDetailed", IDS_CMD_DISPLAY_EXTRA_DETAILED, IDS_CMD_DESC_DISPLAY_EXTRA_DETAILED, IDM_PANE_DISPLAY_EXTRA_DETAILED},
     CommandInfo{L"cmd/pane/edit", IDS_CMD_EDIT, IDS_CMD_DESC_EDIT, IDM_PANE_EDIT},
     CommandInfo{L"cmd/pane/editNew", IDS_CMD_EDIT_NEW, IDS_CMD_DESC_EDIT_NEW, IDM_PANE_EDIT_NEW},
     CommandInfo{L"cmd/pane/editWidth", IDS_CMD_EDIT_WIDTH, IDS_CMD_DESC_EDIT_WIDTH, IDM_PANE_EDIT_WIDTH},

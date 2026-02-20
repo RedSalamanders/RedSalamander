@@ -8,8 +8,8 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
-// Static instance pointer for callback routing
-EtwListener* EtwListener::s_instance = nullptr;
+// Static instance pointer for callback routing (atomic: written on UI thread, read from ETW worker thread)
+std::atomic<EtwListener*> EtwListener::s_instance{nullptr};
 
 EtwListener::EtwListener() : _sessionHandle(INVALID_PROCESSTRACE_HANDLE), _traceHandle(INVALID_PROCESSTRACE_HANDLE), _isRunning(false)
 {
@@ -40,7 +40,7 @@ bool EtwListener::Start(EventCallback callback)
     }
 
     _userCallback = std::move(callback);
-    s_instance    = this;
+    s_instance.store(this, std::memory_order_release);
 
     // Stop any existing session with the same name
     std::vector<BYTE> sessionBuffer(sizeof(EVENT_TRACE_PROPERTIES) + (wcslen(kSessionName) + 1) * sizeof(wchar_t));
@@ -146,9 +146,9 @@ void EtwListener::Stop()
 {
     const bool wasRunning = _isRunning.exchange(false);
 
-    if (s_instance == this)
+    if (s_instance.load(std::memory_order_acquire) == this)
     {
-        s_instance = nullptr;
+        s_instance.store(nullptr, std::memory_order_release);
     }
 
     // Close the trace handle (this will cause ProcessTrace to return)
@@ -160,8 +160,21 @@ void EtwListener::Stop()
 
     if (wasRunning)
     {
-        // Wait for worker thread to finish (jthread destructor handles this)
-        _workerThread = std::jthread();
+        // Wait for worker thread to finish. CloseTrace should cause ProcessTrace to return,
+        // but if it hangs we want to know about it rather than silently deadlock.
+        if (_workerThread.joinable())
+        {
+            auto handle = _workerThread.native_handle();
+            if (handle)
+            {
+                const DWORD waitResult = WaitForSingleObject(handle, 5000);
+                if (waitResult == WAIT_TIMEOUT)
+                {
+                    Debug::Warning(L"EtwListener::Stop: worker thread did not exit within 5 seconds after CloseTrace");
+                }
+            }
+        }
+        _workerThread = std::jthread(); // Join (should be instant if wait succeeded)
     }
 
     // Stop the trace session
@@ -195,10 +208,11 @@ void EtwListener::ProcessTraceThread()
 ULONG WINAPI EtwListener::BufferCallback(PEVENT_TRACE_LOGFILEW logfile)
 {
     // Track buffer statistics
-    if (s_instance && logfile)
+    auto* inst = s_instance.load(std::memory_order_acquire);
+    if (inst && logfile)
     {
-        s_instance->_buffersProcessed.fetch_add(1u, std::memory_order_relaxed);
-        s_instance->_eventsLost.fetch_add(logfile->EventsLost, std::memory_order_relaxed);
+        inst->_buffersProcessed.fetch_add(1u, std::memory_order_relaxed);
+        inst->_eventsLost.fetch_add(logfile->EventsLost, std::memory_order_relaxed);
     }
 
     // Return TRUE to continue processing
@@ -207,9 +221,10 @@ ULONG WINAPI EtwListener::BufferCallback(PEVENT_TRACE_LOGFILEW logfile)
 
 VOID WINAPI EtwListener::EventRecordCallback(PEVENT_RECORD eventRecord)
 {
-    if (s_instance)
+    auto* inst = s_instance.load(std::memory_order_acquire);
+    if (inst)
     {
-        s_instance->HandleEvent(eventRecord);
+        inst->HandleEvent(eventRecord);
     }
 }
 
@@ -241,6 +256,14 @@ void EtwListener::HandleEvent(PEVENT_RECORD eventRecord)
 
 bool EtwListener::ExtractEventData(PEVENT_RECORD eventRecord, Debug::InfoParam& info, std::wstring& message)
 {
+    // PERF NOTE: TDH (Trace Data Helper) API is slow — each event requires TdhGetEventInformation
+    // plus per-property TdhGetPropertySize + TdhGetProperty calls (17+ total). For a known provider
+    // with a fixed schema, direct TraceLogging binary decoding would be 10-50x faster. Since the
+    // RedSalamander schema (Type, Name, Detail, Message, ProcessId, ThreadId, FileTime, DurationUs,
+    // Value0, Value1, Hr) is fixed at compile time, this is a viable future optimization.
+    // For now, TDH overhead is acceptable because it runs on the worker thread (not the UI thread)
+    // and the UI-side batch processing caps ensure responsiveness.
+
     // Get event information using TDH (Trace Data Helper)
     DWORD bufferSize = 0;
     ULONG result     = TdhGetEventInformation(eventRecord, 0, nullptr, nullptr, &bufferSize);

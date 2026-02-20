@@ -601,8 +601,8 @@ HRESULT ReadFileAllBytes(IFileSystem* fileSystem, const std::wstring& path, std:
         return hr;
     }
 
-    unsigned __int64 sizeBytes = 0;
-    const HRESULT sizeHr       = reader->GetSize(&sizeBytes);
+    uint64_t sizeBytes   = 0;
+    const HRESULT sizeHr = reader->GetSize(&sizeBytes);
     if (FAILED(sizeHr))
     {
         outStatusMessage = std::format(L"ViewerImgRaw: GetSize failed (hr=0x{:08X}).", static_cast<unsigned long>(sizeHr));
@@ -620,7 +620,7 @@ HRESULT ReadFileAllBytes(IFileSystem* fileSystem, const std::wstring& path, std:
         outStatusMessage = std::format(L"ViewerImgRaw: File too large ({:L} bytes).", static_cast<uint64_t>(sizeBytes));
         return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
     }
-    if (sizeBytes > static_cast<unsigned __int64>(std::numeric_limits<size_t>::max()))
+    if (sizeBytes > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
     {
         outStatusMessage = L"ViewerImgRaw: File too large for address space.";
         return E_OUTOFMEMORY;
@@ -628,7 +628,7 @@ HRESULT ReadFileAllBytes(IFileSystem* fileSystem, const std::wstring& path, std:
 
     outBytes.resize(static_cast<size_t>(sizeBytes));
 
-    unsigned __int64 pos = 0;
+    uint64_t pos         = 0;
     const HRESULT seekHr = reader->Seek(0, FILE_BEGIN, &pos);
     if (FAILED(seekHr))
     {

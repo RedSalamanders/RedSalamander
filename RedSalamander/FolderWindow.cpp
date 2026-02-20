@@ -189,6 +189,18 @@ void FolderWindow::SetPaneDetailsTextProvider(Pane pane, FolderView::DetailsText
     state.folderView.SetDetailsTextProvider(std::move(provider));
 }
 
+void FolderWindow::SetPaneMetadataTextProvider(Pane pane, FolderView::MetadataTextProvider provider)
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.SetMetadataTextProvider(std::move(provider));
+}
+
+void FolderWindow::SetPaneEmptyStateMessage(Pane pane, std::wstring message)
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.SetEmptyStateMessage(std::move(message));
+}
+
 void FolderWindow::RefreshPaneDetailsText(Pane pane)
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -388,6 +400,8 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kPaneSelectionSizeComputed: return OnPaneSelectionSizeComputed(lp);
         case WndMsg::kPaneSelectionSizeProgress: return OnPaneSelectionSizeProgress(lp);
         case WndMsg::kFileOperationCompleted: return OnFileOperationCompleted(lp);
+        case WndMsg::kChangeCaseTaskUpdate: return OnChangeCaseTaskUpdate(lp);
+        case WndMsg::kChangeCaseCompleted: return OnChangeCaseCompleted(lp);
         case WndMsg::kHostShowAlert: return OnHostServicesMessage(msg, wp, lp);
         case WndMsg::kHostClearAlert: return OnHostServicesMessage(msg, wp, lp);
         case WndMsg::kHostShowPrompt: return OnHostServicesMessage(msg, wp, lp);

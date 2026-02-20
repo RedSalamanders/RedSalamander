@@ -31,6 +31,7 @@ enum class PrefCategory : int
     Themes,
     Plugins,
     Advanced,
+    CompareDirectories,
 };
 
 enum class ShortcutScope : uint8_t
@@ -285,7 +286,7 @@ struct PreferencesDialogState
 
     // Dialog Structure Controls
     HWND categoryTree = nullptr;
-    std::array<HTREEITEM, 9> categoryTreeItems{};
+    std::array<HTREEITEM, 10> categoryTreeItems{};
     HTREEITEM pluginsTreeRoot = nullptr;
     HWND pageHost             = nullptr;
     HWND pageTitle            = nullptr;
@@ -531,6 +532,48 @@ struct PreferencesDialogState
     wil::unique_hwnd advancedFileOperationsDiagnosticsDebugToggle;
     wil::unique_hwnd advancedFileOperationsDiagnosticsDebugDescription;
 
+    wil::unique_hwnd advancedCompareDirectoriesHeader;
+    wil::unique_hwnd advancedCompareSizeLabel;
+    wil::unique_hwnd advancedCompareSizeToggle;
+    wil::unique_hwnd advancedCompareSizeDescription;
+    wil::unique_hwnd advancedCompareDateTimeLabel;
+    wil::unique_hwnd advancedCompareDateTimeToggle;
+    wil::unique_hwnd advancedCompareDateTimeDescription;
+    wil::unique_hwnd advancedCompareAttributesLabel;
+    wil::unique_hwnd advancedCompareAttributesToggle;
+    wil::unique_hwnd advancedCompareAttributesDescription;
+    wil::unique_hwnd advancedCompareContentLabel;
+    wil::unique_hwnd advancedCompareContentToggle;
+    wil::unique_hwnd advancedCompareContentDescription;
+
+    wil::unique_hwnd advancedCompareSubdirectoriesLabel;
+    wil::unique_hwnd advancedCompareSubdirectoriesToggle;
+    wil::unique_hwnd advancedCompareSubdirectoriesDescription;
+    wil::unique_hwnd advancedCompareSubdirectoryAttributesLabel;
+    wil::unique_hwnd advancedCompareSubdirectoryAttributesToggle;
+    wil::unique_hwnd advancedCompareSubdirectoryAttributesDescription;
+    wil::unique_hwnd advancedCompareSelectSubdirsOnlyInOnePaneLabel;
+    wil::unique_hwnd advancedCompareSelectSubdirsOnlyInOnePaneToggle;
+    wil::unique_hwnd advancedCompareSelectSubdirsOnlyInOnePaneDescription;
+
+    wil::unique_hwnd advancedCompareShowIdenticalLabel;
+    wil::unique_hwnd advancedCompareShowIdenticalToggle;
+    wil::unique_hwnd advancedCompareShowIdenticalDescription;
+
+    wil::unique_hwnd advancedCompareIgnoreFilesLabel;
+    wil::unique_hwnd advancedCompareIgnoreFilesToggle;
+    wil::unique_hwnd advancedCompareIgnoreFilesDescription;
+    wil::unique_hwnd advancedCompareIgnoreFilesPatternsLabel;
+    wil::unique_hwnd advancedCompareIgnoreFilesPatternsFrame;
+    wil::unique_hwnd advancedCompareIgnoreFilesPatternsEdit;
+
+    wil::unique_hwnd advancedCompareIgnoreDirectoriesLabel;
+    wil::unique_hwnd advancedCompareIgnoreDirectoriesToggle;
+    wil::unique_hwnd advancedCompareIgnoreDirectoriesDescription;
+    wil::unique_hwnd advancedCompareIgnoreDirectoriesPatternsLabel;
+    wil::unique_hwnd advancedCompareIgnoreDirectoriesPatternsFrame;
+    wil::unique_hwnd advancedCompareIgnoreDirectoriesPatternsEdit;
+
     // Refresh State Flags
     bool previewApplied        = false;
     bool refreshingPanesPage   = false;
@@ -697,3 +740,10 @@ namespace PrefsFileOperations
 [[nodiscard]] Common::Settings::FileOperationsSettings* EnsureWorkingFileOperationsSettings(Common::Settings::Settings& settings) noexcept;
 void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& settings) noexcept;
 } // namespace PrefsFileOperations
+
+namespace PrefsCompareDirectories
+{
+[[nodiscard]] const Common::Settings::CompareDirectoriesSettings& GetCompareDirectoriesSettingsOrDefault(const Common::Settings::Settings& settings) noexcept;
+[[nodiscard]] Common::Settings::CompareDirectoriesSettings* EnsureWorkingCompareDirectoriesSettings(Common::Settings::Settings& settings) noexcept;
+void MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(Common::Settings::Settings& settings) noexcept;
+} // namespace PrefsCompareDirectories

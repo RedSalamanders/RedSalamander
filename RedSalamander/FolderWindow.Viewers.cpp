@@ -529,3 +529,33 @@ bool FolderWindow::TryViewSpaceWithViewer(Pane pane, const std::filesystem::path
 
     return true;
 }
+
+#ifdef _DEBUG
+size_t FolderWindow::DebugGetViewerInstanceCount() const noexcept
+{
+    return _viewerInstances.size();
+}
+
+bool FolderWindow::DebugHasViewerPluginId(std::wstring_view viewerPluginId) const noexcept
+{
+    if (viewerPluginId.empty())
+    {
+        return false;
+    }
+
+    for (const auto& instance : _viewerInstances)
+    {
+        if (! instance)
+        {
+            continue;
+        }
+
+        if (instance->viewerPluginId == viewerPluginId)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+#endif

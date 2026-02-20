@@ -250,8 +250,10 @@ private:
     static LRESULT CALLBACK FindEditProc(HWND, UINT, WPARAM, LPARAM) noexcept;
     static LRESULT CALLBACK FindPanelProc(HWND, UINT, WPARAM, LPARAM) noexcept;
 
-    // Window handle
+    // Window handle (UI-thread only)
     HWND _hWnd = nullptr;
+    // Thread-safe copy for cross-thread access (ETW worker thread reads this in QueueEtwEvent)
+    std::atomic<HWND> _hWndAtomic{nullptr};
 
     // DPI
     float _dpi        = 96.0f;
@@ -442,6 +444,8 @@ private:
     size_t _tailFirstLine              = 0;      // First line in tail layout
     static constexpr size_t kTailLines = 100;    // Fixed window size for tail
     bool _tailLayoutValid              = false;
+    // Cached per-line metadata from BuildFilteredTailText, used by ApplyColoringToTailLayout
+    std::vector<Document::TailLineInfo> _tailFilteredLines;
 
     // Adaptive layout timing thresholds
     static constexpr size_t kSyncLayoutThresholdLines = 100; // Lines below which we use sync layout

@@ -74,13 +74,18 @@ void FolderView::EnsureDeviceIndependentResources()
             DWRITE_TEXT_METRICS metrics{};
             if (SUCCEEDED(probe->GetMetrics(&metrics)))
             {
-                _detailsLineHeightDip = metrics.height;
+                _detailsLineHeightDip  = metrics.height;
+                _metadataLineHeightDip = metrics.height;
             }
         }
 
         if (_detailsLineHeightDip <= 0.0f)
         {
             _detailsLineHeightDip = 12.0f;
+        }
+        if (_metadataLineHeightDip <= 0.0f)
+        {
+            _metadataLineHeightDip = _detailsLineHeightDip;
         }
     }
 
@@ -204,6 +209,7 @@ void FolderView::RecreateThemeBrushes()
     _backgroundBrush.reset();
     _textBrush.reset();
     _detailsTextBrush.reset();
+    _metadataTextBrush.reset();
     _selectionBrush.reset();
     _focusedBackgroundBrush.reset();
     _focusBrush.reset();
@@ -231,6 +237,14 @@ void FolderView::RecreateThemeBrushes()
     detailsColor.a               = std::clamp(detailsColor.a * kDetailsTextAlpha, 0.0f, 1.0f);
     const HRESULT hrDetailsBrush = _d2dContext->CreateSolidColorBrush(detailsColor, _detailsTextBrush.addressof());
     if (! CheckHR(hrDetailsBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(details text)"))
+    {
+        return;
+    }
+
+    D2D1::ColorF metadataColor    = _theme.textNormal;
+    metadataColor.a               = std::clamp(metadataColor.a * kMetadataTextAlpha, 0.0f, 1.0f);
+    const HRESULT hrMetadataBrush = _d2dContext->CreateSolidColorBrush(metadataColor, _metadataTextBrush.addressof());
+    if (! CheckHR(hrMetadataBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(metadata text)"))
     {
         return;
     }
@@ -739,9 +753,9 @@ void FolderView::CreatePlaceholderIcon()
                         if (hBitmap && pBits)
                         {
                             std::memset(pBits, 0, static_cast<size_t>(width) * static_cast<size_t>(height) * 4);
-                            auto oldBitmap = SelectObject(hdcMem.get(), hBitmap.get());
+                            auto oldBitmap = wil::SelectObject(hdcMem.get(), hBitmap.get());
                             DrawIconEx(hdcMem.get(), 0, 0, icon.get(), width, height, 0, nullptr, DI_NORMAL);
-                            SelectObject(hdcMem.get(), oldBitmap);
+                            oldBitmap.reset();
 
                             // Premultiply alpha
                             auto* pixels            = static_cast<BYTE*>(pBits);
@@ -899,6 +913,42 @@ void FolderView::Render(const RECT& invalidRect)
                     }
 
                     columnBaseIndex += static_cast<size_t>(rows);
+                }
+            }
+        }
+
+        if (_items.empty() && _displayedFolder.has_value() && ! _emptyStateMessage.empty() && _dwriteFactory && (_detailsFormat || _labelFormat))
+        {
+            bool hasOverlay = false;
+            {
+                std::lock_guard lock(_errorOverlayMutex);
+                hasOverlay = _errorOverlay.has_value();
+            }
+
+            if (! hasOverlay && _emptyStateMessage.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+            {
+                const UINT32 length         = static_cast<UINT32>(_emptyStateMessage.size());
+                const float clientWidthDip  = std::max(1.0f, DipFromPx(_clientSize.cx));
+                const float clientHeightDip = std::max(1.0f, DipFromPx(_clientSize.cy));
+
+                wil::com_ptr<IDWriteTextLayout> layout;
+                const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(_emptyStateMessage.data(),
+                                                                          length,
+                                                                          _detailsFormat ? _detailsFormat.get() : _labelFormat.get(),
+                                                                          clientWidthDip,
+                                                                          clientHeightDip,
+                                                                          layout.addressof());
+                if (SUCCEEDED(hrLayout) && layout)
+                {
+                    layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                    layout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+                    layout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+
+                    ID2D1SolidColorBrush* brush = _detailsTextBrush ? _detailsTextBrush.get() : _textBrush.get();
+                    if (brush)
+                    {
+                        _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), layout.get(), brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    }
                 }
             }
         }
@@ -1249,7 +1299,7 @@ void FolderView::DrawItem(FolderItem& item)
     const float contentHeight = std::max(0.0f, contentBottom - contentTop);
 
     const float iconLeft = bounds.left + kLabelHorizontalPaddingDip;
-    const float iconTop  = _displayMode == DisplayMode::Detailed ? contentTop : contentTop + std::max(0.0f, (contentHeight - _iconSizeDip) * 0.5f);
+    const float iconTop  = _displayMode == DisplayMode::Brief ? contentTop + std::max(0.0f, (contentHeight - _iconSizeDip) * 0.5f) : contentTop;
     D2D1_RECT_F iconRect = D2D1::RectF(iconLeft, iconTop, iconLeft + _iconSizeDip, iconTop + _iconSizeDip);
     if (item.icon)
     {
@@ -1457,7 +1507,7 @@ void FolderView::DrawItem(FolderItem& item)
 
     if (item.labelLayout)
     {
-        if (_displayMode == DisplayMode::Detailed)
+        if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
         {
             const float nameHeight = item.labelMetrics.height > 0.0f ? item.labelMetrics.height : std::max(0.0f, contentHeight * 0.5f);
             D2D1_POINT_2F origin{labelLeft, contentTop};
@@ -1485,6 +1535,31 @@ void FolderView::DrawItem(FolderItem& item)
                                        detailsBrush,
                                        D2D1_DRAW_TEXT_OPTIONS_CLIP);
             }
+
+            if (_displayMode == DisplayMode::ExtraDetailed)
+            {
+                const bool hasDetails = item.detailsLayout || (! item.detailsText.empty());
+                const float detailsHeight =
+                    hasDetails ? (item.detailsMetrics.height > 0.0f ? item.detailsMetrics.height : std::max(0.0f, _detailsLineHeightDip)) : 0.0f;
+                const float metadataTop = hasDetails ? (detailsTop + std::max(0.0f, detailsHeight) + kDetailsGapDip) : detailsTop;
+
+                ID2D1SolidColorBrush* metadataBrush = item.selected ? textBrush : (_metadataTextBrush ? _metadataTextBrush.get() : detailsBrush);
+                if (item.metadataLayout)
+                {
+                    D2D1_POINT_2F metadataOrigin{labelLeft, metadataTop};
+                    _d2dContext->DrawTextLayout(metadataOrigin, item.metadataLayout.get(), metadataBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                }
+                else if (! item.metadataText.empty() && _detailsFormat)
+                {
+                    D2D1_RECT_F metadataRect = D2D1::RectF(labelLeft, metadataTop, labelLeft + availableWidth, contentBottom);
+                    _d2dContext->DrawTextW(item.metadataText.c_str(),
+                                           static_cast<UINT32>(item.metadataText.length()),
+                                           _detailsFormat.get(),
+                                           metadataRect,
+                                           metadataBrush,
+                                           D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                }
+            }
         }
         else
         {
@@ -1500,10 +1575,12 @@ void FolderView::DrawItem(FolderItem& item)
     }
     else
     {
-        if (_displayMode == DisplayMode::Detailed)
+        if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
         {
-            const float detailsHeight = _detailsLineHeightDip > 0.0f ? _detailsLineHeightDip : 12.0f;
-            const float nameBottom    = std::max(contentTop, contentBottom - detailsHeight - kDetailsGapDip);
+            const float detailsHeight  = _detailsLineHeightDip > 0.0f ? _detailsLineHeightDip : 12.0f;
+            const float metadataHeight = (_displayMode == DisplayMode::ExtraDetailed && _metadataLineHeightDip > 0.0f) ? _metadataLineHeightDip : 0.0f;
+            const float nameBottom =
+                std::max(contentTop, contentBottom - detailsHeight - kDetailsGapDip - (metadataHeight > 0.0f ? (metadataHeight + kDetailsGapDip) : 0.0f));
 
             D2D1_RECT_F labelRect = D2D1::RectF(labelLeft, contentTop, labelLeft + availableWidth, nameBottom);
             _d2dContext->DrawTextW(
@@ -1519,6 +1596,21 @@ void FolderView::DrawItem(FolderItem& item)
                                        _detailsFormat.get(),
                                        detailsRect,
                                        detailsBrush,
+                                       D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            }
+
+            if (_displayMode == DisplayMode::ExtraDetailed && ! item.metadataText.empty() && _detailsFormat)
+            {
+                const bool hasDetails               = ! item.detailsText.empty();
+                const float detailsBottom           = nameBottom + kDetailsGapDip + (hasDetails ? detailsHeight : 0.0f);
+                const float metadataTop             = hasDetails ? (detailsBottom + kDetailsGapDip) : detailsBottom;
+                ID2D1SolidColorBrush* metadataBrush = item.selected ? textBrush : (_metadataTextBrush ? _metadataTextBrush.get() : detailsBrush);
+                D2D1_RECT_F metadataRect            = D2D1::RectF(labelLeft, metadataTop, labelLeft + availableWidth, contentBottom);
+                _d2dContext->DrawTextW(item.metadataText.c_str(),
+                                       static_cast<UINT32>(item.metadataText.length()),
+                                       _detailsFormat.get(),
+                                       metadataRect,
+                                       metadataBrush,
                                        D2D1_DRAW_TEXT_OPTIONS_CLIP);
             }
         }

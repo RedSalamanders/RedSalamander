@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "NavigationMenu.h"
 
 #pragma warning(push)
@@ -25,11 +27,11 @@ struct DriveInfo
     // Optional file system name.
     const wchar_t* fileSystem;
     // Optional total size in bytes.
-    unsigned __int64 totalBytes;
+    uint64_t totalBytes;
     // Optional free bytes.
-    unsigned __int64 freeBytes;
+    uint64_t freeBytes;
     // Optional used bytes.
-    unsigned __int64 usedBytes;
+    uint64_t usedBytes;
 };
 
 enum DriveInfoCommand : uint32_t

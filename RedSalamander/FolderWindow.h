@@ -1,4 +1,5 @@
 #pragma once
+#include <array>
 #include <condition_variable>
 #include <cstdint>
 #include <filesystem>
@@ -108,6 +109,8 @@ public:
     void CommandOpenDriveMenu(Pane pane);
     void CommandShowFolderHistory(Pane pane);
     void CommandRefresh(Pane pane);
+    void CommandCalculateDirectorySizes(Pane pane);
+    void CommandChangeCase(Pane pane);
     void CommandOpenCommandShell(Pane pane);
     void PrepareForNetworkDriveDisconnect(Pane pane);
     void SwapPanes();
@@ -123,6 +126,21 @@ public:
         return _splitRatio;
     }
     void SetSplitRatio(float ratio);
+    void BeginViewWidthAdjust() noexcept;
+    void CommitViewWidthAdjust() noexcept;
+    void CancelViewWidthAdjust() noexcept;
+    [[nodiscard]] bool IsViewWidthAdjustActive() const noexcept
+    {
+        return _viewWidthAdjustActive;
+    }
+    [[nodiscard]] bool HandleViewWidthAdjustKey(uint32_t vk) noexcept;
+
+#ifdef _DEBUG
+    [[nodiscard]] bool DebugIsViewWidthAdjustActive() const noexcept
+    {
+        return _viewWidthAdjustActive;
+    }
+#endif
     void ToggleZoomPanel(Pane pane);
     [[nodiscard]] std::optional<Pane> GetZoomedPane() const noexcept
     {
@@ -149,6 +167,8 @@ public:
     void SetPanePathChangedCallback(PanePathChangedCallback callback);
     void SetPaneEnumerationCompletedCallback(Pane pane, FolderView::EnumerationCompletedCallback callback);
     void SetPaneDetailsTextProvider(Pane pane, FolderView::DetailsTextProvider provider);
+    void SetPaneMetadataTextProvider(Pane pane, FolderView::MetadataTextProvider provider);
+    void SetPaneEmptyStateMessage(Pane pane, std::wstring message);
     void RefreshPaneDetailsText(Pane pane);
     void
     SetPaneSelectionByDisplayNamePredicate(Pane pane, const std::function<bool(std::wstring_view)>& shouldSelect, bool clearExistingSelection = true) noexcept;
@@ -164,6 +184,72 @@ public:
     };
     using FileOperationCompletedCallback = std::function<void(const FileOperationCompletedEvent& e)>;
     void SetFileOperationCompletedCallback(FileOperationCompletedCallback callback);
+
+    struct InformationalTaskUpdate final
+    {
+        static constexpr size_t kMaxContentInFlightFiles = 8u;
+
+         enum class Kind : uint8_t
+         {
+             CompareDirectories,
+            ChangeCase,
+         };
+
+         Kind kind       = Kind::CompareDirectories;
+         uint64_t taskId = 0;
+         std::wstring title;
+
+        // Compare Directories payload (Kind::CompareDirectories)
+        std::filesystem::path leftRoot;
+        std::filesystem::path rightRoot;
+
+        bool scanActive = false;
+        std::filesystem::path scanCurrentRelative;
+        uint64_t scanFolderCount         = 0;
+        uint64_t scanEntryCount          = 0;
+        uint64_t scanCandidateFileCount  = 0;
+        uint64_t scanCandidateTotalBytes = 0;
+        std::optional<uint64_t> scanElapsedSeconds;
+
+        bool contentActive = false;
+        std::filesystem::path contentCurrentRelative;
+        uint64_t contentCurrentTotalBytes     = 0;
+        uint64_t contentCurrentCompletedBytes = 0;
+        uint64_t contentTotalBytes            = 0;
+        uint64_t contentCompletedBytes        = 0;
+        uint64_t contentPendingCount          = 0;
+        uint64_t contentCompletedCount        = 0;
+        std::optional<uint64_t> contentEtaSeconds;
+
+        struct ContentInFlightFile final
+        {
+            std::filesystem::path relativePath;
+            uint64_t totalBytes      = 0;
+            uint64_t completedBytes  = 0;
+            ULONGLONG lastUpdateTick = 0;
+        };
+
+         std::array<ContentInFlightFile, kMaxContentInFlightFiles> contentInFlight{};
+         size_t contentInFlightCount = 0;
+
+        // Change Case payload (Kind::ChangeCase)
+        bool changeCaseEnumerating = false;
+        bool changeCaseRenaming    = false;
+        std::filesystem::path changeCaseCurrentPath;
+        uint64_t changeCaseScannedFolders   = 0;
+        uint64_t changeCaseScannedEntries   = 0;
+        uint64_t changeCasePlannedRenames   = 0;
+        uint64_t changeCaseCompletedRenames = 0;
+
+         bool finished    = false;
+         HRESULT resultHr = S_OK;
+         std::wstring doneSummary;
+     };
+
+    // Informational tasks are read-only task cards displayed in the File Operations popup for background work
+    // that isn't a file operation (e.g., Compare Directories scan/content progress).
+    [[nodiscard]] uint64_t CreateOrUpdateInformationalTask(const InformationalTaskUpdate& update) noexcept;
+    void DismissInformationalTask(uint64_t taskId) noexcept;
 
     // DPI handling
     void OnDpiChanged(float newDpi);
@@ -192,6 +278,10 @@ public:
     // Debug/testing hook: access the file-operations state for automation/self-tests.
     // This will initialize file operations if they are not yet created.
     FileOperationState* DebugGetFileOperationState() noexcept;
+
+    [[nodiscard]] size_t DebugGetViewerInstanceCount() const noexcept;
+    [[nodiscard]] bool DebugHasViewerPluginId(std::wstring_view viewerPluginId) const noexcept;
+    [[nodiscard]] uint64_t DebugGetForceRefreshCount(Pane pane) const noexcept;
 #endif
 
     void ShowPaneAlertOverlay(Pane pane,
@@ -240,6 +330,8 @@ private:
     LRESULT OnPaneSelectionSizeComputed(LPARAM lp) noexcept;
     LRESULT OnPaneSelectionSizeProgress(LPARAM lp) noexcept;
     LRESULT OnFileOperationCompleted(LPARAM lp) noexcept;
+    LRESULT OnChangeCaseTaskUpdate(LPARAM lp) noexcept;
+    LRESULT OnChangeCaseCompleted(LPARAM lp) noexcept;
 
     // File operations (internal implementation in FolderWindow.FileOperations.cpp)
     void EnsureFileOperations();
@@ -326,6 +418,8 @@ private:
         std::vector<std::filesystem::path> selectionSizeWorkFolders;
         wil::com_ptr<IFileSystem> selectionSizeWorkFileSystem;
         std::shared_ptr<std::stop_source> selectionSizeWorkStopSource;
+
+        std::jthread changeCaseThread;
         bool selectionFolderBytesPending = false;
         bool selectionFolderBytesValid   = false;
         uint64_t selectionFolderBytes    = 0;
@@ -365,6 +459,8 @@ private:
     RECT _rightStatusBarRect{};
     RECT _functionBarRect{};
     float _splitRatio = 0.5f;
+    bool _viewWidthAdjustActive       = false;
+    float _viewWidthAdjustRestoreRatio = 0.5f;
     std::optional<float> _zoomRestoreSplitRatio;
     std::optional<Pane> _zoomedPane;
     bool _draggingSplitter    = false;

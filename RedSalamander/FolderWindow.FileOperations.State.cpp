@@ -7,6 +7,8 @@
 #include "SettingsStore.h"
 
 #include <bit>
+#include <cstring>
+#include <functional>
 #include <iterator>
 #include <psapi.h>
 #include <shellapi.h>
@@ -36,6 +38,59 @@ enum class ReparsePointPolicy : unsigned char
     }
 
     return ReparsePointPolicy::CopyReparse;
+}
+
+[[nodiscard]] std::optional<ReparsePointPolicy> TryGetReparsePointPolicyFromFileSystem(const wil::com_ptr<IFileSystem>& fileSystem) noexcept
+{
+    if (! fileSystem)
+    {
+        return std::nullopt;
+    }
+
+    wil::com_ptr<IInformations> informations;
+    if (FAILED(fileSystem->QueryInterface(__uuidof(IInformations), informations.put_void())) || ! informations)
+    {
+        return std::nullopt;
+    }
+
+    const char* configurationJsonUtf8 = nullptr;
+    if (FAILED(informations->GetConfiguration(&configurationJsonUtf8)) || ! configurationJsonUtf8)
+    {
+        return std::nullopt;
+    }
+
+    const size_t configurationBytes = std::strlen(configurationJsonUtf8);
+    if (configurationBytes == 0)
+    {
+        return std::nullopt;
+    }
+
+    yyjson_doc* doc = yyjson_read(configurationJsonUtf8, configurationBytes, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+    if (! doc)
+    {
+        return std::nullopt;
+    }
+    const auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
+
+    yyjson_val* root = yyjson_doc_get_root(doc);
+    if (! root || ! yyjson_is_obj(root))
+    {
+        return std::nullopt;
+    }
+
+    yyjson_val* policyVal = yyjson_obj_get(root, "reparsePointPolicy");
+    if (! policyVal || ! yyjson_is_str(policyVal))
+    {
+        return std::nullopt;
+    }
+
+    const char* policyText = yyjson_get_str(policyVal);
+    if (! policyText || policyText[0] == '\0')
+    {
+        return std::nullopt;
+    }
+
+    return ParseReparsePointPolicy(policyText);
 }
 
 [[nodiscard]] ReparsePointPolicy GetReparsePointPolicyFromSettings(const Common::Settings::Settings& settings, const std::wstring& pluginId) noexcept
@@ -114,18 +169,18 @@ struct DiagnosticsSettings
 struct PreCalcProgressCookie
 {
     std::mutex* totalsMutex          = nullptr;
-    unsigned __int64* totalBytes     = nullptr;
-    unsigned __int64* totalFiles     = nullptr;
-    unsigned __int64* totalDirs      = nullptr;
+    uint64_t* totalBytes             = nullptr;
+    uint64_t* totalFiles             = nullptr;
+    uint64_t* totalDirs              = nullptr;
     std::atomic<bool>* acceptUpdates = nullptr;
-    unsigned __int64 lastBytes       = 0;
-    unsigned __int64 lastFiles       = 0;
-    unsigned __int64 lastDirs        = 0;
+    uint64_t lastBytes               = 0;
+    uint64_t lastFiles               = 0;
+    uint64_t lastDirs                = 0;
 };
 
-void UpdatePreCalcSnapshot(Task& task, unsigned __int64 totalBytes, unsigned __int64 totalFiles, unsigned __int64 totalDirs) noexcept
+void UpdatePreCalcSnapshot(Task& task, uint64_t totalBytes, uint64_t totalFiles, uint64_t totalDirs) noexcept
 {
-    constexpr unsigned __int64 maxUlong = static_cast<unsigned __int64>(std::numeric_limits<unsigned long>::max());
+    constexpr uint64_t maxUlong = static_cast<uint64_t>(std::numeric_limits<unsigned long>::max());
     task._preCalcTotalBytes.store(totalBytes, std::memory_order_release);
     task._preCalcFileCount.store(static_cast<unsigned long>(std::min(totalFiles, maxUlong)), std::memory_order_release);
     task._preCalcDirectoryCount.store(static_cast<unsigned long>(std::min(totalDirs, maxUlong)), std::memory_order_release);
@@ -293,8 +348,8 @@ void SetAutoDismissSuccessInSettings(Common::Settings::Settings& settings, bool 
 
 struct ProcessMemorySnapshot
 {
-    unsigned __int64 workingSetBytes = 0;
-    unsigned __int64 privateBytes    = 0;
+    uint64_t workingSetBytes = 0;
+    uint64_t privateBytes    = 0;
 };
 
 [[nodiscard]] ProcessMemorySnapshot CaptureProcessMemorySnapshot() noexcept
@@ -308,8 +363,8 @@ struct ProcessMemorySnapshot
         return snapshot;
     }
 
-    snapshot.workingSetBytes = static_cast<unsigned __int64>(counters.WorkingSetSize);
-    snapshot.privateBytes    = static_cast<unsigned __int64>(counters.PrivateUsage);
+    snapshot.workingSetBytes = static_cast<uint64_t>(counters.WorkingSetSize);
+    snapshot.privateBytes    = static_cast<uint64_t>(counters.PrivateUsage);
     return snapshot;
 }
 
@@ -826,6 +881,426 @@ DeterminePerItemMaxConcurrency(const wil::com_ptr<IFileSystem>& fileSystem, File
 
     return Task::ConflictBucket::Unknown;
 }
+
+class PerItemTaskScheduler final
+{
+public:
+    PerItemTaskScheduler() = default;
+    ~PerItemTaskScheduler() noexcept { Shutdown(); }
+
+    PerItemTaskScheduler(const PerItemTaskScheduler&)            = delete;
+    PerItemTaskScheduler(PerItemTaskScheduler&&)                 = delete;
+    PerItemTaskScheduler& operator=(const PerItemTaskScheduler&) = delete;
+    PerItemTaskScheduler& operator=(PerItemTaskScheduler&&)      = delete;
+
+    struct Job final
+    {
+        Job() noexcept = default;
+
+        Job(const Job&)            = delete;
+        Job(Job&&)                 = delete;
+        Job& operator=(const Job&) = delete;
+        Job& operator=(Job&&)      = delete;
+
+        Task* task = nullptr;
+        std::function<HRESULT(size_t)> processIndex;
+        size_t totalItems          = 0;
+        unsigned int maxConcurrency = 1;
+
+        // Protected by the scheduler mutex.
+        size_t nextIndex        = 0;
+        unsigned int inFlight   = 0;
+        bool done               = false;
+
+        std::mutex doneMutex;
+        std::condition_variable doneCv;
+    };
+
+    using JobPtr = std::shared_ptr<Job>;
+
+    JobPtr StartJob(Task* task, unsigned int maxConcurrency, size_t totalItems, std::function<HRESULT(size_t)> processIndex)
+    {
+        auto job            = std::make_shared<Job>();
+        job->task           = task;
+        job->totalItems     = totalItems;
+        job->processIndex   = std::move(processIndex);
+        job->maxConcurrency = std::max(1u, maxConcurrency);
+
+        ensureWorkers();
+
+        if (_workers.empty())
+        {
+            for (size_t i = 0; i < job->totalItems; ++i)
+            {
+                if (isTaskCancelled(*job))
+                {
+                    break;
+                }
+                if (job->processIndex)
+                {
+                    static_cast<void>(job->processIndex(i));
+                }
+            }
+
+            {
+                std::scoped_lock lock(job->doneMutex);
+                job->done = true;
+            }
+            job->doneCv.notify_all();
+            return job;
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            _jobs.push_back(job);
+            _rrCursor = _jobs.size() - 1u; // Bias next dequeue to the newly-added job to reduce start latency/starvation.
+        }
+
+        _cv.notify_all();
+        return job;
+    }
+
+    void WaitJob(const JobPtr& job) noexcept
+    {
+        if (! job)
+        {
+            return;
+        }
+
+        std::unique_lock lock(job->doneMutex);
+        job->doneCv.wait(lock, [&]() noexcept { return job->done; });
+    }
+
+    void NotifyWorkAvailable() noexcept
+    {
+        _cv.notify_all();
+    }
+
+    void Shutdown() noexcept
+    {
+        {
+            std::scoped_lock lock(_initMutex);
+            if (! _initialized)
+            {
+                return;
+            }
+
+            for (std::jthread& worker : _workers)
+            {
+                worker.request_stop();
+            }
+        }
+
+        // Ensure any thread blocked in WaitJob can proceed during teardown.
+        {
+            std::scoped_lock lock(_mutex);
+            for (const JobPtr& job : _jobs)
+            {
+                finishJobLocked(job);
+            }
+            _jobs.clear();
+            _rrCursor = 0;
+        }
+
+        _cv.notify_all();
+    }
+
+private:
+    [[nodiscard]] size_t countActiveJobsLocked() const noexcept
+    {
+        size_t active = 0;
+        for (const JobPtr& job : _jobs)
+        {
+            if (! job)
+            {
+                continue;
+            }
+
+            if (isTaskCancelled(*job) || isTaskPaused(*job))
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            ++active;
+        }
+
+        return active;
+    }
+
+    [[nodiscard]] unsigned int effectiveMaxConcurrencyLocked(const Job& job) const noexcept
+    {
+        unsigned int maxConc = std::max(1u, job.maxConcurrency);
+
+        // Sharing policy: when multiple jobs are active, avoid letting a single job occupy every worker thread.
+        // Keep at least one worker available for each other active job so new tasks can start promptly.
+        const unsigned int workerCount = _workerCount.load(std::memory_order_acquire);
+        if (workerCount <= 1u)
+        {
+            return 1u;
+        }
+
+        const size_t activeJobs = countActiveJobsLocked();
+        if (activeJobs <= 1u)
+        {
+            // Starvation guard: reserve one worker so a second job can begin without waiting for an in-flight
+            // long-running file operation to complete.
+            if (job.totalItems > 1u)
+            {
+                maxConc = std::min<unsigned int>(maxConc, workerCount - 1u);
+            }
+
+            return std::max(1u, maxConc);
+        }
+
+        const unsigned int cap = (activeJobs >= static_cast<size_t>(workerCount)) ? 1u : (workerCount - static_cast<unsigned int>(activeJobs) + 1u);
+        maxConc                = std::min<unsigned int>(maxConc, std::max(1u, cap));
+        return std::max(1u, maxConc);
+    }
+
+    void ensureWorkers()
+    {
+        std::scoped_lock lock(_initMutex);
+        if (_initialized)
+        {
+            return;
+        }
+
+        unsigned int workerCount = std::thread::hardware_concurrency();
+        if (workerCount == 0)
+        {
+            workerCount = 4;
+        }
+
+        constexpr unsigned int kMaxWorkers = static_cast<unsigned int>(Task::kMaxInFlightFiles);
+        workerCount                        = std::max(1u, std::min(workerCount, kMaxWorkers));
+        _workerCount.store(workerCount, std::memory_order_release);
+
+        _workers.reserve(workerCount);
+        for (unsigned int i = 0; i < workerCount; ++i)
+        {
+            try
+            {
+                _workers.emplace_back([this](std::stop_token stopToken) noexcept { workerMain(stopToken); });
+            }
+            catch (const std::system_error&)
+            {
+                break;
+            }
+        }
+
+        _workerCount.store(static_cast<unsigned int>(_workers.size()), std::memory_order_release);
+        _initialized = true;
+    }
+
+    [[nodiscard]] bool isTaskCancelled(const Job& job) const noexcept
+    {
+        if (! job.task)
+        {
+            return true;
+        }
+        return job.task->_cancelled.load(std::memory_order_acquire) || job.task->_stopToken.stop_requested();
+    }
+
+    [[nodiscard]] bool isTaskPaused(const Job& job) const noexcept
+    {
+        if (! job.task)
+        {
+            return false;
+        }
+        return job.task->IsPaused() || job.task->IsQueuePaused();
+    }
+
+    void finishJobLocked(const JobPtr& job) noexcept
+    {
+        if (! job)
+        {
+            return;
+        }
+
+        {
+            std::scoped_lock lock(job->doneMutex);
+            job->done = true;
+        }
+        job->doneCv.notify_all();
+    }
+
+    void cleanupJobsLocked() noexcept
+    {
+        size_t write = 0;
+        for (size_t read = 0; read < _jobs.size(); ++read)
+        {
+            const JobPtr& job = _jobs[read];
+            if (! job)
+            {
+                continue;
+            }
+
+            const bool cancelled = isTaskCancelled(*job);
+            const bool finished  = job->nextIndex >= job->totalItems;
+            if ((cancelled || finished) && job->inFlight == 0)
+            {
+                finishJobLocked(job);
+                continue;
+            }
+
+            if (write != read)
+            {
+                _jobs[write] = job;
+            }
+            ++write;
+        }
+
+        if (write < _jobs.size())
+        {
+            _jobs.resize(write);
+        }
+
+        if (_rrCursor >= _jobs.size())
+        {
+            _rrCursor = 0;
+        }
+    }
+
+    [[nodiscard]] bool hasSchedulableWorkLocked() noexcept
+    {
+        cleanupJobsLocked();
+
+        for (const JobPtr& job : _jobs)
+        {
+            if (! job)
+            {
+                continue;
+            }
+
+            if (isTaskCancelled(*job) || isTaskPaused(*job))
+            {
+                continue;
+            }
+
+            if (job->inFlight >= effectiveMaxConcurrencyLocked(*job))
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    [[nodiscard]] bool tryDequeueWorkLocked(JobPtr& outJob, size_t& outIndex) noexcept
+    {
+        const size_t jobCount = _jobs.size();
+        if (jobCount == 0)
+        {
+            return false;
+        }
+
+        const size_t start = (jobCount > 0) ? (_rrCursor % jobCount) : 0;
+        for (size_t attempt = 0; attempt < jobCount; ++attempt)
+        {
+            const size_t idx  = (start + attempt) % jobCount;
+            JobPtr& job       = _jobs[idx];
+            if (! job)
+            {
+                continue;
+            }
+
+            if (isTaskCancelled(*job) || isTaskPaused(*job))
+            {
+                continue;
+            }
+
+            if (job->inFlight >= effectiveMaxConcurrencyLocked(*job))
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            outJob   = job;
+            outIndex = job->nextIndex;
+            job->nextIndex += 1;
+            job->inFlight += 1;
+
+            _rrCursor = (idx + 1u) % jobCount;
+            return true;
+        }
+
+        return false;
+    }
+
+    void workerMain(std::stop_token stopToken) noexcept
+    {
+        [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+
+        for (;;)
+        {
+            JobPtr job;
+            size_t index = 0;
+            {
+                std::unique_lock lock(_mutex);
+                _cv.wait(lock, [&]() noexcept { return stopToken.stop_requested() || hasSchedulableWorkLocked(); });
+                if (stopToken.stop_requested())
+                {
+                    return;
+                }
+
+                cleanupJobsLocked();
+                if (! tryDequeueWorkLocked(job, index))
+                {
+                    continue;
+                }
+            }
+
+            if (job && job->processIndex)
+            {
+                static_cast<void>(job->processIndex(index));
+            }
+
+            {
+                std::scoped_lock lock(_mutex);
+                if (job && job->inFlight > 0)
+                {
+                    job->inFlight -= 1;
+                }
+                cleanupJobsLocked();
+            }
+
+            _cv.notify_all();
+        }
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    std::vector<JobPtr> _jobs;
+    size_t _rrCursor = 0;
+
+    std::mutex _initMutex;
+    bool _initialized = false;
+    std::vector<std::jthread> _workers;
+    std::atomic<unsigned int> _workerCount{0};
+};
+
+PerItemTaskScheduler& GetPerItemTaskScheduler() noexcept
+{
+    static PerItemTaskScheduler scheduler;
+    return scheduler;
+}
 } // namespace
 
 FolderWindow::FileOperationState::Task::Task(FileOperationState& state) noexcept : _state(&state), _folderWindow(&state._owner)
@@ -836,14 +1311,14 @@ FolderWindow::FileOperationState::Task::Task(FileOperationState& state) noexcept
 HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProgress(FileSystemOperation operationType,
                                                                                      unsigned long totalItems,
                                                                                      unsigned long completedItems,
-                                                                                     unsigned __int64 totalBytes,
-                                                                                     unsigned __int64 completedBytes,
+                                                                                     uint64_t totalBytes,
+                                                                                     uint64_t completedBytes,
                                                                                      const wchar_t* currentSourcePath,
                                                                                      const wchar_t* currentDestinationPath,
-                                                                                     unsigned __int64 currentItemTotalBytes,
-                                                                                     unsigned __int64 currentItemCompletedBytes,
+                                                                                     uint64_t currentItemTotalBytes,
+                                                                                     uint64_t currentItemCompletedBytes,
                                                                                      FileSystemOptions* options,
-                                                                                     unsigned __int64 progressStreamId,
+                                                                                     uint64_t progressStreamId,
                                                                                      void* cookie) noexcept
 {
     if (operationType != _operation)
@@ -904,33 +1379,33 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
                 }
             }
 
-            unsigned __int64 inFlightCompletedBytes = 0;
-            unsigned __int64 inFlightCompletedItems = 0;
-            unsigned __int64 inFlightTotalItems     = 0;
+            uint64_t inFlightCompletedBytes = 0;
+            uint64_t inFlightCompletedItems = 0;
+            uint64_t inFlightTotalItems     = 0;
             for (size_t i = 0; i < _perItemInFlightCallCount; ++i)
             {
-                const unsigned __int64 bytes = _perItemInFlightCalls[i].completedBytes;
-                if (std::numeric_limits<unsigned __int64>::max() - inFlightCompletedBytes < bytes)
+                const uint64_t bytes = _perItemInFlightCalls[i].completedBytes;
+                if (std::numeric_limits<uint64_t>::max() - inFlightCompletedBytes < bytes)
                 {
-                    inFlightCompletedBytes = std::numeric_limits<unsigned __int64>::max();
+                    inFlightCompletedBytes = std::numeric_limits<uint64_t>::max();
                     break;
                 }
                 inFlightCompletedBytes += bytes;
 
-                const unsigned __int64 items = _perItemInFlightCalls[i].completedItems;
-                if (std::numeric_limits<unsigned __int64>::max() - inFlightCompletedItems < items)
+                const uint64_t items = _perItemInFlightCalls[i].completedItems;
+                if (std::numeric_limits<uint64_t>::max() - inFlightCompletedItems < items)
                 {
-                    inFlightCompletedItems = std::numeric_limits<unsigned __int64>::max();
+                    inFlightCompletedItems = std::numeric_limits<uint64_t>::max();
                 }
                 else
                 {
                     inFlightCompletedItems += items;
                 }
 
-                const unsigned __int64 total = static_cast<unsigned __int64>(_perItemInFlightCalls[i].totalItems);
-                if (std::numeric_limits<unsigned __int64>::max() - inFlightTotalItems < total)
+                const uint64_t total = static_cast<uint64_t>(_perItemInFlightCalls[i].totalItems);
+                if (std::numeric_limits<uint64_t>::max() - inFlightTotalItems < total)
                 {
-                    inFlightTotalItems = std::numeric_limits<unsigned __int64>::max();
+                    inFlightTotalItems = std::numeric_limits<uint64_t>::max();
                 }
                 else
                 {
@@ -938,26 +1413,24 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
                 }
             }
 
-            const unsigned __int64 mappedCompletedBytes = _perItemCompletedBytes + inFlightCompletedBytes;
-            _progressCompletedBytes                     = (std::max)(_progressCompletedBytes, mappedCompletedBytes);
+            const uint64_t mappedCompletedBytes = _perItemCompletedBytes + inFlightCompletedBytes;
+            _progressCompletedBytes             = (std::max)(_progressCompletedBytes, mappedCompletedBytes);
 
             if (_operation == FILESYSTEM_DELETE)
             {
                 const bool precalcTotalAvailable = _preCalcCompleted.load(std::memory_order_acquire) && _progressTotalItems > 0;
                 if (! precalcTotalAvailable)
                 {
-                    const unsigned __int64 mappedTotalItems = _perItemTotalEntryCount + inFlightTotalItems;
+                    const uint64_t mappedTotalItems = _perItemTotalEntryCount + inFlightTotalItems;
                     if (mappedTotalItems > 0)
                     {
-                        const unsigned __int64 clamped =
-                            std::min<unsigned __int64>(mappedTotalItems, static_cast<unsigned __int64>(std::numeric_limits<unsigned long>::max()));
-                        _progressTotalItems = (std::max)(_progressTotalItems, static_cast<unsigned long>(clamped));
+                        const uint64_t clamped = std::min<uint64_t>(mappedTotalItems, static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()));
+                        _progressTotalItems    = (std::max)(_progressTotalItems, static_cast<unsigned long>(clamped));
                     }
                 }
 
-                const unsigned __int64 mappedCompletedItems = _perItemCompletedEntryCount + inFlightCompletedItems;
-                const unsigned __int64 clamped =
-                    std::min<unsigned __int64>(mappedCompletedItems, static_cast<unsigned __int64>(std::numeric_limits<unsigned long>::max()));
+                const uint64_t mappedCompletedItems = _perItemCompletedEntryCount + inFlightCompletedItems;
+                const uint64_t clamped  = std::min<uint64_t>(mappedCompletedItems, static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()));
                 _progressCompletedItems = (std::max)(_progressCompletedItems, static_cast<unsigned long>(clamped));
             }
             else
@@ -990,7 +1463,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
 
             if (havePreCalcTotals && pluginLikelyReportsTopLevelItems && _progressTotalItems > plannedTopLevelItems)
             {
-                const unsigned __int64 clampedBytes         = (std::min)(_progressCompletedBytes, _progressTotalBytes);
+                const uint64_t clampedBytes                 = (std::min)(_progressCompletedBytes, _progressTotalBytes);
                 const long double ratio                     = static_cast<long double>(clampedBytes) / static_cast<long double>(_progressTotalBytes);
                 const long double estimate                  = ratio * static_cast<long double>(_progressTotalItems);
                 const long double clampedEstimate           = std::clamp<long double>(estimate, 0.0L, static_cast<long double>(_progressTotalItems));
@@ -1022,16 +1495,16 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
 
         if (options && (_operation == FILESYSTEM_COPY || _operation == FILESYSTEM_MOVE))
         {
-            const unsigned __int64 pluginEffective = options->bandwidthLimitBytesPerSecond;
-            const unsigned __int64 desiredTotal    = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+            const uint64_t pluginEffective = options->bandwidthLimitBytesPerSecond;
+            const uint64_t desiredTotal    = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
             if (_executionMode == ExecutionMode::PerItem && _perItemMaxConcurrency > 1u)
             {
-                unsigned __int64 desiredPerCall = desiredTotal;
+                uint64_t desiredPerCall = desiredTotal;
                 if (desiredTotal > 0)
                 {
                     const unsigned int activeCalls = std::max(1u, static_cast<unsigned int>(_perItemInFlightCallCount));
-                    desiredPerCall                 = std::max<unsigned __int64>(1ull, desiredTotal / static_cast<unsigned __int64>(activeCalls));
+                    desiredPerCall                 = std::max<uint64_t>(uint64_t{1}, desiredTotal / static_cast<uint64_t>(activeCalls));
                 }
 
                 // Keep the UI limit line in task units (total), while applying the per-call share to the plugin.
@@ -1041,7 +1514,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
             }
             else
             {
-                const unsigned __int64 applied = _appliedSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+                const uint64_t applied = _appliedSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                 _effectiveSpeedLimitBytesPerSecond.store(pluginEffective, std::memory_order_release);
                 if (desiredTotal != applied)
                 {
@@ -1080,8 +1553,8 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
             }
             _inFlightFileCount = write;
 
-            const void* cookieKey            = cookie;
-            const unsigned __int64 streamKey = progressStreamId;
+            const void* cookieKey    = cookie;
+            const uint64_t streamKey = progressStreamId;
 
             // Find existing entry by (cookie, streamId).
             size_t found = _inFlightFileCount;
@@ -1170,9 +1643,32 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemItem
         ++_itemCompletedCallbackCount;
         if (_executionMode != ExecutionMode::PerItem)
         {
-            const unsigned long completedItemsClamped =
-                static_cast<unsigned long>(std::min(_itemCompletedCallbackCount, static_cast<unsigned __int64>(ULONG_MAX)));
-            _progressCompletedItems = (std::max)(_progressCompletedItems, completedItemsClamped);
+            const unsigned long completedItemsClamped = static_cast<unsigned long>(std::min(_itemCompletedCallbackCount, static_cast<uint64_t>(ULONG_MAX)));
+            _progressCompletedItems                   = (std::max)(_progressCompletedItems, completedItemsClamped);
+
+            const size_t index = static_cast<size_t>(itemIndex);
+            if (index < _topLevelItemCompleted.size() && _topLevelItemCompleted[index] == 0)
+            {
+                _topLevelItemCompleted[index] = 1;
+                if (index < _topLevelItemKinds.size())
+                {
+                    const TopLevelItemKind kind = _topLevelItemKinds[index];
+                    if (kind == TopLevelItemKind::File)
+                    {
+                        if (_completedTopLevelFiles < std::numeric_limits<unsigned long>::max())
+                        {
+                            ++_completedTopLevelFiles;
+                        }
+                    }
+                    else if (kind == TopLevelItemKind::Folder)
+                    {
+                        if (_completedTopLevelFolders < std::numeric_limits<unsigned long>::max())
+                        {
+                            ++_completedTopLevelFolders;
+                        }
+                    }
+                }
+            }
         }
         _lastItemIndex           = itemIndex;
         _lastItemHr              = status;
@@ -1211,16 +1707,16 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemItem
 
         if (options && (_operation == FILESYSTEM_COPY || _operation == FILESYSTEM_MOVE))
         {
-            const unsigned __int64 pluginEffective = options->bandwidthLimitBytesPerSecond;
-            const unsigned __int64 desiredTotal    = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+            const uint64_t pluginEffective = options->bandwidthLimitBytesPerSecond;
+            const uint64_t desiredTotal    = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
             if (_executionMode == ExecutionMode::PerItem && _perItemMaxConcurrency > 1u)
             {
-                unsigned __int64 desiredPerCall = desiredTotal;
+                uint64_t desiredPerCall = desiredTotal;
                 if (desiredTotal > 0)
                 {
                     const unsigned int activeCalls = std::max(1u, static_cast<unsigned int>(_perItemInFlightCallCount));
-                    desiredPerCall                 = std::max<unsigned __int64>(1ull, desiredTotal / static_cast<unsigned __int64>(activeCalls));
+                    desiredPerCall                 = std::max<uint64_t>(uint64_t{1}, desiredTotal / static_cast<uint64_t>(activeCalls));
                 }
 
                 _effectiveSpeedLimitBytesPerSecond.store(desiredTotal, std::memory_order_release);
@@ -1229,7 +1725,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemItem
             }
             else
             {
-                const unsigned __int64 applied = _appliedSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+                const uint64_t applied = _appliedSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                 _effectiveSpeedLimitBytesPerSecond.store(pluginEffective, std::memory_order_release);
                 if (desiredTotal != applied)
                 {
@@ -1552,12 +2048,8 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
     }
 }
 
-HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::DirectorySizeProgress(unsigned __int64 /*scannedEntries*/,
-                                                                                        unsigned __int64 totalBytes,
-                                                                                        unsigned __int64 fileCount,
-                                                                                        unsigned __int64 directoryCount,
-                                                                                        const wchar_t* currentPath,
-                                                                                        void* cookie) noexcept
+HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::DirectorySizeProgress(
+    uint64_t /*scannedEntries*/, uint64_t totalBytes, uint64_t fileCount, uint64_t directoryCount, const wchar_t* currentPath, void* cookie) noexcept
 {
     WaitWhilePreCalcPaused();
 
@@ -1575,18 +2067,18 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::DirectorySizeP
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         }
 
-        const unsigned __int64 bytesDelta = (totalBytes >= progressCookie->lastBytes) ? (totalBytes - progressCookie->lastBytes) : totalBytes;
-        const unsigned __int64 filesDelta = (fileCount >= progressCookie->lastFiles) ? (fileCount - progressCookie->lastFiles) : fileCount;
-        const unsigned __int64 dirsDelta  = (directoryCount >= progressCookie->lastDirs) ? (directoryCount - progressCookie->lastDirs) : directoryCount;
-        progressCookie->lastBytes         = totalBytes;
-        progressCookie->lastFiles         = fileCount;
-        progressCookie->lastDirs          = directoryCount;
+        const uint64_t bytesDelta = (totalBytes >= progressCookie->lastBytes) ? (totalBytes - progressCookie->lastBytes) : totalBytes;
+        const uint64_t filesDelta = (fileCount >= progressCookie->lastFiles) ? (fileCount - progressCookie->lastFiles) : fileCount;
+        const uint64_t dirsDelta  = (directoryCount >= progressCookie->lastDirs) ? (directoryCount - progressCookie->lastDirs) : directoryCount;
+        progressCookie->lastBytes = totalBytes;
+        progressCookie->lastFiles = fileCount;
+        progressCookie->lastDirs  = directoryCount;
 
         if (bytesDelta > 0 || filesDelta > 0 || dirsDelta > 0)
         {
-            unsigned __int64 snapshotBytes = 0;
-            unsigned __int64 snapshotFiles = 0;
-            unsigned __int64 snapshotDirs  = 0;
+            uint64_t snapshotBytes = 0;
+            uint64_t snapshotFiles = 0;
+            uint64_t snapshotDirs  = 0;
             {
                 std::scoped_lock lock(*progressCookie->totalsMutex);
                 if (progressCookie->acceptUpdates && ! progressCookie->acceptUpdates->load(std::memory_order_acquire))
@@ -1594,25 +2086,25 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::DirectorySizeP
                     return HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 }
 
-                if (std::numeric_limits<unsigned __int64>::max() - *progressCookie->totalBytes < bytesDelta)
+                if (std::numeric_limits<uint64_t>::max() - *progressCookie->totalBytes < bytesDelta)
                 {
-                    *progressCookie->totalBytes = std::numeric_limits<unsigned __int64>::max();
+                    *progressCookie->totalBytes = std::numeric_limits<uint64_t>::max();
                 }
                 else
                 {
                     *progressCookie->totalBytes += bytesDelta;
                 }
-                if (std::numeric_limits<unsigned __int64>::max() - *progressCookie->totalFiles < filesDelta)
+                if (std::numeric_limits<uint64_t>::max() - *progressCookie->totalFiles < filesDelta)
                 {
-                    *progressCookie->totalFiles = std::numeric_limits<unsigned __int64>::max();
+                    *progressCookie->totalFiles = std::numeric_limits<uint64_t>::max();
                 }
                 else
                 {
                     *progressCookie->totalFiles += filesDelta;
                 }
-                if (std::numeric_limits<unsigned __int64>::max() - *progressCookie->totalDirs < dirsDelta)
+                if (std::numeric_limits<uint64_t>::max() - *progressCookie->totalDirs < dirsDelta)
                 {
-                    *progressCookie->totalDirs = std::numeric_limits<unsigned __int64>::max();
+                    *progressCookie->totalDirs = std::numeric_limits<uint64_t>::max();
                 }
                 else
                 {
@@ -1690,9 +2182,9 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
     _preCalcSourceBytes.resize(_sourcePaths.size(), 0);
 
     std::mutex totalsMutex;
-    unsigned __int64 totalBytes = 0;
-    unsigned __int64 totalFiles = 0;
-    unsigned __int64 totalDirs  = 0;
+    uint64_t totalBytes = 0;
+    uint64_t totalFiles = 0;
+    uint64_t totalDirs  = 0;
     std::atomic<bool> acceptUpdates{true};
     std::atomic<bool> preCalcAborted{false};
 
@@ -1728,18 +2220,16 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
 
             _preCalcSourceBytes[index] = result.totalBytes;
 
-            const unsigned __int64 missingBytes =
-                (result.totalBytes >= progressCookie.lastBytes) ? (result.totalBytes - progressCookie.lastBytes) : result.totalBytes;
-            const unsigned __int64 missingFiles =
-                (result.fileCount >= progressCookie.lastFiles) ? (result.fileCount - progressCookie.lastFiles) : result.fileCount;
-            const unsigned __int64 missingDirs =
+            const uint64_t missingBytes = (result.totalBytes >= progressCookie.lastBytes) ? (result.totalBytes - progressCookie.lastBytes) : result.totalBytes;
+            const uint64_t missingFiles = (result.fileCount >= progressCookie.lastFiles) ? (result.fileCount - progressCookie.lastFiles) : result.fileCount;
+            const uint64_t missingDirs =
                 (result.directoryCount >= progressCookie.lastDirs) ? (result.directoryCount - progressCookie.lastDirs) : result.directoryCount;
 
             if (missingBytes > 0 || missingFiles > 0 || missingDirs > 0)
             {
-                unsigned __int64 snapshotBytes = 0;
-                unsigned __int64 snapshotFiles = 0;
-                unsigned __int64 snapshotDirs  = 0;
+                uint64_t snapshotBytes = 0;
+                uint64_t snapshotFiles = 0;
+                uint64_t snapshotDirs  = 0;
                 {
                     std::scoped_lock lock(totalsMutex);
                     if (! acceptUpdates.load(std::memory_order_acquire))
@@ -1747,25 +2237,25 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
                         return;
                     }
 
-                    if (std::numeric_limits<unsigned __int64>::max() - totalBytes < missingBytes)
+                    if (std::numeric_limits<uint64_t>::max() - totalBytes < missingBytes)
                     {
-                        totalBytes = std::numeric_limits<unsigned __int64>::max();
+                        totalBytes = std::numeric_limits<uint64_t>::max();
                     }
                     else
                     {
                         totalBytes += missingBytes;
                     }
-                    if (std::numeric_limits<unsigned __int64>::max() - totalFiles < missingFiles)
+                    if (std::numeric_limits<uint64_t>::max() - totalFiles < missingFiles)
                     {
-                        totalFiles = std::numeric_limits<unsigned __int64>::max();
+                        totalFiles = std::numeric_limits<uint64_t>::max();
                     }
                     else
                     {
                         totalFiles += missingFiles;
                     }
-                    if (std::numeric_limits<unsigned __int64>::max() - totalDirs < missingDirs)
+                    if (std::numeric_limits<uint64_t>::max() - totalDirs < missingDirs)
                     {
-                        totalDirs = std::numeric_limits<unsigned __int64>::max();
+                        totalDirs = std::numeric_limits<uint64_t>::max();
                     }
                     else
                     {
@@ -1849,9 +2339,9 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
 
     _preCalcInProgress.store(false, std::memory_order_release);
 
-    unsigned __int64 finalTotalBytes = 0;
-    unsigned __int64 finalTotalFiles = 0;
-    unsigned __int64 finalTotalDirs  = 0;
+    uint64_t finalTotalBytes = 0;
+    uint64_t finalTotalFiles = 0;
+    uint64_t finalTotalDirs  = 0;
     {
         std::scoped_lock lock(totalsMutex);
         finalTotalBytes = totalBytes;
@@ -1869,7 +2359,7 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
         {
             std::scoped_lock lock(_progressMutex);
             _progressTotalBytes = finalTotalBytes;
-            _progressTotalItems = static_cast<unsigned long>(std::min(finalTotalFiles + finalTotalDirs, static_cast<unsigned __int64>(ULONG_MAX)));
+            _progressTotalItems = static_cast<unsigned long>(std::min(finalTotalFiles + finalTotalDirs, static_cast<uint64_t>(ULONG_MAX)));
         }
     }
 }
@@ -1934,13 +2424,13 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         const ULONGLONG preStartTick = _preCalcStartTick.load(std::memory_order_acquire);
         if (preStartTick > 0)
         {
-            const ULONGLONG elapsedMs    = (afterPreCalcTick >= preStartTick) ? (afterPreCalcTick - preStartTick) : 0;
-            const uint64_t durationUs    = static_cast<uint64_t>(elapsedMs) * 1000ull;
-            const HRESULT preCalcHr      = _cancelled.load(std::memory_order_acquire) ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
-                                                                                      : (_preCalcSkipped.load(std::memory_order_acquire) ? S_FALSE : S_OK);
-            const unsigned __int64 bytes = _preCalcTotalBytes.load(std::memory_order_acquire);
-            const unsigned __int64 items = static_cast<unsigned __int64>(_preCalcFileCount.load(std::memory_order_acquire)) +
-                                           static_cast<unsigned __int64>(_preCalcDirectoryCount.load(std::memory_order_acquire));
+            const ULONGLONG elapsedMs = (afterPreCalcTick >= preStartTick) ? (afterPreCalcTick - preStartTick) : 0;
+            const uint64_t durationUs = static_cast<uint64_t>(elapsedMs) * 1000ull;
+            const HRESULT preCalcHr   = _cancelled.load(std::memory_order_acquire) ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                                                                   : (_preCalcSkipped.load(std::memory_order_acquire) ? S_FALSE : S_OK);
+            const uint64_t bytes      = _preCalcTotalBytes.load(std::memory_order_acquire);
+            const uint64_t items      = static_cast<uint64_t>(_preCalcFileCount.load(std::memory_order_acquire)) +
+                                   static_cast<uint64_t>(_preCalcDirectoryCount.load(std::memory_order_acquire));
 
             const size_t sourceCount  = _sourcePaths.size();
             const std::wstring detail = std::format(L"id={} op={} sources={}", _taskId, OperationToString(_operation), sourceCount);
@@ -1952,13 +2442,13 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         const ULONGLONG preStartTick = _preCalcStartTick.load(std::memory_order_acquire);
         if (preStartTick > 0)
         {
-            const ULONGLONG elapsedMs    = (afterPreCalcTick >= preStartTick) ? (afterPreCalcTick - preStartTick) : 0;
-            const HRESULT preCalcHr      = _cancelled.load(std::memory_order_acquire) ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
-                                                                                      : (_preCalcSkipped.load(std::memory_order_acquire) ? S_FALSE : S_OK);
-            const unsigned __int64 bytes = _preCalcTotalBytes.load(std::memory_order_acquire);
-            const unsigned long files    = _preCalcFileCount.load(std::memory_order_acquire);
-            const unsigned long dirs     = _preCalcDirectoryCount.load(std::memory_order_acquire);
-            const bool skipped           = _preCalcSkipped.load(std::memory_order_acquire);
+            const ULONGLONG elapsedMs = (afterPreCalcTick >= preStartTick) ? (afterPreCalcTick - preStartTick) : 0;
+            const HRESULT preCalcHr   = _cancelled.load(std::memory_order_acquire) ? HRESULT_FROM_WIN32(ERROR_CANCELLED)
+                                                                                   : (_preCalcSkipped.load(std::memory_order_acquire) ? S_FALSE : S_OK);
+            const uint64_t bytes      = _preCalcTotalBytes.load(std::memory_order_acquire);
+            const unsigned long files = _preCalcFileCount.load(std::memory_order_acquire);
+            const unsigned long dirs  = _preCalcDirectoryCount.load(std::memory_order_acquire);
+            const bool skipped        = _preCalcSkipped.load(std::memory_order_acquire);
             LogDiagnostic(DiagnosticSeverity::Debug,
                           preCalcHr,
                           L"precalc.result",
@@ -1988,10 +2478,10 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
 
     if (FAILED(hr))
     {
-        unsigned long totalItems        = 0;
-        unsigned long completedItems    = 0;
-        unsigned __int64 totalBytes     = 0;
-        unsigned __int64 completedBytes = 0;
+        unsigned long totalItems     = 0;
+        unsigned long completedItems = 0;
+        uint64_t totalBytes          = 0;
+        uint64_t completedBytes      = 0;
         std::wstring sourcePath;
         std::wstring destinationPath;
         {
@@ -2047,12 +2537,12 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         const ULONGLONG endTick     = GetTickCount64();
         const ULONGLONG elapsedMs   = (opStartTick > 0 && endTick >= opStartTick) ? (endTick - opStartTick) : 0;
 
-        unsigned long totalItems        = 0;
-        unsigned long completedItems    = 0;
-        unsigned __int64 totalBytes     = 0;
-        unsigned __int64 completedBytes = 0;
-        unsigned __int64 progressCalls  = 0;
-        unsigned __int64 itemCalls      = 0;
+        unsigned long totalItems     = 0;
+        unsigned long completedItems = 0;
+        uint64_t totalBytes          = 0;
+        uint64_t completedBytes      = 0;
+        uint64_t progressCalls       = 0;
+        uint64_t itemCalls           = 0;
         std::wstring sourcePath;
         std::wstring destinationPath;
         {
@@ -2090,10 +2580,10 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
         const ULONGLONG elapsedMs   = (opStartTick > 0 && endTick >= opStartTick) ? (endTick - opStartTick) : 0;
         const uint64_t durationUs   = static_cast<uint64_t>(elapsedMs) * 1000ull;
 
-        unsigned __int64 completedBytes = 0;
-        unsigned long completedItems    = 0;
-        unsigned __int64 progressCalls  = 0;
-        unsigned __int64 itemCalls      = 0;
+        uint64_t completedBytes      = 0;
+        unsigned long completedItems = 0;
+        uint64_t progressCalls       = 0;
+        uint64_t itemCalls           = 0;
         {
             std::scoped_lock lock(_progressMutex);
             completedBytes = _progressCompletedBytes;
@@ -2102,8 +2592,8 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
             itemCalls      = _itemCompletedCallbackCount;
         }
 
-        const unsigned __int64 desired   = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-        const unsigned __int64 effective = _effectiveSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+        const uint64_t desired   = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+        const uint64_t effective = _effectiveSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
         const size_t sourceCount  = _sourcePaths.size();
         const std::wstring detail = std::format(L"id={} op={} desired={} effective={} sources={} items={}",
@@ -2154,6 +2644,8 @@ void FolderWindow::FileOperationState::Task::RequestCancel() noexcept
     {
         _state->NotifyQueueChanged();
     }
+
+    GetPerItemTaskScheduler().NotifyWorkAvailable();
 }
 
 void FolderWindow::FileOperationState::Task::TogglePause() noexcept
@@ -2164,9 +2656,11 @@ void FolderWindow::FileOperationState::Task::TogglePause() noexcept
     {
         _pauseCv.notify_all();
     }
+
+    GetPerItemTaskScheduler().NotifyWorkAvailable();
 }
 
-void FolderWindow::FileOperationState::Task::SetDesiredSpeedLimit(unsigned __int64 bytesPerSecond) noexcept
+void FolderWindow::FileOperationState::Task::SetDesiredSpeedLimit(uint64_t bytesPerSecond) noexcept
 {
     _desiredSpeedLimitBytesPerSecond.store(bytesPerSecond, std::memory_order_release);
 }
@@ -2198,6 +2692,8 @@ void FolderWindow::FileOperationState::Task::SetQueuePaused(bool paused) noexcep
     {
         _pauseCv.notify_all();
     }
+
+    GetPerItemTaskScheduler().NotifyWorkAvailable();
 }
 
 void FolderWindow::FileOperationState::Task::ToggleConflictApplyToAllChecked() noexcept
@@ -2284,7 +2780,7 @@ std::filesystem::path FolderWindow::FileOperationState::Task::GetDestinationFold
 
 unsigned long FolderWindow::FileOperationState::Task::GetPlannedItemCount() const noexcept
 {
-    const unsigned __int64 count64 = static_cast<unsigned __int64>(_sourcePaths.size());
+    const uint64_t count64 = static_cast<uint64_t>(_sourcePaths.size());
     if (count64 > std::numeric_limits<unsigned long>::max())
     {
         return std::numeric_limits<unsigned long>::max();
@@ -2403,7 +2899,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         }
 
         ReparsePointPolicy reparsePointPolicy = ReparsePointPolicy::CopyReparse;
-        if (_folderWindow && _folderWindow->_settings)
+        if (const auto policyOpt = TryGetReparsePointPolicyFromFileSystem(_fileSystem); policyOpt.has_value())
+        {
+            reparsePointPolicy = policyOpt.value();
+        }
+        else if (_folderWindow && _folderWindow->_settings)
         {
             const std::wstring& sourcePluginId =
                 _sourcePane == FolderWindow::Pane::Left ? _folderWindow->_leftPane.pluginId : _folderWindow->_rightPane.pluginId;
@@ -2413,7 +2913,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             }
         }
 
-        const unsigned __int64 count64 = static_cast<unsigned __int64>(_sourcePaths.size());
+        const uint64_t count64 = static_cast<uint64_t>(_sourcePaths.size());
         if (count64 > std::numeric_limits<unsigned long>::max())
         {
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
@@ -2671,45 +3171,45 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
         constexpr unsigned int kMaxCachedModifierAttemptsPerBucket = 1u;
 
-        const auto computeInFlightCompletedBytesLocked = [&]() noexcept -> unsigned __int64
+        const auto computeInFlightCompletedBytesLocked = [&]() noexcept -> uint64_t
         {
-            unsigned __int64 sum = 0;
+            uint64_t sum = 0;
             for (size_t i = 0; i < _perItemInFlightCallCount; ++i)
             {
-                const unsigned __int64 v = _perItemInFlightCalls[i].completedBytes;
-                if (std::numeric_limits<unsigned __int64>::max() - sum < v)
+                const uint64_t v = _perItemInFlightCalls[i].completedBytes;
+                if (std::numeric_limits<uint64_t>::max() - sum < v)
                 {
-                    return std::numeric_limits<unsigned __int64>::max();
+                    return std::numeric_limits<uint64_t>::max();
                 }
                 sum += v;
             }
             return sum;
         };
 
-        const auto computeInFlightCompletedItemsLocked = [&]() noexcept -> unsigned __int64
+        const auto computeInFlightCompletedItemsLocked = [&]() noexcept -> uint64_t
         {
-            unsigned __int64 sum = 0;
+            uint64_t sum = 0;
             for (size_t i = 0; i < _perItemInFlightCallCount; ++i)
             {
-                const unsigned __int64 v = static_cast<unsigned __int64>(_perItemInFlightCalls[i].completedItems);
-                if (std::numeric_limits<unsigned __int64>::max() - sum < v)
+                const uint64_t v = static_cast<uint64_t>(_perItemInFlightCalls[i].completedItems);
+                if (std::numeric_limits<uint64_t>::max() - sum < v)
                 {
-                    return std::numeric_limits<unsigned __int64>::max();
+                    return std::numeric_limits<uint64_t>::max();
                 }
                 sum += v;
             }
             return sum;
         };
 
-        const auto computeInFlightTotalItemsLocked = [&]() noexcept -> unsigned __int64
+        const auto computeInFlightTotalItemsLocked = [&]() noexcept -> uint64_t
         {
-            unsigned __int64 sum = 0;
+            uint64_t sum = 0;
             for (size_t i = 0; i < _perItemInFlightCallCount; ++i)
             {
-                const unsigned __int64 v = static_cast<unsigned __int64>(_perItemInFlightCalls[i].totalItems);
-                if (std::numeric_limits<unsigned __int64>::max() - sum < v)
+                const uint64_t v = static_cast<uint64_t>(_perItemInFlightCalls[i].totalItems);
+                if (std::numeric_limits<uint64_t>::max() - sum < v)
                 {
-                    return std::numeric_limits<unsigned __int64>::max();
+                    return std::numeric_limits<uint64_t>::max();
                 }
                 sum += v;
             }
@@ -2732,14 +3232,14 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation /*operationType*/,
                                                          unsigned long /*totalItems*/,
                                                          unsigned long /*completedItems*/,
-                                                         unsigned __int64 /*totalBytes*/,
-                                                         unsigned __int64 /*completedBytes*/,
+                                                         uint64_t /*totalBytes*/,
+                                                         uint64_t /*completedBytes*/,
                                                          const wchar_t* /*currentSourcePath*/,
                                                          const wchar_t* /*currentDestinationPath*/,
-                                                         unsigned __int64 /*currentItemTotalBytes*/,
-                                                         unsigned __int64 /*currentItemCompletedBytes*/,
+                                                         uint64_t /*currentItemTotalBytes*/,
+                                                         uint64_t /*currentItemCompletedBytes*/,
                                                          FileSystemOptions* /*options*/,
-                                                         unsigned __int64 /*progressStreamId*/,
+                                                         uint64_t /*progressStreamId*/,
                                                          void* /*cookie*/) noexcept override
             {
                 task.WaitWhilePaused();
@@ -2801,8 +3301,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             ReparsePointPolicy reparsePointPolicy             = ReparsePointPolicy::CopyReparse;
 
             // Total bytes is best-effort: if unknown, keep 0.
-            unsigned __int64 totalBytes                 = 0;
-            unsigned __int64 completedBytes             = 0;
+            uint64_t totalBytes                         = 0;
+            uint64_t completedBytes                     = 0;
             unsigned long skippedDirectoryReparseCount  = 0;
             bool rootDirectoryReparseSkipped            = false;
             bool unsupportedDirectoryReparseEncountered = false;
@@ -2821,7 +3321,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                   IFileSystemDirectoryOperations* destinationDirOpsIn,
                                   FileSystemFlags flagsIn,
                                   void* cookieIn,
-                                  unsigned __int64 totalBytesIn,
+                                  uint64_t totalBytesIn,
                                   DWORD sourceRootAttributesHintIn,
                                   ReparsePointPolicy reparsePointPolicyIn) noexcept
                 : task(owner),
@@ -2870,9 +3370,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 }
             }
 
-            void Throttle(unsigned __int64 bytesSoFar) noexcept
+            void Throttle(uint64_t bytesSoFar) noexcept
             {
-                const unsigned __int64 bandwidthLimit = options.bandwidthLimitBytesPerSecond;
+                const uint64_t bandwidthLimit = options.bandwidthLimitBytesPerSecond;
                 if (bandwidthLimit == 0)
                 {
                     return;
@@ -2883,24 +3383,24 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     startTick = GetTickCount64();
                 }
 
-                const ULONGLONG now              = GetTickCount64();
-                const unsigned __int64 elapsedMs = static_cast<unsigned __int64>(now - startTick);
+                const ULONGLONG now      = GetTickCount64();
+                const uint64_t elapsedMs = static_cast<uint64_t>(now - startTick);
 
-                constexpr unsigned __int64 maxSafeBytes = std::numeric_limits<unsigned __int64>::max() / 1000u;
+                constexpr uint64_t maxSafeBytes = std::numeric_limits<uint64_t>::max() / 1000u;
 
-                unsigned __int64 desiredMs = 0;
+                uint64_t desiredMs = 0;
                 if (bytesSoFar > 0 && bytesSoFar <= maxSafeBytes)
                 {
                     desiredMs = (bytesSoFar * 1000u) / bandwidthLimit;
                 }
                 else if (bytesSoFar > maxSafeBytes)
                 {
-                    desiredMs = std::numeric_limits<unsigned __int64>::max();
+                    desiredMs = std::numeric_limits<uint64_t>::max();
                 }
 
                 if (desiredMs > elapsedMs)
                 {
-                    const unsigned __int64 remaining = desiredMs - elapsedMs;
+                    const uint64_t remaining = desiredMs - elapsedMs;
                     const DWORD sleepMs = remaining > std::numeric_limits<DWORD>::max() ? std::numeric_limits<DWORD>::max() : static_cast<DWORD>(remaining);
                     if (sleepMs > 0)
                     {
@@ -2911,11 +3411,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
             HRESULT ReportProgress(const std::wstring& currentSourcePath,
                                    const std::wstring& currentDestinationPath,
-                                   unsigned __int64 currentItemTotalBytes,
-                                   unsigned __int64 currentItemCompletedBytes,
-                                   unsigned __int64 callCompletedBytes) noexcept
+                                   uint64_t currentItemTotalBytes,
+                                   uint64_t currentItemCompletedBytes,
+                                   uint64_t callCompletedBytes) noexcept
             {
-                const unsigned __int64 clampedCallCompleted = (totalBytes > 0) ? (std::min)(totalBytes, callCompletedBytes) : callCompletedBytes;
+                const uint64_t clampedCallCompleted = (totalBytes > 0) ? (std::min)(totalBytes, callCompletedBytes) : callCompletedBytes;
                 return task.FileSystemProgress(task._operation,
                                                1,
                                                0,
@@ -3020,7 +3520,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                        destinationPath);
                 }
 
-                unsigned __int64 fileTotalBytes = 0;
+                uint64_t fileTotalBytes = 0;
                 static_cast<void>(reader->GetSize(&fileTotalBytes));
                 if (totalBytes == 0 && fileTotalBytes > 0)
                 {
@@ -3034,8 +3534,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     return hr;
                 }
 
-                unsigned __int64 fileCompletedBytes = 0;
-                hr                                  = ReportProgress(sourcePath, destinationPath, fileTotalBytes, fileCompletedBytes, completedBytes);
+                uint64_t fileCompletedBytes = 0;
+                hr                          = ReportProgress(sourcePath, destinationPath, fileTotalBytes, fileCompletedBytes, completedBytes);
                 if (FAILED(hr))
                 {
                     return hr;
@@ -3083,14 +3583,14 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                         offset += bytesWritten;
 
-                        if (fileCompletedBytes > std::numeric_limits<unsigned __int64>::max() - bytesWritten)
+                        if (fileCompletedBytes > std::numeric_limits<uint64_t>::max() - static_cast<uint64_t>(bytesWritten))
                         {
                             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
                         }
                         fileCompletedBytes += bytesWritten;
 
-                        const unsigned __int64 callCompleted = completedBytes + fileCompletedBytes;
-                        hr                                   = ReportProgress(sourcePath, destinationPath, fileTotalBytes, fileCompletedBytes, callCompleted);
+                        const uint64_t callCompleted = completedBytes + fileCompletedBytes;
+                        hr                           = ReportProgress(sourcePath, destinationPath, fileTotalBytes, fileCompletedBytes, callCompleted);
                         if (FAILED(hr))
                         {
                             return hr;
@@ -3105,13 +3605,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     // Some destination writers (e.g. remote plugins) may perform significant work during Commit()
                     // after the bridge finishes staging writes. For small files this can look like a "stuck at 100%"
                     // progress bar. Switch to an indeterminate item bar during Commit() so the UI stays obviously active.
-                    constexpr unsigned __int64 kSmallFileCommitIndeterminateThresholdBytes = 1024ull * 1024ull;
+                    constexpr uint64_t kSmallFileCommitIndeterminateThresholdBytes = 1024ull * 1024ull;
                     if (fileTotalBytes <= kSmallFileCommitIndeterminateThresholdBytes)
                     {
-                        const unsigned __int64 callCompleted = (completedBytes > (std::numeric_limits<unsigned __int64>::max)() - fileCompletedBytes)
-                                                                   ? (std::numeric_limits<unsigned __int64>::max)()
-                                                                   : (completedBytes + fileCompletedBytes);
-                        hr                                   = ReportProgress(sourcePath, destinationPath, 0, 0, callCompleted);
+                        const uint64_t callCompleted = (completedBytes > (std::numeric_limits<uint64_t>::max)() - fileCompletedBytes)
+                                                           ? (std::numeric_limits<uint64_t>::max)()
+                                                           : (completedBytes + fileCompletedBytes);
+                        hr                           = ReportProgress(sourcePath, destinationPath, 0, 0, callCompleted);
                         if (FAILED(hr))
                         {
                             return hr;
@@ -3142,14 +3642,14 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     }
                 }
 
-                if (completedBytes > std::numeric_limits<unsigned __int64>::max() - fileCompletedBytes)
+                if (completedBytes > std::numeric_limits<uint64_t>::max() - fileCompletedBytes)
                 {
                     return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
                 }
                 completedBytes += fileCompletedBytes;
 
-                const unsigned __int64 finalTotal     = fileTotalBytes > 0 ? fileTotalBytes : fileCompletedBytes;
-                const unsigned __int64 finalCompleted = fileCompletedBytes;
+                const uint64_t finalTotal     = fileTotalBytes > 0 ? fileTotalBytes : fileCompletedBytes;
+                const uint64_t finalCompleted = fileCompletedBytes;
 
                 hr = ReportProgress(sourcePath, destinationPath, finalTotal, finalCompleted, completedBytes);
                 if (FAILED(hr))
@@ -3274,10 +3774,20 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             HRESULT CopyPath(const std::wstring& sourcePath, const std::wstring& destinationPath) noexcept
             {
                 unsigned long attributes = sourceRootAttributesHint;
-                if (attributes == 0)
+                const bool haveHint      = attributes != 0;
+
+                // Hints can be stale, especially for recently-created junctions, and the reparse point policy relies on
+                // accurate attributes. Prefer refreshing attributes when not following reparse targets; otherwise fall
+                // back to the hint if refreshing fails.
+                if (attributes == 0 || reparsePointPolicy != ReparsePointPolicy::FollowTargets)
                 {
-                    const HRESULT hrAttr = sourceIo.GetAttributes(sourcePath.c_str(), &attributes);
-                    if (FAILED(hrAttr))
+                    unsigned long refreshed = 0;
+                    const HRESULT hrAttr    = sourceIo.GetAttributes(sourcePath.c_str(), &refreshed);
+                    if (SUCCEEDED(hrAttr))
+                    {
+                        attributes = refreshed;
+                    }
+                    else if (! haveHint)
                     {
                         return hrAttr;
                     }
@@ -3314,7 +3824,6 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         {
             // Per-task multi-item concurrency: run multiple CopyItem/MoveItem/DeleteItem calls concurrently while keeping
             // conflict prompts serialized (one prompt per task at a time).
-            std::atomic<size_t> nextIndex{0};
             std::atomic<bool> hadSkipped{false};
             std::atomic<HRESULT> firstFailure{S_OK};
 
@@ -3326,17 +3835,17 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     return E_INVALIDARG;
                 }
 
-                const unsigned __int64 preCalcBytesForItem = (canUsePreCalcBytes && index < _preCalcSourceBytes.size()) ? _preCalcSourceBytes[index] : 0;
+                const uint64_t preCalcBytesForItem = (canUsePreCalcBytes && index < _preCalcSourceBytes.size()) ? _preCalcSourceBytes[index] : 0;
 
                 std::array<unsigned int, static_cast<size_t>(ConflictBucket::Count)> retryCounts{};
                 std::array<unsigned int, static_cast<size_t>(ConflictBucket::Count)> cachedModifierAttempts{};
                 FileSystemFlags itemFlags = _flags;
 
-                bool itemSucceeded                  = false;
-                bool itemSkipped                    = false;
-                unsigned __int64 callCompletedBytes = 0;
-                unsigned __int64 callCompletedItems = 0;
-                unsigned __int64 callTotalItems     = 0;
+                bool itemSucceeded          = false;
+                bool itemSkipped            = false;
+                uint64_t callCompletedBytes = 0;
+                uint64_t callCompletedItems = 0;
+                uint64_t callTotalItems     = 0;
 
                 for (;;)
                 {
@@ -3367,9 +3876,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                             ++_perItemInFlightCallCount;
                         }
 
-                        _progressCompletedItems       = (std::max)(_progressCompletedItems, _perItemCompletedItems);
-                        const unsigned __int64 mapped = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
-                        _progressCompletedBytes       = (std::max)(_progressCompletedBytes, mapped);
+                        _progressCompletedItems = (std::max)(_progressCompletedItems, _perItemCompletedItems);
+                        const uint64_t mapped   = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
+                        _progressCompletedBytes = (std::max)(_progressCompletedBytes, mapped);
                     }
 
                     callCompletedBytes = 0;
@@ -3421,7 +3930,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                             {
                                 callCompletedItems       = _perItemInFlightCalls[i].completedItems;
                                 callCompletedBytes       = _perItemInFlightCalls[i].completedBytes;
-                                callTotalItems           = static_cast<unsigned __int64>(_perItemInFlightCalls[i].totalItems);
+                                callTotalItems           = static_cast<uint64_t>(_perItemInFlightCalls[i].totalItems);
                                 _perItemInFlightCalls[i] = _perItemInFlightCalls[_perItemInFlightCallCount - 1u];
                                 --_perItemInFlightCallCount;
                                 break;
@@ -3432,9 +3941,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         {
                             if (callCompletedItems > 0)
                             {
-                                if (_perItemCompletedEntryCount > std::numeric_limits<unsigned __int64>::max() - callCompletedItems)
+                                if (_perItemCompletedEntryCount > std::numeric_limits<uint64_t>::max() - callCompletedItems)
                                 {
-                                    _perItemCompletedEntryCount = std::numeric_limits<unsigned __int64>::max();
+                                    _perItemCompletedEntryCount = std::numeric_limits<uint64_t>::max();
                                 }
                                 else
                                 {
@@ -3444,9 +3953,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                             if (callTotalItems > 0)
                             {
-                                if (_perItemTotalEntryCount > std::numeric_limits<unsigned __int64>::max() - callTotalItems)
+                                if (_perItemTotalEntryCount > std::numeric_limits<uint64_t>::max() - callTotalItems)
                                 {
-                                    _perItemTotalEntryCount = std::numeric_limits<unsigned __int64>::max();
+                                    _perItemTotalEntryCount = std::numeric_limits<uint64_t>::max();
                                 }
                                 else
                                 {
@@ -3454,26 +3963,26 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                 }
                             }
 
-                            const unsigned __int64 mappedCompletedItems = _perItemCompletedEntryCount + computeInFlightCompletedItemsLocked();
-                            const unsigned __int64 clampedCompleted =
-                                std::min<unsigned __int64>(mappedCompletedItems, static_cast<unsigned __int64>(std::numeric_limits<unsigned long>::max()));
+                            const uint64_t mappedCompletedItems = _perItemCompletedEntryCount + computeInFlightCompletedItemsLocked();
+                            const uint64_t clampedCompleted =
+                                std::min<uint64_t>(mappedCompletedItems, static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()));
                             _progressCompletedItems = (std::max)(_progressCompletedItems, static_cast<unsigned long>(clampedCompleted));
 
                             const bool precalcTotalAvailable = _preCalcCompleted.load(std::memory_order_acquire) && _progressTotalItems > 0;
                             if (! precalcTotalAvailable)
                             {
-                                const unsigned __int64 mappedTotalItems = _perItemTotalEntryCount + computeInFlightTotalItemsLocked();
+                                const uint64_t mappedTotalItems = _perItemTotalEntryCount + computeInFlightTotalItemsLocked();
                                 if (mappedTotalItems > 0)
                                 {
-                                    const unsigned __int64 clampedTotal =
-                                        std::min<unsigned __int64>(mappedTotalItems, static_cast<unsigned __int64>(std::numeric_limits<unsigned long>::max()));
+                                    const uint64_t clampedTotal =
+                                        std::min<uint64_t>(mappedTotalItems, static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()));
                                     _progressTotalItems = (std::max)(_progressTotalItems, static_cast<unsigned long>(clampedTotal));
                                 }
                             }
                         }
 
-                        const unsigned __int64 mapped = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
-                        _progressCompletedBytes       = (std::max)(_progressCompletedBytes, mapped);
+                        const uint64_t mapped   = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
+                        _progressCompletedBytes = (std::max)(_progressCompletedBytes, mapped);
                     }
 
                     const bool cancelled = itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || itemHr == E_ABORT;
@@ -3668,7 +4177,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     _progressCompletedBytes = (std::min)(_progressCompletedBytes, _progressTotalBytes);
                 }
 
-                unsigned __int64 bytesForItem = 0;
+                uint64_t bytesForItem = 0;
                 if (itemSucceeded)
                 {
                     bytesForItem = (preCalcBytesForItem > 0) ? preCalcBytesForItem : callCompletedBytes;
@@ -3678,7 +4187,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     std::scoped_lock lock(_progressMutex);
                     if (itemSucceeded)
                     {
-                        if (_perItemCompletedBytes > std::numeric_limits<unsigned __int64>::max() - bytesForItem)
+                        if (_perItemCompletedBytes > std::numeric_limits<uint64_t>::max() - bytesForItem)
                         {
                             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
                         }
@@ -3689,48 +4198,54 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     {
                         ++_perItemCompletedItems;
                     }
-                    _progressCompletedItems       = (std::max)(_progressCompletedItems, _perItemCompletedItems);
-                    const unsigned __int64 mapped = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
-                    _progressCompletedBytes       = (std::max)(_progressCompletedBytes, mapped);
+
+                    if (index < _topLevelItemCompleted.size() && _topLevelItemCompleted[index] == 0)
+                    {
+                        _topLevelItemCompleted[index] = 1;
+                        if (index < _topLevelItemKinds.size())
+                        {
+                            const TopLevelItemKind kind = _topLevelItemKinds[index];
+                            if (kind == TopLevelItemKind::File)
+                            {
+                                if (_completedTopLevelFiles < std::numeric_limits<unsigned long>::max())
+                                {
+                                    ++_completedTopLevelFiles;
+                                }
+                            }
+                            else if (kind == TopLevelItemKind::Folder)
+                            {
+                                if (_completedTopLevelFolders < std::numeric_limits<unsigned long>::max())
+                                {
+                                    ++_completedTopLevelFolders;
+                                }
+                            }
+                        }
+                    }
+                    _progressCompletedItems = (std::max)(_progressCompletedItems, _perItemCompletedItems);
+                    const uint64_t mapped   = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
+                    _progressCompletedBytes = (std::max)(_progressCompletedBytes, mapped);
                 }
 
                 return S_OK;
             };
 
-            const auto runWorker = [&]() noexcept
-            {
-                [[maybe_unused]] auto coInit = wil::CoInitializeEx();
-                for (;;)
+            auto job = GetPerItemTaskScheduler().StartJob(
+                this,
+                _perItemMaxConcurrency,
+                _sourcePaths.size(),
+                [&](size_t index) noexcept -> HRESULT
                 {
-                    if (_cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested())
-                    {
-                        return;
-                    }
-
-                    const size_t index = nextIndex.fetch_add(1u, std::memory_order_acq_rel);
-                    if (index >= _sourcePaths.size())
-                    {
-                        return;
-                    }
-
                     const HRESULT hrItem = processIndex(index);
                     if (FAILED(hrItem))
                     {
                         HRESULT expected = S_OK;
                         firstFailure.compare_exchange_strong(expected, hrItem, std::memory_order_acq_rel);
                         RequestCancel();
-                        return;
                     }
-                }
-            };
+                    return hrItem;
+                });
 
-            std::vector<std::jthread> workers;
-            workers.reserve(_perItemMaxConcurrency - 1u);
-            for (unsigned int i = 1u; i < _perItemMaxConcurrency; ++i)
-            {
-                workers.emplace_back([&](std::stop_token) noexcept { runWorker(); });
-            }
-            runWorker();
+            GetPerItemTaskScheduler().WaitJob(job);
 
             clearConflictPrompt();
 
@@ -3756,7 +4271,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 return E_INVALIDARG;
             }
 
-            const unsigned __int64 preCalcBytesForItem = (canUsePreCalcBytes && index < _preCalcSourceBytes.size()) ? _preCalcSourceBytes[index] : 0;
+            const uint64_t preCalcBytesForItem = (canUsePreCalcBytes && index < _preCalcSourceBytes.size()) ? _preCalcSourceBytes[index] : 0;
 
             std::array<unsigned int, static_cast<size_t>(ConflictBucket::Count)> retryCounts{};
             std::array<unsigned int, static_cast<size_t>(ConflictBucket::Count)> cachedModifierAttempts{};
@@ -3765,12 +4280,12 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             bool itemSkipped          = false;
             bool itemPartiallySkipped = false;
 
-            FileSystemFlags itemFlags           = _flags;
-            unsigned __int64 callCompletedBytes = 0;
-            unsigned __int64 callCompletedItems = 0;
-            unsigned __int64 callTotalItems     = 0;
-            bool moveCopyCompleted              = false;
-            unsigned __int64 moveCopiedBytes    = 0;
+            FileSystemFlags itemFlags   = _flags;
+            uint64_t callCompletedBytes = 0;
+            uint64_t callCompletedItems = 0;
+            uint64_t callTotalItems     = 0;
+            bool moveCopyCompleted      = false;
+            uint64_t moveCopiedBytes    = 0;
 
             for (;;)
             {
@@ -3800,8 +4315,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                 {
                     std::scoped_lock lock(_progressMutex);
-                    _perItemCompletedItems =
-                        static_cast<unsigned long>(std::min<unsigned __int64>(static_cast<unsigned __int64>(index), static_cast<unsigned __int64>(ULONG_MAX)));
+                    _perItemCompletedItems    = static_cast<unsigned long>(std::min<uint64_t>(static_cast<uint64_t>(index), static_cast<uint64_t>(ULONG_MAX)));
                     _perItemInFlightCallCount = 0;
                     if (! _perItemInFlightCalls.empty())
                     {
@@ -3809,9 +4323,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         _perItemInFlightCallCount = 1;
                     }
 
-                    _progressCompletedItems       = _perItemCompletedItems;
-                    const unsigned __int64 mapped = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
-                    _progressCompletedBytes       = (std::max)(_progressCompletedBytes, mapped);
+                    _progressCompletedItems = _perItemCompletedItems;
+                    const uint64_t mapped   = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
+                    _progressCompletedBytes = (std::max)(_progressCompletedBytes, mapped);
                 }
 
                 HRESULT itemHr                                   = E_NOTIMPL;
@@ -3933,7 +4447,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         {
                             callCompletedItems       = _perItemInFlightCalls[i].completedItems;
                             callCompletedBytes       = _perItemInFlightCalls[i].completedBytes;
-                            callTotalItems           = static_cast<unsigned __int64>(_perItemInFlightCalls[i].totalItems);
+                            callTotalItems           = static_cast<uint64_t>(_perItemInFlightCalls[i].totalItems);
                             _perItemInFlightCalls[i] = _perItemInFlightCalls[_perItemInFlightCallCount - 1u];
                             --_perItemInFlightCallCount;
                             break;
@@ -3944,9 +4458,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     {
                         if (callCompletedItems > 0)
                         {
-                            if (_perItemCompletedEntryCount > std::numeric_limits<unsigned __int64>::max() - callCompletedItems)
+                            if (_perItemCompletedEntryCount > std::numeric_limits<uint64_t>::max() - callCompletedItems)
                             {
-                                _perItemCompletedEntryCount = std::numeric_limits<unsigned __int64>::max();
+                                _perItemCompletedEntryCount = std::numeric_limits<uint64_t>::max();
                             }
                             else
                             {
@@ -3956,9 +4470,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                         if (callTotalItems > 0)
                         {
-                            if (_perItemTotalEntryCount > std::numeric_limits<unsigned __int64>::max() - callTotalItems)
+                            if (_perItemTotalEntryCount > std::numeric_limits<uint64_t>::max() - callTotalItems)
                             {
-                                _perItemTotalEntryCount = std::numeric_limits<unsigned __int64>::max();
+                                _perItemTotalEntryCount = std::numeric_limits<uint64_t>::max();
                             }
                             else
                             {
@@ -3966,26 +4480,26 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                             }
                         }
 
-                        const unsigned __int64 mappedCompletedItems = _perItemCompletedEntryCount + computeInFlightCompletedItemsLocked();
-                        const unsigned __int64 clampedCompleted =
-                            std::min<unsigned __int64>(mappedCompletedItems, static_cast<unsigned __int64>(std::numeric_limits<unsigned long>::max()));
+                        const uint64_t mappedCompletedItems = _perItemCompletedEntryCount + computeInFlightCompletedItemsLocked();
+                        const uint64_t clampedCompleted =
+                            std::min<uint64_t>(mappedCompletedItems, static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()));
                         _progressCompletedItems = (std::max)(_progressCompletedItems, static_cast<unsigned long>(clampedCompleted));
 
                         const bool precalcTotalAvailable = _preCalcCompleted.load(std::memory_order_acquire) && _progressTotalItems > 0;
                         if (! precalcTotalAvailable)
                         {
-                            const unsigned __int64 mappedTotalItems = _perItemTotalEntryCount + computeInFlightTotalItemsLocked();
+                            const uint64_t mappedTotalItems = _perItemTotalEntryCount + computeInFlightTotalItemsLocked();
                             if (mappedTotalItems > 0)
                             {
-                                const unsigned __int64 clampedTotal =
-                                    std::min<unsigned __int64>(mappedTotalItems, static_cast<unsigned __int64>(std::numeric_limits<unsigned long>::max()));
+                                const uint64_t clampedTotal =
+                                    std::min<uint64_t>(mappedTotalItems, static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()));
                                 _progressTotalItems = (std::max)(_progressTotalItems, static_cast<unsigned long>(clampedTotal));
                             }
                         }
                     }
 
-                    const unsigned __int64 mapped = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
-                    _progressCompletedBytes       = (std::max)(_progressCompletedBytes, mapped);
+                    const uint64_t mapped   = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
+                    _progressCompletedBytes = (std::max)(_progressCompletedBytes, mapped);
                 }
 
                 const bool cancelled = itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || itemHr == E_ABORT;
@@ -4193,8 +4707,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             }
             else if (itemSucceeded || itemPartiallySkipped)
             {
-                const unsigned __int64 bytesForItem = (preCalcBytesForItem > 0) ? preCalcBytesForItem : callCompletedBytes;
-                if (_perItemCompletedBytes > std::numeric_limits<unsigned __int64>::max() - bytesForItem)
+                const uint64_t bytesForItem = (preCalcBytesForItem > 0) ? preCalcBytesForItem : callCompletedBytes;
+                if (_perItemCompletedBytes > std::numeric_limits<uint64_t>::max() - bytesForItem)
                 {
                     clearConflictPrompt();
                     return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
@@ -4203,14 +4717,36 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 _perItemCompletedBytes += bytesForItem;
             }
 
-            _perItemCompletedItems =
-                static_cast<unsigned long>(std::min<unsigned __int64>(static_cast<unsigned __int64>(index + 1u), static_cast<unsigned __int64>(ULONG_MAX)));
+            _perItemCompletedItems = static_cast<unsigned long>(std::min<uint64_t>(static_cast<uint64_t>(index + 1u), static_cast<uint64_t>(ULONG_MAX)));
 
             {
                 std::scoped_lock lock(_progressMutex);
-                _progressCompletedItems       = _perItemCompletedItems;
-                const unsigned __int64 mapped = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
-                _progressCompletedBytes       = (std::max)(_progressCompletedBytes, mapped);
+                _progressCompletedItems = _perItemCompletedItems;
+                const uint64_t mapped   = _perItemCompletedBytes + computeInFlightCompletedBytesLocked();
+                _progressCompletedBytes = (std::max)(_progressCompletedBytes, mapped);
+
+                if (index < _topLevelItemCompleted.size() && _topLevelItemCompleted[index] == 0)
+                {
+                    _topLevelItemCompleted[index] = 1;
+                    if (index < _topLevelItemKinds.size())
+                    {
+                        const TopLevelItemKind kind = _topLevelItemKinds[index];
+                        if (kind == TopLevelItemKind::File)
+                        {
+                            if (_completedTopLevelFiles < std::numeric_limits<unsigned long>::max())
+                            {
+                                ++_completedTopLevelFiles;
+                            }
+                        }
+                        else if (kind == TopLevelItemKind::Folder)
+                        {
+                            if (_completedTopLevelFolders < std::numeric_limits<unsigned long>::max())
+                            {
+                                ++_completedTopLevelFolders;
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -4349,13 +4885,13 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPathArrayArena(const std::v
         return S_OK;
     }
 
-    const unsigned __int64 count64 = static_cast<unsigned __int64>(paths.size());
+    const uint64_t count64 = static_cast<uint64_t>(paths.size());
     if (count64 > std::numeric_limits<unsigned long>::max())
     {
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
 
-    const unsigned __int64 arrayBytes64 = count64 * static_cast<unsigned __int64>(sizeof(const wchar_t*));
+    const uint64_t arrayBytes64 = count64 * static_cast<uint64_t>(sizeof(const wchar_t*));
     if (arrayBytes64 > std::numeric_limits<unsigned long>::max())
     {
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
@@ -4420,6 +4956,7 @@ HRESULT FolderWindow::FileOperationState::Task::BuildPathArrayArena(const std::v
 
 FolderWindow::FileOperationState::FileOperationState(FolderWindow& owner) : _owner(owner)
 {
+    _uiLifetime = std::make_shared<int>(0);
 }
 
 FolderWindow::FileOperationState::~FileOperationState()
@@ -4435,7 +4972,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
                                                          std::filesystem::path destinationFolder,
                                                          FileSystemFlags flags,
                                                          bool waitForOthers,
-                                                         unsigned __int64 initialSpeedLimitBytesPerSecond,
+                                                         uint64_t initialSpeedLimitBytesPerSecond,
                                                          ExecutionMode executionMode,
                                                          bool requireConfirmation,
                                                          wil::com_ptr<IFileSystem> destinationFileSystem)
@@ -4944,6 +5481,41 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
     }
 
     {
+        const size_t itemCount = task->_sourcePaths.size();
+        task->_topLevelItemKinds.assign(itemCount, Task::TopLevelItemKind::Unknown);
+        task->_topLevelItemCompleted.assign(itemCount, 0);
+        task->_plannedTopLevelFiles     = 0;
+        task->_plannedTopLevelFolders   = 0;
+        task->_completedTopLevelFiles   = 0;
+        task->_completedTopLevelFolders = 0;
+
+        const bool haveHint = task->_sourcePathAttributesHint.size() == itemCount;
+        if (haveHint)
+        {
+            for (size_t i = 0; i < itemCount; ++i)
+            {
+                const bool isDir = (task->_sourcePathAttributesHint[i] & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                if (isDir)
+                {
+                    task->_topLevelItemKinds[i] = Task::TopLevelItemKind::Folder;
+                    if (task->_plannedTopLevelFolders < std::numeric_limits<unsigned long>::max())
+                    {
+                        ++task->_plannedTopLevelFolders;
+                    }
+                }
+                else
+                {
+                    task->_topLevelItemKinds[i] = Task::TopLevelItemKind::File;
+                    if (task->_plannedTopLevelFiles < std::numeric_limits<unsigned long>::max())
+                    {
+                        ++task->_plannedTopLevelFiles;
+                    }
+                }
+            }
+        }
+    }
+
+    {
         std::scoped_lock lock(task->_progressMutex);
         if (! task->_sourcePaths.empty())
         {
@@ -4963,7 +5535,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         _tasks.emplace_back(std::move(task));
     }
 
-    CreateProgressDialog(*rawTask);
+    EnsurePopupVisible();
 
     rawTask->_thread = std::jthread([rawTask](std::stop_token stopToken) noexcept { rawTask->ThreadMain(stopToken); });
     return S_OK;
@@ -4995,11 +5567,40 @@ void FolderWindow::FileOperationState::Shutdown() noexcept
     std::vector<std::unique_ptr<Task>> tasks;
     wil::unique_hwnd popupToClose;
     wil::unique_hwnd issuesPaneToClose;
+    HWND popupHwnd      = nullptr;
+    HWND issuesPaneHwnd = nullptr;
     {
         std::scoped_lock lock(_mutex);
+        _uiLifetime.reset();
         tasks.swap(_tasks);
+        popupHwnd        = _popup.get();
+        issuesPaneHwnd   = _issuesPane.get();
         popupToClose      = std::move(_popup);
         issuesPaneToClose = std::move(_issuesPane);
+    }
+
+    if (_owner._settings)
+    {
+        if (popupHwnd)
+        {
+            SavePopupPlacement(popupHwnd);
+        }
+
+        if (issuesPaneHwnd)
+        {
+            SaveIssuesPanePlacement(issuesPaneHwnd);
+        }
+
+        if (popupHwnd || issuesPaneHwnd)
+        {
+            const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(*_owner._settings);
+            const HRESULT saveHr                            = Common::Settings::SaveSettings(kFileOpsAppId, settingsToSave);
+            if (FAILED(saveHr))
+            {
+                const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kFileOpsAppId);
+                Debug::Error(L"SaveSettings failed (hr=0x{:08X}) path={}", static_cast<unsigned long>(saveHr), settingsPath.wstring());
+            }
+        }
     }
 
     for (auto& task : tasks)
@@ -5123,6 +5724,17 @@ void FolderWindow::FileOperationState::CollectTasks(std::vector<Task*>& outTasks
     }
 }
 
+void FolderWindow::FileOperationState::CollectInformationalTasks(std::vector<FolderWindow::InformationalTaskUpdate>& outTasks) noexcept
+{
+    std::scoped_lock lock(_mutex);
+    outTasks.clear();
+    outTasks.reserve(_informationalTasks.size());
+    for (const auto& task : _informationalTasks)
+    {
+        outTasks.push_back(task);
+    }
+}
+
 void FolderWindow::FileOperationState::CollectCompletedTasks(std::vector<CompletedTaskSummary>& outTasks) noexcept
 {
     std::scoped_lock lock(_mutex);
@@ -5145,10 +5757,118 @@ void FolderWindow::FileOperationState::DismissCompletedTask(uint64_t taskId) noe
                                              [&](const CompletedTaskSummary& summary) noexcept { return summary.taskId == taskId; }),
                               _completedTasks.end());
 
-        if (_tasks.empty() && _completedTasks.empty())
+        if (_tasks.empty() && _completedTasks.empty() && _informationalTasks.empty())
         {
             popupToClose = std::move(_popup);
         }
+    }
+}
+
+uint64_t FolderWindow::FileOperationState::CreateOrUpdateInformationalTask(const FolderWindow::InformationalTaskUpdate& update) noexcept
+{
+    bool createdNew    = false;
+    bool autoDismissed = false;
+    bool needShowPopup = false;
+    HWND popup         = nullptr;
+    wil::unique_hwnd popupToClose;
+
+    uint64_t taskId      = update.taskId;
+    bool updatedExisting = false;
+
+    {
+        std::scoped_lock lock(_mutex);
+        if (taskId != 0)
+        {
+            for (auto& existing : _informationalTasks)
+            {
+                if (existing.taskId == taskId)
+                {
+                    existing        = update;
+                    existing.taskId = taskId;
+                    updatedExisting = true;
+                    break;
+                }
+            }
+        }
+
+        if (taskId == 0 || ! updatedExisting)
+        {
+            taskId                                       = _nextTaskId++;
+            FolderWindow::InformationalTaskUpdate stored = update;
+            stored.taskId                                = taskId;
+            _informationalTasks.push_back(std::move(stored));
+
+            createdNew = true;
+        }
+
+        const bool autoDismissSuccess = _owner._settings ? GetAutoDismissSuccessFromSettings(*_owner._settings) : false;
+        if (autoDismissSuccess && update.finished && (SUCCEEDED(update.resultHr) || IsCancellationStatus(update.resultHr)))
+        {
+            _informationalTasks.erase(std::remove_if(_informationalTasks.begin(),
+                                                     _informationalTasks.end(),
+                                                     [&](const FolderWindow::InformationalTaskUpdate& task) noexcept { return task.taskId == taskId; }),
+                                      _informationalTasks.end());
+
+            autoDismissed = true;
+            if (_tasks.empty() && _completedTasks.empty() && _informationalTasks.empty())
+            {
+                popupToClose = std::move(_popup);
+            }
+        }
+
+        popup = _popup.get();
+        if (! autoDismissed && ! update.finished)
+        {
+            // Informational tasks should surface progress similarly to file operations: when the task starts, ensure the popup is shown.
+            needShowPopup = createdNew || popup == nullptr || IsWindowVisible(popup) == FALSE || IsIconic(popup) != FALSE;
+        }
+        else
+        {
+            needShowPopup = createdNew && (popup == nullptr) && ! autoDismissed;
+        }
+    }
+
+    if (needShowPopup)
+    {
+        EnsurePopupVisible();
+    }
+    else if (popup)
+    {
+        InvalidateRect(popup, nullptr, FALSE);
+    }
+
+    return taskId;
+}
+
+void FolderWindow::FileOperationState::DismissInformationalTask(uint64_t taskId) noexcept
+{
+    if (taskId == 0)
+    {
+        return;
+    }
+
+    wil::unique_hwnd popupToClose;
+    HWND popup = nullptr;
+    {
+        std::scoped_lock lock(_mutex);
+        _informationalTasks.erase(std::remove_if(_informationalTasks.begin(),
+                                                 _informationalTasks.end(),
+                                                 [&](const FolderWindow::InformationalTaskUpdate& task) noexcept { return task.taskId == taskId; }),
+                                  _informationalTasks.end());
+
+        if (_tasks.empty() && _completedTasks.empty() && _informationalTasks.empty())
+        {
+            popupToClose = std::move(_popup);
+        }
+        else
+        {
+            popup = _popup.get();
+        }
+    }
+
+    if (popup)
+    {
+        InvalidateRect(popup, nullptr, FALSE);
     }
 }
 
@@ -5175,6 +5895,7 @@ void FolderWindow::FileOperationState::SetAutoDismissSuccess(bool enabled) noexc
     if (enabled && ! previous)
     {
         wil::unique_hwnd popupToClose;
+        HWND popup = nullptr;
         {
             std::scoped_lock lock(_mutex);
             _completedTasks.erase(std::remove_if(_completedTasks.begin(),
@@ -5183,10 +5904,25 @@ void FolderWindow::FileOperationState::SetAutoDismissSuccess(bool enabled) noexc
                                                  { return SUCCEEDED(summary.resultHr) || IsCancellationStatus(summary.resultHr); }),
                                   _completedTasks.end());
 
-            if (_tasks.empty() && _completedTasks.empty())
+            _informationalTasks.erase(std::remove_if(_informationalTasks.begin(),
+                                                     _informationalTasks.end(),
+                                                     [](const FolderWindow::InformationalTaskUpdate& task) noexcept
+                                                     { return task.finished && (SUCCEEDED(task.resultHr) || IsCancellationStatus(task.resultHr)); }),
+                                      _informationalTasks.end());
+
+            if (_tasks.empty() && _completedTasks.empty() && _informationalTasks.empty())
             {
                 popupToClose = std::move(_popup);
             }
+            else
+            {
+                popup = _popup.get();
+            }
+        }
+
+        if (popup)
+        {
+            InvalidateRect(popup, nullptr, FALSE);
         }
     }
 }
@@ -5437,7 +6173,13 @@ void FolderWindow::FileOperationState::ToggleIssuesPane() noexcept
         }
     }
 
-    HWND createdPane = FileOperationsIssuesPane::Create(this, &_owner, ownerWindow);
+    std::weak_ptr<void> uiLifetime;
+    {
+        std::scoped_lock lock(_mutex);
+        uiLifetime = _uiLifetime;
+    }
+
+    HWND createdPane = FileOperationsIssuesPane::Create(this, &_owner, ownerWindow, std::move(uiLifetime));
     if (! createdPane)
     {
         return;
@@ -6044,6 +6786,9 @@ void FolderWindow::FileOperationState::RecordCompletedTask(Task& task) noexcept
         summary.completedItems  = task._progressCompletedItems;
         summary.totalBytes      = task._progressTotalBytes;
         summary.completedBytes  = task._progressCompletedBytes;
+        summary.preCalcSkipped  = task._preCalcSkipped.load(std::memory_order_acquire);
+        summary.completedFiles  = task._completedTopLevelFiles;
+        summary.completedFolders = task._completedTopLevelFolders;
         summary.sourcePath      = task._progressSourcePath;
         summary.destinationPath = task._progressDestinationPath;
     }
@@ -6263,7 +7008,7 @@ void FolderWindow::FileOperationState::RemoveTask(uint64_t taskId) noexcept
 
         _tasks.erase(std::remove_if(_tasks.begin(), _tasks.end(), [&](const std::unique_ptr<Task>& t) { return ! t || t->GetId() == taskId; }), _tasks.end());
 
-        if (_tasks.empty() && _completedTasks.empty())
+        if (_tasks.empty() && _completedTasks.empty() && _informationalTasks.empty())
         {
             popupToClose = std::move(_popup);
         }

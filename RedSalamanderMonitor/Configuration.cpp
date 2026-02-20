@@ -11,8 +11,7 @@
 #include <Objbase.h>
 #include <WTypes.h>
 
-PCWSTR DB_ROOT_KEY      = L"Software\\RedSalamander\\Bug Report";
-PCWSTR CONFIG_EMAIL_REG = L"Email";
+static constexpr PCWSTR kRegistryRoot = L"Software\\RedSalamander\\Monitor";
 
 Configuration g_config;
 
@@ -21,19 +20,19 @@ Configuration::Configuration()
     ; // Initialize the configuration with default values
 }
 
-BOOL Configuration::Load()
+bool Configuration::Load()
 {
     wil::unique_hkey hKey;
-    auto hRes = wil::reg::open_unique_key_nothrow(HKEY_CURRENT_USER, DB_ROOT_KEY, hKey);
+
+    // Try new registry path first, fall back to legacy path for migration
+    auto hRes = wil::reg::open_unique_key_nothrow(HKEY_CURRENT_USER, kRegistryRoot, hKey);
+    if (hRes != S_OK)
+    {
+        hRes = wil::reg::open_unique_key_nothrow(HKEY_CURRENT_USER, L"Software\\RedSalamander\\Bug Report", hKey);
+    }
+
     if (hRes == S_OK)
     {
-        std::wstring emailParam;
-        hRes = wil::reg::get_value_nothrow<std::wstring>(hKey.get(), CONFIG_EMAIL_REG, &emailParam);
-        if (hRes == S_OK)
-        {
-            email = emailParam;
-        }
-
         // Load filter settings
         DWORD filterMaskValue = 0x1F;
         hRes                  = wil::reg::get_value_nothrow<DWORD>(hKey.get(), L"FilterMask", &filterMaskValue);
@@ -50,47 +49,36 @@ BOOL Configuration::Load()
         }
 
         AddLine(L"Configuration loaded successfully.");
-        return TRUE;
+        return true;
     }
 
     // If the key does not exist, initialize with default values
-    email            = L"";
     filterMask       = 0x1F;
     lastFilterPreset = -1;
-    return FALSE;
+    return false;
 }
 
-BOOL Configuration::Save()
+bool Configuration::Save()
 {
     wil::unique_hkey hKey;
-    auto hRes = wil::reg::create_unique_key_nothrow(HKEY_CURRENT_USER, DB_ROOT_KEY, hKey);
+    auto hRes = wil::reg::create_unique_key_nothrow(HKEY_CURRENT_USER, kRegistryRoot, hKey);
     if (hRes != S_OK)
     {
-        // Handle error if setting the value fails
-        // TODO: Log the error or notify the user
-        return FALSE;
-    }
-
-    hRes = wil::reg::set_value_string_nothrow(hKey.get(), CONFIG_EMAIL_REG, email.c_str());
-    if (hRes != S_OK)
-    {
-        // Handle error if setting the value fails
-        // TODO: Log the error or notify the user
-        return FALSE;
+        return false;
     }
 
     // Save filter settings
     hRes = wil::reg::set_value_nothrow<DWORD>(hKey.get(), L"FilterMask", static_cast<DWORD>(filterMask));
     if (hRes != S_OK)
     {
-        return FALSE;
+        return false;
     }
 
     hRes = wil::reg::set_value_nothrow<DWORD>(hKey.get(), L"LastFilterPreset", static_cast<DWORD>(lastFilterPreset));
     if (hRes != S_OK)
     {
-        return FALSE;
+        return false;
     }
 
-    return TRUE;
+    return true;
 }

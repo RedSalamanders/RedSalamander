@@ -556,6 +556,9 @@
       "default": {},
       "title": "Compare Directories",
       "description": "Settings for the Compare Directories command.",
+      "x-ui-pane": "Compare Directories",
+      "x-ui-control": "custom",
+      "x-ui-order": 0,
       "properties": {
         "compareSize": { "type": "boolean", "default": false, "title": "Compare Size" },
         "compareDateTime": { "type": "boolean", "default": false, "title": "Compare Date and Time" },

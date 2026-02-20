@@ -3299,8 +3299,8 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         return;
     }
 
-    unsigned __int64 sizeBytes = 0;
-    const HRESULT sizeHr       = reader->GetSize(&sizeBytes);
+    uint64_t sizeBytes   = 0;
+    const HRESULT sizeHr = reader->GetSize(&sizeBytes);
     if (FAILED(sizeHr))
     {
         result->hr            = sizeHr;
@@ -3310,11 +3310,10 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     }
 
     const uint64_t maxBytes = static_cast<uint64_t>(config.maxDocumentMiB) * 1024ull * 1024ull;
-    if (static_cast<uint64_t>(sizeBytes) > maxBytes)
+    if (sizeBytes > maxBytes)
     {
-        result->hr = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-        result->statusMessage =
-            std::format(L"File is too large ({}), limit is {}.", FormatBytesCompact(static_cast<uint64_t>(sizeBytes)), FormatBytesCompact(maxBytes));
+        result->hr            = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        result->statusMessage = std::format(L"File is too large ({}), limit is {}.", FormatBytesCompact(sizeBytes), FormatBytesCompact(maxBytes));
         postBack(false);
         return;
     }
@@ -3613,7 +3612,7 @@ HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
         return FAILED(openHr) ? openHr : E_FAIL;
     }
 
-    unsigned __int64 pos = 0;
+    uint64_t pos         = 0;
     const HRESULT seekHr = reader->Seek(0, FILE_BEGIN, &pos);
     if (FAILED(seekHr))
     {

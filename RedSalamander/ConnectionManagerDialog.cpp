@@ -946,7 +946,7 @@ void CloseConnectionManagerWindow(HWND dlg, const DialogState& state, INT_PTR re
 
 void NotifyConnectSelection(const DialogState& state, std::wstring_view connectionName) noexcept
 {
-    if (! state.modeless || ! state.connectNotifyWindow || connectionName.empty())
+    if (! state.modeless || ! state.connectNotifyWindow || IsWindow(state.connectNotifyWindow) == FALSE || connectionName.empty())
     {
         return;
     }
@@ -4420,7 +4420,7 @@ bool ShowConnectionManagerWindow(HWND owner,
 #pragma warning(push)
 #pragma warning(disable : 5039) // pointer/reference to potentially throwing function passed to extern "C"
     const HWND dlg = CreateDialogParamW(
-        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_CONNECTION_MANAGER), nullptr, ConnectionManagerDialogProc, reinterpret_cast<LPARAM>(state));
+        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_CONNECTION_MANAGER), effectiveOwner, ConnectionManagerDialogProc, reinterpret_cast<LPARAM>(state));
 #pragma warning(pop)
     if (! dlg)
     {

@@ -9,7 +9,7 @@
 - Asynchronous folder enumeration and icon loading
 - Grid layout with dynamic column sizing
 - Sorting (Name / Extension / Time / Size / Attributes) with direction toggle + unsorted state
-- Display modes: **Brief** and **Detailed** (multi-line)
+- Display modes: **Brief**, **Detailed**, and **Extra Detailed** (multi-line)
 - Full drag-and-drop support (COM IDataObject/IDropSource/IDropTarget)
 - Multi-selection with visual feedback
 - Keyboard navigation
@@ -137,6 +137,20 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
 - Folder: `TIME • ATTRS`
 - File: `TIME • SIZE • ATTRS`
 
+**Item Rendering (Extra Detailed):**
+```text
+┌──────────────────────────────────────────┐
+│ 🖼️ Filename.txt                          │
+│    DETAILS (caller-provided)             │
+│    METADATA (caller-provided)            │
+└──────────────────────────────────────────┘
+```
+
+- Extra Detailed is a three-line layout intended for views that need both:
+  - a primary “details” line (status/reason text), and
+  - a secondary “metadata” line (time/size/attributes, etc.).
+- The metadata line is optional; if no metadata provider is configured (or it returns empty), Extra Detailed behaves like Detailed.
+
 **Selection States:**
 - **Normal**: Transparent background (theme-defined)
 - **Hovered**: Light blue background (theme-defined)
@@ -163,6 +177,10 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
   - Busy overlays are not closable; for enumeration, the overlay exposes a **Cancel** action (button) to abort enumeration.
   - After the user cancels enumeration, show a non-dismissible **information** overlay (no close button) indicating the cancellation; it is cleared on the next navigation.
 - Async enumeration on background thread
+- **Empty-state message (non-error)**:
+  - The host may set an optional empty-state message per pane (e.g., “This folder doesn’t exist in this hierarchy.”).
+  - When enumeration succeeds and the visible item list is empty, and an empty-state message is set, FolderView renders that message centered in the client area using a secondary/dimmed text style.
+  - The empty-state message must not replace error/busy overlays.
 
 **Enumeration Contract (Plugin Only):**
 - The host obtains an `IFileSystem` instance via the plugin factory (`RedSalamanderCreate`) and uses it as the only source of directory entries.
@@ -330,6 +348,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - **Ctrl+F6**: Sort by **Size** (largest first; folders fall back to Name)
 - **Alt+2**: Display as **Brief**
 - **Alt+3**: Display as **Detailed**
+- **Alt+4**: Display as **Extra Detailed**
 - Sort by **Attributes** is currently menu-only (no default shortcut).
 
 **Notes:**

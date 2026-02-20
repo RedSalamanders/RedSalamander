@@ -138,6 +138,7 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/delete`
 - `cmd/pane/display/brief`
 - `cmd/pane/display/detailed`
+- `cmd/pane/display/extraDetailed`
 - `cmd/pane/moveToOtherPane`
 - `cmd/pane/rename`
 - `cmd/pane/sort/none`
@@ -226,6 +227,7 @@ Notation:
 - ---
 - Brief (`Alt+2`) `[cmd/pane/display/brief]`
 - Detailed (`Alt+3`) `[cmd/pane/display/detailed]`
+- Extra Detailed (`Alt+4`) `[cmd/pane/display/extraDetailed]`
 - ---
 - Sort By >
   - None (`Ctrl+F2`) `[cmd/pane/sort/none]`
@@ -246,7 +248,7 @@ Notation:
 - Rename… (`F2`) `[cmd/pane/rename]`
 - Open / Execute (`Enter`) `[cmd/pane/executeOpen]`
 - View (`F3`) `[cmd/pane/view]`
-- View Width… [td] (`Ctrl+Shift+F3`) `[cmd/app/viewWidth]`
+- View Width… (`Ctrl+Shift+F3`) `[cmd/app/viewWidth]`
 - Alternate View [td] (`Alt+F3`) `[cmd/pane/alternateView]`
 - View With > [td]
   - *(Viewer list, dynamic)*
@@ -270,7 +272,7 @@ Notation:
 - Security… [td] (`⊘`) `[cmd/pane/openSecurity]`
 - ---
 - Change Attributes… [td] (`Ctrl+F8`) `[cmd/pane/changeAttributes]`
-- Change Case… [td] (`Ctrl+F7`) `[cmd/pane/changeCase]`
+- Change Case… (`Ctrl+F7`) `[cmd/pane/changeCase]`
 - Pack… [td] (`Alt+F5`) `[cmd/pane/pack]`
 - Unpack… [td] (`Alt+F6`) `[cmd/pane/unpack]`
 - New >
@@ -324,7 +326,7 @@ Notation:
 - Change Directory… (`Shift+F7`) `[cmd/pane/changeDirectory]` *(opens NavigationView address edit; mounted: `<instanceContext>|/path`)*
 - Compare Directories… [td] (`Ctrl+F10`) `[cmd/app/compare]`
 - Calculate Occupied Space (`Alt+F10`) `[cmd/pane/viewSpace]`
-- Calculate Directory Sizes [td] (`Ctrl+Shift+F10`) `[cmd/pane/calculateDirectorySizes]`
+- Calculate Directory Sizes (`Ctrl+Shift+F10`) `[cmd/pane/calculateDirectorySizes]`
 - Find Files and Directories… [td] (`Alt+F7`) `[cmd/pane/find]`
 - Make File List… [td] (`⊘`) `[cmd/pane/makeFileList]`
 - Go to Shortcut or Link Target [td] (`⊘`) `[cmd/pane/goToShortcutOrLinkTarget]`
@@ -381,7 +383,7 @@ Notation:
   - *(Theme files and user themes, dynamic)*
     - `<Theme Name>` [td] (`⊘`; parameterized: themeId) `[cmd/app/theme/select]`
 - ---
-- Toggle Fullscreen [td] (`Ctrl+Shift+F11`) `[cmd/app/fullScreen]`
+- Toggle Fullscreen (`Ctrl+Shift+F11`) `[cmd/app/fullScreen]`
 - Window Menu [td] (`Alt+Space`) `[cmd/pane/windowMenu]`
 - Switch Pane Focus (`Tab`) `[cmd/pane/switchPaneFocus]`
 - Pane > [td]
@@ -419,6 +421,54 @@ Right menu is identical to Left menu, except:
 - The window includes a **Search** edit at the top.
 - Search is **case-insensitive** and filters rows by **command name**, **description**, or **shortcut text**.
 - Matching substrings are highlighted in the list.
+
+### Command details (Implemented)
+
+#### Toggle Fullscreen (`cmd/app/fullScreen`)
+
+- Invoking the command MUST toggle borderless fullscreen for the main window (hide title bar, cover the current monitor including taskbar).
+- While fullscreen is active, pressing `Esc` MUST exit fullscreen.
+- Invoking the command again MUST exit fullscreen.
+
+#### View Width (`cmd/app/viewWidth`)
+
+- Invoking the command MUST enter “view width adjust” mode for the main pane splitter.
+- While active:
+  - `Left` / `Right` arrows MUST nudge the splitter.
+  - `Enter` MUST commit the new width.
+  - `Esc` MUST cancel and restore the splitter ratio captured when the mode started.
+- Invoking the command again while active MUST commit (same as `Enter`).
+
+#### Calculate Directory Sizes (`cmd/pane/calculateDirectorySizes`)
+
+- Invoking the command MUST open Space Viewer for the target pane’s **current folder**.
+- The selected/current item MUST NOT change the target; the current folder is always used.
+- If Space Viewer cannot be opened, the command MUST show a localized error and MUST do nothing else.
+
+#### Change Case (`cmd/pane/changeCase`)
+
+- Invoking the command MUST show a modal dialog:
+  ```text
+  Title: Change Case
+  Change Case to
+    o Lower case
+    o Upper case
+    o Partially mixed case (name in mixed, extension in lower)
+    o Mixed case
+  Change
+    o Whole filename
+    o Only name
+    o Only extension
+  Options
+    [ ] Include subdirectories
+
+    [ OK ] [ Cancel ]
+  ```
+- Scope: apply to `Selected items`; if no items are selected, apply to the `Current item`.
+- “Include subdirectories”:
+  - MUST be available for any filesystem plugin.
+  - When enabled, traversal MUST be **non-recursive** (iterative) to avoid stack overflow on deep directory hierarchies.
+  - Traversal MUST use the active plugin’s directory enumeration semantics (it MUST work with non-Windows / plugin-specific paths).
 
 ### Command/menu mapping status (Current implementation)
 
@@ -518,6 +568,7 @@ This means any key listed as a valid `vk` in `Specs/SettingsStoreSpec.md` (inclu
 | /         | ⊘                                  | ⊘                                | About                    | ⊘                                  | ⊘                                 | ⊘                 | About                 |
 | 2         | ⊘                                  | ⊘                                | Display as Brief         | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | 3         | ⊘                                  | ⊘                                | Display as Detailed      | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
+| 4         | ⊘                                  | ⊘                                | Display as Extra Detailed | ⊘                                 | ⊘                                 | ⊘                 | ⊘                     |
 | A..Z      | ⊘                                  | ⊘                                | ⊘                        | Go to Drive Root (`<drive>:\\`)    | ⊘                                 | ⊘                 | ⊘                     |
 | Enter     | Execute / Open                     | Bring Filename to Command Line   | Open Properties          | ⊘                                  | Bring Filename to Command Line    | ⊘                 | ⊘                     |
 | Space     | Select + Calc Dir Size + Next      | Bring Current Dir to Command Line | Window Menu              | Quick Search / Command Line Input  | Bring Current Dir to Command Line | ⊘                 | ⊘                     |

@@ -1337,11 +1337,14 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
             }
 
             // Transfer rendering state from old item
-            newItem.labelLayout    = oldItem.labelLayout;
-            newItem.labelMetrics   = oldItem.labelMetrics;
-            newItem.detailsText    = oldItem.detailsText;
-            newItem.detailsLayout  = oldItem.detailsLayout;
-            newItem.detailsMetrics = oldItem.detailsMetrics;
+            newItem.labelLayout     = oldItem.labelLayout;
+            newItem.labelMetrics    = oldItem.labelMetrics;
+            newItem.detailsText     = oldItem.detailsText;
+            newItem.detailsLayout   = oldItem.detailsLayout;
+            newItem.detailsMetrics  = oldItem.detailsMetrics;
+            newItem.metadataText    = oldItem.metadataText;
+            newItem.metadataLayout  = oldItem.metadataLayout;
+            newItem.metadataMetrics = oldItem.metadataMetrics;
             // Only preserve D2D bitmap if icon index matches (icons are shared by extension)
             if (oldItem.iconIndex == newItem.iconIndex && oldItem.icon)
             {
@@ -1381,7 +1384,7 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     }
     _itemMetricsCached = false;
 
-    if (_detailsTextProvider && _displayMode == DisplayMode::Detailed)
+    if (_detailsTextProvider && (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed))
     {
         for (auto& item : _items)
         {
@@ -1397,6 +1400,26 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
                 item.detailsText = std::move(details);
                 item.detailsLayout.reset();
                 item.detailsMetrics = {};
+            }
+        }
+    }
+
+    if (_metadataTextProvider && _displayMode == DisplayMode::ExtraDetailed)
+    {
+        for (auto& item : _items)
+        {
+            if (item.displayName.empty())
+            {
+                continue;
+            }
+
+            std::wstring metadata =
+                _metadataTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+            if (metadata != item.metadataText)
+            {
+                item.metadataText = std::move(metadata);
+                item.metadataLayout.reset();
+                item.metadataMetrics = {};
             }
         }
     }

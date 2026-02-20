@@ -36,7 +36,7 @@ void Document::InvalidateCaches(CacheInvalidationReason reason)
     switch (reason)
     {
         case CacheInvalidationReason::ShowIdsChanged:
-            // Only prefix and display affected (width measurements still valid)
+            // Prefix and display strings change; max line chars includes prefix so it's stale too
             for (auto& line : _lines)
             {
                 line.cachedPrefix.clear();
@@ -44,8 +44,11 @@ void Document::InvalidateCaches(CacheInvalidationReason reason)
                 line.cachedDisplay.clear();
                 line.cachedDisplayValid = false;
             }
-            _totalLengthValid = false;
-            _offsetsValid     = false;
+            _totalLengthValid  = false;
+            _offsetsValid      = false;
+            _maxLineCharsValid = false;
+            _maxLineChars      = 0;
+            _maxLineIndex      = 0;
             break;
 
         case CacheInvalidationReason::FontChanged:
@@ -809,6 +812,49 @@ Document::DisplayTextBatch Document::GetDisplayTextBatchAll(size_t firstAll, siz
     }
 
     return batch;
+}
+
+Document::FilteredTailResult Document::BuildFilteredTailText(size_t firstAll, size_t lastAll) const
+{
+    FilteredTailResult result;
+    std::shared_lock lock(_rwMutex); // Single lock for entire operation
+
+    if (firstAll >= _lines.size())
+        return result;
+
+    lastAll = std::min(lastAll, _lines.size() - 1);
+    result.lines.reserve(lastAll - firstAll + 1);
+
+    for (size_t i = firstAll; i <= lastAll; ++i)
+    {
+        if (! IsLineVisibleUnsafe(i))
+            continue;
+
+        ++result.visibleCount;
+
+        auto& line = _lines[i];
+        if (! line.cachedDisplayValid)
+        {
+            const auto& prefix = BuildPrefix(line);
+            line.cachedDisplay.clear();
+            line.cachedDisplay.reserve(prefix.size() + line.text.size());
+            line.cachedDisplay.append(prefix);
+            line.cachedDisplay.append(line.text);
+            line.cachedDisplay.erase(std::remove(line.cachedDisplay.begin(), line.cachedDisplay.end(), L'\r'), line.cachedDisplay.end());
+            line.cachedDisplayValid = true;
+        }
+
+        const UINT32 prefixLen = PrefixLength(line);
+        result.lines.push_back({i, prefixLen, static_cast<UINT32>(line.text.size()), line.hasMeta, line.meta.type});
+        result.text.append(line.cachedDisplay);
+        result.text.append(L"\n");
+    }
+
+    // Remove trailing newline
+    if (! result.text.empty())
+        result.text.pop_back();
+
+    return result;
 }
 
 bool Document::SaveTextToFile(const std::wstring& path) const

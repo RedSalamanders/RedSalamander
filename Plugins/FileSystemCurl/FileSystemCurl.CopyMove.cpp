@@ -1,6 +1,10 @@
 #include "FileSystemCurl.Internal.h"
 
 #include <atomic>
+#include <condition_variable>
+#include <functional>
+#include <memory>
+#include <mutex>
 #include <thread>
 #include <unordered_map>
 
@@ -8,6 +12,339 @@ using namespace FileSystemCurlInternal;
 
 namespace
 {
+[[nodiscard]] bool EqualsInsensitive(std::wstring_view left, std::wstring_view right) noexcept
+{
+    if (left.size() != right.size())
+    {
+        return false;
+    }
+
+    if (left.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
+    {
+        return false;
+    }
+
+    const int len = static_cast<int>(left.size());
+    return CompareStringOrdinal(left.data(), len, right.data(), len, TRUE) == CSTR_EQUAL;
+}
+
+class SharedCopyMoveJobScheduler final
+{
+public:
+    SharedCopyMoveJobScheduler() = default;
+    ~SharedCopyMoveJobScheduler() noexcept { Shutdown(); }
+
+    SharedCopyMoveJobScheduler(const SharedCopyMoveJobScheduler&)            = delete;
+    SharedCopyMoveJobScheduler(SharedCopyMoveJobScheduler&&)                 = delete;
+    SharedCopyMoveJobScheduler& operator=(const SharedCopyMoveJobScheduler&) = delete;
+    SharedCopyMoveJobScheduler& operator=(SharedCopyMoveJobScheduler&&)      = delete;
+
+    struct Job final
+    {
+        Job() noexcept = default;
+
+        Job(const Job&)            = delete;
+        Job(Job&&)                 = delete;
+        Job& operator=(const Job&) = delete;
+        Job& operator=(Job&&)      = delete;
+
+        std::function<void(size_t, uint64_t)> processIndex;
+        size_t totalItems          = 0;
+        unsigned int maxConcurrency = 1;
+
+        // Protected by the scheduler mutex.
+        size_t nextIndex      = 0;
+        unsigned int inFlight = 0;
+
+        std::atomic<bool> done{false};
+        std::mutex doneMutex;
+        std::condition_variable doneCv;
+    };
+
+    using JobPtr = std::shared_ptr<Job>;
+
+    JobPtr StartJob(unsigned int maxConcurrency, size_t totalItems, std::function<void(size_t, uint64_t)> processIndex)
+    {
+        auto job            = std::make_shared<Job>();
+        job->totalItems     = totalItems;
+        job->processIndex   = std::move(processIndex);
+        job->maxConcurrency = std::max(1u, maxConcurrency);
+        if (job->totalItems > 0)
+        {
+            job->maxConcurrency =
+                std::min<unsigned int>(job->maxConcurrency, static_cast<unsigned int>((std::min)(job->totalItems, static_cast<size_t>(UINT_MAX))));
+        }
+
+        ensureWorkers();
+
+        if (_workers.empty())
+        {
+            if (job->processIndex)
+            {
+                for (size_t i = 0; i < job->totalItems; ++i)
+                {
+                    job->processIndex(i, 0);
+                }
+            }
+
+            finishJob(*job);
+            return job;
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            _jobs.push_back(job);
+        }
+
+        _cv.notify_all();
+        return job;
+    }
+
+    void WaitJob(const JobPtr& job) noexcept
+    {
+        if (! job)
+        {
+            return;
+        }
+
+        std::unique_lock lock(job->doneMutex);
+        job->doneCv.wait(lock, [&]() noexcept { return job->done.load(std::memory_order_acquire); });
+    }
+
+    void Shutdown() noexcept
+    {
+        {
+            std::scoped_lock lock(_initMutex);
+            if (! _initialized)
+            {
+                return;
+            }
+
+            for (std::jthread& worker : _workers)
+            {
+                worker.request_stop();
+            }
+        }
+
+        // Ensure any thread blocked in WaitJob can proceed during teardown.
+        {
+            std::scoped_lock lock(_mutex);
+            for (const JobPtr& job : _jobs)
+            {
+                if (job)
+                {
+                    finishJob(*job);
+                }
+            }
+            _jobs.clear();
+            _rrCursor = 0;
+        }
+
+        _cv.notify_all();
+    }
+
+private:
+    void ensureWorkers()
+    {
+        std::scoped_lock lock(_initMutex);
+        if (_initialized)
+        {
+            return;
+        }
+
+        unsigned int workerCount = std::thread::hardware_concurrency();
+        if (workerCount == 0)
+        {
+            workerCount = 4;
+        }
+
+        constexpr unsigned int kMaxWorkers = 4u;
+        workerCount                        = std::max(1u, std::min(workerCount, kMaxWorkers));
+
+        _workers.reserve(workerCount);
+        for (unsigned int i = 0; i < workerCount; ++i)
+        {
+            try
+            {
+                _workers.emplace_back([this, i](std::stop_token stopToken) noexcept { workerMain(stopToken, static_cast<uint64_t>(i)); });
+            }
+            catch (const std::system_error&)
+            {
+                break;
+            }
+        }
+
+        _initialized = true;
+    }
+
+    void finishJob(Job& job) noexcept
+    {
+        {
+            std::scoped_lock lock(job.doneMutex);
+            job.done.store(true, std::memory_order_release);
+        }
+        job.doneCv.notify_all();
+    }
+
+    void cleanupJobsLocked() noexcept
+    {
+        size_t write = 0;
+        for (size_t read = 0; read < _jobs.size(); ++read)
+        {
+            const JobPtr& job = _jobs[read];
+            if (! job)
+            {
+                continue;
+            }
+
+            const bool finished = job->nextIndex >= job->totalItems;
+            if (finished && job->inFlight == 0)
+            {
+                finishJob(*job);
+                continue;
+            }
+
+            if (write != read)
+            {
+                _jobs[write] = job;
+            }
+            ++write;
+        }
+
+        if (write < _jobs.size())
+        {
+            _jobs.resize(write);
+        }
+
+        if (_rrCursor >= _jobs.size())
+        {
+            _rrCursor = 0;
+        }
+    }
+
+    [[nodiscard]] bool hasSchedulableWorkLocked() noexcept
+    {
+        cleanupJobsLocked();
+
+        for (const JobPtr& job : _jobs)
+        {
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    [[nodiscard]] bool tryDequeueWorkLocked(JobPtr& outJob, size_t& outIndex) noexcept
+    {
+        const size_t jobCount = _jobs.size();
+        if (jobCount == 0)
+        {
+            return false;
+        }
+
+        const size_t start = _rrCursor % jobCount;
+        for (size_t attempt = 0; attempt < jobCount; ++attempt)
+        {
+            const size_t idx = (start + attempt) % jobCount;
+            JobPtr& job      = _jobs[idx];
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            outJob   = job;
+            outIndex = job->nextIndex;
+            job->nextIndex += 1;
+            job->inFlight += 1;
+
+            _rrCursor = (idx + 1u) % jobCount;
+            return true;
+        }
+
+        return false;
+    }
+
+    void workerMain(std::stop_token stopToken, uint64_t streamId) noexcept
+    {
+        for (;;)
+        {
+            JobPtr job;
+            size_t index = 0;
+            {
+                std::unique_lock lock(_mutex);
+                _cv.wait(lock, [&]() noexcept { return stopToken.stop_requested() || hasSchedulableWorkLocked(); });
+                if (stopToken.stop_requested())
+                {
+                    return;
+                }
+
+                cleanupJobsLocked();
+                if (! tryDequeueWorkLocked(job, index))
+                {
+                    continue;
+                }
+            }
+
+            if (job && job->processIndex)
+            {
+                job->processIndex(index, streamId);
+            }
+
+            {
+                std::scoped_lock lock(_mutex);
+                if (job && job->inFlight > 0)
+                {
+                    job->inFlight -= 1;
+                }
+                cleanupJobsLocked();
+            }
+
+            _cv.notify_all();
+        }
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    std::vector<JobPtr> _jobs;
+    size_t _rrCursor = 0;
+
+    std::mutex _initMutex;
+    bool _initialized = false;
+    std::vector<std::jthread> _workers;
+};
+
+SharedCopyMoveJobScheduler& GetSharedCopyMoveJobScheduler() noexcept
+{
+    static SharedCopyMoveJobScheduler scheduler;
+    return scheduler;
+}
+
 constexpr size_t kHashMixConstant = 0x9e3779b97f4a7c15ull;
 
 inline void HashCombine(size_t& seed, size_t value) noexcept
@@ -209,8 +546,8 @@ private:
                                       std::wstring_view destinationFullPath,
                                       FileSystemFlags flags,
                                       FileOperationProgress& progress,
-                                      unsigned __int64 expectedSizeBytes,
-                                      std::atomic<unsigned __int64>* concurrentOverallBytes) noexcept
+                                      uint64_t expectedSizeBytes,
+                                      std::atomic<uint64_t>* concurrentOverallBytes) noexcept
 {
     HRESULT hr = progress.ReportProgress(expectedSizeBytes, 0, sourceFullPath, destinationFullPath);
     if (FAILED(hr))
@@ -238,7 +575,7 @@ private:
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    const unsigned __int64 baseCompleted = concurrentOverallBytes ? 0 : progress.completedBytes;
+    const uint64_t baseCompleted = concurrentOverallBytes ? 0 : progress.completedBytes;
 
     TransferProgressContext downloadCtx{};
     downloadCtx.progress               = &progress;
@@ -257,8 +594,8 @@ private:
         return hr;
     }
 
-    unsigned __int64 fileSize = 0;
-    hr                        = GetFileSizeBytes(tempFile.get(), fileSize);
+    uint64_t fileSize = 0;
+    hr                = GetFileSizeBytes(tempFile.get(), fileSize);
     if (FAILED(hr))
     {
         return hr;
@@ -296,19 +633,18 @@ private:
 
     if (! concurrentOverallBytes)
     {
-        unsigned __int64 wireTotalBytes = fileSize;
-        if (wireTotalBytes > (std::numeric_limits<unsigned __int64>::max)() - fileSize)
+        uint64_t wireTotalBytes = fileSize;
+        if (wireTotalBytes > (std::numeric_limits<uint64_t>::max)() - fileSize)
         {
-            wireTotalBytes = (std::numeric_limits<unsigned __int64>::max)();
+            wireTotalBytes = (std::numeric_limits<uint64_t>::max)();
         }
         else
         {
             wireTotalBytes += fileSize;
         }
 
-        progress.completedBytes = (baseCompleted > (std::numeric_limits<unsigned __int64>::max)() - wireTotalBytes)
-                                      ? (std::numeric_limits<unsigned __int64>::max)()
-                                      : (baseCompleted + wireTotalBytes);
+        progress.completedBytes = (baseCompleted > (std::numeric_limits<uint64_t>::max)() - wireTotalBytes) ? (std::numeric_limits<uint64_t>::max)()
+                                                                                                            : (baseCompleted + wireTotalBytes);
 
         hr = progress.ReportProgress(fileSize, fileSize, sourceFullPath, destinationFullPath);
         if (FAILED(hr))
@@ -336,7 +672,7 @@ private:
                                              std::wstring_view destinationFullDir,
                                              FileSystemFlags flags,
                                              FileOperationProgress& progress,
-                                             std::atomic<unsigned __int64>* concurrentOverallBytes) noexcept
+                                             std::atomic<uint64_t>* concurrentOverallBytes) noexcept
 {
     HRESULT hr = EnsureDirectoryExists(destinationConn, destinationRemoteDir);
     if (FAILED(hr))
@@ -643,7 +979,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
 
     if (CanServerSideRename(sourceResolved.connection, destinationResolved.connection))
     {
-        hr = EnsureOverwriteTargetForRename(sourceResolved.connection, destinationResolved.remotePath, allowOverwrite);
+        const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
+        if (! isSelfRename)
+        {
+            hr = EnsureOverwriteTargetForRename(sourceResolved.connection, destinationResolved.remotePath, allowOverwrite);
+        }
         if (SUCCEEDED(hr))
         {
             hr = RemoteRename(sourceResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath);
@@ -835,7 +1175,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
     }
     else
     {
-        hr = EnsureOverwriteTargetForRename(sourceResolved.connection, destinationResolved.remotePath, allowOverwrite);
+        const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
+        if (! isSelfRename)
+        {
+            hr = EnsureOverwriteTargetForRename(sourceResolved.connection, destinationResolved.remotePath, allowOverwrite);
+        }
         if (SUCCEEDED(hr))
         {
             hr = RemoteRename(sourceResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath);
@@ -902,8 +1246,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
         std::wstring sourceDisplayPath;
         std::wstring destinationRemotePath;
         std::wstring destinationDisplayPath;
-        unsigned __int64 expectedSizeBytes = 0;
-        bool isDirectory                   = false;
+        uint64_t expectedSizeBytes = 0;
+        bool isDirectory           = false;
     };
 
     std::vector<CopyTask> tasks;
@@ -1001,113 +1345,110 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
         return FAILED(failureHr) ? failureHr : S_OK;
     }
 
-    std::atomic<unsigned __int64> overallBytes{0};
-    std::atomic_size_t nextTask{0};
+    std::atomic<uint64_t> overallBytes{0};
 
     const unsigned long maxWorkers = 4u;
     const unsigned long desiredParallelism =
         (std::min)(maxWorkers, static_cast<unsigned long>((std::min)(tasks.size(), static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))));
-    const unsigned long workerThreads = desiredParallelism > 0 ? desiredParallelism - 1u : 0u;
 
-    const auto workerMain = [&](std::stop_token stopToken, unsigned __int64 progressStreamId) noexcept
+    const unsigned int concurrency = std::max(1u, static_cast<unsigned int>(desiredParallelism));
+
+    const auto processTask = [&](size_t taskIndex, uint64_t schedulerStreamId) noexcept
     {
+        if (taskIndex >= tasks.size())
+        {
+            return;
+        }
+
+        if (progress.internalCancel.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        const uint64_t progressStreamId = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
         FileOperationProgress::ProgressStreamScope streamScope(progressStreamId);
 
-        for (;;)
+        const CopyTask& task = tasks[taskIndex];
+
+        HRESULT itemHr = progress.CheckCancel();
+        if (SUCCEEDED(itemHr))
         {
-            if (stopToken.stop_requested())
+            if (task.isDirectory)
             {
-                return;
-            }
-
-            const size_t taskIndex = nextTask.fetch_add(1u, std::memory_order_relaxed);
-            if (taskIndex >= tasks.size())
-            {
-                return;
-            }
-
-            const CopyTask& task = tasks[taskIndex];
-
-            HRESULT itemHr = progress.CheckCancel();
-            if (SUCCEEDED(itemHr))
-            {
-                if (task.isDirectory)
+                if (! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
                 {
-                    if (! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
-                    {
-                        itemHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-                    }
-                    else
-                    {
-                        itemHr = CopyDirectoryRecursive(task.sourceConn,
-                                                        EnsureTrailingSlash(task.sourceRemotePath),
-                                                        EnsureTrailingSlashDisplay(task.sourceDisplayPath),
-                                                        destinationResolved.connection,
-                                                        EnsureTrailingSlash(task.destinationRemotePath),
-                                                        EnsureTrailingSlashDisplay(task.destinationDisplayPath),
-                                                        flags,
-                                                        progress,
-                                                        &overallBytes);
-                    }
+                    itemHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
                 }
                 else
                 {
-                    itemHr = CopyFileViaTemp(task.sourceConn,
-                                             task.sourceRemotePath,
-                                             task.sourceDisplayPath,
-                                             destinationResolved.connection,
-                                             task.destinationRemotePath,
-                                             task.destinationDisplayPath,
-                                             flags,
-                                             progress,
-                                             task.expectedSizeBytes,
-                                             &overallBytes);
+                    itemHr = CopyDirectoryRecursive(task.sourceConn,
+                                                    EnsureTrailingSlash(task.sourceRemotePath),
+                                                    EnsureTrailingSlashDisplay(task.sourceDisplayPath),
+                                                    destinationResolved.connection,
+                                                    EnsureTrailingSlash(task.destinationRemotePath),
+                                                    EnsureTrailingSlashDisplay(task.destinationDisplayPath),
+                                                    flags,
+                                                    progress,
+                                                    &overallBytes);
                 }
             }
-
-            if (FAILED(itemHr))
+            else
             {
-                recordFailure(itemHr);
-                if (! continueOnError || NormalizeCancellation(itemHr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
-                {
-                    progress.internalCancel.store(true, std::memory_order_release);
-                }
+                itemHr = CopyFileViaTemp(task.sourceConn,
+                                         task.sourceRemotePath,
+                                         task.sourceDisplayPath,
+                                         destinationResolved.connection,
+                                         task.destinationRemotePath,
+                                         task.destinationDisplayPath,
+                                         flags,
+                                         progress,
+                                         task.expectedSizeBytes,
+                                         &overallBytes);
             }
+        }
 
-            const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
-            progress.SetCompletedItems(done);
-
-            const HRESULT cbHr = progress.ReportItemCompleted(task.index, task.sourceDisplayPath, task.destinationDisplayPath, itemHr);
-            if (FAILED(cbHr))
+        if (FAILED(itemHr))
+        {
+            recordFailure(itemHr);
+            if (! continueOnError || NormalizeCancellation(itemHr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
             {
-                recordFailure(cbHr);
                 progress.internalCancel.store(true, std::memory_order_release);
-                return;
             }
+        }
 
-            if (FAILED(itemHr) && ! continueOnError)
-            {
-                return;
-            }
+        const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+        progress.SetCompletedItems(done);
+
+        const HRESULT cbHr = progress.ReportItemCompleted(task.index, task.sourceDisplayPath, task.destinationDisplayPath, itemHr);
+        if (FAILED(cbHr))
+        {
+            recordFailure(cbHr);
+            progress.internalCancel.store(true, std::memory_order_release);
+            return;
+        }
+
+        if (FAILED(itemHr) && ! continueOnError)
+        {
+            return;
         }
     };
 
-    std::vector<std::jthread> workers;
-    workers.reserve(workerThreads);
-
-    for (unsigned long i = 0; i < workerThreads; ++i)
+    if (concurrency <= 1u)
     {
-        try
+        for (size_t i = 0; i < tasks.size(); ++i)
         {
-            workers.emplace_back(workerMain, static_cast<unsigned __int64>(i + 1u));
-        }
-        catch (const std::system_error&)
-        {
-            break;
+            processTask(i, 0);
+            if (progress.internalCancel.load(std::memory_order_acquire))
+            {
+                break;
+            }
         }
     }
-
-    workerMain(std::stop_token{}, 0);
+    else
+    {
+        auto job = GetSharedCopyMoveJobScheduler().StartJob(concurrency, tasks.size(), processTask);
+        GetSharedCopyMoveJobScheduler().WaitJob(job);
+    }
 
     const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
     return FAILED(failureHr) ? failureHr : S_OK;
@@ -1194,7 +1535,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
         {
             if (CanServerSideRename(sourceResolved.connection, destinationResolved.connection))
             {
-                itemHr = EnsureOverwriteTargetForRename(destinationResolved.connection, destinationRemote, allowOverwrite);
+                const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationRemote);
+                if (! isSelfRename)
+                {
+                    itemHr = EnsureOverwriteTargetForRename(destinationResolved.connection, destinationRemote, allowOverwrite);
+                }
                 if (SUCCEEDED(itemHr))
                 {
                     itemHr = RemoteRename(destinationResolved.connection, sourceResolved.remotePath, destinationRemote);
@@ -1370,11 +1715,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair* items,
-                                                      unsigned long count,
-                                                      FileSystemFlags flags,
-                                                      const FileSystemOptions* options,
-                                                      IFileSystemCallback* callback,
-                                                      void* cookie) noexcept
+                                                       unsigned long count,
+                                                       FileSystemFlags flags,
+                                                       const FileSystemOptions* options,
+                                                       IFileSystemCallback* callback,
+                                                       void* cookie) noexcept
 {
     if (! items)
     {
@@ -1400,83 +1745,132 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
     }
 
     const bool allowOverwrite = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
-    HRESULT firstFailure      = S_OK;
+    const bool continueOnError = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
 
-    for (unsigned long index = 0; index < count; ++index)
+    std::atomic<HRESULT> firstFailure{S_OK};
+    std::atomic<unsigned long> completedCount{0};
+
+    const auto recordFailure = [&](HRESULT failure) noexcept
     {
+        if (SUCCEEDED(failure))
+        {
+            return;
+        }
+
+        HRESULT expected = S_OK;
+        static_cast<void>(firstFailure.compare_exchange_strong(expected, failure, std::memory_order_acq_rel));
+    };
+
+    const unsigned long maxWorkers = 4u;
+    const unsigned long desiredParallelism = std::min(maxWorkers, count);
+    const unsigned int concurrency          = std::max(1u, static_cast<unsigned int>(desiredParallelism));
+
+    const auto processTask = [&](size_t taskIndex, uint64_t schedulerStreamId) noexcept
+    {
+        if (taskIndex >= count)
+        {
+            return;
+        }
+
+        if (progress.internalCancel.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        const unsigned long index = static_cast<unsigned long>(taskIndex);
+
+        const uint64_t progressStreamId = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
+        FileOperationProgress::ProgressStreamScope streamScope(progressStreamId);
+
+        std::wstring sourceDisplay;
+        std::wstring destDisplay;
+
+        HRESULT itemHr = progress.CheckCancel();
+
         const FileSystemRenamePair& pair = items[index];
-        if (! pair.sourcePath || ! pair.newName || pair.sourcePath[0] == L'\0' || pair.newName[0] == L'\0')
-        {
-            firstFailure = FAILED(firstFailure) ? firstFailure : E_INVALIDARG;
-            if (! HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR))
-            {
-                return E_INVALIDARG;
-            }
-            continue;
-        }
-
-        const std::wstring_view newName = pair.newName;
-        if (newName.find_first_of(L"\\/") != std::wstring_view::npos)
-        {
-            firstFailure = FAILED(firstFailure) ? firstFailure : HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
-            if (! HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR))
-            {
-                return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
-            }
-            continue;
-        }
-
-        const std::wstring source = NormalizePluginPath(pair.sourcePath);
-        const std::wstring dest   = JoinPluginPath(ParentPath(source), newName);
-
-        const std::wstring sourceDisplay = BuildDisplayPath(_protocol, source);
-        const std::wstring destDisplay   = BuildDisplayPath(_protocol, dest);
-
-        hr = progress.ReportProgress(0, 0, sourceDisplay, destDisplay);
-        if (FAILED(hr))
-        {
-            return hr;
-        }
-
-        ResolvedLocation sourceResolved{};
-        HRESULT itemHr = ResolveLocation(_protocol, settings, source, _hostConnections.get(), true, sourceResolved);
         if (SUCCEEDED(itemHr))
         {
-            ResolvedLocation destinationResolved{};
-            itemHr = ResolveLocation(_protocol, settings, dest, _hostConnections.get(), true, destinationResolved);
-            if (SUCCEEDED(itemHr))
+            if (! pair.sourcePath || ! pair.newName || pair.sourcePath[0] == L'\0' || pair.newName[0] == L'\0')
             {
-                if (! CanServerSideRename(sourceResolved.connection, destinationResolved.connection))
+                itemHr = E_INVALIDARG;
+            }
+            else
+            {
+                const std::wstring_view newName = pair.newName;
+                if (newName.find_first_of(L"\\/") != std::wstring_view::npos)
                 {
-                    itemHr = HRESULT_FROM_WIN32(ERROR_NOT_SAME_DEVICE);
+                    itemHr = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
                 }
                 else
                 {
-                    itemHr = EnsureOverwriteTargetForRename(destinationResolved.connection, destinationResolved.remotePath, allowOverwrite);
+                    const std::wstring source = NormalizePluginPath(pair.sourcePath);
+                    const std::wstring dest   = JoinPluginPath(ParentPath(source), newName);
+
+                    sourceDisplay = BuildDisplayPath(_protocol, source);
+                    destDisplay   = BuildDisplayPath(_protocol, dest);
+
+                    const HRESULT progressHr = progress.ReportProgress(0, 0, sourceDisplay, destDisplay);
+                    if (FAILED(progressHr))
+                    {
+                        recordFailure(progressHr);
+                        progress.internalCancel.store(true, std::memory_order_release);
+                        return;
+                    }
+
+                    ResolvedLocation sourceResolved{};
+                    itemHr = ResolveLocation(_protocol, settings, source, _hostConnections.get(), true, sourceResolved);
                     if (SUCCEEDED(itemHr))
                     {
-                        itemHr = RemoteRename(destinationResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath);
+                        ResolvedLocation destinationResolved{};
+                        itemHr = ResolveLocation(_protocol, settings, dest, _hostConnections.get(), true, destinationResolved);
+                        if (SUCCEEDED(itemHr))
+                        {
+                            if (! CanServerSideRename(sourceResolved.connection, destinationResolved.connection))
+                            {
+                                itemHr = HRESULT_FROM_WIN32(ERROR_NOT_SAME_DEVICE);
+                            }
+                            else
+                            {
+                                const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
+                                if (! isSelfRename)
+                                {
+                                    itemHr = EnsureOverwriteTargetForRename(destinationResolved.connection, destinationResolved.remotePath, allowOverwrite);
+                                }
+                                if (SUCCEEDED(itemHr))
+                                {
+                                    itemHr = RemoteRename(destinationResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath);
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
 
-        progress.completedItems = index + 1u;
-        const HRESULT cbHr      = progress.ReportItemCompleted(index, sourceDisplay, destDisplay, itemHr);
-        if (FAILED(cbHr))
-        {
-            return cbHr;
-        }
-
         if (FAILED(itemHr))
         {
-            firstFailure = FAILED(firstFailure) ? firstFailure : itemHr;
-            if (! HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR))
+            recordFailure(itemHr);
+            if (! continueOnError || NormalizeCancellation(itemHr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
             {
-                return itemHr;
+                progress.internalCancel.store(true, std::memory_order_release);
             }
         }
-    }
 
-    return FAILED(firstFailure) ? firstFailure : S_OK;
+        const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+        progress.SetCompletedItems(done);
+
+        const HRESULT cbHr = progress.ReportItemCompleted(index, sourceDisplay, destDisplay, itemHr);
+        if (FAILED(cbHr))
+        {
+            recordFailure(cbHr);
+            progress.internalCancel.store(true, std::memory_order_release);
+            return;
+        }
+    };
+
+    auto job = GetSharedCopyMoveJobScheduler().StartJob(concurrency, count, processTask);
+    GetSharedCopyMoveJobScheduler().WaitJob(job);
+
+    const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+    return FAILED(failureHr) ? failureHr : S_OK;
 }

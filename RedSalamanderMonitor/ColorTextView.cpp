@@ -120,6 +120,8 @@ ColorTextView::ColorTextView()
 
 ColorTextView::~ColorTextView()
 {
+    // Clear atomic HWND first so ETW worker thread stops posting messages
+    _hWndAtomic.store(nullptr, std::memory_order_release);
     // wil::critical_section (_etwQueueCS) cleans up automatically via RAII
 }
 
@@ -145,6 +147,7 @@ HWND ColorTextView::Create(HWND parent, int x, int y, int w, int h)
     // Add scrollbar styles
     _hWnd = CreateWindowEx(
         0, L"ColorTextView", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPSIBLINGS | WS_VSCROLL | WS_HSCROLL, x, y, w, h, parent, nullptr, hinst, this);
+    _hWndAtomic.store(_hWnd, std::memory_order_release);
     return _hWnd;
 }
 
@@ -514,7 +517,9 @@ void ColorTextView::AppendText(const std::wstring& more)
 
 void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, const std::wstring& message)
 {
-    if (! _hWnd)
+    // Use atomic HWND for thread-safe cross-thread access (called from ETW worker thread)
+    const HWND hwnd = _hWndAtomic.load(std::memory_order_acquire);
+    if (! hwnd)
         return;
 
     bool shouldPost = false;
@@ -529,7 +534,7 @@ void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, const std::wstri
     // Post message outside critical section to avoid potential deadlock
     if (shouldPost)
     {
-        PostMessage(_hWnd, WndMsg::kColorTextViewEtwBatch, 0, 0);
+        PostMessage(hwnd, WndMsg::kColorTextViewEtwBatch, 0, 0);
     }
 }
 
@@ -539,6 +544,12 @@ void ColorTextView::AppendInfoLine(const Debug::InfoParam& info, const std::wstr
     // Then call other methods AFTER it returns (lock is released)
     // This avoids deadlock from trying to acquire shared_lock while holding unique_lock
     _document.AppendInfoLine(text, info);
+
+    // When batching (deferInvalidation=true), skip per-event queries entirely.
+    // The caller (OnAppEtwBatch) will query once after the entire batch is processed.
+    // This avoids 3 lock acquisitions per event (TotalLineCount, LongestLineChars, TotalDisplayRows).
+    if (deferInvalidation)
+        return;
 
     // Get values AFTER appending (now lock is released)
     const size_t newLineCount = _document.TotalLineCount();
@@ -552,38 +563,34 @@ void ColorTextView::AppendInfoLine(const Debug::InfoParam& info, const std::wstr
     const UINT32 displayRows = _document.TotalDisplayRows();
     _contentHeight           = (float)displayRows * GetLineHeight() + _padding * 2.f;
 
-    // Skip expensive invalidation operations during batch processing
-    if (! deferInvalidation)
+    UpdateGutterWidth();
+
+    // Two-mode rendering: choose hot path or cold path
+    if (ShouldUseAutoScrollMode())
     {
-        UpdateGutterWidth();
-
-        // Two-mode rendering: choose hot path or cold path
-        if (ShouldUseAutoScrollMode())
+        // HOT PATH: AUTO-SCROLL mode
+        // Fast synchronous tail layout update - no virtualization overhead
+        if (_renderMode != RenderMode::AUTO_SCROLL)
         {
-            // HOT PATH: AUTO-SCROLL mode
-            // Fast synchronous tail layout update - no virtualization overhead
-            if (_renderMode != RenderMode::AUTO_SCROLL)
-            {
-                SwitchToAutoScrollMode();
-            }
-            RebuildTailLayout();
-            // No slice invalidation, no async workers, no bitmap caching
+            SwitchToAutoScrollMode();
         }
-        else
-        {
-            // COLD PATH: SCROLL-BACK mode
-            // Full virtualization with async workers and bitmap caching
-            if (_renderMode != RenderMode::SCROLL_BACK)
-            {
-                SwitchToScrollBackMode();
-            }
-            EnsureLayoutAdaptive(1);
-            InvalidateSliceBitmap();
-        }
-
-        EnsureWidthAsync();
-        Invalidate();
+        RebuildTailLayout();
+        // No slice invalidation, no async workers, no bitmap caching
     }
+    else
+    {
+        // COLD PATH: SCROLL-BACK mode
+        // Full virtualization with async workers and bitmap caching
+        if (_renderMode != RenderMode::SCROLL_BACK)
+        {
+            SwitchToScrollBackMode();
+        }
+        EnsureLayoutAdaptive(1);
+        InvalidateSliceBitmap();
+    }
+
+    EnsureWidthAsync();
+    Invalidate();
 }
 
 void ColorTextView::BeginBatchAppend()
@@ -826,7 +833,7 @@ void ColorTextView::FindNext(bool backward)
         }
     }
 
-    auto r    = _matches[static_cast<unsigned __int64>(_matchIndex)];
+    auto r    = _matches[static_cast<size_t>(_matchIndex)];
     _selStart = r.start;
     _selEnd   = r.start + r.length;
     _caretPos = _selEnd;
@@ -1131,7 +1138,10 @@ LRESULT CALLBACK ColorTextView::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPA
         self    = static_cast<ColorTextView*>(cs->lpCreateParams);
         SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)self);
         if (self)
+        {
             self->_hWnd = hwnd;
+            self->_hWndAtomic.store(hwnd, std::memory_order_release);
+        }
     }
     else
     {
@@ -2960,26 +2970,13 @@ void ColorTextView::RebuildTailLayout()
 
     // Build text for tail - handle filtering
     std::wstring tailText;
-    size_t visibleLinesInTail = 0;
+    Document::FilteredTailResult filteredTail; // Holds metadata for coloring pass
     if (_document.GetFilterMask() != Debug::InfoParam::Type::All)
     {
-        // Build text from visible lines only
-        for (size_t allIdx = _tailFirstLine; allIdx <= tailLastLine; ++allIdx)
-        {
-            if (! _document.IsLineVisible(allIdx))
-                continue;
-
-            ++visibleLinesInTail;
-            const auto& displayText = _document.GetDisplayTextRefAll(allIdx);
-            tailText.append(displayText);
-            tailText.append(L"\n");
-        }
-
-        // Remove trailing newline (layout uses separators between visible lines only)
-        if (! tailText.empty())
-        {
-            tailText.pop_back();
-        }
+        // Build filtered text in a single locked scope (avoids per-line IsLineVisible + GetDisplayTextRefAll lock overhead)
+        filteredTail       = _document.BuildFilteredTailText(_tailFirstLine, tailLastLine);
+        tailText           = std::move(filteredTail.text);
+        _tailFilteredLines = std::move(filteredTail.lines);
 
 #ifdef _DEBUG
         if (shouldLog)
@@ -2987,7 +2984,7 @@ void ColorTextView::RebuildTailLayout()
             const UINT32 firstDisplayRow  = _document.DisplayRowForSource(_tailFirstLine);
             const UINT32 totalDisplayRows = _document.TotalDisplayRows();
             auto msg                      = std::format("  FILTERED: visibleInTail={}, firstDisplayRow={}, totalDisplayRows={}, textLength={}\n",
-                                   visibleLinesInTail,
+                                   filteredTail.visibleCount,
                                    firstDisplayRow,
                                    totalDisplayRows,
                                    tailText.length());
@@ -2998,6 +2995,7 @@ void ColorTextView::RebuildTailLayout()
     else
     {
         // No filtering - use position-based range
+        _tailFilteredLines.clear();
         const UINT32 startPos = _document.GetLineStartOffset(_tailFirstLine);
         const auto& lastLine  = _document.GetSourceLine(tailLastLine);
         const UINT32 endPos   = _document.GetLineStartOffset(tailLastLine) + _document.PrefixLength(lastLine) + static_cast<UINT32>(lastLine.text.size());
@@ -3060,36 +3058,29 @@ void ColorTextView::ApplyColoringToTailLayout()
 
     if (isFiltered)
     {
-        // FILTERED MODE: Use layout-relative positions
-        // The tail layout contains only visible lines, so we must track position as we iterate
+        // FILTERED MODE: Use cached _tailFilteredLines from RebuildTailLayout
+        // This avoids per-line IsLineVisible() + GetSourceLine() lock overhead
         UINT32 layoutOffset = 0;
 
-        for (size_t i = _tailFirstLine; i <= tailLastLine; ++i)
+        for (const auto& info : _tailFilteredLines)
         {
-            if (! _document.IsLineVisible(i))
-                continue; // Skip filtered lines
+            const UINT32 lineLen = info.prefixLen + info.textLen + 1; // +1 for newline separator
 
-            const auto& line       = _document.GetSourceLine(i);
-            const UINT32 prefixLen = _document.PrefixLength(line);
-            const UINT32 textLen   = static_cast<UINT32>(line.text.size());
-            const UINT32 lineLen   = prefixLen + textLen + 1; // +1 for newline separator
-
-            if (line.hasMeta && prefixLen > 0)
+            if (info.hasMeta && info.prefixLen > 0)
             {
-                // Color the prefix based on severity
                 D2D1_COLOR_F color = _theme.metaText;
-                switch (line.meta.type)
+                switch (info.type)
                 {
                     case Debug::InfoParam::Error: color = _theme.metaError; break;
                     case Debug::InfoParam::Warning: color = _theme.metaWarning; break;
                     case Debug::InfoParam::Info: color = _theme.metaInfo; break;
                     case Debug::InfoParam::Debug: color = _theme.metaDebug; break;
                     case Debug::InfoParam::Text:
-                    case Debug::InfoParam::All: // Not a message type, use default
+                    case Debug::InfoParam::All:
                     default: break;
                 }
 
-                DWRITE_TEXT_RANGE range{layoutOffset, prefixLen};
+                DWRITE_TEXT_RANGE range{layoutOffset, info.prefixLen};
                 auto* brush = GetBrush(color);
                 if (brush)
                     _tailLayout->SetDrawingEffect(brush, range);
@@ -5191,6 +5182,19 @@ LRESULT ColorTextView::OnAppEtwBatch()
         _etwEventQueue.clear();
     }
 
+    // Cap batch size to avoid blocking the UI thread for too long on mega-bursts.
+    // Remaining events go back to the queue and we re-post to process them next pump cycle.
+    constexpr size_t kMaxBatchSize = 200;
+    if (batch.size() > kMaxBatchSize)
+    {
+        auto lock = _etwQueueCS.lock();
+        // Prepend remaining events back to the front of the queue
+        _etwEventQueue.insert(_etwEventQueue.begin(), std::make_move_iterator(batch.begin() + kMaxBatchSize), std::make_move_iterator(batch.end()));
+        batch.resize(kMaxBatchSize);
+        // Re-post to process remainder on next message pump cycle
+        PostMessage(_hWnd, WndMsg::kColorTextViewEtwBatch, 0, 0);
+    }
+
     for (const auto& entry : batch)
     {
         AppendInfoLine(entry.info, entry.message, true);
@@ -5198,6 +5202,18 @@ LRESULT ColorTextView::OnAppEtwBatch()
 
     if (! batch.empty())
     {
+        // Query document state once after the entire batch (instead of per-event).
+        // This eliminates 3*N lock acquisitions for TotalLineCount, LongestLineChars, TotalDisplayRows.
+        const size_t newLineCount = _document.TotalLineCount();
+        if (_lineWidthCache.size() != newLineCount)
+            _lineWidthCache.resize(newLineCount, 0.f);
+
+        const size_t maxLen = _document.LongestLineChars();
+        _approxContentWidth = GetAverageCharWidth() * static_cast<float>(maxLen);
+
+        const UINT32 displayRows = _document.TotalDisplayRows();
+        _contentHeight           = static_cast<float>(displayRows) * GetLineHeight() + _padding * 2.f;
+
         UpdateGutterWidth();
 
         if (ShouldUseAutoScrollMode())

@@ -1185,18 +1185,9 @@ int MeasureInfoHeight(HWND dlg, HFONT font, int width, const std::wstring& text)
     rc.right = width;
 
     HFONT useFont = font ? font : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    HGDIOBJ old   = nullptr;
-    if (useFont)
-    {
-        old = SelectObject(hdc.get(), useFont);
-    }
+    auto old      = wil::SelectObject(hdc.get(), useFont);
 
     DrawTextW(hdc.get(), text.c_str(), static_cast<int>(text.size()), &rc, DT_LEFT | DT_WORDBREAK | DT_CALCRECT);
-
-    if (old)
-    {
-        SelectObject(hdc.get(), old);
-    }
 
     return std::max(0l, rc.bottom - rc.top);
 }

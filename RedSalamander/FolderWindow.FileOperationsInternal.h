@@ -30,12 +30,12 @@ struct FolderWindow::FileOperationState
     struct TaskDiagnosticEntry
     {
         SYSTEMTIME localTime{};
-        uint64_t taskId                         = 0;
-        FileSystemOperation operation           = FILESYSTEM_COPY;
-        DiagnosticSeverity severity             = DiagnosticSeverity::Info;
-        HRESULT status                          = S_OK;
-        unsigned __int64 processWorkingSetBytes = 0;
-        unsigned __int64 processPrivateBytes    = 0;
+        uint64_t taskId                 = 0;
+        FileSystemOperation operation   = FILESYSTEM_COPY;
+        DiagnosticSeverity severity     = DiagnosticSeverity::Info;
+        HRESULT status                  = S_OK;
+        uint64_t processWorkingSetBytes = 0;
+        uint64_t processPrivateBytes    = 0;
         std::wstring category;
         std::wstring message;
         std::wstring sourcePath;
@@ -51,11 +51,16 @@ struct FolderWindow::FileOperationState
         std::filesystem::path destinationFolder;
         std::filesystem::path diagnosticsLogPath;
 
-        HRESULT resultHr                = S_OK;
-        unsigned long totalItems        = 0;
-        unsigned long completedItems    = 0;
-        unsigned __int64 totalBytes     = 0;
-        unsigned __int64 completedBytes = 0;
+        HRESULT resultHr             = S_OK;
+        unsigned long totalItems     = 0;
+        unsigned long completedItems = 0;
+        uint64_t totalBytes          = 0;
+        uint64_t completedBytes      = 0;
+
+        // When pre-calc is skipped, totals may be unknown; keep a best-effort top-level type breakdown for UI.
+        bool preCalcSkipped           = false;
+        unsigned long completedFiles  = 0;
+        unsigned long completedFolders = 0;
         std::wstring sourcePath;
         std::wstring destinationPath;
 
@@ -125,12 +130,12 @@ struct FolderWindow::FileOperationState
 
         struct InFlightFileProgress
         {
-            const void* cookieKey             = nullptr;
-            unsigned __int64 progressStreamId = 0;
+            const void* cookieKey     = nullptr;
+            uint64_t progressStreamId = 0;
             std::wstring sourcePath;
-            unsigned __int64 totalBytes     = 0;
-            unsigned __int64 completedBytes = 0;
-            ULONGLONG lastUpdateTick        = 0;
+            uint64_t totalBytes      = 0;
+            uint64_t completedBytes  = 0;
+            ULONGLONG lastUpdateTick = 0;
         };
 
         explicit Task(FileOperationState& state) noexcept;
@@ -145,14 +150,14 @@ struct FolderWindow::FileOperationState
         HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation operationType,
                                                      unsigned long totalItems,
                                                      unsigned long completedItems,
-                                                     unsigned __int64 totalBytes,
-                                                     unsigned __int64 completedBytes,
+                                                     uint64_t totalBytes,
+                                                     uint64_t completedBytes,
                                                      const wchar_t* currentSourcePath,
                                                      const wchar_t* currentDestinationPath,
-                                                     unsigned __int64 currentItemTotalBytes,
-                                                     unsigned __int64 currentItemCompletedBytes,
+                                                     uint64_t currentItemTotalBytes,
+                                                     uint64_t currentItemCompletedBytes,
                                                      FileSystemOptions* options,
-                                                     unsigned __int64 progressStreamId,
+                                                     uint64_t progressStreamId,
                                                      void* cookie) noexcept override;
 
         HRESULT STDMETHODCALLTYPE FileSystemItemCompleted(FileSystemOperation operationType,
@@ -174,10 +179,10 @@ struct FolderWindow::FileOperationState
                                                   void* cookie) noexcept override;
 
         // IFileSystemDirectorySizeCallback
-        HRESULT STDMETHODCALLTYPE DirectorySizeProgress(unsigned __int64 scannedEntries,
-                                                        unsigned __int64 totalBytes,
-                                                        unsigned __int64 fileCount,
-                                                        unsigned __int64 directoryCount,
+        HRESULT STDMETHODCALLTYPE DirectorySizeProgress(uint64_t scannedEntries,
+                                                        uint64_t totalBytes,
+                                                        uint64_t fileCount,
+                                                        uint64_t directoryCount,
                                                         const wchar_t* currentPath,
                                                         void* cookie) noexcept override;
 
@@ -188,7 +193,7 @@ struct FolderWindow::FileOperationState
         void SkipPreCalculation() noexcept;
         void RequestCancel() noexcept;
         void TogglePause() noexcept;
-        void SetDesiredSpeedLimit(unsigned __int64 bytesPerSecond) noexcept;
+        void SetDesiredSpeedLimit(uint64_t bytesPerSecond) noexcept;
         void SetWaitForOthers(bool wait) noexcept;
         void SetQueuePaused(bool paused) noexcept;
         void ToggleConflictApplyToAllChecked() noexcept;
@@ -246,23 +251,36 @@ struct FolderWindow::FileOperationState
         FileSystemFlags _flags = FILESYSTEM_FLAG_NONE;
         bool _enablePreCalc    = true;
 
-        unsigned long _perItemTotalItems             = 0;
-        unsigned int _perItemMaxConcurrency          = 1;
-        unsigned long _perItemCompletedItems         = 0;
-        unsigned __int64 _perItemCompletedEntryCount = 0;
-        unsigned __int64 _perItemTotalEntryCount     = 0;
-        unsigned __int64 _perItemCompletedBytes      = 0;
+        unsigned long _perItemTotalItems     = 0;
+        unsigned int _perItemMaxConcurrency  = 1;
+        unsigned long _perItemCompletedItems = 0;
+        uint64_t _perItemCompletedEntryCount = 0;
+        uint64_t _perItemTotalEntryCount     = 0;
+        uint64_t _perItemCompletedBytes      = 0;
 
         struct PerItemInFlightCall
         {
-            const void* cookie              = nullptr;
-            unsigned long completedItems    = 0;
-            unsigned __int64 completedBytes = 0;
-            unsigned long totalItems        = 0;
+            const void* cookie           = nullptr;
+            unsigned long completedItems = 0;
+            uint64_t completedBytes      = 0;
+            unsigned long totalItems     = 0;
         };
 
         std::array<PerItemInFlightCall, kMaxInFlightFiles> _perItemInFlightCalls{};
         size_t _perItemInFlightCallCount = 0;
+
+        enum class TopLevelItemKind : uint8_t
+        {
+            Unknown,
+            File,
+            Folder,
+        };
+        std::vector<TopLevelItemKind> _topLevelItemKinds;
+        std::vector<uint8_t> _topLevelItemCompleted;
+        unsigned long _plannedTopLevelFiles     = 0;
+        unsigned long _plannedTopLevelFolders   = 0;
+        unsigned long _completedTopLevelFiles   = 0;
+        unsigned long _completedTopLevelFolders = 0;
 
         std::atomic<bool> _waitForOthers{false};
         std::atomic<bool> _waitingInQueue{false};
@@ -274,9 +292,9 @@ struct FolderWindow::FileOperationState
         std::atomic<bool> _queuePaused{false};
         std::atomic<bool> _started{false};
         std::atomic<ULONGLONG> _operationStartTick{0};
-        std::atomic<unsigned __int64> _desiredSpeedLimitBytesPerSecond{0};
-        std::atomic<unsigned __int64> _appliedSpeedLimitBytesPerSecond{0};
-        std::atomic<unsigned __int64> _effectiveSpeedLimitBytesPerSecond{0};
+        std::atomic<uint64_t> _desiredSpeedLimitBytesPerSecond{0};
+        std::atomic<uint64_t> _appliedSpeedLimitBytesPerSecond{0};
+        std::atomic<uint64_t> _effectiveSpeedLimitBytesPerSecond{0};
         std::atomic<HRESULT> _resultHr{S_OK};
         std::atomic<bool> _observedSkipAction{false};
 
@@ -293,30 +311,30 @@ struct FolderWindow::FileOperationState
         std::atomic<bool> _preCalcSkipped{false};
         std::atomic<bool> _preCalcCompleted{false};
         std::atomic<ULONGLONG> _preCalcStartTick{0};
-        std::atomic<unsigned __int64> _preCalcTotalBytes{0};
+        std::atomic<uint64_t> _preCalcTotalBytes{0};
         std::atomic<unsigned long> _preCalcFileCount{0};
         std::atomic<unsigned long> _preCalcDirectoryCount{0};
-        std::vector<unsigned __int64> _preCalcSourceBytes;
+        std::vector<uint64_t> _preCalcSourceBytes;
 
         std::stop_token _stopToken{};
         std::mutex _pauseMutex;
         std::condition_variable _pauseCv;
 
         std::mutex _progressMutex;
-        unsigned long _progressTotalItems            = 0;
-        unsigned long _progressCompletedItems        = 0;
-        unsigned __int64 _progressTotalBytes         = 0;
-        unsigned __int64 _progressCompletedBytes     = 0;
-        unsigned __int64 _progressItemTotalBytes     = 0;
-        unsigned __int64 _progressItemCompletedBytes = 0;
+        unsigned long _progressTotalItems     = 0;
+        unsigned long _progressCompletedItems = 0;
+        uint64_t _progressTotalBytes          = 0;
+        uint64_t _progressCompletedBytes      = 0;
+        uint64_t _progressItemTotalBytes      = 0;
+        uint64_t _progressItemCompletedBytes  = 0;
         std::wstring _progressSourcePath;
         std::wstring _progressDestinationPath;
         std::wstring _lastProgressCallbackSourcePath;
         std::wstring _lastProgressCallbackDestinationPath;
-        unsigned long _lastItemIndex                 = 0;
-        HRESULT _lastItemHr                          = S_OK;
-        unsigned __int64 _progressCallbackCount      = 0;
-        unsigned __int64 _itemCompletedCallbackCount = 0;
+        unsigned long _lastItemIndex         = 0;
+        HRESULT _lastItemHr                  = S_OK;
+        uint64_t _progressCallbackCount      = 0;
+        uint64_t _itemCompletedCallbackCount = 0;
 
         std::array<InFlightFileProgress, kMaxInFlightFiles> _inFlightFiles{};
         size_t _inFlightFileCount = 0;
@@ -341,10 +359,10 @@ struct FolderWindow::FileOperationState
                            std::filesystem::path destinationFolder,
                            FileSystemFlags flags,
                            bool waitForOthers,
-                           unsigned __int64 initialSpeedLimitBytesPerSecond = 0,
-                           ExecutionMode executionMode                      = ExecutionMode::BulkItems,
-                           bool requireConfirmation                         = false,
-                           wil::com_ptr<IFileSystem> destinationFileSystem  = nullptr);
+                           uint64_t initialSpeedLimitBytesPerSecond        = 0,
+                           ExecutionMode executionMode                     = ExecutionMode::BulkItems,
+                           bool requireConfirmation                        = false,
+                           wil::com_ptr<IFileSystem> destinationFileSystem = nullptr);
 
     void ApplyTheme(const AppTheme& theme);
     void Shutdown() noexcept;
@@ -356,8 +374,11 @@ struct FolderWindow::FileOperationState
     void ApplyQueueMode(bool queue) noexcept;
     void CancelAll() noexcept;
     void CollectTasks(std::vector<Task*>& outTasks) noexcept;
+    void CollectInformationalTasks(std::vector<FolderWindow::InformationalTaskUpdate>& outTasks) noexcept;
     void CollectCompletedTasks(std::vector<CompletedTaskSummary>& outTasks) noexcept;
     void DismissCompletedTask(uint64_t taskId) noexcept;
+    uint64_t CreateOrUpdateInformationalTask(const FolderWindow::InformationalTaskUpdate& update) noexcept;
+    void DismissInformationalTask(uint64_t taskId) noexcept;
     bool GetAutoDismissSuccess() const noexcept;
     void SetAutoDismissSuccess(bool enabled) noexcept;
     bool OpenDiagnosticsLogForTask(uint64_t taskId) noexcept;
@@ -393,7 +414,7 @@ struct FolderWindow::FileOperationState
     void RemoveTask(uint64_t taskId) noexcept;
 
 private:
-    void CreateProgressDialog(Task& task) noexcept;
+    void EnsurePopupVisible() noexcept;
     void RecordCompletedTask(Task& task) noexcept;
     void FlushDiagnostics(bool force) noexcept;
     static std::filesystem::path GetDiagnosticsLogDirectory() noexcept;
@@ -404,7 +425,9 @@ private:
 
     FolderWindow& _owner;
     std::mutex _mutex;
+    std::shared_ptr<void> _uiLifetime;
     std::vector<std::unique_ptr<Task>> _tasks;
+    std::vector<FolderWindow::InformationalTaskUpdate> _informationalTasks;
     std::deque<CompletedTaskSummary> _completedTasks;
     uint64_t _nextTaskId = 1;
 

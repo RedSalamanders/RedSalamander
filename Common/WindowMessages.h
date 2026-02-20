@@ -64,6 +64,10 @@ inline constexpr UINT kCompareDirectoriesExecuteCommand  = WM_APP + 0x522;
 inline constexpr UINT kCompareDirectoriesDecisionUpdated = WM_APP + 0x523;
 inline constexpr UINT kCompareDirectoriesContentProgress = WM_APP + 0x524;
 
+// Change Case (background)
+inline constexpr UINT kChangeCaseTaskUpdate = WM_APP + 0x525;
+inline constexpr UINT kChangeCaseCompleted  = WM_APP + 0x526;
+
 // Preferences
 inline constexpr UINT kPreferencesApplyComboThemeDeferred = WM_APP + 0x530;
 

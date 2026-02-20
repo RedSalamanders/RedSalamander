@@ -8,6 +8,7 @@
 #include <cwctype>
 #include <filesystem>
 #include <format>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <string>
@@ -66,6 +67,7 @@
 
 #ifdef _DEBUG
 #include "CompareDirectoriesEngine.SelfTest.h"
+#include "Commands.SelfTest.h"
 #include "FolderWindow.FileOperations.SelfTest.h"
 #endif
 
@@ -93,6 +95,80 @@ constexpr wchar_t kLeftPaneSlot[]                  = L"left";
 constexpr wchar_t kRightPaneSlot[]                 = L"right";
 
 #ifdef _DEBUG
+bool g_runFileOpsSelfTest = false;
+bool g_runCompareDirectoriesSelfTest = false;
+bool g_runCommandsSelfTest = false;
+std::atomic<DWORD> g_selfTestMonitorProcessId{0};
+
+struct SelfTestMonitorCloseContext
+{
+    DWORD processId     = 0;
+    bool foundWindow    = false;
+    bool closedWithMsg  = false;
+};
+
+BOOL CALLBACK SelfTestMonitorWindowEnumProc(HWND hwnd, LPARAM lParam) noexcept
+{
+    auto* context = reinterpret_cast<SelfTestMonitorCloseContext*>(lParam);
+    if (! context || hwnd == nullptr)
+    {
+        return TRUE;
+    }
+
+    DWORD windowPid = 0;
+    GetWindowThreadProcessId(hwnd, &windowPid);
+    if (windowPid != context->processId)
+    {
+        return TRUE;
+    }
+
+    context->foundWindow = true;
+    if (PostMessageW(hwnd, WM_CLOSE, 0, 0))
+    {
+        context->closedWithMsg = true;
+    }
+
+    return TRUE;
+}
+
+void ShutdownSelfTestMonitor() noexcept
+{
+    if (! (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest))
+    {
+        return;
+    }
+
+    const DWORD monitorPid = g_selfTestMonitorProcessId.load(std::memory_order_acquire);
+    if (monitorPid == 0)
+    {
+        return;
+    }
+
+    SelfTestMonitorCloseContext context{};
+    context.processId = monitorPid;
+    EnumWindows(SelfTestMonitorWindowEnumProc, reinterpret_cast<LPARAM>(&context));
+
+    if (! context.closedWithMsg && ! context.foundWindow)
+    {
+        Debug::Info(L"SelfTest: monitor PID {} not found in window enumeration", monitorPid);
+    }
+
+    const wil::unique_handle monitorProcess{::OpenProcess(SYNCHRONIZE | PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, monitorPid)};
+    if (! monitorProcess)
+    {
+        g_selfTestMonitorProcessId.store(0, std::memory_order_release);
+        return;
+    }
+
+    if (WaitForSingleObject(monitorProcess.get(), 2000) == WAIT_TIMEOUT)
+    {
+        TerminateProcess(monitorProcess.get(), 0);
+        WaitForSingleObject(monitorProcess.get(), 2000);
+    }
+
+    g_selfTestMonitorProcessId.store(0, std::memory_order_release);
+}
+
 void QueueRedSalamanderMonitorLaunch() noexcept
 {
     // Best-effort: launch the ETW viewer early in debug builds so startup ETW events are visible.
@@ -172,6 +248,7 @@ void QueueRedSalamanderMonitorLaunch() noexcept
 
             wil::unique_handle process(pi.hProcess);
             wil::unique_handle thread(pi.hThread);
+            g_selfTestMonitorProcessId.store(pi.dwProcessId, std::memory_order_release);
         },
         nullptr,
         nullptr));
@@ -279,112 +356,89 @@ bool g_menuBarVisible          = true;
 bool g_menuBarTemporarilyShown = false;
 bool g_functionBarVisible      = true;
 
+struct FullScreenState
+{
+    bool active            = false;
+    DWORD savedStyle       = 0;
+    DWORD savedExStyle     = 0;
+    WINDOWPLACEMENT savedPlacement{};
+};
+FullScreenState g_fullScreenState{};
+
+void ToggleFullScreen(HWND hWnd) noexcept;
+
 constexpr UINT_PTR kFunctionBarPressedKeyClearTimerId = 1001u;
 constexpr UINT kFunctionBarPressedKeyClearDelayMs     = 200u;
 std::optional<uint32_t> g_functionBarPressedKey;
 std::optional<uint32_t> g_functionBarPressedKeyClearPending;
 
 #ifdef _DEBUG
+#include "SelfTestCommon.h"
+
 constexpr UINT_PTR kFileOpsSelfTestTimerId     = 1002u;
 constexpr UINT kFileOpsSelfTestTimerIntervalMs = 50u;
-bool g_runFileOpsSelfTest                      = false;
-bool g_runCompareDirectoriesSelfTest           = false;
 int g_selfTestExitCode                         = 0;
+SelfTest::SelfTestOptions g_selfTestOptions{};
+SelfTest::SelfTestRunResult g_selfTestRunResult{};
+std::optional<std::chrono::time_point<std::chrono::steady_clock>> g_selfTestRunStart{};
+bool g_selfTestRunFinalized = false;
 
-[[nodiscard]] std::filesystem::path GetSelfTestTracePath() noexcept
+[[nodiscard]] std::wstring GetSelfTestUtcIso8601() noexcept
 {
-    wchar_t buffer[MAX_PATH + 2]{};
-    const DWORD written = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer, static_cast<DWORD>(std::size(buffer)));
-    if (written == 0 || written >= std::size(buffer))
+    const std::chrono::system_clock::time_point now = std::chrono::system_clock::now();
+    const std::time_t nowUtc                        = std::chrono::system_clock::to_time_t(now);
+    tm utc{};
+    if (gmtime_s(&utc, &nowUtc) != 0)
     {
         return {};
     }
 
-    std::filesystem::path dir(buffer);
-    dir /= L"RedSalamander";
-    dir /= L"SelfTest";
+    const auto nowMs      = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch());
+    const auto millisPart = nowMs.count() % 1000;
 
-    std::error_code ec;
-    std::filesystem::create_directories(dir, ec);
-    if (ec)
-    {
-        return {};
-    }
-
-    return dir / L"last_selftest_trace.txt";
+    return std::format(
+        L"{0:04}-{1:02}-{2:02}T{3:02}:{4:02}:{5:02}.{6:03}Z", utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min, utc.tm_sec, millisPart);
 }
 
-void AppendSelfTestTraceLine(std::wstring_view message) noexcept
+void FinalizeSelfTestRun() noexcept
 {
-    if (! (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest))
+    if (g_selfTestRunFinalized || ! g_selfTestRunStart.has_value())
     {
         return;
     }
 
-    const std::filesystem::path path = GetSelfTestTracePath();
-    if (path.empty())
-    {
-        return;
-    }
+    ShutdownSelfTestMonitor();
 
-    wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
-    if (! file)
-    {
-        return;
-    }
+    const auto now                   = std::chrono::steady_clock::now();
+    g_selfTestRunResult.durationMs   = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - g_selfTestRunStart.value()).count());
+    g_selfTestRunResult.failFast     = g_selfTestOptions.failFast;
+    g_selfTestRunResult.timeoutScale = g_selfTestOptions.timeoutScale;
 
-    LARGE_INTEGER size{};
-    if (! GetFileSizeEx(file.get(), &size))
-    {
-        return;
-    }
-
-    if (size.QuadPart == 0)
-    {
-        const wchar_t bom = 0xFEFF;
-        DWORD written     = 0;
-        static_cast<void>(WriteFile(file.get(), &bom, sizeof(bom), &written, nullptr));
-    }
-
-    LARGE_INTEGER seek{};
-    seek.QuadPart = 0;
-    SetFilePointerEx(file.get(), seek, nullptr, FILE_END);
-
-    if (! message.empty())
-    {
-        const size_t bytes = message.size() * sizeof(wchar_t);
-        if (bytes <= static_cast<size_t>(std::numeric_limits<DWORD>::max()))
-        {
-            DWORD written = 0;
-            static_cast<void>(WriteFile(file.get(), message.data(), static_cast<DWORD>(bytes), &written, nullptr));
-        }
-    }
-
-    constexpr wchar_t kNewline[] = L"\r\n";
-    DWORD written                = 0;
-    static_cast<void>(WriteFile(file.get(), kNewline, sizeof(kNewline) - sizeof(wchar_t), &written, nullptr));
-    static_cast<void>(FlushFileBuffers(file.get()));
+    const std::filesystem::path runJsonPath = SelfTest::SelfTestRoot() / L"last_run" / L"results.json";
+    SelfTest::WriteRunJson(g_selfTestRunResult, runJsonPath);
+    g_selfTestRunFinalized = true;
 }
 
-void AppendSelfTestTraceExitCode(std::wstring_view tag, int exitCode) noexcept
+void TraceSelfTestExitCode(std::wstring_view source, int exitCode) noexcept
 {
-    try
-    {
-        std::array<wchar_t, 256> buffer{};
-        constexpr size_t cap = buffer.size() - 1;
-        const auto r         = std::format_to_n(buffer.data(), cap, L"{0}: exit={1}", tag, exitCode);
-        const size_t written = (r.size < cap) ? static_cast<size_t>(r.size) : cap;
-        buffer[written]      = L'\0';
-        AppendSelfTestTraceLine(std::wstring_view(buffer.data(), written));
-    }
-    catch (const std::bad_alloc&)
-    {
-        std::terminate();
-    }
-    catch (const std::format_error&)
-    {
-        AppendSelfTestTraceLine(tag);
-    }
+    SelfTest::AppendSelfTestTrace(std::format(L"{}: exit_code={}", source, exitCode));
+}
+
+void ResetSelfTestRunState() noexcept
+{
+    g_selfTestExitCode                = 0;
+    g_selfTestRunFinalized            = false;
+    g_selfTestRunStart                = std::chrono::steady_clock::now();
+    g_selfTestRunResult               = {};
+    g_selfTestRunResult.startedUtcIso = GetSelfTestUtcIso8601();
+    SelfTest::SetRunStartedUtcIso(g_selfTestRunResult.startedUtcIso);
+    g_selfTestRunResult.failFast     = g_selfTestOptions.failFast;
+    g_selfTestRunResult.timeoutScale = g_selfTestOptions.timeoutScale;
+}
+
+void RecordSelfTestSuite(SelfTest::SelfTestSuiteResult result) noexcept
+{
+    g_selfTestRunResult.suites.push_back(std::move(result));
 }
 #endif
 
@@ -479,21 +533,34 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
         if (done)
         {
             KillTimer(hWnd, kFileOpsSelfTestTimerId);
-            g_selfTestExitCode = FileOperationsSelfTest::DidFail() ? 1 : 0;
-            if (FileOperationsSelfTest::DidFail())
+            const bool fileOpsFailed = FileOperationsSelfTest::DidFail();
+            g_selfTestExitCode |= fileOpsFailed ? 1 : 0;
+            const SelfTest::SelfTestSuiteResult fileOpsResult = FileOperationsSelfTest::GetSuiteResult();
+            RecordSelfTestSuite(fileOpsResult);
+            if (SelfTest::GetSelfTestOptions().writeJsonSummary)
             {
-                AppendSelfTestTraceLine(L"FileOpsSelfTest: FAIL");
+                const std::filesystem::path jsonPath = SelfTest::GetSuiteArtifactPath(SelfTest::SelfTestSuite::FileOperations, L"results.json");
+                SelfTest::WriteSuiteJson(fileOpsResult, jsonPath);
+            }
+
+            if (fileOpsFailed)
+            {
+                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, L"FileOpsSelfTest: FAIL");
+                SelfTest::AppendSelfTestTrace(L"FileOpsSelfTest: FAIL");
                 const std::wstring_view message = FileOperationsSelfTest::FailureMessage();
                 if (! message.empty())
                 {
-                    AppendSelfTestTraceLine(message);
+                    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, message);
+                    SelfTest::AppendSelfTestTrace(message);
                 }
             }
             else
             {
-                AppendSelfTestTraceLine(L"FileOpsSelfTest: PASS");
+                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, L"FileOpsSelfTest: PASS");
+                SelfTest::AppendSelfTestTrace(L"FileOpsSelfTest: PASS");
             }
-            AppendSelfTestTraceExitCode(L"FileOpsSelfTest: end", g_selfTestExitCode);
+            TraceSelfTestExitCode(L"FileOpsSelfTest: end", g_selfTestExitCode);
+            FinalizeSelfTestRun();
             PostMessageW(hWnd, WM_CLOSE, 0, 0);
         }
         return 0;
@@ -578,6 +645,7 @@ Common::Settings::FolderDisplayMode DisplayModeToSettings(FolderView::DisplayMod
     {
         case FolderView::DisplayMode::Brief: return Common::Settings::FolderDisplayMode::Brief;
         case FolderView::DisplayMode::Detailed: return Common::Settings::FolderDisplayMode::Detailed;
+        case FolderView::DisplayMode::ExtraDetailed: return Common::Settings::FolderDisplayMode::Detailed;
     }
     return Common::Settings::FolderDisplayMode::Brief;
 }
@@ -3615,12 +3683,72 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         return false;
     };
 
+    const auto getArgValue = [](PCWSTR prefix, std::wstring& value) noexcept -> bool
+    {
+        if (! prefix || prefix[0] == L'\0')
+        {
+            return false;
+        }
+
+        int argc = 0;
+        wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
+        if (! argv || argc <= 1)
+        {
+            return false;
+        }
+
+        const size_t prefixLen = wcslen(prefix);
+        if (prefixLen == 0)
+        {
+            return false;
+        }
+
+        for (int i = 1; i < argc; ++i)
+        {
+            const wchar_t* arg = argv.get()[i];
+            if (! arg)
+            {
+                continue;
+            }
+
+            if (_wcsnicmp(arg, prefix, prefixLen) != 0)
+            {
+                continue;
+            }
+
+            value = arg + prefixLen;
+            return true;
+        }
+
+        return false;
+    };
+
     if (hasArg(L"--crash-test"))
     {
         CrashHandler::TriggerCrashTest();
     }
 
 #ifdef _DEBUG
+    g_selfTestOptions                  = SelfTest::GetSelfTestOptions();
+    g_selfTestOptions.failFast         = hasArg(L"--selftest-fail-fast");
+    g_selfTestOptions.timeoutScale     = 1.0;
+    g_selfTestOptions.writeJsonSummary = true;
+
+    std::wstring multiplierArg;
+    if (getArgValue(L"--selftest-timeout-multiplier=", multiplierArg))
+    {
+        wchar_t* end        = nullptr;
+        errno               = 0;
+        const double parsed = wcstod(multiplierArg.c_str(), &end);
+        if (end != multiplierArg.c_str() && errno == 0 && parsed > 0.0)
+        {
+            g_selfTestOptions.timeoutScale = parsed;
+        }
+    }
+
+    SelfTest::GetSelfTestOptions() = g_selfTestOptions;
+    SelfTest::InitSelfTestRun(g_selfTestOptions, SelfTest::SelfTestSuite::CompareDirectories);
+
     if (hasArg(L"--fileops-selftest"))
     {
         g_runFileOpsSelfTest = true;
@@ -3631,11 +3759,24 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     {
         g_runCompareDirectoriesSelfTest = true;
     }
+
+    if (hasArg(L"--commands-selftest"))
+    {
+        g_runCommandsSelfTest = true;
+    }
+
+    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+    {
+        SelfTest::GetSelfTestOptions() = g_selfTestOptions;
+        SelfTest::RotateSelfTestRuns();
+        ResetSelfTestRunState();
+    }
 #endif
 
     HRESULT comHr       = S_OK;
     bool comInitialized = false;
     {
+        SplashScreen::IfExistSetText(L"Initializing COM...");
         Debug::Perf::Scope perf(L"App.Startup.CoInitializeEx");
         comHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
         perf.SetHr(comHr);
@@ -3669,6 +3810,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     const std::filesystem::path themesDir = GetThemesDirectory();
     if (! themesDir.empty())
     {
+        SplashScreen::IfExistSetText(L"Loading theme definitions...");
         Debug::Perf::Scope perf(L"App.Startup.LoadThemeDefinitions");
         perf.SetDetail(themesDir.native());
         Common::Settings::LoadThemeDefinitionsFromDirectory(themesDir, g_fileThemes);
@@ -3676,6 +3818,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     HRESULT settingsHr = S_OK;
     {
+        SplashScreen::IfExistSetText(L"Loading app settings...");
         Debug::Perf::Scope perf(L"App.Startup.LoadSettings");
         perf.SetDetail(kAppId);
         settingsHr = Common::Settings::LoadSettings(kAppId, g_settings);
@@ -3699,14 +3842,26 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         g_settings.theme.currentThemeId = ThemeIdFromThemeMode(envTheme);
     }
 
-    const bool showSplash = ! g_settings.startup.has_value() || g_settings.startup->showSplash;
+    const bool showSplash      = ! g_settings.startup.has_value() || g_settings.startup->showSplash;
+    const auto setSplashStatus = [&](std::wstring_view status) noexcept
+    {
+        if (showSplash)
+        {
+            SplashScreen::IfExistSetText(status);
+        }
+    };
+
     if (showSplash)
     {
-        SplashScreen::IfExistSetText(L"Starting...");
+        setSplashStatus(L"Starting RedSalamander...");
         SplashScreen::BeginDelayedOpen(std::chrono::milliseconds(300), hInstance);
     }
 
     {
+        if (showSplash)
+        {
+            setSplashStatus(L"Warming visual resources...");
+        }
         Debug::Perf::Scope perf(L"App.Startup.QueueNavigationViewWarmup");
         const BOOL queued = TrySubmitThreadpoolCallback(
             [](PTP_CALLBACK_INSTANCE /*instance*/, void* /*context*/) noexcept { NavigationView::WarmSharedDeviceResources(); }, nullptr, nullptr);
@@ -3714,6 +3869,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     }
 
     {
+        if (showSplash)
+        {
+            setSplashStatus(L"Preparing keyboard shortcuts...");
+        }
         Debug::Perf::Scope perf(L"App.Startup.Shortcuts.Initialize");
         ShortcutDefaults::EnsureShortcutsInitialized(g_settings);
         ReloadShortcutsFromSettings();
@@ -3721,6 +3880,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     HRESULT pluginHr = S_OK;
     {
+        if (showSplash)
+        {
+            setSplashStatus(L"Initializing file-system plugins...");
+        }
         Debug::Perf::Scope perf(L"App.Startup.Plugins.Initialize.FileSystems");
         perf.SetDetail(kAppId);
         pluginHr = FileSystemPluginManager::GetInstance().Initialize(g_settings);
@@ -3733,6 +3896,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     HRESULT viewerHr = S_OK;
     {
+        if (showSplash)
+        {
+            setSplashStatus(L"Initializing viewer plugins...");
+        }
         Debug::Perf::Scope perf(L"App.Startup.Plugins.Initialize.Viewers");
         perf.SetDetail(kAppId);
         viewerHr = ViewerPluginManager::GetInstance().Initialize(g_settings);
@@ -3744,6 +3911,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     }
 
     {
+        if (showSplash)
+        {
+            setSplashStatus(L"Applying directory cache settings...");
+        }
         Debug::Perf::Scope perf(L"App.Startup.DirectoryInfoCache.ApplySettings");
         DirectoryInfoCache::GetInstance().ApplySettings(g_settings);
     }
@@ -3751,6 +3922,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     // Perform application initialization:
     std::optional<HWND> hWnd;
     {
+        if (showSplash)
+        {
+            setSplashStatus(L"Creating main window...");
+        }
         Debug::Perf::Scope perf(L"App.Startup.InitInstance");
         hWnd = InitInstance(hInstance, nCmdShow);
         perf.SetHr(hWnd.has_value() ? S_OK : E_FAIL);
@@ -3763,6 +3938,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     wil::unique_haccel hAccelTable;
     {
+        if (showSplash)
+        {
+            setSplashStatus(L"Loading menu accelerators...");
+        }
         Debug::Perf::Scope perf(L"App.Startup.LoadAccelerators");
         hAccelTable.reset(LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_REDSALAMANDER)));
         perf.SetHr(hAccelTable ? S_OK : E_FAIL);
@@ -3867,6 +4046,24 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             }
         }
 
+        if (isMainWindowMessage && g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            const uint32_t vk = static_cast<uint32_t>(msg.wParam);
+            if (msg.message == WM_KEYDOWN || msg.message == WM_SYSKEYDOWN)
+            {
+                if (g_folderWindow.HandleViewWidthAdjustKey(vk))
+                {
+                    continue;
+                }
+
+                if (vk == static_cast<uint32_t>(VK_ESCAPE) && g_fullScreenState.active)
+                {
+                    ToggleFullScreen(*hWnd);
+                    continue;
+                }
+            }
+        }
+
         const bool editFocused = (isMainWindowMessage || isCompareWindowMessage) && IsEditControlFocused();
         if ((isMainWindowMessage || isCompareWindowMessage) && editFocused)
         {
@@ -3920,9 +4117,10 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     const int exitCode = static_cast<int>(msg.wParam);
 #ifdef _DEBUG
-    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest)
+    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
-        AppendSelfTestTraceExitCode(L"RunApplication: message loop exit", exitCode);
+        SelfTest::AppendSelfTestTrace(std::format(L"RunApplication: message loop exit={}", exitCode));
+        FinalizeSelfTestRun();
     }
 #endif
     return exitCode;
@@ -4348,25 +4546,189 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
     }
 
 #ifdef _DEBUG
-    if (g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest)
+    if (g_runCompareDirectoriesSelfTest)
     {
+        SplashScreen::IfExistSetText(L"Launching compare-selftest...");
+        SelfTest::SelfTestSuiteResult compareResult;
         Debug::Info(L"CompareSelfTest: running");
-        AppendSelfTestTraceLine(L"CompareSelfTest: begin");
-        g_selfTestExitCode = CompareDirectoriesSelfTest::Run() ? 0 : 1;
-        AppendSelfTestTraceExitCode(L"CompareSelfTest: end", g_selfTestExitCode);
-        PostMessageW(hWnd, WM_CLOSE, 0, 0);
+        SelfTest::InitSelfTestRun(g_selfTestOptions, SelfTest::SelfTestSuite::CompareDirectories);
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, L"CompareSelfTest: begin");
+        SelfTest::AppendSelfTestTrace(L"CompareSelfTest: begin");
+        g_selfTestExitCode |= CompareDirectoriesSelfTest::Run(g_selfTestOptions, &compareResult) ? 0 : 1;
+        RecordSelfTestSuite(compareResult);
+        if (g_selfTestExitCode != 0)
+        {
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, L"CompareSelfTest: FAIL");
+            SelfTest::AppendSelfTestTrace(L"CompareSelfTest: FAIL");
+            if (! compareResult.failureMessage.empty())
+            {
+                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, compareResult.failureMessage);
+                SelfTest::AppendSelfTestTrace(compareResult.failureMessage);
+            }
+        }
+        else
+        {
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, L"CompareSelfTest: PASS");
+            SelfTest::AppendSelfTestTrace(L"CompareSelfTest: PASS");
+        }
+        TraceSelfTestExitCode(L"CompareSelfTest: end", g_selfTestExitCode);
+    }
+
+    if (g_runCommandsSelfTest)
+    {
+        SplashScreen::IfExistSetText(L"Launching commands-selftest...");
+        SelfTest::SelfTestSuiteResult commandsResult;
+        Debug::Info(L"CommandsSelfTest: running");
+        SelfTest::InitSelfTestRun(g_selfTestOptions, SelfTest::SelfTestSuite::Commands);
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: begin");
+        SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: begin");
+        g_selfTestExitCode |= CommandsSelfTest::Run(hWnd, g_selfTestOptions, &commandsResult) ? 0 : 1;
+        RecordSelfTestSuite(commandsResult);
+        if (g_selfTestExitCode != 0)
+        {
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: FAIL");
+            SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: FAIL");
+            if (! commandsResult.failureMessage.empty())
+            {
+                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, commandsResult.failureMessage);
+                SelfTest::AppendSelfTestTrace(commandsResult.failureMessage);
+            }
+        }
+        else
+        {
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: PASS");
+            SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: PASS");
+        }
+        TraceSelfTestExitCode(L"CommandsSelfTest: end", g_selfTestExitCode);
     }
 
     if (g_runFileOpsSelfTest)
     {
+        SplashScreen::IfExistSetText(L"Launching file-operations self-test...");
         Debug::Info(L"FileOpsSelfTest: scheduling");
-        FileOperationsSelfTest::Start(hWnd);
-        SetTimer(hWnd, kFileOpsSelfTestTimerId, kFileOpsSelfTestTimerIntervalMs, nullptr);
+        SelfTest::InitSelfTestRun(g_selfTestOptions, SelfTest::SelfTestSuite::FileOperations);
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, L"FileOpsSelfTest: scheduling");
+        FileOperationsSelfTest::Start(hWnd, g_selfTestOptions);
+        if (SetTimer(hWnd, kFileOpsSelfTestTimerId, kFileOpsSelfTestTimerIntervalMs, nullptr) == 0)
+        {
+            const HRESULT hr     = HRESULT_FROM_WIN32(GetLastError());
+            std::wstring message = std::format(L"FileOpsSelfTest: SetTimer failed: 0x{:08X}", static_cast<unsigned>(hr));
+            Debug::Error(L"{}", message);
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, message);
+            SelfTest::AppendSelfTestTrace(message);
+
+            SelfTest::SelfTestSuiteResult failure{};
+            failure.suite          = SelfTest::SelfTestSuite::FileOperations;
+            failure.failed         = 1;
+            failure.failureMessage = std::move(message);
+            RecordSelfTestSuite(std::move(failure));
+
+            g_selfTestExitCode |= 1;
+            TraceSelfTestExitCode(L"FileOpsSelfTest: scheduling failed", g_selfTestExitCode);
+            FinalizeSelfTestRun();
+            PostMessageW(hWnd, WM_CLOSE, 0, 0);
+        }
+    }
+
+    if ((g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) && ! g_runFileOpsSelfTest)
+    {
+        PostMessageW(hWnd, WM_CLOSE, 0, 0);
     }
 #endif
 
     wmCreatePerf.SetHr(S_OK);
     return 0;
+}
+
+void EnterFullScreen(HWND hWnd) noexcept
+{
+    if (! hWnd || IsWindow(hWnd) == FALSE || g_fullScreenState.active)
+    {
+        return;
+    }
+
+    g_fullScreenState.savedStyle   = static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_STYLE));
+    g_fullScreenState.savedExStyle = static_cast<DWORD>(GetWindowLongPtrW(hWnd, GWL_EXSTYLE));
+
+    g_fullScreenState.savedPlacement        = {};
+    g_fullScreenState.savedPlacement.length = sizeof(WINDOWPLACEMENT);
+    if (GetWindowPlacement(hWnd, &g_fullScreenState.savedPlacement) == FALSE)
+    {
+        // Fallback: synthesize a placement from the current window rectangle.
+        RECT windowRect{};
+        if (GetWindowRect(hWnd, &windowRect) != FALSE)
+        {
+            g_fullScreenState.savedPlacement.length           = sizeof(WINDOWPLACEMENT);
+            g_fullScreenState.savedPlacement.flags            = 0;
+            g_fullScreenState.savedPlacement.showCmd          = SW_SHOWNORMAL;
+            g_fullScreenState.savedPlacement.ptMinPosition.x  = windowRect.left;
+            g_fullScreenState.savedPlacement.ptMinPosition.y  = windowRect.top;
+            g_fullScreenState.savedPlacement.ptMaxPosition.x  = windowRect.left;
+            g_fullScreenState.savedPlacement.ptMaxPosition.y  = windowRect.top;
+            g_fullScreenState.savedPlacement.rcNormalPosition = windowRect;
+        }
+        else
+        {
+            // Indicate that there is no valid placement information.
+            g_fullScreenState.savedPlacement.length = 0;
+        }
+    }
+
+    MONITORINFO mi{};
+    mi.cbSize = sizeof(mi);
+    const HMONITOR monitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
+    if (! monitor || GetMonitorInfoW(monitor, &mi) == FALSE)
+    {
+        return;
+    }
+
+    DWORD newStyle = g_fullScreenState.savedStyle;
+    newStyle &= ~WS_OVERLAPPEDWINDOW;
+    newStyle |= WS_POPUP;
+
+    DWORD newExStyle = g_fullScreenState.savedExStyle;
+    newExStyle |= WS_EX_TOPMOST;
+
+    SetWindowLongPtrW(hWnd, GWL_STYLE, static_cast<LONG_PTR>(newStyle));
+    SetWindowLongPtrW(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(newExStyle));
+
+    const int x      = mi.rcMonitor.left;
+    const int y      = mi.rcMonitor.top;
+    const int width  = mi.rcMonitor.right - mi.rcMonitor.left;
+    const int height = mi.rcMonitor.bottom - mi.rcMonitor.top;
+
+    SetWindowPos(hWnd, HWND_TOPMOST, x, y, width, height, SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+    g_fullScreenState.active = true;
+}
+
+void ExitFullScreen(HWND hWnd) noexcept
+{
+    if (! hWnd || IsWindow(hWnd) == FALSE || ! g_fullScreenState.active)
+    {
+        return;
+    }
+
+    SetWindowLongPtrW(hWnd, GWL_STYLE, static_cast<LONG_PTR>(g_fullScreenState.savedStyle));
+    SetWindowLongPtrW(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(g_fullScreenState.savedExStyle));
+
+    static_cast<void>(SetWindowPlacement(hWnd, &g_fullScreenState.savedPlacement));
+
+    const HWND insertAfter = (g_fullScreenState.savedExStyle & WS_EX_TOPMOST) != 0 ? HWND_TOPMOST : HWND_NOTOPMOST;
+    SetWindowPos(hWnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
+
+    g_fullScreenState.active = false;
+}
+
+void ToggleFullScreen(HWND hWnd) noexcept
+{
+    if (g_fullScreenState.active)
+    {
+        ExitFullScreen(hWnd);
+    }
+    else
+    {
+        EnterFullScreen(hWnd);
+    }
 }
 
 LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
@@ -4392,6 +4754,26 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             if (g_settings.shortcuts.has_value())
             {
                 ShowShortcutsWindow(hWnd, g_settings, g_settings.shortcuts.value(), g_shortcutManager, theme);
+            }
+            break;
+        }
+        case IDM_APP_FULL_SCREEN:
+        {
+            ToggleFullScreen(hWnd);
+            break;
+        }
+        case IDM_APP_VIEW_WIDTH:
+        {
+            if (g_hFolderWindow.load(std::memory_order_acquire))
+            {
+                if (g_folderWindow.IsViewWidthAdjustActive())
+                {
+                    g_folderWindow.CommitViewWidthAdjust();
+                }
+                else
+                {
+                    g_folderWindow.BeginViewWidthAdjust();
+                }
             }
             break;
         }
@@ -4943,6 +5325,18 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             static_cast<void>(ShowConnectionManagerWindow(hWnd, kAppId, g_settings, theme, {}, static_cast<uint8_t>(pane)));
             break;
         }
+        case IDM_PANE_CALCULATE_DIRECTORY_SIZES:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandCalculateDirectorySizes(pane);
+            break;
+        }
+        case IDM_PANE_CHANGE_CASE:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandChangeCase(pane);
+            break;
+        }
         case IDM_PANE_OPEN_COMMAND_SHELL:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
@@ -5052,11 +5446,18 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_PANE_DISPLAY_BRIEF:
         case IDM_PANE_DISPLAY_DETAILED:
+        case IDM_PANE_DISPLAY_EXTRA_DETAILED:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.SetActivePane(pane);
 
-            const FolderView::DisplayMode mode = wmId == IDM_PANE_DISPLAY_DETAILED ? FolderView::DisplayMode::Detailed : FolderView::DisplayMode::Brief;
+            FolderView::DisplayMode mode = FolderView::DisplayMode::Brief;
+            switch (wmId)
+            {
+                case IDM_PANE_DISPLAY_BRIEF: mode = FolderView::DisplayMode::Brief; break;
+                case IDM_PANE_DISPLAY_DETAILED: mode = FolderView::DisplayMode::Detailed; break;
+                case IDM_PANE_DISPLAY_EXTRA_DETAILED: mode = FolderView::DisplayMode::ExtraDetailed; break;
+            }
             g_folderWindow.SetDisplayMode(pane, mode);
             break;
         }
@@ -5092,6 +5493,10 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
             g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::Detailed);
             break;
+        case IDM_LEFT_DISPLAY_EXTRA_DETAILED:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+            g_folderWindow.SetDisplayMode(FolderWindow::Pane::Left, FolderView::DisplayMode::ExtraDetailed);
+            break;
         case IDM_RIGHT_SORT_NAME:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
             g_folderWindow.CycleSortBy(FolderWindow::Pane::Right, FolderView::SortBy::Name);
@@ -5123,6 +5528,10 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         case IDM_RIGHT_DISPLAY_DETAILED:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
             g_folderWindow.SetDisplayMode(FolderWindow::Pane::Right, FolderView::DisplayMode::Detailed);
+            break;
+        case IDM_RIGHT_DISPLAY_EXTRA_DETAILED:
+            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
+            g_folderWindow.SetDisplayMode(FolderWindow::Pane::Right, FolderView::DisplayMode::ExtraDetailed);
             break;
         case IDM_LEFT_OVERLAY_SAMPLE_ERROR:
             if (! IsOverlaySampleEnabled())
@@ -5582,9 +5991,12 @@ LRESULT OnMainWindowConnectionManagerConnect([[maybe_unused]] HWND hWnd, WPARAM 
 LRESULT OnMainWindowClose(HWND hWnd)
 {
 #ifdef _DEBUG
-    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest)
+    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
-        DestroyWindow(hWnd);
+        if (! DestroyWindow(hWnd))
+        {
+            PostQuitMessage(g_selfTestExitCode);
+        }
         return 0;
     }
 #endif
@@ -5603,8 +6015,9 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
     SaveAppSettings(hWnd);
 
 #ifdef _DEBUG
-    AppendSelfTestTraceExitCode(L"OnMainWindowDestroy: PostQuitMessage", (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest) ? g_selfTestExitCode : 0);
-    PostQuitMessage((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest) ? g_selfTestExitCode : 0);
+    TraceSelfTestExitCode(
+        L"OnMainWindowDestroy: PostQuitMessage", (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
+    PostQuitMessage((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
 #else
     PostQuitMessage(0);
 #endif

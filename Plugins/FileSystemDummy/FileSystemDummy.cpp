@@ -62,7 +62,7 @@ std::uint64_t Mix64(std::uint64_t value) noexcept
     return value ^ (value >> 31u);
 }
 
-std::uint8_t GenerateDummyByte(DummyFillKind kind, std::uint64_t seed, unsigned __int64 position) noexcept
+std::uint8_t GenerateDummyByte(DummyFillKind kind, std::uint64_t seed, uint64_t position) noexcept
 {
     if (kind == DummyFillKind::PlainText || kind == DummyFillKind::XmlCData)
     {
@@ -126,7 +126,7 @@ std::uint8_t GenerateDummyByte(DummyFillKind kind, std::uint64_t seed, unsigned 
 class DummyGeneratedFileReader final : public IFileReader
 {
 public:
-    DummyGeneratedFileReader(std::string prefix, std::string suffix, unsigned __int64 bodyBytes, std::uint64_t seed, DummyFillKind fillKind) noexcept
+    DummyGeneratedFileReader(std::string prefix, std::string suffix, uint64_t bodyBytes, std::uint64_t seed, DummyFillKind fillKind) noexcept
         : _prefix(std::move(prefix)),
           _suffix(std::move(suffix)),
           _bodyBytes(bodyBytes),
@@ -173,7 +173,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetSize(unsigned __int64* sizeBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
     {
         if (sizeBytes == nullptr)
         {
@@ -184,7 +184,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, unsigned __int64* newPosition) noexcept override
+    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
     {
         if (newPosition == nullptr)
         {
@@ -214,7 +214,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
         }
 
-        _positionBytes = static_cast<unsigned __int64>(next);
+        _positionBytes = static_cast<uint64_t>(next);
         *newPosition   = _positionBytes;
         return S_OK;
     }
@@ -238,24 +238,24 @@ public:
             return E_POINTER;
         }
 
-        const unsigned __int64 totalSize = GetTotalSizeBytes();
+        const uint64_t totalSize = GetTotalSizeBytes();
         if (_positionBytes >= totalSize)
         {
             return S_OK;
         }
 
-        const unsigned __int64 remaining = totalSize - _positionBytes;
-        const unsigned long take         = (remaining > static_cast<unsigned __int64>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
+        const uint64_t remaining = totalSize - _positionBytes;
+        const unsigned long take = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
         auto* out = static_cast<std::uint8_t*>(buffer);
 
-        const unsigned __int64 prefixBytes = static_cast<unsigned __int64>(_prefix.size());
-        const unsigned __int64 suffixBytes = static_cast<unsigned __int64>(_suffix.size());
+        const uint64_t prefixBytes = static_cast<uint64_t>(_prefix.size());
+        const uint64_t suffixBytes = static_cast<uint64_t>(_suffix.size());
 
         unsigned long written = 0;
         while (written < take)
         {
-            const unsigned __int64 absolutePos = _positionBytes + static_cast<unsigned __int64>(written);
+            const uint64_t absolutePos = _positionBytes + static_cast<uint64_t>(written);
 
             if (absolutePos < prefixBytes)
             {
@@ -267,12 +267,12 @@ public:
                 continue;
             }
 
-            const unsigned __int64 bodyStart = prefixBytes;
-            const unsigned __int64 bodyEnd   = prefixBytes + _bodyBytes;
+            const uint64_t bodyStart = prefixBytes;
+            const uint64_t bodyEnd   = prefixBytes + _bodyBytes;
             if (absolutePos < bodyEnd)
             {
-                const unsigned __int64 bodyPos = absolutePos - bodyStart;
-                out[written]                   = GenerateDummyByte(_fillKind, _seed, bodyPos);
+                const uint64_t bodyPos = absolutePos - bodyStart;
+                out[written]           = GenerateDummyByte(_fillKind, _seed, bodyPos);
                 ++written;
                 continue;
             }
@@ -282,7 +282,7 @@ public:
                 break;
             }
 
-            const unsigned __int64 suffixPos = absolutePos - bodyEnd;
+            const uint64_t suffixPos = absolutePos - bodyEnd;
             if (suffixPos >= suffixBytes)
             {
                 break;
@@ -295,7 +295,7 @@ public:
             written += static_cast<unsigned long>(want);
         }
 
-        _positionBytes += static_cast<unsigned __int64>(take);
+        _positionBytes += static_cast<uint64_t>(take);
         *bytesRead = take;
         return S_OK;
     }
@@ -303,20 +303,20 @@ public:
 private:
     ~DummyGeneratedFileReader() = default;
 
-    unsigned __int64 GetTotalSizeBytes() const noexcept
+    uint64_t GetTotalSizeBytes() const noexcept
     {
-        const unsigned __int64 prefixBytes = static_cast<unsigned __int64>(_prefix.size());
-        const unsigned __int64 suffixBytes = static_cast<unsigned __int64>(_suffix.size());
+        const uint64_t prefixBytes = static_cast<uint64_t>(_prefix.size());
+        const uint64_t suffixBytes = static_cast<uint64_t>(_suffix.size());
         return prefixBytes + _bodyBytes + suffixBytes;
     }
 
     std::atomic_ulong _refCount{1};
     std::string _prefix;
     std::string _suffix;
-    unsigned __int64 _bodyBytes     = 0;
-    std::uint64_t _seed             = 0;
-    DummyFillKind _fillKind         = DummyFillKind::PlainText;
-    unsigned __int64 _positionBytes = 0;
+    uint64_t _bodyBytes     = 0;
+    std::uint64_t _seed     = 0;
+    DummyFillKind _fillKind = DummyFillKind::PlainText;
+    uint64_t _positionBytes = 0;
 };
 
 class DummyBufferFileReader final : public IFileReader
@@ -364,18 +364,18 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetSize(unsigned __int64* sizeBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
     {
         if (sizeBytes == nullptr)
         {
             return E_POINTER;
         }
 
-        *sizeBytes = static_cast<unsigned __int64>(_buffer.size());
+        *sizeBytes = static_cast<uint64_t>(_buffer.size());
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, unsigned __int64* newPosition) noexcept override
+    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
     {
         if (newPosition == nullptr)
         {
@@ -405,7 +405,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
         }
 
-        _positionBytes = static_cast<unsigned __int64>(next);
+        _positionBytes = static_cast<uint64_t>(next);
         *newPosition   = _positionBytes;
         return S_OK;
     }
@@ -429,17 +429,17 @@ public:
             return E_POINTER;
         }
 
-        const unsigned __int64 totalSize = static_cast<unsigned __int64>(_buffer.size());
+        const uint64_t totalSize = static_cast<uint64_t>(_buffer.size());
         if (_positionBytes >= totalSize)
         {
             return S_OK;
         }
 
-        const unsigned __int64 remaining = totalSize - _positionBytes;
-        const unsigned long take         = (remaining > static_cast<unsigned __int64>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
+        const uint64_t remaining = totalSize - _positionBytes;
+        const unsigned long take = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
         memcpy(buffer, _buffer.data() + static_cast<size_t>(_positionBytes), take);
-        _positionBytes += static_cast<unsigned __int64>(take);
+        _positionBytes += static_cast<uint64_t>(take);
         *bytesRead = take;
         return S_OK;
     }
@@ -449,7 +449,7 @@ private:
 
     std::atomic_ulong _refCount{1};
     std::vector<std::byte> _buffer;
-    unsigned __int64 _positionBytes = 0;
+    uint64_t _positionBytes = 0;
 };
 
 class DummySharedBufferFileReader final : public IFileReader
@@ -497,7 +497,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetSize(unsigned __int64* sizeBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
     {
         if (sizeBytes == nullptr)
         {
@@ -510,11 +510,11 @@ public:
             return E_FAIL;
         }
 
-        *sizeBytes = static_cast<unsigned __int64>(_buffer->size());
+        *sizeBytes = static_cast<uint64_t>(_buffer->size());
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, unsigned __int64* newPosition) noexcept override
+    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
     {
         if (newPosition == nullptr)
         {
@@ -549,7 +549,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
         }
 
-        _positionBytes = static_cast<unsigned __int64>(next);
+        _positionBytes = static_cast<uint64_t>(next);
         *newPosition   = _positionBytes;
         return S_OK;
     }
@@ -578,17 +578,17 @@ public:
             return E_FAIL;
         }
 
-        const unsigned __int64 totalSize = static_cast<unsigned __int64>(_buffer->size());
+        const uint64_t totalSize = static_cast<uint64_t>(_buffer->size());
         if (_positionBytes >= totalSize)
         {
             return S_OK;
         }
 
-        const unsigned __int64 remaining = totalSize - _positionBytes;
-        const unsigned long take         = (remaining > static_cast<unsigned __int64>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
+        const uint64_t remaining = totalSize - _positionBytes;
+        const unsigned long take = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
         memcpy(buffer, _buffer->data() + static_cast<size_t>(_positionBytes), take);
-        _positionBytes += static_cast<unsigned __int64>(take);
+        _positionBytes += static_cast<uint64_t>(take);
         *bytesRead = take;
         return S_OK;
     }
@@ -598,7 +598,7 @@ private:
 
     std::atomic_ulong _refCount{1};
     std::shared_ptr<std::vector<std::byte>> _buffer;
-    unsigned __int64 _positionBytes = 0;
+    uint64_t _positionBytes = 0;
 };
 
 class DummyFileWriter final : public IFileWriter
@@ -651,7 +651,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetPosition(unsigned __int64* positionBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPosition(uint64_t* positionBytes) noexcept override
     {
         if (positionBytes == nullptr)
         {
@@ -665,7 +665,7 @@ public:
             return E_OUTOFMEMORY;
         }
 
-        *positionBytes = static_cast<unsigned __int64>(buffer->size());
+        *positionBytes = static_cast<uint64_t>(buffer->size());
         return S_OK;
     }
 
@@ -831,12 +831,12 @@ template <typename T, size_t N> constexpr unsigned long ArrayCount(const T (&)[N
 struct DummyEntry
 {
     std::wstring name;
-    DWORD attributes           = 0;
-    unsigned __int64 sizeBytes = 0;
-    __int64 creationTime       = 0;
-    __int64 lastAccessTime     = 0;
-    __int64 lastWriteTime      = 0;
-    __int64 changeTime         = 0;
+    DWORD attributes       = 0;
+    uint64_t sizeBytes     = 0;
+    __int64 creationTime   = 0;
+    __int64 lastAccessTime = 0;
+    __int64 lastWriteTime  = 0;
+    __int64 changeTime     = 0;
 };
 
 constexpr std::wstring_view kWordSegments[] = {L"alpha",   L"bravo", L"charlie", L"delta",  L"echo",     L"foxtrot", L"golf",   L"hotel",
@@ -891,7 +891,7 @@ enum class DummyFileKind
 };
 
 DummyFileKind GetDummyFileKind(std::wstring_view fileName) noexcept;
-unsigned __int64 MakeDummyFileSize(std::mt19937& rng, DummyFileKind kind) noexcept;
+uint64_t MakeDummyFileSize(std::mt19937& rng, DummyFileKind kind) noexcept;
 
 constexpr wchar_t kSeparators[] = {L' ', L'-', L'_'};
 
@@ -1005,18 +1005,18 @@ unsigned long RandomSkewedUpTo(std::mt19937& rng, unsigned long maxValue) noexce
     return static_cast<unsigned long>(scaled);
 }
 
-unsigned __int64 RandomRange64(std::mt19937& rng, unsigned __int64 minValue, unsigned __int64 maxValue) noexcept
+uint64_t RandomRange64(std::mt19937& rng, uint64_t minValue, uint64_t maxValue) noexcept
 {
     if (minValue >= maxValue)
     {
         return minValue;
     }
 
-    std::uniform_int_distribution<unsigned __int64> dist(minValue, maxValue);
+    std::uniform_int_distribution<uint64_t> dist(minValue, maxValue);
     return dist(rng);
 }
 
-unsigned __int64 RandomSkewedUpTo64(std::mt19937& rng, unsigned __int64 maxValue) noexcept
+uint64_t RandomSkewedUpTo64(std::mt19937& rng, uint64_t maxValue) noexcept
 {
     if (maxValue == 0)
     {
@@ -1035,7 +1035,7 @@ unsigned __int64 RandomSkewedUpTo64(std::mt19937& rng, unsigned __int64 maxValue
         return maxValue;
     }
 
-    return static_cast<unsigned __int64>(scaled);
+    return static_cast<uint64_t>(scaled);
 }
 
 bool RandomChance(std::mt19937& rng, unsigned long numerator, unsigned long denominator) noexcept
@@ -1130,31 +1130,31 @@ DummyFileKind GetDummyFileKind(std::wstring_view fileName) noexcept
     return DummyFileKind::Text;
 }
 
-unsigned __int64 MakeDummyFileSize(std::mt19937& rng, DummyFileKind kind) noexcept
+uint64_t MakeDummyFileSize(std::mt19937& rng, DummyFileKind kind) noexcept
 {
-    constexpr unsigned __int64 kMaxGenericBytes = 25ull * 1024ull * 1024ull;
+    constexpr uint64_t kMaxGenericBytes = 25ull * 1024ull * 1024ull;
 
     if (kind == DummyFileKind::Png)
     {
-        return std::max<unsigned __int64>(RandomRange64(rng, 4ull * 1024ull, 512ull * 1024ull), 256ull);
+        return std::max<uint64_t>(RandomRange64(rng, 4ull * 1024ull, 512ull * 1024ull), 256ull);
     }
 
     if (kind == DummyFileKind::Jpeg)
     {
-        return std::max<unsigned __int64>(RandomRange64(rng, 2ull * 1024ull, 512ull * 1024ull), 256ull);
+        return std::max<uint64_t>(RandomRange64(rng, 2ull * 1024ull, 512ull * 1024ull), 256ull);
     }
 
     if (kind == DummyFileKind::Zip)
     {
-        return std::max<unsigned __int64>(RandomRange64(rng, 128ull, 256ull * 1024ull), 22ull);
+        return std::max<uint64_t>(RandomRange64(rng, 128ull, 256ull * 1024ull), 22ull);
     }
 
     if (kind == DummyFileKind::Csv || kind == DummyFileKind::Json || kind == DummyFileKind::Json5 || kind == DummyFileKind::ThemeJson5 ||
         kind == DummyFileKind::Xml)
     {
-        constexpr unsigned __int64 kMaxStructuredBytes = 2ull * 1024ull * 1024ull;
-        const unsigned __int64 sizeBytes               = RandomSkewedUpTo64(rng, kMaxStructuredBytes);
-        return std::max<unsigned __int64>(sizeBytes, 128ull);
+        constexpr uint64_t kMaxStructuredBytes = 2ull * 1024ull * 1024ull;
+        const uint64_t sizeBytes               = RandomSkewedUpTo64(rng, kMaxStructuredBytes);
+        return std::max<uint64_t>(sizeBytes, 128ull);
     }
 
     if (kind == DummyFileKind::Binary)
@@ -1210,26 +1210,26 @@ bool EqualsIgnoreAsciiCase(std::string_view a, std::string_view b) noexcept
     return true;
 }
 
-unsigned __int64 MultiplyOrSaturate(unsigned __int64 a, unsigned __int64 b) noexcept
+uint64_t MultiplyOrSaturate(uint64_t a, uint64_t b) noexcept
 {
     if (a == 0 || b == 0)
     {
         return 0;
     }
 
-    if (a > (std::numeric_limits<unsigned __int64>::max() / b))
+    if (a > (std::numeric_limits<uint64_t>::max() / b))
     {
-        return std::numeric_limits<unsigned __int64>::max();
+        return std::numeric_limits<uint64_t>::max();
     }
 
     return a * b;
 }
 
-bool TryParseThroughputText(std::string_view text, unsigned __int64& outBytesPerSecond) noexcept
+bool TryParseThroughputText(std::string_view text, uint64_t& outBytesPerSecond) noexcept
 {
-    constexpr unsigned __int64 kKiB = 1024ull;
-    constexpr unsigned __int64 kMiB = 1024ull * 1024ull;
-    constexpr unsigned __int64 kGiB = 1024ull * 1024ull * 1024ull;
+    constexpr uint64_t kKiB = 1024ull;
+    constexpr uint64_t kMiB = 1024ull * 1024ull;
+    constexpr uint64_t kGiB = 1024ull * 1024ull * 1024ull;
 
     outBytesPerSecond = 0;
 
@@ -1239,9 +1239,9 @@ bool TryParseThroughputText(std::string_view text, unsigned __int64& outBytesPer
         return true;
     }
 
-    unsigned __int64 number = 0;
-    const char* begin       = text.data();
-    const char* end         = begin + text.size();
+    uint64_t number   = 0;
+    const char* begin = text.data();
+    const char* end   = begin + text.size();
 
     const auto [ptr, ec] = std::from_chars(begin, end, number);
     if (ec != std::errc{})
@@ -1263,7 +1263,7 @@ bool TryParseThroughputText(std::string_view text, unsigned __int64& outBytesPer
         }
     }
 
-    unsigned __int64 multiplier = 0;
+    uint64_t multiplier = 0;
     if (unit.empty() || EqualsIgnoreAsciiCase(unit, "kb") || EqualsIgnoreAsciiCase(unit, "k") || EqualsIgnoreAsciiCase(unit, "kib"))
     {
         // Bare numeric strings are interpreted as KiB for user-friendliness.
@@ -1333,7 +1333,7 @@ struct DummyFileSnapshot
 {
     std::wstring name;
     unsigned long attributes     = 0;
-    unsigned __int64 sizeBytes   = 0;
+    uint64_t sizeBytes           = 0;
     __int64 creationTime         = 0;
     std::uint64_t generationSeed = 0;
     std::shared_ptr<std::vector<std::byte>> materializedContent;
@@ -1381,8 +1381,8 @@ struct DummyTextTemplate
 {
     std::string prefix;
     std::string suffix;
-    unsigned __int64 bodyBytes = 0;
-    DummyFillKind fillKind     = DummyFillKind::PlainText;
+    uint64_t bodyBytes     = 0;
+    DummyFillKind fillKind = DummyFillKind::PlainText;
 };
 
 DummyTextTemplate BuildDummyTextTemplate(DummyFileKind kind, const DummyFileSnapshot& snapshot, std::uint64_t contentSeed)
@@ -1464,9 +1464,9 @@ DummyTextTemplate BuildDummyTextTemplate(DummyFileKind kind, const DummyFileSnap
         result.suffix   = "\r\n";
     }
 
-    const unsigned __int64 prefixBytes = static_cast<unsigned __int64>(result.prefix.size());
-    const unsigned __int64 suffixBytes = static_cast<unsigned __int64>(result.suffix.size());
-    const unsigned __int64 overhead    = prefixBytes + suffixBytes;
+    const uint64_t prefixBytes = static_cast<uint64_t>(result.prefix.size());
+    const uint64_t suffixBytes = static_cast<uint64_t>(result.suffix.size());
+    const uint64_t overhead    = prefixBytes + suffixBytes;
 
     if (snapshot.sizeBytes >= overhead)
     {
@@ -1574,18 +1574,18 @@ void AppendPngChunk(std::vector<std::byte>& out, const std::array<std::uint8_t, 
     AppendU32BE(out, crc);
 }
 
-std::vector<std::byte> GenerateDummyPng(std::uint64_t seed, unsigned __int64 targetBytes)
+std::vector<std::byte> GenerateDummyPng(std::uint64_t seed, uint64_t targetBytes)
 {
-    constexpr std::uint32_t width        = 32;
-    constexpr std::uint32_t height       = 32;
-    constexpr unsigned __int64 baseBytes = 3172;
+    constexpr std::uint32_t width  = 32;
+    constexpr std::uint32_t height = 32;
+    constexpr uint64_t baseBytes   = 3172;
 
     if (targetBytes < baseBytes)
     {
         return {};
     }
 
-    if (targetBytes > static_cast<unsigned __int64>(std::numeric_limits<size_t>::max()))
+    if (targetBytes > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
     {
         return {};
     }
@@ -1686,13 +1686,13 @@ std::vector<std::byte> GenerateDummyPng(std::uint64_t seed, unsigned __int64 tar
     AppendPngChunk(out, kChunkIHDR, ihdr.data(), ihdr.size());
     AppendPngChunk(out, kChunkIDAT, zlib.data(), zlib.size());
 
-    const unsigned __int64 sizeWithIend = static_cast<unsigned __int64>(out.size()) + 12ull;
+    const uint64_t sizeWithIend = static_cast<uint64_t>(out.size()) + 12ull;
     if (targetBytes < sizeWithIend)
     {
         return {};
     }
 
-    const unsigned __int64 paddingBytes = targetBytes - sizeWithIend;
+    const uint64_t paddingBytes = targetBytes - sizeWithIend;
     if (paddingBytes > 0)
     {
         if (paddingBytes < 12ull)
@@ -1700,8 +1700,8 @@ std::vector<std::byte> GenerateDummyPng(std::uint64_t seed, unsigned __int64 tar
             return {};
         }
 
-        const unsigned __int64 dataBytes = paddingBytes - 12ull;
-        if (dataBytes > static_cast<unsigned __int64>(std::numeric_limits<std::uint32_t>::max()))
+        const uint64_t dataBytes = paddingBytes - 12ull;
+        if (dataBytes > static_cast<uint64_t>(std::numeric_limits<std::uint32_t>::max()))
         {
             return {};
         }
@@ -1710,7 +1710,7 @@ std::vector<std::byte> GenerateDummyPng(std::uint64_t seed, unsigned __int64 tar
         padding.resize(static_cast<size_t>(dataBytes));
         for (size_t index = 0; index < padding.size(); ++index)
         {
-            padding[index] = GenerateDummyByte(DummyFillKind::Binary, seed ^ 0xA5A5A5A5u, static_cast<unsigned __int64>(index));
+            padding[index] = GenerateDummyByte(DummyFillKind::Binary, seed ^ 0xA5A5A5A5u, static_cast<uint64_t>(index));
         }
 
         AppendPngChunk(out, kChunkPad, padding.data(), padding.size());
@@ -1823,7 +1823,7 @@ private:
     std::uint8_t _bitCount   = 0;
 };
 
-std::vector<std::byte> GenerateDummyJpeg(std::uint64_t seed, unsigned __int64 targetBytes)
+std::vector<std::byte> GenerateDummyJpeg(std::uint64_t seed, uint64_t targetBytes)
 {
     constexpr std::array<std::uint8_t, 16> kDcCounts = {{0, 1, 5, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0}};
     constexpr std::array<std::uint8_t, 12> kDcValues = {{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11}};
@@ -1952,15 +1952,14 @@ std::vector<std::byte> GenerateDummyJpeg(std::uint64_t seed, unsigned __int64 ta
     base.push_back(static_cast<std::byte>(63u));   // Se
     base.push_back(static_cast<std::byte>(0u));    // AhAl
 
-    const unsigned __int64 baseWithoutCom =
-        static_cast<unsigned __int64>(base.size()) + static_cast<unsigned __int64>(writer.Bytes().size()) + static_cast<unsigned __int64>(kEOI.size());
+    const uint64_t baseWithoutCom = static_cast<uint64_t>(base.size()) + static_cast<uint64_t>(writer.Bytes().size()) + static_cast<uint64_t>(kEOI.size());
 
     if (targetBytes < baseWithoutCom)
     {
         return {};
     }
 
-    unsigned __int64 remaining = targetBytes - baseWithoutCom;
+    uint64_t remaining = targetBytes - baseWithoutCom;
 
     std::vector<std::byte> out;
     out.reserve(static_cast<size_t>(targetBytes));
@@ -1970,19 +1969,19 @@ std::vector<std::byte> GenerateDummyJpeg(std::uint64_t seed, unsigned __int64 ta
 
     while (remaining > 0)
     {
-        const unsigned __int64 segmentTotal = std::min<unsigned __int64>(remaining, 65537ull);
+        const uint64_t segmentTotal = std::min<uint64_t>(remaining, 65537ull);
         if (segmentTotal < 4ull)
         {
             break;
         }
 
-        const unsigned __int64 dataLen  = segmentTotal - 4ull;
+        const uint64_t dataLen          = segmentTotal - 4ull;
         const std::uint16_t lengthField = static_cast<std::uint16_t>(dataLen + 2ull);
 
         AppendBytes(out, kCOM.data(), kCOM.size());
         AppendU16BE(out, lengthField);
 
-        for (unsigned __int64 i = 0; i < dataLen; ++i)
+        for (uint64_t i = 0; i < dataLen; ++i)
         {
             out.push_back(static_cast<std::byte>(GenerateDummyByte(DummyFillKind::Binary, seed ^ 0xC3C3C3C3u, i)));
         }
@@ -2122,14 +2121,14 @@ HRESULT BuildFileInfoBuffer(const std::vector<DummyEntry>& entries, std::vector<
         info->ChangeTime     = entry.changeTime;
         info->EndOfFile      = static_cast<__int64>(entry.sizeBytes);
 
-        unsigned __int64 allocation = entry.sizeBytes;
+        uint64_t allocation = entry.sizeBytes;
         if (allocation > 0)
         {
             allocation = AlignUp(allocation, static_cast<size_t>(4096));
         }
-        if (allocation > static_cast<unsigned __int64>(std::numeric_limits<__int64>::max()))
+        if (allocation > static_cast<uint64_t>(std::numeric_limits<__int64>::max()))
         {
-            allocation = static_cast<unsigned __int64>(std::numeric_limits<__int64>::max());
+            allocation = static_cast<uint64_t>(std::numeric_limits<__int64>::max());
         }
         info->AllocationSize = static_cast<__int64>(allocation);
 
@@ -2155,24 +2154,24 @@ HRESULT BuildFileInfoBuffer(const std::vector<DummyEntry>& entries, std::vector<
 #pragma warning(disable : 4625 4626)
 struct OperationContext
 {
-    FileSystemOperation type          = FILESYSTEM_COPY;
-    IFileSystemCallback* callback     = nullptr;
-    void* callbackCookie              = nullptr;
-    unsigned __int64 progressStreamId = 0;
+    FileSystemOperation type      = FILESYSTEM_COPY;
+    IFileSystemCallback* callback = nullptr;
+    void* callbackCookie          = nullptr;
+    uint64_t progressStreamId     = 0;
     FileSystemOptions optionsState{};
-    FileSystemOptions* options                  = nullptr;
-    unsigned __int64 virtualLimitBytesPerSecond = 0;
-    unsigned long latencyMilliseconds           = 0;
-    std::uint64_t throughputSeed                = 0;
-    unsigned long totalItems                    = 0;
-    unsigned long completedItems                = 0;
-    unsigned __int64 totalBytes                 = 0;
-    unsigned __int64 completedBytes             = 0;
-    bool continueOnError                        = false;
-    bool allowOverwrite                         = false;
-    bool allowReplaceReadonly                   = false;
-    bool recursive                              = false;
-    bool useRecycleBin                          = false;
+    FileSystemOptions* options          = nullptr;
+    uint64_t virtualLimitBytesPerSecond = 0;
+    unsigned long latencyMilliseconds   = 0;
+    std::uint64_t throughputSeed        = 0;
+    unsigned long totalItems            = 0;
+    unsigned long completedItems        = 0;
+    uint64_t totalBytes                 = 0;
+    uint64_t completedBytes             = 0;
+    bool continueOnError                = false;
+    bool allowOverwrite                 = false;
+    bool allowReplaceReadonly           = false;
+    bool recursive                      = false;
+    bool useRecycleBin                  = false;
     FileSystemArenaOwner itemArena;
     FileSystemArenaOwner progressArena;
     const wchar_t* itemSource          = nullptr;
@@ -2193,7 +2192,7 @@ void InitializeOperationContext(OperationContext& context,
     context.type             = type;
     context.callback         = callback;
     context.callbackCookie   = callback != nullptr ? cookie : nullptr;
-    context.progressStreamId = callback != nullptr ? static_cast<unsigned __int64>(GetCurrentThreadId()) : 0;
+    context.progressStreamId = callback != nullptr ? static_cast<uint64_t>(GetCurrentThreadId()) : 0;
     context.optionsState     = {};
     if (options)
     {
@@ -2368,7 +2367,7 @@ HRESULT CheckCancel(OperationContext& context) noexcept
 
 void UpdateEffectiveBandwidthLimit(OperationContext& context) noexcept;
 
-HRESULT ReportProgress(OperationContext& context, unsigned __int64 currentItemTotalBytes, unsigned __int64 currentItemCompletedBytes) noexcept
+HRESULT ReportProgress(OperationContext& context, uint64_t currentItemTotalBytes, uint64_t currentItemCompletedBytes) noexcept
 {
     if (! context.callback)
     {
@@ -2467,9 +2466,9 @@ std::wstring_view GetPathLeaf(std::wstring_view path) noexcept
     return trimmed.substr(pos + 1);
 }
 
-unsigned __int64 GetEffectiveBandwidthLimitBytesPerSecond(const OperationContext& context, unsigned __int64 virtualLimitBytesPerSecond) noexcept
+uint64_t GetEffectiveBandwidthLimitBytesPerSecond(const OperationContext& context, uint64_t virtualLimitBytesPerSecond) noexcept
 {
-    const unsigned __int64 hostLimit = context.options ? context.options->bandwidthLimitBytesPerSecond : 0;
+    const uint64_t hostLimit = context.options ? context.options->bandwidthLimitBytesPerSecond : 0;
     if (hostLimit == 0)
     {
         return virtualLimitBytesPerSecond;
@@ -2490,24 +2489,24 @@ void UpdateEffectiveBandwidthLimit(OperationContext& context) noexcept
         return;
     }
 
-    const unsigned __int64 effectiveLimit         = GetEffectiveBandwidthLimitBytesPerSecond(context, context.virtualLimitBytesPerSecond);
+    const uint64_t effectiveLimit                 = GetEffectiveBandwidthLimitBytesPerSecond(context, context.virtualLimitBytesPerSecond);
     context.options->bandwidthLimitBytesPerSecond = effectiveLimit;
 }
 
-HRESULT SleepWithCancelChecks(OperationContext& context, unsigned __int64 milliseconds) noexcept
+HRESULT SleepWithCancelChecks(OperationContext& context, uint64_t milliseconds) noexcept
 {
     if (milliseconds == 0)
     {
         return S_OK;
     }
 
-    constexpr unsigned __int64 kMaxSleepMs = static_cast<unsigned __int64>(std::numeric_limits<DWORD>::max());
-    unsigned __int64 remaining             = std::min(milliseconds, kMaxSleepMs);
+    constexpr uint64_t kMaxSleepMs = static_cast<uint64_t>(std::numeric_limits<DWORD>::max());
+    uint64_t remaining             = std::min(milliseconds, kMaxSleepMs);
 
     constexpr DWORD kSleepQuantumMs = 50;
     while (remaining > 0)
     {
-        const DWORD slice = static_cast<DWORD>(std::min<unsigned __int64>(remaining, static_cast<unsigned __int64>(kSleepQuantumMs)));
+        const DWORD slice = static_cast<DWORD>(std::min<uint64_t>(remaining, static_cast<uint64_t>(kSleepQuantumMs)));
         ::Sleep(slice);
         remaining -= slice;
 
@@ -2521,13 +2520,11 @@ HRESULT SleepWithCancelChecks(OperationContext& context, unsigned __int64 millis
     return S_OK;
 }
 
-HRESULT ReportThrottledByteProgress(OperationContext& context,
-                                    unsigned __int64 itemTotalBytes,
-                                    unsigned __int64 baseCompletedBytes,
-                                    unsigned __int64 virtualLimitBytesPerSecond) noexcept
+HRESULT
+ReportThrottledByteProgress(OperationContext& context, uint64_t itemTotalBytes, uint64_t baseCompletedBytes, uint64_t virtualLimitBytesPerSecond) noexcept
 {
-    unsigned __int64 itemCompletedBytes = 0;
-    context.completedBytes              = baseCompletedBytes;
+    uint64_t itemCompletedBytes = 0;
+    context.completedBytes      = baseCompletedBytes;
 
     HRESULT hr = ReportProgress(context, itemTotalBytes, itemCompletedBytes);
     if (FAILED(hr))
@@ -2537,14 +2534,14 @@ HRESULT ReportThrottledByteProgress(OperationContext& context,
 
     if (context.latencyMilliseconds > 0)
     {
-        unsigned __int64 accessCount = 1ull;
+        uint64_t accessCount = 1ull;
         if (context.type == FILESYSTEM_COPY || context.type == FILESYSTEM_MOVE || context.type == FILESYSTEM_RENAME)
         {
             accessCount = 2ull;
         }
 
-        const unsigned __int64 latencyMs = static_cast<unsigned __int64>(context.latencyMilliseconds) * accessCount;
-        hr                               = SleepWithCancelChecks(context, latencyMs);
+        const uint64_t latencyMs = static_cast<uint64_t>(context.latencyMilliseconds) * accessCount;
+        hr                       = SleepWithCancelChecks(context, latencyMs);
         if (FAILED(hr))
         {
             return hr;
@@ -2563,7 +2560,7 @@ HRESULT ReportThrottledByteProgress(OperationContext& context,
 
     while (itemCompletedBytes < itemTotalBytes)
     {
-        const unsigned __int64 effectiveMaxBytesPerSecond = GetEffectiveBandwidthLimitBytesPerSecond(context, virtualLimitBytesPerSecond);
+        const uint64_t effectiveMaxBytesPerSecond = GetEffectiveBandwidthLimitBytesPerSecond(context, virtualLimitBytesPerSecond);
         if (effectiveMaxBytesPerSecond == 0)
         {
             itemCompletedBytes     = itemTotalBytes;
@@ -2571,29 +2568,29 @@ HRESULT ReportThrottledByteProgress(OperationContext& context,
             return ReportProgress(context, itemTotalBytes, itemCompletedBytes);
         }
 
-        const unsigned __int64 maxBytesPerSecond = effectiveMaxBytesPerSecond;
-        unsigned __int64 minBytesPerSecond       = std::max<unsigned __int64>(1ull, maxBytesPerSecond - (maxBytesPerSecond / 5ull)); // ~80%
-        unsigned __int64 jitterMaxBytesPerSecond = maxBytesPerSecond;
+        const uint64_t maxBytesPerSecond = effectiveMaxBytesPerSecond;
+        uint64_t minBytesPerSecond       = std::max<uint64_t>(1ull, maxBytesPerSecond - (maxBytesPerSecond / 5ull)); // ~80%
+        uint64_t jitterMaxBytesPerSecond = maxBytesPerSecond;
         if (maxBytesPerSecond >= 10ull && RandomChance(rng, 1, 200))
         {
-            minBytesPerSecond       = std::max<unsigned __int64>(1ull, maxBytesPerSecond / 10ull);             // ~10%
-            jitterMaxBytesPerSecond = std::max<unsigned __int64>(minBytesPerSecond, maxBytesPerSecond / 3ull); // ~33%
+            minBytesPerSecond       = std::max<uint64_t>(1ull, maxBytesPerSecond / 10ull);             // ~10%
+            jitterMaxBytesPerSecond = std::max<uint64_t>(minBytesPerSecond, maxBytesPerSecond / 3ull); // ~33%
         }
         else if (maxBytesPerSecond >= 10ull && RandomChance(rng, 1, 25))
         {
-            minBytesPerSecond = std::max<unsigned __int64>(1ull, maxBytesPerSecond / 2ull); // ~50%
+            minBytesPerSecond = std::max<uint64_t>(1ull, maxBytesPerSecond / 2ull); // ~50%
         }
 
-        const unsigned __int64 currentBytesPerSecond = RandomRange64(rng, minBytesPerSecond, jitterMaxBytesPerSecond);
-        const unsigned __int64 remaining             = itemTotalBytes - itemCompletedBytes;
-        const unsigned __int64 step                  = std::max<unsigned __int64>(1ull, currentBytesPerSecond / 10ull);
-        const unsigned __int64 chunk                 = std::min(step, remaining);
+        const uint64_t currentBytesPerSecond = RandomRange64(rng, minBytesPerSecond, jitterMaxBytesPerSecond);
+        const uint64_t remaining             = itemTotalBytes - itemCompletedBytes;
+        const uint64_t step                  = std::max<uint64_t>(1ull, currentBytesPerSecond / 10ull);
+        const uint64_t chunk                 = std::min(step, remaining);
 
         const auto sleepDuration =
-            std::chrono::duration<double>(static_cast<double>(chunk) / static_cast<double>(std::max<unsigned __int64>(1ull, currentBytesPerSecond)));
-        const double sleepMsD          = sleepDuration.count() * 1000.0;
-        const unsigned __int64 sleepMs = sleepMsD > 0.0 ? static_cast<unsigned __int64>(sleepMsD + 0.5) : 0ull;
-        hr                             = SleepWithCancelChecks(context, sleepMs);
+            std::chrono::duration<double>(static_cast<double>(chunk) / static_cast<double>(std::max<uint64_t>(1ull, currentBytesPerSecond)));
+        const double sleepMsD  = sleepDuration.count() * 1000.0;
+        const uint64_t sleepMs = sleepMsD > 0.0 ? static_cast<uint64_t>(sleepMsD + 0.5) : 0ull;
+        hr                     = SleepWithCancelChecks(context, sleepMs);
         if (FAILED(hr))
         {
             return hr;
@@ -2806,39 +2803,47 @@ FileSystemDummy::~FileSystemDummy()
 
         if (removedWatches.empty())
         {
-            return;
+            // No watches to drain; fall through to roots cleanup.
         }
-
-        for (const auto& removed : removedWatches)
+        else
         {
-            if (! removed)
+            for (const auto& removed : removedWatches)
             {
-                continue;
+                if (! removed)
+                {
+                    continue;
+                }
+
+                removed->active.store(false, std::memory_order_release);
             }
 
-            removed->active.store(false, std::memory_order_release);
-        }
-
-        _watchCv.wait(lock,
-                      [&]
-                      {
-                          for (const auto& removed : removedWatches)
+            _watchCv.wait(lock,
+                          [&]
                           {
-                              if (! removed)
+                              for (const auto& removed : removedWatches)
                               {
-                                  continue;
-                              }
+                                  if (! removed)
+                                  {
+                                      continue;
+                                  }
 
-                              const bool reentrant           = static_cast<const void*>(removed.get()) == g_activeDirectoryWatchCallback;
-                              const uint32_t desiredInFlight = reentrant ? 1u : 0u;
-                              if (removed->inFlight.load(std::memory_order_acquire) > desiredInFlight)
-                              {
-                                  return false;
+                                  const bool reentrant           = static_cast<const void*>(removed.get()) == g_activeDirectoryWatchCallback;
+                                  const uint32_t desiredInFlight = reentrant ? 1u : 0u;
+                                  if (removed->inFlight.load(std::memory_order_acquire) > desiredInFlight)
+                                  {
+                                      return false;
+                                  }
                               }
-                          }
-                          return true;
-                      });
+                              return true;
+                          });
+        }
     }
+
+    // Iteratively free deeply-nested trees before the inline static _roots destructs at
+    // process exit (which would recurse through DummyNode::children and stack-overflow on
+    // trees created by the compare self-test, which makes 1024-level-deep directories).
+    std::scoped_lock lock(_mutex);
+    ClearRootsIteratively();
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemDummy::GetMetaData(const PluginMetaData** metaData) noexcept
@@ -2863,14 +2868,52 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetConfigurationSchema(const char** s
     return S_OK;
 }
 
+// Iteratively free all DummyNode trees to avoid stack overflow on deeply-nested trees
+// (e.g. the compare self-test creates 1024-level deep directories).
+// Must be called while _mutex is held.
+void FileSystemDummy::ClearRootsIteratively() noexcept
+{
+    // Collect all root-level DummyNode unique_ptrs.
+    std::vector<std::unique_ptr<DummyNode>> pending;
+    pending.reserve(_roots.size());
+    for (auto& root : _roots)
+    {
+        if (root && root->node)
+        {
+            pending.push_back(std::move(root->node));
+        }
+    }
+    _roots.clear();
+
+    // Iteratively drain children into `pending`, then let each childless node
+    // be destroyed at the end of the loop body — O(n) stack depth.
+    while (! pending.empty())
+    {
+        auto node = std::move(pending.back());
+        pending.pop_back();
+        if (node)
+        {
+            for (auto& child : node->children)
+            {
+                if (child)
+                {
+                    pending.push_back(std::move(child));
+                }
+            }
+            node->children.clear(); // destroy child vector before node goes out of scope
+            // node destroyed here — children are empty, so destructor is trivial
+        }
+    }
+}
+
 HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configurationJsonUtf8) noexcept
 {
-    unsigned long maxChildrenPerDirectory            = 42;
-    unsigned long maxDepth                           = 10;
-    unsigned int seed                                = 42;
-    unsigned long latencyMilliseconds                = 0;
-    std::wstring virtualSpeedLimitText               = L"0";
-    unsigned __int64 virtualSpeedLimitBytesPerSecond = 0;
+    unsigned long maxChildrenPerDirectory    = 42;
+    unsigned long maxDepth                   = 10;
+    unsigned int seed                        = 42;
+    unsigned long latencyMilliseconds        = 0;
+    std::wstring virtualSpeedLimitText       = L"0";
+    uint64_t virtualSpeedLimitBytesPerSecond = 0;
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
@@ -2930,7 +2973,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
                     const char* speedText = yyjson_get_str(virtualSpeedVal);
                     if (speedText)
                     {
-                        unsigned __int64 parsed = 0;
+                        uint64_t parsed = 0;
                         if (TryParseThroughputText(speedText, parsed))
                         {
                             virtualSpeedLimitBytesPerSecond = parsed;
@@ -2975,7 +3018,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
             const std::uint64_t effectiveSeed      = _seed == 0 ? static_cast<std::uint64_t>(GetTickCount64()) : static_cast<std::uint64_t>(_seed);
             const std::uint64_t generationBaseTime = ComputeGenerationBaseTime(effectiveSeed);
 
-            _roots.clear();
+            ClearRootsIteratively();
             _effectiveSeed      = effectiveSeed;
             _generationBaseTime = generationBaseTime;
         }
@@ -3088,8 +3131,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDriveInfo([[maybe_unused]] const w
     _driveVolumeLabel = _driveDisplayName;
     _driveFileSystem  = L"DummyFS";
 
-    constexpr unsigned __int64 totalBytes = 8ull * 1024ull * 1024ull * 1024ull;
-    const unsigned __int64 freeBytes      = totalBytes / 2ull;
+    constexpr uint64_t totalBytes = 8ull * 1024ull * 1024ull * 1024ull;
+    const uint64_t freeBytes      = totalBytes / 2ull;
 
     info->flags       = static_cast<DriveInfoFlags>(info->flags | DRIVE_INFO_FLAG_HAS_DISPLAY_NAME);
     info->displayName = _driveDisplayName.c_str();
@@ -3446,11 +3489,11 @@ std::unique_ptr<FileSystemDummy::DummyNode> FileSystemDummy::CreateNode(std::wst
         node->sizeBytes          = MakeDummyFileSize(rng, kind);
     }
 
-    const unsigned __int64 now              = static_cast<unsigned __int64>(_generationBaseTime);
-    const unsigned __int64 maxOffsetSeconds = 60ull * 60ull * 24ull * 365ull * 3ull;
-    const unsigned __int64 offsetSeconds    = RandomRange64(rng, 0, maxOffsetSeconds);
-    const unsigned __int64 offsetTicks      = offsetSeconds * 10000000ull;
-    unsigned __int64 randomTime             = now;
+    const uint64_t now              = static_cast<uint64_t>(_generationBaseTime);
+    const uint64_t maxOffsetSeconds = 60ull * 60ull * 24ull * 365ull * 3ull;
+    const uint64_t offsetSeconds    = RandomRange64(rng, 0, maxOffsetSeconds);
+    const uint64_t offsetTicks      = offsetSeconds * 10000000ull;
+    uint64_t randomTime             = now;
     if (offsetTicks < now)
     {
         randomTime = now - offsetTicks;
@@ -3815,7 +3858,7 @@ void FileSystemDummy::TouchParent(DummyNode* parent) noexcept
     }
 }
 
-unsigned __int64 FileSystemDummy::ComputeNodeBytes(const DummyNode& node) const noexcept
+uint64_t FileSystemDummy::ComputeNodeBytes(const DummyNode& node) const noexcept
 {
     if (! node.isDirectory)
     {
@@ -3827,7 +3870,7 @@ unsigned __int64 FileSystemDummy::ComputeNodeBytes(const DummyNode& node) const 
         return 0;
     }
 
-    unsigned __int64 total = 0;
+    uint64_t total = 0;
     for (const auto& child : node.children)
     {
         total += ComputeNodeBytes(*child);
@@ -3944,7 +3987,7 @@ HRESULT FileSystemDummy::CreateDirectoryClone(
 }
 
 HRESULT
-FileSystemDummy::CopyNode(DummyNode& source, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, unsigned __int64* outBytes)
+FileSystemDummy::CopyNode(DummyNode& source, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, uint64_t* outBytes)
 {
     if (! IsNameValid(destinationName))
     {
@@ -4014,7 +4057,7 @@ FileSystemDummy::CopyNode(DummyNode& source, DummyNode& destinationParent, std::
 }
 
 HRESULT
-FileSystemDummy::MoveNode(DummyNode& source, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, unsigned __int64* outBytes)
+FileSystemDummy::MoveNode(DummyNode& source, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, uint64_t* outBytes)
 {
     if (! IsNameValid(destinationName))
     {
@@ -4182,7 +4225,7 @@ HRESULT FileSystemDummy::CommitFileWriter(const std::filesystem::path& normalize
         node->name                = name;
         node->isDirectory         = false;
         node->attributes          = FILE_ATTRIBUTE_ARCHIVE;
-        node->sizeBytes           = static_cast<unsigned __int64>(buffer->size());
+        node->sizeBytes           = static_cast<uint64_t>(buffer->size());
         node->creationTime        = now;
         node->lastAccessTime      = now;
         node->lastWriteTime       = now;
@@ -4959,8 +5002,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
     constexpr unsigned long kProgressIntervalEntries = 100;
     constexpr ULONGLONG kProgressIntervalMs          = 200;
 
-    unsigned __int64 scannedEntries = 0;
-    ULONGLONG lastProgressTime      = ::GetTickCount64();
+    uint64_t scannedEntries    = 0;
+    ULONGLONG lastProgressTime = ::GetTickCount64();
 
     auto maybeReportProgress = [&](const wchar_t* currentPath) -> bool
     {
@@ -4989,8 +5032,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
         return true;
     };
 
-    bool rootIsFile               = false;
-    unsigned __int64 rootFileSize = 0;
+    bool rootIsFile       = false;
+    uint64_t rootFileSize = 0;
 
     // Validate root path exists and classify directory/file root.
     {
@@ -5035,8 +5078,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
     struct ChildSnapshot
     {
         std::wstring name;
-        bool isDirectory           = false;
-        unsigned __int64 sizeBytes = 0;
+        bool isDirectory   = false;
+        uint64_t sizeBytes = 0;
     };
 
     std::vector<std::filesystem::path> pending;
@@ -5317,8 +5360,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    unsigned __int64 itemBytes = 0;
-    HRESULT itemHr             = S_OK;
+    uint64_t itemBytes = 0;
+    HRESULT itemHr     = S_OK;
 
     {
         std::scoped_lock lock(_mutex);
@@ -5357,10 +5400,10 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    const unsigned __int64 baseCompletedBytes         = 0;
-    const unsigned __int64 virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-    unsigned long latencyMilliseconds                 = 0;
-    std::uint64_t effectiveSeed                       = 0;
+    const uint64_t baseCompletedBytes         = 0;
+    const uint64_t virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    unsigned long latencyMilliseconds         = 0;
+    std::uint64_t effectiveSeed               = 0;
     {
         std::scoped_lock lock(_mutex);
         latencyMilliseconds = _latencyMilliseconds;
@@ -5440,8 +5483,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    unsigned __int64 itemBytes = 0;
-    HRESULT itemHr             = S_OK;
+    uint64_t itemBytes = 0;
+    HRESULT itemHr     = S_OK;
 
     {
         std::scoped_lock lock(_mutex);
@@ -5502,10 +5545,10 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    const unsigned __int64 baseCompletedBytes         = 0;
-    const unsigned __int64 virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-    unsigned long latencyMilliseconds                 = 0;
-    std::uint64_t effectiveSeed                       = 0;
+    const uint64_t baseCompletedBytes         = 0;
+    const uint64_t virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    unsigned long latencyMilliseconds         = 0;
+    std::uint64_t effectiveSeed               = 0;
     {
         std::scoped_lock lock(_mutex);
         latencyMilliseconds = _latencyMilliseconds;
@@ -5600,10 +5643,10 @@ FileSystemDummy::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fi
         return hr;
     }
 
-    constexpr unsigned __int64 kVirtualDeleteBytesPerItem = 64ull * 1024ull;
-    const unsigned __int64 virtualLimitBytesPerSecond     = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-    unsigned long latencyMilliseconds                     = 0;
-    std::uint64_t effectiveSeed                           = 0;
+    constexpr uint64_t kVirtualDeleteBytesPerItem = 64ull * 1024ull;
+    const uint64_t virtualLimitBytesPerSecond     = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    unsigned long latencyMilliseconds             = 0;
+    std::uint64_t effectiveSeed                   = 0;
     {
         std::scoped_lock lock(_mutex);
         latencyMilliseconds = _latencyMilliseconds;
@@ -5679,8 +5722,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    unsigned __int64 itemBytes = 0;
-    HRESULT itemHr             = S_OK;
+    uint64_t itemBytes = 0;
+    HRESULT itemHr     = S_OK;
 
     {
         std::scoped_lock lock(_mutex);
@@ -5785,8 +5828,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
         effectiveSeed               = _effectiveSeed;
     }
 
-    const unsigned __int64 virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-    context.virtualLimitBytesPerSecond                = virtualLimitBytesPerSecond;
+    const uint64_t virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    context.virtualLimitBytesPerSecond        = virtualLimitBytesPerSecond;
 
     const std::filesystem::path normalizedDestinationFolder = NormalizePath(destinationFolder);
     const std::wstring destinationFolderText                = normalizedDestinationFolder.wstring();
@@ -5877,8 +5920,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
 
         const std::wstring destinationPathText = AppendPath(work.destinationParentText, work.destinationName);
 
-        unsigned __int64 itemBytes = 0;
-        HRESULT itemHr             = work.preResolvedHr;
+        uint64_t itemBytes = 0;
+        HRESULT itemHr     = work.preResolvedHr;
 
         DummyNode* source            = nullptr;
         DummyNode* destinationParent = nullptr;
@@ -5962,9 +6005,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
             NotifyDirectoryWatchers(work.destinationParentText, work.destinationName, FILESYSTEM_DIR_CHANGE_ADDED);
         }
 
-        const unsigned __int64 baseCompletedBytes = context.completedBytes;
-        context.throughputSeed                    = CombineSeed(effectiveSeed, work.sourcePathText);
-        context.throughputSeed                    = CombineSeed(context.throughputSeed, destinationPathText);
+        const uint64_t baseCompletedBytes = context.completedBytes;
+        context.throughputSeed            = CombineSeed(effectiveSeed, work.sourcePathText);
+        context.throughputSeed            = CombineSeed(context.throughputSeed, destinationPathText);
 
         HRESULT hr = SetProgressPaths(context, work.sourcePathText.c_str(), destinationPathText.c_str());
         if (FAILED(hr))
@@ -6064,8 +6107,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
         effectiveSeed               = _effectiveSeed;
     }
 
-    const unsigned __int64 virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-    context.virtualLimitBytesPerSecond                = virtualLimitBytesPerSecond;
+    const uint64_t virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    context.virtualLimitBytesPerSecond        = virtualLimitBytesPerSecond;
 
     const std::filesystem::path normalizedDestinationFolder = NormalizePath(destinationFolder);
     const std::wstring destinationFolderText                = normalizedDestinationFolder.wstring();
@@ -6174,8 +6217,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
 
         const std::wstring destinationPathText = AppendPath(work.destinationParentText, work.destinationName);
 
-        unsigned __int64 itemBytes = 0;
-        HRESULT itemHr             = work.preResolvedHr;
+        uint64_t itemBytes = 0;
+        HRESULT itemHr     = work.preResolvedHr;
 
         DummyNode* source            = nullptr;
         DummyNode* destinationParent = nullptr;
@@ -6289,9 +6332,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
             }
         }
 
-        const unsigned __int64 baseCompletedBytes = context.completedBytes;
-        context.throughputSeed                    = CombineSeed(effectiveSeed, work.sourcePathText);
-        context.throughputSeed                    = CombineSeed(context.throughputSeed, destinationPathText);
+        const uint64_t baseCompletedBytes = context.completedBytes;
+        context.throughputSeed            = CombineSeed(effectiveSeed, work.sourcePathText);
+        context.throughputSeed            = CombineSeed(context.throughputSeed, destinationPathText);
 
         HRESULT hr = SetProgressPaths(context, work.sourcePathText.c_str(), destinationPathText.c_str());
         if (FAILED(hr))
@@ -6374,9 +6417,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::DeleteItems(const wchar_t* const* pat
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_DELETE, flags, options, callback, cookie, count);
 
-    constexpr unsigned __int64 kVirtualDeleteBytesPerItem = 64ull * 1024ull;
-    const unsigned __int64 virtualLimitBytesPerSecond     = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-    std::uint64_t effectiveSeed                           = 0;
+    constexpr uint64_t kVirtualDeleteBytesPerItem = 64ull * 1024ull;
+    const uint64_t virtualLimitBytesPerSecond     = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    std::uint64_t effectiveSeed                   = 0;
     {
         std::scoped_lock lock(_mutex);
         context.latencyMilliseconds = _latencyMilliseconds;
@@ -6386,10 +6429,10 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::DeleteItems(const wchar_t* const* pat
     context.totalBytes                 = 0;
     if (kVirtualDeleteBytesPerItem > 0)
     {
-        const unsigned __int64 count64 = static_cast<unsigned __int64>(count);
-        if (count64 > (std::numeric_limits<unsigned __int64>::max() / kVirtualDeleteBytesPerItem))
+        const uint64_t count64 = static_cast<uint64_t>(count);
+        if (count64 > (std::numeric_limits<uint64_t>::max() / kVirtualDeleteBytesPerItem))
         {
-            context.totalBytes = std::numeric_limits<unsigned __int64>::max();
+            context.totalBytes = std::numeric_limits<uint64_t>::max();
         }
         else
         {
@@ -6439,8 +6482,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::DeleteItems(const wchar_t* const* pat
             NotifyDirectoryWatchers(parentText, leafText, FILESYSTEM_DIR_CHANGE_REMOVED);
         }
 
-        const unsigned __int64 baseCompletedBytes = context.completedBytes;
-        context.throughputSeed                    = CombineSeed(effectiveSeed, pathText);
+        const uint64_t baseCompletedBytes = context.completedBytes;
+        context.throughputSeed            = CombineSeed(effectiveSeed, pathText);
 
         hr = SetProgressPaths(context, pathText.c_str(), nullptr);
         if (FAILED(hr))
@@ -6551,8 +6594,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItems(const FileSystemRenamePai
         const std::wstring sourceLeafText            = normalizedSource.filename().wstring();
         const std::wstring destinationText           = AppendPath(directory, item.newName);
 
-        unsigned __int64 itemBytes = 0;
-        HRESULT itemHr             = S_OK;
+        uint64_t itemBytes = 0;
+        HRESULT itemHr     = S_OK;
 
         {
             std::scoped_lock lock(_mutex);

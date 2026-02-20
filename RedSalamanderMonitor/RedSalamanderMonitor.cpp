@@ -52,6 +52,9 @@
 #include "resource.h"
 
 // Global Variables:
+// All globals below are accessed exclusively from the UI thread (message loop).
+// The only cross-thread interaction is EtwListener's worker thread calling
+// g_colorView.QueueEtwEvent(), which is thread-safe via atomic HWND + critical section.
 HINSTANCE g_hInstance = NULL;  // current instance
 ColorTextView g_colorView;     // ColorTextView instance for the right panel
 wil::unique_hwnd g_hColorView; // ColorTextView window handle
@@ -2221,6 +2224,10 @@ LRESULT OnDestroyMainWindow(HWND hWnd)
     SaveMonitorSettings(hWnd);
     KillTimer(hWnd, kStatusBarTimerId);
 
+    // IMPORTANT: Shutdown order matters for thread safety.
+    // 1. Stop ETW listener first (stops worker thread that calls QueueEtwEvent on g_colorView)
+    // 2. Then destroy the color view (safe because no more cross-thread PostMessage calls)
+    // Reversing this order risks use-after-free: worker thread could PostMessage to destroyed HWND.
     if (g_etwListener)
     {
         g_etwListener->Stop();

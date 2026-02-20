@@ -120,6 +120,56 @@ Built executables and libraries are located in:
 
 All build outputs and intermediate files are written under `.build\` to keep the source tree clean.
 
+## Self-tests (Debug only)
+
+RedSalamander includes two debug-only self-test suites:
+
+- CompareDirectories self-test (`--compare-selftest`)
+- FileOperations self-test (`--fileops-selftest`)
+
+### Run self-tests
+
+Build a Debug binary and run the suites (recommended: run both in one process so the aggregated `results.json` includes both):
+
+```powershell
+# Build Debug (x64)
+.\build.ps1 -Configuration Debug -ProjectName RedSalamander
+
+# Run both suites in one process (recommended)
+.\.build\x64\Debug\RedSalamander.exe --compare-selftest --fileops-selftest --selftest-timeout-multiplier=2.0
+
+# Run suites individually
+.\.build\x64\Debug\RedSalamander.exe --compare-selftest
+.\.build\x64\Debug\RedSalamander.exe --fileops-selftest
+
+# Optional: fail-fast for CompareDirectories
+.\.build\x64\Debug\RedSalamander.exe --compare-selftest --selftest-fail-fast
+```
+
+The process exit code is `0` on success and non-zero on failure.
+
+### Self-test artifacts and results
+
+All self-test output is written under:
+
+```text
+%LOCALAPPDATA%\RedSalamander\SelfTest\
+```
+
+At the start of any self-test run, the current `last_run` is rotated to `previous_run` and a fresh `last_run` is created:
+
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\`
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\previous_run\`
+
+Key files:
+
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\trace.txt` (host trace)
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\compare\trace.txt`
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\compare\results.json`
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\fileops\trace.txt`
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\fileops\results.json`
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\results.json` (aggregated run summary)
+
 ### MSIX Installer
 
 Build Release + MSIX in one command:

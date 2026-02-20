@@ -13,7 +13,7 @@ namespace
 [[nodiscard]] HRESULT TryGetS3ObjectSummary(const FsS3::ResolvedAwsContext& bucketCtx,
                                             std::string_view bucket,
                                             std::string_view key,
-                                            unsigned __int64& outSizeBytes,
+                                            uint64_t& outSizeBytes,
                                             __int64& outLastWriteTime,
                                             bool& outFound) noexcept
 {
@@ -51,7 +51,7 @@ namespace
         }
 
         outFound         = true;
-        outSizeBytes     = static_cast<unsigned __int64>(obj.GetSize());
+        outSizeBytes     = static_cast<uint64_t>(obj.GetSize());
         outLastWriteTime = FsS3::AwsDateTimeToFileTime64(obj.GetLastModified());
         return S_OK;
     }
@@ -184,10 +184,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
     const bool explicitlyDirectory = (! normalized.empty() && normalized.back() == L'/');
     if (! explicitlyDirectory && ! key.empty())
     {
-        unsigned __int64 sizeBytes = 0;
-        __int64 lastWriteTime      = 0;
-        bool found                 = false;
-        const HRESULT existsHr     = TryGetS3ObjectSummary(bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
+        uint64_t sizeBytes     = 0;
+        __int64 lastWriteTime  = 0;
+        bool found             = false;
+        const HRESULT existsHr = TryGetS3ObjectSummary(bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
         if (FAILED(existsHr))
         {
             result->status = existsHr;
@@ -226,8 +226,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
     constexpr unsigned long kProgressIntervalEntries = 250;
     constexpr ULONGLONG kProgressIntervalMs          = 250;
 
-    unsigned __int64 scannedEntries = 0;
-    ULONGLONG lastProgressTime      = GetTickCount64();
+    uint64_t scannedEntries    = 0;
+    ULONGLONG lastProgressTime = GetTickCount64();
 
     auto maybeReportProgress = [&]() noexcept -> bool
     {
@@ -312,10 +312,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
             ++result->fileCount;
             ++scannedEntries;
 
-            const unsigned __int64 sizeBytes = static_cast<unsigned __int64>(obj.GetSize());
-            if (std::numeric_limits<unsigned __int64>::max() - result->totalBytes < sizeBytes)
+            const uint64_t sizeBytes = static_cast<uint64_t>(obj.GetSize());
+            if (std::numeric_limits<uint64_t>::max() - result->totalBytes < sizeBytes)
             {
-                result->totalBytes = std::numeric_limits<unsigned __int64>::max();
+                result->totalBytes = std::numeric_limits<uint64_t>::max();
             }
             else
             {
