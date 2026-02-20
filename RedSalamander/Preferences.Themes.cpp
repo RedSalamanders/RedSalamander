@@ -2189,7 +2189,7 @@ void ApplyThemeTemporarily(HWND host, PreferencesDialogState& state) noexcept
         RedrawWindow(state.pageHost, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
     }
     RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
-    if (state.owner)
+    if (state.owner && IsWindow(state.owner) != FALSE)
     {
         PostMessageW(state.owner, WndMsg::kSettingsApplied, 0, 0);
     }

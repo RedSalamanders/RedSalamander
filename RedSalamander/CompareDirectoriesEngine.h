@@ -70,6 +70,7 @@ enum class CompareDirectoriesDiffBit : uint32_t
 
     SubdirAttributes = 0x80u,
     SubdirContent    = 0x100u,
+    SubdirPending    = 0x400u,
 };
 
 [[nodiscard]] inline constexpr uint32_t operator|(CompareDirectoriesDiffBit a, CompareDirectoriesDiffBit b) noexcept
@@ -110,8 +111,13 @@ struct CompareDirectoriesItemDecision
 
 struct CompareDirectoriesFolderDecision
 {
-    uint64_t version = 0;
-    HRESULT hr       = S_OK;
+    uint64_t version        = 0;
+    HRESULT hr              = S_OK;
+    bool leftFolderMissing  = false;
+    bool rightFolderMissing = false;
+    // Precomputed aggregates over items — avoids O(n) scans in hot ancestor-propagation paths.
+    bool anyDifferent = false;
+    bool anyPending   = false;
     std::map<std::wstring, CompareDirectoriesItemDecision, WStringViewNoCaseLess> items;
 };
 
@@ -122,12 +128,19 @@ public:
                                                     std::wstring_view currentEntryName,
                                                     uint64_t scannedFolders,
                                                     uint64_t scannedEntries,
-                                                    uint32_t activeScans)>;
-    using ContentProgressCallback = std::function<void(const std::filesystem::path& relativeFolder,
-                                                    std::wstring_view entryName,
-                                                    uint64_t totalBytes,
-                                                    uint64_t completedBytes,
-                                                    uint64_t pendingContentCompares)>;
+                                                    uint32_t activeScans,
+                                                    uint64_t contentCandidateFileCount,
+                                                    uint64_t contentCandidateTotalBytes)>;
+    using ContentProgressCallback = std::function<void(uint32_t workerIndex,
+                                                       const std::filesystem::path& relativeFolder,
+                                                       std::wstring_view entryName,
+                                                       uint64_t fileTotalBytes,
+                                                       uint64_t fileCompletedBytes,
+                                                       uint64_t overallTotalBytes,
+                                                       uint64_t overallCompletedBytes,
+                                                       uint64_t pendingContentCompares,
+                                                       uint64_t totalContentCompares,
+                                                       uint64_t completedContentCompares)>;
     using DecisionUpdatedCallback = std::function<void()>;
 
     CompareDirectoriesSession(wil::com_ptr<IFileSystem> baseFileSystem,
@@ -143,8 +156,20 @@ public:
 
     void SetRoots(std::filesystem::path leftRoot, std::filesystem::path rightRoot);
     void SetSettings(Common::Settings::CompareDirectoriesSettings settings);
+    void SetCompareEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool IsCompareEnabled() const noexcept;
+    // Controls whether background work is allowed during compare mode:
+    // - When disabled, content compare jobs are canceled/cleared and no new background work is queued.
+    // - Used by the Compare Directories UI to implement a responsive "Cancel" action.
+    void SetBackgroundWorkEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool IsBackgroundWorkEnabled() const noexcept;
     void Invalidate() noexcept;
     void InvalidateForAbsolutePath(const std::filesystem::path& absolutePath, bool includeSubtree) noexcept;
+
+    // Applies any queued content-compare results to cached decisions (and updates ancestor folder
+    // subtree status) so the UI can reflect completed comparisons without requiring navigation.
+    void FlushPendingContentCompareUpdates() noexcept;
+
     void SetScanProgressCallback(ScanProgressCallback callback) noexcept;
     void SetContentProgressCallback(ContentProgressCallback callback) noexcept;
     void SetDecisionUpdatedCallback(DecisionUpdatedCallback callback) noexcept;
@@ -172,8 +197,8 @@ private:
         uint64_t rightSizeBytes    = 0;
         int64_t leftLastWriteTime  = 0;
         int64_t rightLastWriteTime = 0;
-        DWORD leftFileAttributes   = 0;
-        DWORD rightFileAttributes  = 0;
+        // File attributes are intentionally excluded: they do not affect byte content
+        // and their presence caused spurious cache misses when only attributes changed.
     };
 
     struct ContentCompareKeyHash
@@ -188,13 +213,18 @@ private:
 
     struct ContentCompareJob
     {
-        uint64_t version = 0;
+        uint64_t version     = 0;
+        uint64_t cancelToken = 0;
         std::wstring folderKey;
         std::filesystem::path relativeFolder;
         std::wstring entryName;
         ContentCompareKey key;
         std::filesystem::path leftPath;
         std::filesystem::path rightPath;
+        // Attributes are not part of the cache key but are needed for the pending-update
+        // staleness check in ApplyPendingContentCompareUpdatesLocked.
+        DWORD leftFileAttributes  = 0;
+        DWORD rightFileAttributes = 0;
     };
 
     struct PendingContentCompareUpdate
@@ -212,16 +242,23 @@ private:
     std::wstring MakeCacheKey(const std::filesystem::path& relativeFolder) const;
     void InvalidateForRelativePathLocked(const std::filesystem::path& relativePath, bool includeSubtree) noexcept;
     void NotifyScanProgress(const std::filesystem::path& relativeFolder, std::wstring_view currentEntryName, bool force) noexcept;
-    void NotifyContentProgress(const std::filesystem::path& relativeFolder,
-                               std::wstring_view entryName,
-                               uint64_t totalBytes,
-                               uint64_t completedBytes,
-                               bool force) noexcept;
+    void NotifyContentProgress(
+        uint32_t workerIndex, const std::filesystem::path& relativeFolder, std::wstring_view entryName, uint64_t totalBytes, uint64_t completedBytes) noexcept;
     void NotifyDecisionUpdated(bool force) noexcept;
     void EnsureContentCompareWorkersLocked() noexcept;
+    struct ResetCleanup final
+    {
+        std::map<std::wstring, std::shared_ptr<const CompareDirectoriesFolderDecision>, WStringViewNoCaseLess> cache;
+        std::unordered_map<ContentCompareKey, uint64_t, ContentCompareKeyHash, ContentCompareKeyEq> contentCompareInFlight;
+        std::deque<ContentCompareJob> contentCompareQueue;
+        std::map<std::wstring, std::map<std::wstring, PendingContentCompareUpdate, WStringViewNoCaseLess>, WStringViewNoCaseLess> pendingContentCompareUpdates;
+    };
+
+    static void ScheduleResetCleanup(std::unique_ptr<ResetCleanup> cleanup) noexcept;
+    void ResetCompareStateLocked(ResetCleanup& outCleanup) noexcept;
     void ClearContentCompareStateLocked() noexcept;
     void ApplyPendingContentCompareUpdatesLocked(const std::wstring& folderKey) noexcept;
-    void ContentCompareWorker(std::stop_token stopToken) noexcept;
+    void ContentCompareWorker(std::stop_token stopToken, uint32_t workerIndex) noexcept;
 
     wil::com_ptr<IFileSystem> _baseFileSystem;
     wil::com_ptr<IInformations> _baseInformations;
@@ -232,6 +269,9 @@ private:
     std::filesystem::path _rightRoot;
     Common::Settings::CompareDirectoriesSettings _settings;
     std::atomic_uint64_t _version{1};
+    std::atomic_bool _compareEnabled{true};
+    std::atomic_bool _backgroundWorkEnabled{true};
+    std::atomic_uint64_t _backgroundWorkCancelToken{1};
     uint64_t _uiVersion = 1;
 
     std::map<std::wstring, std::shared_ptr<const CompareDirectoriesFolderDecision>, WStringViewNoCaseLess> _cache;
@@ -243,7 +283,10 @@ private:
     std::atomic<std::shared_ptr<const ScanProgressCallback>> _scanProgressCallback;
 
     std::atomic_uint64_t _contentComparePendingCompares{0};
-    std::atomic_uint64_t _contentLastNotifyTickMs{0};
+    std::atomic_uint64_t _contentCompareTotalCompares{0};
+    std::atomic_uint64_t _contentCompareCompletedCompares{0};
+    std::atomic_uint64_t _contentCompareTotalBytes{0};
+    std::atomic_uint64_t _contentCompareCompletedBytes{0};
     std::atomic<std::shared_ptr<const ContentProgressCallback>> _contentProgressCallback;
 
     std::atomic_uint64_t _decisionUpdatedLastNotifyTickMs{0};

@@ -103,6 +103,7 @@ constexpr float kColumnSpacingDip                 = 18.0f;
 constexpr float kRowSpacingDip                    = 4.0f;
 constexpr float kDetailsGapDip                    = 2.0f;
 constexpr float kDetailsTextAlpha                 = 0.75f;
+constexpr float kMetadataTextAlpha                = 0.55f;
 constexpr UINT kSwapChainBufferCount              = 2;
 constexpr UINT_PTR kOverlayTimerId                = 1;
 constexpr uint64_t kBusyOverlayDelayMs            = 300;
@@ -631,13 +632,13 @@ BuildPathArrayArena(const std::vector<std::filesystem::path>& paths, FileSystemA
         return S_OK;
     }
 
-    const unsigned __int64 count64 = static_cast<unsigned __int64>(paths.size());
+    const uint64_t count64 = static_cast<uint64_t>(paths.size());
     if (count64 > std::numeric_limits<unsigned long>::max())
     {
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
 
-    const unsigned __int64 arrayBytes64 = count64 * static_cast<unsigned __int64>(sizeof(const wchar_t*));
+    const uint64_t arrayBytes64 = count64 * static_cast<uint64_t>(sizeof(const wchar_t*));
     if (arrayBytes64 > std::numeric_limits<unsigned long>::max())
     {
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);

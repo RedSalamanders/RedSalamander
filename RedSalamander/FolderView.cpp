@@ -160,6 +160,10 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
 
 void FolderView::ForceRefresh()
 {
+#ifdef _DEBUG
+    ++_debugForceRefreshCount;
+#endif
+
     if (_fileSystem && _currentFolder && _hWnd)
     {
         DirectoryInfoCache::GetInstance().InvalidateFolder(_fileSystem.get(), _currentFolder.value());
@@ -171,9 +175,28 @@ void FolderView::ForceRefresh()
     EnumerateFolder();
 }
 
+void FolderView::SetEmptyStateMessage(std::wstring message)
+{
+    if (message == _emptyStateMessage)
+    {
+        return;
+    }
+
+    _emptyStateMessage = std::move(message);
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+}
+
 void FolderView::RefreshDetailsText()
 {
-    if (! _detailsTextProvider || _displayMode != DisplayMode::Detailed)
+    if (_displayMode == DisplayMode::Brief)
+    {
+        return;
+    }
+
+    if (! _detailsTextProvider && ! (_displayMode == DisplayMode::ExtraDetailed && _metadataTextProvider))
     {
         return;
     }
@@ -191,13 +214,30 @@ void FolderView::RefreshDetailsText()
             continue;
         }
 
-        std::wstring details = _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
-        if (details != item.detailsText)
+        if (_detailsTextProvider)
         {
-            anyChanged       = true;
-            item.detailsText = std::move(details);
-            item.detailsLayout.reset();
-            item.detailsMetrics = {};
+            std::wstring details =
+                _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+            if (details != item.detailsText)
+            {
+                anyChanged       = true;
+                item.detailsText = std::move(details);
+                item.detailsLayout.reset();
+                item.detailsMetrics = {};
+            }
+        }
+
+        if (_displayMode == DisplayMode::ExtraDetailed && _metadataTextProvider)
+        {
+            std::wstring metadata =
+                _metadataTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+            if (metadata != item.metadataText)
+            {
+                anyChanged        = true;
+                item.metadataText = std::move(metadata);
+                item.metadataLayout.reset();
+                item.metadataMetrics = {};
+            }
         }
     }
 
@@ -644,13 +684,14 @@ void FolderView::SetDisplayMode(DisplayMode mode)
         return;
     }
 
-    _displayMode           = mode;
-    _itemMetricsCached     = false;
-    _cachedMaxLabelWidth   = 0.0f;
-    _cachedMaxLabelHeight  = 0.0f;
-    _cachedMaxDetailsWidth = 0.0f;
-    _detailsSizeSlotChars  = 0;
-    _lastLayoutWidth       = 0.0f;
+    _displayMode            = mode;
+    _itemMetricsCached      = false;
+    _cachedMaxLabelWidth    = 0.0f;
+    _cachedMaxLabelHeight   = 0.0f;
+    _cachedMaxDetailsWidth  = 0.0f;
+    _cachedMaxMetadataWidth = 0.0f;
+    _detailsSizeSlotChars   = 0;
+    _lastLayoutWidth        = 0.0f;
 
     if (_displayMode == DisplayMode::Brief)
     {
@@ -658,6 +699,16 @@ void FolderView::SetDisplayMode(DisplayMode mode)
         {
             item.detailsLayout.reset();
             item.detailsMetrics = {};
+            item.metadataLayout.reset();
+            item.metadataMetrics = {};
+        }
+    }
+    else if (_displayMode == DisplayMode::Detailed)
+    {
+        for (auto& item : _items)
+        {
+            item.metadataLayout.reset();
+            item.metadataMetrics = {};
         }
     }
 

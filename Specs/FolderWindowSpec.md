@@ -26,6 +26,14 @@ FolderWindow implementation is intentionally split into focused translation unit
 - `RedSalamander/FolderWindow.FileSystem.cpp`: plugin selection, path parsing/formatting, history/view/sort state, and NavigationView↔FolderView path synchronization.
 - `RedSalamander/FolderWindowInternal.h`: private shared declarations/constants for the above `FolderWindow.*.cpp` files.
 
+## Extension Points (Scoped Windows)
+
+Some features embed a `FolderWindow` but require additional host integration (e.g., Compare Directories). FolderWindow exposes optional callbacks and APIs for these scoped windows:
+
+- **Pane callbacks**: path changed, enumeration completed, and per-item details text provider.
+- **Selection helpers**: apply selection based on display-name predicates.
+- **Informational tasks**: create/update/dismiss read-only task cards in the File Operations popup for background work that is not a file operation (see `Specs/FileOperationsSpec.md`).
+
 ## File System Plugin (v2)
 
 FolderWindow uses `IFileSystem` plugins selected per-pane:

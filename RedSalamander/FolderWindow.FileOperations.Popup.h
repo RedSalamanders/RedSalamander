@@ -4,6 +4,7 @@
 
 #include <array>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -57,23 +58,36 @@ struct TaskSnapshot
     static constexpr size_t kMaxInFlightFiles   = 8u;
     static constexpr size_t kMaxConflictActions = 8u;
 
+    enum class Kind : uint8_t
+    {
+        FileOperation,
+        Informational,
+    };
+
+    Kind kind = Kind::FileOperation;
+    FolderWindow::InformationalTaskUpdate informational{};
+
     struct InFlightFileSnapshot
     {
         std::wstring sourcePath;
-        unsigned __int64 totalBytes     = 0;
-        unsigned __int64 completedBytes = 0;
-        ULONGLONG lastUpdateTick        = 0;
+        uint64_t totalBytes      = 0;
+        uint64_t completedBytes  = 0;
+        ULONGLONG lastUpdateTick = 0;
     };
 
     uint64_t taskId               = 0;
     FileSystemOperation operation = FILESYSTEM_COPY;
 
-    unsigned long totalItems            = 0;
-    unsigned long completedItems        = 0;
-    unsigned __int64 totalBytes         = 0;
-    unsigned __int64 completedBytes     = 0;
-    unsigned __int64 itemTotalBytes     = 0;
-    unsigned __int64 itemCompletedBytes = 0;
+    unsigned long totalItems     = 0;
+    unsigned long completedItems = 0;
+    uint64_t totalBytes          = 0;
+    uint64_t completedBytes      = 0;
+    uint64_t itemTotalBytes      = 0;
+    uint64_t itemCompletedBytes  = 0;
+
+    // Best-effort top-level type breakdown (useful when pre-calc totals are unknown/skipped).
+    unsigned long completedFiles   = 0;
+    unsigned long completedFolders = 0;
 
     std::wstring currentSourcePath;
     std::wstring currentDestinationPath;
@@ -96,8 +110,8 @@ struct TaskSnapshot
 
     ConflictPromptSnapshot conflict{};
 
-    unsigned __int64 desiredSpeedLimitBytesPerSecond   = 0;
-    unsigned __int64 effectiveSpeedLimitBytesPerSecond = 0;
+    uint64_t desiredSpeedLimitBytesPerSecond   = 0;
+    uint64_t effectiveSpeedLimitBytesPerSecond = 0;
 
     bool finished              = false;
     HRESULT resultHr           = S_OK;
@@ -118,7 +132,7 @@ struct TaskSnapshot
     bool preCalcInProgress              = false;
     bool preCalcSkipped                 = false;
     bool preCalcCompleted               = false;
-    unsigned __int64 preCalcTotalBytes  = 0;
+    uint64_t preCalcTotalBytes          = 0;
     unsigned long preCalcFileCount      = 0;
     unsigned long preCalcDirectoryCount = 0;
     ULONGLONG preCalcElapsedMs          = 0;
@@ -133,8 +147,8 @@ struct RateSnapshot
     uint64_t taskId               = 0;
     FileSystemOperation operation = FILESYSTEM_COPY;
 
-    unsigned long completedItems    = 0;
-    unsigned __int64 completedBytes = 0;
+    unsigned long completedItems = 0;
+    uint64_t completedBytes      = 0;
     std::wstring currentSourcePath;
     bool started          = false;
     bool paused           = false;
@@ -152,9 +166,9 @@ struct RateHistory
     size_t count      = 0;
     size_t writeIndex = 0;
 
-    ULONGLONG lastTick         = 0;
-    unsigned __int64 lastBytes = 0;
-    unsigned long lastItems    = 0;
+    ULONGLONG lastTick      = 0;
+    uint64_t lastBytes      = 0;
+    unsigned long lastItems = 0;
 
     float smoothedBytesPerSec = 0.0f;
     float smoothedItemsPerSec = 0.0f;
@@ -165,6 +179,7 @@ class FileOperationsPopupState final
 public:
     FolderWindow::FileOperationState* fileOps = nullptr;
     FolderWindow* folderWindow                = nullptr;
+    std::weak_ptr<void> hostLifetime;
 
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
@@ -204,7 +219,7 @@ private:
     void DrawCollapseChevron(const D2D1_RECT_F& rc, bool collapsed) noexcept;
     void DrawBandwidthGraph(const D2D1_RECT_F& rect,
                             const RateHistory& history,
-                            unsigned __int64 limitBytesPerSecond,
+                            uint64_t limitBytesPerSecond,
                             std::wstring_view overlayText,
                             bool showAnimation,
                             bool rainbowMode,
@@ -216,6 +231,8 @@ private:
 
     PopupHitTest HitTest(float x, float y) const noexcept;
     void Invalidate(HWND hwnd) const noexcept;
+
+    LRESULT OnActivatedHit(HWND hwnd, const PopupHitTest& hit) noexcept;
 
     bool ConfirmCancelAll(HWND hwnd) noexcept;
     void ShowSpeedLimitMenu(HWND hwnd, uint64_t taskId) noexcept;
@@ -317,7 +334,10 @@ private:
 class FileOperationsPopup final
 {
 public:
-    static HWND Create(FolderWindow::FileOperationState* fileOps, FolderWindow* folderWindow, HWND ownerWindow) noexcept;
+    static HWND Create(FolderWindow::FileOperationState* fileOps,
+                       FolderWindow* folderWindow,
+                       HWND ownerWindow,
+                       std::weak_ptr<void> hostLifetime) noexcept;
 
 private:
     FileOperationsPopup() = delete;

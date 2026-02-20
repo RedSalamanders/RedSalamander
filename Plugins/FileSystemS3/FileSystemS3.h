@@ -45,13 +45,13 @@ public:
     struct Entry
     {
         std::wstring name;
-        unsigned long fileIndex    = 0;
-        unsigned long attributes   = 0;
-        unsigned __int64 sizeBytes = 0;
-        __int64 creationTime       = 0;
-        __int64 lastAccessTime     = 0;
-        __int64 lastWriteTime      = 0;
-        __int64 changeTime         = 0;
+        unsigned long fileIndex  = 0;
+        unsigned long attributes = 0;
+        uint64_t sizeBytes       = 0;
+        __int64 creationTime     = 0;
+        __int64 lastAccessTime   = 0;
+        __int64 lastWriteTime    = 0;
+        __int64 changeTime       = 0;
     };
 
     FilesInformationS3()  = default;

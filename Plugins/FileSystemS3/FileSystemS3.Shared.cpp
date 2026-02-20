@@ -232,7 +232,7 @@ void AwsSdkLifetime::Release() noexcept
     return file;
 }
 
-[[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, unsigned __int64& out) noexcept
+[[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, uint64_t& out) noexcept
 {
     out = 0;
     if (! file || file == INVALID_HANDLE_VALUE)
@@ -251,7 +251,7 @@ void AwsSdkLifetime::Release() noexcept
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
 
-    out = static_cast<unsigned __int64>(size.QuadPart);
+    out = static_cast<uint64_t>(size.QuadPart);
     return S_OK;
 }
 

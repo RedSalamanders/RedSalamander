@@ -245,6 +245,27 @@ void FolderWindow::EnsureFileOperations()
     _fileOperations.reset(state.release());
 }
 
+uint64_t FolderWindow::CreateOrUpdateInformationalTask(const InformationalTaskUpdate& update) noexcept
+{
+    EnsureFileOperations();
+    if (! _fileOperations)
+    {
+        return 0;
+    }
+
+    return _fileOperations->CreateOrUpdateInformationalTask(update);
+}
+
+void FolderWindow::DismissInformationalTask(uint64_t taskId) noexcept
+{
+    if (taskId == 0 || ! _fileOperations)
+    {
+        return;
+    }
+
+    _fileOperations->DismissInformationalTask(taskId);
+}
+
 HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::FileOperationRequest request) noexcept
 {
     PaneState& destinationState = pane == Pane::Left ? _leftPane : _rightPane;

@@ -258,7 +258,7 @@ The aggregated schema file written next to settings (`<AppId>.settings.schema.js
 Schema-driven UI generation is now implemented using custom `x-ui-*` annotations. Settings annotated with these attributes automatically generate UI controls in the appropriate pane:
 
 **Implemented Annotations**:
-- `x-ui-pane`: Target pane name (`"General"`, `"Advanced"`, `"Keyboard"`, `"Themes"`, `"Viewers"`, `"Panes"`, `"Plugins"`)
+- `x-ui-pane`: Target pane name (`"General"`, `"Panes"`, `"Viewers"`, `"Keyboard"`, `"Themes"`, `"Plugins"`, `"Compare Directories"`, `"Advanced"`)
 - `x-ui-order`: Integer ordering within a pane (lower numbers appear first)
 - `x-ui-control`: Control type - `"toggle"` (boolean), `"edit"` (string), `"number"` (integer), `"combo"` (enum), `"custom"` (handcrafted)
 - `x-ui-section`: Optional section header for grouping related settings
@@ -399,6 +399,14 @@ Integrated plugin management:
 
 Entry point:
 - The main menu item `Plugin Manager...` opens Preferences with **Plugins** selected.
+
+### Compare Directories
+
+Defaults for the **Compare Directories** command:
+- Compare criteria toggles (size, date/time, attributes, content)
+- Subdirectory comparison controls
+- Ignore patterns (files/directories) and pattern strings
+- Display: Show Identical Items
 
 ### Advanced
 

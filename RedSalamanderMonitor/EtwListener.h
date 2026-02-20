@@ -93,8 +93,8 @@ private:
     std::atomic<ULONG> _eventsProcessed{0};
     std::atomic<ULONG> _eventsLost{0};
 
-    // Static instance pointer for callbacks
-    static EtwListener* s_instance;
+    // Static instance pointer for callbacks (atomic: written on UI thread, read from ETW worker thread)
+    static std::atomic<EtwListener*> s_instance;
 
 public:
     // Get buffer statistics (for diagnostics)

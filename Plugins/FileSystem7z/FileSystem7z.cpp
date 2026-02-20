@@ -114,7 +114,7 @@ std::optional<std::wstring> TryGetJsonString(yyjson_val* obj, const char* key) n
 }
 
 HRESULT
-CreateSevenZipItemFileReader(std::wstring archivePath, std::wstring password, uint32_t itemIndex, unsigned __int64 sizeBytes, IFileReader** outReader) noexcept;
+CreateSevenZipItemFileReader(std::wstring archivePath, std::wstring password, uint32_t itemIndex, uint64_t sizeBytes, IFileReader** outReader) noexcept;
 } // namespace
 
 // FilesInformation7z
@@ -943,8 +943,8 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::CreateFileReader(const wchar_t* path, IF
 
     std::wstring archivePath;
     std::wstring password;
-    uint32_t itemIndex         = 0;
-    unsigned __int64 sizeBytes = 0;
+    uint32_t itemIndex = 0;
+    uint64_t sizeBytes = 0;
 
     {
         std::lock_guard lock(_stateMutex);
@@ -972,7 +972,7 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::CreateFileReader(const wchar_t* path, IF
         }
 
         itemIndex   = it->second.itemIndex.value();
-        sizeBytes   = static_cast<unsigned __int64>(it->second.sizeBytes);
+        sizeBytes   = static_cast<uint64_t>(it->second.sizeBytes);
         archivePath = _archivePath;
         password    = _password;
     }
@@ -1233,8 +1233,8 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
     constexpr unsigned long kProgressIntervalEntries = 100;
     constexpr ULONGLONG kProgressIntervalMs          = 200;
 
-    unsigned __int64 scannedEntries = 0;
-    ULONGLONG lastProgressTime      = ::GetTickCount64();
+    uint64_t scannedEntries    = 0;
+    ULONGLONG lastProgressTime = ::GetTickCount64();
 
     auto maybeReportProgress = [&](const wchar_t* currentPath) -> bool
     {
@@ -1263,8 +1263,8 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
         return true;
     };
 
-    bool rootIsFile               = false;
-    unsigned __int64 rootFileSize = 0;
+    bool rootIsFile       = false;
+    uint64_t rootFileSize = 0;
     {
         std::scoped_lock lock(_stateMutex);
 
@@ -2479,7 +2479,7 @@ HRESULT OpenArchiveAuto(const SevenZipExports& api,
 class SevenZipItemFileReader final : public IFileReader
 {
 public:
-    static HRESULT Create(std::wstring archivePath, std::wstring password, uint32_t itemIndex, unsigned __int64 sizeBytes, IFileReader** outReader) noexcept
+    static HRESULT Create(std::wstring archivePath, std::wstring password, uint32_t itemIndex, uint64_t sizeBytes, IFileReader** outReader) noexcept
     {
         if (outReader == nullptr)
         {
@@ -2564,7 +2564,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetSize(unsigned __int64* sizeBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
     {
         if (sizeBytes == nullptr)
         {
@@ -2575,7 +2575,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, unsigned __int64* newPosition) noexcept override
+    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
     {
         if (newPosition == nullptr)
         {
@@ -2592,10 +2592,18 @@ public:
         __int64 base = 0;
         if (origin == FILE_CURRENT)
         {
+            if (_positionBytes > static_cast<uint64_t>((std::numeric_limits<__int64>::max)()))
+            {
+                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            }
             base = static_cast<__int64>(_positionBytes);
         }
         else if (origin == FILE_END)
         {
+            if (_fileSizeBytes > static_cast<uint64_t>((std::numeric_limits<__int64>::max)()))
+            {
+                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            }
             base = static_cast<__int64>(_fileSizeBytes);
         }
 
@@ -2605,7 +2613,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
         }
 
-        _positionBytes = static_cast<unsigned __int64>(next);
+        _positionBytes = static_cast<uint64_t>(next);
         *newPosition   = _positionBytes;
         return S_OK;
     }
@@ -2641,24 +2649,24 @@ public:
 
         if (_useInMemorySpool)
         {
-            const unsigned __int64 remaining = _fileSizeBytes - _positionBytes;
-            const unsigned long take         = (remaining > static_cast<unsigned __int64>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
+            const uint64_t remaining = _fileSizeBytes - _positionBytes;
+            const unsigned long take = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
-            const unsigned __int64 end = _positionBytes + static_cast<unsigned __int64>(take);
-            const HRESULT spoolHr      = EnsureSpooledUntil(end);
+            const uint64_t end    = _positionBytes + static_cast<uint64_t>(take);
+            const HRESULT spoolHr = EnsureSpooledUntil(end);
             if (FAILED(spoolHr))
             {
                 return spoolHr;
             }
 
-            const unsigned __int64 available = (_spooledBytes > _positionBytes) ? (_spooledBytes - _positionBytes) : 0;
-            const unsigned long canTake      = (available > static_cast<unsigned __int64>(take)) ? take : static_cast<unsigned long>(available);
+            const uint64_t available    = (_spooledBytes > _positionBytes) ? (_spooledBytes - _positionBytes) : 0;
+            const unsigned long canTake = (available > static_cast<uint64_t>(take)) ? take : static_cast<unsigned long>(available);
             if (canTake == 0)
             {
                 return S_OK;
             }
 
-            if (_positionBytes > static_cast<unsigned __int64>(std::numeric_limits<size_t>::max()))
+            if (_positionBytes > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
             {
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
@@ -2666,7 +2674,7 @@ public:
             const size_t offset = static_cast<size_t>(_positionBytes);
             memcpy(buffer, _spool.data() + offset, canTake);
 
-            _positionBytes += static_cast<unsigned __int64>(canTake);
+            _positionBytes += static_cast<uint64_t>(canTake);
             *bytesRead = canTake;
             return S_OK;
         }
@@ -2680,7 +2688,7 @@ public:
     }
 
 private:
-    SevenZipItemFileReader(std::wstring archivePath, std::wstring password, uint32_t itemIndex, unsigned __int64 sizeBytes) noexcept
+    SevenZipItemFileReader(std::wstring archivePath, std::wstring password, uint32_t itemIndex, uint64_t sizeBytes) noexcept
         : _archivePath(std::move(archivePath)),
           _password(std::move(password)),
           _itemIndex(itemIndex),
@@ -3013,11 +3021,11 @@ private:
                 _scratch.resize(kChunkSize);
             }
 
-            unsigned __int64 skipRemaining = _positionBytes - _itemStreamPositionBytes;
+            uint64_t skipRemaining = _positionBytes - _itemStreamPositionBytes;
             while (skipRemaining != 0)
             {
                 const UInt32 request =
-                    (skipRemaining > static_cast<unsigned __int64>(kChunkSize)) ? static_cast<UInt32>(kChunkSize) : static_cast<UInt32>(skipRemaining);
+                    (skipRemaining > static_cast<uint64_t>(kChunkSize)) ? static_cast<UInt32>(kChunkSize) : static_cast<UInt32>(skipRemaining);
 
                 UInt32 processed = 0;
                 const HRESULT hr = _itemStream->Read(_scratch.data(), request, &processed);
@@ -3054,8 +3062,8 @@ private:
             return alignHr;
         }
 
-        const unsigned __int64 remaining = _fileSizeBytes - _positionBytes;
-        const unsigned long take         = (remaining > static_cast<unsigned __int64>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
+        const uint64_t remaining = _fileSizeBytes - _positionBytes;
+        const unsigned long take = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
         UInt32 processed = 0;
         HRESULT hr       = _itemStream->Read(buffer, static_cast<UInt32>(take), &processed);
@@ -3081,8 +3089,8 @@ private:
             return HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
         }
 
-        _positionBytes += static_cast<unsigned __int64>(processed);
-        _itemStreamPositionBytes += static_cast<unsigned __int64>(processed);
+        _positionBytes += static_cast<uint64_t>(processed);
+        _itemStreamPositionBytes += static_cast<uint64_t>(processed);
         *bytesRead = processed;
         return hr;
     }
@@ -3107,12 +3115,12 @@ private:
 
             _pipeReadIndex = (_pipeReadIndex + contiguous) % _pipe.size();
             _pipeSizeBytes -= contiguous;
-            _pipeStartOffsetBytes += static_cast<unsigned __int64>(contiguous);
+            _pipeStartOffsetBytes += static_cast<uint64_t>(contiguous);
             remaining -= contiguous;
         }
     }
 
-    HRESULT RestartExtractStreaming(unsigned __int64 positionBytes) noexcept
+    HRESULT RestartExtractStreaming(uint64_t positionBytes) noexcept
     {
         if (_extractThread.joinable())
         {
@@ -3185,7 +3193,7 @@ private:
     {
         while (_pipeStartOffsetBytes > _positionBytes)
         {
-            const unsigned __int64 target = _positionBytes;
+            const uint64_t target = _positionBytes;
             lock.unlock();
             const HRESULT restartHr = RestartExtractStreaming(target);
             lock.lock();
@@ -3210,7 +3218,7 @@ private:
 
         while (_pipeStartOffsetBytes < _positionBytes)
         {
-            const unsigned __int64 needSkip = _positionBytes - _pipeStartOffsetBytes;
+            const uint64_t needSkip = _positionBytes - _pipeStartOffsetBytes;
 
             while (_pipeSizeBytes == 0 && ! _extractFinished && ! _extractStopRequested)
             {
@@ -3227,7 +3235,7 @@ private:
                 return FAILED(_extractStatus) ? _extractStatus : HRESULT_FROM_WIN32(ERROR_HANDLE_EOF);
             }
 
-            const size_t skipNow = static_cast<size_t>(std::min<unsigned __int64>(needSkip, static_cast<unsigned __int64>(_pipeSizeBytes)));
+            const size_t skipNow = static_cast<size_t>(std::min<uint64_t>(needSkip, static_cast<uint64_t>(_pipeSizeBytes)));
             ConsumePipeLocked(skipNow, nullptr);
             _extractCv.notify_all();
         }
@@ -3270,8 +3278,8 @@ private:
             return alignHr;
         }
 
-        const unsigned __int64 remaining = _fileSizeBytes - _positionBytes;
-        const unsigned long requested    = (remaining > static_cast<unsigned __int64>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
+        const uint64_t remaining      = _fileSizeBytes - _positionBytes;
+        const unsigned long requested = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
         while (_pipeSizeBytes == 0 && ! _extractFinished && ! _extractStopRequested)
         {
@@ -3291,7 +3299,7 @@ private:
         const size_t take = std::min<size_t>(static_cast<size_t>(requested), _pipeSizeBytes);
         ConsumePipeLocked(take, static_cast<uint8_t*>(buffer));
 
-        _positionBytes += static_cast<unsigned __int64>(take);
+        _positionBytes += static_cast<uint64_t>(take);
         *bytesRead = static_cast<unsigned long>(take);
 
         lock.unlock();
@@ -3383,12 +3391,12 @@ private:
             return S_OK;
         }
 
-        constexpr unsigned __int64 kExtractPrefetchBytes = 256u * 1024u;
+        constexpr uint64_t kExtractPrefetchBytes = 256u * 1024u;
 
         while (! _extractStopRequested && ! _extractFinished)
         {
-            unsigned __int64 limit = std::numeric_limits<unsigned __int64>::max();
-            if (_extractWantedBytes <= (std::numeric_limits<unsigned __int64>::max() - kExtractPrefetchBytes))
+            uint64_t limit = std::numeric_limits<uint64_t>::max();
+            if (_extractWantedBytes <= (std::numeric_limits<uint64_t>::max() - kExtractPrefetchBytes))
             {
                 limit = _extractWantedBytes + kExtractPrefetchBytes;
             }
@@ -3418,7 +3426,7 @@ private:
         memcpy(_spool.data() + currentSize, data, size);
         *processedSize = size;
 
-        _spooledBytes = static_cast<unsigned __int64>(_spool.size());
+        _spooledBytes = static_cast<uint64_t>(_spool.size());
 
         lock.unlock();
         _extractCv.notify_all();
@@ -3492,7 +3500,7 @@ private:
         }
     }
 
-    HRESULT EnsureExtractUntil(unsigned __int64 endExclusive) noexcept
+    HRESULT EnsureExtractUntil(uint64_t endExclusive) noexcept
     {
         std::unique_lock lock(_extractMutex);
 
@@ -3550,8 +3558,8 @@ private:
         _positionBytes           = 0;
         _itemStreamPositionBytes = 0;
 
-        constexpr unsigned __int64 kMaxInMemorySpoolBytes = 32u * 1024u * 1024u;
-        _useInMemorySpool                                 = (_fileSizeBytes == 0) || (_fileSizeBytes <= kMaxInMemorySpoolBytes);
+        constexpr uint64_t kMaxInMemorySpoolBytes = 32u * 1024u * 1024u;
+        _useInMemorySpool                         = (_fileSizeBytes == 0) || (_fileSizeBytes <= kMaxInMemorySpoolBytes);
 
         _archiveGetStream.reset();
         _itemStream.reset();
@@ -3559,10 +3567,10 @@ private:
         _spool.clear();
         _spooledBytes = 0;
 
-        constexpr unsigned __int64 kMaxInitialReserveBytes = 4u * 1024u * 1024u;
-        if (_useInMemorySpool && _fileSizeBytes != 0 && _fileSizeBytes <= static_cast<unsigned __int64>(std::numeric_limits<size_t>::max()))
+        constexpr uint64_t kMaxInitialReserveBytes = 4u * 1024u * 1024u;
+        if (_useInMemorySpool && _fileSizeBytes != 0 && _fileSizeBytes <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
         {
-            const unsigned __int64 reserveBytes = std::min<unsigned __int64>(_fileSizeBytes, kMaxInitialReserveBytes);
+            const uint64_t reserveBytes = std::min<uint64_t>(_fileSizeBytes, kMaxInitialReserveBytes);
             _spool.reserve(static_cast<size_t>(reserveBytes));
         }
 
@@ -3594,7 +3602,7 @@ private:
         return S_OK;
     }
 
-    HRESULT EnsureSpooledUntil(unsigned __int64 endExclusive) noexcept
+    HRESULT EnsureSpooledUntil(uint64_t endExclusive) noexcept
     {
         if (_fileSizeBytes != 0 && endExclusive > _fileSizeBytes)
         {
@@ -3619,8 +3627,8 @@ private:
 
         while (_spooledBytes < endExclusive)
         {
-            const unsigned __int64 remaining = endExclusive - _spooledBytes;
-            const UInt32 request = remaining > static_cast<unsigned __int64>(kChunkSize) ? static_cast<UInt32>(kChunkSize) : static_cast<UInt32>(remaining);
+            const uint64_t remaining = endExclusive - _spooledBytes;
+            const UInt32 request     = remaining > static_cast<uint64_t>(kChunkSize) ? static_cast<UInt32>(kChunkSize) : static_cast<UInt32>(remaining);
 
             UInt32 processed = 0;
             const HRESULT hr = _itemStream->Read(_scratch.data(), request, &processed);
@@ -3644,7 +3652,7 @@ private:
             _spool.resize(targetSize);
 
             memcpy(_spool.data() + currentSize, _scratch.data(), processed);
-            _spooledBytes += static_cast<unsigned __int64>(processed);
+            _spooledBytes += static_cast<uint64_t>(processed);
         }
 
         return S_OK;
@@ -3654,8 +3662,8 @@ private:
 
     std::wstring _archivePath;
     std::wstring _password;
-    uint32_t _itemIndex             = 0;
-    unsigned __int64 _fileSizeBytes = 0;
+    uint32_t _itemIndex     = 0;
+    uint64_t _fileSizeBytes = 0;
 
     wil::com_ptr<IInArchive> _archive;
     wil::com_ptr<IInStream> _archiveStream;
@@ -3663,36 +3671,36 @@ private:
     wil::com_ptr<IInArchiveGetStream> _archiveGetStream;
     wil::com_ptr<ISequentialInStream> _itemStream;
 
-    unsigned __int64 _itemStreamPositionBytes = 0;
+    uint64_t _itemStreamPositionBytes = 0;
 
     bool _useInMemorySpool       = true;
     HRESULT _terminalReadStatus  = S_OK;
     bool _terminalStatusReported = false;
 
     std::vector<uint8_t> _spool;
-    unsigned __int64 _spooledBytes = 0;
+    uint64_t _spooledBytes = 0;
 
     std::vector<uint8_t> _pipe;
-    size_t _pipeReadIndex                  = 0;
-    size_t _pipeWriteIndex                 = 0;
-    size_t _pipeSizeBytes                  = 0;
-    unsigned __int64 _pipeStartOffsetBytes = 0;
+    size_t _pipeReadIndex          = 0;
+    size_t _pipeWriteIndex         = 0;
+    size_t _pipeSizeBytes          = 0;
+    uint64_t _pipeStartOffsetBytes = 0;
 
-    unsigned __int64 _positionBytes = 0;
+    uint64_t _positionBytes = 0;
     std::vector<uint8_t> _scratch;
 
     std::mutex _extractMutex;
     std::condition_variable _extractCv;
     std::thread _extractThread;
-    unsigned __int64 _extractWantedBytes = 0;
-    HRESULT _extractStatus               = S_OK;
-    bool _extractStarted                 = false;
-    bool _extractFinished                = false;
-    bool _extractStopRequested           = false;
+    uint64_t _extractWantedBytes = 0;
+    HRESULT _extractStatus       = S_OK;
+    bool _extractStarted         = false;
+    bool _extractFinished        = false;
+    bool _extractStopRequested   = false;
 };
 
 HRESULT
-CreateSevenZipItemFileReader(std::wstring archivePath, std::wstring password, uint32_t itemIndex, unsigned __int64 sizeBytes, IFileReader** outReader) noexcept
+CreateSevenZipItemFileReader(std::wstring archivePath, std::wstring password, uint32_t itemIndex, uint64_t sizeBytes, IFileReader** outReader) noexcept
 {
     return SevenZipItemFileReader::Create(std::move(archivePath), std::move(password), itemIndex, sizeBytes, outReader);
 }

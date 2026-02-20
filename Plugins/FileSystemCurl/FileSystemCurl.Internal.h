@@ -288,11 +288,11 @@ struct FileOperationProgress
     FileOperationProgress& operator=(const FileOperationProgress&) = delete;
     FileOperationProgress& operator=(FileOperationProgress&&)      = delete;
 
-    static inline thread_local unsigned __int64 tlsProgressStreamId = 0;
+    static inline thread_local uint64_t tlsProgressStreamId = 0;
 
     struct ProgressStreamScope final
     {
-        explicit ProgressStreamScope(unsigned __int64 streamId) noexcept : _previous(std::exchange(FileOperationProgress::tlsProgressStreamId, streamId))
+        explicit ProgressStreamScope(uint64_t streamId) noexcept : _previous(std::exchange(FileOperationProgress::tlsProgressStreamId, streamId))
         {
         }
 
@@ -307,14 +307,14 @@ struct FileOperationProgress
         }
 
     private:
-        unsigned __int64 _previous = 0;
+        uint64_t _previous = 0;
     };
 
     FileSystemOperation operation = FILESYSTEM_COPY;
     unsigned long totalItems      = 0;
     unsigned long completedItems  = 0;
 
-    unsigned __int64 completedBytes = 0;
+    uint64_t completedBytes = 0;
 
     FileSystemOptions options{};
     IFileSystemCallback* callback = nullptr;
@@ -381,8 +381,8 @@ struct FileOperationProgress
         return S_OK;
     }
 
-    [[nodiscard]] HRESULT ReportProgress(unsigned __int64 currentItemTotalBytes,
-                                         unsigned __int64 currentItemCompletedBytes,
+    [[nodiscard]] HRESULT ReportProgress(uint64_t currentItemTotalBytes,
+                                         uint64_t currentItemCompletedBytes,
                                          std::wstring_view currentSourcePath,
                                          std::wstring_view currentDestinationPath) noexcept
     {
@@ -422,9 +422,9 @@ struct FileOperationProgress
         return NormalizeCancellation(hr);
     }
 
-    [[nodiscard]] HRESULT ReportProgressWithCompletedBytes(unsigned __int64 overallCompletedBytes,
-                                                           unsigned __int64 currentItemTotalBytes,
-                                                           unsigned __int64 currentItemCompletedBytes,
+    [[nodiscard]] HRESULT ReportProgressWithCompletedBytes(uint64_t overallCompletedBytes,
+                                                           uint64_t currentItemTotalBytes,
+                                                           uint64_t currentItemCompletedBytes,
                                                            std::wstring_view currentSourcePath,
                                                            std::wstring_view currentDestinationPath) noexcept
     {
@@ -512,12 +512,12 @@ struct TransferProgressContext
     std::wstring_view sourcePath;
     std::wstring_view destinationPath;
 
-    unsigned __int64 baseCompletedBytes                   = 0;
-    std::atomic<unsigned __int64>* concurrentOverallBytes = nullptr;
-    unsigned __int64 lastConcurrentWireDone               = 0;
+    uint64_t baseCompletedBytes                   = 0;
+    std::atomic<uint64_t>* concurrentOverallBytes = nullptr;
+    uint64_t lastConcurrentWireDone               = 0;
 
-    unsigned __int64 itemTotalBytes = 0;
-    bool isUpload                   = false;
+    uint64_t itemTotalBytes = 0;
+    bool isUpload           = false;
 
     bool scaleForCopy       = false;
     bool scaleForCopySecond = false; // upload phase
@@ -525,27 +525,27 @@ struct TransferProgressContext
     unsigned long reportIntervalMs = 100;
     unsigned long cancelIntervalMs = 250;
 
-    unsigned __int64 lastReportedItemDone = 0;
-    unsigned __int64 lastReportedOverall  = 0;
+    uint64_t lastReportedItemDone = 0;
+    uint64_t lastReportedOverall  = 0;
 
-    unsigned __int64 lastThrottleBytes = 0;
-    unsigned __int64 throttleStartTick = 0;
+    uint64_t lastThrottleBytes = 0;
+    uint64_t throttleStartTick = 0;
 
-    unsigned __int64 lastCancelTick = 0;
-    unsigned __int64 lastReportTick = 0;
+    uint64_t lastCancelTick = 0;
+    uint64_t lastReportTick = 0;
 
     HRESULT abortHr = S_OK;
 
     void Begin() noexcept
     {
-        const unsigned __int64 now = GetTickCount64();
-        throttleStartTick          = now;
-        lastReportTick             = 0;
-        lastCancelTick             = 0;
-        lastReportedItemDone       = 0;
-        lastReportedOverall        = 0;
-        lastThrottleBytes          = 0;
-        abortHr                    = S_OK;
+        const uint64_t now   = GetTickCount64();
+        throttleStartTick    = now;
+        lastReportTick       = 0;
+        lastCancelTick       = 0;
+        lastReportedItemDone = 0;
+        lastReportedOverall  = 0;
+        lastThrottleBytes    = 0;
+        abortHr              = S_OK;
     }
 };
 
@@ -555,13 +555,13 @@ struct TransferProgressContext
 [[nodiscard]] HRESULT CurlUploadFromFile(const ConnectionInfo& conn,
                                          std::wstring_view pluginPath,
                                          HANDLE file,
-                                         unsigned __int64 sizeBytes,
+                                         uint64_t sizeBytes,
                                          const FileSystemOptions* options,
                                          TransferProgressContext* progressCtx) noexcept;
 
 [[nodiscard]] wil::unique_hfile CreateTemporaryDeleteOnCloseFile() noexcept;
 [[nodiscard]] HRESULT ResetFilePointerToStart(HANDLE file) noexcept;
-[[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, unsigned __int64& out) noexcept;
+[[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, uint64_t& out) noexcept;
 
 [[nodiscard]] HRESULT ImapDownloadMessageToFile(const ConnectionInfo& conn, std::wstring_view pluginPath, HANDLE file) noexcept;
 

@@ -50,7 +50,8 @@ void FolderView::UpdateEstimatedMetrics()
             DWRITE_TEXT_METRICS metrics{};
             if (SUCCEEDED(detailsLayout->GetMetrics(&metrics)))
             {
-                _estimatedDetailsHeightDip = metrics.height;
+                _estimatedDetailsHeightDip  = metrics.height;
+                _estimatedMetadataHeightDip = metrics.height;
             }
         }
     }
@@ -81,9 +82,10 @@ void FolderView::LayoutItems()
         return;
     }
 
-    float maxLabelWidth   = 0.0f;
-    float maxLabelHeight  = 0.0f;
-    float maxDetailsWidth = 0.0f;
+    float maxLabelWidth    = 0.0f;
+    float maxLabelHeight   = 0.0f;
+    float maxDetailsWidth  = 0.0f;
+    float maxMetadataWidth = 0.0f;
 
     // Use estimated metrics for initial layout to avoid blocking UI thread
     // Text layouts are created lazily when items are rendered (visible items only)
@@ -91,7 +93,7 @@ void FolderView::LayoutItems()
     {
         TRACER_CTX(L"EstimateMetrics");
 
-        if (_displayMode == DisplayMode::Detailed)
+        if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
         {
             size_t sizeSlotChars = 0;
             for (const auto& item : _items)
@@ -139,11 +141,19 @@ void FolderView::LayoutItems()
             // Clear any existing layout - will be created lazily on render
             item.labelLayout.reset();
 
-            if (_displayMode == DisplayMode::Detailed)
+            if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
             {
                 if (item.detailsText.empty())
                 {
-                    item.detailsText = BuildDetailsText(item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes, _detailsSizeSlotChars);
+                    if (_detailsTextProvider)
+                    {
+                        item.detailsText =
+                            _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+                    }
+                    else
+                    {
+                        item.detailsText = BuildDetailsText(item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes, _detailsSizeSlotChars);
+                    }
                 }
 
                 // Estimate details width
@@ -156,22 +166,46 @@ void FolderView::LayoutItems()
 
                 // Clear any existing layout - will be created lazily on render
                 item.detailsLayout.reset();
+
+                if (_displayMode == DisplayMode::ExtraDetailed)
+                {
+                    if (item.metadataText.empty() && _metadataTextProvider)
+                    {
+                        item.metadataText =
+                            _metadataTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+                    }
+
+                    const float estimatedMetadataWidth                    = static_cast<float>(item.metadataText.length()) * _estimatedCharWidthDip * 0.85f;
+                    item.metadataMetrics.width                            = estimatedMetadataWidth;
+                    item.metadataMetrics.widthIncludingTrailingWhitespace = estimatedMetadataWidth;
+                    item.metadataMetrics.height                           = _estimatedMetadataHeightDip;
+                    maxMetadataWidth                                      = std::max(maxMetadataWidth, estimatedMetadataWidth);
+
+                    item.metadataLayout.reset();
+                }
+                else
+                {
+                    item.metadataLayout.reset();
+                    item.metadataMetrics = {};
+                }
             }
         }
 
-        _cachedMaxLabelWidth   = maxLabelWidth;
-        _cachedMaxLabelHeight  = maxLabelHeight;
-        _cachedMaxDetailsWidth = maxDetailsWidth;
-        _itemMetricsCached     = true;
+        _cachedMaxLabelWidth    = maxLabelWidth;
+        _cachedMaxLabelHeight   = maxLabelHeight;
+        _cachedMaxDetailsWidth  = maxDetailsWidth;
+        _cachedMaxMetadataWidth = maxMetadataWidth;
+        _itemMetricsCached      = true;
 
         Debug::Info(L"FolderView::LayoutItems estimated {} items, max width={:.1f}, max height={:.1f}", _items.size(), maxLabelWidth, maxLabelHeight);
     }
     else
     {
         // Reuse cached measurements
-        maxLabelWidth   = _cachedMaxLabelWidth;
-        maxLabelHeight  = _cachedMaxLabelHeight;
-        maxDetailsWidth = _cachedMaxDetailsWidth;
+        maxLabelWidth    = _cachedMaxLabelWidth;
+        maxLabelHeight   = _cachedMaxLabelHeight;
+        maxDetailsWidth  = _cachedMaxDetailsWidth;
+        maxMetadataWidth = _cachedMaxMetadataWidth;
     }
 
     if (maxLabelHeight <= 0.0f)
@@ -184,6 +218,10 @@ void FolderView::LayoutItems()
     {
         textWidthForLayout = std::max(maxLabelWidth, maxDetailsWidth);
     }
+    else if (_displayMode == DisplayMode::ExtraDetailed)
+    {
+        textWidthForLayout = std::max(std::max(maxLabelWidth, maxDetailsWidth), maxMetadataWidth);
+    }
 
     const float minColumnWidth     = _iconSizeDip + kIconTextGapDip + kLabelHorizontalPaddingDip * 2.0f;
     const float textWidthSafety    = std::max(_estimatedCharWidthDip, 8.0f);
@@ -193,11 +231,16 @@ void FolderView::LayoutItems()
     _tileWidthDip                  = std::min(targetColumnWidth, maxAllowedWidth);
 
     _labelHeightDip = maxLabelHeight + kLabelVerticalPaddingDip * 2.0f;
-    if (_displayMode == DisplayMode::Detailed)
+    if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
     {
-        const float detailsHeight   = _detailsLineHeightDip > 0.0f ? _detailsLineHeightDip : 12.0f;
-        const float textBlockHeight = maxLabelHeight + kDetailsGapDip + detailsHeight;
-        _tileHeightDip              = std::max(_iconSizeDip, textBlockHeight) + kLabelVerticalPaddingDip * 2.0f;
+        const float detailsHeight = _detailsLineHeightDip > 0.0f ? _detailsLineHeightDip : 12.0f;
+        float textBlockHeight     = maxLabelHeight + kDetailsGapDip + detailsHeight;
+        if (_displayMode == DisplayMode::ExtraDetailed && _metadataTextProvider && maxMetadataWidth > 0.0f)
+        {
+            const float metadataHeight = _metadataLineHeightDip > 0.0f ? _metadataLineHeightDip : detailsHeight;
+            textBlockHeight += kDetailsGapDip + metadataHeight;
+        }
+        _tileHeightDip = std::max(_iconSizeDip, textBlockHeight) + kLabelVerticalPaddingDip * 2.0f;
     }
     else
     {
@@ -315,9 +358,10 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
         return;
     }
 
-    const float constrainedWidth         = std::max(labelWidth, 1.0f);
-    const float constrainedHeight        = std::max(_labelHeightDip, 1.0f);
-    const float constrainedDetailsHeight = std::max(_detailsLineHeightDip, 1.0f);
+    const float constrainedWidth          = std::max(labelWidth, 1.0f);
+    const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
+    const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
+    const float constrainedMetadataHeight = std::max(_metadataLineHeightDip, 1.0f);
 
     // Track scroll direction for predictive pre-loading
     if (_horizontalOffset != _lastHorizontalOffset)
@@ -349,6 +393,8 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
             item.labelLayout.reset();
             item.detailsLayout.reset();
             item.detailsMetrics = {};
+            item.metadataLayout.reset();
+            item.metadataMetrics = {};
             continue;
         }
 
@@ -385,10 +431,12 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
             item.labelLayout->SetMaxHeight(constrainedHeight);
         }
 
-        if (_displayMode != DisplayMode::Detailed)
+        if (_displayMode == DisplayMode::Brief)
         {
             item.detailsLayout.reset();
             item.detailsMetrics = {};
+            item.metadataLayout.reset();
+            item.metadataMetrics = {};
             continue;
         }
 
@@ -399,7 +447,15 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
 
         if (item.detailsText.empty())
         {
-            item.detailsText = BuildDetailsText(item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes, _detailsSizeSlotChars);
+            if (_detailsTextProvider)
+            {
+                item.detailsText =
+                    _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+            }
+            else
+            {
+                item.detailsText = BuildDetailsText(item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes, _detailsSizeSlotChars);
+            }
         }
 
         if (! item.detailsLayout)
@@ -431,6 +487,50 @@ void FolderView::UpdateItemTextLayouts(float labelWidth)
         {
             item.detailsLayout->SetMaxWidth(constrainedWidth);
             item.detailsLayout->SetMaxHeight(constrainedDetailsHeight);
+        }
+
+        if (_displayMode != DisplayMode::ExtraDetailed)
+        {
+            item.metadataLayout.reset();
+            item.metadataMetrics = {};
+            continue;
+        }
+
+        if (item.metadataText.empty() && _metadataTextProvider)
+        {
+            item.metadataText =
+                _metadataTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+        }
+
+        if (! item.metadataLayout && ! item.metadataText.empty())
+        {
+            wil::com_ptr<IDWriteTextLayout> layout;
+            const HRESULT hr = _dwriteFactory->CreateTextLayout(item.metadataText.c_str(),
+                                                                static_cast<UINT32>(item.metadataText.length()),
+                                                                _detailsFormat.get(),
+                                                                constrainedWidth,
+                                                                constrainedMetadataHeight,
+                                                                layout.addressof());
+            if (FAILED(hr))
+            {
+                continue;
+            }
+
+            ConfigureLabelLayout(layout.get(), _detailsEllipsisSign.get(), false);
+
+            DWRITE_TEXT_METRICS metrics{};
+            if (SUCCEEDED(layout->GetMetrics(&metrics)))
+            {
+                item.metadataMetrics = metrics;
+            }
+
+            item.metadataLayout = std::move(layout);
+        }
+
+        if (item.metadataLayout)
+        {
+            item.metadataLayout->SetMaxWidth(constrainedWidth);
+            item.metadataLayout->SetMaxHeight(constrainedMetadataHeight);
         }
     }
 
@@ -529,7 +629,7 @@ void FolderView::ReleaseDistantRenderingState()
     for (size_t i = 0; i < keepStart && i < _items.size(); ++i)
     {
         auto& item = _items[i];
-        if (item.labelLayout || item.detailsLayout || item.icon)
+        if (item.labelLayout || item.detailsLayout || item.metadataLayout || item.icon)
         {
             item.labelLayout.reset();
             item.labelMetrics = {};
@@ -537,6 +637,10 @@ void FolderView::ReleaseDistantRenderingState()
             item.detailsMetrics = {};
             item.detailsText.clear();
             item.detailsText.shrink_to_fit();
+            item.metadataLayout.reset();
+            item.metadataMetrics = {};
+            item.metadataText.clear();
+            item.metadataText.shrink_to_fit();
             item.icon.reset();
             ++released;
         }
@@ -546,7 +650,7 @@ void FolderView::ReleaseDistantRenderingState()
     for (size_t i = keepEnd; i < _items.size(); ++i)
     {
         auto& item = _items[i];
-        if (item.labelLayout || item.detailsLayout || item.icon)
+        if (item.labelLayout || item.detailsLayout || item.metadataLayout || item.icon)
         {
             item.labelLayout.reset();
             item.labelMetrics = {};
@@ -554,6 +658,10 @@ void FolderView::ReleaseDistantRenderingState()
             item.detailsMetrics = {};
             item.detailsText.clear();
             item.detailsText.shrink_to_fit();
+            item.metadataLayout.reset();
+            item.metadataMetrics = {};
+            item.metadataText.clear();
+            item.metadataText.shrink_to_fit();
             item.icon.reset();
             ++released;
         }
@@ -577,9 +685,10 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
         return;
     }
 
-    const float constrainedWidth         = std::max(labelWidth, 1.0f);
-    const float constrainedHeight        = std::max(_labelHeightDip, 1.0f);
-    const float constrainedDetailsHeight = std::max(_detailsLineHeightDip, 1.0f);
+    const float constrainedWidth          = std::max(labelWidth, 1.0f);
+    const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
+    const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
+    const float constrainedMetadataHeight = std::max(_metadataLineHeightDip, 1.0f);
 
     // Create label layout if not yet created
     if (! item.labelLayout)
@@ -610,12 +719,20 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
         item.labelLayout->SetMaxHeight(constrainedHeight);
     }
 
-    // Create details layout if in detailed mode and not yet created
-    if (_displayMode == DisplayMode::Detailed && _detailsFormat)
+    // Create details layout if in detailed/extra detailed mode and not yet created
+    if ((_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed) && _detailsFormat)
     {
         if (item.detailsText.empty())
         {
-            item.detailsText = BuildDetailsText(item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes, _detailsSizeSlotChars);
+            if (_detailsTextProvider)
+            {
+                item.detailsText =
+                    _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+            }
+            else
+            {
+                item.detailsText = BuildDetailsText(item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes, _detailsSizeSlotChars);
+            }
         }
 
         if (! item.detailsLayout && ! item.detailsText.empty())
@@ -644,6 +761,48 @@ void FolderView::EnsureItemTextLayout(FolderItem& item, float labelWidth)
         {
             item.detailsLayout->SetMaxWidth(constrainedWidth);
             item.detailsLayout->SetMaxHeight(constrainedDetailsHeight);
+        }
+
+        if (_displayMode == DisplayMode::ExtraDetailed)
+        {
+            if (item.metadataText.empty() && _metadataTextProvider)
+            {
+                item.metadataText =
+                    _metadataTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+            }
+
+            if (! item.metadataLayout && ! item.metadataText.empty())
+            {
+                wil::com_ptr<IDWriteTextLayout> layout;
+                const HRESULT hr = _dwriteFactory->CreateTextLayout(item.metadataText.c_str(),
+                                                                    static_cast<UINT32>(item.metadataText.length()),
+                                                                    _detailsFormat.get(),
+                                                                    constrainedWidth,
+                                                                    constrainedMetadataHeight,
+                                                                    layout.addressof());
+                if (SUCCEEDED(hr))
+                {
+                    ConfigureLabelLayout(layout.get(), _detailsEllipsisSign.get(), false);
+
+                    DWRITE_TEXT_METRICS metrics{};
+                    if (SUCCEEDED(layout->GetMetrics(&metrics)))
+                    {
+                        item.metadataMetrics = metrics;
+                    }
+
+                    item.metadataLayout = std::move(layout);
+                }
+            }
+            else if (item.metadataLayout)
+            {
+                item.metadataLayout->SetMaxWidth(constrainedWidth);
+                item.metadataLayout->SetMaxHeight(constrainedMetadataHeight);
+            }
+        }
+        else
+        {
+            item.metadataLayout.reset();
+            item.metadataMetrics = {};
         }
     }
 }
@@ -703,10 +862,11 @@ void FolderView::ProcessIdleLayoutBatch()
         return;
     }
 
-    const float labelWidth               = std::max(0.0f, _tileWidthDip - (kLabelHorizontalPaddingDip * 2.0f) - _iconSizeDip - kIconTextGapDip);
-    const float constrainedWidth         = std::max(labelWidth, 1.0f);
-    const float constrainedHeight        = std::max(_labelHeightDip, 1.0f);
-    const float constrainedDetailsHeight = std::max(_detailsLineHeightDip, 1.0f);
+    const float labelWidth                = std::max(0.0f, _tileWidthDip - (kLabelHorizontalPaddingDip * 2.0f) - _iconSizeDip - kIconTextGapDip);
+    const float constrainedWidth          = std::max(labelWidth, 1.0f);
+    const float constrainedHeight         = std::max(_labelHeightDip, 1.0f);
+    const float constrainedDetailsHeight  = std::max(_detailsLineHeightDip, 1.0f);
+    const float constrainedMetadataHeight = std::max(_metadataLineHeightDip, 1.0f);
 
     size_t processed      = 0;
     const size_t startIdx = _idleLayoutNextIndex;
@@ -742,11 +902,19 @@ void FolderView::ProcessIdleLayoutBatch()
         }
 
         // Create details layout if needed
-        if (_displayMode == DisplayMode::Detailed && _detailsFormat)
+        if ((_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed) && _detailsFormat)
         {
             if (item.detailsText.empty())
             {
-                item.detailsText = BuildDetailsText(item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes, _detailsSizeSlotChars);
+                if (_detailsTextProvider)
+                {
+                    item.detailsText =
+                        _detailsTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+                }
+                else
+                {
+                    item.detailsText = BuildDetailsText(item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes, _detailsSizeSlotChars);
+                }
             }
 
             if (! item.detailsLayout && ! item.detailsText.empty())
@@ -768,6 +936,41 @@ void FolderView::ProcessIdleLayoutBatch()
                     }
                     item.detailsLayout = std::move(detailsLayout);
                 }
+            }
+
+            if (_displayMode == DisplayMode::ExtraDetailed)
+            {
+                if (item.metadataText.empty() && _metadataTextProvider)
+                {
+                    item.metadataText =
+                        _metadataTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
+                }
+
+                if (! item.metadataLayout && ! item.metadataText.empty())
+                {
+                    wil::com_ptr<IDWriteTextLayout> metaLayout;
+                    hr = _dwriteFactory->CreateTextLayout(item.metadataText.c_str(),
+                                                          static_cast<UINT32>(item.metadataText.length()),
+                                                          _detailsFormat.get(),
+                                                          constrainedWidth,
+                                                          constrainedMetadataHeight,
+                                                          metaLayout.addressof());
+                    if (SUCCEEDED(hr))
+                    {
+                        ConfigureLabelLayout(metaLayout.get(), _detailsEllipsisSign.get(), false);
+                        DWRITE_TEXT_METRICS metaMetrics{};
+                        if (SUCCEEDED(metaLayout->GetMetrics(&metaMetrics)))
+                        {
+                            item.metadataMetrics = metaMetrics;
+                        }
+                        item.metadataLayout = std::move(metaLayout);
+                    }
+                }
+            }
+            else
+            {
+                item.metadataLayout.reset();
+                item.metadataMetrics = {};
             }
         }
 

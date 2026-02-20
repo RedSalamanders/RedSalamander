@@ -44,7 +44,7 @@ namespace
 [[nodiscard]] HRESULT TryGetS3ObjectSummary(const FsS3::ResolvedAwsContext& bucketCtx,
                                             std::string_view bucket,
                                             std::string_view key,
-                                            unsigned __int64& outSizeBytes,
+                                            uint64_t& outSizeBytes,
                                             __int64& outLastWriteTime,
                                             bool& outFound) noexcept
 {
@@ -82,7 +82,7 @@ namespace
         }
 
         outFound         = true;
-        outSizeBytes     = static_cast<unsigned __int64>(obj.GetSize());
+        outSizeBytes     = static_cast<uint64_t>(obj.GetSize());
         outLastWriteTime = FsS3::AwsDateTimeToFileTime64(obj.GetLastModified());
         return S_OK;
     }
@@ -94,7 +94,7 @@ namespace
 class TempFileReader final : public IFileReader
 {
 public:
-    TempFileReader(wil::unique_hfile file, unsigned __int64 sizeBytes) noexcept : _file(std::move(file)), _sizeBytes(sizeBytes)
+    TempFileReader(wil::unique_hfile file, uint64_t sizeBytes) noexcept : _file(std::move(file)), _sizeBytes(sizeBytes)
     {
     }
 
@@ -136,7 +136,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetSize(unsigned __int64* sizeBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
     {
         if (! sizeBytes)
         {
@@ -147,7 +147,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, unsigned __int64* newPosition) noexcept override
+    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
     {
         if (! newPosition)
         {
@@ -180,7 +180,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
         }
 
-        *newPosition = static_cast<unsigned __int64>(moved.QuadPart);
+        *newPosition = static_cast<uint64_t>(moved.QuadPart);
         return S_OK;
     }
 
@@ -223,7 +223,7 @@ private:
 
     std::atomic_ulong _refCount{1};
     wil::unique_hfile _file;
-    unsigned __int64 _sizeBytes = 0;
+    uint64_t _sizeBytes = 0;
 };
 
 class TempFileWriter final : public IFileWriter
@@ -287,7 +287,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetPosition(unsigned __int64* positionBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPosition(uint64_t* positionBytes) noexcept override
     {
         if (! positionBytes)
         {
@@ -313,7 +313,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        *positionBytes = static_cast<unsigned __int64>(moved.QuadPart);
+        *positionBytes = static_cast<uint64_t>(moved.QuadPart);
         return S_OK;
     }
 
@@ -363,8 +363,8 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
         }
 
-        unsigned __int64 sizeBytes = 0;
-        HRESULT hr                 = FsS3::GetFileSizeBytes(_file.get(), sizeBytes);
+        uint64_t sizeBytes = 0;
+        HRESULT hr         = FsS3::GetFileSizeBytes(_file.get(), sizeBytes);
         if (FAILED(hr))
         {
             return hr;
@@ -438,10 +438,10 @@ public:
         const bool allowOverwrite = (static_cast<unsigned long>(_flags) & FILESYSTEM_FLAG_ALLOW_OVERWRITE) != 0;
         if (! allowOverwrite)
         {
-            unsigned __int64 existingSize = 0;
-            __int64 existingLastWrite     = 0;
-            bool found                    = false;
-            const HRESULT existsHr        = TryGetS3ObjectSummary(bucketCtx, bucket, key, existingSize, existingLastWrite, found);
+            uint64_t existingSize     = 0;
+            __int64 existingLastWrite = 0;
+            bool found                = false;
+            const HRESULT existsHr    = TryGetS3ObjectSummary(bucketCtx, bucket, key, existingSize, existingLastWrite, found);
             if (FAILED(existsHr))
             {
                 return existsHr;
@@ -584,10 +584,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetAttributes(const wchar_t* path, unsig
             return bucketHr;
         }
 
-        unsigned __int64 sizeBytes = 0;
-        __int64 lastWriteTime      = 0;
-        bool foundFile             = false;
-        const HRESULT objHr        = TryGetS3ObjectSummary(bucketCtx, bucket, key, sizeBytes, lastWriteTime, foundFile);
+        uint64_t sizeBytes    = 0;
+        __int64 lastWriteTime = 0;
+        bool foundFile        = false;
+        const HRESULT objHr   = TryGetS3ObjectSummary(bucketCtx, bucket, key, sizeBytes, lastWriteTime, foundFile);
         if (FAILED(objHr))
         {
             return objHr;
@@ -757,8 +757,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileReader(const wchar_t* path, IF
         }
     }
 
-    unsigned __int64 sizeBytes = 0;
-    hr                         = FsS3::GetFileSizeBytes(file.get(), sizeBytes);
+    uint64_t sizeBytes = 0;
+    hr                 = FsS3::GetFileSizeBytes(file.get(), sizeBytes);
     if (FAILED(hr))
     {
         return hr;
@@ -920,10 +920,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetFileBasicInformation([[maybe_unused]]
         return bucketHr;
     }
 
-    unsigned __int64 sizeBytes = 0;
-    __int64 lastWriteTime      = 0;
-    bool found                 = false;
-    const HRESULT objHr        = TryGetS3ObjectSummary(bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
+    uint64_t sizeBytes    = 0;
+    __int64 lastWriteTime = 0;
+    bool found            = false;
+    const HRESULT objHr   = TryGetS3ObjectSummary(bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
     if (FAILED(objHr))
     {
         return objHr;
@@ -1094,10 +1094,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetItemProperties([[maybe_unused]] const
                 return hr;
             }
 
-            unsigned __int64 sizeBytes = 0;
-            __int64 lastWriteTime      = 0;
-            bool found                 = false;
-            hr                         = TryGetS3ObjectSummary(bucketCtx, bucketUtf8, keyUtf8, sizeBytes, lastWriteTime, found);
+            uint64_t sizeBytes    = 0;
+            __int64 lastWriteTime = 0;
+            bool found            = false;
+            hr                    = TryGetS3ObjectSummary(bucketCtx, bucketUtf8, keyUtf8, sizeBytes, lastWriteTime, found);
             if (FAILED(hr))
             {
                 return hr;

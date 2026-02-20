@@ -357,9 +357,9 @@ typedef struct DriveInfo
     const wchar_t* displayName; // Header text (e.g., "C:\\" or "s3://bucket").
     const wchar_t* volumeLabel; // Optional volume label.
     const wchar_t* fileSystem;  // Optional file system name.
-    unsigned __int64 totalBytes;
-    unsigned __int64 freeBytes;
-    unsigned __int64 usedBytes;
+    uint64_t totalBytes;
+    uint64_t freeBytes;
+    uint64_t usedBytes;
 } DriveInfo;
 
 interface __declspec(uuid("b612a5d1-7e55-4e08-a3da-8d0d9f5d0f31"))
@@ -585,7 +585,7 @@ interface __declspec(uuid("b6f0a9e1-8c8b-4b72-9f3e-2f2b4b8b9c41"))
          __declspec(novtable)
          IFileWriter : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetPosition(unsigned __int64* positionBytes) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetPosition(uint64_t* positionBytes) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE Write(const void* buffer, unsigned long bytesToWrite, unsigned long* bytesWritten) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE Commit() noexcept = 0;
 };
@@ -602,19 +602,19 @@ The host obtains this interface via `QueryInterface` on the active `IFileSystem`
 ```cpp
 struct FileSystemDirectorySizeResult
 {
-    unsigned __int64 totalBytes;     // Total size in bytes (sum of file sizes).
-    unsigned __int64 fileCount;      // Number of files counted.
-    unsigned __int64 directoryCount; // Number of directories counted (excluding root).
+    uint64_t totalBytes;     // Total size in bytes (sum of file sizes).
+    uint64_t fileCount;      // Number of files counted.
+    uint64_t directoryCount; // Number of directories counted (excluding root).
     HRESULT status;                  // S_OK, HRESULT_FROM_WIN32(ERROR_CANCELLED), or first error.
 };
 
 interface __declspec(novtable) IFileSystemDirectorySizeCallback
 {
     virtual HRESULT STDMETHODCALLTYPE DirectorySizeProgress(
-        unsigned __int64 scannedEntries,
-        unsigned __int64 totalBytes,
-        unsigned __int64 fileCount,
-        unsigned __int64 directoryCount,
+        uint64_t scannedEntries,
+        uint64_t totalBytes,
+        uint64_t fileCount,
+        uint64_t directoryCount,
         const wchar_t* currentPath,
         void* cookie) noexcept = 0;
 
@@ -971,7 +971,7 @@ typedef struct FileSystemOptions
 {
     // 0 = unlimited (use all available bandwidth).
     // Callbacks receive an in/out FileSystemOptions* so the caller can tweak it on progress updates.
-    unsigned __int64 bandwidthLimitBytesPerSecond;
+    uint64_t bandwidthLimitBytesPerSecond;
 } FileSystemOptions;
 
 typedef struct FileSystemRenamePair
@@ -1042,14 +1042,14 @@ interface __declspec(novtable) IFileSystemCallback
         FileSystemOperation operationType,
         unsigned long totalItems,
         unsigned long completedItems,
-        unsigned __int64 totalBytes,
-        unsigned __int64 completedBytes,
+        uint64_t totalBytes,
+        uint64_t completedBytes,
         const wchar_t* currentSourcePath,
         const wchar_t* currentDestinationPath,
-        unsigned __int64 currentItemTotalBytes,
-        unsigned __int64 currentItemCompletedBytes,
+        uint64_t currentItemTotalBytes,
+        uint64_t currentItemCompletedBytes,
         FileSystemOptions* options,
-        unsigned __int64 progressStreamId,
+        uint64_t progressStreamId,
         void* cookie
     ) noexcept = 0;
 
@@ -1176,8 +1176,8 @@ struct FileSystemSearchMatch
 
 struct FileSystemSearchProgress
 {
-    unsigned __int64 scannedEntries;
-    unsigned __int64 matchedEntries;
+    uint64_t scannedEntries;
+    uint64_t matchedEntries;
     const wchar_t* currentPath;
 };
 ```

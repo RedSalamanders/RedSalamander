@@ -119,6 +119,25 @@ public:
     DisplayTextBatch GetDisplayTextBatch(size_t firstVisible, size_t lastVisible) const;
     DisplayTextBatch GetDisplayTextBatchAll(size_t firstAll, size_t lastAll) const;
 
+    // Optimization - Build filtered tail text in a single locked scope
+    // Returns concatenated display text for visible lines in [firstAll..lastAll], plus per-line metadata
+    // for coloring. Avoids per-line IsLineVisible() + GetDisplayTextRefAll() lock overhead.
+    struct TailLineInfo
+    {
+        size_t sourceIndex = 0;
+        UINT32 prefixLen   = 0;
+        UINT32 textLen     = 0;
+        bool hasMeta       = false;
+        Debug::InfoParam::Type type{};
+    };
+    struct FilteredTailResult
+    {
+        std::wstring text;
+        std::vector<TailLineInfo> lines;
+        size_t visibleCount = 0;
+    };
+    FilteredTailResult BuildFilteredTailText(size_t firstAll, size_t lastAll) const;
+
     // Coloring
     void AddColorRange(UINT32 start, UINT32 length, const D2D1_COLOR_F& color);
     void ClearColoring();

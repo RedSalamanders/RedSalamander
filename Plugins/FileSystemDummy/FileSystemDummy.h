@@ -172,7 +172,7 @@ private:
         std::wstring name;
         bool isDirectory                = false;
         DWORD attributes                = 0;
-        unsigned __int64 sizeBytes      = 0;
+        uint64_t sizeBytes              = 0;
         __int64 creationTime            = 0;
         __int64 lastAccessTime          = 0;
         __int64 lastWriteTime           = 0;
@@ -285,7 +285,7 @@ private:
     inline static unsigned int _seed                     = 42;
     inline static unsigned long _latencyMilliseconds     = 0;
     inline static std::wstring _virtualSpeedLimitText    = L"0";
-    inline static std::atomic<unsigned __int64> _virtualSpeedLimitBytesPerSecond{0};
+    inline static std::atomic<uint64_t> _virtualSpeedLimitBytesPerSecond{0};
 
     mutable std::mutex _propertiesMutex;
     std::string _lastPropertiesJson;
@@ -313,6 +313,10 @@ private:
     std::wstring _driveFileSystem;
     DriveInfo _driveInfo{};
 
+    // Clears _roots iteratively to avoid stack overflow on deeply-nested trees.
+    // Must be called while _mutex is held.
+    static void ClearRootsIteratively() noexcept;
+
     std::filesystem::path NormalizePath(std::wstring_view path) const;
     DummyRoot* FindRoot(std::wstring_view rootPath) noexcept;
     DummyRoot* GetOrCreateRoot(std::wstring_view rootPath);
@@ -329,13 +333,13 @@ private:
     std::wstring MakeRandomBaseName(std::mt19937& rng);
     void TouchNode(DummyNode& node) noexcept;
     void TouchParent(DummyNode* parent) noexcept;
-    unsigned __int64 ComputeNodeBytes(const DummyNode& node) const noexcept;
+    uint64_t ComputeNodeBytes(const DummyNode& node) const noexcept;
     bool IsAncestor(const DummyNode& node, const DummyNode& possibleDescendant) const noexcept;
     std::unique_ptr<DummyNode> CloneNode(const DummyNode& source);
     HRESULT CreateDirectoryClone(
         const DummyNode& sourceDirectory, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, DummyNode** outDirectory);
-    HRESULT CopyNode(DummyNode& source, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, unsigned __int64* outBytes);
-    HRESULT MoveNode(DummyNode& source, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, unsigned __int64* outBytes);
+    HRESULT CopyNode(DummyNode& source, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, uint64_t* outBytes);
+    HRESULT MoveNode(DummyNode& source, DummyNode& destinationParent, std::wstring_view destinationName, FileSystemFlags flags, uint64_t* outBytes);
     HRESULT DeleteNode(DummyNode& target, FileSystemFlags flags);
     void SimulateLatency(unsigned long itemCount) const noexcept;
 

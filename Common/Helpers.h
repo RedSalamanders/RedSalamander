@@ -1315,23 +1315,45 @@ inline void InitPostedPayloadWindow(HWND hwnd) noexcept
 template <typename T> [[nodiscard]] inline bool PostMessagePayload(HWND hwnd, UINT msg, WPARAM wParam, std::unique_ptr<T> payload) noexcept
 {
     T* raw = payload.release();
-    if (! PostMessageW(hwnd, msg, wParam, reinterpret_cast<LPARAM>(raw)))
-    {
-        // PostMessage failed - reclaim ownership via unique_ptr destructor
-        std::unique_ptr<T> reclaimed(raw);
-        return false;
-    }
-
     if (raw == nullptr)
     {
-        return true;
+        return PostMessageW(hwnd, msg, wParam, 0) != 0;
     }
 
     const auto deleter = +[](void* ptr) noexcept { delete static_cast<T*>(ptr); };
-    if (! detail::RegisterPostedMessagePayload(hwnd, msg, raw, deleter))
+
+    auto& registry = detail::GetPostedMessagePayloadRegistry();
+    std::unique_lock lock(registry.mutex);
+
+    if (! hwnd || registry.closedHwnds.contains(hwnd))
     {
+        lock.unlock();
+        deleter(raw);
         return false;
     }
+
+    static_cast<void>(registry.entriesByPtr.emplace(raw, detail::PostedMessagePayloadEntry{.hwnd = hwnd, .msg = msg, .del = deleter}));
+    static_cast<void>(registry.ptrsByHwnd[hwnd].insert(raw));
+
+    if (! PostMessageW(hwnd, msg, wParam, reinterpret_cast<LPARAM>(raw)))
+    {
+        registry.entriesByPtr.erase(raw);
+
+        const auto hwIt = registry.ptrsByHwnd.find(hwnd);
+        if (hwIt != registry.ptrsByHwnd.end())
+        {
+            hwIt->second.erase(raw);
+            if (hwIt->second.empty())
+            {
+                registry.ptrsByHwnd.erase(hwIt);
+            }
+        }
+
+        lock.unlock();
+        deleter(raw);
+        return false;
+    }
+
     return true;
 }
 

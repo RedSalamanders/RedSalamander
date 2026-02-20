@@ -341,8 +341,8 @@ FindHexNeedleForward(IFileReader* reader, uint64_t fileSize, uint64_t startOffse
         return std::nullopt;
     }
 
-    unsigned __int64 newPos = 0;
-    const HRESULT seekHr    = reader->Seek(static_cast<__int64>(startOffset), FILE_BEGIN, &newPos);
+    uint64_t newPos      = 0;
+    const HRESULT seekHr = reader->Seek(static_cast<__int64>(startOffset), FILE_BEGIN, &newPos);
     if (FAILED(seekHr))
     {
         return std::nullopt;
@@ -446,8 +446,8 @@ FindHexNeedleBackward(IFileReader* reader, uint64_t fileSize, uint64_t startOffs
             return std::nullopt;
         }
 
-        unsigned __int64 newPos = 0;
-        const HRESULT seekHr    = reader->Seek(static_cast<__int64>(blockStart), FILE_BEGIN, &newPos);
+        uint64_t newPos      = 0;
+        const HRESULT seekHr = reader->Seek(static_cast<__int64>(blockStart), FILE_BEGIN, &newPos);
         if (FAILED(seekHr))
         {
             return std::nullopt;
@@ -1794,8 +1794,8 @@ HRESULT ViewerText::LoadHexData(HWND hwnd) noexcept
     {
         _hexBytes.resize(static_cast<size_t>(_fileSize));
 
-        unsigned __int64 ignored = 0;
-        const HRESULT seekHr     = _fileReader->Seek(0, FILE_BEGIN, &ignored);
+        uint64_t ignored     = 0;
+        const HRESULT seekHr = _fileReader->Seek(0, FILE_BEGIN, &ignored);
         if (FAILED(seekHr))
         {
             _hexBytes.clear();
@@ -2072,8 +2072,8 @@ HRESULT ViewerText::RefillHexCache(uint64_t offset) noexcept
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
 
-    unsigned __int64 ignored = 0;
-    const HRESULT seekHr     = _fileReader->Seek(static_cast<__int64>(aligned), FILE_BEGIN, &ignored);
+    uint64_t ignored     = 0;
+    const HRESULT seekHr = _fileReader->Seek(static_cast<__int64>(aligned), FILE_BEGIN, &ignored);
     if (FAILED(seekHr))
     {
         return seekHr;

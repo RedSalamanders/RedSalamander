@@ -30,8 +30,8 @@ struct SpeedLimitDialogState
     SpeedLimitDialogState& operator=(SpeedLimitDialogState&) = delete;
     SpeedLimitDialogState(SpeedLimitDialogState&)            = delete;
 
-    unsigned __int64 initialLimitBytesPerSecond = 0;
-    unsigned __int64 resultLimitBytesPerSecond  = 0;
+    uint64_t initialLimitBytesPerSecond = 0;
+    uint64_t resultLimitBytesPerSecond  = 0;
     AppTheme theme{};
     wil::unique_hbrush backgroundBrush;
     std::wstring hintText;
@@ -185,13 +185,13 @@ bool EqualsIgnoreAsciiCase(std::wstring_view a, std::wstring_view b) noexcept
     return true;
 }
 
-bool TryParseThroughputText(std::wstring_view text, unsigned __int64& outBytesPerSecond) noexcept
+bool TryParseThroughputText(std::wstring_view text, uint64_t& outBytesPerSecond) noexcept
 {
-    constexpr unsigned __int64 kKiB = 1024ull;
-    constexpr unsigned __int64 kMiB = 1024ull * 1024ull;
-    constexpr unsigned __int64 kGiB = 1024ull * 1024ull * 1024ull;
-    constexpr unsigned __int64 kTiB = 1024ull * 1024ull * 1024ull * 1024ull;
-    constexpr unsigned __int64 kPiB = 1024ull * 1024ull * 1024ull * 1024ull * 1024ull;
+    constexpr uint64_t kKiB = 1024ull;
+    constexpr uint64_t kMiB = 1024ull * 1024ull;
+    constexpr uint64_t kGiB = 1024ull * 1024ull * 1024ull;
+    constexpr uint64_t kTiB = 1024ull * 1024ull * 1024ull * 1024ull;
+    constexpr uint64_t kPiB = 1024ull * 1024ull * 1024ull * 1024ull * 1024ull;
 
     outBytesPerSecond = 0;
 
@@ -253,7 +253,7 @@ bool TryParseThroughputText(std::wstring_view text, unsigned __int64& outBytesPe
         }
     }
 
-    unsigned __int64 multiplier = 0;
+    uint64_t multiplier = 0;
     if (unit.empty() || EqualsIgnoreAsciiCase(unit, L"kb") || EqualsIgnoreAsciiCase(unit, L"k") || EqualsIgnoreAsciiCase(unit, L"kib"))
     {
         // Bare numeric strings are interpreted as KiB for user-friendliness.
@@ -291,14 +291,14 @@ bool TryParseThroughputText(std::wstring_view text, unsigned __int64& outBytesPe
         return true;
     }
 
-    constexpr double maxValue = static_cast<double>(std::numeric_limits<unsigned __int64>::max());
+    constexpr double maxValue = static_cast<double>(std::numeric_limits<uint64_t>::max());
     if (result >= maxValue)
     {
-        outBytesPerSecond = std::numeric_limits<unsigned __int64>::max();
+        outBytesPerSecond = std::numeric_limits<uint64_t>::max();
         return true;
     }
 
-    outBytesPerSecond = static_cast<unsigned __int64>(result + 0.5);
+    outBytesPerSecond = static_cast<uint64_t>(result + 0.5);
     return true;
 }
 
@@ -500,7 +500,17 @@ using FileOperationsPopupInternal::TaskSnapshot;
 
 void FileOperationsPopupInternal::FileOperationsPopupState::ApplyScrollBarTheme(HWND hwnd) const noexcept
 {
-    if (! hwnd || ! folderWindow)
+    if (! hwnd)
+    {
+        return;
+    }
+
+    if (! hostLifetime.lock())
+    {
+        return;
+    }
+
+    if (! folderWindow)
     {
         return;
     }
@@ -795,7 +805,17 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureTarget(HWND hw
 
 void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noexcept
 {
-    if (! _target || ! folderWindow)
+    if (! _target)
+    {
+        return;
+    }
+
+    if (! hostLifetime.lock())
+    {
+        return;
+    }
+
+    if (! folderWindow)
     {
         return;
     }
@@ -1031,17 +1051,38 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noex
 std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState::BuildSnapshot() const
 {
     std::vector<FolderWindow::FileOperationState::Task*> tasks;
+    std::vector<FolderWindow::InformationalTaskUpdate> informationalTasks;
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completedTasks;
-    if (fileOps)
+    if (fileOps && hostLifetime.lock())
     {
         fileOps->CollectTasks(tasks);
+        fileOps->CollectInformationalTasks(informationalTasks);
         fileOps->CollectCompletedTasks(completedTasks);
     }
 
     std::vector<TaskSnapshot> result;
-    result.reserve(tasks.size() + completedTasks.size());
+    result.reserve(tasks.size() + completedTasks.size() + informationalTasks.size());
     std::unordered_map<uint64_t, bool> activeTaskIds;
     activeTaskIds.reserve(tasks.size());
+
+    for (const auto& info : informationalTasks)
+    {
+        if (info.taskId == 0)
+        {
+            continue;
+        }
+
+        TaskSnapshot snap{};
+        snap.kind                  = TaskSnapshot::Kind::Informational;
+        snap.taskId                = info.taskId;
+        activeTaskIds[snap.taskId] = true;
+        snap.informational         = info;
+        snap.started               = true;
+        snap.finished              = info.finished;
+        snap.resultHr              = info.resultHr;
+
+        result.push_back(std::move(snap));
+    }
 
     for (auto* task : tasks)
     {
@@ -1063,6 +1104,8 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
             snap.completedBytes         = task->_progressCompletedBytes;
             snap.itemTotalBytes         = task->_progressItemTotalBytes;
             snap.itemCompletedBytes     = task->_progressItemCompletedBytes;
+            snap.completedFiles         = task->_completedTopLevelFiles;
+            snap.completedFolders       = task->_completedTopLevelFolders;
             snap.currentSourcePath      = task->_progressSourcePath;
             snap.currentDestinationPath = task->_progressDestinationPath;
             snap.hasProgressCallbacks   = ! task->_lastProgressCallbackSourcePath.empty() || ! task->_lastProgressCallbackDestinationPath.empty();
@@ -1078,8 +1121,8 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
                 // currentItemCompletedBytes > currentItemTotalBytes (can happen with out-of-order updates or bugs).
                 if (snap.inFlightFiles[i].totalBytes > 0 && snap.inFlightFiles[i].completedBytes > snap.inFlightFiles[i].totalBytes)
                 {
-                    constexpr unsigned __int64 kClampThresholdBytes = 64ull * 1024ull;
-                    const unsigned __int64 delta                    = snap.inFlightFiles[i].completedBytes - snap.inFlightFiles[i].totalBytes;
+                    constexpr uint64_t kClampThresholdBytes = 64ull * 1024ull;
+                    const uint64_t delta                    = snap.inFlightFiles[i].completedBytes - snap.inFlightFiles[i].totalBytes;
                     if (delta <= kClampThresholdBytes)
                     {
                         snap.inFlightFiles[i].completedBytes = snap.inFlightFiles[i].totalBytes;
@@ -1175,6 +1218,8 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.completedItems         = completed.completedItems;
         snap.totalBytes             = completed.totalBytes;
         snap.completedBytes         = completed.completedBytes;
+        snap.completedFiles         = completed.completedFiles;
+        snap.completedFolders       = completed.completedFolders;
         snap.currentSourcePath      = completed.sourcePath;
         snap.currentDestinationPath = completed.destinationPath;
         snap.destinationFolder      = completed.destinationFolder;
@@ -1185,6 +1230,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.warningCount           = completed.warningCount;
         snap.errorCount             = completed.errorCount;
         snap.lastDiagnosticMessage  = completed.lastDiagnosticMessage;
+        snap.preCalcSkipped         = completed.preCalcSkipped;
 
         if (snap.totalItems > 0)
         {
@@ -1204,7 +1250,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState::BuildRateSnapshot() const
 {
     std::vector<FolderWindow::FileOperationState::Task*> tasks;
-    if (fileOps)
+    if (fileOps && hostLifetime.lock())
     {
         fileOps->CollectTasks(tasks);
     }
@@ -1309,15 +1355,15 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
                 }
                 else
                 {
-                    unsigned __int64 prevBytes = history.lastBytes;
+                    uint64_t prevBytes = history.lastBytes;
                     if (task.completedBytes < prevBytes)
                     {
                         prevBytes = task.completedBytes;
                     }
 
-                    const unsigned __int64 deltaBytes = task.completedBytes - prevBytes;
-                    const double instBytesPerSec      = static_cast<double>(deltaBytes) / dtSec;
-                    const float instF                 = instBytesPerSec > 0.0 ? static_cast<float>(instBytesPerSec) : 0.0f;
+                    const uint64_t deltaBytes    = task.completedBytes - prevBytes;
+                    const double instBytesPerSec = static_cast<double>(deltaBytes) / dtSec;
+                    const float instF            = instBytesPerSec > 0.0 ? static_cast<float>(instBytesPerSec) : 0.0f;
 
                     history.samples[history.writeIndex] = instF;
                     // Compute hue from the current source path to match progress bar color
@@ -1702,7 +1748,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawCollapseChevron(
 
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(const D2D1_RECT_F& rect,
                                                                                const RateHistory& history,
-                                                                               unsigned __int64 limitBytesPerSecond,
+                                                                               uint64_t limitBytesPerSecond,
                                                                                std::wstring_view overlayText,
                                                                                bool showAnimation,
                                                                                bool rainbowMode,
@@ -2013,6 +2059,18 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
     static_cast<void>(hdc.get());
     static_cast<void>(ps);
 
+    if (! hostLifetime.lock())
+    {
+        return;
+    }
+
+    const FolderWindow* folderWindowPtr = folderWindow;
+    if (! folderWindowPtr)
+    {
+        return;
+    }
+    const AppTheme& appTheme = folderWindowPtr->GetTheme();
+
     EnsureTarget(hwnd);
     EnsureTextFormats();
     EnsureBrushes();
@@ -2044,6 +2102,39 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
     cardHeights.reserve(snapshot.size());
     for (const TaskSnapshot& task : snapshot)
     {
+        if (task.kind == TaskSnapshot::Kind::Informational)
+        {
+            const FolderWindow::InformationalTaskUpdate& info = task.informational;
+            const float expandedBase                          = task.finished ? DipsToPixels(180.0f, _dpi) : DipsToPixels(210.0f, _dpi);
+            float h                                           = IsTaskCollapsed(task.taskId) ? collapsedCardH : expandedBase;
+
+            if (! IsTaskCollapsed(task.taskId) && ! task.finished && info.kind == FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories &&
+                info.contentActive && info.contentInFlightCount > 1u)
+            {
+                size_t activeInFlightCount = 0;
+                for (size_t i = 0; i < info.contentInFlightCount; ++i)
+                {
+                    const auto& entry          = info.contentInFlight[i];
+                    const bool active          = entry.totalBytes == 0 || entry.completedBytes < entry.totalBytes;
+                    const bool recentCompleted = ! active && entry.totalBytes > 0 && entry.completedBytes >= entry.totalBytes && entry.lastUpdateTick != 0 &&
+                                                 renderTick >= entry.lastUpdateTick && (renderTick - entry.lastUpdateTick) <= kCompletedInFlightGraceMs;
+                    if (active || recentCompleted)
+                    {
+                        ++activeInFlightCount;
+                    }
+                }
+
+                const size_t lineCount = std::max<size_t>(1u, activeInFlightCount);
+                if (lineCount > 1u)
+                {
+                    h += static_cast<float>(lineCount - 1u) * baseLineH;
+                }
+            }
+
+            cardHeights.push_back(h);
+            continue;
+        }
+
         float h = IsTaskCollapsed(task.taskId) ? collapsedCardH : expandedCardH;
         if (! IsTaskCollapsed(task.taskId) && task.finished)
         {
@@ -2251,6 +2342,529 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 const float textMaxW     = std::max(0.0f, contentRight - textX);
 
                 const bool isCollapsedTask = IsTaskCollapsed(task.taskId);
+
+                if (task.kind == TaskSnapshot::Kind::Informational)
+                {
+                    const FolderWindow::InformationalTaskUpdate& info = task.informational;
+                    const ULONGLONG nowTick                           = renderTick;
+
+                    std::wstring headerText = info.title;
+                    if (info.finished && ! info.title.empty())
+                    {
+                        const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                        std::wstring statusText;
+                        if (SUCCEEDED(info.resultHr))
+                        {
+                            statusText = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_COMPLETED);
+                        }
+                        else if (info.resultHr == cancelledHr || info.resultHr == E_ABORT)
+                        {
+                            statusText = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_CANCELED);
+                        }
+                        else
+                        {
+                            statusText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_STATUS_FAILED, static_cast<unsigned long>(info.resultHr));
+                        }
+                        headerText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, info.title, statusText);
+                    }
+
+                    const float collapseBtnSize = DipsToPixels(18.0f, _dpi);
+                    const float collapseBtnGap  = DipsToPixels(6.0f, _dpi);
+
+                    const float headerTop    = isCollapsedTask ? cardRect.top + (taskCardH - lineH) * 0.5f : textY;
+                    const float headerBottom = headerTop + lineH;
+                    const float collapseTop  = headerTop + (lineH - collapseBtnSize) * 0.5f;
+                    const float collapseLeft = std::max(textX, contentRight - collapseBtnSize);
+
+                    PopupButton collapseBtn{};
+                    collapseBtn.bounds     = D2D1::RectF(collapseLeft, collapseTop, contentRight, collapseTop + collapseBtnSize);
+                    collapseBtn.hit.kind   = PopupHitTest::Kind::TaskToggleCollapse;
+                    collapseBtn.hit.taskId = task.taskId;
+                    _buttons.push_back(collapseBtn);
+                    DrawButton(collapseBtn, nullptr, {});
+                    DrawCollapseChevron(collapseBtn.bounds, isCollapsedTask);
+
+                    const float headerRight = std::max(textX, collapseBtn.bounds.left - collapseBtnGap);
+                    float headerLeft        = textX;
+
+                    CaptionStatus statusIcon = CaptionStatus::None;
+                    {
+                        const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                        if (info.finished && FAILED(info.resultHr) && info.resultHr != cancelledHr && info.resultHr != E_ABORT)
+                        {
+                            statusIcon = CaptionStatus::Error;
+                        }
+                        else if (info.finished && SUCCEEDED(info.resultHr))
+                        {
+                            statusIcon = CaptionStatus::Ok;
+                        }
+                    }
+
+                    if (statusIcon != CaptionStatus::None && _target)
+                    {
+                        const float iconSize = DipsToPixels(16.0f, _dpi);
+                        const float iconGap  = DipsToPixels(6.0f, _dpi);
+
+                        D2D1_RECT_F iconRc = D2D1::RectF(textX, headerTop, textX + iconSize, headerBottom);
+                        iconRc.right       = std::min(iconRc.right, headerRight);
+
+                        wchar_t fluentGlyph = 0;
+                        wchar_t fallback    = 0;
+                        ID2D1Brush* brush   = _textBrush.get();
+                        switch (statusIcon)
+                        {
+                            case CaptionStatus::Ok:
+                                fluentGlyph = FluentIcons::kCheckMark;
+                                fallback    = FluentIcons::kFallbackCheckMark;
+                                brush       = _statusOkBrush ? _statusOkBrush.get() : (_textBrush ? _textBrush.get() : nullptr);
+                                break;
+                            case CaptionStatus::Error:
+                                fluentGlyph = FluentIcons::kError;
+                                fallback    = FluentIcons::kFallbackError;
+                                brush       = _statusErrorBrush ? _statusErrorBrush.get() : (_textBrush ? _textBrush.get() : nullptr);
+                                break;
+                            case CaptionStatus::Warning:
+                            case CaptionStatus::None:
+                            default: break;
+                        }
+
+                        const bool useFluentFormat = _statusIconFormat != nullptr && fluentGlyph != 0;
+                        const wchar_t glyph        = useFluentFormat ? fluentGlyph : fallback;
+                        IDWriteTextFormat* format  = useFluentFormat ? _statusIconFormat.get() : _statusIconFallbackFormat.get();
+
+                        if (format && brush && glyph != 0 && iconRc.right > iconRc.left)
+                        {
+                            const wchar_t text[2]{glyph, 0};
+                            _target->DrawTextW(text, 1u, format, iconRc, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            headerLeft = std::min(headerRight, iconRc.right + iconGap);
+                        }
+                    }
+
+                    if (_headerFormat)
+                    {
+                        const D2D1_RECT_F headerRc = D2D1::RectF(headerLeft, headerTop, headerRight, headerBottom);
+                        _target->DrawTextW(headerText.data(),
+                                           static_cast<UINT32>(headerText.size()),
+                                           _headerFormat.get(),
+                                           headerRc,
+                                           _textBrush.get(),
+                                           D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    }
+
+                    if (isCollapsedTask)
+                    {
+                        const float gapAfter = (taskIndex + 1u < taskCount) ? cardGap : 0.0f;
+                        y += taskCardH + gapAfter;
+                        continue;
+                    }
+
+                    textY = headerBottom + DipsToPixels(6.0f, _dpi);
+
+                    const auto drawLabeledPathLine = [&](UINT labelId, const std::filesystem::path& path) noexcept
+                    {
+                        if (! _dwriteFactory || ! _smallFormat || ! _bodyFormat || ! _textBrush || ! _subTextBrush)
+                        {
+                            return;
+                        }
+
+                        if (textY + lineH > cardRect.bottom)
+                        {
+                            return;
+                        }
+
+                        const std::wstring label = LoadStringResource(nullptr, labelId);
+                        if (label.empty())
+                        {
+                            return;
+                        }
+
+                        const float labelW   = MeasureTextWidth(_dwriteFactory.get(), _smallFormat.get(), label, textMaxW, lineH);
+                        const float labelGap = DipsToPixels(6.0f, _dpi);
+                        const float pathLeft = textX + labelW + labelGap;
+                        const float pathW    = std::max(0.0f, contentRight - pathLeft);
+
+                        const D2D1_RECT_F labelRc = D2D1::RectF(textX, textY, textX + labelW, textY + lineH);
+                        _target->DrawTextW(
+                            label.data(), static_cast<UINT32>(label.size()), _smallFormat.get(), labelRc, _subTextBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+
+                        const std::wstring pathText = TruncatePathMiddleToWidth(_dwriteFactory.get(), _bodyFormat.get(), path.native(), pathW, lineH);
+                        const D2D1_RECT_F pathRc    = D2D1::RectF(pathLeft, textY, contentRight, textY + lineH);
+                        _target->DrawTextW(
+                            pathText.data(), static_cast<UINT32>(pathText.size()), _bodyFormat.get(), pathRc, _textBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+
+                        textY += lineH;
+                    };
+
+                    if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories)
+                    {
+                        drawLabeledPathLine(IDS_PREFS_PANES_HEADER_LEFT, info.leftRoot);
+                        drawLabeledPathLine(IDS_PREFS_PANES_HEADER_RIGHT, info.rightRoot);
+
+                        if (_smallFormat && _textBrush && (info.scanActive || info.scanFolderCount > 0 || info.scanEntryCount > 0))
+                        {
+                            const std::wstring scanPath = info.scanCurrentRelative.empty() ? std::wstring(L".") : info.scanCurrentRelative.native();
+                            const std::wstring scanText =
+                                FormatStringResource(nullptr, IDS_FMT_COMPARE_SCAN_STATUS, scanPath, info.scanFolderCount, info.scanEntryCount);
+                            const D2D1_RECT_F scanRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                            _target->DrawTextW(scanText.data(),
+                                               static_cast<UINT32>(scanText.size()),
+                                               _smallFormat.get(),
+                                               scanRc,
+                                               _textBrush.get(),
+                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            textY += lineH;
+                        }
+
+                        if (_smallFormat && _subTextBrush && ! info.finished && info.scanElapsedSeconds.has_value())
+                        {
+                            if (textY + lineH <= cardRect.bottom)
+                            {
+                                const std::wstring duration = FormatDurationHms(info.scanElapsedSeconds.value());
+                                if (! duration.empty())
+                                {
+                                    const std::wstring elapsedText = FormatStringResource(nullptr, IDS_FMT_COMPARE_ELAPSED, duration);
+                                    const D2D1_RECT_F elapsedRc    = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                                    _target->DrawTextW(elapsedText.data(),
+                                                       static_cast<UINT32>(elapsedText.size()),
+                                                       _smallFormat.get(),
+                                                       elapsedRc,
+                                                       _subTextBrush.get(),
+                                                       D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                    textY += lineH;
+                                }
+                            }
+                        }
+
+                        if (_smallFormat && _subTextBrush && (info.scanCandidateFileCount > 0 || info.scanCandidateTotalBytes > 0))
+                        {
+                            if (textY + lineH <= cardRect.bottom)
+                            {
+                                const std::wstring totalBytes = FormatBytesCompact(info.scanCandidateTotalBytes);
+                                const std::wstring candidateText =
+                                    FormatStringResource(nullptr, IDS_FMT_COMPARE_SCAN_CANDIDATES_STATUS, info.scanCandidateFileCount, totalBytes);
+                                const D2D1_RECT_F candidatesRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                                _target->DrawTextW(candidateText.data(),
+                                                   static_cast<UINT32>(candidateText.size()),
+                                                   _smallFormat.get(),
+                                                   candidatesRc,
+                                                   _subTextBrush.get(),
+                                                   D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                textY += lineH;
+                            }
+                        }
+                    }
+                    else if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase)
+                    {
+                        if (! info.changeCaseCurrentPath.empty())
+                        {
+                            drawLabeledPathLine(IDS_FILEOPS_LABEL_FROM, info.changeCaseCurrentPath);
+                        }
+
+                        if (_smallFormat && _textBrush &&
+                            (info.changeCaseEnumerating || info.changeCaseScannedFolders > 0 || info.changeCaseScannedEntries > 0))
+                        {
+                            const std::wstring scanPath = info.changeCaseCurrentPath.empty() ? std::wstring(L".") : info.changeCaseCurrentPath.native();
+                            const std::wstring scanText =
+                                FormatStringResource(nullptr, IDS_FMT_COMPARE_SCAN_STATUS, scanPath, info.changeCaseScannedFolders, info.changeCaseScannedEntries);
+                            const D2D1_RECT_F scanRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                            _target->DrawTextW(scanText.data(),
+                                               static_cast<UINT32>(scanText.size()),
+                                               _smallFormat.get(),
+                                               scanRc,
+                                               _textBrush.get(),
+                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            textY += lineH;
+                        }
+
+                        if (_smallFormat && _subTextBrush &&
+                            (info.changeCaseRenaming || info.changeCasePlannedRenames > 0 || info.changeCaseCompletedRenames > 0))
+                        {
+                            if (textY + lineH <= cardRect.bottom)
+                            {
+                                const std::wstring countsText = info.changeCasePlannedRenames > 0
+                                                                    ? FormatStringResource(nullptr,
+                                                                                           IDS_FMT_FILEOPS_OP_COUNTS,
+                                                                                           info.title,
+                                                                                           info.changeCaseCompletedRenames,
+                                                                                           info.changeCasePlannedRenames)
+                                                                    : FormatStringResource(nullptr,
+                                                                                           IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL,
+                                                                                           info.title,
+                                                                                           info.changeCaseCompletedRenames);
+                                const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                                _target->DrawTextW(countsText.data(),
+                                                   static_cast<UINT32>(countsText.size()),
+                                                   _smallFormat.get(),
+                                                   countsRc,
+                                                   _subTextBrush.get(),
+                                                   D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                textY += lineH;
+                            }
+                        }
+                    }
+
+                    if (_smallFormat && _textBrush && info.contentActive)
+                    {
+                        std::array<size_t, FolderWindow::InformationalTaskUpdate::kMaxContentInFlightFiles> activeInFlightIndices{};
+                        size_t activeInFlightCount = 0;
+                        for (size_t i = 0; i < info.contentInFlightCount && activeInFlightCount < activeInFlightIndices.size(); ++i)
+                        {
+                            const auto& entry          = info.contentInFlight[i];
+                            const bool active          = entry.totalBytes == 0 || entry.completedBytes < entry.totalBytes;
+                            const bool recentCompleted = ! active && entry.totalBytes > 0 && entry.completedBytes >= entry.totalBytes &&
+                                                         entry.lastUpdateTick != 0 && nowTick >= entry.lastUpdateTick &&
+                                                         (nowTick - entry.lastUpdateTick) <= kCompletedInFlightGraceMs;
+                            if (active || recentCompleted)
+                            {
+                                activeInFlightIndices[activeInFlightCount] = i;
+                                ++activeInFlightCount;
+                            }
+                        }
+
+                        if (activeInFlightCount == 0u)
+                        {
+                            const std::wstring contentPath = info.contentCurrentRelative.empty() ? std::wstring{} : info.contentCurrentRelative.native();
+                            const std::wstring bytesRead   = FormatBytesCompact(info.contentCurrentCompletedBytes);
+                            std::wstring contentText;
+                            if (info.contentCurrentTotalBytes > 0)
+                            {
+                                const std::wstring bytesTotal = FormatBytesCompact(info.contentCurrentTotalBytes);
+                                contentText = FormatStringResource(nullptr, IDS_FMT_COMPARE_CONTENT_STATUS, contentPath, bytesRead, bytesTotal);
+                            }
+                            else
+                            {
+                                contentText = FormatStringResource(nullptr, IDS_FMT_COMPARE_CONTENT_STATUS_UNKNOWN, contentPath, bytesRead);
+                            }
+
+                            const D2D1_RECT_F contentRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                            _target->DrawTextW(contentText.data(),
+                                               static_cast<UINT32>(contentText.size()),
+                                               _smallFormat.get(),
+                                               contentRc,
+                                               _textBrush.get(),
+                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            textY += lineH;
+                        }
+                        else
+                        {
+                            const float rightEdge       = textX + textMaxW;
+                            const float miniBarGap      = DipsToPixels(8.0f, _dpi);
+                            const float miniBarWDesired = DipsToPixels(92.0f, _dpi);
+                            const float miniBarH        = DipsToPixels(6.0f, _dpi);
+
+                            for (size_t i = 0; i < activeInFlightCount; ++i)
+                            {
+                                if (textY + lineH > cardRect.bottom)
+                                {
+                                    break;
+                                }
+
+                                const auto& entry = info.contentInFlight[activeInFlightIndices[i]];
+
+                                const std::wstring_view sourcePathText = entry.relativePath.native();
+                                const uint64_t fileTotalBytes          = entry.totalBytes;
+                                const uint64_t fileCompletedBytes      = entry.completedBytes;
+
+                                const float availableW     = std::max(0.0f, rightEdge - textX);
+                                const float miniBarWMin    = DipsToPixels(40.0f, _dpi);
+                                const float minTextW       = DipsToPixels(48.0f, _dpi);
+                                float miniBarW             = std::min(miniBarWDesired, availableW);
+                                const float maxBarWithText = std::max(0.0f, availableW - miniBarGap - minTextW);
+                                if (maxBarWithText > 0.0f)
+                                {
+                                    miniBarW = std::clamp(miniBarW, std::min(miniBarWMin, maxBarWithText), maxBarWithText);
+                                }
+
+                                if (fileTotalBytes > 0u && fileCompletedBytes >= fileTotalBytes)
+                                {
+                                    miniBarW = 0.0f;
+                                }
+
+                                const float barRight  = rightEdge;
+                                const float barLeft   = barRight - miniBarW;
+                                const float pathRight = (miniBarW > 0.0f) ? std::max(textX, barLeft - miniBarGap) : rightEdge;
+                                const float pathW     = std::max(0.0f, pathRight - textX);
+
+                                const std::wstring fromPath = TruncatePathMiddleToWidth(_dwriteFactory.get(), _bodyFormat.get(), sourcePathText, pathW, lineH);
+                                const D2D1_RECT_F pathRc    = D2D1::RectF(textX, textY, textX + pathW, textY + lineH);
+                                _target->DrawTextW(fromPath.data(),
+                                                   static_cast<UINT32>(fromPath.size()),
+                                                   _bodyFormat.get(),
+                                                   pathRc,
+                                                   _textBrush.get(),
+                                                   D2D1_DRAW_TEXT_OPTIONS_CLIP);
+
+                                if (miniBarW > 0.0f && _progressBgBrush && _progressItemBrush)
+                                {
+                                    const float barTop          = textY + (lineH - miniBarH) * 0.5f;
+                                    const D2D1_RECT_F miniBarRc = D2D1::RectF(barLeft, barTop, barRight, barTop + miniBarH);
+
+                                    const float radiusTrack = ClampCornerRadius(miniBarRc, DipsToPixels(2.0f, _dpi));
+                                    _target->FillRoundedRectangle(D2D1::RoundedRect(miniBarRc, radiusTrack, radiusTrack), _progressBgBrush.get());
+
+                                    const bool hasTotal = fileTotalBytes > 0u;
+                                    const float frac =
+                                        hasTotal && fileCompletedBytes <= fileTotalBytes
+                                            ? Clamp01(static_cast<float>(static_cast<double>(fileCompletedBytes) / static_cast<double>(fileTotalBytes)))
+                                            : 0.0f;
+
+                                    if (appTheme.menu.rainbowMode)
+                                    {
+                                        const D2D1::ColorF rainbow = RainbowProgressColor(appTheme, sourcePathText);
+                                        _progressItemBrush->SetColor(rainbow);
+                                    }
+                                    else
+                                    {
+                                        _progressItemBrush->SetColor(_progressItemBaseColor);
+                                    }
+
+                                    const D2D1_RECT_F fill =
+                                        hasTotal
+                                            ? D2D1::RectF(
+                                                  miniBarRc.left, miniBarRc.top, miniBarRc.left + (miniBarRc.right - miniBarRc.left) * frac, miniBarRc.bottom)
+                                            : ComputeIndeterminateBarFill(miniBarRc, nowTick);
+                                    const float radiusFill = ClampCornerRadius(fill, DipsToPixels(2.0f, _dpi));
+                                    _target->FillRoundedRectangle(D2D1::RoundedRect(fill, radiusFill, radiusFill), _progressItemBrush.get());
+                                }
+
+                                textY += lineH;
+                            }
+                        }
+                    }
+
+                    if (_smallFormat && _subTextBrush && (info.contentPendingCount > 0 || info.contentCompletedCount > 0))
+                    {
+                        if (textY + lineH <= cardRect.bottom)
+                        {
+                            const std::wstring countsText =
+                                FormatStringResource(nullptr, IDS_FMT_COMPARE_CONTENT_COUNTS_STATUS, info.contentPendingCount, info.contentCompletedCount);
+                            const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                            _target->DrawTextW(countsText.data(),
+                                               static_cast<UINT32>(countsText.size()),
+                                               _smallFormat.get(),
+                                               countsRc,
+                                               _subTextBrush.get(),
+                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            textY += lineH;
+                        }
+                    }
+
+                    if (_smallFormat && _subTextBrush && info.contentTotalBytes > 0)
+                    {
+                        if (textY + lineH <= cardRect.bottom)
+                        {
+                            const std::wstring completedBytes = FormatBytesCompact(info.contentCompletedBytes);
+                            const std::wstring totalBytes     = FormatBytesCompact(info.contentTotalBytes);
+                            const std::wstring bytesText =
+                                FormatStringResource(nullptr, IDS_FMT_COMPARE_CONTENT_TOTAL_BYTES_STATUS, completedBytes, totalBytes);
+                            const D2D1_RECT_F bytesRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                            _target->DrawTextW(bytesText.data(),
+                                               static_cast<UINT32>(bytesText.size()),
+                                               _smallFormat.get(),
+                                               bytesRc,
+                                               _subTextBrush.get(),
+                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            textY += lineH;
+                        }
+                    }
+
+                    if (_smallFormat && _subTextBrush && ! info.finished && info.contentEtaSeconds.has_value())
+                    {
+                        if (textY + lineH <= cardRect.bottom)
+                        {
+                            const std::wstring duration = FormatDurationHms(info.contentEtaSeconds.value());
+                            if (! duration.empty())
+                            {
+                                const std::wstring etaText = FormatStringResource(nullptr, IDS_FMT_COMPARE_ETA, duration);
+                                const D2D1_RECT_F etaRc    = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                                _target->DrawTextW(etaText.data(),
+                                                   static_cast<UINT32>(etaText.size()),
+                                                   _smallFormat.get(),
+                                                   etaRc,
+                                                   _subTextBrush.get(),
+                                                   D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                textY += lineH;
+                            }
+                        }
+                    }
+
+                    if (_smallFormat && _subTextBrush && info.finished && ! info.doneSummary.empty())
+                    {
+                        const D2D1_RECT_F doneRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                        _target->DrawTextW(info.doneSummary.data(),
+                                           static_cast<UINT32>(info.doneSummary.size()),
+                                           _smallFormat.get(),
+                                           doneRc,
+                                           _subTextBrush.get(),
+                                           D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                        textY += lineH;
+                    }
+
+                    const bool showProgressBar = ! info.finished &&
+                                                 ((info.kind == FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories && (info.scanActive || info.contentActive)) ||
+                                                  (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase &&
+                                                   (info.changeCaseEnumerating || info.changeCaseRenaming)));
+                    if (showProgressBar)
+                    {
+                        const float barH        = DipsToPixels(8.0f, _dpi);
+                        const float bottomPad   = DipsToPixels(10.0f, _dpi);
+                        const float barBottom   = cardRect.bottom - bottomPad;
+                        const float barTop      = barBottom - barH;
+                        const D2D1_RECT_F barRc = D2D1::RectF(textX, barTop, contentRight, barBottom);
+
+                        if (_progressBgBrush)
+                        {
+                            const float radius = ClampCornerRadius(barRc, DipsToPixels(2.0f, _dpi));
+                            _target->FillRoundedRectangle(D2D1::RoundedRect(barRc, radius, radius), _progressBgBrush.get());
+                        }
+
+                        if (_progressGlobalBrush)
+                        {
+                            bool hasTotal = false;
+                            float frac    = 0.0f;
+                            if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories)
+                            {
+                                hasTotal = info.contentTotalBytes > 0 && info.contentCompletedBytes <= info.contentTotalBytes;
+                                frac     = hasTotal
+                                               ? Clamp01(static_cast<float>(static_cast<double>(info.contentCompletedBytes) /
+                                                                           static_cast<double>(info.contentTotalBytes)))
+                                               : 0.0f;
+                            }
+                            else if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase)
+                            {
+                                hasTotal = info.changeCasePlannedRenames > 0 && info.changeCaseCompletedRenames <= info.changeCasePlannedRenames;
+                                frac     = hasTotal
+                                               ? Clamp01(static_cast<float>(static_cast<double>(info.changeCaseCompletedRenames) /
+                                                                           static_cast<double>(info.changeCasePlannedRenames)))
+                                               : 0.0f;
+                            }
+
+                            const D2D1_RECT_F fill =
+                                hasTotal ? D2D1::RectF(barRc.left, barRc.top, barRc.left + (barRc.right - barRc.left) * frac, barRc.bottom)
+                                         : ComputeIndeterminateBarFill(barRc, nowTick);
+                            const float radius     = ClampCornerRadius(fill, DipsToPixels(2.0f, _dpi));
+                            _target->FillRoundedRectangle(D2D1::RoundedRect(fill, radius, radius), _progressGlobalBrush.get());
+                        }
+                    }
+
+                    if (info.finished)
+                    {
+                        const float dismissButtonH         = DipsToPixels(24.0f, _dpi);
+                        const float dismissButtonBottomPad = DipsToPixels(8.0f, _dpi);
+                        const float dismissButtonTop       = cardRect.bottom - dismissButtonBottomPad - dismissButtonH;
+
+                        PopupButton dismissBtn{};
+                        dismissBtn.bounds     = D2D1::RectF(textX, dismissButtonTop, contentRight, dismissButtonTop + dismissButtonH);
+                        dismissBtn.hit.kind   = PopupHitTest::Kind::TaskDismiss;
+                        dismissBtn.hit.taskId = task.taskId;
+                        _buttons.push_back(dismissBtn);
+                        DrawButton(dismissBtn, _buttonSmallFormat.get(), LoadStringResource(nullptr, IDS_FILEOP_BTN_DISMISS));
+                    }
+
+                    const float gapAfter = (taskIndex + 1u < taskCount) ? cardGap : 0.0f;
+                    y += taskCardH + gapAfter;
+                    continue;
+                }
 
                 const UINT pauseId           = task.paused ? static_cast<UINT>(IDS_FILEOP_BTN_RESUME) : static_cast<UINT>(IDS_FILEOP_BTN_PAUSE);
                 const std::wstring pauseText = LoadStringResource(nullptr, pauseId);
@@ -2644,8 +3258,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 if (task.preCalcInProgress)
                 {
                     const std::wstring sizeText = FormatBytesCompact(task.preCalcTotalBytes);
-                    const unsigned __int64 totalItems =
-                        static_cast<unsigned __int64>(task.preCalcFileCount) + static_cast<unsigned __int64>(task.preCalcDirectoryCount);
+                    const uint64_t totalItems   = static_cast<uint64_t>(task.preCalcFileCount) + static_cast<uint64_t>(task.preCalcDirectoryCount);
                     const std::wstring countsText =
                         FormatStringResource(nullptr, IDS_FMT_FILEOPS_FILES_FOLDERS, totalItems, task.preCalcFileCount, task.preCalcDirectoryCount);
                     const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
@@ -2711,11 +3324,25 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                 }
                 else
                 {
-                    const double bytesPerSec                  = history ? static_cast<double>(history->smoothedBytesPerSec) : 0.0;
-                    const unsigned __int64 bytesPerSecRounded = bytesPerSec > 0.0 ? static_cast<unsigned __int64>(bytesPerSec + 0.5) : 0ull;
-                    const std::wstring bytesText              = FormatBytesCompact(bytesPerSecRounded);
-                    const std::wstring speedText              = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, bytesText);
-                    const D2D1_RECT_F speedRc                 = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
+                    if (task.preCalcSkipped && (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE))
+                    {
+                        const uint64_t completedTotal = static_cast<uint64_t>(task.completedFiles) + static_cast<uint64_t>(task.completedFolders);
+                        const bool haveBreakdown      = completedTotal == static_cast<uint64_t>(task.completedItems);
+                        if (haveBreakdown && task.completedItems > 0)
+                        {
+                            const std::wstring countsText =
+                                FormatStringResource(nullptr, IDS_FMT_FILEOPS_FILES_FOLDERS, completedTotal, task.completedFiles, task.completedFolders);
+                            const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
+                            _target->DrawTextW(countsText.data(), static_cast<UINT32>(countsText.size()), _bodyFormat.get(), countsRc, _subTextBrush.get());
+                            textY += lineH;
+                        }
+                    }
+
+                    const double bytesPerSec          = history ? static_cast<double>(history->smoothedBytesPerSec) : 0.0;
+                    const uint64_t bytesPerSecRounded = bytesPerSec > 0.0 ? static_cast<uint64_t>(bytesPerSec + 0.5) : 0ull;
+                    const std::wstring bytesText      = FormatBytesCompact(bytesPerSecRounded);
+                    const std::wstring speedText      = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, bytesText);
+                    const D2D1_RECT_F speedRc         = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
                     _target->DrawTextW(speedText.data(), static_cast<UINT32>(speedText.size()), _bodyFormat.get(), speedRc, _subTextBrush.get());
                     textY += lineH;
 
@@ -2732,11 +3359,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
 
                     if (task.totalBytes > 0 && bytesPerSec > 0.0 && task.completedBytes <= task.totalBytes)
                     {
-                        const unsigned __int64 remainingBytes = task.totalBytes - task.completedBytes;
-                        const double secondsD                 = static_cast<double>(remainingBytes) / bytesPerSec;
-                        const uint64_t seconds                = secondsD > 0.0 ? static_cast<uint64_t>(std::ceil(secondsD)) : 0u;
-                        const std::wstring etaText            = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, FormatDurationHms(seconds));
-                        const D2D1_RECT_F etaRc               = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
+                        const uint64_t remainingBytes = task.totalBytes - task.completedBytes;
+                        const double secondsD         = static_cast<double>(remainingBytes) / bytesPerSec;
+                        const uint64_t seconds        = secondsD > 0.0 ? static_cast<uint64_t>(std::ceil(secondsD)) : 0u;
+                        const std::wstring etaText    = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, FormatDurationHms(seconds));
+                        const D2D1_RECT_F etaRc       = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
                         _target->DrawTextW(etaText.data(), static_cast<UINT32>(etaText.size()), _bodyFormat.get(), etaRc, _subTextBrush.get());
                         textY += lineH;
                     }
@@ -2801,8 +3428,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
 
                         std::wstring_view sourcePathText;
-                        unsigned __int64 fileTotalBytes     = 0;
-                        unsigned __int64 fileCompletedBytes = 0;
+                        uint64_t fileTotalBytes     = 0;
+                        uint64_t fileCompletedBytes = 0;
 
                         const bool hasActiveInFlight = showInFlightFiles && activeInFlightCount > 0;
                         const bool useInFlightEntry  = hasActiveInFlight && i < activeInFlightCount;
@@ -3059,7 +3686,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
                         else
                         {
-                            unsigned __int64 limit = 0;
+                            uint64_t limit = 0;
                             if (task.operation != FILESYSTEM_DELETE)
                             {
                                 limit =
@@ -3487,6 +4114,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateLastPopupRect(
         return;
     }
 
+    if (! hostLifetime.lock())
+    {
+        return;
+    }
+
     if (! IsWindowVisible(hwnd) || IsIconic(hwnd))
     {
         return;
@@ -3550,7 +4182,17 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateCaptionStatus(
 
 void FileOperationsPopupInternal::FileOperationsPopupState::PaintCaptionStatusGlyph(HWND hwnd) const noexcept
 {
-    if (! hwnd || ! folderWindow)
+    if (! hwnd)
+    {
+        return;
+    }
+
+    if (! hostLifetime.lock())
+    {
+        return;
+    }
+
+    if (! folderWindow)
     {
         return;
     }
@@ -3709,6 +4351,11 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::ConfirmCancelAll(HWN
         return false;
     }
 
+    if (! hostLifetime.lock())
+    {
+        return true;
+    }
+
     if (! fileOps || ! fileOps->HasActiveOperations())
     {
         return true;
@@ -3750,6 +4397,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         return;
     }
 
+    if (! hostLifetime.lock())
+    {
+        return;
+    }
+
     FolderWindow::FileOperationState::Task* task = fileOps->FindTask(taskId);
     if (! task)
     {
@@ -3762,7 +4414,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         return;
     }
 
-    const unsigned __int64 currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    const uint64_t currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
     HMENU menu       = CreatePopupMenu();
     auto menuCleanup = wil::scope_exit(
@@ -3780,7 +4432,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
     constexpr UINT kCmdCustom     = 2u;
     constexpr UINT kCmdPresetBase = 10u;
 
-    static constexpr std::array<unsigned __int64, 6> kPresets = {{
+    static constexpr std::array<uint64_t, 6> kPresets = {{
         1ull * 1024ull * 1024ull,
         5ull * 1024ull * 1024ull,
         10ull * 1024ull * 1024ull,
@@ -3796,10 +4448,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
 
     for (size_t i = 0; i < kPresets.size(); ++i)
     {
-        const unsigned __int64 bytesPerSecond = kPresets[i];
-        const std::wstring label              = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES, FormatBytesCompact(bytesPerSecond));
-        const UINT cmd                        = kCmdPresetBase + static_cast<UINT>(i);
-        const UINT flags                      = static_cast<UINT>(MF_STRING) | (currentLimit == bytesPerSecond ? static_cast<UINT>(MF_CHECKED) : 0u);
+        const uint64_t bytesPerSecond = kPresets[i];
+        const std::wstring label      = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES, FormatBytesCompact(bytesPerSecond));
+        const UINT cmd                = kCmdPresetBase + static_cast<UINT>(i);
+        const UINT flags              = static_cast<UINT>(MF_STRING) | (currentLimit == bytesPerSecond ? static_cast<UINT>(MF_CHECKED) : 0u);
         AppendMenuW(menu, flags, static_cast<UINT_PTR>(cmd), label.c_str());
     }
 
@@ -3817,7 +4469,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         return;
     }
 
-    unsigned __int64 newLimit = currentLimit;
+    uint64_t newLimit = currentLimit;
     if (chosen == kCmdUnlimited)
     {
         newLimit = 0;
@@ -3853,6 +4505,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
 void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(HWND hwnd, uint64_t taskId) noexcept
 {
     if (! hwnd || ! fileOps || ! folderWindow)
+    {
+        return;
+    }
+
+    if (! hostLifetime.lock())
     {
         return;
     }
@@ -4004,7 +4661,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnCreate(HWND hwn
 {
     _dpi = GetDpiForWindow(hwnd);
 
-    if (folderWindow)
+    if (folderWindow && hostLifetime.lock())
     {
         ApplyTitleBarTheme(hwnd, folderWindow->GetTheme(), GetActiveWindow() == hwnd);
     }
@@ -4030,7 +4687,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnThemeChanged(HW
 
     DiscardDeviceResources();
 
-    if (folderWindow)
+    if (folderWindow && hostLifetime.lock())
     {
         ApplyTitleBarTheme(hwnd, folderWindow->GetTheme(), GetActiveWindow() == hwnd);
     }
@@ -4045,7 +4702,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcDestroy(HWND 
 {
     KillTimer(hwnd, kFileOperationsPopupTimerId);
 
-    if (fileOps)
+    if (fileOps && hostLifetime.lock())
     {
         fileOps->OnPopupDestroyed(hwnd);
     }
@@ -4153,6 +4810,12 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnTimer(HWND hwnd
 {
     if (timerId == kFileOperationsPopupTimerId)
     {
+        if (! hostLifetime.lock())
+        {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+
         if (! IsWindowVisible(hwnd) || IsIconic(hwnd))
         {
             return 0;
@@ -4291,6 +4954,17 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLButtonUp(HWND 
         return 0;
     }
 
+    return OnActivatedHit(hwnd, hit);
+}
+
+LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HWND hwnd, const PopupHitTest& hit) noexcept
+{
+    if (! hostLifetime.lock())
+    {
+        DestroyWindow(hwnd);
+        return 0;
+    }
+
     if (hit.kind == PopupHitTest::Kind::FooterCancelAll)
     {
         if (fileOps && ! fileOps->HasActiveOperations())
@@ -4372,6 +5046,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLButtonUp(HWND 
         if (fileOps)
         {
             fileOps->DismissCompletedTask(hit.taskId);
+            fileOps->DismissInformationalTask(hit.taskId);
         }
         Invalidate(hwnd);
         return 0;
@@ -4471,44 +5146,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(
         return 0;
     }
 
-    const PopupHitTest hit{payload->kind, payload->taskId, payload->data};
-
-    if (hit.kind == PopupHitTest::Kind::TaskConflictToggleApplyToAll)
-    {
-        if (fileOps)
-        {
-            FolderWindow::FileOperationState::Task* task = fileOps->FindTask(hit.taskId);
-            if (task)
-            {
-                task->ToggleConflictApplyToAllChecked();
-            }
-        }
-        Invalidate(hwnd);
-        return 0;
-    }
-
-    if (hit.kind == PopupHitTest::Kind::TaskConflictAction)
-    {
-        if (fileOps)
-        {
-            FolderWindow::FileOperationState::Task* task = fileOps->FindTask(hit.taskId);
-            if (task)
-            {
-                bool applyToAll = false;
-                {
-                    std::scoped_lock lock(task->_conflictMutex);
-                    applyToAll = task->_conflictPrompt.applyToAllChecked;
-                }
-
-                const auto action = static_cast<FolderWindow::FileOperationState::Task::ConflictAction>(hit.data);
-                task->SubmitConflictDecision(action, applyToAll);
-            }
-        }
-        Invalidate(hwnd);
-        return 0;
-    }
-
-    return 0;
+    return OnActivatedHit(hwnd, PopupHitTest{payload->kind, payload->taskId, payload->data});
 }
 #endif
 
@@ -4558,7 +5196,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcPaint(HWND hw
 
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcActivate(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
 {
-    if (folderWindow)
+    if (folderWindow && hostLifetime.lock())
     {
         ApplyTitleBarTheme(hwnd, folderWindow->GetTheme(), wParam != FALSE);
     }
@@ -4768,7 +5406,7 @@ INT_PTR OnSpeedLimitDialogCommand(HWND hwnd, SpeedLimitDialogState* state, UINT 
 
         const std::wstring text = ReadDialogItemText(hwnd, IDC_FILEOP_SPEED_LIMIT_CUSTOM_EDIT);
 
-        unsigned __int64 parsed = 0;
+        uint64_t parsed = 0;
         if (! TryParseThroughputText(std::wstring_view(text), parsed))
         {
             MessageBeep(MB_ICONERROR);
@@ -4838,9 +5476,17 @@ LRESULT CALLBACK FileOperationsPopupInternal::FileOperationsPopupState::WndProcT
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
-HWND FileOperationsPopup::Create(FolderWindow::FileOperationState* fileOps, FolderWindow* folderWindow, HWND ownerWindow) noexcept
+HWND FileOperationsPopup::Create(FolderWindow::FileOperationState* fileOps,
+                                 FolderWindow* folderWindow,
+                                 HWND ownerWindow,
+                                 std::weak_ptr<void> hostLifetime) noexcept
 {
     if (! fileOps || ! folderWindow)
+    {
+        return nullptr;
+    }
+
+    if (hostLifetime.expired())
     {
         return nullptr;
     }
@@ -4853,6 +5499,7 @@ HWND FileOperationsPopup::Create(FolderWindow::FileOperationState* fileOps, Fold
     auto statePtr          = std::make_unique<FileOperationsPopupInternal::FileOperationsPopupState>();
     statePtr->fileOps      = fileOps;
     statePtr->folderWindow = folderWindow;
+    statePtr->hostLifetime = std::move(hostLifetime);
 
     const UINT ownerDpi           = ownerWindow ? GetDpiForWindow(ownerWindow) : USER_DEFAULT_SCREEN_DPI;
     const int desiredClientWidth  = DipsToPixels(480, ownerDpi);

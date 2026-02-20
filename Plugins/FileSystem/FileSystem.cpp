@@ -108,7 +108,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetSize(unsigned __int64* sizeBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
     {
         if (sizeBytes == nullptr)
         {
@@ -119,7 +119,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, unsigned __int64* newPosition) noexcept override
+    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
     {
         if (newPosition == nullptr)
         {
@@ -152,7 +152,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
         }
 
-        *newPosition = static_cast<unsigned __int64>(moved.QuadPart);
+        *newPosition = static_cast<uint64_t>(moved.QuadPart);
         return S_OK;
     }
 
@@ -243,7 +243,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetPosition(unsigned __int64* positionBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPosition(uint64_t* positionBytes) noexcept override
     {
         if (positionBytes == nullptr)
         {
@@ -269,7 +269,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
         }
 
-        *positionBytes = static_cast<unsigned __int64>(moved.QuadPart);
+        *positionBytes = static_cast<uint64_t>(moved.QuadPart);
         return S_OK;
     }
 
@@ -639,9 +639,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetItemProperties(const wchar_t* path, con
         return HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_GEN_FAILURE);
     }
 
-    const bool isDirectory = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-    const unsigned __int64 sizeBytes =
-        isDirectory ? 0ull : (static_cast<unsigned __int64>(data.nFileSizeHigh) << 32u) | static_cast<unsigned __int64>(data.nFileSizeLow);
+    const bool isDirectory   = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+    const uint64_t sizeBytes = isDirectory ? 0ull : (static_cast<uint64_t>(data.nFileSizeHigh) << 32u) | static_cast<uint64_t>(data.nFileSizeLow);
 
     yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
     if (! doc)

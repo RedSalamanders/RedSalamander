@@ -169,12 +169,18 @@ public:
     {
         return static_cast<bool>(_fileOperationRequestCallback);
     }
+
+    [[nodiscard]] uint64_t DebugGetForceRefreshCount() const noexcept
+    {
+        return _debugForceRefreshCount;
+    }
 #endif
 
     enum class DisplayMode : uint8_t
     {
         Brief,
         Detailed,
+        ExtraDetailed,
     };
 
     enum class SortBy : uint8_t
@@ -337,6 +343,18 @@ public:
         _detailsTextProvider = std::move(provider);
     }
 
+    using MetadataTextProvider = std::function<std::wstring(
+        const std::filesystem::path& folder, std::wstring_view displayName, bool isDirectory, uint64_t sizeBytes, int64_t lastWriteTime, DWORD fileAttributes)>;
+
+    void SetMetadataTextProvider(MetadataTextProvider provider)
+    {
+        _metadataTextProvider = std::move(provider);
+    }
+
+    // Optional non-error empty-state message shown when enumeration succeeds but no items are displayed.
+    // Caller controls when it is set/cleared (e.g. "This folder doesn't exist in this hierarchy.").
+    void SetEmptyStateMessage(std::wstring message);
+
     // Recompute `detailsText` for currently displayed items using the active DetailsTextProvider.
     // Useful when the provider's output depends on external state.
     void RefreshDetailsText();
@@ -403,6 +421,10 @@ private:
         wil::com_ptr<IDWriteTextLayout> detailsLayout;
         DWRITE_TEXT_METRICS detailsMetrics{};
 
+        std::wstring metadataText;
+        wil::com_ptr<IDWriteTextLayout> metadataLayout;
+        DWRITE_TEXT_METRICS metadataMetrics{};
+
         // Get extension from displayName (zero-copy)
         [[nodiscard]] std::wstring_view GetExtension() const noexcept
         {
@@ -432,6 +454,7 @@ private:
     SIZE _clientSize{0, 0};
     std::optional<std::filesystem::path> _currentFolder;
     std::optional<std::filesystem::path> _displayedFolder;
+    std::wstring _emptyStateMessage;
     wil::com_ptr<IFileSystem> _fileSystem;
     const PluginMetaData* _fileSystemMetadata{};
     std::wstring _fileSystemPluginId;
@@ -519,6 +542,7 @@ private:
     wil::com_ptr<ID2D1SolidColorBrush> _backgroundBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _textBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _detailsTextBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _metadataTextBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _selectionBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _focusedBackgroundBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _focusBrush;
@@ -586,27 +610,30 @@ private:
     wil::com_ptr<ID2D1StrokeStyle> _incrementalSearchIndicatorStrokeStyle;
 
     // Rendering constants (logical DIPs)
-    float _tileWidthDip         = 220.0f;
-    float _tileHeightDip        = 32.0f;
-    float _iconSizeDip          = 16.0f; // Match Windows Explorer list mode (SHIL_SMALL)
-    float _tileSpacingDip       = 16.0f;
-    float _labelHeightDip       = 20.0f;
-    float _detailsLineHeightDip = 0.0f;
+    float _tileWidthDip          = 220.0f;
+    float _tileHeightDip         = 32.0f;
+    float _iconSizeDip           = 16.0f; // Match Windows Explorer list mode (SHIL_SMALL)
+    float _tileSpacingDip        = 16.0f;
+    float _labelHeightDip        = 20.0f;
+    float _detailsLineHeightDip  = 0.0f;
+    float _metadataLineHeightDip = 0.0f;
 
     // Global cache for label measurements
-    bool _itemMetricsCached      = false;
-    float _cachedMaxLabelWidth   = 0.0f;
-    float _cachedMaxLabelHeight  = 0.0f;
-    float _cachedMaxDetailsWidth = 0.0f;
-    float _lastLayoutWidth       = 0.0f;
-    size_t _detailsSizeSlotChars = 0;
+    bool _itemMetricsCached       = false;
+    float _cachedMaxLabelWidth    = 0.0f;
+    float _cachedMaxLabelHeight   = 0.0f;
+    float _cachedMaxDetailsWidth  = 0.0f;
+    float _cachedMaxMetadataWidth = 0.0f;
+    float _lastLayoutWidth        = 0.0f;
+    size_t _detailsSizeSlotChars  = 0;
 
     // Estimated metrics for lazy layout creation (avoids measuring all items upfront)
     // These are computed from actual font metrics in UpdateEstimatedMetrics()
-    float _estimatedCharWidthDip     = 7.0f;  // Average character width, updated from font metrics
-    float _estimatedLabelHeightDip   = 16.0f; // Label height, updated from font metrics
-    float _estimatedDetailsHeightDip = 14.0f; // Details line height, updated from font metrics
-    bool _estimatedMetricsValid      = false; // True after metrics computed from font
+    float _estimatedCharWidthDip      = 7.0f;  // Average character width, updated from font metrics
+    float _estimatedLabelHeightDip    = 16.0f; // Label height, updated from font metrics
+    float _estimatedDetailsHeightDip  = 14.0f; // Details line height, updated from font metrics
+    float _estimatedMetadataHeightDip = 14.0f; // Metadata line height, updated from font metrics
+    bool _estimatedMetricsValid       = false; // True after metrics computed from font
 
     DisplayMode _displayMode     = DisplayMode::Brief;
     SortBy _sortBy               = SortBy::Name;
@@ -625,6 +652,7 @@ private:
     SelectionSizeComputationRequestedCallback _selectionSizeComputationRequestedCallback;
     EnumerationCompletedCallback _enumerationCompletedCallback;
     DetailsTextProvider _detailsTextProvider;
+    MetadataTextProvider _metadataTextProvider;
 
     SelectionStats _selectionStats{};
 
@@ -770,6 +798,9 @@ private:
     uint64_t _pendingEnumerationGeneration = 0;
     std::atomic<uint64_t> _enumerationGeneration{0};
     ULONGLONG _lastDirectoryCacheRefreshTick = 0;
+#ifdef _DEBUG
+    uint64_t _debugForceRefreshCount = 0;
+#endif
 
     struct PendingExternalCommand final
     {

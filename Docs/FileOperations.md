@@ -14,6 +14,7 @@ The **File Operations** popup opens automatically when an operation starts. It i
 - **Wait / Parallel**:
   - **Wait** runs tasks sequentially (a queue).
   - **Parallel** allows multiple tasks to run at the same time.
+  - Parallel mode uses shared, bounded worker pools so thread count stays under control even with multiple in-flight operations.
   - Switching to **Wait** while several tasks are active pauses all but one at the next safe checkpoint.
 - **Auto-dismiss success/canceled**: when enabled, completed tasks that **succeeded** or were **canceled** are cleared automatically (and the popup closes when nothing remains).
 - **Clear completed**: removes completed task summaries from the popup.
@@ -44,6 +45,12 @@ Task controls (what you can click):
 - **Export issues**: writes a per-task issues report file and opens it.
 - **Dismiss**: removes a completed task summary from the popup.
 
+### Informational task cards
+
+Some background work is displayed as read-only **informational** cards in the same popup (for example **Compare Directories** and **Change Case**).
+To avoid clutter, informational cards are created only if the operation takes longer than ~`700ms`.
+They show the current path and basic progress counters, and can be dismissed when complete.
+
 ### Preflight / “Calculating…”
 
 Some tasks start with a pre-calculation (“preflight”) scan that computes totals (bytes/items). This improves:
@@ -52,6 +59,7 @@ Some tasks start with a pre-calculation (“preflight”) scan that computes tot
 - ETA / remaining time accuracy
 
 For very large trees, preflight can take time; **Skip preflight** starts the operation without those totals.
+When preflight is skipped, the popup still shows best-effort **completed files/folders** counts for the top-level selection, but totals and ETA/remaining time may be unavailable until the operation finishes.
 
 ### Conflicts (overwrite, retry, skip…)
 

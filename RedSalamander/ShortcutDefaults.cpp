@@ -113,6 +113,7 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('U'), ShortcutManager::kModCtrl, L"cmd/app/swapPanes");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('2'), ShortcutManager::kModAlt, L"cmd/pane/display/brief");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('3'), ShortcutManager::kModAlt, L"cmd/pane/display/detailed");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('4'), ShortcutManager::kModAlt, L"cmd/pane/display/extraDetailed");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectAll");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('C'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardCopy");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('V'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardPaste");
@@ -237,6 +238,11 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
     if (! findFolderViewBinding(static_cast<uint32_t>('3'), ShortcutManager::kModAlt))
     {
         AddBinding(shortcuts.folderView, static_cast<uint32_t>('3'), ShortcutManager::kModAlt, L"cmd/pane/display/detailed");
+    }
+
+    if (! findFolderViewBinding(static_cast<uint32_t>('4'), ShortcutManager::kModAlt))
+    {
+        AddBinding(shortcuts.folderView, static_cast<uint32_t>('4'), ShortcutManager::kModAlt, L"cmd/pane/display/extraDetailed");
     }
 
     if (! findFolderViewBinding(static_cast<uint32_t>('A'), ShortcutManager::kModCtrl))

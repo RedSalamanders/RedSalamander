@@ -384,8 +384,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDriveInfo(const wchar_t* path, DriveInf
     ULARGE_INTEGER availableBytes{};
     if (GetDiskFreeSpaceExW(root.c_str(), &availableBytes, &totalBytes, &freeBytes))
     {
-        const unsigned __int64 total = totalBytes.QuadPart;
-        const unsigned __int64 free  = freeBytes.QuadPart;
+        const uint64_t total = totalBytes.QuadPart;
+        const uint64_t free  = freeBytes.QuadPart;
         if (totalBytes.QuadPart > 0)
         {
             info->flags      = static_cast<DriveInfoFlags>(info->flags | DRIVE_INFO_FLAG_HAS_TOTAL_BYTES);

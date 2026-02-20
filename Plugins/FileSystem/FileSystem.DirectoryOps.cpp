@@ -575,7 +575,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
             return result->status;
         }
 
-        result->totalBytes = (static_cast<unsigned __int64>(fileData.nFileSizeHigh) << 32) | fileData.nFileSizeLow;
+        result->totalBytes = (static_cast<uint64_t>(fileData.nFileSizeHigh) << 32) | static_cast<uint64_t>(fileData.nFileSizeLow);
         result->fileCount  = 1;
 
         if (callback != nullptr)
@@ -607,8 +607,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
     constexpr unsigned long kProgressIntervalEntries = 100;
     constexpr ULONGLONG kProgressIntervalMs          = 200;
 
-    unsigned __int64 scannedEntries = 0;
-    ULONGLONG lastProgressTime      = ::GetTickCount64();
+    uint64_t scannedEntries    = 0;
+    ULONGLONG lastProgressTime = ::GetTickCount64();
 
 #ifdef _DEBUG
     const unsigned int delayMs = _directorySizeDelayMs;
@@ -760,7 +760,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         else
         {
             ++result->fileCount;
-            const unsigned __int64 fileSize = (static_cast<unsigned __int64>(currentData.nFileSizeHigh) << 32) | currentData.nFileSizeLow;
+            const uint64_t fileSize = (static_cast<uint64_t>(currentData.nFileSizeHigh) << 32) | static_cast<uint64_t>(currentData.nFileSizeLow);
             result->totalBytes += fileSize;
         }
 

@@ -7,7 +7,9 @@
 #include <cstring>
 #include <deque>
 #include <filesystem>
+#include <functional>
 #include <limits>
+#include <memory>
 #include <mutex>
 #include <ranges>
 #include <thread>
@@ -32,9 +34,9 @@ struct ParallelOperationState
     ParallelOperationState(ParallelOperationState&&)                 = delete;
     ParallelOperationState& operator=(ParallelOperationState&&)      = delete;
 
-    std::atomic<unsigned __int64> completedBytes{0};
+    std::atomic<uint64_t> completedBytes{0};
     std::atomic<unsigned long> completedItems{0};
-    std::atomic<unsigned __int64> bandwidthLimitBytesPerSecond{0};
+    std::atomic<uint64_t> bandwidthLimitBytesPerSecond{0};
 
     ULONGLONG startTick = 0;
     std::mutex callbackMutex;
@@ -49,21 +51,21 @@ struct ParallelOperationState
 
 struct OperationContext
 {
-    FileSystemOperation type          = FILESYSTEM_COPY;
-    IFileSystemCallback* callback     = nullptr;
-    void* callbackCookie              = nullptr;
-    unsigned __int64 progressStreamId = 0;
+    FileSystemOperation type      = FILESYSTEM_COPY;
+    IFileSystemCallback* callback = nullptr;
+    void* callbackCookie          = nullptr;
+    uint64_t progressStreamId     = 0;
     FileSystemOptions optionsState{};
-    FileSystemOptions* options      = nullptr;
-    unsigned long totalItems        = 0;
-    unsigned long completedItems    = 0;
-    unsigned __int64 totalBytes     = 0;
-    unsigned __int64 completedBytes = 0;
-    bool continueOnError            = false;
-    bool allowOverwrite             = false;
-    bool allowReplaceReadonly       = false;
-    bool recursive                  = false;
-    bool useRecycleBin              = false;
+    FileSystemOptions* options   = nullptr;
+    unsigned long totalItems     = 0;
+    unsigned long completedItems = 0;
+    uint64_t totalBytes          = 0;
+    uint64_t completedBytes      = 0;
+    bool continueOnError         = false;
+    bool allowOverwrite          = false;
+    bool allowReplaceReadonly    = false;
+    bool recursive               = false;
+    bool useRecycleBin           = false;
     FileSystemArenaOwner itemArena;
     FileSystemArenaOwner progressArena;
     const wchar_t* itemSource          = nullptr;
@@ -83,11 +85,373 @@ struct OperationContext
 
 struct CopyProgressContext
 {
-    OperationContext* context                 = nullptr;
-    unsigned __int64 itemBaseBytes            = 0; // Used only for sequential operations.
-    unsigned __int64 lastItemBytesTransferred = 0; // Used only for parallel operations.
-    ULONGLONG startTick                       = 0; // Used only for sequential operations.
+    OperationContext* context         = nullptr;
+    uint64_t itemBaseBytes            = 0; // Used only for sequential operations.
+    uint64_t lastItemBytesTransferred = 0; // Used only for parallel operations.
+    ULONGLONG startTick               = 0; // Used only for sequential operations.
 };
+
+class SharedFileOpsJobScheduler final
+{
+public:
+    SharedFileOpsJobScheduler() = default;
+    ~SharedFileOpsJobScheduler() noexcept { Shutdown(); }
+
+    SharedFileOpsJobScheduler(const SharedFileOpsJobScheduler&)            = delete;
+    SharedFileOpsJobScheduler(SharedFileOpsJobScheduler&&)                 = delete;
+    SharedFileOpsJobScheduler& operator=(const SharedFileOpsJobScheduler&) = delete;
+    SharedFileOpsJobScheduler& operator=(SharedFileOpsJobScheduler&&)      = delete;
+
+    struct Job final
+    {
+        Job() noexcept = default;
+
+        Job(const Job&)            = delete;
+        Job(Job&&)                 = delete;
+        Job& operator=(const Job&) = delete;
+        Job& operator=(Job&&)      = delete;
+
+        std::function<void(size_t, uint64_t)> processIndex;
+        size_t totalItems          = 0;
+        unsigned int maxConcurrency = 1;
+
+        // Protected by the scheduler mutex.
+        size_t nextIndex      = 0;
+        unsigned int inFlight = 0;
+
+        std::atomic<bool> done{false};
+        std::mutex doneMutex;
+        std::condition_variable doneCv;
+    };
+
+    using JobPtr = std::shared_ptr<Job>;
+
+    JobPtr StartJob(unsigned int maxConcurrency, size_t totalItems, std::function<void(size_t, uint64_t)> processIndex)
+    {
+        auto job            = std::make_shared<Job>();
+        job->totalItems     = totalItems;
+        job->processIndex   = std::move(processIndex);
+        job->maxConcurrency = std::max(1u, maxConcurrency);
+        if (job->totalItems > 0)
+        {
+            job->maxConcurrency =
+                std::min<unsigned int>(job->maxConcurrency, static_cast<unsigned int>((std::min)(job->totalItems, static_cast<size_t>(UINT_MAX))));
+        }
+
+        ensureWorkers();
+
+        if (_workers.empty())
+        {
+            if (job->processIndex)
+            {
+                for (size_t i = 0; i < job->totalItems; ++i)
+                {
+                    job->processIndex(i, 0);
+                }
+            }
+
+            finishJob(*job);
+            return job;
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            _jobs.push_back(job);
+        }
+
+        _cv.notify_all();
+        return job;
+    }
+
+    void WaitJob(const JobPtr& job) noexcept
+    {
+        if (! job)
+        {
+            return;
+        }
+
+        if (IsWorkerThread())
+        {
+            // Avoid deadlocks when a file operation recursively starts parallel work from within a worker.
+            while (! job->done.load(std::memory_order_acquire))
+            {
+                JobPtr dequeued;
+                size_t index = 0;
+                {
+                    std::unique_lock lock(_mutex);
+                    _cv.wait(lock, [&]() noexcept { return job->done.load(std::memory_order_acquire) || hasSchedulableWorkLocked(); });
+                    if (job->done.load(std::memory_order_acquire))
+                    {
+                        break;
+                    }
+
+                    if (! tryDequeueWorkLocked(dequeued, index))
+                    {
+                        continue;
+                    }
+                }
+
+                executeWorkItem(std::move(dequeued), index, tls_workerStreamId);
+            }
+
+            return;
+        }
+
+        std::unique_lock lock(job->doneMutex);
+        job->doneCv.wait(lock, [&]() noexcept { return job->done.load(std::memory_order_acquire); });
+    }
+
+    void Shutdown() noexcept
+    {
+        {
+            std::scoped_lock lock(_initMutex);
+            if (! _initialized)
+            {
+                return;
+            }
+
+            for (std::jthread& worker : _workers)
+            {
+                worker.request_stop();
+            }
+        }
+
+        // Ensure any thread blocked in WaitJob can proceed during teardown.
+        {
+            std::scoped_lock lock(_mutex);
+            for (const JobPtr& job : _jobs)
+            {
+                if (job)
+                {
+                    finishJob(*job);
+                }
+            }
+            _jobs.clear();
+            _rrCursor = 0;
+        }
+
+        _cv.notify_all();
+    }
+
+private:
+    static inline thread_local const SharedFileOpsJobScheduler* tls_scheduler = nullptr;
+    static inline thread_local uint64_t tls_workerStreamId                    = 0;
+
+    [[nodiscard]] bool IsWorkerThread() const noexcept { return tls_scheduler == this; }
+
+    void ensureWorkers()
+    {
+        std::scoped_lock lock(_initMutex);
+        if (_initialized)
+        {
+            return;
+        }
+
+        unsigned int workerCount = std::thread::hardware_concurrency();
+        if (workerCount == 0)
+        {
+            workerCount = 4;
+        }
+
+        constexpr unsigned int kMaxWorkers = 8u;
+        workerCount                        = std::max(1u, std::min(workerCount, kMaxWorkers));
+
+        _workers.reserve(workerCount);
+        for (unsigned int i = 0; i < workerCount; ++i)
+        {
+            try
+            {
+                _workers.emplace_back([this, i](std::stop_token stopToken) noexcept { workerMain(stopToken, static_cast<uint64_t>(i)); });
+            }
+            catch (const std::system_error&)
+            {
+                break;
+            }
+        }
+
+        _initialized = true;
+    }
+
+    void finishJob(Job& job) noexcept
+    {
+        {
+            std::scoped_lock lock(job.doneMutex);
+            job.done.store(true, std::memory_order_release);
+        }
+        job.doneCv.notify_all();
+    }
+
+    void cleanupJobsLocked() noexcept
+    {
+        size_t write = 0;
+        for (size_t read = 0; read < _jobs.size(); ++read)
+        {
+            const JobPtr& job = _jobs[read];
+            if (! job)
+            {
+                continue;
+            }
+
+            const bool finished = job->nextIndex >= job->totalItems;
+            if (finished && job->inFlight == 0)
+            {
+                finishJob(*job);
+                continue;
+            }
+
+            if (write != read)
+            {
+                _jobs[write] = job;
+            }
+            ++write;
+        }
+
+        if (write < _jobs.size())
+        {
+            _jobs.resize(write);
+        }
+
+        if (_rrCursor >= _jobs.size())
+        {
+            _rrCursor = 0;
+        }
+    }
+
+    [[nodiscard]] bool hasSchedulableWorkLocked() noexcept
+    {
+        cleanupJobsLocked();
+
+        for (const JobPtr& job : _jobs)
+        {
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    [[nodiscard]] bool tryDequeueWorkLocked(JobPtr& outJob, size_t& outIndex) noexcept
+    {
+        const size_t jobCount = _jobs.size();
+        if (jobCount == 0)
+        {
+            return false;
+        }
+
+        const size_t start = _rrCursor % jobCount;
+        for (size_t attempt = 0; attempt < jobCount; ++attempt)
+        {
+            const size_t idx = (start + attempt) % jobCount;
+            JobPtr& job      = _jobs[idx];
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            outJob   = job;
+            outIndex = job->nextIndex;
+            job->nextIndex += 1;
+            job->inFlight += 1;
+
+            _rrCursor = (idx + 1u) % jobCount;
+            return true;
+        }
+
+        return false;
+    }
+
+    void executeWorkItem(JobPtr job, size_t index, uint64_t streamId) noexcept
+    {
+        if (job && job->processIndex)
+        {
+            job->processIndex(index, streamId);
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            if (job && job->inFlight > 0)
+            {
+                job->inFlight -= 1;
+            }
+            cleanupJobsLocked();
+        }
+
+        _cv.notify_all();
+    }
+
+    void workerMain(std::stop_token stopToken, uint64_t streamId) noexcept
+    {
+        tls_scheduler      = this;
+        tls_workerStreamId = streamId;
+
+        [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+
+        for (;;)
+        {
+            JobPtr job;
+            size_t index = 0;
+            {
+                std::unique_lock lock(_mutex);
+                _cv.wait(lock, [&]() noexcept { return stopToken.stop_requested() || hasSchedulableWorkLocked(); });
+                if (stopToken.stop_requested())
+                {
+                    break;
+                }
+
+                cleanupJobsLocked();
+                if (! tryDequeueWorkLocked(job, index))
+                {
+                    continue;
+                }
+            }
+
+            executeWorkItem(std::move(job), index, streamId);
+        }
+
+        tls_scheduler      = nullptr;
+        tls_workerStreamId = 0;
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    std::vector<JobPtr> _jobs;
+    size_t _rrCursor = 0;
+
+    std::mutex _initMutex;
+    bool _initialized = false;
+    std::vector<std::jthread> _workers;
+};
+
+SharedFileOpsJobScheduler& GetSharedFileOpsJobScheduler() noexcept
+{
+    static SharedFileOpsJobScheduler scheduler;
+    return scheduler;
+}
 
 bool HasFlag(FileSystemFlags flags, FileSystemFlags flag) noexcept
 {
@@ -609,7 +973,7 @@ HRESULT WriteReparsePointData(const std::wstring& path, const ReparsePointData& 
     return S_OK;
 }
 
-void AddCompletedBytes(OperationContext& context, unsigned __int64 bytes) noexcept
+void AddCompletedBytes(OperationContext& context, uint64_t bytes) noexcept
 {
     if (bytes == 0)
     {
@@ -622,9 +986,9 @@ void AddCompletedBytes(OperationContext& context, unsigned __int64 bytes) noexce
         return;
     }
 
-    if (std::numeric_limits<unsigned __int64>::max() - context.completedBytes < bytes)
+    if (std::numeric_limits<uint64_t>::max() - context.completedBytes < bytes)
     {
-        context.completedBytes = std::numeric_limits<unsigned __int64>::max();
+        context.completedBytes = std::numeric_limits<uint64_t>::max();
         return;
     }
 
@@ -644,13 +1008,13 @@ void AddCompletedItems(OperationContext& context, unsigned long items) noexcept
         return;
     }
 
-    constexpr unsigned __int64 maxUlong = static_cast<unsigned __int64>(std::numeric_limits<unsigned long>::max());
-    const unsigned __int64 current      = static_cast<unsigned __int64>(context.completedItems);
-    const unsigned __int64 desired      = current + static_cast<unsigned __int64>(items);
-    context.completedItems              = static_cast<unsigned long>(std::min(desired, maxUlong));
+    constexpr uint64_t maxUlong = static_cast<uint64_t>(std::numeric_limits<unsigned long>::max());
+    const uint64_t current      = static_cast<uint64_t>(context.completedItems);
+    const uint64_t desired      = current + static_cast<uint64_t>(items);
+    context.completedItems      = static_cast<unsigned long>(std::min(desired, maxUlong));
 }
 
-unsigned __int64 GetBandwidthLimit(const FileSystemOptions* options) noexcept
+uint64_t GetBandwidthLimit(const FileSystemOptions* options) noexcept
 {
     if (! options)
     {
@@ -845,7 +1209,7 @@ HRESULT CheckCancel(OperationContext& context) noexcept
     return CheckCancelLocked(context);
 }
 
-HRESULT ReportProgress(OperationContext& context, unsigned __int64 currentItemTotalBytes, unsigned __int64 currentItemCompletedBytes) noexcept
+HRESULT ReportProgress(OperationContext& context, uint64_t currentItemTotalBytes, uint64_t currentItemCompletedBytes) noexcept
 {
     if (context.parallel)
     {
@@ -866,8 +1230,8 @@ HRESULT ReportProgress(OperationContext& context, unsigned __int64 currentItemTo
     constexpr ULONGLONG kMinProgressMsDelete   = 100ull;
     const ULONGLONG minProgressMs              = (context.type == FILESYSTEM_DELETE) ? kMinProgressMsDelete : kMinProgressMsCopyMove;
 
-    const unsigned long completedItems    = context.parallel ? context.parallel->completedItems.load(std::memory_order_acquire) : context.completedItems;
-    const unsigned __int64 completedBytes = context.parallel ? context.parallel->completedBytes.load(std::memory_order_acquire) : context.completedBytes;
+    const unsigned long completedItems = context.parallel ? context.parallel->completedItems.load(std::memory_order_acquire) : context.completedItems;
+    const uint64_t completedBytes      = context.parallel ? context.parallel->completedBytes.load(std::memory_order_acquire) : context.completedBytes;
 
     const bool isFinalItem    = currentItemTotalBytes > 0 && currentItemCompletedBytes >= currentItemTotalBytes;
     const bool isFinalOverall = context.totalItems > 0 && completedItems >= context.totalItems;
@@ -942,7 +1306,7 @@ HRESULT ReportProgress(OperationContext& context, unsigned __int64 currentItemTo
     return CheckCancel(context);
 }
 
-HRESULT ReportProgressForced(OperationContext& context, unsigned __int64 currentItemTotalBytes, unsigned __int64 currentItemCompletedBytes) noexcept
+HRESULT ReportProgressForced(OperationContext& context, uint64_t currentItemTotalBytes, uint64_t currentItemCompletedBytes) noexcept
 {
     if (context.parallel)
     {
@@ -959,8 +1323,8 @@ HRESULT ReportProgressForced(OperationContext& context, unsigned __int64 current
         return S_OK;
     }
 
-    const unsigned long completedItems    = context.parallel ? context.parallel->completedItems.load(std::memory_order_acquire) : context.completedItems;
-    const unsigned __int64 completedBytes = context.parallel ? context.parallel->completedBytes.load(std::memory_order_acquire) : context.completedBytes;
+    const unsigned long completedItems = context.parallel ? context.parallel->completedItems.load(std::memory_order_acquire) : context.completedItems;
+    const uint64_t completedBytes      = context.parallel ? context.parallel->completedBytes.load(std::memory_order_acquire) : context.completedBytes;
 
     const ULONGLONG nowTick = GetTickCount64();
     if (context.parallel)
@@ -1137,7 +1501,7 @@ void InitializeOperationContext(OperationContext& context,
     context.reparseRootDestinationPath.clear();
 }
 
-HRESULT GetFileSizeBytes(const std::wstring& path, unsigned __int64* sizeBytes) noexcept
+HRESULT GetFileSizeBytes(const std::wstring& path, uint64_t* sizeBytes) noexcept
 {
     if (! sizeBytes)
     {
@@ -1157,9 +1521,9 @@ HRESULT GetFileSizeBytes(const std::wstring& path, unsigned __int64* sizeBytes) 
         return S_OK;
     }
 
-    const unsigned __int64 high = static_cast<unsigned __int64>(data.nFileSizeHigh);
-    const unsigned __int64 low  = static_cast<unsigned __int64>(data.nFileSizeLow);
-    *sizeBytes                  = (high << 32) | low;
+    const uint64_t high = static_cast<uint64_t>(data.nFileSizeHigh);
+    const uint64_t low  = static_cast<uint64_t>(data.nFileSizeLow);
+    *sizeBytes          = (high << 32) | low;
     return S_OK;
 }
 
@@ -1341,9 +1705,9 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
         return PROGRESS_CONTINUE;
     }
 
-    OperationContext& opContext          = *progressContext->context;
-    const unsigned __int64 itemTotal     = static_cast<unsigned __int64>(totalFileSize.QuadPart);
-    const unsigned __int64 itemCompleted = static_cast<unsigned __int64>(totalBytesTransferred.QuadPart);
+    OperationContext& opContext  = *progressContext->context;
+    const uint64_t itemTotal     = static_cast<uint64_t>(totalFileSize.QuadPart);
+    const uint64_t itemCompleted = static_cast<uint64_t>(totalBytesTransferred.QuadPart);
 
     if (opContext.parallel)
     {
@@ -1356,7 +1720,7 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
 
         if (itemCompleted >= progressContext->lastItemBytesTransferred)
         {
-            const unsigned __int64 delta = itemCompleted - progressContext->lastItemBytesTransferred;
+            const uint64_t delta = itemCompleted - progressContext->lastItemBytesTransferred;
             if (delta > 0)
             {
                 opContext.parallel->completedBytes.fetch_add(delta, std::memory_order_acq_rel);
@@ -1375,29 +1739,29 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
             return PROGRESS_CANCEL;
         }
 
-        const unsigned __int64 bandwidthLimit = opContext.parallel->bandwidthLimitBytesPerSecond.load(std::memory_order_acquire);
+        const uint64_t bandwidthLimit = opContext.parallel->bandwidthLimitBytesPerSecond.load(std::memory_order_acquire);
         if (bandwidthLimit > 0)
         {
-            const ULONGLONG now              = GetTickCount64();
-            const unsigned __int64 elapsedMs = static_cast<unsigned __int64>(now - opContext.parallel->startTick);
+            const ULONGLONG now      = GetTickCount64();
+            const uint64_t elapsedMs = static_cast<uint64_t>(now - opContext.parallel->startTick);
 
-            const unsigned __int64 bytesSoFar       = opContext.parallel->completedBytes.load(std::memory_order_acquire);
-            constexpr unsigned __int64 maxSafeBytes = std::numeric_limits<unsigned __int64>::max() / 1000u;
+            const uint64_t bytesSoFar       = opContext.parallel->completedBytes.load(std::memory_order_acquire);
+            constexpr uint64_t maxSafeBytes = std::numeric_limits<uint64_t>::max() / 1000u;
 
-            unsigned __int64 desiredMs = 0;
+            uint64_t desiredMs = 0;
             if (bytesSoFar > 0 && bytesSoFar <= maxSafeBytes)
             {
                 desiredMs = (bytesSoFar * 1000u) / bandwidthLimit;
             }
             else if (bytesSoFar > maxSafeBytes)
             {
-                desiredMs = std::numeric_limits<unsigned __int64>::max();
+                desiredMs = std::numeric_limits<uint64_t>::max();
             }
 
             if (desiredMs > elapsedMs)
             {
-                const unsigned __int64 remaining = desiredMs - elapsedMs;
-                const DWORD sleepMs = remaining > std::numeric_limits<DWORD>::max() ? std::numeric_limits<DWORD>::max() : static_cast<DWORD>(remaining);
+                const uint64_t remaining = desiredMs - elapsedMs;
+                const DWORD sleepMs      = remaining > std::numeric_limits<DWORD>::max() ? std::numeric_limits<DWORD>::max() : static_cast<DWORD>(remaining);
                 if (sleepMs > 0)
                 {
                     ::Sleep(sleepMs);
@@ -1415,7 +1779,7 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
             return PROGRESS_CANCEL;
         }
 
-        const unsigned __int64 bandwidthLimit = GetBandwidthLimit(opContext.options);
+        const uint64_t bandwidthLimit = GetBandwidthLimit(opContext.options);
         if (bandwidthLimit > 0)
         {
             if (progressContext->startTick == 0)
@@ -1423,24 +1787,24 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
                 progressContext->startTick = GetTickCount64();
             }
 
-            const ULONGLONG now                     = GetTickCount64();
-            const unsigned __int64 elapsedMs        = static_cast<unsigned __int64>(now - progressContext->startTick);
-            constexpr unsigned __int64 maxSafeBytes = std::numeric_limits<unsigned __int64>::max() / 1000u;
+            const ULONGLONG now             = GetTickCount64();
+            const uint64_t elapsedMs        = static_cast<uint64_t>(now - progressContext->startTick);
+            constexpr uint64_t maxSafeBytes = std::numeric_limits<uint64_t>::max() / 1000u;
 
-            unsigned __int64 desiredMs = 0;
+            uint64_t desiredMs = 0;
             if (itemCompleted > 0 && itemCompleted <= maxSafeBytes)
             {
                 desiredMs = (itemCompleted * 1000u) / bandwidthLimit;
             }
             else if (itemCompleted > maxSafeBytes)
             {
-                desiredMs = std::numeric_limits<unsigned __int64>::max();
+                desiredMs = std::numeric_limits<uint64_t>::max();
             }
 
             if (desiredMs > elapsedMs)
             {
-                const unsigned __int64 remaining = desiredMs - elapsedMs;
-                const DWORD sleepMs = remaining > std::numeric_limits<DWORD>::max() ? std::numeric_limits<DWORD>::max() : static_cast<DWORD>(remaining);
+                const uint64_t remaining = desiredMs - elapsedMs;
+                const DWORD sleepMs      = remaining > std::numeric_limits<DWORD>::max() ? std::numeric_limits<DWORD>::max() : static_cast<DWORD>(remaining);
                 if (sleepMs > 0)
                 {
                     ::Sleep(sleepMs);
@@ -1452,7 +1816,7 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
     return PROGRESS_CONTINUE;
 }
 
-HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, const PathInfo& destination, unsigned __int64* bytesCopied) noexcept
+HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, const PathInfo& destination, uint64_t* bytesCopied) noexcept
 {
     if (! bytesCopied)
     {
@@ -1473,8 +1837,7 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
         return hr;
     }
 
-    const auto returnFailure =
-        [&](HRESULT failure, unsigned __int64 currentItemTotalBytes = 0, unsigned __int64 currentItemCompletedBytes = 0) noexcept -> HRESULT
+    const auto returnFailure = [&](HRESULT failure, uint64_t currentItemTotalBytes = 0, uint64_t currentItemCompletedBytes = 0) noexcept -> HRESULT
     {
         const HRESULT progressHr = ReportProgressForced(context, currentItemTotalBytes, currentItemCompletedBytes);
         if (progressHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || progressHr == E_ABORT)
@@ -1507,8 +1870,8 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
         }
     }
 
-    unsigned __int64 fileBytes = 0;
-    hr                         = GetFileSizeBytes(source.extended, &fileBytes);
+    uint64_t fileBytes = 0;
+    hr                 = GetFileSizeBytes(source.extended, &fileBytes);
     if (FAILED(hr))
     {
         return returnFailure(hr);
@@ -1549,8 +1912,8 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
     return S_OK;
 }
 
-HRESULT CopyReparsePointInternal(
-    OperationContext& context, const PathInfo& source, const PathInfo& destination, DWORD sourceAttributes, unsigned __int64* bytesCopied) noexcept
+HRESULT
+CopyReparsePointInternal(OperationContext& context, const PathInfo& source, const PathInfo& destination, DWORD sourceAttributes, uint64_t* bytesCopied) noexcept
 {
     if (! bytesCopied)
     {
@@ -1571,8 +1934,7 @@ HRESULT CopyReparsePointInternal(
         return hr;
     }
 
-    const auto returnFailure =
-        [&](HRESULT failure, unsigned __int64 currentItemTotalBytes = 0, unsigned __int64 currentItemCompletedBytes = 0) noexcept -> HRESULT
+    const auto returnFailure = [&](HRESULT failure, uint64_t currentItemTotalBytes = 0, uint64_t currentItemCompletedBytes = 0) noexcept -> HRESULT
     {
         const HRESULT progressHr = ReportProgressForced(context, currentItemTotalBytes, currentItemCompletedBytes);
         if (progressHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || progressHr == E_ABORT)
@@ -1586,8 +1948,8 @@ HRESULT CopyReparsePointInternal(
     if (! isDirectory)
     {
         // Copy file reparse points as links only. Never silently fall back to dereferencing data copy.
-        unsigned __int64 fileBytes = 0;
-        const HRESULT sizeHr       = GetFileSizeBytes(source.extended, &fileBytes);
+        uint64_t fileBytes   = 0;
+        const HRESULT sizeHr = GetFileSizeBytes(source.extended, &fileBytes);
         if (FAILED(sizeHr))
         {
             return returnFailure(sizeHr);
@@ -1748,7 +2110,7 @@ HRESULT CopyReparsePointInternal(
     return S_OK;
 }
 
-HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source, const PathInfo& destination, unsigned __int64* bytesCopied) noexcept
+HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source, const PathInfo& destination, uint64_t* bytesCopied) noexcept
 {
     if (! bytesCopied)
     {
@@ -1830,8 +2192,8 @@ HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source,
         childDestination.display  = AppendPath(destination.display, data.cFileName);
         childDestination.extended = AppendPath(destination.extended, data.cFileName);
 
-        unsigned __int64 childBytes = 0;
-        HRESULT childHr             = S_OK;
+        uint64_t childBytes = 0;
+        HRESULT childHr     = S_OK;
 
         const DWORD childAttributes = data.dwFileAttributes;
         const bool childIsDirectory = IsDirectory(childAttributes);
@@ -1927,7 +2289,7 @@ HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source,
 
         if (childBytes > 0)
         {
-            if (std::numeric_limits<unsigned __int64>::max() - *bytesCopied < childBytes)
+            if (std::numeric_limits<uint64_t>::max() - *bytesCopied < childBytes)
             {
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
@@ -1955,7 +2317,7 @@ HRESULT CopyDirectoryInternal(OperationContext& context, const PathInfo& source,
     return S_OK;
 }
 
-HRESULT CopyPathInternal(OperationContext& context, const PathInfo& source, const PathInfo& destination, unsigned __int64* bytesCopied) noexcept
+HRESULT CopyPathInternal(OperationContext& context, const PathInfo& source, const PathInfo& destination, uint64_t* bytesCopied) noexcept
 {
     if (! bytesCopied)
     {
@@ -2007,7 +2369,7 @@ struct DirectoryChildWorkItem
                                                     FileSystemFlags flags,
                                                     FileSystemReparsePointPolicy reparsePointPolicy,
                                                     unsigned int maxConcurrency,
-                                                    unsigned __int64* bytesCopied) noexcept
+                                                    uint64_t* bytesCopied) noexcept
 {
     if (! bytesCopied)
     {
@@ -2109,115 +2471,108 @@ struct DirectoryChildWorkItem
     parallel.startTick = GetTickCount64();
     parallel.bandwidthLimitBytesPerSecond.store(sharedOptionsState ? sharedOptionsState->bandwidthLimitBytesPerSecond : 0ull, std::memory_order_release);
 
-    std::atomic<size_t> nextIndex{0};
     std::atomic<bool> hadFailure{false};
     std::atomic<bool> hadSkipped{false};
 
     const std::wstring rootSource      = rootContext.reparseRootSourcePath;
     const std::wstring rootDestination = rootContext.reparseRootDestinationPath;
 
-    std::vector<std::jthread> workers;
-    workers.reserve(concurrency);
-    for (unsigned int worker = 0; worker < concurrency; ++worker)
-    {
-        const unsigned __int64 streamId = static_cast<unsigned __int64>(worker);
-        workers.emplace_back(
-            [&, streamId]() noexcept
+    auto job = GetSharedFileOpsJobScheduler().StartJob(
+        concurrency,
+        work.size(),
+        [&](size_t index, uint64_t schedulerStreamId) noexcept
+        {
+            if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
             {
-                OperationContext context{};
-                InitializeOperationContext(
-                    context, FILESYSTEM_COPY, flags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 1, reparsePointPolicy);
-                context.options                    = sharedOptionsState;
-                context.parallel                   = &parallel;
-                context.totalBytes                 = 0; // let the host provide totals via pre-calc
-                context.progressStreamId           = streamId;
-                context.reparseRootSourcePath      = rootSource;
-                context.reparseRootDestinationPath = rootDestination;
+                return;
+            }
 
-                for (;;)
+            OperationContext context{};
+            InitializeOperationContext(
+                context, FILESYSTEM_COPY, flags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 1, reparsePointPolicy);
+            context.options                    = sharedOptionsState;
+            context.parallel                   = &parallel;
+            context.totalBytes                 = 0; // let the host provide totals via pre-calc
+            context.progressStreamId           = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
+            context.reparseRootSourcePath      = rootSource;
+            context.reparseRootDestinationPath = rootDestination;
+
+            if (index >= work.size())
+            {
+                return;
+            }
+
+            const DirectoryChildWorkItem& item = work[index];
+
+            PathInfo childSource{};
+            childSource.display  = AppendPath(source.display, item.name);
+            childSource.extended = AppendPath(source.extended, item.name);
+
+            PathInfo childDestination{};
+            childDestination.display  = AppendPath(destination.display, item.name);
+            childDestination.extended = AppendPath(destination.extended, item.name);
+
+            HRESULT itemHr      = S_OK;
+            uint64_t childBytes = 0;
+
+            for (;;)
+            {
+                childBytes = 0;
+                itemHr     = CopyPathInternal(context, childSource, childDestination, &childBytes);
+                if (SUCCEEDED(itemHr))
                 {
-                    if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
-                    {
-                        return;
-                    }
-
-                    const size_t index = nextIndex.fetch_add(1u, std::memory_order_acq_rel);
-                    if (index >= work.size())
-                    {
-                        return;
-                    }
-
-                    const DirectoryChildWorkItem& item = work[index];
-
-                    PathInfo childSource{};
-                    childSource.display  = AppendPath(source.display, item.name);
-                    childSource.extended = AppendPath(source.extended, item.name);
-
-                    PathInfo childDestination{};
-                    childDestination.display  = AppendPath(destination.display, item.name);
-                    childDestination.extended = AppendPath(destination.extended, item.name);
-
-                    HRESULT itemHr              = S_OK;
-                    unsigned __int64 childBytes = 0;
-
-                    for (;;)
-                    {
-                        childBytes = 0;
-                        itemHr     = CopyPathInternal(context, childSource, childDestination, &childBytes);
-                        if (SUCCEEDED(itemHr))
-                        {
-                            break;
-                        }
-
-                        itemHr = NormalizeCancellation(itemHr);
-                        if (IsCancellationHr(itemHr))
-                        {
-                            parallel.cancelRequested.store(true, std::memory_order_release);
-                            return;
-                        }
-
-                        if (itemHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))
-                        {
-                            hadSkipped.store(true, std::memory_order_release);
-                            itemHr = S_OK;
-                            break;
-                        }
-
-                        if (context.continueOnError)
-                        {
-                            hadFailure.store(true, std::memory_order_release);
-                            itemHr = S_OK;
-                            break;
-                        }
-
-                        FileSystemIssueAction issueAction = FileSystemIssueAction::Cancel;
-                        const HRESULT issueHr             = ReportIssue(context, itemHr, &issueAction);
-                        if (FAILED(issueHr))
-                        {
-                            parallel.cancelRequested.store(true, std::memory_order_release);
-                            return;
-                        }
-
-                        switch (issueAction)
-                        {
-                            case FileSystemIssueAction::Overwrite: context.allowOverwrite = true; continue;
-                            case FileSystemIssueAction::ReplaceReadOnly: context.allowReplaceReadonly = true; continue;
-                            case FileSystemIssueAction::PermanentDelete: context.useRecycleBin = false; continue;
-                            case FileSystemIssueAction::Retry: continue;
-                            case FileSystemIssueAction::Skip:
-                                hadFailure.store(true, std::memory_order_release);
-                                itemHr = S_OK;
-                                break;
-                            case FileSystemIssueAction::Cancel:
-                            case FileSystemIssueAction::None:
-                            default: parallel.cancelRequested.store(true, std::memory_order_release); return;
-                        }
-
-                        break;
-                    }
+                    break;
                 }
-            });
-    }
+
+                itemHr = NormalizeCancellation(itemHr);
+                if (IsCancellationHr(itemHr))
+                {
+                    parallel.cancelRequested.store(true, std::memory_order_release);
+                    return;
+                }
+
+                if (itemHr == HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY))
+                {
+                    hadSkipped.store(true, std::memory_order_release);
+                    itemHr = S_OK;
+                    break;
+                }
+
+                if (context.continueOnError)
+                {
+                    hadFailure.store(true, std::memory_order_release);
+                    itemHr = S_OK;
+                    break;
+                }
+
+                FileSystemIssueAction issueAction = FileSystemIssueAction::Cancel;
+                const HRESULT issueHr             = ReportIssue(context, itemHr, &issueAction);
+                if (FAILED(issueHr))
+                {
+                    parallel.cancelRequested.store(true, std::memory_order_release);
+                    return;
+                }
+
+                switch (issueAction)
+                {
+                    case FileSystemIssueAction::Overwrite: context.allowOverwrite = true; continue;
+                    case FileSystemIssueAction::ReplaceReadOnly: context.allowReplaceReadonly = true; continue;
+                    case FileSystemIssueAction::PermanentDelete: context.useRecycleBin = false; continue;
+                    case FileSystemIssueAction::Retry: continue;
+                    case FileSystemIssueAction::Skip:
+                        hadFailure.store(true, std::memory_order_release);
+                        itemHr = S_OK;
+                        break;
+                    case FileSystemIssueAction::Cancel:
+                    case FileSystemIssueAction::None:
+                    default: parallel.cancelRequested.store(true, std::memory_order_release); return;
+                }
+
+                break;
+            }
+        });
+
+    GetSharedFileOpsJobScheduler().WaitJob(job);
 
     if (parallel.cancelRequested.load(std::memory_order_acquire))
     {
@@ -2264,7 +2619,14 @@ HRESULT MovePathInternal(OperationContext& context, const PathInfo& source, cons
     {
         if (! context.allowOverwrite)
         {
-            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+            // Case-only renames (e.g. Foo.txt -> foo.txt) should be allowed on case-insensitive filesystems.
+            // The destination path resolves to the same entry, so treating it as a conflict is incorrect.
+            if (! EqualsInsensitive(source.extended, destination.extended))
+            {
+                return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+            }
+
+            destinationAttributes = INVALID_FILE_ATTRIBUTES;
         }
 
         if ((destinationAttributes & FILE_ATTRIBUTE_READONLY) != 0)
@@ -2300,8 +2662,8 @@ HRESULT MovePathInternal(OperationContext& context, const PathInfo& source, cons
             return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
         }
 
-        unsigned __int64 copiedBytes = 0;
-        HRESULT copyHr               = CopyReparsePointInternal(context, source, destination, sourceAttributes, &copiedBytes);
+        uint64_t copiedBytes = 0;
+        HRESULT copyHr       = CopyReparsePointInternal(context, source, destination, sourceAttributes, &copiedBytes);
         if (FAILED(copyHr))
         {
             return copyHr;
@@ -2372,8 +2734,8 @@ HRESULT MovePathInternal(OperationContext& context, const PathInfo& source, cons
         return HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY);
     }
 
-    unsigned __int64 bytesCopied = 0;
-    const HRESULT copyHr         = CopyPathInternal(context, source, destination, &bytesCopied);
+    uint64_t bytesCopied = 0;
+    const HRESULT copyHr = CopyPathInternal(context, source, destination, &bytesCopied);
     if (FAILED(copyHr))
     {
         // If we only partially copied, do not delete source. This preserves move safety semantics for skipped items.
@@ -2391,14 +2753,14 @@ HRESULT MovePathInternal(OperationContext& context, const PathInfo& source, cons
         HRESULT STDMETHODCALLTYPE FileSystemProgress(FileSystemOperation /*operationType*/,
                                                      unsigned long /*totalItems*/,
                                                      unsigned long /*completedItems*/,
-                                                     unsigned __int64 /*totalBytes*/,
-                                                     unsigned __int64 /*completedBytes*/,
+                                                     uint64_t /*totalBytes*/,
+                                                     uint64_t /*completedBytes*/,
                                                      const wchar_t* /*currentSourcePath*/,
                                                      const wchar_t* /*currentDestinationPath*/,
-                                                     unsigned __int64 /*currentItemTotalBytes*/,
-                                                     unsigned __int64 /*currentItemCompletedBytes*/,
+                                                     uint64_t /*currentItemTotalBytes*/,
+                                                     uint64_t /*currentItemCompletedBytes*/,
                                                      FileSystemOptions* /*options*/,
-                                                     unsigned __int64 /*progressStreamId*/,
+                                                     uint64_t /*progressStreamId*/,
                                                      void* /*cookie*/) noexcept override
         {
             // Suppress delete-phase progress reporting for move operations (move progress reflects copy bytes).
@@ -2673,9 +3035,9 @@ public:
 
         if (_workProgressAvailable)
         {
-            constexpr unsigned __int64 maxUlong       = static_cast<unsigned __int64>(std::numeric_limits<unsigned long>::max());
-            const unsigned __int64 desiredTotal64     = static_cast<unsigned __int64>(_baseCompletedItems) + static_cast<unsigned __int64>(workTotal);
-            const unsigned __int64 desiredCompleted64 = static_cast<unsigned __int64>(_baseCompletedItems) + static_cast<unsigned __int64>(workSoFar);
+            constexpr uint64_t maxUlong       = static_cast<uint64_t>(std::numeric_limits<unsigned long>::max());
+            const uint64_t desiredTotal64     = static_cast<uint64_t>(_baseCompletedItems) + static_cast<uint64_t>(workTotal);
+            const uint64_t desiredCompleted64 = static_cast<uint64_t>(_baseCompletedItems) + static_cast<uint64_t>(workSoFar);
 
             const unsigned long desiredTotal     = static_cast<unsigned long>(std::min(desiredTotal64, maxUlong));
             const unsigned long desiredCompleted = static_cast<unsigned long>(std::min(desiredCompleted64, maxUlong));
@@ -2950,7 +3312,7 @@ HRESULT DeletePathInternal(OperationContext& context, const PathInfo& path) noex
         return DeleteDirectoryRecursive(context, path);
     }
 
-    unsigned __int64 fileBytes = 0;
+    uint64_t fileBytes = 0;
     static_cast<void>(GetFileSizeBytes(path.extended, &fileBytes)); // Best-effort only.
 
     if ((attributes & FILE_ATTRIBUTE_READONLY) != 0)
@@ -3090,8 +3452,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
     context.reparseRootSourcePath      = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(source.display)));
     context.reparseRootDestinationPath = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(destination.display)));
 
-    unsigned __int64 bytesCopied = 0;
-    HRESULT itemHr               = S_OK;
+    uint64_t bytesCopied = 0;
+    HRESULT itemHr       = S_OK;
 
     const unsigned int maxConcurrency  = std::clamp(copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
     const DWORD attributes             = GetFileAttributesW(source.extended.c_str());
@@ -3349,8 +3711,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
             context.reparseRootSourcePath      = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(source.display)));
             context.reparseRootDestinationPath = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(destination.display)));
 
-            unsigned __int64 bytesCopied = 0;
-            HRESULT itemHr               = CopyPathInternal(context, source, destination, &bytesCopied);
+            uint64_t bytesCopied = 0;
+            HRESULT itemHr       = CopyPathInternal(context, source, destination, &bytesCopied);
 
             hr = ReportItemCompleted(context, index, itemHr);
             if (FAILED(hr))
@@ -3413,108 +3775,98 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
     parallel.startTick = GetTickCount64();
     parallel.bandwidthLimitBytesPerSecond.store(sharedOptionsState.bandwidthLimitBytesPerSecond, std::memory_order_release);
 
-    std::atomic<unsigned long> nextIndex{0};
-
-    std::vector<std::jthread> workers;
-    workers.reserve(concurrency);
-
-    for (unsigned int worker = 0; worker < concurrency; ++worker)
-    {
-        const unsigned __int64 streamId = static_cast<unsigned __int64>(worker);
-        workers.emplace_back(
-            [&, streamId]() noexcept
+    auto job = GetSharedFileOpsJobScheduler().StartJob(
+        concurrency,
+        static_cast<size_t>(count),
+        [&](size_t index, uint64_t schedulerStreamId) noexcept
+        {
+            if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
             {
-                OperationContext context{};
-                InitializeOperationContext(context, FILESYSTEM_COPY, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);
-                context.options          = &sharedOptionsState;
-                context.parallel         = &parallel;
-                context.totalBytes       = 0; // let the host provide totals via pre-calc
-                context.progressStreamId = streamId;
+                return;
+            }
 
-                for (;;)
+            if (index >= static_cast<size_t>(count))
+            {
+                return;
+            }
+
+            OperationContext context{};
+            InitializeOperationContext(context, FILESYSTEM_COPY, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);
+            context.options          = &sharedOptionsState;
+            context.parallel         = &parallel;
+            context.totalBytes       = 0; // let the host provide totals via pre-calc
+            context.progressStreamId = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
+
+            const unsigned long itemIndex      = static_cast<unsigned long>((std::min)(index, static_cast<size_t>(ULONG_MAX)));
+            const wchar_t* sourcePath          = sourcePaths[itemIndex];
+            const std::wstring_view leaf       = GetPathLeaf(sourcePath);
+
+            HRESULT hr = CheckCancel(context);
+            if (FAILED(hr))
+            {
+                const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                if (! stopOnError)
                 {
-                    if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
-                    {
-                        return;
-                    }
-
-                    const unsigned long index = nextIndex.fetch_add(1u, std::memory_order_acq_rel);
-                    if (index >= count)
-                    {
-                        return;
-                    }
-
-                    const wchar_t* sourcePath    = sourcePaths[index];
-                    const std::wstring_view leaf = GetPathLeaf(sourcePath);
-
-                    HRESULT hr = CheckCancel(context);
-                    if (FAILED(hr))
-                    {
-                        const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
-                        if (! stopOnError)
-                        {
-                            parallel.cancelRequested.store(true, std::memory_order_release);
-                        }
-                        return;
-                    }
-
-                    const PathInfo source      = MakePathInfo(sourcePath);
-                    const PathInfo destination = {AppendPath(destinationRoot.display, leaf), AppendPath(destinationRoot.extended, leaf)};
-
-                    hr = SetItemPaths(context, source.display.c_str(), destination.display.c_str());
-                    if (FAILED(hr))
-                    {
-                        parallel.stopOnErrorRequested.store(true, std::memory_order_release);
-                        HRESULT expected = S_OK;
-                        static_cast<void>(parallel.firstError.compare_exchange_strong(expected, hr, std::memory_order_acq_rel));
-                        return;
-                    }
-
-                    context.reparseRootSourcePath      = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(source.display)));
-                    context.reparseRootDestinationPath = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(destination.display)));
-
-                    unsigned __int64 bytesCopied = 0;
-                    HRESULT itemHr               = CopyPathInternal(context, source, destination, &bytesCopied);
-
-                    hr = ReportItemCompleted(context, index, itemHr);
-                    if (FAILED(hr))
-                    {
-                        const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
-                        if (! stopOnError)
-                        {
-                            parallel.cancelRequested.store(true, std::memory_order_release);
-                        }
-                        return;
-                    }
-
-                    parallel.completedItems.fetch_add(1u, std::memory_order_acq_rel);
-
-                    if (FAILED(itemHr))
-                    {
-                        if (itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
-                        {
-                            const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
-                            if (! stopOnError)
-                            {
-                                parallel.cancelRequested.store(true, std::memory_order_release);
-                            }
-                            return;
-                        }
-
-                        parallel.hadFailure.store(true, std::memory_order_release);
-                        if (! context.continueOnError)
-                        {
-                            parallel.stopOnErrorRequested.store(true, std::memory_order_release);
-                            HRESULT expected = S_OK;
-                            static_cast<void>(parallel.firstError.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
-                            return;
-                        }
-                    }
+                    parallel.cancelRequested.store(true, std::memory_order_release);
                 }
-            });
-    }
+                return;
+            }
 
-    workers.clear();
+            const PathInfo source      = MakePathInfo(sourcePath);
+            const PathInfo destination = {AppendPath(destinationRoot.display, leaf), AppendPath(destinationRoot.extended, leaf)};
+
+            hr = SetItemPaths(context, source.display.c_str(), destination.display.c_str());
+            if (FAILED(hr))
+            {
+                parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                HRESULT expected = S_OK;
+                static_cast<void>(parallel.firstError.compare_exchange_strong(expected, hr, std::memory_order_acq_rel));
+                return;
+            }
+
+            context.reparseRootSourcePath      = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(source.display)));
+            context.reparseRootDestinationPath = TrimTrailingSeparatorsPreserveRoot(StripWin32ExtendedPrefix(MakeAbsolutePath(destination.display)));
+
+            uint64_t bytesCopied = 0;
+            HRESULT itemHr       = CopyPathInternal(context, source, destination, &bytesCopied);
+
+            hr = ReportItemCompleted(context, itemIndex, itemHr);
+            if (FAILED(hr))
+            {
+                const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                if (! stopOnError)
+                {
+                    parallel.cancelRequested.store(true, std::memory_order_release);
+                }
+                return;
+            }
+
+            parallel.completedItems.fetch_add(1u, std::memory_order_acq_rel);
+
+            if (FAILED(itemHr))
+            {
+                if (itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+                {
+                    const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                    if (! stopOnError)
+                    {
+                        parallel.cancelRequested.store(true, std::memory_order_release);
+                    }
+                    return;
+                }
+
+                parallel.hadFailure.store(true, std::memory_order_release);
+                if (! context.continueOnError)
+                {
+                    parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                    HRESULT expected = S_OK;
+                    static_cast<void>(parallel.firstError.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
+                    return;
+                }
+            }
+        });
+
+    GetSharedFileOpsJobScheduler().WaitJob(job);
 
     if (parallel.cancelRequested.load(std::memory_order_acquire))
     {
@@ -3672,104 +4024,94 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItems(const wchar_t* const* sourcePath
     parallel.startTick = GetTickCount64();
     parallel.bandwidthLimitBytesPerSecond.store(sharedOptionsState.bandwidthLimitBytesPerSecond, std::memory_order_release);
 
-    std::atomic<unsigned long> nextIndex{0};
-
-    std::vector<std::jthread> workers;
-    workers.reserve(concurrency);
-
-    for (unsigned int worker = 0; worker < concurrency; ++worker)
-    {
-        const unsigned __int64 streamId = static_cast<unsigned __int64>(worker);
-        workers.emplace_back(
-            [&, streamId]() noexcept
+    auto job = GetSharedFileOpsJobScheduler().StartJob(
+        concurrency,
+        static_cast<size_t>(count),
+        [&](size_t index, uint64_t schedulerStreamId) noexcept
+        {
+            if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
             {
-                OperationContext context{};
-                InitializeOperationContext(context, FILESYSTEM_MOVE, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);
-                context.options          = &sharedOptionsState;
-                context.parallel         = &parallel;
-                context.totalBytes       = 0; // let the host provide totals via pre-calc
-                context.progressStreamId = streamId;
+                return;
+            }
 
-                for (;;)
+            if (index >= static_cast<size_t>(count))
+            {
+                return;
+            }
+
+            OperationContext context{};
+            InitializeOperationContext(context, FILESYSTEM_MOVE, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);
+            context.options          = &sharedOptionsState;
+            context.parallel         = &parallel;
+            context.totalBytes       = 0; // let the host provide totals via pre-calc
+            context.progressStreamId = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
+
+            const unsigned long itemIndex = static_cast<unsigned long>((std::min)(index, static_cast<size_t>(ULONG_MAX)));
+            const wchar_t* sourcePath     = sourcePaths[itemIndex];
+            const std::wstring_view leaf  = GetPathLeaf(sourcePath);
+
+            HRESULT hr = CheckCancel(context);
+            if (FAILED(hr))
+            {
+                const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                if (! stopOnError)
                 {
-                    if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
-                    {
-                        return;
-                    }
-
-                    const unsigned long index = nextIndex.fetch_add(1u, std::memory_order_acq_rel);
-                    if (index >= count)
-                    {
-                        return;
-                    }
-
-                    const wchar_t* sourcePath    = sourcePaths[index];
-                    const std::wstring_view leaf = GetPathLeaf(sourcePath);
-
-                    HRESULT hr = CheckCancel(context);
-                    if (FAILED(hr))
-                    {
-                        const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
-                        if (! stopOnError)
-                        {
-                            parallel.cancelRequested.store(true, std::memory_order_release);
-                        }
-                        return;
-                    }
-
-                    const PathInfo source      = MakePathInfo(sourcePath);
-                    const PathInfo destination = {AppendPath(destinationRoot.display, leaf), AppendPath(destinationRoot.extended, leaf)};
-
-                    hr = SetItemPaths(context, source.display.c_str(), destination.display.c_str());
-                    if (FAILED(hr))
-                    {
-                        parallel.stopOnErrorRequested.store(true, std::memory_order_release);
-                        HRESULT expected = S_OK;
-                        static_cast<void>(parallel.firstError.compare_exchange_strong(expected, hr, std::memory_order_acq_rel));
-                        return;
-                    }
-
-                    const HRESULT itemHr = MovePathInternal(context, source, destination, true);
-
-                    hr = ReportItemCompleted(context, index, itemHr);
-                    if (FAILED(hr))
-                    {
-                        const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
-                        if (! stopOnError)
-                        {
-                            parallel.cancelRequested.store(true, std::memory_order_release);
-                        }
-                        return;
-                    }
-
-                    parallel.completedItems.fetch_add(1u, std::memory_order_acq_rel);
-
-                    if (FAILED(itemHr))
-                    {
-                        if (itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
-                        {
-                            const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
-                            if (! stopOnError)
-                            {
-                                parallel.cancelRequested.store(true, std::memory_order_release);
-                            }
-                            return;
-                        }
-
-                        parallel.hadFailure.store(true, std::memory_order_release);
-                        if (! context.continueOnError)
-                        {
-                            parallel.stopOnErrorRequested.store(true, std::memory_order_release);
-                            HRESULT expected = S_OK;
-                            static_cast<void>(parallel.firstError.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
-                            return;
-                        }
-                    }
+                    parallel.cancelRequested.store(true, std::memory_order_release);
                 }
-            });
-    }
+                return;
+            }
 
-    workers.clear();
+            const PathInfo source      = MakePathInfo(sourcePath);
+            const PathInfo destination = {AppendPath(destinationRoot.display, leaf), AppendPath(destinationRoot.extended, leaf)};
+
+            hr = SetItemPaths(context, source.display.c_str(), destination.display.c_str());
+            if (FAILED(hr))
+            {
+                parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                HRESULT expected = S_OK;
+                static_cast<void>(parallel.firstError.compare_exchange_strong(expected, hr, std::memory_order_acq_rel));
+                return;
+            }
+
+            const HRESULT itemHr = MovePathInternal(context, source, destination, true);
+
+            hr = ReportItemCompleted(context, itemIndex, itemHr);
+            if (FAILED(hr))
+            {
+                const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                if (! stopOnError)
+                {
+                    parallel.cancelRequested.store(true, std::memory_order_release);
+                }
+                return;
+            }
+
+            parallel.completedItems.fetch_add(1u, std::memory_order_acq_rel);
+
+            if (FAILED(itemHr))
+            {
+                if (itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+                {
+                    const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                    if (! stopOnError)
+                    {
+                        parallel.cancelRequested.store(true, std::memory_order_release);
+                    }
+                    return;
+                }
+
+                parallel.hadFailure.store(true, std::memory_order_release);
+                if (! context.continueOnError)
+                {
+                    parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                    HRESULT expected = S_OK;
+                    static_cast<void>(parallel.firstError.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
+                    return;
+                }
+            }
+        });
+
+    GetSharedFileOpsJobScheduler().WaitJob(job);
 
     if (parallel.cancelRequested.load(std::memory_order_acquire))
     {
@@ -3822,7 +4164,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
     const unsigned int maxConcurrencyFast       = std::clamp(deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency);
     const unsigned int maxConcurrencyRecycleBin = std::clamp(deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency);
     const unsigned int maxConcurrency           = useRecycleBin ? maxConcurrencyRecycleBin : maxConcurrencyFast;
-    const unsigned int concurrency              = std::min<unsigned int>(maxConcurrency, count);
+    constexpr unsigned int kMaxSharedConcurrency = 8u;
+    const unsigned int concurrency =
+        std::min<unsigned int>(std::min<unsigned int>(maxConcurrency, count), kMaxSharedConcurrency);
 
     if (concurrency > 1u)
     {
@@ -3940,161 +4284,156 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
         std::condition_variable scheduleCv;
         unsigned long remainingWork = count;
 
-        std::vector<std::jthread> workers;
-        workers.reserve(concurrency);
+        auto job = GetSharedFileOpsJobScheduler().StartJob(
+            concurrency,
+            concurrency,
+            [&](size_t /*workerIndex*/, uint64_t streamId) noexcept
+            {
+                [[maybe_unused]] auto coInit = wil::CoInitializeEx();
 
-        for (unsigned int worker = 0; worker < concurrency; ++worker)
-        {
-            const unsigned __int64 streamId = static_cast<unsigned __int64>(worker);
-            workers.emplace_back(
-                [&, streamId]() noexcept
+                OperationContext context{};
+                // totalItems is 0 because the plugin does not know recursive totals; the host may provide totals via pre-calculation.
+                InitializeOperationContext(context, FILESYSTEM_DELETE, flags, &sharedOptionsState, callback, cookie, 0, reparsePointPolicy);
+                context.options          = &sharedOptionsState;
+                context.parallel         = &parallel;
+                context.totalBytes       = 0; // host pre-calc provides totals when available
+                context.progressStreamId = streamId;
+
+                for (;;)
                 {
-                    [[maybe_unused]] auto coInit = wil::CoInitializeEx();
-
-                    OperationContext context{};
-                    // totalItems is 0 because the plugin does not know recursive totals; the host may provide totals via pre-calculation.
-                    InitializeOperationContext(context, FILESYSTEM_DELETE, flags, &sharedOptionsState, callback, cookie, 0, reparsePointPolicy);
-                    context.options          = &sharedOptionsState;
-                    context.parallel         = &parallel;
-                    context.totalBytes       = 0; // host pre-calc provides totals when available
-                    context.progressStreamId = streamId;
-
-                    for (;;)
+                    if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
                     {
+                        return;
+                    }
+
+                    unsigned long index = 0;
+                    {
+                        std::unique_lock lock(scheduleMutex);
+                        scheduleCv.wait(lock,
+                                        [&] noexcept
+                                        {
+                                            return parallel.cancelRequested.load(std::memory_order_acquire) ||
+                                                   parallel.stopOnErrorRequested.load(std::memory_order_acquire) || remainingWork == 0 || ! ready.empty();
+                                        });
+
                         if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
                         {
                             return;
                         }
 
-                        unsigned long index = 0;
+                        if (remainingWork == 0)
                         {
-                            std::unique_lock lock(scheduleMutex);
-                            scheduleCv.wait(lock,
-                                            [&] noexcept
-                                            {
-                                                return parallel.cancelRequested.load(std::memory_order_acquire) ||
-                                                       parallel.stopOnErrorRequested.load(std::memory_order_acquire) || remainingWork == 0 || ! ready.empty();
-                                            });
-
-                            if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
-                            {
-                                return;
-                            }
-
-                            if (remainingWork == 0)
-                            {
-                                return;
-                            }
-
-                            if (ready.empty())
-                            {
-                                continue;
-                            }
-
-                            index = ready.front();
-                            ready.pop_front();
-                        }
-
-                        const wchar_t* path = paths[index];
-                        if (! path || path[0] == L'\0')
-                        {
-                            parallel.stopOnErrorRequested.store(true, std::memory_order_release);
-                            HRESULT expected = S_OK;
-                            static_cast<void>(
-                                parallel.firstError.compare_exchange_strong(expected, path ? E_INVALIDARG : E_POINTER, std::memory_order_acq_rel));
-                            scheduleCv.notify_all();
                             return;
                         }
 
-                        const PathInfo target = MakePathInfo(path);
-
-                        HRESULT hr = SetItemPaths(context, target.display.c_str(), nullptr);
-                        if (FAILED(hr))
+                        if (ready.empty())
                         {
-                            parallel.stopOnErrorRequested.store(true, std::memory_order_release);
-                            HRESULT expected = S_OK;
-                            static_cast<void>(parallel.firstError.compare_exchange_strong(expected, hr, std::memory_order_acq_rel));
-                            scheduleCv.notify_all();
-                            return;
+                            continue;
                         }
 
-                        const HRESULT itemHr = DeletePathInternal(context, target);
-
-                        hr = ReportItemCompleted(context, index, itemHr);
-                        if (FAILED(hr))
-                        {
-                            const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
-                            if (! stopOnError)
-                            {
-                                parallel.cancelRequested.store(true, std::memory_order_release);
-                            }
-                            scheduleCv.notify_all();
-                            return;
-                        }
-
-                        parallel.completedItems.fetch_add(1u, std::memory_order_acq_rel);
-                        hr = ReportProgress(context, 0, 0);
-                        if (FAILED(hr))
-                        {
-                            const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
-                            if (! stopOnError)
-                            {
-                                parallel.cancelRequested.store(true, std::memory_order_release);
-                            }
-                            scheduleCv.notify_all();
-                            return;
-                        }
-
-                        if (FAILED(itemHr))
-                        {
-                            if (itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
-                            {
-                                const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
-                                if (! stopOnError)
-                                {
-                                    parallel.cancelRequested.store(true, std::memory_order_release);
-                                }
-                                scheduleCv.notify_all();
-                                return;
-                            }
-
-                            parallel.hadFailure.store(true, std::memory_order_release);
-                            if (! context.continueOnError)
-                            {
-                                parallel.stopOnErrorRequested.store(true, std::memory_order_release);
-                                HRESULT expected = S_OK;
-                                static_cast<void>(parallel.firstError.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
-                                scheduleCv.notify_all();
-                                return;
-                            }
-                        }
-
-                        {
-                            std::unique_lock lock(scheduleMutex);
-                            for (const unsigned long dependent : dependents[index])
-                            {
-                                if (remainingDeps[dependent] > 0)
-                                {
-                                    --remainingDeps[dependent];
-                                    if (remainingDeps[dependent] == 0)
-                                    {
-                                        ready.push_back(dependent);
-                                    }
-                                }
-                            }
-
-                            if (remainingWork > 0)
-                            {
-                                --remainingWork;
-                            }
-                        }
-
-                        scheduleCv.notify_all();
+                        index = ready.front();
+                        ready.pop_front();
                     }
-                });
-        }
 
-        workers.clear();
+                    const wchar_t* path = paths[index];
+                    if (! path || path[0] == L'\0')
+                    {
+                        parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                        HRESULT expected = S_OK;
+                        static_cast<void>(
+                            parallel.firstError.compare_exchange_strong(expected, path ? E_INVALIDARG : E_POINTER, std::memory_order_acq_rel));
+                        scheduleCv.notify_all();
+                        return;
+                    }
+
+                    const PathInfo target = MakePathInfo(path);
+
+                    HRESULT hr = SetItemPaths(context, target.display.c_str(), nullptr);
+                    if (FAILED(hr))
+                    {
+                        parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                        HRESULT expected = S_OK;
+                        static_cast<void>(parallel.firstError.compare_exchange_strong(expected, hr, std::memory_order_acq_rel));
+                        scheduleCv.notify_all();
+                        return;
+                    }
+
+                    const HRESULT itemHr = DeletePathInternal(context, target);
+
+                    hr = ReportItemCompleted(context, index, itemHr);
+                    if (FAILED(hr))
+                    {
+                        const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                        if (! stopOnError)
+                        {
+                            parallel.cancelRequested.store(true, std::memory_order_release);
+                        }
+                        scheduleCv.notify_all();
+                        return;
+                    }
+
+                    parallel.completedItems.fetch_add(1u, std::memory_order_acq_rel);
+                    hr = ReportProgress(context, 0, 0);
+                    if (FAILED(hr))
+                    {
+                        const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                        if (! stopOnError)
+                        {
+                            parallel.cancelRequested.store(true, std::memory_order_release);
+                        }
+                        scheduleCv.notify_all();
+                        return;
+                    }
+
+                    if (FAILED(itemHr))
+                    {
+                        if (itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+                        {
+                            const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                            if (! stopOnError)
+                            {
+                                parallel.cancelRequested.store(true, std::memory_order_release);
+                            }
+                            scheduleCv.notify_all();
+                            return;
+                        }
+
+                        parallel.hadFailure.store(true, std::memory_order_release);
+                        if (! context.continueOnError)
+                        {
+                            parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                            HRESULT expected = S_OK;
+                            static_cast<void>(parallel.firstError.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
+                            scheduleCv.notify_all();
+                            return;
+                        }
+                    }
+
+                    {
+                        std::unique_lock lock(scheduleMutex);
+                        for (const unsigned long dependent : dependents[index])
+                        {
+                            if (remainingDeps[dependent] > 0)
+                            {
+                                --remainingDeps[dependent];
+                                if (remainingDeps[dependent] == 0)
+                                {
+                                    ready.push_back(dependent);
+                                }
+                            }
+                        }
+
+                        if (remainingWork > 0)
+                        {
+                            --remainingWork;
+                        }
+                    }
+
+                    scheduleCv.notify_all();
+                }
+            });
+
+        GetSharedFileOpsJobScheduler().WaitJob(job);
 
         if (parallel.cancelRequested.load(std::memory_order_acquire))
         {
@@ -4180,11 +4519,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem::RenameItems(const FileSystemRenamePair* items,
-                                                  unsigned long count,
-                                                  FileSystemFlags flags,
-                                                  const FileSystemOptions* options,
-                                                  IFileSystemCallback* callback,
-                                                  void* cookie) noexcept
+                                                   unsigned long count,
+                                                   FileSystemFlags flags,
+                                                   const FileSystemOptions* options,
+                                                   IFileSystemCallback* callback,
+                                                   void* cookie) noexcept
 {
     if (! items && count > 0)
     {
@@ -4197,9 +4536,156 @@ HRESULT STDMETHODCALLTYPE FileSystem::RenameItems(const FileSystemRenamePair* it
     }
 
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
+    unsigned int copyMoveMaxConcurrency             = 1;
     {
         std::lock_guard lock(_stateMutex);
-        reparsePointPolicy = _reparsePointPolicy;
+        reparsePointPolicy     = _reparsePointPolicy;
+        copyMoveMaxConcurrency = _copyMoveMaxConcurrency;
+    }
+
+    const unsigned int maxConcurrency = std::clamp(copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
+    const unsigned int concurrency    = std::min<unsigned int>(maxConcurrency, count);
+
+    if (concurrency > 1u)
+    {
+        FileSystemOptions sharedOptionsState{};
+        if (options)
+        {
+            sharedOptionsState = *options;
+        }
+
+        ParallelOperationState parallel{};
+        parallel.startTick = GetTickCount64();
+        parallel.bandwidthLimitBytesPerSecond.store(sharedOptionsState.bandwidthLimitBytesPerSecond, std::memory_order_release);
+
+        auto job = GetSharedFileOpsJobScheduler().StartJob(
+            concurrency,
+            count,
+            [&](size_t taskIndex, uint64_t streamId) noexcept
+            {
+                if (taskIndex >= count)
+                {
+                    return;
+                }
+
+                if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+                {
+                    return;
+                }
+
+                [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+
+                OperationContext context{};
+                InitializeOperationContext(context, FILESYSTEM_RENAME, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);
+                context.options          = &sharedOptionsState;
+                context.parallel         = &parallel;
+                context.totalBytes       = 0;
+                context.progressStreamId = streamId;
+
+                const FileSystemRenamePair& item = items[taskIndex];
+                HRESULT itemHr                   = S_OK;
+
+                if (! item.sourcePath || ! item.newName)
+                {
+                    itemHr = E_POINTER;
+                }
+                else if (item.sourcePath[0] == L'\0' || item.newName[0] == L'\0')
+                {
+                    itemHr = E_INVALIDARG;
+                }
+                else
+                {
+                    const std::wstring_view newName = item.newName;
+                    if (ContainsPathSeparator(newName))
+                    {
+                        itemHr = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+                    }
+                    else
+                    {
+                        const std::wstring directory = GetPathDirectory(item.sourcePath);
+                        if (directory.empty())
+                        {
+                            itemHr = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+                        }
+                        else
+                        {
+                            const std::wstring destinationPath = AppendPath(directory, newName);
+                            const PathInfo source              = MakePathInfo(item.sourcePath);
+                            const PathInfo destination         = MakePathInfo(destinationPath);
+
+                            HRESULT hr = SetItemPaths(context, source.display.c_str(), destination.display.c_str());
+                            if (SUCCEEDED(hr))
+                            {
+                                itemHr = MovePathInternal(context, source, destination, false);
+                                hr     = ReportItemCompleted(context, static_cast<unsigned long>(taskIndex), itemHr);
+                                if (FAILED(hr))
+                                {
+                                    const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                                    if (! stopOnError)
+                                    {
+                                        parallel.cancelRequested.store(true, std::memory_order_release);
+                                    }
+                                    return;
+                                }
+                            }
+                            else
+                            {
+                                itemHr = hr;
+                            }
+                        }
+                    }
+                }
+
+                parallel.completedItems.fetch_add(1u, std::memory_order_acq_rel);
+                HRESULT hr = ReportProgress(context, 0, 0);
+                if (FAILED(hr))
+                {
+                    const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                    if (! stopOnError)
+                    {
+                        parallel.cancelRequested.store(true, std::memory_order_release);
+                    }
+                    return;
+                }
+
+                if (FAILED(itemHr))
+                {
+                    if (IsCancellationHr(itemHr))
+                    {
+                        parallel.cancelRequested.store(true, std::memory_order_release);
+                        return;
+                    }
+
+                    parallel.hadFailure.store(true, std::memory_order_release);
+                    if (! context.continueOnError)
+                    {
+                        parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                        HRESULT expected = S_OK;
+                        static_cast<void>(parallel.firstError.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
+                        return;
+                    }
+                }
+            });
+
+        GetSharedFileOpsJobScheduler().WaitJob(job);
+
+        if (parallel.cancelRequested.load(std::memory_order_acquire))
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        if (parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+        {
+            const HRESULT hr = parallel.firstError.load(std::memory_order_acquire);
+            return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        if (parallel.hadFailure.load(std::memory_order_acquire))
+        {
+            return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        }
+
+        return S_OK;
     }
 
     OperationContext context{};
@@ -4250,6 +4736,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::RenameItems(const FileSystemRenamePair* it
         }
 
         context.completedItems += 1;
+        hr = ReportProgress(context, 0, 0);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
 
         if (FAILED(itemHr))
         {

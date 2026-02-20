@@ -1867,3 +1867,51 @@ void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& 
     }
 }
 } // namespace PrefsFileOperations
+
+namespace PrefsCompareDirectories
+{
+const Common::Settings::CompareDirectoriesSettings& GetCompareDirectoriesSettingsOrDefault(const Common::Settings::Settings& settings) noexcept
+{
+    static const Common::Settings::CompareDirectoriesSettings kDefaults{};
+    if (settings.compareDirectories.has_value())
+    {
+        return settings.compareDirectories.value();
+    }
+    return kDefaults;
+}
+
+Common::Settings::CompareDirectoriesSettings* EnsureWorkingCompareDirectoriesSettings(Common::Settings::Settings& settings) noexcept
+{
+    if (settings.compareDirectories.has_value())
+    {
+        return &settings.compareDirectories.value();
+    }
+
+    settings.compareDirectories.emplace();
+    return &settings.compareDirectories.value();
+}
+
+void MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(Common::Settings::Settings& settings) noexcept
+{
+    if (! settings.compareDirectories.has_value())
+    {
+        return;
+    }
+
+    const Common::Settings::CompareDirectoriesSettings defaults{};
+    const auto& compare = settings.compareDirectories.value();
+
+    const bool hasNonDefault =
+        compare.compareSize != defaults.compareSize || compare.compareDateTime != defaults.compareDateTime ||
+        compare.compareAttributes != defaults.compareAttributes || compare.compareContent != defaults.compareContent ||
+        compare.compareSubdirectories != defaults.compareSubdirectories || compare.compareSubdirectoryAttributes != defaults.compareSubdirectoryAttributes ||
+        compare.selectSubdirsOnlyInOnePane != defaults.selectSubdirsOnlyInOnePane || compare.ignoreFiles != defaults.ignoreFiles ||
+        compare.ignoreFilesPatterns != defaults.ignoreFilesPatterns || compare.ignoreDirectories != defaults.ignoreDirectories ||
+        compare.ignoreDirectoriesPatterns != defaults.ignoreDirectoriesPatterns || compare.showIdenticalItems != defaults.showIdenticalItems;
+
+    if (! hasNonDefault)
+    {
+        settings.compareDirectories.reset();
+    }
+}
+} // namespace PrefsCompareDirectories

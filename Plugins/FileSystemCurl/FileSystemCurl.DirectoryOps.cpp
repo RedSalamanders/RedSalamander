@@ -11,7 +11,7 @@ namespace
 class TempFileReader final : public IFileReader
 {
 public:
-    TempFileReader(wil::unique_hfile file, unsigned __int64 sizeBytes) noexcept : _file(std::move(file)), _sizeBytes(sizeBytes)
+    TempFileReader(wil::unique_hfile file, uint64_t sizeBytes) noexcept : _file(std::move(file)), _sizeBytes(sizeBytes)
     {
     }
 
@@ -53,7 +53,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetSize(unsigned __int64* sizeBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
     {
         if (! sizeBytes)
         {
@@ -64,7 +64,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, unsigned __int64* newPosition) noexcept override
+    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
     {
         if (! newPosition)
         {
@@ -97,7 +97,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
         }
 
-        *newPosition = static_cast<unsigned __int64>(moved.QuadPart);
+        *newPosition = static_cast<uint64_t>(moved.QuadPart);
         return S_OK;
     }
 
@@ -140,7 +140,7 @@ private:
 
     std::atomic_ulong _refCount{1};
     wil::unique_hfile _file;
-    unsigned __int64 _sizeBytes = 0;
+    uint64_t _sizeBytes = 0;
 };
 
 class TempFileWriter final : public IFileWriter
@@ -199,7 +199,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetPosition(unsigned __int64* positionBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPosition(uint64_t* positionBytes) noexcept override
     {
         if (! positionBytes)
         {
@@ -225,7 +225,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        *positionBytes = static_cast<unsigned __int64>(moved.QuadPart);
+        *positionBytes = static_cast<uint64_t>(moved.QuadPart);
         return S_OK;
     }
 
@@ -275,8 +275,8 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
         }
 
-        unsigned __int64 sizeBytes = 0;
-        HRESULT hr                 = GetFileSizeBytes(_file.get(), sizeBytes);
+        uint64_t sizeBytes = 0;
+        HRESULT hr         = GetFileSizeBytes(_file.get(), sizeBytes);
         if (FAILED(hr))
         {
             return hr;
@@ -330,7 +330,7 @@ private:
 class CurlStreamingReader final : public IFileReader
 {
 public:
-    CurlStreamingReader(ConnectionInfo conn, std::wstring remotePath, unsigned __int64 sizeBytes) noexcept
+    CurlStreamingReader(ConnectionInfo conn, std::wstring remotePath, uint64_t sizeBytes) noexcept
         : _conn(std::move(conn)),
           _remotePath(std::move(remotePath)),
           _sizeBytes(sizeBytes)
@@ -397,7 +397,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetSize(unsigned __int64* sizeBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
     {
         if (! sizeBytes)
         {
@@ -408,7 +408,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, unsigned __int64* newPosition) noexcept override
+    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
     {
         if (! newPosition)
         {
@@ -424,7 +424,7 @@ public:
 
         std::unique_lock lock(_mutex);
 
-        unsigned __int64 base = 0;
+        uint64_t base = 0;
         if (origin == FILE_BEGIN)
         {
             base = 0;
@@ -445,7 +445,7 @@ public:
 
         if (offset < 0)
         {
-            const unsigned __int64 magnitude = static_cast<unsigned __int64>(-(offset + 1)) + 1u;
+            const uint64_t magnitude = static_cast<uint64_t>(-(offset + 1)) + 1u;
             if (base < magnitude)
             {
                 return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
@@ -453,15 +453,14 @@ public:
         }
         else
         {
-            const unsigned __int64 add = static_cast<unsigned __int64>(offset);
-            if (base > (std::numeric_limits<unsigned __int64>::max)() - add)
+            const uint64_t add = static_cast<uint64_t>(offset);
+            if (base > (std::numeric_limits<uint64_t>::max)() - add)
             {
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
         }
 
-        const unsigned __int64 newPos =
-            (offset < 0) ? (base - (static_cast<unsigned __int64>(-(offset + 1)) + 1u)) : (base + static_cast<unsigned __int64>(offset));
+        const uint64_t newPos = (offset < 0) ? (base - (static_cast<uint64_t>(-(offset + 1)) + 1u)) : (base + static_cast<uint64_t>(offset));
 
         if (newPos == _positionBytes)
         {
@@ -520,7 +519,7 @@ public:
         }
 
         const size_t take = (std::min)(static_cast<size_t>(bytesToRead), _bufferedBytes);
-        if (_positionBytes > (std::numeric_limits<unsigned __int64>::max)() - static_cast<unsigned __int64>(take))
+        if (_positionBytes > (std::numeric_limits<uint64_t>::max)() - static_cast<uint64_t>(take))
         {
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
@@ -538,7 +537,7 @@ public:
             _bufferedBytes -= remaining;
         }
 
-        _positionBytes += static_cast<unsigned __int64>(take);
+        _positionBytes += static_cast<uint64_t>(take);
 
         lock.unlock();
         _cvWritable.notify_all();
@@ -681,7 +680,7 @@ private:
             const uint64_t gen = _generation.load(std::memory_order_acquire);
             _transferGeneration.store(gen, std::memory_order_release);
 
-            unsigned __int64 startOffset = 0;
+            uint64_t startOffset = 0;
             {
                 std::scoped_lock lock(_mutex);
                 startOffset = _positionBytes;
@@ -718,7 +717,7 @@ private:
 
             if (startOffset > 0)
             {
-                constexpr unsigned __int64 kCurlOffMax = static_cast<unsigned __int64>((std::numeric_limits<curl_off_t>::max)());
+                constexpr uint64_t kCurlOffMax = static_cast<uint64_t>((std::numeric_limits<curl_off_t>::max)());
                 if (startOffset > kCurlOffMax)
                 {
                     std::scoped_lock lock(_mutex);
@@ -776,7 +775,7 @@ private:
     ConnectionInfo _conn;
     std::wstring _remotePath;
 
-    unsigned __int64 _sizeBytes = 0;
+    uint64_t _sizeBytes = 0;
 
     std::mutex _mutex;
     std::condition_variable _cvReadable;
@@ -789,7 +788,7 @@ private:
     size_t _writePos      = 0;
     size_t _bufferedBytes = 0;
 
-    unsigned __int64 _positionBytes = 0;
+    uint64_t _positionBytes = 0;
 
     std::atomic<uint64_t> _generation{0};
     std::atomic<uint64_t> _transferGeneration{0};
@@ -868,7 +867,7 @@ public:
         return current;
     }
 
-    HRESULT STDMETHODCALLTYPE GetPosition(unsigned __int64* positionBytes) noexcept override
+    HRESULT STDMETHODCALLTYPE GetPosition(uint64_t* positionBytes) noexcept override
     {
         if (! positionBytes)
         {
@@ -962,11 +961,11 @@ public:
                 offset += second;
             }
 
-            if (_positionBytes > (std::numeric_limits<unsigned __int64>::max)() - static_cast<unsigned __int64>(chunk))
+            if (_positionBytes > (std::numeric_limits<uint64_t>::max)() - static_cast<uint64_t>(chunk))
             {
                 return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
             }
-            _positionBytes += static_cast<unsigned __int64>(chunk);
+            _positionBytes += static_cast<uint64_t>(chunk);
 
             lock.unlock();
             _cvReadable.notify_all();
@@ -1161,7 +1160,7 @@ private:
     size_t _writePos      = 0;
     size_t _bufferedBytes = 0;
 
-    unsigned __int64 _positionBytes = 0;
+    uint64_t _positionBytes = 0;
 
     std::atomic_bool _stopping{false};
     bool _closedForWrite = false;
@@ -1342,8 +1341,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateFileReader(const wchar_t* path, 
                                                 return dlHr;
                                             }
 
-                                            unsigned __int64 sizeBytes = 0;
-                                            HRESULT hr                 = GetFileSizeBytes(file.get(), sizeBytes);
+                                            uint64_t sizeBytes = 0;
+                                            HRESULT hr         = GetFileSizeBytes(file.get(), sizeBytes);
                                             if (FAILED(hr))
                                             {
                                                 return hr;
@@ -1583,8 +1582,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
         return result->status;
     }
 
-    const bool recursive            = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
-    unsigned __int64 scannedEntries = 0;
+    const bool recursive    = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
+    uint64_t scannedEntries = 0;
 
     auto shouldCancel = [&]() noexcept -> bool
     {

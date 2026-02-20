@@ -344,7 +344,7 @@ namespace
         FilesInformationS3::Entry e{};
         e.name          = Utf16FromUtf8(keyView);
         e.attributes    = FILE_ATTRIBUTE_NORMAL;
-        e.sizeBytes     = static_cast<unsigned __int64>(obj.GetSize());
+        e.sizeBytes     = static_cast<uint64_t>(obj.GetSize());
         e.lastWriteTime = AwsDateTimeToFileTime64(obj.GetLastModified());
         e.changeTime    = e.lastWriteTime;
         out.push_back(std::move(e));
@@ -508,7 +508,7 @@ private:
 } // namespace
 
 [[nodiscard]] HRESULT
-UploadS3ObjectFromFile(const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, unsigned __int64 sizeBytes) noexcept
+UploadS3ObjectFromFile(const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept
 {
     if (bucket.empty() || key.empty())
     {
@@ -520,7 +520,7 @@ UploadS3ObjectFromFile(const ResolvedAwsContext& ctx, std::string_view bucket, s
         return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
     }
 
-    if (sizeBytes > static_cast<unsigned __int64>((std::numeric_limits<long long>::max)()))
+    if (sizeBytes > static_cast<uint64_t>((std::numeric_limits<long long>::max)()))
     {
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }

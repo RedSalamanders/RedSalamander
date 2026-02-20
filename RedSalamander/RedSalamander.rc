@@ -35,20 +35,19 @@ LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
 IDI_REDSALAMANDER       ICON                    "res\\logo_debug.ico"
 
 IDI_SMALL               ICON                    "res\\logo_debug.ico"
+
+IDI_SPLASH_LOGO_ICON    ICON                    "res\\logo_big.ico"
 #else
 IDI_REDSALAMANDER       ICON                    "res\\logo.ico"
 
 IDI_SMALL               ICON                    "res\\logo.ico"
+
+IDI_SPLASH_LOGO_ICON    ICON                    "res\\logo_big.ico"
 #endif
 
 
 /////////////////////////////////////////////////////////////////////////////
 //
-// PNG
-//
-
-IDR_SPLASH_LOGO_PNG     PNG                     "res\\logo.png"
-
 IDI_WSL_UBUNTU          PNG                     "res\\wsl_ubuntu.png"
 
 IDI_WSL_DEBIAN          PNG                     "res\\wsl_debian.png"
@@ -126,6 +125,7 @@ BEGIN
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Brief",               IDM_LEFT_DISPLAY_BRIEF,MFT_STRING,MFS_ENABLED
         MENUITEM "&Detailed",            IDM_LEFT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "E&xtra Detailed",      IDM_LEFT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "Sort &By",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -171,7 +171,7 @@ BEGIN
         MENUITEM "&Rename...",               IDM_PANE_RENAME,MFT_STRING,MFS_ENABLED
         MENUITEM "&Open / Execute",       IDM_PANE_EXECUTE_OPEN,MFT_STRING,MFS_ENABLED
         MENUITEM "&View",                    IDM_PANE_VIEW,MFT_STRING,MFS_ENABLED
-        MENUITEM "View &Width... [todo]", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
+        MENUITEM "View &Width...", IDM_APP_VIEW_WIDTH,MFT_STRING,MFS_ENABLED
         MENUITEM "&Alternate View [todo]",      IDM_PANE_ALTERNATE_VIEW,MFT_STRING,MFS_ENABLED
         POPUP "View &With [todo]",                      65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -199,7 +199,7 @@ BEGIN
         MENUITEM "&Security... [todo]",                  IDM_PANE_OPEN_SECURITY,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "Change &Attributes... [todo]", IDM_PANE_CHANGE_ATTRIBUTES,MFT_STRING,MFS_ENABLED
-        MENUITEM "Change Ca&se... [todo]",      IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
+        MENUITEM "Change Ca&se...",      IDM_PANE_CHANGE_CASE,MFT_STRING,MFS_ENABLED
         MENUITEM "&Pack... [todo]",              IDM_PANE_PACK,MFT_STRING,MFS_ENABLED
         MENUITEM "&Unpack... [todo]",            IDM_PANE_UNPACK,MFT_STRING,MFS_ENABLED
         POPUP "&New",                            65535,MFT_STRING,MFS_ENABLED
@@ -256,7 +256,7 @@ BEGIN
         MENUITEM "Change &Directory...", IDM_PANE_CHANGE_DIRECTORY,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Compare &Directories...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Calculate &Occupied Space", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
-	        MENUITEM "Calculate Directory &Sizes [todo]", IDM_PANE_CALCULATE_DIRECTORY_SIZES,MFT_STRING,MFS_ENABLED
+	        MENUITEM "Calculate Directory &Sizes", IDM_PANE_CALCULATE_DIRECTORY_SIZES,MFT_STRING,MFS_ENABLED
 	        MENUITEM "&Find Files and Directories... [todo]", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Make &File List... [todo]", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Go to Shortcut or &Link Target [todo]", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
@@ -311,7 +311,7 @@ BEGIN
             MENUITEM "High &Contrast (App)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP,MFT_STRING,MFS_ENABLED
         END
         MENUITEM MFT_SEPARATOR
-        MENUITEM "&Toggle Fullscreen [todo]", IDM_APP_FULL_SCREEN,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Toggle Fullscreen", IDM_APP_FULL_SCREEN,MFT_STRING,MFS_ENABLED
         MENUITEM "&Window Menu",            IDM_VIEW_WINDOW_MENU,MFT_STRING,MFS_ENABLED
         MENUITEM "Switch &Pane Focus",            IDM_VIEW_SWITCH_PANE_FOCUS,MFT_STRING,MFS_ENABLED
         MENUITEM "File Operations Failed &Items", IDM_VIEW_FILEOPS_FAILED_ITEMS,MFT_STRING,MFS_ENABLED
@@ -354,6 +354,7 @@ BEGIN
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Brief",               IDM_RIGHT_DISPLAY_BRIEF,MFT_STRING,MFS_ENABLED
         MENUITEM "&Detailed",            IDM_RIGHT_DISPLAY_DETAILED,MFT_STRING,MFS_ENABLED
+        MENUITEM "E&xtra Detailed",      IDM_RIGHT_DISPLAY_EXTRA_DETAILED,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         POPUP "Sort &By",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
@@ -415,6 +416,12 @@ BEGIN
         MENUITEM "&Invert Differences Selection",  IDM_COMPARE_INVERT_DIFFERENCES_SELECTION
         MENUITEM SEPARATOR
         MENUITEM "&Close",                  IDM_COMPARE_CLOSE
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Brief\tAlt+2",           IDM_PANE_DISPLAY_BRIEF
+        MENUITEM "&Detailed\tAlt+3",        IDM_PANE_DISPLAY_DETAILED
+        MENUITEM "E&xtra Detailed\tAlt+4",  IDM_PANE_DISPLAY_EXTRA_DETAILED
     END
 END
 
@@ -651,6 +658,8 @@ BEGIN
     IDS_PREFS_CAT_THEMES_DESC "Select and edit themes."
     IDS_PREFS_CAT_PLUGINS   "Plugins"
     IDS_PREFS_CAT_PLUGINS_DESC "Manage plugins."
+    IDS_PREFS_CAT_COMPARE_DIRECTORIES "Compare Directories"
+    IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC "Default options for Compare Directories."
     IDS_PREFS_CAT_ADVANCED  "Advanced"
     IDS_PREFS_CAT_ADVANCED_DESC "Advanced options for expert users."
     IDS_PREFS_OOM_PREPARE_SAVE "Out of memory while preparing preferences for save."
@@ -701,9 +710,22 @@ BEGIN
     IDS_COMPARE_DETAILS_CONTENT_COMPARING "Comparing..."
     IDS_COMPARE_DETAILS_SUBDIR_ATTRIBUTES_DIFFER "Folder attributes differ"
     IDS_COMPARE_DETAILS_SUBDIR_CONTENT_DIFFER "Subdirectories differ"
+    IDS_COMPARE_DETAILS_SUBDIR_COMPUTING "Computing..."
     IDS_COMPARE_BANNER_TITLE "Compare Folder"
     IDS_COMPARE_BANNER_OPTIONS_ELLIPSIS "Options..."
     IDS_COMPARE_BANNER_RESCAN "Rescan"
+    IDS_COMPARE_BANNER_CANCEL "Cancel"
+    IDS_COMPARE_FOLDER_NOT_FOUND "This folder doesn't exist in this hierarchy."
+    IDS_COMPARE_DETAILS_ACCESS_DENIED "Access denied"
+    IDS_COMPARE_LEAVE_SCOPE_TITLE "Compare Folder"
+    IDS_COMPARE_LEAVE_SCOPE_MESSAGE "Leaving the compare scope will cancel the current scan and pending content compares."
+    IDS_FMT_COMPARE_DONE_SUMMARY "Scanned {0} folders, {1} entries • Compared {2}/{3} files"
+    IDS_FMT_COMPARE_DONE_SUMMARY_SCAN_ONLY "Scanned {0} folders, {1} entries"
+    IDS_FMT_COMPARE_SCAN_CANDIDATES_STATUS "Content candidates: {0} files, {1}"
+    IDS_FMT_COMPARE_CONTENT_COUNTS_STATUS "Content compares: {0} pending, {1} completed"
+    IDS_FMT_COMPARE_CONTENT_TOTAL_BYTES_STATUS "Total: {0} / {1}"
+    IDS_FMT_COMPARE_ETA "ETA: {0}"
+    IDS_FMT_COMPARE_ELAPSED "Elapsed: {0}"
     IDS_CONNECTIONS_LIST_HEADER "Connections"
     IDS_CONNECTIONS_SECTION_CONNECTION "Connection"
     IDS_CONNECTIONS_SECTION_AUTH "Authentication"
@@ -907,6 +929,11 @@ BEGIN
     IDS_PREFS_ADV_LABEL_FILEOPS_DIAG_DEBUG "Diagnostics: Debug"
     IDS_PREFS_ADV_DESC_FILEOPS_DIAG_DEBUG "Include debug-level file-operation diagnostics in the per-day diagnostics log. Default: on in Debug builds, off in Release builds."
     IDS_PREFS_ADV_CHECK_FILEOPS_DIAG_DEBUG "Debug"
+    IDS_PREFS_ADV_HEADER_COMPARE_DIRECTORIES "Compare Directories"
+    IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE "Show Identical Items"
+    IDS_PREFS_COMPARE_SHOW_IDENTICAL_DESC "Include identical items (not just differences) in compare results by default."
+    IDS_PREFS_COMPARE_IGNORE_FILES_PATTERNS_TITLE "File patterns"
+    IDS_PREFS_COMPARE_IGNORE_DIRECTORIES_PATTERNS_TITLE "Directory patterns"
     IDS_PREFS_ADV_HEADER_MONITOR "Monitor"
     IDS_PREFS_ADV_LABEL_TOOLBAR "Toolbar"
     IDS_PREFS_ADV_DESC_TOOLBAR "Show or hide the Monitor toolbar."
@@ -1113,6 +1140,8 @@ BEGIN
     IDS_MSG_PANE_OP_REQUIRES_DIFFERENT_FOLDER            "This operation requires source and destination to be different folders."
     IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS               "This operation requires compatible source and destination file systems."
     IDS_MSG_PANE_CREATE_DIR_UNSUPPORTED                  "Create directory is not supported for the current file system."
+    IDS_MSG_PANE_CALCULATE_DIRECTORY_SIZES_FAILED        "Failed to open Space Viewer to calculate directory sizes."
+    IDS_FMT_PANE_CHANGE_CASE_FAILED                      "Failed to change case.\r\n\r\nError: 0x{0:08X}"
     IDS_CAPTION_PROPERTIES                               "Properties"
     IDS_PROPERTIES_COL_KEY                               "Property"
     IDS_PROPERTIES_COL_VALUE                             "Value"
@@ -1286,6 +1315,7 @@ BEGIN
 	    IDS_CMD_SHOW_FOLDERS_HISTORY                           "Show Folders History"
 	    IDS_CMD_DISPLAY_BRIEF                                 "Brief"
 	    IDS_CMD_DISPLAY_DETAILED                              "Detailed"
+	    IDS_CMD_DISPLAY_EXTRA_DETAILED                        "Extra Detailed"
 	    IDS_CMD_UP_ONE_DIRECTORY                              "Up One Directory"
 	    IDS_CMD_SWITCH_PANE_FOCUS                             "Switch Pane Focus"
 	    IDS_CMD_EXECUTE_OPEN                                  "Execute / Open"
@@ -1404,6 +1434,7 @@ BEGIN
 		    IDS_CMD_DESC_DISCONNECT                               "Disconnect from the current location."
 			    IDS_CMD_DESC_DISPLAY_BRIEF                            "Switch to brief display mode."
 			    IDS_CMD_DESC_DISPLAY_DETAILED                         "Switch to detailed display mode."
+			    IDS_CMD_DESC_DISPLAY_EXTRA_DETAILED                   "Switch to extra detailed display mode."
 			    IDS_CMD_DESC_EDIT                                     "Edit the focused file."
 			    IDS_CMD_DESC_EDIT_NEW                                 "Create and edit a new file."
 		    IDS_CMD_DESC_EDIT_WIDTH                               "Adjust the edit width."

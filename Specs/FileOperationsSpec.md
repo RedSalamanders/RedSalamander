@@ -1,6 +1,6 @@
 # File Operations Specification
 
-Last updated: 2026-02-07
+Last updated: 2026-02-19
 
 Normative sections use RFC-2119 keywords (MUST/SHOULD/MAY). Appendices are informative.
 
@@ -26,6 +26,7 @@ It also defines the **speed limit** behavior (host-provided bandwidth cap) and t
 
 - **Operation**: Copy / Move / Delete (executed by an `IFileSystem` plugin).
 - **Task**: One user-requested operation with a stable ID and mutable options (pause/cancel/speed limit).
+- **Informational Task**: A host-created, read-only progress card shown in the File Operations popup for long-running background work that is not a file operation (e.g., Compare Directories scan/content-compare).
 - **Pre-calculation (pre-calc)**: A scan phase that computes totals (bytes + file/folder counts) before the operation begins.
 - **Wait mode**: Sequential mode. Only one task may execute at a time. UI label: `IDS_FILEOPS_BTN_MODE_QUEUE` (`"Wait"`).
 - **Parallel mode**: Concurrent mode. Multiple tasks may execute at once. UI label: `IDS_FILEOPS_BTN_MODE_PARALLEL` (`"Parallel"`).
@@ -56,7 +57,13 @@ It also defines the **speed limit** behavior (host-provided bandwidth cap) and t
 ### Threading
 
 - The host MUST execute each Task (including pre-calc and `IFileSystem::*`) on a background worker thread (one per task).
+- When a Task uses per-item execution with per-item concurrency (`maxConcurrency > 1`), the host SHOULD schedule per-item work using a **shared worker pool** across all active Tasks (especially in Parallel mode) so the total worker thread count stays bounded and workers can be reassigned between Tasks after each item.
+- When a file-system plugin uses internal parallelism (e.g. plugin max concurrency knobs for Copy/Move/Delete), the plugin SHOULD schedule that work using a **shared bounded worker pool** across all in-flight operations (rather than spawning per-operation thread pools) so worker threads can be reused/reassigned between operations as items finish.
 - The host MUST drive progress via `IFileSystemCallback` and forward updates to the UI thread.
+- The host MAY surface background work as Informational Tasks. Informational Tasks:
+  - MUST NOT participate in Wait/Parallel queueing rules.
+  - MUST NOT block or pause file-operation Tasks.
+  - MUST be read-only in the UI (no conflict prompts; no overwrite/replace-readonly decisions).
 
 ### Preconditions (cross-pane Copy/Move)
 
@@ -284,6 +291,9 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
 
 **Body (expanded)**
 - During pre-calc: display the currently accumulated **item totals** (files + folders) and total bytes so far (as they are discovered).
+- When pre-calc is skipped (totals unknown), Copy/Move cards SHOULD display a best-effort breakdown of completed **top-level** items by type (files vs folders) when that classification is available.
+  - The counts MUST be monotonic.
+  - When classification is complete for all top-level items, the host SHOULD keep the breakdown consistent with `completedItems` (`completedFiles + completedFolders == completedItems`).
   - Throughput:
   - Copy/Move: bytes/sec
   - Delete: items/sec
@@ -364,7 +374,7 @@ The host parses user-entered speed limits using a whitespace-tolerant, case-inse
   - `P`, `PB`, `PiB`
 - Optional `"/s"` suffix is accepted.
 - Rounding: the result is rounded to the nearest integer bytes/sec.
-- Clamping: values larger than `std::numeric_limits<unsigned __int64>::max()` are clamped.
+- Clamping: values larger than `std::numeric_limits<uint64_t>::max()` are clamped.
 - Empty input or `0` is treated as unlimited.
 
 ### FileSystemDummy virtual speed

@@ -89,7 +89,7 @@ private:
 [[nodiscard]] __int64 AwsDateTimeToFileTime64(const Aws::Utils::DateTime& t) noexcept;
 
 [[nodiscard]] wil::unique_hfile CreateTemporaryDeleteOnCloseFile() noexcept;
-[[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, unsigned __int64& out) noexcept;
+[[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, uint64_t& out) noexcept;
 [[nodiscard]] HRESULT ResetFilePointerToStart(HANDLE file) noexcept;
 [[nodiscard]] HRESULT WriteUtf8ToFile(HANDLE file, std::string_view text) noexcept;
 
@@ -228,7 +228,7 @@ ResolveS3ContextForBucket(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::
 [[nodiscard]] HRESULT
 DownloadS3ObjectToTempFile(const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, wil::unique_hfile& outFile) noexcept;
 [[nodiscard]] HRESULT
-UploadS3ObjectFromFile(const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, unsigned __int64 sizeBytes) noexcept;
+UploadS3ObjectFromFile(const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept;
 
 [[nodiscard]] HRESULT
 ListS3TableNamespaces(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::wstring_view bucketName, std::vector<FilesInformationS3::Entry>& out) noexcept;

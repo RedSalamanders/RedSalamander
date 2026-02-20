@@ -283,6 +283,8 @@
     <ClInclude Include="Ui\\AlertOverlay.h" />
     <ClInclude Include="Ui\\AlertOverlayWindow.h" />
     <ClInclude Include="Ui\\AnimationDispatcher.h" />
+    <ClInclude Include="ChangeCase.h" />
+    <ClInclude Include="Commands.SelfTest.h" />
     <ClInclude Include="CommandRegistry.h" />
     <ClInclude Include="CompareDirectoriesEngine.SelfTest.h" />
     <ClInclude Include="CompareDirectoriesEngine.h" />
@@ -293,6 +295,7 @@
     <ClInclude Include="Preferences.h" />
     <ClInclude Include="Preferences.Dialog.h" />
     <ClInclude Include="Preferences.Advanced.h" />
+    <ClInclude Include="Preferences.CompareDirectories.h" />
     <ClInclude Include="Preferences.Editors.h" />
     <ClInclude Include="Preferences.General.h" />
     <ClInclude Include="Preferences.Mouse.h" />
@@ -310,6 +313,7 @@
     <ClInclude Include="ShortcutDefaults.h" />
     <ClInclude Include="ShortcutManager.h" />
     <ClInclude Include="ShortcutText.h" />
+    <ClInclude Include="SelfTestCommon.h" />
     <ClInclude Include="SettingsSchemaExport.h" />
     <ClInclude Include="ThemedControls.h" />
     <ClInclude Include="SplashScreen.h" />
@@ -321,6 +325,8 @@
   <ItemGroup>
     <ClCompile Include="AppTheme.cpp" />
     <ClCompile Include="CrashHandler.cpp" />
+    <ClCompile Include="ChangeCase.cpp" />
+    <ClCompile Include="Commands.SelfTest.cpp" />
     <ClCompile Include="DirectoryInfoCache.cpp" />
     <ClCompile Include="FileSystemPluginManager.cpp" />
     <ClCompile Include="FunctionBar.cpp" />
@@ -373,6 +379,7 @@
     <ClCompile Include="Preferences.Dialog.cpp" />
     <ClCompile Include="Preferences.Internal.cpp" />
     <ClCompile Include="Preferences.Advanced.cpp" />
+    <ClCompile Include="Preferences.CompareDirectories.cpp" />
     <ClCompile Include="Preferences.Editors.cpp" />
     <ClCompile Include="Preferences.General.cpp" />
     <ClCompile Include="Preferences.Mouse.cpp" />
@@ -392,6 +399,7 @@
     <ClCompile Include="ShortcutDefaults.cpp" />
     <ClCompile Include="ShortcutManager.cpp" />
     <ClCompile Include="ShortcutText.cpp" />
+    <ClCompile Include="SelfTestCommon.cpp" />
     <ClCompile Include="SplashScreen.cpp" />
     <ClCompile Include="ViewerPluginManager.cpp" />
     <ClCompile Include="WSLDistro.cpp" />
@@ -404,6 +412,7 @@
   <ItemGroup>
     <Image Include="res\logo.ico" />
     <Image Include="res\logo.png" />
+    <Image Include="res\logo_big.ico" />
     <Image Include="res\logo2.png" />
     <Image Include="res\logo256.png" />
     <Image Include="res\logo2_background.png" />

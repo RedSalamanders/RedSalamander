@@ -6,9 +6,11 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include "SelfTestCommon.h"
+
 namespace CompareDirectoriesSelfTest
 {
-[[nodiscard]] bool Run() noexcept;
+[[nodiscard]] bool Run(const SelfTest::SelfTestOptions& options = {}, SelfTest::SelfTestSuiteResult* outResult = nullptr) noexcept;
 }
 
 #endif // _DEBUG

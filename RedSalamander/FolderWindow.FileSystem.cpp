@@ -1,5 +1,6 @@
 #include "ConnectionManagerDialog.h"
 #include "ConnectionSecrets.h"
+#include "ChangeCase.h"
 #include "FolderWindowInternal.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
@@ -40,6 +41,226 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     }
 
     return EqualsNoCase(text.substr(0, prefix.size()), prefix);
+}
+
+struct ChangeCaseDialogState
+{
+    ChangeCaseDialogState()                                         = default;
+    ChangeCaseDialogState(const ChangeCaseDialogState&)             = delete;
+    ChangeCaseDialogState& operator=(const ChangeCaseDialogState&)  = delete;
+    ChangeCaseDialogState(ChangeCaseDialogState&&)                  = delete;
+    ChangeCaseDialogState& operator=(ChangeCaseDialogState&&)       = delete;
+    ~ChangeCaseDialogState()                                        = default;
+
+    AppTheme theme{};
+    wil::unique_hbrush backgroundBrush;
+    bool allowSubdirs = false;
+    ChangeCase::Options options{};
+    bool accepted = false;
+};
+
+void ApplyChangeCaseDialogTheme(HWND dlg, const AppTheme& theme) noexcept
+{
+    if (! dlg)
+    {
+        return;
+    }
+
+    const wchar_t* themeName = theme.highContrast ? L"" : (theme.dark ? L"DarkMode_Explorer" : L"Explorer");
+
+    SetWindowTheme(dlg, themeName, nullptr);
+    SendMessageW(dlg, WM_THEMECHANGED, 0, 0);
+
+    EnumChildWindows(
+        dlg,
+        [](HWND child, LPARAM lParam) noexcept -> BOOL
+        {
+            const wchar_t* themeName = reinterpret_cast<const wchar_t*>(lParam);
+            if (! child)
+            {
+                return TRUE;
+            }
+
+            SetWindowTheme(child, themeName, nullptr);
+            SendMessageW(child, WM_THEMECHANGED, 0, 0);
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(themeName));
+}
+
+INT_PTR OnChangeCaseDialogInit(HWND dlg, ChangeCaseDialogState* state) noexcept
+{
+    if (! dlg || ! state)
+    {
+        return FALSE;
+    }
+
+    SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
+    ApplyTitleBarTheme(dlg, state->theme, GetActiveWindow() == dlg);
+    state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
+    ApplyChangeCaseDialogTheme(dlg, state->theme);
+
+    if (! state->theme.highContrast)
+    {
+        ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
+        ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
+    }
+
+    CheckRadioButton(dlg, IDC_CHANGE_CASE_LOWER, IDC_CHANGE_CASE_MIXED, IDC_CHANGE_CASE_LOWER);
+    CheckRadioButton(dlg, IDC_CHANGE_CASE_WHOLE, IDC_CHANGE_CASE_ONLY_EXTENSION, IDC_CHANGE_CASE_WHOLE);
+
+    if (HWND include = GetDlgItem(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS))
+    {
+        EnableWindow(include, state->allowSubdirs ? TRUE : FALSE);
+        CheckDlgButton(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS, BST_UNCHECKED);
+    }
+
+    return TRUE;
+}
+
+INT_PTR OnChangeCaseDialogCtlColorDialog(ChangeCaseDialogState* state) noexcept
+{
+    if (! state || ! state->backgroundBrush)
+    {
+        return FALSE;
+    }
+
+    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+}
+
+INT_PTR OnChangeCaseDialogCtlColorStatic(ChangeCaseDialogState* state, HDC hdc, HWND control) noexcept
+{
+    if (! state || ! state->backgroundBrush || ! hdc)
+    {
+        return FALSE;
+    }
+
+    const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
+    SetBkMode(hdc, OPAQUE);
+    SetBkColor(hdc, state->theme.windowBackground);
+    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
+    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+}
+
+INT_PTR OnChangeCaseDialogCtlColorButton(ChangeCaseDialogState* state, HDC hdc, HWND control) noexcept
+{
+    if (! state || ! state->backgroundBrush || ! hdc)
+    {
+        return FALSE;
+    }
+
+    const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
+    SetBkMode(hdc, OPAQUE);
+    SetBkColor(hdc, state->theme.windowBackground);
+    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
+    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+}
+
+INT_PTR OnChangeCaseDialogCommand(HWND dlg, ChangeCaseDialogState* state, WORD commandId) noexcept
+{
+    if (! dlg || ! state)
+    {
+        return FALSE;
+    }
+
+    switch (commandId)
+    {
+        case IDOK:
+        {
+            ChangeCase::Options options{};
+
+            if (IsDlgButtonChecked(dlg, IDC_CHANGE_CASE_UPPER) == BST_CHECKED)
+            {
+                options.style = ChangeCase::CaseStyle::Upper;
+            }
+            else if (IsDlgButtonChecked(dlg, IDC_CHANGE_CASE_PARTIALLY_MIXED) == BST_CHECKED)
+            {
+                options.style = ChangeCase::CaseStyle::PartiallyMixed;
+            }
+            else if (IsDlgButtonChecked(dlg, IDC_CHANGE_CASE_MIXED) == BST_CHECKED)
+            {
+                options.style = ChangeCase::CaseStyle::Mixed;
+            }
+            else
+            {
+                options.style = ChangeCase::CaseStyle::Lower;
+            }
+
+            if (IsDlgButtonChecked(dlg, IDC_CHANGE_CASE_ONLY_NAME) == BST_CHECKED)
+            {
+                options.target = ChangeCase::ChangeTarget::OnlyName;
+            }
+            else if (IsDlgButtonChecked(dlg, IDC_CHANGE_CASE_ONLY_EXTENSION) == BST_CHECKED)
+            {
+                options.target = ChangeCase::ChangeTarget::OnlyExtension;
+            }
+            else
+            {
+                options.target = ChangeCase::ChangeTarget::WholeFilename;
+            }
+
+            options.includeSubdirs = state->allowSubdirs && (IsDlgButtonChecked(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS) == BST_CHECKED);
+
+            state->options  = options;
+            state->accepted = true;
+            EndDialog(dlg, IDOK);
+            return TRUE;
+        }
+        case IDCANCEL:
+            EndDialog(dlg, IDCANCEL);
+            return TRUE;
+    }
+
+    return FALSE;
+}
+
+INT_PTR CALLBACK ChangeCaseDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+{
+    auto* state = reinterpret_cast<ChangeCaseDialogState*>(GetWindowLongPtrW(dlg, DWLP_USER));
+
+    switch (msg)
+    {
+        case WM_INITDIALOG: return OnChangeCaseDialogInit(dlg, reinterpret_cast<ChangeCaseDialogState*>(lp));
+        case WM_ERASEBKGND:
+            if (state && state->backgroundBrush && wp)
+            {
+                RECT rc{};
+                if (GetClientRect(dlg, &rc))
+                {
+                    FillRect(reinterpret_cast<HDC>(wp), &rc, state->backgroundBrush.get());
+                    return TRUE;
+                }
+            }
+            break;
+        case WM_CTLCOLORDLG: return OnChangeCaseDialogCtlColorDialog(state);
+        case WM_CTLCOLORSTATIC: return OnChangeCaseDialogCtlColorStatic(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
+        case WM_CTLCOLORBTN: return OnChangeCaseDialogCtlColorButton(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
+        case WM_NCACTIVATE:
+            if (state)
+            {
+                ApplyTitleBarTheme(dlg, state->theme, wp != FALSE);
+            }
+            return FALSE;
+        case WM_DRAWITEM:
+        {
+            if (! state || state->theme.highContrast)
+            {
+                break;
+            }
+
+            auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
+            if (! dis || dis->CtlType != ODT_BUTTON)
+            {
+                break;
+            }
+
+            ThemedControls::DrawThemedPushButton(*dis, state->theme);
+            return TRUE;
+        }
+        case WM_COMMAND: return OnChangeCaseDialogCommand(dlg, state, LOWORD(wp));
+    }
+
+    return FALSE;
 }
 
 constexpr uint32_t kFolderHistoryMaxMax = 50u;
@@ -1218,6 +1439,61 @@ FolderView::SortDirection DefaultSortDirectionFor(FolderView::SortBy sortBy) noe
     return FolderView::SortDirection::Ascending;
 }
 } // namespace
+
+struct ChangeCaseTaskPayload final
+{
+    FolderWindow::InformationalTaskUpdate update{};
+};
+
+struct ChangeCaseCompletedPayload final
+{
+    FolderWindow::Pane pane = FolderWindow::Pane::Left;
+    HRESULT hr              = S_OK;
+};
+
+LRESULT FolderWindow::OnChangeCaseTaskUpdate(LPARAM lp) noexcept
+{
+    auto payload = TakeMessagePayload<ChangeCaseTaskPayload>(lp);
+    if (! payload)
+    {
+        return 0;
+    }
+
+    return static_cast<LRESULT>(CreateOrUpdateInformationalTask(payload->update));
+}
+
+LRESULT FolderWindow::OnChangeCaseCompleted(LPARAM lp) noexcept
+{
+    auto payload = TakeMessagePayload<ChangeCaseCompletedPayload>(lp);
+    if (! payload)
+    {
+        return 0;
+    }
+
+    PaneState& state = payload->pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.changeCaseThread.joinable())
+    {
+        state.changeCaseThread = {};
+    }
+
+    const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    if (FAILED(payload->hr) && payload->hr != cancelledHr && payload->hr != E_ABORT)
+    {
+        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message = FormatStringResource(nullptr, IDS_FMT_PANE_CHANGE_CASE_FAILED, static_cast<unsigned long>(payload->hr));
+        state.folderView.ShowAlertOverlay(
+            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), payload->hr);
+        MessageBeep(MB_ICONERROR);
+        return 0;
+    }
+
+    if (SUCCEEDED(payload->hr))
+    {
+        state.folderView.ForceRefresh();
+    }
+
+    return 0;
+}
 
 HRESULT FolderWindow::EnsurePaneFileSystem(Pane pane, std::wstring_view pluginId) noexcept
 {
@@ -2449,6 +2725,219 @@ void FolderWindow::CommandRefresh(Pane pane)
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.ForceRefresh();
+}
+
+#ifdef _DEBUG
+uint64_t FolderWindow::DebugGetForceRefreshCount(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetForceRefreshCount();
+}
+#endif
+
+void FolderWindow::CommandCalculateDirectorySizes(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+
+    const std::optional<std::filesystem::path> folderPath = state.folderView.GetFolderPath();
+    if (! folderPath.has_value() || folderPath.value().empty())
+    {
+        return;
+    }
+
+    if (! TryViewSpaceWithViewer(pane, folderPath.value()))
+    {
+        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message = LoadStringResource(nullptr, IDS_MSG_PANE_CALCULATE_DIRECTORY_SIZES_FAILED);
+
+        state.folderView.ShowAlertOverlay(
+            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+    }
+}
+
+void FolderWindow::CommandChangeCase(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+
+    if (! state.fileSystem)
+    {
+        return;
+    }
+
+    if (state.changeCaseThread.joinable())
+    {
+        MessageBeep(MB_ICONWARNING);
+        return;
+    }
+
+    ChangeCaseDialogState dialogState{};
+    dialogState.theme        = _theme;
+    dialogState.allowSubdirs = true;
+
+    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    if (! ownerWindow)
+    {
+        ownerWindow = _hWnd.get();
+    }
+
+#pragma warning(push)
+// C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
+#pragma warning(disable : 5039)
+    const INT_PTR dlgResult = DialogBoxParamW(
+        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_PANE_CHANGE_CASE), ownerWindow, ChangeCaseDialogProc, reinterpret_cast<LPARAM>(&dialogState));
+#pragma warning(pop)
+
+    if (dlgResult != IDOK || ! dialogState.accepted)
+    {
+        return;
+    }
+
+    const std::vector<std::filesystem::path> paths = state.folderView.GetSelectedOrFocusedPaths();
+    if (paths.empty())
+    {
+        MessageBeep(MB_ICONWARNING);
+        return;
+    }
+
+    const HWND ownerHwnd = _hWnd.get();
+    wil::com_ptr<IFileSystem> fileSystem = state.fileSystem;
+    const ChangeCase::Options options    = dialogState.options;
+    const std::wstring title             = LoadStringResource(nullptr, IDS_CMD_CHANGE_CASE);
+
+    state.changeCaseThread = std::jthread(
+        [ownerHwnd, pane, fileSystem, paths, options, title](std::stop_token stopToken) noexcept
+        {
+            [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+
+            struct ProgressState final
+            {
+                HWND hwnd                    = nullptr;
+                FolderWindow::Pane pane      = FolderWindow::Pane::Left;
+                std::wstring title;
+                ULONGLONG startTick          = 0;
+                ULONGLONG lastPostedTick     = 0;
+                uint64_t infoTaskId          = 0;
+                ChangeCase::ProgressUpdate last{};
+
+                void PostTaskUpdate(bool finished, HRESULT hr) noexcept
+                {
+                    if (! hwnd || IsWindow(hwnd) == FALSE || infoTaskId == 0)
+                    {
+                        return;
+                    }
+
+                    FolderWindow::InformationalTaskUpdate info{};
+                    info.kind  = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
+                    info.taskId = infoTaskId;
+                    info.title = title;
+                    info.changeCaseCurrentPath      = last.currentPath;
+                    info.changeCaseScannedFolders   = last.scannedFolders;
+                    info.changeCaseScannedEntries   = last.scannedEntries;
+                    info.changeCasePlannedRenames   = last.plannedRenames;
+                    info.changeCaseCompletedRenames = last.completedRenames;
+                    info.changeCaseEnumerating      = ! finished && last.phase == ChangeCase::ProgressUpdate::Phase::Enumerating;
+                    info.changeCaseRenaming         = ! finished && last.phase == ChangeCase::ProgressUpdate::Phase::Renaming;
+                    info.finished                   = finished;
+                    info.resultHr                   = hr;
+
+                    auto payload     = std::make_unique<ChangeCaseTaskPayload>();
+                    payload->update  = std::move(info);
+                    static_cast<void>(PostMessagePayload(hwnd, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)));
+                }
+
+                void EnsureTaskVisibleAfterThreshold() noexcept
+                {
+                    if (! hwnd || IsWindow(hwnd) == FALSE || infoTaskId != 0)
+                    {
+                        return;
+                    }
+
+                    const ULONGLONG nowTick = GetTickCount64();
+                    if (startTick == 0 || nowTick < startTick || (nowTick - startTick) < 700ull)
+                    {
+                        return;
+                    }
+
+                    FolderWindow::InformationalTaskUpdate info{};
+                    info.kind  = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
+                    info.title = title;
+                    info.changeCaseCurrentPath      = last.currentPath;
+                    info.changeCaseScannedFolders   = last.scannedFolders;
+                    info.changeCaseScannedEntries   = last.scannedEntries;
+                    info.changeCasePlannedRenames   = last.plannedRenames;
+                    info.changeCaseCompletedRenames = last.completedRenames;
+                    info.changeCaseEnumerating      = last.phase == ChangeCase::ProgressUpdate::Phase::Enumerating;
+                    info.changeCaseRenaming         = last.phase == ChangeCase::ProgressUpdate::Phase::Renaming;
+
+                    auto payload    = std::make_unique<ChangeCaseTaskPayload>();
+                    payload->update = std::move(info);
+
+                    ChangeCaseTaskPayload* raw = payload.release();
+                    DWORD_PTR result           = 0;
+                    const LRESULT sendOk =
+                        SendMessageTimeoutW(hwnd,
+                                            WndMsg::kChangeCaseTaskUpdate,
+                                            0,
+                                            reinterpret_cast<LPARAM>(raw),
+                                            SMTO_ABORTIFHUNG | SMTO_BLOCK,
+                                            1000,
+                                            &result);
+                    if (sendOk == 0)
+                    {
+                        delete raw;
+                        return;
+                    }
+
+                    infoTaskId      = static_cast<uint64_t>(result);
+                    lastPostedTick  = nowTick;
+                }
+            };
+
+            ProgressState progressState{};
+            progressState.hwnd      = ownerHwnd;
+            progressState.pane      = pane;
+            progressState.title     = title;
+            progressState.startTick = GetTickCount64();
+
+            const auto onProgress = [](const ChangeCase::ProgressUpdate& update, void* cookie) noexcept
+            {
+                auto* state = static_cast<ProgressState*>(cookie);
+                if (! state)
+                {
+                    return;
+                }
+
+                state->last = update;
+                state->EnsureTaskVisibleAfterThreshold();
+
+                if (state->infoTaskId != 0)
+                {
+                    const ULONGLONG nowTick = GetTickCount64();
+                    if (state->lastPostedTick != 0 && nowTick >= state->lastPostedTick && (nowTick - state->lastPostedTick) < 100ull)
+                    {
+                        return;
+                    }
+
+                    state->lastPostedTick = nowTick;
+                    state->PostTaskUpdate(false, S_OK);
+                }
+            };
+
+            const HRESULT operationHr = ChangeCase::ApplyToPaths(*fileSystem, paths, options, stopToken, onProgress, &progressState);
+
+            progressState.EnsureTaskVisibleAfterThreshold();
+            progressState.PostTaskUpdate(true, operationHr);
+
+            if (ownerHwnd && IsWindow(ownerHwnd) != FALSE)
+            {
+                auto completed       = std::make_unique<ChangeCaseCompletedPayload>();
+                completed->pane      = pane;
+                completed->hr        = operationHr;
+                static_cast<void>(PostMessagePayload(ownerHwnd, WndMsg::kChangeCaseCompleted, 0, std::move(completed)));
+            }
+        });
 }
 
 void FolderWindow::CommandChangeDirectory(Pane pane)

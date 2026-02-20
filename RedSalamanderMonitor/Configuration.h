@@ -1,20 +1,13 @@
 #pragma once
 #include "Framework.h"
 
-#define DESCRIPTION_SIZE 5000
-#define EMAIL_SIZE 100
-
 class Configuration
 {
 public:
     Configuration();
 
-    BOOL Save();
-    BOOL Load();
-
-    std::wstring description;
-    std::wstring email;
-    BOOL restart = TRUE; // do not save
+    bool Save();
+    bool Load();
 
     // Filter settings
     uint32_t filterMask  = 0x1F; // All 5 types enabled by default (bits 0-4)
