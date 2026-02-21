@@ -230,7 +230,8 @@ void HotPathsPane::LayoutControls(HWND host, PreferencesDialogState& state, int 
 
         if (descLabel)
         {
-            SetWindowTextW(descLabel, descText.data());
+            const wchar_t* descTextPtr = descText.empty() ? L"" : descText.data();
+            SetWindowTextW(descLabel, descTextPtr);
             SetWindowPos(descLabel,
                          nullptr,
                          card.left + cardPaddingX,
