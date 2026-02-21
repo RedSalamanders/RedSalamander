@@ -9,6 +9,7 @@
 #include <iterator>
 #include <memory>
 #include <optional>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -28,8 +29,8 @@
 #pragma comment(lib, "Shcore.lib")
 
 #pragma warning(push)
-#pragma warning(                                                                                                                                               \
-    disable : 4625 4626 5026 5027) // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
+// WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
+#pragma warning(disable : 4625 4626 5026 5027) 
 #include <wil/com.h>
 #include <wil/resource.h>
 #include <wil/win32_helpers.h>
@@ -1666,12 +1667,11 @@ void BuildFatalExceptionMessage(HINSTANCE hInstance, const wchar_t* exceptionNam
         return;
     }
 
-    const size_t max       = outMessageChars - 1;
-    const auto r           = std::format_to_n(outMessage, max, L"Fatal Exception ({0}, 0x{1:08X}).", exceptionName, static_cast<unsigned>(exceptionCode));
-    using SizeType         = decltype(r.size);
-    const SizeType cap     = static_cast<SizeType>(max);
-    const SizeType written = (r.size < 0) ? 0 : ((r.size > cap) ? cap : r.size);
-    outMessage[static_cast<size_t>(written)] = L'\0';
+    const auto max = std::min<std::size_t>(outMessageChars - 1, static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max()));
+    const auto r   = std::format_to_n(outMessage, static_cast<std::ptrdiff_t>(max), L"Fatal Exception ({0}, 0x{1:08X}).", exceptionName, static_cast<unsigned>(exceptionCode));
+    const std::ptrdiff_t cap     = static_cast<std::ptrdiff_t>(max);
+    const std::ptrdiff_t written = (r.size < 0) ? 0 : ((r.size > cap) ? cap : r.size);
+    outMessage[(written <= 0) ? 0u : static_cast<size_t>(written)] = L'\0';
 }
 } // namespace
 

@@ -29,7 +29,7 @@
 #pragma comment(lib, "dwrite")
 
 #pragma warning(push)
-#pragma warning(disable : 4625 4626 5026 5027 4820) // WIL: deleted copy/move operators and padding
+#pragma warning(disable : 4625 4626 5026 5027 4820 28182) // WIL: deleted copy/move operators and padding
 #include <wil/com.h>
 #include <wil/resource.h>
 #pragma warning(pop)

@@ -10,6 +10,11 @@ name: Release
         description: "Tag to release (e.g., v7.0.0). Leave blank to skip release creation."
         required: false
         type: string
+      build_msi:
+        description: "Also build MSI (off by default)."
+        required: false
+        type: boolean
+        default: false
       build_msix:
         description: "Also build MSIX (off by default)."
         required: false
@@ -20,12 +25,17 @@ name: Release
         required: false
         type: boolean
         default: true
+      build_arm64:
+        description: "Also build ARM64 (off by default)."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 # ════════════════════════════════════════════════════════════════════════
-# Job 1: Build (matrix: x64, ARM64 — parallel via reusable workflow)
+# Job 1: Build (matrix: x64 + optional ARM64 — parallel via reusable workflow)
 # ════════════════════════════════════════════════════════════════════════
 
 jobs:
@@ -33,7 +43,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [x64, ARM64]
+        platform: ${{ fromJson((github.event_name == 'workflow_dispatch' && inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     uses: ./.github/workflows/build-reusable.yml
     with:
       configuration: Release
@@ -51,7 +61,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [x64, ARM64]
+        platform: ${{ fromJson((github.event_name == 'workflow_dispatch' && inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
       - name: Download build output
         uses: actions/download-artifact@v4
@@ -104,11 +114,11 @@ jobs:
   package-msi:
     runs-on: windows-latest
     needs: build
-    if: ${{ !cancelled() }}
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.build_msi }}
     strategy:
       fail-fast: false
       matrix:
-        platform: [x64, ARM64]
+        platform: ${{ fromJson((github.event_name == 'workflow_dispatch' && inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -156,7 +166,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        platform: [x64, ARM64]
+        platform: ${{ fromJson((github.event_name == 'workflow_dispatch' && inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -328,6 +338,7 @@ jobs:
           merge-multiple: true
 
       - name: Download MSI packages
+        if: ${{ needs.package-msi.result == 'success' }}
         continue-on-error: true
         uses: actions/download-artifact@v4
         with:

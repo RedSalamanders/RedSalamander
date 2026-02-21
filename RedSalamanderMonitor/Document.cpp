@@ -1057,24 +1057,24 @@ const std::wstring& Document::BuildPrefix(const Line& line) const
 
     // Pre-allocate buffer for formatting to avoid multiple allocations
     std::array<wchar_t, 128> buffer{};
-    int offset = 0;
+    size_t offset = 0;
 
     // Add emoji
     const auto emoji   = EmojiForType(line.meta.type);
     const int emojiLen = static_cast<int>(emoji.size());
-    if (emojiLen > 0 && offset + emojiLen < 128)
+    if (emojiLen > 0 && (offset + static_cast<size_t>(emojiLen)) < 128u)
     {
         wmemcpy(buffer.data() + offset, emoji.data(), static_cast<size_t>(emojiLen));
-        offset += emojiLen;
+        offset += static_cast<size_t>(emojiLen);
     }
 
     // Format time using GetTimeString (HH:MM:SS.mmm)
     const std::wstring ts = line.meta.GetTimeString();
     const int tsLen       = static_cast<int>(ts.size());
-    if (tsLen > 0 && offset + tsLen < 128)
+    if (tsLen > 0 && (offset + static_cast<size_t>(tsLen)) < 128u)
     {
         wmemcpy(buffer.data() + offset, ts.data(), static_cast<size_t>(tsLen));
-        offset += tsLen;
+        offset += static_cast<size_t>(tsLen);
     }
 
     if (_showIds)
@@ -1083,18 +1083,22 @@ const std::wstring& Document::BuildPrefix(const Line& line) const
         if (line.meta.processID || line.meta.threadID)
         {
             // Format: " PID:TID "
-            const int remaining = 128 - offset;
-            if (remaining > 20) // Ensure space for IDs
+            const size_t remaining = 128 - offset;
+            if (remaining > 20u) // Ensure space for IDs
             {
                 wchar_t* const outBegin = buffer.data() + offset;
-                const auto result       = std::format_to_n(outBegin, static_cast<size_t>(remaining - 1), L" {}:{}", line.meta.processID, line.meta.threadID);
-                offset += static_cast<int>(result.out - outBegin);
+                const auto result = std::format_to_n(outBegin, static_cast<std::ptrdiff_t>(remaining - 1), L" {}:{}", line.meta.processID, line.meta.threadID);
+                const auto written = std::max<std::ptrdiff_t>(std::ptrdiff_t{0}, result.out - outBegin);
+                if (written > 0)
+                {
+                    offset += static_cast<size_t>(written);
+                }
             }
         }
     }
 
     // Add trailing space
-    if (offset < 127)
+    if (offset < 127u)
     {
         buffer[static_cast<size_t>(offset)] = L' ';
         ++offset;

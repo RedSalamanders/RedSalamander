@@ -91,7 +91,7 @@ fs.attach(rawFs);
 ## Required Include
 ```cpp
 #pragma warning(push)
-#pragma warning(disable: 4625 4626 5026 5027)
+#pragma warning(disable: 4625 4626 5026 5027 28182)
 #include <wil/resource.h>
 #pragma warning(pop)
 ```

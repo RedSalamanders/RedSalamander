@@ -17,6 +17,15 @@
 #pragma warning(disable : 4625 4626 5026 5027)
 #include <wil/resource.h>
 #include <wil/win32_helpers.h>
+
+namespace
+{
+struct ForceWilTemplateInstantiations_SelfTestCommon
+{
+    wil::unique_handle handle;
+    wil::unique_any<char*, decltype(&::free), ::free> mallocString;
+};
+} // namespace
 #pragma warning(pop)
 
 #include <yyjson.h>
@@ -33,7 +42,6 @@ constexpr std::wstring_view kCompareDirName{L"compare"};
 constexpr std::wstring_view kFileOpsDirName{L"fileops"};
 constexpr std::wstring_view kCommandsDirName{L"commands"};
 constexpr std::wstring_view kTraceFileName{L"trace.txt"};
-constexpr std::wstring_view kResultsFileName{L"results.json"};
 constexpr const char* kSuiteCompareName = "CompareDirectories";
 constexpr const char* kSuiteFileOpsName = "FileOperations";
 constexpr const char* kSuiteCommandsName = "Commands";

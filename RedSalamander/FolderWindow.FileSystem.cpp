@@ -66,7 +66,8 @@ void ApplyChangeCaseDialogTheme(HWND dlg, const AppTheme& theme) noexcept
         return;
     }
 
-    const wchar_t* themeName = theme.highContrast ? L"" : (theme.dark ? L"DarkMode_Explorer" : L"Explorer");
+    const bool darkBackground = ChooseContrastingTextColor(theme.windowBackground) == RGB(255, 255, 255);
+    const wchar_t* themeName  = theme.highContrast ? L"" : (darkBackground ? L"DarkMode_Explorer" : L"Explorer");
 
     SetWindowTheme(dlg, themeName, nullptr);
     SendMessageW(dlg, WM_THEMECHANGED, 0, 0);
@@ -81,11 +82,36 @@ void ApplyChangeCaseDialogTheme(HWND dlg, const AppTheme& theme) noexcept
                 return TRUE;
             }
 
-            SetWindowTheme(child, themeName, nullptr);
+            const wchar_t* appliedTheme = themeName ? themeName : L"";
+            if (themeName)
+            {
+                wchar_t className[32]{};
+                const int classLen = GetClassNameW(child, className, static_cast<int>(_countof(className)));
+                if (classLen > 0)
+                {
+                    if (_wcsicmp(className, L"Static") == 0)
+                    {
+                        appliedTheme = L"";
+                    }
+                    else if (_wcsicmp(className, L"Button") == 0)
+                    {
+                        const LONG_PTR style = GetWindowLongPtrW(child, GWL_STYLE);
+                        const LONG_PTR type  = style & BS_TYPEMASK;
+                        if (type == BS_GROUPBOX || type == BS_PUSHBUTTON || type == BS_DEFPUSHBUTTON)
+                        {
+                            appliedTheme = L"";
+                        }
+                    }
+                }
+            }
+
+            SetWindowTheme(child, appliedTheme, nullptr);
             SendMessageW(child, WM_THEMECHANGED, 0, 0);
             return TRUE;
         },
         reinterpret_cast<LPARAM>(themeName));
+
+    RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
 INT_PTR OnChangeCaseDialogInit(HWND dlg, ChangeCaseDialogState* state) noexcept
@@ -136,9 +162,18 @@ INT_PTR OnChangeCaseDialogCtlColorStatic(ChangeCaseDialogState* state, HDC hdc, 
     }
 
     const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
+    const COLORREF textColor = enabled ? state->theme.menu.text : state->theme.menu.disabledText;
+
+    if (! state->theme.systemHighContrast)
+    {
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, textColor);
+        return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+    }
+
     SetBkMode(hdc, OPAQUE);
     SetBkColor(hdc, state->theme.windowBackground);
-    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
+    SetTextColor(hdc, textColor);
     return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
 }
 
@@ -150,9 +185,18 @@ INT_PTR OnChangeCaseDialogCtlColorButton(ChangeCaseDialogState* state, HDC hdc, 
     }
 
     const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
+    const COLORREF textColor = enabled ? state->theme.menu.text : state->theme.menu.disabledText;
+
+    if (! state->theme.systemHighContrast)
+    {
+        SetBkMode(hdc, TRANSPARENT);
+        SetTextColor(hdc, textColor);
+        return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+    }
+
     SetBkMode(hdc, OPAQUE);
     SetBkColor(hdc, state->theme.windowBackground);
-    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
+    SetTextColor(hdc, textColor);
     return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
 }
 

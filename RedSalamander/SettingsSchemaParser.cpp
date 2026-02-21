@@ -91,22 +91,6 @@ namespace
     return yyjson_get_sint(val);
 }
 
-[[nodiscard]] std::optional<bool> TryGetBool(yyjson_val* obj, const char* key) noexcept
-{
-    if (! obj || ! key)
-    {
-        return std::nullopt;
-    }
-
-    yyjson_val* val = yyjson_obj_get(obj, key);
-    if (! val || ! yyjson_is_bool(val))
-    {
-        return std::nullopt;
-    }
-
-    return yyjson_get_bool(val);
-}
-
 // Recursively walk JSON schema properties and extract fields with x-ui-pane
 void WalkSchemaProperties(yyjson_val* propertiesObj, const std::wstring& currentPath, std::vector<SettingField>& outFields) noexcept
 {

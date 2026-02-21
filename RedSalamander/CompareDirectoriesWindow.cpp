@@ -17,7 +17,7 @@
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
-#pragma warning(disable : 4625 4626 5026 5027)
+#pragma warning(disable : 4625 4626 5026 5027 28182)
 #include <wil/com.h>
 #include <wil/resource.h>
 #pragma warning(pop)
@@ -4992,6 +4992,19 @@ bool ShowCompareDirectoriesWindow(HWND owner,
 
     static_cast<void>(window.release());
     return true;
+}
+
+HWND GetCompareDirectoriesWindowHandle() noexcept
+{
+    for (HWND hwnd : g_compareDirectoriesWindows)
+    {
+        if (hwnd && IsWindow(hwnd) != FALSE)
+        {
+            return hwnd;
+        }
+    }
+
+    return nullptr;
 }
 
 void UpdateCompareDirectoriesWindowsTheme(const AppTheme& theme) noexcept

@@ -7,13 +7,18 @@
 #include <atomic>
 #include <chrono>
 #include <exception>
+#include <cmath>
 #include <mutex>
 #include <stop_token>
 #include <string>
 #include <thread>
 
+#pragma warning(push)
+// WIL headers: deleted copy/move and unused inline Helpers
+#pragma warning(disable: 4625 4626 5026 5027 4514 28182)
 #include <wil/com.h>
 #include <wil/resource.h>
+#pragma warning(pop)
 
 #include <commctrl.h>
 
@@ -30,6 +35,21 @@ namespace
 constexpr COLORREF MakeRGB(BYTE r, BYTE g, BYTE b) noexcept
 {
     return static_cast<COLORREF>(r) | (static_cast<COLORREF>(g) << 8) | (static_cast<COLORREF>(b) << 16);
+}
+
+constexpr BYTE ColorRefR(COLORREF value) noexcept
+{
+    return static_cast<BYTE>(value & 0xFFu);
+}
+
+constexpr BYTE ColorRefG(COLORREF value) noexcept
+{
+    return static_cast<BYTE>((value >> 8) & 0xFFu);
+}
+
+constexpr BYTE ColorRefB(COLORREF value) noexcept
+{
+    return static_cast<BYTE>((value >> 16) & 0xFFu);
 }
 
 std::atomic<bool> g_threadStarted{false};
@@ -263,12 +283,18 @@ void PaintSplash(HWND hwnd, HDC hdc) noexcept
     for (int y = 0; y < height; ++y)
     {
         const double t = (height > 1) ? (static_cast<double>(y) / static_cast<double>(height - 1)) : 0.0;
-        const int r    = GetRValue(kBgStart) + static_cast<int>((GetRValue(kBgEnd) - GetRValue(kBgStart)) * t);
-        const int g    = GetGValue(kBgStart) + static_cast<int>((GetGValue(kBgEnd) - GetGValue(kBgStart)) * t);
-        const int b    = GetBValue(kBgStart) + static_cast<int>((GetBValue(kBgEnd) - GetBValue(kBgStart)) * t);
+        const auto blendChannel = [](BYTE start, BYTE end, double weight) noexcept
+        {
+            const double value      = static_cast<double>(start) + (static_cast<double>(end) - static_cast<double>(start)) * weight;
+            const int roundedValue  = static_cast<int>(std::lround(value));
+            const int clampedValue  = std::clamp(roundedValue, 0, 255);
+            return static_cast<BYTE>(clampedValue);
+        };
+        const BYTE r = blendChannel(ColorRefR(kBgStart), ColorRefR(kBgEnd), t);
+        const BYTE g = blendChannel(ColorRefG(kBgStart), ColorRefG(kBgEnd), t);
+        const BYTE b = blendChannel(ColorRefB(kBgStart), ColorRefB(kBgEnd), t);
 
-        const auto clampByte = [](int v) noexcept -> BYTE { return static_cast<BYTE>(std::clamp(v, 0, 255)); };
-        SetDCPenColor(hdc, MakeRGB(clampByte(r), clampByte(g), clampByte(b)));
+        SetDCPenColor(hdc, MakeRGB(r, g, b));
         MoveToEx(hdc, 0, y, nullptr);
         LineTo(hdc, width, y);
     }
@@ -282,7 +308,7 @@ void PaintSplash(HWND hwnd, HDC hdc) noexcept
             POINT{ScaleDip(460, dpi), height},
             POINT{0, height},
         };
-        const COLORREF panelColor = MakeRGB(38, 50, 66);
+        constexpr COLORREF panelColor = MakeRGB(38, 50, 66);
         auto panelBrush           = wil::unique_hbrush{CreateSolidBrush(panelColor)};
         if (panelBrush)
         {
