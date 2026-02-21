@@ -534,6 +534,10 @@ struct PreferencesDialogState
     wil::unique_hwnd advancedFileOperationsDiagnosticsDebugDescription;
 
     wil::unique_hwnd advancedCompareDirectoriesHeader;
+    wil::unique_hwnd advancedCompareSectionSubdirsHeader;
+    wil::unique_hwnd advancedCompareSectionCompareHeader;
+    wil::unique_hwnd advancedCompareSectionAdditionalHeader;
+    wil::unique_hwnd advancedCompareSectionMoreHeader;
     wil::unique_hwnd advancedCompareSizeLabel;
     wil::unique_hwnd advancedCompareSizeToggle;
     wil::unique_hwnd advancedCompareSizeDescription;

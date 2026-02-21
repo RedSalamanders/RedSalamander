@@ -951,7 +951,11 @@ void NavigationView::RenderFullPathPopup()
 
             if (segment.layout && brush)
             {
-                _fullPathPopupTarget->DrawTextLayout(D2D1::Point2F(segment.bounds.left + textInsetX, segment.bounds.top), segment.layout.get(), brush);
+                _fullPathPopupTarget->DrawTextLayout(
+                    D2D1::Point2F(segment.bounds.left + textInsetX, segment.bounds.top),
+                    segment.layout.get(),
+                    brush,
+                    D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             }
         }
 

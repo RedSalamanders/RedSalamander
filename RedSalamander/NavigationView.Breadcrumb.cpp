@@ -639,7 +639,11 @@ void NavigationView::RenderBreadcrumbs()
 
         if (segment.layout)
         {
-            _d2dContext->DrawTextLayout(D2D1::Point2F(segment.bounds.left + textInsetX, segment.bounds.top), segment.layout.get(), textBrush);
+            _d2dContext->DrawTextLayout(
+                D2D1::Point2F(segment.bounds.left + textInsetX, segment.bounds.top),
+                segment.layout.get(),
+                textBrush,
+                D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
         }
     }
 

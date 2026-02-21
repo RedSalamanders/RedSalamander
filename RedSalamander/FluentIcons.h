@@ -39,15 +39,16 @@ inline constexpr wchar_t kOpenFile          = L'\uE8E5';
 inline constexpr wchar_t kInfo              = L'\uE946';
 inline constexpr wchar_t kCalendar          = L'\uE787';
 inline constexpr wchar_t kHardDrive         = L'\uEDA2';
-inline constexpr wchar_t kTag               = L'\uE8EC';
-inline constexpr wchar_t kFont              = L'\uE8D2';
-inline constexpr wchar_t kDocument          = L'\uE8A5';
-inline constexpr wchar_t kClear             = L'\uE894';
-inline constexpr wchar_t kMapDrive          = L'\uE8CE';
-inline constexpr wchar_t kConnections       = L'\uED5C';
-inline constexpr wchar_t kHistory           = L'\uE81C';
-inline constexpr wchar_t kFind              = L'\uE721';
-inline constexpr wchar_t kCommandPrompt     = L'\uE756';
+    inline constexpr wchar_t kTag               = L'\uE8EC';
+    inline constexpr wchar_t kFont              = L'\uE8D2';
+    inline constexpr wchar_t kDocument          = L'\uE8A5';
+    inline constexpr wchar_t kClear             = L'\uE894';
+    inline constexpr wchar_t kMapDrive          = L'\uE8CE';
+    inline constexpr wchar_t kSyncFolder        = L'\uE8F7';
+    inline constexpr wchar_t kConnections       = L'\uED5C';
+    inline constexpr wchar_t kHistory           = L'\uE81C';
+    inline constexpr wchar_t kFind              = L'\uE721';
+    inline constexpr wchar_t kCommandPrompt     = L'\uE756';
 
 // Fallback glyphs (standard Unicode) when Segoe Fluent Icons isn't installed.
 inline constexpr wchar_t kFallbackChevronRight = L'\u203A'; // ›
