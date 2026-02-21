@@ -2810,6 +2810,7 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
                 switch (dis->itemID)
                 {
                     case IDM_FILE_PREFERENCES: return FluentIcons::kSettings;
+                    case IDM_APP_COMPARE: return FluentIcons::kSyncFolder;
                     case IDM_VIEW_PLUGINS_MANAGE: return FluentIcons::kPuzzle;
                     case IDM_PANE_EXECUTE_OPEN: return FluentIcons::kOpenFile;
                     case IDM_PANE_CONNECTION_MANAGER: return FluentIcons::kConnections;
@@ -2879,7 +2880,7 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
                         case FolderView::SortBy::Time: glyph = FluentIcons::kCalendar; break;
                         case FolderView::SortBy::Size: glyph = FluentIcons::kHardDrive; break;
                         case FolderView::SortBy::Attributes: glyph = FluentIcons::kTag; break;
-                        case FolderView::SortBy::None: glyph = FluentIcons::kClear; break;
+                        case FolderView::SortBy::None: glyph = 0; break;
                     }
                 }
                 else
@@ -2891,7 +2892,7 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
                         case FolderView::SortBy::Time: glyph = L'\u23F1'; break;
                         case FolderView::SortBy::Size: glyph = direction == FolderView::SortDirection::Ascending ? L'\u25F0' : L'\u25F2'; break;
                         case FolderView::SortBy::Attributes: glyph = L'\u24B6'; break;
-                        case FolderView::SortBy::None: glyph = L' '; break;
+                        case FolderView::SortBy::None: glyph = 0; break;
                     }
                 }
 
@@ -2901,16 +2902,20 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
                 if (showArrow)
                 {
                     RECT arrowRect  = checkRect;
-                    const int mid   = (checkRect.left + checkRect.right) / 2;
-                    arrowRect.right = mid;
-                    iconRect.left   = mid;
+                    const LONG width     = std::max(0L, checkRect.right - checkRect.left);
+                    const LONG arrowArea = std::clamp(static_cast<LONG>(MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI)), 0L, width);
+                    const LONG split     = checkRect.left + arrowArea;
+                    const LONG gap       = std::max(1L, static_cast<LONG>(MulDiv(1, dpi, USER_DEFAULT_SCREEN_DPI)));
+
+                    arrowRect.right = std::max(arrowRect.left, split - gap);
+                    iconRect.left   = std::min(iconRect.right, split + gap);
 
                     const wchar_t arrow = direction == FolderView::SortDirection::Ascending ? L'\u2191' : L'\u2193';
                     wchar_t arrowText[2]{arrow, 0};
 
                     const HFONT arrowFont = fontToUse;
                     auto oldArrowFont     = wil::SelectObject(dis->hDC, arrowFont);
-                    DrawTextW(dis->hDC, arrowText, 1, &arrowRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DrawTextW(dis->hDC, arrowText, 1, &arrowRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
                 }
 
                 if (glyph != 0)
@@ -2919,7 +2924,8 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
 
                     const HFONT glyphFont = useFluentIcons ? g_mainMenuIconFont.get() : fontToUse;
                     auto oldGlyphFont     = wil::SelectObject(dis->hDC, glyphFont);
-                    DrawTextW(dis->hDC, glyphText, 1, &iconRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    const UINT iconAlign  = showArrow ? DT_LEFT : DT_CENTER;
+                    DrawTextW(dis->hDC, glyphText, 1, &iconRect, iconAlign | DT_VCENTER | DT_SINGLELINE);
                 }
             }
             else if (checked)

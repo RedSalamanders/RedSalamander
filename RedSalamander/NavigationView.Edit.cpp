@@ -1381,7 +1381,8 @@ void NavigationView::RenderEditSuggestPopup()
                 brush = _editSuggestPopupDisabledTextBrush.get();
             }
 
-            _editSuggestPopupTarget->DrawTextLayout(D2D1::Point2F(textRect.left, rowRect.top), layout.get(), brush);
+            _editSuggestPopupTarget->DrawTextLayout(
+                D2D1::Point2F(textRect.left, rowRect.top), layout.get(), brush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
         }
     }
 

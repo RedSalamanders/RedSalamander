@@ -74,34 +74,42 @@ void PaintSortIndicatorGlyph(HDC hdc, const RECT& rc, HFONT iconFont, HFONT arro
     const bool hasArrow   = sortText.size() >= 2;
     const wchar_t arrowCh = hasArrow ? sortText.front() : L'\0';
 
-    RECT box         = rc;
-    const int width  = std::max(0L, box.right - box.left);
-    const int height = std::max(0L, box.bottom - box.top);
-    const int size   = std::max(0, std::min(width, height));
-    if (size <= 0)
+    const int dpi         = GetDeviceCaps(hdc, LOGPIXELSX);
+    const int indicatorPx = std::max(1, MulDiv(kStatusBarSortMinPartWidthDip, dpi, USER_DEFAULT_SCREEN_DPI));
+
+    RECT indicatorRect = rc;
+    const int width    = std::max(0L, indicatorRect.right - indicatorRect.left);
+    if (width <= 0)
     {
         return;
     }
 
-    box.left = std::max(box.left, box.right - size);
+    indicatorRect.left = std::max(indicatorRect.left, indicatorRect.right - std::min(width, indicatorPx));
 
     SetBkMode(hdc, TRANSPARENT);
     SetTextColor(hdc, color);
 
-    {
-        auto oldFont = wil::SelectObject(hdc, iconFont);
-        DrawTextW(hdc, &icon, 1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    }
+    RECT iconRect = indicatorRect;
 
     if (hasArrow && arrowCh != 0 && arrowFont)
     {
-        RECT arrowRect  = box;
-        const int inset = std::max(1, size / 3);
-        arrowRect.left  = std::min(arrowRect.right, arrowRect.left + inset);
-        arrowRect.top   = std::min(arrowRect.bottom, arrowRect.top + inset);
+        RECT arrowRect  = indicatorRect;
+        const LONG widthPx   = static_cast<LONG>(width);
+        const LONG arrowArea = std::clamp(static_cast<LONG>(MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI)), 0L, widthPx);
+        const LONG split     = indicatorRect.left + arrowArea;
+        const LONG gap       = std::max(1L, static_cast<LONG>(MulDiv(1, dpi, USER_DEFAULT_SCREEN_DPI)));
 
-        auto oldFont = wil::SelectObject(hdc, arrowFont);
-        DrawTextW(hdc, &arrowCh, 1, &arrowRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        arrowRect.right = std::max(arrowRect.left, split - gap);
+        iconRect.left   = std::min(iconRect.right, split + gap);
+
+        auto oldArrowFont = wil::SelectObject(hdc, arrowFont);
+        DrawTextW(hdc, &arrowCh, 1, &arrowRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+    }
+
+    {
+        auto oldIconFont    = wil::SelectObject(hdc, iconFont);
+        const UINT iconAlign = (hasArrow && arrowCh != 0) ? DT_LEFT : DT_CENTER;
+        DrawTextW(hdc, &icon, 1, &iconRect, iconAlign | DT_VCENTER | DT_SINGLELINE);
     }
 }
 
@@ -550,7 +558,7 @@ std::wstring BuildSortIndicatorText(FolderView::SortBy sortBy, FolderView::SortD
         return placeholder;
     }
 
-    // Asc/Desc should use arrows (not chevrons) and we overlay it over the sort-by glyph in the status bar paint.
+    // Asc/Desc should use arrows (not chevrons). The status bar paint draws the arrow + glyph.
     const wchar_t arrow = direction == FolderView::SortDirection::Ascending ? L'\u2191' : L'\u2193';
 
     const wchar_t icon = [&]() noexcept -> wchar_t

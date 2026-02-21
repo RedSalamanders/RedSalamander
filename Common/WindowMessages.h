@@ -58,11 +58,12 @@ inline constexpr UINT kHostExecuteInPane                  = WM_APP + 0x50D;
 // Startup milestones (UI thread).
 inline constexpr UINT kAppStartupInputReady = WM_APP + 0x510;
 
-// Compare Directories
-inline constexpr UINT kCompareDirectoriesScanProgress    = WM_APP + 0x521;
-inline constexpr UINT kCompareDirectoriesExecuteCommand  = WM_APP + 0x522;
-inline constexpr UINT kCompareDirectoriesDecisionUpdated = WM_APP + 0x523;
-inline constexpr UINT kCompareDirectoriesContentProgress = WM_APP + 0x524;
+ // Compare Directories
+inline constexpr UINT kCompareDirectoriesDeferredStart  = WM_APP + 0x520;
+ inline constexpr UINT kCompareDirectoriesScanProgress    = WM_APP + 0x521;
+ inline constexpr UINT kCompareDirectoriesExecuteCommand  = WM_APP + 0x522;
+ inline constexpr UINT kCompareDirectoriesDecisionUpdated = WM_APP + 0x523;
+ inline constexpr UINT kCompareDirectoriesContentProgress = WM_APP + 0x524;
 
 // Change Case (background)
 inline constexpr UINT kChangeCaseTaskUpdate = WM_APP + 0x525;

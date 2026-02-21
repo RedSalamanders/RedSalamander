@@ -717,13 +717,13 @@ void NavigationView::RenderHistorySection()
             historyLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
             historyLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-            D2D1_POINT_2F origin = D2D1::Point2F(historyRect.left, historyRect.top);
-            if (textBrush)
-            {
-                _d2dContext->DrawTextLayout(origin, historyLayout.get(), textBrush);
-            }
-        }
-    }
+             D2D1_POINT_2F origin = D2D1::Point2F(historyRect.left, historyRect.top);
+             if (textBrush)
+             {
+                _d2dContext->DrawTextLayout(origin, historyLayout.get(), textBrush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+             }
+         }
+     }
 
     if (! _editMode && _accentBrush && _hWnd && GetFocus() == _hWnd.get() && _focusedRegion == FocusRegion::History)
     {
@@ -793,13 +793,13 @@ void NavigationView::RenderDiskInfoSection()
             historyLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
             historyLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-            D2D1_POINT_2F origin = D2D1::Point2F(static_cast<float>(_sectionHistoryRect.left), static_cast<float>(_sectionHistoryRect.top));
-            if (textBrush)
-            {
-                _d2dContext->DrawTextLayout(origin, historyLayout.get(), textBrush);
-            }
-        }
-    }
+             D2D1_POINT_2F origin = D2D1::Point2F(static_cast<float>(_sectionHistoryRect.left), static_cast<float>(_sectionHistoryRect.top));
+             if (textBrush)
+             {
+                _d2dContext->DrawTextLayout(origin, historyLayout.get(), textBrush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+             }
+         }
+     }
 
     // Render Section 3: Disk Info
     D2D1_RECT_F section4Rect = D2D1::RectF(static_cast<float>(_sectionDiskInfoRect.left),
@@ -829,13 +829,13 @@ void NavigationView::RenderDiskInfoSection()
             diskTextLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
             diskTextLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-            D2D1_POINT_2F origin = D2D1::Point2F(section4Rect.left + 4.0f, section4Rect.top);
-            if (textBrush)
-            {
-                _d2dContext->DrawTextLayout(origin, diskTextLayout.get(), textBrush);
-            }
-        }
-    }
+             D2D1_POINT_2F origin = D2D1::Point2F(section4Rect.left + 4.0f, section4Rect.top);
+             if (textBrush)
+             {
+                _d2dContext->DrawTextLayout(origin, diskTextLayout.get(), textBrush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+             }
+         }
+     }
 
     // Draw progress bar at bottom - only if we have a path
     if (_currentPluginPath)

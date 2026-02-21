@@ -74,6 +74,10 @@ void CompareDirectoriesPane::CreateControls(HWND parent, PreferencesDialogState&
     createToggle(state.advancedCompareIgnoreDirectoriesToggle, IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE);
 
     state.advancedCompareDirectoriesHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+    state.advancedCompareSectionSubdirsHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+    state.advancedCompareSectionCompareHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+    state.advancedCompareSectionAdditionalHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+    state.advancedCompareSectionMoreHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
 
     state.advancedCompareSizeLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
     state.advancedCompareSizeDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
@@ -349,98 +353,96 @@ void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& s
         y += headerHeight + gapY;
     }
 
-    const std::wstring labelCompareSizeText       = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_TITLE);
-    const std::wstring labelCompareDateTimeText   = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_TITLE);
-    const std::wstring labelCompareAttributesText = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE);
-    const std::wstring labelCompareContentText    = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_TITLE);
+    const auto layoutSectionHeader = [&](const wil::unique_hwnd& header, UINT textId) noexcept
+    {
+        if (! header)
+        {
+            return;
+        }
 
-    const std::wstring descCompareSizeText       = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC);
-    const std::wstring descCompareDateTimeText   = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC);
-    const std::wstring descCompareAttributesText = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC);
-    const std::wstring descCompareContentText    = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_DESC);
+        SetWindowTextW(header.get(), LoadStringResource(nullptr, textId).c_str());
+        SetWindowPos(header.get(), nullptr, x, y, width, headerHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+        SendMessageW(header.get(), WM_SETFONT, reinterpret_cast<WPARAM>(headerFont), TRUE);
+        y += headerHeight + gapY;
+    };
 
-    layoutToggleCard(state.advancedCompareSizeLabel.get(),
-                     labelCompareSizeText,
-                     state.advancedCompareSizeToggle.get(),
-                     state.advancedCompareSizeDescription.get(),
-                     descCompareSizeText);
-    layoutToggleCard(state.advancedCompareDateTimeLabel.get(),
-                     labelCompareDateTimeText,
-                     state.advancedCompareDateTimeToggle.get(),
-                     state.advancedCompareDateTimeDescription.get(),
-                     descCompareDateTimeText);
-    layoutToggleCard(state.advancedCompareAttributesLabel.get(),
-                     labelCompareAttributesText,
-                     state.advancedCompareAttributesToggle.get(),
-                     state.advancedCompareAttributesDescription.get(),
-                     descCompareAttributesText);
-    layoutToggleCard(state.advancedCompareContentLabel.get(),
-                     labelCompareContentText,
-                     state.advancedCompareContentToggle.get(),
-                     state.advancedCompareContentDescription.get(),
-                     descCompareContentText);
-
-    const std::wstring labelCompareSubdirsText          = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE);
-    const std::wstring labelCompareSubdirAttributesText = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE);
-    const std::wstring labelCompareSelectSubdirsText    = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE);
-
-    const std::wstring descCompareSubdirsText          = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_DESC);
-    const std::wstring descCompareSubdirAttributesText = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC);
-    const std::wstring descCompareSelectSubdirsText    = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC);
-
+    // 1) Subdirectories options
+    layoutSectionHeader(state.advancedCompareSectionSubdirsHeader, IDS_COMPARE_OPTIONS_SECTION_SUBDIRS);
     layoutToggleCard(state.advancedCompareSubdirectoriesLabel.get(),
-                     labelCompareSubdirsText,
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE),
                      state.advancedCompareSubdirectoriesToggle.get(),
                      state.advancedCompareSubdirectoriesDescription.get(),
-                     descCompareSubdirsText);
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_DESC));
+    y += gapY;
+
+    // 2) Compare files with same name by
+    layoutSectionHeader(state.advancedCompareSectionCompareHeader, IDS_COMPARE_OPTIONS_SECTION_COMPARE);
+    layoutToggleCard(state.advancedCompareSizeLabel.get(),
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_TITLE),
+                     state.advancedCompareSizeToggle.get(),
+                     state.advancedCompareSizeDescription.get(),
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC));
+    layoutToggleCard(state.advancedCompareDateTimeLabel.get(),
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_TITLE),
+                     state.advancedCompareDateTimeToggle.get(),
+                     state.advancedCompareDateTimeDescription.get(),
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC));
+    layoutToggleCard(state.advancedCompareAttributesLabel.get(),
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE),
+                     state.advancedCompareAttributesToggle.get(),
+                     state.advancedCompareAttributesDescription.get(),
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC));
+    layoutToggleCard(state.advancedCompareContentLabel.get(),
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_TITLE),
+                     state.advancedCompareContentToggle.get(),
+                     state.advancedCompareContentDescription.get(),
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_DESC));
+    y += gapY;
+
+    // 3) Additional options
+    layoutSectionHeader(state.advancedCompareSectionAdditionalHeader, IDS_COMPARE_OPTIONS_SECTION_ADVANCED);
     layoutToggleCard(state.advancedCompareSubdirectoryAttributesLabel.get(),
-                     labelCompareSubdirAttributesText,
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE),
                      state.advancedCompareSubdirectoryAttributesToggle.get(),
                      state.advancedCompareSubdirectoryAttributesDescription.get(),
-                     descCompareSubdirAttributesText);
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC));
     layoutToggleCard(state.advancedCompareSelectSubdirsOnlyInOnePaneLabel.get(),
-                     labelCompareSelectSubdirsText,
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE),
                      state.advancedCompareSelectSubdirsOnlyInOnePaneToggle.get(),
                      state.advancedCompareSelectSubdirsOnlyInOnePaneDescription.get(),
-                     descCompareSelectSubdirsText);
-
-    const std::wstring labelShowIdenticalText = LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE);
-    const std::wstring descShowIdenticalText  = LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_DESC);
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC));
     layoutToggleCard(state.advancedCompareShowIdenticalLabel.get(),
-                     labelShowIdenticalText,
+                     LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE),
                      state.advancedCompareShowIdenticalToggle.get(),
                      state.advancedCompareShowIdenticalDescription.get(),
-                     descShowIdenticalText);
+                     LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_DESC));
+    y += gapY;
 
-    const std::wstring labelIgnoreFilesText = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE);
-    const std::wstring descIgnoreFilesText  = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC);
+    // 4) More options
+    layoutSectionHeader(state.advancedCompareSectionMoreHeader, IDS_COMPARE_OPTIONS_SECTION_IGNORE);
     layoutToggleCard(state.advancedCompareIgnoreFilesLabel.get(),
-                     labelIgnoreFilesText,
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE),
                      state.advancedCompareIgnoreFilesToggle.get(),
                      state.advancedCompareIgnoreFilesDescription.get(),
-                     descIgnoreFilesText);
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC));
 
-    const std::wstring labelIgnoreFilePatternsText = LoadStringResource(nullptr, IDS_PREFS_COMPARE_IGNORE_FILES_PATTERNS_TITLE);
-    const int wideEditWidth                        = ThemedControls::ScaleDip(dpi, 360);
+    const int wideEditWidth = ThemedControls::ScaleDip(dpi, 360);
     layoutEditCard(state.advancedCompareIgnoreFilesPatternsLabel.get(),
-                   labelIgnoreFilePatternsText,
+                   LoadStringResource(nullptr, IDS_PREFS_COMPARE_IGNORE_FILES_PATTERNS_TITLE),
                    state.advancedCompareIgnoreFilesPatternsFrame.get(),
                    state.advancedCompareIgnoreFilesPatternsEdit.get(),
                    wideEditWidth,
                    nullptr,
                    {});
 
-    const std::wstring labelIgnoreDirectoriesText = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE);
-    const std::wstring descIgnoreDirectoriesText  = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC);
     layoutToggleCard(state.advancedCompareIgnoreDirectoriesLabel.get(),
-                     labelIgnoreDirectoriesText,
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE),
                      state.advancedCompareIgnoreDirectoriesToggle.get(),
                      state.advancedCompareIgnoreDirectoriesDescription.get(),
-                     descIgnoreDirectoriesText);
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC));
 
-    const std::wstring labelIgnoreDirectoryPatternsText = LoadStringResource(nullptr, IDS_PREFS_COMPARE_IGNORE_DIRECTORIES_PATTERNS_TITLE);
     layoutEditCard(state.advancedCompareIgnoreDirectoriesPatternsLabel.get(),
-                   labelIgnoreDirectoryPatternsText,
+                   LoadStringResource(nullptr, IDS_PREFS_COMPARE_IGNORE_DIRECTORIES_PATTERNS_TITLE),
                    state.advancedCompareIgnoreDirectoriesPatternsFrame.get(),
                    state.advancedCompareIgnoreDirectoriesPatternsEdit.get(),
                    wideEditWidth,
