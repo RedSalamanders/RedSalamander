@@ -6596,9 +6596,6 @@ std::wstring_view FileOperationsSelfTest::FailureMessage() noexcept
 
 #else
 
-void FileOperationsSelfTest::Start(HWND /*mainWindow*/, const SelfTest::SelfTestOptions& /*options*/) noexcept
-{
-}
 bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 {
     return false;
@@ -6613,10 +6610,6 @@ bool FileOperationsSelfTest::IsRunning() noexcept
 bool FileOperationsSelfTest::IsDone() noexcept
 {
     return false;
-}
-SelfTest::SelfTestSuiteResult FileOperationsSelfTest::GetSuiteResult() noexcept
-{
-    return {};
 }
 bool FileOperationsSelfTest::DidFail() noexcept
 {

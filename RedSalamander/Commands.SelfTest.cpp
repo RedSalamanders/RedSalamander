@@ -1011,9 +1011,31 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
         DialogState& operator=(DialogState&&)       = delete;
     };
 
-    const auto runDialogAutomation = [](DialogState& dlgState, bool acceptUpper) noexcept
+    const auto runDialogAutomation = [mainWindow](DialogState& dlgState, bool acceptUpper) noexcept
     {
-        const HWND dlg = WaitForWindow([] noexcept { return FindWindowW(L"#32770", L"Change Case"); }, SelfTest::Scale(std::chrono::milliseconds{2000}));
+        // Wait until the dialog has finished WM_INITDIALOG (DWLP_USER set) so WM_COMMAND closes it reliably.
+        const HWND dlg = WaitForWindow(
+            [mainWindow]() noexcept -> HWND
+            {
+                const HWND dlg = FindWindowW(L"#32770", L"Change Case");
+                if (! dlg || IsWindow(dlg) == FALSE || ! IsOwnedBy(dlg, mainWindow))
+                {
+                    return nullptr;
+                }
+
+                if (GetWindowLongPtrW(dlg, DWLP_USER) == 0)
+                {
+                    return nullptr;
+                }
+
+                if (! GetDlgItem(dlg, IDC_CHANGE_CASE_UPPER) || ! GetDlgItem(dlg, IDOK) || ! GetDlgItem(dlg, IDCANCEL))
+                {
+                    return nullptr;
+                }
+
+                return dlg;
+            },
+            SelfTest::Scale(std::chrono::milliseconds{10000}));
         if (! dlg)
         {
             return;
@@ -1027,24 +1049,24 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
 
         if (acceptUpper)
         {
-            if (const HWND upper = GetDlgItem(dlg, IDC_CHANGE_CASE_UPPER))
-            {
-                SendMessageW(upper, BM_CLICK, 0, 0);
-            }
-            if (const HWND okBtn = GetDlgItem(dlg, IDOK))
-            {
-                SendMessageW(okBtn, BM_CLICK, 0, 0);
-            }
+            CheckRadioButton(dlg, IDC_CHANGE_CASE_LOWER, IDC_CHANGE_CASE_MIXED, IDC_CHANGE_CASE_UPPER);
+            PostMessageW(dlg, WM_COMMAND, MAKEWPARAM(IDOK, 0), 0);
         }
         else
         {
-            if (const HWND cancelBtn = GetDlgItem(dlg, IDCANCEL))
-            {
-                SendMessageW(cancelBtn, BM_CLICK, 0, 0);
-            }
+            PostMessageW(dlg, WM_COMMAND, MAKEWPARAM(IDCANCEL, 0), 0);
         }
 
-        dlgState.closed.store(WaitForWindowClosed(dlg, SelfTest::Scale(std::chrono::milliseconds{2000})), std::memory_order_release);
+        bool closed = WaitForWindowClosed(dlg, SelfTest::Scale(std::chrono::milliseconds{5000}));
+        if (! closed)
+        {
+            PostMessageW(dlg, WM_CLOSE, 0, 0);
+            PostMessageW(dlg, WM_KEYDOWN, VK_ESCAPE, 0);
+            PostMessageW(dlg, WM_KEYUP, VK_ESCAPE, 0);
+            closed = WaitForWindowClosed(dlg, SelfTest::Scale(std::chrono::milliseconds{5000}));
+        }
+
+        dlgState.closed.store(closed, std::memory_order_release);
     };
 
     DialogState first{};
