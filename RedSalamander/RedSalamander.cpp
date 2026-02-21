@@ -170,8 +170,49 @@ void ShutdownSelfTestMonitor() noexcept
     g_selfTestMonitorProcessId.store(0, std::memory_order_release);
 }
 
+[[nodiscard]] bool HasAnySelfTestArgInCommandLine() noexcept
+{
+    int argc = 0;
+    wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
+    if (! argv || argc <= 1)
+    {
+        return false;
+    }
+
+    constexpr std::wstring_view kSelfTestArgs[] = {
+        L"--selftest",
+        L"--compare-selftest",
+        L"--commands-selftest",
+        L"--fileops-selftest",
+    };
+
+    for (int i = 1; i < argc; ++i)
+    {
+        const wchar_t* arg = argv.get()[i];
+        if (! arg || arg[0] == L'\0')
+        {
+            continue;
+        }
+
+        for (std::wstring_view needle : kSelfTestArgs)
+        {
+            if (CompareStringOrdinal(arg, -1, needle.data(), static_cast<int>(needle.size()), TRUE) == CSTR_EQUAL)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 void QueueRedSalamanderMonitorLaunch() noexcept
 {
+    if (HasAnySelfTestArgInCommandLine())
+    {
+        return;
+    }
+
     // Best-effort: launch the ETW viewer early in debug builds so startup ETW events are visible.
     // RedSalamanderMonitor has its own single-instance mutex, so extra launches will exit quickly.
     constexpr wchar_t kInstanceMutexName[] = L"Local\\RedSalamanderMonitor_Instance";
@@ -1860,8 +1901,6 @@ void RebuildGoToMenuDynamicItems(FolderWindow::Pane pane, HMENU goToMenu, UINT h
     {
         return;
     }
-    static_cast<void>(hotPathBaseId);
-
     const int hotPathsPos = FindMenuItemPosById(goToMenu, hotPathsCommandId);
     if (hotPathsPos < 0)
     {
@@ -1871,8 +1910,43 @@ void RebuildGoToMenuDynamicItems(FolderWindow::Pane pane, HMENU goToMenu, UINT h
     // Reset everything after the fixed "Hot Paths..." entry (dynamic hot paths + separator + history).
     DeleteMenuItemsFromPosition(goToMenu, hotPathsPos + 1);
 
-    // Hot paths list is not implemented yet.
-    AppendEmptyMenuItem(goToMenu);
+    // Append hot path items.
+    UINT hotPathWritten = 0;
+    if (g_settings.hotPaths.has_value())
+    {
+        const auto& slots = g_settings.hotPaths.value().slots;
+        for (size_t i = 0; i < slots.size(); ++i)
+        {
+            if (! slots[i].has_value() || slots[i].value().path.empty())
+            {
+                continue;
+            }
+
+            const auto& slot = slots[i].value();
+            const UINT id    = hotPathBaseId + static_cast<UINT>(i);
+
+            g_navigatePathMenuTargets[id] = NavigatePathMenuTarget{pane, std::filesystem::path(slot.path)};
+
+            const wchar_t digitChar = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
+            std::wstring label;
+            if (! slot.label.empty())
+            {
+                label = std::format(L"&{}: {}", digitChar, EscapeMenuLabel(slot.label));
+            }
+            else
+            {
+                label = std::format(L"&{}: {}", digitChar, EscapeMenuLabel(slot.path));
+            }
+
+            AppendMenuW(goToMenu, MF_STRING, id, label.c_str());
+            ++hotPathWritten;
+        }
+    }
+
+    if (hotPathWritten == 0)
+    {
+        AppendEmptyMenuItem(goToMenu);
+    }
     AppendMenuW(goToMenu, MF_SEPARATOR, 0, nullptr);
 
     const std::vector<std::filesystem::path> history   = g_folderWindow.GetFolderHistory(pane);
@@ -3291,6 +3365,34 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         }
     }
 
+    std::optional<int> hotPathSlotIndex;
+    {
+        constexpr std::wstring_view kHotPathPrefix    = L"cmd/pane/hotPath/";
+        constexpr std::wstring_view kSetHotPathPrefix = L"cmd/pane/setHotPath/";
+        std::wstring_view suffix;
+        if (originalCommandId.starts_with(kHotPathPrefix) && originalCommandId.size() > kHotPathPrefix.size())
+        {
+            suffix = originalCommandId.substr(kHotPathPrefix.size());
+        }
+        else if (originalCommandId.starts_with(kSetHotPathPrefix) && originalCommandId.size() > kSetHotPathPrefix.size())
+        {
+            suffix = originalCommandId.substr(kSetHotPathPrefix.size());
+        }
+
+        if (! suffix.empty())
+        {
+            const wchar_t digit = suffix[0];
+            if (digit >= L'1' && digit <= L'9')
+            {
+                hotPathSlotIndex = static_cast<int>(digit - L'1');
+            }
+            else if (digit == L'0')
+            {
+                hotPathSlotIndex = 9;
+            }
+        }
+    }
+
     commandId = CanonicalizeCommandId(commandId);
 
     if (commandId == L"cmd/pane/menu")
@@ -3395,6 +3497,103 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
         g_folderWindow.SetActivePane(pane);
         g_folderWindow.SetFolderPath(pane, std::filesystem::path(driveRoot));
+        return true;
+    }
+
+    if (commandId == L"cmd/pane/hotPath")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire) || ! hotPathSlotIndex.has_value())
+        {
+            return true;
+        }
+
+        const int slotIdx = hotPathSlotIndex.value();
+        if (g_settings.hotPaths.has_value())
+        {
+            const auto& slots = g_settings.hotPaths.value().slots;
+            if (slotIdx >= 0 && slotIdx < static_cast<int>(slots.size()) && slots[static_cast<size_t>(slotIdx)].has_value())
+            {
+                const auto& slot = slots[static_cast<size_t>(slotIdx)].value();
+                if (! slot.path.empty())
+                {
+                    const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+                    g_folderWindow.SetActivePane(pane);
+                    g_folderWindow.SetFolderPath(pane, std::filesystem::path(slot.path));
+                }
+            }
+        }
+        return true;
+    }
+
+    if (commandId == L"cmd/pane/setHotPath")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire) || ! hotPathSlotIndex.has_value())
+        {
+            return true;
+        }
+
+        const int slotIdx = hotPathSlotIndex.value();
+        const FolderWindow::Pane pane           = g_folderWindow.GetFocusedPane();
+        const std::optional<std::filesystem::path> currentPath = g_folderWindow.GetCurrentPath(pane);
+        if (! currentPath.has_value() || currentPath.value().empty())
+        {
+            return true;
+        }
+
+        const std::wstring newPath = currentPath.value().wstring();
+
+        // Check if slot is occupied and ask for confirmation.
+        if (g_settings.hotPaths.has_value())
+        {
+            const auto& slots = g_settings.hotPaths.value().slots;
+            if (slotIdx >= 0 && slotIdx < static_cast<int>(slots.size()) && slots[static_cast<size_t>(slotIdx)].has_value())
+            {
+                const auto& existingSlot = slots[static_cast<size_t>(slotIdx)].value();
+                if (! existingSlot.path.empty())
+                {
+                    const wchar_t digitChar = (slotIdx < 9) ? static_cast<wchar_t>(L'1' + slotIdx) : L'0';
+                    const std::wstring title   = LoadStringResource(nullptr, IDS_HOT_PATH_CONFIRM_TITLE);
+                    const std::wstring message = FormatStringResource(nullptr, IDS_HOT_PATH_CONFIRM_REPLACE, digitChar, existingSlot.path);
+
+                    const int result = MessageBoxCenteredText(ownerWindow, message, title, MB_YESNO | MB_ICONQUESTION);
+                    if (result != IDYES)
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        // Assign the slot.
+        if (! g_settings.hotPaths.has_value())
+        {
+            g_settings.hotPaths = Common::Settings::HotPathsSettings{};
+        }
+
+        Common::Settings::HotPathSlot slot{};
+        if (slotIdx >= 0 && slotIdx < static_cast<int>(g_settings.hotPaths.value().slots.size()) &&
+            g_settings.hotPaths.value().slots[static_cast<size_t>(slotIdx)].has_value())
+        {
+            slot = g_settings.hotPaths.value().slots[static_cast<size_t>(slotIdx)].value();
+        }
+        slot.path = newPath;
+        g_settings.hotPaths.value().slots[static_cast<size_t>(slotIdx)] = std::move(slot);
+
+        static_cast<void>(Common::Settings::SaveSettings(kAppId, SettingsSave::PrepareForSave(g_settings)));
+
+        // Optionally open the prefs page.
+        if (g_settings.hotPaths.value().openPrefsOnAssign)
+        {
+            const AppTheme theme = ResolveConfiguredTheme();
+            static_cast<void>(ShowPreferencesDialogHotPaths(ownerWindow, kAppId, g_settings, theme));
+        }
+        return true;
+    }
+
+    if (commandId == L"cmd/pane/hotPaths")
+    {
+        const AppTheme theme = ResolveConfiguredTheme();
+        static_cast<void>(ShowPreferencesDialogHotPaths(ownerWindow, kAppId, g_settings, theme));
         return true;
     }
 
@@ -3650,10 +3849,6 @@ bool DebugDispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId)
 // Separate function with C++ objects (cannot use __try/__except)
 static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 {
-#ifdef _DEBUG
-    QueueRedSalamanderMonitorLaunch();
-#endif
-
     std::optional<Debug::Perf::Scope> startupPerf;
     startupPerf.emplace(L"App.Startup.UntilMessageLoop");
     startupPerf->SetDetail(kAppId);
@@ -3690,6 +3885,98 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
         return false;
     };
+
+    const auto writeHelpText = [](std::wstring_view text) -> void
+    {
+        auto tryWrite = [](HANDLE handle, std::wstring_view msg) -> bool
+        {
+            if (! handle || handle == INVALID_HANDLE_VALUE)
+            {
+                return false;
+            }
+
+            DWORD mode = 0;
+            if (GetConsoleMode(handle, &mode) != FALSE)
+            {
+                DWORD written = 0;
+                return WriteConsoleW(handle, msg.data(), static_cast<DWORD>(msg.size()), &written, nullptr) != FALSE;
+            }
+
+            const int bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), nullptr, 0, nullptr, nullptr);
+            if (bytesNeeded <= 0)
+            {
+                return false;
+            }
+
+            std::string utf8;
+            utf8.resize(static_cast<size_t>(bytesNeeded));
+            const int converted =
+                WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), utf8.data(), bytesNeeded, nullptr, nullptr);
+            if (converted != bytesNeeded)
+            {
+                return false;
+            }
+
+            DWORD written = 0;
+            return WriteFile(handle, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr) != FALSE;
+        };
+
+        if (tryWrite(GetStdHandle(STD_OUTPUT_HANDLE), text))
+        {
+            return;
+        }
+
+        const bool hadConsole = GetConsoleWindow() != nullptr;
+        if (! hadConsole)
+        {
+            if (AttachConsole(ATTACH_PARENT_PROCESS) == FALSE)
+            {
+                const DWORD err = GetLastError();
+                if (err != ERROR_ACCESS_DENIED)
+                {
+                    static_cast<void>(AllocConsole());
+                }
+            }
+        }
+
+        wil::unique_handle conout(CreateFileW(L"CONOUT$", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr));
+        if (conout && tryWrite(conout.get(), text))
+        {
+            return;
+        }
+
+        std::wstring boxed(text);
+        MessageBoxW(nullptr, boxed.c_str(), L"RedSalamander Help", MB_OK | MB_ICONINFORMATION);
+    };
+
+    if (hasArg(L"--help") || hasArg(L"-h") || hasArg(L"/?"))
+    {
+        constexpr wchar_t kHelpText[] =
+            L"RedSalamander\r\n"
+            L"\r\n"
+            L"Usage:\r\n"
+            L"  RedSalamander.exe [options]\r\n"
+            L"\r\n"
+            L"Options:\r\n"
+            L"  -h, --help, /?                 Show this help.\r\n"
+            L"  --crash-test                    Trigger crash handler test.\r\n"
+#ifdef _DEBUG
+            L"  --selftest                      Run all debug self-test suites and exit.\r\n"
+            L"  --compare-selftest              Run CompareDirectories self-test suite.\r\n"
+            L"  --commands-selftest             Run Commands self-test suite.\r\n"
+            L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
+            L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
+            L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by N (default 1.0).\r\n"
+#endif
+            L"\r\n";
+
+        writeHelpText(kHelpText);
+        return 0;
+    }
+
+#ifdef _DEBUG
+    QueueRedSalamanderMonitorLaunch();
+#endif
 
     const auto getArgValue = [](PCWSTR prefix, std::wstring& value) noexcept -> bool
     {
@@ -3755,7 +4042,15 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     }
 
     SelfTest::GetSelfTestOptions() = g_selfTestOptions;
-    SelfTest::InitSelfTestRun(g_selfTestOptions, SelfTest::SelfTestSuite::CompareDirectories);
+    SelfTest::InitSelfTestRun(g_selfTestOptions);
+
+    if (hasArg(L"--selftest"))
+    {
+        g_runFileOpsSelfTest              = true;
+        g_runCompareDirectoriesSelfTest   = true;
+        g_runCommandsSelfTest             = true;
+        HostSetAutoAcceptPrompts(true);
+    }
 
     if (hasArg(L"--fileops-selftest"))
     {
@@ -4559,7 +4854,7 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         SplashScreen::IfExistSetText(L"Launching compare-selftest...");
         SelfTest::SelfTestSuiteResult compareResult;
         Debug::Info(L"CompareSelfTest: running");
-        SelfTest::InitSelfTestRun(g_selfTestOptions, SelfTest::SelfTestSuite::CompareDirectories);
+        SelfTest::InitSelfTestRun(g_selfTestOptions);
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, L"CompareSelfTest: begin");
         SelfTest::AppendSelfTestTrace(L"CompareSelfTest: begin");
         g_selfTestExitCode |= CompareDirectoriesSelfTest::Run(g_selfTestOptions, &compareResult) ? 0 : 1;
@@ -4587,7 +4882,7 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         SplashScreen::IfExistSetText(L"Launching commands-selftest...");
         SelfTest::SelfTestSuiteResult commandsResult;
         Debug::Info(L"CommandsSelfTest: running");
-        SelfTest::InitSelfTestRun(g_selfTestOptions, SelfTest::SelfTestSuite::Commands);
+        SelfTest::InitSelfTestRun(g_selfTestOptions);
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: begin");
         SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: begin");
         g_selfTestExitCode |= CommandsSelfTest::Run(hWnd, g_selfTestOptions, &commandsResult) ? 0 : 1;
@@ -4614,7 +4909,7 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
     {
         SplashScreen::IfExistSetText(L"Launching file-operations self-test...");
         Debug::Info(L"FileOpsSelfTest: scheduling");
-        SelfTest::InitSelfTestRun(g_selfTestOptions, SelfTest::SelfTestSuite::FileOperations);
+        SelfTest::InitSelfTestRun(g_selfTestOptions);
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, L"FileOpsSelfTest: scheduling");
         FileOperationsSelfTest::Start(hWnd, g_selfTestOptions);
         if (SetTimer(hWnd, kFileOpsSelfTestTimerId, kFileOpsSelfTestTimerIntervalMs, nullptr) == 0)
@@ -4719,7 +5014,20 @@ void ExitFullScreen(HWND hWnd) noexcept
     SetWindowLongPtrW(hWnd, GWL_STYLE, static_cast<LONG_PTR>(g_fullScreenState.savedStyle));
     SetWindowLongPtrW(hWnd, GWL_EXSTYLE, static_cast<LONG_PTR>(g_fullScreenState.savedExStyle));
 
-    static_cast<void>(SetWindowPlacement(hWnd, &g_fullScreenState.savedPlacement));
+    WINDOWPLACEMENT placement = g_fullScreenState.savedPlacement;
+    if ((g_fullScreenState.savedStyle & WS_VISIBLE) == 0)
+    {
+        placement.showCmd = SW_HIDE;
+    }
+
+    if (placement.length == sizeof(WINDOWPLACEMENT))
+    {
+        static_cast<void>(SetWindowPlacement(hWnd, &placement));
+    }
+    else if ((g_fullScreenState.savedStyle & WS_VISIBLE) == 0)
+    {
+        ShowWindow(hWnd, SW_HIDE);
+    }
 
     const HWND insertAfter = (g_fullScreenState.savedExStyle & WS_EX_TOPMOST) != 0 ? HWND_TOPMOST : HWND_NOTOPMOST;
     SetWindowPos(hWnd, insertAfter, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_NOACTIVATE);
@@ -5001,9 +5309,12 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             break;
         }
         case IDM_LEFT_HOT_PATHS:
+        {
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/hotPaths");
+            const AppTheme theme = ResolveConfiguredTheme();
+            static_cast<void>(ShowPreferencesDialogHotPaths(hWnd, kAppId, g_settings, theme));
             break;
+        }
         case IDM_LEFT_ZOOM_PANEL: g_folderWindow.ToggleZoomPanel(FolderWindow::Pane::Left); break;
         case IDM_LEFT_FILTER:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
@@ -5037,9 +5348,12 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             break;
         }
         case IDM_RIGHT_HOT_PATHS:
+        {
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/hotPaths");
+            const AppTheme theme = ResolveConfiguredTheme();
+            static_cast<void>(ShowPreferencesDialogHotPaths(hWnd, kAppId, g_settings, theme));
             break;
+        }
         case IDM_RIGHT_ZOOM_PANEL: g_folderWindow.ToggleZoomPanel(FolderWindow::Pane::Right); break;
         case IDM_RIGHT_FILTER:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
@@ -6023,6 +6337,7 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
     SaveAppSettings(hWnd);
 
 #ifdef _DEBUG
+    ShutdownSelfTestMonitor();
     TraceSelfTestExitCode(
         L"OnMainWindowDestroy: PostQuitMessage", (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
     PostQuitMessage((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);

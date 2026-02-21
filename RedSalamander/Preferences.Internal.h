@@ -32,6 +32,7 @@ enum class PrefCategory : int
     Plugins,
     Advanced,
     CompareDirectories,
+    HotPaths,
 };
 
 enum class ShortcutScope : uint8_t
@@ -286,7 +287,7 @@ struct PreferencesDialogState
 
     // Dialog Structure Controls
     HWND categoryTree = nullptr;
-    std::array<HTREEITEM, 10> categoryTreeItems{};
+    std::array<HTREEITEM, 11> categoryTreeItems{};
     HTREEITEM pluginsTreeRoot = nullptr;
     HWND pageHost             = nullptr;
     HWND pageTitle            = nullptr;
@@ -574,6 +575,32 @@ struct PreferencesDialogState
     wil::unique_hwnd advancedCompareIgnoreDirectoriesPatternsFrame;
     wil::unique_hwnd advancedCompareIgnoreDirectoriesPatternsEdit;
 
+    // Hot Paths page controls.
+    struct HotPathSlotControls
+    {
+        HotPathSlotControls()                                      = default;
+        HotPathSlotControls(const HotPathSlotControls&)            = delete;
+        HotPathSlotControls& operator=(const HotPathSlotControls&) = delete;
+        HotPathSlotControls(HotPathSlotControls&&)                 = default;
+        HotPathSlotControls& operator=(HotPathSlotControls&&)      = default;
+
+        wil::unique_hwnd header;
+        wil::unique_hwnd pathLabel;
+        wil::unique_hwnd pathFrame;
+        wil::unique_hwnd pathEdit;
+        wil::unique_hwnd browseButton;
+        wil::unique_hwnd labelLabel;
+        wil::unique_hwnd labelFrame;
+        wil::unique_hwnd labelEdit;
+        wil::unique_hwnd showInMenuLabel;
+        wil::unique_hwnd showInMenuToggle;
+        wil::unique_hwnd showInMenuDescription;
+    };
+    std::vector<HotPathSlotControls> hotPathSlotControls;
+    wil::unique_hwnd hotPathOpenPrefsOnAssignLabel;
+    wil::unique_hwnd hotPathOpenPrefsOnAssignToggle;
+    wil::unique_hwnd hotPathOpenPrefsOnAssignDescription;
+
     // Refresh State Flags
     bool previewApplied        = false;
     bool refreshingPanesPage   = false;
@@ -747,3 +774,10 @@ namespace PrefsCompareDirectories
 [[nodiscard]] Common::Settings::CompareDirectoriesSettings* EnsureWorkingCompareDirectoriesSettings(Common::Settings::Settings& settings) noexcept;
 void MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(Common::Settings::Settings& settings) noexcept;
 } // namespace PrefsCompareDirectories
+
+namespace PrefsHotPaths
+{
+[[nodiscard]] const Common::Settings::HotPathsSettings& GetHotPathsSettingsOrDefault(const Common::Settings::Settings& settings) noexcept;
+[[nodiscard]] Common::Settings::HotPathsSettings* EnsureWorkingHotPathsSettings(Common::Settings::Settings& settings) noexcept;
+void MaybeResetWorkingHotPathsSettingsIfEmpty(Common::Settings::Settings& settings) noexcept;
+} // namespace PrefsHotPaths

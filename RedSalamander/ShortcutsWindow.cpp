@@ -509,7 +509,7 @@ HWND ShortcutsWindow::Create(HWND owner,
                     CW_USEDEFAULT,
                     defaultWidth,
                     defaultHeight,
-                    nullptr,
+                    owner,
                     nullptr,
                     _hInstance,
                     this);

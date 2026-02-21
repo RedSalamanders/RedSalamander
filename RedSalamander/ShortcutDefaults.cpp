@@ -132,6 +132,16 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
         AddBinding(shortcuts.folderView, static_cast<uint32_t>(driveLetter), ShortcutManager::kModShift, commandId);
     }
 
+    // Hot path shortcuts: Ctrl+1..Ctrl+9, Ctrl+0 and Ctrl+Shift+1..Ctrl+Shift+9, Ctrl+Shift+0
+    for (int i = 0; i < 10; ++i)
+    {
+        const wchar_t digit                = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
+        const std::wstring goCommandId     = std::wstring(L"cmd/pane/hotPath/") + digit;
+        const std::wstring setCommandId    = std::wstring(L"cmd/pane/setHotPath/") + digit;
+        AddBinding(shortcuts.folderView, static_cast<uint32_t>(digit), ShortcutManager::kModCtrl, goCommandId);
+        AddBinding(shortcuts.folderView, static_cast<uint32_t>(digit), ShortcutManager::kModCtrl | ShortcutManager::kModShift, setCommandId);
+    }
+
     AddBinding(shortcuts.folderView, VK_RETURN, 0, L"cmd/pane/executeOpen");
     AddBinding(shortcuts.folderView, VK_RETURN, ShortcutManager::kModCtrl, L"cmd/pane/bringFilenameToCommandLine");
     AddBinding(shortcuts.folderView, VK_RETURN, ShortcutManager::kModAlt, L"cmd/pane/openProperties");
@@ -305,5 +315,22 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
         std::wstring commandId = L"cmd/pane/goDriveRoot/";
         commandId.push_back(driveLetter);
         AddBinding(shortcuts.folderView, static_cast<uint32_t>(driveLetter), ShortcutManager::kModShift, commandId);
+    }
+
+    // Ensure hot path shortcuts exist.
+    for (int i = 0; i < 10; ++i)
+    {
+        const wchar_t digit = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
+        const uint32_t vk   = static_cast<uint32_t>(digit);
+
+        if (! findFolderViewBinding(vk, ShortcutManager::kModCtrl))
+        {
+            AddBinding(shortcuts.folderView, vk, ShortcutManager::kModCtrl, std::wstring(L"cmd/pane/hotPath/") + digit);
+        }
+
+        if (! findFolderViewBinding(vk, ShortcutManager::kModCtrl | ShortcutManager::kModShift))
+        {
+            AddBinding(shortcuts.folderView, vk, ShortcutManager::kModCtrl | ShortcutManager::kModShift, std::wstring(L"cmd/pane/setHotPath/") + digit);
+        }
     }
 }

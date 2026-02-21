@@ -85,6 +85,34 @@ std::wstring GetCommandDisplayName(std::wstring_view commandId) noexcept
         }
     }
 
+    constexpr std::wstring_view kHotPathPrefix = L"cmd/pane/hotPath/";
+    if (commandId.starts_with(kHotPathPrefix) && commandId.size() > kHotPathPrefix.size())
+    {
+        const wchar_t digit = commandId[kHotPathPrefix.size()];
+        if (digit >= L'0' && digit <= L'9')
+        {
+            const std::wstring display = FormatStringResource(nullptr, IDS_FMT_CMD_HOT_PATH_GO_WITH_DIGIT, digit);
+            if (! display.empty())
+            {
+                return display;
+            }
+        }
+    }
+
+    constexpr std::wstring_view kSetHotPathPrefix = L"cmd/pane/setHotPath/";
+    if (commandId.starts_with(kSetHotPathPrefix) && commandId.size() > kSetHotPathPrefix.size())
+    {
+        const wchar_t digit = commandId[kSetHotPathPrefix.size()];
+        if (digit >= L'0' && digit <= L'9')
+        {
+            const std::wstring display = FormatStringResource(nullptr, IDS_FMT_CMD_SET_HOT_PATH_WITH_DIGIT, digit);
+            if (! display.empty())
+            {
+                return display;
+            }
+        }
+    }
+
     const std::optional<unsigned int> displayNameIdOpt = TryGetCommandDisplayNameStringId(commandId);
     if (displayNameIdOpt.has_value())
     {

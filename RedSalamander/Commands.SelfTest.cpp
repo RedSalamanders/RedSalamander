@@ -28,8 +28,12 @@
 #include "ChangeCase.h"
 #include "FolderWindow.h"
 #include "Helpers.h"
+#include "HostServices.h"
 #include "Preferences.h"
+#include "ShortcutDefaults.h"
+#include "ShortcutManager.h"
 #include "ShortcutsWindow.h"
+#include "WindowMessages.h"
 #include "resource.h"
 
 extern FolderWindow g_folderWindow;
@@ -52,68 +56,7 @@ void PumpPendingMessages() noexcept
     }
 }
 
-struct CaseState
-{
-    std::wstring failure;
-
-    bool Require(bool condition, std::wstring_view message) noexcept
-    {
-        if (condition)
-        {
-            return true;
-        }
-
-        if (failure.empty())
-        {
-            failure.assign(message);
-        }
-        return false;
-    }
-};
-
-template <typename Func>
-void RunCase(const SelfTest::SelfTestOptions& options,
-             SelfTest::SelfTestSuiteResult& suite,
-             std::wstring_view name,
-             Func&& func) noexcept
-{
-    SelfTest::SelfTestCaseResult result{};
-    result.name = std::wstring(name);
-
-    if (options.failFast && suite.failed != 0)
-    {
-        result.status = SelfTest::SelfTestCaseResult::Status::skipped;
-        result.reason = L"not executed (fail-fast)";
-        suite.cases.push_back(std::move(result));
-        ++suite.skipped;
-        return;
-    }
-
-    const auto startedAt = std::chrono::steady_clock::now();
-    CaseState state{};
-    const bool ok = func(state);
-    const auto endedAt = std::chrono::steady_clock::now();
-
-    result.durationMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(endedAt - startedAt).count());
-
-    if (! ok || ! state.failure.empty())
-    {
-        result.status = SelfTest::SelfTestCaseResult::Status::failed;
-        result.reason = state.failure.empty() ? L"failed" : state.failure;
-        suite.cases.push_back(std::move(result));
-        ++suite.failed;
-
-        if (suite.failureMessage.empty())
-        {
-            suite.failureMessage = suite.cases.back().reason;
-        }
-        return;
-    }
-
-    result.status = SelfTest::SelfTestCaseResult::Status::passed;
-    suite.cases.push_back(std::move(result));
-    ++suite.passed;
-}
+using CaseState = SelfTest::CaseState;
 
 [[nodiscard]] bool IsOwnedBy(HWND window, HWND expectedOwner) noexcept
 {
@@ -225,6 +168,33 @@ void CloseNonBaselineWindows(DWORD processId, const std::unordered_set<uintptr_t
         PostMessageW(hwnd, WM_KEYDOWN, VK_ESCAPE, 0);
         PostMessageW(hwnd, WM_KEYUP, VK_ESCAPE, 0);
         PostMessageW(hwnd, WM_CLOSE, 0, 0);
+    }
+}
+
+void AutoCloseTransientUi(std::stop_token stopToken,
+                          DWORD uiThreadId,
+                          DWORD processId,
+                          const std::unordered_set<uintptr_t>& baseline,
+                          HWND mainWindow) noexcept
+{
+    using namespace std::chrono_literals;
+
+    while (! stopToken.stop_requested())
+    {
+        GUITHREADINFO gti{};
+        gti.cbSize = sizeof(gti);
+        if (GetGUIThreadInfo(uiThreadId, &gti) != FALSE && (gti.flags & GUI_INMENUMODE) != 0)
+        {
+            const HWND target = gti.hwndMenuOwner ? gti.hwndMenuOwner : (gti.hwndActive ? gti.hwndActive : mainWindow);
+            if (target)
+            {
+                PostMessageW(target, WM_KEYDOWN, VK_ESCAPE, 0);
+                PostMessageW(target, WM_KEYUP, VK_ESCAPE, 0);
+            }
+        }
+
+        CloseNonBaselineWindows(processId, baseline, mainWindow);
+        std::this_thread::sleep_for(30ms);
     }
 }
 
@@ -384,6 +354,44 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestShortcutDefaultsMapping(CaseState& state) noexcept
+{
+    ShortcutManager manager;
+    manager.Load(ShortcutDefaults::CreateDefaultShortcuts());
+
+    state.Require(manager.GetFunctionBarConflicts().empty(), L"Default function bar shortcuts have conflicts.");
+    state.Require(manager.GetFolderViewConflicts().empty(), L"Default folder view shortcuts have conflicts.");
+
+    if (const auto cmd = manager.FindFunctionBarCommand(VK_F3, 0))
+    {
+        state.Require(cmd.value() == L"cmd/pane/view", L"F3 default shortcut expected cmd/pane/view.");
+    }
+    else
+    {
+        state.Require(false, L"F3 default shortcut missing.");
+    }
+
+    if (const auto cmd = manager.FindFolderViewCommand(static_cast<uint32_t>('U'), ShortcutManager::kModCtrl))
+    {
+        state.Require(cmd.value() == L"cmd/app/swapPanes", L"Ctrl+U default shortcut expected cmd/app/swapPanes.");
+    }
+    else
+    {
+        state.Require(false, L"Ctrl+U default shortcut missing.");
+    }
+
+    if (const auto cmd = manager.FindFolderViewCommand(VK_DELETE, ShortcutManager::kModShift))
+    {
+        state.Require(cmd.value() == L"cmd/pane/permanentDeleteWithValidation", L"Shift+Del default shortcut expected cmd/pane/permanentDeleteWithValidation.");
+    }
+    else
+    {
+        state.Require(false, L"Shift+Del default shortcut missing.");
+    }
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestDispatchAllCommandsSmoke(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -397,6 +405,18 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     const DWORD processId  = GetCurrentProcessId();
     const DWORD uiThreadId = GetWindowThreadProcessId(mainWindow, nullptr);
     const auto baseline    = SnapshotTopLevelWindowsForProcess(processId);
+
+    std::jthread autoCloser;
+    try
+    {
+        autoCloser = std::jthread(
+            [&](std::stop_token stopToken) noexcept { AutoCloseTransientUi(stopToken, uiThreadId, processId, baseline, mainWindow); });
+    }
+    catch (const std::system_error&)
+    {
+        state.Require(false, L"Dispatch smoke: failed to start UI auto-closer thread.");
+        return false;
+    }
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
@@ -415,14 +435,25 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, left);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, right);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, left, 2s), L"Dispatch smoke: failed to set left pane path.");
-    state.Require(WaitForPanePath(FolderWindow::Pane::Right, right, 2s), L"Dispatch smoke: failed to set right pane path.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, left, SelfTest::Scale(std::chrono::milliseconds{2000})),
+                  L"Dispatch smoke: failed to set left pane path.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, right, SelfTest::Scale(std::chrono::milliseconds{2000})),
+                  L"Dispatch smoke: failed to set right pane path.");
 
     const std::unordered_set<std::wstring_view> skipIds = {
         L"cmd/app/exit",
         L"cmd/app/openFileExplorerKnownFolder",
         L"cmd/pane/openCommandShell",
         L"cmd/pane/openCurrentFolder",
+        // Avoid starting real file operations in the command-dispatch smoke test (covered by FileOperations suite).
+        L"cmd/pane/copyToOtherPane",
+        L"cmd/pane/moveToOtherPane",
+        L"cmd/pane/moveToRecycleBin",
+        L"cmd/pane/delete",
+        L"cmd/pane/permanentDelete",
+        L"cmd/pane/permanentDeleteWithValidation",
+        L"cmd/pane/rename",
+        L"cmd/pane/createDirectory",
     };
 
     const auto commands = GetAllCommands();
@@ -441,6 +472,8 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
 
         PumpPendingMessages();
 
+        Trace(std::format(L"Dispatch: {}", cmd.id));
+
         if (cmd.wmCommandId != 0)
         {
             const WPARAM wp = MAKEWPARAM(static_cast<WORD>(cmd.wmCommandId), 0);
@@ -453,16 +486,20 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
 
         std::this_thread::sleep_for(10ms);
 
-        state.Require(EnsureUiNotInMenuMode(uiThreadId, mainWindow, 500ms), std::format(L"Dispatch smoke: {} left UI in menu mode.", cmd.id));
-        state.Require(WaitForNoNonBaselineWindows(processId, baseline, mainWindow, 500ms), std::format(L"Dispatch smoke: {} left windows open.", cmd.id));
+        state.Require(EnsureUiNotInMenuMode(uiThreadId, mainWindow, SelfTest::Scale(std::chrono::milliseconds{500})),
+                      std::format(L"Dispatch smoke: {} left UI in menu mode.", cmd.id));
+        state.Require(WaitForNoNonBaselineWindows(processId, baseline, mainWindow, SelfTest::Scale(std::chrono::milliseconds{500})),
+                      std::format(L"Dispatch smoke: {} left windows open.", cmd.id));
         if (! state.failure.empty())
         {
             return false;
         }
     }
 
-    state.Require(EnsureUiNotInMenuMode(uiThreadId, mainWindow, 2s), L"Dispatch smoke: cleanup left UI in menu mode.");
-    state.Require(WaitForNoNonBaselineWindows(processId, baseline, mainWindow, 2s), L"Dispatch smoke: cleanup left windows open.");
+    state.Require(EnsureUiNotInMenuMode(uiThreadId, mainWindow, SelfTest::Scale(std::chrono::milliseconds{2000})),
+                  L"Dispatch smoke: cleanup left UI in menu mode.");
+    state.Require(WaitForNoNonBaselineWindows(processId, baseline, mainWindow, SelfTest::Scale(std::chrono::milliseconds{2000})),
+                  L"Dispatch smoke: cleanup left windows open.");
     return state.failure.empty();
 }
 
@@ -496,7 +533,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     {
         state.Require(IsOwnedBy(prefs, mainWindow), L"Preferences window is not owned by main window.");
         PostMessageW(prefs, WM_CLOSE, 0, 0);
-        state.Require(WaitForWindowClosed(prefs, std::chrono::seconds{2}), L"Preferences window did not close.");
+        state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(std::chrono::milliseconds{2000})), L"Preferences window did not close.");
     }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CONNECTION_MANAGER, 0), 0);
@@ -506,17 +543,17 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     {
         state.Require(IsOwnedBy(connMgr, mainWindow), L"Connection Manager window is not owned by main window.");
         PostMessageW(connMgr, WM_CLOSE, 0, 0);
-        state.Require(WaitForWindowClosed(connMgr, std::chrono::seconds{2}), L"Connection Manager window did not close.");
+        state.Require(WaitForWindowClosed(connMgr, SelfTest::Scale(std::chrono::milliseconds{2000})), L"Connection Manager window did not close.");
     }
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_SHOW_SHORTCUTS, 0), 0);
-    const HWND shortcuts = WaitForWindow([] noexcept { return GetShortcutsWindowHandle(); }, std::chrono::seconds{2});
+    const HWND shortcuts = WaitForWindow([] noexcept { return GetShortcutsWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{2000}));
     state.Require(shortcuts != nullptr && IsWindow(shortcuts) != FALSE, L"Shortcuts window did not open.");
     if (shortcuts)
     {
         state.Require(IsOwnedBy(shortcuts, mainWindow), L"Shortcuts window is not owned by main window.");
         PostMessageW(shortcuts, WM_CLOSE, 0, 0);
-        state.Require(WaitForWindowClosed(shortcuts, std::chrono::seconds{2}), L"Shortcuts window did not close.");
+        state.Require(WaitForWindowClosed(shortcuts, SelfTest::Scale(std::chrono::milliseconds{2000})), L"Shortcuts window did not close.");
     }
 
     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
@@ -535,13 +572,13 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightFolder);
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_COMPARE, 0), 0);
-    const HWND compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, std::chrono::seconds{2});
+    const HWND compare = WaitForWindow([] noexcept { return GetCompareDirectoriesWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{2000}));
     state.Require(compare != nullptr && IsWindow(compare) != FALSE, L"Compare window did not open.");
     if (compare)
     {
         state.Require(IsOwnedBy(compare, mainWindow), L"Compare window is not owned by main window.");
         PostMessageW(compare, WM_CLOSE, 0, 0);
-        state.Require(WaitForWindowClosed(compare, std::chrono::seconds{2}), L"Compare window did not close.");
+        state.Require(WaitForWindowClosed(compare, SelfTest::Scale(std::chrono::milliseconds{2000})), L"Compare window did not close.");
     }
 
     return state.failure.empty();
@@ -605,7 +642,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
                 {
                     using namespace std::chrono_literals;
 
-                    const auto openDeadline = std::chrono::steady_clock::now() + 2s;
+                    const auto openDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{2000});
                     while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < openDeadline)
                     {
                         GUITHREADINFO gti{};
@@ -623,7 +660,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
                         return;
                     }
 
-                    const auto closeDeadline = std::chrono::steady_clock::now() + 2s;
+                    const auto closeDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{2000});
                     while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < closeDeadline)
                     {
                         GUITHREADINFO gti{};
@@ -723,6 +760,23 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestShortcutFunctionBarDispatchRefresh(HWND mainWindow, CaseState& state) noexcept
+{
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    const uint64_t before = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+    SendMessageW(mainWindow, WndMsg::kFunctionBarInvoke, VK_F9, static_cast<LPARAM>(ShortcutManager::kModCtrl));
+    const uint64_t after = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+
+    state.Require(after == before + 1u, L"Ctrl+F9 shortcut dispatch did not call FolderView::ForceRefresh.");
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestCalculateDirectorySizes(HWND mainWindow, CaseState& state) noexcept
 {
     if (! mainWindow || ! IsWindow(mainWindow))
@@ -815,12 +869,16 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, left);
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, right);
 
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, left, 2s), L"Failed to set left pane path for swap test.");
-    state.Require(WaitForPanePath(FolderWindow::Pane::Right, right, 2s), L"Failed to set right pane path for swap test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, left, SelfTest::Scale(std::chrono::milliseconds{2000})),
+                  L"Failed to set left pane path for swap test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, right, SelfTest::Scale(std::chrono::milliseconds{2000})),
+                  L"Failed to set right pane path for swap test.");
 
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_APP_SWAP_PANES, 0), 0);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, right, 2s), L"SwapPanes did not move right path into left pane.");
-    state.Require(WaitForPanePath(FolderWindow::Pane::Right, left, 2s), L"SwapPanes did not move left path into right pane.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, right, SelfTest::Scale(std::chrono::milliseconds{2000})),
+                  L"SwapPanes did not move right path into left pane.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Right, left, SelfTest::Scale(std::chrono::milliseconds{2000})),
+                  L"SwapPanes did not move left path into right pane.");
 
     return state.failure.empty();
 }
@@ -920,9 +978,10 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
         });
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, 3s), L"Failed to set left pane path for change-case dialog test.");
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Failed to set left pane path for change-case dialog test.");
 
-    const auto enumDeadline = std::chrono::steady_clock::now() + 3s;
+    const auto enumDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
     while (std::chrono::steady_clock::now() < enumDeadline && ! enumerated.load(std::memory_order_acquire))
     {
         PumpPendingMessages();
@@ -954,7 +1013,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
 
     const auto runDialogAutomation = [](DialogState& dlgState, bool acceptUpper) noexcept
     {
-        const HWND dlg = WaitForWindow([] noexcept { return FindWindowW(L"#32770", L"Change Case"); }, 2s);
+        const HWND dlg = WaitForWindow([] noexcept { return FindWindowW(L"#32770", L"Change Case"); }, SelfTest::Scale(std::chrono::milliseconds{2000}));
         if (! dlg)
         {
             return;
@@ -985,7 +1044,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
             }
         }
 
-        dlgState.closed.store(WaitForWindowClosed(dlg, 2s), std::memory_order_release);
+        dlgState.closed.store(WaitForWindowClosed(dlg, SelfTest::Scale(std::chrono::milliseconds{2000})), std::memory_order_release);
     };
 
     DialogState first{};
@@ -998,7 +1057,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     state.Require(first.closed.load(std::memory_order_acquire), L"Change Case dialog did not close after OK.");
     state.Require(first.includeEnabled.load(std::memory_order_acquire), L"Change Case include-subdirectories checkbox unexpectedly disabled.");
 
-    const auto renameDeadline = std::chrono::steady_clock::now() + 5s;
+    const auto renameDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{5000});
     while (std::chrono::steady_clock::now() < renameDeadline)
     {
         PumpPendingMessages();
@@ -1204,19 +1263,25 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
 
     Trace(L"CommandsSelfTest: begin");
 
-    RunCase(options, suite, L"registry_integrity", [](CaseState& state) noexcept { return TestRegistryIntegrity(state); });
-    RunCase(options, suite, L"modeless_window_ownership", [=](CaseState& state) noexcept { return TestModelessWindowOwnership(mainWindow, state); });
-    RunCase(options, suite, L"cmd_app_fullScreen", [=](CaseState& state) noexcept { return TestFullScreenToggle(mainWindow, state); });
-    RunCase(options, suite, L"cmd_app_openDriveMenus", [=](CaseState& state) noexcept { return TestDriveMenuCommands(mainWindow, state); });
-    RunCase(options, suite, L"cmd_app_viewWidth", [=](CaseState& state) noexcept { return TestViewWidthAdjust(mainWindow, state); });
-    RunCase(options, suite, L"cmd_app_toggleUiChrome", [=](CaseState& state) noexcept { return TestToggleUiChrome(mainWindow, state); });
-    RunCase(options, suite, L"cmd_app_swapPanes", [=](CaseState& state) noexcept { return TestSwapPanesCommand(mainWindow, state); });
-    RunCase(options, suite, L"cmd_pane_refresh", [=](CaseState& state) noexcept { return TestPaneRefresh(mainWindow, state); });
-    RunCase(options, suite, L"cmd_pane_displayModeAndSort", [=](CaseState& state) noexcept { return TestDisplayModeAndSortCommands(mainWindow, state); });
-    RunCase(options, suite, L"cmd_pane_calculateDirectorySizes", [=](CaseState& state) noexcept { return TestCalculateDirectorySizes(mainWindow, state); });
-    RunCase(options, suite, L"cmd_pane_changeCase_dialog", [=](CaseState& state) noexcept { return TestChangeCaseDialogAndMultiSelection(mainWindow, state); });
-    RunCase(options, suite, L"cmd_pane_changeCase", [](CaseState& state) noexcept { return TestChangeCaseCore(state); });
-    RunCase(options, suite, L"dispatch_smoke_all_commands", [=](CaseState& state) noexcept { return TestDispatchAllCommandsSmoke(mainWindow, state); });
+    const bool autoPromptsBefore = HostGetAutoAcceptPrompts();
+    HostSetAutoAcceptPrompts(true);
+    const auto restoreAutoPrompts = wil::scope_exit([&] { HostSetAutoAcceptPrompts(autoPromptsBefore); });
+
+    SelfTest::RunCase(options, suite, L"registry_integrity", [](CaseState& state) noexcept { return TestRegistryIntegrity(state); });
+    SelfTest::RunCase(options, suite, L"shortcut_defaults_mapping", [](CaseState& state) noexcept { return TestShortcutDefaultsMapping(state); });
+    SelfTest::RunCase(options, suite, L"modeless_window_ownership", [=](CaseState& state) noexcept { return TestModelessWindowOwnership(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_app_fullScreen", [=](CaseState& state) noexcept { return TestFullScreenToggle(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_app_openDriveMenus", [=](CaseState& state) noexcept { return TestDriveMenuCommands(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_app_viewWidth", [=](CaseState& state) noexcept { return TestViewWidthAdjust(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_app_toggleUiChrome", [=](CaseState& state) noexcept { return TestToggleUiChrome(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_app_swapPanes", [=](CaseState& state) noexcept { return TestSwapPanesCommand(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_refresh", [=](CaseState& state) noexcept { return TestPaneRefresh(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"shortcut_functionbar_dispatch_refresh", [=](CaseState& state) noexcept { return TestShortcutFunctionBarDispatchRefresh(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_displayModeAndSort", [=](CaseState& state) noexcept { return TestDisplayModeAndSortCommands(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_calculateDirectorySizes", [=](CaseState& state) noexcept { return TestCalculateDirectorySizes(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_changeCase_dialog", [=](CaseState& state) noexcept { return TestChangeCaseDialogAndMultiSelection(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_changeCase", [](CaseState& state) noexcept { return TestChangeCaseCore(state); });
+    SelfTest::RunCase(options, suite, L"dispatch_smoke_all_commands", [=](CaseState& state) noexcept { return TestDispatchAllCommandsSmoke(mainWindow, state); });
 
     const auto endedAt = std::chrono::steady_clock::now();
     suite.durationMs   = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(endedAt - startedAt).count());

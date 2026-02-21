@@ -591,6 +591,67 @@ void NormalizeSlashes(std::wstring& path) noexcept
     return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
 }
 
+struct FileIdentity final
+{
+    DWORD volumeSerialNumber = 0;
+    uint64_t fileIndex       = 0;
+};
+
+[[nodiscard]] HRESULT TryGetFileIdentity(const std::wstring& path, FileIdentity& identity) noexcept
+{
+    identity = {};
+
+    const DWORD attributes = ::GetFileAttributesW(path.c_str());
+    if (attributes == INVALID_FILE_ATTRIBUTES)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    wil::unique_handle handle(::CreateFileW(path.c_str(),
+                                           FILE_READ_ATTRIBUTES,
+                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                           nullptr,
+                                           OPEN_EXISTING,
+                                           FILE_FLAG_BACKUP_SEMANTICS,
+                                           nullptr));
+    if (! handle)
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (! ::GetFileInformationByHandle(handle.get(), &info))
+    {
+        return HRESULT_FROM_WIN32(::GetLastError());
+    }
+
+    identity.volumeSerialNumber = info.dwVolumeSerialNumber;
+    identity.fileIndex = (static_cast<uint64_t>(info.nFileIndexHigh) << 32) | static_cast<uint64_t>(info.nFileIndexLow);
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT TryAreSameFile(const std::wstring& left, const std::wstring& right, bool& same) noexcept
+{
+    same = false;
+
+    FileIdentity leftId{};
+    HRESULT hr = TryGetFileIdentity(left, leftId);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    FileIdentity rightId{};
+    hr = TryGetFileIdentity(right, rightId);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    same = leftId.volumeSerialNumber == rightId.volumeSerialNumber && leftId.fileIndex == rightId.fileIndex;
+    return S_OK;
+}
+
 [[nodiscard]] bool IsPathWithinRoot(std::wstring_view path, std::wstring_view root) noexcept
 {
     if (root.empty() || path.size() < root.size())
@@ -2591,6 +2652,80 @@ struct DirectoryChildWorkItem
 
 HRESULT DeletePathInternal(OperationContext& context, const PathInfo& path) noexcept;
 
+[[nodiscard]] HRESULT RenameCaseOnlyWithTemp(OperationContext& context,
+                                            const std::wstring& sourceExtended,
+                                            const std::wstring& destinationExtended,
+                                            DWORD renameFlags) noexcept
+{
+    const std::wstring directory = GetPathDirectory(sourceExtended);
+    if (directory.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+    }
+
+    const DWORD pid      = GetCurrentProcessId();
+    const DWORD tid      = GetCurrentThreadId();
+    const ULONGLONG tick = GetTickCount64();
+
+    constexpr unsigned int kMaxAttempts = 32;
+    for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
+    {
+        HRESULT hr = CheckCancel(context);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        std::wstring leaf;
+        leaf.reserve(96);
+        leaf.append(L".rs_case_tmp_");
+        leaf.append(std::to_wstring(pid));
+        leaf.push_back(L'_');
+        leaf.append(std::to_wstring(tid));
+        leaf.push_back(L'_');
+        leaf.append(std::to_wstring(tick));
+        leaf.push_back(L'_');
+        leaf.append(std::to_wstring(attempt));
+
+        std::wstring tempPath = AppendPath(directory, leaf);
+        if (tempPath.empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        }
+
+        const DWORD tempAttributes = ::GetFileAttributesW(tempPath.c_str());
+        if (tempAttributes != INVALID_FILE_ATTRIBUTES)
+        {
+            continue;
+        }
+
+        if (! ::MoveFileExW(sourceExtended.c_str(), tempPath.c_str(), renameFlags))
+        {
+            return HRESULT_FROM_WIN32(::GetLastError());
+        }
+
+        hr = CheckCancel(context);
+        if (FAILED(hr))
+        {
+            const DWORD revertFlags = renameFlags & ~MOVEFILE_REPLACE_EXISTING;
+            static_cast<void>(::MoveFileExW(tempPath.c_str(), sourceExtended.c_str(), revertFlags));
+            return hr;
+        }
+
+        if (! ::MoveFileExW(tempPath.c_str(), destinationExtended.c_str(), renameFlags))
+        {
+            const DWORD error       = ::GetLastError();
+            const DWORD revertFlags = renameFlags & ~MOVEFILE_REPLACE_EXISTING;
+            static_cast<void>(::MoveFileExW(tempPath.c_str(), sourceExtended.c_str(), revertFlags));
+            return HRESULT_FROM_WIN32(error);
+        }
+
+        return S_OK;
+    }
+
+    return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+}
+
 HRESULT MovePathInternal(OperationContext& context, const PathInfo& source, const PathInfo& destination, bool allowCopy) noexcept
 {
     HRESULT hr = SetProgressPaths(context, source.display.c_str(), destination.display.c_str());
@@ -2614,22 +2749,34 @@ HRESULT MovePathInternal(OperationContext& context, const PathInfo& source, cons
     const bool sourceIsDirectory = (sourceAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
     const bool sourceIsReparse   = IsReparsePoint(sourceAttributes);
 
+    bool caseOnlyRename = false;
     DWORD destinationAttributes = GetFileAttributesW(destination.extended.c_str());
     if (destinationAttributes != INVALID_FILE_ATTRIBUTES)
     {
-        if (! context.allowOverwrite)
+        if (source.extended != destination.extended && EqualsInsensitive(source.extended, destination.extended))
         {
-            // Case-only renames (e.g. Foo.txt -> foo.txt) should be allowed on case-insensitive filesystems.
-            // The destination path resolves to the same entry, so treating it as a conflict is incorrect.
-            if (! EqualsInsensitive(source.extended, destination.extended))
+            bool same = false;
+            const HRESULT sameHr = TryAreSameFile(source.extended, destination.extended, same);
+            if (FAILED(sameHr))
+            {
+                return sameHr;
+            }
+
+            if (same)
+            {
+                caseOnlyRename = true;
+            }
+            else if (! context.allowOverwrite)
             {
                 return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
             }
-
-            destinationAttributes = INVALID_FILE_ATTRIBUTES;
+        }
+        else if (! context.allowOverwrite)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
         }
 
-        if ((destinationAttributes & FILE_ATTRIBUTE_READONLY) != 0)
+        if (! caseOnlyRename && (destinationAttributes & FILE_ATTRIBUTE_READONLY) != 0)
         {
             if (! context.allowReplaceReadonly)
             {
@@ -2721,6 +2868,16 @@ HRESULT MovePathInternal(OperationContext& context, const PathInfo& source, cons
     if (error == ERROR_REQUEST_ABORTED || error == ERROR_CANCELLED)
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (caseOnlyRename && (error == ERROR_ACCESS_DENIED || error == ERROR_ALREADY_EXISTS))
+    {
+        const HRESULT caseHr = RenameCaseOnlyWithTemp(context, source.extended, destination.extended, renameFlags);
+        if (SUCCEEDED(caseHr))
+        {
+            return S_OK;
+        }
+        return caseHr;
     }
 
     if (! allowCopy || error != ERROR_NOT_SAME_DEVICE)

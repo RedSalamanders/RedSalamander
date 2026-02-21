@@ -1000,7 +1000,22 @@ constexpr ULONG kSymlinkRelativeFlag = 0x00000001u;
         path.pop_back();
     }
 
-    std::ranges::transform(path, path.begin(), [](wchar_t ch) { return static_cast<wchar_t>(towlower(ch)); });
+    if (! path.empty())
+    {
+        if (path.size() > static_cast<size_t>(std::numeric_limits<int>::max() - 1))
+        {
+            return path;
+        }
+
+        std::wstring lower(path.size() + 1, L'\0');
+        const int written =
+            LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_LOWERCASE, path.c_str(), -1, lower.data(), static_cast<int>(lower.size()), nullptr, nullptr, 0);
+        if (written > 0)
+        {
+            lower.resize(static_cast<size_t>(written) - 1);
+            path = std::move(lower);
+        }
+    }
     return path;
 }
 
@@ -2740,11 +2755,74 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     }
                 }
 
+                const std::filesystem::path unicodeA = enumDir / L"\u3053\u3093\u306b\u3061\u306f.txt"; // こんにちは.txt
+                const std::filesystem::path unicodeB = enumDir / L"emoji_\U0001F600.txt";               // emoji_\U0001F600.txt
+                if (! WriteTestFile(unicodeA, 1) || ! WriteTestFile(unicodeB, 1))
+                {
+                    Fail(L"Failed to create enum Unicode stress files.");
+                    return true;
+                }
+
                 wil::com_ptr<IFilesInformation> files;
                 const HRESULT hr = state.fsLocal->ReadDirectoryInfo(enumDir.c_str(), files.put());
                 if (FAILED(hr))
                 {
                     Fail(std::format(L"ReadDirectoryInfo(enum) failed: 0x{:08X}", static_cast<unsigned long>(hr)));
+                    return true;
+                }
+
+                FileInfo* head = nullptr;
+                if (FAILED(files->GetBuffer(&head)) || ! head)
+                {
+                    Fail(L"ReadDirectoryInfo(enum) returned an empty buffer.");
+                    return true;
+                }
+
+                const std::wstring expectedA = unicodeA.filename().wstring();
+                const std::wstring expectedB = unicodeB.filename().wstring();
+
+                bool foundA = false;
+                bool foundB = false;
+                for (FileInfo* entry = head; entry;)
+                {
+                    if (entry->FileNameSize >= sizeof(wchar_t))
+                    {
+                        const size_t charCount = entry->FileNameSize / sizeof(wchar_t);
+                        const std::wstring_view name(entry->FileName, charCount);
+                        if (name == expectedA)
+                        {
+                            foundA = true;
+                        }
+                        else if (name == expectedB)
+                        {
+                            foundB = true;
+                        }
+                    }
+
+                    if (foundA && foundB)
+                    {
+                        break;
+                    }
+
+                    if (entry->NextEntryOffset == 0)
+                    {
+                        break;
+                    }
+                    entry = reinterpret_cast<FileInfo*>(reinterpret_cast<unsigned char*>(entry) + entry->NextEntryOffset);
+                }
+
+                if (! foundA || ! foundB)
+                {
+                    std::wstring missing;
+                    if (! foundA)
+                    {
+                        missing.append(L" ").append(expectedA);
+                    }
+                    if (! foundB)
+                    {
+                        missing.append(L" ").append(expectedB);
+                    }
+                    Fail(std::format(L"ReadDirectoryInfo(enum) missing Unicode entries:{}", missing));
                     return true;
                 }
 

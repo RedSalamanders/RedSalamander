@@ -34,6 +34,7 @@
     <ClInclude Include="Preferences.Dialog.h" />
     <ClInclude Include="Preferences.Advanced.h" />
     <ClInclude Include="Preferences.CompareDirectories.h" />
+    <ClInclude Include="Preferences.HotPaths.h" />
     <ClInclude Include="Preferences.Editors.h" />
     <ClInclude Include="Preferences.General.h" />
     <ClInclude Include="Preferences.Mouse.h" />
@@ -64,6 +65,12 @@
     <ClInclude Include="ThemedInputFrames.h" />
     <ClInclude Include="Preferences.Plugin.Configuration.h" />
     <ClInclude Include="SettingsSchemaParser.h" />
+    <ClInclude Include="WindowMaximizeBehavior.h" />
+    <ClInclude Include="FluentIcons.h" />
+    <ClInclude Include="CommandDispatch.Debug.h" />
+    <ClInclude Include="NavigationLocation.h" />
+    <ClInclude Include="SettingsSave.h" />
+    <ClInclude Include="WindowPlacementPersistence.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AppTheme.cpp" />
@@ -118,6 +125,7 @@
     <ClCompile Include="Preferences.Internal.cpp" />
     <ClCompile Include="Preferences.Advanced.cpp" />
     <ClCompile Include="Preferences.CompareDirectories.cpp" />
+    <ClCompile Include="Preferences.HotPaths.cpp" />
     <ClCompile Include="Preferences.Editors.cpp" />
     <ClCompile Include="Preferences.General.cpp" />
     <ClCompile Include="Preferences.Mouse.cpp" />
