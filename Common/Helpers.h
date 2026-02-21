@@ -28,9 +28,22 @@
 #pragma warning(push)
 // WIL and TraceLogging: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted),
 // C5027 (move assign deleted), C4820 (padding)
-#pragma warning(disable : 4625 4626 5026 5027 4820)
+#pragma warning(disable : 4625 4626 5026 5027 4820 28182)
 #include <TraceLoggingProvider.h>
 #include <wil/resource.h>
+
+// MSVC can emit C4625/C4626/C5026/C5027 for WIL move-only templates at their first instantiation site.
+// Force the instantiations used by this header while warnings are disabled.
+namespace WilWarningSilenceDetail
+{
+struct ForceWilTemplateInstantiations_Helpers
+{
+    wil::unique_hbrush brush;
+    wil::unique_hdc_paint hdcPaint;
+    wil::unique_hlocal_string localString;
+    wil::unique_hmodule module;
+};
+} // namespace WilWarningSilenceDetail
 #pragma warning(pop)
 
 #include <Helpers.h>

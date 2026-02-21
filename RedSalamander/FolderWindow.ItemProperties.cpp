@@ -9,7 +9,10 @@
 #include "Helpers.h"
 #include "SettingsSave.h"
 
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 4514 28182) // WIL headers: deleted copy/move and unused inline Helpers
 #include <wil/resource.h>
+#pragma warning(pop)
 
 #include <CommCtrl.h>
 #include <ShlObj.h>

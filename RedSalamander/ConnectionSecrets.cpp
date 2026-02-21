@@ -14,7 +14,7 @@
 #pragma comment(lib, "Advapi32.lib")
 
 #pragma warning(push)
-#pragma warning(disable : 4625 4626 5026 5027 4514) // WIL headers: deleted copy/move and unused inline Helpers
+#pragma warning(disable : 4625 4626 5026 5027 4514 28182) // WIL headers: deleted copy/move and unused inline Helpers
 #include <wil/resource.h>
 #pragma warning(pop)
 

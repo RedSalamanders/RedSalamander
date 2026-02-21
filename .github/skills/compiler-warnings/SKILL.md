@@ -46,7 +46,7 @@ Preferred fixes:
 ### WIL/System Headers
 ```cpp
 #pragma warning(push)
-#pragma warning(disable: 4625 4626 5026 5027) // Deleted operators
+#pragma warning(disable: 4625 4626 5026 5027 4514 28182) // Deleted operators
 #include <wil/resource.h>
 #pragma warning(pop)
 ```

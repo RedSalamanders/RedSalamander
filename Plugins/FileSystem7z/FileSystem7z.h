@@ -18,7 +18,7 @@
 #include <vector>
 
 #pragma warning(push)
-#pragma warning(disable : 4625 4626 5026 5027 4514) // WIL headers: deleted copy/move and unreferenced inline Helpers
+#pragma warning(disable : 4625 4626 5026 5027 4514 28182) // WIL headers: deleted copy/move and unreferenced inline Helpers
 #include <wil/com.h>
 #include <wil/resource.h>
 #pragma warning(pop)

@@ -44,7 +44,7 @@
 #include <winioctl.h>
 
 #pragma warning(push)
-#pragma warning(disable : 4625 4626 5026 5027 4514) // WIL headers: deleted copy/move and unreferenced inline helpers
+#pragma warning(disable : 4625 4626 5026 5027 4514 28182) // WIL headers: deleted copy/move and unreferenced inline helpers
 #include <wil/com.h>
 #include <wil/resource.h>
 #pragma warning(pop)

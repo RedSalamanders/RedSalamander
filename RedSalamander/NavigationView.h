@@ -30,7 +30,7 @@
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027
 // (move assign deleted), C4820 (padding)
-#pragma warning(disable : 4625 4626 5026 5027 4820)
+#pragma warning(disable : 4625 4626 5026 5027 4820 28182)
 #include <d2d1.h>
 #include <dcommon.h>
 #include <dxgi1_2.h>

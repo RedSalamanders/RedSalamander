@@ -23,3 +23,5 @@ class ShortcutManager;
                                                 std::filesystem::path rightRoot) noexcept;
 
 void UpdateCompareDirectoriesWindowsTheme(const AppTheme& theme) noexcept;
+
+[[nodiscard]] HWND GetCompareDirectoriesWindowHandle() noexcept;

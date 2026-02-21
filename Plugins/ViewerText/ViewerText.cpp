@@ -1925,7 +1925,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
 
         FileEncoding encoding = FileEncoding::Unknown;
         uint64_t bomBytes     = 0;
-        uint64_t fileSize     = 0;
+        uint64_t detectedFileSize = 0;
 
         uint64_t sizeBytes   = 0;
         const HRESULT sizeHr = result->fileReader->GetSize(&sizeBytes);
@@ -1936,7 +1936,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
             return;
         }
 
-        fileSize = sizeBytes;
+        detectedFileSize = sizeBytes;
 
         BYTE bom[4]{};
         unsigned long read = 0;
@@ -1986,7 +1986,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
 
         result->encoding = encoding;
         result->bomBytes = bomBytes;
-        result->fileSize = fileSize;
+        result->fileSize = detectedFileSize;
 
         UINT selection = previousDisplayEncodingSelection;
         if (displayEncodingMenuSelection != 0 && IsEncodingMenuSelectionValid(displayEncodingMenuSelection))
@@ -2034,7 +2034,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
         const uint64_t streamSkipBytes = ::BytesToSkipForDisplayEncoding(selection, encoding, bomBytes);
         result->textStreamSkipBytes    = streamSkipBytes;
 
-        const uint64_t clampedStart   = std::min<uint64_t>(streamSkipBytes, fileSize);
+        const uint64_t clampedStart   = std::min<uint64_t>(streamSkipBytes, detectedFileSize);
         result->textStreamStartOffset = clampedStart;
         result->textStreamEndOffset   = clampedStart;
         result->textStreamActive      = false;
@@ -2043,7 +2043,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
         const UINT displayCodePage         = CodePageForSelection(selection);
         const uint64_t maxChunkBytes       = ::TextStreamChunkBytes(textBufferMiB, displayEncoding);
 
-        const uint64_t availableBytes = (fileSize > clampedStart) ? (fileSize - clampedStart) : 0;
+        const uint64_t availableBytes = (detectedFileSize > clampedStart) ? (detectedFileSize - clampedStart) : 0;
         const uint64_t wantBytes64    = std::min<uint64_t>(availableBytes, maxChunkBytes);
         const size_t wantBytes        = static_cast<size_t>(std::min<uint64_t>(wantBytes64, static_cast<uint64_t>(std::numeric_limits<size_t>::max())));
 
@@ -2222,14 +2222,14 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
         if (bytesReadTotal >= carryBytes)
         {
             const uint64_t consumed     = static_cast<uint64_t>(bytesReadTotal - carryBytes);
-            result->textStreamEndOffset = std::min<uint64_t>(clampedStart + consumed, fileSize);
+            result->textStreamEndOffset = std::min<uint64_t>(clampedStart + consumed, detectedFileSize);
         }
         else
         {
             result->textStreamEndOffset = clampedStart;
         }
 
-        result->textStreamActive = (fileSize > streamSkipBytes) && ((fileSize - streamSkipBytes) > maxChunkBytes);
+        result->textStreamActive = (detectedFileSize > streamSkipBytes) && ((detectedFileSize - streamSkipBytes) > maxChunkBytes);
 
         const UINT defaultCodePage      = GetACP();
         result->detectedCodePage        = 0;
@@ -2285,11 +2285,11 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
         result->viewMode = targetViewMode;
 
         const bool needHex = (targetViewMode == ViewMode::Hex);
-        if (needHex && fileSize > 0)
+        if (needHex && detectedFileSize > 0)
         {
-            if (fileSize <= kMaxHexLoadBytes && fileSize <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+            if (detectedFileSize <= kMaxHexLoadBytes && detectedFileSize <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
             {
-                result->hexBytes.resize(static_cast<size_t>(fileSize));
+                result->hexBytes.resize(static_cast<size_t>(detectedFileSize));
 
                 uint64_t ignored        = 0;
                 const HRESULT seekHexHr = result->fileReader->Seek(0, FILE_BEGIN, &ignored);
@@ -2327,7 +2327,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
                 uint64_t cacheBytes = static_cast<uint64_t>(hexBufferMiB) * 1024u * 1024u;
                 cacheBytes          = std::clamp<uint64_t>(cacheBytes, 256u * 1024u, 256u * 1024u * 1024u);
 
-                const uint64_t remaining = fileSize;
+                const uint64_t remaining = detectedFileSize;
                 const uint64_t want64    = std::min<uint64_t>(remaining, cacheBytes);
                 const unsigned long want = want64 > static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()) ? std::numeric_limits<unsigned long>::max()
                                                                                                                      : static_cast<unsigned long>(want64);
@@ -2377,10 +2377,10 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
             result->hexCacheValid  = 0;
             result->hasHexCache    = false;
 
-            const uint64_t fileSize = result->fileSize;
-            if (fileSize <= kMaxHexLoadBytes && fileSize <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+            const uint64_t hexFallbackSize = result->fileSize;
+            if (hexFallbackSize <= kMaxHexLoadBytes && hexFallbackSize <= static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
             {
-                result->hexBytes.resize(static_cast<size_t>(fileSize));
+                result->hexBytes.resize(static_cast<size_t>(hexFallbackSize));
 
                 uint64_t ignored        = 0;
                 const HRESULT seekHexHr = result->fileReader->Seek(0, FILE_BEGIN, &ignored);
@@ -2420,7 +2420,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
                 cacheBytes          = std::clamp<uint64_t>(cacheBytes, 256u * 1024u, 256u * 1024u * 1024u);
 
                 const uint64_t aligned   = 0;
-                const uint64_t remaining = (fileSize > aligned) ? (fileSize - aligned) : 0;
+                const uint64_t remaining = (detectedFileSize > aligned) ? (detectedFileSize - aligned) : 0;
                 const uint64_t want64    = std::min<uint64_t>(remaining, cacheBytes);
                 const unsigned long want = want64 > static_cast<uint64_t>(std::numeric_limits<unsigned long>::max()) ? std::numeric_limits<unsigned long>::max()
                                                                                                                      : static_cast<unsigned long>(want64);

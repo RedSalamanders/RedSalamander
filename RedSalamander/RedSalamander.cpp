@@ -22,8 +22,8 @@
 #include "resource.h"
 
 #pragma warning(push)
-#pragma warning(                                                                                                                                               \
-    disable : 4625 4626 5026 5027) // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
+// WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
+#pragma warning(disable : 4625 4626 5026 5027 28182) 
 #include <wil/resource.h>
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
@@ -67,6 +67,7 @@
 
 #ifdef _DEBUG
 #include "CompareDirectoriesEngine.SelfTest.h"
+#include "CommandDispatch.Debug.h"
 #include "Commands.SelfTest.h"
 #include "FolderWindow.FileOperations.SelfTest.h"
 #endif
@@ -3638,6 +3639,13 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
     return DispatchShortcutCommandToCompareWindow(compareWindow, commandId);
 }
 } // namespace
+
+#ifdef _DEBUG
+bool DebugDispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId) noexcept
+{
+    return DispatchShortcutCommand(ownerWindow, commandId);
+}
+#endif // _DEBUG
 
 // Separate function with C++ objects (cannot use __try/__except)
 static int RunApplication(HINSTANCE hInstance, int nCmdShow)
