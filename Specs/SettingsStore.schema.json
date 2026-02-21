@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:redsalamander:settings-store:9",
-  "title": "RedSalamander Settings Store (v9)",
+  "$id": "urn:redsalamander:settings-store:10",
+  "title": "RedSalamander Settings Store (v10)",
   "type": "object",
   "required": ["schemaVersion"],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "type": "integer", "const": 9 },
+    "schemaVersion": { "type": "integer", "const": 10 },
     "windows": {
       "type": "object",
       "title": "Windows",
@@ -28,7 +28,8 @@
     "extensions": { "$ref": "#/$defs/extensionsSettings" },
     "connections": { "$ref": "#/$defs/connectionsSettings" },
     "fileOperations": { "$ref": "#/$defs/fileOperationsSettings" },
-    "compareDirectories": { "$ref": "#/$defs/compareDirectoriesSettings" }
+    "compareDirectories": { "$ref": "#/$defs/compareDirectoriesSettings" },
+    "hotPaths": { "$ref": "#/$defs/hotPathsSettings" }
   },
   "additionalProperties": false,
   "$defs": {
@@ -582,6 +583,41 @@
           "description": "Wildcard patterns separated by ';' (e.g. .git;node_modules)."
         },
         "showIdenticalItems": { "type": "boolean", "default": false, "title": "Show Identical Items" }
+      },
+      "additionalProperties": false
+    },
+    "hotPathSlot": {
+      "type": "object",
+      "title": "Hot Path Slot",
+      "description": "A single hot path bookmark slot.",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string", "title": "Path", "description": "The folder path for this hot path." },
+        "label": { "type": "string", "default": "", "title": "Label", "description": "Optional display name. If empty, the path is shown." },
+        "showInMenu": { "type": "boolean", "default": false, "title": "Show in Menu", "description": "Show this hot path in the Change Drive popup menu." }
+      },
+      "additionalProperties": false
+    },
+    "hotPathsSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Hot Paths",
+      "description": "Bookmark slots for quick folder navigation (Ctrl+1..Ctrl+0).",
+      "properties": {
+        "openPrefsOnAssign": { "type": "boolean", "default": false, "title": "Open Preferences on Assign", "description": "Open the Hot Paths preferences page after assigning a slot." },
+        "slots": {
+          "type": "array",
+          "title": "Slots",
+          "description": "Array of 10 hot path slots (index 0 = Ctrl+1, index 9 = Ctrl+0). Null entries are empty.",
+          "minItems": 0,
+          "maxItems": 10,
+          "items": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/$defs/hotPathSlot" }
+            ]
+          }
+        }
       },
       "additionalProperties": false
     },

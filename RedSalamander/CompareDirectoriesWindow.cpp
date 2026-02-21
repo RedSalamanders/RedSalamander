@@ -911,7 +911,7 @@ bool CompareDirectoriesWindow::Create(HWND owner) noexcept
                                    y,
                                    w,
                                    h,
-                                   nullptr,
+                                   placementOwner,
                                    menu.get(),
                                    instance,
                                    this);

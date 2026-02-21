@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <filesystem>
 #include <memory>
@@ -285,6 +286,19 @@ struct CompareDirectoriesSettings
     bool showIdenticalItems = false; // Show full list (not just differences).
 };
 
+struct HotPathSlot
+{
+    std::wstring path;
+    std::wstring label;      // empty = derive display name from path
+    bool showInMenu = false;
+};
+
+struct HotPathsSettings
+{
+    std::array<std::optional<HotPathSlot>, 10> slots{}; // [0]=Ctrl+1 .. [9]=Ctrl+0
+    bool openPrefsOnAssign = false;
+};
+
 struct ExtensionsSettings
 {
     // Map a file extension (lowercase, with leading dot like ".7z") to a file system plugin ID.
@@ -466,7 +480,7 @@ struct ShortcutsSettings
 
 struct Settings
 {
-    uint32_t schemaVersion = 9;
+    uint32_t schemaVersion = 10;
     std::unordered_map<std::wstring, WindowPlacement> windows;
     ThemeSettings theme;
     PluginsSettings plugins;
@@ -480,6 +494,7 @@ struct Settings
     std::optional<ConnectionsSettings> connections;
     std::optional<FileOperationsSettings> fileOperations;
     std::optional<CompareDirectoriesSettings> compareDirectories;
+    std::optional<HotPathsSettings> hotPaths;
 };
 
 COMMON_API std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept;

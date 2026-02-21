@@ -47,7 +47,6 @@ constexpr const char* kSuiteFileOpsName = "FileOperations";
 constexpr const char* kSuiteCommandsName = "Commands";
 
 SelfTestOptions g_options{};
-SelfTestSuite g_currentSuite = SelfTestSuite::CompareDirectories;
 std::wstring g_runStartedUtcIso;
 
 // Path helpers
@@ -417,10 +416,9 @@ void RotateSelfTestRuns()
     TruncateUtf16Log(lastRun / kCommandsDirName / kTraceFileName);
 }
 
-void InitSelfTestRun(const SelfTestOptions& options, SelfTestSuite suite)
+void InitSelfTestRun(const SelfTestOptions& options)
 {
     g_options      = options;
-    g_currentSuite = suite;
 }
 
 void AppendSelfTestTrace(std::wstring_view msg) noexcept
@@ -480,15 +478,25 @@ bool WriteBinaryFile(const std::filesystem::path& path, std::span<const std::byt
 
     if (! bytes.empty())
     {
-        DWORD written = 0;
-        if (! WriteFile(file.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr))
+        constexpr size_t kChunkSize = 16ull * 1024ull * 1024ull; // 16 MiB
+        size_t offset               = 0;
+        while (offset < bytes.size())
         {
-            return false;
-        }
+            const size_t remaining = bytes.size() - offset;
+            const size_t chunkSize = (remaining > kChunkSize) ? kChunkSize : remaining;
 
-        if (written != bytes.size())
-        {
-            return false;
+            DWORD written = 0;
+            if (! WriteFile(file.get(), bytes.data() + offset, static_cast<DWORD>(chunkSize), &written, nullptr))
+            {
+                return false;
+            }
+
+            if (written == 0)
+            {
+                return false;
+            }
+
+            offset += static_cast<size_t>(written);
         }
     }
 

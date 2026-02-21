@@ -122,24 +122,26 @@ All build outputs and intermediate files are written under `.build\` to keep the
 
 ## Self-tests (Debug only)
 
-RedSalamander includes two debug-only self-test suites:
+RedSalamander includes three debug-only self-test suites:
 
 - CompareDirectories self-test (`--compare-selftest`)
+- Commands self-test (`--commands-selftest`)
 - FileOperations self-test (`--fileops-selftest`)
 
 ### Run self-tests
 
-Build a Debug binary and run the suites (recommended: run both in one process so the aggregated `results.json` includes both):
+Build a Debug binary and run the suites (recommended: run all suites in one process so the aggregated `results.json` includes everything):
 
 ```powershell
 # Build Debug (x64)
 .\build.ps1 -Configuration Debug -ProjectName RedSalamander
 
-# Run both suites in one process (recommended)
-.\.build\x64\Debug\RedSalamander.exe --compare-selftest --fileops-selftest --selftest-timeout-multiplier=2.0
+# Run all suites in one process (recommended)
+.\.build\x64\Debug\RedSalamander.exe --selftest --selftest-timeout-multiplier=2.0
 
 # Run suites individually
 .\.build\x64\Debug\RedSalamander.exe --compare-selftest
+.\.build\x64\Debug\RedSalamander.exe --commands-selftest
 .\.build\x64\Debug\RedSalamander.exe --fileops-selftest
 
 # Optional: fail-fast for CompareDirectories
@@ -147,6 +149,10 @@ Build a Debug binary and run the suites (recommended: run both in one process so
 ```
 
 The process exit code is `0` on success and non-zero on failure.
+
+Note: the Commands self-test is UI-driven and may take longer to run.
+
+Note: `RedSalamander.exe` is a GUI app, so PowerShell may return to the prompt immediately after launching it. Use `Start-Process -Wait` if you need to wait for completion and capture the exit code.
 
 ### Self-test artifacts and results
 
@@ -166,6 +172,8 @@ Key files:
 - `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\trace.txt` (host trace)
 - `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\compare\trace.txt`
 - `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\compare\results.json`
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\commands\trace.txt`
+- `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\commands\results.json`
 - `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\fileops\trace.txt`
 - `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\fileops\results.json`
 - `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\results.json` (aggregated run summary)

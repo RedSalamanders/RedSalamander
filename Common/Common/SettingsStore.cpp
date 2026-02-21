@@ -2153,6 +2153,69 @@ void ParseCompareDirectories(yyjson_val* root, Common::Settings::Settings& out)
     }
 }
 
+void ParseHotPaths(yyjson_val* root, Common::Settings::Settings& out)
+{
+    yyjson_val* hotPaths = yyjson_obj_get(root, "hotPaths");
+    if (! hotPaths || ! yyjson_is_obj(hotPaths))
+    {
+        return;
+    }
+
+    Common::Settings::HotPathsSettings settings;
+    GetBool(hotPaths, "openPrefsOnAssign", settings.openPrefsOnAssign);
+
+    yyjson_val* slotsArr = yyjson_obj_get(hotPaths, "slots");
+    if (slotsArr && yyjson_is_arr(slotsArr))
+    {
+        const size_t count = yyjson_arr_size(slotsArr);
+        for (size_t i = 0; i < count && i < settings.slots.size(); ++i)
+        {
+            yyjson_val* slotVal = yyjson_arr_get(slotsArr, i);
+            if (! slotVal || yyjson_is_null(slotVal))
+            {
+                settings.slots[i].reset();
+                continue;
+            }
+
+            if (! yyjson_is_obj(slotVal))
+            {
+                continue;
+            }
+
+            Common::Settings::HotPathSlot slot;
+            if (const auto path = GetString(slotVal, "path"))
+            {
+                slot.path = Utf16FromUtf8(path.value());
+            }
+            if (const auto label = GetString(slotVal, "label"))
+            {
+                slot.label = Utf16FromUtf8(label.value());
+            }
+            GetBool(slotVal, "showInMenu", slot.showInMenu);
+
+            if (! slot.path.empty())
+            {
+                settings.slots[i] = std::move(slot);
+            }
+        }
+    }
+
+    bool hasAnySlot = false;
+    for (const auto& slot : settings.slots)
+    {
+        if (slot.has_value())
+        {
+            hasAnySlot = true;
+            break;
+        }
+    }
+
+    if (hasAnySlot || settings.openPrefsOnAssign)
+    {
+        out.hotPaths = std::move(settings);
+    }
+}
+
 void ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out)
 {
     yyjson_val* shortcuts = yyjson_obj_get(root, "shortcuts");
@@ -2591,7 +2654,7 @@ HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
     }
 
     const int64_t schemaVersion = yyjson_get_int(schema);
-    if (schemaVersion != 6 && schemaVersion != 7 && schemaVersion != 8 && schemaVersion != 9)
+    if (schemaVersion != 6 && schemaVersion != 7 && schemaVersion != 8 && schemaVersion != 9 && schemaVersion != 10)
     {
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
         BackupBadSettingsFile(path);
@@ -2616,8 +2679,9 @@ HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
     ParseConnections(root, out);
     ParseFileOperations(root, out);
     ParseCompareDirectories(root, out);
+    ParseHotPaths(root, out);
 
-    out.schemaVersion = 9;
+    out.schemaVersion = 10;
 
     return S_OK;
 }
@@ -2674,7 +2738,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
     schemaRef.append(L".settings.schema.json");
     yyjson_mut_obj_add_val(doc, root, "$schema", NewString(doc, schemaRef));
 
-    yyjson_mut_obj_add_int(doc, root, "schemaVersion", 9);
+    yyjson_mut_obj_add_int(doc, root, "schemaVersion", 10);
 
     yyjson_mut_val* windows = nullptr;
     {
@@ -3878,6 +3942,71 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             if (compare.showIdenticalItems != defaults.showIdenticalItems)
             {
                 yyjson_mut_obj_add_bool(doc, compareObj, "showIdenticalItems", compare.showIdenticalItems);
+            }
+        }
+    }
+
+    if (settings.hotPaths)
+    {
+        const auto& hp = settings.hotPaths.value();
+
+        bool hasAnySlot = false;
+        for (const auto& slot : hp.slots)
+        {
+            if (slot.has_value() && ! slot.value().path.empty())
+            {
+                hasAnySlot = true;
+                break;
+            }
+        }
+
+        if (hasAnySlot || hp.openPrefsOnAssign)
+        {
+            yyjson_mut_val* hotPathsObj = yyjson_mut_obj(doc);
+            if (! hotPathsObj)
+            {
+                return E_OUTOFMEMORY;
+            }
+            yyjson_mut_obj_add_val(doc, root, "hotPaths", hotPathsObj);
+
+            if (hp.openPrefsOnAssign)
+            {
+                yyjson_mut_obj_add_bool(doc, hotPathsObj, "openPrefsOnAssign", hp.openPrefsOnAssign);
+            }
+
+            yyjson_mut_val* slotsArr = yyjson_mut_arr(doc);
+            if (! slotsArr)
+            {
+                return E_OUTOFMEMORY;
+            }
+            yyjson_mut_obj_add_val(doc, hotPathsObj, "slots", slotsArr);
+
+            for (const auto& slot : hp.slots)
+            {
+                if (! slot.has_value() || slot.value().path.empty())
+                {
+                    yyjson_mut_arr_add_null(doc, slotsArr);
+                    continue;
+                }
+
+                const auto& slotValue = slot.value();
+
+                yyjson_mut_val* slotObj = yyjson_mut_obj(doc);
+                if (! slotObj)
+                {
+                    return E_OUTOFMEMORY;
+                }
+                yyjson_mut_arr_add_val(slotsArr, slotObj);
+
+                yyjson_mut_obj_add_val(doc, slotObj, "path", NewString(doc, slotValue.path));
+                if (! slotValue.label.empty())
+                {
+                    yyjson_mut_obj_add_val(doc, slotObj, "label", NewString(doc, slotValue.label));
+                }
+                if (slotValue.showInMenu)
+                {
+                    yyjson_mut_obj_add_bool(doc, slotObj, "showInMenu", slotValue.showInMenu);
+                }
             }
         }
     }

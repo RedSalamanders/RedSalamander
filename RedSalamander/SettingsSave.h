@@ -71,6 +71,26 @@ namespace SettingsSave
         }
     }
 
+    if (result.hotPaths.has_value())
+    {
+        const auto& hp = result.hotPaths.value();
+
+        bool hasAnyPath = false;
+        for (const auto& slot : hp.slots)
+        {
+            if (slot.has_value() && ! slot.value().path.empty())
+            {
+                hasAnyPath = true;
+                break;
+            }
+        }
+
+        if (! hasAnyPath && ! hp.openPrefsOnAssign)
+        {
+            result.hotPaths.reset();
+        }
+    }
+
     return result;
 }
 } // namespace SettingsSave

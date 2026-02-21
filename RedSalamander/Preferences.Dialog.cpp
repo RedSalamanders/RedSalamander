@@ -3,6 +3,7 @@
 #include "Preferences.Advanced.h"
 #include "Preferences.CompareDirectories.h"
 #include "Preferences.Dialog.h"
+#include "Preferences.HotPaths.h"
 #include "Preferences.Editors.h"
 #include "Preferences.General.h"
 #include "Preferences.Internal.h"
@@ -76,6 +77,7 @@ struct PreferencesDialogHost final : PreferencesDialogState
     ThemesPane _themesPane;
     PluginsPane _pluginsPane;
     CompareDirectoriesPane _compareDirectoriesPane;
+    HotPathsPane _hotPathsPane;
     AdvancedPane _advancedPane;
 };
 
@@ -98,6 +100,7 @@ constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
         case PrefCategory::Themes: return hostState._themesPane.Hwnd();
         case PrefCategory::Plugins: return hostState._pluginsPane.Hwnd();
         case PrefCategory::CompareDirectories: return hostState._compareDirectoriesPane.Hwnd();
+        case PrefCategory::HotPaths: return hostState._hotPathsPane.Hwnd();
         case PrefCategory::Advanced: return hostState._advancedPane.Hwnd();
         default: return nullptr;
     }
@@ -418,7 +421,7 @@ struct CategoryInfo
     UINT descriptionId{};
 };
 
-constexpr std::array<CategoryInfo, 10> kCategories = {{
+constexpr std::array<CategoryInfo, 11> kCategories = {{
     {PrefCategory::General, IDS_PREFS_CAT_GENERAL, IDS_PREFS_CAT_GENERAL_DESC},
     {PrefCategory::Panes, IDS_PREFS_CAT_PANES, IDS_PREFS_CAT_PANES_DESC},
     {PrefCategory::Viewers, IDS_PREFS_CAT_VIEWERS, IDS_PREFS_CAT_VIEWERS_DESC},
@@ -428,6 +431,7 @@ constexpr std::array<CategoryInfo, 10> kCategories = {{
     {PrefCategory::Themes, IDS_PREFS_CAT_THEMES, IDS_PREFS_CAT_THEMES_DESC},
     {PrefCategory::Plugins, IDS_PREFS_CAT_PLUGINS, IDS_PREFS_CAT_PLUGINS_DESC},
     {PrefCategory::CompareDirectories, IDS_PREFS_CAT_COMPARE_DIRECTORIES, IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC},
+    {PrefCategory::HotPaths, IDS_PREFS_CAT_HOT_PATHS, IDS_PREFS_CAT_HOT_PATHS_DESC},
     {PrefCategory::Advanced, IDS_PREFS_CAT_ADVANCED, IDS_PREFS_CAT_ADVANCED_DESC},
 }};
 
@@ -1540,6 +1544,7 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     hostState._themesPane.ResizeToHostClient(host);
     hostState._pluginsPane.ResizeToHostClient(host);
     hostState._compareDirectoriesPane.ResizeToHostClient(host);
+    hostState._hotPathsPane.ResizeToHostClient(host);
     hostState._advancedPane.ResizeToHostClient(host);
 
     const UINT dpi     = GetDpiForWindow(host);
@@ -1564,6 +1569,7 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     const bool showThemes             = state.currentCategory == PrefCategory::Themes;
     const bool showPlugins            = state.currentCategory == PrefCategory::Plugins;
     const bool showCompareDirectories = state.currentCategory == PrefCategory::CompareDirectories;
+    const bool showHotPaths           = state.currentCategory == PrefCategory::HotPaths;
     const bool showAdvanced           = state.currentCategory == PrefCategory::Advanced;
     const bool panesUseTwoStateCombo  = state.theme.systemHighContrast;
 
@@ -1740,6 +1746,24 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     setVisible(state.advancedCompareIgnoreDirectoriesPatternsLabel, showCompareDirectories);
     setVisible(state.advancedCompareIgnoreDirectoriesPatternsFrame, showCompareDirectories);
     setVisible(state.advancedCompareIgnoreDirectoriesPatternsEdit, showCompareDirectories);
+    setVisible(hostState._hotPathsPane.Hwnd(), showHotPaths);
+    for (const auto& slotCtl : state.hotPathSlotControls)
+    {
+        setVisible(slotCtl.header, showHotPaths);
+        setVisible(slotCtl.pathLabel, showHotPaths);
+        setVisible(slotCtl.pathFrame, showHotPaths);
+        setVisible(slotCtl.pathEdit, showHotPaths);
+        setVisible(slotCtl.browseButton, showHotPaths);
+        setVisible(slotCtl.labelLabel, showHotPaths);
+        setVisible(slotCtl.labelFrame, showHotPaths);
+        setVisible(slotCtl.labelEdit, showHotPaths);
+        setVisible(slotCtl.showInMenuLabel, showHotPaths);
+        setVisible(slotCtl.showInMenuToggle, showHotPaths);
+        setVisible(slotCtl.showInMenuDescription, showHotPaths);
+    }
+    setVisible(state.hotPathOpenPrefsOnAssignLabel, showHotPaths);
+    setVisible(state.hotPathOpenPrefsOnAssignToggle, showHotPaths);
+    setVisible(state.hotPathOpenPrefsOnAssignDescription, showHotPaths);
     setVisible(hostState._advancedPane.Hwnd(), showAdvanced);
     setVisible(state.advancedConnectionsHelloHeader, showAdvanced);
     setVisible(state.advancedConnectionsBypassHelloLabel, showAdvanced);
@@ -1847,6 +1871,13 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     if (showCompareDirectories)
     {
         CompareDirectoriesPane::LayoutControls(host, state, x, y, width, margin, gapY, dialogFont);
+        FinalizePreferencesPageHostLayout(host, state, margin, width);
+        return;
+    }
+
+    if (showHotPaths)
+    {
+        HotPathsPane::LayoutControls(host, state, x, y, width, margin, gapY, dialogFont);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
@@ -1961,6 +1992,10 @@ void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory catego
     if (category == PrefCategory::CompareDirectories && state.pageHost)
     {
         CompareDirectoriesPane::Refresh(state.pageHost, state);
+    }
+    if (category == PrefCategory::HotPaths && state.pageHost)
+    {
+        HotPathsPane::Refresh(state.pageHost, state);
     }
     if (category == PrefCategory::Advanced && state.pageHost)
     {
@@ -2116,6 +2151,7 @@ void CreatePageControls(HWND dlg, PreferencesDialogState& state) noexcept
     static_cast<void>(hostState._themesPane.EnsureCreated(state.pageHost));
     static_cast<void>(hostState._pluginsPane.EnsureCreated(state.pageHost));
     static_cast<void>(hostState._compareDirectoriesPane.EnsureCreated(state.pageHost));
+    static_cast<void>(hostState._hotPathsPane.EnsureCreated(state.pageHost));
     static_cast<void>(hostState._advancedPane.EnsureCreated(state.pageHost));
 
     const HWND generalParent  = hostState._generalPane.Hwnd() ? hostState._generalPane.Hwnd() : state.pageHost;
@@ -2127,6 +2163,7 @@ void CreatePageControls(HWND dlg, PreferencesDialogState& state) noexcept
     const HWND themesParent   = hostState._themesPane.Hwnd() ? hostState._themesPane.Hwnd() : state.pageHost;
     const HWND pluginsParent  = hostState._pluginsPane.Hwnd() ? hostState._pluginsPane.Hwnd() : state.pageHost;
     const HWND compareParent  = hostState._compareDirectoriesPane.Hwnd() ? hostState._compareDirectoriesPane.Hwnd() : state.pageHost;
+    const HWND hotPathsParent = hostState._hotPathsPane.Hwnd() ? hostState._hotPathsPane.Hwnd() : state.pageHost;
     const HWND advancedParent = hostState._advancedPane.Hwnd() ? hostState._advancedPane.Hwnd() : state.pageHost;
 
     const DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
@@ -2227,6 +2264,9 @@ void CreatePageControls(HWND dlg, PreferencesDialogState& state) noexcept
 
     // Compare Directories page.
     CompareDirectoriesPane::CreateControls(compareParent, state);
+
+    // Hot Paths page.
+    HotPathsPane::CreateControls(hotPathsParent, state);
 
     // Advanced page (Phase 6 starter).
     AdvancedPane::CreateControls(advancedParent, state);
@@ -2787,6 +2827,11 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
             }
 
             if (CompareDirectoriesPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
+            {
+                return 0;
+            }
+
+            if (HotPathsPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
             {
                 return 0;
             }

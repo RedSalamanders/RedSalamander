@@ -7,7 +7,7 @@
 
 namespace
 {
-constexpr std::array<CommandInfo, 123> kCommands = {
+constexpr std::array<CommandInfo, 125> kCommands = {
     CommandInfo{L"cmd/app/about", IDS_CMD_ABOUT, IDS_CMD_DESC_ABOUT, IDM_ABOUT},
     CommandInfo{L"cmd/app/compare", IDS_CMD_COMPARE, IDS_CMD_DESC_COMPARE, IDM_APP_COMPARE},
     CommandInfo{L"cmd/app/exit", IDS_CMD_EXIT, IDS_CMD_DESC_EXIT, IDM_EXIT},
@@ -85,6 +85,7 @@ constexpr std::array<CommandInfo, 123> kCommands = {
                 IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET},
     CommandInfo{L"cmd/pane/historyBack", IDS_CMD_HISTORY_BACK, IDS_CMD_DESC_HISTORY_BACK, 0},
     CommandInfo{L"cmd/pane/historyForward", IDS_CMD_HISTORY_FORWARD, IDS_CMD_DESC_HISTORY_FORWARD, 0},
+    CommandInfo{L"cmd/pane/hotPath", IDS_CMD_HOT_PATH_GO, IDS_CMD_DESC_HOT_PATH_GO, 0},
     CommandInfo{L"cmd/pane/hotPaths", IDS_CMD_HOT_PATHS, IDS_CMD_DESC_HOT_PATHS, 0},
     CommandInfo{L"cmd/pane/listOpenedFiles", IDS_CMD_LIST_OPENED_FILES, IDS_CMD_DESC_LIST_OPENED_FILES, IDM_PANE_LIST_OPENED_FILES},
     CommandInfo{L"cmd/pane/loadSelection", IDS_CMD_LOAD_SELECTION, IDS_CMD_DESC_LOAD_SELECTION, IDM_PANE_LOAD_SELECTION},
@@ -155,6 +156,7 @@ constexpr std::array<CommandInfo, 123> kCommands = {
                 IDS_CMD_SELECTION_UNSELECT_SAME_NAME,
                 IDS_CMD_DESC_SELECTION_UNSELECT_SAME_NAME,
                 IDM_PANE_SELECTION_UNSELECT_SAME_NAME},
+    CommandInfo{L"cmd/pane/setHotPath", IDS_CMD_SET_HOT_PATH, IDS_CMD_DESC_SET_HOT_PATH, 0},
     CommandInfo{L"cmd/pane/setPathFromOtherPane", IDS_CMD_SET_PATH_FROM_OTHER_PANE, IDS_CMD_DESC_SET_PATH_FROM_OTHER_PANE, 0},
     CommandInfo{L"cmd/pane/shares", IDS_CMD_SHARES, IDS_CMD_DESC_SHARES, IDM_PANE_SHARES},
     CommandInfo{L"cmd/pane/showFoldersHistory", IDS_CMD_SHOW_FOLDERS_HISTORY, IDS_CMD_DESC_SHOW_FOLDERS_HISTORY, IDM_PANE_SHOW_FOLDERS_HISTORY},
@@ -218,6 +220,18 @@ std::wstring_view CanonicalizeCommandId(std::wstring_view commandId) noexcept
     if (commandId.starts_with(kGoDriveRootPrefix))
     {
         return L"cmd/pane/goDriveRoot";
+    }
+
+    constexpr std::wstring_view kHotPathPrefix = L"cmd/pane/hotPath/";
+    if (commandId.starts_with(kHotPathPrefix))
+    {
+        return L"cmd/pane/hotPath";
+    }
+
+    constexpr std::wstring_view kSetHotPathPrefix = L"cmd/pane/setHotPath/";
+    if (commandId.starts_with(kSetHotPathPrefix))
+    {
+        return L"cmd/pane/setHotPath";
     }
 
     return commandId;

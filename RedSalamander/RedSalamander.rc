@@ -660,6 +660,8 @@ BEGIN
     IDS_PREFS_CAT_PLUGINS_DESC "Manage plugins."
     IDS_PREFS_CAT_COMPARE_DIRECTORIES "Compare Directories"
     IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC "Default options for Compare Directories."
+    IDS_PREFS_CAT_HOT_PATHS "Hot Paths"
+    IDS_PREFS_CAT_HOT_PATHS_DESC "Bookmark folder paths for quick access."
     IDS_PREFS_CAT_ADVANCED  "Advanced"
     IDS_PREFS_CAT_ADVANCED_DESC "Advanced options for expert users."
     IDS_PREFS_OOM_PREPARE_SAVE "Out of memory while preparing preferences for save."
@@ -1528,6 +1530,25 @@ BEGIN
 		    IDS_CMD_DESC_VIEWOPTIONS_TOGGLE_STATUS_BAR            "Toggle showing the status bar."
 		    IDS_CMD_DESC_SELECT_FILE_SYSTEM_PLUGIN                "Select a file system plugin."
 		END
+
+STRINGTABLE
+BEGIN
+    IDS_CMD_HOT_PATH_GO                               "Go to Hot Path"
+    IDS_CMD_DESC_HOT_PATH_GO                          "Navigate to a bookmarked hot path."
+    IDS_CMD_SET_HOT_PATH                              "Set Hot Path"
+    IDS_CMD_DESC_SET_HOT_PATH                         "Assign the current folder to a hot path slot."
+    IDS_FMT_CMD_HOT_PATH_GO_WITH_DIGIT                "Go to Hot Path {0}"
+    IDS_FMT_CMD_SET_HOT_PATH_WITH_DIGIT               "Set Hot Path {0}"
+    IDS_HOT_PATH_CONFIRM_TITLE                        "Hot Paths"
+    IDS_HOT_PATH_CONFIRM_REPLACE                      "Slot {0} is already assigned to:\r\n{1}\r\n\r\nReplace with the current folder?"
+    IDS_PREFS_HOT_PATHS_SLOT_HEADER_FMT               "Ctrl+{0}"
+    IDS_PREFS_HOT_PATHS_PATH_LABEL                    "Path"
+    IDS_PREFS_HOT_PATHS_LABEL_LABEL                   "Label"
+    IDS_PREFS_HOT_PATHS_SHOW_IN_MENU                  "Show in Change Drive menu"
+    IDS_PREFS_HOT_PATHS_BROWSE_ELLIPSIS               "Browse..."
+    IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN          "Open preferences page when assigning"
+    IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN_DESC     "Open the Hot Paths preferences page after assigning a slot from the panel."
+END
 
 #endif    // English (United States) resources
 /////////////////////////////////////////////////////////////////////////////

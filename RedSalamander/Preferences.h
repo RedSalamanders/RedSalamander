@@ -11,5 +11,6 @@
 
 [[nodiscard]] bool ShowPreferencesDialog(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme);
 [[nodiscard]] bool ShowPreferencesDialogPlugins(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme);
+[[nodiscard]] bool ShowPreferencesDialogHotPaths(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme);
 
 [[nodiscard]] HWND GetPreferencesDialogHandle() noexcept;

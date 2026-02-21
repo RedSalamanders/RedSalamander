@@ -55,6 +55,29 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     return path[1] == L':' && (path[2] == L'\\' || path[2] == L'/') && path[3] == L'\0';
 }
 
+[[nodiscard]] std::wstring EscapeMenuLabel(std::wstring_view text)
+{
+    std::wstring result;
+    result.reserve(text.size());
+
+    for (const wchar_t ch : text)
+    {
+        if (ch == L'\t')
+        {
+            result.push_back(L' ');
+            continue;
+        }
+
+        result.push_back(ch);
+        if (ch == L'&')
+        {
+            result.push_back(L'&');
+        }
+    }
+
+    return result;
+}
+
 [[nodiscard]] bool TryEllipsizePathMiddleToWidth(HDC hdc, std::wstring_view text, int maxWidthPx, std::wstring& output) noexcept
 {
     if (! hdc || maxWidthPx <= 0 || text.empty())
@@ -1716,6 +1739,61 @@ void NavigationView::ShowFileSystemDriveMenuDropdown()
     if (! connectionsItemAdded)
     {
         tryAppendConnectionsMenu();
+    }
+
+    // Append hot paths with showInMenu flag.
+    if (_settings && _settings->hotPaths.has_value())
+    {
+        bool anyVisible = false;
+        for (const auto& slot : _settings->hotPaths.value().slots)
+        {
+            if (slot.has_value() && slot.value().showInMenu && ! slot.value().path.empty())
+            {
+                anyVisible = true;
+                break;
+            }
+        }
+
+        if (anyVisible)
+        {
+            AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+
+            const auto& slots = _settings->hotPaths.value().slots;
+            for (size_t i = 0; i < slots.size(); ++i)
+            {
+                if (! slots[i].has_value() || ! slots[i].value().showInMenu || slots[i].value().path.empty())
+                {
+                    continue;
+                }
+
+                if (nextId > ID_NAV_MENU_MAX)
+                {
+                    break;
+                }
+
+                const auto& slot        = slots[i].value();
+                const UINT id           = nextId++;
+                const wchar_t digitChar = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
+
+                 std::wstring label;
+                 if (! slot.label.empty())
+                 {
+                    label = std::format(L"&{}: {}", digitChar, EscapeMenuLabel(slot.label));
+                 }
+                 else
+                 {
+                    label = std::format(L"&{}: {}", digitChar, EscapeMenuLabel(slot.path));
+                 }
+
+                AppendMenuW(menu, MF_STRING, id, label.c_str());
+
+                MenuAction action;
+                action.menuId = id;
+                action.type   = MenuActionType::NavigatePath;
+                action.path   = slot.path;
+                _navigationMenuActions.push_back(std::move(action));
+            }
+        }
     }
 
     POINT pt = {_sectionDriveRect.left, _sectionDriveRect.bottom};
