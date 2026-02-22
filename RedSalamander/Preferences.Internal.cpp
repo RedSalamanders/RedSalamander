@@ -13,6 +13,7 @@
 #include <string>
 
 #include <commctrl.h>
+#include <uxtheme.h>
 
 #include "FileSystemPluginManager.h"
 #include "ThemedControls.h"
@@ -523,6 +524,15 @@ void CreateFramedEditBox(PreferencesDialogState& state, HWND parent, HWND& outFr
                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(controlId)),
                               GetModuleHandleW(nullptr),
                               nullptr);
+
+    if (outEdit)
+    {
+        // Ensure edit controls render with consistent dark/light text colors.
+        const wchar_t* themeName =
+            (state.theme.highContrast || state.theme.systemHighContrast) ? L"" : (state.theme.dark ? L"DarkMode_Explorer" : L"Explorer");
+        SetWindowTheme(outEdit, themeName, nullptr);
+        SendMessageW(outEdit, WM_THEMECHANGED, 0, 0);
+    }
 
     if (outFrame && outEdit)
     {

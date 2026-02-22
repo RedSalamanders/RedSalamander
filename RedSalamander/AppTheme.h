@@ -84,7 +84,7 @@ struct FolderViewTheme
     D2D1::ColorF itemBackgroundNormal           = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f);
     D2D1::ColorF itemBackgroundHovered          = D2D1::ColorF(0.902f, 0.941f, 1.0f);
     D2D1::ColorF itemBackgroundSelected         = D2D1::ColorF(D2D1::ColorF::DodgerBlue);
-    D2D1::ColorF itemBackgroundSelectedInactive = D2D1::ColorF(0.118f, 0.565f, 1.0f, 0.65f);
+    D2D1::ColorF itemBackgroundSelectedInactive = D2D1::ColorF(0.118f, 0.565f, 1.0f, 0.35f);
     D2D1::ColorF itemBackgroundFocused          = D2D1::ColorF(0.0f, 0.478f, 1.0f, 0.3f);
 
     D2D1::ColorF textNormal           = D2D1::ColorF(D2D1::ColorF::Black);

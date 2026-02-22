@@ -437,6 +437,8 @@ private:
         bool dragging = false;
         POINT startPoint{};
         size_t anchorIndex = static_cast<size_t>(-1);
+        bool hasStartItemRect = false;
+        RECT startItemRect{};
     };
 
     struct IncrementalSearchState

@@ -46,7 +46,9 @@ void HotPathsPane::CreateControls(HWND parent, PreferencesDialogState& state) no
         return;
     }
 
-    const DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
+    const DWORD baseStaticStyle    = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
+    const DWORD captionStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_CENTERIMAGE;
+    const DWORD rightCaptionStaticStyle = WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX | SS_CENTERIMAGE;
     const DWORD wrapStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
     const bool customButtons    = ! state.theme.systemHighContrast;
 
@@ -64,7 +66,7 @@ void HotPathsPane::CreateControls(HWND parent, PreferencesDialogState& state) no
         slot.header.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
 
         // Path label + framed edit + browse button
-        slot.pathLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+        slot.pathLabel.reset(CreateWindowExW(0, L"Static", L"", captionStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
 
         const int pathEditId = IDC_PREFS_HOT_PATHS_PATH_EDIT_BASE + i;
         PrefsInput::CreateFramedEditBox(state, parent, slot.pathFrame, slot.pathEdit, pathEditId, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
@@ -73,9 +75,13 @@ void HotPathsPane::CreateControls(HWND parent, PreferencesDialogState& state) no
         slot.browseButton.reset(CreateWindowExW(
             0, L"Button", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 10, 10, parent,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(browseId)), instance, nullptr));
+        if (slot.browseButton && customButtons)
+        {
+            ThemedControls::EnableOwnerDrawButton(parent, browseId);
+        }
 
         // Label label + framed edit
-        slot.labelLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+        slot.labelLabel.reset(CreateWindowExW(0, L"Static", L"", captionStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
 
         const int labelEditId = IDC_PREFS_HOT_PATHS_LABEL_EDIT_BASE + i;
         PrefsInput::CreateFramedEditBox(state, parent, slot.labelFrame, slot.labelEdit, labelEditId, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
@@ -88,7 +94,7 @@ void HotPathsPane::CreateControls(HWND parent, PreferencesDialogState& state) no
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(showInMenuId)), instance, nullptr));
         PrefsInput::EnableMouseWheelForwarding(slot.showInMenuToggle);
 
-        slot.showInMenuLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+        slot.showInMenuLabel.reset(CreateWindowExW(0, L"Static", L"", rightCaptionStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
         slot.showInMenuDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
     }
 
@@ -128,6 +134,34 @@ void HotPathsPane::Refresh(HWND /*host*/, PreferencesDialogState& state) noexcep
         }
     };
 
+    const auto setStaticVisuallyDisabled = [](const auto& hwndLike, bool disabled) noexcept
+    {
+        HWND hwnd = nullptr;
+        if constexpr (requires { hwndLike.get(); })
+        {
+            hwnd = hwndLike.get();
+        }
+        else
+        {
+            hwnd = hwndLike;
+        }
+        if (! hwnd)
+        {
+            return;
+        }
+
+        EnableWindow(hwnd, TRUE);
+        if (disabled)
+        {
+            SetPropW(hwnd, kPrefsVisuallyDisabledProp, reinterpret_cast<HANDLE>(1));
+        }
+        else
+        {
+            RemovePropW(hwnd, kPrefsVisuallyDisabledProp);
+        }
+        InvalidateRect(hwnd, nullptr, TRUE);
+    };
+
     for (int i = 0; i < kSlotCount && i < static_cast<int>(state.hotPathSlotControls.size()); ++i)
     {
         const auto& slotCtl  = state.hotPathSlotControls[static_cast<size_t>(i)];
@@ -148,10 +182,10 @@ void HotPathsPane::Refresh(HWND /*host*/, PreferencesDialogState& state) noexcep
             PrefsUi::SetTwoStateToggleState(slotCtl.showInMenuToggle, state.theme.systemHighContrast, checked);
         }
 
-        setEnabledAndInvalidate(slotCtl.labelLabel, enableDependentControls);
+        setStaticVisuallyDisabled(slotCtl.labelLabel, enableDependentControls == FALSE);
         setEnabledAndInvalidate(slotCtl.labelFrame, enableDependentControls);
         setEnabledAndInvalidate(slotCtl.labelEdit, enableDependentControls);
-        setEnabledAndInvalidate(slotCtl.showInMenuLabel, enableDependentControls);
+        setStaticVisuallyDisabled(slotCtl.showInMenuLabel, enableDependentControls == FALSE);
         setEnabledAndInvalidate(slotCtl.showInMenuToggle, enableDependentControls);
         setEnabledAndInvalidate(slotCtl.showInMenuDescription, enableDependentControls);
     }
@@ -159,7 +193,14 @@ void HotPathsPane::Refresh(HWND /*host*/, PreferencesDialogState& state) noexcep
     PrefsUi::SetTwoStateToggleState(state.hotPathOpenPrefsOnAssignToggle, state.theme.systemHighContrast, hp.openPrefsOnAssign);
 }
 
-void HotPathsPane::LayoutControls(HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, HFONT dialogFont) noexcept
+void HotPathsPane::LayoutControls(HWND host,
+                                 PreferencesDialogState& state,
+                                 int x,
+                                 int& y,
+                                 int width,
+                                 [[maybe_unused]] int margin,
+                                 int gapY,
+                                 HFONT dialogFont) noexcept
 {
     using namespace PrefsLayoutConstants;
 
@@ -264,76 +305,261 @@ void HotPathsPane::LayoutControls(HWND host, PreferencesDialogState& state, int 
         const wchar_t digitChar = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
         const std::wstring headerText = FormatStringResource(nullptr, IDS_PREFS_HOT_PATHS_SLOT_HEADER_FMT, digitChar);
 
+        const int cardLeft = x;
+        const int cardWidth = width;
+        const int cardContentX = cardLeft + cardPaddingX;
+        const int cardContentW = std::max(0, cardWidth - 2 * cardPaddingX);
+
+        const int frameInset = ThemedControls::ScaleDip(dpi, kFramePaddingDip);
+
+        const std::wstring pathLabelText = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_PATH_LABEL);
+        const std::wstring labelLabelText = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_LABEL_LABEL);
+        const std::wstring showInMenuText = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_SHOW_IN_MENU);
+
+        // Slot header outside the card (matches the other "section header" style used in preferences).
         if (slotCtl.header)
         {
             SetWindowTextW(slotCtl.header.get(), headerText.c_str());
-            SetWindowPos(slotCtl.header.get(), nullptr, x, y, width, headerHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(slotCtl.header.get(), nullptr, cardLeft, y, cardWidth, headerHeight, SWP_NOZORDER | SWP_NOACTIVATE);
             SendMessageW(slotCtl.header.get(), WM_SETFONT, reinterpret_cast<WPARAM>(headerFont), TRUE);
             y += headerHeight + innerGap;
         }
 
-        // Path row: label + edit + browse
-        const std::wstring pathLabel = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_PATH_LABEL);
-        if (slotCtl.pathLabel)
+        int slotY    = y;
+        int contentY = slotY + cardPaddingY;
+
+        // Layout: aligned caption + input + right actions.
+        if (slotCtl.showInMenuDescription)
         {
-            SetWindowTextW(slotCtl.pathLabel.get(), pathLabel.c_str());
-            SetWindowPos(slotCtl.pathLabel.get(), nullptr, x + margin, y, width - margin, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(slotCtl.pathLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-            y += rowHeight;
+            ShowWindow(slotCtl.showInMenuDescription.get(), SW_HIDE);
         }
 
-        const int editWidth = width - margin - browseWidth - browseGap;
-        if (slotCtl.pathFrame)
-        {
-            SetWindowPos(slotCtl.pathFrame.get(), nullptr, x + margin, y, std::max(10, editWidth), editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        }
-        if (slotCtl.pathEdit)
-        {
-            const int frameInset = ThemedControls::ScaleDip(dpi, 2);
-            SetWindowPos(slotCtl.pathEdit.get(), nullptr, x + margin + frameInset, y + frameInset, std::max(4, editWidth - 2 * frameInset),
-                         std::max(4, editHeight - 2 * frameInset), SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(slotCtl.pathEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        }
+        const int inlineGapX     = innerGap;
+        const int minInlineEditW = ThemedControls::ScaleDip(dpi, kMinEditWidthDip);
+        const int textPadX       = ThemedControls::ScaleDip(dpi, 6);
+
+        const int pathCaptionW  = std::max(0, ThemedControls::MeasureTextWidth(host, dialogFont, pathLabelText) + textPadX);
+        const int labelCaptionW = std::max(0, ThemedControls::MeasureTextWidth(host, dialogFont, labelLabelText) + textPadX);
+        const int captionW      = std::max(pathCaptionW, labelCaptionW);
+
+        const int showTextW  = std::max(0, ThemedControls::MeasureTextWidth(host, dialogFont, showInMenuText) + textPadX);
+        const int showAreaW  = showTextW + inlineGapX + toggleWidth;
+        const int rightEdge  = cardContentX + cardContentW;
+        const int browseX    = rightEdge - browseWidth;
+        const int showAreaX  = rightEdge - showAreaW;
+
+        const int editX      = cardContentX + captionW + inlineGapX;
+        const int pathEditW  = browseX - browseGap - editX;
+        const int labelEditW = showAreaX - inlineGapX - editX;
+
+        const bool useTableLayout =
+            (cardContentW > 0 && captionW > 0 && pathEditW >= minInlineEditW && labelEditW >= minInlineEditW && showAreaW > toggleWidth);
 
         const std::wstring browseText = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_BROWSE_ELLIPSIS);
-        if (slotCtl.browseButton)
-        {
-            SetWindowTextW(slotCtl.browseButton.get(), browseText.c_str());
-            SetWindowPos(slotCtl.browseButton.get(), nullptr, x + margin + editWidth + browseGap, y, browseWidth, editHeight,
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(slotCtl.browseButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        }
-        y += editHeight + innerGap;
 
-        // Label row: label + edit
-        const std::wstring labelLabel = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_LABEL_LABEL);
-        if (slotCtl.labelLabel)
+        if (useTableLayout)
         {
-            SetWindowTextW(slotCtl.labelLabel.get(), labelLabel.c_str());
-            SetWindowPos(slotCtl.labelLabel.get(), nullptr, x + margin, y, width - margin, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(slotCtl.labelLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-            y += rowHeight;
+            // Path row: [Path] [Edit] [Browse…]
+            const int rowY = contentY;
+
+            if (slotCtl.pathLabel)
+            {
+                SetWindowTextW(slotCtl.pathLabel.get(), pathLabelText.c_str());
+                SetWindowPos(slotCtl.pathLabel.get(), nullptr, cardContentX, rowY, captionW, editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.pathLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            if (slotCtl.pathFrame)
+            {
+                SetWindowPos(slotCtl.pathFrame.get(), nullptr, editX, rowY, std::max(10, pathEditW), editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            if (slotCtl.pathEdit)
+            {
+                SetWindowPos(slotCtl.pathEdit.get(),
+                             nullptr,
+                             editX + frameInset,
+                             rowY + frameInset,
+                             std::max(4, pathEditW - 2 * frameInset),
+                             std::max(4, editHeight - 2 * frameInset),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.pathEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            if (slotCtl.browseButton)
+            {
+                SetWindowTextW(slotCtl.browseButton.get(), browseText.c_str());
+                SetWindowPos(slotCtl.browseButton.get(),
+                             nullptr,
+                             std::max(cardContentX, browseX),
+                             rowY,
+                             browseWidth,
+                             editHeight,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.browseButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            contentY += editHeight + innerGap;
+
+            // Label row: [Label] [Edit] [Show in Change Drive menu] [On/Off toggle]
+            const int rowY2 = contentY;
+
+            if (slotCtl.labelLabel)
+            {
+                SetWindowTextW(slotCtl.labelLabel.get(), labelLabelText.c_str());
+                SetWindowPos(slotCtl.labelLabel.get(), nullptr, cardContentX, rowY2, captionW, editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.labelLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            if (slotCtl.labelFrame)
+            {
+                SetWindowPos(slotCtl.labelFrame.get(), nullptr, editX, rowY2, std::max(10, labelEditW), editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            if (slotCtl.labelEdit)
+            {
+                SetWindowPos(slotCtl.labelEdit.get(),
+                             nullptr,
+                             editX + frameInset,
+                             rowY2 + frameInset,
+                             std::max(4, labelEditW - 2 * frameInset),
+                             std::max(4, editHeight - 2 * frameInset),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.labelEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            const int toggleY = rowY2 + (editHeight - rowHeight) / 2;
+
+            if (slotCtl.showInMenuLabel)
+            {
+                SetWindowTextW(slotCtl.showInMenuLabel.get(), showInMenuText.c_str());
+                const int showLabelW = std::max(0, showAreaW - inlineGapX - toggleWidth);
+                SetWindowPos(slotCtl.showInMenuLabel.get(), nullptr, showAreaX, rowY2, showLabelW, editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.showInMenuLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            if (slotCtl.showInMenuToggle)
+            {
+                SetWindowPos(slotCtl.showInMenuToggle.get(),
+                             nullptr,
+                             rightEdge - toggleWidth,
+                             toggleY,
+                             toggleWidth,
+                             rowHeight,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.showInMenuToggle.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            contentY += editHeight;
+        }
+        else
+        {
+            // Fallback: stack on narrow widths.
+            if (slotCtl.pathLabel)
+            {
+                SetWindowTextW(slotCtl.pathLabel.get(), pathLabelText.c_str());
+                SetWindowPos(slotCtl.pathLabel.get(), nullptr, cardContentX, contentY, cardContentW, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.pathLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+                contentY += rowHeight;
+            }
+
+            const int stackPathEditW = std::max(0, cardContentW - browseGap - browseWidth);
+            if (slotCtl.pathFrame)
+            {
+                SetWindowPos(slotCtl.pathFrame.get(),
+                             nullptr,
+                             cardContentX,
+                             contentY,
+                             std::max(10, stackPathEditW),
+                             editHeight,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            if (slotCtl.pathEdit)
+            {
+                SetWindowPos(slotCtl.pathEdit.get(),
+                             nullptr,
+                             cardContentX + frameInset,
+                             contentY + frameInset,
+                             std::max(4, stackPathEditW - 2 * frameInset),
+                             std::max(4, editHeight - 2 * frameInset),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.pathEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            if (slotCtl.browseButton)
+            {
+                SetWindowTextW(slotCtl.browseButton.get(), browseText.c_str());
+                SetWindowPos(slotCtl.browseButton.get(),
+                             nullptr,
+                             cardContentX + stackPathEditW + browseGap,
+                             contentY,
+                             browseWidth,
+                             editHeight,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.browseButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+            contentY += editHeight + innerGap;
+
+            if (slotCtl.labelLabel)
+            {
+                SetWindowTextW(slotCtl.labelLabel.get(), labelLabelText.c_str());
+                SetWindowPos(slotCtl.labelLabel.get(), nullptr, cardContentX, contentY, cardContentW, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.labelLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+                contentY += rowHeight;
+            }
+
+            if (slotCtl.labelFrame)
+            {
+                SetWindowPos(slotCtl.labelFrame.get(), nullptr, cardContentX, contentY, std::max(10, cardContentW), editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            if (slotCtl.labelEdit)
+            {
+                SetWindowPos(slotCtl.labelEdit.get(),
+                             nullptr,
+                             cardContentX + frameInset,
+                             contentY + frameInset,
+                             std::max(4, cardContentW - 2 * frameInset),
+                             std::max(4, editHeight - 2 * frameInset),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.labelEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+            contentY += editHeight + innerGap;
+
+            if (slotCtl.showInMenuLabel)
+            {
+                SetWindowTextW(slotCtl.showInMenuLabel.get(), showInMenuText.c_str());
+                SetWindowPos(slotCtl.showInMenuLabel.get(),
+                             nullptr,
+                             cardContentX,
+                             contentY,
+                             std::max(0, cardContentW - cardGapX - toggleWidth),
+                             rowHeight,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.showInMenuLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            if (slotCtl.showInMenuToggle)
+            {
+                SetWindowPos(slotCtl.showInMenuToggle.get(),
+                             nullptr,
+                             cardContentX + std::max(0, cardContentW - toggleWidth),
+                             contentY,
+                             toggleWidth,
+                             rowHeight,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(slotCtl.showInMenuToggle.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
+
+            contentY += rowHeight;
         }
 
-        if (slotCtl.labelFrame)
-        {
-            SetWindowPos(slotCtl.labelFrame.get(), nullptr, x + margin, y, std::max(10, editWidth), editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        }
-        if (slotCtl.labelEdit)
-        {
-            const int frameInset = ThemedControls::ScaleDip(dpi, 2);
-            SetWindowPos(slotCtl.labelEdit.get(), nullptr, x + margin + frameInset, y + frameInset, std::max(4, editWidth - 2 * frameInset),
-                         std::max(4, editHeight - 2 * frameInset), SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(slotCtl.labelEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        }
-        y += editHeight + innerGap;
+        const int cardBottom = std::max(slotY + 1, contentY + cardPaddingY);
+        RECT card{};
+        card.left   = cardLeft;
+        card.top    = slotY;
+        card.right  = cardLeft + cardWidth;
+        card.bottom = cardBottom;
+        pushCard(card);
 
-        // Show in menu toggle card
-        const std::wstring showLabel = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_SHOW_IN_MENU);
-        layoutToggleCard(x + margin, width - margin, slotCtl.showInMenuLabel.get(), showLabel,
-                         slotCtl.showInMenuToggle.get(), slotCtl.showInMenuDescription.get(), std::wstring_view{});
-
-        y += gapY;
+        y = cardBottom + cardSpacingY;
     }
 
     // Open prefs on assign
@@ -419,12 +645,43 @@ bool HotPathsPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT 
                 const bool hasPathNow = (hp->slots[idx].has_value() && ! hp->slots[idx].value().path.empty());
                 const BOOL enable     = hasPathNow ? TRUE : FALSE;
                 auto& slotCtl         = state.hotPathSlotControls[idx];
-                EnableWindow(slotCtl.labelLabel.get(), enable);
-                EnableWindow(slotCtl.labelFrame.get(), enable);
-                EnableWindow(slotCtl.labelEdit.get(), enable);
-                EnableWindow(slotCtl.showInMenuLabel.get(), enable);
-                EnableWindow(slotCtl.showInMenuToggle.get(), enable);
-                EnableWindow(slotCtl.showInMenuDescription.get(), enable);
+
+                const auto setEnabledAndInvalidate = [](HWND hwnd, BOOL isEnabled) noexcept
+                {
+                    if (! hwnd)
+                    {
+                        return;
+                    }
+                    EnableWindow(hwnd, isEnabled);
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                };
+
+                const auto setStaticVisuallyDisabled = [](HWND hwnd, bool disabled) noexcept
+                {
+                    if (! hwnd)
+                    {
+                        return;
+                    }
+
+                    EnableWindow(hwnd, TRUE);
+                    if (disabled)
+                    {
+                        SetPropW(hwnd, kPrefsVisuallyDisabledProp, reinterpret_cast<HANDLE>(1));
+                    }
+                    else
+                    {
+                        RemovePropW(hwnd, kPrefsVisuallyDisabledProp);
+                    }
+                    InvalidateRect(hwnd, nullptr, TRUE);
+                };
+
+                const bool visuallyDisabled = ! hasPathNow;
+                setStaticVisuallyDisabled(slotCtl.labelLabel.get(), visuallyDisabled);
+                setEnabledAndInvalidate(slotCtl.labelFrame.get(), enable);
+                setEnabledAndInvalidate(slotCtl.labelEdit.get(), enable);
+                setStaticVisuallyDisabled(slotCtl.showInMenuLabel.get(), visuallyDisabled);
+                setEnabledAndInvalidate(slotCtl.showInMenuToggle.get(), enable);
+                setEnabledAndInvalidate(slotCtl.showInMenuDescription.get(), enable);
             }
             else
             {
@@ -534,6 +791,18 @@ bool HotPathsPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT 
             return true;
         }
 
+        if (! hwndCtl)
+        {
+            return true;
+        }
+
+        const bool ownerDraw = (GetWindowLongPtrW(hwndCtl, GWL_STYLE) & BS_TYPEMASK) == BS_OWNERDRAW;
+        if (ownerDraw)
+        {
+            const bool toggledOn = PrefsUi::GetTwoStateToggleState(hwndCtl, false);
+            PrefsUi::SetTwoStateToggleState(hwndCtl, false, ! toggledOn);
+        }
+
         const bool toggledOn = PrefsUi::GetTwoStateToggleState(hwndCtl, state.theme.systemHighContrast);
         const size_t idx     = static_cast<size_t>(slotIdx);
 
@@ -558,6 +827,18 @@ bool HotPathsPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT 
     // Handle open-prefs-on-assign toggle.
     if (commandId == IDC_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN && notifyCode == BN_CLICKED)
     {
+        if (! hwndCtl)
+        {
+            return true;
+        }
+
+        const bool ownerDraw = (GetWindowLongPtrW(hwndCtl, GWL_STYLE) & BS_TYPEMASK) == BS_OWNERDRAW;
+        if (ownerDraw)
+        {
+            const bool toggledOn = PrefsUi::GetTwoStateToggleState(hwndCtl, false);
+            PrefsUi::SetTwoStateToggleState(hwndCtl, false, ! toggledOn);
+        }
+
         const bool toggledOn = PrefsUi::GetTwoStateToggleState(hwndCtl, state.theme.systemHighContrast);
 
         auto* hp = EnsureWorkingHotPathsSettings(state.workingSettings);

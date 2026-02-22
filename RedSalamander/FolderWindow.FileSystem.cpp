@@ -43,8 +43,8 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     return EqualsNoCase(text.substr(0, prefix.size()), prefix);
 }
 
-struct ChangeCaseDialogState
-{
+ struct ChangeCaseDialogState
+ {
     ChangeCaseDialogState()                                         = default;
     ChangeCaseDialogState(const ChangeCaseDialogState&)             = delete;
     ChangeCaseDialogState& operator=(const ChangeCaseDialogState&)  = delete;
@@ -52,12 +52,129 @@ struct ChangeCaseDialogState
     ChangeCaseDialogState& operator=(ChangeCaseDialogState&&)       = delete;
     ~ChangeCaseDialogState()                                        = default;
 
+    struct ToggleCard final
+    {
+        HWND title       = nullptr;
+        HWND description = nullptr;
+        HWND toggle      = nullptr;
+    };
+
+    struct Ui final
+    {
+        ToggleCard includeSubdirs{};
+
+        HWND headerChangeCaseTo = nullptr;
+        ToggleCard lower{};
+        ToggleCard upper{};
+        ToggleCard partiallyMixed{};
+        ToggleCard mixed{};
+
+        HWND headerChange = nullptr;
+        ToggleCard whole{};
+        ToggleCard onlyName{};
+        ToggleCard onlyExtension{};
+    };
+
     AppTheme theme{};
     wil::unique_hbrush backgroundBrush;
+    wil::unique_hbrush cardBrush;
+    std::vector<RECT> cards;
+    bool useTwoColumns               = false;
+    int twoColumnSeparatorX          = -1;
+    int twoColumnSeparatorYTop       = 0;
+    int twoColumnSeparatorYBottom    = 0;
+    wil::unique_hfont boldFont;
+    wil::unique_hfont italicFont;
+    std::wstring toggleOnLabel;
+    std::wstring toggleOffLabel;
+
     bool allowSubdirs = false;
     ChangeCase::Options options{};
     bool accepted = false;
-};
+
+     Ui ui{};
+ };
+
+ void CenterWindowOnOwner(HWND window, HWND owner) noexcept;
+
+ [[nodiscard]] int MeasureStaticTextHeight(HWND referenceWindow, HFONT font, int width, std::wstring_view text) noexcept
+ {
+    if (! referenceWindow || ! font || width <= 0 || text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        return 0;
+    }
+
+    auto hdc = wil::GetDC(referenceWindow);
+    if (! hdc)
+    {
+        return 0;
+    }
+
+    [[maybe_unused]] auto oldFont = wil::SelectObject(hdc.get(), font);
+
+    RECT rc{};
+    rc.left   = 0;
+    rc.top    = 0;
+    rc.right  = width;
+    rc.bottom = 0;
+
+    DrawTextW(hdc.get(), text.data(), static_cast<int>(text.size()), &rc, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX | DT_CALCRECT);
+
+    const UINT dpi     = GetDpiForWindow(referenceWindow);
+    const int paddingY = ThemedControls::ScaleDip(dpi, 6);
+    return static_cast<int>(std::max(0l, rc.bottom - rc.top) + std::max(1, paddingY));
+}
+
+void EnsureChangeCaseDialogFonts(HWND dlg, ChangeCaseDialogState& state) noexcept
+{
+    if (! dlg)
+    {
+        return;
+    }
+
+    HFONT baseFont = reinterpret_cast<HFONT>(SendMessageW(dlg, WM_GETFONT, 0, 0));
+    if (! baseFont)
+    {
+        baseFont = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    }
+
+    LOGFONTW lf{};
+    if (GetObjectW(baseFont, sizeof(lf), &lf) != sizeof(lf))
+    {
+        return;
+    }
+
+    if (! state.boldFont)
+    {
+        LOGFONTW bold = lf;
+        bold.lfWeight = std::max<LONG>(FW_SEMIBOLD, lf.lfWeight);
+        state.boldFont.reset(CreateFontIndirectW(&bold));
+    }
+    if (! state.italicFont)
+    {
+        LOGFONTW italic = lf;
+        italic.lfItalic = TRUE;
+        state.italicFont.reset(CreateFontIndirectW(&italic));
+    }
+}
+
+LRESULT CALLBACK ChangeCaseToggleCheckSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR) noexcept
+{
+    switch (msg)
+    {
+        case BM_GETCHECK: return (GetWindowLongPtrW(hwnd, GWLP_USERDATA) != 0) ? BST_CHECKED : BST_UNCHECKED;
+        case BM_SETCHECK:
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, (wp == BST_CHECKED) ? 1 : 0);
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+        case WM_NCDESTROY:
+            RemoveWindowSubclass(hwnd, ChangeCaseToggleCheckSubclassProc, subclassId);
+            break;
+        default: break;
+    }
+
+    return DefSubclassProc(hwnd, msg, wp, lp);
+}
 
 void ApplyChangeCaseDialogTheme(HWND dlg, const AppTheme& theme) noexcept
 {
@@ -114,8 +231,534 @@ void ApplyChangeCaseDialogTheme(HWND dlg, const AppTheme& theme) noexcept
     RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
-INT_PTR OnChangeCaseDialogInit(HWND dlg, ChangeCaseDialogState* state) noexcept
+void EnsureChangeCaseDialogControlsCreated(HWND dlg, ChangeCaseDialogState& state) noexcept
 {
+    if (! dlg || state.ui.headerChangeCaseTo)
+    {
+        return;
+    }
+
+    const HINSTANCE instance = GetModuleHandleW(nullptr);
+    const bool highContrast  = state.theme.highContrast || state.theme.systemHighContrast;
+
+    constexpr DWORD baseStaticStyle = static_cast<DWORD>(WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX);
+    constexpr DWORD wrapStaticStyle = static_cast<DWORD>(WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL);
+
+    const DWORD toggleStyle =
+        static_cast<DWORD>(WS_CHILD | WS_VISIBLE | WS_TABSTOP) | static_cast<DWORD>(highContrast ? BS_AUTOCHECKBOX : 0);
+
+    const auto makeStatic = [&](DWORD style) noexcept -> HWND
+    { return CreateWindowExW(0, L"Static", L"", style, 0, 0, 10, 10, dlg, nullptr, instance, nullptr); };
+
+    const auto makeToggle = [&](int id) noexcept -> HWND
+    {
+        const HWND toggle = CreateWindowExW(
+            0, L"Button", L"", toggleStyle, 0, 0, 10, 10, dlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), instance, nullptr);
+        if (toggle && ! highContrast)
+        {
+            ThemedControls::EnableOwnerDrawButton(dlg, id);
+            SetWindowSubclass(toggle, ChangeCaseToggleCheckSubclassProc, 1u, 0);
+        }
+        return toggle;
+    };
+
+    state.ui.includeSubdirs.title       = makeStatic(baseStaticStyle);
+    state.ui.includeSubdirs.description = makeStatic(wrapStaticStyle);
+    state.ui.includeSubdirs.toggle      = makeToggle(IDC_CHANGE_CASE_INCLUDE_SUBDIRS);
+
+    state.ui.headerChangeCaseTo  = makeStatic(baseStaticStyle);
+    state.ui.lower.title         = makeStatic(baseStaticStyle);
+    state.ui.lower.description   = makeStatic(wrapStaticStyle);
+    state.ui.lower.toggle        = makeToggle(IDC_CHANGE_CASE_LOWER);
+    state.ui.upper.title         = makeStatic(baseStaticStyle);
+    state.ui.upper.description   = makeStatic(wrapStaticStyle);
+    state.ui.upper.toggle        = makeToggle(IDC_CHANGE_CASE_UPPER);
+    state.ui.partiallyMixed.title       = makeStatic(baseStaticStyle);
+    state.ui.partiallyMixed.description = makeStatic(wrapStaticStyle);
+    state.ui.partiallyMixed.toggle      = makeToggle(IDC_CHANGE_CASE_PARTIALLY_MIXED);
+    state.ui.mixed.title         = makeStatic(baseStaticStyle);
+    state.ui.mixed.description   = makeStatic(wrapStaticStyle);
+    state.ui.mixed.toggle        = makeToggle(IDC_CHANGE_CASE_MIXED);
+
+    state.ui.headerChange        = makeStatic(baseStaticStyle);
+    state.ui.whole.title         = makeStatic(baseStaticStyle);
+    state.ui.whole.description   = makeStatic(wrapStaticStyle);
+    state.ui.whole.toggle        = makeToggle(IDC_CHANGE_CASE_WHOLE);
+    state.ui.onlyName.title      = makeStatic(baseStaticStyle);
+    state.ui.onlyName.description = makeStatic(wrapStaticStyle);
+    state.ui.onlyName.toggle     = makeToggle(IDC_CHANGE_CASE_ONLY_NAME);
+    state.ui.onlyExtension.title       = makeStatic(baseStaticStyle);
+    state.ui.onlyExtension.description = makeStatic(wrapStaticStyle);
+    state.ui.onlyExtension.toggle      = makeToggle(IDC_CHANGE_CASE_ONLY_EXTENSION);
+
+    state.toggleOnLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
+    state.toggleOffLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
+}
+
+void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCaseDialogState& state) noexcept
+{
+    if (! hdc || ! dlg)
+    {
+        return;
+    }
+
+    RECT rc{};
+    GetClientRect(dlg, &rc);
+
+    if (state.backgroundBrush)
+    {
+        FillRect(hdc, &rc, state.backgroundBrush.get());
+    }
+
+    if (state.theme.systemHighContrast || state.theme.highContrast || state.cards.empty())
+    {
+        return;
+    }
+
+    const UINT dpi         = GetDpiForWindow(dlg);
+    const int radius       = ThemedControls::ScaleDip(dpi, 6);
+    const COLORREF surface = ThemedControls::GetControlSurfaceColor(state.theme);
+    const COLORREF border  = ThemedControls::BlendColor(surface, state.theme.menu.text, state.theme.dark ? 40 : 30, 255);
+
+    wil::unique_hbrush cardBrushFallback;
+    HBRUSH cardBrush = state.cardBrush.get();
+    if (! cardBrush)
+    {
+        cardBrushFallback.reset(CreateSolidBrush(surface));
+        cardBrush = cardBrushFallback.get();
+    }
+    wil::unique_hpen cardPen(CreatePen(PS_SOLID, 1, border));
+    if (! cardBrush || ! cardPen)
+    {
+        return;
+    }
+
+    [[maybe_unused]] auto oldBrush = wil::SelectObject(hdc, cardBrush);
+    [[maybe_unused]] auto oldPen   = wil::SelectObject(hdc, cardPen.get());
+
+    for (const RECT& card : state.cards)
+    {
+        RoundRect(hdc, card.left, card.top, card.right, card.bottom, radius, radius);
+    }
+
+    if (state.useTwoColumns && state.twoColumnSeparatorX > rc.left && state.twoColumnSeparatorX < rc.right)
+    {
+        const int rcTop    = static_cast<int>(rc.top);
+        const int rcBottom = static_cast<int>(rc.bottom);
+        const int yTop     = std::clamp(state.twoColumnSeparatorYTop, rcTop, rcBottom);
+        const int yBottom  = std::clamp(state.twoColumnSeparatorYBottom, rcTop, rcBottom);
+        if (yBottom > yTop)
+        {
+            const COLORREF separator = ThemedControls::BlendColor(surface, state.theme.menu.text, state.theme.dark ? 28 : 20, 255);
+            wil::unique_hpen sepPen(CreatePen(PS_SOLID, 1, separator));
+            if (sepPen)
+            {
+                [[maybe_unused]] auto oldSepPen = wil::SelectObject(hdc, sepPen.get());
+                MoveToEx(hdc, state.twoColumnSeparatorX, yTop, nullptr);
+                LineTo(hdc, state.twoColumnSeparatorX, yBottom);
+            }
+        }
+    }
+}
+
+ void LayoutChangeCaseDialogControls(HWND dlg, ChangeCaseDialogState& state) noexcept
+ {
+    EnsureChangeCaseDialogControlsCreated(dlg, state);
+
+    if (! dlg || ! state.ui.headerChangeCaseTo)
+    {
+        return;
+    }
+
+    RECT rcDlg{};
+    if (! GetClientRect(dlg, &rcDlg))
+    {
+        return;
+    }
+
+    const int dlgW = std::max(0l, rcDlg.right - rcDlg.left);
+    const int dlgH = std::max(0l, rcDlg.bottom - rcDlg.top);
+
+    const UINT dpi = GetDpiForWindow(dlg);
+
+    const int margin       = ThemedControls::ScaleDip(dpi, 16);
+    const int gapX         = ThemedControls::ScaleDip(dpi, 12);
+    const int gapY         = ThemedControls::ScaleDip(dpi, 12);
+    const int rowHeight    = std::max(1, ThemedControls::ScaleDip(dpi, 26));
+    const int titleHeight  = std::max(1, ThemedControls::ScaleDip(dpi, 18));
+    const int headerHeight = std::max(1, ThemedControls::ScaleDip(dpi, 20));
+
+    const int cardPaddingX   = ThemedControls::ScaleDip(dpi, 12);
+    const int cardPaddingY   = ThemedControls::ScaleDip(dpi, 8);
+    const int cardGapY       = ThemedControls::ScaleDip(dpi, 2);
+    const int cardGapX       = ThemedControls::ScaleDip(dpi, 12);
+    const int cardSpacingY   = ThemedControls::ScaleDip(dpi, 8);
+    const int sectionSpacing = ThemedControls::ScaleDip(dpi, 16);
+
+    HFONT dialogFont = reinterpret_cast<HFONT>(SendMessageW(dlg, WM_GETFONT, 0, 0));
+    if (! dialogFont)
+    {
+        dialogFont = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    }
+    EnsureChangeCaseDialogFonts(dlg, state);
+    const HFONT headerFont = state.boldFont ? state.boldFont.get() : dialogFont;
+    const HFONT infoFont   = state.italicFont ? state.italicFont.get() : dialogFont;
+
+    const auto getWindowText = [](HWND hwnd) noexcept -> std::wstring
+    {
+        if (! hwnd)
+        {
+            return {};
+        }
+        const int len = GetWindowTextLengthW(hwnd);
+        if (len <= 0)
+        {
+            return {};
+        }
+        std::wstring text(static_cast<size_t>(len), L'\0');
+        const int copied = GetWindowTextW(hwnd, text.data(), len + 1);
+        if (copied <= 0)
+        {
+            return {};
+        }
+        if (static_cast<size_t>(copied) < text.size())
+        {
+            text.resize(static_cast<size_t>(copied));
+        }
+        return text;
+    };
+
+    const int buttonPadX = ThemedControls::ScaleDip(dpi, 16);
+    const int minBtnW    = ThemedControls::ScaleDip(dpi, 80);
+
+    const auto measureButtonWidth = [&](HWND btn) noexcept -> int
+    {
+        const std::wstring text = getWindowText(btn);
+        const int textW         = ThemedControls::MeasureTextWidth(dlg, dialogFont, text);
+        return std::max(minBtnW, (2 * buttonPadX) + textW);
+    };
+
+    const HWND okBtn     = GetDlgItem(dlg, IDOK);
+    const HWND cancelBtn = GetDlgItem(dlg, IDCANCEL);
+
+    const int okW     = measureButtonWidth(okBtn);
+    const int cancelW = measureButtonWidth(cancelBtn);
+    const int buttonsY = std::max(0, dlgH - margin - rowHeight);
+
+    const UINT flags = SWP_NOZORDER | SWP_NOACTIVATE;
+
+    int nextRight = std::max(0, dlgW - margin);
+    if (cancelBtn)
+    {
+        nextRight -= cancelW;
+        SetWindowPos(cancelBtn, nullptr, nextRight, buttonsY, cancelW, rowHeight, flags);
+        SendMessageW(cancelBtn, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        nextRight -= gapX;
+    }
+    if (okBtn)
+    {
+        nextRight -= okW;
+        SetWindowPos(okBtn, nullptr, nextRight, buttonsY, okW, rowHeight, flags);
+        SendMessageW(okBtn, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+    }
+
+    const int contentX = margin;
+    const int contentY = margin;
+    const int contentW = std::max(0, dlgW - 2 * margin);
+
+    const int minToggleWidth  = ThemedControls::ScaleDip(dpi, 90);
+    const int onWidth         = ThemedControls::MeasureTextWidth(dlg, headerFont, state.toggleOnLabel);
+    const int offWidth        = ThemedControls::MeasureTextWidth(dlg, headerFont, state.toggleOffLabel);
+    const int togglePaddingX  = ThemedControls::ScaleDip(dpi, 6);
+    const int toggleGapX      = ThemedControls::ScaleDip(dpi, 8);
+    const int toggleTrackW    = ThemedControls::ScaleDip(dpi, 34);
+    const int stateTextW      = std::max(onWidth, offWidth);
+    const int measuredToggleW = std::max(minToggleWidth, (2 * togglePaddingX) + stateTextW + toggleGapX + toggleTrackW);
+
+    const auto computeToggleWidth = [&](int availableW) noexcept -> int
+    { return std::min(std::max(0, availableW - 2 * cardPaddingX), measuredToggleW); };
+
+     const int columnSeparatorAreaW = ThemedControls::ScaleDip(dpi, 28);
+     const int minLeftColumnW       = ThemedControls::ScaleDip(dpi, 320);
+     const int minRightColumnW      = ThemedControls::ScaleDip(dpi, 240);
+
+    state.cards.clear();
+    state.useTwoColumns             = false;
+    state.twoColumnSeparatorX       = -1;
+    state.twoColumnSeparatorYTop    = 0;
+    state.twoColumnSeparatorYBottom = 0;
+
+    auto pushCard = [&](const RECT& card) noexcept { state.cards.push_back(card); };
+
+    auto showToggleCardControls = [&](const ChangeCaseDialogState::ToggleCard& card, bool visible) noexcept
+    {
+        const int cmd = visible ? SW_SHOW : SW_HIDE;
+        ShowWindow(card.title, cmd);
+        ShowWindow(card.description, cmd);
+        ShowWindow(card.toggle, cmd);
+    };
+
+    auto layoutSectionHeaderAt = [&](HWND header, std::wstring_view text, int x, int width, int& y) noexcept
+    {
+        if (! header)
+        {
+            return;
+        }
+
+        SetWindowTextW(header, text.data());
+        ShowWindow(header, SW_SHOW);
+        SetWindowPos(header, nullptr, x, y, width, headerHeight, flags);
+        SendMessageW(header, WM_SETFONT, reinterpret_cast<WPARAM>(headerFont), TRUE);
+        y += headerHeight + gapY;
+    };
+
+    auto layoutToggleCardAt = [&](const ChangeCaseDialogState::ToggleCard& card,
+                                  std::wstring_view titleText,
+                                  std::wstring_view descText,
+                                  bool visible,
+                                  int x,
+                                  int width,
+                                  int toggleW,
+                                  bool addBottomSpacing,
+                                  int& y) noexcept
+    {
+        showToggleCardControls(card, visible);
+        if (! visible)
+        {
+            return;
+        }
+
+        const int textW = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleW);
+        const int descH = descText.empty() ? 0 : MeasureStaticTextHeight(dlg, infoFont, textW, descText);
+
+        const int contentH = std::max(0, titleHeight + (descH > 0 ? (cardGapY + descH) : 0));
+        const int cardH    = std::max(rowHeight + 2 * cardPaddingY, contentH + 2 * cardPaddingY);
+
+        RECT cardRc{};
+        cardRc.left   = x;
+        cardRc.top    = y;
+        cardRc.right  = x + width;
+        cardRc.bottom = y + cardH;
+        pushCard(cardRc);
+
+        SetWindowTextW(card.title, titleText.data());
+        SetWindowPos(card.title, nullptr, cardRc.left + cardPaddingX, cardRc.top + cardPaddingY, textW, titleHeight, flags);
+        SendMessageW(card.title, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+
+        if (descH > 0)
+        {
+            SetWindowTextW(card.description, descText.data());
+            ShowWindow(card.description, SW_SHOW);
+            SetWindowPos(card.description,
+                         nullptr,
+                         cardRc.left + cardPaddingX,
+                         cardRc.top + cardPaddingY + titleHeight + cardGapY,
+                         textW,
+                         std::max(0, descH),
+                         flags);
+            SendMessageW(card.description, WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
+        }
+        else
+        {
+            ShowWindow(card.description, SW_HIDE);
+        }
+
+        if (card.toggle)
+        {
+            SetWindowPos(card.toggle,
+                         nullptr,
+                         cardRc.right - cardPaddingX - toggleW,
+                         cardRc.top + (cardH - rowHeight) / 2,
+                         toggleW,
+                         rowHeight,
+                         flags);
+            SendMessageW(card.toggle, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        }
+
+        y += cardH + (addBottomSpacing ? cardSpacingY : 0);
+    };
+
+    int y = contentY;
+
+    const int toggleWFull = computeToggleWidth(contentW);
+
+    layoutToggleCardAt(state.ui.includeSubdirs,
+                       L"Include subdirectories",
+                       L"Apply to selected folders recursively.",
+                       true,
+                       contentX,
+                       contentW,
+                       toggleWFull,
+                       true,
+                       y);
+
+    y += sectionSpacing;
+
+     const bool useTwoColumnsLayout = contentW >= (minLeftColumnW + minRightColumnW + columnSeparatorAreaW);
+
+     if (useTwoColumnsLayout)
+     {
+         const int availableW = std::max(0, contentW - columnSeparatorAreaW);
+         const int minCombined = minLeftColumnW + minRightColumnW;
+         const int extra       = std::max(0, availableW - minCombined);
+ 
+         const int leftExtra = (extra * 2) / 3;
+         const int leftW     = std::max(0, minLeftColumnW + leftExtra);
+         const int rightW    = std::max(0, availableW - leftW);
+         const int leftX  = contentX;
+         const int rightX = contentX + leftW + columnSeparatorAreaW;
+
+        const int toggleWLeft  = computeToggleWidth(leftW);
+        const int toggleWRight = computeToggleWidth(rightW);
+
+        int leftY  = y;
+        int rightY = y;
+
+        if (! state.theme.systemHighContrast && ! state.theme.highContrast)
+        {
+            state.useTwoColumns          = true;
+            state.twoColumnSeparatorX    = contentX + leftW + (columnSeparatorAreaW / 2);
+            state.twoColumnSeparatorYTop = y;
+        }
+
+        layoutSectionHeaderAt(state.ui.headerChangeCaseTo, L"Change case to", leftX, leftW, leftY);
+        layoutToggleCardAt(state.ui.lower, L"Lower case", {}, true, leftX, leftW, toggleWLeft, true, leftY);
+        layoutToggleCardAt(state.ui.upper, L"Upper case", {}, true, leftX, leftW, toggleWLeft, true, leftY);
+        layoutToggleCardAt(
+            state.ui.partiallyMixed, L"Partially mixed case", L"Name in Mixed Case, extension in lower case.", true, leftX, leftW, toggleWLeft, true, leftY);
+        layoutToggleCardAt(state.ui.mixed, L"Mixed case", L"Title case (first letter of each word).", true, leftX, leftW, toggleWLeft, false, leftY);
+
+        layoutSectionHeaderAt(state.ui.headerChange, L"Change", rightX, rightW, rightY);
+        layoutToggleCardAt(state.ui.whole, L"Whole filename", {}, true, rightX, rightW, toggleWRight, true, rightY);
+        layoutToggleCardAt(state.ui.onlyName, L"Only name", {}, true, rightX, rightW, toggleWRight, true, rightY);
+        layoutToggleCardAt(state.ui.onlyExtension, L"Only extension", {}, true, rightX, rightW, toggleWRight, false, rightY);
+
+        y = std::max(leftY, rightY);
+        if (state.useTwoColumns)
+        {
+            state.twoColumnSeparatorYBottom = y;
+        }
+    }
+    else
+    {
+        layoutSectionHeaderAt(state.ui.headerChangeCaseTo, L"Change case to", contentX, contentW, y);
+        layoutToggleCardAt(state.ui.lower, L"Lower case", {}, true, contentX, contentW, toggleWFull, true, y);
+        layoutToggleCardAt(state.ui.upper, L"Upper case", {}, true, contentX, contentW, toggleWFull, true, y);
+        layoutToggleCardAt(
+            state.ui.partiallyMixed, L"Partially mixed case", L"Name in Mixed Case, extension in lower case.", true, contentX, contentW, toggleWFull, true, y);
+        layoutToggleCardAt(state.ui.mixed, L"Mixed case", L"Title case (first letter of each word).", true, contentX, contentW, toggleWFull, false, y);
+
+        y += sectionSpacing;
+        layoutSectionHeaderAt(state.ui.headerChange, L"Change", contentX, contentW, y);
+        layoutToggleCardAt(state.ui.whole, L"Whole filename", {}, true, contentX, contentW, toggleWFull, true, y);
+        layoutToggleCardAt(state.ui.onlyName, L"Only name", {}, true, contentX, contentW, toggleWFull, true, y);
+        layoutToggleCardAt(state.ui.onlyExtension, L"Only extension", {}, true, contentX, contentW, toggleWFull, false, y);
+    }
+
+    if (state.ui.includeSubdirs.toggle)
+    {
+        EnableWindow(state.ui.includeSubdirs.toggle, state.allowSubdirs ? TRUE : FALSE);
+        InvalidateRect(state.ui.includeSubdirs.toggle, nullptr, TRUE);
+    }
+
+     InvalidateRect(dlg, nullptr, TRUE);
+ }
+
+ void EnsureChangeCaseDialogAllOptionsVisible(HWND dlg, ChangeCaseDialogState& state) noexcept
+ {
+     if (! dlg || state.cards.empty())
+     {
+         return;
+     }
+ 
+     const HWND okBtn     = GetDlgItem(dlg, IDOK);
+     const HWND cancelBtn = GetDlgItem(dlg, IDCANCEL);
+     if (! okBtn && ! cancelBtn)
+     {
+         return;
+     }
+ 
+     const auto mapWindowTopToClient = [&](HWND window) noexcept -> std::optional<int>
+     {
+         if (! window)
+         {
+             return std::nullopt;
+         }
+ 
+         RECT rc{};
+         if (GetWindowRect(window, &rc) == 0)
+         {
+             return std::nullopt;
+         }
+ 
+         MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&rc), 2);
+         return static_cast<int>(rc.top);
+     };
+ 
+     int buttonsTop = std::numeric_limits<int>::max();
+     if (const auto okTop = mapWindowTopToClient(okBtn); okTop.has_value())
+     {
+         buttonsTop = std::min(buttonsTop, okTop.value());
+     }
+     if (const auto cancelTop = mapWindowTopToClient(cancelBtn); cancelTop.has_value())
+     {
+         buttonsTop = std::min(buttonsTop, cancelTop.value());
+     }
+     if (buttonsTop == std::numeric_limits<int>::max())
+     {
+         return;
+     }
+ 
+     int contentBottom = 0;
+     for (const RECT& card : state.cards)
+     {
+         contentBottom = std::max(contentBottom, static_cast<int>(card.bottom));
+     }
+ 
+     const UINT dpi  = GetDpiForWindow(dlg);
+     const int gapY  = ThemedControls::ScaleDip(dpi, 12);
+     const int desiredBottom = contentBottom + gapY;
+     if (desiredBottom <= buttonsTop)
+     {
+         return;
+     }
+ 
+     RECT windowRc{};
+     RECT clientRc{};
+     if (! GetWindowRect(dlg, &windowRc) || ! GetClientRect(dlg, &clientRc))
+     {
+         return;
+     }
+ 
+     const int windowW = std::max(1l, windowRc.right - windowRc.left);
+     const int windowH = std::max(1l, windowRc.bottom - windowRc.top);
+ 
+     int newWindowH       = windowH + (desiredBottom - buttonsTop);
+ 
+     HMONITOR monitor = MonitorFromWindow(dlg, MONITOR_DEFAULTTONEAREST);
+     MONITORINFO mi{};
+     mi.cbSize = sizeof(mi);
+     if (monitor && GetMonitorInfoW(monitor, &mi))
+     {
+         const int workH = static_cast<int>(mi.rcWork.bottom - mi.rcWork.top);
+         newWindowH      = std::min(newWindowH, workH);
+     }
+ 
+     if (newWindowH <= windowH)
+     {
+         return;
+     }
+ 
+     SetWindowPos(dlg, nullptr, 0, 0, windowW, newWindowH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+ 
+     if (HWND owner = GetParent(dlg))
+     {
+         CenterWindowOnOwner(dlg, owner);
+     }
+ }
+ 
+ INT_PTR OnChangeCaseDialogInit(HWND dlg, ChangeCaseDialogState* state) noexcept
+ {
     if (! dlg || ! state)
     {
         return FALSE;
@@ -124,9 +767,17 @@ INT_PTR OnChangeCaseDialogInit(HWND dlg, ChangeCaseDialogState* state) noexcept
     SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
     ApplyTitleBarTheme(dlg, state->theme, GetActiveWindow() == dlg);
     state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
+    state->cardBrush.reset();
+    if (! state->theme.systemHighContrast && ! state->theme.highContrast)
+    {
+        const COLORREF surface = ThemedControls::GetControlSurfaceColor(state->theme);
+        state->cardBrush.reset(CreateSolidBrush(surface));
+    }
+    EnsureChangeCaseDialogControlsCreated(dlg, *state);
     ApplyChangeCaseDialogTheme(dlg, state->theme);
 
-    if (! state->theme.highContrast)
+    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
+    if (! highContrast)
     {
         ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
         ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
@@ -135,14 +786,17 @@ INT_PTR OnChangeCaseDialogInit(HWND dlg, ChangeCaseDialogState* state) noexcept
     CheckRadioButton(dlg, IDC_CHANGE_CASE_LOWER, IDC_CHANGE_CASE_MIXED, IDC_CHANGE_CASE_LOWER);
     CheckRadioButton(dlg, IDC_CHANGE_CASE_WHOLE, IDC_CHANGE_CASE_ONLY_EXTENSION, IDC_CHANGE_CASE_WHOLE);
 
-    if (HWND include = GetDlgItem(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS))
-    {
-        EnableWindow(include, state->allowSubdirs ? TRUE : FALSE);
-        CheckDlgButton(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS, BST_UNCHECKED);
-    }
+     if (HWND include = GetDlgItem(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS))
+     {
+         EnableWindow(include, state->allowSubdirs ? TRUE : FALSE);
+         CheckDlgButton(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS, BST_UNCHECKED);
+     }
 
-    return TRUE;
-}
+     LayoutChangeCaseDialogControls(dlg, *state);
+     EnsureChangeCaseDialogAllOptionsVisible(dlg, *state);
+
+     return TRUE;
+ }
 
 INT_PTR OnChangeCaseDialogCtlColorDialog(ChangeCaseDialogState* state) noexcept
 {
@@ -164,17 +818,47 @@ INT_PTR OnChangeCaseDialogCtlColorStatic(ChangeCaseDialogState* state, HDC hdc, 
     const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
     const COLORREF textColor = enabled ? state->theme.menu.text : state->theme.menu.disabledText;
 
+    COLORREF background = state->theme.windowBackground;
+    HBRUSH brush        = state->backgroundBrush.get();
+
+    if (! state->theme.systemHighContrast && ! state->theme.highContrast && control && state->cardBrush && ! state->cards.empty())
+    {
+        RECT rcControl{};
+        if (GetWindowRect(control, &rcControl) != 0)
+        {
+            const HWND root = GetAncestor(control, GA_ROOT);
+            if (root)
+            {
+                MapWindowPoints(nullptr, root, reinterpret_cast<POINT*>(&rcControl), 2);
+                POINT center{};
+                center.x = (rcControl.left + rcControl.right) / 2;
+                center.y = (rcControl.top + rcControl.bottom) / 2;
+
+                for (const RECT& card : state->cards)
+                {
+                    if (PtInRect(&card, center) != FALSE)
+                    {
+                        background = ThemedControls::GetControlSurfaceColor(state->theme);
+                        brush      = state->cardBrush.get();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     if (! state->theme.systemHighContrast)
     {
         SetBkMode(hdc, TRANSPARENT);
+        SetBkColor(hdc, background);
         SetTextColor(hdc, textColor);
-        return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+        return reinterpret_cast<INT_PTR>(brush);
     }
 
     SetBkMode(hdc, OPAQUE);
-    SetBkColor(hdc, state->theme.windowBackground);
+    SetBkColor(hdc, background);
     SetTextColor(hdc, textColor);
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+    return reinterpret_cast<INT_PTR>(brush);
 }
 
 INT_PTR OnChangeCaseDialogCtlColorButton(ChangeCaseDialogState* state, HDC hdc, HWND control) noexcept
@@ -187,17 +871,47 @@ INT_PTR OnChangeCaseDialogCtlColorButton(ChangeCaseDialogState* state, HDC hdc, 
     const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
     const COLORREF textColor = enabled ? state->theme.menu.text : state->theme.menu.disabledText;
 
+    COLORREF background = state->theme.windowBackground;
+    HBRUSH brush        = state->backgroundBrush.get();
+
+    if (! state->theme.systemHighContrast && ! state->theme.highContrast && control && state->cardBrush && ! state->cards.empty())
+    {
+        RECT rcControl{};
+        if (GetWindowRect(control, &rcControl) != 0)
+        {
+            const HWND root = GetAncestor(control, GA_ROOT);
+            if (root)
+            {
+                MapWindowPoints(nullptr, root, reinterpret_cast<POINT*>(&rcControl), 2);
+                POINT center{};
+                center.x = (rcControl.left + rcControl.right) / 2;
+                center.y = (rcControl.top + rcControl.bottom) / 2;
+
+                for (const RECT& card : state->cards)
+                {
+                    if (PtInRect(&card, center) != FALSE)
+                    {
+                        background = ThemedControls::GetControlSurfaceColor(state->theme);
+                        brush      = state->cardBrush.get();
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
     if (! state->theme.systemHighContrast)
     {
         SetBkMode(hdc, TRANSPARENT);
+        SetBkColor(hdc, background);
         SetTextColor(hdc, textColor);
-        return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+        return reinterpret_cast<INT_PTR>(brush);
     }
 
     SetBkMode(hdc, OPAQUE);
-    SetBkColor(hdc, state->theme.windowBackground);
+    SetBkColor(hdc, background);
     SetTextColor(hdc, textColor);
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+    return reinterpret_cast<INT_PTR>(brush);
 }
 
 INT_PTR OnChangeCaseDialogCommand(HWND dlg, ChangeCaseDialogState* state, WORD commandId) noexcept
@@ -265,17 +979,55 @@ INT_PTR CALLBACK ChangeCaseDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     switch (msg)
     {
         case WM_INITDIALOG: return OnChangeCaseDialogInit(dlg, reinterpret_cast<ChangeCaseDialogState*>(lp));
-        case WM_ERASEBKGND:
-            if (state && state->backgroundBrush && wp)
+        case WM_SIZE:
+            if (state)
             {
-                RECT rc{};
-                if (GetClientRect(dlg, &rc))
-                {
-                    FillRect(reinterpret_cast<HDC>(wp), &rc, state->backgroundBrush.get());
-                    return TRUE;
-                }
+                LayoutChangeCaseDialogControls(dlg, *state);
             }
-            break;
+            return TRUE;
+        case WM_ERASEBKGND:
+            // Avoid flicker; paint background and cards in WM_PAINT.
+            return TRUE;
+        case WM_PAINT:
+        {
+            if (! state)
+            {
+                break;
+            }
+
+            PAINTSTRUCT ps{};
+            wil::unique_hdc_paint hdc = wil::BeginPaint(dlg, &ps);
+            if (! hdc)
+            {
+                return TRUE;
+            }
+
+            RECT client{};
+            GetClientRect(dlg, &client);
+            const int width  = std::max(0l, client.right - client.left);
+            const int height = std::max(0l, client.bottom - client.top);
+
+            wil::unique_hdc memDc;
+            wil::unique_hbitmap memBmp;
+            if (width > 0 && height > 0)
+            {
+                memDc.reset(CreateCompatibleDC(hdc.get()));
+                memBmp.reset(CreateCompatibleBitmap(hdc.get(), width, height));
+            }
+
+            if (memDc && memBmp)
+            {
+                [[maybe_unused]] auto oldBmp = wil::SelectObject(memDc.get(), memBmp.get());
+                PaintChangeCaseDialogBackgroundAndCards(memDc.get(), dlg, *state);
+                BitBlt(hdc.get(), 0, 0, width, height, memDc.get(), 0, 0, SRCCOPY);
+            }
+            else
+            {
+                PaintChangeCaseDialogBackgroundAndCards(hdc.get(), dlg, *state);
+            }
+
+            return TRUE;
+        }
         case WM_CTLCOLORDLG: return OnChangeCaseDialogCtlColorDialog(state);
         case WM_CTLCOLORSTATIC: return OnChangeCaseDialogCtlColorStatic(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
         case WM_CTLCOLORBTN: return OnChangeCaseDialogCtlColorButton(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
@@ -287,7 +1039,7 @@ INT_PTR CALLBACK ChangeCaseDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             return FALSE;
         case WM_DRAWITEM:
         {
-            if (! state || state->theme.highContrast)
+            if (! state || state->theme.highContrast || state->theme.systemHighContrast)
             {
                 break;
             }
@@ -298,10 +1050,59 @@ INT_PTR CALLBACK ChangeCaseDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 break;
             }
 
+            const UINT id = dis->CtlID;
+            const bool isToggle = id == IDC_CHANGE_CASE_INCLUDE_SUBDIRS || id == IDC_CHANGE_CASE_LOWER || id == IDC_CHANGE_CASE_UPPER ||
+                                  id == IDC_CHANGE_CASE_PARTIALLY_MIXED || id == IDC_CHANGE_CASE_MIXED || id == IDC_CHANGE_CASE_WHOLE ||
+                                  id == IDC_CHANGE_CASE_ONLY_NAME || id == IDC_CHANGE_CASE_ONLY_EXTENSION;
+            if (isToggle)
+            {
+                const bool toggledOn   = dis->hwndItem && SendMessageW(dis->hwndItem, BM_GETCHECK, 0, 0) == BST_CHECKED;
+                const COLORREF surface = ThemedControls::GetControlSurfaceColor(state->theme);
+                const HFONT boldFont   = state->boldFont ? state->boldFont.get() : reinterpret_cast<HFONT>(SendMessageW(dlg, WM_GETFONT, 0, 0));
+                ThemedControls::DrawThemedSwitchToggle(*dis, state->theme, surface, boldFont, state->toggleOnLabel, state->toggleOffLabel, toggledOn);
+                return TRUE;
+            }
+
             ThemedControls::DrawThemedPushButton(*dis, state->theme);
             return TRUE;
         }
-        case WM_COMMAND: return OnChangeCaseDialogCommand(dlg, state, LOWORD(wp));
+        case WM_COMMAND:
+        {
+            const WORD id         = LOWORD(wp);
+            const WORD notifyCode = HIWORD(wp);
+            HWND hwndCtl          = reinterpret_cast<HWND>(lp);
+
+            if (state && notifyCode == BN_CLICKED && hwndCtl)
+            {
+                switch (id)
+                {
+                    case IDC_CHANGE_CASE_LOWER:
+                    case IDC_CHANGE_CASE_UPPER:
+                    case IDC_CHANGE_CASE_PARTIALLY_MIXED:
+                    case IDC_CHANGE_CASE_MIXED:
+                        CheckRadioButton(dlg, IDC_CHANGE_CASE_LOWER, IDC_CHANGE_CASE_MIXED, id);
+                        return TRUE;
+                    case IDC_CHANGE_CASE_WHOLE:
+                    case IDC_CHANGE_CASE_ONLY_NAME:
+                    case IDC_CHANGE_CASE_ONLY_EXTENSION:
+                        CheckRadioButton(dlg, IDC_CHANGE_CASE_WHOLE, IDC_CHANGE_CASE_ONLY_EXTENSION, id);
+                        return TRUE;
+                    case IDC_CHANGE_CASE_INCLUDE_SUBDIRS:
+                    {
+                        const LONG_PTR style = GetWindowLongPtrW(hwndCtl, GWL_STYLE);
+                        if ((style & BS_TYPEMASK) == BS_OWNERDRAW)
+                        {
+                            const bool checked = IsDlgButtonChecked(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS) == BST_CHECKED;
+                            CheckDlgButton(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS, checked ? BST_UNCHECKED : BST_CHECKED);
+                        }
+                        break;
+                    }
+                    default: break;
+                }
+            }
+
+            return OnChangeCaseDialogCommand(dlg, state, id);
+        }
     }
 
     return FALSE;
