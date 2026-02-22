@@ -937,7 +937,7 @@ bool CompareDirectoriesWindow::Create(HWND owner) noexcept
                                    y,
                                    w,
                                    h,
-                                   placementOwner,
+                                   nullptr,
                                    menu.get(),
                                    instance,
                                    this);
@@ -952,7 +952,6 @@ bool CompareDirectoriesWindow::Create(HWND owner) noexcept
     }
 
     ShowWindow(created, _restoreShowCmd);
-    UpdateWindow(created);
     return true;
 }
 
@@ -2314,6 +2313,46 @@ void CompareDirectoriesWindow::ApplyOptionsDialogTheme() noexcept
         },
         reinterpret_cast<LPARAM>(&data));
 
+    if (data.optionsHost && data.themeName)
+    {
+        EnumChildWindows(
+            data.optionsHost,
+            [](HWND child, LPARAM lParam) noexcept -> BOOL
+            {
+                auto* data = reinterpret_cast<const EnumData*>(lParam);
+                if (! data || ! child)
+                {
+                    return TRUE;
+                }
+
+                if (data->font)
+                {
+                    SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(data->font), FALSE);
+                }
+
+                std::array<wchar_t, 32> className{};
+                const int classLen = GetClassNameW(child, className.data(), static_cast<int>(className.size()));
+
+                const wchar_t* appliedTheme = data->themeName;
+                if (classLen > 0)
+                {
+                    if (_wcsicmp(className.data(), L"Static") == 0)
+                    {
+                        appliedTheme = L"";
+                    }
+                    else if (_wcsicmp(className.data(), L"Button") == 0)
+                    {
+                        appliedTheme = L"";
+                    }
+                }
+
+                SetWindowTheme(child, appliedTheme, nullptr);
+                SendMessageW(child, WM_THEMECHANGED, 0, 0);
+                return TRUE;
+            },
+            reinterpret_cast<LPARAM>(&data));
+    }
+
     RedrawWindow(_optionsDlg.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
@@ -2927,6 +2966,12 @@ LRESULT CALLBACK CompareOptionsWheelRouteSubclassProc(HWND hwnd, UINT msg, WPARA
                 return 0;
             }
 
+            static thread_local bool s_routingWheel = false;
+            if (s_routingWheel && hwnd != self->_optionsUi.host)
+            {
+                return 0;
+            }
+
             POINT ptScreen{};
             ptScreen.x = GET_X_LPARAM(lp);
             ptScreen.y = GET_Y_LPARAM(lp);
@@ -2945,8 +2990,16 @@ LRESULT CALLBACK CompareOptionsWheelRouteSubclassProc(HWND hwnd, UINT msg, WPARA
                 return 0;
             }
 
+            if (self->_optionsScrollMax <= 0)
+            {
+                // Nothing to scroll; swallow the wheel to avoid comctl32 forwarding loops.
+                return 0;
+            }
+
             if (hwnd != self->_optionsUi.host)
             {
+                s_routingWheel = true;
+                auto reset     = wil::scope_exit([&] { s_routingWheel = false; });
                 SendMessageW(self->_optionsUi.host, msg, wp, lp);
                 return 0;
             }
@@ -3059,6 +3112,14 @@ void CompareDirectoriesWindow::EnsureOptionsControlsCreated(HWND dlg) noexcept
         const DWORD editExStyle = customFrames ? 0 : WS_EX_CLIENTEDGE;
         outEdit                 = CreateWindowExW(
             editExStyle, L"Edit", L"", editStyle, 0, 0, 10, 10, _optionsUi.host, reinterpret_cast<HMENU>(static_cast<INT_PTR>(editId)), instance, nullptr);
+
+        if (outEdit)
+        {
+            const wchar_t* themeName =
+                (_theme.highContrast || _theme.systemHighContrast) ? L"" : ((_theme.dark) ? L"DarkMode_Explorer" : L"Explorer");
+            SetWindowTheme(outEdit, themeName, nullptr);
+            SendMessageW(outEdit, WM_THEMECHANGED, 0, 0);
+        }
 
         if (customFrames && outFrame && outEdit)
         {
@@ -3780,23 +3841,13 @@ void CompareDirectoriesWindow::Layout() noexcept
 
     if (_optionsDlg && IsWindowVisible(_optionsDlg.get()) != 0)
     {
-        RECT dr{};
-        GetWindowRect(_optionsDlg.get(), &dr);
-        const int minDw = std::max(1, static_cast<int>(dr.right - dr.left));
-        const int minDh = std::max(1, static_cast<int>(dr.bottom - dr.top));
-
         const int outerMargin = std::max(0, MulDiv(24, dpi, USER_DEFAULT_SCREEN_DPI));
         const int maxDw       = std::max(1, w - 2 * outerMargin);
         const int maxDh       = std::max(1, contentHeight - 2 * outerMargin);
-
-        const int preferredMaxDw = std::max(1, MulDiv(820, dpi, USER_DEFAULT_SCREEN_DPI));
-        const int preferredMaxDh = std::max(1, MulDiv(560, dpi, USER_DEFAULT_SCREEN_DPI));
-
-        const int dw = std::max(minDw, std::min(maxDw, preferredMaxDw));
-        const int dh = std::max(minDh, std::min(maxDh, preferredMaxDh));
-
-        const int x = std::max(0, (w - dw) / 2);
-        const int y = std::max(bannerHeight, bannerHeight + (contentHeight - dh) / 2);
+        const int dw           = maxDw;
+        const int dh           = maxDh;
+        const int x            = std::max(0, (w - dw) / 2);
+        const int y            = std::max(bannerHeight, bannerHeight + (contentHeight - dh) / 2);
         SetWindowPos(_optionsDlg.get(), nullptr, x, y, dw, dh, SWP_NOZORDER | SWP_NOACTIVATE);
         LayoutOptionsControls();
     }

@@ -3843,6 +3843,56 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
 
     return DispatchShortcutCommandToCompareWindow(compareWindow, commandId);
 }
+
+[[nodiscard]] bool TryDismissAlertOverlaysOnEscape(HWND root) noexcept
+{
+    if (! root || IsWindow(root) == FALSE)
+    {
+        return false;
+    }
+
+    struct EnumState
+    {
+        bool dismissed = false;
+    };
+
+    EnumState state{};
+    EnumChildWindows(
+        root,
+        [](HWND child, LPARAM lParam) noexcept -> BOOL
+        {
+            auto* state = reinterpret_cast<EnumState*>(lParam);
+            if (! state)
+            {
+                return TRUE;
+            }
+
+            constexpr wchar_t kAlertOverlayWindowClassName[] = L"RedSalamander.AlertOverlayWindow";
+
+            wchar_t className[64]{};
+            const int classLen = GetClassNameW(child, className, static_cast<int>(_countof(className)));
+            if (classLen <= 0 || wcscmp(className, kAlertOverlayWindowClassName) != 0)
+            {
+                return TRUE;
+            }
+
+            if (IsWindowVisible(child) == FALSE)
+            {
+                return TRUE;
+            }
+
+            SendMessageW(child, WM_KEYDOWN, VK_ESCAPE, 0);
+            if (IsWindowVisible(child) == FALSE)
+            {
+                state->dismissed = true;
+                return FALSE; // stop enumeration
+            }
+
+            return TRUE;
+        },
+        reinterpret_cast<LPARAM>(&state));
+    return state.dismissed;
+}
 } // namespace
 
 #ifdef _DEBUG
@@ -4269,6 +4319,17 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         const HWND root                   = msg.hwnd ? GetAncestor(msg.hwnd, GA_ROOT) : nullptr;
         const bool isMainWindowMessage    = (root == *hWnd);
         const bool isCompareWindowMessage = IsCompareDirectoriesWindowMessageRoot(root);
+
+        if ((msg.message == WM_SYSKEYDOWN || msg.message == WM_KEYDOWN) && msg.wParam == static_cast<WPARAM>(VK_ESCAPE))
+        {
+            // Host alerts are closable by design when request.closable==TRUE (see Common/PlugInterfaces/Host.h).
+            // Modeless overlay windows don't take focus, so route Esc explicitly.
+            if (TryDismissAlertOverlaysOnEscape(root))
+            {
+                continue;
+            }
+        }
+
         const HWND prefsDialog            = GetPreferencesDialogHandle();
         if (prefsDialog && root == prefsDialog)
         {
@@ -6316,6 +6377,87 @@ LRESULT OnMainWindowConnectionManagerConnect([[maybe_unused]] HWND hWnd, WPARAM 
     return 0;
 }
 
+struct ShutdownCloseWindowSnapshotContext final
+{
+    DWORD pid        = 0;
+    HWND excludeHwnd = nullptr;
+    std::vector<HWND> windows;
+};
+
+BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
+{
+    auto* ctx = reinterpret_cast<ShutdownCloseWindowSnapshotContext*>(lParam);
+    if (! ctx || ! hwnd || hwnd == ctx->excludeHwnd)
+    {
+        return TRUE;
+    }
+
+    DWORD windowPid = 0;
+    static_cast<void>(GetWindowThreadProcessId(hwnd, &windowPid));
+    if (windowPid != ctx->pid)
+    {
+        return TRUE;
+    }
+
+    // Only unowned top-level windows; owned windows will be torn down automatically with their owner.
+    if (GetWindow(hwnd, GW_OWNER) != nullptr || GetParent(hwnd) != nullptr)
+    {
+        return TRUE;
+    }
+
+    wchar_t className[256]{};
+    const int len = GetClassNameW(hwnd, className, static_cast<int>(std::size(className)));
+    if (len <= 0)
+    {
+        return TRUE;
+    }
+
+    constexpr std::wstring_view kPrefix = L"RedSalamander.";
+    if (static_cast<size_t>(len) < kPrefix.size())
+    {
+        return TRUE;
+    }
+
+    if (CompareStringOrdinal(className, static_cast<int>(kPrefix.size()), kPrefix.data(), static_cast<int>(kPrefix.size()), TRUE) != CSTR_EQUAL)
+    {
+        return TRUE;
+    }
+
+    ctx->windows.push_back(hwnd);
+    return TRUE;
+}
+
+void CloseUnownedTopLevelRedSalamanderWindowsForShutdown(HWND excludeHwnd) noexcept
+{
+    // Our internal window classes follow the "RedSalamander.*" naming convention. Close any unowned top-level windows
+    // in this process so they can tear down D2D/D3D resources before DLL/process shutdown.
+    ShutdownCloseWindowSnapshotContext ctx{};
+    ctx.pid         = GetCurrentProcessId();
+    ctx.excludeHwnd = excludeHwnd;
+    EnumWindows(&ShutdownCloseEnumWindowsProc, reinterpret_cast<LPARAM>(&ctx));
+
+    const DWORD currentThreadId = GetCurrentThreadId();
+    for (HWND hwnd : ctx.windows)
+    {
+        if (! hwnd || IsWindow(hwnd) == FALSE)
+        {
+            continue;
+        }
+
+        DWORD windowPid = 0;
+        const DWORD windowTid = GetWindowThreadProcessId(hwnd, &windowPid);
+
+        DWORD_PTR ignoredResult = 0;
+        static_cast<void>(SendMessageTimeoutW(hwnd, WM_CLOSE, 0, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, 1000, &ignoredResult));
+
+        // Best-effort: DestroyWindow only works from the creating thread.
+        if (IsWindow(hwnd) != FALSE && windowTid == currentThreadId)
+        {
+            DestroyWindow(hwnd);
+        }
+    }
+}
+
 LRESULT OnMainWindowClose(HWND hWnd)
 {
 #ifdef _DEBUG
@@ -6333,6 +6475,10 @@ LRESULT OnMainWindowClose(HWND hWnd)
     {
         return 0;
     }
+
+    // Ensure non-owned top-level windows release graphics resources before we tear down the process.
+    // The D2D debug layer breaks on shutdown if any D2D objects are still alive at DLL unload time.
+    CloseUnownedTopLevelRedSalamanderWindowsForShutdown(hWnd);
 
     DestroyWindow(hWnd);
     return 0;

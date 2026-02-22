@@ -250,6 +250,29 @@ LRESULT CALLBACK InputFrameSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             RECT rc{};
             GetClientRect(hwnd, &rc);
 
+            // Prevent the frame from painting over the input control (frame and input are siblings and overlap).
+            // This fixes cases where the input text appears and then disappears while typing due to frame repaints.
+            if (HWND input = reinterpret_cast<HWND>(GetWindowLongPtrW(hwnd, GWLP_USERDATA)))
+            {
+                RECT inputRc{};
+                if (GetWindowRect(input, &inputRc))
+                {
+                    MapWindowPoints(nullptr, hwnd, reinterpret_cast<POINT*>(&inputRc), 2);
+
+                    wil::unique_hrgn inputRgn(CreateRectRgn(0, 0, 0, 0));
+                    const int rgnType = inputRgn ? GetWindowRgn(input, inputRgn.get()) : ERROR;
+                    if (rgnType != ERROR && rgnType != NULLREGION)
+                    {
+                        OffsetRgn(inputRgn.get(), inputRc.left, inputRc.top);
+                        ExtSelectClipRgn(hdc.get(), inputRgn.get(), RGN_DIFF);
+                    }
+                    else
+                    {
+                        ExcludeClipRect(hdc.get(), inputRc.left, inputRc.top, inputRc.right, inputRc.bottom);
+                    }
+                }
+            }
+
             if (style->backdropBrush)
             {
                 FillRect(hdc.get(), &rc, style->backdropBrush);

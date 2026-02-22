@@ -2422,6 +2422,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 break;
             }
 
+            const bool visuallyDisabled = control && GetPropW(control, kPrefsVisuallyDisabledProp) != nullptr;
             bool enabled = true;
             if (control)
             {
@@ -2457,7 +2458,16 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                             }
                         }
 
-                        const COLORREF textColor = comboEnabled ? state->theme.menu.text : GetDisabledTextColor(*state, background);
+                        COLORREF textColor =
+                            (comboEnabled && ! visuallyDisabled) ? state->theme.menu.text : GetDisabledTextColor(*state, background);
+                        if (comboEnabled && ! visuallyDisabled && ! state->theme.highContrast && ! state->theme.systemHighContrast)
+                        {
+                            constexpr int kMinTextLumaDiff = 80;
+                            if (std::abs(ColorLuma(textColor) - ColorLuma(background)) < kMinTextLumaDiff)
+                            {
+                                textColor = ChooseContrastingTextColor(background);
+                            }
+                        }
                         SetBkMode(hdc, OPAQUE);
                         SetBkColor(hdc, background);
                         SetTextColor(hdc, textColor);
@@ -2498,7 +2508,16 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 }
             }
 
-            const COLORREF textColor = enabled ? state->theme.menu.text : GetDisabledTextColor(*state, background);
+            const bool enabledForText = enabled && ! visuallyDisabled;
+            COLORREF textColor        = enabledForText ? state->theme.menu.text : GetDisabledTextColor(*state, background);
+            if (enabledForText && ! state->theme.highContrast && ! state->theme.systemHighContrast)
+            {
+                constexpr int kMinTextLumaDiff = 80;
+                if (std::abs(ColorLuma(textColor) - ColorLuma(background)) < kMinTextLumaDiff)
+                {
+                    textColor = ChooseContrastingTextColor(background);
+                }
+            }
             SetBkMode(hdc, OPAQUE);
             SetBkColor(hdc, background);
             SetTextColor(hdc, textColor);
@@ -2523,7 +2542,15 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
             const COLORREF background =
                 themedInputs ? (enabled ? (focused ? state->inputFocusedBackgroundColor : state->inputBackgroundColor) : state->inputDisabledBackgroundColor)
                              : state->theme.windowBackground;
-            const COLORREF textColor = enabled ? state->theme.menu.text : GetDisabledTextColor(*state, background);
+            COLORREF textColor = enabled ? state->theme.menu.text : GetDisabledTextColor(*state, background);
+            if (enabled && ! state->theme.highContrast && ! state->theme.systemHighContrast)
+            {
+                constexpr int kMinTextLumaDiff = 80;
+                if (std::abs(ColorLuma(textColor) - ColorLuma(background)) < kMinTextLumaDiff)
+                {
+                    textColor = ChooseContrastingTextColor(background);
+                }
+            }
             HBRUSH brush             = state->backgroundBrush ? state->backgroundBrush.get() : reinterpret_cast<HBRUSH>(GetStockObject(DC_BRUSH));
             if (themedInputs)
             {
@@ -2744,7 +2771,10 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 dis->CtlID == IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE ||
                 dis->CtlID == IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE ||
                 dis->CtlID == IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE)
+                dis->CtlID == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE ||
+                dis->CtlID == IDC_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN ||
+                (dis->CtlID >= static_cast<UINT>(IDC_PREFS_HOT_PATHS_SHOW_IN_MENU_BASE) &&
+                 dis->CtlID < static_cast<UINT>(IDC_PREFS_HOT_PATHS_SHOW_IN_MENU_BASE + 10)))
             {
                 const bool toggledOn        = GetWindowLongPtrW(dis->hwndItem, GWLP_USERDATA) != 0;
                 const COLORREF surface      = ThemedControls::GetControlSurfaceColor(state->theme);

@@ -270,7 +270,7 @@ wil::unique_hfont CreateMenuFontForDpi(UINT dpi) noexcept
 
 static FolderViewTheme MakeFolderViewThemeLight(const D2D1::ColorF& accent) noexcept
 {
-    constexpr float kInactiveSelectionAlpha = 0.65f;
+    constexpr float kInactiveSelectionAlpha = 0.15f;
 
     FolderViewTheme theme;
     theme.backgroundColor                = D2D1::ColorF(D2D1::ColorF::White);
@@ -312,7 +312,7 @@ static FolderViewTheme MakeFolderViewThemeLight(const D2D1::ColorF& accent) noex
 
 static FolderViewTheme MakeFolderViewThemeDark(const D2D1::ColorF& accent) noexcept
 {
-    constexpr float kInactiveSelectionAlpha = 0.65f;
+    constexpr float kInactiveSelectionAlpha = 0.15f;
 
     FolderViewTheme theme;
     theme.backgroundColor                = D2D1::ColorF(0.08f, 0.08f, 0.08f);

@@ -20,6 +20,9 @@
 #include "SettingsSchemaParser.h"
 #include "SettingsStore.h"
 
+// Window props used by Preferences UI controls.
+inline constexpr wchar_t kPrefsVisuallyDisabledProp[] = L"RedSalamander.Preferences.VisuallyDisabled";
+
 enum class PrefCategory : int
 {
     General = 0,

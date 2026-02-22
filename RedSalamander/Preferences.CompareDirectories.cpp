@@ -166,33 +166,6 @@ void CompareDirectoriesPane::Refresh(HWND /*host*/, PreferencesDialogState& stat
     {
         SetWindowTextW(state.advancedCompareIgnoreDirectoriesPatternsEdit.get(), compare.ignoreDirectoriesPatterns.c_str());
     }
-
-    const auto setEnabledAndInvalidate = [](const auto& hwndLike, BOOL enabled) noexcept
-    {
-        HWND hwnd = nullptr;
-        if constexpr (requires { hwndLike.get(); })
-        {
-            hwnd = hwndLike.get();
-        }
-        else
-        {
-            hwnd = hwndLike;
-        }
-        if (hwnd)
-        {
-            EnableWindow(hwnd, enabled);
-            InvalidateRect(hwnd, nullptr, TRUE);
-        }
-    };
-
-    const BOOL enableIgnoreFiles       = compare.ignoreFiles ? TRUE : FALSE;
-    const BOOL enableIgnoreDirectories = compare.ignoreDirectories ? TRUE : FALSE;
-    setEnabledAndInvalidate(state.advancedCompareIgnoreFilesPatternsLabel, enableIgnoreFiles);
-    setEnabledAndInvalidate(state.advancedCompareIgnoreFilesPatternsFrame, enableIgnoreFiles);
-    setEnabledAndInvalidate(state.advancedCompareIgnoreFilesPatternsEdit, enableIgnoreFiles);
-    setEnabledAndInvalidate(state.advancedCompareIgnoreDirectoriesPatternsLabel, enableIgnoreDirectories);
-    setEnabledAndInvalidate(state.advancedCompareIgnoreDirectoriesPatternsFrame, enableIgnoreDirectories);
-    setEnabledAndInvalidate(state.advancedCompareIgnoreDirectoriesPatternsEdit, enableIgnoreDirectories);
 }
 
 void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, HFONT dialogFont) noexcept
@@ -236,6 +209,8 @@ void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& s
 
     const int measuredToggleWidth = std::max(minToggleWidth, (2 * paddingX) + stateTextWidth + gapX + trackWidth);
     const int toggleWidth         = std::min(std::max(0, width - 2 * cardPaddingX), measuredToggleWidth);
+
+    const auto& compare = GetCompareDirectoriesSettingsOrDefault(state.workingSettings);
 
     auto pushCard = [&](const RECT& card) noexcept { state.pageSettingCards.push_back(card); };
 
@@ -289,15 +264,25 @@ void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& s
         y += cardHeight + cardSpacingY;
     };
 
-    auto layoutEditCard =
-        [&](HWND label, std::wstring_view labelText, HWND frame, HWND edit, int desiredWidth, HWND descLabel, std::wstring_view descText) noexcept
+    auto layoutIgnoreCard = [&](HWND label,
+                               std::wstring_view labelText,
+                               HWND toggle,
+                               HWND descLabel,
+                               std::wstring_view descText,
+                               HWND patternsLabel,
+                               HWND patternsFrame,
+                               HWND patternsEdit,
+                               bool showEdit) noexcept
     {
-        desiredWidth         = std::min(desiredWidth, std::max(0, width - 2 * cardPaddingX));
-        const int textWidth  = std::max(0, width - 2 * cardPaddingX - cardGapX - desiredWidth);
+        const int textWidth  = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleWidth);
         const int descHeight = descLabel ? PrefsUi::MeasureStaticTextHeight(host, infoFont, textWidth, descText) : 0;
 
-        const int contentHeight = std::max(0, titleHeight + cardGapY + descHeight);
-        const int cardHeight    = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
+        int contentHeight = std::max(0, titleHeight + cardGapY + descHeight);
+        if (showEdit)
+        {
+            contentHeight += cardGapY + rowHeight;
+        }
+        const int cardHeight = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
 
         RECT card{};
         card.left   = x;
@@ -326,20 +311,53 @@ void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& s
             SendMessageW(descLabel, WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
         }
 
-        const int inputX       = card.right - cardPaddingX - desiredWidth;
-        const int inputY       = card.top + (cardHeight - rowHeight) / 2;
-        const int framePadding = (frame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-
-        if (frame)
+        if (toggle)
         {
-            SetWindowPos(frame, nullptr, inputX, inputY, desiredWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            // Keep the toggle aligned with the title row even when the card expands to show the pattern field.
+            SetWindowPos(toggle, nullptr, card.right - cardPaddingX - toggleWidth, card.top + cardPaddingY, toggleWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            SendMessageW(toggle, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
         }
-        if (edit)
+
+        if (patternsLabel)
         {
-            const int innerW = std::max(1, desiredWidth - 2 * framePadding);
-            const int innerH = std::max(1, rowHeight - 2 * framePadding);
-            SetWindowPos(edit, nullptr, inputX + framePadding, inputY + framePadding, innerW, innerH, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(edit, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            ShowWindow(patternsLabel, SW_HIDE);
+        }
+
+        if (patternsFrame)
+        {
+            ShowWindow(patternsFrame, showEdit ? SW_SHOW : SW_HIDE);
+            EnableWindow(patternsFrame, showEdit ? TRUE : FALSE);
+            InvalidateRect(patternsFrame, nullptr, TRUE);
+        }
+        if (patternsEdit)
+        {
+            ShowWindow(patternsEdit, showEdit ? SW_SHOW : SW_HIDE);
+            EnableWindow(patternsEdit, showEdit ? TRUE : FALSE);
+            InvalidateRect(patternsEdit, nullptr, TRUE);
+        }
+
+        if (showEdit && patternsEdit)
+        {
+            const int editX = card.left + cardPaddingX;
+            const int editW = std::max(0, width - 2 * cardPaddingX);
+
+            const int contentTop    = card.top + cardPaddingY;
+            const int contentBottom = contentTop + titleHeight + cardGapY + descHeight;
+            const int editTop       = contentBottom + cardGapY;
+
+            const int framePadding = (patternsFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
+
+            if (patternsFrame)
+            {
+                SetWindowPos(patternsFrame, nullptr, editX, editTop, editW, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            if (patternsEdit)
+            {
+                const int innerW = std::max(1, editW - 2 * framePadding);
+                const int innerH = std::max(1, rowHeight - 2 * framePadding);
+                SetWindowPos(patternsEdit, nullptr, editX + framePadding, editTop + framePadding, innerW, innerH, SWP_NOZORDER | SWP_NOACTIVATE);
+                SendMessageW(patternsEdit, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            }
         }
 
         y += cardHeight + cardSpacingY;
@@ -420,34 +438,24 @@ void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& s
 
     // 4) More options
     layoutSectionHeader(state.advancedCompareSectionMoreHeader, IDS_COMPARE_OPTIONS_SECTION_IGNORE);
-    layoutToggleCard(state.advancedCompareIgnoreFilesLabel.get(),
+    layoutIgnoreCard(state.advancedCompareIgnoreFilesLabel.get(),
                      LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE),
                      state.advancedCompareIgnoreFilesToggle.get(),
                      state.advancedCompareIgnoreFilesDescription.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC));
-
-    const int wideEditWidth = ThemedControls::ScaleDip(dpi, 360);
-    layoutEditCard(state.advancedCompareIgnoreFilesPatternsLabel.get(),
-                   LoadStringResource(nullptr, IDS_PREFS_COMPARE_IGNORE_FILES_PATTERNS_TITLE),
-                   state.advancedCompareIgnoreFilesPatternsFrame.get(),
-                   state.advancedCompareIgnoreFilesPatternsEdit.get(),
-                   wideEditWidth,
-                   nullptr,
-                   {});
-
-    layoutToggleCard(state.advancedCompareIgnoreDirectoriesLabel.get(),
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC),
+                     state.advancedCompareIgnoreFilesPatternsLabel.get(),
+                     state.advancedCompareIgnoreFilesPatternsFrame.get(),
+                     state.advancedCompareIgnoreFilesPatternsEdit.get(),
+                     compare.ignoreFiles);
+    layoutIgnoreCard(state.advancedCompareIgnoreDirectoriesLabel.get(),
                      LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE),
                      state.advancedCompareIgnoreDirectoriesToggle.get(),
                      state.advancedCompareIgnoreDirectoriesDescription.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC));
-
-    layoutEditCard(state.advancedCompareIgnoreDirectoriesPatternsLabel.get(),
-                   LoadStringResource(nullptr, IDS_PREFS_COMPARE_IGNORE_DIRECTORIES_PATTERNS_TITLE),
-                   state.advancedCompareIgnoreDirectoriesPatternsFrame.get(),
-                   state.advancedCompareIgnoreDirectoriesPatternsEdit.get(),
-                   wideEditWidth,
-                   nullptr,
-                   {});
+                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC),
+                     state.advancedCompareIgnoreDirectoriesPatternsLabel.get(),
+                     state.advancedCompareIgnoreDirectoriesPatternsFrame.get(),
+                     state.advancedCompareIgnoreDirectoriesPatternsEdit.get(),
+                     compare.ignoreDirectories);
 }
 
 bool CompareDirectoriesPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT commandId, UINT notifyCode, HWND hwndCtl) noexcept
@@ -516,6 +524,16 @@ bool CompareDirectoriesPane::HandleCommand(HWND host, PreferencesDialogState& st
              commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE);
         if (isCompareToggle)
         {
+            if (hwndCtl)
+            {
+                const bool ownerDraw = (GetWindowLongPtrW(hwndCtl, GWL_STYLE) & BS_TYPEMASK) == BS_OWNERDRAW;
+                if (ownerDraw)
+                {
+                    const bool current = PrefsUi::GetTwoStateToggleState(hwndCtl, false);
+                    PrefsUi::SetTwoStateToggleState(hwndCtl, false, ! current);
+                }
+            }
+
             const bool toggledOn = PrefsUi::GetTwoStateToggleState(hwndCtl, state.theme.systemHighContrast);
 
             auto* compare = EnsureWorkingCompareDirectoriesSettings(state.workingSettings);
@@ -542,6 +560,17 @@ bool CompareDirectoriesPane::HandleCommand(HWND host, PreferencesDialogState& st
             MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(state.workingSettings);
             SetDirty(GetParent(host), state);
             Refresh(host, state);
+
+            if (host && (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE))
+            {
+                RECT rc{};
+                if (GetClientRect(host, &rc))
+                {
+                    const int cx = std::max(0l, rc.right - rc.left);
+                    const int cy = std::max(0l, rc.bottom - rc.top);
+                    SendMessageW(host, WM_SIZE, SIZE_RESTORED, MAKELPARAM(cx, cy));
+                }
+            }
             return true;
         }
     }

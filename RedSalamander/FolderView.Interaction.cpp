@@ -356,10 +356,20 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
     SetCapture(_hWnd.get());
     _drag.dragging   = true;
     _drag.startPoint = pt;
+    _drag.anchorIndex = static_cast<size_t>(-1);
+    _drag.hasStartItemRect = false;
 
     auto hit = HitTest(pt);
     if (hit)
     {
+        _drag.anchorIndex = *hit;
+        if (*hit < _items.size())
+        {
+            const D2D1_RECT_F bounds = OffsetRect(_items[*hit].bounds, -_horizontalOffset, -_scrollOffset);
+            _drag.startItemRect      = ToPixelRect(bounds, _dpi);
+            _drag.hasStartItemRect   = (_drag.startItemRect.right > _drag.startItemRect.left) && (_drag.startItemRect.bottom > _drag.startItemRect.top);
+        }
+
         bool ctrl  = (keys & MK_CONTROL) != 0;
         bool shift = (keys & MK_SHIFT) != 0;
 
@@ -410,6 +420,8 @@ void FolderView::OnLButtonUp(POINT /*pt*/)
 {
     ReleaseCapture();
     _drag.dragging = false;
+    _drag.anchorIndex = static_cast<size_t>(-1);
+    _drag.hasStartItemRect = false;
 }
 
 void FolderView::OnMouseMove(POINT pt, WPARAM keys)
@@ -475,6 +487,12 @@ void FolderView::OnMouseMove(POINT pt, WPARAM keys)
 
     if ((_drag.dragging) && (keys & MK_LBUTTON))
     {
+        if (_drag.hasStartItemRect && PtInRect(&_drag.startItemRect, pt) != FALSE)
+        {
+            // Don't start a drag until the mouse leaves the item where the click began.
+            return;
+        }
+
         const int dx      = std::abs(pt.x - _drag.startPoint.x);
         const int dy      = std::abs(pt.y - _drag.startPoint.y);
         const int threshX = GetSystemMetrics(SM_CXDRAG);

@@ -947,7 +947,9 @@ void FolderView::Render(const RECT& invalidRect)
                     ID2D1SolidColorBrush* brush = _detailsTextBrush ? _detailsTextBrush.get() : _textBrush.get();
                     if (brush)
                     {
-                        _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), layout.get(), brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                        constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(
+                            D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                        _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), layout.get(), brush, options);
                     }
                 }
             }
@@ -1141,8 +1143,10 @@ void FolderView::DrawIncrementalSearchIndicator(uint64_t nowTickMs)
         const float textY = y + (kHeightDip - textHeightDip) * 0.5f;
 
         _incrementalSearchIndicatorTextBrush->SetOpacity(visibility);
+        constexpr auto options =
+            static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
         _d2dContext->DrawTextLayout(
-            D2D1::Point2F(textX, textY), _incrementalSearchIndicatorLayout.get(), _incrementalSearchIndicatorTextBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            D2D1::Point2F(textX, textY), _incrementalSearchIndicatorLayout.get(), _incrementalSearchIndicatorTextBrush.get(), options);
 
         if (pulse > 0.0f && textWidthDip > 0.0f)
         {
@@ -1509,13 +1513,15 @@ void FolderView::DrawItem(FolderItem& item)
     {
         if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
         {
+            constexpr auto options =
+                static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             const float nameHeight = item.labelMetrics.height > 0.0f ? item.labelMetrics.height : std::max(0.0f, contentHeight * 0.5f);
             D2D1_POINT_2F origin{labelLeft, contentTop};
             if (incrementalSearchRange.has_value())
             {
                 drawIncrementalSearchHighlight(origin, incrementalSearchRange.value());
             }
-            _d2dContext->DrawTextLayout(origin, item.labelLayout.get(), textBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            _d2dContext->DrawTextLayout(origin, item.labelLayout.get(), textBrush, options);
 
             ID2D1SolidColorBrush* detailsBrush = item.selected ? textBrush : (_detailsTextBrush ? _detailsTextBrush.get() : textBrush);
 
@@ -1523,7 +1529,7 @@ void FolderView::DrawItem(FolderItem& item)
             if (item.detailsLayout)
             {
                 D2D1_POINT_2F detailsOrigin{labelLeft, detailsTop};
-                _d2dContext->DrawTextLayout(detailsOrigin, item.detailsLayout.get(), detailsBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                _d2dContext->DrawTextLayout(detailsOrigin, item.detailsLayout.get(), detailsBrush, options);
             }
             else if (! item.detailsText.empty() && _detailsFormat)
             {
@@ -1533,7 +1539,7 @@ void FolderView::DrawItem(FolderItem& item)
                                        _detailsFormat.get(),
                                        detailsRect,
                                        detailsBrush,
-                                       D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                       options);
             }
 
             if (_displayMode == DisplayMode::ExtraDetailed)
@@ -1547,7 +1553,7 @@ void FolderView::DrawItem(FolderItem& item)
                 if (item.metadataLayout)
                 {
                     D2D1_POINT_2F metadataOrigin{labelLeft, metadataTop};
-                    _d2dContext->DrawTextLayout(metadataOrigin, item.metadataLayout.get(), metadataBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    _d2dContext->DrawTextLayout(metadataOrigin, item.metadataLayout.get(), metadataBrush, options);
                 }
                 else if (! item.metadataText.empty() && _detailsFormat)
                 {
@@ -1557,7 +1563,7 @@ void FolderView::DrawItem(FolderItem& item)
                                            _detailsFormat.get(),
                                            metadataRect,
                                            metadataBrush,
-                                           D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                           options);
                 }
             }
         }
@@ -1570,7 +1576,9 @@ void FolderView::DrawItem(FolderItem& item)
             {
                 drawIncrementalSearchHighlight(origin, incrementalSearchRange.value());
             }
-            _d2dContext->DrawTextLayout(origin, item.labelLayout.get(), textBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            constexpr auto options =
+                static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+            _d2dContext->DrawTextLayout(origin, item.labelLayout.get(), textBrush, options);
         }
     }
     else
@@ -1583,8 +1591,10 @@ void FolderView::DrawItem(FolderItem& item)
                 std::max(contentTop, contentBottom - detailsHeight - kDetailsGapDip - (metadataHeight > 0.0f ? (metadataHeight + kDetailsGapDip) : 0.0f));
 
             D2D1_RECT_F labelRect = D2D1::RectF(labelLeft, contentTop, labelLeft + availableWidth, nameBottom);
+            constexpr auto options =
+                static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             _d2dContext->DrawTextW(
-                item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
 
             ID2D1SolidColorBrush* detailsBrush = item.selected ? textBrush : (_detailsTextBrush ? _detailsTextBrush.get() : textBrush);
 
@@ -1596,7 +1606,7 @@ void FolderView::DrawItem(FolderItem& item)
                                        _detailsFormat.get(),
                                        detailsRect,
                                        detailsBrush,
-                                       D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                       options);
             }
 
             if (_displayMode == DisplayMode::ExtraDetailed && ! item.metadataText.empty() && _detailsFormat)
@@ -1611,14 +1621,16 @@ void FolderView::DrawItem(FolderItem& item)
                                        _detailsFormat.get(),
                                        metadataRect,
                                        metadataBrush,
-                                       D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                       options);
             }
         }
         else
         {
             D2D1_RECT_F labelRect = D2D1::RectF(labelLeft, contentTop, labelLeft + availableWidth, contentBottom);
+            constexpr auto options =
+                static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             _d2dContext->DrawTextW(
-                item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
         }
     }
 }
