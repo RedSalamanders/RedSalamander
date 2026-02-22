@@ -45,6 +45,11 @@ The Compare Directories window uses an embedded `FolderWindow`:
 - Window placement is persisted using `WindowPlacementPersistence` with window id `CompareDirectoriesWindow`.
 - If there is no saved placement yet, the compare window opens at the same **normal position and size** as the invoking main window.
 
+### Lifetime / shutdown
+
+- The Compare Directories window is an independent top-level window (not a child/owned window).
+- When the application shuts down (main window closes), the host closes any remaining unowned top-level RedSalamander windows during shutdown teardown so Direct2D resources can be released before process exit.
+
 ### Banner (Title + Actions + Progress)
 
 Above the panes, a banner region is displayed. The banner is themed consistently with the rest of the app and supports smooth progress updates (a Direct2D implementation is recommended but not required by the spec).

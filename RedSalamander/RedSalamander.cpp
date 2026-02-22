@@ -6384,6 +6384,9 @@ struct ShutdownCloseWindowSnapshotContext final
     std::vector<HWND> windows;
 };
 
+constexpr std::wstring_view kInternalWindowClassPrefix = L"RedSalamander.";
+constexpr UINT kShutdownCloseTimeoutMs                 = 1000;
+
 BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
 {
     auto* ctx = reinterpret_cast<ShutdownCloseWindowSnapshotContext*>(lParam);
@@ -6412,13 +6415,16 @@ BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
         return TRUE;
     }
 
-    constexpr std::wstring_view kPrefix = L"RedSalamander.";
-    if (static_cast<size_t>(len) < kPrefix.size())
+    if (static_cast<size_t>(len) < kInternalWindowClassPrefix.size())
     {
         return TRUE;
     }
 
-    if (CompareStringOrdinal(className, static_cast<int>(kPrefix.size()), kPrefix.data(), static_cast<int>(kPrefix.size()), TRUE) != CSTR_EQUAL)
+    if (CompareStringOrdinal(className,
+                             static_cast<int>(kInternalWindowClassPrefix.size()),
+                             kInternalWindowClassPrefix.data(),
+                             static_cast<int>(kInternalWindowClassPrefix.size()),
+                             TRUE) != CSTR_EQUAL)
     {
         return TRUE;
     }
@@ -6427,7 +6433,7 @@ BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
     return TRUE;
 }
 
-void CloseUnownedTopLevelRedSalamanderWindowsForShutdown(HWND excludeHwnd) noexcept
+[[nodiscard]] bool CloseUnownedTopLevelRedSalamanderWindowsForShutdown(HWND excludeHwnd) noexcept
 {
     // Our internal window classes follow the "RedSalamander.*" naming convention. Close any unowned top-level windows
     // in this process so they can tear down D2D/D3D resources before DLL/process shutdown.
@@ -6436,7 +6442,7 @@ void CloseUnownedTopLevelRedSalamanderWindowsForShutdown(HWND excludeHwnd) noexc
     ctx.excludeHwnd = excludeHwnd;
     EnumWindows(&ShutdownCloseEnumWindowsProc, reinterpret_cast<LPARAM>(&ctx));
 
-    const DWORD currentThreadId = GetCurrentThreadId();
+    bool allClosed = true;
     for (HWND hwnd : ctx.windows)
     {
         if (! hwnd || IsWindow(hwnd) == FALSE)
@@ -6444,18 +6450,25 @@ void CloseUnownedTopLevelRedSalamanderWindowsForShutdown(HWND excludeHwnd) noexc
             continue;
         }
 
-        DWORD windowPid = 0;
-        const DWORD windowTid = GetWindowThreadProcessId(hwnd, &windowPid);
-
         DWORD_PTR ignoredResult = 0;
-        static_cast<void>(SendMessageTimeoutW(hwnd, WM_CLOSE, 0, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, 1000, &ignoredResult));
-
-        // Best-effort: DestroyWindow only works from the creating thread.
-        if (IsWindow(hwnd) != FALSE && windowTid == currentThreadId)
+        const LRESULT sent      =
+            SendMessageTimeoutW(hwnd, WM_CLOSE, 0, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, kShutdownCloseTimeoutMs, &ignoredResult);
+        if (sent == 0)
         {
-            DestroyWindow(hwnd);
+            if (IsWindow(hwnd) != FALSE)
+            {
+                allClosed = false;
+            }
+            continue;
+        }
+
+        if (IsWindow(hwnd) != FALSE)
+        {
+            allClosed = false;
         }
     }
+
+    return allClosed;
 }
 
 LRESULT OnMainWindowClose(HWND hWnd)
@@ -6478,7 +6491,10 @@ LRESULT OnMainWindowClose(HWND hWnd)
 
     // Ensure non-owned top-level windows release graphics resources before we tear down the process.
     // The D2D debug layer breaks on shutdown if any D2D objects are still alive at DLL unload time.
-    CloseUnownedTopLevelRedSalamanderWindowsForShutdown(hWnd);
+    if (! CloseUnownedTopLevelRedSalamanderWindowsForShutdown(hWnd))
+    {
+        return 0;
+    }
 
     DestroyWindow(hWnd);
     return 0;
