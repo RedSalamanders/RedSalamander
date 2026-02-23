@@ -264,6 +264,45 @@ void FolderView::SetSelectionByDisplayNamePredicate(const std::function<bool(std
     UpdateIncrementalSearchHighlightForFocusedItem();
 }
 
+void FolderView::ClearSelectionByDisplayNamePredicate(const std::function<bool(std::wstring_view)>& shouldUnselect)
+{
+    if (_items.empty())
+    {
+        return;
+    }
+
+    bool changed = false;
+    for (auto& item : _items)
+    {
+        if (! item.selected)
+        {
+            continue;
+        }
+
+        const bool wantsUnselect = shouldUnselect ? shouldUnselect(item.displayName) : false;
+        if (! wantsUnselect)
+        {
+            continue;
+        }
+
+        item.selected = false;
+        changed       = true;
+    }
+
+    if (! changed)
+    {
+        return;
+    }
+
+    RecomputeSelectionStats();
+    NotifySelectionChanged();
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+    UpdateIncrementalSearchHighlightForFocusedItem();
+}
+
 void FolderView::RecomputeSelectionStats() noexcept
 {
     SelectionStats stats{};

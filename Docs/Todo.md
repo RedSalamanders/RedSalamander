@@ -6,20 +6,16 @@ This page is a user-facing summary of what is planned.
 
 ## Navigation
 
-- [ ] History Back / Forward
-- [ ] Hot Paths
-- [ ] Root Directory navigation
 - [ ] Filter UI
 
 ## View / layout
 
-- [ ] Fullscreen toggle
 - [ ] Pane view options (hidden/system files, extensions, thumbnails, preview pane, filter bar)
 - [ ] Navigation bar visibility toggles per pane
 
 ## Files and editors
 
-- [ ] “View width” / “Edit width”
+- [ ] “Edit width”
 - [ ] Alternate View
 - [ ] View With / Edit With menus
 - [ ] Edit / Edit new file workflow
@@ -35,8 +31,6 @@ This page is a user-facing summary of what is planned.
 
 ## Commands
 
-- [ ] Compare directories
-- [ ] Calculate directory sizes
 - [ ] Find files and directories
 - [ ] Make file list
 - [ ] Go to shortcut/link target
@@ -50,4 +44,3 @@ This page is a user-facing summary of what is planned.
 ## Packing
 
 - [ ] Pack / Unpack commands (beyond browsing archives as virtual file systems)
-

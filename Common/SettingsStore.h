@@ -299,6 +299,13 @@ struct HotPathsSettings
     bool openPrefsOnAssign = false;
 };
 
+struct SelectionMasksSettings
+{
+    // Most-recent-first history (max 10 recommended).
+    std::vector<std::wstring> selectHistory;
+    std::vector<std::wstring> unselectHistory;
+};
+
 struct ExtensionsSettings
 {
     // Map a file extension (lowercase, with leading dot like ".7z") to a file system plugin ID.
@@ -495,6 +502,7 @@ struct Settings
     std::optional<FileOperationsSettings> fileOperations;
     std::optional<CompareDirectoriesSettings> compareDirectories;
     std::optional<HotPathsSettings> hotPaths;
+    std::optional<SelectionMasksSettings> selectionMasks;
 };
 
 COMMON_API std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept;

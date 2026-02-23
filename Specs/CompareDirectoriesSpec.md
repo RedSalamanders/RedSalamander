@@ -531,7 +531,7 @@ The Compare Directories Options panel reads/writes the same settings; Preference
 
 ## Testing
 
-- Engine self-tests: `RedSalamander/CompareDirectoriesEngine.SelfTest.cpp` via `--compare-selftest`.
+- Engine self-tests: `RedSalamander/CompareDirectoriesEngine.SelfTest.cpp` via `--compare-selftest` (or `--selftest`).
 - Manual UI checks:
   - Shortcuts (function keys, selection, copy/move/delete) behave like the main window.
   - Compare scope behavior: OK/Rescan establishes roots; navigation outside roots cancels compare mode (with a prompt if scan/content compare is active) until the next OK/Rescan.

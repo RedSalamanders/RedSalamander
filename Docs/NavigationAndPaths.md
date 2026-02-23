@@ -8,10 +8,25 @@
   - click the left section of the Navigation bar, or
   - `Alt+F1` (Left) / `Alt+F2` (Right)
 - Open folder history: `Alt+Down` (or **Commands → Show Folders History**)
+- History back / forward: `Alt+Left` / `Alt+Right`
+- Hot Paths (bookmarked folders):
+  - Go to Hot Path: `Ctrl+1` .. `Ctrl+0`
+  - Set Hot Path to current folder: `Ctrl+Shift+1` .. `Ctrl+Shift+0`
+  - Manage Hot Paths: `Shift+F9` (opens Preferences → Hot Paths)
 - Go up one directory: `Backspace` (also `Alt+Up`)
+- Go to root directory: `Shift+Backspace`
 - Jump to a drive root: `Shift` + a drive letter (example: `Shift+C` → `C:\`)
+- Set path from other pane: `Ctrl+.`
 
 ![Drive/menu dropdown](res/drive-menu.png)
+
+### Hot Paths details
+
+Hot Paths are 10 bookmark slots for quick folder navigation:
+
+- Slots map to digits: `Ctrl+1` = slot 1, …, `Ctrl+9` = slot 9, `Ctrl+0` = slot 10.
+- Each slot can optionally have a **Label** (display name). If the label is empty, the path is shown.
+- You can choose whether a slot appears in the **drive/menu dropdown** via **Preferences → Hot Paths → Show in Change Drive menu**.
 
 ## Paths you can type
 
@@ -89,8 +104,6 @@ When browsing a local drive (the `file` file system), the disk info section can 
 
 ## Not implemented yet
 
-- History **Back** / **Forward**
-- Hot Paths
 - Filter bar
 - View options toggles (hidden/system/files/extensions/thumbnails/preview pane)
 

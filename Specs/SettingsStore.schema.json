@@ -29,7 +29,8 @@
     "connections": { "$ref": "#/$defs/connectionsSettings" },
     "fileOperations": { "$ref": "#/$defs/fileOperationsSettings" },
     "compareDirectories": { "$ref": "#/$defs/compareDirectoriesSettings" },
-    "hotPaths": { "$ref": "#/$defs/hotPathsSettings" }
+    "hotPaths": { "$ref": "#/$defs/hotPathsSettings" },
+    "selectionMasks": { "$ref": "#/$defs/selectionMasksSettings" }
   },
   "additionalProperties": false,
   "$defs": {
@@ -617,6 +618,33 @@
               { "$ref": "#/$defs/hotPathSlot" }
             ]
           }
+        }
+      },
+      "additionalProperties": false
+    },
+    "selectionMasksSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Selection Masks",
+      "description": "History for Select/Unselect selection-mask dialogs.",
+      "properties": {
+        "selectHistory": {
+          "type": "array",
+          "default": [],
+          "title": "Select History",
+          "description": "Most-recent-first mask history for the Select dialog.",
+          "minItems": 0,
+          "maxItems": 10,
+          "items": { "type": "string" }
+        },
+        "unselectHistory": {
+          "type": "array",
+          "default": [],
+          "title": "Unselect History",
+          "description": "Most-recent-first mask history for the Unselect dialog.",
+          "minItems": 0,
+          "maxItems": 10,
+          "items": { "type": "string" }
         }
       },
       "additionalProperties": false

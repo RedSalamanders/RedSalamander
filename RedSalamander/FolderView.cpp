@@ -16,7 +16,7 @@ void FolderView::SetPaneFocused(bool focused) noexcept
     }
 }
 
-FolderView::FolderView() : _theme(ResolveAppTheme(ThemeMode::System, L"").folderView)
+FolderView::FolderView() : _appTheme(ResolveAppTheme(ThemeMode::System, L"")), _theme(_appTheme.folderView)
 {
     _items.reserve(256);
     _alertOverlay = std::make_unique<RedSalamander::Ui::AlertOverlay>();
@@ -654,6 +654,11 @@ void FolderView::OnPaint()
     }
 
     Render(rcPaint);
+}
+
+void FolderView::SetAppTheme(const AppTheme& theme)
+{
+    _appTheme = theme;
 }
 
 void FolderView::SetTheme(const FolderViewTheme& theme)

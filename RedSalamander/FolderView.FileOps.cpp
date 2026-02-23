@@ -386,7 +386,7 @@ void FolderView::RenameFocusedItem()
         return;
 
     const auto& item = _items[_focusedIndex];
-    auto prompt      = PromptForRename(_hWnd.get(), std::wstring(item.displayName), item.isDirectory);
+    auto prompt      = PromptForRename(_hWnd.get(), std::wstring(item.displayName), item.isDirectory, _appTheme);
     if (! prompt || prompt->empty())
         return;
 

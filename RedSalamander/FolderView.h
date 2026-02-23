@@ -119,6 +119,7 @@ public:
         return _fileSystemInstanceContext;
     }
 
+    void SetAppTheme(const AppTheme& theme);
     void SetTheme(const FolderViewTheme& theme);
     void SetMenuTheme(const MenuTheme& menuTheme);
     void SetShortcutManager(const ShortcutManager* shortcuts) noexcept;
@@ -363,6 +364,9 @@ public:
     // When clearExistingSelection is false, this only adds selection (it does not unselect already-selected items).
     void SetSelectionByDisplayNamePredicate(const std::function<bool(std::wstring_view)>& shouldSelect, bool clearExistingSelection = true);
 
+    // Programmatic unselection: sets selected=false for items where `shouldUnselect(displayName)` returns true.
+    void ClearSelectionByDisplayNamePredicate(const std::function<bool(std::wstring_view)>& shouldUnselect);
+
     void DebugShowOverlaySample(OverlaySeverity severity);
     void DebugShowOverlaySample(ErrorOverlayKind kind, OverlaySeverity severity, bool blocksInput);
     void DebugShowCanceledOverlaySample();
@@ -501,6 +505,7 @@ private:
     bool _deferredInitPosted     = false;
 
     // Rendering resources
+    AppTheme _appTheme;
     FolderViewTheme _theme;
     MenuTheme _menuTheme;
     const ShortcutManager* _shortcutManager = nullptr;

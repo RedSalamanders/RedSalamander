@@ -208,11 +208,17 @@ void FolderWindow::RefreshPaneDetailsText(Pane pane)
 }
 
 void FolderWindow::SetPaneSelectionByDisplayNamePredicate(Pane pane,
-                                                          const std::function<bool(std::wstring_view)>& shouldSelect,
-                                                          bool clearExistingSelection) noexcept
+                                                         const std::function<bool(std::wstring_view)>& shouldSelect,
+                                                         bool clearExistingSelection) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.SetSelectionByDisplayNamePredicate(shouldSelect, clearExistingSelection);
+}
+
+void FolderWindow::ClearPaneSelectionByDisplayNamePredicate(Pane pane, const std::function<bool(std::wstring_view)>& shouldUnselect) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.ClearSelectionByDisplayNamePredicate(shouldUnselect);
 }
 
 void FolderWindow::SetFileOperationCompletedCallback(FileOperationCompletedCallback callback)

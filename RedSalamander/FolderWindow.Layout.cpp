@@ -108,6 +108,7 @@ void FolderWindow::ApplyTheme(const AppTheme& theme)
 
         if (pane.hFolderView)
         {
+            pane.folderView.SetAppTheme(_theme);
             pane.folderView.SetTheme(_theme.folderView);
             pane.folderView.SetMenuTheme(_theme.menu);
 

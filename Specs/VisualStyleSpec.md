@@ -89,6 +89,23 @@ Windows common controls do not automatically inherit dark-mode styling in all ca
   - `LISTVIEW` header (`ListView_GetHeader(hwndListView)`)
 - **Dark combobox/listbox backgrounds**: for dropdowns that still paint with a light background, handle `WM_CTLCOLORLISTBOX` / `WM_CTLCOLOREDIT` / `WM_CTLCOLORSTATIC` and return a theme brush + `SetTextColor/SetBkColor` (skip this in high contrast).
 
+## Themed Dialog Buttons (Owner-Draw)
+
+Standard dialog push buttons (`OK`, `Cancel`, `Create`, etc.) MUST be theme-aware so they do not render as light-mode controls on dark dialogs.
+
+- In non-high-contrast themes, dialogs SHOULD enable owner-draw for push buttons (via `ThemedControls::EnableOwnerDrawButton`) and handle `WM_DRAWITEM` by calling `ThemedControls::DrawThemedPushButton`.
+- In high-contrast themes, dialogs MUST NOT force owner-draw; the system must remain in full control of colors.
+
+## Themed Dialog Inputs (Edit/Combo Frames)
+
+Win32 `EDIT` / `COMBOBOX` controls frequently render mismatched borders in dark-themed dialogs. In non-high-contrast themes, dialogs SHOULD use the shared framed-input pattern:
+
+- Apply `SetWindowTheme` to inputs (`DarkMode_Explorer` / `Explorer`) and forward `WM_THEMECHANGED` so scrollbars and non-client details update.
+- Remove 3D borders (`WS_EX_CLIENTEDGE` / `WS_BORDER`) and add text padding via `EM_SETMARGINS` (`6 DIP` left/right).
+- Create a sibling `Static` frame window behind the input and install it via `ThemedInputFrames::InstallFrame` (input inset inside the frame by `2 DIP`).
+- When using framed inputs, handle `WM_CTLCOLOREDIT` / `WM_CTLCOLORSTATIC` / `WM_CTLCOLORLISTBOX` as needed and return brushes that match the frame fill (switch based on enabled/focused state).
+- In high-contrast themes, dialogs MUST NOT force custom frames; the system must remain in full control of borders and colors.
+
 ## Themed Title Bars (Top-Level Windows)
 
 Any new top-level window that is theme-aware (dialogs included unless explicitly mentioned) MUST apply title-bar styling:
