@@ -764,6 +764,56 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
     return true;
 }
 
+[[nodiscard]] bool AreEquivalentCompareDirectoriesSettings(const Common::Settings::CompareDirectoriesSettings& a,
+                                                          const Common::Settings::CompareDirectoriesSettings& b) noexcept
+{
+    return a.compareSize == b.compareSize && a.compareDateTime == b.compareDateTime && a.compareAttributes == b.compareAttributes &&
+           a.compareContent == b.compareContent && a.compareSubdirectories == b.compareSubdirectories &&
+           a.compareSubdirectoryAttributes == b.compareSubdirectoryAttributes && a.selectSubdirsOnlyInOnePane == b.selectSubdirsOnlyInOnePane &&
+           a.ignoreFiles == b.ignoreFiles && a.ignoreFilesPatterns == b.ignoreFilesPatterns && a.ignoreDirectories == b.ignoreDirectories &&
+           a.ignoreDirectoriesPatterns == b.ignoreDirectoriesPatterns && a.showIdenticalItems == b.showIdenticalItems;
+}
+
+[[nodiscard]] bool IsEmptyHotPathSlot(const Common::Settings::HotPathSlot& slot) noexcept
+{
+    return slot.path.empty() && slot.label.empty() && ! slot.showInMenu;
+}
+
+[[nodiscard]] bool AreEquivalentHotPathSlots(const std::optional<Common::Settings::HotPathSlot>& a,
+                                             const std::optional<Common::Settings::HotPathSlot>& b) noexcept
+{
+    const Common::Settings::HotPathSlot* aSlot = (a.has_value() && ! IsEmptyHotPathSlot(a.value())) ? &a.value() : nullptr;
+    const Common::Settings::HotPathSlot* bSlot = (b.has_value() && ! IsEmptyHotPathSlot(b.value())) ? &b.value() : nullptr;
+    if (! aSlot && ! bSlot)
+    {
+        return true;
+    }
+    if (! aSlot || ! bSlot)
+    {
+        return false;
+    }
+
+    return aSlot->path == bSlot->path && aSlot->label == bSlot->label && aSlot->showInMenu == bSlot->showInMenu;
+}
+
+[[nodiscard]] bool AreEquivalentHotPathsSettings(const Common::Settings::HotPathsSettings& a, const Common::Settings::HotPathsSettings& b) noexcept
+{
+    if (a.openPrefsOnAssign != b.openPrefsOnAssign)
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < a.slots.size(); ++i)
+    {
+        if (! AreEquivalentHotPathSlots(a.slots[i], b.slots[i]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 [[nodiscard]] bool IsDirty(const PreferencesDialogState& state) noexcept
 {
     const Common::Settings::MainMenuState baseline = GetMainMenu(state.baselineSettings);
@@ -837,6 +887,22 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
     if (state.baselineSettings.extensions.openWithViewerByExtension != state.workingSettings.extensions.openWithViewerByExtension)
     {
         return true;
+    }
+    {
+        const auto& baselineCompare = PrefsCompareDirectories::GetCompareDirectoriesSettingsOrDefault(state.baselineSettings);
+        const auto& workingCompare  = PrefsCompareDirectories::GetCompareDirectoriesSettingsOrDefault(state.workingSettings);
+        if (! AreEquivalentCompareDirectoriesSettings(baselineCompare, workingCompare))
+        {
+            return true;
+        }
+    }
+    {
+        const auto& baselineHotPaths = PrefsHotPaths::GetHotPathsSettingsOrDefault(state.baselineSettings);
+        const auto& workingHotPaths  = PrefsHotPaths::GetHotPathsSettingsOrDefault(state.workingSettings);
+        if (! AreEquivalentHotPathsSettings(baselineHotPaths, workingHotPaths))
+        {
+            return true;
+        }
     }
     if (! AreEquivalentPluginsSettings(state.baselineSettings.plugins, state.workingSettings.plugins))
     {
@@ -963,6 +1029,8 @@ namespace
         const auto& workingFileOperations  = GetFileOperationsSettingsOrDefault(state.workingSettings);
         if (baselineFileOperations.autoDismissSuccess != workingFileOperations.autoDismissSuccess ||
             baselineFileOperations.maxDiagnosticsLogFiles != workingFileOperations.maxDiagnosticsLogFiles ||
+            baselineFileOperations.diagnosticsInfoEnabled != workingFileOperations.diagnosticsInfoEnabled ||
+            baselineFileOperations.diagnosticsDebugEnabled != workingFileOperations.diagnosticsDebugEnabled ||
             baselineFileOperations.maxIssueReportFiles != workingFileOperations.maxIssueReportFiles ||
             baselineFileOperations.maxDiagnosticsInMemory != workingFileOperations.maxDiagnosticsInMemory ||
             baselineFileOperations.maxDiagnosticsPerFlush != workingFileOperations.maxDiagnosticsPerFlush ||
@@ -975,6 +1043,22 @@ namespace
     if (state.baselineSettings.extensions.openWithViewerByExtension != state.workingSettings.extensions.openWithViewerByExtension)
     {
         merged.extensions.openWithViewerByExtension = state.workingSettings.extensions.openWithViewerByExtension;
+    }
+    {
+        const auto& baselineCompare = PrefsCompareDirectories::GetCompareDirectoriesSettingsOrDefault(state.baselineSettings);
+        const auto& workingCompare  = PrefsCompareDirectories::GetCompareDirectoriesSettingsOrDefault(state.workingSettings);
+        if (! AreEquivalentCompareDirectoriesSettings(baselineCompare, workingCompare))
+        {
+            merged.compareDirectories = state.workingSettings.compareDirectories;
+        }
+    }
+    {
+        const auto& baselineHotPaths = PrefsHotPaths::GetHotPathsSettingsOrDefault(state.baselineSettings);
+        const auto& workingHotPaths  = PrefsHotPaths::GetHotPathsSettingsOrDefault(state.workingSettings);
+        if (! AreEquivalentHotPathsSettings(baselineHotPaths, workingHotPaths))
+        {
+            merged.hotPaths = state.workingSettings.hotPaths;
+        }
     }
     if (! AreEquivalentPluginsSettings(state.baselineSettings.plugins, state.workingSettings.plugins))
     {

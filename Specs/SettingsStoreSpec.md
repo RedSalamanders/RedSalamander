@@ -24,7 +24,7 @@ This specification defines:
 - Writer emits strict JSON and omits default values; comments/trailing commas are not preserved.
 
 
-## Non-Goals (v6)
+## Non-Goals
 
 - No registry storage for these settings (registry-backed settings can remain where they are until explicitly migrated).
 - No runtime JSON Schema validation dependency (the schema is normative; runtime validation is implemented as type/range checks when reading).
@@ -50,6 +50,9 @@ To avoid cross-process contention and keep settings scoped correctly, each execu
 - `AppId` examples:
   - `RedSalamander`
   - `RedSalamanderMonitor`
+
+Debug-load note:
+- In Debug builds, if `<AppId>-debug.settings.json` does not exist, settings load falls back to the versioned file (and then the legacy file) so developers can reuse existing settings without copying/renaming files.
 
 Example (Release):
 - `C:\\Users\\<User>\\AppData\\Local\\RedSalamander\\Settings\\RedSalamander-7.0.settings.json`
@@ -141,7 +144,7 @@ namespace Common::Settings
 ### Root object
 
 The root JSON object may contain (depending on the application):
-- `schemaVersion` (integer): format version (v6 = `6`); unsupported versions are treated as invalid (file is backed up and defaults are used, no migration).
+- `schemaVersion` (integer): format version (current: v10 = `10`); unsupported versions are treated as invalid (file is backed up and defaults are used, no migration).
 - `windows` (object): per-window placement records
 - `theme` (object): current theme + custom themes
 - `plugins` (object): plugin discovery + per-plugin configuration
@@ -482,6 +485,40 @@ Behavior:
 - When `menuBarVisible` is `false`, pressing **Alt** (alone) temporarily shows the menu bar for interaction; it hides again when the menu loop exits.
 - `functionBarVisible` is toggled by `View → Function Bar` and takes effect immediately.
 
+## Compare Directories Defaults
+
+Defaults for the Compare Directories feature live under:
+- `compareDirectories`
+
+Keys map to `Common::Settings::CompareDirectoriesSettings`:
+- Compare files: `compareSize`, `compareDateTime`, `compareAttributes`, `compareContent`
+- Subdirectories: `compareSubdirectories`, `compareSubdirectoryAttributes`, `selectSubdirsOnlyInOnePane`
+- Ignore patterns: `ignoreFiles` + `ignoreFilesPatterns`, `ignoreDirectories` + `ignoreDirectoriesPatterns`
+- Display: `showIdenticalItems`
+
+These defaults are edited in **Preferences → Compare Directories** and are used by the Compare Directories window.
+
+## Hot Paths
+
+Hot Paths (bookmarked folders) live under:
+- `hotPaths`
+
+Keys:
+- `openPrefsOnAssign` (bool): after assigning a slot via `Ctrl+Shift+<digit>`, open **Preferences → Hot Paths**.
+- `slots` (array, max 10): hot path slots (`index 0 = Ctrl+1`, `index 9 = Ctrl+0`). Each slot is either `null` (empty) or:
+  - `path` (string): folder path
+  - `label` (string, optional): display name (empty = show `path`)
+  - `showInMenu` (bool): include this slot in the NavigationView drive/menu dropdown
+
+## Selection Masks
+
+History for selection-mask dialogs lives under:
+- `selectionMasks`
+
+Keys:
+- `selectHistory` (array, max 10): most-recent-first history for `cmd/pane/selection/selectDialog`
+- `unselectHistory` (array, max 10): most-recent-first history for `cmd/pane/selection/unselectDialog`
+
 ## RedSalamanderMonitor UI State
 
 These settings persist the state of checkable menu items and filter state.
@@ -517,7 +554,7 @@ These settings persist the state of checkable menu items and filter state.
 
 ```json
 {
-  "schemaVersion": 6,
+  "schemaVersion": 10,
   "windows": {
     "MainWindow": {
       "state": "maximized",
@@ -565,7 +602,7 @@ These settings persist the state of checkable menu items and filter state.
 
 ```json
 {
-  "schemaVersion": 6,
+  "schemaVersion": 10,
   "windows": {
     "MonitorWindow": {
       "state": "normal",

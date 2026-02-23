@@ -111,10 +111,10 @@ BEGIN
         MENUITEM "Change &Drive",        IDM_LEFT_CHANGE_DRIVE,MFT_STRING,MFS_ENABLED
         POPUP "&Go to",                         65535,MFT_STRING,MFS_ENABLED
         BEGIN
-            MENUITEM "&Back [todo]",              IDM_LEFT_GO_TO_BACK,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Forward [todo]",          IDM_LEFT_GO_TO_FORWARD,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Back",                   IDM_LEFT_GO_TO_BACK,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Forward",                IDM_LEFT_GO_TO_FORWARD,MFT_STRING,MFS_ENABLED
             MENUITEM "Parent &Directory", IDM_LEFT_GO_TO_PARENT_DIRECTORY,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Root Directory [todo]",              IDM_LEFT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Root Directory",                    IDM_LEFT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
             MENUITEM "Path from &Other Panel",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "Hot &Paths... [todo]",      IDM_LEFT_HOT_PATHS,MFT_STRING,MFS_ENABLED
@@ -223,8 +223,8 @@ BEGIN
         MENUITEM "Copy Path as Text [todo]",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
         MENUITEM "Copy Path + File Name as Text [todo]", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "&Select... [todo]",                    IDM_PANE_SELECTION_SELECT_DIALOG,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Unselect... [todo]",                  IDM_PANE_SELECTION_UNSELECT_DIALOG,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Select...",                           IDM_PANE_SELECTION_SELECT_DIALOG,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Unselect...",                         IDM_PANE_SELECTION_UNSELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "&Invert Selection [todo]",             IDM_PANE_SELECTION_INVERT,MFT_STRING,MFS_ENABLED
         MENUITEM "Select &All",                          IDM_PANE_SELECTION_SELECT_ALL,MFT_STRING,MFS_ENABLED
         MENUITEM "Unselect A&ll",                        IDM_PANE_SELECTION_UNSELECT_ALL,MFT_STRING,MFS_ENABLED
@@ -340,10 +340,10 @@ BEGIN
         MENUITEM "Change &Drive",        IDM_RIGHT_CHANGE_DRIVE,MFT_STRING,MFS_ENABLED
         POPUP "&Go to",                         65535,MFT_STRING,MFS_ENABLED
         BEGIN
-            MENUITEM "&Back [todo]",              IDM_RIGHT_GO_TO_BACK,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Forward [todo]",          IDM_RIGHT_GO_TO_FORWARD,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Back",                   IDM_RIGHT_GO_TO_BACK,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Forward",                IDM_RIGHT_GO_TO_FORWARD,MFT_STRING,MFS_ENABLED
             MENUITEM "Parent &Directory", IDM_RIGHT_GO_TO_PARENT_DIRECTORY,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Root Directory [todo]",              IDM_RIGHT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Root Directory",                    IDM_RIGHT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
             MENUITEM "Path from &Other Panel",       IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "Hot &Paths... [todo]",      IDM_RIGHT_HOT_PATHS,MFT_STRING,MFS_ENABLED
@@ -1152,6 +1152,15 @@ BEGIN
     IDS_LABEL_CREATE_DIR_IN                              "Create in:"
     IDS_LABEL_CREATE_DIR_NAME                            "Folder name:"
     IDS_BUTTON_CREATE                                    "Create"
+    IDS_CAPTION_SELECTION_MASK                           "Select or Unselect"
+    IDS_LABEL_SELECTION_MASK                             "Select or Unselect"
+    IDS_CAPTION_SELECTION_MASK_SELECT                    "Select"
+    IDS_CAPTION_SELECTION_MASK_UNSELECT                  "Unselect"
+    IDS_LABEL_SELECTION_MASK_SELECT                      "Select"
+    IDS_LABEL_SELECTION_MASK_UNSELECT                    "Unselect"
+    IDS_SELECTION_MASK_HINT_COLLAPSED                    "Mask syntax ▸"
+    IDS_SELECTION_MASK_HINT_EXPANDED                     "Mask syntax ▾"
+    IDS_SELECTION_MASK_HELP_TEXT                         "'*' stands for any number of characters. '?' stands for any character.\r\nExample: *.a? (.al, anything.ai, etc)\r\nMasks are separated by semi-colon. Example: *.txt;*.doc (a.txt, b.doc, etc)\r\nExcluded masks are placed after '|'. Example: |*.txt;*.doc (anything except *.txt;*.doc)\r\nIf you need semi-colon inside mask, type it twice. Example: one;;mask"
     IDS_NEW_FOLDER_DEFAULT_NAME                          "New folder"
     IDS_MSG_PANE_CREATE_DIR_INVALID_CHARS                "A folder name can't contain any of the following characters:\r\n\\ / : * ? "" < > |"
     IDS_MSG_PANE_CREATE_DIR_EMPTY_NAME                   "A folder name can't be empty."

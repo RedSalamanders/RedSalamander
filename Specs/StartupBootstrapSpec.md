@@ -102,11 +102,38 @@ Implementation:
 
 - Code: `QueueRedSalamanderMonitorLaunch()` in `RedSalamander/RedSalamander.cpp`
 
+## Shutdown (Debug-layer safe)
+
+When the user closes the main window (`WM_CLOSE`), RedSalamander MUST ensure any auxiliary top-level windows are shut down before the process exits.
+
+Behavior:
+
+- Confirm cancellation of file operations (do not exit while file operations are still running unless the user explicitly chooses to cancel).
+- Close any other **unowned top-level** RedSalamander windows in the same process (Compare Directories, viewers, File Operations popup, item properties, etc.) before destroying the main window.
+- If any such window refuses to close or does not respond within the timeout, abort the main window close (do not proceed to process teardown while any window is still alive).
+
+Implementation notes:
+
+- Window discovery uses `EnumWindows` filtered by:
+  - current process id
+  - `GetParent(hwnd) == nullptr` and `GetWindow(hwnd, GW_OWNER) == nullptr`
+  - `GetClassNameW(hwnd)` starts with `RedSalamander.`
+- Close windows by sending `WM_CLOSE` via `SendMessageTimeoutW` (use a finite timeout; do not hang shutdown on a stuck window).
+- If the window is still alive after `WM_CLOSE`, treat shutdown as canceled and keep the app running.
+
+Rationale:
+
+- With the Direct2D debug layer enabled (`d2d1debug3.dll`), outstanding D2D objects can trigger a debug break during process teardown. Closing windows first ensures they run their normal destruction paths and release D2D/D3D resources before exit.
+
+Code:
+
+- `CloseUnownedTopLevelRedSalamanderWindowsForShutdown()` in `RedSalamander/RedSalamander.cpp`
+
 ## Settings
 
 ### Schema
 
-- Settings schema version: **8**
+- Settings schema version: **10** (the splash setting was introduced in v8)
 - New section:
   - `startup.showSplash` (bool, default `true`)
 

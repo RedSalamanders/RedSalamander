@@ -47,39 +47,41 @@ When an **edit control** is focused, the host MUST bypass (2) and (3) and MUST N
   - `cmd/pane/*`: pane-targeted commands; these MUST resolve to the **focused pane** when focus is inside a pane, otherwise the **active pane** (see rules above).
 - Command display names MUST be localized resource strings (`.rc` STRINGTABLE). UI (Function Bar, settings dialog, tooltips) MUST NOT hardcode user-facing command names.
 - If a shortcut is bound to a command that is not implemented at runtime, invoking it MUST show a localized message box stating it is not yet implemented and MUST do nothing else.
-- Some menu items are **parameterized** (example: History/Hot Path entries, plugin/theme entries). Parameterized menu entries MUST still use a stable `cmd/*` ID; the parameter is carried by the menu item payload (not encoded into the string ID unless explicitly specified).
+- Some commands/menu entries are **parameterized** (drive roots, hot paths, history paths, plugin/theme entries). For shortcuts the parameter is encoded in the command ID (e.g. `cmd/pane/goDriveRoot/C`, `cmd/pane/hotPath/1`) and is canonicalized for display/lookup; for menus the parameter is carried by dynamic menu-item ranges/payloads (or encoded in a command ID suffix for shortcut-like commands).
 
 ### Canonical Command IDs
 
 This section is the single source of truth for the command ID catalog.
 
 **Application commands (`cmd/app/*`)**
-- `cmd/app/about` *(planned)*
+- `cmd/app/about`
 - `cmd/app/exit`
 - `cmd/app/openLeftDriveMenu`
 - `cmd/app/openRightDriveMenu`
 - `cmd/app/compare`
 - `cmd/app/fullScreen`
 - `cmd/app/openFileExplorerKnownFolder` *(planned, parameterized: knownFolderId)*
-- `cmd/app/preferences` *(planned)*
+- `cmd/app/preferences`
 - `cmd/app/showShortcuts`
 - `cmd/app/swapPanes`
-- `cmd/app/toggleFunctionBar` *(planned)*
-- `cmd/app/toggleMenuBar` *(planned)*
+- `cmd/app/toggleFunctionBar`
+- `cmd/app/toggleMenuBar`
 - `cmd/app/viewWidth`
 - `cmd/app/rereadAssociations` *(planned)*
 - `cmd/app/theme/select` *(planned, parameterized: themeId)*
 - `cmd/app/theme/systemHighContrastIndicator` *(planned)*
-- `cmd/app/plugins/manage` *(planned)*
+- `cmd/app/plugins/manage`
 - `cmd/app/plugins/toggleEnabled` *(planned, parameterized: pluginId)*
 - `cmd/app/plugins/configure` *(planned, parameterized: pluginId)*
 
 **Pane commands (`cmd/pane/*`)**
-- `cmd/pane/historyBack` *(planned)*
-- `cmd/pane/historyForward` *(planned)*
+- `cmd/pane/historyBack`
+- `cmd/pane/historyForward`
 - `cmd/pane/goDriveRoot` *(parameterized: driveLetter)*
-- `cmd/pane/goRootDirectory` *(planned)*
-- `cmd/pane/setPathFromOtherPane` *(planned)*
+- `cmd/pane/hotPath` *(parameterized: digit `1..9` and `0` for slot 10)*
+- `cmd/pane/setHotPath` *(parameterized: digit `1..9` and `0` for slot 10)*
+- `cmd/pane/goRootDirectory`
+- `cmd/pane/setPathFromOtherPane`
 - `cmd/pane/navigatePath` *(planned, parameterized: path)*
 - `cmd/pane/selectFileSystemPlugin` *(planned, parameterized: pluginId)*
 - `cmd/pane/bringCurrentDirToCommandLine`
@@ -120,6 +122,8 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/filter`
 - `cmd/pane/find`
 - `cmd/pane/hotPaths`
+- `cmd/pane/hotPath` *(parameterized: digit `1..9` and `0`)*
+- `cmd/pane/setHotPath` *(parameterized: digit `1..9` and `0`)*
 - `cmd/pane/listOpenedFiles`
 - `cmd/pane/showFoldersHistory`
 - `cmd/pane/loadSelection`
@@ -151,8 +155,8 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/viewWith` *(planned, parameterized: viewerId)*
 - `cmd/pane/viewSpace`
 - `cmd/pane/newFromShellTemplate` *(planned, parameterized: templateId)*
-- `cmd/pane/selection/selectDialog` *(planned)*
-- `cmd/pane/selection/unselectDialog` *(planned)*
+- `cmd/pane/selection/selectDialog`
+- `cmd/pane/selection/unselectDialog`
 - `cmd/pane/selection/invert` *(planned)*
 - `cmd/pane/selection/selectAll` *(planned)*
 - `cmd/pane/selection/unselectAll` *(planned)*
@@ -212,18 +216,18 @@ Notation:
 
 - Change Drive (`Alt+F1`) *(opens file-system drive menu; when pane is in a non-`file` plugin, the NavigationView menu also exposes a bottom “Change Drive” submenu)* `[cmd/app/openLeftDriveMenu]`
 - Go to >
-  - Back [td] (`Alt+Left`) *(History Back)* `[cmd/pane/historyBack]`
-  - Forward [td] (`Alt+Right`) *(History Forward)* `[cmd/pane/historyForward]`
+  - Back (`Alt+Left`) *(History Back)* `[cmd/pane/historyBack]`
+  - Forward (`Alt+Right`) *(History Forward)* `[cmd/pane/historyForward]`
   - Parent Directory (`Backspace`) `[cmd/pane/upOneDirectory]`
-  - Root Directory [td] (`⊘`) `[cmd/pane/goRootDirectory]`
-  - Path from Other Panel (`⊘`) `[cmd/pane/setPathFromOtherPane]`
+  - Root Directory (`Shift+Backspace`) `[cmd/pane/goRootDirectory]`
+  - Path from Other Panel (`Ctrl+.`) `[cmd/pane/setPathFromOtherPane]`
   - ---
-  - Hot Paths… [td] (`Shift+F9`) `[cmd/pane/hotPaths]`
-  - *(Hot Paths section, dynamic)*
-    - `<Hot Path Name>` [td] (`⊘`; parameterized: path) `[cmd/pane/navigatePath]`
+  - Hot Paths… (`Shift+F9`) `[cmd/pane/hotPaths]`
+  - *(Hot Paths section, dynamic — from settings; navigates to the stored slot path)*
+    - `<Hot Path>` (`⊘`)
   - ---
   - *(History section, dynamic)*
-    - `<History Path>` [td] (`⊘`; parameterized: path) `[cmd/pane/navigatePath]`
+    - `<History Path>` (`⊘`)
 - ---
 - Brief (`Alt+2`) `[cmd/pane/display/brief]`
 - Detailed (`Alt+3`) `[cmd/pane/display/detailed]`
@@ -295,8 +299,8 @@ Notation:
 - Copy Path as Text [td] (`Ctrl+Alt+Insert`) `[cmd/pane/copyPathAsText]`
 - Copy Path + File Name as Text [td] (`Ctrl+Shift+Insert`) `[cmd/pane/copyPathAndFileName]`
 - ---
-- Select… [td] (`⊘`) `[cmd/pane/selection/selectDialog]`
-- Unselect… [td] (`⊘`) `[cmd/pane/selection/unselectDialog]`
+- Select… (`Ctrl+=`) `[cmd/pane/selection/selectDialog]`
+- Unselect… (`Ctrl+-`) `[cmd/pane/selection/unselectDialog]`
 - Invert Selection [td] (`⊘`) `[cmd/pane/selection/invert]`
 - Select All (`Ctrl+A` target) `[cmd/pane/selection/selectAll]`
 - Unselect All (`⊘`) `[cmd/pane/selection/unselectAll]`
@@ -324,7 +328,7 @@ Notation:
 
 - Create Directory… (`F7`) `[cmd/pane/createDirectory]`
 - Change Directory… (`Shift+F7`) `[cmd/pane/changeDirectory]` *(opens NavigationView address edit; mounted: `<instanceContext>|/path`)*
-- Compare Directories… [td] (`Ctrl+F10`) `[cmd/app/compare]`
+- Compare Directories… (`Ctrl+F10`) `[cmd/app/compare]`
 - Calculate Occupied Space (`Alt+F10`) `[cmd/pane/viewSpace]`
 - Calculate Directory Sizes (`Ctrl+Shift+F10`) `[cmd/pane/calculateDirectorySizes]`
 - Find Files and Directories… [td] (`Alt+F7`) `[cmd/pane/find]`
@@ -424,6 +428,13 @@ Right menu is identical to Left menu, except:
 
 ### Command details (Implemented)
 
+#### Go Root Directory (`cmd/pane/goRootDirectory`)
+
+- Invoking the command MUST navigate the target pane to the “effective root” for the current file system:
+  - **Win32 file system (`file`)**: the drive root (e.g. `C:\`) or UNC share root (e.g. `\\server\share\`).
+  - **Plugins**: the plugin root (`/`), except when the current plugin path is under a Connection Manager root (`/@conn:<name>/...`), in which case the effective root is `/@conn:<name>/`.
+  - **Mounted plugins** (`<shortId>:<instanceContext>|<pluginPath>`): the effective root MUST preserve the mount context and set the plugin path to `/` (or the Connection Manager root when applicable).
+
 #### Toggle Fullscreen (`cmd/app/fullScreen`)
 
 - Invoking the command MUST toggle borderless fullscreen for the main window (hide title bar, cover the current monitor including taskbar).
@@ -445,30 +456,84 @@ Right menu is identical to Left menu, except:
 - The selected/current item MUST NOT change the target; the current folder is always used.
 - If Space Viewer cannot be opened, the command MUST show a localized error and MUST do nothing else.
 
+#### Rename (`cmd/pane/rename`)
+
+- Invoking the command MUST show a modal dialog:
+  ```text
+  Title: Rename Item
+
+  New name:
+  [ <name> ]   (editable input)
+
+                       [ OK ] [ Cancel ]
+  ```
+- The dialog MUST be theme-aware (title bar + background + input + buttons) and follow `Specs/VisualStyleSpec.md` for framed inputs and owner-draw buttons (skip custom drawing in high contrast).
+- Layout:
+  - The dialog SHOULD default to a wide size (same width as the Select/Unselect mask dialog) to accommodate long names.
+  - The dialog MUST be centered on the main window.
+- Default value MUST be the focused item’s current display name.
+- Initial text selection:
+  - For files, the dialog SHOULD select the name without its extension (up to the last `.`).
+  - For folders, the dialog SHOULD select the full name.
+- `Enter` commits; `Escape` cancels.
+- The new name MUST be trimmed; empty input MUST be rejected (warning beep) and the dialog MUST remain open.
+
 #### Change Case (`cmd/pane/changeCase`)
 
 - Invoking the command MUST show a modal dialog:
   ```text
   Title: Change Case
-  Change Case to
-    o Lower case
-    o Upper case
-    o Partially mixed case (name in mixed, extension in lower)
-    o Mixed case
-  Change
-    o Whole filename
-    o Only name
-    o Only extension
-  Options
-    [ ] Include subdirectories
+
+  [ ] Include subdirectories (apply to selected folders recursively)
+
+  Change Case to                    Change
+    o Lower case                      o Whole filename
+    o Upper case                      o Only name
+    o Partially mixed case (...)      o Only extension
+    o Mixed case (...)
 
     [ OK ] [ Cancel ]
   ```
+- Layout:
+  - When there is enough horizontal space, the dialog SHOULD use a two-column layout with **balanced** column widths (avoid an oversized left column).
+  - When space is constrained, the dialog MUST fall back to a single-column stacked layout.
+  - When DPI changes while the dialog is open, it MUST recompute layout and typography so the two-column split remains balanced and controls do not overlap.
+  - The dialog SHOULD size its height to content so the button row does not sit far below the last option card.
 - Scope: apply to `Selected items`; if no items are selected, apply to the `Current item`.
 - “Include subdirectories”:
   - MUST be available for any filesystem plugin.
   - When enabled, traversal MUST be **non-recursive** (iterative) to avoid stack overflow on deep directory hierarchies.
   - Traversal MUST use the active plugin’s directory enumeration semantics (it MUST work with non-Windows / plugin-specific paths).
+ - Execution MUST be asynchronous (no long UI-thread stalls) and MAY surface progress as an informational task in the File Operations popup for long runs.
+ - Case-only renames on case-insensitive file systems SHOULD be supported (use a temp rename where required).
+
+#### Select / Unselect (Mask Dialog) (`cmd/pane/selection/selectDialog`, `cmd/pane/selection/unselectDialog`)
+
+- Invoking `selectDialog` MUST show a modal dialog:
+  ```text
+  Title: Select
+
+  Select
+  [ <mask> ]   (editable combo box)
+
+  Mask syntax ▸ (toggle)
+  (help text)
+
+                               [ OK ] [ Cancel ]
+  ```
+- Invoking `unselectDialog` MUST show a modal dialog with the same layout, but title/label “Unselect”.
+- History:
+  - The mask combo MUST persist history entries (most-recent-first, max 10).
+  - `selectDialog` history key: `settings.selectionMasks.selectHistory`
+  - `unselectDialog` history key: `settings.selectionMasks.unselectHistory`
+- Mask matching:
+  - `*` matches any number of characters; `?` matches any single character.
+  - Masks are separated by `;` (use `;;` for a literal `;`).
+  - Excluded masks come after `|` (examples: `|*.tmp`, `*.txt;*.doc|~*`).
+  - Matching is case-insensitive.
+- Behavior:
+  - `selectDialog` MUST add matching items to the current selection (it MUST NOT unselect non-matching items).
+  - `unselectDialog` MUST remove matching items from the current selection (it MUST NOT select anything).
 
 ### Command/menu mapping status (Current implementation)
 
@@ -559,6 +624,8 @@ This means any key listed as a valid `vk` in `Specs/SettingsStoreSpec.md` (inclu
 | Tab       | Switch Pane Focus                  | ⊘                                | ⊘                        | Switch Pane Focus                  | ⊘                                 | ⊘                 | ⊘                     |
 | U         | ⊘                                  | Swap Panes                        | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | A         | ⊘                                  | Select All                       | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
+| =         | ⊘                                  | Select...                        | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
+| -         | ⊘                                  | Unselect...                      | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | C         | ⊘                                  | Clipboard Copy                   | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | V         | ⊘                                  | Clipboard Paste                  | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | L         | ⊘                                  | Focus Address Bar                | ⊘                        | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
@@ -569,6 +636,7 @@ This means any key listed as a valid `vk` in `Specs/SettingsStoreSpec.md` (inclu
 | 2         | ⊘                                  | ⊘                                | Display as Brief         | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | 3         | ⊘                                  | ⊘                                | Display as Detailed      | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | 4         | ⊘                                  | ⊘                                | Display as Extra Detailed | ⊘                                 | ⊘                                 | ⊘                 | ⊘                     |
+| 0..9      | ⊘                                  | Go to Hot Path (`Ctrl+<digit>`)  | ⊘                        | ⊘                                  | Set Hot Path (`Ctrl+Shift+<digit>`) | ⊘               | ⊘                     |
 | A..Z      | ⊘                                  | ⊘                                | ⊘                        | Go to Drive Root (`<drive>:\\`)    | ⊘                                 | ⊘                 | ⊘                     |
 | Enter     | Execute / Open                     | Bring Filename to Command Line   | Open Properties          | ⊘                                  | Bring Filename to Command Line    | ⊘                 | ⊘                     |
 | Space     | Select + Calc Dir Size + Next      | Bring Current Dir to Command Line | Window Menu              | Quick Search / Command Line Input  | Bring Current Dir to Command Line | ⊘                 | ⊘                     |
@@ -576,7 +644,7 @@ This means any key listed as a valid `vk` in `Specs/SettingsStoreSpec.md` (inclu
 | Delete    | Move to Recycle Bin                | ⊘                                | ⊘                        | Permanent Delete (With Validation) | Permanent Delete (With Validation) | ⊘                 | ⊘                     |
 
 Notes:
-- Unmodified digit keys (`0`-`9`) and unmodified letter keys are unbound by default so they can be used for incremental search typing; planned Hot Path digit bindings are future work.
+- Unmodified digit keys (`0`-`9`) and unmodified letter keys are unbound by default so they can be used for incremental search typing; Hot Paths use `Ctrl+<digit>` / `Ctrl+Shift+<digit>` and do not interfere with typing.
 
 ### Shortcut Customization UI (Preferences)
 

@@ -15,6 +15,7 @@ RedSalamander is a Windows dual-pane file manager with:
 - [Main Window & Panes](MainWindow.md)
 - [Navigation & Path Syntax](NavigationAndPaths.md)
 - [File Operations (Copy/Move/Delete)](FileOperations.md)
+- [Compare Directories](CompareDirectories.md)
 
 ## Configure and extend
 

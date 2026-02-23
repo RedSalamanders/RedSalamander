@@ -108,8 +108,16 @@ public:
     void CommandFocusAddressBar(Pane pane);
     void CommandOpenDriveMenu(Pane pane);
     void CommandShowFolderHistory(Pane pane);
+    void CommandGoRootDirectory(Pane pane);
+    void CommandSetPathFromOtherPane(Pane pane);
+    void CommandHistoryBack(Pane pane);
+    void CommandHistoryForward(Pane pane);
+    [[nodiscard]] bool CanHistoryBack(Pane pane) const noexcept;
+    [[nodiscard]] bool CanHistoryForward(Pane pane) const noexcept;
     void CommandRefresh(Pane pane);
     void CommandCalculateDirectorySizes(Pane pane);
+    void CommandSelectionSelectDialog(Pane pane);
+    void CommandSelectionUnselectDialog(Pane pane);
     void CommandChangeCase(Pane pane);
     void CommandOpenCommandShell(Pane pane);
     void PrepareForNetworkDriveDisconnect(Pane pane);
@@ -172,6 +180,7 @@ public:
     void RefreshPaneDetailsText(Pane pane);
     void
     SetPaneSelectionByDisplayNamePredicate(Pane pane, const std::function<bool(std::wstring_view)>& shouldSelect, bool clearExistingSelection = true) noexcept;
+    void ClearPaneSelectionByDisplayNamePredicate(Pane pane, const std::function<bool(std::wstring_view)>& shouldUnselect) noexcept;
 
     struct FileOperationCompletedEvent
     {
@@ -301,6 +310,8 @@ public:
     };
 
 private:
+    struct PaneState;
+
     // Class registration
     static ATOM RegisterWndClass(HINSTANCE instance);
     static constexpr PCWSTR kClassName = L"RedSalamander.FolderWindow";
@@ -353,6 +364,8 @@ private:
     // Path synchronization
     void OnNavigationPathChanged(Pane pane, const std::optional<std::filesystem::path>& path);
     void OnFolderViewPathChanged(Pane pane, const std::optional<std::filesystem::path>& path);
+    void RecordNavigationHistory(PaneState& state, const std::filesystem::path& displayPath);
+    void TrimNavigationHistory(PaneState& state);
     void OnFolderViewNavigateUpFromRoot(Pane pane) noexcept;
     HRESULT EnsurePaneFileSystem(Pane pane, std::wstring_view pluginId) noexcept;
     Pane GetPaneFromChild(HWND child) const noexcept;
@@ -436,6 +449,10 @@ private:
 
         std::optional<std::filesystem::path> currentPath;
         bool updatingPath = false;
+
+        std::vector<std::filesystem::path> navigationHistory;
+        size_t navigationHistoryIndex = 0;
+        bool navigationHistorySuspendRecord = false;
     };
     bool SanityCheckBothPanes(PaneState& src, PaneState& dest, FileSystemOperation operation);
 

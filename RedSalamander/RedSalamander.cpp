@@ -1837,6 +1837,24 @@ void UpdatePaneMenuChecks() noexcept
         updateSortDisplay(FolderWindow::Pane::Right, g_rightSortMenu, g_rightDisplayMenu, IDM_RIGHT_SORT_NAME, IDM_RIGHT_DISPLAY_BRIEF);
     }
 
+    if (g_leftGoToMenu)
+    {
+        const UINT backFlags = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.CanHistoryBack(FolderWindow::Pane::Left) ? MF_ENABLED : MF_GRAYED));
+        EnableMenuItem(g_leftGoToMenu, IDM_LEFT_GO_TO_BACK, backFlags);
+
+        const UINT forwardFlags = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.CanHistoryForward(FolderWindow::Pane::Left) ? MF_ENABLED : MF_GRAYED));
+        EnableMenuItem(g_leftGoToMenu, IDM_LEFT_GO_TO_FORWARD, forwardFlags);
+    }
+
+    if (g_rightGoToMenu)
+    {
+        const UINT backFlags = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.CanHistoryBack(FolderWindow::Pane::Right) ? MF_ENABLED : MF_GRAYED));
+        EnableMenuItem(g_rightGoToMenu, IDM_RIGHT_GO_TO_BACK, backFlags);
+
+        const UINT forwardFlags = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.CanHistoryForward(FolderWindow::Pane::Right) ? MF_ENABLED : MF_GRAYED));
+        EnableMenuItem(g_rightGoToMenu, IDM_RIGHT_GO_TO_FORWARD, forwardFlags);
+    }
+
     const UINT leftStatusCheck  = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetStatusBarVisible(FolderWindow::Pane::Left) ? MF_CHECKED : MF_UNCHECKED));
     const UINT rightStatusCheck = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetStatusBarVisible(FolderWindow::Pane::Right) ? MF_CHECKED : MF_UNCHECKED));
 
@@ -2291,8 +2309,6 @@ void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shor
         return std::nullopt;
     }
 
-    commandId = CanonicalizeCommandId(commandId);
-
     if (g_settings.shortcuts.has_value())
     {
         const Common::Settings::ShortcutsSettings& shortcuts = g_settings.shortcuts.value();
@@ -2306,7 +2322,7 @@ void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shor
                     continue;
                 }
 
-                if (CanonicalizeCommandId(binding.commandId) != commandId)
+                if (std::wstring_view(binding.commandId) != commandId)
                 {
                     continue;
                 }
@@ -2365,6 +2381,20 @@ void UpdateThemedMenuShortcutsRecursive(HMENU menu) noexcept
                 if (commandIdOpt.has_value())
                 {
                     if (const std::optional<std::wstring> shortcutOpt = TryGetShortcutTextForCommandId(commandIdOpt.value()))
+                    {
+                        data->shortcut = shortcutOpt.value();
+                    }
+                }
+                else if ((itemInfo.wID >= IDM_LEFT_HOT_PATH_BASE && itemInfo.wID < (IDM_LEFT_HOT_PATH_BASE + 10u)) ||
+                         (itemInfo.wID >= IDM_RIGHT_HOT_PATH_BASE && itemInfo.wID < (IDM_RIGHT_HOT_PATH_BASE + 10u)))
+                {
+                    const UINT base    = (itemInfo.wID >= IDM_RIGHT_HOT_PATH_BASE) ? IDM_RIGHT_HOT_PATH_BASE : IDM_LEFT_HOT_PATH_BASE;
+                    const UINT slotIdx = itemInfo.wID - base;
+
+                    const wchar_t digitChar = (slotIdx < 9u) ? static_cast<wchar_t>(L'1' + slotIdx) : L'0';
+                    std::wstring commandId  = L"cmd/pane/hotPath/";
+                    commandId.push_back(digitChar);
+                    if (const std::optional<std::wstring> shortcutOpt = TryGetShortcutTextForCommandId(commandId))
                     {
                         data->shortcut = shortcutOpt.value();
                     }
@@ -3416,6 +3446,54 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
 
         const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
         g_folderWindow.CommandFocusAddressBar(pane);
+        return true;
+    }
+
+    if (commandId == L"cmd/pane/historyBack")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandHistoryBack(pane);
+        return true;
+    }
+
+    if (commandId == L"cmd/pane/historyForward")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandHistoryForward(pane);
+        return true;
+    }
+
+    if (commandId == L"cmd/pane/setPathFromOtherPane")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandSetPathFromOtherPane(pane);
+        return true;
+    }
+
+    if (commandId == L"cmd/pane/goRootDirectory")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandGoRootDirectory(pane);
         return true;
     }
 
@@ -5349,32 +5427,14 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_LEFT_CHANGE_DRIVE: g_folderWindow.CommandOpenDriveMenu(FolderWindow::Pane::Left); break;
         case IDM_RIGHT_CHANGE_DRIVE: g_folderWindow.CommandOpenDriveMenu(FolderWindow::Pane::Right); break;
-        case IDM_LEFT_GO_TO_BACK:
-            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/historyBack");
-            break;
-        case IDM_LEFT_GO_TO_FORWARD:
-            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/historyForward");
-            break;
+        case IDM_LEFT_GO_TO_BACK: g_folderWindow.CommandHistoryBack(FolderWindow::Pane::Left); break;
+        case IDM_LEFT_GO_TO_FORWARD: g_folderWindow.CommandHistoryForward(FolderWindow::Pane::Left); break;
         case IDM_LEFT_GO_TO_PARENT_DIRECTORY:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
             static_cast<void>(SendKeyToFolderView(FolderWindow::Pane::Left, VK_BACK));
             break;
-        case IDM_LEFT_GO_TO_ROOT_DIRECTORY:
-            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/goRootDirectory");
-            break;
-        case IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE:
-        {
-            const std::optional<std::filesystem::path> other = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
-            if (other.has_value())
-            {
-                g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
-                g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, other.value());
-            }
-            break;
-        }
+        case IDM_LEFT_GO_TO_ROOT_DIRECTORY: g_folderWindow.CommandGoRootDirectory(FolderWindow::Pane::Left); break;
+        case IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE: g_folderWindow.CommandSetPathFromOtherPane(FolderWindow::Pane::Left); break;
         case IDM_LEFT_HOT_PATHS:
         {
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
@@ -5388,32 +5448,14 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/filter");
             break;
         case IDM_LEFT_REFRESH: g_folderWindow.CommandRefresh(FolderWindow::Pane::Left); break;
-        case IDM_RIGHT_GO_TO_BACK:
-            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/historyBack");
-            break;
-        case IDM_RIGHT_GO_TO_FORWARD:
-            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/historyForward");
-            break;
+        case IDM_RIGHT_GO_TO_BACK: g_folderWindow.CommandHistoryBack(FolderWindow::Pane::Right); break;
+        case IDM_RIGHT_GO_TO_FORWARD: g_folderWindow.CommandHistoryForward(FolderWindow::Pane::Right); break;
         case IDM_RIGHT_GO_TO_PARENT_DIRECTORY:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
             static_cast<void>(SendKeyToFolderView(FolderWindow::Pane::Right, VK_BACK));
             break;
-        case IDM_RIGHT_GO_TO_ROOT_DIRECTORY:
-            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/goRootDirectory");
-            break;
-        case IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE:
-        {
-            const std::optional<std::filesystem::path> other = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
-            if (other.has_value())
-            {
-                g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
-                g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, other.value());
-            }
-            break;
-        }
+        case IDM_RIGHT_GO_TO_ROOT_DIRECTORY: g_folderWindow.CommandGoRootDirectory(FolderWindow::Pane::Right); break;
+        case IDM_RIGHT_GO_TO_PATH_FROM_OTHER_PANE: g_folderWindow.CommandSetPathFromOtherPane(FolderWindow::Pane::Right); break;
         case IDM_RIGHT_HOT_PATHS:
         {
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
@@ -5464,11 +5506,23 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             static_cast<void>(SendCommandToFolderView(pane, IDM_FOLDERVIEW_CONTEXT_SELECT_ALL));
             break;
         }
+        case IDM_PANE_SELECTION_SELECT_DIALOG:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionSelectDialog(pane);
+            break;
+        }
         case IDM_PANE_SELECTION_UNSELECT_ALL:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.SetActivePane(pane);
             static_cast<void>(SendCommandToFolderView(pane, IDM_FOLDERVIEW_CONTEXT_UNSELECT_ALL));
+            break;
+        }
+        case IDM_PANE_SELECTION_UNSELECT_DIALOG:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionUnselectDialog(pane);
             break;
         }
         case IDM_PANE_CLIPBOARD_PASTE:
@@ -6384,6 +6438,9 @@ struct ShutdownCloseWindowSnapshotContext final
     std::vector<HWND> windows;
 };
 
+constexpr std::wstring_view kInternalWindowClassPrefix = L"RedSalamander.";
+constexpr UINT kShutdownCloseTimeoutMs                 = 1000;
+
 BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
 {
     auto* ctx = reinterpret_cast<ShutdownCloseWindowSnapshotContext*>(lParam);
@@ -6412,13 +6469,16 @@ BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
         return TRUE;
     }
 
-    constexpr std::wstring_view kPrefix = L"RedSalamander.";
-    if (static_cast<size_t>(len) < kPrefix.size())
+    if (static_cast<size_t>(len) < kInternalWindowClassPrefix.size())
     {
         return TRUE;
     }
 
-    if (CompareStringOrdinal(className, static_cast<int>(kPrefix.size()), kPrefix.data(), static_cast<int>(kPrefix.size()), TRUE) != CSTR_EQUAL)
+    if (CompareStringOrdinal(className,
+                             static_cast<int>(kInternalWindowClassPrefix.size()),
+                             kInternalWindowClassPrefix.data(),
+                             static_cast<int>(kInternalWindowClassPrefix.size()),
+                             TRUE) != CSTR_EQUAL)
     {
         return TRUE;
     }
@@ -6427,7 +6487,7 @@ BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
     return TRUE;
 }
 
-void CloseUnownedTopLevelRedSalamanderWindowsForShutdown(HWND excludeHwnd) noexcept
+[[nodiscard]] bool CloseUnownedTopLevelRedSalamanderWindowsForShutdown(HWND excludeHwnd) noexcept
 {
     // Our internal window classes follow the "RedSalamander.*" naming convention. Close any unowned top-level windows
     // in this process so they can tear down D2D/D3D resources before DLL/process shutdown.
@@ -6436,7 +6496,7 @@ void CloseUnownedTopLevelRedSalamanderWindowsForShutdown(HWND excludeHwnd) noexc
     ctx.excludeHwnd = excludeHwnd;
     EnumWindows(&ShutdownCloseEnumWindowsProc, reinterpret_cast<LPARAM>(&ctx));
 
-    const DWORD currentThreadId = GetCurrentThreadId();
+    bool allClosed = true;
     for (HWND hwnd : ctx.windows)
     {
         if (! hwnd || IsWindow(hwnd) == FALSE)
@@ -6444,18 +6504,25 @@ void CloseUnownedTopLevelRedSalamanderWindowsForShutdown(HWND excludeHwnd) noexc
             continue;
         }
 
-        DWORD windowPid = 0;
-        const DWORD windowTid = GetWindowThreadProcessId(hwnd, &windowPid);
-
         DWORD_PTR ignoredResult = 0;
-        static_cast<void>(SendMessageTimeoutW(hwnd, WM_CLOSE, 0, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, 1000, &ignoredResult));
-
-        // Best-effort: DestroyWindow only works from the creating thread.
-        if (IsWindow(hwnd) != FALSE && windowTid == currentThreadId)
+        const LRESULT sent      =
+            SendMessageTimeoutW(hwnd, WM_CLOSE, 0, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, kShutdownCloseTimeoutMs, &ignoredResult);
+        if (sent == 0)
         {
-            DestroyWindow(hwnd);
+            if (IsWindow(hwnd) != FALSE)
+            {
+                allClosed = false;
+            }
+            continue;
+        }
+
+        if (IsWindow(hwnd) != FALSE)
+        {
+            allClosed = false;
         }
     }
+
+    return allClosed;
 }
 
 LRESULT OnMainWindowClose(HWND hWnd)
@@ -6478,7 +6545,10 @@ LRESULT OnMainWindowClose(HWND hWnd)
 
     // Ensure non-owned top-level windows release graphics resources before we tear down the process.
     // The D2D debug layer breaks on shutdown if any D2D objects are still alive at DLL unload time.
-    CloseUnownedTopLevelRedSalamanderWindowsForShutdown(hWnd);
+    if (! CloseUnownedTopLevelRedSalamanderWindowsForShutdown(hWnd))
+    {
+        return 0;
+    }
 
     DestroyWindow(hWnd);
     return 0;

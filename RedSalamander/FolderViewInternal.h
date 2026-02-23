@@ -35,6 +35,7 @@
 #include <shlobj_core.h>
 #include <shlwapi.h>
 #include <shobjidl.h>
+#include <uxtheme.h>
 
 #include <sstream>
 #include <system_error>
@@ -58,6 +59,7 @@
 #include "HostServices.h"
 #include "IconCache.h"
 #include "ThemedControls.h"
+#include "ThemedInputFrames.h"
 #include "WindowMessages.h"
 #include "resource.h"
 
@@ -288,9 +290,31 @@ enum FolderCommands : UINT
 
 struct RenameDialogState
 {
+    RenameDialogState()                                    = default;
+    RenameDialogState(const RenameDialogState&)            = delete;
+    RenameDialogState& operator=(const RenameDialogState&) = delete;
+    RenameDialogState(RenameDialogState&&)                 = delete;
+    RenameDialogState& operator=(RenameDialogState&&)      = delete;
+    ~RenameDialogState()                                   = default;
+
+    HWND centerOnWindow = nullptr;
+
     std::wstring currentName;
     std::wstring newName;
     bool isDirectory = false;
+
+    AppTheme theme{};
+    wil::unique_hbrush backgroundBrush;
+
+    COLORREF inputBackgroundColor             = RGB(255, 255, 255);
+    COLORREF inputFocusedBackgroundColor      = RGB(255, 255, 255);
+    COLORREF inputDisabledBackgroundColor     = RGB(255, 255, 255);
+    wil::unique_hbrush inputBrush;
+    wil::unique_hbrush inputFocusedBrush;
+    wil::unique_hbrush inputDisabledBrush;
+
+    ThemedInputFrames::FrameStyle inputFrameStyle{};
+    wil::unique_hwnd editFrame;
 };
 
 std::wstring FormatHResult(HRESULT hr)
@@ -447,6 +471,67 @@ void CenterMultilineEditTextVertically(HWND edit) noexcept
     ThemedControls::CenterEditTextVertically(edit);
 }
 
+void PrepareFlatEditControl(HWND control) noexcept
+{
+    if (! control)
+    {
+        return;
+    }
+
+    const LONG_PTR exStyle    = GetWindowLongPtrW(control, GWL_EXSTYLE);
+    const LONG_PTR style      = GetWindowLongPtrW(control, GWL_STYLE);
+    const LONG_PTR newExStyle = exStyle & ~static_cast<LONG_PTR>(WS_EX_CLIENTEDGE);
+    const LONG_PTR newStyle   = style & ~static_cast<LONG_PTR>(WS_BORDER);
+
+    if (newExStyle != exStyle)
+    {
+        SetWindowLongPtrW(control, GWL_EXSTYLE, newExStyle);
+    }
+    if (newStyle != style)
+    {
+        SetWindowLongPtrW(control, GWL_STYLE, newStyle);
+    }
+
+    SetWindowPos(control, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    InvalidateRect(control, nullptr, TRUE);
+}
+
+void PrepareEditMargins(HWND edit) noexcept
+{
+    if (! edit)
+    {
+        return;
+    }
+
+    const UINT dpi       = GetDpiForWindow(edit);
+    const int textMargin = ThemedControls::ScaleDip(dpi, 6);
+    SendMessageW(edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(textMargin, textMargin));
+}
+
+void CenterWindowOnOwner(HWND window, HWND owner) noexcept
+{
+    if (! window || ! owner)
+    {
+        return;
+    }
+
+    RECT ownerRc{};
+    RECT windowRc{};
+    if (! GetWindowRect(owner, &ownerRc) || ! GetWindowRect(window, &windowRc))
+    {
+        return;
+    }
+
+    const int ownerW  = ownerRc.right - ownerRc.left;
+    const int ownerH  = ownerRc.bottom - ownerRc.top;
+    const int windowW = windowRc.right - windowRc.left;
+    const int windowH = windowRc.bottom - windowRc.top;
+
+    const int x = ownerRc.left + (ownerW - windowW) / 2;
+    const int y = ownerRc.top + (ownerH - windowH) / 2;
+    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 LRESULT OnRenameEditPaste(HWND hwnd, WPARAM wParam, LPARAM lParam)
 {
     const LRESULT result = DefSubclassProc(hwnd, WM_PASTE, wParam, lParam);
@@ -493,6 +578,137 @@ LRESULT CALLBACK RenameEditSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
     return DefSubclassProc(hwnd, msg, wParam, lParam);
 }
 
+INT_PTR OnRenameDialogCtlColorDialog(RenameDialogState* state) noexcept
+{
+    if (! state || ! state->backgroundBrush)
+    {
+        return FALSE;
+    }
+
+    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+}
+
+INT_PTR OnRenameDialogCtlColorStatic(RenameDialogState* state, HDC hdc, HWND control) noexcept
+{
+    if (! state || ! state->backgroundBrush || ! hdc)
+    {
+        return FALSE;
+    }
+
+    const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
+    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+}
+
+INT_PTR OnRenameDialogCtlColorEdit(RenameDialogState* state, HDC hdc, HWND control) noexcept
+{
+    if (! state || ! hdc)
+    {
+        return FALSE;
+    }
+
+    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
+    const bool enabled      = ! control || IsWindowEnabled(control) != FALSE;
+    const bool focused      = enabled && control && GetFocus() == control;
+
+    const COLORREF bg = enabled ? (focused ? state->inputFocusedBackgroundColor : state->inputBackgroundColor) : state->inputDisabledBackgroundColor;
+
+    SetBkColor(hdc, bg);
+    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
+
+    if (highContrast)
+    {
+        return state->backgroundBrush ? reinterpret_cast<INT_PTR>(state->backgroundBrush.get()) : FALSE;
+    }
+
+    HBRUSH brush = nullptr;
+    if (! enabled)
+    {
+        brush = state->inputDisabledBrush.get();
+    }
+    else
+    {
+        brush = (focused && state->inputFocusedBrush) ? state->inputFocusedBrush.get() : state->inputBrush.get();
+    }
+
+    if (brush)
+    {
+        return reinterpret_cast<INT_PTR>(brush);
+    }
+
+    return state->backgroundBrush ? reinterpret_cast<INT_PTR>(state->backgroundBrush.get()) : FALSE;
+}
+
+void EnsureRenameDialogEditFrame(HWND dlg, RenameDialogState* state, HWND edit) noexcept
+{
+    if (! dlg || ! state || ! edit)
+    {
+        return;
+    }
+
+    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
+    if (highContrast)
+    {
+        return;
+    }
+
+    RECT frameRc{};
+    if (state->editFrame && GetWindowRect(state->editFrame.get(), &frameRc))
+    {
+        MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&frameRc), 2);
+    }
+    else
+    {
+        if (! GetWindowRect(edit, &frameRc))
+        {
+            return;
+        }
+        MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&frameRc), 2);
+    }
+
+    const int frameW = std::max(0l, frameRc.right - frameRc.left);
+    const int frameH = std::max(0l, frameRc.bottom - frameRc.top);
+    if (frameW <= 0 || frameH <= 0)
+    {
+        return;
+    }
+
+    const UINT dpi         = GetDpiForWindow(dlg);
+    const int framePadding = std::max(1, ThemedControls::ScaleDip(dpi, 2));
+
+    const int editW = std::max(1, frameW - 2 * framePadding);
+    const int editH = std::max(1, frameH - 2 * framePadding);
+
+    SetWindowPos(edit, nullptr, frameRc.left + framePadding, frameRc.top + framePadding, editW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (! state->editFrame)
+    {
+        state->editFrame.reset(CreateWindowExW(0,
+                                              L"Static",
+                                              L"",
+                                              WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                                              frameRc.left,
+                                              frameRc.top,
+                                              frameW,
+                                              frameH,
+                                              dlg,
+                                              nullptr,
+                                              GetModuleHandleW(nullptr),
+                                              nullptr));
+        if (! state->editFrame)
+        {
+            return;
+        }
+
+        SetWindowPos(state->editFrame.get(), edit, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        ThemedInputFrames::InstallFrame(state->editFrame.get(), edit, &state->inputFrameStyle);
+        return;
+    }
+
+    SetWindowPos(state->editFrame.get(), edit, frameRc.left, frameRc.top, frameW, frameH, SWP_NOACTIVATE);
+}
+
 INT_PTR OnRenameDialogInit(HWND dlg, RenameDialogState* state)
 {
     if (! state)
@@ -501,9 +717,56 @@ INT_PTR OnRenameDialogInit(HWND dlg, RenameDialogState* state)
     }
 
     SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
+
+    ApplyTitleBarTheme(dlg, state->theme, GetActiveWindow() == dlg);
+    state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
+
+    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
+    if (! highContrast)
+    {
+        ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
+        ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
+    }
+
+    const COLORREF surface             = ThemedControls::GetControlSurfaceColor(state->theme);
+    state->inputBackgroundColor        = ThemedControls::BlendColor(surface, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
+    state->inputFocusedBackgroundColor = ThemedControls::BlendColor(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
+    state->inputDisabledBackgroundColor =
+        ThemedControls::BlendColor(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
+
+    state->inputBrush.reset();
+    state->inputFocusedBrush.reset();
+    state->inputDisabledBrush.reset();
+    if (! highContrast)
+    {
+        state->inputBrush.reset(CreateSolidBrush(state->inputBackgroundColor));
+        state->inputFocusedBrush.reset(CreateSolidBrush(state->inputFocusedBackgroundColor));
+        state->inputDisabledBrush.reset(CreateSolidBrush(state->inputDisabledBackgroundColor));
+    }
+
+    state->inputFrameStyle.theme                        = &state->theme;
+    state->inputFrameStyle.backdropBrush                = state->backgroundBrush.get();
+    state->inputFrameStyle.inputBackgroundColor         = state->inputBackgroundColor;
+    state->inputFrameStyle.inputFocusedBackgroundColor  = state->inputFocusedBackgroundColor;
+    state->inputFrameStyle.inputDisabledBackgroundColor = state->inputDisabledBackgroundColor;
+
+    SetDlgItemTextW(dlg, IDOK, LoadStringResource(nullptr, IDS_BTN_OK).c_str());
+    SetDlgItemTextW(dlg, IDCANCEL, LoadStringResource(nullptr, IDS_BTN_CANCEL).c_str());
+
     const HWND edit = GetDlgItem(dlg, IDC_FOLDERVIEW_RENAME_EDIT);
     if (edit)
     {
+        if (! highContrast)
+        {
+            const bool darkBackground = ChooseContrastingTextColor(state->theme.windowBackground) == RGB(255, 255, 255);
+            SetWindowTheme(edit, darkBackground ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+            SendMessageW(edit, WM_THEMECHANGED, 0, 0);
+
+            PrepareFlatEditControl(edit);
+            PrepareEditMargins(edit);
+            EnsureRenameDialogEditFrame(dlg, state, edit);
+        }
+
         SetWindowTextW(edit, state->currentName.c_str());
         CenterMultilineEditTextVertically(edit);
 
@@ -526,10 +789,21 @@ INT_PTR OnRenameDialogInit(HWND dlg, RenameDialogState* state)
             }
         }
 
+        if (state->centerOnWindow)
+        {
+            CenterWindowOnOwner(dlg, state->centerOnWindow);
+        }
+
         SetFocus(edit);
         SendMessageW(edit, EM_SETSEL, 0, static_cast<LPARAM>(selectionEnd));
         return FALSE;
     }
+
+    if (state->centerOnWindow)
+    {
+        CenterWindowOnOwner(dlg, state->centerOnWindow);
+    }
+
     return TRUE;
 }
 
@@ -576,21 +850,81 @@ INT_PTR CALLBACK RenameDialogProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lPar
     switch (msg)
     {
         case WM_INITDIALOG: return OnRenameDialogInit(dlg, reinterpret_cast<RenameDialogState*>(lParam));
+        case WM_CTLCOLORDLG: return OnRenameDialogCtlColorDialog(state);
+        case WM_CTLCOLORSTATIC: return OnRenameDialogCtlColorStatic(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_CTLCOLOREDIT: return OnRenameDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_NCACTIVATE:
+            if (state)
+            {
+                ApplyTitleBarTheme(dlg, state->theme, wParam != FALSE);
+            }
+            return FALSE;
+        case WM_DPICHANGED:
+            if (state)
+            {
+                const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
+                if (suggested)
+                {
+                    const int w = std::max(1l, suggested->right - suggested->left);
+                    const int h = std::max(1l, suggested->bottom - suggested->top);
+                    SetWindowPos(dlg, nullptr, suggested->left, suggested->top, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+
+                if (HWND edit = GetDlgItem(dlg, IDC_FOLDERVIEW_RENAME_EDIT))
+                {
+                    PrepareEditMargins(edit);
+                    EnsureRenameDialogEditFrame(dlg, state, edit);
+                    CenterMultilineEditTextVertically(edit);
+                }
+
+                if (state->centerOnWindow)
+                {
+                    CenterWindowOnOwner(dlg, state->centerOnWindow);
+                }
+
+                RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+                return TRUE;
+            }
+            break;
+        case WM_DRAWITEM:
+        {
+            if (! state || state->theme.highContrast || state->theme.systemHighContrast)
+            {
+                break;
+            }
+
+            auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
+            if (! dis || dis->CtlType != ODT_BUTTON)
+            {
+                break;
+            }
+
+            ThemedControls::DrawThemedPushButton(*dis, state->theme);
+            return TRUE;
+        }
         case WM_COMMAND: return OnRenameDialogCommand(dlg, state, LOWORD(wParam));
     }
     return FALSE;
 }
 
-std::optional<std::wstring> PromptForRename(HWND owner, const std::wstring& currentName, bool isDirectory)
+std::optional<std::wstring> PromptForRename(HWND owner, const std::wstring& currentName, bool isDirectory, const AppTheme& theme)
 {
     RenameDialogState state{};
     state.currentName = currentName;
     state.isDirectory = isDirectory;
+    state.theme       = theme;
+
+    HWND rootOwner = owner ? GetAncestor(owner, GA_ROOT) : nullptr;
+    if (! rootOwner)
+    {
+        rootOwner = owner;
+    }
+    state.centerOnWindow = rootOwner;
 #pragma warning(push)
 // pointer or reference to potentially throwing function passed to 'extern "C"' function
 #pragma warning(disable : 5039)
     INT_PTR result =
-        DialogBoxParamW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_FOLDERVIEW_RENAME), owner, RenameDialogProc, reinterpret_cast<LPARAM>(&state));
+        DialogBoxParamW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_FOLDERVIEW_RENAME), rootOwner, RenameDialogProc, reinterpret_cast<LPARAM>(&state));
 #pragma warning(pop)
     if (result == IDOK && ! state.newName.empty())
     {

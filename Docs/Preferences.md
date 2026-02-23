@@ -3,6 +3,7 @@
 Open Preferences from:
 
 - **View → Preferences…**
+- Tip: **Hot Paths** can also be opened directly with `Shift+F9`.
 
 ![Preferences](res/preferences.png)
 
@@ -22,10 +23,11 @@ The left tree contains:
 - **Viewers**: file extension → viewer mapping (used by `F3`).
 - **Editors**: placeholder (not implemented yet).
 - **Keyboard**: shortcut bindings (Function Bar + FolderView).
-- **Mouse**: mouse behavior and related UI options.
+- **Mouse**: placeholder (not implemented yet).
 - **Themes**: theme selection and theme file management.
 - **Plugins**: enable/disable plugins, configure plugins, and run plugin tests.
+- **Compare Directories**: default options used by the Compare Directories window.
+- **Hot Paths**: bookmark folder paths for quick access (`Ctrl+1`..`Ctrl+0`).
 - **Advanced**: expert settings and diagnostics-related options.
 
 Tip: Plugins also appear as child nodes under **Plugins** when a plugin exposes configurable fields.
-

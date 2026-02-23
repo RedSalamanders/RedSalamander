@@ -2216,6 +2216,61 @@ void ParseHotPaths(yyjson_val* root, Common::Settings::Settings& out)
     }
 }
 
+void ParseSelectionMasks(yyjson_val* root, Common::Settings::Settings& out)
+{
+    yyjson_val* selectionMasks = yyjson_obj_get(root, "selectionMasks");
+    if (! selectionMasks || ! yyjson_is_obj(selectionMasks))
+    {
+        return;
+    }
+
+    Common::Settings::SelectionMasksSettings settings;
+
+    constexpr size_t kMaxHistoryItems = 10u;
+    auto parseHistory = [&](const char* key, std::vector<std::wstring>& dest)
+    {
+        yyjson_val* arr = yyjson_obj_get(selectionMasks, key);
+        if (! arr || ! yyjson_is_arr(arr))
+        {
+            return;
+        }
+
+        const size_t count = yyjson_arr_size(arr);
+        dest.reserve(std::min(count, kMaxHistoryItems));
+
+        for (size_t i = 0; i < count && dest.size() < kMaxHistoryItems; ++i)
+        {
+            yyjson_val* v = yyjson_arr_get(arr, i);
+            if (! v || ! yyjson_is_str(v))
+            {
+                continue;
+            }
+
+            const char* utf8 = yyjson_get_str(v);
+            if (! utf8)
+            {
+                continue;
+            }
+
+            std::wstring value = Utf16FromUtf8(utf8);
+            if (value.empty())
+            {
+                continue;
+            }
+
+            dest.push_back(std::move(value));
+        }
+    };
+
+    parseHistory("selectHistory", settings.selectHistory);
+    parseHistory("unselectHistory", settings.unselectHistory);
+
+    if (! settings.selectHistory.empty() || ! settings.unselectHistory.empty())
+    {
+        out.selectionMasks = std::move(settings);
+    }
+}
+
 void ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out)
 {
     yyjson_val* shortcuts = yyjson_obj_get(root, "shortcuts");
@@ -2680,6 +2735,7 @@ HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
     ParseFileOperations(root, out);
     ParseCompareDirectories(root, out);
     ParseHotPaths(root, out);
+    ParseSelectionMasks(root, out);
 
     out.schemaVersion = 10;
 
@@ -4007,6 +4063,67 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 {
                     yyjson_mut_obj_add_bool(doc, slotObj, "showInMenu", slotValue.showInMenu);
                 }
+            }
+        }
+    }
+
+    if (settings.selectionMasks)
+    {
+        const auto& masks = settings.selectionMasks.value();
+
+        const bool wroteMasks = ! masks.selectHistory.empty() || ! masks.unselectHistory.empty();
+        if (wroteMasks)
+        {
+            yyjson_mut_val* masksObj = yyjson_mut_obj(doc);
+            if (! masksObj)
+            {
+                return E_OUTOFMEMORY;
+            }
+            yyjson_mut_obj_add_val(doc, root, "selectionMasks", masksObj);
+
+            constexpr size_t kMaxHistoryItems = 10u;
+            auto writeHistory = [&](const char* key, const std::vector<std::wstring>& history) -> HRESULT
+            {
+                if (history.empty())
+                {
+                    return S_OK;
+                }
+
+                yyjson_mut_val* arr = yyjson_mut_arr(doc);
+                if (! arr)
+                {
+                    return E_OUTOFMEMORY;
+                }
+
+                yyjson_mut_obj_add_val(doc, masksObj, key, arr);
+
+                size_t added = 0;
+                for (const auto& entry : history)
+                {
+                    if (entry.empty())
+                    {
+                        continue;
+                    }
+
+                    yyjson_mut_arr_add_val(arr, NewString(doc, entry));
+
+                    ++added;
+                    if (added >= kMaxHistoryItems)
+                    {
+                        break;
+                    }
+                }
+
+                return S_OK;
+            };
+
+            if (const HRESULT hr = writeHistory("selectHistory", masks.selectHistory); FAILED(hr))
+            {
+                return hr;
+            }
+            if (const HRESULT hr = writeHistory("unselectHistory", masks.unselectHistory); FAILED(hr))
+            {
+                return hr;
             }
         }
     }

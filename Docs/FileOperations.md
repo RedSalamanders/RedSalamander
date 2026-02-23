@@ -140,7 +140,6 @@ Limitations:
 ## Not implemented yet
 
 - Pack / Unpack
-- Compare directories
 - Find files
 - “Copy path as text” helpers
 - Selection dialog features (select/unselect/invert/restore, select same extension/name, …)

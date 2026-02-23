@@ -23,6 +23,8 @@ RedSalamander opens as a **dual-pane** window:
 - `Tab`: switch pane focus
 - `Ctrl+L` or `Alt+D`: focus the address bar (type a path/URI and press Enter)
 - `Alt+F1` / `Alt+F2`: open Left/Right drive menu
+- `Ctrl+1`..`Ctrl+0`: go to a Hot Path (bookmarked folder)
+- `Ctrl+Shift+1`..`Ctrl+Shift+0`: set a Hot Path to the current folder
 - `F2`: rename
 - `F3`: View (opens the configured viewer plugin)
 - `Shift+F3`: open current folder in File Explorer
@@ -31,6 +33,7 @@ RedSalamander opens as a **dual-pane** window:
 - `F7`: Create folder
 - `F8` or `Del`: Delete (to Recycle Bin when supported)
 - `Shift+Del`: Permanent Delete (with confirmation)
+- `Ctrl+F10`: Compare Directories (compare the two panes)
 - `F11`: Connect network drive
 - `F12`: Disconnect network drive
 

@@ -16,6 +16,7 @@
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
 #include "SettingsStore.h"
+#include "ShortcutText.h"
 #include "ThemedControls.h"
 #include "resource.h"
 
@@ -76,6 +77,69 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     }
 
     return result;
+}
+
+[[nodiscard]] std::wstring CompactChordTextForMenu(std::wstring text)
+{
+    for (size_t pos = 0; (pos = text.find(L" + ", pos)) != std::wstring::npos;)
+    {
+        text.replace(pos, 3u, L"+");
+        pos += 1u;
+    }
+
+    return text;
+}
+
+[[nodiscard]] std::optional<std::wstring> TryGetShortcutTextForCommandId(const Common::Settings::Settings& settings, std::wstring_view commandId) noexcept
+{
+    if (commandId.empty())
+    {
+        return std::nullopt;
+    }
+
+    if (! settings.shortcuts.has_value())
+    {
+        return std::nullopt;
+    }
+
+    const auto findBinding = [&](const std::vector<Common::Settings::ShortcutBinding>& bindings) noexcept -> std::optional<std::wstring>
+    {
+        for (const auto& binding : bindings)
+        {
+            if (binding.commandId.empty())
+            {
+                continue;
+            }
+
+            if (std::wstring_view(binding.commandId) != commandId)
+            {
+                continue;
+            }
+
+            std::wstring text = ShortcutText::FormatChordText(binding.vk, binding.modifiers);
+            if (text.empty())
+            {
+                return std::wstring{};
+            }
+
+            return CompactChordTextForMenu(std::move(text));
+        }
+
+        return std::nullopt;
+    };
+
+    const Common::Settings::ShortcutsSettings& shortcuts = settings.shortcuts.value();
+    if (std::optional<std::wstring> found = findBinding(shortcuts.functionBar))
+    {
+        return found;
+    }
+
+    if (std::optional<std::wstring> found = findBinding(shortcuts.folderView))
+    {
+        return found;
+    }
+
+    return std::nullopt;
 }
 
 [[nodiscard]] bool TryEllipsizePathMiddleToWidth(HDC hdc, std::wstring_view text, int maxWidthPx, std::wstring& output) noexcept
@@ -1775,15 +1839,26 @@ void NavigationView::ShowFileSystemDriveMenuDropdown()
                 const UINT id           = nextId++;
                 const wchar_t digitChar = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
 
-                 std::wstring label;
-                 if (! slot.label.empty())
-                 {
+                std::wstring label;
+                if (! slot.label.empty())
+                {
                     label = std::format(L"&{}: {}", digitChar, EscapeMenuLabel(slot.label));
-                 }
-                 else
-                 {
+                }
+                else
+                {
                     label = std::format(L"&{}: {}", digitChar, EscapeMenuLabel(slot.path));
-                 }
+                }
+
+                if (_settings)
+                {
+                    std::wstring commandId = L"cmd/pane/hotPath/";
+                    commandId.push_back(digitChar);
+                    if (const std::optional<std::wstring> shortcutOpt = TryGetShortcutTextForCommandId(*_settings, commandId))
+                    {
+                        label.append(L"\t");
+                        label.append(shortcutOpt.value());
+                    }
+                }
 
                 AppendMenuW(menu, MF_STRING, id, label.c_str());
 

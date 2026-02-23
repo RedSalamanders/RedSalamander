@@ -548,6 +548,11 @@ When the active plugin is **not** `file`, NavigationView appends a bottom:
 - `---`
 - `Change Drive >` submenu containing the **standard FileSystem** navigation menu items (drives + known folders), so users can jump back to the Windows file system quickly.
 
+**Hot Paths (host-injected, optional)**:
+- If any Hot Path slots are configured with `showInMenu = true` and a non-empty `path`, NavigationView appends a separator and those slots near the bottom of the drive/menu dropdown.
+- Labels are formatted as `&<digit>: <Label>` (or the path when the label is empty), where `<digit>` is `1..9` and `0` for slot 10.
+- Selecting an entry navigates to the stored folder path.
+
 **Typical FileSystem plugin composition**:
 ```text
 [Icon] Desktop          

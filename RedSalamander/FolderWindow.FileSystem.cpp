@@ -7,7 +7,9 @@
 
 #include "SettingsStore.h"
 #include "ThemedControls.h"
+#include "ThemedInputFrames.h"
 
+#include <commctrl.h>
 #include <shellapi.h>
 
 namespace
@@ -85,6 +87,7 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     int twoColumnSeparatorYBottom    = 0;
     wil::unique_hfont boldFont;
     wil::unique_hfont italicFont;
+    UINT fontsDpi = 0;
     std::wstring toggleOnLabel;
     std::wstring toggleOffLabel;
 
@@ -130,6 +133,14 @@ void EnsureChangeCaseDialogFonts(HWND dlg, ChangeCaseDialogState& state) noexcep
     if (! dlg)
     {
         return;
+    }
+
+    const UINT dpi = GetDpiForWindow(dlg);
+    if (state.fontsDpi != dpi)
+    {
+        state.fontsDpi = dpi;
+        state.boldFont.reset();
+        state.italicFont.reset();
     }
 
     HFONT baseFont = reinterpret_cast<HFONT>(SendMessageW(dlg, WM_GETFONT, 0, 0));
@@ -599,12 +610,8 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
      if (useTwoColumnsLayout)
      {
          const int availableW = std::max(0, contentW - columnSeparatorAreaW);
-         const int minCombined = minLeftColumnW + minRightColumnW;
-         const int extra       = std::max(0, availableW - minCombined);
- 
-         const int leftExtra = (extra * 2) / 3;
-         const int leftW     = std::max(0, minLeftColumnW + leftExtra);
-         const int rightW    = std::max(0, availableW - leftW);
+         const int leftW      = std::clamp(availableW / 2, minLeftColumnW, availableW - minRightColumnW);
+         const int rightW     = std::max(0, availableW - leftW);
          const int leftX  = contentX;
          const int rightX = contentX + leftW + columnSeparatorAreaW;
 
@@ -664,7 +671,7 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
      InvalidateRect(dlg, nullptr, TRUE);
  }
 
- void EnsureChangeCaseDialogAllOptionsVisible(HWND dlg, ChangeCaseDialogState& state) noexcept
+ void EnsureChangeCaseDialogAllOptionsVisible(HWND dlg, ChangeCaseDialogState& state, bool allowShrink) noexcept
  {
      if (! dlg || state.cards.empty())
      {
@@ -718,7 +725,8 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
      const UINT dpi  = GetDpiForWindow(dlg);
      const int gapY  = ThemedControls::ScaleDip(dpi, 12);
      const int desiredBottom = contentBottom + gapY;
-     if (desiredBottom <= buttonsTop)
+     const int delta = desiredBottom - buttonsTop;
+     if (delta == 0 || (! allowShrink && delta < 0))
      {
          return;
      }
@@ -733,18 +741,23 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
      const int windowW = std::max(1l, windowRc.right - windowRc.left);
      const int windowH = std::max(1l, windowRc.bottom - windowRc.top);
  
-     int newWindowH       = windowH + (desiredBottom - buttonsTop);
+     int newWindowH       = windowH + delta;
  
-     HMONITOR monitor = MonitorFromWindow(dlg, MONITOR_DEFAULTTONEAREST);
-     MONITORINFO mi{};
-     mi.cbSize = sizeof(mi);
-     if (monitor && GetMonitorInfoW(monitor, &mi))
+     if (delta > 0)
      {
-         const int workH = static_cast<int>(mi.rcWork.bottom - mi.rcWork.top);
-         newWindowH      = std::min(newWindowH, workH);
+         HMONITOR monitor = MonitorFromWindow(dlg, MONITOR_DEFAULTTONEAREST);
+         MONITORINFO mi{};
+         mi.cbSize = sizeof(mi);
+         if (monitor && GetMonitorInfoW(monitor, &mi))
+         {
+             const int workH = static_cast<int>(mi.rcWork.bottom - mi.rcWork.top);
+             newWindowH      = std::min(newWindowH, workH);
+         }
      }
+
+     newWindowH = std::max(1, newWindowH);
  
-     if (newWindowH <= windowH)
+     if (newWindowH == windowH)
      {
          return;
      }
@@ -793,10 +806,37 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
      }
 
      LayoutChangeCaseDialogControls(dlg, *state);
-     EnsureChangeCaseDialogAllOptionsVisible(dlg, *state);
+     EnsureChangeCaseDialogAllOptionsVisible(dlg, *state, true);
 
      return TRUE;
  }
+
+INT_PTR OnChangeCaseDialogDpiChanged(HWND dlg, ChangeCaseDialogState* state, UINT dpi, const RECT* suggested) noexcept
+{
+    UNREFERENCED_PARAMETER(dpi);
+
+    if (! dlg || ! state)
+    {
+        return FALSE;
+    }
+
+    if (suggested)
+    {
+        const int width  = static_cast<int>(std::max(0l, suggested->right - suggested->left));
+        const int height = static_cast<int>(std::max(0l, suggested->bottom - suggested->top));
+        SetWindowPos(dlg, nullptr, suggested->left, suggested->top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+    }
+
+    state->fontsDpi = 0;
+    state->boldFont.reset();
+    state->italicFont.reset();
+
+    LayoutChangeCaseDialogControls(dlg, *state);
+    EnsureChangeCaseDialogAllOptionsVisible(dlg, *state, true);
+
+    RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+    return TRUE;
+}
 
 INT_PTR OnChangeCaseDialogCtlColorDialog(ChangeCaseDialogState* state) noexcept
 {
@@ -983,8 +1023,11 @@ INT_PTR CALLBACK ChangeCaseDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             if (state)
             {
                 LayoutChangeCaseDialogControls(dlg, *state);
+                EnsureChangeCaseDialogAllOptionsVisible(dlg, *state, false);
             }
             return TRUE;
+        case WM_DPICHANGED:
+            return OnChangeCaseDialogDpiChanged(dlg, state, static_cast<UINT>(HIWORD(wp)), reinterpret_cast<const RECT*>(lp));
         case WM_ERASEBKGND:
             // Avoid flicker; paint background and cards in WM_PAINT.
             return TRUE;
@@ -1815,6 +1858,14 @@ struct CreateDirectoryDialogState
     std::wstring folderName;
     AppTheme theme{};
     wil::unique_hbrush backgroundBrush;
+    COLORREF inputBackgroundColor         = RGB(255, 255, 255);
+    COLORREF inputFocusedBackgroundColor  = RGB(255, 255, 255);
+    COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
+    wil::unique_hbrush inputBrush;
+    wil::unique_hbrush inputFocusedBrush;
+    wil::unique_hbrush inputDisabledBrush;
+    ThemedInputFrames::FrameStyle inputFrameStyle{};
+    wil::unique_hwnd nameFrame;
     bool showingValidationMessage = false;
 };
 
@@ -1931,6 +1982,43 @@ void UpdateCreateDirectoryDialogValidationForInput(HWND dlg, CreateDirectoryDial
 void CenterMultilineEditTextVertically(HWND edit) noexcept
 {
     ThemedControls::CenterEditTextVertically(edit);
+}
+
+void PrepareFlatEditControl(HWND control) noexcept
+{
+    if (! control)
+    {
+        return;
+    }
+
+    const LONG_PTR exStyle    = GetWindowLongPtrW(control, GWL_EXSTYLE);
+    const LONG_PTR style      = GetWindowLongPtrW(control, GWL_STYLE);
+    const LONG_PTR newExStyle = exStyle & ~static_cast<LONG_PTR>(WS_EX_CLIENTEDGE);
+    const LONG_PTR newStyle   = style & ~static_cast<LONG_PTR>(WS_BORDER);
+
+    if (newExStyle != exStyle)
+    {
+        SetWindowLongPtrW(control, GWL_EXSTYLE, newExStyle);
+    }
+    if (newStyle != style)
+    {
+        SetWindowLongPtrW(control, GWL_STYLE, newStyle);
+    }
+
+    SetWindowPos(control, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+    InvalidateRect(control, nullptr, TRUE);
+}
+
+void PrepareEditMargins(HWND edit) noexcept
+{
+    if (! edit)
+    {
+        return;
+    }
+
+    const UINT dpi       = GetDpiForWindow(edit);
+    const int textMargin = ThemedControls::ScaleDip(dpi, 6);
+    SendMessageW(edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(textMargin, textMargin));
 }
 
 LRESULT OnCreateDirectoryNameEditPaste(HWND hwnd, WPARAM wParam, LPARAM lParam)
@@ -2054,6 +2142,16 @@ void UpdateCreateDirectoryDialogLayout(HWND dlg, CreateDirectoryDialogState* sta
         SetWindowPos(control, nullptr, rect.left, rect.top + delta, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
+    if (state->nameFrame)
+    {
+        RECT frameRect{};
+        if (GetWindowRect(state->nameFrame.get(), &frameRect) != 0)
+        {
+            MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&frameRect), 2);
+            SetWindowPos(state->nameFrame.get(), nullptr, frameRect.left, frameRect.top + delta, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+
     RECT dialogRect{};
     if (GetWindowRect(dlg, &dialogRect) == 0)
     {
@@ -2096,16 +2194,43 @@ INT_PTR OnCreateDirectoryDialogCtlColorStatic(CreateDirectoryDialogState* state,
     return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
 }
 
-INT_PTR OnCreateDirectoryDialogCtlColorEdit(CreateDirectoryDialogState* state, HDC hdc)
+INT_PTR OnCreateDirectoryDialogCtlColorEdit(CreateDirectoryDialogState* state, HDC hdc, HWND control)
 {
-    if (! state || ! state->backgroundBrush)
+    if (! state || ! hdc)
     {
         return FALSE;
     }
 
-    SetBkColor(hdc, state->theme.windowBackground);
-    SetTextColor(hdc, state->theme.menu.text);
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
+    const bool enabled      = ! control || IsWindowEnabled(control) != FALSE;
+    const bool focused      = enabled && control && GetFocus() == control;
+
+    const COLORREF bg = enabled ? (focused ? state->inputFocusedBackgroundColor : state->inputBackgroundColor) : state->inputDisabledBackgroundColor;
+
+    SetBkColor(hdc, bg);
+    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
+
+    if (highContrast)
+    {
+        return state->backgroundBrush ? reinterpret_cast<INT_PTR>(state->backgroundBrush.get()) : FALSE;
+    }
+
+    HBRUSH brush = nullptr;
+    if (! enabled)
+    {
+        brush = state->inputDisabledBrush.get();
+    }
+    else
+    {
+        brush = (focused && state->inputFocusedBrush) ? state->inputFocusedBrush.get() : state->inputBrush.get();
+    }
+
+    if (brush)
+    {
+        return reinterpret_cast<INT_PTR>(brush);
+    }
+
+    return state->backgroundBrush ? reinterpret_cast<INT_PTR>(state->backgroundBrush.get()) : FALSE;
 }
 
 INT_PTR OnCreateDirectoryDialogInit(HWND dlg, CreateDirectoryDialogState* state)
@@ -2119,6 +2244,35 @@ INT_PTR OnCreateDirectoryDialogInit(HWND dlg, CreateDirectoryDialogState* state)
 
     ApplyTitleBarTheme(dlg, state->theme, GetActiveWindow() == dlg);
     state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
+
+    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
+    if (! highContrast)
+    {
+        ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
+        ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
+    }
+
+    const COLORREF surface             = ThemedControls::GetControlSurfaceColor(state->theme);
+    state->inputBackgroundColor        = ThemedControls::BlendColor(surface, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
+    state->inputFocusedBackgroundColor = ThemedControls::BlendColor(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
+    state->inputDisabledBackgroundColor =
+        ThemedControls::BlendColor(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
+
+    state->inputBrush.reset();
+    state->inputFocusedBrush.reset();
+    state->inputDisabledBrush.reset();
+    if (! highContrast)
+    {
+        state->inputBrush.reset(CreateSolidBrush(state->inputBackgroundColor));
+        state->inputFocusedBrush.reset(CreateSolidBrush(state->inputFocusedBackgroundColor));
+        state->inputDisabledBrush.reset(CreateSolidBrush(state->inputDisabledBackgroundColor));
+    }
+
+    state->inputFrameStyle.theme                        = &state->theme;
+    state->inputFrameStyle.backdropBrush                = state->backgroundBrush.get();
+    state->inputFrameStyle.inputBackgroundColor         = state->inputBackgroundColor;
+    state->inputFrameStyle.inputFocusedBackgroundColor  = state->inputFocusedBackgroundColor;
+    state->inputFrameStyle.inputDisabledBackgroundColor = state->inputDisabledBackgroundColor;
 
     const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_CREATE_DIR);
     if (! caption.empty())
@@ -2139,6 +2293,57 @@ INT_PTR OnCreateDirectoryDialogInit(HWND dlg, CreateDirectoryDialogState* state)
     {
         SetWindowTextW(nameEdit, state->initialName.c_str());
         SendMessageW(nameEdit, EM_SETSEL, 0, -1);
+
+        if (! highContrast)
+        {
+            const bool darkBackground = ChooseContrastingTextColor(state->theme.windowBackground) == RGB(255, 255, 255);
+            SetWindowTheme(nameEdit, darkBackground ? L"DarkMode_Explorer" : L"Explorer", nullptr);
+            SendMessageW(nameEdit, WM_THEMECHANGED, 0, 0);
+
+            PrepareFlatEditControl(nameEdit);
+            PrepareEditMargins(nameEdit);
+
+            RECT frameRc{};
+            if (GetWindowRect(nameEdit, &frameRc))
+            {
+                MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&frameRc), 2);
+
+                const int frameW = std::max(0l, frameRc.right - frameRc.left);
+                const int frameH = std::max(0l, frameRc.bottom - frameRc.top);
+
+                const UINT dpi         = GetDpiForWindow(dlg);
+                const int framePadding = std::max(1, ThemedControls::ScaleDip(dpi, 2));
+
+                const int editW = std::max(1, frameW - 2 * framePadding);
+                const int editH = std::max(1, frameH - 2 * framePadding);
+                SetWindowPos(nameEdit,
+                             nullptr,
+                             frameRc.left + framePadding,
+                             frameRc.top + framePadding,
+                             editW,
+                             editH,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+
+                state->nameFrame.reset(CreateWindowExW(0,
+                                                      L"Static",
+                                                      L"",
+                                                      WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                                                      frameRc.left,
+                                                      frameRc.top,
+                                                      frameW,
+                                                      frameH,
+                                                      dlg,
+                                                      nullptr,
+                                                      GetModuleHandleW(nullptr),
+                                                      nullptr));
+                if (state->nameFrame)
+                {
+                    SetWindowPos(state->nameFrame.get(), nameEdit, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    ThemedInputFrames::InstallFrame(state->nameFrame.get(), nameEdit, &state->inputFrameStyle);
+                }
+            }
+        }
+
         CenterMultilineEditTextVertically(nameEdit);
 #pragma warning(push)
 #pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
@@ -2235,13 +2440,30 @@ INT_PTR CALLBACK CreateDirectoryDialogProc(HWND dlg, UINT msg, WPARAM wParam, LP
         case WM_INITDIALOG: return OnCreateDirectoryDialogInit(dlg, reinterpret_cast<CreateDirectoryDialogState*>(lParam));
         case WM_CTLCOLORDLG: return OnCreateDirectoryDialogCtlColorDialog(state);
         case WM_CTLCOLORSTATIC: return OnCreateDirectoryDialogCtlColorStatic(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
-        case WM_CTLCOLOREDIT: return OnCreateDirectoryDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam));
+        case WM_CTLCOLOREDIT:
+            return OnCreateDirectoryDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
         case WM_NCACTIVATE:
             if (state)
             {
                 ApplyTitleBarTheme(dlg, state->theme, wParam != FALSE);
             }
             return FALSE;
+        case WM_DRAWITEM:
+        {
+            if (! state || state->theme.highContrast || state->theme.systemHighContrast)
+            {
+                break;
+            }
+
+            auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
+            if (! dis || dis->CtlType != ODT_BUTTON)
+            {
+                break;
+            }
+
+            ThemedControls::DrawThemedPushButton(*dis, state->theme);
+            return TRUE;
+        }
         case WM_COMMAND: return OnCreateDirectoryDialogCommand(dlg, state, LOWORD(wParam), HIWORD(wParam));
     }
     return FALSE;
@@ -2265,6 +2487,876 @@ std::optional<std::wstring> PromptForCreateDirectoryName(HWND ownerWindow, std::
     if (result == IDOK && ! state.folderName.empty())
     {
         return state.folderName;
+    }
+
+    return std::nullopt;
+}
+
+[[nodiscard]] wchar_t LowerInvariant(wchar_t ch) noexcept
+{
+    wchar_t buf[2] = {ch, L'\0'};
+    ::CharLowerW(buf);
+    return buf[0];
+}
+
+[[nodiscard]] bool WildcardMatchNoCase(std::wstring_view text, std::wstring_view pattern) noexcept
+{
+    // Glob match with '*' and '?', case-insensitive.
+    size_t ti = 0;
+    size_t pi = 0;
+
+    size_t star  = std::wstring_view::npos;
+    size_t match = 0;
+
+    while (ti < text.size())
+    {
+        if (pi < pattern.size())
+        {
+            const wchar_t pch = pattern[pi];
+            if (pch == L'?')
+            {
+                ++ti;
+                ++pi;
+                continue;
+            }
+            if (pch == L'*')
+            {
+                star  = pi++;
+                match = ti;
+                continue;
+            }
+
+            if (LowerInvariant(text[ti]) == LowerInvariant(pch))
+            {
+                ++ti;
+                ++pi;
+                continue;
+            }
+        }
+
+        if (star != std::wstring_view::npos)
+        {
+            pi = star + 1;
+            ++match;
+            ti = match;
+            continue;
+        }
+
+        return false;
+    }
+
+    while (pi < pattern.size() && pattern[pi] == L'*')
+    {
+        ++pi;
+    }
+
+    return pi == pattern.size();
+}
+
+[[nodiscard]] bool MatchesAnyMask(std::wstring_view text, const std::vector<std::wstring>& patterns) noexcept
+{
+    for (const auto& pat : patterns)
+    {
+        if (pat.empty())
+        {
+            continue;
+        }
+        if (WildcardMatchNoCase(text, pat))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+[[nodiscard]] std::vector<std::wstring> SplitMaskList(std::wstring_view text)
+{
+    std::vector<std::wstring> result;
+    if (text.empty())
+    {
+        return result;
+    }
+
+    std::wstring token;
+    token.reserve(text.size());
+
+    for (size_t i = 0; i < text.size(); ++i)
+    {
+        const wchar_t ch = text[i];
+        if (ch != L';')
+        {
+            token.push_back(ch);
+            continue;
+        }
+
+        if ((i + 1) < text.size() && text[i + 1] == L';')
+        {
+            token.push_back(L';');
+            ++i;
+            continue;
+        }
+
+        std::wstring trimmed = TrimWhitespace(token);
+        if (! trimmed.empty())
+        {
+            result.push_back(std::move(trimmed));
+        }
+        token.clear();
+    }
+
+    std::wstring trimmed = TrimWhitespace(token);
+    if (! trimmed.empty())
+    {
+        result.push_back(std::move(trimmed));
+    }
+
+    return result;
+}
+
+struct SelectionMask final
+{
+    std::vector<std::wstring> includePatterns;
+    std::vector<std::wstring> excludePatterns;
+};
+
+[[nodiscard]] SelectionMask ParseSelectionMask(std::wstring_view rawText)
+{
+    SelectionMask result;
+
+    const std::wstring text = TrimWhitespace(rawText);
+    if (text.empty())
+    {
+        return result;
+    }
+
+    const size_t pipe = text.find(L'|');
+    std::wstring_view includeText(text);
+    std::wstring_view excludeText;
+    if (pipe != std::wstring::npos)
+    {
+        includeText = std::wstring_view(text).substr(0, pipe);
+        excludeText = std::wstring_view(text).substr(pipe + 1);
+    }
+
+    result.includePatterns = SplitMaskList(includeText);
+    result.excludePatterns = SplitMaskList(excludeText);
+    return result;
+}
+
+[[nodiscard]] bool MatchesSelectionMask(std::wstring_view name, const SelectionMask& mask) noexcept
+{
+    const bool includeMatch = mask.includePatterns.empty() ? true : MatchesAnyMask(name, mask.includePatterns);
+    if (! includeMatch)
+    {
+        return false;
+    }
+
+    return ! MatchesAnyMask(name, mask.excludePatterns);
+}
+
+constexpr size_t kSelectionMaskHistoryMaxItems = 10u;
+
+void NormalizeSelectionMaskHistory(std::vector<std::wstring>& history, size_t maxItems)
+{
+    std::vector<std::wstring> normalized;
+    normalized.reserve(std::min(history.size(), maxItems));
+
+    for (auto& entry : history)
+    {
+        std::wstring trimmed = TrimWhitespace(entry);
+        if (trimmed.empty())
+        {
+            continue;
+        }
+
+        const std::wstring_view trimmedView(trimmed);
+        const bool exists =
+            std::find_if(normalized.begin(), normalized.end(), [&](const std::wstring& existing) noexcept { return EqualsNoCase(existing, trimmedView); }) !=
+            normalized.end();
+        if (exists)
+        {
+            continue;
+        }
+
+        normalized.push_back(std::move(trimmed));
+        if (normalized.size() >= maxItems)
+        {
+            break;
+        }
+    }
+
+    history = std::move(normalized);
+}
+
+void AddToSelectionMaskHistory(std::vector<std::wstring>& history, size_t maxItems, std::wstring_view entry)
+{
+    if (maxItems == 0)
+    {
+        return;
+    }
+
+    std::wstring trimmed = TrimWhitespace(entry);
+    if (trimmed.empty())
+    {
+        return;
+    }
+
+    const std::wstring_view trimmedView(trimmed);
+    auto it = std::find_if(history.begin(), history.end(), [&](const std::wstring& existing) noexcept { return EqualsNoCase(existing, trimmedView); });
+
+    if (it != history.end())
+    {
+        if (it == history.begin())
+        {
+            return;
+        }
+
+        std::wstring moved = std::move(*it);
+        history.erase(it);
+        history.insert(history.begin(), std::move(moved));
+        return;
+    }
+
+    history.insert(history.begin(), std::move(trimmed));
+    if (history.size() > maxItems)
+    {
+        history.resize(maxItems);
+    }
+}
+
+struct SelectionMaskDialogState
+{
+    SelectionMaskDialogState()                                            = default;
+    SelectionMaskDialogState(const SelectionMaskDialogState&)             = delete;
+    SelectionMaskDialogState& operator=(const SelectionMaskDialogState&)  = delete;
+    SelectionMaskDialogState(SelectionMaskDialogState&&)                  = delete;
+    SelectionMaskDialogState& operator=(SelectionMaskDialogState&&)       = delete;
+    ~SelectionMaskDialogState()                                           = default;
+
+    HWND centerOnWindow = nullptr;
+    const std::vector<std::wstring>* history = nullptr;
+
+    AppTheme theme{};
+    wil::unique_hbrush backgroundBrush;
+
+    std::wstring captionText;
+    std::wstring labelText;
+
+    COLORREF inputBackgroundColor         = RGB(255, 255, 255);
+    COLORREF inputFocusedBackgroundColor  = RGB(255, 255, 255);
+    COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
+    wil::unique_hbrush inputBrush;
+    wil::unique_hbrush inputFocusedBrush;
+    wil::unique_hbrush inputDisabledBrush;
+
+    ThemedInputFrames::FrameStyle inputFrameStyle{};
+    wil::unique_hwnd maskFrame;
+
+    wil::unique_hfont boldFont;
+    UINT fontsDpi = 0;
+
+    std::wstring hintCollapsed;
+    std::wstring hintExpanded;
+    std::wstring helpText;
+
+    bool helpExpanded     = false;
+    bool layoutInProgress = false;
+    std::wstring maskText;
+};
+
+void EnsureSelectionMaskDialogFonts(HWND dlg, SelectionMaskDialogState& state) noexcept
+{
+    if (! dlg)
+    {
+        return;
+    }
+
+    const UINT dpi = GetDpiForWindow(dlg);
+    if (state.fontsDpi != dpi)
+    {
+        state.fontsDpi = dpi;
+        state.boldFont.reset();
+    }
+
+    HFONT baseFont = reinterpret_cast<HFONT>(SendMessageW(dlg, WM_GETFONT, 0, 0));
+    if (! baseFont)
+    {
+        baseFont = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    }
+
+    LOGFONTW lf{};
+    if (GetObjectW(baseFont, sizeof(lf), &lf) != sizeof(lf))
+    {
+        return;
+    }
+
+    if (! state.boldFont)
+    {
+        LOGFONTW bold = lf;
+        bold.lfWeight = std::max<LONG>(FW_SEMIBOLD, lf.lfWeight);
+        state.boldFont.reset(CreateFontIndirectW(&bold));
+    }
+}
+
+void UpdateSelectionMaskDialogLayout(HWND dlg, SelectionMaskDialogState* state, bool allowResize) noexcept
+{
+    if (! dlg || ! state || state->layoutInProgress)
+    {
+        return;
+    }
+
+    state->layoutInProgress = true;
+    auto clearGuard         = wil::scope_exit([&] { state->layoutInProgress = false; });
+
+    RECT rcClient{};
+    if (GetClientRect(dlg, &rcClient) == 0)
+    {
+        return;
+    }
+
+    const int clientW = std::max(0l, rcClient.right - rcClient.left);
+    const int clientH = std::max(0l, rcClient.bottom - rcClient.top);
+    const UINT dpi    = GetDpiForWindow(dlg);
+
+    const int margin    = ThemedControls::ScaleDip(dpi, 16);
+    const int gapX      = ThemedControls::ScaleDip(dpi, 12);
+    const int gapY      = ThemedControls::ScaleDip(dpi, 10);
+    const int rowHeight = std::max(1, ThemedControls::ScaleDip(dpi, 26));
+
+    const int contentX = margin;
+    const int contentW = std::max(0, clientW - 2 * margin);
+
+    HFONT dialogFont = reinterpret_cast<HFONT>(SendMessageW(dlg, WM_GETFONT, 0, 0));
+    if (! dialogFont)
+    {
+        dialogFont = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    }
+
+    EnsureSelectionMaskDialogFonts(dlg, *state);
+    const HFONT headerFont = state->boldFont ? state->boldFont.get() : dialogFont;
+
+    const auto getWindowText = [](HWND hwnd) noexcept -> std::wstring
+    {
+        if (! hwnd)
+        {
+            return {};
+        }
+        const int len = GetWindowTextLengthW(hwnd);
+        if (len <= 0)
+        {
+            return {};
+        }
+        std::wstring text(static_cast<size_t>(len), L'\0');
+        const int copied = GetWindowTextW(hwnd, text.data(), len + 1);
+        if (copied <= 0)
+        {
+            return {};
+        }
+        if (static_cast<size_t>(copied) < text.size())
+        {
+            text.resize(static_cast<size_t>(copied));
+        }
+        return text;
+    };
+
+    const int buttonPadX = ThemedControls::ScaleDip(dpi, 16);
+    const int minBtnW    = ThemedControls::ScaleDip(dpi, 80);
+
+    const auto measureButtonWidth = [&](HWND btn) noexcept -> int
+    {
+        const std::wstring text = getWindowText(btn);
+        const int textW         = ThemedControls::MeasureTextWidth(dlg, dialogFont, text);
+        return std::max(minBtnW, (2 * buttonPadX) + textW);
+    };
+
+    const HWND okBtn     = GetDlgItem(dlg, IDOK);
+    const HWND cancelBtn = GetDlgItem(dlg, IDCANCEL);
+
+    const int okW     = measureButtonWidth(okBtn);
+    const int cancelW = measureButtonWidth(cancelBtn);
+
+    const UINT flags = SWP_NOZORDER | SWP_NOACTIVATE;
+
+    int y = margin;
+
+    const HWND label = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_LABEL);
+    if (label)
+    {
+        const int labelH = std::max(1, ThemedControls::ScaleDip(dpi, 20));
+        SetWindowPos(label, nullptr, contentX, y, contentW, labelH, flags);
+        SendMessageW(label, WM_SETFONT, reinterpret_cast<WPARAM>(headerFont), TRUE);
+        y += labelH + gapY;
+    }
+
+    const HWND combo = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_COMBO);
+    const HWND frame = state->maskFrame.get();
+    if (combo)
+    {
+        const int framePadding = std::max(1, ThemedControls::ScaleDip(dpi, 2));
+
+        if (frame)
+        {
+            SetWindowPos(frame, nullptr, contentX, y, contentW, rowHeight, flags);
+        }
+
+        SetWindowPos(combo, nullptr, contentX + framePadding, y + framePadding, std::max(1, contentW - 2 * framePadding), std::max(1, rowHeight - 2 * framePadding), flags);
+        if (frame)
+        {
+            SetWindowPos(frame, combo, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+
+        ThemedControls::EnsureComboBoxDroppedWidth(combo, dpi);
+        y += rowHeight + gapY;
+    }
+
+    const HWND hint = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_HINT);
+    if (hint)
+    {
+        const int hintH = std::max(1, ThemedControls::ScaleDip(dpi, 18));
+        SetWindowPos(hint, nullptr, contentX, y, contentW, hintH, flags);
+        SendMessageW(hint, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        y += hintH + gapY;
+    }
+
+    const HWND help = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_HELP);
+    if (help && state->helpExpanded && ! state->helpText.empty())
+    {
+        const int helpH = MeasureStaticTextHeight(dlg, dialogFont, contentW, state->helpText);
+        SetWindowPos(help, nullptr, contentX, y, contentW, std::max(1, helpH), flags);
+        SendMessageW(help, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        ShowWindow(help, SW_SHOW);
+        y += std::max(1, helpH) + gapY;
+    }
+    else if (help)
+    {
+        ShowWindow(help, SW_HIDE);
+    }
+
+    const int buttonsY = y;
+    const int desiredClientH = buttonsY + rowHeight + margin;
+
+    if (allowResize && desiredClientH > 0 && desiredClientH != clientH)
+    {
+        RECT rcWindow{};
+        if (GetWindowRect(dlg, &rcWindow) != 0)
+        {
+            const int windowW = rcWindow.right - rcWindow.left;
+            const int windowH = rcWindow.bottom - rcWindow.top;
+            const int nonClientH = std::max(0, windowH - clientH);
+            const int newWindowH = desiredClientH + nonClientH;
+            SetWindowPos(dlg, nullptr, 0, 0, windowW, newWindowH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+    }
+
+    int nextRight = std::max(0, clientW - margin);
+    if (cancelBtn)
+    {
+        nextRight -= cancelW;
+        SetWindowPos(cancelBtn, nullptr, nextRight, buttonsY, cancelW, rowHeight, flags);
+        SendMessageW(cancelBtn, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        nextRight -= gapX;
+    }
+    if (okBtn)
+    {
+        nextRight -= okW;
+        SetWindowPos(okBtn, nullptr, nextRight, buttonsY, okW, rowHeight, flags);
+        SendMessageW(okBtn, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+    }
+
+    InvalidateRect(dlg, nullptr, TRUE);
+}
+
+INT_PTR OnSelectionMaskDialogCtlColorDialog(SelectionMaskDialogState* state)
+{
+    if (! state || ! state->backgroundBrush)
+    {
+        return FALSE;
+    }
+    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+}
+
+INT_PTR OnSelectionMaskDialogCtlColorStatic(SelectionMaskDialogState* state, HDC hdc, HWND)
+{
+    if (! state || ! state->backgroundBrush)
+    {
+        return FALSE;
+    }
+
+    SetBkMode(hdc, TRANSPARENT);
+    SetTextColor(hdc, state->theme.menu.text);
+    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+}
+
+INT_PTR OnSelectionMaskDialogCtlColorEdit(SelectionMaskDialogState* state, HDC hdc, HWND control)
+{
+    if (! state || ! hdc)
+    {
+        return FALSE;
+    }
+
+    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
+    const bool enabled      = ! control || IsWindowEnabled(control) != FALSE;
+    const bool focused      = enabled && control && GetFocus() == control;
+
+    const COLORREF bg = enabled ? (focused ? state->inputFocusedBackgroundColor : state->inputBackgroundColor) : state->inputDisabledBackgroundColor;
+
+    SetBkColor(hdc, bg);
+    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
+
+    if (highContrast)
+    {
+        return state->backgroundBrush ? reinterpret_cast<INT_PTR>(state->backgroundBrush.get()) : FALSE;
+    }
+
+    HBRUSH brush = nullptr;
+    if (! enabled)
+    {
+        brush = state->inputDisabledBrush.get();
+    }
+    else
+    {
+        brush = (focused && state->inputFocusedBrush) ? state->inputFocusedBrush.get() : state->inputBrush.get();
+    }
+
+    if (brush)
+    {
+        return reinterpret_cast<INT_PTR>(brush);
+    }
+
+    return state->backgroundBrush ? reinterpret_cast<INT_PTR>(state->backgroundBrush.get()) : FALSE;
+}
+
+INT_PTR OnSelectionMaskDialogInit(HWND dlg, SelectionMaskDialogState* state)
+{
+    if (! dlg || ! state)
+    {
+        return FALSE;
+    }
+
+    SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
+
+    ApplyTitleBarTheme(dlg, state->theme, GetActiveWindow() == dlg);
+    state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
+
+    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
+    if (! highContrast)
+    {
+        ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
+        ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
+    }
+
+    const COLORREF surface             = ThemedControls::GetControlSurfaceColor(state->theme);
+    state->inputBackgroundColor        = ThemedControls::BlendColor(surface, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
+    state->inputFocusedBackgroundColor = ThemedControls::BlendColor(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
+    state->inputDisabledBackgroundColor =
+        ThemedControls::BlendColor(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
+
+    state->inputBrush.reset();
+    state->inputFocusedBrush.reset();
+    state->inputDisabledBrush.reset();
+    if (! highContrast)
+    {
+        state->inputBrush.reset(CreateSolidBrush(state->inputBackgroundColor));
+        state->inputFocusedBrush.reset(CreateSolidBrush(state->inputFocusedBackgroundColor));
+        state->inputDisabledBrush.reset(CreateSolidBrush(state->inputDisabledBackgroundColor));
+    }
+
+    state->inputFrameStyle.theme                        = &state->theme;
+    state->inputFrameStyle.backdropBrush                = state->backgroundBrush.get();
+    state->inputFrameStyle.inputBackgroundColor         = state->inputBackgroundColor;
+    state->inputFrameStyle.inputFocusedBackgroundColor  = state->inputFocusedBackgroundColor;
+    state->inputFrameStyle.inputDisabledBackgroundColor = state->inputDisabledBackgroundColor;
+
+    if (! state->captionText.empty())
+    {
+        SetWindowTextW(dlg, state->captionText.c_str());
+    }
+
+    if (! state->labelText.empty())
+    {
+        SetDlgItemTextW(dlg, IDC_PANE_SELECTION_MASK_LABEL, state->labelText.c_str());
+    }
+
+    SetDlgItemTextW(dlg, IDOK, LoadStringResource(nullptr, IDS_BTN_OK).c_str());
+    SetDlgItemTextW(dlg, IDCANCEL, LoadStringResource(nullptr, IDS_BTN_CANCEL).c_str());
+
+    state->hintCollapsed = LoadStringResource(nullptr, IDS_SELECTION_MASK_HINT_COLLAPSED);
+    state->hintExpanded  = LoadStringResource(nullptr, IDS_SELECTION_MASK_HINT_EXPANDED);
+    state->helpText      = LoadStringResource(nullptr, IDS_SELECTION_MASK_HELP_TEXT);
+
+    if (const HWND hint = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_HINT))
+    {
+        const std::wstring& text = state->helpExpanded ? state->hintExpanded : state->hintCollapsed;
+        SetWindowTextW(hint, text.c_str());
+    }
+
+    if (const HWND help = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_HELP))
+    {
+        SetWindowTextW(help, state->helpText.c_str());
+        ShowWindow(help, state->helpExpanded ? SW_SHOW : SW_HIDE);
+    }
+
+    const HWND combo = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_COMBO);
+    if (combo)
+    {
+        SendMessageW(combo, CB_RESETCONTENT, 0, 0);
+        if (state->history)
+        {
+            for (const auto& entry : *state->history)
+            {
+                if (entry.empty())
+                {
+                    continue;
+                }
+                SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(entry.c_str()));
+            }
+
+            if (! state->history->empty() && ! state->history->front().empty())
+            {
+                SetWindowTextW(combo, state->history->front().c_str());
+                SendMessageW(combo, CB_SETEDITSEL, 0, MAKELPARAM(0, -1));
+            }
+        }
+
+        ThemedControls::ApplyThemeToComboBox(combo, state->theme);
+
+        if (! highContrast)
+        {
+            PrepareFlatEditControl(combo);
+
+            COMBOBOXINFO cbi{};
+            cbi.cbSize = sizeof(cbi);
+            if (GetComboBoxInfo(combo, &cbi) && cbi.hwndItem)
+            {
+                PrepareEditMargins(cbi.hwndItem);
+            }
+
+            RECT frameRc{};
+            if (GetWindowRect(combo, &frameRc))
+            {
+                MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&frameRc), 2);
+
+                const int frameW = std::max(0l, frameRc.right - frameRc.left);
+                const int frameH = std::max(0l, frameRc.bottom - frameRc.top);
+
+                const UINT frameDpi     = GetDpiForWindow(dlg);
+                const int framePadding  = std::max(1, ThemedControls::ScaleDip(frameDpi, 2));
+                const int innerW        = std::max(1, frameW - 2 * framePadding);
+                const int innerH        = std::max(1, frameH - 2 * framePadding);
+
+                SetWindowPos(combo, nullptr, frameRc.left + framePadding, frameRc.top + framePadding, innerW, innerH, SWP_NOZORDER | SWP_NOACTIVATE);
+
+                state->maskFrame.reset(CreateWindowExW(0,
+                                                      L"Static",
+                                                      L"",
+                                                      WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                                                      frameRc.left,
+                                                      frameRc.top,
+                                                      frameW,
+                                                      frameH,
+                                                      dlg,
+                                                      nullptr,
+                                                      GetModuleHandleW(nullptr),
+                                                      nullptr));
+                if (state->maskFrame)
+                {
+                    SetWindowPos(state->maskFrame.get(), combo, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                    ThemedInputFrames::InstallFrame(state->maskFrame.get(), combo, &state->inputFrameStyle);
+                }
+            }
+        }
+    }
+
+    UpdateSelectionMaskDialogLayout(dlg, state, true);
+    CenterWindowOnOwner(dlg, state->centerOnWindow);
+
+    if (combo)
+    {
+        SetFocus(combo);
+        SendMessageW(combo, CB_SETEDITSEL, 0, MAKELPARAM(0, -1));
+        return FALSE;
+    }
+
+    return TRUE;
+}
+
+INT_PTR OnSelectionMaskDialogCommand(HWND dlg, SelectionMaskDialogState* state, UINT commandId, UINT notifyCode)
+{
+    if (! dlg || ! state)
+    {
+        return FALSE;
+    }
+
+    if (commandId == IDC_PANE_SELECTION_MASK_HINT && notifyCode == STN_CLICKED)
+    {
+        state->helpExpanded = ! state->helpExpanded;
+
+        const HWND hint = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_HINT);
+        if (hint)
+        {
+            const std::wstring& text = state->helpExpanded ? state->hintExpanded : state->hintCollapsed;
+            SetWindowTextW(hint, text.c_str());
+        }
+
+        UpdateSelectionMaskDialogLayout(dlg, state, true);
+        return TRUE;
+    }
+
+    if (commandId == IDC_PANE_SELECTION_MASK_COMBO && notifyCode == CBN_DROPDOWN)
+    {
+        if (const HWND combo = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_COMBO))
+        {
+            ThemedControls::ApplyThemeToComboBoxDropDown(combo, state->theme);
+        }
+        return TRUE;
+    }
+
+    if (commandId == IDCANCEL)
+    {
+        EndDialog(dlg, IDCANCEL);
+        return TRUE;
+    }
+
+    if (commandId != IDOK)
+    {
+        return FALSE;
+    }
+
+    const HWND combo = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_COMBO);
+    if (! combo)
+    {
+        return TRUE;
+    }
+
+    const int len = GetWindowTextLengthW(combo);
+    if (len <= 0)
+    {
+        MessageBeep(MB_ICONWARNING);
+        SetFocus(combo);
+        return TRUE;
+    }
+
+    std::wstring text(static_cast<size_t>(len), L'\0');
+    const int copied = GetWindowTextW(combo, text.data(), len + 1);
+    if (copied <= 0)
+    {
+        MessageBeep(MB_ICONWARNING);
+        SetFocus(combo);
+        return TRUE;
+    }
+    if (static_cast<size_t>(copied) < text.size())
+    {
+        text.resize(static_cast<size_t>(copied));
+    }
+
+    std::wstring trimmed = TrimWhitespace(text);
+    if (trimmed.empty())
+    {
+        MessageBeep(MB_ICONWARNING);
+        SetFocus(combo);
+        return TRUE;
+    }
+
+    state->maskText = std::move(trimmed);
+    EndDialog(dlg, IDOK);
+    return TRUE;
+}
+
+INT_PTR CALLBACK SelectionMaskDialogProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    auto* state = reinterpret_cast<SelectionMaskDialogState*>(GetWindowLongPtrW(dlg, DWLP_USER));
+
+    switch (msg)
+    {
+        case WM_INITDIALOG: return OnSelectionMaskDialogInit(dlg, reinterpret_cast<SelectionMaskDialogState*>(lParam));
+        case WM_CTLCOLORDLG: return OnSelectionMaskDialogCtlColorDialog(state);
+        case WM_CTLCOLORSTATIC: return OnSelectionMaskDialogCtlColorStatic(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_CTLCOLOREDIT:
+        case WM_CTLCOLORLISTBOX:
+            return OnSelectionMaskDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_NCACTIVATE:
+            if (state)
+            {
+                ApplyTitleBarTheme(dlg, state->theme, wParam != FALSE);
+            }
+            return FALSE;
+        case WM_SETCURSOR:
+            if (state)
+            {
+                const HWND hover = reinterpret_cast<HWND>(wParam);
+                const HWND hint  = GetDlgItem(dlg, IDC_PANE_SELECTION_MASK_HINT);
+                if (hover && hint && hover == hint)
+                {
+                    SetCursor(LoadCursorW(nullptr, IDC_HAND));
+                    return TRUE;
+                }
+            }
+            break;
+        case WM_SIZE:
+            if (state)
+            {
+                UpdateSelectionMaskDialogLayout(dlg, state, false);
+                return TRUE;
+            }
+            break;
+        case WM_DPICHANGED:
+            if (state)
+            {
+                const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
+                if (suggested)
+                {
+                    const int w = std::max(1l, suggested->right - suggested->left);
+                    const int h = std::max(1l, suggested->bottom - suggested->top);
+                    SetWindowPos(dlg, nullptr, suggested->left, suggested->top, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                UpdateSelectionMaskDialogLayout(dlg, state, true);
+                return TRUE;
+            }
+            break;
+        case WM_DRAWITEM:
+        {
+            if (! state || state->theme.highContrast || state->theme.systemHighContrast)
+            {
+                break;
+            }
+
+            auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
+            if (! dis || dis->CtlType != ODT_BUTTON)
+            {
+                break;
+            }
+
+            ThemedControls::DrawThemedPushButton(*dis, state->theme);
+            return TRUE;
+        }
+        case WM_COMMAND:
+            return OnSelectionMaskDialogCommand(dlg, state, LOWORD(wParam), HIWORD(wParam));
+    }
+    return FALSE;
+}
+
+std::optional<std::wstring>
+PromptForSelectionMask(HWND ownerWindow, const std::vector<std::wstring>& history, const AppTheme& theme, UINT captionId, UINT labelId)
+{
+    SelectionMaskDialogState state{};
+    state.centerOnWindow = ownerWindow;
+    state.history        = &history;
+    state.theme          = theme;
+    state.helpExpanded   = false;
+    state.captionText    = LoadStringResource(nullptr, captionId);
+    state.labelText      = LoadStringResource(nullptr, labelId);
+
+#pragma warning(push)
+    // pointer or reference to potentially throwing function passed to 'extern "C"' function
+    #pragma warning(disable : 5039)
+    const INT_PTR result = DialogBoxParamW(
+        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_PANE_SELECTION_MASK), ownerWindow, SelectionMaskDialogProc, reinterpret_cast<LPARAM>(&state));
+#pragma warning(pop)
+
+    if (result == IDOK && ! state.maskText.empty())
+    {
+        return state.maskText;
     }
 
     return std::nullopt;
@@ -3227,6 +4319,7 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
                                                           : L"FolderWindow.SetFolderPath.Right.UpdateHistory");
         historyPerf.SetDetail(displayPath.native());
 
+        RecordNavigationHistory(state, displayPath);
         AddToFolderHistory(_folderHistory, static_cast<size_t>(_folderHistoryMax), displayPath);
         _leftPane.navigationView.SetHistory(_folderHistory);
         _rightPane.navigationView.SetHistory(_folderHistory);
@@ -3356,6 +4449,91 @@ void FolderWindow::SetFolderHistoryMax(uint32_t maxItems)
 
     _leftPane.navigationView.SetHistory(_folderHistory);
     _rightPane.navigationView.SetHistory(_folderHistory);
+
+    TrimNavigationHistory(_leftPane);
+    TrimNavigationHistory(_rightPane);
+}
+
+void FolderWindow::TrimNavigationHistory(PaneState& state)
+{
+    const size_t maxItems = static_cast<size_t>(_folderHistoryMax);
+    if (maxItems == 0)
+    {
+        state.navigationHistory.clear();
+        state.navigationHistoryIndex = 0;
+        return;
+    }
+
+    if (state.navigationHistory.empty())
+    {
+        state.navigationHistoryIndex = 0;
+        return;
+    }
+
+    if (state.navigationHistoryIndex >= state.navigationHistory.size())
+    {
+        state.navigationHistoryIndex = state.navigationHistory.size() - 1;
+    }
+
+    if (state.navigationHistory.size() <= maxItems)
+    {
+        return;
+    }
+
+    const size_t trimCount = state.navigationHistory.size() - maxItems;
+    state.navigationHistory.erase(state.navigationHistory.begin(), state.navigationHistory.begin() + static_cast<std::ptrdiff_t>(trimCount));
+
+    if (state.navigationHistoryIndex >= trimCount)
+    {
+        state.navigationHistoryIndex -= trimCount;
+    }
+    else
+    {
+        state.navigationHistoryIndex = 0;
+    }
+}
+
+void FolderWindow::RecordNavigationHistory(PaneState& state, const std::filesystem::path& displayPath)
+{
+    if (state.navigationHistorySuspendRecord)
+    {
+        return;
+    }
+
+    if (displayPath.empty())
+    {
+        return;
+    }
+
+    if (state.navigationHistory.empty())
+    {
+        state.navigationHistory.push_back(displayPath);
+        state.navigationHistoryIndex = 0;
+        TrimNavigationHistory(state);
+        return;
+    }
+
+    if (state.navigationHistoryIndex >= state.navigationHistory.size())
+    {
+        state.navigationHistoryIndex = state.navigationHistory.size() - 1;
+    }
+
+    const std::wstring_view entryText   = displayPath.native();
+    const std::wstring_view currentText = state.navigationHistory[state.navigationHistoryIndex].native();
+    if (EqualsNoCase(currentText, entryText))
+    {
+        return;
+    }
+
+    const size_t nextIndex = state.navigationHistoryIndex + 1;
+    if (nextIndex < state.navigationHistory.size())
+    {
+        state.navigationHistory.erase(state.navigationHistory.begin() + static_cast<std::ptrdiff_t>(nextIndex), state.navigationHistory.end());
+    }
+
+    state.navigationHistory.push_back(displayPath);
+    state.navigationHistoryIndex = state.navigationHistory.size() - 1;
+    TrimNavigationHistory(state);
 }
 
 void FolderWindow::SetDisplayMode(Pane pane, FolderView::DisplayMode mode)
@@ -3601,6 +4779,90 @@ void FolderWindow::CommandCalculateDirectorySizes(Pane pane)
     }
 }
 
+void FolderWindow::CommandSelectionSelectDialog(Pane pane)
+{
+    SetActivePane(pane);
+
+    std::vector<std::wstring> history;
+    if (_settings && _settings->selectionMasks.has_value())
+    {
+        history = _settings->selectionMasks->selectHistory;
+    }
+    NormalizeSelectionMaskHistory(history, kSelectionMaskHistoryMaxItems);
+
+    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    if (! ownerWindow)
+    {
+        ownerWindow = _hWnd.get();
+    }
+
+    const std::optional<std::wstring> maskTextOpt =
+        PromptForSelectionMask(ownerWindow, history, _theme, IDS_CAPTION_SELECTION_MASK_SELECT, IDS_LABEL_SELECTION_MASK_SELECT);
+    if (! maskTextOpt.has_value())
+    {
+        return;
+    }
+
+    const std::wstring& maskText = maskTextOpt.value();
+
+    if (_settings)
+    {
+        Common::Settings::SelectionMasksSettings& masks =
+            _settings->selectionMasks.has_value() ? _settings->selectionMasks.value() : _settings->selectionMasks.emplace();
+
+        AddToSelectionMaskHistory(masks.selectHistory, kSelectionMaskHistoryMaxItems, maskText);
+        NormalizeSelectionMaskHistory(masks.selectHistory, kSelectionMaskHistoryMaxItems);
+    }
+
+    SelectionMask mask = ParseSelectionMask(maskText);
+
+    SetPaneSelectionByDisplayNamePredicate(
+        pane,
+        [mask = std::move(mask)](std::wstring_view displayName) noexcept { return MatchesSelectionMask(displayName, mask); },
+        false /* clearExistingSelection */);
+}
+
+void FolderWindow::CommandSelectionUnselectDialog(Pane pane)
+{
+    SetActivePane(pane);
+
+    std::vector<std::wstring> history;
+    if (_settings && _settings->selectionMasks.has_value())
+    {
+        history = _settings->selectionMasks->unselectHistory;
+    }
+    NormalizeSelectionMaskHistory(history, kSelectionMaskHistoryMaxItems);
+
+    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    if (! ownerWindow)
+    {
+        ownerWindow = _hWnd.get();
+    }
+
+    const std::optional<std::wstring> maskTextOpt =
+        PromptForSelectionMask(ownerWindow, history, _theme, IDS_CAPTION_SELECTION_MASK_UNSELECT, IDS_LABEL_SELECTION_MASK_UNSELECT);
+    if (! maskTextOpt.has_value())
+    {
+        return;
+    }
+
+    const std::wstring& maskText = maskTextOpt.value();
+
+    if (_settings)
+    {
+        Common::Settings::SelectionMasksSettings& masks =
+            _settings->selectionMasks.has_value() ? _settings->selectionMasks.value() : _settings->selectionMasks.emplace();
+
+        AddToSelectionMaskHistory(masks.unselectHistory, kSelectionMaskHistoryMaxItems, maskText);
+        NormalizeSelectionMaskHistory(masks.unselectHistory, kSelectionMaskHistoryMaxItems);
+    }
+
+    SelectionMask mask = ParseSelectionMask(maskText);
+
+    ClearPaneSelectionByDisplayNamePredicate(
+        pane, [mask = std::move(mask)](std::wstring_view displayName) noexcept { return MatchesSelectionMask(displayName, mask); });
+}
+
 void FolderWindow::CommandChangeCase(Pane pane)
 {
     SetActivePane(pane);
@@ -3811,6 +5073,201 @@ void FolderWindow::CommandShowFolderHistory(Pane pane)
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.navigationView.OpenHistoryDropdownFromKeyboard();
+}
+
+void FolderWindow::CommandGoRootDirectory(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+
+    if (IsFilePluginShortId(state.pluginShortId))
+    {
+        const std::optional<std::filesystem::path> pluginPathOpt = state.folderView.GetFolderPath();
+        if (! pluginPathOpt.has_value() || pluginPathOpt.value().empty())
+        {
+            return;
+        }
+
+        std::filesystem::path root = pluginPathOpt.value().root_path();
+        if (root.empty())
+        {
+            root = GetDefaultFileSystemRoot();
+        }
+
+    SetFolderPath(pane, root);
+    return;
+}
+
+std::filesystem::path rootPluginPath(L"/");
+{
+    const std::optional<std::filesystem::path> pluginPathOpt = state.folderView.GetFolderPath();
+    if (pluginPathOpt.has_value() && ! pluginPathOpt.value().empty())
+    {
+        std::wstring normalized = NavigationLocation::NormalizePluginPathText(pluginPathOpt.value().wstring(),
+                                                                              NavigationLocation::EmptyPathPolicy::Root,
+                                                                              NavigationLocation::LeadingSlashPolicy::Ensure,
+                                                                              NavigationLocation::TrailingSlashPolicy::Trim);
+
+        constexpr std::wstring_view kConnPrefix = L"/@conn:";
+        if (StartsWithNoCase(normalized, kConnPrefix))
+        {
+            const size_t nameStart = kConnPrefix.size();
+            if (nameStart < normalized.size())
+            {
+                const size_t nextSlash = normalized.find(L'/', nameStart);
+                const size_t end       = nextSlash == std::wstring::npos ? normalized.size() : nextSlash;
+                if (end > 0u)
+                {
+                    std::wstring rootText = normalized.substr(0, end);
+                    if (! rootText.empty() && rootText.back() != L'/')
+                    {
+                        rootText.push_back(L'/');
+                    }
+                    rootPluginPath = std::filesystem::path(std::move(rootText));
+                }
+            }
+        }
+    }
+}
+
+const std::filesystem::path rootDisplayPath = NavigationLocation::FormatHistoryPath(state.pluginShortId, state.instanceContext, rootPluginPath);
+SetFolderPath(pane, rootDisplayPath);
+}
+
+void FolderWindow::CommandSetPathFromOtherPane(Pane pane)
+{
+    SetActivePane(pane);
+
+    const Pane otherPane = pane == Pane::Left ? Pane::Right : Pane::Left;
+    const std::optional<std::filesystem::path> otherPath = GetCurrentPath(otherPane);
+    if (! otherPath.has_value() || otherPath.value().empty())
+    {
+        return;
+    }
+
+    SetFolderPath(pane, otherPath.value());
+}
+
+bool FolderWindow::CanHistoryBack(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return ! state.navigationHistory.empty() && state.navigationHistoryIndex > 0 && state.navigationHistoryIndex < state.navigationHistory.size();
+}
+
+bool FolderWindow::CanHistoryForward(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return ! state.navigationHistory.empty() && (state.navigationHistoryIndex + 1) < state.navigationHistory.size();
+}
+
+void FolderWindow::CommandHistoryBack(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (! CanHistoryBack(pane))
+    {
+        return;
+    }
+
+    const std::optional<std::filesystem::path> before = state.currentPath;
+    const size_t previousIndex                        = state.navigationHistoryIndex;
+    const size_t targetIndex                          = previousIndex - 1;
+    const std::filesystem::path target                = state.navigationHistory[targetIndex];
+
+    state.navigationHistoryIndex = targetIndex;
+
+    struct SuspendNavigationHistoryRecord final
+    {
+        PaneState& state;
+        bool previous = false;
+
+        explicit SuspendNavigationHistoryRecord(PaneState& s) noexcept : state(s), previous(s.navigationHistorySuspendRecord)
+        {
+            state.navigationHistorySuspendRecord = true;
+        }
+
+        SuspendNavigationHistoryRecord(const SuspendNavigationHistoryRecord&)            = delete;
+        SuspendNavigationHistoryRecord& operator=(const SuspendNavigationHistoryRecord&) = delete;
+        SuspendNavigationHistoryRecord(SuspendNavigationHistoryRecord&&)                 = delete;
+        SuspendNavigationHistoryRecord& operator=(SuspendNavigationHistoryRecord&&)      = delete;
+
+        ~SuspendNavigationHistoryRecord()
+        {
+            state.navigationHistorySuspendRecord = previous;
+        }
+    };
+
+    {
+        SuspendNavigationHistoryRecord guard(state);
+        SetFolderPath(pane, target);
+    }
+
+    const bool changed = state.currentPath.has_value() && (! before.has_value() || ! EqualsNoCase(before.value().native(), state.currentPath.value().native()));
+    if (! changed)
+    {
+        state.navigationHistoryIndex = previousIndex;
+        return;
+    }
+
+    if (state.navigationHistoryIndex < state.navigationHistory.size() && state.currentPath.has_value() && ! state.currentPath.value().empty())
+    {
+        state.navigationHistory[state.navigationHistoryIndex] = state.currentPath.value();
+    }
+}
+
+void FolderWindow::CommandHistoryForward(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (! CanHistoryForward(pane))
+    {
+        return;
+    }
+
+    const std::optional<std::filesystem::path> before = state.currentPath;
+    const size_t previousIndex                        = state.navigationHistoryIndex;
+    const size_t targetIndex                          = previousIndex + 1;
+    const std::filesystem::path target                = state.navigationHistory[targetIndex];
+
+    state.navigationHistoryIndex = targetIndex;
+
+    struct SuspendNavigationHistoryRecord final
+    {
+        PaneState& state;
+        bool previous = false;
+
+        explicit SuspendNavigationHistoryRecord(PaneState& s) noexcept : state(s), previous(s.navigationHistorySuspendRecord)
+        {
+            state.navigationHistorySuspendRecord = true;
+        }
+
+        SuspendNavigationHistoryRecord(const SuspendNavigationHistoryRecord&)            = delete;
+        SuspendNavigationHistoryRecord& operator=(const SuspendNavigationHistoryRecord&) = delete;
+        SuspendNavigationHistoryRecord(SuspendNavigationHistoryRecord&&)                 = delete;
+        SuspendNavigationHistoryRecord& operator=(SuspendNavigationHistoryRecord&&)      = delete;
+
+        ~SuspendNavigationHistoryRecord()
+        {
+            state.navigationHistorySuspendRecord = previous;
+        }
+    };
+
+    {
+        SuspendNavigationHistoryRecord guard(state);
+        SetFolderPath(pane, target);
+    }
+
+    const bool changed = state.currentPath.has_value() && (! before.has_value() || ! EqualsNoCase(before.value().native(), state.currentPath.value().native()));
+    if (! changed)
+    {
+        state.navigationHistoryIndex = previousIndex;
+        return;
+    }
+
+    if (state.navigationHistoryIndex < state.navigationHistory.size() && state.currentPath.has_value() && ! state.currentPath.value().empty())
+    {
+        state.navigationHistory[state.navigationHistoryIndex] = state.currentPath.value();
+    }
 }
 
 void FolderWindow::PrepareForNetworkDriveDisconnect(Pane pane)
@@ -4038,6 +5495,7 @@ void FolderWindow::OnFolderViewPathChanged(Pane pane, const std::optional<std::f
 
     state.updatingPath = false;
 
+    RecordNavigationHistory(state, displayPath);
     AddToFolderHistory(_folderHistory, static_cast<size_t>(_folderHistoryMax), displayPath);
     _leftPane.navigationView.SetHistory(_folderHistory);
     _rightPane.navigationView.SetHistory(_folderHistory);

@@ -859,13 +859,13 @@ void ViewerWeb::OnKeyDown(HWND hwnd, UINT vk) noexcept
         return;
     }
 
-    if (ctrl && (vk == VK_OEM_PLUS || vk == VK_ADD || vk == '='))
+    if (ctrl && (vk == VK_OEM_PLUS || vk == VK_OEM_6 ||vk == VK_ADD || vk == '='))
     {
         CommandZoomIn();
         return;
     }
 
-    if (ctrl && (vk == VK_OEM_MINUS || vk == VK_SUBTRACT || vk == '-'))
+    if (ctrl && (vk == VK_OEM_MINUS || vk == VK_OEM_7 || vk == VK_SUBTRACT || vk == '-'))
     {
         CommandZoomOut();
         return;
@@ -2631,14 +2631,14 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
                                             return S_OK;
                                         }
 
-                                        if (ctrl && (vk == VK_OEM_PLUS || vk == VK_ADD || vk == '='))
+                                        if (ctrl && (vk == VK_OEM_PLUS || vk == VK_OEM_6 || vk == VK_ADD || vk == '='))
                                         {
                                             CommandZoomIn();
                                             handle(true);
                                             return S_OK;
                                         }
 
-                                        if (ctrl && (vk == VK_OEM_MINUS || vk == VK_SUBTRACT || vk == '-'))
+                                        if (ctrl && (vk == VK_OEM_MINUS || vk == VK_OEM_7 || vk == VK_SUBTRACT || vk == '-'))
                                         {
                                             CommandZoomOut();
                                             handle(true);

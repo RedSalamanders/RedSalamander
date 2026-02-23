@@ -108,6 +108,7 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
 
     // FolderView bindings (non-function-bar).
     AddBinding(shortcuts.folderView, VK_BACK, 0, L"cmd/pane/upOneDirectory");
+    AddBinding(shortcuts.folderView, VK_BACK, ShortcutManager::kModShift, L"cmd/pane/goRootDirectory");
     AddBinding(shortcuts.folderView, VK_TAB, 0, L"cmd/pane/switchPaneFocus");
     AddBinding(shortcuts.folderView, VK_TAB, ShortcutManager::kModShift, L"cmd/pane/switchPaneFocus");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('U'), ShortcutManager::kModCtrl, L"cmd/app/swapPanes");
@@ -115,13 +116,20 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('3'), ShortcutManager::kModAlt, L"cmd/pane/display/detailed");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('4'), ShortcutManager::kModAlt, L"cmd/pane/display/extraDetailed");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectAll");
+    AddBinding(shortcuts.folderView, VK_OEM_PLUS, ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
+    AddBinding(shortcuts.folderView, VK_OEM_6, ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
+    AddBinding(shortcuts.folderView, VK_OEM_MINUS, ShortcutManager::kModCtrl, L"cmd/pane/selection/unselectDialog");
+    AddBinding(shortcuts.folderView, VK_OEM_7, ShortcutManager::kModCtrl, L"cmd/pane/selection/unselectDialog");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('C'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardCopy");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('V'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardPaste");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('L'), ShortcutManager::kModCtrl, L"cmd/pane/focusAddressBar");
+    AddBinding(shortcuts.folderView, VK_OEM_PERIOD, ShortcutManager::kModCtrl, L"cmd/pane/setPathFromOtherPane");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('J'), ShortcutManager::kModCtrl, L"cmd/app/toggleFileOperationsFailedItems");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('D'), ShortcutManager::kModAlt, L"cmd/pane/focusAddressBar");
     AddBinding(shortcuts.folderView, VK_DOWN, ShortcutManager::kModAlt, L"cmd/pane/showFoldersHistory");
     AddBinding(shortcuts.folderView, VK_UP, ShortcutManager::kModAlt, L"cmd/pane/upOneDirectory");
+    AddBinding(shortcuts.folderView, VK_LEFT, ShortcutManager::kModAlt, L"cmd/pane/historyBack");
+    AddBinding(shortcuts.folderView, VK_RIGHT, ShortcutManager::kModAlt, L"cmd/pane/historyForward");
     AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt, L"cmd/app/about");
     AddBinding(shortcuts.folderView, VK_OEM_2, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/app/about");
 
@@ -260,6 +268,26 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
         AddBinding(shortcuts.folderView, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectAll");
     }
 
+    if (! findFolderViewBinding(VK_OEM_PLUS, ShortcutManager::kModCtrl))
+    {
+        AddBinding(shortcuts.folderView, VK_OEM_PLUS, ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
+    }
+
+    if (! findFolderViewBinding(VK_OEM_6, ShortcutManager::kModCtrl))
+    {
+        AddBinding(shortcuts.folderView, VK_OEM_6, ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
+    }
+
+    if (! findFolderViewBinding(VK_OEM_MINUS, ShortcutManager::kModCtrl))
+    {
+        AddBinding(shortcuts.folderView, VK_OEM_MINUS, ShortcutManager::kModCtrl, L"cmd/pane/selection/unselectDialog");
+    }
+
+    if (! findFolderViewBinding(VK_OEM_7, ShortcutManager::kModCtrl))
+    {
+        AddBinding(shortcuts.folderView, VK_OEM_7, ShortcutManager::kModCtrl, L"cmd/pane/selection/unselectDialog");
+    }
+
     if (! findFolderViewBinding(static_cast<uint32_t>('C'), ShortcutManager::kModCtrl))
     {
         AddBinding(shortcuts.folderView, static_cast<uint32_t>('C'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardCopy");
@@ -273,6 +301,11 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
     if (! findFolderViewBinding(static_cast<uint32_t>('L'), ShortcutManager::kModCtrl))
     {
         AddBinding(shortcuts.folderView, static_cast<uint32_t>('L'), ShortcutManager::kModCtrl, L"cmd/pane/focusAddressBar");
+    }
+
+    if (! findFolderViewBinding(VK_OEM_PERIOD, ShortcutManager::kModCtrl))
+    {
+        AddBinding(shortcuts.folderView, VK_OEM_PERIOD, ShortcutManager::kModCtrl, L"cmd/pane/setPathFromOtherPane");
     }
 
     if (! findFolderViewBinding(static_cast<uint32_t>('J'), ShortcutManager::kModCtrl))
@@ -293,6 +326,21 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
     if (! findFolderViewBinding(VK_UP, ShortcutManager::kModAlt))
     {
         AddBinding(shortcuts.folderView, VK_UP, ShortcutManager::kModAlt, L"cmd/pane/upOneDirectory");
+    }
+
+    if (! findFolderViewBinding(VK_BACK, ShortcutManager::kModShift))
+    {
+        AddBinding(shortcuts.folderView, VK_BACK, ShortcutManager::kModShift, L"cmd/pane/goRootDirectory");
+    }
+
+    if (! findFolderViewBinding(VK_LEFT, ShortcutManager::kModAlt))
+    {
+        AddBinding(shortcuts.folderView, VK_LEFT, ShortcutManager::kModAlt, L"cmd/pane/historyBack");
+    }
+
+    if (! findFolderViewBinding(VK_RIGHT, ShortcutManager::kModAlt))
+    {
+        AddBinding(shortcuts.folderView, VK_RIGHT, ShortcutManager::kModAlt, L"cmd/pane/historyForward");
     }
 
     if (! findFolderViewBinding(VK_OEM_2, ShortcutManager::kModAlt))
