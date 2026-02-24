@@ -48,6 +48,7 @@ inline constexpr wchar_t kHardDrive         = L'\uEDA2';
     inline constexpr wchar_t kConnections       = L'\uED5C';
     inline constexpr wchar_t kHistory           = L'\uE81C';
     inline constexpr wchar_t kFind              = L'\uE721';
+    inline constexpr wchar_t kFilter            = L'\uE71C';
     inline constexpr wchar_t kCommandPrompt     = L'\uE756';
 
 // Fallback glyphs (standard Unicode) when Segoe Fluent Icons isn't installed.

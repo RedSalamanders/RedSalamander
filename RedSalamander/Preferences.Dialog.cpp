@@ -1715,6 +1715,11 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     setVisible(state.panesRightStatusBarLabel, showPanes);
     setVisible(state.panesRightStatusBarToggle, showPanes);
     setVisible(state.panesRightStatusBarDescription, showPanes);
+    setVisible(state.panesGeneralHeader, showPanes);
+    setVisible(state.panesShowHiddenFilesLabel, showPanes);
+    setVisible(state.panesShowHiddenFilesToggle, showPanes);
+    setVisible(state.panesShowSystemFilesLabel, showPanes);
+    setVisible(state.panesShowSystemFilesToggle, showPanes);
     setVisible(state.panesHistoryLabel, showPanes);
     setVisible(state.panesHistoryFrame, showPanes);
     setVisible(state.panesHistoryEdit, showPanes);
@@ -2844,7 +2849,8 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
 
             if (dis->CtlID == IDC_PREFS_GENERAL_MENUBAR_TOGGLE || dis->CtlID == IDC_PREFS_GENERAL_FUNCTIONBAR_TOGGLE ||
                 dis->CtlID == IDC_PREFS_GENERAL_SPLASH_TOGGLE || dis->CtlID == IDC_PREFS_PANES_LEFT_STATUSBAR_TOGGLE ||
-                dis->CtlID == IDC_PREFS_PANES_RIGHT_STATUSBAR_TOGGLE || dis->CtlID == IDC_PREFS_ADV_CONNECTIONS_BYPASS_HELLO_TOGGLE ||
+                dis->CtlID == IDC_PREFS_PANES_RIGHT_STATUSBAR_TOGGLE || dis->CtlID == IDC_PREFS_PANES_SHOW_HIDDEN_TOGGLE ||
+                dis->CtlID == IDC_PREFS_PANES_SHOW_SYSTEM_TOGGLE || dis->CtlID == IDC_PREFS_ADV_CONNECTIONS_BYPASS_HELLO_TOGGLE ||
                 dis->CtlID == IDC_PREFS_ADV_MONITOR_TOOLBAR_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_LINE_NUMBERS_TOGGLE ||
                 dis->CtlID == IDC_PREFS_ADV_MONITOR_ALWAYS_ON_TOP_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_SHOW_IDS_TOGGLE ||
                 dis->CtlID == IDC_PREFS_ADV_MONITOR_AUTO_SCROLL_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_TEXT_TOGGLE ||

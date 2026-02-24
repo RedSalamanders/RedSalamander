@@ -89,6 +89,82 @@ void InstallFileComboEscClose(HWND combo) noexcept
     static_cast<void>(SetWindowSubclass(combo, FileComboEscCloseSubclassProc, kFileComboEscCloseSubclassId, 0));
 }
 
+[[nodiscard]] std::wstring KeyGlyphFromVirtualKey(UINT vk, HKL keyboardLayout) noexcept
+{
+    if (! keyboardLayout)
+    {
+        return {};
+    }
+
+    const UINT scanCode = MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, keyboardLayout);
+    if (scanCode == 0)
+    {
+        return {};
+    }
+
+    std::array<BYTE, 256> keyboardState{};
+    std::array<wchar_t, 8> buffer{};
+    const int result = ToUnicodeEx(vk, scanCode, keyboardState.data(), buffer.data(), static_cast<int>(buffer.size() - 1), 0, keyboardLayout);
+
+    if (result > 0)
+    {
+        std::wstring out(buffer.data(), buffer.data() + result);
+        if (! out.empty() && ! std::iswcntrl(out.front()))
+        {
+            return out;
+        }
+    }
+    else if (result < 0)
+    {
+        std::array<wchar_t, 8> clearBuf{};
+        static_cast<void>(ToUnicodeEx(vk, scanCode, keyboardState.data(), clearBuf.data(), static_cast<int>(clearBuf.size() - 1), 0, keyboardLayout));
+    }
+
+    wchar_t nameBuf[64]{};
+    const LONG lParam = static_cast<LONG>(scanCode << 16);
+    const int nameLen = GetKeyNameTextW(lParam, nameBuf, static_cast<int>(std::size(nameBuf)));
+    if (nameLen > 0)
+    {
+        return std::wstring(nameBuf, nameBuf + nameLen);
+    }
+
+    return {};
+}
+
+[[nodiscard]] UINT VkFromScanCode(UINT scanCode, HKL keyboardLayout) noexcept
+{
+    if (! keyboardLayout)
+    {
+        return 0;
+    }
+
+    return MapVirtualKeyExW(scanCode, MAPVK_VSC_TO_VK_EX, keyboardLayout);
+}
+
+[[nodiscard]] UINT ZoomInVirtualKeyForLayout(HKL keyboardLayout) noexcept
+{
+    // Number row: key left of Backspace (US: =/+)
+    constexpr UINT kScanCode = 0x0Du;
+    if (const UINT vk = VkFromScanCode(kScanCode, keyboardLayout); vk != 0)
+    {
+        return vk;
+    }
+
+    return VK_OEM_PLUS;
+}
+
+[[nodiscard]] UINT ZoomOutVirtualKeyForLayout(HKL keyboardLayout) noexcept
+{
+    // Number row: key right of '0' (US: -/_)
+    constexpr UINT kScanCode = 0x0Cu;
+    if (const UINT vk = VkFromScanCode(kScanCode, keyboardLayout); vk != 0)
+    {
+        return vk;
+    }
+
+    return VK_OEM_MINUS;
+}
+
 using unique_yyjson_doc     = wil::unique_any<yyjson_doc*, decltype(&yyjson_doc_free), yyjson_doc_free>;
 using unique_yyjson_mut_doc = wil::unique_any<yyjson_mut_doc*, decltype(&yyjson_mut_doc_free), yyjson_mut_doc_free>;
 using unique_malloc_string  = wil::unique_any<char*, decltype(&::free), ::free>;
@@ -348,17 +424,6 @@ std::string Utf8FromUtf16(std::wstring_view text) noexcept
     }
 
     return result;
-}
-
-bool StartsWithNoCase(std::wstring_view value, std::wstring_view prefix) noexcept
-{
-    if (value.size() < prefix.size())
-    {
-        return false;
-    }
-
-    const int len = static_cast<int>(prefix.size());
-    return CompareStringOrdinal(value.data(), len, prefix.data(), len, TRUE) == CSTR_EQUAL;
 }
 
 // Forward declarations for file-scope helpers defined later in this file.
@@ -810,6 +875,9 @@ void ViewerWeb::OnKeyDown(HWND hwnd, UINT vk) noexcept
 
     const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
     const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    const HKL keyboardLayout = GetKeyboardLayout(0);
+    const UINT zoomInVk      = ZoomInVirtualKeyForLayout(keyboardLayout);
+    const UINT zoomOutVk     = ZoomOutVirtualKeyForLayout(keyboardLayout);
 
     if (vk == VK_ESCAPE)
     {
@@ -859,13 +927,13 @@ void ViewerWeb::OnKeyDown(HWND hwnd, UINT vk) noexcept
         return;
     }
 
-    if (ctrl && (vk == VK_OEM_PLUS || vk == VK_OEM_6 ||vk == VK_ADD || vk == '='))
+    if (ctrl && (vk == VK_ADD || vk == zoomInVk || vk == '='))
     {
         CommandZoomIn();
         return;
     }
 
-    if (ctrl && (vk == VK_OEM_MINUS || vk == VK_OEM_7 || vk == VK_SUBTRACT || vk == '-'))
+    if (ctrl && (vk == VK_SUBTRACT || vk == zoomOutVk || vk == '-'))
     {
         CommandZoomOut();
         return;
@@ -2319,6 +2387,42 @@ void ViewerWeb::ApplyMenuTheme(HWND hwnd) noexcept
 
     _menuThemeItems.clear();
     PrepareMenuTheme(menu, true, _menuThemeItems);
+    const HKL keyboardLayout = GetKeyboardLayout(0);
+    if (keyboardLayout)
+    {
+        const UINT zoomInVk    = ZoomInVirtualKeyForLayout(keyboardLayout);
+        const UINT zoomOutVk   = ZoomOutVirtualKeyForLayout(keyboardLayout);
+        const std::wstring zoomInKey    = KeyGlyphFromVirtualKey(zoomInVk, keyboardLayout);
+        const std::wstring zoomOutKey   = KeyGlyphFromVirtualKey(zoomOutVk, keyboardLayout);
+        const std::wstring zoomResetKey = KeyGlyphFromVirtualKey(static_cast<UINT>('0'), keyboardLayout);
+
+        for (MenuItemData& item : _menuThemeItems)
+        {
+            switch (item.id)
+            {
+                case IDM_VIEWERWEB_VIEW_ZOOM_IN:
+                    if (! zoomInKey.empty())
+                    {
+                        item.shortcut = std::format(L"Ctrl+{}", zoomInKey);
+                    }
+                    break;
+                case IDM_VIEWERWEB_VIEW_ZOOM_OUT:
+                    if (! zoomOutKey.empty())
+                    {
+                        item.shortcut = std::format(L"Ctrl+{}", zoomOutKey);
+                    }
+                    break;
+                case IDM_VIEWERWEB_VIEW_ZOOM_RESET:
+                    if (! zoomResetKey.empty())
+                    {
+                        item.shortcut = std::format(L"Ctrl+{}", zoomResetKey);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+    }
     DrawMenuBar(hwnd);
 }
 
@@ -2498,9 +2602,10 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
                                         }
 
                                         const std::wstring_view url(uri.get());
-                                        const bool isHttp  = StartsWithNoCase(url, L"http://") || StartsWithNoCase(url, L"https://");
-                                        const bool isAbout = StartsWithNoCase(url, L"about:");
-                                        const bool isData  = StartsWithNoCase(url, L"data:");
+                                        const bool isHttp = OrdinalString::StartsWithNoCase(url, L"http://") ||
+                                                            OrdinalString::StartsWithNoCase(url, L"https://");
+                                        const bool isAbout = OrdinalString::StartsWithNoCase(url, L"about:");
+                                        const bool isData  = OrdinalString::StartsWithNoCase(url, L"data:");
 
                                         if (_kind == ViewerWebKind::Web)
                                         {
@@ -2564,13 +2669,16 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
                                         UINT vk = 0;
                                         static_cast<void>(args->get_VirtualKey(&vk));
 
-                                        const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-                                        const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-
-                                        const auto handle = [&](bool handled) noexcept
-                                        {
-                                            if (handled)
-                                            {
+                                         const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                                         const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+                                         const HKL keyboardLayout = GetKeyboardLayout(0);
+                                         const UINT zoomInVk      = ZoomInVirtualKeyForLayout(keyboardLayout);
+                                         const UINT zoomOutVk     = ZoomOutVirtualKeyForLayout(keyboardLayout);
+ 
+                                         const auto handle = [&](bool handled) noexcept
+                                         {
+                                             if (handled)
+                                             {
                                                 static_cast<void>(args->put_Handled(TRUE));
                                             }
                                         };
@@ -2631,14 +2739,14 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
                                             return S_OK;
                                         }
 
-                                        if (ctrl && (vk == VK_OEM_PLUS || vk == VK_OEM_6 || vk == VK_ADD || vk == '='))
+                                        if (ctrl && (vk == VK_ADD || vk == zoomInVk || vk == '='))
                                         {
                                             CommandZoomIn();
                                             handle(true);
                                             return S_OK;
                                         }
 
-                                        if (ctrl && (vk == VK_OEM_MINUS || vk == VK_OEM_7 || vk == VK_SUBTRACT || vk == '-'))
+                                        if (ctrl && (vk == VK_SUBTRACT || vk == zoomOutVk || vk == '-'))
                                         {
                                             CommandZoomOut();
                                             handle(true);
@@ -2883,7 +2991,7 @@ HRESULT ViewerWeb::OpenPath(HWND hwnd, const std::wstring& path, bool updateOthe
         {
             const std::wstring_view a(_otherFiles[i]);
             const std::wstring_view b(path);
-            if (a.size() == b.size() && CompareStringOrdinal(a.data(), static_cast<int>(a.size()), b.data(), static_cast<int>(b.size()), TRUE) == CSTR_EQUAL)
+            if (OrdinalString::EqualsNoCase(a, b))
             {
                 _otherIndex = i;
                 break;
@@ -3730,7 +3838,7 @@ void ViewerWeb::CommandCopyUrl(HWND hwnd) noexcept
         if (SUCCEEDED(_webView->get_Source(source.put())) && source && source.get()[0] != L'\0')
         {
             const std::wstring_view src(source.get());
-            if (! StartsWithNoCase(src, L"about:"))
+            if (! OrdinalString::StartsWithNoCase(src, L"about:"))
             {
                 toCopy.assign(src);
             }
@@ -3770,7 +3878,7 @@ void ViewerWeb::CommandOpenExternal(HWND hwnd) noexcept
         if (SUCCEEDED(_webView->get_Source(source.put())) && source && source.get()[0] != L'\0')
         {
             const std::wstring_view src(source.get());
-            if (! StartsWithNoCase(src, L"about:"))
+            if (! OrdinalString::StartsWithNoCase(src, L"about:"))
             {
                 url.assign(src);
             }
@@ -3952,7 +4060,7 @@ bool CopyUnicodeTextToClipboard(HWND hwnd, std::wstring_view text) noexcept
         return true;
     }
 
-    if (StartsWithNoCase(path, L"\\\\") || StartsWithNoCase(path, L"//"))
+    if (OrdinalString::StartsWithNoCase(path, L"\\\\") || OrdinalString::StartsWithNoCase(path, L"//"))
     {
         return true;
     }

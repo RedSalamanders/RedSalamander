@@ -168,6 +168,40 @@ bool g_viewerImgRawMenuIconFontValid = false;
     return {};
 }
 
+[[nodiscard]] UINT VkFromScanCode(UINT scanCode, HKL keyboardLayout) noexcept
+{
+    if (! keyboardLayout)
+    {
+        return 0;
+    }
+
+    return MapVirtualKeyExW(scanCode, MAPVK_VSC_TO_VK_EX, keyboardLayout);
+}
+
+[[nodiscard]] UINT ZoomInVirtualKeyForLayout(HKL keyboardLayout) noexcept
+{
+    // Number row: key left of Backspace (US: =/+)
+    constexpr UINT kScanCode = 0x0Du;
+    if (const UINT vk = VkFromScanCode(kScanCode, keyboardLayout); vk != 0)
+    {
+        return vk;
+    }
+
+    return VK_OEM_PLUS;
+}
+
+[[nodiscard]] UINT ZoomOutVirtualKeyForLayout(HKL keyboardLayout) noexcept
+{
+    // Number row: key right of '0' (US: -/_)
+    constexpr UINT kScanCode = 0x0Cu;
+    if (const UINT vk = VkFromScanCode(kScanCode, keyboardLayout); vk != 0)
+    {
+        return vk;
+    }
+
+    return VK_OEM_MINUS;
+}
+
 [[nodiscard]] D2D1_MATRIX_3X2_F ExifOrientationTransform(uint16_t orientation, float widthDip, float heightDip) noexcept
 {
     switch (orientation)
@@ -1804,8 +1838,10 @@ void ViewerImgRaw::UpdateMenuShortcutTextForKeyboardLayout() noexcept
         return;
     }
 
-    const std::wstring zoomInKey    = KeyGlyphFromVirtualKey(VK_OEM_PLUS, keyboardLayout);
-    const std::wstring zoomOutKey   = KeyGlyphFromVirtualKey(VK_OEM_MINUS, keyboardLayout);
+    const UINT zoomInVk             = ZoomInVirtualKeyForLayout(keyboardLayout);
+    const UINT zoomOutVk            = ZoomOutVirtualKeyForLayout(keyboardLayout);
+    const std::wstring zoomInKey    = KeyGlyphFromVirtualKey(zoomInVk, keyboardLayout);
+    const std::wstring zoomOutKey   = KeyGlyphFromVirtualKey(zoomOutVk, keyboardLayout);
     const std::wstring zoomResetKey = KeyGlyphFromVirtualKey(static_cast<UINT>('0'), keyboardLayout);
 
     for (MenuItemData& item : _menuThemeItems)
@@ -3026,13 +3062,17 @@ void ViewerImgRaw::OnKeyDown(HWND hwnd, UINT vk) noexcept
         return;
     }
 
-    if (! ctrl && ! alt && (vk == VK_ADD || vk == VK_OEM_PLUS))
+    const HKL keyboardLayout = GetKeyboardLayout(0);
+    const UINT zoomInVk      = ZoomInVirtualKeyForLayout(keyboardLayout);
+    const UINT zoomOutVk     = ZoomOutVirtualKeyForLayout(keyboardLayout);
+
+    if (! ctrl && ! alt && (vk == VK_ADD || vk == zoomInVk))
     {
         SendMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDM_VIEWERRAW_VIEW_ZOOM_IN, 0), 0);
         return;
     }
 
-    if (! ctrl && ! alt && (vk == VK_SUBTRACT || vk == VK_OEM_MINUS))
+    if (! ctrl && ! alt && (vk == VK_SUBTRACT || vk == zoomOutVk))
     {
         SendMessageW(hwnd, WM_COMMAND, MAKEWPARAM(IDM_VIEWERRAW_VIEW_ZOOM_OUT, 0), 0);
         return;

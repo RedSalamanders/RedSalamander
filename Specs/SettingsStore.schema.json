@@ -404,12 +404,48 @@
       "properties": {
         "active": { "$ref": "#/$defs/folderSlot" },
         "layout": { "$ref": "#/$defs/folderLayoutSettings" },
-        "historyMax": { "type": "integer", "minimum": 1, "maximum": 50, "default": 20, "title": "History Size", "description": "Maximum number of folders kept in history." },
+        "showHiddenFiles": {
+          "type": "boolean",
+          "default": true,
+          "title": "Display hidden files and folders",
+          "description": "Whether hidden files and folders are displayed in folder panes."
+        },
+        "showSystemFiles": {
+          "type": "boolean",
+          "default": true,
+          "title": "Display system files and folders",
+          "description": "Whether system files and folders are displayed in folder panes."
+        },
+        "historyMax": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 20,
+          "title": "History Size",
+          "description": "Maximum number of folders kept in history."
+        },
         "history": {
           "type": "array",
           "default": [],
           "maxItems": 50,
           "items": { "type": "string", "minLength": 1 }
+        },
+        "historyFilters": {
+          "type": "array",
+          "default": [],
+          "maxItems": 50,
+          "title": "History Filters",
+          "description": "Per-history-entry filter state for cmd/pane/filter.",
+          "items": {
+            "type": "object",
+            "required": ["path"],
+            "properties": {
+              "path": { "type": "string", "minLength": 1 },
+              "enabled": { "type": "boolean", "default": false },
+              "text": { "type": "string", "default": "" }
+            },
+            "additionalProperties": false
+          }
         },
         "items": {
           "type": "array",
@@ -642,6 +678,15 @@
           "default": [],
           "title": "Unselect History",
           "description": "Most-recent-first mask history for the Unselect dialog.",
+          "minItems": 0,
+          "maxItems": 10,
+          "items": { "type": "string" }
+        },
+        "filterHistory": {
+          "type": "array",
+          "default": [],
+          "title": "Filter History",
+          "description": "Most-recent-first mask history for the Filter dialog.",
           "minItems": 0,
           "maxItems": 10,
           "items": { "type": "string" }

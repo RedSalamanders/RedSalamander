@@ -442,8 +442,14 @@ Folder state is stored as an array to support multiple panes (e.g., Left/Right) 
 - `folders.layout.splitRatio`: divider position as a fraction of total width (number, `0.0..1.0`, default: `0.5`).
 - `folders.layout.zoomedPane`: which pane is maximized (string; `"left"` or `"right"`; omitted when not maximized).
 - `folders.layout.zoomRestoreSplitRatio`: the ratio to restore when un-maximizing (number, `0.0..1.0`; omitted when not maximized).
+- `folders.showHiddenFiles`: whether hidden files and folders are displayed (bool, default: `true`).
+- `folders.showSystemFiles`: whether system files and folders are displayed (bool, default: `true`).
 - `folders.historyMax`: maximum number of stored history entries (integer, default: `20`, clamped to `1..50`).
 - `folders.history`: global MRU list of recently visited locations (same format as `current`), most recent first.
+- `folders.historyFilters`: per-history-entry filter state for `cmd/pane/filter` (array, optional). Each item:
+  - `path` (string): the matching history path (same format as `folders.history[]`)
+  - `enabled` (bool): whether filtering is enabled for this path
+  - `text` (string): filter mask text (same syntax as selection-mask dialogs)
 - `folders.items[]`: per-pane state objects:
   - `slot`: pane identifier / position (string, recommended: `"left"` / `"right"`).
   - `current`: current location as a string (either a Windows path or a plugin-qualified path: `<pluginShortId>:<pluginPath>`).
@@ -518,6 +524,7 @@ History for selection-mask dialogs lives under:
 Keys:
 - `selectHistory` (array, max 10): most-recent-first history for `cmd/pane/selection/selectDialog`
 - `unselectHistory` (array, max 10): most-recent-first history for `cmd/pane/selection/unselectDialog`
+- `filterHistory` (array, max 10): most-recent-first history for `cmd/pane/filter`
 
 ## RedSalamanderMonitor UI State
 

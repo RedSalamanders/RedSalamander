@@ -151,7 +151,8 @@ else
 
 ✅ **Breadcrumb separator enhancements**:
 - Hover and pressed states for separators
-- Sibling + history dropdowns use the ModernCombo popup visuals (40 DIP rows, rounded highlight + accent bar; no per-item icons), but open below the NavigationView and can expand to the remaining main-window height (themed scrollbar). In the sibling dropdown, the current folder stays marked with the accent bar while hover/keyboard selection moves independently.
+- Sibling + history dropdowns use the ModernCombo popup visuals (40 DIP rows, rounded highlight + accent bar), open below the NavigationView, and can expand to the remaining main-window height (themed scrollbar). In the sibling dropdown, the current folder stays marked with the accent bar while hover/keyboard selection moves independently.
+- History dropdown supports a per-item leading filter glyph when navigating to that entry would restore an active pane filter (from `folders.historyFilters`).
 - Navigation only commits on click/Enter; click-outside cancels (no navigation)
 - Full clickable zone highlighting in breadcrumb segments
 
@@ -1306,7 +1307,7 @@ void ExitEditMode(bool accept) {
 
 **Location**: Small button (24×24 DIP) in `_sectionHistoryRect` between the path area and the disk info area  
 **Icon**: Down glyph (currently rendered as `⩔`)  
-**Trigger**: Click history button region, or press **Alt+Down**
+**Trigger**: Click history button region, or execute **Show Folders History** (`cmd/pane/showFoldersHistory`, default: `Alt+F12`)
 
 **Storage**: History is supplied by the host (FolderWindow) via `SetHistory()` and persisted in settings (`folders.history`, bounded by `folders.historyMax`, default `20`, clamped `1..50`).
 
@@ -1447,9 +1448,10 @@ void ExitEditMode();   // Hide edit control, show breadcrumbs
 
 **UI Elements:**
 - **History dropdown button** (`_sectionHistoryRect`): Opens a popup menu of recent paths (newest-first, bounded by `folders.historyMax`, default `20`, clamped `1..50`).
+  - Entries that would restore an active pane filter on navigation show a leading filter icon.
 
-**Keyboard Shortcut:**
-- **Alt+Down**: Open history dropdown menu
+**Keyboard Shortcut (default):**
+- **Alt+F12**: Open history dropdown menu (`cmd/pane/showFoldersHistory`)
 
 ## Disk Info Section
 
@@ -1903,15 +1905,14 @@ _navView.SetPathChangedCallback([this](const auto& path) {
 - **F4**: Enter edit mode in Section 2, select all text
 - **Alt+D**: Same as F4 (Windows Explorer standard) *(default chord binding is settings-backed)*
 - **Ctrl+L**: Same as F4 (browser standard) *(default chord binding is settings-backed)*
-- **Alt+Down**: (Optional) Open history dropdown (equivalent to activating **History** region) *(default chord binding is settings-backed)*
+- **Alt+F12**: Open history dropdown (equivalent to activating **History** region) *(default chord binding is settings-backed)*
 - **Enter** (in edit): Accept path, exit edit mode
 - **Escape** (in edit): Cancel changes, revert to previous path
-- **Alt+Up**: Navigate to parent folder (handled by FolderView)
 - **Tab**: Cycle focus through **visible** regions (Menu → Path → History → Disk Info, skipping hidden sections); when on **Disk Info**, Tab moves focus to **FolderView**
 - **Shift+Tab**: Reverse focus through **visible** regions (Disk Info → History → Path → Menu, skipping hidden sections); when on **Menu**, Shift+Tab moves focus to **FolderView**
 
 **Routing Requirement:**
-- `F4` / `Alt+D` / `Ctrl+L` and `Alt+Down` MUST work even when **FolderView** has focus (settings-backed shortcuts are routed at the host level).
+- `F4` / `Alt+D` / `Ctrl+L` and `Alt+F12` MUST work even when **FolderView** has focus (settings-backed shortcuts are routed at the host level).
 - `Tab` / `Shift+Tab` inside FolderView are reserved for pane switching (see `Specs/CommandMenuKeyboardSpec.md`) and are not forwarded to NavigationView.
 
 ## Focus Traversal and Activation

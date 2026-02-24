@@ -42,6 +42,7 @@ Common interactions:
 - `F2`: rename
 - `Alt+Enter`: properties
 - `Shift+F10` or the **Apps/Menu** key: open the item context menu
+- `Ctrl+F12`: filter the current folder (pane filter dialog)
 - Mouse: multi-select, drag & drop
 
 Display and sort (defaults):
@@ -52,6 +53,11 @@ Display and sort (defaults):
 - `Ctrl+F3..F6`: Sort by Name/Ext/Time/Size
 
 ![Folder view](res/folder-view.png)
+
+### View options
+
+- **View → Pane → Show Hidden Files**: toggle display of hidden items (hidden items use a dim icon when shown).
+- **View → Pane → Show System Files**: toggle display of system items.
 
 ## Status bar (per pane)
 

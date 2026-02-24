@@ -706,12 +706,12 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::Initialize(const wchar_t* rootPath, cons
             text = Trim(text);
         }
 
-        if (text.size() >= 3u && CompareStringOrdinal(text.data(), 3, L"7z:", 3, TRUE) == CSTR_EQUAL)
+        if (OrdinalString::StartsWithNoCase(text, L"7z:"))
         {
             text.remove_prefix(3u);
             text = Trim(text);
         }
-        else if (text.size() >= 5u && CompareStringOrdinal(text.data(), 5, L"file:", 5, TRUE) == CSTR_EQUAL)
+        else if (OrdinalString::StartsWithNoCase(text, L"file:"))
         {
             text.remove_prefix(5u);
             text = Trim(text);
@@ -1478,8 +1478,7 @@ bool FileSystem7z::EqualsNoCase(std::wstring_view a, std::wstring_view b) noexce
         return false;
     }
 
-    const int len = static_cast<int>(a.size());
-    return CompareStringOrdinal(a.data(), len, b.data(), len, TRUE) == CSTR_EQUAL;
+    return OrdinalString::EqualsNoCase(a, b);
 }
 
 std::string FileSystem7z::Utf8FromUtf16(std::wstring_view text) noexcept
@@ -2263,8 +2262,7 @@ bool ExtensionListContains(std::wstring_view list, std::wstring_view extensionNo
             continue;
         }
 
-        const int len = static_cast<int>(token.size());
-        if (CompareStringOrdinal(token.data(), len, extensionNoDotLower.data(), len, TRUE) == CSTR_EQUAL)
+        if (OrdinalString::EqualsNoCase(token, extensionNoDotLower))
         {
             return true;
         }

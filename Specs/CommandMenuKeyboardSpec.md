@@ -158,22 +158,22 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/selection/selectDialog`
 - `cmd/pane/selection/unselectDialog`
 - `cmd/pane/selection/invert` *(planned)*
-- `cmd/pane/selection/selectAll` *(planned)*
-- `cmd/pane/selection/unselectAll` *(planned)*
+- `cmd/pane/selection/selectAll`
+- `cmd/pane/selection/unselectAll`
 - `cmd/pane/selection/restore` *(planned)*
-- `cmd/pane/selection/selectSameExtension` *(planned)*
-- `cmd/pane/selection/unselectSameExtension` *(planned)*
+- `cmd/pane/selection/selectSameExtension`
+- `cmd/pane/selection/unselectSameExtension`
 - `cmd/pane/selection/selectSameName` *(planned)*
 - `cmd/pane/selection/unselectSameName` *(planned)*
 - `cmd/pane/selection/hideSelectedNames` *(planned)*
 - `cmd/pane/selection/hideUnselectedNames` *(planned)*
 - `cmd/pane/selection/showHiddenNames` *(planned)*
-- `cmd/pane/selection/goToPreviousSelectedName` *(planned)*
-- `cmd/pane/selection/goToNextSelectedName` *(planned)*
+- `cmd/pane/selection/goToPreviousSelectedName`
+- `cmd/pane/selection/goToNextSelectedName`
 - `cmd/pane/goToShortcutOrLinkTarget` *(planned)*
 - `cmd/pane/openCommandShell`
-- `cmd/pane/viewOptions/toggleHiddenFiles` *(planned)*
-- `cmd/pane/viewOptions/toggleSystemFiles` *(planned)*
+- `cmd/pane/viewOptions/toggleHiddenFiles`
+- `cmd/pane/viewOptions/toggleSystemFiles`
 - `cmd/pane/viewOptions/toggleFileExtensions` *(planned)*
 - `cmd/pane/viewOptions/toggleThumbnails` *(planned)*
 - `cmd/pane/viewOptions/togglePreviewPane` *(planned)*
@@ -244,7 +244,7 @@ Notation:
 - Maximize/Restore Pane (`Ctrl+F11`) *(toggle: move splitter to edge; restore only if splitter wasn't dragged while maximized; state persisted in settings)* `[cmd/pane/zoomPanel]`
 - Swap Panes (`Ctrl+U`) *(swap Left/Right pane file system + current folder; view options stay with the pane; global history unaffected)* `[cmd/app/swapPanes]`
 - ---
-- Filter… [td] (`Ctrl+F12`) `[cmd/pane/filter]`
+- Filter… (`Ctrl+F12`) *(open pane filter dialog; wildcard mask syntax shared with Select/Unselect; history saved; active filter shows a subtle background watermark; filter state restored when navigating to a path from history)* `[cmd/pane/filter]`
 - Refresh (`Ctrl+F9`) *(invalidate directory cache + re-enumerate current folder)* `[cmd/pane/refresh]`
 
 #### Files (targets Focused pane unless explicitly stated)
@@ -299,11 +299,11 @@ Notation:
 - Copy Path as Text [td] (`Ctrl+Alt+Insert`) `[cmd/pane/copyPathAsText]`
 - Copy Path + File Name as Text [td] (`Ctrl+Shift+Insert`) `[cmd/pane/copyPathAndFileName]`
 - ---
-- Select… (`Ctrl+=`) `[cmd/pane/selection/selectDialog]`
-- Unselect… (`Ctrl+-`) `[cmd/pane/selection/unselectDialog]`
+- Select… (`Ctrl+<key left of Backspace>`) `[cmd/pane/selection/selectDialog]`
+- Unselect… (`Ctrl+<key right of 0>`) `[cmd/pane/selection/unselectDialog]`
 - Invert Selection [td] (`⊘`) `[cmd/pane/selection/invert]`
 - Select All (`Ctrl+A` target) `[cmd/pane/selection/selectAll]`
-- Unselect All (`⊘`) `[cmd/pane/selection/unselectAll]`
+- Unselect All (`Esc`) `[cmd/pane/selection/unselectAll]`
 - Restore Selection [td] (`⊘`) `[cmd/pane/selection/restore]`
 - Select Next (`Insert`) `[cmd/pane/selectNext]`
 - Select + Calculate Directory Size + Next (`Space`) `[cmd/pane/selectCalculateDirectorySizeNext]`
@@ -311,8 +311,8 @@ Notation:
   - Save Selection [td] (`Ctrl+Shift+F2`) `[cmd/pane/saveSelection]`
   - Load Selection… [td] (`Ctrl+Shift+F6`) `[cmd/pane/loadSelection]`
   - ---
-  - Select Same Extensions [td] (`⊘`) `[cmd/pane/selection/selectSameExtension]`
-  - Unselect Same Extensions [td] (`⊘`) `[cmd/pane/selection/unselectSameExtension]`
+  - Select Same Extensions (`Ctrl+Shift+<key left of Backspace>`) `[cmd/pane/selection/selectSameExtension]`
+  - Unselect Same Extensions (`Ctrl+Shift+<key right of 0>`) `[cmd/pane/selection/unselectSameExtension]`
   - ---
   - Select Same Names [td] (`⊘`) `[cmd/pane/selection/selectSameName]`
   - Unselect Same Names [td] (`⊘`) `[cmd/pane/selection/unselectSameName]`
@@ -321,8 +321,8 @@ Notation:
   - Hide Unselected Names [td] (`⊘`) `[cmd/pane/selection/hideUnselectedNames]`
   - Show Hidden Names [td] (`⊘`) `[cmd/pane/selection/showHiddenNames]`
   - ---
-  - Go to Previous Selected Name [td] (`⊘`) `[cmd/pane/selection/goToPreviousSelectedName]`
-  - Go to Next Selected Name [td] (`⊘`) `[cmd/pane/selection/goToNextSelectedName]`
+  - Go to Previous Selected Name (`Alt+Up`) `[cmd/pane/selection/goToPreviousSelectedName]`
+  - Go to Next Selected Name (`Alt+Down`) `[cmd/pane/selection/goToNextSelectedName]`
 
 #### Commands (targets Focused pane unless explicitly stated)
 
@@ -391,8 +391,8 @@ Notation:
 - Window Menu [td] (`Alt+Space`) `[cmd/pane/windowMenu]`
 - Switch Pane Focus (`Tab`) `[cmd/pane/switchPaneFocus]`
 - Pane > [td]
-  - Show Hidden Files [td] (`⊘`; checkable) `[cmd/pane/viewOptions/toggleHiddenFiles]`
-  - Show System Files [td] (`⊘`; checkable) `[cmd/pane/viewOptions/toggleSystemFiles]`
+  - Show Hidden Files (`⊘`; checkable) `[cmd/pane/viewOptions/toggleHiddenFiles]`
+  - Show System Files (`⊘`; checkable) `[cmd/pane/viewOptions/toggleSystemFiles]`
   - Show File Extensions [td] (`⊘`; checkable) `[cmd/pane/viewOptions/toggleFileExtensions]`
   - Show Thumbnails [td] (`⊘`; checkable) `[cmd/pane/viewOptions/toggleThumbnails]`
   - Show Preview Pane [td] (`⊘`; checkable) `[cmd/pane/viewOptions/togglePreviewPane]`
@@ -434,6 +434,17 @@ Right menu is identical to Left menu, except:
   - **Win32 file system (`file`)**: the drive root (e.g. `C:\`) or UNC share root (e.g. `\\server\share\`).
   - **Plugins**: the plugin root (`/`), except when the current plugin path is under a Connection Manager root (`/@conn:<name>/...`), in which case the effective root is `/@conn:<name>/`.
   - **Mounted plugins** (`<shortId>:<instanceContext>|<pluginPath>`): the effective root MUST preserve the mount context and set the plugin path to `/` (or the Connection Manager root when applicable).
+
+#### Toggle Hidden Files (`cmd/pane/viewOptions/toggleHiddenFiles`)
+
+- Invoking the command MUST toggle `folders.showHiddenFiles` (see `Specs/SettingsStoreSpec.md`).
+- Default is `true` (shown).
+- When `true`, hidden items (Windows `FILE_ATTRIBUTE_HIDDEN`) MUST be visible and MUST display a dimmed icon.
+
+#### Toggle System Files (`cmd/pane/viewOptions/toggleSystemFiles`)
+
+- Invoking the command MUST toggle `folders.showSystemFiles` (see `Specs/SettingsStoreSpec.md`).
+- Default is `true` (shown).
 
 #### Toggle Fullscreen (`cmd/app/fullScreen`)
 
@@ -688,15 +699,14 @@ Notes:
 - `F2`: rename `Current item`
 - `Tab` / `Shift+Tab`: move focus   between Pane `FolderView`s (no longer enters NavigationView)
 - `Alt+D` / `Ctrl+L`: focus NavigationView address edit
-- `Alt+Down`: open history dropdown
-- `Alt+Up`: navigate to parent folder
+- `Alt+Down`: go to next selected name
+- `Alt+Up`: go to previous selected name
 - `Tab`: switch focus to the other pane’s `FolderView`.
   - `Shift+Tab`: same as `Tab` (two-pane toggle) unless later extended.
 
 **NavigationView** (see `RedSalamander/NavigationView.Interaction.cpp`)
 - `Tab` / `Shift+Tab`: cycle focus between visible regions (Menu → Path → History → Disk Info), then hand off to FolderView
 - `Alt+D` / `Ctrl+L`: enter edit mode / focus address edit
-- `Alt+Down`: open history dropdown
 - `Enter` / `Space`: activate focused region
 
 ### RedSalamanderMonitor

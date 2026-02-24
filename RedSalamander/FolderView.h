@@ -30,6 +30,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include "MaskSyntax.h"
+
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027
 // (move assign deleted), C4820 (padding)
@@ -231,6 +233,21 @@ public:
         return _sortDirection;
     }
 
+    void SetShowHiddenFiles(bool show);
+    [[nodiscard]] bool GetShowHiddenFiles() const noexcept;
+    void SetShowSystemFiles(bool show);
+    [[nodiscard]] bool GetShowSystemFiles() const noexcept;
+
+    struct NameFilterState
+    {
+        bool enabled = false;
+        std::wstring text;
+    };
+
+    void SetNameFilterState(const NameFilterState& state, bool refresh = true);
+    [[nodiscard]] NameFilterState GetNameFilterState() const;
+    [[nodiscard]] bool IsNameFilterActive() const noexcept;
+
     enum class NavigationRequest
     {
         FocusNavigationMenu,
@@ -366,6 +383,14 @@ public:
 
     // Programmatic unselection: sets selected=false for items where `shouldUnselect(displayName)` returns true.
     void ClearSelectionByDisplayNamePredicate(const std::function<bool(std::wstring_view)>& shouldUnselect);
+
+    void SelectSameExtension();
+    void UnselectSameExtension();
+
+    // Selection navigation: move focus to the previous/next selected item without changing selection.
+    // Returns true if focus changed (wrap allowed).
+    [[nodiscard]] bool GoToPreviousSelectedName();
+    [[nodiscard]] bool GoToNextSelectedName();
 
     void DebugShowOverlaySample(OverlaySeverity severity);
     void DebugShowOverlaySample(ErrorOverlayKind kind, OverlaySeverity severity, bool blocksInput);
@@ -544,9 +569,15 @@ private:
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
     wil::com_ptr<IDWriteTextFormat> _labelFormat;
     wil::com_ptr<IDWriteTextFormat> _detailsFormat;
+    wil::com_ptr<IDWriteTextFormat> _filterWatermarkFormat;
+    wil::com_ptr<IDWriteTextLayout> _filterWatermarkLayout;
+    SIZE _filterWatermarkLayoutClientSizePx = {};
+    float _filterWatermarkLayoutDpi         = 0.0f;
+    float _filterWatermarkLayoutFontSizeDip = 0.0f;
     wil::com_ptr<IDWriteInlineObject> _ellipsisSign;
     wil::com_ptr<IDWriteInlineObject> _detailsEllipsisSign;
     wil::com_ptr<ID2D1SolidColorBrush> _backgroundBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _filterWatermarkBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _textBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _detailsTextBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _metadataTextBrush;
@@ -598,6 +629,18 @@ private:
     bool _dropTargetRegistered      = false;
     bool _supportsPresent1          = true;
     bool _paneFocused               = false;
+    std::atomic<bool> _showHiddenFiles{true};
+    std::atomic<bool> _showSystemFiles{true};
+
+    struct CompiledNameFilter final
+    {
+        NameFilterState state{};
+        MaskSyntax::WildcardMask mask{};
+        bool hasMask = false;
+    };
+
+    std::atomic<std::shared_ptr<const CompiledNameFilter>> _nameFilter;
+
     IncrementalSearchState _incrementalSearch{};
     std::wstring _incrementalSearchIndicatorDisplayQuery;
     mutable float _incrementalSearchIndicatorVisibility          = 0.0f;
@@ -736,6 +779,7 @@ private:
     void NotifySelectionChanged() const noexcept;
     void NotifyIncrementalSearchChanged() const noexcept;
     void FocusItem(size_t index, bool ensureVisible);
+    [[nodiscard]] bool GoToSelectedName(bool forward);
     void ActivateFocusedItem();
     void ExitIncrementalSearch() noexcept;
     void UpdateIncrementalSearchIndicatorState(uint64_t nowTickMs, bool triggerPulse, std::wstring_view displayQuery) noexcept;

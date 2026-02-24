@@ -369,7 +369,7 @@ wil::com_ptr<IFileSystem> GetFileSystem(std::wstring_view pluginId) noexcept
             continue;
         }
 
-        if (CompareStringOrdinal(entry.id.c_str(), -1, pluginId.data(), static_cast<int>(pluginId.size()), TRUE) == CSTR_EQUAL)
+        if (wil::compare_string_ordinal(entry.id, pluginId, true) == wistd::weak_ordering::equivalent)
         {
             return entry.fileSystem;
         }

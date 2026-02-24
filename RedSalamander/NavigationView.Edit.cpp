@@ -417,13 +417,7 @@ void NavigationView::UpdateEditSuggest()
 
     const auto startsWithNoCase = [](std::wstring_view value, std::wstring_view prefix) noexcept
     {
-        if (prefix.empty() || value.size() < prefix.size() || prefix.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-        {
-            return false;
-        }
-
-        const int len = static_cast<int>(prefix.size());
-        return CompareStringOrdinal(value.data(), len, prefix.data(), len, TRUE) == CSTR_EQUAL;
+        return ! prefix.empty() && OrdinalString::StartsWithNoCase(value, prefix);
     };
 
     auto showStaticSuggestions = [&](std::vector<EditSuggestItem>&& items, std::wstring&& highlightText)
@@ -1688,8 +1682,7 @@ bool NavigationView::ValidatePath(const std::wstring& pathStr)
     if (text.size() >= 6u)
     {
         constexpr std::wstring_view kConnPrefix = L"@conn:";
-        const int prefixLen                     = static_cast<int>(kConnPrefix.size());
-        if (CompareStringOrdinal(text.data(), prefixLen, kConnPrefix.data(), prefixLen, TRUE) == CSTR_EQUAL)
+        if (OrdinalString::StartsWithNoCase(text, kConnPrefix))
         {
             return true;
         }

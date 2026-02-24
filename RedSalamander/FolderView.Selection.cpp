@@ -303,6 +303,103 @@ void FolderView::ClearSelectionByDisplayNamePredicate(const std::function<bool(s
     UpdateIncrementalSearchHighlightForFocusedItem();
 }
 
+void FolderView::SelectSameExtension()
+{
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex == invalidIndex || _focusedIndex >= _items.size())
+    {
+        return;
+    }
+
+    const FolderItem& focused = _items[_focusedIndex];
+    if (focused.isDirectory)
+    {
+        return;
+    }
+
+    const std::wstring_view extension = focused.GetExtension();
+
+    bool changed = false;
+    for (auto& item : _items)
+    {
+        if (item.isDirectory)
+        {
+            continue;
+        }
+
+        if (! OrdinalString::EqualsNoCase(item.GetExtension(), extension))
+        {
+            continue;
+        }
+
+        if (! item.selected)
+        {
+            item.selected = true;
+            changed       = true;
+        }
+    }
+
+    if (! changed)
+    {
+        return;
+    }
+
+    RecomputeSelectionStats();
+    NotifySelectionChanged();
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+    UpdateIncrementalSearchHighlightForFocusedItem();
+}
+
+void FolderView::UnselectSameExtension()
+{
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex == invalidIndex || _focusedIndex >= _items.size())
+    {
+        return;
+    }
+
+    const FolderItem& focused = _items[_focusedIndex];
+    if (focused.isDirectory)
+    {
+        return;
+    }
+
+    const std::wstring_view extension = focused.GetExtension();
+
+    bool changed = false;
+    for (auto& item : _items)
+    {
+        if (item.isDirectory || ! item.selected)
+        {
+            continue;
+        }
+
+        if (! OrdinalString::EqualsNoCase(item.GetExtension(), extension))
+        {
+            continue;
+        }
+
+        item.selected = false;
+        changed       = true;
+    }
+
+    if (! changed)
+    {
+        return;
+    }
+
+    RecomputeSelectionStats();
+    NotifySelectionChanged();
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+    UpdateIncrementalSearchHighlightForFocusedItem();
+}
+
 void FolderView::RecomputeSelectionStats() noexcept
 {
     SelectionStats stats{};
@@ -391,6 +488,133 @@ void FolderView::FocusItem(size_t index, bool ensureVisible)
     }
     UpdateIncrementalSearchHighlightForFocusedItem();
     RememberFocusedItemForDisplayedFolder();
+}
+
+[[nodiscard]] bool FolderView::GoToPreviousSelectedName()
+{
+    return GoToSelectedName(/*forward*/ false);
+}
+
+[[nodiscard]] bool FolderView::GoToNextSelectedName()
+{
+    return GoToSelectedName(/*forward*/ true);
+}
+
+[[nodiscard]] bool FolderView::GoToSelectedName(bool forward)
+{
+    ErrorOverlayState overlay{};
+    bool hasOverlay = false;
+    {
+        std::lock_guard lock(_errorOverlayMutex);
+        if (_errorOverlay)
+        {
+            overlay    = *_errorOverlay;
+            hasOverlay = true;
+        }
+    }
+
+    if (hasOverlay && overlay.blocksInput)
+    {
+        return false;
+    }
+
+    ExitIncrementalSearch();
+
+    if (_items.empty())
+    {
+        return false;
+    }
+
+    const auto invalidIndex = static_cast<size_t>(-1);
+    const bool hasFocus     = _focusedIndex != invalidIndex && _focusedIndex < _items.size();
+
+    uint32_t selectedCount  = 0;
+    size_t firstSelectedIdx = invalidIndex;
+    size_t lastSelectedIdx  = invalidIndex;
+    for (size_t i = 0; i < _items.size(); ++i)
+    {
+        if (! _items[i].selected)
+        {
+            continue;
+        }
+
+        ++selectedCount;
+        if (firstSelectedIdx == invalidIndex)
+        {
+            firstSelectedIdx = i;
+        }
+        lastSelectedIdx = i;
+    }
+
+    if (selectedCount == 0u)
+    {
+        return false;
+    }
+
+    const auto focusIndex = [&](size_t index) noexcept -> bool
+    {
+        if (index == invalidIndex || index >= _items.size() || index == _focusedIndex)
+        {
+            return false;
+        }
+
+        FocusItem(index, true);
+        _anchorIndex = index;
+        return true;
+    };
+
+    if (! hasFocus)
+    {
+        const size_t target = forward ? firstSelectedIdx : lastSelectedIdx;
+        return focusIndex(target);
+    }
+
+    if (selectedCount == 1u)
+    {
+        return focusIndex(firstSelectedIdx);
+    }
+
+    if (forward)
+    {
+        for (size_t i = _focusedIndex + 1; i < _items.size(); ++i)
+        {
+            if (_items[i].selected)
+            {
+                return focusIndex(i);
+            }
+        }
+
+        for (size_t i = 0; i < _focusedIndex; ++i)
+        {
+            if (_items[i].selected)
+            {
+                return focusIndex(i);
+            }
+        }
+
+        return false;
+    }
+
+    if (_focusedIndex > 0)
+    {
+        for (size_t i = _focusedIndex; i-- > 0;)
+        {
+            if (_items[i].selected)
+            {
+                return focusIndex(i);
+            }
+        }
+    }
+
+    for (size_t i = _items.size(); i-- > (_focusedIndex + 1);)
+    {
+        if (_items[i].selected)
+        {
+            return focusIndex(i);
+        }
+    }
+
+    return false;
 }
 
 bool FolderView::PrepareForExternalCommand(std::wstring_view focusItemDisplayName) noexcept

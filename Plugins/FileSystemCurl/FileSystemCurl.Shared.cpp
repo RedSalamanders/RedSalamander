@@ -782,8 +782,7 @@ namespace FileSystemCurlInternal
         {
             return false;
         }
-        const int len = static_cast<int>(a.size());
-        return CompareStringOrdinal(a.data(), len, b.data(), len, TRUE) == CSTR_EQUAL;
+        return OrdinalString::EqualsNoCase(a, b);
     };
 
     out.connection.ftpUseEpsv         = settings.ftpUseEpsv;

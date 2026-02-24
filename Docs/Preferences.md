@@ -19,7 +19,7 @@ Open Preferences from:
 The left tree contains:
 
 - **General**: common app settings.
-- **Panes**: left/right pane behavior and visibility options.
+- **Panes**: left/right pane behavior and visibility options (including hidden/system file visibility and history size).
 - **Viewers**: file extension → viewer mapping (used by `F3`).
 - **Editors**: placeholder (not implemented yet).
 - **Keyboard**: shortcut bindings (Function Bar + FolderView).

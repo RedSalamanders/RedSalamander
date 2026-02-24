@@ -352,11 +352,6 @@ void AwsSdkLifetime::Release() noexcept
     return yyjson_get_bool(v) != 0;
 }
 
-[[nodiscard]] bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
-{
-    return OrdinalString::EqualsNoCase(a, b);
-}
-
 namespace
 {
 [[nodiscard]] HRESULT ResolveConnectionManagerProfile(IHostConnections* hostConnections,
@@ -409,7 +404,7 @@ namespace
     constexpr std::wstring_view kPluginIdS3      = L"builtin/file-system-s3";
     constexpr std::wstring_view kPluginIdS3Table = L"builtin/file-system-s3table";
     const std::wstring_view expectedId           = (mode == FileSystemS3Mode::S3) ? kPluginIdS3 : kPluginIdS3Table;
-    if (! EqualsNoCase(*pluginId, expectedId))
+    if (! OrdinalString::EqualsNoCase(*pluginId, expectedId))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
     }
@@ -567,7 +562,7 @@ namespace
             hasConnPrefix         = true;
         }
     }
-    else if (EqualsNoCase(authority, L"@conn"))
+    else if (OrdinalString::EqualsNoCase(authority, L"@conn"))
     {
         // URI-style shorthand: // @conn / <connectionName> / ...
         std::wstring_view rest = pathPart;

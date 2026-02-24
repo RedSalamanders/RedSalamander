@@ -1,5 +1,7 @@
 #include "FolderViewInternal.h"
 
+#include "FluentIcons.h"
+
 #include <cmath>
 
 void FolderView::EnsureDeviceIndependentResources()
@@ -87,6 +89,26 @@ void FolderView::EnsureDeviceIndependentResources()
         {
             _metadataLineHeightDip = _detailsLineHeightDip;
         }
+    }
+
+    if (! _filterWatermarkFormat)
+    {
+        const HRESULT hrFormat = _dwriteFactory->CreateTextFormat(FluentIcons::kFontFamily.data(),
+                                                                  nullptr,
+                                                                  DWRITE_FONT_WEIGHT_NORMAL,
+                                                                  DWRITE_FONT_STYLE_NORMAL,
+                                                                  DWRITE_FONT_STRETCH_NORMAL,
+                                                                  120.0f,
+                                                                  L"en-us",
+                                                                  _filterWatermarkFormat.addressof());
+        if (! CheckHR(hrFormat, L"IDWriteFactory::CreateTextFormat(filter watermark)"))
+        {
+            return;
+        }
+
+        _filterWatermarkFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        _filterWatermarkFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        _filterWatermarkFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     }
 
     // Alert overlay formats are owned by the shared RedSalamander::Ui::AlertOverlay component.
@@ -207,6 +229,7 @@ void FolderView::RecreateThemeBrushes()
 
     // Reset existing brushes
     _backgroundBrush.reset();
+    _filterWatermarkBrush.reset();
     _textBrush.reset();
     _detailsTextBrush.reset();
     _metadataTextBrush.reset();
@@ -231,6 +254,13 @@ void FolderView::RecreateThemeBrushes()
     if (! CheckHR(hrTextBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(text)"))
     {
         return;
+    }
+
+    {
+        D2D1::ColorF watermarkColor = _theme.textNormal;
+        watermarkColor.a            = _theme.darkBase ? 0.07f : 0.04f;
+        const HRESULT hrWatermark   = _d2dContext->CreateSolidColorBrush(watermarkColor, _filterWatermarkBrush.addressof());
+        static_cast<void>(CheckHR(hrWatermark, L"ID2D1DeviceContext::CreateSolidColorBrush(filter watermark)"));
     }
 
     D2D1::ColorF detailsColor    = _theme.textNormal;
@@ -552,6 +582,7 @@ void FolderView::DiscardDeviceResources()
     }
 
     _backgroundBrush.reset();
+    _filterWatermarkBrush.reset();
     _textBrush.reset();
     _selectionBrush.reset();
     _focusedBackgroundBrush.reset();
@@ -570,6 +601,11 @@ void FolderView::DiscardDeviceResources()
 
     _labelFormat.reset();
     _detailsFormat.reset();
+    _filterWatermarkFormat.reset();
+    _filterWatermarkLayout.reset();
+    _filterWatermarkLayoutClientSizePx = {};
+    _filterWatermarkLayoutDpi          = 0.0f;
+    _filterWatermarkLayoutFontSizeDip  = 0.0f;
     _incrementalSearchIndicatorLayout.reset();
     _incrementalSearchIndicatorLayoutText.clear();
     _incrementalSearchIndicatorLayoutMaxWidthDip = 0.0f;
@@ -834,6 +870,47 @@ void FolderView::Render(const RECT& invalidRect)
         _d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
         _d2dContext->PushAxisAlignedClip(dirtyDip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         _d2dContext->FillRectangle(dirtyDip, _backgroundBrush.get());
+
+        if (IsNameFilterActive() && ! _appTheme.highContrast && ! _appTheme.systemHighContrast && _dwriteFactory && _filterWatermarkFormat && _filterWatermarkBrush)
+        {
+            const float clientWidthDip  = std::max(0.0f, DipFromPx(_clientSize.cx));
+            const float clientHeightDip = std::max(0.0f, DipFromPx(_clientSize.cy));
+            if (clientWidthDip > 0.0f && clientHeightDip > 0.0f)
+            {
+                const float minDim      = std::min(clientWidthDip, clientHeightDip);
+                const float fontSizeDip = std::clamp(minDim * 0.55f, 72.0f, 240.0f);
+
+                const wchar_t glyphText[2]{FluentIcons::kFilter, 0};
+                const bool needsLayoutRebuild =
+                    ! _filterWatermarkLayout || _filterWatermarkLayoutClientSizePx.cx != _clientSize.cx ||
+                    _filterWatermarkLayoutClientSizePx.cy != _clientSize.cy || _filterWatermarkLayoutDpi != _dpi;
+                if (needsLayoutRebuild)
+                {
+                    _filterWatermarkLayout.reset();
+                    const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(
+                        glyphText, 1u, _filterWatermarkFormat.get(), clientWidthDip, clientHeightDip, _filterWatermarkLayout.addressof());
+                    if (SUCCEEDED(hrLayout) && _filterWatermarkLayout)
+                    {
+                        _filterWatermarkLayoutClientSizePx = _clientSize;
+                        _filterWatermarkLayoutDpi          = _dpi;
+                        _filterWatermarkLayoutFontSizeDip  = 0.0f;
+                    }
+                }
+
+                if (_filterWatermarkLayout)
+                {
+                    const DWRITE_TEXT_RANGE range{0, 1};
+                    if (_filterWatermarkLayoutFontSizeDip != fontSizeDip)
+                    {
+                        _filterWatermarkLayout->SetFontSize(fontSizeDip, range);
+                        _filterWatermarkLayoutFontSizeDip = fontSizeDip;
+                    }
+
+                    constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                    _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), _filterWatermarkLayout.get(), _filterWatermarkBrush.get(), options);
+                }
+            }
+        }
 
         const float layoutLeft   = dirtyDip.left + _horizontalOffset;
         const float layoutRight  = dirtyDip.right + _horizontalOffset;
@@ -1305,10 +1382,11 @@ void FolderView::DrawItem(FolderItem& item)
     const float iconLeft = bounds.left + kLabelHorizontalPaddingDip;
     const float iconTop  = _displayMode == DisplayMode::Brief ? contentTop + std::max(0.0f, (contentHeight - _iconSizeDip) * 0.5f) : contentTop;
     D2D1_RECT_F iconRect = D2D1::RectF(iconLeft, iconTop, iconLeft + _iconSizeDip, iconTop + _iconSizeDip);
+    const float iconOpacity = (item.fileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0 ? 0.5f : 1.0f;
     if (item.icon)
     {
         // Render icon with nearest neighbor interpolation for crisp pixel-perfect rendering
-        _d2dContext->DrawBitmap(item.icon.get(), iconRect, 1.0f, D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
+        _d2dContext->DrawBitmap(item.icon.get(), iconRect, iconOpacity, D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
 
         // Render shortcut overlay if applicable
         if (item.isShortcut && _shortcutOverlayIcon)
@@ -1316,7 +1394,7 @@ void FolderView::DrawItem(FolderItem& item)
             // Position overlay at bottom-right corner of icon
             const float overlaySize = _iconSizeDip * 0.5f; // Half icon size for overlay
             D2D1_RECT_F overlayRect = D2D1::RectF(iconRect.right - overlaySize, iconRect.bottom - overlaySize, iconRect.right, iconRect.bottom);
-            _d2dContext->DrawBitmap(_shortcutOverlayIcon.get(), &overlayRect, 1.0f, D2D1_INTERPOLATION_MODE_LINEAR);
+            _d2dContext->DrawBitmap(_shortcutOverlayIcon.get(), &overlayRect, iconOpacity, D2D1_INTERPOLATION_MODE_LINEAR);
         }
     }
     else

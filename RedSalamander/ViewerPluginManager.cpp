@@ -83,8 +83,7 @@ bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
         return false;
     }
 
-    const int len = static_cast<int>(a.size());
-    return CompareStringOrdinal(a.data(), len, b.data(), len, TRUE) == CSTR_EQUAL;
+    return OrdinalString::EqualsNoCase(a, b);
 }
 
 void RemoveStringFromVector(std::vector<std::wstring>& values, std::wstring_view needle)

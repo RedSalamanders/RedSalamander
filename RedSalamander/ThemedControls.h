@@ -44,6 +44,11 @@ void SetModernComboPinnedIndex(HWND combo, int index) noexcept;
 void SetModernComboCompactMode(HWND combo, bool compact) noexcept;
 void SetModernComboUseMiddleEllipsis(HWND combo, bool enable) noexcept;
 
+// Encodes a leading-glyph hint into the combo item data for RedSalamander's modern combo box.
+// This is ignored by standard Win32 combo boxes.
+[[nodiscard]] LPARAM MakeModernComboItemIconData(wchar_t glyph) noexcept;
+[[nodiscard]] bool TryGetModernComboItemIconGlyph(LPARAM data, wchar_t& glyph) noexcept;
+
 void ApplyThemeToListView(HWND listView, const AppTheme& theme) noexcept;
 
 template <typename T>

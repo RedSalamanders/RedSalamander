@@ -563,8 +563,7 @@ struct ProcessMemorySnapshot
         return false;
     }
 
-    const int prefixChars = static_cast<int>(root.size());
-    if (CompareStringOrdinal(candidate.data(), prefixChars, root.data(), prefixChars, TRUE) != CSTR_EQUAL)
+    if (! OrdinalString::StartsWithNoCase(candidate, root))
     {
         return false;
     }

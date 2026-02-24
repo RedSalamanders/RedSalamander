@@ -6,11 +6,13 @@ This page is a user-facing summary of what is planned.
 
 ## Navigation
 
-- [ ] Filter UI
+- [ ] Filter bar (always-visible)
 
 ## View / layout
 
-- [ ] Pane view options (hidden/system files, extensions, thumbnails, preview pane, filter bar)
+- [ ] Pane view options: file extensions
+- [ ] Pane view options: thumbnails
+- [ ] Pane view options: preview pane
 - [ ] Navigation bar visibility toggles per pane
 
 ## Files and editors
@@ -23,11 +25,10 @@ This page is a user-facing summary of what is planned.
 
 ## Selection tools
 
-- [ ] Select/Unselect dialogs
 - [ ] Invert / Restore selection
 - [ ] Save/Load selection
-- [ ] Select same extension/name
-- [ ] Hide selected/unselected names and related navigation helpers
+- [ ] Select/unselect same name
+- [ ] Hide selected/unselected names
 
 ## Commands
 

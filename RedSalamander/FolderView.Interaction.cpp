@@ -1313,12 +1313,12 @@ std::optional<UINT32> FolderView::FindIncrementalSearchMatchOffset(std::wstring_
         return std::nullopt;
     }
 
-    const int queryLength          = static_cast<int>(query.size());
+    const size_t querySize         = query.size();
     const size_t lastStartPosition = displayName.size() - query.size();
     for (size_t startPosition = 0; startPosition <= lastStartPosition; ++startPosition)
     {
-        const int compareResult = CompareStringOrdinal(displayName.data() + startPosition, queryLength, query.data(), queryLength, TRUE);
-        if (compareResult != CSTR_EQUAL)
+        const std::wstring_view window(displayName.data() + startPosition, querySize);
+        if (! OrdinalString::EqualsNoCase(window, query))
         {
             continue;
         }

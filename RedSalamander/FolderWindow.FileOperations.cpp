@@ -184,8 +184,7 @@ struct FileSystemCapabilitiesV1
             return true;
         }
 
-        const int result = CompareStringOrdinal(id.data(), static_cast<int>(id.size()), otherPluginId.data(), static_cast<int>(otherPluginId.size()), TRUE);
-        if (result == CSTR_EQUAL)
+        if (OrdinalString::EqualsNoCase(id, otherPluginId))
         {
             return true;
         }
@@ -315,7 +314,7 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
                     return false;
                 }
 
-                if (CompareStringOrdinal(path.data(), static_cast<int>(folder.size()), folder.data(), static_cast<int>(folder.size()), TRUE) != CSTR_EQUAL)
+                if (! OrdinalString::StartsWithNoCase(path, folder))
                 {
                     return false;
                 }

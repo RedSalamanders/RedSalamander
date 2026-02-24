@@ -1634,6 +1634,9 @@ void ParseFolders(yyjson_val* root, Common::Settings::Settings& out)
         }
     }
 
+    GetBool(folders, "showHiddenFiles", folderSettings.showHiddenFiles);
+    GetBool(folders, "showSystemFiles", folderSettings.showSystemFiles);
+
     uint32_t historyMax = folderSettings.historyMax;
     GetUInt32(folders, "historyMax", historyMax);
     historyMax                = std::clamp(historyMax, 1u, 50u);
@@ -1669,6 +1672,81 @@ void ParseFolders(yyjson_val* root, Common::Settings::Settings& out)
         }
 
         NormalizeHistory(folderSettings.history, static_cast<size_t>(historyMax));
+    }
+
+    yyjson_val* historyFiltersArr = GetArr(folders, "historyFilters");
+    if (historyFiltersArr && ! folderSettings.history.empty())
+    {
+        struct ParsedFilter
+        {
+            std::filesystem::path path;
+            bool enabled = false;
+            std::wstring text;
+        };
+
+        std::vector<ParsedFilter> parsed;
+
+        const size_t count = yyjson_arr_size(historyFiltersArr);
+        parsed.reserve(std::min(count, static_cast<size_t>(historyMax)));
+
+        for (size_t i = 0; i < count && parsed.size() < static_cast<size_t>(historyMax); ++i)
+        {
+            yyjson_val* item = yyjson_arr_get(historyFiltersArr, i);
+            if (! item || ! yyjson_is_obj(item))
+            {
+                continue;
+            }
+
+            const auto pathText = GetString(item, "path");
+            if (! pathText)
+            {
+                continue;
+            }
+
+            const std::wstring pathWide = Utf16FromUtf8(*pathText);
+            if (pathWide.empty())
+            {
+                continue;
+            }
+
+            ParsedFilter filter{};
+            filter.path = std::filesystem::path(pathWide);
+            GetBool(item, "enabled", filter.enabled);
+
+            if (const auto textText = GetString(item, "text"))
+            {
+                filter.text = Utf16FromUtf8(*textText);
+            }
+
+            if (! filter.enabled && filter.text.empty())
+            {
+                continue;
+            }
+
+            parsed.push_back(std::move(filter));
+        }
+
+        folderSettings.historyFilters.reserve(folderSettings.history.size());
+        for (const auto& historyPath : folderSettings.history)
+        {
+            const auto it = std::find_if(
+                parsed.begin(), parsed.end(), [&](const ParsedFilter& filter) noexcept { return OrdinalString::EqualsNoCasePath(filter.path, historyPath); });
+            if (it == parsed.end())
+            {
+                continue;
+            }
+
+            Common::Settings::FolderHistoryFilterState state{};
+            state.path    = historyPath;
+            state.enabled = it->enabled;
+            state.text    = it->text;
+            if (! state.enabled && state.text.empty())
+            {
+                continue;
+            }
+
+            folderSettings.historyFilters.push_back(std::move(state));
+        }
     }
 
     yyjson_val* items = GetArr(folders, "items");
@@ -2264,8 +2342,9 @@ void ParseSelectionMasks(yyjson_val* root, Common::Settings::Settings& out)
 
     parseHistory("selectHistory", settings.selectHistory);
     parseHistory("unselectHistory", settings.unselectHistory);
+    parseHistory("filterHistory", settings.filterHistory);
 
-    if (! settings.selectHistory.empty() || ! settings.unselectHistory.empty())
+    if (! settings.selectHistory.empty() || ! settings.unselectHistory.empty() || ! settings.filterHistory.empty())
     {
         out.selectionMasks = std::move(settings);
     }
@@ -3472,6 +3551,15 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 }
             }
 
+            if (settings.folders->showHiddenFiles != defaults.showHiddenFiles)
+            {
+                yyjson_mut_obj_add_bool(doc, folders, "showHiddenFiles", settings.folders->showHiddenFiles);
+            }
+            if (settings.folders->showSystemFiles != defaults.showSystemFiles)
+            {
+                yyjson_mut_obj_add_bool(doc, folders, "showSystemFiles", settings.folders->showSystemFiles);
+            }
+
             const uint32_t historyMax = std::clamp(settings.folders->historyMax, 1u, 50u);
             if (historyMax != defaults.historyMax)
             {
@@ -3503,6 +3591,73 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 if (historyWritten > 0)
                 {
                     yyjson_mut_obj_add_val(doc, folders, "history", history);
+                }
+            }
+
+            if (! settings.folders->historyFilters.empty() && ! settings.folders->history.empty())
+            {
+                yyjson_mut_val* filters = yyjson_mut_arr(doc);
+                if (! filters)
+                {
+                    return E_OUTOFMEMORY;
+                }
+
+                size_t written = 0;
+                size_t historyWritten = 0;
+                for (const auto& historyPath : settings.folders->history)
+                {
+                    if (historyPath.empty())
+                    {
+                        continue;
+                    }
+
+                    ++historyWritten;
+                    if (historyWritten > static_cast<size_t>(historyMax))
+                    {
+                        break;
+                    }
+
+                    const auto it = std::find_if(settings.folders->historyFilters.begin(),
+                                                 settings.folders->historyFilters.end(),
+                                                 [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
+                                                 { return OrdinalString::EqualsNoCasePath(state.path, historyPath); });
+                    if (it == settings.folders->historyFilters.end())
+                    {
+                        continue;
+                    }
+
+                    if (! it->enabled && it->text.empty())
+                    {
+                        continue;
+                    }
+
+                    yyjson_mut_val* item = yyjson_mut_obj(doc);
+                    if (! item)
+                    {
+                        return E_OUTOFMEMORY;
+                    }
+
+                    yyjson_mut_obj_add_val(doc, item, "path", NewString(doc, historyPath.wstring()));
+                    if (it->enabled)
+                    {
+                        yyjson_mut_obj_add_bool(doc, item, "enabled", it->enabled);
+                    }
+                    if (! it->text.empty())
+                    {
+                        yyjson_mut_obj_add_val(doc, item, "text", NewString(doc, it->text));
+                    }
+
+                    yyjson_mut_arr_add_val(filters, item);
+                    ++written;
+                    if (written >= static_cast<size_t>(historyMax))
+                    {
+                        break;
+                    }
+                }
+
+                if (written > 0)
+                {
+                    yyjson_mut_obj_add_val(doc, folders, "historyFilters", filters);
                 }
             }
 
@@ -4071,7 +4226,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
     {
         const auto& masks = settings.selectionMasks.value();
 
-        const bool wroteMasks = ! masks.selectHistory.empty() || ! masks.unselectHistory.empty();
+        const bool wroteMasks = ! masks.selectHistory.empty() || ! masks.unselectHistory.empty() || ! masks.filterHistory.empty();
         if (wroteMasks)
         {
             yyjson_mut_val* masksObj = yyjson_mut_obj(doc);
@@ -4122,6 +4277,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 return hr;
             }
             if (const HRESULT hr = writeHistory("unselectHistory", masks.unselectHistory); FAILED(hr))
+            {
+                return hr;
+            }
+            if (const HRESULT hr = writeHistory("filterHistory", masks.filterHistory); FAILED(hr))
             {
                 return hr;
             }

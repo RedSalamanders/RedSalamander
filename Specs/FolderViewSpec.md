@@ -10,6 +10,8 @@
 - Grid layout with dynamic column sizing
 - Sorting (Name / Extension / Time / Size / Attributes) with direction toggle + unsorted state
 - Display modes: **Brief**, **Detailed**, and **Extra Detailed** (multi-line)
+- Pane filter (wildcard mask) with persisted per-path state and a subtle watermark indicator when active
+- View options for hidden/system files (hidden items display a dim icon when shown)
 - Full drag-and-drop support (COM IDataObject/IDropSource/IDropTarget)
 - Multi-selection with visual feedback
 - Keyboard navigation
@@ -182,6 +184,16 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
   - When enumeration succeeds and the visible item list is empty, and an empty-state message is set, FolderView renders that message centered in the client area using a secondary/dimmed text style.
   - The empty-state message must not replace error/busy overlays.
 
+**View options & filtering:**
+- **Hidden/System visibility** is controlled by settings:
+  - `folders.showHiddenFiles` (default `true`)
+  - `folders.showSystemFiles` (default `true`)
+- When `folders.showHiddenFiles` is `false`, items with `FILE_ATTRIBUTE_HIDDEN` MUST be excluded from the item list.
+- When `folders.showSystemFiles` is `false`, items with `FILE_ATTRIBUTE_SYSTEM` MUST be excluded from the item list.
+- When hidden items are shown, they MUST display a **dim** icon to distinguish them from normal items.
+- **Pane filter** (`cmd/pane/filter`): when enabled and the filter text parses to at least one mask, FolderView MUST exclude items whose `displayName` does not match the wildcard mask set (same syntax as Select/Unselect dialogs; see `MaskSyntax::MatchesWildcardMask`).
+- While a pane filter is active, FolderView SHOULD render a very subtle watermark glyph in the background (Sego UI Symbol `0xE71C`) so the user can tell the pane is filtered.
+
 **Enumeration Contract (Plugin Only):**
 - The host obtains an `IFileSystem` instance via the plugin factory (`RedSalamanderCreate`) and uses it as the only source of directory entries.
 - Each enumeration calls `IFileSystem::ReadDirectoryInfo(path, info.put())` to obtain an `IFilesInformation` result object.
@@ -314,12 +326,13 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 
 **NavigationView Access (FolderWindow Integration):**
 - **F4 / Alt+D / Ctrl+L**: Focus the active pane’s NavigationView address bar and enter edit mode (select all). *(Default chord bindings are settings-backed.)*
-- **Alt+Down**: Open the active pane’s history dropdown (global MRU list). *(Default chord binding is settings-backed.)*
-- **Alt+Up**: Navigate to parent folder (equivalent to Backspace). *(Default chord binding is settings-backed.)*
 
 **Selection Keys:**
 - **Space**: Toggle selection of focused item
 - **Insert**: Toggle selection of focused item and move to next item (Commander-style)
+- **Alt+Up / Alt+Down**: Go to previous/next selected name (wrap allowed). *(Default chord binding is settings-backed.)*
+- **Ctrl+Shift+<key left of Backspace>**: Select all items with the same extension as the focused item (adds to selection).
+- **Ctrl+Shift+<key right of 0>**: Unselect all items with the same extension as the focused item (removes from selection).
 - **Ctrl+A**: Select all items *(default chord binding is settings-backed)*
 - **Ctrl+Click**: Toggle individual item selection
 - **Shift+Click**: Range selection from anchor to clicked item
@@ -346,6 +359,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - **Ctrl+F4**: Sort by **Extension**
 - **Ctrl+F5**: Sort by **Time** (newest first)
 - **Ctrl+F6**: Sort by **Size** (largest first; folders fall back to Name)
+- **Ctrl+F12**: Open the pane filter dialog (wildcard mask filter; affects enumeration).
 - **Alt+2**: Display as **Brief**
 - **Alt+3**: Display as **Detailed**
 - **Alt+4**: Display as **Extra Detailed**
@@ -986,7 +1000,7 @@ Example: `FolderView::ReportError(L"EnumerateFolder", hr)` logs the failure and 
 1. **Thumbnail View**: Show image previews instead of icons
 2. **List/Details View**: Table view with columns (Name, Size, Modified)
 3. **Grouping**: Group by type, date, size
-4. **Filtering**: Quick filter by extension or name pattern
+4. **Filter Bar**: Always-visible quick filter UI (in addition to the filter dialog)
 5. **Marquee Selection**: Drag rectangle to select multiple items
 6. **Inline Rename**: Rename without dialog
 7. **Quick Look**: Space bar to preview file without opening

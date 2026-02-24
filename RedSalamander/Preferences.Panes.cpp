@@ -52,11 +52,14 @@ void PanesPane::LayoutControls(
 
     const std::wstring leftHeaderText     = LoadStringResource(nullptr, IDS_PREFS_PANES_HEADER_LEFT);
     const std::wstring rightHeaderText    = LoadStringResource(nullptr, IDS_PREFS_PANES_HEADER_RIGHT);
+    const std::wstring generalHeaderText  = LoadStringResource(nullptr, IDS_PREFS_PANES_HEADER_GENERAL);
     const std::wstring displayLabelText   = LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_DISPLAY);
     const std::wstring sortByLabelText    = LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_SORT_BY);
     const std::wstring directionLabelText = LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_DIRECTION);
     const std::wstring statusBarLabelText = LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_STATUS_BAR);
     const std::wstring statusBarDescText  = LoadStringResource(nullptr, IDS_PREFS_PANES_DESC_STATUS_BAR);
+    const std::wstring showHiddenText     = LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_SHOW_HIDDEN_FILES);
+    const std::wstring showSystemText     = LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_SHOW_SYSTEM_FILES);
     const std::wstring historyLabelText   = LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_HISTORY_SIZE);
     const std::wstring historyDescText    = LoadStringResource(nullptr, IDS_PREFS_PANES_DESC_HISTORY_SIZE);
     const std::wstring briefText          = LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_BRIEF);
@@ -162,6 +165,10 @@ void PanesPane::LayoutControls(
         placeLabeledCombo(state.panesRightSortDirLabel.get(), state.panesRightSortDirFrame.get(), state.panesRightSortDirCombo.get(), directionLabelText);
         placeStatusBarRow(
             state.panesRightStatusBarLabel.get(), state.panesRightStatusBarToggle.get(), state.panesRightStatusBarDescription.get(), statusBarLabelText);
+
+        placeHeader(state.panesGeneralHeader.get(), generalHeaderText);
+        placeStatusBarRow(state.panesShowHiddenFilesLabel.get(), state.panesShowHiddenFilesToggle.get(), nullptr, showHiddenText);
+        placeStatusBarRow(state.panesShowSystemFilesLabel.get(), state.panesShowSystemFilesToggle.get(), nullptr, showSystemText);
 
         const int rowWidth   = std::max(0, width - sectionX);
         const int labelWidth = std::min(rowWidth, ThemedControls::ScaleDip(dpi, kMinToggleWidthDip));
@@ -420,6 +427,9 @@ void PanesPane::LayoutControls(
 
     y += std::max(0, sectionY - cardSpacingY);
 
+    placeHeader(state.panesGeneralHeader.get(), generalHeaderText);
+    layoutToggleCard(state.panesShowHiddenFilesLabel.get(), showHiddenText, state.panesShowHiddenFilesToggle.get(), nullptr, {});
+    layoutToggleCard(state.panesShowSystemFilesLabel.get(), showSystemText, state.panesShowSystemFilesToggle.get(), nullptr, {});
     layoutHistoryCard(state.panesHistoryLabel.get(),
                       historyLabelText,
                       state.panesHistoryFrame.get(),
@@ -433,6 +443,8 @@ void PanesPane::Refresh(HWND /*host*/, PreferencesDialogState& state) noexcept
     const PrefsFolders::FolderPanePreferences left  = PrefsFolders::GetFolderPanePreferences(state.workingSettings, PrefsFolders::kLeftPaneSlot);
     const PrefsFolders::FolderPanePreferences right = PrefsFolders::GetFolderPanePreferences(state.workingSettings, PrefsFolders::kRightPaneSlot);
     const uint32_t historyMax                       = PrefsFolders::GetFolderHistoryMax(state.workingSettings);
+    const bool showHiddenFiles                      = PrefsFolders::GetFolderShowHiddenFiles(state.workingSettings);
+    const bool showSystemFiles                      = PrefsFolders::GetFolderShowSystemFiles(state.workingSettings);
 
     state.refreshingPanesPage = true;
     const auto reset          = wil::scope_exit([&] { state.refreshingPanesPage = false; });
@@ -454,6 +466,9 @@ void PanesPane::Refresh(HWND /*host*/, PreferencesDialogState& state) noexcept
     PrefsUi::SetTwoStateToggleState(
         state.panesRightSortDirToggle.get(), state.theme.systemHighContrast, right.sortDirection == Common::Settings::FolderSortDirection::Ascending);
     PrefsUi::SetTwoStateToggleState(state.panesRightStatusBarToggle.get(), state.theme.systemHighContrast, right.statusBarVisible);
+
+    PrefsUi::SetTwoStateToggleState(state.panesShowHiddenFilesToggle.get(), state.theme.systemHighContrast, showHiddenFiles);
+    PrefsUi::SetTwoStateToggleState(state.panesShowSystemFilesToggle.get(), state.theme.systemHighContrast, showSystemFiles);
 
     if (state.panesHistoryEdit)
     {
@@ -568,6 +583,33 @@ bool PanesPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT com
         return true;
     };
 
+    auto handleFoldersTwoStateToggle = [&](HWND clicked, const bool manualFlip, auto&& apply) noexcept
+    {
+        if (! clicked)
+        {
+            return true;
+        }
+
+        const bool ownerDraw = (GetWindowLongPtrW(clicked, GWL_STYLE) & BS_TYPEMASK) == BS_OWNERDRAW;
+        if (manualFlip && ownerDraw)
+        {
+            const LONG_PTR current = GetWindowLongPtrW(clicked, GWLP_USERDATA);
+            SetWindowLongPtrW(clicked, GWLP_USERDATA, current == 0 ? 1 : 0);
+            InvalidateRect(clicked, nullptr, TRUE);
+        }
+
+        const bool toggledOn = PrefsUi::GetTwoStateToggleState(clicked, state.theme.systemHighContrast);
+        auto* folders        = PrefsFolders::EnsureWorkingFoldersSettings(state.workingSettings);
+        if (! folders)
+        {
+            return true;
+        }
+
+        apply(*folders, toggledOn);
+        SetDirty(dlg, state);
+        return true;
+    };
+
     switch (commandId)
     {
         case IDC_PREFS_PANES_LEFT_DISPLAY_COMBO:
@@ -604,6 +646,18 @@ bool PanesPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT com
             if (notifyCode == CBN_SELCHANGE)
             {
                 return handleSortDirCombo(PrefsFolders::kRightPaneSlot, state.panesRightSortDirCombo.get());
+            }
+            break;
+        case IDC_PREFS_PANES_SHOW_HIDDEN_TOGGLE:
+            if (notifyCode == BN_CLICKED)
+            {
+                return handleFoldersTwoStateToggle(hwndCtl, true, [](Common::Settings::FoldersSettings& folders, bool on) noexcept { folders.showHiddenFiles = on; });
+            }
+            break;
+        case IDC_PREFS_PANES_SHOW_SYSTEM_TOGGLE:
+            if (notifyCode == BN_CLICKED)
+            {
+                return handleFoldersTwoStateToggle(hwndCtl, true, [](Common::Settings::FoldersSettings& folders, bool on) noexcept { folders.showSystemFiles = on; });
             }
             break;
         case IDC_PREFS_PANES_HISTORY_MAX_EDIT:
@@ -983,6 +1037,105 @@ void PanesPane::CreateControls(HWND parent, PreferencesDialogState& state) noexc
                                                               nullptr));
     }
 
+    state.panesGeneralHeader.reset(CreateWindowExW(0,
+                                                   L"Static",
+                                                   LoadStringResource(nullptr, IDS_PREFS_PANES_HEADER_GENERAL).c_str(),
+                                                   baseStaticStyle,
+                                                   0,
+                                                   0,
+                                                   10,
+                                                   10,
+                                                   parent,
+                                                   nullptr,
+                                                   GetModuleHandleW(nullptr),
+                                                   nullptr));
+
+    state.panesShowHiddenFilesLabel.reset(CreateWindowExW(0,
+                                                          L"Static",
+                                                          LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_SHOW_HIDDEN_FILES).c_str(),
+                                                          baseStaticStyle,
+                                                          0,
+                                                          0,
+                                                          10,
+                                                          10,
+                                                          parent,
+                                                          nullptr,
+                                                          GetModuleHandleW(nullptr),
+                                                          nullptr));
+    if (customButtons)
+    {
+        state.panesShowHiddenFilesToggle.reset(CreateWindowExW(0,
+                                                               L"Button",
+                                                               L"",
+                                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                                                               0,
+                                                               0,
+                                                               10,
+                                                               10,
+                                                               parent,
+                                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_PANES_SHOW_HIDDEN_TOGGLE)),
+                                                               GetModuleHandleW(nullptr),
+                                                               nullptr));
+    }
+    else
+    {
+        state.panesShowHiddenFilesToggle.reset(CreateWindowExW(0,
+                                                               L"Button",
+                                                               LoadStringResource(nullptr, IDS_PREFS_PANES_CHECK_SHOW_HIDDEN_FILES).c_str(),
+                                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                                               0,
+                                                               0,
+                                                               10,
+                                                               10,
+                                                               parent,
+                                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_PANES_SHOW_HIDDEN_TOGGLE)),
+                                                               GetModuleHandleW(nullptr),
+                                                               nullptr));
+    }
+
+    state.panesShowSystemFilesLabel.reset(CreateWindowExW(0,
+                                                          L"Static",
+                                                          LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_SHOW_SYSTEM_FILES).c_str(),
+                                                          baseStaticStyle,
+                                                          0,
+                                                          0,
+                                                          10,
+                                                          10,
+                                                          parent,
+                                                          nullptr,
+                                                          GetModuleHandleW(nullptr),
+                                                          nullptr));
+    if (customButtons)
+    {
+        state.panesShowSystemFilesToggle.reset(CreateWindowExW(0,
+                                                               L"Button",
+                                                               L"",
+                                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                                                               0,
+                                                               0,
+                                                               10,
+                                                               10,
+                                                               parent,
+                                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_PANES_SHOW_SYSTEM_TOGGLE)),
+                                                               GetModuleHandleW(nullptr),
+                                                               nullptr));
+    }
+    else
+    {
+        state.panesShowSystemFilesToggle.reset(CreateWindowExW(0,
+                                                               L"Button",
+                                                               LoadStringResource(nullptr, IDS_PREFS_PANES_CHECK_SHOW_SYSTEM_FILES).c_str(),
+                                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
+                                                               0,
+                                                               0,
+                                                               10,
+                                                               10,
+                                                               parent,
+                                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_PANES_SHOW_SYSTEM_TOGGLE)),
+                                                               GetModuleHandleW(nullptr),
+                                                               nullptr));
+    }
+
     state.panesHistoryLabel.reset(CreateWindowExW(0,
                                                   L"Static",
                                                   LoadStringResource(nullptr, IDS_PREFS_PANES_LABEL_HISTORY_SIZE).c_str(),
@@ -1025,4 +1178,6 @@ void PanesPane::CreateControls(HWND parent, PreferencesDialogState& state) noexc
     PrefsInput::EnableMouseWheelForwarding(state.panesRightDisplayToggle.get());
     PrefsInput::EnableMouseWheelForwarding(state.panesRightSortDirToggle.get());
     PrefsInput::EnableMouseWheelForwarding(state.panesRightStatusBarToggle.get());
+    PrefsInput::EnableMouseWheelForwarding(state.panesShowHiddenFilesToggle.get());
+    PrefsInput::EnableMouseWheelForwarding(state.panesShowSystemFilesToggle.get());
 }

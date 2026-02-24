@@ -296,6 +296,7 @@
     <ClInclude Include="CompareDirectoriesEngine.h" />
     <ClInclude Include="CompareDirectoriesWindow.h" />
     <ClInclude Include="ManagePluginsDialog.h" />
+    <ClInclude Include="MaskSyntax.h" />
     <ClInclude Include="NavigationView.h" />
     <ClInclude Include="NavigationViewInternal.h" />
     <ClInclude Include="Preferences.h" />
@@ -375,6 +376,7 @@
     <ClCompile Include="CompareDirectoriesEngine.cpp" />
     <ClCompile Include="CompareDirectoriesWindow.cpp" />
     <ClCompile Include="ManagePluginsDialog.cpp" />
+    <ClCompile Include="MaskSyntax.cpp" />
     <ClCompile Include="NavigationView.cpp" />
     <ClCompile Include="NavigationView.Breadcrumb.cpp" />
     <ClCompile Include="NavigationView.Edit.cpp" />

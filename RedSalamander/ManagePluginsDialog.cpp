@@ -1016,7 +1016,7 @@ bool TryGetBoolValue(yyjson_val* obj, const char* key, bool& out) noexcept
         return false;
     }
 
-    return CompareStringOrdinal(a.data(), static_cast<int>(a.size()), b.data(), static_cast<int>(b.size()), TRUE) == CSTR_EQUAL;
+    return OrdinalString::EqualsNoCase(a, b);
 }
 
 [[nodiscard]] std::optional<bool> TryParseBoolToggleToken(const std::wstring_view token) noexcept

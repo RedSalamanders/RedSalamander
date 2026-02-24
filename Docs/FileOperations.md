@@ -142,6 +142,6 @@ Limitations:
 - Pack / Unpack
 - Find files
 - “Copy path as text” helpers
-- Selection dialog features (select/unselect/invert/restore, select same extension/name, …)
+- Some advanced selection tools (invert/restore, save/load selection, select/unselect same name, hide selected/unselected)
 
 See: [Planned / TODO features](Todo.md)

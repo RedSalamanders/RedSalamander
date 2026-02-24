@@ -93,6 +93,11 @@ public:
     void SetStatusBarVisible(Pane pane, bool visible);
     bool GetStatusBarVisible(Pane pane) const noexcept;
 
+    void SetShowHiddenFiles(bool show);
+    [[nodiscard]] bool GetShowHiddenFiles() const noexcept;
+    void SetShowSystemFiles(bool show);
+    [[nodiscard]] bool GetShowSystemFiles() const noexcept;
+
     void CommandRename(Pane pane);
     void CommandView(Pane pane);
     void CommandViewSpace(Pane pane);
@@ -108,6 +113,7 @@ public:
     void CommandFocusAddressBar(Pane pane);
     void CommandOpenDriveMenu(Pane pane);
     void CommandShowFolderHistory(Pane pane);
+    void CommandFilter(Pane pane);
     void CommandGoRootDirectory(Pane pane);
     void CommandSetPathFromOtherPane(Pane pane);
     void CommandHistoryBack(Pane pane);
@@ -118,6 +124,10 @@ public:
     void CommandCalculateDirectorySizes(Pane pane);
     void CommandSelectionSelectDialog(Pane pane);
     void CommandSelectionUnselectDialog(Pane pane);
+    void CommandSelectionSelectSameExtension(Pane pane);
+    void CommandSelectionUnselectSameExtension(Pane pane);
+    void CommandSelectionGoToPreviousSelectedName(Pane pane);
+    void CommandSelectionGoToNextSelectedName(Pane pane);
     void CommandChangeCase(Pane pane);
     void CommandOpenCommandShell(Pane pane);
     void PrepareForNetworkDriveDisconnect(Pane pane);
@@ -494,6 +504,8 @@ private:
 
     std::unique_ptr<FileOperationState, FileOperationStateDeleter> _fileOperations;
     Common::Settings::Settings* _settings = nullptr;
+    bool _showHiddenFiles                 = true;
+    bool _showSystemFiles                 = true;
     uint32_t _folderHistoryMax            = 20u;
     std::vector<std::filesystem::path> _folderHistory;
 
