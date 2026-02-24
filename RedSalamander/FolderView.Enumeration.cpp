@@ -325,6 +325,12 @@ FolderView::ExecuteEnumeration(const std::filesystem::path& folder, uint64_t gen
                 static constexpr std::wstring_view kStableHashSeparator = L"|";
                 const uint32_t folderStableHashSeed                     = appendStableHash32(StableHash32(folderText), kStableHashSeparator);
 
+                const bool showHiddenFiles = _showHiddenFiles.load(std::memory_order_acquire);
+                const bool showSystemFiles = _showSystemFiles.load(std::memory_order_acquire);
+
+                const auto nameFilter   = _nameFilter.load(std::memory_order_acquire);
+                const bool filterActive = nameFilter && nameFilter->state.enabled && nameFilter->hasMask;
+
                 while (! stopToken.stop_requested())
                 {
                     if (_enumerationGeneration.load(std::memory_order_acquire) != generation)
@@ -332,46 +338,63 @@ FolderView::ExecuteEnumeration(const std::filesystem::path& folder, uint64_t gen
                         return nullptr;
                     }
 
-                    const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
+                    const DWORD fileAttributes = entry->FileAttributes;
+                    bool include = (showHiddenFiles || (fileAttributes & FILE_ATTRIBUTE_HIDDEN) == 0) &&
+                                   (showSystemFiles || (fileAttributes & FILE_ATTRIBUTE_SYSTEM) == 0);
 
-                    // Zero-copy: create string_view pointing into arena buffer for displayName
-                    FolderItem item{};
-                    item.displayName = std::wstring_view(entry->FileName, nameChars);
-
-                    // Stable hash used for rainbow rendering (avoid storing full paths per item).
+                    std::wstring_view displayName;
+                    if (include)
                     {
-                        item.stableHash32 = appendStableHash32(folderStableHashSeed, item.displayName);
-                    }
+                        const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
+                        displayName = std::wstring_view(entry->FileName, nameChars);
 
-                    item.isDirectory    = (entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                    item.fileAttributes = entry->FileAttributes;
-                    item.lastWriteTime  = entry->LastWriteTime;
-                    if (! item.isDirectory && entry->EndOfFile > 0)
-                    {
-                        item.sizeBytes = static_cast<uint64_t>(entry->EndOfFile);
-                    }
-
-                    // Compute extension offset for files (zero-copy)
-                    if (! item.isDirectory && ! item.displayName.empty())
-                    {
-                        const size_t dotPos = item.displayName.rfind(L'.');
-                        if (dotPos != std::wstring_view::npos && dotPos > 0)
+                        if (filterActive && ! MaskSyntax::MatchesWildcardMask(displayName, nameFilter->mask))
                         {
-                            item.extensionOffset = static_cast<uint16_t>(dotPos);
-                            // Detect .lnk shortcuts
-                            const auto ext  = item.displayName.substr(dotPos);
-                            item.isShortcut = (ext.size() == 4 && (ext[1] == L'l' || ext[1] == L'L') && (ext[2] == L'n' || ext[2] == L'N') &&
-                                               (ext[3] == L'k' || ext[3] == L'K'));
+                            include = false;
                         }
                     }
 
-                    if (item.isDirectory)
+                    if (include)
                     {
-                        directories.emplace_back(std::move(item));
-                    }
-                    else
-                    {
-                        files.emplace_back(std::move(item));
+                        // Zero-copy: create string_view pointing into arena buffer for displayName
+                        FolderItem item{};
+                        item.displayName = displayName;
+
+                        // Stable hash used for rainbow rendering (avoid storing full paths per item).
+                        {
+                            item.stableHash32 = appendStableHash32(folderStableHashSeed, item.displayName);
+                        }
+
+                        item.isDirectory    = (fileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                        item.fileAttributes = fileAttributes;
+                        item.lastWriteTime  = entry->LastWriteTime;
+                        if (! item.isDirectory && entry->EndOfFile > 0)
+                        {
+                            item.sizeBytes = static_cast<uint64_t>(entry->EndOfFile);
+                        }
+
+                        // Compute extension offset for files (zero-copy)
+                        if (! item.isDirectory && ! item.displayName.empty())
+                        {
+                            const size_t dotPos = item.displayName.rfind(L'.');
+                            if (dotPos != std::wstring_view::npos && dotPos > 0)
+                            {
+                                item.extensionOffset = static_cast<uint16_t>(dotPos);
+                                // Detect .lnk shortcuts
+                                const auto ext  = item.displayName.substr(dotPos);
+                                item.isShortcut = (ext.size() == 4 && (ext[1] == L'l' || ext[1] == L'L') && (ext[2] == L'n' || ext[2] == L'N') &&
+                                                   (ext[3] == L'k' || ext[3] == L'K'));
+                            }
+                        }
+
+                        if (item.isDirectory)
+                        {
+                            directories.emplace_back(std::move(item));
+                        }
+                        else
+                        {
+                            files.emplace_back(std::move(item));
+                        }
                     }
 
                     if (entry->NextEntryOffset == 0)
@@ -411,12 +434,9 @@ FolderView::ExecuteEnumeration(const std::filesystem::path& folder, uint64_t gen
             perf.SetValue0(directories.size());
             perf.SetValue1(files.size());
 
-            // Use CompareStringOrdinal for string_view comparison (handles non-null-terminated strings)
             auto compare = [](const FolderItem& a, const FolderItem& b)
             {
-                const int result = CompareStringOrdinal(
-                    a.displayName.data(), static_cast<int>(a.displayName.size()), b.displayName.data(), static_cast<int>(b.displayName.size()), TRUE);
-                return result == CSTR_LESS_THAN;
+                return OrdinalString::Compare(a.displayName, b.displayName, true) < 0;
             };
 
             // Use parallel sorting for large directories (threshold: 1000 items)
@@ -955,17 +975,13 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
 
     auto compareName = [&](const FolderItem& a, const FolderItem& b) noexcept
     {
-        const int cmpResult = CompareStringOrdinal(
-            a.displayName.data(), static_cast<int>(a.displayName.size()), b.displayName.data(), static_cast<int>(b.displayName.size()), TRUE);
-        const int cmp = (cmpResult == CSTR_LESS_THAN) ? -1 : ((cmpResult == CSTR_GREATER_THAN) ? 1 : 0);
+        const int cmp = OrdinalString::Compare(a.displayName, b.displayName, true);
         if (cmp != 0)
         {
             return compareInt(cmp);
         }
 
-        const int caseCmpResult = CompareStringOrdinal(
-            a.displayName.data(), static_cast<int>(a.displayName.size()), b.displayName.data(), static_cast<int>(b.displayName.size()), FALSE);
-        const int caseCmp = (caseCmpResult == CSTR_LESS_THAN) ? -1 : ((caseCmpResult == CSTR_GREATER_THAN) ? 1 : 0);
+        const int caseCmp = OrdinalString::Compare(a.displayName, b.displayName, false);
         if (caseCmp != 0)
         {
             return compareInt(caseCmp);
@@ -988,8 +1004,7 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
             {
                 const auto extA        = a.GetExtension();
                 const auto extB        = b.GetExtension();
-                const int extCmpResult = CompareStringOrdinal(extA.data(), static_cast<int>(extA.size()), extB.data(), static_cast<int>(extB.size()), TRUE);
-                const int extCmp       = (extCmpResult == CSTR_LESS_THAN) ? -1 : ((extCmpResult == CSTR_GREATER_THAN) ? 1 : 0);
+                const int extCmp       = OrdinalString::Compare(extA, extB, true);
                 if (extCmp != 0)
                 {
                     return compareInt(extCmp);

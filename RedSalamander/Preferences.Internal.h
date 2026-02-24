@@ -340,6 +340,12 @@ struct PreferencesDialogState
     wil::unique_hwnd panesRightStatusBarToggle;
     wil::unique_hwnd panesRightStatusBarDescription;
 
+    wil::unique_hwnd panesGeneralHeader;
+    wil::unique_hwnd panesShowHiddenFilesLabel;
+    wil::unique_hwnd panesShowHiddenFilesToggle;
+    wil::unique_hwnd panesShowSystemFilesLabel;
+    wil::unique_hwnd panesShowSystemFilesToggle;
+
     wil::unique_hwnd panesHistoryLabel;
     wil::unique_hwnd panesHistoryFrame;
     wil::unique_hwnd panesHistoryEdit;
@@ -739,6 +745,8 @@ struct FolderPanePreferences
 
 [[nodiscard]] FolderPanePreferences GetFolderPanePreferences(const Common::Settings::Settings& settings, std::wstring_view slot) noexcept;
 [[nodiscard]] uint32_t GetFolderHistoryMax(const Common::Settings::Settings& settings) noexcept;
+[[nodiscard]] bool GetFolderShowHiddenFiles(const Common::Settings::Settings& settings) noexcept;
+[[nodiscard]] bool GetFolderShowSystemFiles(const Common::Settings::Settings& settings) noexcept;
 [[nodiscard]] bool AreEquivalentFolderPreferences(const Common::Settings::Settings& a, const Common::Settings::Settings& b) noexcept;
 [[nodiscard]] Common::Settings::FolderSortDirection DefaultFolderSortDirection(Common::Settings::FolderSortBy sortBy) noexcept;
 

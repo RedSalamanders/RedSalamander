@@ -24,8 +24,7 @@ namespace
         return false;
     }
 
-    const int len = static_cast<int>(left.size());
-    return CompareStringOrdinal(left.data(), len, right.data(), len, TRUE) == CSTR_EQUAL;
+    return OrdinalString::EqualsNoCase(left, right);
 }
 
 class SharedCopyMoveJobScheduler final

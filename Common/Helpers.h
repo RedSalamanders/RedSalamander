@@ -5,6 +5,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cwctype>
 #include <cstring>
 #include <exception>
 #include <filesystem>
@@ -107,6 +108,41 @@ inline bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
     return Compare(a, b, true) == 0;
 }
 
+[[nodiscard]] inline bool StartsWithNoCase(std::wstring_view text, std::wstring_view prefix) noexcept
+{
+    if (prefix.empty())
+    {
+        return true;
+    }
+
+    if (text.size() < prefix.size())
+    {
+        return false;
+    }
+
+    if (prefix.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        return false;
+    }
+
+    return EqualsNoCase(text.substr(0, prefix.size()), prefix);
+}
+
+inline bool EqualsNoCasePath(const std::filesystem::path& a, const std::filesystem::path& b) noexcept
+{
+    return EqualsNoCase(a.native(), b.native());
+}
+
+inline bool EqualsNoCasePath(const std::filesystem::path& a, std::wstring_view b) noexcept
+{
+    return EqualsNoCase(a.native(), b);
+}
+
+inline bool EqualsNoCasePath(std::wstring_view a, const std::filesystem::path& b) noexcept
+{
+    return EqualsNoCase(a, b.native());
+}
+
 inline bool LessNoCase(std::wstring_view a, std::wstring_view b) noexcept
 {
     const int cmp = Compare(a, b, true);
@@ -124,6 +160,32 @@ inline bool LessNoCase(std::wstring_view a, std::wstring_view b) noexcept
     return false;
 }
 } // namespace OrdinalString
+
+namespace StringUtils
+{
+[[nodiscard]] inline std::wstring_view TrimWhitespace(std::wstring_view text) noexcept
+{
+    size_t start = 0;
+    size_t end   = text.size();
+
+    while (start < end && std::iswspace(text[start]) != 0)
+    {
+        ++start;
+    }
+
+    while (end > start && std::iswspace(text[end - 1]) != 0)
+    {
+        --end;
+    }
+
+    return text.substr(start, end - start);
+}
+
+[[nodiscard]] inline std::wstring TrimWhitespaceCopy(std::wstring_view text)
+{
+    return std::wstring(TrimWhitespace(text));
+}
+} // namespace StringUtils
 
 // LoadString from resource ID
 template <typename string_type, size_t stackBufferLength = 256>

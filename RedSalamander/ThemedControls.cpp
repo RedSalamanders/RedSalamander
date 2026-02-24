@@ -2,6 +2,7 @@
 
 #include "ThemedControls.h"
 #include "WindowMessages.h"
+#include "FluentIcons.h"
 
 #include <algorithm>
 #include <array>
@@ -227,6 +228,18 @@ void CenterEditTextVertically(HWND edit) noexcept
     InvalidateRect(edit, nullptr, FALSE);
 }
 
+// ModernCombo item data tag for optional leading glyphs.
+// Uses a high-bit tag unlikely to collide with typical pointers/indices.
+#ifdef _WIN64
+constexpr UINT_PTR kModernComboItemIconMask     = 0xFFFF'0000'0000'0000ull;
+constexpr UINT_PTR kModernComboItemIconTag      = 0xF17E'0000'0000'0000ull;
+constexpr UINT_PTR kModernComboItemIconGlyphMask = 0x0000'0000'0000'FFFFull;
+#else
+constexpr UINT_PTR kModernComboItemIconMask     = 0xFFFF'0000u;
+constexpr UINT_PTR kModernComboItemIconTag      = 0xF17E'0000u;
+constexpr UINT_PTR kModernComboItemIconGlyphMask = 0x0000'FFFFu;
+#endif
+
 namespace
 {
 constexpr wchar_t kModernComboBoxClassName[]    = L"RedSalamanderModernComboBox";
@@ -282,6 +295,9 @@ struct ModernComboState
 
     HFONT font = nullptr;
     UINT dpi   = USER_DEFAULT_SCREEN_DPI;
+
+    wil::unique_hfont iconFont;
+    UINT iconFontDpi = USER_DEFAULT_SCREEN_DPI;
 
     std::wstring typeBuffer;
     ULONGLONG lastTypeTick = 0;
@@ -977,6 +993,34 @@ LRESULT CALLBACK ModernComboPopupWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
 
             RECT textRc = dis->rcItem;
             InflateRect(&textRc, -textInsetX, 0);
+
+            wchar_t leadingGlyph{};
+            if (TryGetModernComboItemIconGlyph(state->items[itemIdx].data, leadingGlyph))
+            {
+                if (dpi != state->iconFontDpi || ! state->iconFont)
+                {
+                    state->iconFont    = FluentIcons::CreateFontForDpi(dpi, FluentIcons::kDefaultSizeDip);
+                    state->iconFontDpi = dpi;
+                }
+
+                if (state->iconFont && FluentIcons::FontHasGlyph(dis->hDC, state->iconFont.get(), leadingGlyph))
+                {
+                    const int glyphBoxW = ScaleDip(dpi, compact ? 18 : 20);
+                    const int glyphGap  = ScaleDip(dpi, compact ? 4 : 6);
+
+                    RECT glyphRc = textRc;
+                    glyphRc.right = std::min(glyphRc.right, glyphRc.left + glyphBoxW);
+
+                    const wchar_t glyphText[2]{leadingGlyph, 0};
+                    {
+                        [[maybe_unused]] auto oldIconFont = wil::SelectObject(dis->hDC, state->iconFont.get());
+                        DrawTextW(dis->hDC, glyphText, 1, &glyphRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+                    }
+
+                    textRc.left = std::min(textRc.right, textRc.left + glyphBoxW + glyphGap);
+                }
+            }
+
             if (state->useMiddleEllipsis && ! state->items[itemIdx].text.empty())
             {
                 const int availableW        = std::max(0l, textRc.right - textRc.left);
@@ -2258,6 +2302,25 @@ void SetModernComboUseMiddleEllipsis(HWND combo, bool enable) noexcept
     }
 
     SendMessageW(combo, WndMsg::kModernComboSetUseMiddleEllipsis, enable ? TRUE : FALSE, 0);
+}
+
+LPARAM MakeModernComboItemIconData(wchar_t glyph) noexcept
+{
+    const UINT_PTR glyphBits = static_cast<UINT_PTR>(glyph) & kModernComboItemIconGlyphMask;
+    return static_cast<LPARAM>(kModernComboItemIconTag | glyphBits);
+}
+
+bool TryGetModernComboItemIconGlyph(LPARAM data, wchar_t& glyph) noexcept
+{
+    const UINT_PTR raw = static_cast<UINT_PTR>(data);
+    if ((raw & kModernComboItemIconMask) != kModernComboItemIconTag)
+    {
+        glyph = 0;
+        return false;
+    }
+
+    glyph = static_cast<wchar_t>(raw & kModernComboItemIconGlyphMask);
+    return glyph != 0;
 }
 
 void ApplyThemeToComboBox(HWND combo, const AppTheme& theme) noexcept

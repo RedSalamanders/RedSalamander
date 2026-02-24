@@ -109,7 +109,7 @@ Keyboard shortcuts (ViewerText-aligned where meaningful):
 - `Ctrl+F` / `Double Click`: fit to window
 - `F`: toggle Fit ↔ 100%
 - `1` / `Ctrl+Double Click`: actual size (100%)
-- `+` / `-` / `0`: zoom in/out/reset (virtual-key based; menu displays the current keyboard-layout glyph)
+- `key left of Backspace` / `key right of 0` / `0`: zoom in/out/reset (keyboard-layout independent; menu displays the current keyboard-layout glyph)
 - `Ctrl+S`: export
 - `I`: toggle Exif overlay
 - `R`: rotate clockwise

@@ -140,7 +140,7 @@ BEGIN
         MENUITEM "&Maximize/Restore Pane", IDM_LEFT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "&Swap Panes",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-	        MENUITEM "&Filter... [todo]",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
+	        MENUITEM "&Filter...",             IDM_LEFT_FILTER,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Re&fresh",                IDM_LEFT_REFRESH,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
@@ -236,8 +236,8 @@ BEGIN
             MENUITEM "&Save Selection [todo]", IDM_PANE_SAVE_SELECTION,MFT_STRING,MFS_ENABLED
             MENUITEM "&Load Selection... [todo]", IDM_PANE_LOAD_SELECTION,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Select Same E&xtensions [todo]",       IDM_PANE_SELECTION_SELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
-            MENUITEM "Unselect Same Extensions [todo]",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
+            MENUITEM "Select Same E&xtensions",       IDM_PANE_SELECTION_SELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
+            MENUITEM "Unselect Same Extensions",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "Select Same &Names [todo]",            IDM_PANE_SELECTION_SELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM "Unselect Same Names [todo]",           IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
@@ -246,8 +246,8 @@ BEGIN
             MENUITEM "Hide Unselected Names [todo]",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
             MENUITEM "Show Hidden Names [todo]",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Go to Previous Selected Name [todo]",  IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
-            MENUITEM "Go to Next Selected Name [todo]",      IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "Go to Previous Selected Name",         IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "Go to Next Selected Name",             IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
         END
     END
     POPUP "&Commands",                      65535,MFT_STRING,MFS_ENABLED
@@ -317,8 +317,8 @@ BEGIN
         MENUITEM "File Operations Failed &Items", IDM_VIEW_FILEOPS_FAILED_ITEMS,MFT_STRING,MFS_ENABLED
         POPUP "&Pane",                          65535,MFT_STRING,MFS_ENABLED
         BEGIN
-            MENUITEM "Show &Hidden Files [todo]",               IDM_VIEW_PANE_HIDDEN_FILES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Show &System Files [todo]",               IDM_VIEW_PANE_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Show &Hidden Files",               IDM_VIEW_PANE_HIDDEN_FILES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Show &System Files",               IDM_VIEW_PANE_SYSTEM_FILES,MFT_STRING,MFS_ENABLED
             MENUITEM "Show File E&xtensions [todo]",            IDM_VIEW_PANE_FILE_EXTENSIONS,MFT_STRING,MFS_ENABLED
             MENUITEM "Show &Thumbnails [todo]",                 IDM_VIEW_PANE_THUMBNAILS,MFT_STRING,MFS_ENABLED
             MENUITEM "Show &Preview Pane [todo]",               IDM_VIEW_PANE_PREVIEW_PANE,MFT_STRING,MFS_ENABLED
@@ -369,7 +369,7 @@ BEGIN
         MENUITEM "&Maximize/Restore Pane", IDM_RIGHT_ZOOM_PANEL,MFT_STRING,MFS_ENABLED
         MENUITEM "&Swap Panes",              IDM_APP_SWAP_PANES,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-	        MENUITEM "&Filter... [todo]",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
+	        MENUITEM "&Filter...",             IDM_RIGHT_FILTER,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Re&fresh",                IDM_RIGHT_REFRESH,MFT_STRING,MFS_ENABLED
 #if defined(_DEBUG) || defined(DEBUG)
 	        MENUITEM MFT_SEPARATOR
@@ -817,6 +817,11 @@ BEGIN
     IDS_PREFS_PANES_SORT_SIZE "Size"
     IDS_PREFS_PANES_SORT_ATTRIBUTES "Attributes"
     IDS_PREFS_PANES_SORT_NONE "None"
+    IDS_PREFS_PANES_HEADER_GENERAL "General"
+    IDS_PREFS_PANES_LABEL_SHOW_HIDDEN_FILES "Display hidden files and folders"
+    IDS_PREFS_PANES_LABEL_SHOW_SYSTEM_FILES "Display system files and folders"
+    IDS_PREFS_PANES_CHECK_SHOW_HIDDEN_FILES "Display hidden files and folders"
+    IDS_PREFS_PANES_CHECK_SHOW_SYSTEM_FILES "Display system files and folders"
     IDS_PREFS_VIEWERS_COL_EXTENSION "Extension"
     IDS_PREFS_VIEWERS_COL_VIEWER "Viewer"
     IDS_PREFS_VIEWERS_HINT "Map file extensions to the viewer used when pressing F3."
@@ -1161,6 +1166,9 @@ BEGIN
     IDS_SELECTION_MASK_HINT_COLLAPSED                    "Mask syntax ▸"
     IDS_SELECTION_MASK_HINT_EXPANDED                     "Mask syntax ▾"
     IDS_SELECTION_MASK_HELP_TEXT                         "'*' stands for any number of characters. '?' stands for any character.\r\nExample: *.a? (.al, anything.ai, etc)\r\nMasks are separated by semi-colon. Example: *.txt;*.doc (a.txt, b.doc, etc)\r\nExcluded masks are placed after '|'. Example: |*.txt;*.doc (anything except *.txt;*.doc)\r\nIf you need semi-colon inside mask, type it twice. Example: one;;mask"
+    IDS_CAPTION_PANE_FILTER                              "Filter"
+    IDS_LABEL_PANE_FILTER                                "Filter"
+    IDS_LABEL_PANE_FILTER_USE_FILTER                     "Use Filter"
     IDS_NEW_FOLDER_DEFAULT_NAME                          "New folder"
     IDS_MSG_PANE_CREATE_DIR_INVALID_CHARS                "A folder name can't contain any of the following characters:\r\n\\ / : * ? "" < > |"
     IDS_MSG_PANE_CREATE_DIR_EMPTY_NAME                   "A folder name can't be empty."

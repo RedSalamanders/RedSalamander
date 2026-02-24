@@ -113,12 +113,22 @@ struct FolderLayoutSettings
     std::optional<float> zoomRestoreSplitRatio;
 };
 
+struct FolderHistoryFilterState
+{
+    std::filesystem::path path;
+    bool enabled = false;
+    std::wstring text;
+};
+
 struct FoldersSettings
 {
     std::wstring active;
     FolderLayoutSettings layout;
+    bool showHiddenFiles = true;
+    bool showSystemFiles = true;
     uint32_t historyMax = 20u;
     std::vector<std::filesystem::path> history;
+    std::vector<FolderHistoryFilterState> historyFilters;
     std::vector<FolderPane> items;
 };
 
@@ -304,6 +314,7 @@ struct SelectionMasksSettings
     // Most-recent-first history (max 10 recommended).
     std::vector<std::wstring> selectHistory;
     std::vector<std::wstring> unselectHistory;
+    std::vector<std::wstring> filterHistory;
 };
 
 struct ExtensionsSettings

@@ -7,6 +7,7 @@
 
 #include "SettingsStore.h"
 #include "ViewerPluginManager.h"
+#include "Helpers.h"
 
 namespace
 {
@@ -29,15 +30,7 @@ bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
         return false;
     }
 
-    const int len = static_cast<int>(a.size());
-    return CompareStringOrdinal(a.data(), len, b.data(), len, TRUE) == CSTR_EQUAL;
-}
-
-bool PathEqualsNoCase(const std::filesystem::path& a, const std::filesystem::path& b) noexcept
-{
-    const std::wstring aw = a.wstring();
-    const std::wstring bw = b.wstring();
-    return EqualsNoCase(aw, bw);
+    return OrdinalString::EqualsNoCase(a, b);
 }
 
 uint8_t ClampByte(float value) noexcept
@@ -310,7 +303,7 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
     size_t focusedOtherIndex = static_cast<size_t>(-1);
     for (size_t i = 0; i < otherFiles.size(); ++i)
     {
-        if (PathEqualsNoCase(otherFiles[i], request.focusedPath))
+        if (OrdinalString::EqualsNoCasePath(otherFiles[i], request.focusedPath))
         {
             focusedOtherIndex = i;
             break;

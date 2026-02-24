@@ -94,7 +94,7 @@ namespace SettingsSave
     if (result.selectionMasks.has_value())
     {
         const auto& masks = result.selectionMasks.value();
-        if (masks.selectHistory.empty() && masks.unselectHistory.empty())
+        if (masks.selectHistory.empty() && masks.unselectHistory.empty() && masks.filterHistory.empty())
         {
             result.selectionMasks.reset();
         }

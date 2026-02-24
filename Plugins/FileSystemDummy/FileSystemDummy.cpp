@@ -11,6 +11,12 @@
 #include "FileSystemDummy.h"
 
 #pragma warning(push)
+// WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
+#pragma warning(disable : 4625 4626 5026 5027)
+#include <wil/win32_helpers.h>
+#pragma warning(pop)
+
+#pragma warning(push)
 // (C6297) Arithmetic overflow. Results might not be an expected value.
 // (C28182) Dereferencing NULL pointer.
 #pragma warning(disable : 6297 28182)
@@ -1066,8 +1072,7 @@ bool EqualsNoCase(std::wstring_view left, std::wstring_view right) noexcept
         return false;
     }
 
-    const int length = static_cast<int>(left.size());
-    return CompareStringOrdinal(left.data(), length, right.data(), length, TRUE) == CSTR_EQUAL;
+    return wil::compare_string_ordinal(left, right, true) == wistd::weak_ordering::equivalent;
 }
 
 bool EndsWithNoCase(std::wstring_view text, std::wstring_view suffix) noexcept

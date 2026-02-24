@@ -15,6 +15,8 @@
 #include "PlugInterfaces/FileSystem.h"
 #include "WindowMessages.h"
 
+#include "Helpers.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -166,8 +168,7 @@ struct EditChromeRects
         return false;
     }
 
-    const int len = static_cast<int>(a.size());
-    return CompareStringOrdinal(a.data(), len, b.data(), len, TRUE) == CSTR_EQUAL;
+    return OrdinalString::EqualsNoCase(a, b);
 }
 
 [[nodiscard]] bool LooksLikeWindowsDrivePath(std::wstring_view text) noexcept

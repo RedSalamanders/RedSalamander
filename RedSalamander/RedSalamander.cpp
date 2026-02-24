@@ -18,6 +18,7 @@
 
 #include "AppTheme.h"
 #include "FluentIcons.h"
+#include "MaskSyntax.h"
 #include "SettingsStore.h"
 #include "resource.h"
 
@@ -194,9 +195,10 @@ void ShutdownSelfTestMonitor() noexcept
             continue;
         }
 
+        const std::wstring_view argView(arg);
         for (std::wstring_view needle : kSelfTestArgs)
         {
-            if (CompareStringOrdinal(arg, -1, needle.data(), static_cast<int>(needle.size()), TRUE) == CSTR_EQUAL)
+            if (OrdinalString::EqualsNoCase(argView, needle))
             {
                 return true;
             }
@@ -503,6 +505,58 @@ struct NavigatePathMenuTarget
 };
 
 std::unordered_map<UINT, NavigatePathMenuTarget> g_navigatePathMenuTargets;
+
+[[nodiscard]] bool IsHistoryGoToMenuId(UINT itemId) noexcept
+{
+    return (itemId >= IDM_LEFT_HISTORY_BASE && itemId < IDM_LEFT_HISTORY_BASE + kHistoryMenuMaxItems) ||
+           (itemId >= IDM_RIGHT_HISTORY_BASE && itemId < IDM_RIGHT_HISTORY_BASE + kHistoryMenuMaxItems);
+}
+
+[[nodiscard]] bool GoToHistoryMenuItemHasActiveFilter(UINT itemId) noexcept
+{
+    if (! IsHistoryGoToMenuId(itemId))
+    {
+        return false;
+    }
+
+    const auto itTarget = g_navigatePathMenuTargets.find(itemId);
+    if (itTarget == g_navigatePathMenuTargets.end())
+    {
+        return false;
+    }
+
+    const std::filesystem::path& displayPath = itTarget->second.path;
+    if (displayPath.empty() || ! g_settings.folders.has_value())
+    {
+        return false;
+    }
+
+    const auto& filters = g_settings.folders->historyFilters;
+    if (filters.empty())
+    {
+        return false;
+    }
+
+    const std::wstring_view displayText = displayPath.native();
+    const auto itFilter = std::find_if(filters.begin(),
+                                       filters.end(),
+                                       [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
+                                       {
+                                            if (state.path.empty() || state.text.empty() || ! state.enabled)
+                                            {
+                                                return false;
+                                            }
+
+                                            return OrdinalString::EqualsNoCasePath(state.path, displayText);
+                                        });
+    if (itFilter == filters.end())
+    {
+        return false;
+    }
+
+    const MaskSyntax::WildcardMask mask = MaskSyntax::ParseWildcardMask(itFilter->text);
+    return ! mask.includePatterns.empty() || ! mask.excludePatterns.empty();
+}
 
 constexpr UINT kCustomThemeMenuIdFirst = 32800u;
 constexpr UINT kCustomThemeMenuIdLast  = 32999u;
@@ -1046,10 +1100,18 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
 
     if (g_hFolderWindow.load(std::memory_order_acquire))
     {
+        std::vector<Common::Settings::FolderHistoryFilterState> historyFilters;
+        if (g_settings.folders.has_value())
+        {
+            historyFilters = g_settings.folders->historyFilters;
+        }
+
         Common::Settings::FoldersSettings folders;
         const FolderWindow::Pane activePane = g_folderWindow.GetFocusedPane();
         folders.active                      = activePane == FolderWindow::Pane::Right ? kRightPaneSlot : kLeftPaneSlot;
         folders.layout.splitRatio           = g_folderWindow.GetSplitRatio();
+        folders.showHiddenFiles             = g_folderWindow.GetShowHiddenFiles();
+        folders.showSystemFiles             = g_folderWindow.GetShowSystemFiles();
         if (const std::optional<FolderWindow::Pane> zoomedPane = g_folderWindow.GetZoomedPane())
         {
             folders.layout.zoomedPane            = zoomedPane.value() == FolderWindow::Pane::Left ? kLeftPaneSlot : kRightPaneSlot;
@@ -1085,6 +1147,37 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
 
         folders.historyMax = g_folderWindow.GetFolderHistoryMax();
         folders.history    = g_folderWindow.GetFolderHistory();
+
+        if (! historyFilters.empty() && ! folders.history.empty())
+        {
+            folders.historyFilters.reserve(folders.history.size());
+            for (const auto& historyPath : folders.history)
+            {
+                if (historyPath.empty())
+                {
+                    continue;
+                }
+
+                const std::wstring_view historyText = historyPath.native();
+                const auto it = std::find_if(historyFilters.begin(),
+                                             historyFilters.end(),
+                                             [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
+                                             { return ! state.path.empty() && OrdinalString::EqualsNoCasePath(state.path, historyText); });
+                if (it == historyFilters.end())
+                {
+                    continue;
+                }
+
+                if (! it->enabled && it->text.empty())
+                {
+                    continue;
+                }
+
+                Common::Settings::FolderHistoryFilterState state = *it;
+                state.path                                      = historyPath;
+                folders.historyFilters.push_back(std::move(state));
+            }
+        }
 
         g_settings.folders = std::move(folders);
     }
@@ -1857,9 +1950,13 @@ void UpdatePaneMenuChecks() noexcept
 
     const UINT leftStatusCheck  = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetStatusBarVisible(FolderWindow::Pane::Left) ? MF_CHECKED : MF_UNCHECKED));
     const UINT rightStatusCheck = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetStatusBarVisible(FolderWindow::Pane::Right) ? MF_CHECKED : MF_UNCHECKED));
+    const UINT hiddenFilesCheck = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetShowHiddenFiles() ? MF_CHECKED : MF_UNCHECKED));
+    const UINT systemFilesCheck = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.GetShowSystemFiles() ? MF_CHECKED : MF_UNCHECKED));
 
     if (g_viewPaneMenu)
     {
+        CheckMenuItem(g_viewPaneMenu, IDM_VIEW_PANE_HIDDEN_FILES, hiddenFilesCheck);
+        CheckMenuItem(g_viewPaneMenu, IDM_VIEW_PANE_SYSTEM_FILES, systemFilesCheck);
         CheckMenuItem(g_viewPaneMenu, IDM_VIEW_PANE_STATUSBAR_LEFT, leftStatusCheck);
         CheckMenuItem(g_viewPaneMenu, IDM_VIEW_PANE_STATUSBAR_RIGHT, rightStatusCheck);
     }
@@ -2556,7 +2653,8 @@ void OnMeasureMainMenuItem(HWND hWnd, MEASUREITEMSTRUCT* mis)
 
         const bool isSortItem = (mis->itemID >= static_cast<UINT>(IDM_LEFT_SORT_NAME) && mis->itemID <= static_cast<UINT>(IDM_LEFT_SORT_NONE)) ||
                                 (mis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && mis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE));
-        if (isSortItem)
+        const bool isHistoryItem = IsHistoryGoToMenuId(mis->itemID);
+        if (isSortItem || isHistoryItem)
         {
             return MulDiv(32, dpiInt, USER_DEFAULT_SCREEN_DPI);
         }
@@ -2764,7 +2862,8 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
 
         const bool isSortItem = (dis->itemID >= static_cast<UINT>(IDM_LEFT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_LEFT_SORT_NONE)) ||
                                 (dis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE));
-        if (isSortItem)
+        const bool isHistoryItem = IsHistoryGoToMenuId(dis->itemID);
+        if (isSortItem || isHistoryItem)
         {
             return MulDiv(32, dpi, USER_DEFAULT_SCREEN_DPI);
         }
@@ -2804,7 +2903,38 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
 
         const bool isSortItem = isLeftSort || isRightSort;
 
-        if (bitmap && ! checked && ! isSortItem)
+        if (! isSortItem && GoToHistoryMenuItemHasActiveFilter(dis->itemID) && g_mainMenuIconFontValid && g_mainMenuIconFont)
+        {
+            SetBkMode(dis->hDC, TRANSPARENT);
+            SetTextColor(dis->hDC, textColor);
+
+            RECT filterRect    = checkRect;
+            RECT checkMarkRect = checkRect;
+
+            const LONG width = std::max(0L, checkRect.right - checkRect.left);
+            const LONG half  = width / 2;
+            const LONG gap   = std::max(1L, static_cast<LONG>(MulDiv(1, dpi, USER_DEFAULT_SCREEN_DPI)));
+            const LONG split = checkRect.left + half;
+
+            filterRect.right   = std::max(filterRect.left, split - gap);
+            checkMarkRect.left = std::min(checkMarkRect.right, split + gap);
+
+            {
+                const wchar_t glyph = FluentIcons::kFilter;
+                wchar_t glyphText[2]{glyph, 0};
+                auto oldIconFont = wil::SelectObject(dis->hDC, g_mainMenuIconFont.get());
+                DrawTextW(dis->hDC, glyphText, 1, &filterRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
+
+            if (checked)
+            {
+                const wchar_t glyph = FluentIcons::kCheckMark;
+                wchar_t glyphText[2]{glyph, 0};
+                auto oldIconFont = wil::SelectObject(dis->hDC, g_mainMenuIconFont.get());
+                DrawTextW(dis->hDC, glyphText, 1, &checkMarkRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            }
+        }
+        else if (bitmap && ! checked && ! isSortItem)
         {
             wil::unique_hdc memDC(CreateCompatibleDC(dis->hDC));
             if (memDC)
@@ -3505,6 +3635,10 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
     {
         return SendKeyToFocusedFolderView(VK_TAB);
     }
+    if (commandId == L"cmd/pane/selection/unselectAll")
+    {
+        return SendKeyToFocusedFolderView(VK_ESCAPE);
+    }
     if (commandId == L"cmd/pane/zoomPanel")
     {
         if (! g_hFolderWindow.load(std::memory_order_acquire))
@@ -3514,6 +3648,17 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
 
         const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
         g_folderWindow.ToggleZoomPanel(pane);
+        return true;
+    }
+    if (commandId == L"cmd/pane/filter")
+    {
+        if (! g_hFolderWindow.load(std::memory_order_acquire))
+        {
+            return false;
+        }
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        g_folderWindow.CommandFilter(pane);
         return true;
     }
     if (commandId == L"cmd/pane/refresh")
@@ -3798,20 +3943,21 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
         return false;
     }
 
-    return CompareStringOrdinal(className.data(), -1, L"RedSalamander.CompareDirectoriesWindow", -1, TRUE) == CSTR_EQUAL;
+    const std::wstring_view classNameView(className.data(), static_cast<size_t>(len));
+    return OrdinalString::EqualsNoCase(classNameView, L"RedSalamander.CompareDirectoriesWindow");
 }
 
-[[nodiscard]] bool IsFolderViewFocusedInCompareWindow(HWND compareWindow) noexcept
+[[nodiscard]] HWND TryGetFocusedFolderViewInCompareWindow(HWND compareWindow) noexcept
 {
     if (! compareWindow)
     {
-        return false;
+        return nullptr;
     }
 
     const HWND focus = GetFocus();
     if (! focus || (focus != compareWindow && ! IsChild(compareWindow, focus)))
     {
-        return false;
+        return nullptr;
     }
 
     std::array<wchar_t, 96> className{};
@@ -3820,15 +3966,20 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
     {
         className.fill(L'\0');
         const int len = GetClassNameW(current, className.data(), static_cast<int>(className.size()));
-        if (len > 0 && CompareStringOrdinal(className.data(), -1, L"RedSalamanderFolderView", -1, TRUE) == CSTR_EQUAL)
+        if (len > 0 && OrdinalString::EqualsNoCase(std::wstring_view(className.data(), static_cast<size_t>(len)), L"RedSalamanderFolderView"))
         {
-            return true;
+            return current;
         }
 
         current = GetParent(current);
     }
 
-    return false;
+    return nullptr;
+}
+
+[[nodiscard]] bool IsFolderViewFocusedInCompareWindow(HWND compareWindow) noexcept
+{
+    return TryGetFocusedFolderViewInCompareWindow(compareWindow) != nullptr;
 }
 
 [[nodiscard]] bool DispatchShortcutCommandToCompareWindow(HWND compareWindow, std::wstring_view commandId) noexcept
@@ -3840,6 +3991,18 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
 
     const std::wstring_view originalCommandId = commandId;
     commandId                                 = CanonicalizeCommandId(commandId);
+
+    if (commandId == L"cmd/pane/selection/unselectAll")
+    {
+        const HWND folderView = TryGetFocusedFolderViewInCompareWindow(compareWindow);
+        if (! folderView)
+        {
+            return false;
+        }
+
+        SendMessageW(folderView, WM_KEYDOWN, static_cast<WPARAM>(VK_ESCAPE), 0);
+        return true;
+    }
 
     const std::optional<unsigned int> wmCommandOpt = TryGetWmCommandId(commandId);
     if (! wmCommandOpt.has_value())
@@ -4878,6 +5041,8 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
     std::optional<FolderWindow::Pane> zoomedPane;
     std::optional<float> zoomRestoreSplitRatio;
     uint32_t folderHistoryMax = 20u;
+    bool showHiddenFiles      = true;
+    bool showSystemFiles      = true;
     std::vector<std::filesystem::path> folderHistory;
 
     if (g_settings.folders)
@@ -4906,6 +5071,8 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         }
 
         folderHistoryMax = folders.historyMax;
+        showHiddenFiles  = folders.showHiddenFiles;
+        showSystemFiles  = folders.showSystemFiles;
         folderHistory    = folders.history;
 
         for (const auto& item : folders.items)
@@ -4925,6 +5092,8 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
     g_folderWindow.SetActivePane(activePane);
     g_folderWindow.SetZoomState(zoomedPane, zoomRestoreSplitRatio);
     g_folderWindow.SetFolderHistoryMax(folderHistoryMax);
+    g_folderWindow.SetShowHiddenFiles(showHiddenFiles);
+    g_folderWindow.SetShowSystemFiles(showSystemFiles);
 
     auto applyPane = [&](FolderWindow::Pane pane, const Common::Settings::FolderPane* settingsPane)
     {
@@ -5425,6 +5594,20 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             UpdatePaneMenuChecks();
             break;
         }
+        case IDM_VIEW_PANE_HIDDEN_FILES:
+        {
+            const bool visible = g_folderWindow.GetShowHiddenFiles();
+            g_folderWindow.SetShowHiddenFiles(! visible);
+            UpdatePaneMenuChecks();
+            break;
+        }
+        case IDM_VIEW_PANE_SYSTEM_FILES:
+        {
+            const bool visible = g_folderWindow.GetShowSystemFiles();
+            g_folderWindow.SetShowSystemFiles(! visible);
+            UpdatePaneMenuChecks();
+            break;
+        }
         case IDM_LEFT_CHANGE_DRIVE: g_folderWindow.CommandOpenDriveMenu(FolderWindow::Pane::Left); break;
         case IDM_RIGHT_CHANGE_DRIVE: g_folderWindow.CommandOpenDriveMenu(FolderWindow::Pane::Right); break;
         case IDM_LEFT_GO_TO_BACK: g_folderWindow.CommandHistoryBack(FolderWindow::Pane::Left); break;
@@ -5444,8 +5627,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_LEFT_ZOOM_PANEL: g_folderWindow.ToggleZoomPanel(FolderWindow::Pane::Left); break;
         case IDM_LEFT_FILTER:
-            g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/filter");
+            g_folderWindow.CommandFilter(FolderWindow::Pane::Left);
             break;
         case IDM_LEFT_REFRESH: g_folderWindow.CommandRefresh(FolderWindow::Pane::Left); break;
         case IDM_RIGHT_GO_TO_BACK: g_folderWindow.CommandHistoryBack(FolderWindow::Pane::Right); break;
@@ -5465,8 +5647,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_RIGHT_ZOOM_PANEL: g_folderWindow.ToggleZoomPanel(FolderWindow::Pane::Right); break;
         case IDM_RIGHT_FILTER:
-            g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
-            ShowCommandNotImplementedMessage(hWnd, L"cmd/pane/filter");
+            g_folderWindow.CommandFilter(FolderWindow::Pane::Right);
             break;
         case IDM_RIGHT_REFRESH: g_folderWindow.CommandRefresh(FolderWindow::Pane::Right); break;
         case IDM_VIEW_PANE_NAVBAR_LEFT:
@@ -5523,6 +5704,30 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.CommandSelectionUnselectDialog(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_SELECT_SAME_EXTENSION:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionSelectSameExtension(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionUnselectSameExtension(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionGoToPreviousSelectedName(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionGoToNextSelectedName(pane);
             break;
         }
         case IDM_PANE_CLIPBOARD_PASTE:
@@ -6345,11 +6550,15 @@ LRESULT OnMainWindowSettingsApplied(HWND hWnd)
         const Common::Settings::FolderPane* leftSettings  = nullptr;
         const Common::Settings::FolderPane* rightSettings = nullptr;
         uint32_t folderHistoryMax                         = 20u;
+        bool showHiddenFiles                              = true;
+        bool showSystemFiles                              = true;
 
         if (g_settings.folders)
         {
             const auto& folders = *g_settings.folders;
             folderHistoryMax    = folders.historyMax;
+            showHiddenFiles     = folders.showHiddenFiles;
+            showSystemFiles     = folders.showSystemFiles;
 
             for (const auto& item : folders.items)
             {
@@ -6366,6 +6575,8 @@ LRESULT OnMainWindowSettingsApplied(HWND hWnd)
 
         folderHistoryMax = std::clamp(folderHistoryMax, 1u, 50u);
         g_folderWindow.SetFolderHistoryMax(folderHistoryMax);
+        g_folderWindow.SetShowHiddenFiles(showHiddenFiles);
+        g_folderWindow.SetShowSystemFiles(showSystemFiles);
 
         auto applyPane = [&](FolderWindow::Pane pane, const Common::Settings::FolderPane* settingsPane)
         {
@@ -6389,6 +6600,8 @@ LRESULT OnMainWindowSettingsApplied(HWND hWnd)
 
         applyPane(FolderWindow::Pane::Left, leftSettings);
         applyPane(FolderWindow::Pane::Right, rightSettings);
+
+        UpdatePaneMenuChecks();
     }
 
     ReloadShortcutsFromSettings();
@@ -6474,11 +6687,8 @@ BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
         return TRUE;
     }
 
-    if (CompareStringOrdinal(className,
-                             static_cast<int>(kInternalWindowClassPrefix.size()),
-                             kInternalWindowClassPrefix.data(),
-                             static_cast<int>(kInternalWindowClassPrefix.size()),
-                             TRUE) != CSTR_EQUAL)
+    const std::wstring_view classNameView(className, static_cast<size_t>(len));
+    if (! OrdinalString::StartsWithNoCase(classNameView, kInternalWindowClassPrefix))
     {
         return TRUE;
     }

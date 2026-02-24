@@ -149,13 +149,14 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
     {
         _directoryCachePin = DirectoryInfoCache::Pin{};
     }
-    EnumerateFolder();
 
     // Notify parent window of path change
     if (_pathChangedCallback)
     {
         _pathChangedCallback(_currentFolder);
     }
+
+    EnumerateFolder();
 }
 
 void FolderView::ForceRefresh()
@@ -746,4 +747,86 @@ void FolderView::SetSort(SortBy sortBy, SortDirection direction)
     {
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
+}
+
+void FolderView::SetShowHiddenFiles(bool show)
+{
+    if (_showHiddenFiles.load(std::memory_order_relaxed) == show)
+    {
+        return;
+    }
+
+    _showHiddenFiles.store(show, std::memory_order_release);
+    RequestRefreshFromCache();
+}
+
+bool FolderView::GetShowHiddenFiles() const noexcept
+{
+    return _showHiddenFiles.load(std::memory_order_relaxed);
+}
+
+void FolderView::SetShowSystemFiles(bool show)
+{
+    if (_showSystemFiles.load(std::memory_order_relaxed) == show)
+    {
+        return;
+    }
+
+    _showSystemFiles.store(show, std::memory_order_release);
+    RequestRefreshFromCache();
+}
+
+bool FolderView::GetShowSystemFiles() const noexcept
+{
+    return _showSystemFiles.load(std::memory_order_relaxed);
+}
+
+void FolderView::SetNameFilterState(const NameFilterState& state, bool refresh)
+{
+    const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(state.text);
+
+    if (! state.enabled && trimmed.empty())
+    {
+        _nameFilter.store(std::shared_ptr<const CompiledNameFilter>{}, std::memory_order_release);
+        if (_hWnd)
+        {
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
+        if (refresh)
+        {
+            RequestRefreshFromCache();
+        }
+        return;
+    }
+
+    auto compiled           = std::make_shared<CompiledNameFilter>();
+    compiled->state.enabled = state.enabled;
+    compiled->state.text    = trimmed;
+    compiled->mask          = MaskSyntax::ParseWildcardMask(trimmed);
+    compiled->hasMask       = ! compiled->mask.includePatterns.empty() || ! compiled->mask.excludePatterns.empty();
+
+    std::shared_ptr<const CompiledNameFilter> compiledConst = std::move(compiled);
+    _nameFilter.store(std::move(compiledConst), std::memory_order_release);
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+
+    if (refresh)
+    {
+        RequestRefreshFromCache();
+    }
+}
+
+FolderView::NameFilterState FolderView::GetNameFilterState() const
+{
+    const auto filter = _nameFilter.load(std::memory_order_acquire);
+    return filter ? filter->state : NameFilterState{};
+}
+
+bool FolderView::IsNameFilterActive() const noexcept
+{
+    const auto filter = _nameFilter.load(std::memory_order_acquire);
+    return filter && filter->state.enabled && filter->hasMask;
 }

@@ -586,11 +586,6 @@ void NormalizeSlashes(std::wstring& path) noexcept
     return path;
 }
 
-[[nodiscard]] bool EqualsInsensitive(std::wstring_view left, std::wstring_view right) noexcept
-{
-    return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
-}
-
 struct FileIdentity final
 {
     DWORD volumeSerialNumber = 0;
@@ -659,7 +654,7 @@ struct FileIdentity final
         return false;
     }
 
-    if (! EqualsInsensitive(path.substr(0, root.size()), root))
+    if (! OrdinalString::StartsWithNoCase(path, root))
     {
         return false;
     }
@@ -2753,7 +2748,7 @@ HRESULT MovePathInternal(OperationContext& context, const PathInfo& source, cons
     DWORD destinationAttributes = GetFileAttributesW(destination.extended.c_str());
     if (destinationAttributes != INVALID_FILE_ATTRIBUTES)
     {
-        if (source.extended != destination.extended && EqualsInsensitive(source.extended, destination.extended))
+        if (source.extended != destination.extended && OrdinalString::EqualsNoCase(source.extended, destination.extended))
         {
             bool same = false;
             const HRESULT sameHr = TryAreSameFile(source.extended, destination.extended, same);

@@ -20,6 +20,7 @@
     <ClInclude Include="FolderWindow.FileOperations.SelfTest.h" />
     <ClInclude Include="FolderWindowInternal.h" />
     <ClInclude Include="DirectoryInfoCache.h" />
+    <ClInclude Include="MaskSyntax.h" />
     <ClInclude Include="FolderWatcher.h" />
     <ClInclude Include="HostServices.h" />
     <ClInclude Include="SplashScreen.h" />
@@ -139,6 +140,7 @@
     <ClCompile Include="FileSystemPluginManager.cpp" />
     <ClCompile Include="FunctionBar.cpp" />
     <ClCompile Include="ManagePluginsDialog.cpp" />
+    <ClCompile Include="MaskSyntax.cpp" />
     <ClCompile Include="CommandRegistry.cpp" />
     <ClCompile Include="CompareDirectoriesEngine.SelfTest.cpp" />
     <ClCompile Include="CompareDirectoriesEngine.cpp" />

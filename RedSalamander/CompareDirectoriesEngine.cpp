@@ -26,6 +26,8 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "Helpers.h"
+
 namespace
 {
 struct SideEntry
@@ -410,26 +412,6 @@ void CompareDirectoriesSession::Invalidate() noexcept
 
 namespace
 {
-[[nodiscard]] bool StartsWithNoCase(std::wstring_view text, std::wstring_view prefix) noexcept
-{
-    if (prefix.empty())
-    {
-        return true;
-    }
-
-    if (text.size() < prefix.size())
-    {
-        return false;
-    }
-
-    if (prefix.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return false;
-    }
-
-    const int prefixLen = static_cast<int>(prefix.size());
-    return CompareStringOrdinal(text.data(), prefixLen, prefix.data(), prefixLen, TRUE) == CSTR_EQUAL;
-}
 } // namespace
 
 void CompareDirectoriesSession::InvalidateForRelativePathLocked(const std::filesystem::path& relativePath, bool includeSubtree) noexcept
@@ -459,7 +441,7 @@ void CompareDirectoriesSession::InvalidateForRelativePathLocked(const std::files
             for (auto it = _cache.lower_bound(prefix); it != _cache.end();)
             {
                 const std::wstring_view key = it->first;
-                if (! StartsWithNoCase(key, prefix))
+                if (! OrdinalString::StartsWithNoCase(key, prefix))
                 {
                     break;
                 }
@@ -2626,16 +2608,16 @@ public:
 
         const auto compareName = [](const OutEntry& a, const OutEntry& b) noexcept
         {
-            const int cmp = CompareStringOrdinal(a.name.data(), static_cast<int>(a.name.size()), b.name.data(), static_cast<int>(b.name.size()), TRUE);
-            if (cmp != CSTR_EQUAL)
+            const int cmp = OrdinalString::Compare(a.name, b.name, true);
+            if (cmp != 0)
             {
-                return cmp == CSTR_LESS_THAN;
+                return cmp < 0;
             }
 
-            const int caseCmp = CompareStringOrdinal(a.name.data(), static_cast<int>(a.name.size()), b.name.data(), static_cast<int>(b.name.size()), FALSE);
-            if (caseCmp != CSTR_EQUAL)
+            const int caseCmp = OrdinalString::Compare(a.name, b.name, false);
+            if (caseCmp != 0)
             {
-                return caseCmp == CSTR_LESS_THAN;
+                return caseCmp < 0;
             }
 
             return a.name < b.name;

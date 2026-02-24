@@ -84,26 +84,6 @@ void AppendCompareSelfTestTraceLine(std::wstring_view message) noexcept;
     return SelfTest::GetFileSystem(kBuiltinLocalFileSystemId);
 }
 
-[[nodiscard]] bool StartsWithNoCase(std::wstring_view text, std::wstring_view prefix) noexcept
-{
-    if (prefix.empty())
-    {
-        return true;
-    }
-
-    if (text.size() < prefix.size())
-    {
-        return false;
-    }
-
-    if (prefix.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return false;
-    }
-
-    return CompareStringOrdinal(text.data(), static_cast<int>(prefix.size()), prefix.data(), static_cast<int>(prefix.size()), TRUE) == CSTR_EQUAL;
-}
-
 class ShortReadFileReader final : public IFileReader
 {
 public:
@@ -439,7 +419,7 @@ public:
 
         const std::wstring_view pathText(path ? path : L"");
         const std::wstring rootText = _shortReadRoot.wstring();
-        const bool shouldShortRead  = ! rootText.empty() && StartsWithNoCase(pathText, rootText);
+        const bool shouldShortRead  = ! rootText.empty() && OrdinalString::StartsWithNoCase(pathText, rootText);
         if (! shouldShortRead)
         {
             *reader = inner.detach();

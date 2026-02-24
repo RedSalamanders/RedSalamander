@@ -54,6 +54,9 @@ Behavior:
 
 Displays common images and many camera RAW formats with smooth zoom/pan.
 
+- Zoom: the keys next to `Backspace` and `0` (typically `+` / `-`), and `0` to reset.
+- Mouse wheel zoom and drag-to-pan are supported.
+
 ![ViewerImgRaw](res/viewer-imgraw.png)
 
 ## PE viewer (`builtin/viewer-pe`)
@@ -81,4 +84,3 @@ Requirements:
 - WebView2 Runtime installed on the machine.
 
 ![ViewerWeb](res/viewer-web.png)
-

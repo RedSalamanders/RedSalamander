@@ -11,6 +11,7 @@
 #include "FluentIcons.h"
 #include "Helpers.h"
 #include "IconCache.h"
+#include "MaskSyntax.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Informations.h"
@@ -1907,12 +1908,46 @@ void NavigationView::ShowHistoryDropdown()
     ThemedControls::SetModernComboPinnedIndex(_navDropdownCombo.get(), -1);
     SendMessageW(_navDropdownCombo.get(), CB_RESETCONTENT, 0, 0);
 
+    auto historyEntryHasActiveFilter = [&](const std::filesystem::path& historyPath) -> bool
+    {
+        if (historyPath.empty() || ! _settings || ! _settings->folders.has_value())
+        {
+            return false;
+        }
+
+        const auto& folders = _settings->folders.value();
+        if (folders.historyFilters.empty())
+        {
+            return false;
+        }
+
+        const std::wstring_view historyText = historyPath.native();
+        const auto it = std::find_if(folders.historyFilters.begin(),
+                                     folders.historyFilters.end(),
+                                     [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
+                                     { return state.enabled && ! state.path.empty() && EqualsNoCase(state.path.native(), historyText); });
+        if (it == folders.historyFilters.end())
+        {
+            return false;
+        }
+
+        const MaskSyntax::WildcardMask mask = MaskSyntax::ParseWildcardMask(it->text);
+        return ! mask.includePatterns.empty() || ! mask.excludePatterns.empty();
+    };
+
     int selectedIndex = 0;
     for (size_t i = 0; i < _navDropdownPaths.size(); ++i)
     {
         const auto& path           = _navDropdownPaths[i];
         const std::wstring display = path.wstring();
-        SendMessageW(_navDropdownCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(display.c_str()));
+        const LRESULT index = SendMessageW(_navDropdownCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(display.c_str()));
+        if (index != CB_ERR && historyEntryHasActiveFilter(path))
+        {
+            SendMessageW(_navDropdownCombo.get(),
+                         CB_SETITEMDATA,
+                         static_cast<WPARAM>(index),
+                         ThemedControls::MakeModernComboItemIconData(FluentIcons::kFilter));
+        }
 
         if (_currentPath && wil::compare_string_ordinal(path.wstring(), _currentPath->wstring(), true) == wistd::weak_ordering::equivalent)
         {

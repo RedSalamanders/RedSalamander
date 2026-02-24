@@ -26,6 +26,7 @@
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
 #pragma warning(disable : 4625 4626 5026 5027)
 #include <wil/com.h>
+#include <wil/win32_helpers.h>
 #pragma warning(pop)
 
 #include "PlugInterfaces/FileSystem.h"
@@ -48,10 +49,7 @@ struct WStringViewNoCaseLess
         {
             return left < right;
         }
-        const int leftLen  = static_cast<int>(left.size());
-        const int rightLen = static_cast<int>(right.size());
-        const int cmp      = CompareStringOrdinal(left.data(), leftLen, right.data(), rightLen, TRUE);
-        return cmp == CSTR_LESS_THAN;
+        return wil::compare_string_ordinal(left, right, true) == wistd::weak_ordering::less;
     }
 };
 

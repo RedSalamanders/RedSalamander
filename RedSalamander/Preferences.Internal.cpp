@@ -1554,8 +1554,33 @@ uint32_t GetFolderHistoryMax(const Common::Settings::Settings& settings) noexcep
     return std::clamp(settings.folders->historyMax, 1u, 50u);
 }
 
+bool GetFolderShowHiddenFiles(const Common::Settings::Settings& settings) noexcept
+{
+    if (! settings.folders.has_value())
+    {
+        return Common::Settings::FoldersSettings{}.showHiddenFiles;
+    }
+
+    return settings.folders->showHiddenFiles;
+}
+
+bool GetFolderShowSystemFiles(const Common::Settings::Settings& settings) noexcept
+{
+    if (! settings.folders.has_value())
+    {
+        return Common::Settings::FoldersSettings{}.showSystemFiles;
+    }
+
+    return settings.folders->showSystemFiles;
+}
+
 bool AreEquivalentFolderPreferences(const Common::Settings::Settings& a, const Common::Settings::Settings& b) noexcept
 {
+    if (GetFolderShowHiddenFiles(a) != GetFolderShowHiddenFiles(b) || GetFolderShowSystemFiles(a) != GetFolderShowSystemFiles(b))
+    {
+        return false;
+    }
+
     if (GetFolderHistoryMax(a) != GetFolderHistoryMax(b))
     {
         return false;
