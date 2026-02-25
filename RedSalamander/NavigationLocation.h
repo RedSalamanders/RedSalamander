@@ -588,8 +588,9 @@ enum class TrailingSlashPolicy
     return true;
 }
 
-[[nodiscard]] inline std::filesystem::path
-FormatHistoryPath(std::wstring_view pluginShortId, std::wstring_view instanceContext, const std::filesystem::path& pluginPath) noexcept
+[[nodiscard]] inline std::filesystem::path FormatHistoryPath(std::wstring_view pluginShortId,
+                                                             std::wstring_view instanceContext,
+                                                             const std::filesystem::path& pluginPath) noexcept
 {
     if (IsFilePluginShortId(pluginShortId))
     {

@@ -265,14 +265,14 @@ void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& s
     };
 
     auto layoutIgnoreCard = [&](HWND label,
-                               std::wstring_view labelText,
-                               HWND toggle,
-                               HWND descLabel,
-                               std::wstring_view descText,
-                               HWND patternsLabel,
-                               HWND patternsFrame,
-                               HWND patternsEdit,
-                               bool showEdit) noexcept
+                                std::wstring_view labelText,
+                                HWND toggle,
+                                HWND descLabel,
+                                std::wstring_view descText,
+                                HWND patternsLabel,
+                                HWND patternsFrame,
+                                HWND patternsEdit,
+                                bool showEdit) noexcept
     {
         const int textWidth  = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleWidth);
         const int descHeight = descLabel ? PrefsUi::MeasureStaticTextHeight(host, infoFont, textWidth, descText) : 0;
@@ -314,7 +314,8 @@ void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& s
         if (toggle)
         {
             // Keep the toggle aligned with the title row even when the card expands to show the pattern field.
-            SetWindowPos(toggle, nullptr, card.right - cardPaddingX - toggleWidth, card.top + cardPaddingY, toggleWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            SetWindowPos(
+                toggle, nullptr, card.right - cardPaddingX - toggleWidth, card.top + cardPaddingY, toggleWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
             SendMessageW(toggle, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
         }
 

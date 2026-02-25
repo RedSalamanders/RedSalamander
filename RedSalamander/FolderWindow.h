@@ -124,8 +124,15 @@ public:
     void CommandCalculateDirectorySizes(Pane pane);
     void CommandSelectionSelectDialog(Pane pane);
     void CommandSelectionUnselectDialog(Pane pane);
+    void CommandSelectionInvert(Pane pane);
+    void CommandSelectionSave(Pane pane);
+    void CommandSelectionRestore(Pane pane);
     void CommandSelectionSelectSameExtension(Pane pane);
     void CommandSelectionUnselectSameExtension(Pane pane);
+    void CommandSelectionHideSelectedNames(Pane pane);
+    void CommandSelectionHideUnselectedNames(Pane pane);
+    void CommandSelectionShowHiddenNames(Pane pane);
+    [[nodiscard]] bool CanShowHiddenNames(Pane pane) const noexcept;
     void CommandSelectionGoToPreviousSelectedName(Pane pane);
     void CommandSelectionGoToNextSelectedName(Pane pane);
     void CommandChangeCase(Pane pane);
@@ -188,9 +195,12 @@ public:
     void SetPaneMetadataTextProvider(Pane pane, FolderView::MetadataTextProvider provider);
     void SetPaneEmptyStateMessage(Pane pane, std::wstring message);
     void RefreshPaneDetailsText(Pane pane);
-    void
-    SetPaneSelectionByDisplayNamePredicate(Pane pane, const std::function<bool(std::wstring_view)>& shouldSelect, bool clearExistingSelection = true) noexcept;
+    void SetPaneSelectionByDisplayNamePredicate(Pane pane,
+                                                const std::function<bool(std::wstring_view)>& shouldSelect,
+                                                bool clearExistingSelection = true) noexcept;
     void ClearPaneSelectionByDisplayNamePredicate(Pane pane, const std::function<bool(std::wstring_view)>& shouldUnselect) noexcept;
+
+    [[nodiscard]] bool HasSavedSelection() const noexcept;
 
     struct FileOperationCompletedEvent
     {
@@ -208,15 +218,15 @@ public:
     {
         static constexpr size_t kMaxContentInFlightFiles = 8u;
 
-         enum class Kind : uint8_t
-         {
-             CompareDirectories,
+        enum class Kind : uint8_t
+        {
+            CompareDirectories,
             ChangeCase,
-         };
+        };
 
-         Kind kind       = Kind::CompareDirectories;
-         uint64_t taskId = 0;
-         std::wstring title;
+        Kind kind       = Kind::CompareDirectories;
+        uint64_t taskId = 0;
+        std::wstring title;
 
         // Compare Directories payload (Kind::CompareDirectories)
         std::filesystem::path leftRoot;
@@ -248,8 +258,8 @@ public:
             ULONGLONG lastUpdateTick = 0;
         };
 
-         std::array<ContentInFlightFile, kMaxContentInFlightFiles> contentInFlight{};
-         size_t contentInFlightCount = 0;
+        std::array<ContentInFlightFile, kMaxContentInFlightFiles> contentInFlight{};
+        size_t contentInFlightCount = 0;
 
         // Change Case payload (Kind::ChangeCase)
         bool changeCaseEnumerating = false;
@@ -260,10 +270,10 @@ public:
         uint64_t changeCasePlannedRenames   = 0;
         uint64_t changeCaseCompletedRenames = 0;
 
-         bool finished    = false;
-         HRESULT resultHr = S_OK;
-         std::wstring doneSummary;
-     };
+        bool finished    = false;
+        HRESULT resultHr = S_OK;
+        std::wstring doneSummary;
+    };
 
     // Informational tasks are read-only task cards displayed in the File Operations popup for background work
     // that isn't a file operation (e.g., Compare Directories scan/content progress).
@@ -301,6 +311,17 @@ public:
     [[nodiscard]] size_t DebugGetViewerInstanceCount() const noexcept;
     [[nodiscard]] bool DebugHasViewerPluginId(std::wstring_view viewerPluginId) const noexcept;
     [[nodiscard]] uint64_t DebugGetForceRefreshCount(Pane pane) const noexcept;
+
+    [[nodiscard]] std::wstring_view DebugGetFocusedItemDisplayName(Pane pane) const noexcept;
+    [[nodiscard]] bool DebugHasItemDisplayName(Pane pane, std::wstring_view displayName) const noexcept;
+    [[nodiscard]] bool DebugIsItemSelected(Pane pane, std::wstring_view displayName) const noexcept;
+    [[nodiscard]] size_t DebugGetSelectedCount(Pane pane) const noexcept;
+    [[nodiscard]] bool DebugIsEmptyFolderStateActive(Pane pane) const noexcept;
+    [[nodiscard]] std::wstring_view DebugGetEmptyFolderFunMessage(Pane pane) const noexcept;
+    [[nodiscard]] bool DebugFocusItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept;
+    [[nodiscard]] FolderView::NameFilterState DebugGetNameFilterState(Pane pane) const;
+    [[nodiscard]] bool DebugIsNameFilterActive(Pane pane) const noexcept;
+    [[nodiscard]] FolderView::FilterWatermarkVisualMode DebugGetFilterWatermarkVisualMode(Pane pane) const noexcept;
 #endif
 
     void ShowPaneAlertOverlay(Pane pane,
@@ -461,7 +482,7 @@ private:
         bool updatingPath = false;
 
         std::vector<std::filesystem::path> navigationHistory;
-        size_t navigationHistoryIndex = 0;
+        size_t navigationHistoryIndex       = 0;
         bool navigationHistorySuspendRecord = false;
     };
     bool SanityCheckBothPanes(PaneState& src, PaneState& dest, FileSystemOperation operation);
@@ -485,8 +506,8 @@ private:
     RECT _rightFolderViewRect{};
     RECT _rightStatusBarRect{};
     RECT _functionBarRect{};
-    float _splitRatio = 0.5f;
-    bool _viewWidthAdjustActive       = false;
+    float _splitRatio                  = 0.5f;
+    bool _viewWidthAdjustActive        = false;
     float _viewWidthAdjustRestoreRatio = 0.5f;
     std::optional<float> _zoomRestoreSplitRatio;
     std::optional<Pane> _zoomedPane;
@@ -508,6 +529,17 @@ private:
     bool _showSystemFiles                 = true;
     uint32_t _folderHistoryMax            = 20u;
     std::vector<std::filesystem::path> _folderHistory;
+
+    struct SavedSelection final
+    {
+        // Saved for future restore improvements (e.g., validating the source folder/plugin context or offering a plugin-aware restore).
+        // Current restore selects by display name only.
+        std::wstring sourcePluginId;
+        std::wstring sourceInstanceContext;
+        std::filesystem::path sourceFolder;
+        std::vector<std::wstring> displayNames;
+    };
+    std::optional<SavedSelection> _savedSelection;
 
     ViewerCallbackState _viewerCallback;
     std::vector<std::unique_ptr<ViewerInstance>> _viewerInstances;

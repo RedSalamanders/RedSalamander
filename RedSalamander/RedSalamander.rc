@@ -225,16 +225,16 @@ BEGIN
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Select...",                           IDM_PANE_SELECTION_SELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "&Unselect...",                         IDM_PANE_SELECTION_UNSELECT_DIALOG,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Invert Selection [todo]",             IDM_PANE_SELECTION_INVERT,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Invert Selection",                    IDM_PANE_SELECTION_INVERT,MFT_STRING,MFS_ENABLED
         MENUITEM "Select &All",                          IDM_PANE_SELECTION_SELECT_ALL,MFT_STRING,MFS_ENABLED
         MENUITEM "Unselect A&ll",                        IDM_PANE_SELECTION_UNSELECT_ALL,MFT_STRING,MFS_ENABLED
-        MENUITEM "&Restore Selection [todo]",            IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
+        MENUITEM "&Restore Selection",                   IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
         MENUITEM "Select &Next",          IDM_PANE_SELECT_NEXT,MFT_STRING,MFS_ENABLED
         MENUITEM "Select + Calculate Directory Size + Next", IDM_PANE_SELECT_CALC_DIR_SIZE_NEXT,MFT_STRING,MFS_ENABLED
-        POPUP "&Advanced [todo]",                       65535,MFT_STRING,MFS_ENABLED
+        POPUP "&Advanced",                       65535,MFT_STRING,MFS_ENABLED
         BEGIN
-            MENUITEM "&Save Selection [todo]", IDM_PANE_SAVE_SELECTION,MFT_STRING,MFS_ENABLED
-            MENUITEM "&Load Selection... [todo]", IDM_PANE_LOAD_SELECTION,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Save Selection", IDM_PANE_SAVE_SELECTION,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Load Selection...", IDM_PANE_SELECTION_RESTORE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "Select Same E&xtensions",       IDM_PANE_SELECTION_SELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM "Unselect Same Extensions",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
@@ -242,9 +242,9 @@ BEGIN
             MENUITEM "Select Same &Names [todo]",            IDM_PANE_SELECTION_SELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM "Unselect Same Names [todo]",           IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "&Hide Selected Names [todo]",          IDM_PANE_SELECTION_HIDE_SELECTED_NAMES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Hide Unselected Names [todo]",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
-            MENUITEM "Show Hidden Names [todo]",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "&Hide Selected Names",          IDM_PANE_SELECTION_HIDE_SELECTED_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Hide Unselected Names",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
+            MENUITEM "Show Hidden Names",             IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "Go to Previous Selected Name",         IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM "Go to Next Selected Name",             IDM_PANE_SELECTION_GOTO_NEXT_SELECTED_NAME,MFT_STRING,MFS_ENABLED
@@ -1169,6 +1169,21 @@ BEGIN
     IDS_CAPTION_PANE_FILTER                              "Filter"
     IDS_LABEL_PANE_FILTER                                "Filter"
     IDS_LABEL_PANE_FILTER_USE_FILTER                     "Use Filter"
+    IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED              "Failed to copy selection to clipboard."
+    IDS_MSG_SELECTION_RESTORE_NO_SAVED                   "No saved selection."
+    IDS_FMT_SELECTION_RESTORE_INCOMPLETE                 "Could not restore selection for some items:\r\n{0}{1}"
+    IDS_MSG_SELECTION_RESTORE_FILTER_NOTE                "Some items may be hidden by the current filter."
+    IDS_EMPTY_FOLDER_TITLE                               "Empty folder"
+    IDS_EMPTY_FOLDER_FUN_1                               "😌\r\nNothing to see here. Yet."
+    IDS_EMPTY_FOLDER_FUN_2                               "🧹\r\nAll clean. This folder is spotless."
+    IDS_EMPTY_FOLDER_FUN_3                               "🦄\r\nMagic space available. Add something fun."
+    IDS_EMPTY_FOLDER_FUN_4                               "😴\r\nThis folder is taking a nap."
+    IDS_EMPTY_FOLDER_FUN_5                               "🎉\r\nYou made it to the end. High five!"
+    IDS_EMPTY_FOLDER_FUN_6                               "🤖\r\nBeep boop… no files detected."
+    IDS_EMPTY_FOLDER_FUN_7                               "🧭\r\nLost? Nope. Just empty."
+    IDS_EMPTY_FOLDER_FUN_8                               "🪐\r\nSo much space. So few files."
+    IDS_EMPTY_FOLDER_FUN_9                               "🐾\r\nNo tracks. Nobody's been here."
+    IDS_EMPTY_FOLDER_FUN_10                              "🗃️\r\nAn empty shelf, waiting for treasures."
     IDS_NEW_FOLDER_DEFAULT_NAME                          "New folder"
     IDS_MSG_PANE_CREATE_DIR_INVALID_CHARS                "A folder name can't contain any of the following characters:\r\n\\ / : * ? "" < > |"
     IDS_MSG_PANE_CREATE_DIR_EMPTY_NAME                   "A folder name can't be empty."

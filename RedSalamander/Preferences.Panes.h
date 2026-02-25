@@ -20,8 +20,8 @@ public:
 
     static void CreateControls(HWND parent, PreferencesDialogState& state) noexcept;
     static void Refresh(HWND host, PreferencesDialogState& state) noexcept;
-    static void
-    LayoutControls(HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept;
+    static void LayoutControls(
+        HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept;
     [[nodiscard]] static bool HandleCommand(HWND host, PreferencesDialogState& state, UINT commandId, UINT notifyCode, HWND hwndCtl) noexcept;
 
 private:

@@ -229,34 +229,6 @@ void SplitMenuText(std::wstring_view raw, std::wstring& outText, std::wstring& o
     return result;
 }
 
-[[nodiscard]] std::wstring GetDlgItemTextString(HWND hwnd, int controlId) noexcept
-{
-    const HWND ctl = GetDlgItem(hwnd, controlId);
-    if (! ctl)
-    {
-        return {};
-    }
-
-    const int len = GetWindowTextLengthW(ctl);
-    if (len <= 0)
-    {
-        return {};
-    }
-
-    std::wstring text(static_cast<size_t>(len), L'\0');
-    const int copied = GetWindowTextW(ctl, text.data(), len + 1);
-    if (copied <= 0)
-    {
-        return {};
-    }
-
-    if (static_cast<size_t>(copied) < text.size())
-    {
-        text.resize(static_cast<size_t>(copied));
-    }
-    return text;
-}
-
 int MeasureStaticTextHeight(HWND referenceWindow, HFONT font, int width, std::wstring_view text) noexcept
 {
     if (! referenceWindow || ! font || width <= 0 || text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
@@ -504,8 +476,8 @@ private:
 
     struct PreparedCompareRun
     {
-        uint64_t runId      = 0;
-        bool startedBefore  = false;
+        uint64_t runId     = 0;
+        bool startedBefore = false;
     };
 
     [[nodiscard]] std::optional<PreparedCompareRun> PrepareCompareRun() noexcept;
@@ -648,11 +620,11 @@ private:
 
     OptionsUi _optionsUi{};
     std::vector<RECT> _optionsCards;
-    int _optionsScrollOffset   = 0;
-    int _optionsScrollMax      = 0;
-    int _optionsWheelRemainder = 0;
-    bool _optionsUseTwoColumns       = false;
-    int _optionsTwoColumnSeparatorX  = -1;
+    int _optionsScrollOffset        = 0;
+    int _optionsScrollMax           = 0;
+    int _optionsWheelRemainder      = 0;
+    bool _optionsUseTwoColumns      = false;
+    int _optionsTwoColumnSeparatorX = -1;
 
     Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};
@@ -708,15 +680,15 @@ private:
     std::vector<std::unique_ptr<CompareMenuItemData>> _menuItemData;
     std::vector<std::unique_ptr<CompareMenuItemData>> _popupMenuItemData;
 
-    bool _compareStarted        = false;
-    bool _compareActive         = false;
-    bool _compareRunPending     = false;
+    bool _compareStarted            = false;
+    bool _compareActive             = false;
+    bool _compareRunPending         = false;
     bool _compareRunSawScanProgress = false;
-    bool _bannerRescanIsCancel  = false;
-    bool _syncingPaths          = false;
-    uint64_t _compareRunId      = 0;
-    uint64_t _compareTaskId     = 0;
-    HRESULT _compareRunResultHr = S_OK;
+    bool _bannerRescanIsCancel      = false;
+    bool _syncingPaths              = false;
+    uint64_t _compareRunId          = 0;
+    uint64_t _compareTaskId         = 0;
+    HRESULT _compareRunResultHr     = S_OK;
 
     enum class DeferredStartPhase
     {
@@ -1984,7 +1956,7 @@ void CompareDirectoriesWindow::OnDrawItem(DRAWITEMSTRUCT* dis) noexcept
             const bool showArrow = checked && sortBy != FolderView::SortBy::None;
             if (showArrow)
             {
-                RECT arrowRect  = checkRect;
+                RECT arrowRect       = checkRect;
                 const LONG width     = std::max(0L, checkRect.right - checkRect.left);
                 const LONG arrowArea = std::clamp(static_cast<LONG>(MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI)), 0L, width);
                 const LONG split     = checkRect.left + arrowArea;
@@ -2267,9 +2239,55 @@ void CompareDirectoriesWindow::ApplyOptionsDialogTheme() noexcept
     data.themeName   = themeName;
     data.optionsHost = _optionsUi.host;
 
-    EnumChildWindows(
-        _optionsDlg.get(),
-        [](HWND child, LPARAM lParam) noexcept -> BOOL
+    EnumChildWindows(_optionsDlg.get(),
+                     [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto* data = reinterpret_cast<const EnumData*>(lParam);
+        if (! data || ! child)
+        {
+            return TRUE;
+        }
+
+        if (data->font)
+        {
+            SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(data->font), FALSE);
+        }
+
+        if (data->themeName)
+        {
+            std::array<wchar_t, 32> className{};
+            const int classLen = GetClassNameW(child, className.data(), static_cast<int>(className.size()));
+
+            const wchar_t* appliedTheme = data->themeName;
+            if (classLen > 0)
+            {
+                if (_wcsicmp(className.data(), L"Static") == 0)
+                {
+                    appliedTheme = child == data->optionsHost ? data->themeName : L"";
+                }
+                else if (_wcsicmp(className.data(), L"Button") == 0)
+                {
+                    const LONG_PTR style = GetWindowLongPtrW(child, GWL_STYLE);
+                    const LONG_PTR type  = style & BS_TYPEMASK;
+                    if (type == BS_GROUPBOX || type == BS_PUSHBUTTON || type == BS_DEFPUSHBUTTON)
+                    {
+                        appliedTheme = L"";
+                    }
+                }
+            }
+
+            SetWindowTheme(child, appliedTheme, nullptr);
+            SendMessageW(child, WM_THEMECHANGED, 0, 0);
+        }
+
+        return TRUE;
+    },
+                     reinterpret_cast<LPARAM>(&data));
+
+    if (data.optionsHost && data.themeName)
+    {
+        EnumChildWindows(data.optionsHost,
+                         [](HWND child, LPARAM lParam) noexcept -> BOOL
         {
             auto* data = reinterpret_cast<const EnumData*>(lParam);
             if (! data || ! child)
@@ -2282,75 +2300,27 @@ void CompareDirectoriesWindow::ApplyOptionsDialogTheme() noexcept
                 SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(data->font), FALSE);
             }
 
-            if (data->themeName)
+            std::array<wchar_t, 32> className{};
+            const int classLen = GetClassNameW(child, className.data(), static_cast<int>(className.size()));
+
+            const wchar_t* appliedTheme = data->themeName;
+            if (classLen > 0)
             {
-                std::array<wchar_t, 32> className{};
-                const int classLen = GetClassNameW(child, className.data(), static_cast<int>(className.size()));
-
-                const wchar_t* appliedTheme = data->themeName;
-                if (classLen > 0)
+                if (_wcsicmp(className.data(), L"Static") == 0)
                 {
-                    if (_wcsicmp(className.data(), L"Static") == 0)
-                    {
-                        appliedTheme = child == data->optionsHost ? data->themeName : L"";
-                    }
-                    else if (_wcsicmp(className.data(), L"Button") == 0)
-                    {
-                        const LONG_PTR style = GetWindowLongPtrW(child, GWL_STYLE);
-                        const LONG_PTR type  = style & BS_TYPEMASK;
-                        if (type == BS_GROUPBOX || type == BS_PUSHBUTTON || type == BS_DEFPUSHBUTTON)
-                        {
-                            appliedTheme = L"";
-                        }
-                    }
+                    appliedTheme = L"";
                 }
-
-                SetWindowTheme(child, appliedTheme, nullptr);
-                SendMessageW(child, WM_THEMECHANGED, 0, 0);
+                else if (_wcsicmp(className.data(), L"Button") == 0)
+                {
+                    appliedTheme = L"";
+                }
             }
 
+            SetWindowTheme(child, appliedTheme, nullptr);
+            SendMessageW(child, WM_THEMECHANGED, 0, 0);
             return TRUE;
         },
-        reinterpret_cast<LPARAM>(&data));
-
-    if (data.optionsHost && data.themeName)
-    {
-        EnumChildWindows(
-            data.optionsHost,
-            [](HWND child, LPARAM lParam) noexcept -> BOOL
-            {
-                auto* data = reinterpret_cast<const EnumData*>(lParam);
-                if (! data || ! child)
-                {
-                    return TRUE;
-                }
-
-                if (data->font)
-                {
-                    SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(data->font), FALSE);
-                }
-
-                std::array<wchar_t, 32> className{};
-                const int classLen = GetClassNameW(child, className.data(), static_cast<int>(className.size()));
-
-                const wchar_t* appliedTheme = data->themeName;
-                if (classLen > 0)
-                {
-                    if (_wcsicmp(className.data(), L"Static") == 0)
-                    {
-                        appliedTheme = L"";
-                    }
-                    else if (_wcsicmp(className.data(), L"Button") == 0)
-                    {
-                        appliedTheme = L"";
-                    }
-                }
-
-                SetWindowTheme(child, appliedTheme, nullptr);
-                SendMessageW(child, WM_THEMECHANGED, 0, 0);
-                return TRUE;
-            },
-            reinterpret_cast<LPARAM>(&data));
+                         reinterpret_cast<LPARAM>(&data));
     }
 
     RedrawWindow(_optionsDlg.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
@@ -2713,60 +2683,56 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
     _folderWindow.SetFunctionBarVisible(functionBarVisible);
 
     _folderWindow.SetPanePathChangedCallback([this](FolderWindow::Pane pane, const std::optional<std::filesystem::path>& pluginPath)
-                                             { OnPanePathChanged(pane == FolderWindow::Pane::Left ? ComparePane::Left : ComparePane::Right, pluginPath); });
+    { OnPanePathChanged(pane == FolderWindow::Pane::Left ? ComparePane::Left : ComparePane::Right, pluginPath); });
 
     _folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                       [this](const std::filesystem::path& folder)
-                                                      {
-                                                          ApplySelectionForFolder(ComparePane::Left, folder);
-                                                          UpdateEmptyStateForFolder(ComparePane::Left, folder);
-                                                      });
+    {
+        ApplySelectionForFolder(ComparePane::Left, folder);
+        UpdateEmptyStateForFolder(ComparePane::Left, folder);
+    });
     _folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Right,
                                                       [this](const std::filesystem::path& folder)
-                                                      {
-                                                          ApplySelectionForFolder(ComparePane::Right, folder);
-                                                          UpdateEmptyStateForFolder(ComparePane::Right, folder);
-                                                      });
+    {
+        ApplySelectionForFolder(ComparePane::Right, folder);
+        UpdateEmptyStateForFolder(ComparePane::Right, folder);
+    });
 
-    _folderWindow.SetPaneDetailsTextProvider(
-        FolderWindow::Pane::Left,
-        [this](const std::filesystem::path& folder,
-               std::wstring_view displayName,
-               bool isDirectory,
-               uint64_t sizeBytes,
-               int64_t lastWriteTime,
-               DWORD fileAttributes) noexcept -> std::wstring
-        { return BuildDetailsTextForCompareItem(ComparePane::Left, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
+    _folderWindow.SetPaneDetailsTextProvider(FolderWindow::Pane::Left,
+                                             [this](const std::filesystem::path& folder,
+                                                    std::wstring_view displayName,
+                                                    bool isDirectory,
+                                                    uint64_t sizeBytes,
+                                                    int64_t lastWriteTime,
+                                                    DWORD fileAttributes) noexcept -> std::wstring
+    { return BuildDetailsTextForCompareItem(ComparePane::Left, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
 
-    _folderWindow.SetPaneDetailsTextProvider(
-        FolderWindow::Pane::Right,
-        [this](const std::filesystem::path& folder,
-               std::wstring_view displayName,
-               bool isDirectory,
-               uint64_t sizeBytes,
-               int64_t lastWriteTime,
-               DWORD fileAttributes) noexcept -> std::wstring
-        { return BuildDetailsTextForCompareItem(ComparePane::Right, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
+    _folderWindow.SetPaneDetailsTextProvider(FolderWindow::Pane::Right,
+                                             [this](const std::filesystem::path& folder,
+                                                    std::wstring_view displayName,
+                                                    bool isDirectory,
+                                                    uint64_t sizeBytes,
+                                                    int64_t lastWriteTime,
+                                                    DWORD fileAttributes) noexcept -> std::wstring
+    { return BuildDetailsTextForCompareItem(ComparePane::Right, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
 
-    _folderWindow.SetPaneMetadataTextProvider(
-        FolderWindow::Pane::Left,
-        [this](const std::filesystem::path& folder,
-               std::wstring_view displayName,
-               bool isDirectory,
-               uint64_t sizeBytes,
-               int64_t lastWriteTime,
-               DWORD fileAttributes) noexcept -> std::wstring
-        { return BuildMetadataTextForCompareItem(ComparePane::Left, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
+    _folderWindow.SetPaneMetadataTextProvider(FolderWindow::Pane::Left,
+                                              [this](const std::filesystem::path& folder,
+                                                     std::wstring_view displayName,
+                                                     bool isDirectory,
+                                                     uint64_t sizeBytes,
+                                                     int64_t lastWriteTime,
+                                                     DWORD fileAttributes) noexcept -> std::wstring
+    { return BuildMetadataTextForCompareItem(ComparePane::Left, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
 
-    _folderWindow.SetPaneMetadataTextProvider(
-        FolderWindow::Pane::Right,
-        [this](const std::filesystem::path& folder,
-               std::wstring_view displayName,
-               bool isDirectory,
-               uint64_t sizeBytes,
-               int64_t lastWriteTime,
-               DWORD fileAttributes) noexcept -> std::wstring
-        { return BuildMetadataTextForCompareItem(ComparePane::Right, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
+    _folderWindow.SetPaneMetadataTextProvider(FolderWindow::Pane::Right,
+                                              [this](const std::filesystem::path& folder,
+                                                     std::wstring_view displayName,
+                                                     bool isDirectory,
+                                                     uint64_t sizeBytes,
+                                                     int64_t lastWriteTime,
+                                                     DWORD fileAttributes) noexcept -> std::wstring
+    { return BuildMetadataTextForCompareItem(ComparePane::Right, folder, displayName, isDirectory, sizeBytes, lastWriteTime, fileAttributes); });
 
     _folderWindow.SetFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) { OnFolderWindowFileOperationCompleted(e); });
 
@@ -3115,8 +3081,7 @@ void CompareDirectoriesWindow::EnsureOptionsControlsCreated(HWND dlg) noexcept
 
         if (outEdit)
         {
-            const wchar_t* themeName =
-                (_theme.highContrast || _theme.systemHighContrast) ? L"" : ((_theme.dark) ? L"DarkMode_Explorer" : L"Explorer");
+            const wchar_t* themeName = (_theme.highContrast || _theme.systemHighContrast) ? L"" : ((_theme.dark) ? L"DarkMode_Explorer" : L"Explorer");
             SetWindowTheme(outEdit, themeName, nullptr);
             SendMessageW(outEdit, WM_THEMECHANGED, 0, 0);
         }
@@ -3180,19 +3145,18 @@ void CompareDirectoriesWindow::EnsureOptionsControlsCreated(HWND dlg) noexcept
 #pragma warning(push)
 #pragma warning(disable : 5039) // passing potentially-throwing callback to extern "C" Win32 API under -EHc
     SetWindowSubclass(dlg, CompareOptionsWheelRouteSubclassProc, 2u, reinterpret_cast<DWORD_PTR>(this));
-    EnumChildWindows(
-        dlg,
-        [](HWND child, LPARAM lParam) noexcept -> BOOL
+    EnumChildWindows(dlg,
+                     [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto* self = reinterpret_cast<CompareDirectoriesWindow*>(lParam);
+        if (! self)
         {
-            auto* self = reinterpret_cast<CompareDirectoriesWindow*>(lParam);
-            if (! self)
-            {
-                return TRUE;
-            }
-            SetWindowSubclass(child, CompareOptionsWheelRouteSubclassProc, 2u, reinterpret_cast<DWORD_PTR>(self));
             return TRUE;
-        },
-        reinterpret_cast<LPARAM>(this));
+        }
+        SetWindowSubclass(child, CompareOptionsWheelRouteSubclassProc, 2u, reinterpret_cast<DWORD_PTR>(self));
+        return TRUE;
+    },
+                     reinterpret_cast<LPARAM>(this));
 #pragma warning(pop)
 }
 
@@ -3273,14 +3237,14 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
     const int titleHeight  = std::max(1, ThemedControls::ScaleDip(dpi, 18));
     const int headerHeight = std::max(1, ThemedControls::ScaleDip(dpi, 20));
 
-    const int cardPaddingX   = ThemedControls::ScaleDip(dpi, 12);
-    const int cardPaddingY   = ThemedControls::ScaleDip(dpi, 8);
-    const int cardGapY       = ThemedControls::ScaleDip(dpi, 2);
-    const int cardGapX       = ThemedControls::ScaleDip(dpi, 12);
-    const int cardSpacingY   = ThemedControls::ScaleDip(dpi, 8);
-    const int sectionSpacing = ThemedControls::ScaleDip(dpi, 16);
-    const int framePadding   = ThemedControls::ScaleDip(dpi, 2);
-    const int minToggleWidth = ThemedControls::ScaleDip(dpi, 90);
+    const int cardPaddingX         = ThemedControls::ScaleDip(dpi, 12);
+    const int cardPaddingY         = ThemedControls::ScaleDip(dpi, 8);
+    const int cardGapY             = ThemedControls::ScaleDip(dpi, 2);
+    const int cardGapX             = ThemedControls::ScaleDip(dpi, 12);
+    const int cardSpacingY         = ThemedControls::ScaleDip(dpi, 8);
+    const int sectionSpacing       = ThemedControls::ScaleDip(dpi, 16);
+    const int framePadding         = ThemedControls::ScaleDip(dpi, 2);
+    const int minToggleWidth       = ThemedControls::ScaleDip(dpi, 90);
     const int columnSeparatorAreaW = ThemedControls::ScaleDip(dpi, 28);
     const int minColumnW           = ThemedControls::ScaleDip(dpi, 360);
 
@@ -3302,16 +3266,13 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         {
             return {};
         }
-        std::wstring text(static_cast<size_t>(len), L'\0');
+        std::wstring text(static_cast<size_t>(len) + 1u, L'\0');
         const int copied = GetWindowTextW(hwnd, text.data(), len + 1);
         if (copied <= 0)
         {
             return {};
         }
-        if (static_cast<size_t>(copied) < text.size())
-        {
-            text.resize(static_cast<size_t>(copied));
-        }
+        text.resize(static_cast<size_t>(copied));
         return text;
     };
 
@@ -3404,8 +3365,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         const bool ignoreFilesOn = GetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast);
         const bool ignoreDirsOn  = GetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast);
 
-        const bool canTwoColumnLayout =
-            (! _theme.systemHighContrast && ! _theme.highContrast) && (contentW >= (2 * minColumnW + columnSeparatorAreaW));
+        const bool canTwoColumnLayout = (! _theme.systemHighContrast && ! _theme.highContrast) && (contentW >= (2 * minColumnW + columnSeparatorAreaW));
         if (! canTwoColumnLayout)
         {
             const int toggleW = computeToggleWidth(contentW);
@@ -3429,7 +3389,8 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
 
             y += sectionSpacing;
             y += headerHeight + gapY;
-            y += computeIgnoreCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC), toggleW, ignoreFilesOn) + cardSpacingY;
+            y += computeIgnoreCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC), toggleW, ignoreFilesOn) +
+                 cardSpacingY;
             y += computeIgnoreCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC), toggleW, ignoreDirsOn) +
                  cardSpacingY;
 
@@ -3461,7 +3422,8 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
 
         rightY += sectionSpacing;
         rightY += headerHeight + gapY;
-        rightY += computeIgnoreCardHeight(rightW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC), toggleWRight, ignoreFilesOn) + cardSpacingY;
+        rightY +=
+            computeIgnoreCardHeight(rightW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC), toggleWRight, ignoreFilesOn) + cardSpacingY;
         rightY += computeIgnoreCardHeight(rightW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC), toggleWRight, ignoreDirsOn) +
                   cardSpacingY;
 
@@ -3521,10 +3483,10 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
 
     _optionsCards.clear();
 
-    const int scrollOffset = _optionsScrollOffset;
-    const bool useTwoColumns       = (! _theme.systemHighContrast && ! _theme.highContrast) && (viewportW2 >= (2 * minColumnW + columnSeparatorAreaW));
+    const int scrollOffset   = _optionsScrollOffset;
+    const bool useTwoColumns = (! _theme.systemHighContrast && ! _theme.highContrast) && (viewportW2 >= (2 * minColumnW + columnSeparatorAreaW));
 
-    _optionsUseTwoColumns        = useTwoColumns;
+    _optionsUseTwoColumns       = useTwoColumns;
     _optionsTwoColumnSeparatorX = useTwoColumns ? (std::max(0, (viewportW2 - columnSeparatorAreaW) / 2) + (columnSeparatorAreaW / 2)) : -1;
 
     const auto positionScrollable = [&](HWND hwnd, int x, int y, int w, int h) noexcept
@@ -3586,7 +3548,8 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         y += headerHeight + gapY;
     };
 
-    const auto layoutToggleCard = [&](const OptionsToggleCard& card, UINT titleId, UINT descId, bool visible, int contentX, int contentW, int toggleW, int& y) noexcept
+    const auto layoutToggleCard =
+        [&](const OptionsToggleCard& card, UINT titleId, UINT descId, bool visible, int contentX, int contentW, int toggleW, int& y) noexcept
     {
         showToggleCardControls(card, visible);
         if (! visible)
@@ -3677,27 +3640,56 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         int y = 0;
 
         layoutSectionHeader(_optionsUi.headerSubdirs, IDS_COMPARE_OPTIONS_SECTION_SUBDIRS, 0, viewportW2, y);
-        layoutToggleCard(_optionsUi.compareSubdirectories, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE, IDS_COMPARE_OPTIONS_SUBDIRS_DESC, true, 0, viewportW2, toggleW, y);
+        layoutToggleCard(
+            _optionsUi.compareSubdirectories, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE, IDS_COMPARE_OPTIONS_SUBDIRS_DESC, true, 0, viewportW2, toggleW, y);
 
         y += sectionSpacing;
         layoutSectionHeader(_optionsUi.headerCompare, IDS_COMPARE_OPTIONS_SECTION_COMPARE, 0, viewportW2, y);
         layoutToggleCard(_optionsUi.compareSize, IDS_COMPARE_OPTIONS_SIZE_TITLE, IDS_COMPARE_OPTIONS_SIZE_DESC, true, 0, viewportW2, toggleW, y);
         layoutToggleCard(_optionsUi.compareDateTime, IDS_COMPARE_OPTIONS_DATETIME_TITLE, IDS_COMPARE_OPTIONS_DATETIME_DESC, true, 0, viewportW2, toggleW, y);
-        layoutToggleCard(_optionsUi.compareAttributes, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC, true, 0, viewportW2, toggleW, y);
+        layoutToggleCard(
+            _optionsUi.compareAttributes, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC, true, 0, viewportW2, toggleW, y);
         layoutToggleCard(_optionsUi.compareContent, IDS_COMPARE_OPTIONS_CONTENT_TITLE, IDS_COMPARE_OPTIONS_CONTENT_DESC, true, 0, viewportW2, toggleW, y);
 
         y += sectionSpacing;
         layoutSectionHeader(_optionsUi.headerAdvanced, IDS_COMPARE_OPTIONS_SECTION_ADVANCED, 0, viewportW2, y);
-        layoutToggleCard(
-            _optionsUi.compareSubdirAttributes, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC, true, 0, viewportW2, toggleW, y);
-        layoutToggleCard(
-            _optionsUi.selectSubdirsOnlyInOnePane, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC, true, 0, viewportW2, toggleW, y);
+        layoutToggleCard(_optionsUi.compareSubdirAttributes,
+                         IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE,
+                         IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC,
+                         true,
+                         0,
+                         viewportW2,
+                         toggleW,
+                         y);
+        layoutToggleCard(_optionsUi.selectSubdirsOnlyInOnePane,
+                         IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE,
+                         IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC,
+                         true,
+                         0,
+                         viewportW2,
+                         toggleW,
+                         y);
 
         y += sectionSpacing;
         layoutSectionHeader(_optionsUi.headerIgnore, IDS_COMPARE_OPTIONS_SECTION_IGNORE, 0, viewportW2, y);
-        layoutIgnoreCard(_optionsUi.ignoreFiles, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC, true, ignoreFilesOn, 0, viewportW2, toggleW, y);
-        layoutIgnoreCard(
-            _optionsUi.ignoreDirectories, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC, true, ignoreDirsOn, 0, viewportW2, toggleW, y);
+        layoutIgnoreCard(_optionsUi.ignoreFiles,
+                         IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE,
+                         IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC,
+                         true,
+                         ignoreFilesOn,
+                         0,
+                         viewportW2,
+                         toggleW,
+                         y);
+        layoutIgnoreCard(_optionsUi.ignoreDirectories,
+                         IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE,
+                         IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC,
+                         true,
+                         ignoreDirsOn,
+                         0,
+                         viewportW2,
+                         toggleW,
+                         y);
     }
     else
     {
@@ -3710,43 +3702,56 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
 
         int leftY = 0;
         layoutSectionHeader(_optionsUi.headerSubdirs, IDS_COMPARE_OPTIONS_SECTION_SUBDIRS, 0, leftW, leftY);
-        layoutToggleCard(_optionsUi.compareSubdirectories, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE, IDS_COMPARE_OPTIONS_SUBDIRS_DESC, true, 0, leftW, toggleWLeft, leftY);
+        layoutToggleCard(
+            _optionsUi.compareSubdirectories, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE, IDS_COMPARE_OPTIONS_SUBDIRS_DESC, true, 0, leftW, toggleWLeft, leftY);
 
         leftY += sectionSpacing;
         layoutSectionHeader(_optionsUi.headerCompare, IDS_COMPARE_OPTIONS_SECTION_COMPARE, 0, leftW, leftY);
         layoutToggleCard(_optionsUi.compareSize, IDS_COMPARE_OPTIONS_SIZE_TITLE, IDS_COMPARE_OPTIONS_SIZE_DESC, true, 0, leftW, toggleWLeft, leftY);
         layoutToggleCard(_optionsUi.compareDateTime, IDS_COMPARE_OPTIONS_DATETIME_TITLE, IDS_COMPARE_OPTIONS_DATETIME_DESC, true, 0, leftW, toggleWLeft, leftY);
-        layoutToggleCard(_optionsUi.compareAttributes, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC, true, 0, leftW, toggleWLeft, leftY);
+        layoutToggleCard(
+            _optionsUi.compareAttributes, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC, true, 0, leftW, toggleWLeft, leftY);
         layoutToggleCard(_optionsUi.compareContent, IDS_COMPARE_OPTIONS_CONTENT_TITLE, IDS_COMPARE_OPTIONS_CONTENT_DESC, true, 0, leftW, toggleWLeft, leftY);
 
         int rightY = 0;
         layoutSectionHeader(_optionsUi.headerAdvanced, IDS_COMPARE_OPTIONS_SECTION_ADVANCED, rightX, rightW, rightY);
-        layoutToggleCard(
-            _optionsUi.compareSubdirAttributes,
-            IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE,
-            IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC,
-            true,
-            rightX,
-            rightW,
-            toggleWRight,
-            rightY);
-        layoutToggleCard(
-            _optionsUi.selectSubdirsOnlyInOnePane, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC, true, rightX, rightW, toggleWRight, rightY);
+        layoutToggleCard(_optionsUi.compareSubdirAttributes,
+                         IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE,
+                         IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC,
+                         true,
+                         rightX,
+                         rightW,
+                         toggleWRight,
+                         rightY);
+        layoutToggleCard(_optionsUi.selectSubdirsOnlyInOnePane,
+                         IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE,
+                         IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC,
+                         true,
+                         rightX,
+                         rightW,
+                         toggleWRight,
+                         rightY);
 
         rightY += sectionSpacing;
         layoutSectionHeader(_optionsUi.headerIgnore, IDS_COMPARE_OPTIONS_SECTION_IGNORE, rightX, rightW, rightY);
-        layoutIgnoreCard(
-            _optionsUi.ignoreFiles, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC, true, ignoreFilesOn, rightX, rightW, toggleWRight, rightY);
-        layoutIgnoreCard(
-            _optionsUi.ignoreDirectories,
-            IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE,
-            IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC,
-            true,
-            ignoreDirsOn,
-            rightX,
-            rightW,
-            toggleWRight,
-            rightY);
+        layoutIgnoreCard(_optionsUi.ignoreFiles,
+                         IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE,
+                         IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC,
+                         true,
+                         ignoreFilesOn,
+                         rightX,
+                         rightW,
+                         toggleWRight,
+                         rightY);
+        layoutIgnoreCard(_optionsUi.ignoreDirectories,
+                         IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE,
+                         IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC,
+                         true,
+                         ignoreDirsOn,
+                         rightX,
+                         rightW,
+                         toggleWRight,
+                         rightY);
     }
 
     InvalidateRect(_optionsUi.host, nullptr, TRUE);
@@ -3844,10 +3849,10 @@ void CompareDirectoriesWindow::Layout() noexcept
         const int outerMargin = std::max(0, MulDiv(24, dpi, USER_DEFAULT_SCREEN_DPI));
         const int maxDw       = std::max(1, w - 2 * outerMargin);
         const int maxDh       = std::max(1, contentHeight - 2 * outerMargin);
-        const int dw           = maxDw;
-        const int dh           = maxDh;
-        const int x            = std::max(0, (w - dw) / 2);
-        const int y            = std::max(bannerHeight, bannerHeight + (contentHeight - dh) / 2);
+        const int dw          = maxDw;
+        const int dh          = maxDh;
+        const int x           = std::max(0, (w - dw) / 2);
+        const int y           = std::max(bannerHeight, bannerHeight + (contentHeight - dh) / 2);
         SetWindowPos(_optionsDlg.get(), nullptr, x, y, dw, dh, SWP_NOZORDER | SWP_NOACTIVATE);
         LayoutOptionsControls();
     }
@@ -3923,74 +3928,71 @@ void CompareDirectoriesWindow::SetSessionCallbacksForRun(uint64_t runId) noexcep
     }
 
     const HWND hwnd = _hWnd.get();
-    _session->SetScanProgressCallback(
-        [hwnd, runId](const std::filesystem::path& relativeFolder,
-                      std::wstring_view currentEntryName,
-                      uint64_t scannedFolders,
-                      uint64_t scannedEntries,
-                      uint32_t activeScans,
-                      uint64_t contentCandidateFileCount,
-                      uint64_t contentCandidateTotalBytes) noexcept
+    _session->SetScanProgressCallback([hwnd, runId](const std::filesystem::path& relativeFolder,
+                                                    std::wstring_view currentEntryName,
+                                                    uint64_t scannedFolders,
+                                                    uint64_t scannedEntries,
+                                                    uint32_t activeScans,
+                                                    uint64_t contentCandidateFileCount,
+                                                    uint64_t contentCandidateTotalBytes) noexcept
+    {
+        if (! hwnd)
         {
-            if (! hwnd)
-            {
-                return;
-            }
+            return;
+        }
 
-            auto payload                        = std::make_unique<ScanProgressPayload>();
-            payload->runId                      = runId;
-            payload->activeScans                = activeScans;
-            payload->folderCount                = scannedFolders;
-            payload->entryCount                 = scannedEntries;
-            payload->contentCandidateFileCount  = contentCandidateFileCount;
-            payload->contentCandidateTotalBytes = contentCandidateTotalBytes;
-            payload->relativeFolder             = relativeFolder;
-            payload->entryName                  = std::wstring(currentEntryName);
-            static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesScanProgress, 0, std::move(payload)));
-        });
+        auto payload                        = std::make_unique<ScanProgressPayload>();
+        payload->runId                      = runId;
+        payload->activeScans                = activeScans;
+        payload->folderCount                = scannedFolders;
+        payload->entryCount                 = scannedEntries;
+        payload->contentCandidateFileCount  = contentCandidateFileCount;
+        payload->contentCandidateTotalBytes = contentCandidateTotalBytes;
+        payload->relativeFolder             = relativeFolder;
+        payload->entryName                  = std::wstring(currentEntryName);
+        static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesScanProgress, 0, std::move(payload)));
+    });
 
-    _session->SetContentProgressCallback(
-        [hwnd, runId](uint32_t workerIndex,
-                      const std::filesystem::path& relativeFolder,
-                      std::wstring_view entryName,
-                      uint64_t fileTotalBytes,
-                      uint64_t fileCompletedBytes,
-                      uint64_t overallTotalBytes,
-                      uint64_t overallCompletedBytes,
-                      uint64_t pendingContentCompares,
-                      uint64_t totalContentCompares,
-                      uint64_t completedContentCompares) noexcept
+    _session->SetContentProgressCallback([hwnd, runId](uint32_t workerIndex,
+                                                       const std::filesystem::path& relativeFolder,
+                                                       std::wstring_view entryName,
+                                                       uint64_t fileTotalBytes,
+                                                       uint64_t fileCompletedBytes,
+                                                       uint64_t overallTotalBytes,
+                                                       uint64_t overallCompletedBytes,
+                                                       uint64_t pendingContentCompares,
+                                                       uint64_t totalContentCompares,
+                                                       uint64_t completedContentCompares) noexcept
+    {
+        if (! hwnd)
         {
-            if (! hwnd)
-            {
-                return;
-            }
+            return;
+        }
 
-            auto payload                      = std::make_unique<ContentProgressPayload>();
-            payload->runId                    = runId;
-            payload->workerIndex              = workerIndex;
-            payload->pendingContentCompares   = pendingContentCompares;
-            payload->fileTotalBytes           = fileTotalBytes;
-            payload->fileCompletedBytes       = fileCompletedBytes;
-            payload->overallTotalBytes        = overallTotalBytes;
-            payload->overallCompletedBytes    = overallCompletedBytes;
-            payload->totalContentCompares     = totalContentCompares;
-            payload->completedContentCompares = completedContentCompares;
-            payload->relativeFolder           = relativeFolder;
-            payload->entryName                = std::wstring(entryName);
-            static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesContentProgress, 0, std::move(payload)));
-        });
+        auto payload                      = std::make_unique<ContentProgressPayload>();
+        payload->runId                    = runId;
+        payload->workerIndex              = workerIndex;
+        payload->pendingContentCompares   = pendingContentCompares;
+        payload->fileTotalBytes           = fileTotalBytes;
+        payload->fileCompletedBytes       = fileCompletedBytes;
+        payload->overallTotalBytes        = overallTotalBytes;
+        payload->overallCompletedBytes    = overallCompletedBytes;
+        payload->totalContentCompares     = totalContentCompares;
+        payload->completedContentCompares = completedContentCompares;
+        payload->relativeFolder           = relativeFolder;
+        payload->entryName                = std::wstring(entryName);
+        static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesContentProgress, 0, std::move(payload)));
+    });
 
-    _session->SetDecisionUpdatedCallback(
-        [hwnd, runId]() noexcept
+    _session->SetDecisionUpdatedCallback([hwnd, runId]() noexcept
+    {
+        if (! hwnd || IsWindow(hwnd) == 0)
         {
-            if (! hwnd || IsWindow(hwnd) == 0)
-            {
-                return;
-            }
+            return;
+        }
 
-            PostMessageW(hwnd, WndMsg::kCompareDirectoriesDecisionUpdated, static_cast<WPARAM>(runId), 0);
-        });
+        PostMessageW(hwnd, WndMsg::kCompareDirectoriesDecisionUpdated, static_cast<WPARAM>(runId), 0);
+    });
 }
 
 void CompareDirectoriesWindow::UpdateCompareRootsFromCurrentPanes() noexcept
@@ -4116,8 +4118,8 @@ LRESULT CompareDirectoriesWindow::OnDeferredBeginOrRescanCompare(WPARAM wp) noex
 {
     if (! _hWnd)
     {
-        _deferredCompareStartPhase = DeferredStartPhase::None;
-        _deferredCompareStartRunId = 0;
+        _deferredCompareStartPhase         = DeferredStartPhase::None;
+        _deferredCompareStartRunId         = 0;
         _deferredCompareStartStartedBefore = false;
         return 0;
     }
@@ -4136,14 +4138,14 @@ LRESULT CompareDirectoriesWindow::OnDeferredBeginOrRescanCompare(WPARAM wp) noex
             return 0;
         }
 
-        _deferredCompareStartRunId     = prepared->runId;
+        _deferredCompareStartRunId         = prepared->runId;
         _deferredCompareStartStartedBefore = prepared->startedBefore;
-        _deferredCompareStartPhase     = DeferredStartPhase::Prepared;
+        _deferredCompareStartPhase         = DeferredStartPhase::Prepared;
 
         if (PostMessageW(_hWnd.get(), WndMsg::kCompareDirectoriesDeferredStart, static_cast<WPARAM>(_deferredCompareStartRunId), 0) == 0)
         {
-            _deferredCompareStartPhase = DeferredStartPhase::None;
-            _deferredCompareStartRunId = 0;
+            _deferredCompareStartPhase         = DeferredStartPhase::None;
+            _deferredCompareStartRunId         = 0;
             _deferredCompareStartStartedBefore = false;
         }
         return 0;
@@ -4157,8 +4159,8 @@ LRESULT CompareDirectoriesWindow::OnDeferredBeginOrRescanCompare(WPARAM wp) noex
 
     ExecutePreparedCompareRun(runId, _deferredCompareStartStartedBefore);
 
-    _deferredCompareStartPhase = DeferredStartPhase::None;
-    _deferredCompareStartRunId = 0;
+    _deferredCompareStartPhase         = DeferredStartPhase::None;
+    _deferredCompareStartRunId         = 0;
     _deferredCompareStartStartedBefore = false;
     return 0;
 }
@@ -4180,8 +4182,8 @@ void CompareDirectoriesWindow::CancelCompareMode() noexcept
         }
     }
 
-    _compareActive         = false;
-    _compareRunPending     = false;
+    _compareActive             = false;
+    _compareRunPending         = false;
     _compareRunSawScanProgress = false;
     UpdateRescanButtonText();
 
@@ -5256,9 +5258,9 @@ void CompareDirectoriesWindow::SaveOptionsControlsToSettings() noexcept
 
     s.ignoreFiles         = GetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast);
     s.ignoreDirectories   = GetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast);
-    s.ignoreFilesPatterns = _optionsUi.ignoreFiles.edit ? GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_FILES_PATTERNS) : std::wstring{};
+    s.ignoreFilesPatterns = _optionsUi.ignoreFiles.edit ? Win32Text::GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_FILES_PATTERNS) : std::wstring{};
     s.ignoreDirectoriesPatterns =
-        _optionsUi.ignoreDirectories.edit ? GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_DIRECTORIES_PATTERNS) : std::wstring{};
+        _optionsUi.ignoreDirectories.edit ? Win32Text::GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_DIRECTORIES_PATTERNS) : std::wstring{};
 
     _settings->compareDirectories = std::move(s);
 }

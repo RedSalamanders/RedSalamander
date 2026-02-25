@@ -656,8 +656,9 @@ void AppendCompareSelfTestTraceLine(std::wstring_view message) noexcept
     Trace(message);
 }
 
-[[nodiscard]] std::vector<std::wstring>
-EnumerateDirectoryNames(const wil::com_ptr<IFileSystem>& fs, const std::filesystem::path& folder, SelfTest::CaseState& state) noexcept
+[[nodiscard]] std::vector<std::wstring> EnumerateDirectoryNames(const wil::com_ptr<IFileSystem>& fs,
+                                                                const std::filesystem::path& folder,
+                                                                SelfTest::CaseState& state) noexcept
 {
     if (! fs)
     {
@@ -775,9 +776,9 @@ void InvokeGetRootDecision(void* rawContext) noexcept
 }
 
 [[nodiscard]] std::shared_ptr<const CompareDirectoriesFolderDecision> WaitForContentCompare(const std::shared_ptr<CompareDirectoriesSession>& session,
-                                                                                             const std::filesystem::path& relativeFolder,
-                                                                                             std::wstring_view itemName,
-                                                                                             SelfTest::CaseState& state) noexcept
+                                                                                            const std::filesystem::path& relativeFolder,
+                                                                                            std::wstring_view itemName,
+                                                                                            SelfTest::CaseState& state) noexcept
 {
     if (! session)
     {
@@ -785,7 +786,8 @@ void InvokeGetRootDecision(void* rawContext) noexcept
         return {};
     }
 
-    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(5000))};
+    const auto deadline =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(5000))};
     while (std::chrono::steady_clock::now() < deadline)
     {
         auto decision = session->GetOrComputeDecision(relativeFolder);
@@ -924,7 +926,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
     if (fatalSetupFailure.empty())
     {
-        SelfTest::RunCase(options, suite, L"unique", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"unique",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Unique files/dirs selected; identical excluded by default.
             if (const auto foldersOpt = CreateCaseFolders(root, L"unique"))
@@ -1013,7 +1018,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"typemismatch", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"typemismatch",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: File vs directory mismatch selects both sides.
             if (const auto foldersOpt = CreateCaseFolders(root, L"typemismatch"))
@@ -1043,7 +1051,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"size", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"size",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Size compare selects bigger file.
             if (const auto foldersOpt = CreateCaseFolders(root, L"size"))
@@ -1076,7 +1087,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"time", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"time",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Date/time compare selects newer file.
             if (const auto foldersOpt = CreateCaseFolders(root, L"time"))
@@ -1123,7 +1137,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"attributes", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"attributes",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Attribute compare selects both sides.
             if (const auto foldersOpt = CreateCaseFolders(root, L"attributes"))
@@ -1165,7 +1182,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"content", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"content",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Content compare selects both sides.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content"))
@@ -1201,7 +1221,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"content_size_mismatch_no_pending", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"content_size_mismatch_no_pending",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Content compare with different sizes does not mark ContentPending.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_size_mismatch_no_pending"))
@@ -1236,7 +1259,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"zero_vs_nonzero_content", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"zero_vs_nonzero_content",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Content compare with zero vs non-zero size does not mark ContentPending.
             if (const auto foldersOpt = CreateCaseFolders(root, L"zero_vs_nonzero_content"))
@@ -1271,14 +1297,18 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"unicode_filenames", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"unicode_filenames",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Unicode filenames (CJK + emoji) appear in decisions and content compare works.
             if (const auto foldersOpt = CreateCaseFolders(root, L"unicode_filenames"))
             {
                 const auto& folders = *foldersOpt;
                 state.Require(SelfTest::WriteTextFile(folders.left / L"\u3053\u3093\u306B\u3061\u306F.txt", "JP"), L"Failed to create こんにちは.txt (left).");
-                state.Require(SelfTest::WriteTextFile(folders.right / L"\u3053\u3093\u306B\u3061\u306F.txt", "JP"), L"Failed to create こんにちは.txt (right).");
+                state.Require(SelfTest::WriteTextFile(folders.right / L"\u3053\u3093\u306B\u3061\u306F.txt", "JP"),
+                              L"Failed to create こんにちは.txt (right).");
 
                 state.Require(WriteFileFill(folders.left / L"emoji_\U0001F600.bin", 'A', 64), L"Failed to create emoji file (left).");
                 state.Require(WriteFileFill(folders.right / L"emoji_\U0001F600.bin", 'B', 64), L"Failed to create emoji file (right).");
@@ -1320,7 +1350,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"content short reads", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"content short reads",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Content compare tolerates short reads for equal files.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_shortreads"))
@@ -1360,7 +1393,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"subdir pending", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"subdir pending",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Subdirectory pending state + flush updates ancestors without navigation.
             if (const auto foldersOpt = CreateCaseFolders(root, L"subdir_pending"))
@@ -1384,27 +1420,26 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 std::condition_variable progressCv;
                 bool contentDone = false;
 
-                session->SetContentProgressCallback(
-                    [&](uint32_t,
-                        const std::filesystem::path&,
-                        std::wstring_view,
-                        uint64_t,
-                        uint64_t,
-                        uint64_t,
-                        uint64_t,
-                        uint64_t pendingContentCompares,
-                        uint64_t totalContentCompares,
-                        uint64_t completedContentCompares) noexcept
+                session->SetContentProgressCallback([&](uint32_t,
+                                                        const std::filesystem::path&,
+                                                        std::wstring_view,
+                                                        uint64_t,
+                                                        uint64_t,
+                                                        uint64_t,
+                                                        uint64_t,
+                                                        uint64_t pendingContentCompares,
+                                                        uint64_t totalContentCompares,
+                                                        uint64_t completedContentCompares) noexcept
+                {
+                    if (pendingContentCompares != 0u || totalContentCompares == 0u || completedContentCompares != totalContentCompares)
                     {
-                        if (pendingContentCompares != 0u || totalContentCompares == 0u || completedContentCompares != totalContentCompares)
-                        {
-                            return;
-                        }
+                        return;
+                    }
 
-                        std::lock_guard lock(progressMutex);
-                        contentDone = true;
-                        progressCv.notify_all();
-                    });
+                    std::lock_guard lock(progressMutex);
+                    contentDone = true;
+                    progressCv.notify_all();
+                });
 
                 auto rootDecision = session->GetOrComputeDecision(std::filesystem::path{});
                 state.Require(static_cast<bool>(rootDecision), L"subdir pending: root decision is null.");
@@ -1498,7 +1533,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"subdirs", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"subdirs",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Subdirectory content compare selects both directories.
             if (const auto foldersOpt = CreateCaseFolders(root, L"subdirs"))
@@ -1533,7 +1571,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"subdirattrs", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"subdirattrs",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Compare attributes of subdirectories selects both.
             if (const auto foldersOpt = CreateCaseFolders(root, L"subdirattrs"))
@@ -1576,7 +1617,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"missing folder", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"missing folder",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Missing folder is reported without failing the decision.
             if (const auto foldersOpt = CreateCaseFolders(root, L"missing_folder"))
@@ -1604,7 +1648,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"reparse", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"reparse",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Reparse points are not traversed for subdirectory comparison.
             if (const auto foldersOpt = CreateCaseFolders(root, L"reparse"))
@@ -1657,7 +1704,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"dummy_content", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"dummy_content",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Dummy filesystem paths use plugin I/O for content compare (cross-filesystem support).
             if (dummyFs && dummyIo && dummyOps)
@@ -1695,7 +1745,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"deep_tree", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"deep_tree",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Deep directory trees do not overflow the stack (iterative traversal).
             if (dummyFs && dummyIo && dummyOps)
@@ -1750,7 +1803,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"invalidate", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"invalidate",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Version invalidation mid-scan does not cache stale results.
             if (dummyFs && dummyIo && dummyOps)
@@ -1783,12 +1839,12 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 std::atomic<bool> scanStarted{false};
                 session->SetScanProgressCallback(
                     [&](const std::filesystem::path& folder, std::wstring_view, uint64_t, uint64_t, uint32_t, uint64_t, uint64_t) noexcept
+                {
+                    if (folder.empty())
                     {
-                        if (folder.empty())
-                        {
-                            scanStarted.store(true, std::memory_order_release);
-                        }
-                    });
+                        scanStarted.store(true, std::memory_order_release);
+                    }
+                });
 
                 std::shared_ptr<const CompareDirectoriesFolderDecision> decisionBefore;
                 std::jthread worker([&] { decisionBefore = session->GetOrComputeDecision(std::filesystem::path{}); });
@@ -1822,7 +1878,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"concurrent_get_or_compute_decision", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"concurrent_get_or_compute_decision",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Concurrent GetOrComputeDecision and Invalidate does not crash and never returns null.
             if (const auto foldersOpt = CreateCaseFolders(root, L"concurrent_get_or_compute_decision"))
@@ -1837,36 +1896,34 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 const auto session = std::make_shared<CompareDirectoriesSession>(baseFs, folders.left, folders.right, settings);
 
                 std::atomic<uint32_t> nullDecisions{0};
-                constexpr int kWorkerCount   = 4;
-                constexpr int kWorkerIters   = 50;
+                constexpr int kWorkerCount     = 4;
+                constexpr int kWorkerIters     = 50;
                 constexpr int kInvalidateIters = 10;
 
                 std::vector<std::jthread> workers;
                 workers.reserve(kWorkerCount);
                 for (int i = 0; i < kWorkerCount; ++i)
                 {
-                    workers.emplace_back(
-                        [session, &nullDecisions](std::stop_token) noexcept
-                        {
-                            for (int j = 0; j < kWorkerIters; ++j)
-                            {
-                                auto decision = session->GetOrComputeDecision(std::filesystem::path{});
-                                if (! decision)
-                                {
-                                    nullDecisions.fetch_add(1u, std::memory_order_relaxed);
-                                }
-                            }
-                        });
-                }
-
-                std::jthread invalidator(
-                    [session](std::stop_token) noexcept
+                    workers.emplace_back([session, &nullDecisions](std::stop_token) noexcept
                     {
-                        for (int j = 0; j < kInvalidateIters; ++j)
+                        for (int j = 0; j < kWorkerIters; ++j)
                         {
-                            session->Invalidate();
+                            auto decision = session->GetOrComputeDecision(std::filesystem::path{});
+                            if (! decision)
+                            {
+                                nullDecisions.fetch_add(1u, std::memory_order_relaxed);
+                            }
                         }
                     });
+                }
+
+                std::jthread invalidator([session](std::stop_token) noexcept
+                {
+                    for (int j = 0; j < kInvalidateIters; ++j)
+                    {
+                        session->Invalidate();
+                    }
+                });
 
                 for (auto& worker : workers)
                 {
@@ -1884,7 +1941,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"ignore", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"ignore",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Ignore patterns exclude files/directories.
             if (const auto foldersOpt = CreateCaseFolders(root, L"ignore"))
@@ -1918,7 +1978,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"ignore_multiple_patterns", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"ignore_multiple_patterns",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Multiple ignore patterns exclude all matching files.
             if (const auto foldersOpt = CreateCaseFolders(root, L"ignore_multiple_patterns"))
@@ -1948,7 +2011,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"showIdentical", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"showIdentical",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: showIdenticalItems includes identical files.
             if (const auto foldersOpt = CreateCaseFolders(root, L"identical"))
@@ -2003,7 +2069,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"setCompareEnabled", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"setCompareEnabled",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: SetCompareEnabled(false) stops producing decisions; re-enabling resumes.
             if (const auto foldersOpt = CreateCaseFolders(root, L"setCompareEnabled"))
@@ -2067,7 +2136,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"invalidateForPath", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"invalidateForPath",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: InvalidateForAbsolutePath invalidates only the targeted subtree.
             if (const auto foldersOpt = CreateCaseFolders(root, L"invalidateForPath"))
@@ -2112,7 +2184,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"decisionUpdatedCallback", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"decisionUpdatedCallback",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: SetDecisionUpdatedCallback fires after Invalidate().
             if (const auto foldersOpt = CreateCaseFolders(root, L"decisionUpdatedCallback"))
@@ -2159,7 +2234,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"uiVersion", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"uiVersion",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: GetUiVersion increments on Invalidate() and after FlushPendingContentCompareUpdates().
             if (const auto foldersOpt = CreateCaseFolders(root, L"uiVersion"))
@@ -2188,7 +2266,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"accessors", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"accessors",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Accessor getters return correct values after construction.
             if (const auto foldersOpt = CreateCaseFolders(root, L"accessors"))
@@ -2224,13 +2305,16 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"try_make_relative_outside_root", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"try_make_relative_outside_root",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: TryMakeRelative returns nullopt for an absolute path not under the root.
             if (const auto foldersOpt = CreateCaseFolders(root, L"try_make_relative_outside_root"))
             {
                 const auto& folders = *foldersOpt;
-                auto session         = std::make_shared<CompareDirectoriesSession>(baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+                auto session = std::make_shared<CompareDirectoriesSession>(baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
 
                 const std::filesystem::path outsideLeft = folders.left.parent_path();
                 const auto relLeft                      = session->TryMakeRelative(ComparePane::Left, outsideLeft);
@@ -2248,7 +2332,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"baseInterfaces", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"baseInterfaces",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Base interface accessors return non-null objects after construction.
             if (const auto foldersOpt = CreateCaseFolders(root, L"baseInterfaces"))
@@ -2268,7 +2355,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"contentCacheHit", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"contentCacheHit",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Repeated GetOrComputeDecision without invalidation returns the same cached object.
             if (const auto foldersOpt = CreateCaseFolders(root, L"contentCacheHit"))
@@ -2295,7 +2385,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"empty_directories", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"empty_directories",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: Empty directory roots produce an empty decision.
             if (const auto foldersOpt = CreateCaseFolders(root, L"empty_directories"))
@@ -2317,7 +2410,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"zeroByteContent", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"zeroByteContent",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: compareContent=true on two zero-byte files reports them as identical.
             if (const auto foldersOpt = CreateCaseFolders(root, L"zeroByteContent"))
@@ -2351,7 +2447,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        SelfTest::RunCase(options, suite, L"setSettingsInvalidates", [&](SelfTest::CaseState& state) noexcept
+        SelfTest::RunCase(options,
+                          suite,
+                          L"setSettingsInvalidates",
+                          [&](SelfTest::CaseState& state) noexcept
         {
             // Case: SetSettings with a meaningful change increments GetVersion(); a no-op toggle does not.
             if (const auto foldersOpt = CreateCaseFolders(root, L"setSettingsInvalidates"))

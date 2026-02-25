@@ -24,8 +24,8 @@ public:
     static void UpdateHint(HWND host, PreferencesDialogState& state) noexcept;
     static void UpdateButtons(HWND host, PreferencesDialogState& state) noexcept;
     static void UpdateListColumnWidths(HWND list, UINT dpi) noexcept;
-    static void
-    LayoutControls(HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept;
+    static void LayoutControls(
+        HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept;
     [[nodiscard]] static LRESULT OnMeasureList(MEASUREITEMSTRUCT* mis, PreferencesDialogState& state) noexcept;
     [[nodiscard]] static LRESULT OnDrawList(DRAWITEMSTRUCT* dis, PreferencesDialogState& state) noexcept;
 

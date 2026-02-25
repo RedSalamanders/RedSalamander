@@ -626,8 +626,10 @@ struct ProcessMemorySnapshot
     return result;
 }
 
-[[nodiscard]] unsigned int
-DeterminePerItemMaxConcurrency(const wil::com_ptr<IFileSystem>& fileSystem, FileSystemOperation operation, FileSystemFlags flags, unsigned int uiMax) noexcept
+[[nodiscard]] unsigned int DeterminePerItemMaxConcurrency(const wil::com_ptr<IFileSystem>& fileSystem,
+                                                          FileSystemOperation operation,
+                                                          FileSystemFlags flags,
+                                                          unsigned int uiMax) noexcept
 {
     if (! fileSystem || uiMax == 0u)
     {
@@ -885,7 +887,10 @@ class PerItemTaskScheduler final
 {
 public:
     PerItemTaskScheduler() = default;
-    ~PerItemTaskScheduler() noexcept { Shutdown(); }
+    ~PerItemTaskScheduler() noexcept
+    {
+        Shutdown();
+    }
 
     PerItemTaskScheduler(const PerItemTaskScheduler&)            = delete;
     PerItemTaskScheduler(PerItemTaskScheduler&&)                 = delete;
@@ -903,13 +908,13 @@ public:
 
         Task* task = nullptr;
         std::function<HRESULT(size_t)> processIndex;
-        size_t totalItems          = 0;
+        size_t totalItems           = 0;
         unsigned int maxConcurrency = 1;
 
         // Protected by the scheduler mutex.
-        size_t nextIndex        = 0;
-        unsigned int inFlight   = 0;
-        bool done               = false;
+        size_t nextIndex      = 0;
+        unsigned int inFlight = 0;
+        bool done             = false;
 
         std::mutex doneMutex;
         std::condition_variable doneCv;
@@ -1208,8 +1213,8 @@ private:
         const size_t start = (jobCount > 0) ? (_rrCursor % jobCount) : 0;
         for (size_t attempt = 0; attempt < jobCount; ++attempt)
         {
-            const size_t idx  = (start + attempt) % jobCount;
-            JobPtr& job       = _jobs[idx];
+            const size_t idx = (start + attempt) % jobCount;
+            JobPtr& job      = _jobs[idx];
             if (! job)
             {
                 continue;
@@ -2299,27 +2304,26 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
         workers.reserve(workerCount);
         for (unsigned int worker = 0; worker < workerCount; ++worker)
         {
-            workers.emplace_back(
-                [&]() noexcept
+            workers.emplace_back([&]() noexcept
+            {
+                for (;;)
                 {
-                    for (;;)
+                    if (_cancelled.load(std::memory_order_acquire) || _preCalcSkipped.load(std::memory_order_acquire))
                     {
-                        if (_cancelled.load(std::memory_order_acquire) || _preCalcSkipped.load(std::memory_order_acquire))
-                        {
-                            acceptUpdates.store(false, std::memory_order_release);
-                            preCalcAborted.store(true, std::memory_order_release);
-                            return;
-                        }
-
-                        const size_t index = nextIndex.fetch_add(1, std::memory_order_acq_rel);
-                        if (index >= sourceCount)
-                        {
-                            return;
-                        }
-
-                        processIndex(index);
+                        acceptUpdates.store(false, std::memory_order_release);
+                        preCalcAborted.store(true, std::memory_order_release);
+                        return;
                     }
-                });
+
+                    const size_t index = nextIndex.fetch_add(1, std::memory_order_acq_rel);
+                    if (index >= sourceCount)
+                    {
+                        return;
+                    }
+
+                    processIndex(index);
+                }
+            });
         }
     }
     else
@@ -2369,14 +2373,14 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
     [[maybe_unused]] auto coInit = wil::CoInitializeEx();
     [[maybe_unused]] const std::stop_callback stopWake(stopToken,
                                                        [this]() noexcept
-                                                       {
-                                                           _pauseCv.notify_all();
-                                                           _conflictCv.notify_all();
-                                                           if (_state)
-                                                           {
-                                                               _state->NotifyQueueChanged();
-                                                           }
-                                                       });
+    {
+        _pauseCv.notify_all();
+        _conflictCv.notify_all();
+        if (_state)
+        {
+            _state->NotifyQueueChanged();
+        }
+    });
 
     if (! _state)
     {
@@ -2823,10 +2827,10 @@ void FolderWindow::FileOperationState::Task::WaitWhilePaused() noexcept
     std::unique_lock lock(_pauseMutex);
     _pauseCv.wait(lock,
                   [&]
-                  {
-                      const bool stillPaused = _paused.load(std::memory_order_acquire) || _queuePaused.load(std::memory_order_acquire);
-                      return ! stillPaused || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested();
-                  });
+    {
+        const bool stillPaused = _paused.load(std::memory_order_acquire) || _queuePaused.load(std::memory_order_acquire);
+        return ! stillPaused || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested();
+    });
 }
 
 void FolderWindow::FileOperationState::Task::WaitWhilePreCalcPaused() noexcept
@@ -2840,11 +2844,10 @@ void FolderWindow::FileOperationState::Task::WaitWhilePreCalcPaused() noexcept
     std::unique_lock lock(_pauseMutex);
     _pauseCv.wait(lock,
                   [&]
-                  {
-                      const bool stillPaused = _paused.load(std::memory_order_acquire) || _queuePaused.load(std::memory_order_acquire);
-                      return ! stillPaused || _cancelled.load(std::memory_order_acquire) || _preCalcSkipped.load(std::memory_order_acquire) ||
-                             _stopToken.stop_requested();
-                  });
+    {
+        const bool stillPaused = _paused.load(std::memory_order_acquire) || _queuePaused.load(std::memory_order_acquire);
+        return ! stillPaused || _cancelled.load(std::memory_order_acquire) || _preCalcSkipped.load(std::memory_order_acquire) || _stopToken.stop_requested();
+    });
 }
 
 HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
@@ -4057,10 +4060,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                             }
                             else
                             {
-                                _conflictCv.wait(
-                                    lock,
-                                    [&]() noexcept
-                                    { return ! _conflictPrompt.active || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested(); });
+                                _conflictCv.wait(lock, [&]() noexcept {
+                                    return ! _conflictPrompt.active || _cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested();
+                                });
 
                                 if (_cancelled.load(std::memory_order_acquire) || _stopToken.stop_requested())
                                 {
@@ -4228,21 +4230,20 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 return S_OK;
             };
 
-            auto job = GetPerItemTaskScheduler().StartJob(
-                this,
-                _perItemMaxConcurrency,
-                _sourcePaths.size(),
-                [&](size_t index) noexcept -> HRESULT
+            auto job = GetPerItemTaskScheduler().StartJob(this,
+                                                          _perItemMaxConcurrency,
+                                                          _sourcePaths.size(),
+                                                          [&](size_t index) noexcept -> HRESULT
+            {
+                const HRESULT hrItem = processIndex(index);
+                if (FAILED(hrItem))
                 {
-                    const HRESULT hrItem = processIndex(index);
-                    if (FAILED(hrItem))
-                    {
-                        HRESULT expected = S_OK;
-                        firstFailure.compare_exchange_strong(expected, hrItem, std::memory_order_acq_rel);
-                        RequestCancel();
-                    }
-                    return hrItem;
-                });
+                    HRESULT expected = S_OK;
+                    firstFailure.compare_exchange_strong(expected, hrItem, std::memory_order_acq_rel);
+                    RequestCancel();
+                }
+                return hrItem;
+            });
 
             GetPerItemTaskScheduler().WaitJob(job);
 
@@ -5572,8 +5573,8 @@ void FolderWindow::FileOperationState::Shutdown() noexcept
         std::scoped_lock lock(_mutex);
         _uiLifetime.reset();
         tasks.swap(_tasks);
-        popupHwnd        = _popup.get();
-        issuesPaneHwnd   = _issuesPane.get();
+        popupHwnd         = _popup.get();
+        issuesPaneHwnd    = _issuesPane.get();
         popupToClose      = std::move(_popup);
         issuesPaneToClose = std::move(_issuesPane);
     }
@@ -5900,13 +5901,13 @@ void FolderWindow::FileOperationState::SetAutoDismissSuccess(bool enabled) noexc
             _completedTasks.erase(std::remove_if(_completedTasks.begin(),
                                                  _completedTasks.end(),
                                                  [](const CompletedTaskSummary& summary) noexcept
-                                                 { return SUCCEEDED(summary.resultHr) || IsCancellationStatus(summary.resultHr); }),
+            { return SUCCEEDED(summary.resultHr) || IsCancellationStatus(summary.resultHr); }),
                                   _completedTasks.end());
 
             _informationalTasks.erase(std::remove_if(_informationalTasks.begin(),
                                                      _informationalTasks.end(),
                                                      [](const FolderWindow::InformationalTaskUpdate& task) noexcept
-                                                     { return task.finished && (SUCCEEDED(task.resultHr) || IsCancellationStatus(task.resultHr)); }),
+            { return task.finished && (SUCCEEDED(task.resultHr) || IsCancellationStatus(task.resultHr)); }),
                                       _informationalTasks.end());
 
             if (_tasks.empty() && _completedTasks.empty() && _informationalTasks.empty())
@@ -6781,15 +6782,15 @@ void FolderWindow::FileOperationState::RecordCompletedTask(Task& task) noexcept
 
     {
         std::scoped_lock lock(task._progressMutex);
-        summary.totalItems      = task._progressTotalItems;
-        summary.completedItems  = task._progressCompletedItems;
-        summary.totalBytes      = task._progressTotalBytes;
-        summary.completedBytes  = task._progressCompletedBytes;
-        summary.preCalcSkipped  = task._preCalcSkipped.load(std::memory_order_acquire);
-        summary.completedFiles  = task._completedTopLevelFiles;
+        summary.totalItems       = task._progressTotalItems;
+        summary.completedItems   = task._progressCompletedItems;
+        summary.totalBytes       = task._progressTotalBytes;
+        summary.completedBytes   = task._progressCompletedBytes;
+        summary.preCalcSkipped   = task._preCalcSkipped.load(std::memory_order_acquire);
+        summary.completedFiles   = task._completedTopLevelFiles;
         summary.completedFolders = task._completedTopLevelFolders;
-        summary.sourcePath      = task._progressSourcePath;
-        summary.destinationPath = task._progressDestinationPath;
+        summary.sourcePath       = task._progressSourcePath;
+        summary.destinationPath  = task._progressDestinationPath;
     }
 
     {
@@ -6921,19 +6922,19 @@ bool FolderWindow::FileOperationState::EnterOperation(Task& task, std::stop_toke
 
     _queueCv.wait(lock,
                   [&]
-                  {
-                      if (stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire))
-                      {
-                          return true;
-                      }
+    {
+        if (stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire))
+        {
+            return true;
+        }
 
-                      if (! task._waitForOthers.load(std::memory_order_acquire))
-                      {
-                          return true;
-                      }
+        if (! task._waitForOthers.load(std::memory_order_acquire))
+        {
+            return true;
+        }
 
-                      return _activeOperations == 0 && ! _queue.empty() && _queue.front() == task._taskId;
-                  });
+        return _activeOperations == 0 && ! _queue.empty() && _queue.front() == task._taskId;
+    });
 
     if (stopToken.stop_requested() || task._cancelled.load(std::memory_order_acquire))
     {

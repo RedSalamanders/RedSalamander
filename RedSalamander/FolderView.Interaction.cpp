@@ -354,9 +354,9 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
 
     SetFocus(_hWnd.get());
     SetCapture(_hWnd.get());
-    _drag.dragging   = true;
-    _drag.startPoint = pt;
-    _drag.anchorIndex = static_cast<size_t>(-1);
+    _drag.dragging         = true;
+    _drag.startPoint       = pt;
+    _drag.anchorIndex      = static_cast<size_t>(-1);
     _drag.hasStartItemRect = false;
 
     auto hit = HitTest(pt);
@@ -408,6 +408,10 @@ void FolderView::OnLButtonDblClk(POINT pt, WPARAM /*keys*/)
     const std::optional<size_t> hit = HitTest(pt);
     if (! hit.has_value() || hit.value() >= _items.size())
     {
+        if (CanShowEmptyFolderState())
+        {
+            NavigateUp();
+        }
         return;
     }
 
@@ -419,8 +423,8 @@ void FolderView::OnLButtonDblClk(POINT pt, WPARAM /*keys*/)
 void FolderView::OnLButtonUp(POINT /*pt*/)
 {
     ReleaseCapture();
-    _drag.dragging = false;
-    _drag.anchorIndex = static_cast<size_t>(-1);
+    _drag.dragging         = false;
+    _drag.anchorIndex      = static_cast<size_t>(-1);
     _drag.hasStartItemRect = false;
 }
 
@@ -505,6 +509,63 @@ void FolderView::OnMouseMove(POINT pt, WPARAM keys)
     }
 }
 
+void FolderView::NavigateUp() noexcept
+{
+    ExitIncrementalSearch();
+
+    if (_currentFolder)
+    {
+        const auto isConnectionRoot = [](const std::filesystem::path& path) noexcept -> bool
+        {
+            std::wstring normalized = path.generic_wstring();
+            if (normalized.empty())
+            {
+                return false;
+            }
+
+            while (normalized.size() > 1u && normalized.back() == L'/')
+            {
+                normalized.pop_back();
+            }
+
+            constexpr std::wstring_view kConnPrefix = L"/@conn:";
+            if (normalized.starts_with(kConnPrefix))
+            {
+                const size_t nameStart = kConnPrefix.size();
+                if (nameStart >= normalized.size())
+                {
+                    return false;
+                }
+                return normalized.find(L'/', nameStart) == std::wstring::npos;
+            }
+
+            return false;
+        };
+
+        // Connection manager roots are terminal; don't navigate above them.
+        if (isConnectionRoot(_currentFolder.value()))
+        {
+            if (_navigateUpFromRootRequestCallback)
+            {
+                _navigateUpFromRootRequestCallback();
+            }
+            return;
+        }
+
+        const std::filesystem::path parent = _currentFolder->parent_path();
+        if (! parent.empty() && parent != _currentFolder.value())
+        {
+            SetFolderPath(parent);
+            return;
+        }
+    }
+
+    if (_navigateUpFromRootRequestCallback)
+    {
+        _navigateUpFromRootRequestCallback();
+    }
+}
+
 void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
 {
     static_cast<void>(ctrl);
@@ -556,63 +617,6 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
         }
     }
 
-    auto navigateUp = [&]() noexcept
-    {
-        ExitIncrementalSearch();
-
-        if (_currentFolder)
-        {
-            const auto isConnectionRoot = [](const std::filesystem::path& path) noexcept -> bool
-            {
-                std::wstring normalized = path.generic_wstring();
-                if (normalized.empty())
-                {
-                    return false;
-                }
-
-                while (normalized.size() > 1u && normalized.back() == L'/')
-                {
-                    normalized.pop_back();
-                }
-
-                constexpr std::wstring_view kConnPrefix = L"/@conn:";
-                if (normalized.starts_with(kConnPrefix))
-                {
-                    const size_t nameStart = kConnPrefix.size();
-                    if (nameStart >= normalized.size())
-                    {
-                        return false;
-                    }
-                    return normalized.find(L'/', nameStart) == std::wstring::npos;
-                }
-
-                return false;
-            };
-
-            // Connection manager roots are terminal; don't navigate above them.
-            if (isConnectionRoot(_currentFolder.value()))
-            {
-                if (_navigateUpFromRootRequestCallback)
-                {
-                    _navigateUpFromRootRequestCallback();
-                }
-                return;
-            }
-
-            const std::filesystem::path parent = _currentFolder->parent_path();
-            if (! parent.empty() && parent != _currentFolder.value())
-            {
-                SetFolderPath(parent);
-                return;
-            }
-        }
-
-        if (_navigateUpFromRootRequestCallback)
-        {
-            _navigateUpFromRootRequestCallback();
-        }
-    };
-
     if (_incrementalSearch.active)
     {
         switch (key)
@@ -621,7 +625,7 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
             case VK_BACK:
                 if (_items.empty())
                 {
-                    navigateUp();
+                    NavigateUp();
                     return;
                 }
                 HandleIncrementalSearchBackspace();
@@ -669,7 +673,7 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
     {
         if (key == VK_BACK)
         {
-            navigateUp();
+            NavigateUp();
         }
         return;
     }
@@ -828,7 +832,7 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
             InvalidateRect(_hWnd.get(), nullptr, FALSE);
             break;
         }
-        case VK_BACK: navigateUp(); break;
+        case VK_BACK: NavigateUp(); break;
         case VK_SPACE:
             ExitIncrementalSearch();
             if (hasFocus)

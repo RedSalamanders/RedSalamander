@@ -173,9 +173,9 @@ std::vector<WslDistributionEntry> EnumerateWslDistributions() noexcept
         distributions.push_back(std::move(entry));
     }
 
-    std::sort(distributions.begin(),
-              distributions.end(),
-              [](const WslDistributionEntry& a, const WslDistributionEntry& b) { return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0; });
+    std::sort(distributions.begin(), distributions.end(), [](const WslDistributionEntry& a, const WslDistributionEntry& b) {
+        return _wcsicmp(a.name.c_str(), b.name.c_str()) < 0;
+    });
 
     return distributions;
 }

@@ -3,9 +3,9 @@
 #include "Preferences.Advanced.h"
 #include "Preferences.CompareDirectories.h"
 #include "Preferences.Dialog.h"
-#include "Preferences.HotPaths.h"
 #include "Preferences.Editors.h"
 #include "Preferences.General.h"
+#include "Preferences.HotPaths.h"
 #include "Preferences.Internal.h"
 #include "Preferences.Keyboard.h"
 #include "Preferences.Mouse.h"
@@ -765,7 +765,7 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
 }
 
 [[nodiscard]] bool AreEquivalentCompareDirectoriesSettings(const Common::Settings::CompareDirectoriesSettings& a,
-                                                          const Common::Settings::CompareDirectoriesSettings& b) noexcept
+                                                           const Common::Settings::CompareDirectoriesSettings& b) noexcept
 {
     return a.compareSize == b.compareSize && a.compareDateTime == b.compareDateTime && a.compareAttributes == b.compareAttributes &&
            a.compareContent == b.compareContent && a.compareSubdirectories == b.compareSubdirectories &&
@@ -2512,7 +2512,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
             }
 
             const bool visuallyDisabled = control && GetPropW(control, kPrefsVisuallyDisabledProp) != nullptr;
-            bool enabled = true;
+            bool enabled                = true;
             if (control)
             {
                 enabled = IsWindowEnabled(control) != FALSE;
@@ -2547,8 +2547,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                             }
                         }
 
-                        COLORREF textColor =
-                            (comboEnabled && ! visuallyDisabled) ? state->theme.menu.text : GetDisabledTextColor(*state, background);
+                        COLORREF textColor = (comboEnabled && ! visuallyDisabled) ? state->theme.menu.text : GetDisabledTextColor(*state, background);
                         if (comboEnabled && ! visuallyDisabled && ! state->theme.highContrast && ! state->theme.systemHighContrast)
                         {
                             constexpr int kMinTextLumaDiff = 80;
@@ -2640,7 +2639,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                     textColor = ChooseContrastingTextColor(background);
                 }
             }
-            HBRUSH brush             = state->backgroundBrush ? state->backgroundBrush.get() : reinterpret_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+            HBRUSH brush = state->backgroundBrush ? state->backgroundBrush.get() : reinterpret_cast<HBRUSH>(GetStockObject(DC_BRUSH));
             if (themedInputs)
             {
                 if (! enabled)
@@ -3671,14 +3670,13 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 }
 
                 RemoveWindowSubclass(dlg, PreferencesWheelRouteSubclassProc, kPrefsWheelRouteSubclassId);
-                EnumChildWindows(
-                    dlg,
-                    [](HWND child, LPARAM) noexcept -> BOOL
-                    {
-                        RemoveWindowSubclass(child, PreferencesWheelRouteSubclassProc, kPrefsWheelRouteSubclassId);
-                        return TRUE;
-                    },
-                    0);
+                EnumChildWindows(dlg,
+                                 [](HWND child, LPARAM) noexcept -> BOOL
+                {
+                    RemoveWindowSubclass(child, PreferencesWheelRouteSubclassProc, kPrefsWheelRouteSubclassId);
+                    return TRUE;
+                },
+                                 0);
 
                 SetState(dlg, nullptr);
                 if (g_preferencesDialog.get() == dlg)
@@ -3694,8 +3692,8 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 }
 } // namespace
 
-[[nodiscard]] bool
-PreferencesDialog::Show(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme, PrefCategory initialCategory) noexcept
+[[nodiscard]] bool PreferencesDialog::Show(
+    HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme, PrefCategory initialCategory) noexcept
 {
     if (const HWND existing = g_preferencesDialog.get())
     {

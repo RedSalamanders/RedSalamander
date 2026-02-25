@@ -298,22 +298,22 @@ HRESULT FilesInformationCurl::BuildFromEntries(std::vector<Entry> entries) noexc
     std::sort(entries.begin(),
               entries.end(),
               [](const Entry& a, const Entry& b)
-              {
-                  const int cmp = OrdinalString::Compare(a.name, b.name, true);
-                  if (cmp != 0)
-                  {
-                      return cmp < 0;
-                  }
+    {
+        const int cmp = OrdinalString::Compare(a.name, b.name, true);
+        if (cmp != 0)
+        {
+            return cmp < 0;
+        }
 
-                  const bool aDir = (a.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                  const bool bDir = (b.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                  if (aDir != bDir)
-                  {
-                      return aDir;
-                  }
+        const bool aDir = (a.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const bool bDir = (b.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        if (aDir != bDir)
+        {
+            return aDir;
+        }
 
-                  return a.sizeBytes < b.sizeBytes;
-              });
+        return a.sizeBytes < b.sizeBytes;
+    });
 
     size_t totalBytes = 0;
     for (const auto& entry : entries)
@@ -1643,10 +1643,10 @@ HRESULT EnsureCurlInitialized() noexcept
 
     std::call_once(initOnce,
                    []() noexcept
-                   {
-                       const CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
-                       initResult.store(code == CURLE_OK ? S_OK : E_FAIL, std::memory_order_release);
-                   });
+    {
+        const CURLcode code = curl_global_init(CURL_GLOBAL_DEFAULT);
+        initResult.store(code == CURLE_OK ? S_OK : E_FAIL, std::memory_order_release);
+    });
 
     return initResult.load(std::memory_order_acquire);
 }
@@ -1709,28 +1709,28 @@ void CurlShareUnlock(CURL* /*handle*/, curl_lock_data data, void* userptr) noexc
 
     std::call_once(initOnce,
                    [&]() noexcept
-                   {
-                       if (FAILED(EnsureCurlInitialized()))
-                       {
-                           return;
-                       }
+    {
+        if (FAILED(EnsureCurlInitialized()))
+        {
+            return;
+        }
 
-                       CURLSH* share = curl_share_init();
-                       if (! share)
-                       {
-                           return;
-                       }
+        CURLSH* share = curl_share_init();
+        if (! share)
+        {
+            return;
+        }
 
-                       curl_share_setopt(share, CURLSHOPT_USERDATA, &ctx);
-                       curl_share_setopt(share, CURLSHOPT_LOCKFUNC, CurlShareLock);
-                       curl_share_setopt(share, CURLSHOPT_UNLOCKFUNC, CurlShareUnlock);
+        curl_share_setopt(share, CURLSHOPT_USERDATA, &ctx);
+        curl_share_setopt(share, CURLSHOPT_LOCKFUNC, CurlShareLock);
+        curl_share_setopt(share, CURLSHOPT_UNLOCKFUNC, CurlShareUnlock);
 
-                       curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
-                       curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
-                       curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
+        curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_DNS);
+        curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_SSL_SESSION);
+        curl_share_setopt(share, CURLSHOPT_SHARE, CURL_LOCK_DATA_CONNECT);
 
-                       ctx.share = share;
-                   });
+        ctx.share = share;
+    });
 
     return ctx.share;
 }

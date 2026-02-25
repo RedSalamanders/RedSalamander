@@ -90,8 +90,10 @@ namespace
 }
 } // namespace
 
-[[nodiscard]] HRESULT
-ListS3TableNamespaces(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::wstring_view bucketName, std::vector<FilesInformationS3::Entry>& out) noexcept
+[[nodiscard]] HRESULT ListS3TableNamespaces(FileSystemS3& fs,
+                                            const ResolvedAwsContext& ctx,
+                                            std::wstring_view bucketName,
+                                            std::vector<FilesInformationS3::Entry>& out) noexcept
 {
     out.clear();
 

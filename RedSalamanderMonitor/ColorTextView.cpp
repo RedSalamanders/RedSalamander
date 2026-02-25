@@ -15,8 +15,8 @@
 #include <utility>
 
 #pragma warning(push)
-#pragma warning(                                                                                                                                               \
-    disable : 4625 4626 5026 5027) // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
+#pragma warning(disable                                                                                                                                        \
+                : 4625 4626 5026 5027) // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
 #include <wil/resource.h>
 #include <wil/result_macros.h>
 #pragma warning(pop)
@@ -97,9 +97,9 @@ static size_t FindCaseIncensitive(const std::wstring& hay, const std::wstring& n
                           lowerNeedle.begin(),
                           lowerNeedle.end(),
                           [](wchar_t hayChar, wchar_t needleChar)
-                          {
-                              return towlower(hayChar) == needleChar; // needleChar is already lowercase
-                          });
+    {
+        return towlower(hayChar) == needleChar; // needleChar is already lowercase
+    });
 
     return (it == hayEnd) ? std::wstring::npos : (it - hay.begin());
 }
@@ -1094,10 +1094,9 @@ void ColorTextView::EnsureCaretVisible()
         }
         else if (! _sliceFilteredRuns.empty())
         {
-            auto it = std::upper_bound(_sliceFilteredRuns.begin(),
-                                       _sliceFilteredRuns.end(),
-                                       _caretPos,
-                                       [](UINT32 value, const FilteredTextRun& run) { return value < run.sourceStart; });
+            auto it = std::upper_bound(_sliceFilteredRuns.begin(), _sliceFilteredRuns.end(), _caretPos, [](UINT32 value, const FilteredTextRun& run) {
+                return value < run.sourceStart;
+            });
             if (it != _sliceFilteredRuns.begin())
                 --it;
 

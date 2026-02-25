@@ -126,7 +126,7 @@ struct FoldersSettings
     FolderLayoutSettings layout;
     bool showHiddenFiles = true;
     bool showSystemFiles = true;
-    uint32_t historyMax = 20u;
+    uint32_t historyMax  = 20u;
     std::vector<std::filesystem::path> history;
     std::vector<FolderHistoryFilterState> historyFilters;
     std::vector<FolderPane> items;
@@ -299,7 +299,7 @@ struct CompareDirectoriesSettings
 struct HotPathSlot
 {
     std::wstring path;
-    std::wstring label;      // empty = derive display name from path
+    std::wstring label; // empty = derive display name from path
     bool showInMenu = false;
 };
 

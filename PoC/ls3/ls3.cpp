@@ -154,8 +154,7 @@ typedef enum _FILE_INFORMATION_CLASS_ALL // from ntifs.h
     FileHardLinkFullIdInformation,          // 62
     FileIdExtdBothDirectoryInformation,     // 63
     FileMaximumInformation
-} FILE_INFORMATION_CLASS_ALL,
-    *PFILE_INFORMATION_CLASS_ALL;
+} FILE_INFORMATION_CLASS_ALL, *PFILE_INFORMATION_CLASS_ALL;
 
 // --- tiny utils --------------------------------------------------------------
 static inline bool IsDotOrDotDot(const wchar_t* name)

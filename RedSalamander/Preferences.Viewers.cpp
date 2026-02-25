@@ -397,9 +397,9 @@ void PopulateViewersPluginCombo(PreferencesDialogState& state) noexcept
 
     ensureBuiltin(L"builtin/viewer-text", LoadStringResource(nullptr, IDS_PREFS_VIEWERS_BUILTIN_TEXT_VIEWER));
 
-    std::sort(state.viewersPluginOptions.begin(),
-              state.viewersPluginOptions.end(),
-              [](const ViewerPluginOption& a, const ViewerPluginOption& b) noexcept { return _wcsicmp(a.displayName.c_str(), b.displayName.c_str()) < 0; });
+    std::sort(state.viewersPluginOptions.begin(), state.viewersPluginOptions.end(), [](const ViewerPluginOption& a, const ViewerPluginOption& b) noexcept {
+        return _wcsicmp(a.displayName.c_str(), b.displayName.c_str()) < 0;
+    });
 
     SendMessageW(state.viewersViewerCombo.get(), CB_RESETCONTENT, 0, 0);
 

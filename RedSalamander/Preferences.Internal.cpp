@@ -528,8 +528,7 @@ void CreateFramedEditBox(PreferencesDialogState& state, HWND parent, HWND& outFr
     if (outEdit)
     {
         // Ensure edit controls render with consistent dark/light text colors.
-        const wchar_t* themeName =
-            (state.theme.highContrast || state.theme.systemHighContrast) ? L"" : (state.theme.dark ? L"DarkMode_Explorer" : L"Explorer");
+        const wchar_t* themeName = (state.theme.highContrast || state.theme.systemHighContrast) ? L"" : (state.theme.dark ? L"DarkMode_Explorer" : L"Explorer");
         SetWindowTheme(outEdit, themeName, nullptr);
         SendMessageW(outEdit, WM_THEMECHANGED, 0, 0);
     }
@@ -619,27 +618,27 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
     std::sort(out.begin(),
               out.end(),
               [](const PrefsPluginListItem& a, const PrefsPluginListItem& b) noexcept
-              {
-                  if (a.type != b.type)
-                  {
-                      return a.type < b.type;
-                  }
+    {
+        if (a.type != b.type)
+        {
+            return a.type < b.type;
+        }
 
-                  const int aOrigin = GetOriginOrder(a);
-                  const int bOrigin = GetOriginOrder(b);
-                  if (aOrigin != bOrigin)
-                  {
-                      return aOrigin < bOrigin;
-                  }
+        const int aOrigin = GetOriginOrder(a);
+        const int bOrigin = GetOriginOrder(b);
+        if (aOrigin != bOrigin)
+        {
+            return aOrigin < bOrigin;
+        }
 
-                  const std::wstring_view aName = GetDisplayName(a);
-                  const std::wstring_view bName = GetDisplayName(b);
-                  if (aName.empty() || bName.empty())
-                  {
-                      return aName < bName;
-                  }
-                  return _wcsicmp(aName.data(), bName.data()) < 0;
-              });
+        const std::wstring_view aName = GetDisplayName(a);
+        const std::wstring_view bName = GetDisplayName(b);
+        if (aName.empty() || bName.empty())
+        {
+            return aName < bName;
+        }
+        return _wcsicmp(aName.data(), bName.data()) < 0;
+    });
 }
 
 [[nodiscard]] std::wstring_view GetId(const PrefsPluginListItem& item) noexcept
@@ -751,30 +750,6 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
 
 namespace PrefsUi
 {
-std::wstring GetWindowTextString(HWND hwnd) noexcept
-{
-    if (! hwnd)
-    {
-        return {};
-    }
-
-    const int length = GetWindowTextLengthW(hwnd);
-    if (length <= 0)
-    {
-        return {};
-    }
-
-    std::wstring text;
-    text.resize(static_cast<size_t>(length) + 1u);
-    const int copied = GetWindowTextW(hwnd, text.data(), length + 1);
-    if (copied <= 0)
-    {
-        return {};
-    }
-    text.resize(static_cast<size_t>(copied));
-    return text;
-}
-
 int MeasureStaticTextHeight(HWND referenceWindow, HFONT font, int width, std::wstring_view text) noexcept
 {
     if (! referenceWindow || ! font || width <= 0 || text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
@@ -824,11 +799,9 @@ bool ContainsCaseInsensitive(std::wstring_view haystack, std::wstring_view needl
         return true;
     }
 
-    const auto it = std::search(haystack.begin(),
-                                haystack.end(),
-                                needle.begin(),
-                                needle.end(),
-                                [](wchar_t a, wchar_t b) noexcept { return std::towlower(static_cast<wint_t>(a)) == std::towlower(static_cast<wint_t>(b)); });
+    const auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(), [](wchar_t a, wchar_t b) noexcept {
+        return std::towlower(static_cast<wint_t>(a)) == std::towlower(static_cast<wint_t>(b));
+    });
     return it != haystack.end();
 }
 

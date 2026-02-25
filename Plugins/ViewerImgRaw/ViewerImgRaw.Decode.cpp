@@ -166,8 +166,8 @@ std::wstring TrimSpaces(std::wstring_view text);
     return true;
 }
 
-[[nodiscard]] bool
-ReadTiffLong(const uint8_t* tiffBase, size_t tiffSize, bool littleEndian, uint32_t valueOrOffset, uint32_t count, uint32_t& outValue) noexcept
+[[nodiscard]] bool ReadTiffLong(
+    const uint8_t* tiffBase, size_t tiffSize, bool littleEndian, uint32_t valueOrOffset, uint32_t count, uint32_t& outValue) noexcept
 {
     outValue = 0;
     if (! tiffBase || tiffSize == 0 || count == 0)
@@ -191,8 +191,8 @@ ReadTiffLong(const uint8_t* tiffBase, size_t tiffSize, bool littleEndian, uint32
     return true;
 }
 
-[[nodiscard]] bool
-ReadTiffRational(const uint8_t* tiffBase, size_t tiffSize, bool littleEndian, uint32_t valueOrOffset, uint32_t count, float& outValue) noexcept
+[[nodiscard]] bool ReadTiffRational(
+    const uint8_t* tiffBase, size_t tiffSize, bool littleEndian, uint32_t valueOrOffset, uint32_t count, float& outValue) noexcept
 {
     outValue = 0.0f;
     if (! tiffBase || tiffSize == 0 || count == 0)
@@ -1273,12 +1273,11 @@ HRESULT DecodeRawFullImageFromBufferToBgra(const RawDecodeSettings& cfg,
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
-    auto freeMemImg = wil::scope_exit(
-        [&]
-        {
-            LibRaw::dcraw_clear_mem(memImg);
-            raw.recycle();
-        });
+    auto freeMemImg = wil::scope_exit([&]
+    {
+        LibRaw::dcraw_clear_mem(memImg);
+        raw.recycle();
+    });
 
     const uint32_t w      = static_cast<uint32_t>(memImg->width);
     const uint32_t h      = static_cast<uint32_t>(memImg->height);
@@ -2202,19 +2201,19 @@ void ViewerImgRaw::StartPrefetchNeighbors(uint64_t requestId) noexcept
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    {
+        std::unique_ptr<PrefetchWorkItem> ctx(static_cast<PrefetchWorkItem*>(context));
+        if (! ctx)
         {
-            std::unique_ptr<PrefetchWorkItem> ctx(static_cast<PrefetchWorkItem*>(context));
-            if (! ctx)
-            {
-                return;
-            }
+            return;
+        }
 
-            static_cast<void>(ctx->moduleKeepAlive);
-            if (ctx->work)
-            {
-                ctx->work();
-            }
-        },
+        static_cast<void>(ctx->moduleKeepAlive);
+        if (ctx->work)
+        {
+            ctx->work();
+        }
+    },
         ctx.get(),
         nullptr);
 
@@ -2374,16 +2373,15 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
             return;
         }
 
-        auto postResult = wil::scope_exit(
-            [&]
+        auto postResult = wil::scope_exit([&]
+        {
+            if (! hwnd || GetWindowLongPtrW(hwnd, GWLP_USERDATA) != reinterpret_cast<LONG_PTR>(this))
             {
-                if (! hwnd || GetWindowLongPtrW(hwnd, GWLP_USERDATA) != reinterpret_cast<LONG_PTR>(this))
-                {
-                    return;
-                }
+                return;
+            }
 
-                static_cast<void>(PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(result)));
-            });
+            static_cast<void>(PostMessagePayload(hwnd, kAsyncOpenCompleteMessage, 0, std::move(result)));
+        });
 
         result->viewer           = this;
         result->requestId        = requestId;
@@ -2779,19 +2777,19 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    {
+        std::unique_ptr<AsyncOpenWorkItem> ctx(static_cast<AsyncOpenWorkItem*>(context));
+        if (! ctx)
         {
-            std::unique_ptr<AsyncOpenWorkItem> ctx(static_cast<AsyncOpenWorkItem*>(context));
-            if (! ctx)
-            {
-                return;
-            }
+            return;
+        }
 
-            static_cast<void>(ctx->moduleKeepAlive);
-            if (ctx->work)
-            {
-                ctx->work();
-            }
-        },
+        static_cast<void>(ctx->moduleKeepAlive);
+        if (ctx->work)
+        {
+            ctx->work();
+        }
+    },
         ctx.get(),
         nullptr);
 

@@ -225,7 +225,38 @@ void FolderView::SelectAll()
 
     _selectionStats = stats;
     NotifySelectionChanged();
-    InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+    UpdateIncrementalSearchHighlightForFocusedItem();
+}
+
+void FolderView::InvertSelection()
+{
+    if (_items.empty())
+    {
+        _selectionStats = {};
+        NotifySelectionChanged();
+        if (_hWnd)
+        {
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
+        UpdateIncrementalSearchHighlightForFocusedItem();
+        return;
+    }
+
+    for (auto& item : _items)
+    {
+        item.selected = ! item.selected;
+    }
+
+    RecomputeSelectionStats();
+    NotifySelectionChanged();
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
     UpdateIncrementalSearchHighlightForFocusedItem();
 }
 
@@ -398,6 +429,115 @@ void FolderView::UnselectSameExtension()
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
     UpdateIncrementalSearchHighlightForFocusedItem();
+}
+
+void FolderView::HideSelectedNames()
+{
+    if (_items.empty())
+    {
+        return;
+    }
+
+    std::vector<std::wstring> namesToHide;
+    namesToHide.reserve(static_cast<size_t>(_selectionStats.selectedFolders + _selectionStats.selectedFiles));
+
+    for (const auto& item : _items)
+    {
+        if (! item.selected || item.displayName.empty())
+        {
+            continue;
+        }
+
+        namesToHide.emplace_back(item.displayName);
+    }
+
+    if (namesToHide.empty())
+    {
+        return;
+    }
+
+    const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
+    auto updated           = hiddenNames ? std::make_shared<HiddenNamesFilter>(*hiddenNames) : std::make_shared<HiddenNamesFilter>();
+    updated->names.reserve(updated->names.size() + namesToHide.size());
+    for (auto& name : namesToHide)
+    {
+        updated->names.insert(std::move(name));
+    }
+
+    std::shared_ptr<const HiddenNamesFilter> updatedConst = std::move(updated);
+    _hiddenNames.store(std::move(updatedConst), std::memory_order_release);
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+
+    RequestRefreshFromCache();
+}
+
+void FolderView::HideUnselectedNames()
+{
+    if (_items.empty())
+    {
+        return;
+    }
+
+    bool hasSelected = false;
+    std::vector<std::wstring> namesToHide;
+    namesToHide.reserve(_items.size());
+
+    for (const auto& item : _items)
+    {
+        hasSelected = hasSelected || item.selected;
+
+        if (item.selected || item.displayName.empty())
+        {
+            continue;
+        }
+
+        namesToHide.emplace_back(item.displayName);
+    }
+
+    if (! hasSelected || namesToHide.empty())
+    {
+        return;
+    }
+
+    const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
+    auto updated           = hiddenNames ? std::make_shared<HiddenNamesFilter>(*hiddenNames) : std::make_shared<HiddenNamesFilter>();
+    updated->names.reserve(updated->names.size() + namesToHide.size());
+    for (auto& name : namesToHide)
+    {
+        updated->names.insert(std::move(name));
+    }
+
+    std::shared_ptr<const HiddenNamesFilter> updatedConst = std::move(updated);
+    _hiddenNames.store(std::move(updatedConst), std::memory_order_release);
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+
+    RequestRefreshFromCache();
+}
+
+void FolderView::ShowHiddenNames()
+{
+    const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
+    if (! hiddenNames || hiddenNames->names.empty())
+    {
+        return;
+    }
+
+    _hiddenNames.store(std::shared_ptr<const HiddenNamesFilter>{}, std::memory_order_release);
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+
+    RequestRefreshFromCache();
 }
 
 void FolderView::RecomputeSelectionStats() noexcept
@@ -712,6 +852,30 @@ std::vector<std::filesystem::path> FolderView::GetSelectedOrFocusedPaths() const
     return paths;
 }
 
+std::vector<std::wstring> FolderView::GetSelectedOrFocusedDisplayNames() const
+{
+    std::vector<std::wstring> names;
+    for (const auto& item : _items)
+    {
+        if (item.selected)
+        {
+            names.emplace_back(item.displayName);
+        }
+    }
+
+    if (! names.empty())
+    {
+        return names;
+    }
+
+    if (_focusedIndex != static_cast<size_t>(-1) && _focusedIndex < _items.size())
+    {
+        names.emplace_back(_items[_focusedIndex].displayName);
+    }
+
+    return names;
+}
+
 std::vector<FolderView::PathAttributes> FolderView::GetSelectedOrFocusedPathAttributes() const
 {
     std::vector<PathAttributes> items;
@@ -762,3 +926,113 @@ std::vector<std::filesystem::path> FolderView::GetSelectedDirectoryPaths() const
     }
     return paths;
 }
+
+#ifdef _DEBUG
+std::wstring_view FolderView::DebugGetFocusedDisplayName() const noexcept
+{
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex == invalidIndex || _focusedIndex >= _items.size())
+    {
+        return {};
+    }
+
+    return _items[_focusedIndex].displayName;
+}
+
+bool FolderView::DebugHasItemDisplayName(std::wstring_view displayName) const noexcept
+{
+    if (displayName.empty())
+    {
+        return false;
+    }
+
+    for (const auto& item : _items)
+    {
+        if (item.displayName == displayName)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool FolderView::DebugIsItemSelectedByDisplayName(std::wstring_view displayName) const noexcept
+{
+    if (displayName.empty())
+    {
+        return false;
+    }
+
+    for (const auto& item : _items)
+    {
+        if (item.displayName == displayName)
+        {
+            return item.selected;
+        }
+    }
+
+    return false;
+}
+
+size_t FolderView::DebugGetSelectedItemCount() const noexcept
+{
+    size_t count = 0;
+    for (const auto& item : _items)
+    {
+        if (item.selected)
+        {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+bool FolderView::DebugIsEmptyFolderStateActive() const noexcept
+{
+    return CanShowEmptyFolderState() && _emptyFolderState.has_value();
+}
+
+FolderView::FilterWatermarkVisualMode FolderView::DebugGetFilterWatermarkVisualMode() const noexcept
+{
+    if (! IsNameFilterActive())
+    {
+        return FilterWatermarkVisualMode::None;
+    }
+
+    if (! _items.empty())
+    {
+        return FilterWatermarkVisualMode::Background;
+    }
+
+    bool hasOverlay = false;
+    {
+        std::lock_guard lock(_errorOverlayMutex);
+        hasOverlay = _errorOverlay.has_value();
+    }
+
+    const bool canShowEmptyUi = ! hasOverlay && ! _pendingBusyOverlay.has_value();
+    if (canShowEmptyUi && ! _emptyStateMessage.empty())
+    {
+        return FilterWatermarkVisualMode::Badge;
+    }
+
+    if (canShowEmptyUi && CanShowEmptyFolderState() && _emptyFolderState.has_value())
+    {
+        return FilterWatermarkVisualMode::Badge;
+    }
+
+    return FilterWatermarkVisualMode::Background;
+}
+
+std::wstring_view FolderView::DebugGetEmptyFolderFunMessage() const noexcept
+{
+    if (! _emptyFolderState)
+    {
+        return {};
+    }
+
+    return _emptyFolderState->funMessage;
+}
+#endif

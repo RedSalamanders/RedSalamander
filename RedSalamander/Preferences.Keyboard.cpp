@@ -1591,18 +1591,18 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
     std::sort(commands.begin(),
               commands.end(),
               [](const CommandEntry& a, const CommandEntry& b) noexcept
-              {
-                  const int cmp = CompareStringOrdinal(a.displayName.c_str(), -1, b.displayName.c_str(), -1, TRUE);
-                  if (cmp == CSTR_LESS_THAN)
-                  {
-                      return true;
-                  }
-                  if (cmp == CSTR_GREATER_THAN)
-                  {
-                      return false;
-                  }
-                  return CompareStringOrdinal(a.id.c_str(), -1, b.id.c_str(), -1, TRUE) == CSTR_LESS_THAN;
-              });
+    {
+        const int cmp = CompareStringOrdinal(a.displayName.c_str(), -1, b.displayName.c_str(), -1, TRUE);
+        if (cmp == CSTR_LESS_THAN)
+        {
+            return true;
+        }
+        if (cmp == CSTR_GREATER_THAN)
+        {
+            return false;
+        }
+        return CompareStringOrdinal(a.id.c_str(), -1, b.id.c_str(), -1, TRUE) == CSTR_LESS_THAN;
+    });
 
     const auto matchesSearch = [&](const KeyboardShortcutRow& row) noexcept
     {
@@ -2217,17 +2217,17 @@ void KeyboardPane::ResetShortcutsToDefaults(HWND host, PreferencesDialogState& s
         std::sort(items.begin(),
                   items.end(),
                   [](const Common::Settings::ShortcutBinding* a, const Common::Settings::ShortcutBinding* b)
-                  {
-                      if (a->vk != b->vk)
-                      {
-                          return a->vk < b->vk;
-                      }
-                      if (a->modifiers != b->modifiers)
-                      {
-                          return a->modifiers < b->modifiers;
-                      }
-                      return a->commandId < b->commandId;
-                  });
+        {
+            if (a->vk != b->vk)
+            {
+                return a->vk < b->vk;
+            }
+            if (a->modifiers != b->modifiers)
+            {
+                return a->modifiers < b->modifiers;
+            }
+            return a->commandId < b->commandId;
+        });
 
         for (const Common::Settings::ShortcutBinding* binding : items)
         {

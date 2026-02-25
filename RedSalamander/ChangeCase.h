@@ -30,9 +30,9 @@ enum class ChangeTarget : uint8_t
 
 struct Options
 {
-    CaseStyle style      = CaseStyle::Lower;
-    ChangeTarget target  = ChangeTarget::WholeFilename;
-    bool includeSubdirs  = false;
+    CaseStyle style     = CaseStyle::Lower;
+    ChangeTarget target = ChangeTarget::WholeFilename;
+    bool includeSubdirs = false;
 };
 
 [[nodiscard]] std::wstring TransformLeafName(std::wstring_view leafName, const Options& options) noexcept;
@@ -48,8 +48,8 @@ struct ProgressUpdate final
     Phase phase = Phase::Enumerating;
     std::filesystem::path currentPath;
 
-    uint64_t scannedFolders   = 0;
-    uint64_t scannedEntries   = 0;
+    uint64_t scannedFolders = 0;
+    uint64_t scannedEntries = 0;
 
     uint64_t plannedRenames   = 0;
     uint64_t completedRenames = 0;
@@ -63,9 +63,9 @@ using ProgressCallback = void (*)(const ProgressUpdate& update, void* cookie) no
 // - Renames are batched via IFileSystem::RenameItems.
 // - stopToken allows cooperative cancellation.
 [[nodiscard]] HRESULT ApplyToPaths(IFileSystem& fileSystem,
-                                  const std::vector<std::filesystem::path>& inputPaths,
-                                  const Options& options,
-                                  std::stop_token stopToken = {},
-                                  ProgressCallback progress = nullptr,
-                                  void* progressCookie      = nullptr) noexcept;
+                                   const std::vector<std::filesystem::path>& inputPaths,
+                                   const Options& options,
+                                   std::stop_token stopToken = {},
+                                   ProgressCallback progress = nullptr,
+                                   void* progressCookie      = nullptr) noexcept;
 } // namespace ChangeCase

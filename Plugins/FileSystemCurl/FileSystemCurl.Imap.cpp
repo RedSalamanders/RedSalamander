@@ -50,8 +50,10 @@ static constexpr DWORD kImapFileAttributeDeleted = 0x08000000u;
     return std::format("{}://{}{}", ImapSchemeForConnection(conn), authority, pathUtf8);
 }
 
-[[nodiscard]] HRESULT
-CurlPerformImapCustomRequest(const ConnectionInfo& conn, std::wstring_view mailboxPath, std::string_view request, std::string& outResponse) noexcept
+[[nodiscard]] HRESULT CurlPerformImapCustomRequest(const ConnectionInfo& conn,
+                                                   std::wstring_view mailboxPath,
+                                                   std::string_view request,
+                                                   std::string& outResponse) noexcept
 {
     outResponse.clear();
 
@@ -3530,8 +3532,9 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
     return true;
 }
 
-[[nodiscard]] HRESULT
-ImapReadDirectoryEntries(const ConnectionInfo& conn, std::wstring_view pluginPath, std::vector<FilesInformationCurl::Entry>& entries) noexcept
+[[nodiscard]] HRESULT ImapReadDirectoryEntries(const ConnectionInfo& conn,
+                                               std::wstring_view pluginPath,
+                                               std::vector<FilesInformationCurl::Entry>& entries) noexcept
 {
     entries.clear();
 
@@ -4028,175 +4031,174 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
         settings = _settings;
     }
 
-    return FileSystemCurlInternal::ResolveLocationWithAuthRetry(
-        _protocol,
-        settings,
-        path,
-        _hostConnections.get(),
-        true,
-        [&](const FileSystemCurlInternal::ResolvedLocation& resolved) noexcept
+    return FileSystemCurlInternal::ResolveLocationWithAuthRetry(_protocol,
+                                                                settings,
+                                                                path,
+                                                                _hostConnections.get(),
+                                                                true,
+                                                                [&](const FileSystemCurlInternal::ResolvedLocation& resolved) noexcept
+    {
+        FilesInformationCurl::Entry entry{};
+        HRESULT hr = FileSystemCurlInternal::GetEntryInfo(resolved.connection, resolved.remotePath, entry);
+        if (FAILED(hr))
         {
-            FilesInformationCurl::Entry entry{};
-            HRESULT hr = FileSystemCurlInternal::GetEntryInfo(resolved.connection, resolved.remotePath, entry);
-            if (FAILED(hr))
+            return hr;
+        }
+
+        yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
+        if (! doc)
+        {
+            return E_OUTOFMEMORY;
+        }
+        auto freeDoc = wil::scope_exit([&] { yyjson_mut_doc_free(doc); });
+
+        yyjson_mut_val* root = yyjson_mut_obj(doc);
+        yyjson_mut_doc_set_root(doc, root);
+
+        yyjson_mut_obj_add_int(doc, root, "version", 1);
+        yyjson_mut_obj_add_str(doc, root, "title", "properties");
+
+        yyjson_mut_val* sections = yyjson_mut_arr(doc);
+        yyjson_mut_obj_add_val(doc, root, "sections", sections);
+
+        auto addSection = [&](const char* title) -> yyjson_mut_val*
+        {
+            yyjson_mut_val* section = yyjson_mut_obj(doc);
+            yyjson_mut_obj_add_str(doc, section, "title", title);
+
+            yyjson_mut_val* fields = yyjson_mut_arr(doc);
+            yyjson_mut_obj_add_val(doc, section, "fields", fields);
+
+            yyjson_mut_arr_add_val(sections, section);
+            return fields;
+        };
+
+        auto addField = [&](yyjson_mut_val* fields, const char* key, std::string value)
+        {
+            yyjson_mut_val* field = yyjson_mut_obj(doc);
+            yyjson_mut_obj_add_strcpy(doc, field, "key", key);
+            yyjson_mut_obj_add_strncpy(doc, field, "value", value.data(), value.size());
+            yyjson_mut_arr_add_val(fields, field);
+        };
+
+        const std::wstring normalizedPath = FileSystemCurlInternal::NormalizePluginPath(resolved.remotePath);
+
+        yyjson_mut_val* general = addSection("general");
+        addField(general, "name", FileSystemCurlInternal::Utf8FromUtf16(entry.name));
+        addField(general, "path", FileSystemCurlInternal::Utf8FromUtf16(normalizedPath));
+        addField(general, "type", (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ? std::string("directory") : std::string("file"));
+        addField(general, "attributes", std::format("0x{:08x}", entry.attributes));
+        if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        {
+            addField(general, "sizeBytes", std::format("{}", entry.sizeBytes));
+        }
+
+        yyjson_mut_val* remote = addSection("remote");
+        addField(remote, "remotePath", FileSystemCurlInternal::Utf8FromUtf16(resolved.remotePath));
+        addField(remote,
+                 "displayPath",
+                 FileSystemCurlInternal::Utf8FromUtf16(FileSystemCurlInternal::BuildDisplayPath(resolved.connection.protocol, normalizedPath)));
+
+        yyjson_mut_val* connection = addSection("connection");
+        addField(connection, "protocol", FileSystemCurlInternal::Utf8FromUtf16(FileSystemCurlInternal::ProtocolToDisplay(resolved.connection.protocol)));
+        addField(connection, "host", resolved.connection.host);
+        addField(connection, "user", resolved.connection.user);
+        addField(connection, "basePath", resolved.connection.basePath);
+        addField(connection, "fromConnectionManagerProfile", resolved.connection.fromConnectionManagerProfile ? "true" : "false");
+        addField(connection, "connectionName", FileSystemCurlInternal::Utf8FromUtf16(resolved.connection.connectionName));
+        addField(connection, "connectionId", FileSystemCurlInternal::Utf8FromUtf16(resolved.connection.connectionId));
+        addField(connection, "connectionAuthMode", FileSystemCurlInternal::Utf8FromUtf16(resolved.connection.connectionAuthMode));
+        addField(connection, "connectionSavePassword", resolved.connection.connectionSavePassword ? "true" : "false");
+        addField(connection, "connectionRequireHello", resolved.connection.connectionRequireHello ? "true" : "false");
+        addField(connection, "connectTimeoutMs", std::format("{}", resolved.connection.connectTimeoutMs));
+        addField(connection, "operationTimeoutMs", std::format("{}", resolved.connection.operationTimeoutMs));
+        addField(connection, "ignoreSslTrust", resolved.connection.ignoreSslTrust ? "true" : "false");
+        addField(connection, "ftpUseEpsv", resolved.connection.ftpUseEpsv ? "true" : "false");
+        addField(connection, "hasPassword", ! resolved.connection.password.empty() ? "true" : "false");
+        addField(connection, "hasSshPrivateKey", ! resolved.connection.sshPrivateKey.empty() ? "true" : "false");
+        addField(connection, "hasSshPublicKey", ! resolved.connection.sshPublicKey.empty() ? "true" : "false");
+        addField(connection, "hasSshKnownHosts", ! resolved.connection.sshKnownHosts.empty() ? "true" : "false");
+
+        if (resolved.connection.port.has_value())
+        {
+            addField(connection, "port", std::format("{}", resolved.connection.port.value()));
+        }
+
+        yyjson_mut_val* timestamps = addSection("timestamps");
+        addField(timestamps, "creationTime", std::format("{}", entry.creationTime));
+        addField(timestamps, "lastAccessTime", std::format("{}", entry.lastAccessTime));
+        addField(timestamps, "lastWriteTime", std::format("{}", entry.lastWriteTime));
+        addField(timestamps, "changeTime", std::format("{}", entry.changeTime));
+
+        if (resolved.connection.protocol == FileSystemCurlInternal::Protocol::Imap && (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        {
+            const std::wstring fullPath = FileSystemCurlInternal::JoinPluginPathWide(resolved.connection.basePathWide, resolved.remotePath);
+
+            const std::wstring_view leaf = FileSystemCurlInternal::LeafName(fullPath);
+            uint64_t uid                 = 0;
+
+            yyjson_mut_val* imap = addSection("imap");
+            addField(imap, "fullPath", FileSystemCurlInternal::Utf8FromUtf16(fullPath));
+
+            if (FileSystemCurlInternal::TryParseImapUidFromLeafName(leaf, uid))
             {
-                return hr;
-            }
+                addField(imap, "uid", std::format("{}", uid));
 
-            yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
-            if (! doc)
-            {
-                return E_OUTOFMEMORY;
-            }
-            auto freeDoc = wil::scope_exit([&] { yyjson_mut_doc_free(doc); });
-
-            yyjson_mut_val* root = yyjson_mut_obj(doc);
-            yyjson_mut_doc_set_root(doc, root);
-
-            yyjson_mut_obj_add_int(doc, root, "version", 1);
-            yyjson_mut_obj_add_str(doc, root, "title", "properties");
-
-            yyjson_mut_val* sections = yyjson_mut_arr(doc);
-            yyjson_mut_obj_add_val(doc, root, "sections", sections);
-
-            auto addSection = [&](const char* title) -> yyjson_mut_val*
-            {
-                yyjson_mut_val* section = yyjson_mut_obj(doc);
-                yyjson_mut_obj_add_str(doc, section, "title", title);
-
-                yyjson_mut_val* fields = yyjson_mut_arr(doc);
-                yyjson_mut_obj_add_val(doc, section, "fields", fields);
-
-                yyjson_mut_arr_add_val(sections, section);
-                return fields;
-            };
-
-            auto addField = [&](yyjson_mut_val* fields, const char* key, std::string value)
-            {
-                yyjson_mut_val* field = yyjson_mut_obj(doc);
-                yyjson_mut_obj_add_strcpy(doc, field, "key", key);
-                yyjson_mut_obj_add_strncpy(doc, field, "value", value.data(), value.size());
-                yyjson_mut_arr_add_val(fields, field);
-            };
-
-            const std::wstring normalizedPath = FileSystemCurlInternal::NormalizePluginPath(resolved.remotePath);
-
-            yyjson_mut_val* general = addSection("general");
-            addField(general, "name", FileSystemCurlInternal::Utf8FromUtf16(entry.name));
-            addField(general, "path", FileSystemCurlInternal::Utf8FromUtf16(normalizedPath));
-            addField(general, "type", (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0 ? std::string("directory") : std::string("file"));
-            addField(general, "attributes", std::format("0x{:08x}", entry.attributes));
-            if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
-            {
-                addField(general, "sizeBytes", std::format("{}", entry.sizeBytes));
-            }
-
-            yyjson_mut_val* remote = addSection("remote");
-            addField(remote, "remotePath", FileSystemCurlInternal::Utf8FromUtf16(resolved.remotePath));
-            addField(remote,
-                     "displayPath",
-                     FileSystemCurlInternal::Utf8FromUtf16(FileSystemCurlInternal::BuildDisplayPath(resolved.connection.protocol, normalizedPath)));
-
-            yyjson_mut_val* connection = addSection("connection");
-            addField(connection, "protocol", FileSystemCurlInternal::Utf8FromUtf16(FileSystemCurlInternal::ProtocolToDisplay(resolved.connection.protocol)));
-            addField(connection, "host", resolved.connection.host);
-            addField(connection, "user", resolved.connection.user);
-            addField(connection, "basePath", resolved.connection.basePath);
-            addField(connection, "fromConnectionManagerProfile", resolved.connection.fromConnectionManagerProfile ? "true" : "false");
-            addField(connection, "connectionName", FileSystemCurlInternal::Utf8FromUtf16(resolved.connection.connectionName));
-            addField(connection, "connectionId", FileSystemCurlInternal::Utf8FromUtf16(resolved.connection.connectionId));
-            addField(connection, "connectionAuthMode", FileSystemCurlInternal::Utf8FromUtf16(resolved.connection.connectionAuthMode));
-            addField(connection, "connectionSavePassword", resolved.connection.connectionSavePassword ? "true" : "false");
-            addField(connection, "connectionRequireHello", resolved.connection.connectionRequireHello ? "true" : "false");
-            addField(connection, "connectTimeoutMs", std::format("{}", resolved.connection.connectTimeoutMs));
-            addField(connection, "operationTimeoutMs", std::format("{}", resolved.connection.operationTimeoutMs));
-            addField(connection, "ignoreSslTrust", resolved.connection.ignoreSslTrust ? "true" : "false");
-            addField(connection, "ftpUseEpsv", resolved.connection.ftpUseEpsv ? "true" : "false");
-            addField(connection, "hasPassword", ! resolved.connection.password.empty() ? "true" : "false");
-            addField(connection, "hasSshPrivateKey", ! resolved.connection.sshPrivateKey.empty() ? "true" : "false");
-            addField(connection, "hasSshPublicKey", ! resolved.connection.sshPublicKey.empty() ? "true" : "false");
-            addField(connection, "hasSshKnownHosts", ! resolved.connection.sshKnownHosts.empty() ? "true" : "false");
-
-            if (resolved.connection.port.has_value())
-            {
-                addField(connection, "port", std::format("{}", resolved.connection.port.value()));
-            }
-
-            yyjson_mut_val* timestamps = addSection("timestamps");
-            addField(timestamps, "creationTime", std::format("{}", entry.creationTime));
-            addField(timestamps, "lastAccessTime", std::format("{}", entry.lastAccessTime));
-            addField(timestamps, "lastWriteTime", std::format("{}", entry.lastWriteTime));
-            addField(timestamps, "changeTime", std::format("{}", entry.changeTime));
-
-            if (resolved.connection.protocol == FileSystemCurlInternal::Protocol::Imap && (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
-            {
-                const std::wstring fullPath = FileSystemCurlInternal::JoinPluginPathWide(resolved.connection.basePathWide, resolved.remotePath);
-
-                const std::wstring_view leaf = FileSystemCurlInternal::LeafName(fullPath);
-                uint64_t uid                 = 0;
-
-                yyjson_mut_val* imap = addSection("imap");
-                addField(imap, "fullPath", FileSystemCurlInternal::Utf8FromUtf16(fullPath));
-
-                if (FileSystemCurlInternal::TryParseImapUidFromLeafName(leaf, uid))
+                std::wstring mailboxPath = FileSystemCurlInternal::ParentPath(fullPath);
+                mailboxPath              = std::wstring(FileSystemCurlInternal::TrimTrailingSlash(mailboxPath));
+                if (mailboxPath.empty())
                 {
-                    addField(imap, "uid", std::format("{}", uid));
+                    mailboxPath = L"/";
+                }
 
-                    std::wstring mailboxPath = FileSystemCurlInternal::ParentPath(fullPath);
-                    mailboxPath              = std::wstring(FileSystemCurlInternal::TrimTrailingSlash(mailboxPath));
-                    if (mailboxPath.empty())
+                if (mailboxPath != L"/")
+                {
+                    wchar_t delimiter = L'\0';
+                    hr                = FileSystemCurlInternal::ImapGetHierarchyDelimiter(resolved.connection, delimiter);
+                    if (SUCCEEDED(hr))
                     {
-                        mailboxPath = L"/";
-                    }
-
-                    if (mailboxPath != L"/")
-                    {
-                        wchar_t delimiter = L'\0';
-                        hr                = FileSystemCurlInternal::ImapGetHierarchyDelimiter(resolved.connection, delimiter);
-                        if (SUCCEEDED(hr))
+                        const std::wstring serverMailboxPath = FileSystemCurlInternal::ImapMailboxPathToServerMailboxPath(mailboxPath, delimiter);
+                        if (! serverMailboxPath.empty())
                         {
-                            const std::wstring serverMailboxPath = FileSystemCurlInternal::ImapMailboxPathToServerMailboxPath(mailboxPath, delimiter);
-                            if (! serverMailboxPath.empty())
+                            std::unordered_map<uint64_t, FileSystemCurlInternal::ImapMessageSummary> summaries;
+                            const uint64_t uidArr[1]{uid};
+                            hr = FileSystemCurlInternal::ImapFetchMessageSummaries(
+                                resolved.connection, serverMailboxPath, std::span<const uint64_t>(uidArr, 1), summaries);
+                            if (SUCCEEDED(hr))
                             {
-                                std::unordered_map<uint64_t, FileSystemCurlInternal::ImapMessageSummary> summaries;
-                                const uint64_t uidArr[1]{uid};
-                                hr = FileSystemCurlInternal::ImapFetchMessageSummaries(
-                                    resolved.connection, serverMailboxPath, std::span<const uint64_t>(uidArr, 1), summaries);
-                                if (SUCCEEDED(hr))
+                                const auto it = summaries.find(uid);
+                                if (it != summaries.end())
                                 {
-                                    const auto it = summaries.find(uid);
-                                    if (it != summaries.end())
-                                    {
-                                        const FileSystemCurlInternal::ImapMessageSummary& s = it->second;
-                                        addField(imap, "subject", FileSystemCurlInternal::Utf8FromUtf16(s.subject));
-                                        addField(imap, "from", FileSystemCurlInternal::Utf8FromUtf16(s.from));
-                                        addField(imap, "sentTime", std::format("{}", s.sentTime));
-                                        addField(imap, "recvTime", std::format("{}", s.recvTime));
-                                        addField(imap, "seen", s.seen ? "true" : "false");
-                                        addField(imap, "flagged", s.flagged ? "true" : "false");
-                                        addField(imap, "deleted", s.deleted ? "true" : "false");
-                                        addField(imap, "sizeBytes", std::format("{}", s.sizeBytes));
-                                    }
+                                    const FileSystemCurlInternal::ImapMessageSummary& s = it->second;
+                                    addField(imap, "subject", FileSystemCurlInternal::Utf8FromUtf16(s.subject));
+                                    addField(imap, "from", FileSystemCurlInternal::Utf8FromUtf16(s.from));
+                                    addField(imap, "sentTime", std::format("{}", s.sentTime));
+                                    addField(imap, "recvTime", std::format("{}", s.recvTime));
+                                    addField(imap, "seen", s.seen ? "true" : "false");
+                                    addField(imap, "flagged", s.flagged ? "true" : "false");
+                                    addField(imap, "deleted", s.deleted ? "true" : "false");
+                                    addField(imap, "sizeBytes", std::format("{}", s.sizeBytes));
                                 }
                             }
                         }
                     }
                 }
             }
+        }
 
-            const char* written = yyjson_mut_write(doc, YYJSON_WRITE_NOFLAG, nullptr);
-            if (! written)
-            {
-                return E_OUTOFMEMORY;
-            }
-            auto freeWritten = wil::scope_exit([&] { free(const_cast<char*>(written)); });
+        const char* written = yyjson_mut_write(doc, YYJSON_WRITE_NOFLAG, nullptr);
+        if (! written)
+        {
+            return E_OUTOFMEMORY;
+        }
+        auto freeWritten = wil::scope_exit([&] { free(const_cast<char*>(written)); });
 
-            {
-                std::scoped_lock lock(_propertiesMutex);
-                _lastPropertiesJson.assign(written);
-                *jsonUtf8 = _lastPropertiesJson.c_str();
-            }
+        {
+            std::scoped_lock lock(_propertiesMutex);
+            _lastPropertiesJson.assign(written);
+            *jsonUtf8 = _lastPropertiesJson.c_str();
+        }
 
-            return S_OK;
-        });
+        return S_OK;
+    });
 }

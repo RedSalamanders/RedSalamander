@@ -7,9 +7,9 @@
 #include <format>
 #include <fstream>
 #include <iterator>
+#include <limits>
 #include <memory>
 #include <optional>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -30,7 +30,7 @@
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
-#pragma warning(disable : 4625 4626 5026 5027) 
+#pragma warning(disable : 4625 4626 5026 5027)
 #include <wil/com.h>
 #include <wil/resource.h>
 #include <wil/win32_helpers.h>
@@ -968,12 +968,11 @@ void CreateOrRecreateToolbar(HWND hWnd)
 
     // Ensure COM is initialized for WIC
     bool coinit   = SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED));
-    auto coUninit = wil::scope_exit(
-        [&]() noexcept
-        {
-            if (coinit)
-                CoUninitialize();
-        });
+    auto coUninit = wil::scope_exit([&]() noexcept
+    {
+        if (coinit)
+            CoUninitialize();
+    });
 
     wil::com_ptr<IWICImagingFactory> factory;
     if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.addressof()))))
@@ -1668,9 +1667,10 @@ void BuildFatalExceptionMessage(HINSTANCE hInstance, const wchar_t* exceptionNam
     }
 
     const auto max = std::min<std::size_t>(outMessageChars - 1, static_cast<std::size_t>(std::numeric_limits<std::ptrdiff_t>::max()));
-    const auto r   = std::format_to_n(outMessage, static_cast<std::ptrdiff_t>(max), L"Fatal Exception ({0}, 0x{1:08X}).", exceptionName, static_cast<unsigned>(exceptionCode));
-    const std::ptrdiff_t cap     = static_cast<std::ptrdiff_t>(max);
-    const std::ptrdiff_t written = (r.size < 0) ? 0 : ((r.size > cap) ? cap : r.size);
+    const auto r   = std::format_to_n(
+        outMessage, static_cast<std::ptrdiff_t>(max), L"Fatal Exception ({0}, 0x{1:08X}).", exceptionName, static_cast<unsigned>(exceptionCode));
+    const std::ptrdiff_t cap                                       = static_cast<std::ptrdiff_t>(max);
+    const std::ptrdiff_t written                                   = (r.size < 0) ? 0 : ((r.size > cap) ? cap : r.size);
     outMessage[(written <= 0) ? 0u : static_cast<size_t>(written)] = L'\0';
 }
 } // namespace
@@ -1889,17 +1889,16 @@ LRESULT OnCreateMainWindow(HWND hWnd)
     UpdateStatusBar();
 
     g_etwListener         = std::make_unique<EtwListener>();
-    const bool etwStarted = g_etwListener->Start(
-        [](const Debug::InfoParam& info, const std::wstring& message)
+    const bool etwStarted = g_etwListener->Start([](const Debug::InfoParam& info, const std::wstring& message)
+    {
+        std::wstring normalizedMsg = message;
+        while (! normalizedMsg.empty() && (normalizedMsg.back() == L'\n' || normalizedMsg.back() == L'\r'))
         {
-            std::wstring normalizedMsg = message;
-            while (! normalizedMsg.empty() && (normalizedMsg.back() == L'\n' || normalizedMsg.back() == L'\r'))
-            {
-                normalizedMsg.pop_back();
-            }
+            normalizedMsg.pop_back();
+        }
 
-            g_colorView.QueueEtwEvent(info, std::move(normalizedMsg));
-        });
+        g_colorView.QueueEtwEvent(info, std::move(normalizedMsg));
+    });
 
     if (! etwStarted)
     {

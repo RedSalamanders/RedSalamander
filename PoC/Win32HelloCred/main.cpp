@@ -66,12 +66,21 @@ static bool DeleteGenericCredential(const std::wstring& targetName)
 // -------------------------
 static std::wstring GetWindowTextString(HWND h)
 {
-    int len = GetWindowTextLengthW(h);
-    std::wstring s;
-    s.resize(static_cast<size_t>(len));
-    if (len > 0)
-        GetWindowTextW(h, s.data(), len + 1);
-    return s;
+    const int len = GetWindowTextLengthW(h);
+    if (len <= 0)
+    {
+        return {};
+    }
+
+    std::wstring text(static_cast<size_t>(len) + 1u, L'\0');
+    const int copied = GetWindowTextW(h, text.data(), len + 1);
+    if (copied <= 0)
+    {
+        return {};
+    }
+
+    text.resize(static_cast<size_t>(copied));
+    return text;
 }
 
 static void ShowLastError(HWND hwnd, const wchar_t* prefix)
@@ -118,73 +127,71 @@ static void BeginHelloVerification(HWND hwnd)
 {
     // Step 1: Check availability
     auto availOp = UserConsentVerifier::CheckAvailabilityAsync();
-    availOp.Completed(
-        [hwnd](auto const& op, winrt::Windows::Foundation::AsyncStatus status)
+    availOp.Completed([hwnd](auto const& op, winrt::Windows::Foundation::AsyncStatus status)
+    {
+        if (status != winrt::Windows::Foundation::AsyncStatus::Completed)
         {
-            if (status != winrt::Windows::Foundation::AsyncStatus::Completed)
+            PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::Canceled, 0);
+            return;
+        }
+
+        UserConsentVerifierAvailability avail{};
+        try
+        {
+            avail = op.GetResults();
+        }
+        catch (...)
+        {
+            PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::DeviceNotPresent, 0);
+            return;
+        }
+
+        if (avail != UserConsentVerifierAvailability::Available)
+        {
+            // Map "not available" to a representative result.
+            PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::DeviceNotPresent, 0);
+            return;
+        }
+
+        // Step 2: Request verification attached to our window (HWND)
+        try
+        {
+            winrt::hstring message = L"Verify with Windows Hello to access the stored credential";
+
+            winrt::com_ptr<IUserConsentVerifierInterop> interop = winrt::get_activation_factory<UserConsentVerifier, IUserConsentVerifierInterop>();
+
+            IAsyncOperation<UserConsentVerificationResult> verifyOp{nullptr};
+            HRESULT hr = interop->RequestVerificationForWindowAsync(
+                hwnd, (HSTRING)winrt::get_abi(message), winrt::guid_of<IAsyncOperation<UserConsentVerificationResult>>(), winrt::put_abi(verifyOp));
+
+            if (FAILED(hr))
             {
-                PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::Canceled, 0);
+                PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::Canceled, (LPARAM)hr);
                 return;
             }
 
-            UserConsentVerifierAvailability avail{};
-            try
+            verifyOp.Completed([hwnd](auto const& vop, winrt::Windows::Foundation::AsyncStatus vstatus)
             {
-                avail = op.GetResults();
-            }
-            catch (...)
-            {
-                PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::DeviceNotPresent, 0);
-                return;
-            }
-
-            if (avail != UserConsentVerifierAvailability::Available)
-            {
-                // Map "not available" to a representative result.
-                PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::DeviceNotPresent, 0);
-                return;
-            }
-
-            // Step 2: Request verification attached to our window (HWND)
-            try
-            {
-                winrt::hstring message = L"Verify with Windows Hello to access the stored credential";
-
-                winrt::com_ptr<IUserConsentVerifierInterop> interop = winrt::get_activation_factory<UserConsentVerifier, IUserConsentVerifierInterop>();
-
-                IAsyncOperation<UserConsentVerificationResult> verifyOp{nullptr};
-                HRESULT hr = interop->RequestVerificationForWindowAsync(
-                    hwnd, (HSTRING)winrt::get_abi(message), winrt::guid_of<IAsyncOperation<UserConsentVerificationResult>>(), winrt::put_abi(verifyOp));
-
-                if (FAILED(hr))
+                UserConsentVerificationResult res = UserConsentVerificationResult::Canceled;
+                if (vstatus == winrt::Windows::Foundation::AsyncStatus::Completed)
                 {
-                    PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::Canceled, (LPARAM)hr);
-                    return;
-                }
-
-                verifyOp.Completed(
-                    [hwnd](auto const& vop, winrt::Windows::Foundation::AsyncStatus vstatus)
+                    try
                     {
-                        UserConsentVerificationResult res = UserConsentVerificationResult::Canceled;
-                        if (vstatus == winrt::Windows::Foundation::AsyncStatus::Completed)
-                        {
-                            try
-                            {
-                                res = vop.GetResults();
-                            }
-                            catch (...)
-                            {
-                                res = UserConsentVerificationResult::Canceled;
-                            }
-                        }
-                        PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)res, 0);
-                    });
-            }
-            catch (...)
-            {
-                PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::Canceled, 0);
-            }
-        });
+                        res = vop.GetResults();
+                    }
+                    catch (...)
+                    {
+                        res = UserConsentVerificationResult::Canceled;
+                    }
+                }
+                PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)res, 0);
+            });
+        }
+        catch (...)
+        {
+            PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::Canceled, 0);
+        }
+    });
 }
 
 // -------------------------

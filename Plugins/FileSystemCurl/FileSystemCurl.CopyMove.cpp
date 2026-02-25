@@ -31,7 +31,10 @@ class SharedCopyMoveJobScheduler final
 {
 public:
     SharedCopyMoveJobScheduler() = default;
-    ~SharedCopyMoveJobScheduler() noexcept { Shutdown(); }
+    ~SharedCopyMoveJobScheduler() noexcept
+    {
+        Shutdown();
+    }
 
     SharedCopyMoveJobScheduler(const SharedCopyMoveJobScheduler&)            = delete;
     SharedCopyMoveJobScheduler(SharedCopyMoveJobScheduler&&)                 = delete;
@@ -48,7 +51,7 @@ public:
         Job& operator=(Job&&)      = delete;
 
         std::function<void(size_t, uint64_t)> processIndex;
-        size_t totalItems          = 0;
+        size_t totalItems           = 0;
         unsigned int maxConcurrency = 1;
 
         // Protected by the scheduler mutex.
@@ -1714,11 +1717,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair* items,
-                                                       unsigned long count,
-                                                       FileSystemFlags flags,
-                                                       const FileSystemOptions* options,
-                                                       IFileSystemCallback* callback,
-                                                       void* cookie) noexcept
+                                                      unsigned long count,
+                                                      FileSystemFlags flags,
+                                                      const FileSystemOptions* options,
+                                                      IFileSystemCallback* callback,
+                                                      void* cookie) noexcept
 {
     if (! items)
     {
@@ -1743,7 +1746,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
         return hr;
     }
 
-    const bool allowOverwrite = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
+    const bool allowOverwrite  = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
     const bool continueOnError = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
 
     std::atomic<HRESULT> firstFailure{S_OK};
@@ -1760,9 +1763,9 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
         static_cast<void>(firstFailure.compare_exchange_strong(expected, failure, std::memory_order_acq_rel));
     };
 
-    const unsigned long maxWorkers = 4u;
+    const unsigned long maxWorkers         = 4u;
     const unsigned long desiredParallelism = std::min(maxWorkers, count);
-    const unsigned int concurrency          = std::max(1u, static_cast<unsigned int>(desiredParallelism));
+    const unsigned int concurrency         = std::max(1u, static_cast<unsigned int>(desiredParallelism));
 
     const auto processTask = [&](size_t taskIndex, uint64_t schedulerStreamId) noexcept
     {

@@ -334,10 +334,7 @@ private:
 class FileOperationsPopup final
 {
 public:
-    static HWND Create(FolderWindow::FileOperationState* fileOps,
-                       FolderWindow* folderWindow,
-                       HWND ownerWindow,
-                       std::weak_ptr<void> hostLifetime) noexcept;
+    static HWND Create(FolderWindow::FileOperationState* fileOps, FolderWindow* folderWindow, HWND ownerWindow, std::weak_ptr<void> hostLifetime) noexcept;
 
 private:
     FileOperationsPopup() = delete;

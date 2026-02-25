@@ -606,6 +606,10 @@ void FolderView::DiscardDeviceResources()
     _filterWatermarkLayoutClientSizePx = {};
     _filterWatermarkLayoutDpi          = 0.0f;
     _filterWatermarkLayoutFontSizeDip  = 0.0f;
+    _filterWatermarkBadgeLayout.reset();
+    _filterWatermarkBadgeLayoutClientSizePx = {};
+    _filterWatermarkBadgeLayoutDpi          = 0.0f;
+    _filterWatermarkBadgeLayoutFontSizeDip  = 0.0f;
     _incrementalSearchIndicatorLayout.reset();
     _incrementalSearchIndicatorLayoutText.clear();
     _incrementalSearchIndicatorLayoutMaxWidthDip = 0.0f;
@@ -871,7 +875,29 @@ void FolderView::Render(const RECT& invalidRect)
         _d2dContext->PushAxisAlignedClip(dirtyDip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         _d2dContext->FillRectangle(dirtyDip, _backgroundBrush.get());
 
-        if (IsNameFilterActive() && ! _appTheme.highContrast && ! _appTheme.systemHighContrast && _dwriteFactory && _filterWatermarkFormat && _filterWatermarkBrush)
+        const bool canRenderWatermark = IsNameFilterActive() && ! _appTheme.highContrast && ! _appTheme.systemHighContrast && _dwriteFactory &&
+                                        _filterWatermarkFormat && _filterWatermarkBrush;
+        bool drawWatermarkBadge = false;
+        if (canRenderWatermark && _items.empty() && ! _emptyStateMessage.empty())
+        {
+            bool hasOverlay = false;
+            {
+                std::lock_guard lock(_errorOverlayMutex);
+                hasOverlay = _errorOverlay.has_value();
+            }
+            drawWatermarkBadge = ! hasOverlay && ! _pendingBusyOverlay.has_value();
+        }
+        else if (canRenderWatermark && _items.empty() && _emptyStateMessage.empty())
+        {
+            bool hasOverlay = false;
+            {
+                std::lock_guard lock(_errorOverlayMutex);
+                hasOverlay = _errorOverlay.has_value();
+            }
+            drawWatermarkBadge = ! hasOverlay && ! _pendingBusyOverlay.has_value() && CanShowEmptyFolderState() && _emptyFolderState.has_value();
+        }
+
+        if (canRenderWatermark && ! drawWatermarkBadge)
         {
             const float clientWidthDip  = std::max(0.0f, DipFromPx(_clientSize.cx));
             const float clientHeightDip = std::max(0.0f, DipFromPx(_clientSize.cy));
@@ -881,9 +907,8 @@ void FolderView::Render(const RECT& invalidRect)
                 const float fontSizeDip = std::clamp(minDim * 0.55f, 72.0f, 240.0f);
 
                 const wchar_t glyphText[2]{FluentIcons::kFilter, 0};
-                const bool needsLayoutRebuild =
-                    ! _filterWatermarkLayout || _filterWatermarkLayoutClientSizePx.cx != _clientSize.cx ||
-                    _filterWatermarkLayoutClientSizePx.cy != _clientSize.cy || _filterWatermarkLayoutDpi != _dpi;
+                const bool needsLayoutRebuild = ! _filterWatermarkLayout || _filterWatermarkLayoutClientSizePx.cx != _clientSize.cx ||
+                                                _filterWatermarkLayoutClientSizePx.cy != _clientSize.cy || _filterWatermarkLayoutDpi != _dpi;
                 if (needsLayoutRebuild)
                 {
                     _filterWatermarkLayout.reset();
@@ -908,6 +933,52 @@ void FolderView::Render(const RECT& invalidRect)
 
                     constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
                     _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), _filterWatermarkLayout.get(), _filterWatermarkBrush.get(), options);
+                }
+            }
+        }
+        else if (canRenderWatermark && drawWatermarkBadge)
+        {
+            const float clientWidthDip  = std::max(0.0f, DipFromPx(_clientSize.cx));
+            const float clientHeightDip = std::max(0.0f, DipFromPx(_clientSize.cy));
+            if (clientWidthDip > 0.0f && clientHeightDip > 0.0f)
+            {
+                const float minDim          = std::min(clientWidthDip, clientHeightDip);
+                const float paddingDip      = std::clamp(minDim * 0.035f, 12.0f, 26.0f);
+                const float fontSizeDip     = std::clamp(minDim * 0.12f, 24.0f, 56.0f);
+                const float layoutWidthDip  = std::max(1.0f, clientWidthDip - paddingDip * 2.0f);
+                const float layoutHeightDip = std::max(1.0f, clientHeightDip - paddingDip * 2.0f);
+
+                const wchar_t glyphText[2]{FluentIcons::kFilter, 0};
+                const bool needsLayoutRebuild = ! _filterWatermarkBadgeLayout || _filterWatermarkBadgeLayoutClientSizePx.cx != _clientSize.cx ||
+                                                _filterWatermarkBadgeLayoutClientSizePx.cy != _clientSize.cy || _filterWatermarkBadgeLayoutDpi != _dpi;
+                if (needsLayoutRebuild)
+                {
+                    _filterWatermarkBadgeLayout.reset();
+                    const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(
+                        glyphText, 1u, _filterWatermarkFormat.get(), layoutWidthDip, layoutHeightDip, _filterWatermarkBadgeLayout.addressof());
+                    if (SUCCEEDED(hrLayout) && _filterWatermarkBadgeLayout)
+                    {
+                        _filterWatermarkBadgeLayoutClientSizePx = _clientSize;
+                        _filterWatermarkBadgeLayoutDpi          = _dpi;
+                        _filterWatermarkBadgeLayoutFontSizeDip  = 0.0f;
+
+                        _filterWatermarkBadgeLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+                        _filterWatermarkBadgeLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+                        _filterWatermarkBadgeLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+                    }
+                }
+
+                if (_filterWatermarkBadgeLayout)
+                {
+                    const DWRITE_TEXT_RANGE range{0, 1};
+                    if (_filterWatermarkBadgeLayoutFontSizeDip != fontSizeDip)
+                    {
+                        _filterWatermarkBadgeLayout->SetFontSize(fontSizeDip, range);
+                        _filterWatermarkBadgeLayoutFontSizeDip = fontSizeDip;
+                    }
+
+                    constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                    _d2dContext->DrawTextLayout(D2D1::Point2F(paddingDip, paddingDip), _filterWatermarkBadgeLayout.get(), _filterWatermarkBrush.get(), options);
                 }
             }
         }
@@ -994,7 +1065,7 @@ void FolderView::Render(const RECT& invalidRect)
             }
         }
 
-        if (_items.empty() && _displayedFolder.has_value() && ! _emptyStateMessage.empty() && _dwriteFactory && (_detailsFormat || _labelFormat))
+        if (_items.empty() && _displayedFolder.has_value() && _dwriteFactory && (_detailsFormat || _labelFormat))
         {
             bool hasOverlay = false;
             {
@@ -1002,31 +1073,204 @@ void FolderView::Render(const RECT& invalidRect)
                 hasOverlay = _errorOverlay.has_value();
             }
 
-            if (! hasOverlay && _emptyStateMessage.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+            if (! hasOverlay && ! _pendingBusyOverlay.has_value())
             {
-                const UINT32 length         = static_cast<UINT32>(_emptyStateMessage.size());
                 const float clientWidthDip  = std::max(1.0f, DipFromPx(_clientSize.cx));
                 const float clientHeightDip = std::max(1.0f, DipFromPx(_clientSize.cy));
+                const float minDimDip       = std::min(clientWidthDip, clientHeightDip);
 
-                wil::com_ptr<IDWriteTextLayout> layout;
-                const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(_emptyStateMessage.data(),
-                                                                          length,
-                                                                          _detailsFormat ? _detailsFormat.get() : _labelFormat.get(),
-                                                                          clientWidthDip,
-                                                                          clientHeightDip,
-                                                                          layout.addressof());
-                if (SUCCEEDED(hrLayout) && layout)
+                auto drawCenteredText = [&](std::wstring_view message)
                 {
+                    if (message.empty() || message.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+                    {
+                        return;
+                    }
+
+                    const UINT32 length = static_cast<UINT32>(message.size());
+                    wil::com_ptr<IDWriteTextLayout> layout;
+                    const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(message.data(),
+                                                                              length,
+                                                                              _detailsFormat ? _detailsFormat.get() : _labelFormat.get(),
+                                                                              clientWidthDip,
+                                                                              clientHeightDip,
+                                                                              layout.addressof());
+                    if (FAILED(hrLayout) || ! layout)
+                    {
+                        return;
+                    }
+
                     layout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
                     layout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
                     layout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
 
                     ID2D1SolidColorBrush* brush = _detailsTextBrush ? _detailsTextBrush.get() : _textBrush.get();
-                    if (brush)
+                    if (! brush)
                     {
-                        constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(
-                            D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-                        _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), layout.get(), brush, options);
+                        return;
+                    }
+
+                    constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                    _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), layout.get(), brush, options);
+                };
+
+                if (! _emptyStateMessage.empty())
+                {
+                    drawCenteredText(_emptyStateMessage);
+                }
+                else if (CanShowEmptyFolderState() && _emptyFolderState.has_value() && _filterWatermarkBrush && (_detailsTextBrush || _textBrush) &&
+                         _filterWatermarkFormat)
+                {
+                    const UINT messageId          = _emptyFolderState ? _emptyFolderState->funMessageResourceId : 0;
+                    const bool needsLayoutRebuild = ! _emptyFolderIconLayout || ! _emptyFolderTitleLayout || ! _emptyFolderFunLayout ||
+                                                    _emptyFolderLayoutClientSizePx.cx != _clientSize.cx ||
+                                                    _emptyFolderLayoutClientSizePx.cy != _clientSize.cy || _emptyFolderLayoutDpi != _dpi ||
+                                                    _emptyFolderLayoutMessageId != messageId;
+                    if (needsLayoutRebuild)
+                    {
+                        _emptyFolderIconLayout.reset();
+                        _emptyFolderTitleLayout.reset();
+                        _emptyFolderFunLayout.reset();
+                        _emptyFolderIconMetrics  = {};
+                        _emptyFolderTitleMetrics = {};
+                        _emptyFolderFunMetrics   = {};
+
+                        const float iconFontSizeDip    = std::clamp(minDimDip * 0.35f, 72.0f, 220.0f);
+                        const float titleFontSizeDip   = std::clamp(minDimDip * 0.07f, 16.0f, 24.0f);
+                        const float emojiFontSizeDip   = std::clamp(minDimDip * 0.11f, 28.0f, 52.0f);
+                        const float messageFontSizeDip = std::clamp(minDimDip * 0.05f, 13.0f, 18.0f);
+
+                        const wchar_t iconText[2]{FluentIcons::kPreview, 0};
+                        const HRESULT hrIconLayout = _dwriteFactory->CreateTextLayout(
+                            iconText, 1u, _filterWatermarkFormat.get(), clientWidthDip, clientHeightDip, _emptyFolderIconLayout.addressof());
+                        if (SUCCEEDED(hrIconLayout) && _emptyFolderIconLayout)
+                        {
+                            _emptyFolderIconLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                            _emptyFolderIconLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+                            _emptyFolderIconLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+
+                            const DWRITE_TEXT_RANGE range{0, 1};
+                            _emptyFolderIconLayout->SetFontSize(iconFontSizeDip, range);
+                            static_cast<void>(_emptyFolderIconLayout->GetMetrics(&_emptyFolderIconMetrics));
+                            _emptyFolderIconFontSizeDip = iconFontSizeDip;
+                        }
+
+                        std::wstring title = LoadStringResource(nullptr, IDS_EMPTY_FOLDER_TITLE);
+
+                        const float maxTextWidthDip = std::max(1.0f, clientWidthDip - std::clamp(minDimDip * 0.18f, 80.0f, 200.0f));
+                        const UINT32 titleLength = static_cast<UINT32>(std::min<size_t>(title.size(), static_cast<size_t>(std::numeric_limits<UINT32>::max())));
+                        if (titleLength > 0)
+                        {
+                            const HRESULT hrTitleLayout = _dwriteFactory->CreateTextLayout(title.data(),
+                                                                                           titleLength,
+                                                                                           _labelFormat ? _labelFormat.get() : _detailsFormat.get(),
+                                                                                           maxTextWidthDip,
+                                                                                           clientHeightDip,
+                                                                                           _emptyFolderTitleLayout.addressof());
+                            if (SUCCEEDED(hrTitleLayout) && _emptyFolderTitleLayout)
+                            {
+                                _emptyFolderTitleLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                                _emptyFolderTitleLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+                                _emptyFolderTitleLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+
+                                const DWRITE_TEXT_RANGE range{0, titleLength};
+                                _emptyFolderTitleLayout->SetFontSize(titleFontSizeDip, range);
+                                _emptyFolderTitleLayout->SetFontWeight(DWRITE_FONT_WEIGHT_SEMI_BOLD, range);
+                                static_cast<void>(_emptyFolderTitleLayout->GetMetrics(&_emptyFolderTitleMetrics));
+                            }
+                        }
+
+                        std::wstring funText;
+                        if (_emptyFolderState && (! _emptyFolderState->emoji.empty() || ! _emptyFolderState->funMessage.empty()))
+                        {
+                            funText = _emptyFolderState->emoji;
+                            if (! funText.empty() && ! _emptyFolderState->funMessage.empty())
+                            {
+                                funText.append(L"\r\n");
+                            }
+                            funText.append(_emptyFolderState->funMessage);
+                        }
+
+                        const UINT32 funLength = static_cast<UINT32>(std::min<size_t>(funText.size(), static_cast<size_t>(std::numeric_limits<UINT32>::max())));
+                        if (funLength > 0)
+                        {
+                            const HRESULT hrFunLayout = _dwriteFactory->CreateTextLayout(funText.data(),
+                                                                                         funLength,
+                                                                                         _labelFormat ? _labelFormat.get() : _detailsFormat.get(),
+                                                                                         maxTextWidthDip,
+                                                                                         clientHeightDip,
+                                                                                         _emptyFolderFunLayout.addressof());
+                            if (SUCCEEDED(hrFunLayout) && _emptyFolderFunLayout)
+                            {
+                                _emptyFolderFunLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                                _emptyFolderFunLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+                                _emptyFolderFunLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+
+                                if (_emptyFolderState && ! _emptyFolderState->emoji.empty())
+                                {
+                                    const auto emojiLen = static_cast<UINT32>(
+                                        std::min<size_t>(_emptyFolderState->emoji.size(), static_cast<size_t>(std::numeric_limits<UINT32>::max())));
+                                    if (emojiLen > 0 && emojiLen <= funLength)
+                                    {
+                                        const DWRITE_TEXT_RANGE emojiRange{0, emojiLen};
+                                        _emptyFolderFunLayout->SetFontSize(emojiFontSizeDip, emojiRange);
+                                        _emptyFolderFunLayout->SetFontFamilyName(L"Segoe UI Emoji", emojiRange);
+                                    }
+
+                                    const UINT32 messageStart = emojiLen;
+                                    if (messageStart < funLength)
+                                    {
+                                        const DWRITE_TEXT_RANGE messageRange{messageStart, funLength - messageStart};
+                                        _emptyFolderFunLayout->SetFontSize(messageFontSizeDip, messageRange);
+                                    }
+                                }
+                                else
+                                {
+                                    const DWRITE_TEXT_RANGE range{0, funLength};
+                                    _emptyFolderFunLayout->SetFontSize(messageFontSizeDip, range);
+                                }
+
+                                static_cast<void>(_emptyFolderFunLayout->GetMetrics(&_emptyFolderFunMetrics));
+                            }
+                        }
+
+                        _emptyFolderLayoutClientSizePx = _clientSize;
+                        _emptyFolderLayoutDpi          = _dpi;
+                        _emptyFolderLayoutMessageId    = messageId;
+                    }
+
+                    ID2D1SolidColorBrush* textBrush = _detailsTextBrush ? _detailsTextBrush.get() : _textBrush.get();
+                    constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                    if (_emptyFolderIconLayout && _filterWatermarkBrush && textBrush)
+                    {
+                        const float spacingIconToTitleDip = std::clamp(minDimDip * 0.03f, 8.0f, 16.0f);
+                        const float spacingTitleToFunDip  = std::clamp(minDimDip * 0.025f, 6.0f, 14.0f);
+
+                        const float iconHeightDip  = std::max(0.0f, _emptyFolderIconMetrics.height);
+                        const float titleHeightDip = std::max(0.0f, _emptyFolderTitleMetrics.height);
+                        const float funHeightDip   = std::max(0.0f, _emptyFolderFunMetrics.height);
+
+                        const float groupHeightDip = iconHeightDip + spacingIconToTitleDip + titleHeightDip + spacingTitleToFunDip + funHeightDip;
+                        float topDip               = (clientHeightDip - groupHeightDip) * 0.5f;
+                        topDip                     = std::max(0.0f, topDip);
+
+                        float yDip = topDip;
+                        _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, yDip), _emptyFolderIconLayout.get(), _filterWatermarkBrush.get(), options);
+
+                        yDip += iconHeightDip + spacingIconToTitleDip;
+                        if (_emptyFolderTitleLayout)
+                        {
+                            const float maxTextWidthDip = std::max(1.0f, clientWidthDip - std::clamp(minDimDip * 0.18f, 80.0f, 200.0f));
+                            const float leftDip         = (clientWidthDip - maxTextWidthDip) * 0.5f;
+                            _d2dContext->DrawTextLayout(D2D1::Point2F(leftDip, yDip), _emptyFolderTitleLayout.get(), textBrush, options);
+                        }
+
+                        yDip += titleHeightDip + spacingTitleToFunDip;
+                        if (_emptyFolderFunLayout)
+                        {
+                            const float maxTextWidthDip = std::max(1.0f, clientWidthDip - std::clamp(minDimDip * 0.18f, 80.0f, 200.0f));
+                            const float leftDip         = (clientWidthDip - maxTextWidthDip) * 0.5f;
+                            _d2dContext->DrawTextLayout(D2D1::Point2F(leftDip, yDip), _emptyFolderFunLayout.get(), textBrush, options);
+                        }
                     }
                 }
             }
@@ -1220,10 +1464,8 @@ void FolderView::DrawIncrementalSearchIndicator(uint64_t nowTickMs)
         const float textY = y + (kHeightDip - textHeightDip) * 0.5f;
 
         _incrementalSearchIndicatorTextBrush->SetOpacity(visibility);
-        constexpr auto options =
-            static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-        _d2dContext->DrawTextLayout(
-            D2D1::Point2F(textX, textY), _incrementalSearchIndicatorLayout.get(), _incrementalSearchIndicatorTextBrush.get(), options);
+        constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+        _d2dContext->DrawTextLayout(D2D1::Point2F(textX, textY), _incrementalSearchIndicatorLayout.get(), _incrementalSearchIndicatorTextBrush.get(), options);
 
         if (pulse > 0.0f && textWidthDip > 0.0f)
         {
@@ -1379,9 +1621,9 @@ void FolderView::DrawItem(FolderItem& item)
     const float contentBottom = bounds.bottom - kLabelVerticalPaddingDip;
     const float contentHeight = std::max(0.0f, contentBottom - contentTop);
 
-    const float iconLeft = bounds.left + kLabelHorizontalPaddingDip;
-    const float iconTop  = _displayMode == DisplayMode::Brief ? contentTop + std::max(0.0f, (contentHeight - _iconSizeDip) * 0.5f) : contentTop;
-    D2D1_RECT_F iconRect = D2D1::RectF(iconLeft, iconTop, iconLeft + _iconSizeDip, iconTop + _iconSizeDip);
+    const float iconLeft    = bounds.left + kLabelHorizontalPaddingDip;
+    const float iconTop     = _displayMode == DisplayMode::Brief ? contentTop + std::max(0.0f, (contentHeight - _iconSizeDip) * 0.5f) : contentTop;
+    D2D1_RECT_F iconRect    = D2D1::RectF(iconLeft, iconTop, iconLeft + _iconSizeDip, iconTop + _iconSizeDip);
     const float iconOpacity = (item.fileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0 ? 0.5f : 1.0f;
     if (item.icon)
     {
@@ -1591,8 +1833,7 @@ void FolderView::DrawItem(FolderItem& item)
     {
         if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
         {
-            constexpr auto options =
-                static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+            constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             const float nameHeight = item.labelMetrics.height > 0.0f ? item.labelMetrics.height : std::max(0.0f, contentHeight * 0.5f);
             D2D1_POINT_2F origin{labelLeft, contentTop};
             if (incrementalSearchRange.has_value())
@@ -1612,12 +1853,8 @@ void FolderView::DrawItem(FolderItem& item)
             else if (! item.detailsText.empty() && _detailsFormat)
             {
                 D2D1_RECT_F detailsRect = D2D1::RectF(labelLeft, detailsTop, labelLeft + availableWidth, contentBottom);
-                _d2dContext->DrawTextW(item.detailsText.c_str(),
-                                       static_cast<UINT32>(item.detailsText.length()),
-                                       _detailsFormat.get(),
-                                       detailsRect,
-                                       detailsBrush,
-                                       options);
+                _d2dContext->DrawTextW(
+                    item.detailsText.c_str(), static_cast<UINT32>(item.detailsText.length()), _detailsFormat.get(), detailsRect, detailsBrush, options);
             }
 
             if (_displayMode == DisplayMode::ExtraDetailed)
@@ -1636,12 +1873,8 @@ void FolderView::DrawItem(FolderItem& item)
                 else if (! item.metadataText.empty() && _detailsFormat)
                 {
                     D2D1_RECT_F metadataRect = D2D1::RectF(labelLeft, metadataTop, labelLeft + availableWidth, contentBottom);
-                    _d2dContext->DrawTextW(item.metadataText.c_str(),
-                                           static_cast<UINT32>(item.metadataText.length()),
-                                           _detailsFormat.get(),
-                                           metadataRect,
-                                           metadataBrush,
-                                           options);
+                    _d2dContext->DrawTextW(
+                        item.metadataText.c_str(), static_cast<UINT32>(item.metadataText.length()), _detailsFormat.get(), metadataRect, metadataBrush, options);
                 }
             }
         }
@@ -1654,8 +1887,7 @@ void FolderView::DrawItem(FolderItem& item)
             {
                 drawIncrementalSearchHighlight(origin, incrementalSearchRange.value());
             }
-            constexpr auto options =
-                static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+            constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             _d2dContext->DrawTextLayout(origin, item.labelLayout.get(), textBrush, options);
         }
     }
@@ -1668,23 +1900,17 @@ void FolderView::DrawItem(FolderItem& item)
             const float nameBottom =
                 std::max(contentTop, contentBottom - detailsHeight - kDetailsGapDip - (metadataHeight > 0.0f ? (metadataHeight + kDetailsGapDip) : 0.0f));
 
-            D2D1_RECT_F labelRect = D2D1::RectF(labelLeft, contentTop, labelLeft + availableWidth, nameBottom);
-            constexpr auto options =
-                static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-            _d2dContext->DrawTextW(
-                item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
+            D2D1_RECT_F labelRect  = D2D1::RectF(labelLeft, contentTop, labelLeft + availableWidth, nameBottom);
+            constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+            _d2dContext->DrawTextW(item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
 
             ID2D1SolidColorBrush* detailsBrush = item.selected ? textBrush : (_detailsTextBrush ? _detailsTextBrush.get() : textBrush);
 
             if (! item.detailsText.empty() && _detailsFormat)
             {
                 D2D1_RECT_F detailsRect = D2D1::RectF(labelLeft, nameBottom + kDetailsGapDip, labelLeft + availableWidth, contentBottom);
-                _d2dContext->DrawTextW(item.detailsText.c_str(),
-                                       static_cast<UINT32>(item.detailsText.length()),
-                                       _detailsFormat.get(),
-                                       detailsRect,
-                                       detailsBrush,
-                                       options);
+                _d2dContext->DrawTextW(
+                    item.detailsText.c_str(), static_cast<UINT32>(item.detailsText.length()), _detailsFormat.get(), detailsRect, detailsBrush, options);
             }
 
             if (_displayMode == DisplayMode::ExtraDetailed && ! item.metadataText.empty() && _detailsFormat)
@@ -1694,21 +1920,15 @@ void FolderView::DrawItem(FolderItem& item)
                 const float metadataTop             = hasDetails ? (detailsBottom + kDetailsGapDip) : detailsBottom;
                 ID2D1SolidColorBrush* metadataBrush = item.selected ? textBrush : (_metadataTextBrush ? _metadataTextBrush.get() : detailsBrush);
                 D2D1_RECT_F metadataRect            = D2D1::RectF(labelLeft, metadataTop, labelLeft + availableWidth, contentBottom);
-                _d2dContext->DrawTextW(item.metadataText.c_str(),
-                                       static_cast<UINT32>(item.metadataText.length()),
-                                       _detailsFormat.get(),
-                                       metadataRect,
-                                       metadataBrush,
-                                       options);
+                _d2dContext->DrawTextW(
+                    item.metadataText.c_str(), static_cast<UINT32>(item.metadataText.length()), _detailsFormat.get(), metadataRect, metadataBrush, options);
             }
         }
         else
         {
-            D2D1_RECT_F labelRect = D2D1::RectF(labelLeft, contentTop, labelLeft + availableWidth, contentBottom);
-            constexpr auto options =
-                static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-            _d2dContext->DrawTextW(
-                item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
+            D2D1_RECT_F labelRect  = D2D1::RectF(labelLeft, contentTop, labelLeft + availableWidth, contentBottom);
+            constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+            _d2dContext->DrawTextW(item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
         }
     }
 }

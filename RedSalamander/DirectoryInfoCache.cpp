@@ -1043,8 +1043,10 @@ DirectoryInfoCache::Borrowed DirectoryInfoCache::BorrowDirectoryInfo(IFileSystem
     return BorrowDirectoryInfo(fileSystem, folder, mode, std::stop_token{});
 }
 
-DirectoryInfoCache::Borrowed
-DirectoryInfoCache::BorrowDirectoryInfo(IFileSystem* fileSystem, const std::filesystem::path& folder, BorrowMode mode, std::stop_token stopToken) noexcept
+DirectoryInfoCache::Borrowed DirectoryInfoCache::BorrowDirectoryInfo(IFileSystem* fileSystem,
+                                                                     const std::filesystem::path& folder,
+                                                                     BorrowMode mode,
+                                                                     std::stop_token stopToken) noexcept
 {
     Borrowed result{};
     result._owner = this;

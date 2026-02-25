@@ -90,7 +90,6 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.functionBar, VK_F2, 0, L"cmd/pane/rename");
     AddBinding(shortcuts.functionBar, VK_F2, ShortcutManager::kModCtrl, L"cmd/pane/sort/none");
     AddBinding(shortcuts.functionBar, VK_F2, ShortcutManager::kModAlt, L"cmd/app/openRightDriveMenu");
-    AddBinding(shortcuts.functionBar, VK_F2, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/saveSelection");
 
     AddBinding(shortcuts.functionBar, VK_F3, 0, L"cmd/pane/view");
     AddBinding(shortcuts.functionBar, VK_F3, ShortcutManager::kModCtrl, L"cmd/pane/sort/name");
@@ -107,12 +106,12 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.functionBar, VK_F5, 0, L"cmd/pane/copyToOtherPane");
     AddBinding(shortcuts.functionBar, VK_F5, ShortcutManager::kModCtrl, L"cmd/pane/sort/time");
     AddBinding(shortcuts.functionBar, VK_F5, ShortcutManager::kModAlt, L"cmd/pane/pack");
-    AddBinding(shortcuts.functionBar, VK_F5, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/saveSelection");
+    AddBinding(shortcuts.functionBar, VK_F5, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/save");
 
     AddBinding(shortcuts.functionBar, VK_F6, 0, L"cmd/pane/moveToOtherPane");
     AddBinding(shortcuts.functionBar, VK_F6, ShortcutManager::kModCtrl, L"cmd/pane/sort/size");
     AddBinding(shortcuts.functionBar, VK_F6, ShortcutManager::kModAlt, L"cmd/pane/unpack");
-    AddBinding(shortcuts.functionBar, VK_F6, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/loadSelection");
+    AddBinding(shortcuts.functionBar, VK_F6, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/restore");
 
     AddBinding(shortcuts.functionBar, VK_F7, 0, L"cmd/pane/createDirectory");
     AddBinding(shortcuts.functionBar, VK_F7, ShortcutManager::kModCtrl, L"cmd/pane/changeCase");
@@ -158,11 +157,10 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, VK_ESCAPE, 0, L"cmd/pane/selection/unselectAll");
     AddBinding(shortcuts.folderView, DefaultSelectDialogVk(), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
     AddBinding(shortcuts.folderView, DefaultUnselectDialogVk(), ShortcutManager::kModCtrl, L"cmd/pane/selection/unselectDialog");
-    AddBinding(shortcuts.folderView, DefaultSelectDialogVk(), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/selectSameExtension");
-    AddBinding(shortcuts.folderView,
-               DefaultUnselectDialogVk(),
-               ShortcutManager::kModCtrl | ShortcutManager::kModShift,
-               L"cmd/pane/selection/unselectSameExtension");
+    AddBinding(
+        shortcuts.folderView, DefaultSelectDialogVk(), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/selectSameExtension");
+    AddBinding(
+        shortcuts.folderView, DefaultUnselectDialogVk(), ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/selection/unselectSameExtension");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('C'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardCopy");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('V'), ShortcutManager::kModCtrl, L"cmd/pane/clipboardPaste");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('L'), ShortcutManager::kModCtrl, L"cmd/pane/focusAddressBar");
@@ -186,9 +184,9 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     // Hot path shortcuts: Ctrl+1..Ctrl+9, Ctrl+0 and Ctrl+Shift+1..Ctrl+Shift+9, Ctrl+Shift+0
     for (int i = 0; i < 10; ++i)
     {
-        const wchar_t digit                = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
-        const std::wstring goCommandId     = std::wstring(L"cmd/pane/hotPath/") + digit;
-        const std::wstring setCommandId    = std::wstring(L"cmd/pane/setHotPath/") + digit;
+        const wchar_t digit             = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
+        const std::wstring goCommandId  = std::wstring(L"cmd/pane/hotPath/") + digit;
+        const std::wstring setCommandId = std::wstring(L"cmd/pane/setHotPath/") + digit;
         AddBinding(shortcuts.folderView, static_cast<uint32_t>(digit), ShortcutManager::kModCtrl, goCommandId);
         AddBinding(shortcuts.folderView, static_cast<uint32_t>(digit), ShortcutManager::kModCtrl | ShortcutManager::kModShift, setCommandId);
     }
@@ -249,10 +247,9 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
     };
 
     const bool hasF1NoneBinding =
-        std::any_of(shortcuts.functionBar.begin(),
-                    shortcuts.functionBar.end(),
-                    [](const Common::Settings::ShortcutBinding& binding) noexcept
-                    { return binding.vk == static_cast<uint32_t>(VK_F1) && (binding.modifiers & 0x7u) == 0u && ! binding.commandId.empty(); });
+        std::any_of(shortcuts.functionBar.begin(), shortcuts.functionBar.end(), [](const Common::Settings::ShortcutBinding& binding) noexcept {
+        return binding.vk == static_cast<uint32_t>(VK_F1) && (binding.modifiers & 0x7u) == 0u && ! binding.commandId.empty();
+    });
 
     if (! hasF1NoneBinding)
     {

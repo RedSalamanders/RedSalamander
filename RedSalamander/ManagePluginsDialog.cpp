@@ -1839,23 +1839,23 @@ std::vector<PluginConfigField> ParseConfigurationSchema(std::string_view schemaJ
     std::stable_sort(fields.begin(),
                      fields.end(),
                      [](const PluginConfigField& a, const PluginConfigField& b)
-                     {
-                         // Fields with explicit uiOrder come first, sorted by order value
-                         // Fields without uiOrder (order=0) maintain original order via stable_sort
-                         if (a.uiOrder != 0 && b.uiOrder != 0)
-                         {
-                             return a.uiOrder < b.uiOrder;
-                         }
-                         if (a.uiOrder != 0)
-                         {
-                             return true; // a has order, b doesn't → a comes first
-                         }
-                         if (b.uiOrder != 0)
-                         {
-                             return false; // b has order, a doesn't → b comes first
-                         }
-                         return false; // both have no order → maintain original order
-                     });
+    {
+        // Fields with explicit uiOrder come first, sorted by order value
+        // Fields without uiOrder (order=0) maintain original order via stable_sort
+        if (a.uiOrder != 0 && b.uiOrder != 0)
+        {
+            return a.uiOrder < b.uiOrder;
+        }
+        if (a.uiOrder != 0)
+        {
+            return true; // a has order, b doesn't → a comes first
+        }
+        if (b.uiOrder != 0)
+        {
+            return false; // b has order, a doesn't → b comes first
+        }
+        return false; // both have no order → maintain original order
+    });
 
     return fields;
 }

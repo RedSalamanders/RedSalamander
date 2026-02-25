@@ -17,6 +17,7 @@
 #include <commctrl.h>
 
 #include "AppTheme.h"
+#include "Helpers.h"
 #include "SettingsSchemaParser.h"
 #include "SettingsStore.h"
 
@@ -625,7 +626,7 @@ void SetDirty(HWND dlg, PreferencesDialogState& state) noexcept;
 
 namespace PrefsUi
 {
-[[nodiscard]] std::wstring GetWindowTextString(HWND hwnd) noexcept;
+using Win32Text::GetWindowTextString;
 [[nodiscard]] inline std::wstring GetWindowTextString(const wil::unique_hwnd& hwnd) noexcept
 {
     return GetWindowTextString(hwnd.get());
@@ -694,8 +695,8 @@ namespace PrefsFile
 namespace PrefsListView
 {
 [[nodiscard]] int GetSingleLineRowHeightPx(HWND list, HDC hdc) noexcept;
-[[nodiscard]] LRESULT
-DrawThemedTwoColumnListRow(DRAWITEMSTRUCT* dis, PreferencesDialogState& state, HWND list, UINT expectedCtlId, bool secondColumnRightAlign) noexcept;
+[[nodiscard]] LRESULT DrawThemedTwoColumnListRow(
+    DRAWITEMSTRUCT* dis, PreferencesDialogState& state, HWND list, UINT expectedCtlId, bool secondColumnRightAlign) noexcept;
 } // namespace PrefsListView
 
 namespace PrefsPaneHost

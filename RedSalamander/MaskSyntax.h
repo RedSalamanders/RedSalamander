@@ -21,4 +21,3 @@ constexpr size_t kWildcardMaskHistoryMaxItems = 10u;
 void NormalizeWildcardMaskHistory(std::vector<std::wstring>& history, size_t maxItems = kWildcardMaskHistoryMaxItems);
 void AddToWildcardMaskHistory(std::vector<std::wstring>& history, size_t maxItems, std::wstring_view entry);
 } // namespace MaskSyntax
-

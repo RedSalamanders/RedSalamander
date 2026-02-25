@@ -135,22 +135,22 @@ HRESULT FilesInformationS3::BuildFromEntries(std::vector<Entry> entries) noexcep
     std::sort(entries.begin(),
               entries.end(),
               [](const Entry& a, const Entry& b)
-              {
-                  const int cmp = OrdinalString::Compare(a.name, b.name, true);
-                  if (cmp != 0)
-                  {
-                      return cmp < 0;
-                  }
+    {
+        const int cmp = OrdinalString::Compare(a.name, b.name, true);
+        if (cmp != 0)
+        {
+            return cmp < 0;
+        }
 
-                  const bool aDir = (a.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                  const bool bDir = (b.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                  if (aDir != bDir)
-                  {
-                      return aDir;
-                  }
+        const bool aDir = (a.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const bool bDir = (b.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        if (aDir != bDir)
+        {
+            return aDir;
+        }
 
-                  return a.sizeBytes < b.sizeBytes;
-              });
+        return a.sizeBytes < b.sizeBytes;
+    });
 
     size_t totalBytes = 0;
     for (const auto& entry : entries)

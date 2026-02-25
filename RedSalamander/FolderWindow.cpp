@@ -208,8 +208,8 @@ void FolderWindow::RefreshPaneDetailsText(Pane pane)
 }
 
 void FolderWindow::SetPaneSelectionByDisplayNamePredicate(Pane pane,
-                                                         const std::function<bool(std::wstring_view)>& shouldSelect,
-                                                         bool clearExistingSelection) noexcept
+                                                          const std::function<bool(std::wstring_view)>& shouldSelect,
+                                                          bool clearExistingSelection) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.SetSelectionByDisplayNamePredicate(shouldSelect, clearExistingSelection);
@@ -676,70 +676,67 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CreatePane.SetCallbacks");
             perf.SetDetail(paneName);
             state.navigationView.SetPathChangedCallback([this, pane](const std::optional<std::filesystem::path>& path)
-                                                        { OnNavigationPathChanged(pane, path); });
-            state.navigationView.SetRequestFolderViewFocusCallback(
-                [this, pane]
+            { OnNavigationPathChanged(pane, path); });
+            state.navigationView.SetRequestFolderViewFocusCallback([this, pane]
+            {
+                PaneState& s = pane == Pane::Left ? _leftPane : _rightPane;
+                if (s.hFolderView)
                 {
-                    PaneState& s = pane == Pane::Left ? _leftPane : _rightPane;
-                    if (s.hFolderView)
-                    {
-                        SetFocus(s.hFolderView.get());
-                    }
-                });
+                    SetFocus(s.hFolderView.get());
+                }
+            });
 
             state.folderView.SetPathChangedCallback([this, pane](const std::optional<std::filesystem::path>& path) { OnFolderViewPathChanged(pane, path); });
             state.folderView.SetNavigateUpFromRootRequestCallback([this, pane] { OnFolderViewNavigateUpFromRoot(pane); });
             state.folderView.SetOpenFileRequestCallback([this, pane](const std::filesystem::path& path) { return TryOpenFileAsVirtualFileSystem(pane, path); });
             state.folderView.SetViewFileRequestCallback([this, pane](const FolderView::ViewFileRequest& request)
-                                                        { return TryViewFileWithViewer(pane, request); });
+            { return TryViewFileWithViewer(pane, request); });
             state.folderView.SetFileOperationRequestCallback([this, pane](FolderView::FileOperationRequest request) noexcept -> HRESULT
-                                                             { return StartFileOperationFromFolderView(pane, std::move(request)); });
+            { return StartFileOperationFromFolderView(pane, std::move(request)); });
             state.folderView.SetPropertiesRequestCallback([this, pane](std::filesystem::path path) noexcept -> HRESULT
-                                                          { return ShowItemPropertiesFromFolderView(pane, std::move(path)); });
-            state.folderView.SetNavigationRequestCallback(
-                [this, pane](FolderView::NavigationRequest request)
+            { return ShowItemPropertiesFromFolderView(pane, std::move(path)); });
+            state.folderView.SetNavigationRequestCallback([this, pane](FolderView::NavigationRequest request)
+            {
+                PaneState& s = pane == Pane::Left ? _leftPane : _rightPane;
+                switch (request)
                 {
-                    PaneState& s = pane == Pane::Left ? _leftPane : _rightPane;
-                    switch (request)
-                    {
-                        case FolderView::NavigationRequest::FocusNavigationMenu:
-                            s.navigationView.SetFocusRegion(NavigationView::FocusRegion::Menu);
-                            if (s.hNavigationView)
-                            {
-                                SetFocus(s.hNavigationView.get());
-                            }
-                            break;
-                        case FolderView::NavigationRequest::FocusNavigationDiskInfo:
-                            s.navigationView.SetFocusRegion(NavigationView::FocusRegion::DiskInfo);
-                            if (s.hNavigationView)
-                            {
-                                SetFocus(s.hNavigationView.get());
-                            }
-                            break;
-                        case FolderView::NavigationRequest::FocusAddressBar: s.navigationView.FocusAddressBar(); break;
-                        case FolderView::NavigationRequest::OpenHistoryDropdown: s.navigationView.OpenHistoryDropdownFromKeyboard(); break;
-                        case FolderView::NavigationRequest::SwitchPane:
+                    case FolderView::NavigationRequest::FocusNavigationMenu:
+                        s.navigationView.SetFocusRegion(NavigationView::FocusRegion::Menu);
+                        if (s.hNavigationView)
                         {
-                            const Pane otherPane = pane == Pane::Left ? Pane::Right : Pane::Left;
-                            PaneState& other     = otherPane == Pane::Left ? _leftPane : _rightPane;
-                            if (other.hFolderView)
-                            {
-                                SetActivePane(otherPane);
-                                SetFocus(other.hFolderView.get());
-                            }
-                            break;
+                            SetFocus(s.hNavigationView.get());
                         }
+                        break;
+                    case FolderView::NavigationRequest::FocusNavigationDiskInfo:
+                        s.navigationView.SetFocusRegion(NavigationView::FocusRegion::DiskInfo);
+                        if (s.hNavigationView)
+                        {
+                            SetFocus(s.hNavigationView.get());
+                        }
+                        break;
+                    case FolderView::NavigationRequest::FocusAddressBar: s.navigationView.FocusAddressBar(); break;
+                    case FolderView::NavigationRequest::OpenHistoryDropdown: s.navigationView.OpenHistoryDropdownFromKeyboard(); break;
+                    case FolderView::NavigationRequest::SwitchPane:
+                    {
+                        const Pane otherPane = pane == Pane::Left ? Pane::Right : Pane::Left;
+                        PaneState& other     = otherPane == Pane::Left ? _leftPane : _rightPane;
+                        if (other.hFolderView)
+                        {
+                            SetActivePane(otherPane);
+                            SetFocus(other.hFolderView.get());
+                        }
+                        break;
                     }
-                });
+                }
+            });
 
-            state.folderView.SetSelectionChangedCallback(
-                [this, pane](const FolderView::SelectionStats& stats)
-                {
-                    PaneState& s     = pane == Pane::Left ? _leftPane : _rightPane;
-                    s.selectionStats = stats;
-                    CancelSelectionSizeComputation(pane);
-                    UpdatePaneStatusBar(pane);
-                });
+            state.folderView.SetSelectionChangedCallback([this, pane](const FolderView::SelectionStats& stats)
+            {
+                PaneState& s     = pane == Pane::Left ? _leftPane : _rightPane;
+                s.selectionStats = stats;
+                CancelSelectionSizeComputation(pane);
+                UpdatePaneStatusBar(pane);
+            });
 
             state.folderView.SetIncrementalSearchChangedCallback([this, pane] { UpdatePaneStatusBar(pane); });
             state.folderView.SetSelectionSizeComputationRequestedCallback([this, pane] { RequestSelectionSizeComputation(pane); });

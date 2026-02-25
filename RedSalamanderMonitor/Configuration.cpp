@@ -2,8 +2,8 @@
 #include "Framework.h"
 
 #pragma warning(push)
-#pragma warning(                                                                                                                                               \
-    disable : 4625 4626 5026 5027) // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
+#pragma warning(disable                                                                                                                                        \
+                : 4625 4626 5026 5027) // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
 #include <wil/registry.h>
 #include <wil/registry_helpers.h>
 #pragma warning(pop)

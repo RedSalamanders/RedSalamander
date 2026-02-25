@@ -987,10 +987,9 @@ private:
 
         const auto& items = g_settings.connections->items;
 
-        const auto byName =
-            std::find_if(items.begin(),
-                         items.end(),
-                         [&](const Common::Settings::ConnectionProfile& c) noexcept { return ! c.name.empty() && EqualsIgnoreCase(c.name, connectionName); });
+        const auto byName = std::find_if(items.begin(), items.end(), [&](const Common::Settings::ConnectionProfile& c) noexcept {
+            return ! c.name.empty() && EqualsIgnoreCase(c.name, connectionName);
+        });
         if (byName != items.end())
         {
             return &(*byName);
@@ -1008,10 +1007,9 @@ private:
 
         auto& items = g_settings.connections->items;
 
-        const auto byName =
-            std::find_if(items.begin(),
-                         items.end(),
-                         [&](Common::Settings::ConnectionProfile& c) noexcept { return ! c.name.empty() && EqualsIgnoreCase(c.name, connectionName); });
+        const auto byName = std::find_if(items.begin(), items.end(), [&](Common::Settings::ConnectionProfile& c) noexcept {
+            return ! c.name.empty() && EqualsIgnoreCase(c.name, connectionName);
+        });
         if (byName != items.end())
         {
             return &(*byName);

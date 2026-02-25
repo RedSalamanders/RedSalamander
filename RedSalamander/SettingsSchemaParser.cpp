@@ -328,17 +328,17 @@ std::vector<SettingField> ParseSettingsSchema(std::string_view schemaJsonUtf8) n
     std::sort(fields.begin(),
               fields.end(),
               [](const SettingField& a, const SettingField& b)
-              {
-                  if (a.paneName != b.paneName)
-                  {
-                      return a.paneName < b.paneName;
-                  }
-                  if (a.sectionHeader != b.sectionHeader)
-                  {
-                      return a.sectionHeader < b.sectionHeader;
-                  }
-                  return a.displayOrder < b.displayOrder;
-              });
+    {
+        if (a.paneName != b.paneName)
+        {
+            return a.paneName < b.paneName;
+        }
+        if (a.sectionHeader != b.sectionHeader)
+        {
+            return a.sectionHeader < b.sectionHeader;
+        }
+        return a.displayOrder < b.displayOrder;
+    });
 
     return fields;
 }

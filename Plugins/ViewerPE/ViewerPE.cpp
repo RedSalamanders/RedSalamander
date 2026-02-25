@@ -1877,864 +1877,855 @@ void ViewerPE::StartAsyncParse(HWND hwnd, wil::com_ptr<IFileSystem> fileSystem, 
         return;
     }
 
-    _worker = std::jthread(
-        [hwnd, requestId, fileSystem = std::move(fileSystem), path = std::move(path)](std::stop_token st) noexcept
+    _worker = std::jthread([hwnd, requestId, fileSystem = std::move(fileSystem), path = std::move(path)](std::stop_token st) noexcept
+    {
+        auto postResult = [&](HRESULT hr, std::wstring title, std::wstring subtitle, std::wstring body, std::wstring markdown) noexcept
         {
-            auto postResult = [&](HRESULT hr, std::wstring title, std::wstring subtitle, std::wstring body, std::wstring markdown) noexcept
-            {
-                if (st.stop_requested())
-                {
-                    return;
-                }
-
-                if (! hwnd || IsWindow(hwnd) == 0)
-                {
-                    return;
-                }
-
-                auto result = std::unique_ptr<AsyncParseResult>(new (std::nothrow) AsyncParseResult());
-                if (! result)
-                {
-                    return;
-                }
-
-                result->requestId = requestId;
-                result->hr        = hr;
-                result->title     = std::move(title);
-                result->subtitle  = std::move(subtitle);
-                result->body      = std::move(body);
-                result->markdown  = std::move(markdown);
-                static_cast<void>(PostMessagePayload(hwnd, kAsyncParseCompleteMessage, 0, std::move(result)));
-            };
-
-            wil::com_ptr<IFileSystemIO> fsio;
-            HRESULT hr = fileSystem->QueryInterface(__uuidof(IFileSystemIO), fsio.put_void());
-            if (FAILED(hr) || ! fsio)
-            {
-                postResult(E_NOINTERFACE, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_NO_FILEIO), {});
-                return;
-            }
-
-            wil::com_ptr<IFileReader> reader;
-            hr = fsio->CreateFileReader(path.c_str(), reader.put());
-            if (FAILED(hr) || ! reader)
-            {
-                postResult(hr, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_OPEN_FAILED), {});
-                return;
-            }
-
-            uint64_t sizeBytes = 0;
-            hr                 = reader->GetSize(&sizeBytes);
-            if (FAILED(hr) || sizeBytes == 0)
-            {
-                postResult(hr, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_OPEN_FAILED), {});
-                return;
-            }
-
-            if (sizeBytes > static_cast<uint64_t>((std::numeric_limits<std::uint32_t>::max)()) ||
-                sizeBytes > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
-            {
-                postResult(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE), {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_TOO_LARGE), {});
-                return;
-            }
-
-            std::vector<std::uint8_t> bytes;
-            bytes.resize(static_cast<size_t>(sizeBytes));
-
-            size_t offset = 0;
-            while (offset < bytes.size())
-            {
-                if (st.stop_requested())
-                {
-                    return;
-                }
-
-                const size_t remaining   = bytes.size() - offset;
-                const unsigned long want = static_cast<unsigned long>((std::min)(remaining, static_cast<size_t>(16u * 1024u * 1024u)));
-                unsigned long read       = 0;
-                hr                       = reader->Read(bytes.data() + offset, want, &read);
-                if (FAILED(hr))
-                {
-                    postResult(hr, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_READ_FAILED), {});
-                    return;
-                }
-                if (read == 0)
-                {
-                    break;
-                }
-                offset += static_cast<size_t>(read);
-            }
-
-            if (offset == 0)
-            {
-                postResult(E_FAIL, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_READ_FAILED), {});
-                return;
-            }
-            if (offset < bytes.size())
-            {
-                bytes.resize(offset);
-            }
-
-            std::unique_ptr<peparse::parsed_pe, ParsedPeDeleter> pe(peparse::ParsePEFromPointer(bytes.data(), static_cast<std::uint32_t>(bytes.size())));
-            if (! pe)
-            {
-                std::wstring err          = LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_PARSE_FAILED);
-                const std::wstring detail = Utf16FromUtf8(peparse::GetPEErrString());
-                const std::wstring loc    = Utf16FromUtf8(peparse::GetPEErrLoc());
-                if (! detail.empty())
-                {
-                    err += L"\n\n";
-                    err += detail;
-                    if (! loc.empty())
-                    {
-                        err += L"\n";
-                        err += loc;
-                    }
-                }
-
-                postResult(E_FAIL, {}, {}, std::move(err), {});
-                return;
-            }
-
-            const auto& nt               = pe->peHeader.nt;
-            const std::uint16_t optMagic = nt.OptionalMagic;
-            const bool is64              = optMagic == 0x20Bu;
-
-            peparse::VA entryPoint   = 0;
-            const bool hasEntryPoint = peparse::GetEntryPoint(pe.get(), entryPoint);
-
-            const std::wstring machine       = MachineText(pe.get());
-            const std::wstring subsystem     = SubsystemText(pe.get());
-            const std::wstring_view kindName = PeKindName(optMagic);
-
-            std::wstring subtitle;
-            subtitle = std::format(L"{}  •  {}  •  {} section(s)", kindName, machine.empty() ? L"Unknown machine" : machine, nt.FileHeader.NumberOfSections);
-
-            const auto& dos        = pe->peHeader.dos;
-            const auto& fileHeader = nt.FileHeader;
-            const auto& opt32      = nt.OptionalHeader;
-            const auto& opt64      = nt.OptionalHeader64;
-
-            const uint64_t imageBase = is64 ? opt64.ImageBase : opt32.ImageBase;
-
-            std::wstring entryPointText;
-            if (hasEntryPoint)
-            {
-                entryPointText = std::format(L"0x{:016X}", static_cast<uint64_t>(entryPoint));
-            }
-            else
-            {
-                entryPointText = L"(none)";
-            }
-
-            std::wstring body;
-            body = std::format(L"Path: {}\nSize: {} ({})\n\nKind: {}\nMachine: {}\nSubsystem: {}\nTimestamp: 0x{:08X}\nCharacteristics: "
-                               L"0x{:04X}\nImageBase: 0x{:016X}\nEntryPoint: {}\n\nDOS Header:\n  e_magic: 0x{:04X}\n  e_lfanew: 0x{:08X}\n\nSections:\n",
-                               path,
-                               sizeBytes,
-                               FormatBytesCompact(sizeBytes),
-                               kindName,
-                               machine.empty() ? L"(unknown)" : machine,
-                               subsystem.empty() ? L"(unknown)" : subsystem,
-                               static_cast<std::uint32_t>(fileHeader.TimeDateStamp),
-                               fileHeader.Characteristics,
-                               imageBase,
-                               entryPointText,
-                               dos.e_magic,
-                               dos.e_lfanew);
-
-            body += std::format(L"{:<10} {:>10} {:>10} {:>10} {:>10} {:>10}\n", L"Name", L"RVA", L"VSize", L"RawPtr", L"RawSize", L"Chars");
-
-            struct SectionRow
-            {
-                std::wstring name;
-                std::uint32_t rva     = 0;
-                std::uint32_t vsize   = 0;
-                std::uint32_t rawPtr  = 0;
-                std::uint32_t rawSize = 0;
-                std::uint32_t chars   = 0;
-            };
-
-            std::vector<SectionRow> sections;
-            peparse::IterSec(
-                pe.get(),
-                [](void* ctx,
-                   const peparse::VA& /*va*/,
-                   const std::string& name,
-                   const peparse::image_section_header& hdr,
-                   const peparse::bounded_buffer* /*buf*/) -> int
-                {
-                    auto* out = static_cast<std::vector<SectionRow>*>(ctx);
-                    if (! out)
-                    {
-                        return 0;
-                    }
-
-                    SectionRow row{};
-                    row.name.assign(name.begin(), name.end());
-                    row.rva     = hdr.VirtualAddress;
-                    row.vsize   = hdr.Misc.VirtualSize;
-                    row.rawPtr  = hdr.PointerToRawData;
-                    row.rawSize = hdr.SizeOfRawData;
-                    row.chars   = hdr.Characteristics;
-
-                    out->push_back(std::move(row));
-                    return 0;
-                },
-                &sections);
-
-            for (const auto& sec : sections)
-            {
-                if (st.stop_requested())
-                {
-                    return;
-                }
-
-                std::wstring line;
-                line = std::format(L"{:<10} 0x{:08X} 0x{:08X} 0x{:08X} 0x{:08X} 0x{:08X}\n", sec.name, sec.rva, sec.vsize, sec.rawPtr, sec.rawSize, sec.chars);
-                body += line;
-            }
-
-            const auto safeAppend = [&](std::wstring_view text) noexcept { body.append(text); };
-
-            const auto safeAppendLine = [&](std::wstring_view text) noexcept
-            {
-                safeAppend(text);
-                safeAppend(L"\n");
-            };
-
-            const auto safeAppendFormat = [&]<typename... Args>(std::wformat_string<Args...> fmt, Args&&... args) noexcept
-            { safeAppend(std::format(fmt, std::forward<Args>(args)...)); };
-
-            const auto safeAppendBlankLine = [&]() noexcept { safeAppend(L"\n"); };
-
-            safeAppendBlankLine();
-            safeAppendLine(L"Rich Header:");
-            safeAppendFormat(L"Present: {}\n", pe->peHeader.rich.isPresent ? L"Yes" : L"No");
-            safeAppendFormat(L"Valid: {}\n", pe->peHeader.rich.isValid ? L"Yes" : L"No");
-            if (pe->peHeader.rich.isPresent)
-            {
-                safeAppendFormat(L"DecryptionKey: 0x{:08X}\n", pe->peHeader.rich.DecryptionKey);
-                safeAppendFormat(L"Checksum: 0x{:08X}\n", pe->peHeader.rich.Checksum);
-                safeAppendFormat(L"Entries: {:L}\n", pe->peHeader.rich.Entries.size());
-
-                static constexpr size_t kMaxRichEntries = 256;
-                if (! pe->peHeader.rich.Entries.empty())
-                {
-                    safeAppendBlankLine();
-                    safeAppendLine(L"ProductId Build     Count      Product");
-                    safeAppendLine(L"-------- -----     ---------  ------------------------------");
-
-                    size_t shown = 0;
-                    for (const auto& entry : pe->peHeader.rich.Entries)
-                    {
-                        if (st.stop_requested())
-                        {
-                            return;
-                        }
-
-                        if (shown >= kMaxRichEntries)
-                        {
-                            safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", kMaxRichEntries);
-                            break;
-                        }
-
-                        const std::string& prod = peparse::GetRichProductName(entry.BuildNumber);
-                        const std::string& obj  = peparse::GetRichObjectType(entry.ProductId);
-                        std::wstring label      = Utf16FromUtf8(prod);
-                        if (! obj.empty())
-                        {
-                            label += L" ";
-                            label += Utf16FromUtf8(obj);
-                        }
-
-                        safeAppendFormat(L"{:>8} {:>5}     {:>9}  {}\n", entry.ProductId, entry.BuildNumber, entry.Count, label);
-                        shown += 1;
-                    }
-                }
-            }
-
-            safeAppendBlankLine();
-            safeAppendLine(L"File Header:");
-            safeAppendFormat(L"NumberOfSections: {:L}\n", fileHeader.NumberOfSections);
-            safeAppendFormat(L"SizeOfOptionalHeader: {:L}\n", fileHeader.SizeOfOptionalHeader);
-            safeAppendFormat(L"PointerToSymbolTable: 0x{:08X}\n", fileHeader.PointerToSymbolTable);
-            safeAppendFormat(L"NumberOfSymbols: {:L}\n", fileHeader.NumberOfSymbols);
-
-            safeAppendBlankLine();
-            safeAppendLine(L"Optional Header:");
-            if (is64)
-            {
-                safeAppendFormat(L"Magic: 0x{:04X}\n", opt64.Magic);
-                safeAppendFormat(L"LinkerVersion: {}.{}\n", opt64.MajorLinkerVersion, opt64.MinorLinkerVersion);
-                safeAppendFormat(L"SizeOfImage: 0x{:08X}\n", opt64.SizeOfImage);
-                safeAppendFormat(L"SizeOfHeaders: 0x{:08X}\n", opt64.SizeOfHeaders);
-                safeAppendFormat(L"CheckSum: 0x{:08X}\n", opt64.CheckSum);
-                safeAppendFormat(L"DllCharacteristics: 0x{:04X}\n", opt64.DllCharacteristics);
-                safeAppendFormat(L"SectionAlignment: 0x{:08X}\n", opt64.SectionAlignment);
-                safeAppendFormat(L"FileAlignment: 0x{:08X}\n", opt64.FileAlignment);
-                safeAppendFormat(L"OSVersion: {}.{}\n", opt64.MajorOperatingSystemVersion, opt64.MinorOperatingSystemVersion);
-                safeAppendFormat(L"ImageVersion: {}.{}\n", opt64.MajorImageVersion, opt64.MinorImageVersion);
-                safeAppendFormat(L"SubsystemVersion: {}.{}\n", opt64.MajorSubsystemVersion, opt64.MinorSubsystemVersion);
-                safeAppendFormat(L"SizeOfStackReserve: 0x{:016X}\n", opt64.SizeOfStackReserve);
-                safeAppendFormat(L"SizeOfStackCommit: 0x{:016X}\n", opt64.SizeOfStackCommit);
-                safeAppendFormat(L"SizeOfHeapReserve: 0x{:016X}\n", opt64.SizeOfHeapReserve);
-                safeAppendFormat(L"SizeOfHeapCommit: 0x{:016X}\n", opt64.SizeOfHeapCommit);
-                safeAppendFormat(L"NumberOfRvaAndSizes: {:L}\n", opt64.NumberOfRvaAndSizes);
-            }
-            else
-            {
-                safeAppendFormat(L"Magic: 0x{:04X}\n", opt32.Magic);
-                safeAppendFormat(L"LinkerVersion: {}.{}\n", opt32.MajorLinkerVersion, opt32.MinorLinkerVersion);
-                safeAppendFormat(L"SizeOfImage: 0x{:08X}\n", opt32.SizeOfImage);
-                safeAppendFormat(L"SizeOfHeaders: 0x{:08X}\n", opt32.SizeOfHeaders);
-                safeAppendFormat(L"CheckSum: 0x{:08X}\n", opt32.CheckSum);
-                safeAppendFormat(L"DllCharacteristics: 0x{:04X}\n", opt32.DllCharacteristics);
-                safeAppendFormat(L"SectionAlignment: 0x{:08X}\n", opt32.SectionAlignment);
-                safeAppendFormat(L"FileAlignment: 0x{:08X}\n", opt32.FileAlignment);
-                safeAppendFormat(L"OSVersion: {}.{}\n", opt32.MajorOperatingSystemVersion, opt32.MinorOperatingSystemVersion);
-                safeAppendFormat(L"ImageVersion: {}.{}\n", opt32.MajorImageVersion, opt32.MinorImageVersion);
-                safeAppendFormat(L"SubsystemVersion: {}.{}\n", opt32.MajorSubsystemVersion, opt32.MinorSubsystemVersion);
-                safeAppendFormat(L"SizeOfStackReserve: 0x{:08X}\n", opt32.SizeOfStackReserve);
-                safeAppendFormat(L"SizeOfStackCommit: 0x{:08X}\n", opt32.SizeOfStackCommit);
-                safeAppendFormat(L"SizeOfHeapReserve: 0x{:08X}\n", opt32.SizeOfHeapReserve);
-                safeAppendFormat(L"SizeOfHeapCommit: 0x{:08X}\n", opt32.SizeOfHeapCommit);
-                safeAppendFormat(L"NumberOfRvaAndSizes: {:L}\n", opt32.NumberOfRvaAndSizes);
-            }
-
-            safeAppendBlankLine();
-            safeAppendLine(L"Data Directories:");
-            safeAppendLine(L"Name                 RVA        Size");
-            safeAppendLine(L"-------------------  ---------  ---------");
-            for (size_t i = 0; i < kDataDirectoryNames.size(); ++i)
-            {
-                const peparse::data_directory dir = is64 ? opt64.DataDirectory[i] : opt32.DataDirectory[i];
-                safeAppendFormat(L"{:<19}  0x{:08X}  0x{:08X}\n", kDataDirectoryNames[i], dir.VirtualAddress, dir.Size);
-            }
-
             if (st.stop_requested())
             {
                 return;
             }
 
-            static constexpr size_t kMaxImportRows  = 600;
-            static constexpr size_t kHardMaxImports = 6000;
-
-            struct ImportRow
+            if (! hwnd || IsWindow(hwnd) == 0)
             {
-                uint64_t va = 0;
-                std::wstring module;
-                std::wstring name;
-            };
-
-            std::vector<ImportRow> imports;
-            imports.reserve(128);
-
-            struct ImportCollect
-            {
-                std::vector<ImportRow>* out = nullptr;
-                size_t maxRows              = 0;
-                size_t hardMax              = 0;
-                size_t seen                 = 0;
-                bool truncated              = false;
-            };
-
-            ImportCollect importCollect{&imports, kMaxImportRows, kHardMaxImports, 0, false};
-            peparse::IterImpVAString(
-                pe.get(),
-                [](void* ctx, const peparse::VA& va, const std::string& module, const std::string& name) -> int
-                {
-                    auto* c = static_cast<ImportCollect*>(ctx);
-                    if (! c)
-                    {
-                        return 0;
-                    }
-
-                    c->seen += 1;
-                    if (c->out && c->out->size() < c->maxRows)
-                    {
-                        ImportRow row{};
-                        row.va     = static_cast<uint64_t>(va);
-                        row.module = Utf16FromUtf8(module);
-                        row.name   = Utf16FromUtf8(name);
-
-                        c->out->push_back(std::move(row));
-                    }
-
-                    if (c->seen >= c->hardMax)
-                    {
-                        c->truncated = true;
-                        return 1;
-                    }
-
-                    return 0;
-                },
-                &importCollect);
-
-            safeAppendBlankLine();
-            if (importCollect.seen == 0)
-            {
-                safeAppendLine(L"Imports: (none)");
-            }
-            else
-            {
-                safeAppendFormat(L"Imports: {:L}{}\n", importCollect.seen, importCollect.truncated ? L"+" : L"");
-                safeAppendLine(L"VA                 Module                   Import");
-                safeAppendLine(L"-----------------  -----------------------  ------------------------------");
-                for (const auto& imp : imports)
-                {
-                    safeAppendFormat(L"0x{:016X} {:<23}  {}\n", imp.va, imp.module, imp.name);
-                }
-                if (importCollect.seen > imports.size())
-                {
-                    safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", imports.size());
-                }
+                return;
             }
 
+            auto result = std::unique_ptr<AsyncParseResult>(new (std::nothrow) AsyncParseResult());
+            if (! result)
+            {
+                return;
+            }
+
+            result->requestId = requestId;
+            result->hr        = hr;
+            result->title     = std::move(title);
+            result->subtitle  = std::move(subtitle);
+            result->body      = std::move(body);
+            result->markdown  = std::move(markdown);
+            static_cast<void>(PostMessagePayload(hwnd, kAsyncParseCompleteMessage, 0, std::move(result)));
+        };
+
+        wil::com_ptr<IFileSystemIO> fsio;
+        HRESULT hr = fileSystem->QueryInterface(__uuidof(IFileSystemIO), fsio.put_void());
+        if (FAILED(hr) || ! fsio)
+        {
+            postResult(E_NOINTERFACE, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_NO_FILEIO), {});
+            return;
+        }
+
+        wil::com_ptr<IFileReader> reader;
+        hr = fsio->CreateFileReader(path.c_str(), reader.put());
+        if (FAILED(hr) || ! reader)
+        {
+            postResult(hr, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_OPEN_FAILED), {});
+            return;
+        }
+
+        uint64_t sizeBytes = 0;
+        hr                 = reader->GetSize(&sizeBytes);
+        if (FAILED(hr) || sizeBytes == 0)
+        {
+            postResult(hr, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_OPEN_FAILED), {});
+            return;
+        }
+
+        if (sizeBytes > static_cast<uint64_t>((std::numeric_limits<std::uint32_t>::max)()) ||
+            sizeBytes > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
+        {
+            postResult(HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE), {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_TOO_LARGE), {});
+            return;
+        }
+
+        std::vector<std::uint8_t> bytes;
+        bytes.resize(static_cast<size_t>(sizeBytes));
+
+        size_t offset = 0;
+        while (offset < bytes.size())
+        {
             if (st.stop_requested())
             {
                 return;
             }
 
-            static constexpr size_t kMaxExportRows  = 600;
-            static constexpr size_t kHardMaxExports = 6000;
-
-            struct ExportRow
+            const size_t remaining   = bytes.size() - offset;
+            const unsigned long want = static_cast<unsigned long>((std::min)(remaining, static_cast<size_t>(16u * 1024u * 1024u)));
+            unsigned long read       = 0;
+            hr                       = reader->Read(bytes.data() + offset, want, &read);
+            if (FAILED(hr))
             {
-                uint64_t va       = 0;
-                std::uint16_t ord = 0;
-                std::wstring name;
-                std::wstring forward;
-            };
-
-            std::vector<ExportRow> exports;
-            exports.reserve(128);
-
-            struct ExportCollect
-            {
-                std::vector<ExportRow>* out = nullptr;
-                size_t maxRows              = 0;
-                size_t hardMax              = 0;
-                size_t seen                 = 0;
-                bool truncated              = false;
-            };
-
-            ExportCollect exportCollect{&exports, kMaxExportRows, kHardMaxExports, 0, false};
-            peparse::IterExpFull(
-                pe.get(),
-                [](void* ctx, const peparse::VA& va, std::uint16_t ord, const std::string& name, const std::string& /*module*/, const std::string& forwardStr)
-                    -> int
-                {
-                    auto* c = static_cast<ExportCollect*>(ctx);
-                    if (! c)
-                    {
-                        return 0;
-                    }
-
-                    c->seen += 1;
-                    if (c->out && c->out->size() < c->maxRows)
-                    {
-                        ExportRow row{};
-                        row.va      = static_cast<uint64_t>(va);
-                        row.ord     = ord;
-                        row.name    = Utf16FromUtf8(name);
-                        row.forward = Utf16FromUtf8(forwardStr);
-
-                        c->out->push_back(std::move(row));
-                    }
-
-                    if (c->seen >= c->hardMax)
-                    {
-                        c->truncated = true;
-                        return 1;
-                    }
-
-                    return 0;
-                },
-                &exportCollect);
-
-            safeAppendBlankLine();
-            if (exportCollect.seen == 0)
-            {
-                safeAppendLine(L"Exports: (none)");
+                postResult(hr, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_READ_FAILED), {});
+                return;
             }
-            else
+            if (read == 0)
             {
-                safeAppendFormat(L"Exports: {:L}{}\n", exportCollect.seen, exportCollect.truncated ? L"+" : L"");
-                safeAppendLine(L"Ord   VA                 Name");
-                safeAppendLine(L"----  -----------------  --------------------------------------------");
-                for (const auto& exp : exports)
+                break;
+            }
+            offset += static_cast<size_t>(read);
+        }
+
+        if (offset == 0)
+        {
+            postResult(E_FAIL, {}, {}, LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_READ_FAILED), {});
+            return;
+        }
+        if (offset < bytes.size())
+        {
+            bytes.resize(offset);
+        }
+
+        std::unique_ptr<peparse::parsed_pe, ParsedPeDeleter> pe(peparse::ParsePEFromPointer(bytes.data(), static_cast<std::uint32_t>(bytes.size())));
+        if (! pe)
+        {
+            std::wstring err          = LoadStringResource(g_hInstance, IDS_VIEWERPE_ERROR_PARSE_FAILED);
+            const std::wstring detail = Utf16FromUtf8(peparse::GetPEErrString());
+            const std::wstring loc    = Utf16FromUtf8(peparse::GetPEErrLoc());
+            if (! detail.empty())
+            {
+                err += L"\n\n";
+                err += detail;
+                if (! loc.empty())
                 {
-                    if (exp.va != 0)
-                    {
-                        safeAppendFormat(L"{:>4} 0x{:016X}  {}\n", exp.ord, exp.va, exp.name);
-                    }
-                    else if (! exp.forward.empty())
-                    {
-                        safeAppendFormat(L"{:>4} (forwarded)        {} -> {}\n", exp.ord, exp.name, exp.forward);
-                    }
-                    else
-                    {
-                        safeAppendFormat(L"{:>4} (n/a)              {}\n", exp.ord, exp.name);
-                    }
-                }
-                if (exportCollect.seen > exports.size())
-                {
-                    safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", exports.size());
+                    err += L"\n";
+                    err += loc;
                 }
             }
 
+            postResult(E_FAIL, {}, {}, std::move(err), {});
+            return;
+        }
+
+        const auto& nt               = pe->peHeader.nt;
+        const std::uint16_t optMagic = nt.OptionalMagic;
+        const bool is64              = optMagic == 0x20Bu;
+
+        peparse::VA entryPoint   = 0;
+        const bool hasEntryPoint = peparse::GetEntryPoint(pe.get(), entryPoint);
+
+        const std::wstring machine       = MachineText(pe.get());
+        const std::wstring subsystem     = SubsystemText(pe.get());
+        const std::wstring_view kindName = PeKindName(optMagic);
+
+        std::wstring subtitle;
+        subtitle = std::format(L"{}  •  {}  •  {} section(s)", kindName, machine.empty() ? L"Unknown machine" : machine, nt.FileHeader.NumberOfSections);
+
+        const auto& dos        = pe->peHeader.dos;
+        const auto& fileHeader = nt.FileHeader;
+        const auto& opt32      = nt.OptionalHeader;
+        const auto& opt64      = nt.OptionalHeader64;
+
+        const uint64_t imageBase = is64 ? opt64.ImageBase : opt32.ImageBase;
+
+        std::wstring entryPointText;
+        if (hasEntryPoint)
+        {
+            entryPointText = std::format(L"0x{:016X}", static_cast<uint64_t>(entryPoint));
+        }
+        else
+        {
+            entryPointText = L"(none)";
+        }
+
+        std::wstring body;
+        body = std::format(L"Path: {}\nSize: {} ({})\n\nKind: {}\nMachine: {}\nSubsystem: {}\nTimestamp: 0x{:08X}\nCharacteristics: "
+                           L"0x{:04X}\nImageBase: 0x{:016X}\nEntryPoint: {}\n\nDOS Header:\n  e_magic: 0x{:04X}\n  e_lfanew: 0x{:08X}\n\nSections:\n",
+                           path,
+                           sizeBytes,
+                           FormatBytesCompact(sizeBytes),
+                           kindName,
+                           machine.empty() ? L"(unknown)" : machine,
+                           subsystem.empty() ? L"(unknown)" : subsystem,
+                           static_cast<std::uint32_t>(fileHeader.TimeDateStamp),
+                           fileHeader.Characteristics,
+                           imageBase,
+                           entryPointText,
+                           dos.e_magic,
+                           dos.e_lfanew);
+
+        body += std::format(L"{:<10} {:>10} {:>10} {:>10} {:>10} {:>10}\n", L"Name", L"RVA", L"VSize", L"RawPtr", L"RawSize", L"Chars");
+
+        struct SectionRow
+        {
+            std::wstring name;
+            std::uint32_t rva     = 0;
+            std::uint32_t vsize   = 0;
+            std::uint32_t rawPtr  = 0;
+            std::uint32_t rawSize = 0;
+            std::uint32_t chars   = 0;
+        };
+
+        std::vector<SectionRow> sections;
+        peparse::IterSec(
+            pe.get(),
+            [](void* ctx, const peparse::VA& /*va*/, const std::string& name, const peparse::image_section_header& hdr, const peparse::bounded_buffer* /*buf*/)
+                -> int
+        {
+            auto* out = static_cast<std::vector<SectionRow>*>(ctx);
+            if (! out)
+            {
+                return 0;
+            }
+
+            SectionRow row{};
+            row.name.assign(name.begin(), name.end());
+            row.rva     = hdr.VirtualAddress;
+            row.vsize   = hdr.Misc.VirtualSize;
+            row.rawPtr  = hdr.PointerToRawData;
+            row.rawSize = hdr.SizeOfRawData;
+            row.chars   = hdr.Characteristics;
+
+            out->push_back(std::move(row));
+            return 0;
+        },
+            &sections);
+
+        for (const auto& sec : sections)
+        {
             if (st.stop_requested())
             {
                 return;
             }
 
-            static constexpr size_t kMaxResourceRows  = 600;
-            static constexpr size_t kHardMaxResources = 6000;
+            std::wstring line;
+            line = std::format(L"{:<10} 0x{:08X} 0x{:08X} 0x{:08X} 0x{:08X} 0x{:08X}\n", sec.name, sec.rva, sec.vsize, sec.rawPtr, sec.rawSize, sec.chars);
+            body += line;
+        }
 
-            struct ResourceRow
+        const auto safeAppend = [&](std::wstring_view text) noexcept { body.append(text); };
+
+        const auto safeAppendLine = [&](std::wstring_view text) noexcept
+        {
+            safeAppend(text);
+            safeAppend(L"\n");
+        };
+
+        const auto safeAppendFormat = [&]<typename... Args>(std::wformat_string<Args...> fmt, Args&&... args) noexcept
+        { safeAppend(std::format(fmt, std::forward<Args>(args)...)); };
+
+        const auto safeAppendBlankLine = [&]() noexcept { safeAppend(L"\n"); };
+
+        safeAppendBlankLine();
+        safeAppendLine(L"Rich Header:");
+        safeAppendFormat(L"Present: {}\n", pe->peHeader.rich.isPresent ? L"Yes" : L"No");
+        safeAppendFormat(L"Valid: {}\n", pe->peHeader.rich.isValid ? L"Yes" : L"No");
+        if (pe->peHeader.rich.isPresent)
+        {
+            safeAppendFormat(L"DecryptionKey: 0x{:08X}\n", pe->peHeader.rich.DecryptionKey);
+            safeAppendFormat(L"Checksum: 0x{:08X}\n", pe->peHeader.rich.Checksum);
+            safeAppendFormat(L"Entries: {:L}\n", pe->peHeader.rich.Entries.size());
+
+            static constexpr size_t kMaxRichEntries = 256;
+            if (! pe->peHeader.rich.Entries.empty())
             {
-                std::wstring type;
-                std::wstring name;
-                std::wstring lang;
-                std::uint32_t codepage = 0;
-                std::uint32_t rva      = 0;
-                std::uint32_t size     = 0;
-            };
+                safeAppendBlankLine();
+                safeAppendLine(L"ProductId Build     Count      Product");
+                safeAppendLine(L"-------- -----     ---------  ------------------------------");
 
-            std::vector<ResourceRow> resources;
-            resources.reserve(128);
-
-            struct ResourceCollect
-            {
-                std::vector<ResourceRow>* out = nullptr;
-                size_t maxRows                = 0;
-                size_t hardMax                = 0;
-                size_t seen                   = 0;
-                bool truncated                = false;
-            };
-
-            ResourceCollect rsrcCollect{&resources, kMaxResourceRows, kHardMaxResources, 0, false};
-            peparse::IterRsrc(
-                pe.get(),
-                [](void* ctx, const peparse::resource& res) -> int
+                size_t shown = 0;
+                for (const auto& entry : pe->peHeader.rich.Entries)
                 {
-                    auto* c = static_cast<ResourceCollect*>(ctx);
-                    if (! c)
+                    if (st.stop_requested())
                     {
-                        return 0;
+                        return;
                     }
 
-                    c->seen += 1;
-                    if (c->out && c->out->size() < c->maxRows)
+                    if (shown >= kMaxRichEntries)
                     {
-                        ResourceRow row{};
-                        row.type     = Utf16FromUtf8(res.type_str);
-                        row.name     = Utf16FromUtf8(res.name_str);
-                        row.lang     = Utf16FromUtf8(res.lang_str);
-                        row.codepage = res.codepage;
-                        row.rva      = res.RVA;
-                        row.size     = res.size;
-
-                        if (row.type.empty())
-                        {
-                            row.type = std::to_wstring(res.type);
-                        }
-                        if (row.name.empty())
-                        {
-                            row.name = std::to_wstring(res.name);
-                        }
-                        if (row.lang.empty())
-                        {
-                            row.lang = std::to_wstring(res.lang);
-                        }
-
-                        c->out->push_back(std::move(row));
+                        safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", kMaxRichEntries);
+                        break;
                     }
 
-                    if (c->seen >= c->hardMax)
+                    const std::string& prod = peparse::GetRichProductName(entry.BuildNumber);
+                    const std::string& obj  = peparse::GetRichObjectType(entry.ProductId);
+                    std::wstring label      = Utf16FromUtf8(prod);
+                    if (! obj.empty())
                     {
-                        c->truncated = true;
-                        return 1;
+                        label += L" ";
+                        label += Utf16FromUtf8(obj);
                     }
 
-                    return 0;
-                },
-                &rsrcCollect);
-
-            safeAppendBlankLine();
-            if (rsrcCollect.seen == 0)
-            {
-                safeAppendLine(L"Resources: (none)");
-            }
-            else
-            {
-                safeAppendFormat(L"Resources: {:L}{}\n", rsrcCollect.seen, rsrcCollect.truncated ? L"+" : L"");
-                safeAppendLine(L"RVA        Size       CodePage  Type / Name / Lang");
-                safeAppendLine(L"---------  ---------  --------  ---------------------------------------");
-                for (const auto& res : resources)
-                {
-                    safeAppendFormat(L"0x{:08X} 0x{:08X} {:>8}  {}/{}/{}\n", res.rva, res.size, res.codepage, res.type, res.name, res.lang);
-                }
-                if (rsrcCollect.seen > resources.size())
-                {
-                    safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", resources.size());
+                    safeAppendFormat(L"{:>8} {:>5}     {:>9}  {}\n", entry.ProductId, entry.BuildNumber, entry.Count, label);
+                    shown += 1;
                 }
             }
+        }
 
-            if (st.stop_requested())
+        safeAppendBlankLine();
+        safeAppendLine(L"File Header:");
+        safeAppendFormat(L"NumberOfSections: {:L}\n", fileHeader.NumberOfSections);
+        safeAppendFormat(L"SizeOfOptionalHeader: {:L}\n", fileHeader.SizeOfOptionalHeader);
+        safeAppendFormat(L"PointerToSymbolTable: 0x{:08X}\n", fileHeader.PointerToSymbolTable);
+        safeAppendFormat(L"NumberOfSymbols: {:L}\n", fileHeader.NumberOfSymbols);
+
+        safeAppendBlankLine();
+        safeAppendLine(L"Optional Header:");
+        if (is64)
+        {
+            safeAppendFormat(L"Magic: 0x{:04X}\n", opt64.Magic);
+            safeAppendFormat(L"LinkerVersion: {}.{}\n", opt64.MajorLinkerVersion, opt64.MinorLinkerVersion);
+            safeAppendFormat(L"SizeOfImage: 0x{:08X}\n", opt64.SizeOfImage);
+            safeAppendFormat(L"SizeOfHeaders: 0x{:08X}\n", opt64.SizeOfHeaders);
+            safeAppendFormat(L"CheckSum: 0x{:08X}\n", opt64.CheckSum);
+            safeAppendFormat(L"DllCharacteristics: 0x{:04X}\n", opt64.DllCharacteristics);
+            safeAppendFormat(L"SectionAlignment: 0x{:08X}\n", opt64.SectionAlignment);
+            safeAppendFormat(L"FileAlignment: 0x{:08X}\n", opt64.FileAlignment);
+            safeAppendFormat(L"OSVersion: {}.{}\n", opt64.MajorOperatingSystemVersion, opt64.MinorOperatingSystemVersion);
+            safeAppendFormat(L"ImageVersion: {}.{}\n", opt64.MajorImageVersion, opt64.MinorImageVersion);
+            safeAppendFormat(L"SubsystemVersion: {}.{}\n", opt64.MajorSubsystemVersion, opt64.MinorSubsystemVersion);
+            safeAppendFormat(L"SizeOfStackReserve: 0x{:016X}\n", opt64.SizeOfStackReserve);
+            safeAppendFormat(L"SizeOfStackCommit: 0x{:016X}\n", opt64.SizeOfStackCommit);
+            safeAppendFormat(L"SizeOfHeapReserve: 0x{:016X}\n", opt64.SizeOfHeapReserve);
+            safeAppendFormat(L"SizeOfHeapCommit: 0x{:016X}\n", opt64.SizeOfHeapCommit);
+            safeAppendFormat(L"NumberOfRvaAndSizes: {:L}\n", opt64.NumberOfRvaAndSizes);
+        }
+        else
+        {
+            safeAppendFormat(L"Magic: 0x{:04X}\n", opt32.Magic);
+            safeAppendFormat(L"LinkerVersion: {}.{}\n", opt32.MajorLinkerVersion, opt32.MinorLinkerVersion);
+            safeAppendFormat(L"SizeOfImage: 0x{:08X}\n", opt32.SizeOfImage);
+            safeAppendFormat(L"SizeOfHeaders: 0x{:08X}\n", opt32.SizeOfHeaders);
+            safeAppendFormat(L"CheckSum: 0x{:08X}\n", opt32.CheckSum);
+            safeAppendFormat(L"DllCharacteristics: 0x{:04X}\n", opt32.DllCharacteristics);
+            safeAppendFormat(L"SectionAlignment: 0x{:08X}\n", opt32.SectionAlignment);
+            safeAppendFormat(L"FileAlignment: 0x{:08X}\n", opt32.FileAlignment);
+            safeAppendFormat(L"OSVersion: {}.{}\n", opt32.MajorOperatingSystemVersion, opt32.MinorOperatingSystemVersion);
+            safeAppendFormat(L"ImageVersion: {}.{}\n", opt32.MajorImageVersion, opt32.MinorImageVersion);
+            safeAppendFormat(L"SubsystemVersion: {}.{}\n", opt32.MajorSubsystemVersion, opt32.MinorSubsystemVersion);
+            safeAppendFormat(L"SizeOfStackReserve: 0x{:08X}\n", opt32.SizeOfStackReserve);
+            safeAppendFormat(L"SizeOfStackCommit: 0x{:08X}\n", opt32.SizeOfStackCommit);
+            safeAppendFormat(L"SizeOfHeapReserve: 0x{:08X}\n", opt32.SizeOfHeapReserve);
+            safeAppendFormat(L"SizeOfHeapCommit: 0x{:08X}\n", opt32.SizeOfHeapCommit);
+            safeAppendFormat(L"NumberOfRvaAndSizes: {:L}\n", opt32.NumberOfRvaAndSizes);
+        }
+
+        safeAppendBlankLine();
+        safeAppendLine(L"Data Directories:");
+        safeAppendLine(L"Name                 RVA        Size");
+        safeAppendLine(L"-------------------  ---------  ---------");
+        for (size_t i = 0; i < kDataDirectoryNames.size(); ++i)
+        {
+            const peparse::data_directory dir = is64 ? opt64.DataDirectory[i] : opt32.DataDirectory[i];
+            safeAppendFormat(L"{:<19}  0x{:08X}  0x{:08X}\n", kDataDirectoryNames[i], dir.VirtualAddress, dir.Size);
+        }
+
+        if (st.stop_requested())
+        {
+            return;
+        }
+
+        static constexpr size_t kMaxImportRows  = 600;
+        static constexpr size_t kHardMaxImports = 6000;
+
+        struct ImportRow
+        {
+            uint64_t va = 0;
+            std::wstring module;
+            std::wstring name;
+        };
+
+        std::vector<ImportRow> imports;
+        imports.reserve(128);
+
+        struct ImportCollect
+        {
+            std::vector<ImportRow>* out = nullptr;
+            size_t maxRows              = 0;
+            size_t hardMax              = 0;
+            size_t seen                 = 0;
+            bool truncated              = false;
+        };
+
+        ImportCollect importCollect{&imports, kMaxImportRows, kHardMaxImports, 0, false};
+        peparse::IterImpVAString(pe.get(),
+                                 [](void* ctx, const peparse::VA& va, const std::string& module, const std::string& name) -> int
+        {
+            auto* c = static_cast<ImportCollect*>(ctx);
+            if (! c)
             {
-                return;
+                return 0;
             }
 
-            static constexpr size_t kMaxRelocRows  = 600;
-            static constexpr size_t kHardMaxRelocs = 20000;
-
-            struct RelocRow
+            c->seen += 1;
+            if (c->out && c->out->size() < c->maxRows)
             {
-                uint64_t va              = 0;
-                peparse::reloc_type type = peparse::RELOC_ABSOLUTE;
-            };
+                ImportRow row{};
+                row.va     = static_cast<uint64_t>(va);
+                row.module = Utf16FromUtf8(module);
+                row.name   = Utf16FromUtf8(name);
 
-            std::vector<RelocRow> relocs;
-            relocs.reserve(256);
-
-            struct RelocCollect
-            {
-                std::vector<RelocRow>* out = nullptr;
-                size_t maxRows             = 0;
-                size_t hardMax             = 0;
-                size_t seen                = 0;
-                bool truncated             = false;
-            };
-
-            RelocCollect relocCollect{&relocs, kMaxRelocRows, kHardMaxRelocs, 0, false};
-            peparse::IterRelocs(
-                pe.get(),
-                [](void* ctx, const peparse::VA& va, const peparse::reloc_type& type) -> int
-                {
-                    auto* c = static_cast<RelocCollect*>(ctx);
-                    if (! c)
-                    {
-                        return 0;
-                    }
-
-                    c->seen += 1;
-                    if (c->out && c->out->size() < c->maxRows)
-                    {
-                        RelocRow row{};
-                        row.va   = static_cast<uint64_t>(va);
-                        row.type = type;
-
-                        c->out->push_back(row);
-                    }
-
-                    if (c->seen >= c->hardMax)
-                    {
-                        c->truncated = true;
-                        return 1;
-                    }
-
-                    return 0;
-                },
-                &relocCollect);
-
-            safeAppendBlankLine();
-            if (relocCollect.seen == 0)
-            {
-                safeAppendLine(L"Relocations: (none)");
+                c->out->push_back(std::move(row));
             }
-            else
+
+            if (c->seen >= c->hardMax)
             {
-                safeAppendFormat(L"Relocations: {:L}{}\n", relocCollect.seen, relocCollect.truncated ? L"+" : L"");
-                safeAppendLine(L"VA                 Type");
-                safeAppendLine(L"-----------------  ----");
-                for (const auto& rel : relocs)
+                c->truncated = true;
+                return 1;
+            }
+
+            return 0;
+        },
+                                 &importCollect);
+
+        safeAppendBlankLine();
+        if (importCollect.seen == 0)
+        {
+            safeAppendLine(L"Imports: (none)");
+        }
+        else
+        {
+            safeAppendFormat(L"Imports: {:L}{}\n", importCollect.seen, importCollect.truncated ? L"+" : L"");
+            safeAppendLine(L"VA                 Module                   Import");
+            safeAppendLine(L"-----------------  -----------------------  ------------------------------");
+            for (const auto& imp : imports)
+            {
+                safeAppendFormat(L"0x{:016X} {:<23}  {}\n", imp.va, imp.module, imp.name);
+            }
+            if (importCollect.seen > imports.size())
+            {
+                safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", imports.size());
+            }
+        }
+
+        if (st.stop_requested())
+        {
+            return;
+        }
+
+        static constexpr size_t kMaxExportRows  = 600;
+        static constexpr size_t kHardMaxExports = 6000;
+
+        struct ExportRow
+        {
+            uint64_t va       = 0;
+            std::uint16_t ord = 0;
+            std::wstring name;
+            std::wstring forward;
+        };
+
+        std::vector<ExportRow> exports;
+        exports.reserve(128);
+
+        struct ExportCollect
+        {
+            std::vector<ExportRow>* out = nullptr;
+            size_t maxRows              = 0;
+            size_t hardMax              = 0;
+            size_t seen                 = 0;
+            bool truncated              = false;
+        };
+
+        ExportCollect exportCollect{&exports, kMaxExportRows, kHardMaxExports, 0, false};
+        peparse::IterExpFull(
+            pe.get(),
+            [](void* ctx, const peparse::VA& va, std::uint16_t ord, const std::string& name, const std::string& /*module*/, const std::string& forwardStr)
+                -> int
+        {
+            auto* c = static_cast<ExportCollect*>(ctx);
+            if (! c)
+            {
+                return 0;
+            }
+
+            c->seen += 1;
+            if (c->out && c->out->size() < c->maxRows)
+            {
+                ExportRow row{};
+                row.va      = static_cast<uint64_t>(va);
+                row.ord     = ord;
+                row.name    = Utf16FromUtf8(name);
+                row.forward = Utf16FromUtf8(forwardStr);
+
+                c->out->push_back(std::move(row));
+            }
+
+            if (c->seen >= c->hardMax)
+            {
+                c->truncated = true;
+                return 1;
+            }
+
+            return 0;
+        },
+            &exportCollect);
+
+        safeAppendBlankLine();
+        if (exportCollect.seen == 0)
+        {
+            safeAppendLine(L"Exports: (none)");
+        }
+        else
+        {
+            safeAppendFormat(L"Exports: {:L}{}\n", exportCollect.seen, exportCollect.truncated ? L"+" : L"");
+            safeAppendLine(L"Ord   VA                 Name");
+            safeAppendLine(L"----  -----------------  --------------------------------------------");
+            for (const auto& exp : exports)
+            {
+                if (exp.va != 0)
                 {
-                    safeAppendFormat(L"0x{:016X}  {:L}\n", rel.va, static_cast<unsigned long>(rel.type));
+                    safeAppendFormat(L"{:>4} 0x{:016X}  {}\n", exp.ord, exp.va, exp.name);
                 }
-                if (relocCollect.seen > relocs.size())
+                else if (! exp.forward.empty())
                 {
-                    safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", relocs.size());
+                    safeAppendFormat(L"{:>4} (forwarded)        {} -> {}\n", exp.ord, exp.name, exp.forward);
                 }
-            }
-
-            if (st.stop_requested())
-            {
-                return;
-            }
-
-            static constexpr size_t kMaxDebugRows  = 256;
-            static constexpr size_t kHardMaxDebugs = 2000;
-
-            struct DebugRow
-            {
-                std::uint32_t type = 0;
-                std::uint32_t size = 0;
-            };
-
-            std::vector<DebugRow> debugs;
-            debugs.reserve(32);
-
-            struct DebugCollect
-            {
-                std::vector<DebugRow>* out = nullptr;
-                size_t maxRows             = 0;
-                size_t hardMax             = 0;
-                size_t seen                = 0;
-                bool truncated             = false;
-            };
-
-            DebugCollect debugCollect{&debugs, kMaxDebugRows, kHardMaxDebugs, 0, false};
-            peparse::IterDebugs(
-                pe.get(),
-                [](void* ctx, const std::uint32_t& type, const peparse::bounded_buffer* buf) -> int
+                else
                 {
-                    auto* c = static_cast<DebugCollect*>(ctx);
-                    if (! c)
-                    {
-                        return 0;
-                    }
-
-                    c->seen += 1;
-                    if (c->out && c->out->size() < c->maxRows)
-                    {
-                        DebugRow row{};
-                        row.type = type;
-                        row.size = buf ? buf->bufLen : 0;
-                        c->out->push_back(row);
-                    }
-
-                    if (c->seen >= c->hardMax)
-                    {
-                        c->truncated = true;
-                        return 1;
-                    }
-
-                    return 0;
-                },
-                &debugCollect);
-
-            safeAppendBlankLine();
-            if (debugCollect.seen == 0)
-            {
-                safeAppendLine(L"Debug Directories: (none)");
-            }
-            else
-            {
-                safeAppendFormat(L"Debug Directories: {:L}{}\n", debugCollect.seen, debugCollect.truncated ? L"+" : L"");
-                safeAppendLine(L"Type       Size");
-                safeAppendLine(L"---------  ---------");
-                for (const auto& dbg : debugs)
-                {
-                    safeAppendFormat(L"{:>9} 0x{:08X}\n", dbg.type, dbg.size);
-                }
-                if (debugCollect.seen > debugs.size())
-                {
-                    safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", debugs.size());
-                }
-            }
-
-            if (st.stop_requested())
-            {
-                return;
-            }
-
-            static constexpr size_t kMaxSymbolRows  = 600;
-            static constexpr size_t kHardMaxSymbols = 6000;
-
-            struct SymbolRow
-            {
-                std::wstring name;
-                std::uint32_t value  = 0;
-                std::int16_t section = 0;
-                std::uint16_t type   = 0;
-                std::uint8_t storage = 0;
-                std::uint8_t aux     = 0;
-            };
-
-            std::vector<SymbolRow> symbols;
-            symbols.reserve(128);
-
-            struct SymbolCollect
-            {
-                std::vector<SymbolRow>* out = nullptr;
-                size_t maxRows              = 0;
-                size_t hardMax              = 0;
-                size_t seen                 = 0;
-                bool truncated              = false;
-            };
-
-            SymbolCollect symbolCollect{&symbols, kMaxSymbolRows, kHardMaxSymbols, 0, false};
-            peparse::IterSymbols(
-                pe.get(),
-                [](void* ctx,
-                   const std::string& name,
-                   const std::uint32_t& value,
-                   const std::int16_t& section,
-                   const std::uint16_t& type,
-                   const std::uint8_t& storage,
-                   const std::uint8_t& aux) -> int
-                {
-                    auto* c = static_cast<SymbolCollect*>(ctx);
-                    if (! c)
-                    {
-                        return 0;
-                    }
-
-                    c->seen += 1;
-                    if (c->out && c->out->size() < c->maxRows)
-                    {
-                        SymbolRow row{};
-                        row.name    = Utf16FromUtf8(name);
-                        row.value   = value;
-                        row.section = section;
-                        row.type    = type;
-                        row.storage = storage;
-                        row.aux     = aux;
-
-                        c->out->push_back(std::move(row));
-                    }
-
-                    if (c->seen >= c->hardMax)
-                    {
-                        c->truncated = true;
-                        return 1;
-                    }
-
-                    return 0;
-                },
-                &symbolCollect);
-
-            safeAppendBlankLine();
-            if (symbolCollect.seen == 0)
-            {
-                safeAppendLine(L"Symbols: (none)");
-            }
-            else
-            {
-                safeAppendFormat(L"Symbols: {:L}{}\n", symbolCollect.seen, symbolCollect.truncated ? L"+" : L"");
-                safeAppendLine(L"Value      Sect Type  Stor Aux Name");
-                safeAppendLine(L"---------  ---- ----  ---- --- --------------------------------");
-                for (const auto& sym : symbols)
-                {
-                    safeAppendFormat(L"0x{:08X} {:>4} 0x{:04X} {:>4} {:>3} {}\n", sym.value, sym.section, sym.type, sym.storage, sym.aux, sym.name);
-                }
-                if (symbolCollect.seen > symbols.size())
-                {
-                    safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", symbols.size());
+                    safeAppendFormat(L"{:>4} (n/a)              {}\n", exp.ord, exp.name);
                 }
             }
+            if (exportCollect.seen > exports.size())
+            {
+                safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", exports.size());
+            }
+        }
 
-            std::wstring title;
-            title = std::filesystem::path(path).filename().wstring();
+        if (st.stop_requested())
+        {
+            return;
+        }
 
-            std::wstring markdown;
-            const std::wstring mdTitle = title.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERPE_NAME) : title;
-            markdown                   = std::format(L"# {}\n\n{}\n\n```text\n{}\n```\n", mdTitle, subtitle, body);
+        static constexpr size_t kMaxResourceRows  = 600;
+        static constexpr size_t kHardMaxResources = 6000;
 
-            postResult(S_OK, std::move(title), std::move(subtitle), std::move(body), std::move(markdown));
-        });
+        struct ResourceRow
+        {
+            std::wstring type;
+            std::wstring name;
+            std::wstring lang;
+            std::uint32_t codepage = 0;
+            std::uint32_t rva      = 0;
+            std::uint32_t size     = 0;
+        };
+
+        std::vector<ResourceRow> resources;
+        resources.reserve(128);
+
+        struct ResourceCollect
+        {
+            std::vector<ResourceRow>* out = nullptr;
+            size_t maxRows                = 0;
+            size_t hardMax                = 0;
+            size_t seen                   = 0;
+            bool truncated                = false;
+        };
+
+        ResourceCollect rsrcCollect{&resources, kMaxResourceRows, kHardMaxResources, 0, false};
+        peparse::IterRsrc(pe.get(),
+                          [](void* ctx, const peparse::resource& res) -> int
+        {
+            auto* c = static_cast<ResourceCollect*>(ctx);
+            if (! c)
+            {
+                return 0;
+            }
+
+            c->seen += 1;
+            if (c->out && c->out->size() < c->maxRows)
+            {
+                ResourceRow row{};
+                row.type     = Utf16FromUtf8(res.type_str);
+                row.name     = Utf16FromUtf8(res.name_str);
+                row.lang     = Utf16FromUtf8(res.lang_str);
+                row.codepage = res.codepage;
+                row.rva      = res.RVA;
+                row.size     = res.size;
+
+                if (row.type.empty())
+                {
+                    row.type = std::to_wstring(res.type);
+                }
+                if (row.name.empty())
+                {
+                    row.name = std::to_wstring(res.name);
+                }
+                if (row.lang.empty())
+                {
+                    row.lang = std::to_wstring(res.lang);
+                }
+
+                c->out->push_back(std::move(row));
+            }
+
+            if (c->seen >= c->hardMax)
+            {
+                c->truncated = true;
+                return 1;
+            }
+
+            return 0;
+        },
+                          &rsrcCollect);
+
+        safeAppendBlankLine();
+        if (rsrcCollect.seen == 0)
+        {
+            safeAppendLine(L"Resources: (none)");
+        }
+        else
+        {
+            safeAppendFormat(L"Resources: {:L}{}\n", rsrcCollect.seen, rsrcCollect.truncated ? L"+" : L"");
+            safeAppendLine(L"RVA        Size       CodePage  Type / Name / Lang");
+            safeAppendLine(L"---------  ---------  --------  ---------------------------------------");
+            for (const auto& res : resources)
+            {
+                safeAppendFormat(L"0x{:08X} 0x{:08X} {:>8}  {}/{}/{}\n", res.rva, res.size, res.codepage, res.type, res.name, res.lang);
+            }
+            if (rsrcCollect.seen > resources.size())
+            {
+                safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", resources.size());
+            }
+        }
+
+        if (st.stop_requested())
+        {
+            return;
+        }
+
+        static constexpr size_t kMaxRelocRows  = 600;
+        static constexpr size_t kHardMaxRelocs = 20000;
+
+        struct RelocRow
+        {
+            uint64_t va              = 0;
+            peparse::reloc_type type = peparse::RELOC_ABSOLUTE;
+        };
+
+        std::vector<RelocRow> relocs;
+        relocs.reserve(256);
+
+        struct RelocCollect
+        {
+            std::vector<RelocRow>* out = nullptr;
+            size_t maxRows             = 0;
+            size_t hardMax             = 0;
+            size_t seen                = 0;
+            bool truncated             = false;
+        };
+
+        RelocCollect relocCollect{&relocs, kMaxRelocRows, kHardMaxRelocs, 0, false};
+        peparse::IterRelocs(pe.get(),
+                            [](void* ctx, const peparse::VA& va, const peparse::reloc_type& type) -> int
+        {
+            auto* c = static_cast<RelocCollect*>(ctx);
+            if (! c)
+            {
+                return 0;
+            }
+
+            c->seen += 1;
+            if (c->out && c->out->size() < c->maxRows)
+            {
+                RelocRow row{};
+                row.va   = static_cast<uint64_t>(va);
+                row.type = type;
+
+                c->out->push_back(row);
+            }
+
+            if (c->seen >= c->hardMax)
+            {
+                c->truncated = true;
+                return 1;
+            }
+
+            return 0;
+        },
+                            &relocCollect);
+
+        safeAppendBlankLine();
+        if (relocCollect.seen == 0)
+        {
+            safeAppendLine(L"Relocations: (none)");
+        }
+        else
+        {
+            safeAppendFormat(L"Relocations: {:L}{}\n", relocCollect.seen, relocCollect.truncated ? L"+" : L"");
+            safeAppendLine(L"VA                 Type");
+            safeAppendLine(L"-----------------  ----");
+            for (const auto& rel : relocs)
+            {
+                safeAppendFormat(L"0x{:016X}  {:L}\n", rel.va, static_cast<unsigned long>(rel.type));
+            }
+            if (relocCollect.seen > relocs.size())
+            {
+                safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", relocs.size());
+            }
+        }
+
+        if (st.stop_requested())
+        {
+            return;
+        }
+
+        static constexpr size_t kMaxDebugRows  = 256;
+        static constexpr size_t kHardMaxDebugs = 2000;
+
+        struct DebugRow
+        {
+            std::uint32_t type = 0;
+            std::uint32_t size = 0;
+        };
+
+        std::vector<DebugRow> debugs;
+        debugs.reserve(32);
+
+        struct DebugCollect
+        {
+            std::vector<DebugRow>* out = nullptr;
+            size_t maxRows             = 0;
+            size_t hardMax             = 0;
+            size_t seen                = 0;
+            bool truncated             = false;
+        };
+
+        DebugCollect debugCollect{&debugs, kMaxDebugRows, kHardMaxDebugs, 0, false};
+        peparse::IterDebugs(pe.get(),
+                            [](void* ctx, const std::uint32_t& type, const peparse::bounded_buffer* buf) -> int
+        {
+            auto* c = static_cast<DebugCollect*>(ctx);
+            if (! c)
+            {
+                return 0;
+            }
+
+            c->seen += 1;
+            if (c->out && c->out->size() < c->maxRows)
+            {
+                DebugRow row{};
+                row.type = type;
+                row.size = buf ? buf->bufLen : 0;
+                c->out->push_back(row);
+            }
+
+            if (c->seen >= c->hardMax)
+            {
+                c->truncated = true;
+                return 1;
+            }
+
+            return 0;
+        },
+                            &debugCollect);
+
+        safeAppendBlankLine();
+        if (debugCollect.seen == 0)
+        {
+            safeAppendLine(L"Debug Directories: (none)");
+        }
+        else
+        {
+            safeAppendFormat(L"Debug Directories: {:L}{}\n", debugCollect.seen, debugCollect.truncated ? L"+" : L"");
+            safeAppendLine(L"Type       Size");
+            safeAppendLine(L"---------  ---------");
+            for (const auto& dbg : debugs)
+            {
+                safeAppendFormat(L"{:>9} 0x{:08X}\n", dbg.type, dbg.size);
+            }
+            if (debugCollect.seen > debugs.size())
+            {
+                safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", debugs.size());
+            }
+        }
+
+        if (st.stop_requested())
+        {
+            return;
+        }
+
+        static constexpr size_t kMaxSymbolRows  = 600;
+        static constexpr size_t kHardMaxSymbols = 6000;
+
+        struct SymbolRow
+        {
+            std::wstring name;
+            std::uint32_t value  = 0;
+            std::int16_t section = 0;
+            std::uint16_t type   = 0;
+            std::uint8_t storage = 0;
+            std::uint8_t aux     = 0;
+        };
+
+        std::vector<SymbolRow> symbols;
+        symbols.reserve(128);
+
+        struct SymbolCollect
+        {
+            std::vector<SymbolRow>* out = nullptr;
+            size_t maxRows              = 0;
+            size_t hardMax              = 0;
+            size_t seen                 = 0;
+            bool truncated              = false;
+        };
+
+        SymbolCollect symbolCollect{&symbols, kMaxSymbolRows, kHardMaxSymbols, 0, false};
+        peparse::IterSymbols(pe.get(),
+                             [](void* ctx,
+                                const std::string& name,
+                                const std::uint32_t& value,
+                                const std::int16_t& section,
+                                const std::uint16_t& type,
+                                const std::uint8_t& storage,
+                                const std::uint8_t& aux) -> int
+        {
+            auto* c = static_cast<SymbolCollect*>(ctx);
+            if (! c)
+            {
+                return 0;
+            }
+
+            c->seen += 1;
+            if (c->out && c->out->size() < c->maxRows)
+            {
+                SymbolRow row{};
+                row.name    = Utf16FromUtf8(name);
+                row.value   = value;
+                row.section = section;
+                row.type    = type;
+                row.storage = storage;
+                row.aux     = aux;
+
+                c->out->push_back(std::move(row));
+            }
+
+            if (c->seen >= c->hardMax)
+            {
+                c->truncated = true;
+                return 1;
+            }
+
+            return 0;
+        },
+                             &symbolCollect);
+
+        safeAppendBlankLine();
+        if (symbolCollect.seen == 0)
+        {
+            safeAppendLine(L"Symbols: (none)");
+        }
+        else
+        {
+            safeAppendFormat(L"Symbols: {:L}{}\n", symbolCollect.seen, symbolCollect.truncated ? L"+" : L"");
+            safeAppendLine(L"Value      Sect Type  Stor Aux Name");
+            safeAppendLine(L"---------  ---- ----  ---- --- --------------------------------");
+            for (const auto& sym : symbols)
+            {
+                safeAppendFormat(L"0x{:08X} {:>4} 0x{:04X} {:>4} {:>3} {}\n", sym.value, sym.section, sym.type, sym.storage, sym.aux, sym.name);
+            }
+            if (symbolCollect.seen > symbols.size())
+            {
+                safeAppendFormat(L"... (truncated; showing first {:L} entries)\n", symbols.size());
+            }
+        }
+
+        std::wstring title;
+        title = std::filesystem::path(path).filename().wstring();
+
+        std::wstring markdown;
+        const std::wstring mdTitle = title.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERPE_NAME) : title;
+        markdown                   = std::format(L"# {}\n\n{}\n\n```text\n{}\n```\n", mdTitle, subtitle, body);
+
+        postResult(S_OK, std::move(title), std::move(subtitle), std::move(body), std::move(markdown));
+    });
 }
 
 void ViewerPE::OnAsyncParseComplete(std::unique_ptr<AsyncParseResult> result) noexcept

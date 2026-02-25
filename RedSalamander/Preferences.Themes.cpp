@@ -1009,8 +1009,9 @@ void PopulateThemesThemeCombo(PreferencesDialogState& state) noexcept
     return nullptr;
 }
 
-[[nodiscard]] const Common::Settings::ThemeDefinition*
-FindThemeDefinitionForDisplay(const PreferencesDialogState& state, std::wstring_view id, bool& outEditable) noexcept
+[[nodiscard]] const Common::Settings::ThemeDefinition* FindThemeDefinitionForDisplay(const PreferencesDialogState& state,
+                                                                                     std::wstring_view id,
+                                                                                     bool& outEditable) noexcept
 {
     outEditable = false;
     if (const auto* def = FindThemeDefinitionById(state.workingSettings.theme.themes, id))

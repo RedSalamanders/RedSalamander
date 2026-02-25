@@ -159,8 +159,9 @@ constexpr AwsRegionEntry kAwsRegions[] = {
     return std::wstring(text.substr(start, end - start));
 }
 
-[[nodiscard]] std::wstring
-MakeUniqueConnectionName(const std::vector<Common::Settings::ConnectionProfile>& connections, std::wstring_view desired, std::wstring_view excludeId) noexcept
+[[nodiscard]] std::wstring MakeUniqueConnectionName(const std::vector<Common::Settings::ConnectionProfile>& connections,
+                                                    std::wstring_view desired,
+                                                    std::wstring_view excludeId) noexcept
 {
     std::wstring base = TrimWhitespace(desired);
     if (base.empty())
@@ -262,18 +263,6 @@ MakeUniqueConnectionName(const std::vector<Common::Settings::ConnectionProfile>&
     }
 
     return result;
-}
-
-[[nodiscard]] std::wstring GetWindowTextString(HWND h)
-{
-    const int len = GetWindowTextLengthW(h);
-    std::wstring s;
-    s.resize(static_cast<size_t>(std::max(0, len)));
-    if (len > 0)
-    {
-        GetWindowTextW(h, s.data(), len + 1);
-    }
-    return s;
 }
 
 [[nodiscard]] HFONT GetDialogFont(HWND hwnd) noexcept
@@ -1173,8 +1162,10 @@ void UpdateSecretVisibility(DialogState& state) noexcept
     return S_OK;
 }
 
-[[nodiscard]] HRESULT
-LoadStoredSecretForProfile(HWND owner, DialogState& state, const Common::Settings::ConnectionProfile& profile, std::wstring& secretOut) noexcept
+[[nodiscard]] HRESULT LoadStoredSecretForProfile(HWND owner,
+                                                 DialogState& state,
+                                                 const Common::Settings::ConnectionProfile& profile,
+                                                 std::wstring& secretOut) noexcept
 {
     secretOut.clear();
 
@@ -1838,7 +1829,7 @@ void StageSecretsFromEditor(DialogState& state, const Common::Settings::Connecti
         return;
     }
 
-    const std::wstring secret = GetWindowTextString(state.secretEdit);
+    const std::wstring secret = Win32Text::GetWindowTextString(state.secretEdit);
     if (const auto it = state.secretPlaceholderById.find(profile.id); it != state.secretPlaceholderById.end())
     {
         if (secret == it->second)
@@ -1873,7 +1864,7 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
 {
     if (! IsQuickConnectProfile(profile))
     {
-        const std::wstring rawName        = GetWindowTextString(state.nameEdit);
+        const std::wstring rawName        = Win32Text::GetWindowTextString(state.nameEdit);
         const std::wstring normalizedName = TrimWhitespace(rawName);
         const std::wstring uniqueName     = MakeUniqueConnectionName(state.connections, normalizedName, profile.id);
         profile.name                      = uniqueName;
@@ -1904,7 +1895,7 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
     }
 
     const HWND hostControl            = IsAwsS3PluginId(profile.pluginId) && state.awsRegionCombo ? state.awsRegionCombo : state.hostEdit;
-    const std::wstring rawHost        = GetWindowTextString(hostControl);
+    const std::wstring rawHost        = Win32Text::GetWindowTextString(hostControl);
     const std::wstring normalizedHost = TrimWhitespace(rawHost);
     profile.host                      = normalizedHost;
     if (hostControl && ! state.loadingControls && rawHost != normalizedHost)
@@ -1920,14 +1911,14 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
     else
     {
         uint32_t port               = 0;
-        const std::wstring portText = GetWindowTextString(state.portEdit);
+        const std::wstring portText = Win32Text::GetWindowTextString(state.portEdit);
         if (TryParsePort(portText, port))
         {
             profile.port = port;
         }
     }
 
-    profile.initialPath = GetWindowTextString(state.initialPathEdit);
+    profile.initialPath = Win32Text::GetWindowTextString(state.initialPathEdit);
     if (profile.initialPath.empty())
     {
         profile.initialPath = L"/";
@@ -1949,7 +1940,7 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
         {
             profile.authMode = Common::Settings::ConnectionAuthMode::Password;
         }
-        const std::wstring rawUser        = GetWindowTextString(state.userEdit);
+        const std::wstring rawUser        = Win32Text::GetWindowTextString(state.userEdit);
         const std::wstring normalizedUser = TrimWhitespace(rawUser);
         profile.userName                  = normalizedUser;
         if (state.userEdit && ! state.loadingControls && rawUser != normalizedUser)
@@ -1967,7 +1958,7 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
 
     if (IsAwsS3PluginId(profile.pluginId))
     {
-        ExtraSetString(profile.extra, "endpointOverride", TrimWhitespace(GetWindowTextString(state.s3EndpointOverrideEdit)));
+        ExtraSetString(profile.extra, "endpointOverride", TrimWhitespace(Win32Text::GetWindowTextString(state.s3EndpointOverrideEdit)));
         ExtraSetBool(profile.extra, "useHttps", GetTwoStateToggleState(state.s3UseHttpsToggle, state.theme));
         ExtraSetBool(profile.extra, "verifyTls", GetTwoStateToggleState(state.s3VerifyTlsToggle, state.theme));
         if (IsS3PluginId(profile.pluginId))
@@ -1976,9 +1967,9 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
         }
     }
 
-    const std::wstring sshPrivateKey = GetWindowTextString(state.sshPrivateKeyEdit);
+    const std::wstring sshPrivateKey = Win32Text::GetWindowTextString(state.sshPrivateKeyEdit);
     ExtraSetString(profile.extra, "sshPrivateKey", sshPrivateKey);
-    ExtraSetString(profile.extra, "sshKnownHosts", GetWindowTextString(state.sshKnownHostsEdit));
+    ExtraSetString(profile.extra, "sshKnownHosts", Win32Text::GetWindowTextString(state.sshKnownHostsEdit));
 
     if (IsSshPluginId(profile.pluginId))
     {
@@ -3793,7 +3784,7 @@ INT_PTR OnCommand(HWND dlg, DialogState& state, int controlId) noexcept
                 const auto& profile = state.connections[model.value()];
                 if (! profile.id.empty() && profile.savePassword && profile.authMode != Common::Settings::ConnectionAuthMode::Anonymous)
                 {
-                    const std::wstring current = GetWindowTextString(state.secretEdit);
+                    const std::wstring current = Win32Text::GetWindowTextString(state.secretEdit);
                     const auto placeholderIt   = state.secretPlaceholderById.find(profile.id);
                     if (placeholderIt != state.secretPlaceholderById.end() && ! state.secretDirtyIds.contains(profile.id) && current == placeholderIt->second)
                     {

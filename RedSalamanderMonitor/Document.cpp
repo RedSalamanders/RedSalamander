@@ -1087,7 +1087,7 @@ const std::wstring& Document::BuildPrefix(const Line& line) const
             if (remaining > 20u) // Ensure space for IDs
             {
                 wchar_t* const outBegin = buffer.data() + offset;
-                const auto result = std::format_to_n(outBegin, static_cast<std::ptrdiff_t>(remaining - 1), L" {}:{}", line.meta.processID, line.meta.threadID);
+                const auto result  = std::format_to_n(outBegin, static_cast<std::ptrdiff_t>(remaining - 1), L" {}:{}", line.meta.processID, line.meta.threadID);
                 const auto written = std::max<std::ptrdiff_t>(std::ptrdiff_t{0}, result.out - outBegin);
                 if (written > 0)
                 {

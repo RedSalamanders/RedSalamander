@@ -776,10 +776,9 @@ void CompareDirectoriesSession::ScheduleResetCleanup(std::unique_ptr<ResetCleanu
     }
 
     ResetCleanup* raw = cleanup.release();
-    const BOOL ok     = TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
-                                                { std::unique_ptr<ResetCleanup> owned(static_cast<ResetCleanup*>(context)); },
-                                                raw,
-                                                nullptr);
+    const BOOL ok     = TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept {
+        std::unique_ptr<ResetCleanup> owned(static_cast<ResetCleanup*>(context));
+    }, raw, nullptr);
 
     if (! ok)
     {
@@ -1688,20 +1687,19 @@ std::shared_ptr<const CompareDirectoriesFolderDecision> CompareDirectoriesSessio
 
     const bool scanStarted = allowBackgroundWork && (activeBefore == 0u);
 
-    auto scanCleanup = wil::scope_exit(
-        [&]
+    auto scanCleanup = wil::scope_exit([&]
+    {
+        if (! allowBackgroundWork)
         {
-            if (! allowBackgroundWork)
-            {
-                return;
-            }
+            return;
+        }
 
-            const uint32_t activeAfter = _scanActiveScans.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
-            if (activeAfter == 0u)
-            {
-                NotifyScanProgress(relativeFolder, {}, true);
-            }
-        });
+        const uint32_t activeAfter = _scanActiveScans.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        if (activeAfter == 0u)
+        {
+            NotifyScanProgress(relativeFolder, {}, true);
+        }
+    });
 
     const Common::Settings::CompareDirectoriesSettings settings = GetSettings();
     const std::vector<std::wstring> ignoreFilePatterns          = SplitPatterns(settings.ignoreFilesPatterns);
