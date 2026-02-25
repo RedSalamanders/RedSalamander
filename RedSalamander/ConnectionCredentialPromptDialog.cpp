@@ -112,37 +112,6 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
     return std::wstring(text.substr(start, end - start));
 }
 
-[[nodiscard]] std::wstring GetDlgItemTextString(HWND dlg, int controlId) noexcept
-{
-    HWND control = dlg ? GetDlgItem(dlg, controlId) : nullptr;
-    if (! control)
-    {
-        return {};
-    }
-
-    const int len = GetWindowTextLengthW(control);
-    if (len <= 0)
-    {
-        return {};
-    }
-
-    std::wstring buffer(static_cast<size_t>(len) + 1u, L'\0');
-    const int written = GetWindowTextW(control, buffer.data(), len + 1);
-    if (written <= 0)
-    {
-        return {};
-    }
-    if (written < static_cast<int>(buffer.size()))
-    {
-        buffer.resize(static_cast<size_t>(written));
-    }
-    else if (! buffer.empty())
-    {
-        buffer.resize(buffer.size() - 1u);
-    }
-    return buffer;
-}
-
 void PrepareFlatControl(HWND control) noexcept
 {
     if (! control)
@@ -588,7 +557,7 @@ INT_PTR OnCommand(HWND dlg, DialogState* state, int controlId, int notifyCode) n
     std::wstring userName;
     if (state->showUserName)
     {
-        userName = TrimWhitespace(GetDlgItemTextString(dlg, IDC_CONNECTION_CRED_PROMPT_USER_EDIT));
+        userName = TrimWhitespace(Win32Text::GetDlgItemTextString(dlg, IDC_CONNECTION_CRED_PROMPT_USER_EDIT));
         if (userName.empty())
         {
             ShowValidation(dlg, state, LoadStringResource(nullptr, IDS_CONNECTIONS_ERR_PROMPT_USER_REQUIRED));
@@ -600,7 +569,7 @@ INT_PTR OnCommand(HWND dlg, DialogState* state, int controlId, int notifyCode) n
         }
     }
 
-    std::wstring secret = GetDlgItemTextString(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT);
+    std::wstring secret = Win32Text::GetDlgItemTextString(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT);
     if (! state->allowEmptySecret)
     {
         if (secret.empty())

@@ -1,8 +1,8 @@
 #include "Framework.h"
 
+#include "FluentIcons.h"
 #include "ThemedControls.h"
 #include "WindowMessages.h"
-#include "FluentIcons.h"
 
 #include <algorithm>
 #include <array>
@@ -231,12 +231,12 @@ void CenterEditTextVertically(HWND edit) noexcept
 // ModernCombo item data tag for optional leading glyphs.
 // Uses a high-bit tag unlikely to collide with typical pointers/indices.
 #ifdef _WIN64
-constexpr UINT_PTR kModernComboItemIconMask     = 0xFFFF'0000'0000'0000ull;
-constexpr UINT_PTR kModernComboItemIconTag      = 0xF17E'0000'0000'0000ull;
+constexpr UINT_PTR kModernComboItemIconMask      = 0xFFFF'0000'0000'0000ull;
+constexpr UINT_PTR kModernComboItemIconTag       = 0xF17E'0000'0000'0000ull;
 constexpr UINT_PTR kModernComboItemIconGlyphMask = 0x0000'0000'0000'FFFFull;
 #else
-constexpr UINT_PTR kModernComboItemIconMask     = 0xFFFF'0000u;
-constexpr UINT_PTR kModernComboItemIconTag      = 0xF17E'0000u;
+constexpr UINT_PTR kModernComboItemIconMask      = 0xFFFF'0000u;
+constexpr UINT_PTR kModernComboItemIconTag       = 0xF17E'0000u;
 constexpr UINT_PTR kModernComboItemIconGlyphMask = 0x0000'FFFFu;
 #endif
 
@@ -1008,7 +1008,7 @@ LRESULT CALLBACK ModernComboPopupWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM 
                     const int glyphBoxW = ScaleDip(dpi, compact ? 18 : 20);
                     const int glyphGap  = ScaleDip(dpi, compact ? 4 : 6);
 
-                    RECT glyphRc = textRc;
+                    RECT glyphRc  = textRc;
                     glyphRc.right = std::min(glyphRc.right, glyphRc.left + glyphBoxW);
 
                     const wchar_t glyphText[2]{leadingGlyph, 0};
@@ -2192,25 +2192,25 @@ void EnsureModernComboClassesRegistered() noexcept
     static std::once_flag s_once;
     std::call_once(s_once,
                    []() noexcept
-                   {
-                       WNDCLASSEXW wc{};
-                       wc.cbSize        = sizeof(wc);
-                       wc.style         = CS_HREDRAW | CS_VREDRAW;
-                       wc.lpfnWndProc   = ModernComboWndProc;
-                       wc.hInstance     = GetModuleHandleW(nullptr);
-                       wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
-                       wc.lpszClassName = kModernComboBoxClassName;
-                       RegisterClassExW(&wc);
+    {
+        WNDCLASSEXW wc{};
+        wc.cbSize        = sizeof(wc);
+        wc.style         = CS_HREDRAW | CS_VREDRAW;
+        wc.lpfnWndProc   = ModernComboWndProc;
+        wc.hInstance     = GetModuleHandleW(nullptr);
+        wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kModernComboBoxClassName;
+        RegisterClassExW(&wc);
 
-                       WNDCLASSEXW popup{};
-                       popup.cbSize        = sizeof(popup);
-                       popup.style         = CS_HREDRAW | CS_VREDRAW;
-                       popup.lpfnWndProc   = ModernComboPopupWndProc;
-                       popup.hInstance     = GetModuleHandleW(nullptr);
-                       popup.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
-                       popup.lpszClassName = kModernComboPopupClassName;
-                       RegisterClassExW(&popup);
-                   });
+        WNDCLASSEXW popup{};
+        popup.cbSize        = sizeof(popup);
+        popup.style         = CS_HREDRAW | CS_VREDRAW;
+        popup.lpfnWndProc   = ModernComboPopupWndProc;
+        popup.hInstance     = GetModuleHandleW(nullptr);
+        popup.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+        popup.lpszClassName = kModernComboPopupClassName;
+        RegisterClassExW(&popup);
+    });
 }
 
 [[nodiscard]] bool IsModernComboClass(HWND hwnd) noexcept

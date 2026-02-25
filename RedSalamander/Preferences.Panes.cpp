@@ -651,13 +651,15 @@ bool PanesPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT com
         case IDC_PREFS_PANES_SHOW_HIDDEN_TOGGLE:
             if (notifyCode == BN_CLICKED)
             {
-                return handleFoldersTwoStateToggle(hwndCtl, true, [](Common::Settings::FoldersSettings& folders, bool on) noexcept { folders.showHiddenFiles = on; });
+                return handleFoldersTwoStateToggle(
+                    hwndCtl, true, [](Common::Settings::FoldersSettings& folders, bool on) noexcept { folders.showHiddenFiles = on; });
             }
             break;
         case IDC_PREFS_PANES_SHOW_SYSTEM_TOGGLE:
             if (notifyCode == BN_CLICKED)
             {
-                return handleFoldersTwoStateToggle(hwndCtl, true, [](Common::Settings::FoldersSettings& folders, bool on) noexcept { folders.showSystemFiles = on; });
+                return handleFoldersTwoStateToggle(
+                    hwndCtl, true, [](Common::Settings::FoldersSettings& folders, bool on) noexcept { folders.showSystemFiles = on; });
             }
             break;
         case IDC_PREFS_PANES_HISTORY_MAX_EDIT:
@@ -722,21 +724,20 @@ bool PanesPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT com
                 const bool isLeft            = commandId == IDC_PREFS_PANES_LEFT_DISPLAY_TOGGLE || commandId == IDC_PREFS_PANES_LEFT_SORTDIR_TOGGLE;
                 const std::wstring_view slot = isLeft ? PrefsFolders::kLeftPaneSlot : PrefsFolders::kRightPaneSlot;
 
-                bool changed = handleTwoStateToggle(
-                    slot,
-                    hwndCtl,
-                    true,
-                    [&](Common::Settings::FolderPane& pane, bool on) noexcept
+                bool changed = handleTwoStateToggle(slot,
+                                                    hwndCtl,
+                                                    true,
+                                                    [&](Common::Settings::FolderPane& pane, bool on) noexcept
+                {
+                    if (commandId == IDC_PREFS_PANES_LEFT_DISPLAY_TOGGLE || commandId == IDC_PREFS_PANES_RIGHT_DISPLAY_TOGGLE)
                     {
-                        if (commandId == IDC_PREFS_PANES_LEFT_DISPLAY_TOGGLE || commandId == IDC_PREFS_PANES_RIGHT_DISPLAY_TOGGLE)
-                        {
-                            pane.view.display = on ? Common::Settings::FolderDisplayMode::Brief : Common::Settings::FolderDisplayMode::Detailed;
-                        }
-                        else
-                        {
-                            pane.view.sortDirection = on ? Common::Settings::FolderSortDirection::Ascending : Common::Settings::FolderSortDirection::Descending;
-                        }
-                    });
+                        pane.view.display = on ? Common::Settings::FolderDisplayMode::Brief : Common::Settings::FolderDisplayMode::Detailed;
+                    }
+                    else
+                    {
+                        pane.view.sortDirection = on ? Common::Settings::FolderSortDirection::Ascending : Common::Settings::FolderSortDirection::Descending;
+                    }
+                });
 
                 if (changed)
                 {

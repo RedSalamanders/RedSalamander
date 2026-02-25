@@ -296,15 +296,15 @@ public:
                                           _hostConnections.get(),
                                           true,
                                           [&](const ResolvedLocation& resolved) noexcept
-                                          {
-                                              const HRESULT overwriteHr = EnsureOverwriteTargetFile(resolved.connection, resolved.remotePath, allowOverwrite);
-                                              if (FAILED(overwriteHr))
-                                              {
-                                                  return overwriteHr;
-                                              }
+        {
+            const HRESULT overwriteHr = EnsureOverwriteTargetFile(resolved.connection, resolved.remotePath, allowOverwrite);
+            if (FAILED(overwriteHr))
+            {
+                return overwriteHr;
+            }
 
-                                              return CurlUploadFromFile(resolved.connection, resolved.remotePath, _file.get(), sizeBytes, nullptr, nullptr);
-                                          });
+            return CurlUploadFromFile(resolved.connection, resolved.remotePath, _file.get(), sizeBytes, nullptr, nullptr);
+        });
         if (FAILED(hr))
         {
             return hr;
@@ -583,10 +583,10 @@ private:
             std::unique_lock lock(_mutex);
             _cvWritable.wait(lock,
                              [&]() noexcept
-                             {
-                                 return _stopping.load(std::memory_order_acquire) || stopToken.stop_requested() ||
-                                        _generation.load(std::memory_order_acquire) != activeGen || _bufferedBytes < _bufferCapacity;
-                             });
+            {
+                return _stopping.load(std::memory_order_acquire) || stopToken.stop_requested() || _generation.load(std::memory_order_acquire) != activeGen ||
+                       _bufferedBytes < _bufferCapacity;
+            });
 
             if (_stopping.load(std::memory_order_acquire) || stopToken.stop_requested())
             {
@@ -753,12 +753,9 @@ private:
 
                 std::unique_lock lock(_mutex);
                 const uint64_t eofGen = _generation.load(std::memory_order_acquire);
-                _cvWritable.wait(lock,
-                                 [&]() noexcept
-                                 {
-                                     return _stopping.load(std::memory_order_acquire) || stopToken.stop_requested() ||
-                                            _generation.load(std::memory_order_acquire) != eofGen;
-                                 });
+                _cvWritable.wait(lock, [&]() noexcept {
+                    return _stopping.load(std::memory_order_acquire) || stopToken.stop_requested() || _generation.load(std::memory_order_acquire) != eofGen;
+                });
                 continue;
             }
 
@@ -918,9 +915,9 @@ public:
                 return _workerHr;
             }
 
-            _cvWritable.wait(lock,
-                             [&]() noexcept
-                             { return _stopping.load(std::memory_order_acquire) || _closedForWrite || FAILED(_workerHr) || _bufferedBytes < _bufferCapacity; });
+            _cvWritable.wait(lock, [&]() noexcept {
+                return _stopping.load(std::memory_order_acquire) || _closedForWrite || FAILED(_workerHr) || _bufferedBytes < _bufferCapacity;
+            });
 
             if (_stopping.load(std::memory_order_acquire))
             {
@@ -1198,10 +1195,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::ReadDirectoryInfo(const wchar_t* path,
                                                     _hostConnections.get(),
                                                     true,
                                                     [&](const ResolvedLocation& resolved) noexcept
-                                                    {
-                                                        entries.clear();
-                                                        return ReadDirectoryEntries(resolved.connection, resolved.remotePath, entries);
-                                                    });
+    {
+        entries.clear();
+        return ReadDirectoryEntries(resolved.connection, resolved.remotePath, entries);
+    });
     if (FAILED(hr))
     {
         return hr;
@@ -1250,10 +1247,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetAttributes(const wchar_t* path, uns
                                                     _hostConnections.get(),
                                                     true,
                                                     [&](const ResolvedLocation& resolved) noexcept
-                                                    {
-                                                        entry = {};
-                                                        return GetEntryInfo(resolved.connection, resolved.remotePath, entry);
-                                                    });
+    {
+        entry = {};
+        return GetEntryInfo(resolved.connection, resolved.remotePath, entry);
+    });
     if (FAILED(hr))
     {
         return hr;
@@ -1289,80 +1286,80 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateFileReader(const wchar_t* path, 
                                         _hostConnections.get(),
                                         true,
                                         [&](const ResolvedLocation& resolved) noexcept
-                                        {
-                                            FilesInformationCurl::Entry entry{};
-                                            const HRESULT attrHr = GetEntryInfo(resolved.connection, resolved.remotePath, entry);
-                                            if (FAILED(attrHr))
-                                            {
-                                                return attrHr;
-                                            }
+    {
+        FilesInformationCurl::Entry entry{};
+        const HRESULT attrHr = GetEntryInfo(resolved.connection, resolved.remotePath, entry);
+        if (FAILED(attrHr))
+        {
+            return attrHr;
+        }
 
-                                            if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
-                                            {
-                                                return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-                                            }
+        if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
 
-                                            if (resolved.connection.protocol != Protocol::Imap)
-                                            {
-                                                auto* impl = new (std::nothrow) CurlStreamingReader(resolved.connection, resolved.remotePath, entry.sizeBytes);
-                                                if (! impl)
-                                                {
-                                                    return E_OUTOFMEMORY;
-                                                }
+        if (resolved.connection.protocol != Protocol::Imap)
+        {
+            auto* impl = new (std::nothrow) CurlStreamingReader(resolved.connection, resolved.remotePath, entry.sizeBytes);
+            if (! impl)
+            {
+                return E_OUTOFMEMORY;
+            }
 
-                                                const HRESULT initHr = impl->Initialize();
-                                                if (FAILED(initHr))
-                                                {
-                                                    impl->Release();
-                                                    return initHr;
-                                                }
+            const HRESULT initHr = impl->Initialize();
+            if (FAILED(initHr))
+            {
+                impl->Release();
+                return initHr;
+            }
 
-                                                *reader = impl;
-                                                return S_OK;
-                                            }
+            *reader = impl;
+            return S_OK;
+        }
 
-                                            wil::unique_hfile file = CreateTemporaryDeleteOnCloseFile();
-                                            if (! file)
-                                            {
-                                                return HRESULT_FROM_WIN32(GetLastError());
-                                            }
+        wil::unique_hfile file = CreateTemporaryDeleteOnCloseFile();
+        if (! file)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
 
-                                            HRESULT dlHr = S_OK;
-                                            if (resolved.connection.protocol == Protocol::Imap)
-                                            {
-                                                dlHr = ImapDownloadMessageToFile(resolved.connection, resolved.remotePath, file.get());
-                                            }
-                                            else
-                                            {
-                                                dlHr = CurlDownloadToFile(resolved.connection, resolved.remotePath, file.get(), nullptr, nullptr);
-                                            }
-                                            if (FAILED(dlHr))
-                                            {
-                                                return dlHr;
-                                            }
+        HRESULT dlHr = S_OK;
+        if (resolved.connection.protocol == Protocol::Imap)
+        {
+            dlHr = ImapDownloadMessageToFile(resolved.connection, resolved.remotePath, file.get());
+        }
+        else
+        {
+            dlHr = CurlDownloadToFile(resolved.connection, resolved.remotePath, file.get(), nullptr, nullptr);
+        }
+        if (FAILED(dlHr))
+        {
+            return dlHr;
+        }
 
-                                            uint64_t sizeBytes = 0;
-                                            HRESULT hr         = GetFileSizeBytes(file.get(), sizeBytes);
-                                            if (FAILED(hr))
-                                            {
-                                                return hr;
-                                            }
+        uint64_t sizeBytes = 0;
+        HRESULT hr         = GetFileSizeBytes(file.get(), sizeBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
 
-                                            hr = ResetFilePointerToStart(file.get());
-                                            if (FAILED(hr))
-                                            {
-                                                return hr;
-                                            }
+        hr = ResetFilePointerToStart(file.get());
+        if (FAILED(hr))
+        {
+            return hr;
+        }
 
-                                            auto* impl = new (std::nothrow) TempFileReader(std::move(file), sizeBytes);
-                                            if (! impl)
-                                            {
-                                                return E_OUTOFMEMORY;
-                                            }
+        auto* impl = new (std::nothrow) TempFileReader(std::move(file), sizeBytes);
+        if (! impl)
+        {
+            return E_OUTOFMEMORY;
+        }
 
-                                            *reader = impl;
-                                            return S_OK;
-                                        });
+        *reader = impl;
+        return S_OK;
+    });
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateFileWriter([[maybe_unused]] const wchar_t* path,
@@ -1395,47 +1392,47 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateFileWriter([[maybe_unused]] cons
                                         _hostConnections.get(),
                                         true,
                                         [&](const ResolvedLocation& resolved) noexcept
-                                        {
-                                            const HRESULT overwriteHr = EnsureOverwriteTargetFile(resolved.connection, resolved.remotePath, allowOverwrite);
-                                            if (FAILED(overwriteHr))
-                                            {
-                                                return overwriteHr;
-                                            }
+    {
+        const HRESULT overwriteHr = EnsureOverwriteTargetFile(resolved.connection, resolved.remotePath, allowOverwrite);
+        if (FAILED(overwriteHr))
+        {
+            return overwriteHr;
+        }
 
-                                            if (resolved.connection.protocol != Protocol::Imap)
-                                            {
-                                                auto* impl = new (std::nothrow) CurlStreamingWriter(resolved.connection, resolved.remotePath);
-                                                if (! impl)
-                                                {
-                                                    return E_OUTOFMEMORY;
-                                                }
+        if (resolved.connection.protocol != Protocol::Imap)
+        {
+            auto* impl = new (std::nothrow) CurlStreamingWriter(resolved.connection, resolved.remotePath);
+            if (! impl)
+            {
+                return E_OUTOFMEMORY;
+            }
 
-                                                const HRESULT initHr = impl->Initialize();
-                                                if (FAILED(initHr))
-                                                {
-                                                    impl->Release();
-                                                    return initHr;
-                                                }
+            const HRESULT initHr = impl->Initialize();
+            if (FAILED(initHr))
+            {
+                impl->Release();
+                return initHr;
+            }
 
-                                                *writer = impl;
-                                                return S_OK;
-                                            }
+            *writer = impl;
+            return S_OK;
+        }
 
-                                            wil::unique_hfile file = CreateTemporaryDeleteOnCloseFile();
-                                            if (! file)
-                                            {
-                                                return HRESULT_FROM_WIN32(GetLastError());
-                                            }
+        wil::unique_hfile file = CreateTemporaryDeleteOnCloseFile();
+        if (! file)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
 
-                                            auto* impl = new (std::nothrow) TempFileWriter(std::move(file), _protocol, settings, _hostConnections, path, flags);
-                                            if (! impl)
-                                            {
-                                                return E_OUTOFMEMORY;
-                                            }
+        auto* impl = new (std::nothrow) TempFileWriter(std::move(file), _protocol, settings, _hostConnections, path, flags);
+        if (! impl)
+        {
+            return E_OUTOFMEMORY;
+        }
 
-                                            *writer = impl;
-                                            return S_OK;
-                                        });
+        *writer = impl;
+        return S_OK;
+    });
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::GetFileBasicInformation([[maybe_unused]] const wchar_t* path, FileSystemBasicInformation* info) noexcept
@@ -1465,10 +1462,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetFileBasicInformation([[maybe_unused
                                                     _hostConnections.get(),
                                                     true,
                                                     [&](const ResolvedLocation& resolved) noexcept
-                                                    {
-                                                        entry = {};
-                                                        return GetEntryInfo(resolved.connection, resolved.remotePath, entry);
-                                                    });
+    {
+        entry = {};
+        return GetEntryInfo(resolved.connection, resolved.remotePath, entry);
+    });
     if (FAILED(hr))
     {
         return hr;
@@ -1517,27 +1514,27 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateDirectory(const wchar_t* path) n
                                         _hostConnections.get(),
                                         true,
                                         [&](const ResolvedLocation& resolved) noexcept
-                                        {
-                                            if (resolved.remotePath == L"/")
-                                            {
-                                                return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-                                            }
+    {
+        if (resolved.remotePath == L"/")
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
 
-                                            const HRESULT hr = RemoteMkdir(resolved.connection, resolved.remotePath);
-                                            if (SUCCEEDED(hr))
-                                            {
-                                                return S_OK;
-                                            }
+        const HRESULT hr = RemoteMkdir(resolved.connection, resolved.remotePath);
+        if (SUCCEEDED(hr))
+        {
+            return S_OK;
+        }
 
-                                            FilesInformationCurl::Entry existing{};
-                                            const HRESULT existsHr = GetEntryInfo(resolved.connection, resolved.remotePath, existing);
-                                            if (SUCCEEDED(existsHr) && (existing.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
-                                            {
-                                                return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-                                            }
+        FilesInformationCurl::Entry existing{};
+        const HRESULT existsHr = GetEntryInfo(resolved.connection, resolved.remotePath, existing);
+        if (SUCCEEDED(existsHr) && (existing.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
 
-                                            return hr;
-                                        });
+        return hr;
+    });
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
@@ -1571,11 +1568,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
                                                         _hostConnections.get(),
                                                         true,
                                                         [&](const ResolvedLocation& resolved) noexcept
-                                                        {
-                                                            rootResolved = resolved;
-                                                            rootInfo     = {};
-                                                            return GetEntryInfo(resolved.connection, resolved.remotePath, rootInfo);
-                                                        });
+    {
+        rootResolved = resolved;
+        rootInfo     = {};
+        return GetEntryInfo(resolved.connection, resolved.remotePath, rootInfo);
+    });
     if (FAILED(rootHr))
     {
         result->status = rootHr;

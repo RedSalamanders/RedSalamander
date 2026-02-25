@@ -277,8 +277,9 @@ std::optional<uint64_t> FindHexNeedleForwardInMemory(const std::vector<uint8_t>&
     return static_cast<uint64_t>(index);
 }
 
-std::optional<uint64_t>
-FindHexNeedleBackwardInMemory(const std::vector<uint8_t>& hay, uint64_t startOffsetInclusive, const std::vector<uint8_t>& needle) noexcept
+std::optional<uint64_t> FindHexNeedleBackwardInMemory(const std::vector<uint8_t>& hay,
+                                                      uint64_t startOffsetInclusive,
+                                                      const std::vector<uint8_t>& needle) noexcept
 {
     if (needle.empty())
     {
@@ -304,8 +305,8 @@ FindHexNeedleBackwardInMemory(const std::vector<uint8_t>& hay, uint64_t startOff
     return static_cast<uint64_t>(index);
 }
 
-std::optional<uint64_t>
-FindHexNeedleForward(IFileReader* reader, uint64_t fileSize, uint64_t startOffset, const std::vector<uint8_t>& needle, size_t chunkBytes) noexcept
+std::optional<uint64_t> FindHexNeedleForward(
+    IFileReader* reader, uint64_t fileSize, uint64_t startOffset, const std::vector<uint8_t>& needle, size_t chunkBytes) noexcept
 {
     if (! reader || needle.empty())
     {
@@ -397,8 +398,8 @@ FindHexNeedleForward(IFileReader* reader, uint64_t fileSize, uint64_t startOffse
     return std::nullopt;
 }
 
-std::optional<uint64_t>
-FindHexNeedleBackward(IFileReader* reader, uint64_t fileSize, uint64_t startOffsetInclusive, const std::vector<uint8_t>& needle, size_t chunkBytes) noexcept
+std::optional<uint64_t> FindHexNeedleBackward(
+    IFileReader* reader, uint64_t fileSize, uint64_t startOffsetInclusive, const std::vector<uint8_t>& needle, size_t chunkBytes) noexcept
 {
     if (! reader || needle.empty() || fileSize == 0)
     {

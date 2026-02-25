@@ -594,8 +594,8 @@ PathEllipsisParts SplitPathForEllipsis(std::wstring_view path, bool fileSystemIs
     return parts;
 }
 
-std::wstring
-BuildMiddleEllipsisPathText(std::wstring_view fullText, bool fileSystemIsWin32, IDWriteFactory* factory, IDWriteTextFormat* format, float maxWidthDip) noexcept
+std::wstring BuildMiddleEllipsisPathText(
+    std::wstring_view fullText, bool fileSystemIsWin32, IDWriteFactory* factory, IDWriteTextFormat* format, float maxWidthDip) noexcept
 {
     if (fullText.empty() || factory == nullptr || format == nullptr)
     {
@@ -3078,9 +3078,9 @@ void ViewerSpace::OnPaint()
             tryInsertSpinner(nodeRef.id, rc, area);
         }
 
-        std::sort(spinners.begin(),
-                  spinners.begin() + static_cast<ptrdiff_t>(spinnerCount),
-                  [](const SpinnerCandidate& a, const SpinnerCandidate& b) noexcept { return a.area > b.area; });
+        std::sort(spinners.begin(), spinners.begin() + static_cast<ptrdiff_t>(spinnerCount), [](const SpinnerCandidate& a, const SpinnerCandidate& b) noexcept {
+            return a.area > b.area;
+        });
 
         const size_t maxWanted = std::clamp<size_t>(static_cast<size_t>(std::clamp(_config.scanThreads, 1u, 16u)), 1u, kMaxBigSpinners);
 
@@ -3611,12 +3611,11 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     }
 
     const size_t previousMenuThemeItemCount = _menuThemeItems.size();
-    auto menuCleanup                        = wil::scope_exit(
-        [&, previousMenuThemeItemCount]
-        {
-            DestroyMenu(rootMenu);
-            _menuThemeItems.resize(previousMenuThemeItemCount);
-        });
+    auto menuCleanup                        = wil::scope_exit([&, previousMenuThemeItemCount]
+    {
+        DestroyMenu(rootMenu);
+        _menuThemeItems.resize(previousMenuThemeItemCount);
+    });
 
     HMENU menu = GetSubMenu(rootMenu, 0);
     if (! menu)
@@ -5104,12 +5103,12 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
     _scanWorker.done                         = done;
     wil::com_ptr<IFileSystem> scanFileSystem = _fileSystem;
     const bool fileSystemIsWin32             = _fileSystemIsWin32;
-    _scanWorker.thread                       = std::jthread(
-        [this, generation, done, scanFileSystem, fileSystemIsWin32, scanRootPath, topFilesPerDirectory, scanThreads](std::stop_token st) noexcept
-        {
-            auto markDone = wil::scope_exit([done] { done->store(true); });
-            ScanMain(st, generation, scanFileSystem, fileSystemIsWin32, scanRootPath, 1, 2, topFilesPerDirectory, scanThreads);
-        });
+    _scanWorker.thread =
+        std::jthread([this, generation, done, scanFileSystem, fileSystemIsWin32, scanRootPath, topFilesPerDirectory, scanThreads](std::stop_token st) noexcept
+    {
+        auto markDone = wil::scope_exit([done] { done->store(true); });
+        ScanMain(st, generation, scanFileSystem, fileSystemIsWin32, scanRootPath, 1, 2, topFilesPerDirectory, scanThreads);
+    });
 
     if (_hWnd)
     {
@@ -5342,14 +5341,13 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
     }
 
     const BOOL backgroundMode  = SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN);
-    auto restoreBackgroundMode = wil::scope_exit(
-        [backgroundMode]
+    auto restoreBackgroundMode = wil::scope_exit([backgroundMode]
+    {
+        if (backgroundMode != 0)
         {
-            if (backgroundMode != 0)
-            {
-                SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END);
-            }
-        });
+            SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END);
+        }
+    });
 
     PendingUpdate scanningUp;
     scanningUp.kind       = PendingUpdate::Kind::UpdateState;
@@ -5558,13 +5556,13 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
         std::sort(item.topFiles.begin(),
                   item.topFiles.end(),
                   [](const FileSummaryItem& a, const FileSummaryItem& b) noexcept
-                  {
-                      if (a.bytes != b.bytes)
-                      {
-                          return a.bytes > b.bytes;
-                      }
-                      return a.name < b.name;
-                  });
+        {
+            if (a.bytes != b.bytes)
+            {
+                return a.bytes > b.bytes;
+            }
+            return a.name < b.name;
+        });
 
         for (auto& file : item.topFiles)
         {
@@ -5730,14 +5728,13 @@ void ViewerSpace::ScanMain(std::stop_token stopToken,
     auto runWorker = [&](bool setBackgroundMode) noexcept
     {
         const BOOL threadBackgroundMode  = setBackgroundMode ? SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_BEGIN) : 0;
-        auto restoreThreadBackgroundMode = wil::scope_exit(
-            [setBackgroundMode, threadBackgroundMode]
+        auto restoreThreadBackgroundMode = wil::scope_exit([setBackgroundMode, threadBackgroundMode]
+        {
+            if (setBackgroundMode && threadBackgroundMode != 0)
             {
-                if (setBackgroundMode && threadBackgroundMode != 0)
-                {
-                    SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END);
-                }
-            });
+                SetThreadPriority(GetCurrentThread(), THREAD_MODE_BACKGROUND_END);
+            }
+        });
 
         for (;;)
         {
@@ -6802,13 +6799,13 @@ void ViewerSpace::RebuildLayout() noexcept
         std::sort(topItems.begin(),
                   topItems.end(),
                   [](const Item& a, const Item& b) noexcept
-                  {
-                      if (a.bytes != b.bytes)
-                      {
-                          return a.bytes > b.bytes;
-                      }
-                      return a.nodeId < b.nodeId;
-                  });
+        {
+            if (a.bytes != b.bytes)
+            {
+                return a.bytes > b.bytes;
+            }
+            return a.nodeId < b.nodeId;
+        });
 
         if (otherCount > 0 && remaining > 0)
         {
@@ -7147,13 +7144,13 @@ void ViewerSpace::RebuildLayout() noexcept
         std::sort(expandTasks.begin(),
                   expandTasks.end(),
                   [](const ExpandTask& a, const ExpandTask& b) noexcept
-                  {
-                      if (a.area != b.area)
-                      {
-                          return a.area > b.area;
-                      }
-                      return a.nodeId < b.nodeId;
-                  });
+        {
+            if (a.area != b.area)
+            {
+                return a.area > b.area;
+            }
+            return a.nodeId < b.nodeId;
+        });
 
         for (const ExpandTask& task : expandTasks)
         {

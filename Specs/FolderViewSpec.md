@@ -183,6 +183,11 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
   - The host may set an optional empty-state message per pane (e.g., “This folder doesn’t exist in this hierarchy.”).
   - When enumeration succeeds and the visible item list is empty, and an empty-state message is set, FolderView renders that message centered in the client area using a secondary/dimmed text style.
   - The empty-state message must not replace error/busy overlays.
+  - When enumeration succeeds and the visible item list is empty, and **no** host message is set, FolderView renders an **Empty folder** state:
+    - A very dim, large watermark glyph (Segoe Fluent Icons `0xE8FF` "Preview").
+    - Title text: **Empty folder**.
+    - A fun, friendly message with a large emoji, chosen randomly from a small set of resource strings.
+    - Double-click anywhere in the pane navigates **up to the parent folder**.
 
 **View options & filtering:**
 - **Hidden/System visibility** is controlled by settings:
@@ -192,7 +197,15 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
 - When `folders.showSystemFiles` is `false`, items with `FILE_ATTRIBUTE_SYSTEM` MUST be excluded from the item list.
 - When hidden items are shown, they MUST display a **dim** icon to distinguish them from normal items.
 - **Pane filter** (`cmd/pane/filter`): when enabled and the filter text parses to at least one mask, FolderView MUST exclude items whose `displayName` does not match the wildcard mask set (same syntax as Select/Unselect dialogs; see `MaskSyntax::MatchesWildcardMask`).
-- While a pane filter is active, FolderView SHOULD render a very subtle watermark glyph in the background (Sego UI Symbol `0xE71C`) so the user can tell the pane is filtered.
+- **Hide names (in-memory)**:
+  - `cmd/pane/selection/hideSelectedNames`: add the **currently selected** item `displayName`s to an in-memory hidden-names set (excludes those names from the view).
+  - `cmd/pane/selection/hideUnselectedNames`: add the **currently unselected** item `displayName`s to the hidden-names set (no-op when nothing is selected).
+  - `cmd/pane/selection/showHiddenNames`: clears the hidden-names set but MUST NOT change any existing pane filter.
+  - The hidden-names set is pane-local and MUST be cleared on folder navigation.
+- While a pane filter is active **or** the hidden-names set is non-empty, FolderView SHOULD render a very subtle watermark glyph in the background (Sego UI Symbol `0xE71C`) so the user can tell the pane is filtered/hidden.
+- When the pane is showing a centered empty-state UI (Empty folder state or an explicit empty-state message) and a filter is active, FolderView MUST avoid rendering overlapping watermarks:
+  - The large background filter watermark MUST be suppressed.
+  - FolderView SHOULD instead render a small filter badge in a corner.
 
 **Enumeration Contract (Plugin Only):**
 - The host obtains an `IFileSystem` instance via the plugin factory (`RedSalamanderCreate`) and uses it as the only source of directory entries.

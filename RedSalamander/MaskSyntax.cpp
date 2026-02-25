@@ -203,9 +203,9 @@ void MaskSyntax::NormalizeWildcardMaskHistory(std::vector<std::wstring>& history
         }
 
         const std::wstring_view trimmedView(trimmed);
-        const bool exists =
-            std::find_if(normalized.begin(), normalized.end(), [&](const std::wstring& existing) noexcept { return EqualsNoCase(existing, trimmedView); }) !=
-            normalized.end();
+        const bool exists = std::find_if(normalized.begin(), normalized.end(), [&](const std::wstring& existing) noexcept {
+            return EqualsNoCase(existing, trimmedView);
+        }) != normalized.end();
         if (exists)
         {
             continue;

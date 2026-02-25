@@ -102,15 +102,15 @@ void FolderView::StartOverlayAnimation() const noexcept
 
     _overlayAnimationSubscriptionId = RedSalamander::Ui::AnimationDispatcher::GetInstance().Subscribe(
         [](void* context, uint64_t nowTickMs) noexcept -> bool
+    {
+        auto* self = static_cast<FolderView*>(context);
+        if (! self)
         {
-            auto* self = static_cast<FolderView*>(context);
-            if (! self)
-            {
-                return false;
-            }
+            return false;
+        }
 
-            return self->OnOverlayAnimationTick(nowTickMs);
-        },
+        return self->OnOverlayAnimationTick(nowTickMs);
+    },
         const_cast<FolderView*>(this));
 }
 

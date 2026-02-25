@@ -5,9 +5,9 @@
 #include <limits>
 #include <utility>
 
+#include "Helpers.h"
 #include "SettingsStore.h"
 #include "ViewerPluginManager.h"
-#include "Helpers.h"
 
 namespace
 {

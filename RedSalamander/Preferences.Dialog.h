@@ -13,8 +13,8 @@ enum class PrefCategory : int;
 
 namespace PreferencesDialog
 {
-[[nodiscard]] bool
-Show(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme, PrefCategory initialCategory) noexcept;
+[[nodiscard]] bool Show(
+    HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme, PrefCategory initialCategory) noexcept;
 
 [[nodiscard]] HWND GetHandle() noexcept;
 } // namespace PreferencesDialog

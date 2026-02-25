@@ -383,7 +383,8 @@ private:
     friend std::optional<std::string> LookupS3BucketRegion(FileSystemS3& fs, std::wstring_view bucketName) noexcept;
     friend void SetS3BucketRegion(FileSystemS3& fs, std::wstring_view bucketName, std::string region) noexcept;
 
-    friend HRESULT
-    ListS3TableBuckets(FileSystemS3& fs, const FileSystemS3Internal::ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept;
+    friend HRESULT ListS3TableBuckets(FileSystemS3& fs,
+                                      const FileSystemS3Internal::ResolvedAwsContext& ctx,
+                                      std::vector<FilesInformationS3::Entry>& out) noexcept;
     friend std::optional<std::string> LookupS3TableBucketArn(FileSystemS3& fs, std::wstring_view bucketName) noexcept;
 };

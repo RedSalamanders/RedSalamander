@@ -42,8 +42,8 @@ constexpr std::wstring_view kCompareDirName{L"compare"};
 constexpr std::wstring_view kFileOpsDirName{L"fileops"};
 constexpr std::wstring_view kCommandsDirName{L"commands"};
 constexpr std::wstring_view kTraceFileName{L"trace.txt"};
-constexpr const char* kSuiteCompareName = "CompareDirectories";
-constexpr const char* kSuiteFileOpsName = "FileOperations";
+constexpr const char* kSuiteCompareName  = "CompareDirectories";
+constexpr const char* kSuiteFileOpsName  = "FileOperations";
 constexpr const char* kSuiteCommandsName = "Commands";
 
 SelfTestOptions g_options{};
@@ -418,7 +418,7 @@ void RotateSelfTestRuns()
 
 void InitSelfTestRun(const SelfTestOptions& options)
 {
-    g_options      = options;
+    g_options = options;
 }
 
 void AppendSelfTestTrace(std::wstring_view msg) noexcept

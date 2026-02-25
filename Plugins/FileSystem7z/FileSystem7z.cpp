@@ -251,21 +251,21 @@ HRESULT FilesInformation7z::BuildFromEntries(std::vector<Entry> entries) noexcep
     std::sort(entries.begin(),
               entries.end(),
               [](const Entry& a, const Entry& b)
-              {
-                  const int cmp = OrdinalString::Compare(a.name, b.name, true);
-                  if (cmp != 0)
-                  {
-                      return cmp < 0;
-                  }
+    {
+        const int cmp = OrdinalString::Compare(a.name, b.name, true);
+        if (cmp != 0)
+        {
+            return cmp < 0;
+        }
 
-                  const bool aDir = (a.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                  const bool bDir = (b.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                  if (aDir != bDir)
-                  {
-                      return aDir;
-                  }
-                  return a.sizeBytes < b.sizeBytes;
-              });
+        const bool aDir = (a.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const bool bDir = (b.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        if (aDir != bDir)
+        {
+            return aDir;
+        }
+        return a.sizeBytes < b.sizeBytes;
+    });
 
     size_t totalBytes = 0;
     for (const auto& entry : entries)
@@ -2317,17 +2317,16 @@ std::optional<GUID> TryGetFormatClassIdForExtension(const SevenZipExports& api, 
 
         PROPVARIANT addExtVar{};
         PropVariantInit(&addExtVar);
-        addExtVar.vt         = VT_EMPTY;
-        hr                   = api.getHandlerProperty2(i, NArchive::NHandlerPropID::kAddExtension, &addExtVar);
-        const bool hasAddExt = SUCCEEDED(hr);
-        auto clearAddExt     = wil::scope_exit(
-            [&]
+        addExtVar.vt                  = VT_EMPTY;
+        hr                            = api.getHandlerProperty2(i, NArchive::NHandlerPropID::kAddExtension, &addExtVar);
+        const bool hasAddExt          = SUCCEEDED(hr);
+        auto clearAddExt              = wil::scope_exit([&]
+        {
+            if (hasAddExt)
             {
-                if (hasAddExt)
-                {
-                    PropVariantClear(&addExtVar);
-                }
-            });
+                PropVariantClear(&addExtVar);
+            }
+        });
         const std::wstring addExtList = hasAddExt ? PropVariantToWideString(addExtVar) : std::wstring();
 
         if (! ExtensionListContains(extList, extensionNoDotLower) && ! ExtensionListContains(addExtList, extensionNoDotLower))

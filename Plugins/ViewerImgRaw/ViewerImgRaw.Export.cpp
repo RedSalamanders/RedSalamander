@@ -161,14 +161,13 @@ std::optional<ExportSaveDialogResult> ShowExportSaveDialog(HWND hwnd, ExportForm
 {
     const HRESULT coinitHr  = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
     const bool shouldUninit = SUCCEEDED(coinitHr);
-    auto coUninit           = wil::scope_exit(
-        [&]
+    auto coUninit           = wil::scope_exit([&]
+    {
+        if (shouldUninit)
         {
-            if (shouldUninit)
-            {
-                CoUninitialize();
-            }
-        });
+            CoUninitialize();
+        }
+    });
 
     // If the host initialized COM with a different apartment model, don't crash; proceed best-effort.
     if (FAILED(coinitHr) && coinitHr != RPC_E_CHANGED_MODE)
@@ -723,14 +722,13 @@ void ViewerImgRaw::BeginExport(HWND hwnd)
 
         const HRESULT coinitHr  = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
         const bool shouldUninit = SUCCEEDED(coinitHr);
-        auto coUninit           = wil::scope_exit(
-            [&]
+        auto coUninit           = wil::scope_exit([&]
+        {
+            if (shouldUninit)
             {
-                if (shouldUninit)
-                {
-                    CoUninitialize();
-                }
-            });
+                CoUninitialize();
+            }
+        });
 
         std::unique_ptr<AsyncExportResult> result(new (std::nothrow) AsyncExportResult{});
         if (! result)
@@ -761,19 +759,19 @@ void ViewerImgRaw::BeginExport(HWND hwnd)
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    {
+        std::unique_ptr<AsyncExportWorkItem> ctx(static_cast<AsyncExportWorkItem*>(context));
+        if (! ctx)
         {
-            std::unique_ptr<AsyncExportWorkItem> ctx(static_cast<AsyncExportWorkItem*>(context));
-            if (! ctx)
-            {
-                return;
-            }
+            return;
+        }
 
-            static_cast<void>(ctx->moduleKeepAlive);
-            if (ctx->work)
-            {
-                ctx->work();
-            }
-        },
+        static_cast<void>(ctx->moduleKeepAlive);
+        if (ctx->work)
+        {
+            ctx->work();
+        }
+    },
         ctx.get(),
         nullptr);
 

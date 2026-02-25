@@ -75,7 +75,7 @@ namespace
 
 [[nodiscard]] size_t PathDepthKey(const std::filesystem::path& p) noexcept
 {
-    size_t depth = 0;
+    size_t depth             = 0;
     const std::wstring& text = p.native();
     for (wchar_t ch : text)
     {
@@ -139,11 +139,11 @@ struct RenameOp final
 };
 
 [[nodiscard]] HRESULT RenameBatch(IFileSystem& fileSystem,
-                                 std::span<const RenameOp> ops,
-                                 FileSystemFlags flags,
-                                 const FileSystemOptions* options,
-                                 IFileSystemCallback* callback,
-                                 void* cookie) noexcept
+                                  std::span<const RenameOp> ops,
+                                  FileSystemFlags flags,
+                                  const FileSystemOptions* options,
+                                  IFileSystemCallback* callback,
+                                  void* cookie) noexcept
 {
     if (ops.empty())
     {
@@ -182,7 +182,7 @@ struct RenameOp final
 
     for (size_t i = 0; i < ops.size(); ++i)
     {
-        const RenameOp& op            = ops[i];
+        const RenameOp& op           = ops[i];
         const std::wstring& source   = op.sourcePath.native();
         const std::wstring_view name = op.newLeaf;
 
@@ -205,15 +205,15 @@ struct RenameOp final
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
 
-        auto* sourceBuf = static_cast<wchar_t*>(AllocateFromFileSystemArena(
-            arena, static_cast<unsigned long>((sourceLen + 1u) * sizeof(wchar_t)), static_cast<unsigned long>(alignof(wchar_t))));
+        auto* sourceBuf = static_cast<wchar_t*>(
+            AllocateFromFileSystemArena(arena, static_cast<unsigned long>((sourceLen + 1u) * sizeof(wchar_t)), static_cast<unsigned long>(alignof(wchar_t))));
         if (! sourceBuf)
         {
             return E_OUTOFMEMORY;
         }
 
-        auto* nameBuf = static_cast<wchar_t*>(AllocateFromFileSystemArena(
-            arena, static_cast<unsigned long>((nameLen + 1u) * sizeof(wchar_t)), static_cast<unsigned long>(alignof(wchar_t))));
+        auto* nameBuf = static_cast<wchar_t*>(
+            AllocateFromFileSystemArena(arena, static_cast<unsigned long>((nameLen + 1u) * sizeof(wchar_t)), static_cast<unsigned long>(alignof(wchar_t))));
         if (! nameBuf)
         {
             return E_OUTOFMEMORY;
@@ -426,9 +426,9 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
                         {
                             paths.push_back(child);
 
-                            const DWORD attrs          = entry->FileAttributes;
-                            const bool isDir           = (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                            const bool isReparsePoint  = (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+                            const DWORD attrs         = entry->FileAttributes;
+                            const bool isDir          = (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                            const bool isReparsePoint = (attrs & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
                             if (isDir && ! isReparsePoint)
                             {
                                 pending.push_back(child);
@@ -464,18 +464,17 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
 
     if (paths.size() > 1u)
     {
-        std::ranges::sort(
-            paths,
-            [](const std::filesystem::path& a, const std::filesystem::path& b) noexcept
+        std::ranges::sort(paths,
+                          [](const std::filesystem::path& a, const std::filesystem::path& b) noexcept
+        {
+            const size_t depthA = PathDepthKey(a);
+            const size_t depthB = PathDepthKey(b);
+            if (depthA != depthB)
             {
-                const size_t depthA = PathDepthKey(a);
-                const size_t depthB = PathDepthKey(b);
-                if (depthA != depthB)
-                {
-                    return depthA > depthB;
-                }
-                return a.native().size() > b.native().size();
-            });
+                return depthA > depthB;
+            }
+            return a.native().size() > b.native().size();
+        });
     }
 
     std::vector<RenameOp> renames;
@@ -503,7 +502,7 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
         renames.push_back(std::move(op));
     }
 
-    progressUpdate.phase          = ProgressUpdate::Phase::Renaming;
+    progressUpdate.phase = ProgressUpdate::Phase::Renaming;
     progressUpdate.currentPath.clear();
     progressUpdate.plannedRenames   = static_cast<uint64_t>(renames.size());
     progressUpdate.completedRenames = 0;
@@ -512,8 +511,8 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
         progress(progressUpdate, progressCookie);
     }
 
-    uint64_t completed = 0;
-    size_t index       = 0;
+    uint64_t completed          = 0;
+    size_t index                = 0;
     const FileSystemFlags flags = FILESYSTEM_FLAG_NONE;
     while (index < renames.size())
     {
@@ -545,8 +544,8 @@ HRESULT ApplyToPaths(IFileSystem& fileSystem,
                 progress(progressUpdate, progressCookie);
             }
 
-            const HRESULT hr = RenameBatch(
-                fileSystem, std::span<const RenameOp>(renames.data() + batchStart, batchEnd - batchStart), flags, nullptr, nullptr, nullptr);
+            const HRESULT hr =
+                RenameBatch(fileSystem, std::span<const RenameOp>(renames.data() + batchStart, batchEnd - batchStart), flags, nullptr, nullptr, nullptr);
             if (FAILED(hr))
             {
                 return hr;

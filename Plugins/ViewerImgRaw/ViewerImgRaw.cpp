@@ -3762,20 +3762,19 @@ void ViewerImgRaw::OnPaint()
         const UINT dpi = GetDpiForWindow(hwnd);
 
         _d2dTarget->BeginDraw();
-        auto endDraw = wil::scope_exit(
-            [&]
+        auto endDraw = wil::scope_exit([&]
+        {
+            if (! _d2dTarget)
             {
-                if (! _d2dTarget)
-                {
-                    return;
-                }
+                return;
+            }
 
-                const HRESULT hrEnd = _d2dTarget->EndDraw();
-                if (hrEnd == D2DERR_RECREATE_TARGET)
-                {
-                    DiscardDirect2D();
-                }
-            });
+            const HRESULT hrEnd = _d2dTarget->EndDraw();
+            if (hrEnd == D2DERR_RECREATE_TARGET)
+            {
+                DiscardDirect2D();
+            }
+        });
 
         const auto rectF = [&](const RECT& rc) noexcept { return RectFFromPixels(rc, dpi); };
 
@@ -3821,14 +3820,13 @@ void ViewerImgRaw::OnPaint()
                 {
                     D2D1_MATRIX_3X2_F oldTransform{};
                     _d2dTarget->GetTransform(&oldTransform);
-                    auto restoreTransform = wil::scope_exit(
-                        [&]
+                    auto restoreTransform = wil::scope_exit([&]
+                    {
+                        if (_d2dTarget)
                         {
-                            if (_d2dTarget)
-                            {
-                                _d2dTarget->SetTransform(oldTransform);
-                            }
-                        });
+                            _d2dTarget->SetTransform(oldTransform);
+                        }
+                    });
 
                     const uint16_t orientation        = (_viewOrientation >= 1 && _viewOrientation <= 8) ? _viewOrientation : static_cast<uint16_t>(1);
                     const float xDip                  = DipsFromPixelsF(x, dpi);

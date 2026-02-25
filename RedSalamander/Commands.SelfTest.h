@@ -14,4 +14,3 @@ namespace CommandsSelfTest
 }
 
 #endif // _DEBUG
-

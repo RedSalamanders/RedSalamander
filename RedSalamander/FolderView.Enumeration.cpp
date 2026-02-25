@@ -170,9 +170,9 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
 
         {
             std::unique_lock lock(_enumerationMutex);
-            _enumerationCv.wait(
-                lock,
-                [&]() { return stopToken.stop_requested() || _pendingEnumerationPath.has_value() || _iconLoadingActive.load(std::memory_order_acquire); });
+            _enumerationCv.wait(lock, [&]() {
+                return stopToken.stop_requested() || _pendingEnumerationPath.has_value() || _iconLoadingActive.load(std::memory_order_acquire);
+            });
 
             if (stopToken.stop_requested())
             {
@@ -211,8 +211,9 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
     }
 }
 
-std::unique_ptr<FolderView::EnumerationPayload>
-FolderView::ExecuteEnumeration(const std::filesystem::path& folder, uint64_t generation, std::stop_token stopToken)
+std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(const std::filesystem::path& folder,
+                                                                               uint64_t generation,
+                                                                               std::stop_token stopToken)
 {
     TRACER_CTX(folder.c_str());
 
@@ -331,6 +332,9 @@ FolderView::ExecuteEnumeration(const std::filesystem::path& folder, uint64_t gen
                 const auto nameFilter   = _nameFilter.load(std::memory_order_acquire);
                 const bool filterActive = nameFilter && nameFilter->state.enabled && nameFilter->hasMask;
 
+                const auto hiddenNames  = _hiddenNames.load(std::memory_order_acquire);
+                const bool hiddenActive = hiddenNames && ! hiddenNames->names.empty();
+
                 while (! stopToken.stop_requested())
                 {
                     if (_enumerationGeneration.load(std::memory_order_acquire) != generation)
@@ -339,16 +343,20 @@ FolderView::ExecuteEnumeration(const std::filesystem::path& folder, uint64_t gen
                     }
 
                     const DWORD fileAttributes = entry->FileAttributes;
-                    bool include = (showHiddenFiles || (fileAttributes & FILE_ATTRIBUTE_HIDDEN) == 0) &&
+                    bool include               = (showHiddenFiles || (fileAttributes & FILE_ATTRIBUTE_HIDDEN) == 0) &&
                                    (showSystemFiles || (fileAttributes & FILE_ATTRIBUTE_SYSTEM) == 0);
 
                     std::wstring_view displayName;
                     if (include)
                     {
                         const size_t nameChars = static_cast<size_t>(entry->FileNameSize) / sizeof(wchar_t);
-                        displayName = std::wstring_view(entry->FileName, nameChars);
+                        displayName            = std::wstring_view(entry->FileName, nameChars);
 
                         if (filterActive && ! MaskSyntax::MatchesWildcardMask(displayName, nameFilter->mask))
+                        {
+                            include = false;
+                        }
+                        else if (hiddenActive && hiddenNames->names.contains(displayName))
                         {
                             include = false;
                         }
@@ -434,10 +442,7 @@ FolderView::ExecuteEnumeration(const std::filesystem::path& folder, uint64_t gen
             perf.SetValue0(directories.size());
             perf.SetValue1(files.size());
 
-            auto compare = [](const FolderItem& a, const FolderItem& b)
-            {
-                return OrdinalString::Compare(a.displayName, b.displayName, true) < 0;
-            };
+            auto compare = [](const FolderItem& a, const FolderItem& b) { return OrdinalString::Compare(a.displayName, b.displayName, true) < 0; };
 
             // Use parallel sorting for large directories (threshold: 1000 items)
             constexpr size_t kParallelSortThreshold = 1000;
@@ -582,21 +587,21 @@ FolderView::ExecuteEnumeration(const std::filesystem::path& folder, uint64_t gen
                     // Create thread pool work item
                     UniqueThreadpoolWork tpWork(::CreateThreadpoolWork(
                         [](PTP_CALLBACK_INSTANCE, PVOID context, PTP_WORK) noexcept
+                    {
+                        auto* work = static_cast<QueryWork*>(context);
+                        if (work->stopRequested->load() ||
+                            (work->generationCounter && work->generationCounter->load(std::memory_order_acquire) != work->generation))
                         {
-                            auto* work = static_cast<QueryWork*>(context);
-                            if (work->stopRequested->load() ||
-                                (work->generationCounter && work->generationCounter->load(std::memory_order_acquire) != work->generation))
-                            {
-                                return;
-                            }
+                            return;
+                        }
 
-                            const auto iconIndex = IconCache::GetInstance().GetOrQueryIconIndexByExtension(work->query.extension, work->query.fileAttributes);
-                            if (iconIndex.has_value())
-                            {
-                                std::lock_guard lock(*work->resultsMutex);
-                                (*work->results)[work->query.extension] = iconIndex.value();
-                            }
-                        },
+                        const auto iconIndex = IconCache::GetInstance().GetOrQueryIconIndexByExtension(work->query.extension, work->query.fileAttributes);
+                        if (iconIndex.has_value())
+                        {
+                            std::lock_guard lock(*work->resultsMutex);
+                            (*work->results)[work->query.extension] = iconIndex.value();
+                        }
+                    },
                         work.get(),
                         nullptr));
 
@@ -712,19 +717,19 @@ FolderView::ExecuteEnumeration(const std::filesystem::path& folder, uint64_t gen
                 {
                     UniqueThreadpoolWork workItem(::CreateThreadpoolWork(
                         [](PTP_CALLBACK_INSTANCE, PVOID context, PTP_WORK) noexcept
+                    {
+                        auto* work = static_cast<PerFileWork*>(context);
+                        if (work->stopRequested->load() ||
+                            (work->generationCounter && work->generationCounter->load(std::memory_order_acquire) != work->generation))
                         {
-                            auto* work = static_cast<PerFileWork*>(context);
-                            if (work->stopRequested->load() ||
-                                (work->generationCounter && work->generationCounter->load(std::memory_order_acquire) != work->generation))
-                            {
-                                return;
-                            }
+                            return;
+                        }
 
-                            const auto iconIndex = IconCache::GetInstance().QuerySysIconIndexForPath(work->fullPath.c_str(), 0, false);
+                        const auto iconIndex = IconCache::GetInstance().QuerySysIconIndexForPath(work->fullPath.c_str(), 0, false);
 
-                            std::lock_guard<std::mutex> lock(*work->resultsMutex);
-                            (*work->results)[work->itemIndex] = iconIndex.value_or(-1);
-                        },
+                        std::lock_guard<std::mutex> lock(*work->resultsMutex);
+                        (*work->results)[work->itemIndex] = iconIndex.value_or(-1);
+                    },
                         work.get(),
                         nullptr));
 
@@ -1002,9 +1007,9 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
             case SortBy::Name: return compareName(a, b);
             case SortBy::Extension:
             {
-                const auto extA        = a.GetExtension();
-                const auto extB        = b.GetExtension();
-                const int extCmp       = OrdinalString::Compare(extA, extB, true);
+                const auto extA  = a.GetExtension();
+                const auto extB  = b.GetExtension();
+                const int extCmp = OrdinalString::Compare(extA, extB, true);
                 if (extCmp != 0)
                 {
                     return compareInt(extCmp);
@@ -1452,10 +1457,94 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     Debug::Info(L"FolderView: About to queue icons for {} items", _items.size());
     QueueIconLoading();
 
+    const auto resetEmptyFolderLayouts = [&]() noexcept
+    {
+        _emptyFolderIconLayout.reset();
+        _emptyFolderTitleLayout.reset();
+        _emptyFolderFunLayout.reset();
+        _emptyFolderLayoutClientSizePx = {};
+        _emptyFolderLayoutDpi          = 0.0f;
+        _emptyFolderLayoutMessageId    = 0;
+        _emptyFolderIconFontSizeDip    = 0.0f;
+        _emptyFolderIconMetrics        = {};
+        _emptyFolderTitleMetrics       = {};
+        _emptyFolderFunMetrics         = {};
+    };
+
     if (! _items.empty())
     {
         const std::wstring_view folderDetail = _itemsFolder.empty() ? std::wstring_view{} : std::wstring_view(_itemsFolder.native());
         StartupMetrics::MarkFirstPanePopulated(folderDetail.empty() ? std::wstring_view(L"(unknown)") : folderDetail, static_cast<uint64_t>(_items.size()));
+
+        if (_emptyFolderState.has_value())
+        {
+            _emptyFolderState.reset();
+            resetEmptyFolderLayouts();
+        }
+    }
+    else
+    {
+        if (_emptyStateMessage.empty() && _displayedFolder)
+        {
+            constexpr UINT kFunMessages[] = {
+                IDS_EMPTY_FOLDER_FUN_1,
+                IDS_EMPTY_FOLDER_FUN_2,
+                IDS_EMPTY_FOLDER_FUN_3,
+                IDS_EMPTY_FOLDER_FUN_4,
+                IDS_EMPTY_FOLDER_FUN_5,
+                IDS_EMPTY_FOLDER_FUN_6,
+                IDS_EMPTY_FOLDER_FUN_7,
+                IDS_EMPTY_FOLDER_FUN_8,
+                IDS_EMPTY_FOLDER_FUN_9,
+                IDS_EMPTY_FOLDER_FUN_10,
+            };
+
+            const std::wstring folderKey = NormalizeFocusMemoryFolderKey(_displayedFolder.value());
+            const bool needsNewMessage =
+                ! _emptyFolderState.has_value() || _emptyFolderState->folderKey != folderKey || _emptyFolderState->funMessageResourceId == 0;
+            if (needsNewMessage)
+            {
+                const ULONGLONG tick  = GetTickCount64();
+                const uint32_t tick32 = static_cast<uint32_t>(tick ^ (tick >> 32));
+                const uint32_t seed   = StableHash32(std::wstring_view(folderKey)) ^ tick32;
+                const UINT messageId  = kFunMessages[static_cast<size_t>(seed % static_cast<uint32_t>(std::size(kFunMessages)))];
+
+                std::wstring raw = LoadStringResource(nullptr, messageId);
+                std::wstring emoji;
+                std::wstring funMessage;
+
+                const size_t breakPos = raw.find_first_of(L"\r\n");
+                if (breakPos == std::wstring::npos)
+                {
+                    funMessage = StringUtils::TrimWhitespaceCopy(raw);
+                }
+                else
+                {
+                    emoji = StringUtils::TrimWhitespaceCopy(std::wstring_view(raw).substr(0, breakPos));
+
+                    size_t messageStart = breakPos;
+                    while (messageStart < raw.size() && (raw[messageStart] == L'\r' || raw[messageStart] == L'\n'))
+                    {
+                        ++messageStart;
+                    }
+                    funMessage = StringUtils::TrimWhitespaceCopy(std::wstring_view(raw).substr(messageStart));
+                }
+
+                EmptyFolderState state{};
+                state.folderKey            = folderKey;
+                state.funMessageResourceId = messageId;
+                state.emoji                = std::move(emoji);
+                state.funMessage           = std::move(funMessage);
+                _emptyFolderState          = std::move(state);
+
+                resetEmptyFolderLayouts();
+            }
+        }
+        else if (_emptyFolderState.has_value())
+        {
+            _emptyFolderState.reset();
+            resetEmptyFolderLayouts();
+        }
     }
 
     // Schedule idle-time layout pre-creation for off-screen items

@@ -5,8 +5,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
-#include <cwctype>
 #include <cstring>
+#include <cwctype>
 #include <exception>
 #include <filesystem>
 #include <format>
@@ -186,6 +186,38 @@ namespace StringUtils
     return std::wstring(TrimWhitespace(text));
 }
 } // namespace StringUtils
+
+namespace Win32Text
+{
+[[nodiscard]] inline std::wstring GetWindowTextString(HWND hwnd) noexcept
+{
+    if (! hwnd)
+    {
+        return {};
+    }
+
+    const int length = GetWindowTextLengthW(hwnd);
+    if (length <= 0)
+    {
+        return {};
+    }
+
+    std::wstring text(static_cast<size_t>(length) + 1u, L'\0');
+    const int copied = GetWindowTextW(hwnd, text.data(), length + 1);
+    if (copied <= 0)
+    {
+        return {};
+    }
+
+    text.resize(static_cast<size_t>(copied));
+    return text;
+}
+
+[[nodiscard]] inline std::wstring GetDlgItemTextString(HWND dlg, int controlId) noexcept
+{
+    return GetWindowTextString(dlg ? GetDlgItem(dlg, controlId) : nullptr);
+}
+} // namespace Win32Text
 
 // LoadString from resource ID
 template <typename string_type, size_t stackBufferLength = 256>
@@ -775,39 +807,39 @@ inline bool EnsureTraceLoggingRegistered() noexcept
 {
     std::call_once(g_traceLoggingRegisterOnce,
                    []() noexcept
-                   {
-                       const HRESULT hr   = TraceLoggingRegister(g_RedSalamanderProvider);
-                       const bool success = SUCCEEDED(hr);
-                       g_etwRegistered.store(success, std::memory_order_release);
+    {
+        const HRESULT hr   = TraceLoggingRegister(g_RedSalamanderProvider);
+        const bool success = SUCCEEDED(hr);
+        g_etwRegistered.store(success, std::memory_order_release);
 
 #ifdef _DEBUG
-                       // Output detailed registration result for debugging
-                       wchar_t msg[256]{};
-                       const size_t msgMax = (sizeof(msg) / sizeof(msg[0])) - 1;
-                       if (success)
-                       {
-                           const auto r           = std::format_to_n(msg, msgMax, L"ETW TraceLoggingRegister succeeded: 0x{:08X}\n", static_cast<unsigned>(hr));
-                           using SizeType         = decltype(r.size);
-                           const SizeType cap     = static_cast<SizeType>(msgMax);
-                           const SizeType written = (r.size < 0) ? 0 : ((r.size > cap) ? cap : r.size);
-                           msg[static_cast<size_t>(written)] = L'\0';
-                       }
-                       else
-                       {
-                           const wchar_t* const hrText = hr == static_cast<HRESULT>(0x80070005)   ? L"E_ACCESSDENIED"
-                                                         : hr == E_INVALIDARG                     ? L"E_INVALIDARG"
-                                                         : hr == static_cast<HRESULT>(0x800700B7) ? L"ERROR_ALREADY_EXISTS"
-                                                                                                  : L"Unknown Error";
+        // Output detailed registration result for debugging
+        wchar_t msg[256]{};
+        const size_t msgMax = (sizeof(msg) / sizeof(msg[0])) - 1;
+        if (success)
+        {
+            const auto r                      = std::format_to_n(msg, msgMax, L"ETW TraceLoggingRegister succeeded: 0x{:08X}\n", static_cast<unsigned>(hr));
+            using SizeType                    = decltype(r.size);
+            const SizeType cap                = static_cast<SizeType>(msgMax);
+            const SizeType written            = (r.size < 0) ? 0 : ((r.size > cap) ? cap : r.size);
+            msg[static_cast<size_t>(written)] = L'\0';
+        }
+        else
+        {
+            const wchar_t* const hrText = hr == static_cast<HRESULT>(0x80070005)   ? L"E_ACCESSDENIED"
+                                          : hr == E_INVALIDARG                     ? L"E_INVALIDARG"
+                                          : hr == static_cast<HRESULT>(0x800700B7) ? L"ERROR_ALREADY_EXISTS"
+                                                                                   : L"Unknown Error";
 
-                           const auto r = std::format_to_n(msg, msgMax, L"ETW TraceLoggingRegister FAILED: 0x{:08X} ({})\n", static_cast<unsigned>(hr), hrText);
-                           using SizeType                    = decltype(r.size);
-                           const SizeType cap                = static_cast<SizeType>(msgMax);
-                           const SizeType written            = (r.size < 0) ? 0 : ((r.size > cap) ? cap : r.size);
-                           msg[static_cast<size_t>(written)] = L'\0';
-                       }
-                       OutputDebugStringW(msg);
+            const auto r           = std::format_to_n(msg, msgMax, L"ETW TraceLoggingRegister FAILED: 0x{:08X} ({})\n", static_cast<unsigned>(hr), hrText);
+            using SizeType         = decltype(r.size);
+            const SizeType cap     = static_cast<SizeType>(msgMax);
+            const SizeType written = (r.size < 0) ? 0 : ((r.size > cap) ? cap : r.size);
+            msg[static_cast<size_t>(written)] = L'\0';
+        }
+        OutputDebugStringW(msg);
 #endif
-                   });
+    });
     return g_etwRegistered.load(std::memory_order_acquire);
 }
 

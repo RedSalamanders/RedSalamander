@@ -96,25 +96,24 @@ template <typename T> [[nodiscard]] HRESULT WaitForOperationWithMessagePump(winr
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    operation.Completed(
-        [state](auto const& op, winrt::Windows::Foundation::AsyncStatus status) noexcept
+    operation.Completed([state](auto const& op, winrt::Windows::Foundation::AsyncStatus status) noexcept
+    {
+        switch (status)
         {
-            switch (status)
-            {
-                case winrt::Windows::Foundation::AsyncStatus::Started:
-                    state->hr = E_PENDING;
-                    return; // Completed handlers should not be invoked for Started; keep waiting.
-                case winrt::Windows::Foundation::AsyncStatus::Completed:
-                    state->result = op.GetResults();
-                    state->hr     = S_OK;
-                    break;
-                case winrt::Windows::Foundation::AsyncStatus::Canceled: state->hr = HRESULT_FROM_WIN32(ERROR_CANCELLED); break;
-                case winrt::Windows::Foundation::AsyncStatus::Error: state->hr = op.ErrorCode(); break;
-                default: state->hr = E_FAIL; break;
-            }
+            case winrt::Windows::Foundation::AsyncStatus::Started:
+                state->hr = E_PENDING;
+                return; // Completed handlers should not be invoked for Started; keep waiting.
+            case winrt::Windows::Foundation::AsyncStatus::Completed:
+                state->result = op.GetResults();
+                state->hr     = S_OK;
+                break;
+            case winrt::Windows::Foundation::AsyncStatus::Canceled: state->hr = HRESULT_FROM_WIN32(ERROR_CANCELLED); break;
+            case winrt::Windows::Foundation::AsyncStatus::Error: state->hr = op.ErrorCode(); break;
+            default: state->hr = E_FAIL; break;
+        }
 
-            static_cast<void>(SetEvent(state->completedEvent.get()));
-        });
+        static_cast<void>(SetEvent(state->completedEvent.get()));
+    });
 
     const HRESULT waitHr = WaitForHandleWithMessagePump(state->completedEvent.get());
     if (FAILED(waitHr))

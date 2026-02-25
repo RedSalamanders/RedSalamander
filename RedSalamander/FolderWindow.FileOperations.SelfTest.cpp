@@ -910,7 +910,7 @@ bool CreateDeleteTree(const std::filesystem::path& root, int directories, int fi
 struct Phase14ShutdownWork final
 {
     FolderWindow::FileOperationState* fileOps = nullptr;
-    std::atomic<bool>* done                  = nullptr;
+    std::atomic<bool>* done                   = nullptr;
 };
 
 void CALLBACK Phase14ShutdownCallback(PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
@@ -1295,20 +1295,20 @@ constexpr ULONG kSymlinkRelativeFlag = 0x00000001u;
     return setSecurityError == ERROR_SUCCESS;
 }
 
-std::optional<std::uint64_t>
-StartFileOperationAndGetId(FolderWindow::FileOperationState* fileOps,
-                           FileSystemOperation operation,
-                           FolderWindow::Pane sourcePane,
-                           std::optional<FolderWindow::Pane> destinationPane,
-                           const wil::com_ptr<IFileSystem>& fileSystem,
-                           std::vector<std::filesystem::path> sourcePaths,
-                           std::filesystem::path destinationFolder,
-                           FileSystemFlags flags,
-                           bool waitForOthers,
-                           uint64_t initialSpeedLimitBytesPerSecond                      = 0,
-                           FolderWindow::FileOperationState::ExecutionMode executionMode = FolderWindow::FileOperationState::ExecutionMode::BulkItems,
-                           bool requireConfirmation                                      = false,
-                           wil::com_ptr<IFileSystem> destinationFileSystem               = nullptr) noexcept
+std::optional<std::uint64_t> StartFileOperationAndGetId(
+    FolderWindow::FileOperationState* fileOps,
+    FileSystemOperation operation,
+    FolderWindow::Pane sourcePane,
+    std::optional<FolderWindow::Pane> destinationPane,
+    const wil::com_ptr<IFileSystem>& fileSystem,
+    std::vector<std::filesystem::path> sourcePaths,
+    std::filesystem::path destinationFolder,
+    FileSystemFlags flags,
+    bool waitForOthers,
+    uint64_t initialSpeedLimitBytesPerSecond                      = 0,
+    FolderWindow::FileOperationState::ExecutionMode executionMode = FolderWindow::FileOperationState::ExecutionMode::BulkItems,
+    bool requireConfirmation                                      = false,
+    wil::com_ptr<IFileSystem> destinationFileSystem               = nullptr) noexcept
 {
     if (! fileOps)
     {
@@ -1438,10 +1438,10 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     state.phaseName.clear();
     state.phaseFailureMessage.clear();
 
-    state.step          = SelfTestState::Step::Setup;
-    state.runStartTick  = GetTickCount64();
-    state.stepStartTick = static_cast<ULONGLONG>(state.runStartTick);
-    state.markerTick    = 0;
+    state.step                = SelfTestState::Step::Setup;
+    state.runStartTick        = GetTickCount64();
+    state.stepStartTick       = static_cast<ULONGLONG>(state.runStartTick);
+    state.markerTick          = 0;
     state.baselineThreadCount = 0;
     BeginPhase(state, SelfTestState::Step::Setup);
     AppendLog(L"Start");
@@ -3043,10 +3043,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     Task* task = state.fileOps ? state.fileOps->FindTask(id) : nullptr;
                     if (task)
                     {
-                        unsigned int maxConc          = 0;
-                        size_t inFlight               = 0;
-                        unsigned long completedItems  = 0;
-                        unsigned long completedFiles  = 0;
+                        unsigned int maxConc           = 0;
+                        size_t inFlight                = 0;
+                        unsigned long completedItems   = 0;
+                        unsigned long completedFiles   = 0;
                         unsigned long completedFolders = 0;
                         {
                             std::scoped_lock lock(task->_progressMutex);
@@ -3066,23 +3066,23 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                         const bool preCalcSkipped = task->_preCalcSkipped.load(std::memory_order_acquire);
                         const bool preCalcDone    = task->_preCalcCompleted.load(std::memory_order_acquire);
 
-                        return std::format(
-                            L"{}:{} started={} entered={} waiting={} qPaused={} paused={} preCalc(inProg={} skipped={} done={}) maxConc={} inFlight={} completedItems={} files={} folders={}",
-                            name,
-                            id,
-                            started ? 1 : 0,
-                            entered ? 1 : 0,
-                            waiting ? 1 : 0,
-                            queuePaused ? 1 : 0,
-                            paused ? 1 : 0,
-                            preCalcInProg ? 1 : 0,
-                            preCalcSkipped ? 1 : 0,
-                            preCalcDone ? 1 : 0,
-                            maxConc,
-                            inFlight,
-                            completedItems,
-                            completedFiles,
-                            completedFolders);
+                        return std::format(L"{}:{} started={} entered={} waiting={} qPaused={} paused={} preCalc(inProg={} skipped={} done={}) maxConc={} "
+                                           L"inFlight={} completedItems={} files={} folders={}",
+                                           name,
+                                           id,
+                                           started ? 1 : 0,
+                                           entered ? 1 : 0,
+                                           waiting ? 1 : 0,
+                                           queuePaused ? 1 : 0,
+                                           paused ? 1 : 0,
+                                           preCalcInProg ? 1 : 0,
+                                           preCalcSkipped ? 1 : 0,
+                                           preCalcDone ? 1 : 0,
+                                           maxConc,
+                                           inFlight,
+                                           completedItems,
+                                           completedFiles,
+                                           completedFolders);
                     }
 
                     const auto it = state.completedTasks.find(id);
@@ -3116,9 +3116,9 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 state.fileOps->ApplyQueueMode(false);
                 state.taskA.reset();
                 state.taskB.reset();
-                state.markerTick           = 0;
-                state.baselineThreadCount  = 0;
-                state.lastProgressLogTick  = 0;
+                state.markerTick          = 0;
+                state.baselineThreadCount = 0;
+                state.lastProgressLogTick = 0;
 
                 static_cast<void>(SetPluginConfiguration(
                     state.infoLocal.get(),
@@ -3189,19 +3189,18 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
             const auto applySelection = [&]() noexcept
             {
-                folderView->SetSelectionByDisplayNamePredicate(
-                    [&](std::wstring_view displayName) noexcept -> bool
+                folderView->SetSelectionByDisplayNamePredicate([&](std::wstring_view displayName) noexcept -> bool
+                {
+                    if (displayName == L"a_folder" || displayName == L"z_slow_dir")
                     {
-                        if (displayName == L"a_folder" || displayName == L"z_slow_dir")
-                        {
-                            return true;
-                        }
-                        if (displayName.size() >= 6 && displayName.starts_with(L"f_") && displayName.ends_with(L".bin"))
-                        {
-                            return true;
-                        }
-                        return false;
-                    });
+                        return true;
+                    }
+                    if (displayName.size() >= 6 && displayName.starts_with(L"f_") && displayName.ends_with(L".bin"))
+                    {
+                        return true;
+                    }
+                    return false;
+                });
             };
 
             const size_t expectedSelectionCount = static_cast<size_t>(kFileCount + 2);
@@ -3270,8 +3269,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
-                const auto isCancelHr = [](HRESULT hr) noexcept -> bool
-                { return hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT; };
+                const auto isCancelHr = [](HRESULT hr) noexcept -> bool { return hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT; };
 
                 if (! isCancelHr(itA->second.hr) || ! isCancelHr(itB->second.hr))
                 {
@@ -3290,7 +3288,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return false;
             }
 
-            using Task = FolderWindow::FileOperationState::Task;
+            using Task  = FolderWindow::FileOperationState::Task;
             Task* taskA = state.fileOps ? state.fileOps->FindTask(state.taskA.value()) : nullptr;
             Task* taskB = state.taskB.has_value() && state.fileOps ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
             if (! taskA)
@@ -3314,18 +3312,18 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     state.markerTick = nowTick;
                 }
 
-                unsigned int maxConcA               = 0;
-                size_t inFlightA                    = 0;
-                unsigned long completedItemsA       = 0;
-                unsigned long completedFilesA       = 0;
-                unsigned long completedFoldersA     = 0;
+                unsigned int maxConcA           = 0;
+                size_t inFlightA                = 0;
+                unsigned long completedItemsA   = 0;
+                unsigned long completedFilesA   = 0;
+                unsigned long completedFoldersA = 0;
                 {
                     std::scoped_lock lock(taskA->_progressMutex);
-                    maxConcA           = taskA->_perItemMaxConcurrency;
-                    inFlightA          = taskA->_perItemInFlightCallCount;
-                    completedItemsA    = taskA->_progressCompletedItems;
-                    completedFilesA    = taskA->_completedTopLevelFiles;
-                    completedFoldersA  = taskA->_completedTopLevelFolders;
+                    maxConcA          = taskA->_perItemMaxConcurrency;
+                    inFlightA         = taskA->_perItemInFlightCallCount;
+                    completedItemsA   = taskA->_progressCompletedItems;
+                    completedFilesA   = taskA->_completedTopLevelFiles;
+                    completedFoldersA = taskA->_completedTopLevelFolders;
                 }
 
                 if (maxConcA <= 1u)
@@ -3415,31 +3413,31 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     state.markerTick = nowTick;
                 }
 
-                unsigned int maxConcA               = 0;
-                unsigned int maxConcB               = 0;
-                size_t inFlightA                    = 0;
-                size_t inFlightB                    = 0;
-                unsigned long completedItemsA       = 0;
-                unsigned long completedItemsB       = 0;
-                unsigned long completedFilesA       = 0;
-                unsigned long completedFilesB       = 0;
-                unsigned long completedFoldersA     = 0;
-                unsigned long completedFoldersB     = 0;
+                unsigned int maxConcA           = 0;
+                unsigned int maxConcB           = 0;
+                size_t inFlightA                = 0;
+                size_t inFlightB                = 0;
+                unsigned long completedItemsA   = 0;
+                unsigned long completedItemsB   = 0;
+                unsigned long completedFilesA   = 0;
+                unsigned long completedFilesB   = 0;
+                unsigned long completedFoldersA = 0;
+                unsigned long completedFoldersB = 0;
                 {
                     std::scoped_lock lock(taskA->_progressMutex);
-                    maxConcA           = taskA->_perItemMaxConcurrency;
-                    inFlightA          = taskA->_perItemInFlightCallCount;
-                    completedItemsA    = taskA->_progressCompletedItems;
-                    completedFilesA    = taskA->_completedTopLevelFiles;
-                    completedFoldersA  = taskA->_completedTopLevelFolders;
+                    maxConcA          = taskA->_perItemMaxConcurrency;
+                    inFlightA         = taskA->_perItemInFlightCallCount;
+                    completedItemsA   = taskA->_progressCompletedItems;
+                    completedFilesA   = taskA->_completedTopLevelFiles;
+                    completedFoldersA = taskA->_completedTopLevelFolders;
                 }
                 {
                     std::scoped_lock lock(taskB->_progressMutex);
-                    maxConcB           = taskB->_perItemMaxConcurrency;
-                    inFlightB          = taskB->_perItemInFlightCallCount;
-                    completedItemsB    = taskB->_progressCompletedItems;
-                    completedFilesB    = taskB->_completedTopLevelFiles;
-                    completedFoldersB  = taskB->_completedTopLevelFolders;
+                    maxConcB          = taskB->_perItemMaxConcurrency;
+                    inFlightB         = taskB->_perItemInFlightCallCount;
+                    completedItemsB   = taskB->_progressCompletedItems;
+                    completedFilesB   = taskB->_completedTopLevelFiles;
+                    completedFoldersB = taskB->_completedTopLevelFolders;
                 }
 
                 if (maxConcA <= 1u || maxConcB <= 1u)
@@ -3466,7 +3464,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                         return true;
                     }
 
-                    const size_t delta = (threadsNow >= state.baselineThreadCount) ? (threadsNow - state.baselineThreadCount) : 0;
+                    const size_t delta                       = (threadsNow >= state.baselineThreadCount) ? (threadsNow - state.baselineThreadCount) : 0;
                     constexpr size_t kMaxExpectedThreadDelta = 8;
                     if (delta > kMaxExpectedThreadDelta)
                     {

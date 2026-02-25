@@ -353,8 +353,10 @@ namespace
     return S_OK;
 }
 
-[[nodiscard]] HRESULT
-DownloadS3ObjectToTempFile(const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, wil::unique_hfile& outFile) noexcept
+[[nodiscard]] HRESULT DownloadS3ObjectToTempFile(const ResolvedAwsContext& ctx,
+                                                 std::string_view bucket,
+                                                 std::string_view key,
+                                                 wil::unique_hfile& outFile) noexcept
 {
     outFile.reset();
 
@@ -507,8 +509,8 @@ private:
 };
 } // namespace
 
-[[nodiscard]] HRESULT
-UploadS3ObjectFromFile(const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept
+[[nodiscard]] HRESULT UploadS3ObjectFromFile(
+    const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept
 {
     if (bucket.empty() || key.empty())
     {

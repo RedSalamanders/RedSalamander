@@ -24,7 +24,7 @@
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
-#pragma warning(disable : 4625 4626 5026 5027 28182) 
+#pragma warning(disable : 4625 4626 5026 5027 28182)
 #include <wil/resource.h>
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
@@ -67,9 +67,9 @@
 #include "WindowPlacementPersistence.h"
 
 #ifdef _DEBUG
-#include "CompareDirectoriesEngine.SelfTest.h"
 #include "CommandDispatch.Debug.h"
 #include "Commands.SelfTest.h"
+#include "CompareDirectoriesEngine.SelfTest.h"
 #include "FolderWindow.FileOperations.SelfTest.h"
 #endif
 
@@ -97,16 +97,16 @@ constexpr wchar_t kLeftPaneSlot[]                  = L"left";
 constexpr wchar_t kRightPaneSlot[]                 = L"right";
 
 #ifdef _DEBUG
-bool g_runFileOpsSelfTest = false;
+bool g_runFileOpsSelfTest            = false;
 bool g_runCompareDirectoriesSelfTest = false;
-bool g_runCommandsSelfTest = false;
+bool g_runCommandsSelfTest           = false;
 std::atomic<DWORD> g_selfTestMonitorProcessId{0};
 
 struct SelfTestMonitorCloseContext
 {
-    DWORD processId     = 0;
-    bool foundWindow    = false;
-    bool closedWithMsg  = false;
+    DWORD processId    = 0;
+    bool foundWindow   = false;
+    bool closedWithMsg = false;
 };
 
 BOOL CALLBACK SelfTestMonitorWindowEnumProc(HWND hwnd, LPARAM lParam) noexcept
@@ -226,74 +226,74 @@ void QueueRedSalamanderMonitorLaunch() noexcept
 
     static_cast<void>(TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* /*context*/) noexcept
+    {
+        constexpr wchar_t kInstanceMutexName[] = L"Local\\RedSalamanderMonitor_Instance";
+        wil::unique_handle existingInstance(::OpenMutexW(SYNCHRONIZE, FALSE, kInstanceMutexName));
+        if (existingInstance)
         {
-            constexpr wchar_t kInstanceMutexName[] = L"Local\\RedSalamanderMonitor_Instance";
-            wil::unique_handle existingInstance(::OpenMutexW(SYNCHRONIZE, FALSE, kInstanceMutexName));
-            if (existingInstance)
-            {
-                return;
-            }
+            return;
+        }
 
-            wchar_t exePath[MAX_PATH]{};
-            const DWORD exeLen = ::GetModuleFileNameW(nullptr, exePath, static_cast<DWORD>(std::size(exePath)));
-            if (exeLen == 0 || exeLen >= std::size(exePath))
-            {
-                return;
-            }
+        wchar_t exePath[MAX_PATH]{};
+        const DWORD exeLen = ::GetModuleFileNameW(nullptr, exePath, static_cast<DWORD>(std::size(exePath)));
+        if (exeLen == 0 || exeLen >= std::size(exePath))
+        {
+            return;
+        }
 
-            wchar_t* lastSlash = wcsrchr(exePath, L'\\');
-            if (! lastSlash)
-            {
-                lastSlash = wcsrchr(exePath, L'/');
-            }
-            if (! lastSlash)
-            {
-                return;
-            }
-            *(lastSlash + 1) = L'\0';
+        wchar_t* lastSlash = wcsrchr(exePath, L'\\');
+        if (! lastSlash)
+        {
+            lastSlash = wcsrchr(exePath, L'/');
+        }
+        if (! lastSlash)
+        {
+            return;
+        }
+        *(lastSlash + 1) = L'\0';
 
-            wchar_t monitorPath[MAX_PATH]{};
-            if (wcscpy_s(monitorPath, std::size(monitorPath), exePath) != 0)
-            {
-                return;
-            }
-            if (wcscat_s(monitorPath, std::size(monitorPath), L"RedSalamanderMonitor.exe") != 0)
-            {
-                return;
-            }
+        wchar_t monitorPath[MAX_PATH]{};
+        if (wcscpy_s(monitorPath, std::size(monitorPath), exePath) != 0)
+        {
+            return;
+        }
+        if (wcscat_s(monitorPath, std::size(monitorPath), L"RedSalamanderMonitor.exe") != 0)
+        {
+            return;
+        }
 
-            if (::GetFileAttributesW(monitorPath) == INVALID_FILE_ATTRIBUTES)
-            {
-                return;
-            }
+        if (::GetFileAttributesW(monitorPath) == INVALID_FILE_ATTRIBUTES)
+        {
+            return;
+        }
 
-            wchar_t cmdLine[(MAX_PATH * 2) + 4]{};
-            if (wcscpy_s(cmdLine, std::size(cmdLine), L"\"") != 0)
-            {
-                return;
-            }
-            if (wcscat_s(cmdLine, std::size(cmdLine), monitorPath) != 0)
-            {
-                return;
-            }
-            if (wcscat_s(cmdLine, std::size(cmdLine), L"\"") != 0)
-            {
-                return;
-            }
+        wchar_t cmdLine[(MAX_PATH * 2) + 4]{};
+        if (wcscpy_s(cmdLine, std::size(cmdLine), L"\"") != 0)
+        {
+            return;
+        }
+        if (wcscat_s(cmdLine, std::size(cmdLine), monitorPath) != 0)
+        {
+            return;
+        }
+        if (wcscat_s(cmdLine, std::size(cmdLine), L"\"") != 0)
+        {
+            return;
+        }
 
-            STARTUPINFOW si{};
-            si.cb = sizeof(si);
+        STARTUPINFOW si{};
+        si.cb = sizeof(si);
 
-            PROCESS_INFORMATION pi{};
-            if (! ::CreateProcessW(monitorPath, cmdLine, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi))
-            {
-                return;
-            }
+        PROCESS_INFORMATION pi{};
+        if (! ::CreateProcessW(monitorPath, cmdLine, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi))
+        {
+            return;
+        }
 
-            wil::unique_handle process(pi.hProcess);
-            wil::unique_handle thread(pi.hThread);
-            g_selfTestMonitorProcessId.store(pi.dwProcessId, std::memory_order_release);
-        },
+        wil::unique_handle process(pi.hProcess);
+        wil::unique_handle thread(pi.hThread);
+        g_selfTestMonitorProcessId.store(pi.dwProcessId, std::memory_order_release);
+    },
         nullptr,
         nullptr));
 }
@@ -387,6 +387,8 @@ wil::unique_hbrush g_mainMenuBackgroundBrush;
 std::vector<std::unique_ptr<MainMenuItemData>> g_mainMenuItemData;
 HMENU g_mainMenuHandle       = nullptr;
 HMENU g_viewMenu             = nullptr;
+HMENU g_editMenu             = nullptr;
+HMENU g_editAdvancedMenu     = nullptr;
 HMENU g_viewThemeMenu        = nullptr;
 HMENU g_viewPluginsMenu      = nullptr;
 HMENU g_viewPaneMenu         = nullptr;
@@ -402,9 +404,9 @@ bool g_functionBarVisible      = true;
 
 struct FullScreenState
 {
-    bool active            = false;
-    DWORD savedStyle       = 0;
-    DWORD savedExStyle     = 0;
+    bool active        = false;
+    DWORD savedStyle   = 0;
+    DWORD savedExStyle = 0;
     WINDOWPLACEMENT savedPlacement{};
 };
 FullScreenState g_fullScreenState{};
@@ -538,17 +540,17 @@ std::unordered_map<UINT, NavigatePathMenuTarget> g_navigatePathMenuTargets;
     }
 
     const std::wstring_view displayText = displayPath.native();
-    const auto itFilter = std::find_if(filters.begin(),
+    const auto itFilter                 = std::find_if(filters.begin(),
                                        filters.end(),
                                        [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
-                                       {
-                                            if (state.path.empty() || state.text.empty() || ! state.enabled)
-                                            {
-                                                return false;
-                                            }
+    {
+        if (state.path.empty() || state.text.empty() || ! state.enabled)
+        {
+            return false;
+        }
 
-                                            return OrdinalString::EqualsNoCasePath(state.path, displayText);
-                                        });
+        return OrdinalString::EqualsNoCasePath(state.path, displayText);
+    });
     if (itFilter == filters.end())
     {
         return false;
@@ -1159,10 +1161,10 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
                 }
 
                 const std::wstring_view historyText = historyPath.native();
-                const auto it = std::find_if(historyFilters.begin(),
-                                             historyFilters.end(),
-                                             [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
-                                             { return ! state.path.empty() && OrdinalString::EqualsNoCasePath(state.path, historyText); });
+                const auto it =
+                    std::find_if(historyFilters.begin(), historyFilters.end(), [&](const Common::Settings::FolderHistoryFilterState& state) noexcept {
+                    return ! state.path.empty() && OrdinalString::EqualsNoCasePath(state.path, historyText);
+                });
                 if (it == historyFilters.end())
                 {
                     continue;
@@ -1174,7 +1176,7 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
                 }
 
                 Common::Settings::FolderHistoryFilterState state = *it;
-                state.path                                      = historyPath;
+                state.path                                       = historyPath;
                 folders.historyFilters.push_back(std::move(state));
             }
         }
@@ -1509,8 +1511,8 @@ static void RemoveOverlaySampleSubmenu(HMENU paneMenu, UINT sampleErrorCommandId
     }
 }
 
-static void
-EnsurePaneMenuHandlesFor(HMENU mainMenu, UINT sortCommand, UINT displayCommand, HMENU& outPane, HMENU& outSort, HMENU& outDisplay, HMENU& outHistory) noexcept
+static void EnsurePaneMenuHandlesFor(
+    HMENU mainMenu, UINT sortCommand, UINT displayCommand, HMENU& outPane, HMENU& outSort, HMENU& outDisplay, HMENU& outHistory) noexcept
 {
     std::vector<HMENU> sortPath;
     std::vector<HMENU> displayPath;
@@ -1575,6 +1577,24 @@ static void EnsureMenuHandles(HWND hWnd) noexcept
         if (TryFindMenuPathToCommand(mainMenu, IDM_VIEW_MENUBAR, viewPath) && ! viewPath.empty())
         {
             g_viewMenu = viewPath.back();
+        }
+    }
+
+    if (! g_editMenu)
+    {
+        std::vector<HMENU> editPath;
+        if (TryFindMenuPathToCommand(mainMenu, IDM_PANE_CLIPBOARD_COPY, editPath) && ! editPath.empty())
+        {
+            g_editMenu = editPath.back();
+        }
+    }
+
+    if (! g_editAdvancedMenu)
+    {
+        std::vector<HMENU> advancedPath;
+        if (TryFindMenuPathToCommand(mainMenu, IDM_PANE_SAVE_SELECTION, advancedPath) && ! advancedPath.empty())
+        {
+            g_editAdvancedMenu = advancedPath.back();
         }
     }
 
@@ -1982,6 +2002,25 @@ void UpdatePaneMenuChecks() noexcept
         const UINT issuesPaneCheck = static_cast<UINT>(MF_BYCOMMAND | (g_folderWindow.IsFileOperationsIssuesPaneVisible() ? MF_CHECKED : MF_UNCHECKED));
         CheckMenuItem(g_viewMenu, IDM_VIEW_FILEOPS_FAILED_ITEMS, issuesPaneCheck);
     }
+
+    if (g_editMenu)
+    {
+        const bool canRestore   = g_folderWindow.HasSavedSelection();
+        const UINT restoreFlags = static_cast<UINT>(MF_BYCOMMAND | (canRestore ? MF_ENABLED : MF_GRAYED));
+        EnableMenuItem(g_editMenu, IDM_PANE_SELECTION_RESTORE, restoreFlags);
+    }
+
+    if (g_editAdvancedMenu)
+    {
+        const bool canRestore   = g_folderWindow.HasSavedSelection();
+        const UINT restoreFlags = static_cast<UINT>(MF_BYCOMMAND | (canRestore ? MF_ENABLED : MF_GRAYED));
+        EnableMenuItem(g_editAdvancedMenu, IDM_PANE_SELECTION_RESTORE, restoreFlags);
+
+        const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+        const bool canShowHidden      = g_folderWindow.CanShowHiddenNames(pane);
+        const UINT showHiddenFlags    = static_cast<UINT>(MF_BYCOMMAND | (canShowHidden ? MF_ENABLED : MF_GRAYED));
+        EnableMenuItem(g_editAdvancedMenu, IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES, showHiddenFlags);
+    }
 }
 
 void ShowSortMenuPopup(HWND hWnd, FolderWindow::Pane pane, POINT screenPoint) noexcept
@@ -2210,6 +2249,8 @@ void OnInitMenuPopup(HWND hWnd, HMENU menu)
         return;
     }
 
+    EnsureMenuHandles(hWnd);
+
     if (menu == g_viewPluginsMenu)
     {
         RebuildPluginsMenuDynamicItems(hWnd);
@@ -2225,7 +2266,8 @@ void OnInitMenuPopup(HWND hWnd, HMENU menu)
     }
 
     if (menu != g_leftGoToMenu && menu != g_rightGoToMenu && menu != g_leftSortMenu && menu != g_rightSortMenu && menu != g_leftDisplayMenu &&
-        menu != g_rightDisplayMenu && menu != g_viewPaneMenu && menu != g_viewMenu && menu != g_leftPaneMenu && menu != g_rightPaneMenu)
+        menu != g_rightDisplayMenu && menu != g_viewPaneMenu && menu != g_viewMenu && menu != g_editMenu && menu != g_editAdvancedMenu &&
+        menu != g_leftPaneMenu && menu != g_rightPaneMenu)
     {
         return;
     }
@@ -3061,7 +3103,7 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
                 const bool showArrow = checked && sortBy != FolderView::SortBy::None;
                 if (showArrow)
                 {
-                    RECT arrowRect  = checkRect;
+                    RECT arrowRect       = checkRect;
                     const LONG width     = std::max(0L, checkRect.right - checkRect.left);
                     const LONG arrowArea = std::clamp(static_cast<LONG>(MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI)), 0L, width);
                     const LONG split     = checkRect.left + arrowArea;
@@ -3327,8 +3369,9 @@ ShortcutManager g_shortcutManager;
     return HRESULT_FROM_WIN32(error);
 }
 
-[[nodiscard]] HRESULT
-ShowDisconnectNetworkDriveDialog(HWND ownerWindow, const std::optional<std::wstring>& localNameOpt, const std::optional<std::wstring>& remoteNameOpt) noexcept
+[[nodiscard]] HRESULT ShowDisconnectNetworkDriveDialog(HWND ownerWindow,
+                                                       const std::optional<std::wstring>& localNameOpt,
+                                                       const std::optional<std::wstring>& remoteNameOpt) noexcept
 {
     DISCDLGSTRUCTW dialog{};
     dialog.cbStructure = sizeof(dialog);
@@ -3761,8 +3804,8 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
             return true;
         }
 
-        const int slotIdx = hotPathSlotIndex.value();
-        const FolderWindow::Pane pane           = g_folderWindow.GetFocusedPane();
+        const int slotIdx                                      = hotPathSlotIndex.value();
+        const FolderWindow::Pane pane                          = g_folderWindow.GetFocusedPane();
         const std::optional<std::filesystem::path> currentPath = g_folderWindow.GetCurrentPath(pane);
         if (! currentPath.has_value() || currentPath.value().empty())
         {
@@ -3780,7 +3823,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
                 const auto& existingSlot = slots[static_cast<size_t>(slotIdx)].value();
                 if (! existingSlot.path.empty())
                 {
-                    const wchar_t digitChar = (slotIdx < 9) ? static_cast<wchar_t>(L'1' + slotIdx) : L'0';
+                    const wchar_t digitChar    = (slotIdx < 9) ? static_cast<wchar_t>(L'1' + slotIdx) : L'0';
                     const std::wstring title   = LoadStringResource(nullptr, IDS_HOT_PATH_CONFIRM_TITLE);
                     const std::wstring message = FormatStringResource(nullptr, IDS_HOT_PATH_CONFIRM_REPLACE, digitChar, existingSlot.path);
 
@@ -3805,7 +3848,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         {
             slot = g_settings.hotPaths.value().slots[static_cast<size_t>(slotIdx)].value();
         }
-        slot.path = newPath;
+        slot.path                                                       = newPath;
         g_settings.hotPaths.value().slots[static_cast<size_t>(slotIdx)] = std::move(slot);
 
         static_cast<void>(Common::Settings::SaveSettings(kAppId, SettingsSave::PrepareForSave(g_settings)));
@@ -4098,40 +4141,39 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
     };
 
     EnumState state{};
-    EnumChildWindows(
-        root,
-        [](HWND child, LPARAM lParam) noexcept -> BOOL
+    EnumChildWindows(root,
+                     [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto* state = reinterpret_cast<EnumState*>(lParam);
+        if (! state)
         {
-            auto* state = reinterpret_cast<EnumState*>(lParam);
-            if (! state)
-            {
-                return TRUE;
-            }
-
-            constexpr wchar_t kAlertOverlayWindowClassName[] = L"RedSalamander.AlertOverlayWindow";
-
-            wchar_t className[64]{};
-            const int classLen = GetClassNameW(child, className, static_cast<int>(_countof(className)));
-            if (classLen <= 0 || wcscmp(className, kAlertOverlayWindowClassName) != 0)
-            {
-                return TRUE;
-            }
-
-            if (IsWindowVisible(child) == FALSE)
-            {
-                return TRUE;
-            }
-
-            SendMessageW(child, WM_KEYDOWN, VK_ESCAPE, 0);
-            if (IsWindowVisible(child) == FALSE)
-            {
-                state->dismissed = true;
-                return FALSE; // stop enumeration
-            }
-
             return TRUE;
-        },
-        reinterpret_cast<LPARAM>(&state));
+        }
+
+        constexpr wchar_t kAlertOverlayWindowClassName[] = L"RedSalamander.AlertOverlayWindow";
+
+        wchar_t className[64]{};
+        const int classLen = GetClassNameW(child, className, static_cast<int>(_countof(className)));
+        if (classLen <= 0 || wcscmp(className, kAlertOverlayWindowClassName) != 0)
+        {
+            return TRUE;
+        }
+
+        if (IsWindowVisible(child) == FALSE)
+        {
+            return TRUE;
+        }
+
+        SendMessageW(child, WM_KEYDOWN, VK_ESCAPE, 0);
+        if (IsWindowVisible(child) == FALSE)
+        {
+            state->dismissed = true;
+            return FALSE; // stop enumeration
+        }
+
+        return TRUE;
+    },
+                     reinterpret_cast<LPARAM>(&state));
     return state.dismissed;
 }
 } // namespace
@@ -4207,8 +4249,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
             std::string utf8;
             utf8.resize(static_cast<size_t>(bytesNeeded));
-            const int converted =
-                WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), utf8.data(), bytesNeeded, nullptr, nullptr);
+            const int converted = WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), utf8.data(), bytesNeeded, nullptr, nullptr);
             if (converted != bytesNeeded)
             {
                 return false;
@@ -4248,24 +4289,23 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     if (hasArg(L"--help") || hasArg(L"-h") || hasArg(L"/?"))
     {
-        constexpr wchar_t kHelpText[] =
-            L"RedSalamander\r\n"
-            L"\r\n"
-            L"Usage:\r\n"
-            L"  RedSalamander.exe [options]\r\n"
-            L"\r\n"
-            L"Options:\r\n"
-            L"  -h, --help, /?                 Show this help.\r\n"
-            L"  --crash-test                    Trigger crash handler test.\r\n"
+        constexpr wchar_t kHelpText[] = L"RedSalamander\r\n"
+                                        L"\r\n"
+                                        L"Usage:\r\n"
+                                        L"  RedSalamander.exe [options]\r\n"
+                                        L"\r\n"
+                                        L"Options:\r\n"
+                                        L"  -h, --help, /?                 Show this help.\r\n"
+                                        L"  --crash-test                    Trigger crash handler test.\r\n"
 #ifdef _DEBUG
-            L"  --selftest                      Run all debug self-test suites and exit.\r\n"
-            L"  --compare-selftest              Run CompareDirectories self-test suite.\r\n"
-            L"  --commands-selftest             Run Commands self-test suite.\r\n"
-            L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
-            L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
-            L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by N (default 1.0).\r\n"
+                                        L"  --selftest                      Run all debug self-test suites and exit.\r\n"
+                                        L"  --compare-selftest              Run CompareDirectories self-test suite.\r\n"
+                                        L"  --commands-selftest             Run Commands self-test suite.\r\n"
+                                        L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
+                                        L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
+                                        L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by N (default 1.0).\r\n"
 #endif
-            L"\r\n";
+                                        L"\r\n";
 
         writeHelpText(kHelpText);
         return 0;
@@ -4343,9 +4383,9 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     if (hasArg(L"--selftest"))
     {
-        g_runFileOpsSelfTest              = true;
-        g_runCompareDirectoriesSelfTest   = true;
-        g_runCommandsSelfTest             = true;
+        g_runFileOpsSelfTest            = true;
+        g_runCompareDirectoriesSelfTest = true;
+        g_runCommandsSelfTest           = true;
         HostSetAutoAcceptPrompts(true);
     }
 
@@ -4395,14 +4435,13 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         }
     }
 
-    const auto comCleanup = wil::scope_exit(
-        [&]
+    const auto comCleanup = wil::scope_exit([&]
+    {
+        if (comInitialized)
         {
-            if (comInitialized)
-            {
-                CoUninitialize();
-            }
-        });
+            CoUninitialize();
+        }
+    });
 
     const ThemeMode envTheme = GetInitialThemeModeFromEnvironment();
     g_themeMode              = envTheme;
@@ -4571,7 +4610,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             }
         }
 
-        const HWND prefsDialog            = GetPreferencesDialogHandle();
+        const HWND prefsDialog = GetPreferencesDialogHandle();
         if (prefsDialog && root == prefsDialog)
         {
             if (IsDialogMessageW(prefsDialog, &msg))
@@ -5292,7 +5331,7 @@ void EnterFullScreen(HWND hWnd) noexcept
     }
 
     MONITORINFO mi{};
-    mi.cbSize = sizeof(mi);
+    mi.cbSize              = sizeof(mi);
     const HMONITOR monitor = MonitorFromWindow(hWnd, MONITOR_DEFAULTTONEAREST);
     if (! monitor || GetMonitorInfoW(monitor, &mi) == FALSE)
     {
@@ -5626,9 +5665,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             break;
         }
         case IDM_LEFT_ZOOM_PANEL: g_folderWindow.ToggleZoomPanel(FolderWindow::Pane::Left); break;
-        case IDM_LEFT_FILTER:
-            g_folderWindow.CommandFilter(FolderWindow::Pane::Left);
-            break;
+        case IDM_LEFT_FILTER: g_folderWindow.CommandFilter(FolderWindow::Pane::Left); break;
         case IDM_LEFT_REFRESH: g_folderWindow.CommandRefresh(FolderWindow::Pane::Left); break;
         case IDM_RIGHT_GO_TO_BACK: g_folderWindow.CommandHistoryBack(FolderWindow::Pane::Right); break;
         case IDM_RIGHT_GO_TO_FORWARD: g_folderWindow.CommandHistoryForward(FolderWindow::Pane::Right); break;
@@ -5646,9 +5683,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             break;
         }
         case IDM_RIGHT_ZOOM_PANEL: g_folderWindow.ToggleZoomPanel(FolderWindow::Pane::Right); break;
-        case IDM_RIGHT_FILTER:
-            g_folderWindow.CommandFilter(FolderWindow::Pane::Right);
-            break;
+        case IDM_RIGHT_FILTER: g_folderWindow.CommandFilter(FolderWindow::Pane::Right); break;
         case IDM_RIGHT_REFRESH: g_folderWindow.CommandRefresh(FolderWindow::Pane::Right); break;
         case IDM_VIEW_PANE_NAVBAR_LEFT:
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
@@ -5706,6 +5741,24 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             g_folderWindow.CommandSelectionUnselectDialog(pane);
             break;
         }
+        case IDM_PANE_SAVE_SELECTION:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionSave(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_RESTORE:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionRestore(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_INVERT:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionInvert(pane);
+            break;
+        }
         case IDM_PANE_SELECTION_SELECT_SAME_EXTENSION:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
@@ -5716,6 +5769,24 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.CommandSelectionUnselectSameExtension(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_HIDE_SELECTED_NAMES:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionHideSelectedNames(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionHideUnselectedNames(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_SHOW_HIDDEN_NAMES:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionShowHiddenNames(pane);
             break;
         }
         case IDM_PANE_SELECTION_GOTO_PREV_SELECTED_NAME:
@@ -6715,8 +6786,7 @@ BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
         }
 
         DWORD_PTR ignoredResult = 0;
-        const LRESULT sent      =
-            SendMessageTimeoutW(hwnd, WM_CLOSE, 0, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, kShutdownCloseTimeoutMs, &ignoredResult);
+        const LRESULT sent      = SendMessageTimeoutW(hwnd, WM_CLOSE, 0, 0, SMTO_ABORTIFHUNG | SMTO_NORMAL, kShutdownCloseTimeoutMs, &ignoredResult);
         if (sent == 0)
         {
             if (IsWindow(hwnd) != FALSE)
@@ -6770,8 +6840,8 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
 
 #ifdef _DEBUG
     ShutdownSelfTestMonitor();
-    TraceSelfTestExitCode(
-        L"OnMainWindowDestroy: PostQuitMessage", (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
+    TraceSelfTestExitCode(L"OnMainWindowDestroy: PostQuitMessage",
+                          (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
     PostQuitMessage((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
 #else
     PostQuitMessage(0);

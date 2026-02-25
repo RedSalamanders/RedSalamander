@@ -1114,12 +1114,11 @@ void NavigationView::ShowMenuDropdown()
     _navigationMenuActions.clear();
 
     HMENU menu       = CreatePopupMenu();
-    auto menuCleanup = wil::scope_exit(
-        [&]
-        {
-            if (menu)
-                DestroyMenu(menu);
-        });
+    auto menuCleanup = wil::scope_exit([&]
+    {
+        if (menu)
+            DestroyMenu(menu);
+    });
 
     constexpr unsigned int kMaxActions = ID_NAV_MENU_MAX - ID_NAV_MENU_BASE + 1u;
 
@@ -1160,14 +1159,13 @@ void NavigationView::ShowMenuDropdown()
             return;
         }
 
-        auto connectionsMenuCleanup = wil::scope_exit(
-            [&]
+        auto connectionsMenuCleanup = wil::scope_exit([&]
+        {
+            if (connectionsMenu)
             {
-                if (connectionsMenu)
-                {
-                    DestroyMenu(connectionsMenu);
-                }
-            });
+                DestroyMenu(connectionsMenu);
+            }
+        });
 
         // Connections Manager...
         {
@@ -1252,9 +1250,9 @@ void NavigationView::ShowMenuDropdown()
 
         if (connectionItems.size() > 1u)
         {
-            std::sort(connectionItems.begin() + 1u,
-                      connectionItems.end(),
-                      [](const ConnectionMenuItem& a, const ConnectionMenuItem& b) { return _wcsicmp(a.label.c_str(), b.label.c_str()) < 0; });
+            std::sort(connectionItems.begin() + 1u, connectionItems.end(), [](const ConnectionMenuItem& a, const ConnectionMenuItem& b) {
+                return _wcsicmp(a.label.c_str(), b.label.c_str()) < 0;
+            });
         }
 
         if (connectionItems.empty())
@@ -1518,14 +1516,13 @@ void NavigationView::ShowFileSystemDriveMenuDropdown()
     _navigationMenuActions.clear();
 
     HMENU menu       = CreatePopupMenu();
-    auto menuCleanup = wil::scope_exit(
-        [&]
+    auto menuCleanup = wil::scope_exit([&]
+    {
+        if (menu)
         {
-            if (menu)
-            {
-                DestroyMenu(menu);
-            }
-        });
+            DestroyMenu(menu);
+        }
+    });
     if (! menu)
     {
         _menuButtonPressed = false;
@@ -1571,14 +1568,13 @@ void NavigationView::ShowFileSystemDriveMenuDropdown()
             return;
         }
 
-        auto connectionsMenuCleanup = wil::scope_exit(
-            [&]
+        auto connectionsMenuCleanup = wil::scope_exit([&]
+        {
+            if (connectionsMenu)
             {
-                if (connectionsMenu)
-                {
-                    DestroyMenu(connectionsMenu);
-                }
-            });
+                DestroyMenu(connectionsMenu);
+            }
+        });
 
         // Connections Manager...
         {
@@ -1663,9 +1659,9 @@ void NavigationView::ShowFileSystemDriveMenuDropdown()
 
         if (connectionItems.size() > 1u)
         {
-            std::sort(connectionItems.begin() + 1u,
-                      connectionItems.end(),
-                      [](const ConnectionMenuItem& a, const ConnectionMenuItem& b) { return _wcsicmp(a.label.c_str(), b.label.c_str()) < 0; });
+            std::sort(connectionItems.begin() + 1u, connectionItems.end(), [](const ConnectionMenuItem& a, const ConnectionMenuItem& b) {
+                return _wcsicmp(a.label.c_str(), b.label.c_str()) < 0;
+            });
         }
 
         if (connectionItems.empty())
@@ -1922,10 +1918,10 @@ void NavigationView::ShowHistoryDropdown()
         }
 
         const std::wstring_view historyText = historyPath.native();
-        const auto it = std::find_if(folders.historyFilters.begin(),
-                                     folders.historyFilters.end(),
-                                     [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
-                                     { return state.enabled && ! state.path.empty() && EqualsNoCase(state.path.native(), historyText); });
+        const auto it =
+            std::find_if(folders.historyFilters.begin(), folders.historyFilters.end(), [&](const Common::Settings::FolderHistoryFilterState& state) noexcept {
+            return state.enabled && ! state.path.empty() && EqualsNoCase(state.path.native(), historyText);
+        });
         if (it == folders.historyFilters.end())
         {
             return false;
@@ -1940,13 +1936,11 @@ void NavigationView::ShowHistoryDropdown()
     {
         const auto& path           = _navDropdownPaths[i];
         const std::wstring display = path.wstring();
-        const LRESULT index = SendMessageW(_navDropdownCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(display.c_str()));
+        const LRESULT index        = SendMessageW(_navDropdownCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(display.c_str()));
         if (index != CB_ERR && historyEntryHasActiveFilter(path))
         {
-            SendMessageW(_navDropdownCombo.get(),
-                         CB_SETITEMDATA,
-                         static_cast<WPARAM>(index),
-                         ThemedControls::MakeModernComboItemIconData(FluentIcons::kFilter));
+            SendMessageW(
+                _navDropdownCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(index), ThemedControls::MakeModernComboItemIconData(FluentIcons::kFilter));
         }
 
         if (_currentPath && wil::compare_string_ordinal(path.wstring(), _currentPath->wstring(), true) == wistd::weak_ordering::equivalent)
@@ -2025,12 +2019,11 @@ void NavigationView::ShowDiskInfoDropdown()
     _menuBitmaps.clear();
 
     HMENU menu       = CreatePopupMenu();
-    auto menuCleanup = wil::scope_exit(
-        [&]
-        {
-            if (menu)
-                DestroyMenu(menu);
-        });
+    auto menuCleanup = wil::scope_exit([&]
+    {
+        if (menu)
+            DestroyMenu(menu);
+    });
 
     std::wstring headerName;
     if (! _driveDisplayName.empty())
@@ -2253,9 +2246,9 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
         entry = reinterpret_cast<FileInfo*>(reinterpret_cast<std::byte*>(entry) + entry->NextEntryOffset);
     }
 
-    std::sort(siblings.begin(),
-              siblings.end(),
-              [](const std::filesystem::path& a, const std::filesystem::path& b) { return _wcsicmp(a.filename().c_str(), b.filename().c_str()) < 0; });
+    std::sort(siblings.begin(), siblings.end(), [](const std::filesystem::path& a, const std::filesystem::path& b) {
+        return _wcsicmp(a.filename().c_str(), b.filename().c_str()) < 0;
+    });
 
     return true;
 }

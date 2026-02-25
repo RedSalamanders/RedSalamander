@@ -28,6 +28,7 @@
 #include <string_view>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "MaskSyntax.h"
@@ -137,6 +138,7 @@ public:
     HRESULT MoveSelectedItemsToFolder(const std::filesystem::path& destinationFolder);
     std::vector<std::filesystem::path> GetSelectedDirectoryPaths() const;
     std::vector<std::filesystem::path> GetSelectedOrFocusedPaths() const;
+    std::vector<std::wstring> GetSelectedOrFocusedDisplayNames() const;
 
     struct PathAttributes
     {
@@ -177,6 +179,21 @@ public:
     {
         return _debugForceRefreshCount;
     }
+
+    [[nodiscard]] std::wstring_view DebugGetFocusedDisplayName() const noexcept;
+    [[nodiscard]] bool DebugHasItemDisplayName(std::wstring_view displayName) const noexcept;
+    [[nodiscard]] bool DebugIsItemSelectedByDisplayName(std::wstring_view displayName) const noexcept;
+    [[nodiscard]] size_t DebugGetSelectedItemCount() const noexcept;
+    [[nodiscard]] bool DebugIsEmptyFolderStateActive() const noexcept;
+    [[nodiscard]] std::wstring_view DebugGetEmptyFolderFunMessage() const noexcept;
+
+    enum class FilterWatermarkVisualMode : uint8_t
+    {
+        None,
+        Background,
+        Badge,
+    };
+    [[nodiscard]] FilterWatermarkVisualMode DebugGetFilterWatermarkVisualMode() const noexcept;
 #endif
 
     enum class DisplayMode : uint8_t
@@ -247,6 +264,11 @@ public:
     void SetNameFilterState(const NameFilterState& state, bool refresh = true);
     [[nodiscard]] NameFilterState GetNameFilterState() const;
     [[nodiscard]] bool IsNameFilterActive() const noexcept;
+
+    void HideSelectedNames();
+    void HideUnselectedNames();
+    void ShowHiddenNames();
+    [[nodiscard]] bool HasHiddenNames() const noexcept;
 
     enum class NavigationRequest
     {
@@ -384,6 +406,8 @@ public:
     // Programmatic unselection: sets selected=false for items where `shouldUnselect(displayName)` returns true.
     void ClearSelectionByDisplayNamePredicate(const std::function<bool(std::wstring_view)>& shouldUnselect);
 
+    void InvertSelection();
+
     void SelectSameExtension();
     void UnselectSameExtension();
 
@@ -465,7 +489,7 @@ private:
     {
         bool dragging = false;
         POINT startPoint{};
-        size_t anchorIndex = static_cast<size_t>(-1);
+        size_t anchorIndex    = static_cast<size_t>(-1);
         bool hasStartItemRect = false;
         RECT startItemRect{};
     };
@@ -486,6 +510,26 @@ private:
     std::optional<std::filesystem::path> _currentFolder;
     std::optional<std::filesystem::path> _displayedFolder;
     std::wstring _emptyStateMessage;
+
+    struct EmptyFolderState
+    {
+        std::wstring folderKey;
+        UINT funMessageResourceId = 0;
+        std::wstring emoji;
+        std::wstring funMessage;
+    };
+
+    std::optional<EmptyFolderState> _emptyFolderState;
+    wil::com_ptr<IDWriteTextLayout> _emptyFolderIconLayout;
+    wil::com_ptr<IDWriteTextLayout> _emptyFolderTitleLayout;
+    wil::com_ptr<IDWriteTextLayout> _emptyFolderFunLayout;
+    SIZE _emptyFolderLayoutClientSizePx = {};
+    float _emptyFolderLayoutDpi         = 0.0f;
+    UINT _emptyFolderLayoutMessageId    = 0;
+    float _emptyFolderIconFontSizeDip   = 0.0f;
+    DWRITE_TEXT_METRICS _emptyFolderIconMetrics{};
+    DWRITE_TEXT_METRICS _emptyFolderTitleMetrics{};
+    DWRITE_TEXT_METRICS _emptyFolderFunMetrics{};
     wil::com_ptr<IFileSystem> _fileSystem;
     const PluginMetaData* _fileSystemMetadata{};
     std::wstring _fileSystemPluginId;
@@ -574,6 +618,10 @@ private:
     SIZE _filterWatermarkLayoutClientSizePx = {};
     float _filterWatermarkLayoutDpi         = 0.0f;
     float _filterWatermarkLayoutFontSizeDip = 0.0f;
+    wil::com_ptr<IDWriteTextLayout> _filterWatermarkBadgeLayout;
+    SIZE _filterWatermarkBadgeLayoutClientSizePx = {};
+    float _filterWatermarkBadgeLayoutDpi         = 0.0f;
+    float _filterWatermarkBadgeLayoutFontSizeDip = 0.0f;
     wil::com_ptr<IDWriteInlineObject> _ellipsisSign;
     wil::com_ptr<IDWriteInlineObject> _detailsEllipsisSign;
     wil::com_ptr<ID2D1SolidColorBrush> _backgroundBrush;
@@ -640,6 +688,60 @@ private:
     };
 
     std::atomic<std::shared_ptr<const CompiledNameFilter>> _nameFilter;
+
+    struct HiddenNamesHash final
+    {
+        using is_transparent = void;
+
+        size_t operator()(std::wstring_view value) const noexcept
+        {
+            uint64_t hash = 14695981039346656037ull; // FNV-1a 64-bit offset basis
+            for (const wchar_t ch : value)
+            {
+                const wchar_t lower = static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
+                hash ^= static_cast<uint64_t>(lower);
+                hash *= 1099511628211ull; // FNV-1a 64-bit prime
+            }
+            return static_cast<size_t>(hash);
+        }
+
+        size_t operator()(const std::wstring& value) const noexcept
+        {
+            return (*this)(std::wstring_view{value});
+        }
+    };
+
+    struct HiddenNamesEq final
+    {
+        using is_transparent = void;
+
+        bool operator()(std::wstring_view left, std::wstring_view right) const noexcept
+        {
+            if (left.size() != right.size())
+            {
+                return false;
+            }
+
+            for (size_t i = 0; i < left.size(); ++i)
+            {
+                const wint_t a = std::towlower(static_cast<wint_t>(left[i]));
+                const wint_t b = std::towlower(static_cast<wint_t>(right[i]));
+                if (a != b)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+    };
+
+    struct HiddenNamesFilter final
+    {
+        std::unordered_set<std::wstring, HiddenNamesHash, HiddenNamesEq> names;
+    };
+
+    std::atomic<std::shared_ptr<const HiddenNamesFilter>> _hiddenNames;
 
     IncrementalSearchState _incrementalSearch{};
     std::wstring _incrementalSearchIndicatorDisplayQuery;
@@ -759,6 +861,8 @@ private:
     void ShowBusyOverlayNow(const std::filesystem::path& folder);
 
     void EnumerateFolder();
+    void NavigateUp() noexcept;
+    [[nodiscard]] bool CanShowEmptyFolderState() const noexcept;
     void EnsureEnumerationThread();
     void EnumerationWorker(std::stop_token stopToken);
     std::unique_ptr<EnumerationPayload> ExecuteEnumeration(const std::filesystem::path& folder, uint64_t generation, std::stop_token stopToken);

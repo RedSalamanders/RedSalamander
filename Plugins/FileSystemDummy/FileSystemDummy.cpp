@@ -2824,23 +2824,23 @@ FileSystemDummy::~FileSystemDummy()
 
             _watchCv.wait(lock,
                           [&]
-                          {
-                              for (const auto& removed : removedWatches)
-                              {
-                                  if (! removed)
-                                  {
-                                      continue;
-                                  }
+            {
+                for (const auto& removed : removedWatches)
+                {
+                    if (! removed)
+                    {
+                        continue;
+                    }
 
-                                  const bool reentrant           = static_cast<const void*>(removed.get()) == g_activeDirectoryWatchCallback;
-                                  const uint32_t desiredInFlight = reentrant ? 1u : 0u;
-                                  if (removed->inFlight.load(std::memory_order_acquire) > desiredInFlight)
-                                  {
-                                      return false;
-                                  }
-                              }
-                              return true;
-                          });
+                    const bool reentrant           = static_cast<const void*>(removed.get()) == g_activeDirectoryWatchCallback;
+                    const uint32_t desiredInFlight = reentrant ? 1u : 0u;
+                    if (removed->inFlight.load(std::memory_order_acquire) > desiredInFlight)
+                    {
+                        return false;
+                    }
+                }
+                return true;
+            });
         }
     }
 

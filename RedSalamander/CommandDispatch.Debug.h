@@ -12,4 +12,3 @@
 [[nodiscard]] bool DebugDispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId) noexcept;
 
 #endif // _DEBUG
-

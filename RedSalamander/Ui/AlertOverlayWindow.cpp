@@ -165,15 +165,14 @@ void AlertOverlayWindow::OnPaint() noexcept
     const uint64_t now = GetTickCount64();
 
     _target->BeginDraw();
-    auto endDraw = wil::scope_exit(
-        [&]
+    auto endDraw = wil::scope_exit([&]
+    {
+        const HRESULT hr = _target->EndDraw();
+        if (hr == D2DERR_RECREATE_TARGET)
         {
-            const HRESULT hr = _target->EndDraw();
-            if (hr == D2DERR_RECREATE_TARGET)
-            {
-                DiscardD2DResources();
-            }
-        });
+            DiscardD2DResources();
+        }
+    });
 
     _target->Clear(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.0f));
     _overlay.Draw(_target.get(), _dwriteFactory.get(), widthDip, heightDip, now);

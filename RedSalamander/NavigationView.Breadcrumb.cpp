@@ -33,25 +33,24 @@ void NavigationView::RenderPathSection()
 
     // Allow rendering background even without path
     _d2dContext->BeginDraw();
-    auto endDraw = wil::scope_exit(
-        [&]
+    auto endDraw = wil::scope_exit([&]
+    {
+        const HRESULT hrEnd = _d2dContext->EndDraw();
+        if (FAILED(hrEnd))
         {
-            const HRESULT hrEnd = _d2dContext->EndDraw();
-            if (FAILED(hrEnd))
+            if (hrEnd == D2DERR_RECREATE_TARGET)
             {
-                if (hrEnd == D2DERR_RECREATE_TARGET)
-                {
-                    DiscardD2DResources();
-                    return;
-                }
-
-                Debug::Error(L"[NavigationView] EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+                DiscardD2DResources();
                 return;
             }
 
-            RECT dirtyRect = _sectionPathRect;
-            Present(&dirtyRect);
-        });
+            Debug::Error(L"[NavigationView] EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+            return;
+        }
+
+        RECT dirtyRect = _sectionPathRect;
+        Present(&dirtyRect);
+    });
     _d2dContext->SetTarget(_d2dTarget.get());
 
     D2D1_RECT_F section2Rect = D2D1::RectF(static_cast<float>(_sectionPathRect.left),
@@ -640,10 +639,7 @@ void NavigationView::RenderBreadcrumbs()
         if (segment.layout)
         {
             _d2dContext->DrawTextLayout(
-                D2D1::Point2F(segment.bounds.left + textInsetX, segment.bounds.top),
-                segment.layout.get(),
-                textBrush,
-                D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                D2D1::Point2F(segment.bounds.left + textInsetX, segment.bounds.top), segment.layout.get(), textBrush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
         }
     }
 

@@ -873,8 +873,8 @@ void ViewerWeb::OnKeyDown(HWND hwnd, UINT vk) noexcept
         return;
     }
 
-    const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-    const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+    const bool ctrl          = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    const bool shift         = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     const HKL keyboardLayout = GetKeyboardLayout(0);
     const UINT zoomInVk      = ZoomInVirtualKeyForLayout(keyboardLayout);
     const UINT zoomOutVk     = ZoomOutVirtualKeyForLayout(keyboardLayout);
@@ -2390,8 +2390,8 @@ void ViewerWeb::ApplyMenuTheme(HWND hwnd) noexcept
     const HKL keyboardLayout = GetKeyboardLayout(0);
     if (keyboardLayout)
     {
-        const UINT zoomInVk    = ZoomInVirtualKeyForLayout(keyboardLayout);
-        const UINT zoomOutVk   = ZoomOutVirtualKeyForLayout(keyboardLayout);
+        const UINT zoomInVk             = ZoomInVirtualKeyForLayout(keyboardLayout);
+        const UINT zoomOutVk            = ZoomOutVirtualKeyForLayout(keyboardLayout);
         const std::wstring zoomInKey    = KeyGlyphFromVirtualKey(zoomInVk, keyboardLayout);
         const std::wstring zoomOutKey   = KeyGlyphFromVirtualKey(zoomOutVk, keyboardLayout);
         const std::wstring zoomResetKey = KeyGlyphFromVirtualKey(static_cast<UINT>('0'), keyboardLayout);
@@ -2418,8 +2418,7 @@ void ViewerWeb::ApplyMenuTheme(HWND hwnd) noexcept
                         item.shortcut = std::format(L"Ctrl+{}", zoomResetKey);
                     }
                     break;
-                default:
-                    break;
+                default: break;
             }
         }
     }
@@ -2537,322 +2536,313 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
         nullptr,
         MakeComCallback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, HRESULT, ICoreWebView2Environment*>(
             [this, hwnd](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT
-            {
-                if (FAILED(result) || ! environment)
-                {
-                    _webViewInitInProgress = false;
+    {
+        if (FAILED(result) || ! environment)
+        {
+            _webViewInitInProgress = false;
 
-                    const UINT msgId = (result == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || result == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
-                                           ? IDS_VIEWERWEB_ERROR_WEBVIEW2_RUNTIME_MISSING
-                                           : IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED;
-                    ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, msgId));
-                    Release();
+            const UINT msgId = (result == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) || result == HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND))
+                                   ? IDS_VIEWERWEB_ERROR_WEBVIEW2_RUNTIME_MISSING
+                                   : IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED;
+            ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, msgId));
+            Release();
+            return S_OK;
+        }
+
+        _webViewEnvironment = environment;
+
+        const HRESULT createControllerHr = environment->CreateCoreWebView2Controller(
+            hwnd,
+            MakeComCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
+                [this, hwnd](HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT
+        {
+            _webViewInitInProgress = false;
+            auto releaseSelf       = wil::scope_exit([&] { Release(); });
+
+            if (FAILED(controllerResult) || ! controller)
+            {
+                ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
+                return S_OK;
+            }
+
+            if (! _hWnd || _hWnd.get() != hwnd)
+            {
+                controller->Close();
+                return S_OK;
+            }
+
+            _webViewController = controller;
+
+            wil::com_ptr<ICoreWebView2> webView;
+            const HRESULT webViewHr = controller->get_CoreWebView2(webView.put());
+            if (FAILED(webViewHr) || ! webView)
+            {
+                ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
+                _webViewController = nullptr;
+                return S_OK;
+            }
+
+            _webView = std::move(webView);
+
+            static_cast<void>(_webView->add_NavigationStarting(
+                MakeComCallback<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*>(
+                    [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT
+            {
+                if (! args)
+                {
                     return S_OK;
                 }
 
-                _webViewEnvironment = environment;
-
-                const HRESULT createControllerHr = environment->CreateCoreWebView2Controller(
-                    hwnd,
-                    MakeComCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
-                        [this, hwnd](HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT
-                        {
-                            _webViewInitInProgress = false;
-                            auto releaseSelf       = wil::scope_exit([&] { Release(); });
-
-                            if (FAILED(controllerResult) || ! controller)
-                            {
-                                ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
-                                return S_OK;
-                            }
-
-                            if (! _hWnd || _hWnd.get() != hwnd)
-                            {
-                                controller->Close();
-                                return S_OK;
-                            }
-
-                            _webViewController = controller;
-
-                            wil::com_ptr<ICoreWebView2> webView;
-                            const HRESULT webViewHr = controller->get_CoreWebView2(webView.put());
-                            if (FAILED(webViewHr) || ! webView)
-                            {
-                                ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
-                                _webViewController = nullptr;
-                                return S_OK;
-                            }
-
-                            _webView = std::move(webView);
-
-                            static_cast<void>(_webView->add_NavigationStarting(
-                                MakeComCallback<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*>(
-                                    [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT
-                                    {
-                                        if (! args)
-                                        {
-                                            return S_OK;
-                                        }
-
-                                        wil::unique_cotaskmem_string uri;
-                                        static_cast<void>(args->get_Uri(uri.put()));
-                                        if (! uri)
-                                        {
-                                            return S_OK;
-                                        }
-
-                                        const std::wstring_view url(uri.get());
-                                        const bool isHttp = OrdinalString::StartsWithNoCase(url, L"http://") ||
-                                                            OrdinalString::StartsWithNoCase(url, L"https://");
-                                        const bool isAbout = OrdinalString::StartsWithNoCase(url, L"about:");
-                                        const bool isData  = OrdinalString::StartsWithNoCase(url, L"data:");
-
-                                        if (_kind == ViewerWebKind::Web)
-                                        {
-                                            if (isHttp && ! _config.allowExternalNavigation)
-                                            {
-                                                static_cast<void>(args->put_Cancel(TRUE));
-                                            }
-                                            return S_OK;
-                                        }
-
-                                        // JSON/Markdown: keep viewer content stable and open external links in the system browser.
-                                        if (isHttp)
-                                        {
-                                            static_cast<void>(args->put_Cancel(TRUE));
-                                            ShellExecuteW(nullptr, L"open", uri.get(), nullptr, nullptr, SW_SHOWNORMAL);
-                                            return S_OK;
-                                        }
-
-                                        if (! isAbout && ! isData)
-                                        {
-                                            static_cast<void>(args->put_Cancel(TRUE));
-                                        }
-
-                                        return S_OK;
-                                    })
-                                    .get(),
-                                &_navStartingToken));
-
-                            static_cast<void>(_webView->add_NavigationCompleted(
-                                MakeComCallback<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*>(
-                                    [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationCompletedEventArgs* /*args*/) -> HRESULT
-                                    {
-                                        UpdateWebViewTheme();
-                                        return S_OK;
-                                    })
-                                    .get(),
-                                &_navCompletedToken));
-
-                            static_cast<void>(_webViewController->add_AcceleratorKeyPressed(
-                                MakeComCallback<ICoreWebView2AcceleratorKeyPressedEventHandler,
-                                                ICoreWebView2Controller*,
-                                                ICoreWebView2AcceleratorKeyPressedEventArgs*>(
-                                    [this](ICoreWebView2Controller* /*sender*/, ICoreWebView2AcceleratorKeyPressedEventArgs* args) -> HRESULT
-                                    {
-                                        if (! args || ! _hWnd)
-                                        {
-                                            return S_OK;
-                                        }
-
-                                        COREWEBVIEW2_KEY_EVENT_KIND kind{};
-                                        if (FAILED(args->get_KeyEventKind(&kind)))
-                                        {
-                                            return S_OK;
-                                        }
-
-                                        if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
-                                        {
-                                            return S_OK;
-                                        }
-
-                                        UINT vk = 0;
-                                        static_cast<void>(args->get_VirtualKey(&vk));
-
-                                         const bool ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-                                         const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-                                         const HKL keyboardLayout = GetKeyboardLayout(0);
-                                         const UINT zoomInVk      = ZoomInVirtualKeyForLayout(keyboardLayout);
-                                         const UINT zoomOutVk     = ZoomOutVirtualKeyForLayout(keyboardLayout);
- 
-                                         const auto handle = [&](bool handled) noexcept
-                                         {
-                                             if (handled)
-                                             {
-                                                static_cast<void>(args->put_Handled(TRUE));
-                                            }
-                                        };
-
-                                        if (vk == VK_ESCAPE)
-                                        {
-                                            _hWnd.reset();
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (vk == VK_F5)
-                                        {
-                                            static_cast<void>(OpenPath(_hWnd.get(), _currentPath, false));
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (vk == VK_F12)
-                                        {
-                                            CommandToggleDevTools();
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (vk == VK_F3)
-                                        {
-                                            shift ? CommandFindPrevious(_hWnd.get()) : CommandFindNext(_hWnd.get());
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && (vk == 'F' || vk == 'f'))
-                                        {
-                                            CommandFind(_hWnd.get());
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && (vk == 'S' || vk == 's'))
-                                        {
-                                            static_cast<void>(CommandSaveAs(_hWnd.get()));
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && (vk == 'L' || vk == 'l'))
-                                        {
-                                            CommandCopyUrl(_hWnd.get());
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && vk == VK_RETURN)
-                                        {
-                                            CommandOpenExternal(_hWnd.get());
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && (vk == VK_ADD || vk == zoomInVk || vk == '='))
-                                        {
-                                            CommandZoomIn();
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && (vk == VK_SUBTRACT || vk == zoomOutVk || vk == '-'))
-                                        {
-                                            CommandZoomOut();
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && vk == '0')
-                                        {
-                                            CommandZoomReset();
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && vk == VK_OEM_3)
-                                        {
-                                            CommandMarkdownToggleSource();
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && vk == VK_UP)
-                                        {
-                                            SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_PREVIOUS, 0);
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && vk == VK_DOWN)
-                                        {
-                                            SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_NEXT, 0);
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && vk == VK_HOME)
-                                        {
-                                            SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_FIRST, 0);
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (ctrl && vk == VK_END)
-                                        {
-                                            SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_LAST, 0);
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (_kind != ViewerWebKind::Web && vk == VK_SPACE)
-                                        {
-                                            SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_NEXT, 0);
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        if (_kind != ViewerWebKind::Web && vk == VK_BACK)
-                                        {
-                                            SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_PREVIOUS, 0);
-                                            handle(true);
-                                            return S_OK;
-                                        }
-
-                                        return S_OK;
-                                    })
-                                    .get(),
-                                &_accelToken));
-
-                            Layout(hwnd);
-                            UpdateWebViewTheme();
-
-                            if (_pendingWebContent.has_value())
-                            {
-                                const std::wstring html = std::move(_pendingWebContent.value());
-                                _pendingWebContent.reset();
-                                const HRESULT navHr = _webView->NavigateToString(html.c_str());
-                                if (FAILED(navHr))
-                                {
-                                    ShowHostAlert(
-                                        hwnd, HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-                                }
-                            }
-                            else if (_pendingPath.has_value())
-                            {
-                                const std::wstring url = std::move(_pendingPath.value());
-                                _pendingPath.reset();
-                                const HRESULT navHr = _webView->Navigate(url.c_str());
-                                if (FAILED(navHr))
-                                {
-                                    ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"Navigate failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-                                }
-                            }
-
-                            return S_OK;
-                        })
-                        .get());
-
-                if (FAILED(createControllerHr))
+                wil::unique_cotaskmem_string uri;
+                static_cast<void>(args->get_Uri(uri.put()));
+                if (! uri)
                 {
-                    _webViewInitInProgress = false;
-                    ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
-                    Release();
+                    return S_OK;
+                }
+
+                const std::wstring_view url(uri.get());
+                const bool isHttp  = OrdinalString::StartsWithNoCase(url, L"http://") || OrdinalString::StartsWithNoCase(url, L"https://");
+                const bool isAbout = OrdinalString::StartsWithNoCase(url, L"about:");
+                const bool isData  = OrdinalString::StartsWithNoCase(url, L"data:");
+
+                if (_kind == ViewerWebKind::Web)
+                {
+                    if (isHttp && ! _config.allowExternalNavigation)
+                    {
+                        static_cast<void>(args->put_Cancel(TRUE));
+                    }
+                    return S_OK;
+                }
+
+                // JSON/Markdown: keep viewer content stable and open external links in the system browser.
+                if (isHttp)
+                {
+                    static_cast<void>(args->put_Cancel(TRUE));
+                    ShellExecuteW(nullptr, L"open", uri.get(), nullptr, nullptr, SW_SHOWNORMAL);
+                    return S_OK;
+                }
+
+                if (! isAbout && ! isData)
+                {
+                    static_cast<void>(args->put_Cancel(TRUE));
                 }
 
                 return S_OK;
-            })
-            .get());
+            }).get(),
+                &_navStartingToken));
+
+            static_cast<void>(_webView->add_NavigationCompleted(
+                MakeComCallback<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*>(
+                    [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationCompletedEventArgs* /*args*/) -> HRESULT
+            {
+                UpdateWebViewTheme();
+                return S_OK;
+            }).get(),
+                &_navCompletedToken));
+
+            static_cast<void>(_webViewController->add_AcceleratorKeyPressed(
+                MakeComCallback<ICoreWebView2AcceleratorKeyPressedEventHandler, ICoreWebView2Controller*, ICoreWebView2AcceleratorKeyPressedEventArgs*>(
+                    [this](ICoreWebView2Controller* /*sender*/, ICoreWebView2AcceleratorKeyPressedEventArgs* args) -> HRESULT
+            {
+                if (! args || ! _hWnd)
+                {
+                    return S_OK;
+                }
+
+                COREWEBVIEW2_KEY_EVENT_KIND kind{};
+                if (FAILED(args->get_KeyEventKind(&kind)))
+                {
+                    return S_OK;
+                }
+
+                if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
+                {
+                    return S_OK;
+                }
+
+                UINT vk = 0;
+                static_cast<void>(args->get_VirtualKey(&vk));
+
+                const bool ctrl          = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+                const bool shift         = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+                const HKL keyboardLayout = GetKeyboardLayout(0);
+                const UINT zoomInVk      = ZoomInVirtualKeyForLayout(keyboardLayout);
+                const UINT zoomOutVk     = ZoomOutVirtualKeyForLayout(keyboardLayout);
+
+                const auto handle = [&](bool handled) noexcept
+                {
+                    if (handled)
+                    {
+                        static_cast<void>(args->put_Handled(TRUE));
+                    }
+                };
+
+                if (vk == VK_ESCAPE)
+                {
+                    _hWnd.reset();
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (vk == VK_F5)
+                {
+                    static_cast<void>(OpenPath(_hWnd.get(), _currentPath, false));
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (vk == VK_F12)
+                {
+                    CommandToggleDevTools();
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (vk == VK_F3)
+                {
+                    shift ? CommandFindPrevious(_hWnd.get()) : CommandFindNext(_hWnd.get());
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && (vk == 'F' || vk == 'f'))
+                {
+                    CommandFind(_hWnd.get());
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && (vk == 'S' || vk == 's'))
+                {
+                    static_cast<void>(CommandSaveAs(_hWnd.get()));
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && (vk == 'L' || vk == 'l'))
+                {
+                    CommandCopyUrl(_hWnd.get());
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && vk == VK_RETURN)
+                {
+                    CommandOpenExternal(_hWnd.get());
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && (vk == VK_ADD || vk == zoomInVk || vk == '='))
+                {
+                    CommandZoomIn();
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && (vk == VK_SUBTRACT || vk == zoomOutVk || vk == '-'))
+                {
+                    CommandZoomOut();
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && vk == '0')
+                {
+                    CommandZoomReset();
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && vk == VK_OEM_3)
+                {
+                    CommandMarkdownToggleSource();
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && vk == VK_UP)
+                {
+                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_PREVIOUS, 0);
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && vk == VK_DOWN)
+                {
+                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_NEXT, 0);
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && vk == VK_HOME)
+                {
+                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_FIRST, 0);
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (ctrl && vk == VK_END)
+                {
+                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_LAST, 0);
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (_kind != ViewerWebKind::Web && vk == VK_SPACE)
+                {
+                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_NEXT, 0);
+                    handle(true);
+                    return S_OK;
+                }
+
+                if (_kind != ViewerWebKind::Web && vk == VK_BACK)
+                {
+                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_PREVIOUS, 0);
+                    handle(true);
+                    return S_OK;
+                }
+
+                return S_OK;
+            }).get(),
+                &_accelToken));
+
+            Layout(hwnd);
+            UpdateWebViewTheme();
+
+            if (_pendingWebContent.has_value())
+            {
+                const std::wstring html = std::move(_pendingWebContent.value());
+                _pendingWebContent.reset();
+                const HRESULT navHr = _webView->NavigateToString(html.c_str());
+                if (FAILED(navHr))
+                {
+                    ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
+                }
+            }
+            else if (_pendingPath.has_value())
+            {
+                const std::wstring url = std::move(_pendingPath.value());
+                _pendingPath.reset();
+                const HRESULT navHr = _webView->Navigate(url.c_str());
+                if (FAILED(navHr))
+                {
+                    ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"Navigate failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
+                }
+            }
+
+            return S_OK;
+        }).get());
+
+        if (FAILED(createControllerHr))
+        {
+            _webViewInitInProgress = false;
+            ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
+            Release();
+        }
+
+        return S_OK;
+    }).get());
 
     if (FAILED(hr))
     {
@@ -3111,16 +3101,16 @@ HRESULT ViewerWeb::StartAsyncLoad(HWND hwnd, const std::wstring& path) noexcept
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    {
+        std::unique_ptr<AsyncLoadWorkItem> ctx(static_cast<AsyncLoadWorkItem*>(context));
+        if (! ctx || ! ctx->payload)
         {
-            std::unique_ptr<AsyncLoadWorkItem> ctx(static_cast<AsyncLoadWorkItem*>(context));
-            if (! ctx || ! ctx->payload)
-            {
-                return;
-            }
+            return;
+        }
 
-            static_cast<void>(ctx->moduleKeepAlive);
-            AsyncLoadProc(ctx->payload.release());
-        },
+        static_cast<void>(ctx->moduleKeepAlive);
+        AsyncLoadProc(ctx->payload.release());
+    },
         ctx.get(),
         nullptr);
 

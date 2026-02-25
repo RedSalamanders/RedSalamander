@@ -767,14 +767,13 @@ void Clear(PreferencesDialogState& state) noexcept
     }
 
     yyjson_doc* configDoc = ParseJsonToDoc(configUtf8);
-    auto freeConfigDoc    = wil::scope_exit(
-        [&]
+    auto freeConfigDoc    = wil::scope_exit([&]
+    {
+        if (configDoc)
         {
-            if (configDoc)
-            {
-                yyjson_doc_free(configDoc);
-            }
-        });
+            yyjson_doc_free(configDoc);
+        }
+    });
 
     yyjson_val* configRoot = nullptr;
     if (configDoc)

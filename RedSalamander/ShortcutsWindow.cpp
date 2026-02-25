@@ -41,35 +41,6 @@ constexpr wchar_t kSettingsAppId[]       = L"RedSalamander";
 constexpr int kGroupFunctionBar = 1;
 constexpr int kGroupFolderView  = 2;
 
-[[nodiscard]] std::wstring GetWindowTextString(HWND hwnd) noexcept
-{
-    if (! hwnd)
-    {
-        return {};
-    }
-
-    const int len = GetWindowTextLengthW(hwnd);
-    if (len <= 0)
-    {
-        return {};
-    }
-
-    std::wstring text;
-    text.resize(static_cast<size_t>(len));
-    const int copied = GetWindowTextW(hwnd, text.data(), len + 1);
-    if (copied <= 0)
-    {
-        return {};
-    }
-
-    if (static_cast<size_t>(copied) < text.size())
-    {
-        text.resize(static_cast<size_t>(copied));
-    }
-
-    return text;
-}
-
 [[nodiscard]] std::wstring_view TrimWhitespace(std::wstring_view text) noexcept
 {
     while (! text.empty() && std::iswspace(static_cast<wint_t>(text.front())) != 0)
@@ -97,11 +68,9 @@ constexpr int kGroupFolderView  = 2;
         return false;
     }
 
-    const auto it = std::search(haystack.begin(),
-                                haystack.end(),
-                                needle.begin(),
-                                needle.end(),
-                                [](wchar_t a, wchar_t b) noexcept { return std::towupper(static_cast<wint_t>(a)) == std::towupper(static_cast<wint_t>(b)); });
+    const auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(), [](wchar_t a, wchar_t b) noexcept {
+        return std::towupper(static_cast<wint_t>(a)) == std::towupper(static_cast<wint_t>(b));
+    });
 
     return it != haystack.end();
 }
@@ -118,11 +87,9 @@ constexpr int kGroupFolderView  = 2;
     while (startIndex + needle.size() <= text.size())
     {
         const auto it =
-            std::search(text.begin() + static_cast<ptrdiff_t>(startIndex),
-                        text.end(),
-                        needle.begin(),
-                        needle.end(),
-                        [](wchar_t a, wchar_t b) noexcept { return std::towupper(static_cast<wint_t>(a)) == std::towupper(static_cast<wint_t>(b)); });
+            std::search(text.begin() + static_cast<ptrdiff_t>(startIndex), text.end(), needle.begin(), needle.end(), [](wchar_t a, wchar_t b) noexcept {
+            return std::towupper(static_cast<wint_t>(a)) == std::towupper(static_cast<wint_t>(b));
+        });
 
         if (it == text.end())
         {
@@ -1260,7 +1227,7 @@ void ShortcutsWindow::OnSearchChanged() noexcept
         return;
     }
 
-    const std::wstring text         = GetWindowTextString(_searchEdit);
+    const std::wstring text         = Win32Text::GetWindowTextString(_searchEdit);
     const std::wstring_view trimmed = TrimWhitespace(text);
 
     std::wstring newQuery(trimmed);

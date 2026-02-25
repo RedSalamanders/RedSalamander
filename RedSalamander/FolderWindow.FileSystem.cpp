@@ -1,9 +1,9 @@
+#include "ChangeCase.h"
 #include "ConnectionManagerDialog.h"
 #include "ConnectionSecrets.h"
-#include "ChangeCase.h"
 #include "FolderWindowInternal.h"
-#include "HostServices.h"
 #include "Helpers.h"
+#include "HostServices.h"
 #include "MaskSyntax.h"
 #include "NavigationLocation.h"
 
@@ -11,8 +11,19 @@
 #include "ThemedControls.h"
 #include "ThemedInputFrames.h"
 
+#include <cstring>
+#include <limits>
+#include <map>
+#include <unordered_set>
+
 #include <commctrl.h>
 #include <shellapi.h>
+
+#pragma warning(push)
+// WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
+#pragma warning(disable : 4625 4626 5026 5027)
+#include <wil/resource.h>
+#pragma warning(pop)
 
 namespace
 {
@@ -24,14 +35,66 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     return EqualsNoCase(pluginShortId, L"file");
 }
 
- struct ChangeCaseDialogState
- {
-    ChangeCaseDialogState()                                         = default;
-    ChangeCaseDialogState(const ChangeCaseDialogState&)             = delete;
-    ChangeCaseDialogState& operator=(const ChangeCaseDialogState&)  = delete;
-    ChangeCaseDialogState(ChangeCaseDialogState&&)                  = delete;
-    ChangeCaseDialogState& operator=(ChangeCaseDialogState&&)       = delete;
-    ~ChangeCaseDialogState()                                        = default;
+[[nodiscard]] bool SetClipboardUnicodeText(HWND ownerWindow, std::wstring_view text) noexcept
+{
+    if (! ownerWindow)
+    {
+        return false;
+    }
+
+    if (text.size() >= (std::numeric_limits<size_t>::max() / sizeof(wchar_t)))
+    {
+        return false;
+    }
+
+    const SIZE_T bytes = (text.size() + 1u) * sizeof(wchar_t);
+    wil::unique_hglobal memory(GlobalAlloc(GMEM_MOVEABLE, bytes));
+    if (! memory)
+    {
+        return false;
+    }
+
+    auto* out = static_cast<wchar_t*>(GlobalLock(memory.get()));
+    if (! out)
+    {
+        return false;
+    }
+
+    if (! text.empty())
+    {
+        memcpy(out, text.data(), text.size() * sizeof(wchar_t));
+    }
+    out[text.size()] = L'\0';
+    GlobalUnlock(memory.get());
+
+    if (OpenClipboard(ownerWindow) == 0)
+    {
+        return false;
+    }
+    const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
+
+    if (EmptyClipboard() == 0)
+    {
+        return false;
+    }
+
+    if (SetClipboardData(CF_UNICODETEXT, memory.get()) == nullptr)
+    {
+        return false;
+    }
+
+    static_cast<void>(memory.release());
+    return true;
+}
+
+struct ChangeCaseDialogState
+{
+    ChangeCaseDialogState()                                        = default;
+    ChangeCaseDialogState(const ChangeCaseDialogState&)            = delete;
+    ChangeCaseDialogState& operator=(const ChangeCaseDialogState&) = delete;
+    ChangeCaseDialogState(ChangeCaseDialogState&&)                 = delete;
+    ChangeCaseDialogState& operator=(ChangeCaseDialogState&&)      = delete;
+    ~ChangeCaseDialogState()                                       = default;
 
     struct ToggleCard final
     {
@@ -60,10 +123,10 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     wil::unique_hbrush backgroundBrush;
     wil::unique_hbrush cardBrush;
     std::vector<RECT> cards;
-    bool useTwoColumns               = false;
-    int twoColumnSeparatorX          = -1;
-    int twoColumnSeparatorYTop       = 0;
-    int twoColumnSeparatorYBottom    = 0;
+    bool useTwoColumns            = false;
+    int twoColumnSeparatorX       = -1;
+    int twoColumnSeparatorYTop    = 0;
+    int twoColumnSeparatorYBottom = 0;
     wil::unique_hfont boldFont;
     wil::unique_hfont italicFont;
     UINT fontsDpi = 0;
@@ -74,13 +137,13 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     ChangeCase::Options options{};
     bool accepted = false;
 
-     Ui ui{};
- };
+    Ui ui{};
+};
 
- void CenterWindowOnOwner(HWND window, HWND owner) noexcept;
+void CenterWindowOnOwner(HWND window, HWND owner) noexcept;
 
- [[nodiscard]] int MeasureStaticTextHeight(HWND referenceWindow, HFONT font, int width, std::wstring_view text) noexcept
- {
+[[nodiscard]] int MeasureStaticTextHeight(HWND referenceWindow, HFONT font, int width, std::wstring_view text) noexcept
+{
     if (! referenceWindow || ! font || width <= 0 || text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
     {
         return 0;
@@ -157,9 +220,7 @@ LRESULT CALLBACK ChangeCaseToggleCheckSubclassProc(HWND hwnd, UINT msg, WPARAM w
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, (wp == BST_CHECKED) ? 1 : 0);
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
-        case WM_NCDESTROY:
-            RemoveWindowSubclass(hwnd, ChangeCaseToggleCheckSubclassProc, subclassId);
-            break;
+        case WM_NCDESTROY: RemoveWindowSubclass(hwnd, ChangeCaseToggleCheckSubclassProc, subclassId); break;
         default: break;
     }
 
@@ -179,44 +240,43 @@ void ApplyChangeCaseDialogTheme(HWND dlg, const AppTheme& theme) noexcept
     SetWindowTheme(dlg, themeName, nullptr);
     SendMessageW(dlg, WM_THEMECHANGED, 0, 0);
 
-    EnumChildWindows(
-        dlg,
-        [](HWND child, LPARAM lParam) noexcept -> BOOL
+    EnumChildWindows(dlg,
+                     [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        const wchar_t* themeName = reinterpret_cast<const wchar_t*>(lParam);
+        if (! child)
         {
-            const wchar_t* themeName = reinterpret_cast<const wchar_t*>(lParam);
-            if (! child)
-            {
-                return TRUE;
-            }
+            return TRUE;
+        }
 
-            const wchar_t* appliedTheme = themeName ? themeName : L"";
-            if (themeName)
+        const wchar_t* appliedTheme = themeName ? themeName : L"";
+        if (themeName)
+        {
+            wchar_t className[32]{};
+            const int classLen = GetClassNameW(child, className, static_cast<int>(_countof(className)));
+            if (classLen > 0)
             {
-                wchar_t className[32]{};
-                const int classLen = GetClassNameW(child, className, static_cast<int>(_countof(className)));
-                if (classLen > 0)
+                if (_wcsicmp(className, L"Static") == 0)
                 {
-                    if (_wcsicmp(className, L"Static") == 0)
+                    appliedTheme = L"";
+                }
+                else if (_wcsicmp(className, L"Button") == 0)
+                {
+                    const LONG_PTR style = GetWindowLongPtrW(child, GWL_STYLE);
+                    const LONG_PTR type  = style & BS_TYPEMASK;
+                    if (type == BS_GROUPBOX || type == BS_PUSHBUTTON || type == BS_DEFPUSHBUTTON)
                     {
                         appliedTheme = L"";
                     }
-                    else if (_wcsicmp(className, L"Button") == 0)
-                    {
-                        const LONG_PTR style = GetWindowLongPtrW(child, GWL_STYLE);
-                        const LONG_PTR type  = style & BS_TYPEMASK;
-                        if (type == BS_GROUPBOX || type == BS_PUSHBUTTON || type == BS_DEFPUSHBUTTON)
-                        {
-                            appliedTheme = L"";
-                        }
-                    }
                 }
             }
+        }
 
-            SetWindowTheme(child, appliedTheme, nullptr);
-            SendMessageW(child, WM_THEMECHANGED, 0, 0);
-            return TRUE;
-        },
-        reinterpret_cast<LPARAM>(themeName));
+        SetWindowTheme(child, appliedTheme, nullptr);
+        SendMessageW(child, WM_THEMECHANGED, 0, 0);
+        return TRUE;
+    },
+                     reinterpret_cast<LPARAM>(themeName));
 
     RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
 }
@@ -234,16 +294,15 @@ void EnsureChangeCaseDialogControlsCreated(HWND dlg, ChangeCaseDialogState& stat
     constexpr DWORD baseStaticStyle = static_cast<DWORD>(WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX);
     constexpr DWORD wrapStaticStyle = static_cast<DWORD>(WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL);
 
-    const DWORD toggleStyle =
-        static_cast<DWORD>(WS_CHILD | WS_VISIBLE | WS_TABSTOP) | static_cast<DWORD>(highContrast ? BS_AUTOCHECKBOX : 0);
+    const DWORD toggleStyle = static_cast<DWORD>(WS_CHILD | WS_VISIBLE | WS_TABSTOP) | static_cast<DWORD>(highContrast ? BS_AUTOCHECKBOX : 0);
 
     const auto makeStatic = [&](DWORD style) noexcept -> HWND
     { return CreateWindowExW(0, L"Static", L"", style, 0, 0, 10, 10, dlg, nullptr, instance, nullptr); };
 
     const auto makeToggle = [&](int id) noexcept -> HWND
     {
-        const HWND toggle = CreateWindowExW(
-            0, L"Button", L"", toggleStyle, 0, 0, 10, 10, dlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), instance, nullptr);
+        const HWND toggle =
+            CreateWindowExW(0, L"Button", L"", toggleStyle, 0, 0, 10, 10, dlg, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), instance, nullptr);
         if (toggle && ! highContrast)
         {
             ThemedControls::EnableOwnerDrawButton(dlg, id);
@@ -256,27 +315,27 @@ void EnsureChangeCaseDialogControlsCreated(HWND dlg, ChangeCaseDialogState& stat
     state.ui.includeSubdirs.description = makeStatic(wrapStaticStyle);
     state.ui.includeSubdirs.toggle      = makeToggle(IDC_CHANGE_CASE_INCLUDE_SUBDIRS);
 
-    state.ui.headerChangeCaseTo  = makeStatic(baseStaticStyle);
-    state.ui.lower.title         = makeStatic(baseStaticStyle);
-    state.ui.lower.description   = makeStatic(wrapStaticStyle);
-    state.ui.lower.toggle        = makeToggle(IDC_CHANGE_CASE_LOWER);
-    state.ui.upper.title         = makeStatic(baseStaticStyle);
-    state.ui.upper.description   = makeStatic(wrapStaticStyle);
-    state.ui.upper.toggle        = makeToggle(IDC_CHANGE_CASE_UPPER);
+    state.ui.headerChangeCaseTo         = makeStatic(baseStaticStyle);
+    state.ui.lower.title                = makeStatic(baseStaticStyle);
+    state.ui.lower.description          = makeStatic(wrapStaticStyle);
+    state.ui.lower.toggle               = makeToggle(IDC_CHANGE_CASE_LOWER);
+    state.ui.upper.title                = makeStatic(baseStaticStyle);
+    state.ui.upper.description          = makeStatic(wrapStaticStyle);
+    state.ui.upper.toggle               = makeToggle(IDC_CHANGE_CASE_UPPER);
     state.ui.partiallyMixed.title       = makeStatic(baseStaticStyle);
     state.ui.partiallyMixed.description = makeStatic(wrapStaticStyle);
     state.ui.partiallyMixed.toggle      = makeToggle(IDC_CHANGE_CASE_PARTIALLY_MIXED);
-    state.ui.mixed.title         = makeStatic(baseStaticStyle);
-    state.ui.mixed.description   = makeStatic(wrapStaticStyle);
-    state.ui.mixed.toggle        = makeToggle(IDC_CHANGE_CASE_MIXED);
+    state.ui.mixed.title                = makeStatic(baseStaticStyle);
+    state.ui.mixed.description          = makeStatic(wrapStaticStyle);
+    state.ui.mixed.toggle               = makeToggle(IDC_CHANGE_CASE_MIXED);
 
-    state.ui.headerChange        = makeStatic(baseStaticStyle);
-    state.ui.whole.title         = makeStatic(baseStaticStyle);
-    state.ui.whole.description   = makeStatic(wrapStaticStyle);
-    state.ui.whole.toggle        = makeToggle(IDC_CHANGE_CASE_WHOLE);
-    state.ui.onlyName.title      = makeStatic(baseStaticStyle);
-    state.ui.onlyName.description = makeStatic(wrapStaticStyle);
-    state.ui.onlyName.toggle     = makeToggle(IDC_CHANGE_CASE_ONLY_NAME);
+    state.ui.headerChange              = makeStatic(baseStaticStyle);
+    state.ui.whole.title               = makeStatic(baseStaticStyle);
+    state.ui.whole.description         = makeStatic(wrapStaticStyle);
+    state.ui.whole.toggle              = makeToggle(IDC_CHANGE_CASE_WHOLE);
+    state.ui.onlyName.title            = makeStatic(baseStaticStyle);
+    state.ui.onlyName.description      = makeStatic(wrapStaticStyle);
+    state.ui.onlyName.toggle           = makeToggle(IDC_CHANGE_CASE_ONLY_NAME);
     state.ui.onlyExtension.title       = makeStatic(baseStaticStyle);
     state.ui.onlyExtension.description = makeStatic(wrapStaticStyle);
     state.ui.onlyExtension.toggle      = makeToggle(IDC_CHANGE_CASE_ONLY_EXTENSION);
@@ -351,8 +410,8 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
     }
 }
 
- void LayoutChangeCaseDialogControls(HWND dlg, ChangeCaseDialogState& state) noexcept
- {
+void LayoutChangeCaseDialogControls(HWND dlg, ChangeCaseDialogState& state) noexcept
+{
     EnsureChangeCaseDialogControlsCreated(dlg, state);
 
     if (! dlg || ! state.ui.headerChangeCaseTo)
@@ -405,16 +464,13 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
         {
             return {};
         }
-        std::wstring text(static_cast<size_t>(len), L'\0');
+        std::wstring text(static_cast<size_t>(len) + 1u, L'\0');
         const int copied = GetWindowTextW(hwnd, text.data(), len + 1);
         if (copied <= 0)
         {
             return {};
         }
-        if (static_cast<size_t>(copied) < text.size())
-        {
-            text.resize(static_cast<size_t>(copied));
-        }
+        text.resize(static_cast<size_t>(copied));
         return text;
     };
 
@@ -431,8 +487,8 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
     const HWND okBtn     = GetDlgItem(dlg, IDOK);
     const HWND cancelBtn = GetDlgItem(dlg, IDCANCEL);
 
-    const int okW     = measureButtonWidth(okBtn);
-    const int cancelW = measureButtonWidth(cancelBtn);
+    const int okW      = measureButtonWidth(okBtn);
+    const int cancelW  = measureButtonWidth(cancelBtn);
     const int buttonsY = std::max(0, dlgH - margin - rowHeight);
 
     const UINT flags = SWP_NOZORDER | SWP_NOACTIVATE;
@@ -465,12 +521,11 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
     const int stateTextW      = std::max(onWidth, offWidth);
     const int measuredToggleW = std::max(minToggleWidth, (2 * togglePaddingX) + stateTextW + toggleGapX + toggleTrackW);
 
-    const auto computeToggleWidth = [&](int availableW) noexcept -> int
-    { return std::min(std::max(0, availableW - 2 * cardPaddingX), measuredToggleW); };
+    const auto computeToggleWidth = [&](int availableW) noexcept -> int { return std::min(std::max(0, availableW - 2 * cardPaddingX), measuredToggleW); };
 
-     const int columnSeparatorAreaW = ThemedControls::ScaleDip(dpi, 28);
-     const int minLeftColumnW       = ThemedControls::ScaleDip(dpi, 320);
-     const int minRightColumnW      = ThemedControls::ScaleDip(dpi, 240);
+    const int columnSeparatorAreaW = ThemedControls::ScaleDip(dpi, 28);
+    const int minLeftColumnW       = ThemedControls::ScaleDip(dpi, 320);
+    const int minRightColumnW      = ThemedControls::ScaleDip(dpi, 240);
 
     state.cards.clear();
     state.useTwoColumns             = false;
@@ -539,13 +594,8 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
         {
             SetWindowTextW(card.description, descText.data());
             ShowWindow(card.description, SW_SHOW);
-            SetWindowPos(card.description,
-                         nullptr,
-                         cardRc.left + cardPaddingX,
-                         cardRc.top + cardPaddingY + titleHeight + cardGapY,
-                         textW,
-                         std::max(0, descH),
-                         flags);
+            SetWindowPos(
+                card.description, nullptr, cardRc.left + cardPaddingX, cardRc.top + cardPaddingY + titleHeight + cardGapY, textW, std::max(0, descH), flags);
             SendMessageW(card.description, WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
         }
         else
@@ -555,13 +605,7 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
 
         if (card.toggle)
         {
-            SetWindowPos(card.toggle,
-                         nullptr,
-                         cardRc.right - cardPaddingX - toggleW,
-                         cardRc.top + (cardH - rowHeight) / 2,
-                         toggleW,
-                         rowHeight,
-                         flags);
+            SetWindowPos(card.toggle, nullptr, cardRc.right - cardPaddingX - toggleW, cardRc.top + (cardH - rowHeight) / 2, toggleW, rowHeight, flags);
             SendMessageW(card.toggle, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
         }
 
@@ -572,27 +616,20 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
 
     const int toggleWFull = computeToggleWidth(contentW);
 
-    layoutToggleCardAt(state.ui.includeSubdirs,
-                       L"Include subdirectories",
-                       L"Apply to selected folders recursively.",
-                       true,
-                       contentX,
-                       contentW,
-                       toggleWFull,
-                       true,
-                       y);
+    layoutToggleCardAt(
+        state.ui.includeSubdirs, L"Include subdirectories", L"Apply to selected folders recursively.", true, contentX, contentW, toggleWFull, true, y);
 
     y += sectionSpacing;
 
-     const bool useTwoColumnsLayout = contentW >= (minLeftColumnW + minRightColumnW + columnSeparatorAreaW);
+    const bool useTwoColumnsLayout = contentW >= (minLeftColumnW + minRightColumnW + columnSeparatorAreaW);
 
-     if (useTwoColumnsLayout)
-     {
-         const int availableW = std::max(0, contentW - columnSeparatorAreaW);
-         const int leftW      = std::clamp(availableW / 2, minLeftColumnW, availableW - minRightColumnW);
-         const int rightW     = std::max(0, availableW - leftW);
-         const int leftX  = contentX;
-         const int rightX = contentX + leftW + columnSeparatorAreaW;
+    if (useTwoColumnsLayout)
+    {
+        const int availableW = std::max(0, contentW - columnSeparatorAreaW);
+        const int leftW      = std::clamp(availableW / 2, minLeftColumnW, availableW - minRightColumnW);
+        const int rightW     = std::max(0, availableW - leftW);
+        const int leftX      = contentX;
+        const int rightX     = contentX + leftW + columnSeparatorAreaW;
 
         const int toggleWLeft  = computeToggleWidth(leftW);
         const int toggleWRight = computeToggleWidth(rightW);
@@ -647,110 +684,110 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
         InvalidateRect(state.ui.includeSubdirs.toggle, nullptr, TRUE);
     }
 
-     InvalidateRect(dlg, nullptr, TRUE);
- }
+    InvalidateRect(dlg, nullptr, TRUE);
+}
 
- void EnsureChangeCaseDialogAllOptionsVisible(HWND dlg, ChangeCaseDialogState& state, bool allowShrink) noexcept
- {
-     if (! dlg || state.cards.empty())
-     {
-         return;
-     }
- 
-     const HWND okBtn     = GetDlgItem(dlg, IDOK);
-     const HWND cancelBtn = GetDlgItem(dlg, IDCANCEL);
-     if (! okBtn && ! cancelBtn)
-     {
-         return;
-     }
- 
-     const auto mapWindowTopToClient = [&](HWND window) noexcept -> std::optional<int>
-     {
-         if (! window)
-         {
-             return std::nullopt;
-         }
- 
-         RECT rc{};
-         if (GetWindowRect(window, &rc) == 0)
-         {
-             return std::nullopt;
-         }
- 
-         MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&rc), 2);
-         return static_cast<int>(rc.top);
-     };
- 
-     int buttonsTop = std::numeric_limits<int>::max();
-     if (const auto okTop = mapWindowTopToClient(okBtn); okTop.has_value())
-     {
-         buttonsTop = std::min(buttonsTop, okTop.value());
-     }
-     if (const auto cancelTop = mapWindowTopToClient(cancelBtn); cancelTop.has_value())
-     {
-         buttonsTop = std::min(buttonsTop, cancelTop.value());
-     }
-     if (buttonsTop == std::numeric_limits<int>::max())
-     {
-         return;
-     }
- 
-     int contentBottom = 0;
-     for (const RECT& card : state.cards)
-     {
-         contentBottom = std::max(contentBottom, static_cast<int>(card.bottom));
-     }
- 
-     const UINT dpi  = GetDpiForWindow(dlg);
-     const int gapY  = ThemedControls::ScaleDip(dpi, 12);
-     const int desiredBottom = contentBottom + gapY;
-     const int delta = desiredBottom - buttonsTop;
-     if (delta == 0 || (! allowShrink && delta < 0))
-     {
-         return;
-     }
- 
-     RECT windowRc{};
-     RECT clientRc{};
-     if (! GetWindowRect(dlg, &windowRc) || ! GetClientRect(dlg, &clientRc))
-     {
-         return;
-     }
- 
-     const int windowW = std::max(1l, windowRc.right - windowRc.left);
-     const int windowH = std::max(1l, windowRc.bottom - windowRc.top);
- 
-     int newWindowH       = windowH + delta;
- 
-     if (delta > 0)
-     {
-         HMONITOR monitor = MonitorFromWindow(dlg, MONITOR_DEFAULTTONEAREST);
-         MONITORINFO mi{};
-         mi.cbSize = sizeof(mi);
-         if (monitor && GetMonitorInfoW(monitor, &mi))
-         {
-             const int workH = static_cast<int>(mi.rcWork.bottom - mi.rcWork.top);
-             newWindowH      = std::min(newWindowH, workH);
-         }
-     }
+void EnsureChangeCaseDialogAllOptionsVisible(HWND dlg, ChangeCaseDialogState& state, bool allowShrink) noexcept
+{
+    if (! dlg || state.cards.empty())
+    {
+        return;
+    }
 
-     newWindowH = std::max(1, newWindowH);
- 
-     if (newWindowH == windowH)
-     {
-         return;
-     }
- 
-     SetWindowPos(dlg, nullptr, 0, 0, windowW, newWindowH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
- 
-     if (HWND owner = GetParent(dlg))
-     {
-         CenterWindowOnOwner(dlg, owner);
-     }
- }
- 
- INT_PTR OnChangeCaseDialogInit(HWND dlg, ChangeCaseDialogState* state) noexcept
- {
+    const HWND okBtn     = GetDlgItem(dlg, IDOK);
+    const HWND cancelBtn = GetDlgItem(dlg, IDCANCEL);
+    if (! okBtn && ! cancelBtn)
+    {
+        return;
+    }
+
+    const auto mapWindowTopToClient = [&](HWND window) noexcept -> std::optional<int>
+    {
+        if (! window)
+        {
+            return std::nullopt;
+        }
+
+        RECT rc{};
+        if (GetWindowRect(window, &rc) == 0)
+        {
+            return std::nullopt;
+        }
+
+        MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&rc), 2);
+        return static_cast<int>(rc.top);
+    };
+
+    int buttonsTop = std::numeric_limits<int>::max();
+    if (const auto okTop = mapWindowTopToClient(okBtn); okTop.has_value())
+    {
+        buttonsTop = std::min(buttonsTop, okTop.value());
+    }
+    if (const auto cancelTop = mapWindowTopToClient(cancelBtn); cancelTop.has_value())
+    {
+        buttonsTop = std::min(buttonsTop, cancelTop.value());
+    }
+    if (buttonsTop == std::numeric_limits<int>::max())
+    {
+        return;
+    }
+
+    int contentBottom = 0;
+    for (const RECT& card : state.cards)
+    {
+        contentBottom = std::max(contentBottom, static_cast<int>(card.bottom));
+    }
+
+    const UINT dpi          = GetDpiForWindow(dlg);
+    const int gapY          = ThemedControls::ScaleDip(dpi, 12);
+    const int desiredBottom = contentBottom + gapY;
+    const int delta         = desiredBottom - buttonsTop;
+    if (delta == 0 || (! allowShrink && delta < 0))
+    {
+        return;
+    }
+
+    RECT windowRc{};
+    RECT clientRc{};
+    if (! GetWindowRect(dlg, &windowRc) || ! GetClientRect(dlg, &clientRc))
+    {
+        return;
+    }
+
+    const int windowW = std::max(1l, windowRc.right - windowRc.left);
+    const int windowH = std::max(1l, windowRc.bottom - windowRc.top);
+
+    int newWindowH = windowH + delta;
+
+    if (delta > 0)
+    {
+        HMONITOR monitor = MonitorFromWindow(dlg, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi{};
+        mi.cbSize = sizeof(mi);
+        if (monitor && GetMonitorInfoW(monitor, &mi))
+        {
+            const int workH = static_cast<int>(mi.rcWork.bottom - mi.rcWork.top);
+            newWindowH      = std::min(newWindowH, workH);
+        }
+    }
+
+    newWindowH = std::max(1, newWindowH);
+
+    if (newWindowH == windowH)
+    {
+        return;
+    }
+
+    SetWindowPos(dlg, nullptr, 0, 0, windowW, newWindowH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+
+    if (HWND owner = GetParent(dlg))
+    {
+        CenterWindowOnOwner(dlg, owner);
+    }
+}
+
+INT_PTR OnChangeCaseDialogInit(HWND dlg, ChangeCaseDialogState* state) noexcept
+{
     if (! dlg || ! state)
     {
         return FALSE;
@@ -778,17 +815,17 @@ void PaintChangeCaseDialogBackgroundAndCards(HDC hdc, HWND dlg, const ChangeCase
     CheckRadioButton(dlg, IDC_CHANGE_CASE_LOWER, IDC_CHANGE_CASE_MIXED, IDC_CHANGE_CASE_LOWER);
     CheckRadioButton(dlg, IDC_CHANGE_CASE_WHOLE, IDC_CHANGE_CASE_ONLY_EXTENSION, IDC_CHANGE_CASE_WHOLE);
 
-     if (HWND include = GetDlgItem(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS))
-     {
-         EnableWindow(include, state->allowSubdirs ? TRUE : FALSE);
-         CheckDlgButton(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS, BST_UNCHECKED);
-     }
+    if (HWND include = GetDlgItem(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS))
+    {
+        EnableWindow(include, state->allowSubdirs ? TRUE : FALSE);
+        CheckDlgButton(dlg, IDC_CHANGE_CASE_INCLUDE_SUBDIRS, BST_UNCHECKED);
+    }
 
-     LayoutChangeCaseDialogControls(dlg, *state);
-     EnsureChangeCaseDialogAllOptionsVisible(dlg, *state, true);
+    LayoutChangeCaseDialogControls(dlg, *state);
+    EnsureChangeCaseDialogAllOptionsVisible(dlg, *state, true);
 
-     return TRUE;
- }
+    return TRUE;
+}
 
 INT_PTR OnChangeCaseDialogDpiChanged(HWND dlg, ChangeCaseDialogState* state, UINT dpi, const RECT* suggested) noexcept
 {
@@ -834,7 +871,7 @@ INT_PTR OnChangeCaseDialogCtlColorStatic(ChangeCaseDialogState* state, HDC hdc, 
         return FALSE;
     }
 
-    const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
+    const bool enabled       = ! control || IsWindowEnabled(control) != FALSE;
     const COLORREF textColor = enabled ? state->theme.menu.text : state->theme.menu.disabledText;
 
     COLORREF background = state->theme.windowBackground;
@@ -887,7 +924,7 @@ INT_PTR OnChangeCaseDialogCtlColorButton(ChangeCaseDialogState* state, HDC hdc, 
         return FALSE;
     }
 
-    const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
+    const bool enabled       = ! control || IsWindowEnabled(control) != FALSE;
     const COLORREF textColor = enabled ? state->theme.menu.text : state->theme.menu.disabledText;
 
     COLORREF background = state->theme.windowBackground;
@@ -983,9 +1020,7 @@ INT_PTR OnChangeCaseDialogCommand(HWND dlg, ChangeCaseDialogState* state, WORD c
             EndDialog(dlg, IDOK);
             return TRUE;
         }
-        case IDCANCEL:
-            EndDialog(dlg, IDCANCEL);
-            return TRUE;
+        case IDCANCEL: EndDialog(dlg, IDCANCEL); return TRUE;
     }
 
     return FALSE;
@@ -1005,8 +1040,7 @@ INT_PTR CALLBACK ChangeCaseDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 EnsureChangeCaseDialogAllOptionsVisible(dlg, *state, false);
             }
             return TRUE;
-        case WM_DPICHANGED:
-            return OnChangeCaseDialogDpiChanged(dlg, state, static_cast<UINT>(HIWORD(wp)), reinterpret_cast<const RECT*>(lp));
+        case WM_DPICHANGED: return OnChangeCaseDialogDpiChanged(dlg, state, static_cast<UINT>(HIWORD(wp)), reinterpret_cast<const RECT*>(lp));
         case WM_ERASEBKGND:
             // Avoid flicker; paint background and cards in WM_PAINT.
             return TRUE;
@@ -1072,7 +1106,7 @@ INT_PTR CALLBACK ChangeCaseDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 break;
             }
 
-            const UINT id = dis->CtlID;
+            const UINT id       = dis->CtlID;
             const bool isToggle = id == IDC_CHANGE_CASE_INCLUDE_SUBDIRS || id == IDC_CHANGE_CASE_LOWER || id == IDC_CHANGE_CASE_UPPER ||
                                   id == IDC_CHANGE_CASE_PARTIALLY_MIXED || id == IDC_CHANGE_CASE_MIXED || id == IDC_CHANGE_CASE_WHOLE ||
                                   id == IDC_CHANGE_CASE_ONLY_NAME || id == IDC_CHANGE_CASE_ONLY_EXTENSION;
@@ -1101,14 +1135,10 @@ INT_PTR CALLBACK ChangeCaseDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                     case IDC_CHANGE_CASE_LOWER:
                     case IDC_CHANGE_CASE_UPPER:
                     case IDC_CHANGE_CASE_PARTIALLY_MIXED:
-                    case IDC_CHANGE_CASE_MIXED:
-                        CheckRadioButton(dlg, IDC_CHANGE_CASE_LOWER, IDC_CHANGE_CASE_MIXED, id);
-                        return TRUE;
+                    case IDC_CHANGE_CASE_MIXED: CheckRadioButton(dlg, IDC_CHANGE_CASE_LOWER, IDC_CHANGE_CASE_MIXED, id); return TRUE;
                     case IDC_CHANGE_CASE_WHOLE:
                     case IDC_CHANGE_CASE_ONLY_NAME:
-                    case IDC_CHANGE_CASE_ONLY_EXTENSION:
-                        CheckRadioButton(dlg, IDC_CHANGE_CASE_WHOLE, IDC_CHANGE_CASE_ONLY_EXTENSION, id);
-                        return TRUE;
+                    case IDC_CHANGE_CASE_ONLY_EXTENSION: CheckRadioButton(dlg, IDC_CHANGE_CASE_WHOLE, IDC_CHANGE_CASE_ONLY_EXTENSION, id); return TRUE;
                     case IDC_CHANGE_CASE_INCLUDE_SUBDIRS:
                     {
                         const LONG_PTR style = GetWindowLongPtrW(hwndCtl, GWL_STYLE);
@@ -1145,9 +1175,9 @@ void NormalizeFolderHistory(std::vector<std::filesystem::path>& history, size_t 
         }
 
         const std::wstring_view entryText = entry.native();
-        const bool exists                 = std::find_if(normalized.begin(),
-                                         normalized.end(),
-                                         [&](const std::filesystem::path& existing) { return OrdinalString::EqualsNoCasePath(existing, entryText); }) != normalized.end();
+        const bool exists                 = std::find_if(normalized.begin(), normalized.end(), [&](const std::filesystem::path& existing) {
+            return OrdinalString::EqualsNoCasePath(existing, entryText);
+        }) != normalized.end();
         if (exists)
         {
             continue;
@@ -1171,8 +1201,8 @@ void AddToFolderHistory(std::vector<std::filesystem::path>& history, size_t maxI
     }
 
     const std::wstring_view entryText = entry.native();
-    auto it =
-        std::find_if(history.begin(), history.end(), [&](const std::filesystem::path& existing) { return OrdinalString::EqualsNoCasePath(existing, entryText); });
+    auto it                           = std::find_if(
+        history.begin(), history.end(), [&](const std::filesystem::path& existing) { return OrdinalString::EqualsNoCasePath(existing, entryText); });
 
     if (it != history.end())
     {
@@ -1194,7 +1224,8 @@ void AddToFolderHistory(std::vector<std::filesystem::path>& history, size_t maxI
     }
 }
 
-[[nodiscard]] FolderView::NameFilterState GetFolderHistoryFilterState(const Common::Settings::FoldersSettings* folders, const std::filesystem::path& displayPath)
+[[nodiscard]] FolderView::NameFilterState GetFolderHistoryFilterState(const Common::Settings::FoldersSettings* folders,
+                                                                      const std::filesystem::path& displayPath)
 {
     FolderView::NameFilterState result{};
 
@@ -1203,10 +1234,10 @@ void AddToFolderHistory(std::vector<std::filesystem::path>& history, size_t maxI
         return result;
     }
 
-    const auto it = std::find_if(folders->historyFilters.begin(),
-                                 folders->historyFilters.end(),
-                                 [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
-                                 { return ! state.path.empty() && OrdinalString::EqualsNoCasePath(state.path, displayPath); });
+    const auto it =
+        std::find_if(folders->historyFilters.begin(), folders->historyFilters.end(), [&](const Common::Settings::FolderHistoryFilterState& state) noexcept {
+        return ! state.path.empty() && OrdinalString::EqualsNoCasePath(state.path, displayPath);
+    });
     if (it == folders->historyFilters.end())
     {
         return result;
@@ -1218,18 +1249,17 @@ void AddToFolderHistory(std::vector<std::filesystem::path>& history, size_t maxI
 }
 
 void SetFolderHistoryFilterState(Common::Settings::FoldersSettings& folders,
-                                const std::filesystem::path& displayPath,
-                                const FolderView::NameFilterState& filter)
+                                 const std::filesystem::path& displayPath,
+                                 const FolderView::NameFilterState& filter)
 {
     if (displayPath.empty())
     {
         return;
     }
 
-    auto it = std::find_if(folders.historyFilters.begin(),
-                           folders.historyFilters.end(),
-                           [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
-                           { return ! state.path.empty() && OrdinalString::EqualsNoCasePath(state.path, displayPath); });
+    auto it = std::find_if(folders.historyFilters.begin(), folders.historyFilters.end(), [&](const Common::Settings::FolderHistoryFilterState& state) noexcept {
+        return ! state.path.empty() && OrdinalString::EqualsNoCasePath(state.path, displayPath);
+    });
 
     if (! filter.enabled && filter.text.empty())
     {
@@ -1273,10 +1303,10 @@ void PruneFolderHistoryFilters(Common::Settings::FoldersSettings& folders, const
             continue;
         }
 
-        const auto it = std::find_if(folders.historyFilters.begin(),
-                                     folders.historyFilters.end(),
-                                     [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
-                                     { return ! state.path.empty() && OrdinalString::EqualsNoCasePath(state.path, historyPath); });
+        const auto it =
+            std::find_if(folders.historyFilters.begin(), folders.historyFilters.end(), [&](const Common::Settings::FolderHistoryFilterState& state) noexcept {
+            return ! state.path.empty() && OrdinalString::EqualsNoCasePath(state.path, historyPath);
+        });
         if (it == folders.historyFilters.end())
         {
             continue;
@@ -1288,7 +1318,7 @@ void PruneFolderHistoryFilters(Common::Settings::FoldersSettings& folders, const
         }
 
         Common::Settings::FolderHistoryFilterState state = *it;
-        state.path                                      = historyPath;
+        state.path                                       = historyPath;
         pruned.push_back(std::move(state));
 
         if (pruned.size() >= maxItems)
@@ -2392,26 +2422,20 @@ INT_PTR OnCreateDirectoryDialogInit(HWND dlg, CreateDirectoryDialogState* state)
 
                 const int editW = std::max(1, frameW - 2 * framePadding);
                 const int editH = std::max(1, frameH - 2 * framePadding);
-                SetWindowPos(nameEdit,
-                             nullptr,
-                             frameRc.left + framePadding,
-                             frameRc.top + framePadding,
-                             editW,
-                             editH,
-                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(nameEdit, nullptr, frameRc.left + framePadding, frameRc.top + framePadding, editW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
 
                 state->nameFrame.reset(CreateWindowExW(0,
-                                                      L"Static",
-                                                      L"",
-                                                      WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-                                                      frameRc.left,
-                                                      frameRc.top,
-                                                      frameW,
-                                                      frameH,
-                                                      dlg,
-                                                      nullptr,
-                                                      GetModuleHandleW(nullptr),
-                                                      nullptr));
+                                                       L"Static",
+                                                       L"",
+                                                       WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                                                       frameRc.left,
+                                                       frameRc.top,
+                                                       frameW,
+                                                       frameH,
+                                                       dlg,
+                                                       nullptr,
+                                                       GetModuleHandleW(nullptr),
+                                                       nullptr));
                 if (state->nameFrame)
                 {
                     SetWindowPos(state->nameFrame.get(), nameEdit, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -2516,8 +2540,7 @@ INT_PTR CALLBACK CreateDirectoryDialogProc(HWND dlg, UINT msg, WPARAM wParam, LP
         case WM_INITDIALOG: return OnCreateDirectoryDialogInit(dlg, reinterpret_cast<CreateDirectoryDialogState*>(lParam));
         case WM_CTLCOLORDLG: return OnCreateDirectoryDialogCtlColorDialog(state);
         case WM_CTLCOLORSTATIC: return OnCreateDirectoryDialogCtlColorStatic(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
-        case WM_CTLCOLOREDIT:
-            return OnCreateDirectoryDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_CTLCOLOREDIT: return OnCreateDirectoryDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
         case WM_NCACTIVATE:
             if (state)
             {
@@ -2577,7 +2600,7 @@ struct MaskDialogCommonState
     MaskDialogCommonState& operator=(MaskDialogCommonState&&)      = delete;
     ~MaskDialogCommonState()                                       = default;
 
-    HWND centerOnWindow = nullptr;
+    HWND centerOnWindow                      = nullptr;
     const std::vector<std::wstring>* history = nullptr;
 
     AppTheme theme{};
@@ -2603,34 +2626,6 @@ struct MaskDialogCommonState
     bool helpExpanded     = false;
     bool layoutInProgress = false;
 };
-
-[[nodiscard]] std::wstring GetWindowTextCopy(HWND hwnd) noexcept
-{
-    if (! hwnd)
-    {
-        return {};
-    }
-
-    const int len = GetWindowTextLengthW(hwnd);
-    if (len <= 0)
-    {
-        return {};
-    }
-
-    std::wstring text(static_cast<size_t>(len), L'\0');
-    const int copied = GetWindowTextW(hwnd, text.data(), len + 1);
-    if (copied <= 0)
-    {
-        return {};
-    }
-
-    if (static_cast<size_t>(copied) < text.size())
-    {
-        text.resize(static_cast<size_t>(copied));
-    }
-
-    return text;
-}
 
 void EnsureMaskDialogFonts(HWND dlg, MaskDialogCommonState& state) noexcept
 {
@@ -2666,25 +2661,25 @@ void EnsureMaskDialogFonts(HWND dlg, MaskDialogCommonState& state) noexcept
     }
 }
 
- struct SelectionMaskDialogState
- {
-    SelectionMaskDialogState()                                            = default;
-    SelectionMaskDialogState(const SelectionMaskDialogState&)             = delete;
-    SelectionMaskDialogState& operator=(const SelectionMaskDialogState&)  = delete;
-    SelectionMaskDialogState(SelectionMaskDialogState&&)                  = delete;
-    SelectionMaskDialogState& operator=(SelectionMaskDialogState&&)       = delete;
-    ~SelectionMaskDialogState()                                           = default;
+struct SelectionMaskDialogState
+{
+    SelectionMaskDialogState()                                           = default;
+    SelectionMaskDialogState(const SelectionMaskDialogState&)            = delete;
+    SelectionMaskDialogState& operator=(const SelectionMaskDialogState&) = delete;
+    SelectionMaskDialogState(SelectionMaskDialogState&&)                 = delete;
+    SelectionMaskDialogState& operator=(SelectionMaskDialogState&&)      = delete;
+    ~SelectionMaskDialogState()                                          = default;
 
     MaskDialogCommonState common{};
     std::wstring captionText;
     std::wstring labelText;
     std::wstring maskText;
- };
+};
 
- void EnsureSelectionMaskDialogFonts(HWND dlg, SelectionMaskDialogState& state) noexcept
- {
+void EnsureSelectionMaskDialogFonts(HWND dlg, SelectionMaskDialogState& state) noexcept
+{
     EnsureMaskDialogFonts(dlg, state.common);
- }
+}
 
 void UpdateSelectionMaskDialogLayout(HWND dlg, SelectionMaskDialogState* state, bool allowResize) noexcept
 {
@@ -2728,7 +2723,7 @@ void UpdateSelectionMaskDialogLayout(HWND dlg, SelectionMaskDialogState* state, 
 
     const auto measureButtonWidth = [&](HWND btn) noexcept -> int
     {
-        const std::wstring text = GetWindowTextCopy(btn);
+        const std::wstring text = Win32Text::GetWindowTextString(btn);
         const int textW         = ThemedControls::MeasureTextWidth(dlg, dialogFont, text);
         return std::max(minBtnW, (2 * buttonPadX) + textW);
     };
@@ -2763,7 +2758,13 @@ void UpdateSelectionMaskDialogLayout(HWND dlg, SelectionMaskDialogState* state, 
             SetWindowPos(frame, nullptr, contentX, y, contentW, rowHeight, flags);
         }
 
-        SetWindowPos(combo, nullptr, contentX + framePadding, y + framePadding, std::max(1, contentW - 2 * framePadding), std::max(1, rowHeight - 2 * framePadding), flags);
+        SetWindowPos(combo,
+                     nullptr,
+                     contentX + framePadding,
+                     y + framePadding,
+                     std::max(1, contentW - 2 * framePadding),
+                     std::max(1, rowHeight - 2 * framePadding),
+                     flags);
         if (frame)
         {
             SetWindowPos(frame, combo, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -2796,7 +2797,7 @@ void UpdateSelectionMaskDialogLayout(HWND dlg, SelectionMaskDialogState* state, 
         ShowWindow(help, SW_HIDE);
     }
 
-    const int buttonsY = y;
+    const int buttonsY       = y;
     const int desiredClientH = buttonsY + rowHeight + margin;
 
     if (allowResize && desiredClientH > 0 && desiredClientH != clientH)
@@ -2804,8 +2805,8 @@ void UpdateSelectionMaskDialogLayout(HWND dlg, SelectionMaskDialogState* state, 
         RECT rcWindow{};
         if (GetWindowRect(dlg, &rcWindow) != 0)
         {
-            const int windowW = rcWindow.right - rcWindow.left;
-            const int windowH = rcWindow.bottom - rcWindow.top;
+            const int windowW    = rcWindow.right - rcWindow.left;
+            const int windowH    = rcWindow.bottom - rcWindow.top;
             const int nonClientH = std::max(0, windowH - clientH);
             const int newWindowH = desiredClientH + nonClientH;
             SetWindowPos(dlg, nullptr, 0, 0, windowW, newWindowH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
@@ -2862,8 +2863,8 @@ INT_PTR OnSelectionMaskDialogCtlColorEdit(SelectionMaskDialogState* state, HDC h
     const bool enabled      = ! control || IsWindowEnabled(control) != FALSE;
     const bool focused      = enabled && control && GetFocus() == control;
 
-    const COLORREF bg = enabled ? (focused ? state->common.inputFocusedBackgroundColor : state->common.inputBackgroundColor)
-                                : state->common.inputDisabledBackgroundColor;
+    const COLORREF bg =
+        enabled ? (focused ? state->common.inputFocusedBackgroundColor : state->common.inputBackgroundColor) : state->common.inputDisabledBackgroundColor;
 
     SetBkColor(hdc, bg);
     SetTextColor(hdc, enabled ? state->common.theme.menu.text : state->common.theme.menu.disabledText);
@@ -2910,9 +2911,10 @@ INT_PTR OnSelectionMaskDialogInit(HWND dlg, SelectionMaskDialogState* state)
         ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
     }
 
-    const COLORREF surface                    = ThemedControls::GetControlSurfaceColor(state->common.theme);
-    state->common.inputBackgroundColor        = ThemedControls::BlendColor(surface, state->common.theme.windowBackground, state->common.theme.dark ? 50 : 30, 255);
-    state->common.inputFocusedBackgroundColor = ThemedControls::BlendColor(state->common.inputBackgroundColor, state->common.theme.menu.text, state->common.theme.dark ? 20 : 16, 255);
+    const COLORREF surface             = ThemedControls::GetControlSurfaceColor(state->common.theme);
+    state->common.inputBackgroundColor = ThemedControls::BlendColor(surface, state->common.theme.windowBackground, state->common.theme.dark ? 50 : 30, 255);
+    state->common.inputFocusedBackgroundColor =
+        ThemedControls::BlendColor(state->common.inputBackgroundColor, state->common.theme.menu.text, state->common.theme.dark ? 20 : 16, 255);
     state->common.inputDisabledBackgroundColor =
         ThemedControls::BlendColor(state->common.theme.windowBackground, state->common.inputBackgroundColor, state->common.theme.dark ? 70 : 40, 255);
 
@@ -3004,25 +3006,25 @@ INT_PTR OnSelectionMaskDialogInit(HWND dlg, SelectionMaskDialogState* state)
                 const int frameW = std::max(0l, frameRc.right - frameRc.left);
                 const int frameH = std::max(0l, frameRc.bottom - frameRc.top);
 
-                const UINT frameDpi     = GetDpiForWindow(dlg);
-                const int framePadding  = std::max(1, ThemedControls::ScaleDip(frameDpi, 2));
-                const int innerW        = std::max(1, frameW - 2 * framePadding);
-                const int innerH        = std::max(1, frameH - 2 * framePadding);
+                const UINT frameDpi    = GetDpiForWindow(dlg);
+                const int framePadding = std::max(1, ThemedControls::ScaleDip(frameDpi, 2));
+                const int innerW       = std::max(1, frameW - 2 * framePadding);
+                const int innerH       = std::max(1, frameH - 2 * framePadding);
 
                 SetWindowPos(combo, nullptr, frameRc.left + framePadding, frameRc.top + framePadding, innerW, innerH, SWP_NOZORDER | SWP_NOACTIVATE);
 
                 state->common.inputFrame.reset(CreateWindowExW(0,
-                                                              L"Static",
-                                                              L"",
-                                                              WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-                                                              frameRc.left,
-                                                              frameRc.top,
-                                                              frameW,
-                                                              frameH,
-                                                              dlg,
-                                                              nullptr,
-                                                              GetModuleHandleW(nullptr),
-                                                              nullptr));
+                                                               L"Static",
+                                                               L"",
+                                                               WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                                                               frameRc.left,
+                                                               frameRc.top,
+                                                               frameW,
+                                                               frameH,
+                                                               dlg,
+                                                               nullptr,
+                                                               GetModuleHandleW(nullptr),
+                                                               nullptr));
                 if (state->common.inputFrame)
                 {
                     SetWindowPos(state->common.inputFrame.get(), combo, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -3093,28 +3095,8 @@ INT_PTR OnSelectionMaskDialogCommand(HWND dlg, SelectionMaskDialogState* state, 
         return TRUE;
     }
 
-    const int len = GetWindowTextLengthW(combo);
-    if (len <= 0)
-    {
-        MessageBeep(MB_ICONWARNING);
-        SetFocus(combo);
-        return TRUE;
-    }
-
-    std::wstring text(static_cast<size_t>(len), L'\0');
-    const int copied = GetWindowTextW(combo, text.data(), len + 1);
-    if (copied <= 0)
-    {
-        MessageBeep(MB_ICONWARNING);
-        SetFocus(combo);
-        return TRUE;
-    }
-    if (static_cast<size_t>(copied) < text.size())
-    {
-        text.resize(static_cast<size_t>(copied));
-    }
-
-    std::wstring trimmed = StringUtils::TrimWhitespaceCopy(text);
+    const std::wstring text = Win32Text::GetWindowTextString(combo);
+    std::wstring trimmed    = StringUtils::TrimWhitespaceCopy(text);
     if (trimmed.empty())
     {
         MessageBeep(MB_ICONWARNING);
@@ -3137,8 +3119,7 @@ INT_PTR CALLBACK SelectionMaskDialogProc(HWND dlg, UINT msg, WPARAM wParam, LPAR
         case WM_CTLCOLORDLG: return OnSelectionMaskDialogCtlColorDialog(state);
         case WM_CTLCOLORSTATIC: return OnSelectionMaskDialogCtlColorStatic(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
         case WM_CTLCOLOREDIT:
-        case WM_CTLCOLORLISTBOX:
-            return OnSelectionMaskDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_CTLCOLORLISTBOX: return OnSelectionMaskDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
         case WM_NCACTIVATE:
             if (state)
             {
@@ -3194,26 +3175,25 @@ INT_PTR CALLBACK SelectionMaskDialogProc(HWND dlg, UINT msg, WPARAM wParam, LPAR
             ThemedControls::DrawThemedPushButton(*dis, state->common.theme);
             return TRUE;
         }
-        case WM_COMMAND:
-            return OnSelectionMaskDialogCommand(dlg, state, LOWORD(wParam), HIWORD(wParam));
+        case WM_COMMAND: return OnSelectionMaskDialogCommand(dlg, state, LOWORD(wParam), HIWORD(wParam));
     }
     return FALSE;
 }
 
-std::optional<std::wstring>
-PromptForSelectionMask(HWND ownerWindow, const std::vector<std::wstring>& history, const AppTheme& theme, UINT captionId, UINT labelId)
+std::optional<std::wstring> PromptForSelectionMask(
+    HWND ownerWindow, const std::vector<std::wstring>& history, const AppTheme& theme, UINT captionId, UINT labelId)
 {
     SelectionMaskDialogState state{};
     state.common.centerOnWindow = ownerWindow;
     state.common.history        = &history;
     state.common.theme          = theme;
     state.common.helpExpanded   = false;
-    state.captionText    = LoadStringResource(nullptr, captionId);
-    state.labelText      = LoadStringResource(nullptr, labelId);
+    state.captionText           = LoadStringResource(nullptr, captionId);
+    state.labelText             = LoadStringResource(nullptr, labelId);
 
 #pragma warning(push)
-    // pointer or reference to potentially throwing function passed to 'extern "C"' function
-    #pragma warning(disable : 5039)
+// pointer or reference to potentially throwing function passed to 'extern "C"' function
+#pragma warning(disable : 5039)
     const INT_PTR result = DialogBoxParamW(
         GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_PANE_SELECTION_MASK), ownerWindow, SelectionMaskDialogProc, reinterpret_cast<LPARAM>(&state));
 #pragma warning(pop)
@@ -3226,14 +3206,14 @@ PromptForSelectionMask(HWND ownerWindow, const std::vector<std::wstring>& histor
     return std::nullopt;
 }
 
- struct PaneFilterDialogState
- {
-    PaneFilterDialogState()                                       = default;
+struct PaneFilterDialogState
+{
+    PaneFilterDialogState()                                        = default;
     PaneFilterDialogState(const PaneFilterDialogState&)            = delete;
     PaneFilterDialogState& operator=(const PaneFilterDialogState&) = delete;
     PaneFilterDialogState(PaneFilterDialogState&&)                 = delete;
     PaneFilterDialogState& operator=(PaneFilterDialogState&&)      = delete;
-    ~PaneFilterDialogState()                                      = default;
+    ~PaneFilterDialogState()                                       = default;
 
     MaskDialogCommonState common{};
     std::wstring captionText;
@@ -3245,12 +3225,12 @@ PromptForSelectionMask(HWND ownerWindow, const std::vector<std::wstring>& histor
 
     FolderView::NameFilterState initial;
     FolderView::NameFilterState result;
- };
+};
 
- void EnsurePaneFilterDialogFonts(HWND dlg, PaneFilterDialogState& state) noexcept
- {
+void EnsurePaneFilterDialogFonts(HWND dlg, PaneFilterDialogState& state) noexcept
+{
     EnsureMaskDialogFonts(dlg, state.common);
- }
+}
 
 void UpdatePaneFilterDialogLayout(HWND dlg, PaneFilterDialogState* state, bool allowResize) noexcept
 {
@@ -3294,7 +3274,7 @@ void UpdatePaneFilterDialogLayout(HWND dlg, PaneFilterDialogState* state, bool a
 
     const auto measureButtonWidth = [&](HWND btn) noexcept -> int
     {
-        const std::wstring text = GetWindowTextCopy(btn);
+        const std::wstring text = Win32Text::GetWindowTextString(btn);
         const int textW         = ThemedControls::MeasureTextWidth(dlg, dialogFont, text);
         return std::max(minBtnW, (2 * buttonPadX) + textW);
     };
@@ -3320,7 +3300,7 @@ void UpdatePaneFilterDialogLayout(HWND dlg, PaneFilterDialogState* state, bool a
         const int toggleGapX   = ThemedControls::ScaleDip(dpi, 8);
         const int trackWidth   = ThemedControls::ScaleDip(dpi, 34);
         const int stateTextW   = std::max(ThemedControls::MeasureTextWidth(dlg, headerFont, state->toggleOnLabel),
-                                          ThemedControls::MeasureTextWidth(dlg, headerFont, state->toggleOffLabel));
+                                        ThemedControls::MeasureTextWidth(dlg, headerFont, state->toggleOffLabel));
         const int measuredW    = std::max(minToggleW, (2 * paddingX) + stateTextW + toggleGapX + trackWidth);
         const int toggleW      = std::min(std::max(0, contentW), measuredW);
         const int labelW       = std::max(0, contentW - toggleW - gapX);
@@ -3460,8 +3440,8 @@ INT_PTR OnPaneFilterDialogCtlColorEdit(PaneFilterDialogState* state, HDC hdc, HW
     const bool enabled      = ! control || IsWindowEnabled(control) != FALSE;
     const bool focused      = enabled && control && GetFocus() == control;
 
-    const COLORREF bg = enabled ? (focused ? state->common.inputFocusedBackgroundColor : state->common.inputBackgroundColor)
-                                : state->common.inputDisabledBackgroundColor;
+    const COLORREF bg =
+        enabled ? (focused ? state->common.inputFocusedBackgroundColor : state->common.inputBackgroundColor) : state->common.inputDisabledBackgroundColor;
 
     SetBkColor(hdc, bg);
     SetTextColor(hdc, enabled ? state->common.theme.menu.text : state->common.theme.menu.disabledText);
@@ -3501,7 +3481,7 @@ INT_PTR OnPaneFilterDialogInit(HWND dlg, PaneFilterDialogState* state)
     ApplyTitleBarTheme(dlg, state->common.theme, GetActiveWindow() == dlg);
     const COLORREF surface = ThemedControls::GetControlSurfaceColor(state->common.theme);
 
-    const bool highContrast      = state->common.theme.highContrast || state->common.theme.systemHighContrast;
+    const bool highContrast         = state->common.theme.highContrast || state->common.theme.systemHighContrast;
     const COLORREF dialogBackground = highContrast ? state->common.theme.windowBackground : surface;
     state->common.backgroundBrush.reset(CreateSolidBrush(dialogBackground));
     if (! highContrast)
@@ -3511,8 +3491,9 @@ INT_PTR OnPaneFilterDialogInit(HWND dlg, PaneFilterDialogState* state)
         ThemedControls::EnableOwnerDrawButton(dlg, IDC_PANE_FILTER_USE_TOGGLE);
     }
 
-    state->common.inputBackgroundColor        = ThemedControls::BlendColor(surface, state->common.theme.windowBackground, state->common.theme.dark ? 50 : 30, 255);
-    state->common.inputFocusedBackgroundColor = ThemedControls::BlendColor(state->common.inputBackgroundColor, state->common.theme.menu.text, state->common.theme.dark ? 20 : 16, 255);
+    state->common.inputBackgroundColor = ThemedControls::BlendColor(surface, state->common.theme.windowBackground, state->common.theme.dark ? 50 : 30, 255);
+    state->common.inputFocusedBackgroundColor =
+        ThemedControls::BlendColor(state->common.inputBackgroundColor, state->common.theme.menu.text, state->common.theme.dark ? 20 : 16, 255);
     state->common.inputDisabledBackgroundColor =
         ThemedControls::BlendColor(dialogBackground, state->common.inputBackgroundColor, state->common.theme.dark ? 70 : 40, 255);
 
@@ -3632,21 +3613,20 @@ INT_PTR OnPaneFilterDialogInit(HWND dlg, PaneFilterDialogState* state)
                 const int innerW       = std::max(1, frameW - 2 * framePadding);
                 const int innerH       = std::max(1, frameH - 2 * framePadding);
 
-                SetWindowPos(
-                    combo, nullptr, frameRc.left + framePadding, frameRc.top + framePadding, innerW, innerH, SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(combo, nullptr, frameRc.left + framePadding, frameRc.top + framePadding, innerW, innerH, SWP_NOZORDER | SWP_NOACTIVATE);
 
                 state->common.inputFrame.reset(CreateWindowExW(0,
-                                                              L"Static",
-                                                              L"",
-                                                              WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-                                                              frameRc.left,
-                                                              frameRc.top,
-                                                              frameW,
-                                                              frameH,
-                                                              dlg,
-                                                              nullptr,
-                                                              GetModuleHandleW(nullptr),
-                                                              nullptr));
+                                                               L"Static",
+                                                               L"",
+                                                               WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                                                               frameRc.left,
+                                                               frameRc.top,
+                                                               frameW,
+                                                               frameH,
+                                                               dlg,
+                                                               nullptr,
+                                                               GetModuleHandleW(nullptr),
+                                                               nullptr));
                 if (state->common.inputFrame)
                 {
                     SetWindowPos(state->common.inputFrame.get(), combo, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
@@ -3738,20 +3718,7 @@ INT_PTR OnPaneFilterDialogCommand(HWND dlg, PaneFilterDialogState* state, UINT c
         return TRUE;
     }
 
-    std::wstring trimmed;
-    {
-        const int len = GetWindowTextLengthW(combo);
-        if (len > 0)
-        {
-            std::wstring text(static_cast<size_t>(len), L'\0');
-            const int copied = GetWindowTextW(combo, text.data(), len + 1);
-            if (copied > 0 && static_cast<size_t>(copied) < text.size())
-            {
-                text.resize(static_cast<size_t>(copied));
-            }
-            trimmed = StringUtils::TrimWhitespaceCopy(text);
-        }
-    }
+    std::wstring trimmed = StringUtils::TrimWhitespaceCopy(Win32Text::GetWindowTextString(combo));
 
     if (enabled)
     {
@@ -3781,8 +3748,7 @@ INT_PTR CALLBACK PaneFilterDialogProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM 
         case WM_CTLCOLORDLG: return OnPaneFilterDialogCtlColorDialog(state);
         case WM_CTLCOLORSTATIC: return OnPaneFilterDialogCtlColorStatic(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
         case WM_CTLCOLOREDIT:
-        case WM_CTLCOLORLISTBOX:
-            return OnPaneFilterDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_CTLCOLORLISTBOX: return OnPaneFilterDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
         case WM_NCACTIVATE:
             if (state)
             {
@@ -3840,38 +3806,38 @@ INT_PTR CALLBACK PaneFilterDialogProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM 
                 const bool toggledOn   = dis->hwndItem && SendMessageW(dis->hwndItem, BM_GETCHECK, 0, 0) == BST_CHECKED;
                 const COLORREF surface = ThemedControls::GetControlSurfaceColor(state->common.theme);
                 const HFONT boldFont   = state->common.boldFont ? state->common.boldFont.get() : nullptr;
-                ThemedControls::DrawThemedSwitchToggle(
-                    *dis, state->common.theme, surface, boldFont, state->toggleOnLabel, state->toggleOffLabel, toggledOn);
+                ThemedControls::DrawThemedSwitchToggle(*dis, state->common.theme, surface, boldFont, state->toggleOnLabel, state->toggleOffLabel, toggledOn);
                 return TRUE;
             }
 
             ThemedControls::DrawThemedPushButton(*dis, state->common.theme);
             return TRUE;
         }
-        case WM_COMMAND:
-            return OnPaneFilterDialogCommand(dlg, state, LOWORD(wParam), HIWORD(wParam));
+        case WM_COMMAND: return OnPaneFilterDialogCommand(dlg, state, LOWORD(wParam), HIWORD(wParam));
     }
     return FALSE;
 }
 
-std::optional<FolderView::NameFilterState>
-PromptForPaneFilter(HWND ownerWindow, const std::vector<std::wstring>& history, const AppTheme& theme, const FolderView::NameFilterState& initial)
+std::optional<FolderView::NameFilterState> PromptForPaneFilter(HWND ownerWindow,
+                                                               const std::vector<std::wstring>& history,
+                                                               const AppTheme& theme,
+                                                               const FolderView::NameFilterState& initial)
 {
     PaneFilterDialogState state{};
     state.common.centerOnWindow = ownerWindow;
     state.common.history        = &history;
     state.common.theme          = theme;
     state.common.helpExpanded   = false;
-    state.captionText    = LoadStringResource(nullptr, IDS_CAPTION_PANE_FILTER);
-    state.useLabelText   = LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER_USE_FILTER);
-    state.labelText      = LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER);
-    state.initial        = initial;
+    state.captionText           = LoadStringResource(nullptr, IDS_CAPTION_PANE_FILTER);
+    state.useLabelText          = LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER_USE_FILTER);
+    state.labelText             = LoadStringResource(nullptr, IDS_LABEL_PANE_FILTER);
+    state.initial               = initial;
 
 #pragma warning(push)
-    // pointer or reference to potentially throwing function passed to 'extern "C"' function
-    #pragma warning(disable : 5039)
-    const INT_PTR result = DialogBoxParamW(
-        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_PANE_FILTER), ownerWindow, PaneFilterDialogProc, reinterpret_cast<LPARAM>(&state));
+// pointer or reference to potentially throwing function passed to 'extern "C"' function
+#pragma warning(disable : 5039)
+    const INT_PTR result =
+        DialogBoxParamW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_PANE_FILTER), ownerWindow, PaneFilterDialogProc, reinterpret_cast<LPARAM>(&state));
 #pragma warning(pop)
 
     if (result == IDOK)
@@ -4347,10 +4313,9 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
         else if (_settings->connections)
         {
             const auto& conns = _settings->connections->items;
-            const auto it =
-                std::find_if(conns.begin(),
-                             conns.end(),
-                             [&](const Common::Settings::ConnectionProfile& c) noexcept { return ! c.name.empty() && EqualsNoCase(c.name, connectionName); });
+            const auto it     = std::find_if(conns.begin(), conns.end(), [&](const Common::Settings::ConnectionProfile& c) noexcept {
+                return ! c.name.empty() && EqualsNoCase(c.name, connectionName);
+            });
             if (it != conns.end())
             {
                 profile = &(*it);
@@ -4830,7 +4795,7 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
             viewPerf.SetDetail(pluginPath.native());
 
             const Common::Settings::FoldersSettings* folders = (_settings && _settings->folders.has_value()) ? &_settings->folders.value() : nullptr;
-            const FolderView::NameFilterState filter          = GetFolderHistoryFilterState(folders, displayPath);
+            const FolderView::NameFilterState filter         = GetFolderHistoryFilterState(folders, displayPath);
             state.folderView.SetNameFilterState(filter, false /* refresh */);
             state.folderView.SetFolderPath(pluginPath);
         }
@@ -5332,6 +5297,66 @@ uint64_t FolderWindow::DebugGetForceRefreshCount(Pane pane) const noexcept
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.DebugGetForceRefreshCount();
 }
+
+std::wstring_view FolderWindow::DebugGetFocusedItemDisplayName(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetFocusedDisplayName();
+}
+
+bool FolderWindow::DebugHasItemDisplayName(Pane pane, std::wstring_view displayName) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugHasItemDisplayName(displayName);
+}
+
+bool FolderWindow::DebugIsItemSelected(Pane pane, std::wstring_view displayName) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugIsItemSelectedByDisplayName(displayName);
+}
+
+size_t FolderWindow::DebugGetSelectedCount(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetSelectedItemCount();
+}
+
+bool FolderWindow::DebugIsEmptyFolderStateActive(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugIsEmptyFolderStateActive();
+}
+
+std::wstring_view FolderWindow::DebugGetEmptyFolderFunMessage(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetEmptyFolderFunMessage();
+}
+
+bool FolderWindow::DebugFocusItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.PrepareForExternalCommand(displayName);
+}
+
+FolderView::NameFilterState FolderWindow::DebugGetNameFilterState(Pane pane) const
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.GetNameFilterState();
+}
+
+bool FolderWindow::DebugIsNameFilterActive(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.IsNameFilterActive();
+}
+
+FolderView::FilterWatermarkVisualMode FolderWindow::DebugGetFilterWatermarkVisualMode(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetFilterWatermarkVisualMode();
+}
 #endif
 
 void FolderWindow::CommandCalculateDirectorySizes(Pane pane)
@@ -5350,8 +5375,7 @@ void FolderWindow::CommandCalculateDirectorySizes(Pane pane)
         std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
         std::wstring message = LoadStringResource(nullptr, IDS_MSG_PANE_CALCULATE_DIRECTORY_SIZES_FAILED);
 
-        state.folderView.ShowAlertOverlay(
-            FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
+        state.folderView.ShowAlertOverlay(FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message));
     }
 }
 
@@ -5392,10 +5416,9 @@ void FolderWindow::CommandSelectionSelectDialog(Pane pane)
 
     MaskSyntax::WildcardMask mask = MaskSyntax::ParseWildcardMask(maskText);
 
-    SetPaneSelectionByDisplayNamePredicate(
-        pane,
-        [mask = std::move(mask)](std::wstring_view displayName) noexcept { return MaskSyntax::MatchesWildcardMask(displayName, mask); },
-        false /* clearExistingSelection */);
+    SetPaneSelectionByDisplayNamePredicate(pane, [mask = std::move(mask)](std::wstring_view displayName) noexcept {
+        return MaskSyntax::MatchesWildcardMask(displayName, mask);
+    }, false /* clearExistingSelection */);
 }
 
 void FolderWindow::CommandSelectionUnselectDialog(Pane pane)
@@ -5439,6 +5462,201 @@ void FolderWindow::CommandSelectionUnselectDialog(Pane pane)
         pane, [mask = std::move(mask)](std::wstring_view displayName) noexcept { return MaskSyntax::MatchesWildcardMask(displayName, mask); });
 }
 
+void FolderWindow::CommandSelectionInvert(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.InvertSelection();
+}
+
+bool FolderWindow::HasSavedSelection() const noexcept
+{
+    return _savedSelection.has_value() && ! _savedSelection->displayNames.empty();
+}
+
+void FolderWindow::CommandSelectionSave(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+
+    const std::optional<std::filesystem::path> folderOpt = state.folderView.GetFolderPath();
+    if (! folderOpt.has_value() || folderOpt.value().empty())
+    {
+        MessageBeep(MB_ICONWARNING);
+        return;
+    }
+
+    std::vector<std::wstring> names = state.folderView.GetSelectedOrFocusedDisplayNames();
+    if (names.empty())
+    {
+        MessageBeep(MB_ICONWARNING);
+        return;
+    }
+
+    SavedSelection saved{};
+    saved.sourcePluginId        = std::wstring(state.folderView.GetFileSystemPluginId());
+    saved.sourceInstanceContext = std::wstring(state.folderView.GetFileSystemInstanceContext());
+    saved.sourceFolder          = folderOpt.value();
+    saved.displayNames          = std::move(names);
+    _savedSelection             = std::move(saved);
+
+    std::wstring clipboardText;
+    {
+        const std::wstring folderText = folderOpt.value().native();
+        size_t reserveChars           = folderText.size() + 2u;
+        for (const auto& name : _savedSelection->displayNames)
+        {
+            reserveChars += name.size() + 2u;
+        }
+
+        clipboardText.reserve(reserveChars);
+        clipboardText.append(folderText);
+        for (const auto& name : _savedSelection->displayNames)
+        {
+            clipboardText.append(L"\r\n");
+            clipboardText.append(name);
+        }
+        clipboardText.append(L"\r\n");
+    }
+
+    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    if (! ownerWindow)
+    {
+        ownerWindow = _hWnd.get();
+    }
+
+    if (! SetClipboardUnicodeText(ownerWindow, clipboardText))
+    {
+        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+        std::wstring message = LoadStringResource(nullptr, IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED);
+        ShowPaneAlertOverlay(
+            pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), S_OK, true, false);
+    }
+}
+
+void FolderWindow::CommandSelectionRestore(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+
+    if (! HasSavedSelection())
+    {
+        MessageBeep(MB_ICONWARNING);
+        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+        std::wstring message = LoadStringResource(nullptr, IDS_MSG_SELECTION_RESTORE_NO_SAVED);
+        ShowPaneAlertOverlay(
+            pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), S_OK, true, false);
+        return;
+    }
+
+    const SavedSelection& saved = _savedSelection.value();
+
+    std::unordered_set<std::wstring_view> remaining;
+    remaining.reserve(saved.displayNames.size());
+    for (const auto& name : saved.displayNames)
+    {
+        if (! name.empty())
+        {
+            remaining.emplace(name);
+        }
+    }
+
+    SetPaneSelectionByDisplayNamePredicate(pane,
+                                           [&](std::wstring_view displayName) noexcept
+    {
+        const auto it = remaining.find(displayName);
+        if (it == remaining.end())
+        {
+            return false;
+        }
+        remaining.erase(it);
+        return true;
+    },
+                                           true /* clearExistingSelection */);
+
+    if (! remaining.empty())
+    {
+        struct WStringViewNoCaseLess final
+        {
+            bool operator()(std::wstring_view left, std::wstring_view right) const noexcept
+            {
+                return OrdinalString::Compare(left, right, true) < 0;
+            }
+        };
+
+        std::map<std::wstring_view, std::vector<std::wstring_view>, WStringViewNoCaseLess> remainingNoCase;
+        for (const auto& name : remaining)
+        {
+            remainingNoCase[name].push_back(name);
+        }
+
+        SetPaneSelectionByDisplayNamePredicate(pane,
+                                               [&](std::wstring_view displayName) noexcept
+        {
+            const auto it = remainingNoCase.find(displayName);
+            if (it == remainingNoCase.end() || it->second.empty())
+            {
+                return false;
+            }
+
+            const std::wstring_view matched = it->second.back();
+            it->second.pop_back();
+            remaining.erase(matched);
+            if (it->second.empty())
+            {
+                remainingNoCase.erase(it);
+            }
+            return true;
+        },
+                                               false /* clearExistingSelection */);
+    }
+
+    if (remaining.empty())
+    {
+        return;
+    }
+
+    std::wstring missingLines;
+    for (const auto& name : saved.displayNames)
+    {
+        if (name.empty())
+        {
+            continue;
+        }
+
+        if (remaining.find(std::wstring_view(name)) == remaining.end())
+        {
+            continue;
+        }
+
+        missingLines.append(L"- ");
+        missingLines.append(name);
+        missingLines.append(L"\r\n");
+    }
+
+    std::wstring filterNote;
+    if (state.folderView.IsNameFilterActive())
+    {
+        const std::wstring noteText = LoadStringResource(nullptr, IDS_MSG_SELECTION_RESTORE_FILTER_NOTE);
+        if (! noteText.empty())
+        {
+            filterNote.reserve(4u + noteText.size());
+            filterNote.append(L"\r\n\r\n");
+            filterNote.append(noteText);
+        }
+    }
+
+    std::wstring title = LoadStringResource(nullptr, IDS_CMD_SELECTION_RESTORE);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_OVERLAY_TITLE_INFORMATION);
+    }
+
+    std::wstring message = FormatStringResource(nullptr, IDS_FMT_SELECTION_RESTORE_INCOMPLETE, missingLines, filterNote);
+    ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Information, std::move(title), std::move(message), S_OK, true, false);
+}
+
 void FolderWindow::CommandSelectionSelectSameExtension(Pane pane)
 {
     SetActivePane(pane);
@@ -5451,6 +5669,33 @@ void FolderWindow::CommandSelectionUnselectSameExtension(Pane pane)
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.UnselectSameExtension();
+}
+
+void FolderWindow::CommandSelectionHideSelectedNames(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.HideSelectedNames();
+}
+
+void FolderWindow::CommandSelectionHideUnselectedNames(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.HideUnselectedNames();
+}
+
+void FolderWindow::CommandSelectionShowHiddenNames(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.ShowHiddenNames();
+}
+
+bool FolderWindow::CanShowHiddenNames(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.HasHiddenNames();
 }
 
 void FolderWindow::CommandSelectionGoToPreviousSelectedName(Pane pane)
@@ -5512,143 +5757,136 @@ void FolderWindow::CommandChangeCase(Pane pane)
         return;
     }
 
-    const HWND ownerHwnd = _hWnd.get();
+    const HWND ownerHwnd                 = _hWnd.get();
     wil::com_ptr<IFileSystem> fileSystem = state.fileSystem;
     const ChangeCase::Options options    = dialogState.options;
     const std::wstring title             = LoadStringResource(nullptr, IDS_CMD_CHANGE_CASE);
 
-    state.changeCaseThread = std::jthread(
-        [ownerHwnd, pane, fileSystem, paths, options, title](std::stop_token stopToken) noexcept
+    state.changeCaseThread = std::jthread([ownerHwnd, pane, fileSystem, paths, options, title](std::stop_token stopToken) noexcept
+    {
+        [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+
+        struct ProgressState final
         {
-            [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+            HWND hwnd               = nullptr;
+            FolderWindow::Pane pane = FolderWindow::Pane::Left;
+            std::wstring title;
+            ULONGLONG startTick      = 0;
+            ULONGLONG lastPostedTick = 0;
+            uint64_t infoTaskId      = 0;
+            ChangeCase::ProgressUpdate last{};
 
-            struct ProgressState final
+            void PostTaskUpdate(bool finished, HRESULT hr) noexcept
             {
-                HWND hwnd                    = nullptr;
-                FolderWindow::Pane pane      = FolderWindow::Pane::Left;
-                std::wstring title;
-                ULONGLONG startTick          = 0;
-                ULONGLONG lastPostedTick     = 0;
-                uint64_t infoTaskId          = 0;
-                ChangeCase::ProgressUpdate last{};
-
-                void PostTaskUpdate(bool finished, HRESULT hr) noexcept
-                {
-                    if (! hwnd || IsWindow(hwnd) == FALSE || infoTaskId == 0)
-                    {
-                        return;
-                    }
-
-                    FolderWindow::InformationalTaskUpdate info{};
-                    info.kind  = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
-                    info.taskId = infoTaskId;
-                    info.title = title;
-                    info.changeCaseCurrentPath      = last.currentPath;
-                    info.changeCaseScannedFolders   = last.scannedFolders;
-                    info.changeCaseScannedEntries   = last.scannedEntries;
-                    info.changeCasePlannedRenames   = last.plannedRenames;
-                    info.changeCaseCompletedRenames = last.completedRenames;
-                    info.changeCaseEnumerating      = ! finished && last.phase == ChangeCase::ProgressUpdate::Phase::Enumerating;
-                    info.changeCaseRenaming         = ! finished && last.phase == ChangeCase::ProgressUpdate::Phase::Renaming;
-                    info.finished                   = finished;
-                    info.resultHr                   = hr;
-
-                    auto payload     = std::make_unique<ChangeCaseTaskPayload>();
-                    payload->update  = std::move(info);
-                    static_cast<void>(PostMessagePayload(hwnd, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)));
-                }
-
-                void EnsureTaskVisibleAfterThreshold() noexcept
-                {
-                    if (! hwnd || IsWindow(hwnd) == FALSE || infoTaskId != 0)
-                    {
-                        return;
-                    }
-
-                    const ULONGLONG nowTick = GetTickCount64();
-                    if (startTick == 0 || nowTick < startTick || (nowTick - startTick) < 700ull)
-                    {
-                        return;
-                    }
-
-                    FolderWindow::InformationalTaskUpdate info{};
-                    info.kind  = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
-                    info.title = title;
-                    info.changeCaseCurrentPath      = last.currentPath;
-                    info.changeCaseScannedFolders   = last.scannedFolders;
-                    info.changeCaseScannedEntries   = last.scannedEntries;
-                    info.changeCasePlannedRenames   = last.plannedRenames;
-                    info.changeCaseCompletedRenames = last.completedRenames;
-                    info.changeCaseEnumerating      = last.phase == ChangeCase::ProgressUpdate::Phase::Enumerating;
-                    info.changeCaseRenaming         = last.phase == ChangeCase::ProgressUpdate::Phase::Renaming;
-
-                    auto payload    = std::make_unique<ChangeCaseTaskPayload>();
-                    payload->update = std::move(info);
-
-                    ChangeCaseTaskPayload* raw = payload.release();
-                    DWORD_PTR result           = 0;
-                    const LRESULT sendOk =
-                        SendMessageTimeoutW(hwnd,
-                                            WndMsg::kChangeCaseTaskUpdate,
-                                            0,
-                                            reinterpret_cast<LPARAM>(raw),
-                                            SMTO_ABORTIFHUNG | SMTO_BLOCK,
-                                            1000,
-                                            &result);
-                    if (sendOk == 0)
-                    {
-                        delete raw;
-                        return;
-                    }
-
-                    infoTaskId      = static_cast<uint64_t>(result);
-                    lastPostedTick  = nowTick;
-                }
-            };
-
-            ProgressState progressState{};
-            progressState.hwnd      = ownerHwnd;
-            progressState.pane      = pane;
-            progressState.title     = title;
-            progressState.startTick = GetTickCount64();
-
-            const auto onProgress = [](const ChangeCase::ProgressUpdate& update, void* cookie) noexcept
-            {
-                auto* state = static_cast<ProgressState*>(cookie);
-                if (! state)
+                if (! hwnd || IsWindow(hwnd) == FALSE || infoTaskId == 0)
                 {
                     return;
                 }
 
-                state->last = update;
-                state->EnsureTaskVisibleAfterThreshold();
+                FolderWindow::InformationalTaskUpdate info{};
+                info.kind                       = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
+                info.taskId                     = infoTaskId;
+                info.title                      = title;
+                info.changeCaseCurrentPath      = last.currentPath;
+                info.changeCaseScannedFolders   = last.scannedFolders;
+                info.changeCaseScannedEntries   = last.scannedEntries;
+                info.changeCasePlannedRenames   = last.plannedRenames;
+                info.changeCaseCompletedRenames = last.completedRenames;
+                info.changeCaseEnumerating      = ! finished && last.phase == ChangeCase::ProgressUpdate::Phase::Enumerating;
+                info.changeCaseRenaming         = ! finished && last.phase == ChangeCase::ProgressUpdate::Phase::Renaming;
+                info.finished                   = finished;
+                info.resultHr                   = hr;
 
-                if (state->infoTaskId != 0)
-                {
-                    const ULONGLONG nowTick = GetTickCount64();
-                    if (state->lastPostedTick != 0 && nowTick >= state->lastPostedTick && (nowTick - state->lastPostedTick) < 100ull)
-                    {
-                        return;
-                    }
-
-                    state->lastPostedTick = nowTick;
-                    state->PostTaskUpdate(false, S_OK);
-                }
-            };
-
-            const HRESULT operationHr = ChangeCase::ApplyToPaths(*fileSystem, paths, options, stopToken, onProgress, &progressState);
-
-            progressState.EnsureTaskVisibleAfterThreshold();
-            progressState.PostTaskUpdate(true, operationHr);
-
-            if (ownerHwnd && IsWindow(ownerHwnd) != FALSE)
-            {
-                auto completed       = std::make_unique<ChangeCaseCompletedPayload>();
-                completed->pane      = pane;
-                completed->hr        = operationHr;
-                static_cast<void>(PostMessagePayload(ownerHwnd, WndMsg::kChangeCaseCompleted, 0, std::move(completed)));
+                auto payload    = std::make_unique<ChangeCaseTaskPayload>();
+                payload->update = std::move(info);
+                static_cast<void>(PostMessagePayload(hwnd, WndMsg::kChangeCaseTaskUpdate, 0, std::move(payload)));
             }
-        });
+
+            void EnsureTaskVisibleAfterThreshold() noexcept
+            {
+                if (! hwnd || IsWindow(hwnd) == FALSE || infoTaskId != 0)
+                {
+                    return;
+                }
+
+                const ULONGLONG nowTick = GetTickCount64();
+                if (startTick == 0 || nowTick < startTick || (nowTick - startTick) < 700ull)
+                {
+                    return;
+                }
+
+                FolderWindow::InformationalTaskUpdate info{};
+                info.kind                       = FolderWindow::InformationalTaskUpdate::Kind::ChangeCase;
+                info.title                      = title;
+                info.changeCaseCurrentPath      = last.currentPath;
+                info.changeCaseScannedFolders   = last.scannedFolders;
+                info.changeCaseScannedEntries   = last.scannedEntries;
+                info.changeCasePlannedRenames   = last.plannedRenames;
+                info.changeCaseCompletedRenames = last.completedRenames;
+                info.changeCaseEnumerating      = last.phase == ChangeCase::ProgressUpdate::Phase::Enumerating;
+                info.changeCaseRenaming         = last.phase == ChangeCase::ProgressUpdate::Phase::Renaming;
+
+                auto payload    = std::make_unique<ChangeCaseTaskPayload>();
+                payload->update = std::move(info);
+
+                ChangeCaseTaskPayload* raw = payload.release();
+                DWORD_PTR result           = 0;
+                const LRESULT sendOk =
+                    SendMessageTimeoutW(hwnd, WndMsg::kChangeCaseTaskUpdate, 0, reinterpret_cast<LPARAM>(raw), SMTO_ABORTIFHUNG | SMTO_BLOCK, 1000, &result);
+                if (sendOk == 0)
+                {
+                    delete raw;
+                    return;
+                }
+
+                infoTaskId     = static_cast<uint64_t>(result);
+                lastPostedTick = nowTick;
+            }
+        };
+
+        ProgressState progressState{};
+        progressState.hwnd      = ownerHwnd;
+        progressState.pane      = pane;
+        progressState.title     = title;
+        progressState.startTick = GetTickCount64();
+
+        const auto onProgress = [](const ChangeCase::ProgressUpdate& update, void* cookie) noexcept
+        {
+            auto* state = static_cast<ProgressState*>(cookie);
+            if (! state)
+            {
+                return;
+            }
+
+            state->last = update;
+            state->EnsureTaskVisibleAfterThreshold();
+
+            if (state->infoTaskId != 0)
+            {
+                const ULONGLONG nowTick = GetTickCount64();
+                if (state->lastPostedTick != 0 && nowTick >= state->lastPostedTick && (nowTick - state->lastPostedTick) < 100ull)
+                {
+                    return;
+                }
+
+                state->lastPostedTick = nowTick;
+                state->PostTaskUpdate(false, S_OK);
+            }
+        };
+
+        const HRESULT operationHr = ChangeCase::ApplyToPaths(*fileSystem, paths, options, stopToken, onProgress, &progressState);
+
+        progressState.EnsureTaskVisibleAfterThreshold();
+        progressState.PostTaskUpdate(true, operationHr);
+
+        if (ownerHwnd && IsWindow(ownerHwnd) != FALSE)
+        {
+            auto completed  = std::make_unique<ChangeCaseCompletedPayload>();
+            completed->pane = pane;
+            completed->hr   = operationHr;
+            static_cast<void>(PostMessagePayload(ownerHwnd, WndMsg::kChangeCaseCompleted, 0, std::move(completed)));
+        }
+    });
 }
 
 void FolderWindow::CommandChangeDirectory(Pane pane)
@@ -5697,7 +5935,7 @@ void FolderWindow::CommandFilter(Pane pane)
         ownerWindow = _hWnd.get();
     }
 
-    const FolderView::NameFilterState initial = state.folderView.GetNameFilterState();
+    const FolderView::NameFilterState initial                  = state.folderView.GetNameFilterState();
     const std::optional<FolderView::NameFilterState> resultOpt = PromptForPaneFilter(ownerWindow, history, _theme, initial);
     if (! resultOpt.has_value())
     {
@@ -5744,51 +5982,51 @@ void FolderWindow::CommandGoRootDirectory(Pane pane)
             root = GetDefaultFileSystemRoot();
         }
 
-    SetFolderPath(pane, root);
-    return;
-}
+        SetFolderPath(pane, root);
+        return;
+    }
 
-std::filesystem::path rootPluginPath(L"/");
-{
-    const std::optional<std::filesystem::path> pluginPathOpt = state.folderView.GetFolderPath();
-    if (pluginPathOpt.has_value() && ! pluginPathOpt.value().empty())
+    std::filesystem::path rootPluginPath(L"/");
     {
-        std::wstring normalized = NavigationLocation::NormalizePluginPathText(pluginPathOpt.value().wstring(),
-                                                                              NavigationLocation::EmptyPathPolicy::Root,
-                                                                              NavigationLocation::LeadingSlashPolicy::Ensure,
-                                                                              NavigationLocation::TrailingSlashPolicy::Trim);
-
-        constexpr std::wstring_view kConnPrefix = L"/@conn:";
-        if (StartsWithNoCase(normalized, kConnPrefix))
+        const std::optional<std::filesystem::path> pluginPathOpt = state.folderView.GetFolderPath();
+        if (pluginPathOpt.has_value() && ! pluginPathOpt.value().empty())
         {
-            const size_t nameStart = kConnPrefix.size();
-            if (nameStart < normalized.size())
+            std::wstring normalized = NavigationLocation::NormalizePluginPathText(pluginPathOpt.value().wstring(),
+                                                                                  NavigationLocation::EmptyPathPolicy::Root,
+                                                                                  NavigationLocation::LeadingSlashPolicy::Ensure,
+                                                                                  NavigationLocation::TrailingSlashPolicy::Trim);
+
+            constexpr std::wstring_view kConnPrefix = L"/@conn:";
+            if (StartsWithNoCase(normalized, kConnPrefix))
             {
-                const size_t nextSlash = normalized.find(L'/', nameStart);
-                const size_t end       = nextSlash == std::wstring::npos ? normalized.size() : nextSlash;
-                if (end > 0u)
+                const size_t nameStart = kConnPrefix.size();
+                if (nameStart < normalized.size())
                 {
-                    std::wstring rootText = normalized.substr(0, end);
-                    if (! rootText.empty() && rootText.back() != L'/')
+                    const size_t nextSlash = normalized.find(L'/', nameStart);
+                    const size_t end       = nextSlash == std::wstring::npos ? normalized.size() : nextSlash;
+                    if (end > 0u)
                     {
-                        rootText.push_back(L'/');
+                        std::wstring rootText = normalized.substr(0, end);
+                        if (! rootText.empty() && rootText.back() != L'/')
+                        {
+                            rootText.push_back(L'/');
+                        }
+                        rootPluginPath = std::filesystem::path(std::move(rootText));
                     }
-                    rootPluginPath = std::filesystem::path(std::move(rootText));
                 }
             }
         }
     }
-}
 
-const std::filesystem::path rootDisplayPath = NavigationLocation::FormatHistoryPath(state.pluginShortId, state.instanceContext, rootPluginPath);
-SetFolderPath(pane, rootDisplayPath);
+    const std::filesystem::path rootDisplayPath = NavigationLocation::FormatHistoryPath(state.pluginShortId, state.instanceContext, rootPluginPath);
+    SetFolderPath(pane, rootDisplayPath);
 }
 
 void FolderWindow::CommandSetPathFromOtherPane(Pane pane)
 {
     SetActivePane(pane);
 
-    const Pane otherPane = pane == Pane::Left ? Pane::Right : Pane::Left;
+    const Pane otherPane                                 = pane == Pane::Left ? Pane::Right : Pane::Left;
     const std::optional<std::filesystem::path> otherPath = GetCurrentPath(otherPane);
     if (! otherPath.has_value() || otherPath.value().empty())
     {
@@ -6147,7 +6385,7 @@ void FolderWindow::OnFolderViewPathChanged(Pane pane, const std::optional<std::f
     const std::filesystem::path displayPath = NavigationLocation::FormatHistoryPath(shortId, state.instanceContext, path.value());
 
     const Common::Settings::FoldersSettings* folders = (_settings && _settings->folders.has_value()) ? &_settings->folders.value() : nullptr;
-    const FolderView::NameFilterState filter          = GetFolderHistoryFilterState(folders, displayPath);
+    const FolderView::NameFilterState filter         = GetFolderHistoryFilterState(folders, displayPath);
     state.folderView.SetNameFilterState(filter, false /* refresh */);
 
     state.updatingPath = true;

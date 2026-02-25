@@ -811,8 +811,8 @@ float MeasureTextWidth(IDWriteFactory* factory, IDWriteTextFormat* format, std::
     return width;
 }
 
-std::wstring
-TruncateTextToWidth(IDWriteFactory* factory, IDWriteTextFormat* format, std::wstring_view text, float maxWidth, float height, std::wstring_view ellipsisText)
+std::wstring TruncateTextToWidth(
+    IDWriteFactory* factory, IDWriteTextFormat* format, std::wstring_view text, float maxWidth, float height, std::wstring_view ellipsisText)
 {
     const float currentWidth = MeasureTextWidth(factory, format, text, kIntrinsicTextLayoutMaxWidth, height);
     if (currentWidth <= maxWidth)

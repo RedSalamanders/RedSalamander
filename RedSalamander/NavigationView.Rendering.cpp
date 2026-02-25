@@ -552,25 +552,24 @@ void NavigationView::RenderDriveSection()
     // Render Section Drive Menu (shows hamburger fallback)
 
     _d2dContext->BeginDraw();
-    auto endDraw = wil::scope_exit(
-        [&]
+    auto endDraw = wil::scope_exit([&]
+    {
+        const HRESULT hrEnd = _d2dContext->EndDraw();
+        if (FAILED(hrEnd))
         {
-            const HRESULT hrEnd = _d2dContext->EndDraw();
-            if (FAILED(hrEnd))
+            if (hrEnd == D2DERR_RECREATE_TARGET)
             {
-                if (hrEnd == D2DERR_RECREATE_TARGET)
-                {
-                    DiscardD2DResources();
-                    return;
-                }
-
-                Debug::Error(L"[NavigationView] EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+                DiscardD2DResources();
                 return;
             }
 
-            RECT dirtyRect = _sectionDriveRect;
-            Present(&dirtyRect);
-        });
+            Debug::Error(L"[NavigationView] EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+            return;
+        }
+
+        RECT dirtyRect = _sectionDriveRect;
+        Present(&dirtyRect);
+    });
 
     _d2dContext->SetTarget(_d2dTarget.get());
 
@@ -668,25 +667,24 @@ void NavigationView::RenderHistorySection()
     }
 
     _d2dContext->BeginDraw();
-    auto endDraw = wil::scope_exit(
-        [&]
+    auto endDraw = wil::scope_exit([&]
+    {
+        const HRESULT hrEnd = _d2dContext->EndDraw();
+        if (FAILED(hrEnd))
         {
-            const HRESULT hrEnd = _d2dContext->EndDraw();
-            if (FAILED(hrEnd))
+            if (hrEnd == D2DERR_RECREATE_TARGET)
             {
-                if (hrEnd == D2DERR_RECREATE_TARGET)
-                {
-                    DiscardD2DResources();
-                    return;
-                }
-
-                Debug::Error(L"[NavigationView] EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+                DiscardD2DResources();
                 return;
             }
 
-            RECT dirtyRect = _sectionHistoryRect;
-            Present(&dirtyRect);
-        });
+            Debug::Error(L"[NavigationView] EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+            return;
+        }
+
+        RECT dirtyRect = _sectionHistoryRect;
+        Present(&dirtyRect);
+    });
 
     _d2dContext->SetTarget(_d2dTarget.get());
 
@@ -717,13 +715,13 @@ void NavigationView::RenderHistorySection()
             historyLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
             historyLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-             D2D1_POINT_2F origin = D2D1::Point2F(historyRect.left, historyRect.top);
-             if (textBrush)
-             {
+            D2D1_POINT_2F origin = D2D1::Point2F(historyRect.left, historyRect.top);
+            if (textBrush)
+            {
                 _d2dContext->DrawTextLayout(origin, historyLayout.get(), textBrush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-             }
-         }
-     }
+            }
+        }
+    }
 
     if (! _editMode && _accentBrush && _hWnd && GetFocus() == _hWnd.get() && _focusedRegion == FocusRegion::History)
     {
@@ -752,25 +750,24 @@ void NavigationView::RenderDiskInfoSection()
     }
 
     _d2dContext->BeginDraw();
-    auto endDraw = wil::scope_exit(
-        [&]
+    auto endDraw = wil::scope_exit([&]
+    {
+        const HRESULT hrEnd = _d2dContext->EndDraw();
+        if (FAILED(hrEnd))
         {
-            const HRESULT hrEnd = _d2dContext->EndDraw();
-            if (FAILED(hrEnd))
+            if (hrEnd == D2DERR_RECREATE_TARGET)
             {
-                if (hrEnd == D2DERR_RECREATE_TARGET)
-                {
-                    DiscardD2DResources();
-                    return;
-                }
-
-                Debug::Error(L"[NavigationView] EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+                DiscardD2DResources();
                 return;
             }
 
-            RECT dirtyRect = _sectionDiskInfoRect;
-            Present(&dirtyRect);
-        });
+            Debug::Error(L"[NavigationView] EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+            return;
+        }
+
+        RECT dirtyRect = _sectionDiskInfoRect;
+        Present(&dirtyRect);
+    });
     _d2dContext->SetTarget(_d2dTarget.get());
 
     ID2D1SolidColorBrush* textBrush = _textBrush.get();
@@ -793,13 +790,13 @@ void NavigationView::RenderDiskInfoSection()
             historyLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
             historyLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-             D2D1_POINT_2F origin = D2D1::Point2F(static_cast<float>(_sectionHistoryRect.left), static_cast<float>(_sectionHistoryRect.top));
-             if (textBrush)
-             {
+            D2D1_POINT_2F origin = D2D1::Point2F(static_cast<float>(_sectionHistoryRect.left), static_cast<float>(_sectionHistoryRect.top));
+            if (textBrush)
+            {
                 _d2dContext->DrawTextLayout(origin, historyLayout.get(), textBrush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-             }
-         }
-     }
+            }
+        }
+    }
 
     // Render Section 3: Disk Info
     D2D1_RECT_F section4Rect = D2D1::RectF(static_cast<float>(_sectionDiskInfoRect.left),
@@ -829,13 +826,13 @@ void NavigationView::RenderDiskInfoSection()
             diskTextLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
             diskTextLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 
-             D2D1_POINT_2F origin = D2D1::Point2F(section4Rect.left + 4.0f, section4Rect.top);
-             if (textBrush)
-             {
+            D2D1_POINT_2F origin = D2D1::Point2F(section4Rect.left + 4.0f, section4Rect.top);
+            if (textBrush)
+            {
                 _d2dContext->DrawTextLayout(origin, diskTextLayout.get(), textBrush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-             }
-         }
-     }
+            }
+        }
+    }
 
     // Draw progress bar at bottom - only if we have a path
     if (_currentPluginPath)

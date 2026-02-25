@@ -141,13 +141,13 @@ void FolderView::QueueIconLoading()
     std::sort(visibleRequests.begin(),
               visibleRequests.end(),
               [](const IconLoadRequest& a, const IconLoadRequest& b)
-              {
-                  if (a.firstVisibleItemIndex != b.firstVisibleItemIndex)
-                  {
-                      return a.firstVisibleItemIndex < b.firstVisibleItemIndex;
-                  }
-                  return a.itemIndices.size() > b.itemIndices.size();
-              });
+    {
+        if (a.firstVisibleItemIndex != b.firstVisibleItemIndex)
+        {
+            return a.firstVisibleItemIndex < b.firstVisibleItemIndex;
+        }
+        return a.itemIndices.size() > b.itemIndices.size();
+    });
 
     std::deque<IconLoadRequest> newQueue;
     newQueue.insert(newQueue.end(), std::make_move_iterator(visibleRequests.begin()), std::make_move_iterator(visibleRequests.end()));
@@ -419,13 +419,12 @@ void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPt
         return;
     }
 
-    const auto onExit = wil::scope_exit(
-        [&]() noexcept
-        {
-            const uint64_t remaining = _iconLoadStats.pendingBitmapCreates.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
-            static_cast<void>(remaining);
-            MaybeEmitIconBitmapSummary(batchId);
-        });
+    const auto onExit = wil::scope_exit([&]() noexcept
+    {
+        const uint64_t remaining = _iconLoadStats.pendingBitmapCreates.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        static_cast<void>(remaining);
+        MaybeEmitIconBitmapSummary(batchId);
+    });
 
     if (! _d2dContext || requestPtr->iconIndex < 0 || requestPtr->itemIndices.empty())
     {

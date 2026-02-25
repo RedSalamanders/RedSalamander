@@ -127,6 +127,7 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
 
     if (! folderPath)
     {
+        _hiddenNames.store(std::shared_ptr<const HiddenNamesFilter>{}, std::memory_order_release);
         _pendingExternalCommandAfterEnumeration.reset();
         ClearErrorOverlay(ErrorOverlayKind::Enumeration);
         _directoryCachePin = DirectoryInfoCache::Pin{};
@@ -137,6 +138,19 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
         _itemsFolder.clear();
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
         return;
+    }
+
+    if (! _currentFolder.has_value() || ! OrdinalString::EqualsNoCasePath(_currentFolder.value(), folderPath.value()))
+    {
+        const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
+        if (hiddenNames && ! hiddenNames->names.empty())
+        {
+            _hiddenNames.store(std::shared_ptr<const HiddenNamesFilter>{}, std::memory_order_release);
+            if (_hWnd)
+            {
+                InvalidateRect(_hWnd.get(), nullptr, FALSE);
+            }
+        }
     }
 
     _currentFolder = folderPath;
@@ -188,6 +202,42 @@ void FolderView::SetEmptyStateMessage(std::wstring message)
     {
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
+}
+
+bool FolderView::CanShowEmptyFolderState() const noexcept
+{
+    if (! _emptyStateMessage.empty())
+    {
+        return false;
+    }
+
+    if (! _currentFolder || ! _displayedFolder)
+    {
+        return false;
+    }
+
+    if (! _items.empty())
+    {
+        return false;
+    }
+
+    if (_pendingBusyOverlay.has_value())
+    {
+        return false;
+    }
+
+    if (! OrdinalString::EqualsNoCasePath(_currentFolder.value(), _displayedFolder.value()))
+    {
+        return false;
+    }
+
+    bool hasOverlay = false;
+    {
+        std::lock_guard lock(_errorOverlayMutex);
+        hasOverlay = _errorOverlay.has_value();
+    }
+
+    return ! hasOverlay;
 }
 
 void FolderView::RefreshDetailsText()
@@ -828,5 +878,17 @@ FolderView::NameFilterState FolderView::GetNameFilterState() const
 bool FolderView::IsNameFilterActive() const noexcept
 {
     const auto filter = _nameFilter.load(std::memory_order_acquire);
-    return filter && filter->state.enabled && filter->hasMask;
+    if (filter && filter->state.enabled && filter->hasMask)
+    {
+        return true;
+    }
+
+    const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
+    return hiddenNames && ! hiddenNames->names.empty();
+}
+
+bool FolderView::HasHiddenNames() const noexcept
+{
+    const auto hiddenNames = _hiddenNames.load(std::memory_order_acquire);
+    return hiddenNames && ! hiddenNames->names.empty();
 }

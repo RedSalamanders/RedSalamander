@@ -306,9 +306,9 @@ struct RenameDialogState
     AppTheme theme{};
     wil::unique_hbrush backgroundBrush;
 
-    COLORREF inputBackgroundColor             = RGB(255, 255, 255);
-    COLORREF inputFocusedBackgroundColor      = RGB(255, 255, 255);
-    COLORREF inputDisabledBackgroundColor     = RGB(255, 255, 255);
+    COLORREF inputBackgroundColor         = RGB(255, 255, 255);
+    COLORREF inputFocusedBackgroundColor  = RGB(255, 255, 255);
+    COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
     wil::unique_hbrush inputBrush;
     wil::unique_hbrush inputFocusedBrush;
     wil::unique_hbrush inputDisabledBrush;
@@ -685,17 +685,17 @@ void EnsureRenameDialogEditFrame(HWND dlg, RenameDialogState* state, HWND edit) 
     if (! state->editFrame)
     {
         state->editFrame.reset(CreateWindowExW(0,
-                                              L"Static",
-                                              L"",
-                                              WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-                                              frameRc.left,
-                                              frameRc.top,
-                                              frameW,
-                                              frameH,
-                                              dlg,
-                                              nullptr,
-                                              GetModuleHandleW(nullptr),
-                                              nullptr));
+                                               L"Static",
+                                               L"",
+                                               WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+                                               frameRc.left,
+                                               frameRc.top,
+                                               frameW,
+                                               frameH,
+                                               dlg,
+                                               nullptr,
+                                               GetModuleHandleW(nullptr),
+                                               nullptr));
         if (! state->editFrame)
         {
             return;
@@ -1462,12 +1462,11 @@ private:
         }
         // Copy the handle value now; don’t reference the local `data`.
         HGLOBAL h   = data.get();
-        auto unlock = wil::scope_exit(
-            [h]()
-            {
-                if (h)
-                    GlobalUnlock(h);
-            });
+        auto unlock = wil::scope_exit([h]()
+        {
+            if (h)
+                GlobalUnlock(h);
+        });
 
         auto* header                 = static_cast<Header*>(raw);
         header->version              = 1;

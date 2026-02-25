@@ -21,8 +21,8 @@ public:
     static void CreateControls(HWND parent, PreferencesDialogState& state) noexcept;
     static void Refresh(HWND host, PreferencesDialogState& state) noexcept;
     static void UpdateEditorFromSelection(HWND host, PreferencesDialogState& state) noexcept;
-    static void
-    LayoutControls(HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept;
+    static void LayoutControls(
+        HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept;
     [[nodiscard]] static bool HandleCommand(HWND host, PreferencesDialogState& state, UINT commandId, UINT notifyCode, HWND hwndCtl) noexcept;
     [[nodiscard]] static bool HandleNotify(HWND host, PreferencesDialogState& state, NMHDR* hdr, LRESULT& outResult) noexcept;
     [[nodiscard]] static LRESULT OnMeasureColorsList(MEASUREITEMSTRUCT* mis, PreferencesDialogState& state) noexcept;

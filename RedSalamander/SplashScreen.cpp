@@ -6,8 +6,8 @@
 #include <array>
 #include <atomic>
 #include <chrono>
-#include <exception>
 #include <cmath>
+#include <exception>
 #include <mutex>
 #include <stop_token>
 #include <string>
@@ -15,7 +15,7 @@
 
 #pragma warning(push)
 // WIL headers: deleted copy/move and unused inline Helpers
-#pragma warning(disable: 4625 4626 5026 5027 4514 28182)
+#pragma warning(disable : 4625 4626 5026 5027 4514 28182)
 #include <wil/com.h>
 #include <wil/resource.h>
 #pragma warning(pop)
@@ -282,12 +282,12 @@ void PaintSplash(HWND hwnd, HDC hdc) noexcept
     auto oldBrush = wil::SelectObject(hdc, GetStockObject(DC_BRUSH));
     for (int y = 0; y < height; ++y)
     {
-        const double t = (height > 1) ? (static_cast<double>(y) / static_cast<double>(height - 1)) : 0.0;
+        const double t          = (height > 1) ? (static_cast<double>(y) / static_cast<double>(height - 1)) : 0.0;
         const auto blendChannel = [](BYTE start, BYTE end, double weight) noexcept
         {
-            const double value      = static_cast<double>(start) + (static_cast<double>(end) - static_cast<double>(start)) * weight;
-            const int roundedValue  = static_cast<int>(std::lround(value));
-            const int clampedValue  = std::clamp(roundedValue, 0, 255);
+            const double value     = static_cast<double>(start) + (static_cast<double>(end) - static_cast<double>(start)) * weight;
+            const int roundedValue = static_cast<int>(std::lround(value));
+            const int clampedValue = std::clamp(roundedValue, 0, 255);
             return static_cast<BYTE>(clampedValue);
         };
         const BYTE r = blendChannel(ColorRefR(kBgStart), ColorRefR(kBgEnd), t);
@@ -309,7 +309,7 @@ void PaintSplash(HWND hwnd, HDC hdc) noexcept
             POINT{0, height},
         };
         constexpr COLORREF panelColor = MakeRGB(38, 50, 66);
-        auto panelBrush           = wil::unique_hbrush{CreateSolidBrush(panelColor)};
+        auto panelBrush               = wil::unique_hbrush{CreateSolidBrush(panelColor)};
         if (panelBrush)
         {
             auto oldFillBrush = wil::SelectObject(hdc, panelBrush.get());
@@ -554,14 +554,13 @@ void ThreadMain(std::chrono::milliseconds delay, HINSTANCE instance) noexcept
     }
 
     const HRESULT comHr   = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-    const auto comCleanup = wil::scope_exit(
-        [&]
+    const auto comCleanup = wil::scope_exit([&]
+    {
+        if (SUCCEEDED(comHr))
         {
-            if (SUCCEEDED(comHr))
-            {
-                CoUninitialize();
-            }
-        });
+            CoUninitialize();
+        }
+    });
 
     if (! g_logoIcon)
     {
@@ -631,26 +630,25 @@ void BeginDelayedOpen(std::chrono::milliseconds delay, HINSTANCE instance) noexc
     // Mandatory: `noexcept` boundary. Splash is best-effort; thread creation can throw.
     try
     {
-        g_workerThread = std::jthread(
-            [delay, instance](std::stop_token stopToken) noexcept
+        g_workerThread = std::jthread([delay, instance](std::stop_token stopToken) noexcept
+        {
+            std::stop_callback stopCallback(stopToken,
+                                            []() noexcept
             {
-                std::stop_callback stopCallback(stopToken,
-                                                []() noexcept
-                                                {
-                                                    if (g_closeEvent)
-                                                    {
-                                                        static_cast<void>(SetEvent(g_closeEvent.get()));
-                                                    }
+                if (g_closeEvent)
+                {
+                    static_cast<void>(SetEvent(g_closeEvent.get()));
+                }
 
-                                                    const HWND hwnd = g_hwnd.load(std::memory_order_acquire);
-                                                    if (hwnd)
-                                                    {
-                                                        static_cast<void>(PostMessageW(hwnd, WM_CLOSE, 0, 0));
-                                                    }
-                                                });
-
-                ThreadMain(delay, instance);
+                const HWND hwnd = g_hwnd.load(std::memory_order_acquire);
+                if (hwnd)
+                {
+                    static_cast<void>(PostMessageW(hwnd, WM_CLOSE, 0, 0));
+                }
             });
+
+            ThreadMain(delay, instance);
+        });
     }
     catch (const std::bad_alloc&)
     {

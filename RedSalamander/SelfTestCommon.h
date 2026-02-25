@@ -96,8 +96,7 @@ struct CaseState
     }
 };
 
-template <typename Func>
-void RunCase(const SelfTestOptions& options, SelfTestSuiteResult& suite, std::wstring_view name, Func&& func) noexcept
+template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSuiteResult& suite, std::wstring_view name, Func&& func) noexcept
 {
     SelfTestCaseResult result{};
     result.name = std::wstring(name);
@@ -120,7 +119,7 @@ void RunCase(const SelfTestOptions& options, SelfTestSuiteResult& suite, std::ws
 
     const auto startedAt = std::chrono::steady_clock::now();
     CaseState state{};
-    const bool ok   = std::forward<Func>(func)(state);
+    const bool ok      = std::forward<Func>(func)(state);
     const auto endedAt = std::chrono::steady_clock::now();
 
     result.durationMs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(endedAt - startedAt).count());

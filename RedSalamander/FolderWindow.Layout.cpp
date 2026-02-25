@@ -353,7 +353,7 @@ void FolderWindow::BeginViewWidthAdjust() noexcept
         return;
     }
 
-    _viewWidthAdjustActive        = true;
+    _viewWidthAdjustActive       = true;
     _viewWidthAdjustRestoreRatio = _splitRatio;
 }
 
@@ -369,7 +369,7 @@ void FolderWindow::CancelViewWidthAdjust() noexcept
         return;
     }
 
-    const float restore = _viewWidthAdjustRestoreRatio;
+    const float restore    = _viewWidthAdjustRestoreRatio;
     _viewWidthAdjustActive = false;
     SetSplitRatio(restore);
 }
@@ -398,14 +398,9 @@ bool FolderWindow::HandleViewWidthAdjustKey(uint32_t vk) noexcept
             SetSplitRatio(_splitRatio + delta);
             return true;
         }
-        case VK_RETURN:
-            CommitViewWidthAdjust();
-            return true;
-        case VK_ESCAPE:
-            CancelViewWidthAdjust();
-            return true;
-        default:
-            return false;
+        case VK_RETURN: CommitViewWidthAdjust(); return true;
+        case VK_ESCAPE: CancelViewWidthAdjust(); return true;
+        default: return false;
     }
 }
 

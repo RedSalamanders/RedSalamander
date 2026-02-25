@@ -126,13 +126,11 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/setHotPath` *(parameterized: digit `1..9` and `0`)*
 - `cmd/pane/listOpenedFiles`
 - `cmd/pane/showFoldersHistory`
-- `cmd/pane/loadSelection`
 - `cmd/pane/makeFileList` *(planned)*
 - `cmd/pane/menu`
 - `cmd/pane/pack`
 - `cmd/pane/permanentDelete`
 - `cmd/pane/refresh`
-- `cmd/pane/saveSelection`
 - `cmd/pane/shares`
 - `cmd/pane/unpack`
 - `cmd/pane/userMenu`
@@ -157,17 +155,18 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/newFromShellTemplate` *(planned, parameterized: templateId)*
 - `cmd/pane/selection/selectDialog`
 - `cmd/pane/selection/unselectDialog`
-- `cmd/pane/selection/invert` *(planned)*
+- `cmd/pane/selection/invert`
 - `cmd/pane/selection/selectAll`
 - `cmd/pane/selection/unselectAll`
-- `cmd/pane/selection/restore` *(planned)*
+- `cmd/pane/selection/restore`
+- `cmd/pane/selection/save`
 - `cmd/pane/selection/selectSameExtension`
 - `cmd/pane/selection/unselectSameExtension`
 - `cmd/pane/selection/selectSameName` *(planned)*
 - `cmd/pane/selection/unselectSameName` *(planned)*
-- `cmd/pane/selection/hideSelectedNames` *(planned)*
-- `cmd/pane/selection/hideUnselectedNames` *(planned)*
-- `cmd/pane/selection/showHiddenNames` *(planned)*
+- `cmd/pane/selection/hideSelectedNames`
+- `cmd/pane/selection/hideUnselectedNames`
+- `cmd/pane/selection/showHiddenNames`
 - `cmd/pane/selection/goToPreviousSelectedName`
 - `cmd/pane/selection/goToNextSelectedName`
 - `cmd/pane/goToShortcutOrLinkTarget` *(planned)*
@@ -301,15 +300,15 @@ Notation:
 - ---
 - Select… (`Ctrl+<key left of Backspace>`) `[cmd/pane/selection/selectDialog]`
 - Unselect… (`Ctrl+<key right of 0>`) `[cmd/pane/selection/unselectDialog]`
-- Invert Selection [td] (`⊘`) `[cmd/pane/selection/invert]`
+- Invert Selection (`⊘`) `[cmd/pane/selection/invert]`
 - Select All (`Ctrl+A` target) `[cmd/pane/selection/selectAll]`
 - Unselect All (`Esc`) `[cmd/pane/selection/unselectAll]`
-- Restore Selection [td] (`⊘`) `[cmd/pane/selection/restore]`
+- Restore Selection (`Ctrl+Shift+F6`) `[cmd/pane/selection/restore]`
 - Select Next (`Insert`) `[cmd/pane/selectNext]`
 - Select + Calculate Directory Size + Next (`Space`) `[cmd/pane/selectCalculateDirectorySizeNext]`
 - Advanced >
-  - Save Selection [td] (`Ctrl+Shift+F2`) `[cmd/pane/saveSelection]`
-  - Load Selection… [td] (`Ctrl+Shift+F6`) `[cmd/pane/loadSelection]`
+  - Save Selection (`Ctrl+Shift+F5`) `[cmd/pane/selection/save]`
+  - Load Selection… (`Ctrl+Shift+F6`) `[cmd/pane/selection/restore]`
   - ---
   - Select Same Extensions (`Ctrl+Shift+<key left of Backspace>`) `[cmd/pane/selection/selectSameExtension]`
   - Unselect Same Extensions (`Ctrl+Shift+<key right of 0>`) `[cmd/pane/selection/unselectSameExtension]`
@@ -317,9 +316,9 @@ Notation:
   - Select Same Names [td] (`⊘`) `[cmd/pane/selection/selectSameName]`
   - Unselect Same Names [td] (`⊘`) `[cmd/pane/selection/unselectSameName]`
   - ---
-  - Hide Selected Names [td] (`⊘`) `[cmd/pane/selection/hideSelectedNames]`
-  - Hide Unselected Names [td] (`⊘`) `[cmd/pane/selection/hideUnselectedNames]`
-  - Show Hidden Names [td] (`⊘`) `[cmd/pane/selection/showHiddenNames]`
+  - Hide Selected Names (`⊘`) `[cmd/pane/selection/hideSelectedNames]`
+  - Hide Unselected Names (`⊘`) `[cmd/pane/selection/hideUnselectedNames]`
+  - Show Hidden Names (`⊘`) `[cmd/pane/selection/showHiddenNames]`
   - ---
   - Go to Previous Selected Name (`Alt+Up`) `[cmd/pane/selection/goToPreviousSelectedName]`
   - Go to Next Selected Name (`Alt+Down`) `[cmd/pane/selection/goToNextSelectedName]`
@@ -602,11 +601,11 @@ All Function Bar bindings MUST be configurable in settings.
 | Key  | None            | Ctrl                     | Alt                         | Shift                | Ctrl+Shift                      | Alt+Shift                                 |
 |------|-----------------|--------------------------|-----------------------------|----------------------|----------------------------------|-------------------------------------------|
 | F1   | Shortcuts       | ⊘                        | Open Left Drive Menu        | ⊘                    | ⊘                                | ⊘                                         |
-| F2   | Rename          | Sort None                | Open Right Drive Menu       | ⊘                    | Save Selection                   | ⊘                                         |
+| F2   | Rename          | Sort None                | Open Right Drive Menu       | ⊘                    | ⊘                                | ⊘                                         |
 | F3   | View            | Sort by Name             | Alternate View              | Open Current Folder  | View Width                       | ⊘                                         |
 | F4   | Edit            | Sort by Extension        | Exit                        | Edit New             | Edit Width                       | ⊘                                         |
 | F5   | Copy            | Sort by Time             | Pack                        | ⊘                    | Save Selection                   | ⊘                                         |
-| F6   | Move            | Sort by Size             | Unpack                      | ⊘                    | Load Selection                   | ⊘                                         |
+| F6   | Move            | Sort by Size             | Unpack                      | ⊘                    | Restore Selection                | ⊘                                         |
 | F7   | Make Directory  | Change Case              | Find                        | Change Directory     | ⊘                                | ⊘                                         |
 | F8   | Delete          | Change Attributes        | ⊘                           | Permanent Delete     | ⊘                                | ⊘                                         |
 | F9   | User Menu       | Refresh                  | Unpack                      | Hot Paths            | Shares                           | ⊘                                         |

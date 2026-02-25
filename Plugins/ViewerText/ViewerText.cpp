@@ -1923,8 +1923,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
             return;
         }
 
-        FileEncoding encoding = FileEncoding::Unknown;
-        uint64_t bomBytes     = 0;
+        FileEncoding encoding     = FileEncoding::Unknown;
+        uint64_t bomBytes         = 0;
         uint64_t detectedFileSize = 0;
 
         uint64_t sizeBytes   = 0;
@@ -2473,19 +2473,19 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
 
     const BOOL queued = TrySubmitThreadpoolCallback(
         [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+    {
+        std::unique_ptr<AsyncOpenWorkItem> ctx(static_cast<AsyncOpenWorkItem*>(context));
+        if (! ctx)
         {
-            std::unique_ptr<AsyncOpenWorkItem> ctx(static_cast<AsyncOpenWorkItem*>(context));
-            if (! ctx)
-            {
-                return;
-            }
+            return;
+        }
 
-            static_cast<void>(ctx->moduleKeepAlive);
-            if (ctx->work)
-            {
-                ctx->work();
-            }
-        },
+        static_cast<void>(ctx->moduleKeepAlive);
+        if (ctx->work)
+        {
+            ctx->work();
+        }
+    },
         ctx.get(),
         nullptr);
 
@@ -3443,15 +3443,14 @@ void ViewerText::OnPaint()
         HRESULT hr = S_OK;
         {
             _d2dTarget->BeginDraw();
-            auto endDraw = wil::scope_exit(
-                [&]
+            auto endDraw = wil::scope_exit([&]
+            {
+                hr = _d2dTarget->EndDraw();
+                if (hr == D2DERR_RECREATE_TARGET)
                 {
-                    hr = _d2dTarget->EndDraw();
-                    if (hr == D2DERR_RECREATE_TARGET)
-                    {
-                        DiscardDirect2D();
-                    }
-                });
+                    DiscardDirect2D();
+                }
+            });
 
             _d2dTarget->SetTransform(D2D1::Matrix3x2F::Identity());
             _d2dTarget->Clear(ColorFFromColorRef(bg));

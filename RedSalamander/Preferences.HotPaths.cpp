@@ -46,11 +46,11 @@ void HotPathsPane::CreateControls(HWND parent, PreferencesDialogState& state) no
         return;
     }
 
-    const DWORD baseStaticStyle    = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
-    const DWORD captionStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_CENTERIMAGE;
+    const DWORD baseStaticStyle         = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
+    const DWORD captionStaticStyle      = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_CENTERIMAGE;
     const DWORD rightCaptionStaticStyle = WS_CHILD | WS_VISIBLE | SS_RIGHT | SS_NOPREFIX | SS_CENTERIMAGE;
-    const DWORD wrapStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-    const bool customButtons    = ! state.theme.systemHighContrast;
+    const DWORD wrapStaticStyle         = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
+    const bool customButtons            = ! state.theme.systemHighContrast;
 
     const DWORD toggleStyle = customButtons ? (WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW) : (WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX);
 
@@ -72,9 +72,18 @@ void HotPathsPane::CreateControls(HWND parent, PreferencesDialogState& state) no
         PrefsInput::CreateFramedEditBox(state, parent, slot.pathFrame, slot.pathEdit, pathEditId, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
 
         const int browseId = IDC_PREFS_HOT_PATHS_BROWSE_BASE + i;
-        slot.browseButton.reset(CreateWindowExW(
-            0, L"Button", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON, 0, 0, 10, 10, parent,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(browseId)), instance, nullptr));
+        slot.browseButton.reset(CreateWindowExW(0,
+                                                L"Button",
+                                                L"",
+                                                WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                                0,
+                                                0,
+                                                10,
+                                                10,
+                                                parent,
+                                                reinterpret_cast<HMENU>(static_cast<INT_PTR>(browseId)),
+                                                instance,
+                                                nullptr));
         if (slot.browseButton && customButtons)
         {
             ThemedControls::EnableOwnerDrawButton(parent, browseId);
@@ -87,11 +96,20 @@ void HotPathsPane::CreateControls(HWND parent, PreferencesDialogState& state) no
         PrefsInput::CreateFramedEditBox(state, parent, slot.labelFrame, slot.labelEdit, labelEditId, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
 
         // Show in menu toggle
-        const int showInMenuId = IDC_PREFS_HOT_PATHS_SHOW_IN_MENU_BASE + i;
+        const int showInMenuId       = IDC_PREFS_HOT_PATHS_SHOW_IN_MENU_BASE + i;
         const std::wstring showLabel = customButtons ? std::wstring{} : LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_SHOW_IN_MENU);
-        slot.showInMenuToggle.reset(CreateWindowExW(
-            0, L"Button", showLabel.c_str(), toggleStyle, 0, 0, 10, 10, parent,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(showInMenuId)), instance, nullptr));
+        slot.showInMenuToggle.reset(CreateWindowExW(0,
+                                                    L"Button",
+                                                    showLabel.c_str(),
+                                                    toggleStyle,
+                                                    0,
+                                                    0,
+                                                    10,
+                                                    10,
+                                                    parent,
+                                                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(showInMenuId)),
+                                                    instance,
+                                                    nullptr));
         PrefsInput::EnableMouseWheelForwarding(slot.showInMenuToggle);
 
         slot.showInMenuLabel.reset(CreateWindowExW(0, L"Static", L"", rightCaptionStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
@@ -100,14 +118,22 @@ void HotPathsPane::CreateControls(HWND parent, PreferencesDialogState& state) no
 
     // Open prefs on assign toggle
     const std::wstring assignLabel = customButtons ? std::wstring{} : LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN);
-    state.hotPathOpenPrefsOnAssignToggle.reset(CreateWindowExW(
-        0, L"Button", assignLabel.c_str(), toggleStyle, 0, 0, 10, 10, parent,
-        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN)), instance, nullptr));
+    state.hotPathOpenPrefsOnAssignToggle.reset(CreateWindowExW(0,
+                                                               L"Button",
+                                                               assignLabel.c_str(),
+                                                               toggleStyle,
+                                                               0,
+                                                               0,
+                                                               10,
+                                                               10,
+                                                               parent,
+                                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN)),
+                                                               instance,
+                                                               nullptr));
     PrefsInput::EnableMouseWheelForwarding(state.hotPathOpenPrefsOnAssignToggle);
 
     state.hotPathOpenPrefsOnAssignLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.hotPathOpenPrefsOnAssignDescription.reset(
-        CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+    state.hotPathOpenPrefsOnAssignDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
 
     Refresh(parent, state);
 }
@@ -164,8 +190,8 @@ void HotPathsPane::Refresh(HWND /*host*/, PreferencesDialogState& state) noexcep
 
     for (int i = 0; i < kSlotCount && i < static_cast<int>(state.hotPathSlotControls.size()); ++i)
     {
-        const auto& slotCtl  = state.hotPathSlotControls[static_cast<size_t>(i)];
-        const auto& slotData = hp.slots[static_cast<size_t>(i)];
+        const auto& slotCtl                = state.hotPathSlotControls[static_cast<size_t>(i)];
+        const auto& slotData               = hp.slots[static_cast<size_t>(i)];
         const BOOL enableDependentControls = (slotData.has_value() && ! slotData.value().path.empty()) ? TRUE : FALSE;
 
         if (slotCtl.pathEdit)
@@ -193,14 +219,8 @@ void HotPathsPane::Refresh(HWND /*host*/, PreferencesDialogState& state) noexcep
     PrefsUi::SetTwoStateToggleState(state.hotPathOpenPrefsOnAssignToggle, state.theme.systemHighContrast, hp.openPrefsOnAssign);
 }
 
-void HotPathsPane::LayoutControls(HWND host,
-                                 PreferencesDialogState& state,
-                                 int x,
-                                 int& y,
-                                 int width,
-                                 [[maybe_unused]] int margin,
-                                 int gapY,
-                                 HFONT dialogFont) noexcept
+void HotPathsPane::LayoutControls(
+    HWND host, PreferencesDialogState& state, int x, int& y, int width, [[maybe_unused]] int margin, int gapY, HFONT dialogFont) noexcept
 {
     using namespace PrefsLayoutConstants;
 
@@ -237,17 +257,18 @@ void HotPathsPane::LayoutControls(HWND host,
     const int onWidth             = ThemedControls::MeasureTextWidth(host, toggleMeasureFont, onLabel);
     const int offWidth            = ThemedControls::MeasureTextWidth(host, toggleMeasureFont, offLabel);
 
-    const int tPaddingX       = ThemedControls::ScaleDip(dpi, kTogglePaddingXDip);
-    const int tGapX           = ThemedControls::ScaleDip(dpi, kToggleGapXDip);
-    const int trackWidth      = ThemedControls::ScaleDip(dpi, kToggleTrackWidthDip);
-    const int stateTextWidth  = std::max(onWidth, offWidth);
+    const int tPaddingX      = ThemedControls::ScaleDip(dpi, kTogglePaddingXDip);
+    const int tGapX          = ThemedControls::ScaleDip(dpi, kToggleGapXDip);
+    const int trackWidth     = ThemedControls::ScaleDip(dpi, kToggleTrackWidthDip);
+    const int stateTextWidth = std::max(onWidth, offWidth);
 
     const int measuredToggleWidth = std::max(minToggleWidth, (2 * tPaddingX) + stateTextWidth + tGapX + trackWidth);
     const int toggleWidth         = std::min(std::max(0, width - 2 * cardPaddingX), measuredToggleWidth);
 
     auto pushCard = [&](const RECT& card) noexcept { state.pageSettingCards.push_back(card); };
 
-    auto layoutToggleCard = [&](int cardX, int cardWidth, HWND label, std::wstring_view labelText, HWND toggle, HWND descLabel, std::wstring_view descText) noexcept
+    auto layoutToggleCard =
+        [&](int cardX, int cardWidth, HWND label, std::wstring_view labelText, HWND toggle, HWND descLabel, std::wstring_view descText) noexcept
     {
         const int textWidth  = std::max(0, cardWidth - 2 * cardPaddingX - cardGapX - toggleWidth);
         const int descHeight = descLabel ? PrefsUi::MeasureStaticTextHeight(host, infoFont, textWidth, descText) : 0;
@@ -302,17 +323,17 @@ void HotPathsPane::LayoutControls(HWND host,
         auto& slotCtl = state.hotPathSlotControls[static_cast<size_t>(i)];
 
         // Slot header: "Ctrl+1" etc.
-        const wchar_t digitChar = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
+        const wchar_t digitChar       = (i < 9) ? static_cast<wchar_t>(L'1' + i) : L'0';
         const std::wstring headerText = FormatStringResource(nullptr, IDS_PREFS_HOT_PATHS_SLOT_HEADER_FMT, digitChar);
 
-        const int cardLeft = x;
-        const int cardWidth = width;
+        const int cardLeft     = x;
+        const int cardWidth    = width;
         const int cardContentX = cardLeft + cardPaddingX;
         const int cardContentW = std::max(0, cardWidth - 2 * cardPaddingX);
 
         const int frameInset = ThemedControls::ScaleDip(dpi, kFramePaddingDip);
 
-        const std::wstring pathLabelText = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_PATH_LABEL);
+        const std::wstring pathLabelText  = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_PATH_LABEL);
         const std::wstring labelLabelText = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_LABEL_LABEL);
         const std::wstring showInMenuText = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_SHOW_IN_MENU);
 
@@ -342,11 +363,11 @@ void HotPathsPane::LayoutControls(HWND host,
         const int labelCaptionW = std::max(0, ThemedControls::MeasureTextWidth(host, dialogFont, labelLabelText) + textPadX);
         const int captionW      = std::max(pathCaptionW, labelCaptionW);
 
-        const int showTextW  = std::max(0, ThemedControls::MeasureTextWidth(host, dialogFont, showInMenuText) + textPadX);
-        const int showAreaW  = showTextW + inlineGapX + toggleWidth;
-        const int rightEdge  = cardContentX + cardContentW;
-        const int browseX    = rightEdge - browseWidth;
-        const int showAreaX  = rightEdge - showAreaW;
+        const int showTextW = std::max(0, ThemedControls::MeasureTextWidth(host, dialogFont, showInMenuText) + textPadX);
+        const int showAreaW = showTextW + inlineGapX + toggleWidth;
+        const int rightEdge = cardContentX + cardContentW;
+        const int browseX   = rightEdge - browseWidth;
+        const int showAreaX = rightEdge - showAreaW;
 
         const int editX      = cardContentX + captionW + inlineGapX;
         const int pathEditW  = browseX - browseGap - editX;
@@ -388,13 +409,8 @@ void HotPathsPane::LayoutControls(HWND host,
             if (slotCtl.browseButton)
             {
                 SetWindowTextW(slotCtl.browseButton.get(), browseText.c_str());
-                SetWindowPos(slotCtl.browseButton.get(),
-                             nullptr,
-                             std::max(cardContentX, browseX),
-                             rowY,
-                             browseWidth,
-                             editHeight,
-                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(
+                    slotCtl.browseButton.get(), nullptr, std::max(cardContentX, browseX), rowY, browseWidth, editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
                 SendMessageW(slotCtl.browseButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
             }
 
@@ -438,13 +454,7 @@ void HotPathsPane::LayoutControls(HWND host,
 
             if (slotCtl.showInMenuToggle)
             {
-                SetWindowPos(slotCtl.showInMenuToggle.get(),
-                             nullptr,
-                             rightEdge - toggleWidth,
-                             toggleY,
-                             toggleWidth,
-                             rowHeight,
-                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(slotCtl.showInMenuToggle.get(), nullptr, rightEdge - toggleWidth, toggleY, toggleWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
                 SendMessageW(slotCtl.showInMenuToggle.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
             }
 
@@ -464,13 +474,7 @@ void HotPathsPane::LayoutControls(HWND host,
             const int stackPathEditW = std::max(0, cardContentW - browseGap - browseWidth);
             if (slotCtl.pathFrame)
             {
-                SetWindowPos(slotCtl.pathFrame.get(),
-                             nullptr,
-                             cardContentX,
-                             contentY,
-                             std::max(10, stackPathEditW),
-                             editHeight,
-                             SWP_NOZORDER | SWP_NOACTIVATE);
+                SetWindowPos(slotCtl.pathFrame.get(), nullptr, cardContentX, contentY, std::max(10, stackPathEditW), editHeight, SWP_NOZORDER | SWP_NOACTIVATE);
             }
             if (slotCtl.pathEdit)
             {
@@ -565,15 +569,20 @@ void HotPathsPane::LayoutControls(HWND host,
     // Open prefs on assign
     const std::wstring assignLabel = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN);
     const std::wstring assignDesc  = LoadStringResource(nullptr, IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN_DESC);
-    layoutToggleCard(x, width, state.hotPathOpenPrefsOnAssignLabel.get(), assignLabel,
-                     state.hotPathOpenPrefsOnAssignToggle.get(), state.hotPathOpenPrefsOnAssignDescription.get(), assignDesc);
+    layoutToggleCard(x,
+                     width,
+                     state.hotPathOpenPrefsOnAssignLabel.get(),
+                     assignLabel,
+                     state.hotPathOpenPrefsOnAssignToggle.get(),
+                     state.hotPathOpenPrefsOnAssignDescription.get(),
+                     assignDesc);
 }
 
 bool HotPathsPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT commandId, UINT notifyCode, HWND hwndCtl) noexcept
 {
     // Handle path and label edit changes.
-    const bool isPathEdit  = (commandId >= static_cast<UINT>(IDC_PREFS_HOT_PATHS_PATH_EDIT_BASE) &&
-                             commandId < static_cast<UINT>(IDC_PREFS_HOT_PATHS_PATH_EDIT_BASE + kSlotCount));
+    const bool isPathEdit =
+        (commandId >= static_cast<UINT>(IDC_PREFS_HOT_PATHS_PATH_EDIT_BASE) && commandId < static_cast<UINT>(IDC_PREFS_HOT_PATHS_PATH_EDIT_BASE + kSlotCount));
     const bool isLabelEdit = (commandId >= static_cast<UINT>(IDC_PREFS_HOT_PATHS_LABEL_EDIT_BASE) &&
                               commandId < static_cast<UINT>(IDC_PREFS_HOT_PATHS_LABEL_EDIT_BASE + kSlotCount));
 
@@ -581,8 +590,8 @@ bool HotPathsPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT 
     {
         if (notifyCode == EN_CHANGE || notifyCode == EN_KILLFOCUS)
         {
-            HWND edit               = hwndCtl ? hwndCtl : GetDlgItem(host, static_cast<int>(commandId));
-            const std::wstring text = PrefsUi::GetWindowTextString(edit);
+            HWND edit                       = hwndCtl ? hwndCtl : GetDlgItem(host, static_cast<int>(commandId));
+            const std::wstring text         = PrefsUi::GetWindowTextString(edit);
             const std::wstring_view trimmed = PrefsUi::TrimWhitespace(text);
             const bool commit               = (notifyCode == EN_KILLFOCUS);
 
@@ -720,8 +729,8 @@ bool HotPathsPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT 
     }
 
     // Handle browse buttons.
-    const bool isBrowse = (commandId >= static_cast<UINT>(IDC_PREFS_HOT_PATHS_BROWSE_BASE) &&
-                           commandId < static_cast<UINT>(IDC_PREFS_HOT_PATHS_BROWSE_BASE + kSlotCount));
+    const bool isBrowse =
+        (commandId >= static_cast<UINT>(IDC_PREFS_HOT_PATHS_BROWSE_BASE) && commandId < static_cast<UINT>(IDC_PREFS_HOT_PATHS_BROWSE_BASE + kSlotCount));
     if (isBrowse && notifyCode == BN_CLICKED)
     {
         const int slotIdx = static_cast<int>(commandId) - IDC_PREFS_HOT_PATHS_BROWSE_BASE;

@@ -7,7 +7,7 @@
 
 namespace
 {
-constexpr std::array<CommandInfo, 125> kCommands = {
+constexpr std::array<CommandInfo, 124> kCommands = {
     CommandInfo{L"cmd/app/about", IDS_CMD_ABOUT, IDS_CMD_DESC_ABOUT, IDM_ABOUT},
     CommandInfo{L"cmd/app/compare", IDS_CMD_COMPARE, IDS_CMD_DESC_COMPARE, IDM_APP_COMPARE},
     CommandInfo{L"cmd/app/exit", IDS_CMD_EXIT, IDS_CMD_DESC_EXIT, IDM_EXIT},
@@ -88,7 +88,6 @@ constexpr std::array<CommandInfo, 125> kCommands = {
     CommandInfo{L"cmd/pane/hotPath", IDS_CMD_HOT_PATH_GO, IDS_CMD_DESC_HOT_PATH_GO, 0},
     CommandInfo{L"cmd/pane/hotPaths", IDS_CMD_HOT_PATHS, IDS_CMD_DESC_HOT_PATHS, 0},
     CommandInfo{L"cmd/pane/listOpenedFiles", IDS_CMD_LIST_OPENED_FILES, IDS_CMD_DESC_LIST_OPENED_FILES, IDM_PANE_LIST_OPENED_FILES},
-    CommandInfo{L"cmd/pane/loadSelection", IDS_CMD_LOAD_SELECTION, IDS_CMD_DESC_LOAD_SELECTION, IDM_PANE_LOAD_SELECTION},
     CommandInfo{L"cmd/pane/makeFileList", IDS_CMD_MAKE_FILE_LIST, IDS_CMD_DESC_MAKE_FILE_LIST, IDM_PANE_MAKE_FILE_LIST},
     CommandInfo{L"cmd/pane/menu", IDS_CMD_MENU, IDS_CMD_DESC_MENU, IDM_PANE_MENU},
     CommandInfo{L"cmd/pane/moveToOtherPane", IDS_CMD_MOVE, IDS_CMD_DESC_MOVE, IDM_PANE_MOVE_TO_OTHER},
@@ -108,7 +107,6 @@ constexpr std::array<CommandInfo, 125> kCommands = {
     CommandInfo{L"cmd/pane/quickSearch", IDS_CMD_QUICK_SEARCH, IDS_CMD_DESC_QUICK_SEARCH, IDM_PANE_QUICK_SEARCH},
     CommandInfo{L"cmd/pane/refresh", IDS_CMD_REFRESH, IDS_CMD_DESC_REFRESH, 0},
     CommandInfo{L"cmd/pane/rename", IDS_CMD_RENAME, IDS_CMD_DESC_RENAME, IDM_PANE_RENAME},
-    CommandInfo{L"cmd/pane/saveSelection", IDS_CMD_SAVE_SELECTION, IDS_CMD_DESC_SAVE_SELECTION, IDM_PANE_SAVE_SELECTION},
     CommandInfo{L"cmd/pane/selectCalculateDirectorySizeNext",
                 IDS_CMD_SELECT_CALC_DIR_SIZE_NEXT,
                 IDS_CMD_DESC_SELECT_CALC_DIR_SIZE_NEXT,
@@ -133,6 +131,7 @@ constexpr std::array<CommandInfo, 125> kCommands = {
                 IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES},
     CommandInfo{L"cmd/pane/selection/invert", IDS_CMD_SELECTION_INVERT, IDS_CMD_DESC_SELECTION_INVERT, IDM_PANE_SELECTION_INVERT},
     CommandInfo{L"cmd/pane/selection/restore", IDS_CMD_SELECTION_RESTORE, IDS_CMD_DESC_SELECTION_RESTORE, IDM_PANE_SELECTION_RESTORE},
+    CommandInfo{L"cmd/pane/selection/save", IDS_CMD_SAVE_SELECTION, IDS_CMD_DESC_SAVE_SELECTION, IDM_PANE_SAVE_SELECTION},
     CommandInfo{L"cmd/pane/selection/selectAll", IDS_CMD_SELECTION_SELECT_ALL, IDS_CMD_DESC_SELECTION_SELECT_ALL, IDM_PANE_SELECTION_SELECT_ALL},
     CommandInfo{L"cmd/pane/selection/selectDialog", IDS_CMD_SELECTION_SELECT_DIALOG, IDS_CMD_DESC_SELECTION_SELECT_DIALOG, IDM_PANE_SELECTION_SELECT_DIALOG},
     CommandInfo{L"cmd/pane/selection/selectSameExtension",
@@ -201,16 +200,16 @@ constexpr std::array<CommandInfo, 125> kCommands = {
 
 static_assert(
     []() consteval
+{
+    for (size_t i = 1; i < kCommands.size(); ++i)
     {
-        for (size_t i = 1; i < kCommands.size(); ++i)
+        if (kCommands[i - 1].id >= kCommands[i].id)
         {
-            if (kCommands[i - 1].id >= kCommands[i].id)
-            {
-                return false;
-            }
+            return false;
         }
-        return true;
-    }(),
+    }
+    return true;
+}(),
     "kCommands must be sorted by id.");
 } // namespace
 

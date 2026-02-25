@@ -19,8 +19,8 @@ public:
     }
 
     static void CreateControls(HWND parent, PreferencesDialogState& state) noexcept;
-    static void
-    LayoutControls(HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept;
+    static void LayoutControls(
+        HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept;
 
 private:
     wil::unique_hwnd _hWnd;

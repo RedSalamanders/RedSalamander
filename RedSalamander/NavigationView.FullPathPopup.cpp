@@ -494,15 +494,14 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
         return;
     }
 
-    auto menuCleanup = wil::scope_exit(
-        [&]
+    auto menuCleanup = wil::scope_exit([&]
+    {
+        if (menu)
         {
-            if (menu)
-            {
-                DestroyMenu(menu);
-            }
-            _menuBitmaps.clear();
-        });
+            DestroyMenu(menu);
+        }
+        _menuBitmaps.clear();
+    });
 
     BuildSiblingFoldersMenu(menu, siblings, segment.fullPath);
 
@@ -902,21 +901,20 @@ void NavigationView::RenderFullPathPopup()
     }
 
     _fullPathPopupTarget->BeginDraw();
-    auto endDraw = wil::scope_exit(
-        [&]
+    auto endDraw = wil::scope_exit([&]
+    {
+        const HRESULT hrEnd = _fullPathPopupTarget->EndDraw();
+        if (FAILED(hrEnd))
         {
-            const HRESULT hrEnd = _fullPathPopupTarget->EndDraw();
-            if (FAILED(hrEnd))
+            if (hrEnd == D2DERR_RECREATE_TARGET)
             {
-                if (hrEnd == D2DERR_RECREATE_TARGET)
-                {
-                    DiscardFullPathPopupD2DResources();
-                    return;
-                }
-                Debug::Error(L"[NavigationView] NavigationView::RenderFullPathPopup EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+                DiscardFullPathPopupD2DResources();
                 return;
             }
-        });
+            Debug::Error(L"[NavigationView] NavigationView::RenderFullPathPopup EndDraw failed (hr=0x{:08X})", static_cast<unsigned long>(hrEnd));
+            return;
+        }
+    });
 
     const D2D1_RECT_F clientRect = D2D1::RectF(0.0f, 0.0f, static_cast<float>(_fullPathPopupClientSize.cx), static_cast<float>(_fullPathPopupClientSize.cy));
     if (_fullPathPopupBackgroundBrush)
@@ -952,10 +950,7 @@ void NavigationView::RenderFullPathPopup()
             if (segment.layout && brush)
             {
                 _fullPathPopupTarget->DrawTextLayout(
-                    D2D1::Point2F(segment.bounds.left + textInsetX, segment.bounds.top),
-                    segment.layout.get(),
-                    brush,
-                    D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                    D2D1::Point2F(segment.bounds.left + textInsetX, segment.bounds.top), segment.layout.get(), brush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             }
         }
 

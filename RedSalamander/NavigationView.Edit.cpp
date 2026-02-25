@@ -416,9 +416,7 @@ void NavigationView::UpdateEditSuggest()
     }
 
     const auto startsWithNoCase = [](std::wstring_view value, std::wstring_view prefix) noexcept
-    {
-        return ! prefix.empty() && OrdinalString::StartsWithNoCase(value, prefix);
-    };
+    { return ! prefix.empty() && OrdinalString::StartsWithNoCase(value, prefix); };
 
     auto showStaticSuggestions = [&](std::vector<EditSuggestItem>&& items, std::wstring&& highlightText)
     {
@@ -1251,15 +1249,14 @@ void NavigationView::RenderEditSuggestPopup()
     }
 
     _editSuggestPopupTarget->BeginDraw();
-    auto endDraw = wil::scope_exit(
-        [&]
+    auto endDraw = wil::scope_exit([&]
+    {
+        const HRESULT hr = _editSuggestPopupTarget->EndDraw();
+        if (hr == D2DERR_RECREATE_TARGET)
         {
-            const HRESULT hr = _editSuggestPopupTarget->EndDraw();
-            if (hr == D2DERR_RECREATE_TARGET)
-            {
-                DiscardEditSuggestPopupD2DResources();
-            }
-        });
+            DiscardEditSuggestPopupD2DResources();
+        }
+    });
 
     const float width            = static_cast<float>(_editSuggestPopupClientSize.cx);
     const float height           = static_cast<float>(_editSuggestPopupClientSize.cy);
@@ -1375,8 +1372,7 @@ void NavigationView::RenderEditSuggestPopup()
                 brush = _editSuggestPopupDisabledTextBrush.get();
             }
 
-            _editSuggestPopupTarget->DrawTextLayout(
-                D2D1::Point2F(textRect.left, rowRect.top), layout.get(), brush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+            _editSuggestPopupTarget->DrawTextLayout(D2D1::Point2F(textRect.left, rowRect.top), layout.get(), brush, D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
         }
     }
 

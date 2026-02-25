@@ -2305,7 +2305,7 @@ void ParseSelectionMasks(yyjson_val* root, Common::Settings::Settings& out)
     Common::Settings::SelectionMasksSettings settings;
 
     constexpr size_t kMaxHistoryItems = 10u;
-    auto parseHistory = [&](const char* key, std::vector<std::wstring>& dest)
+    auto parseHistory                 = [&](const char* key, std::vector<std::wstring>& dest)
     {
         yyjson_val* arr = yyjson_obj_get(selectionMasks, key);
         if (! arr || ! yyjson_is_arr(arr))
@@ -2673,31 +2673,31 @@ std::string_view GetSettingsStoreSchemaJsonUtf8() noexcept
 
     std::call_once(once,
                    []
-                   {
-                       const std::filesystem::path schemaPath = GetShippedSettingsStoreSchemaPath();
-                       if (schemaPath.empty())
-                       {
-                           return;
-                       }
+    {
+        const std::filesystem::path schemaPath = GetShippedSettingsStoreSchemaPath();
+        if (schemaPath.empty())
+        {
+            return;
+        }
 
-                       const DWORD attrs = GetFileAttributesW(schemaPath.c_str());
-                       if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0)
-                       {
-                           Debug::Warning(L"Shipped settings schema file is missing: '{}'", schemaPath.c_str());
-                           return;
-                       }
+        const DWORD attrs = GetFileAttributesW(schemaPath.c_str());
+        if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            Debug::Warning(L"Shipped settings schema file is missing: '{}'", schemaPath.c_str());
+            return;
+        }
 
-                       std::string bytes;
-                       const HRESULT hr = ReadFileBytes(schemaPath, bytes);
-                       if (FAILED(hr))
-                       {
-                           Debug::Warning(L"Failed to read shipped settings schema '{}': hr=0x{:08X}", schemaPath.c_str(), static_cast<unsigned long>(hr));
-                           return;
-                       }
+        std::string bytes;
+        const HRESULT hr = ReadFileBytes(schemaPath, bytes);
+        if (FAILED(hr))
+        {
+            Debug::Warning(L"Failed to read shipped settings schema '{}': hr=0x{:08X}", schemaPath.c_str(), static_cast<unsigned long>(hr));
+            return;
+        }
 
-                       StripUtf8BomInPlace(bytes);
-                       cached = std::move(bytes);
-                   });
+        StripUtf8BomInPlace(bytes);
+        cached = std::move(bytes);
+    });
 
     return cached;
 }
@@ -3300,17 +3300,17 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             std::sort(items.begin(),
                       items.end(),
                       [](const ShortcutBinding* a, const ShortcutBinding* b)
-                      {
-                          if (a->vk != b->vk)
-                          {
-                              return a->vk < b->vk;
-                          }
-                          if (a->modifiers != b->modifiers)
-                          {
-                              return a->modifiers < b->modifiers;
-                          }
-                          return a->commandId < b->commandId;
-                      });
+            {
+                if (a->vk != b->vk)
+                {
+                    return a->vk < b->vk;
+                }
+                if (a->modifiers != b->modifiers)
+                {
+                    return a->modifiers < b->modifiers;
+                }
+                return a->commandId < b->commandId;
+            });
 
             for (const ShortcutBinding* binding : items)
             {
@@ -3602,7 +3602,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                     return E_OUTOFMEMORY;
                 }
 
-                size_t written = 0;
+                size_t written        = 0;
                 size_t historyWritten = 0;
                 for (const auto& historyPath : settings.folders->history)
                 {
@@ -3620,7 +3620,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                     const auto it = std::find_if(settings.folders->historyFilters.begin(),
                                                  settings.folders->historyFilters.end(),
                                                  [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
-                                                 { return OrdinalString::EqualsNoCasePath(state.path, historyPath); });
+                    { return OrdinalString::EqualsNoCasePath(state.path, historyPath); });
                     if (it == settings.folders->historyFilters.end())
                     {
                         continue;
@@ -4237,7 +4237,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             yyjson_mut_obj_add_val(doc, root, "selectionMasks", masksObj);
 
             constexpr size_t kMaxHistoryItems = 10u;
-            auto writeHistory = [&](const char* key, const std::vector<std::wstring>& history) -> HRESULT
+            auto writeHistory                 = [&](const char* key, const std::vector<std::wstring>& history) -> HRESULT
             {
                 if (history.empty())
                 {
@@ -4506,11 +4506,11 @@ HRESULT LoadThemeDefinitionsFromDirectory(const std::filesystem::path& directory
     std::sort(paths.begin(),
               paths.end(),
               [](const std::filesystem::path& left, const std::filesystem::path& right) noexcept
-              {
-                  const std::wstring leftText  = left.filename().wstring();
-                  const std::wstring rightText = right.filename().wstring();
-                  return CompareStringOrdinal(leftText.c_str(), -1, rightText.c_str(), -1, TRUE) == CSTR_LESS_THAN;
-              });
+    {
+        const std::wstring leftText  = left.filename().wstring();
+        const std::wstring rightText = right.filename().wstring();
+        return CompareStringOrdinal(leftText.c_str(), -1, rightText.c_str(), -1, TRUE) == CSTR_LESS_THAN;
+    });
 
     for (const auto& path : paths)
     {

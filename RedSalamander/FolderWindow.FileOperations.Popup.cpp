@@ -2564,8 +2564,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             (info.changeCaseEnumerating || info.changeCaseScannedFolders > 0 || info.changeCaseScannedEntries > 0))
                         {
                             const std::wstring scanPath = info.changeCaseCurrentPath.empty() ? std::wstring(L".") : info.changeCaseCurrentPath.native();
-                            const std::wstring scanText =
-                                FormatStringResource(nullptr, IDS_FMT_COMPARE_SCAN_STATUS, scanPath, info.changeCaseScannedFolders, info.changeCaseScannedEntries);
+                            const std::wstring scanText = FormatStringResource(
+                                nullptr, IDS_FMT_COMPARE_SCAN_STATUS, scanPath, info.changeCaseScannedFolders, info.changeCaseScannedEntries);
                             const D2D1_RECT_F scanRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
                             _target->DrawTextW(scanText.data(),
                                                static_cast<UINT32>(scanText.size()),
@@ -2581,16 +2581,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         {
                             if (textY + lineH <= cardRect.bottom)
                             {
-                                const std::wstring countsText = info.changeCasePlannedRenames > 0
-                                                                    ? FormatStringResource(nullptr,
-                                                                                           IDS_FMT_FILEOPS_OP_COUNTS,
-                                                                                           info.title,
-                                                                                           info.changeCaseCompletedRenames,
-                                                                                           info.changeCasePlannedRenames)
-                                                                    : FormatStringResource(nullptr,
-                                                                                           IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL,
-                                                                                           info.title,
-                                                                                           info.changeCaseCompletedRenames);
+                                const std::wstring countsText =
+                                    info.changeCasePlannedRenames > 0
+                                        ? FormatStringResource(
+                                              nullptr, IDS_FMT_FILEOPS_OP_COUNTS, info.title, info.changeCaseCompletedRenames, info.changeCasePlannedRenames)
+                                        : FormatStringResource(nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, info.title, info.changeCaseCompletedRenames);
                                 const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
                                 _target->DrawTextW(countsText.data(),
                                                    static_cast<UINT32>(countsText.size()),
@@ -2800,10 +2795,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         textY += lineH;
                     }
 
-                    const bool showProgressBar = ! info.finished &&
-                                                 ((info.kind == FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories && (info.scanActive || info.contentActive)) ||
-                                                  (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase &&
-                                                   (info.changeCaseEnumerating || info.changeCaseRenaming)));
+                    const bool showProgressBar =
+                        ! info.finished &&
+                        ((info.kind == FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories && (info.scanActive || info.contentActive)) ||
+                         (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase && (info.changeCaseEnumerating || info.changeCaseRenaming)));
                     if (showProgressBar)
                     {
                         const float barH        = DipsToPixels(8.0f, _dpi);
@@ -2825,23 +2820,20 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories)
                             {
                                 hasTotal = info.contentTotalBytes > 0 && info.contentCompletedBytes <= info.contentTotalBytes;
-                                frac     = hasTotal
-                                               ? Clamp01(static_cast<float>(static_cast<double>(info.contentCompletedBytes) /
-                                                                           static_cast<double>(info.contentTotalBytes)))
-                                               : 0.0f;
+                                frac     = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.contentCompletedBytes) /
+                                                                             static_cast<double>(info.contentTotalBytes)))
+                                                    : 0.0f;
                             }
                             else if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase)
                             {
                                 hasTotal = info.changeCasePlannedRenames > 0 && info.changeCaseCompletedRenames <= info.changeCasePlannedRenames;
-                                frac     = hasTotal
-                                               ? Clamp01(static_cast<float>(static_cast<double>(info.changeCaseCompletedRenames) /
-                                                                           static_cast<double>(info.changeCasePlannedRenames)))
-                                               : 0.0f;
+                                frac     = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.changeCaseCompletedRenames) /
+                                                                             static_cast<double>(info.changeCasePlannedRenames)))
+                                                    : 0.0f;
                             }
 
-                            const D2D1_RECT_F fill =
-                                hasTotal ? D2D1::RectF(barRc.left, barRc.top, barRc.left + (barRc.right - barRc.left) * frac, barRc.bottom)
-                                         : ComputeIndeterminateBarFill(barRc, nowTick);
+                            const D2D1_RECT_F fill = hasTotal ? D2D1::RectF(barRc.left, barRc.top, barRc.left + (barRc.right - barRc.left) * frac, barRc.bottom)
+                                                              : ComputeIndeterminateBarFill(barRc, nowTick);
                             const float radius     = ClampCornerRadius(fill, DipsToPixels(2.0f, _dpi));
                             _target->FillRoundedRectangle(D2D1::RoundedRect(fill, radius, radius), _progressGlobalBrush.get());
                         }
@@ -4417,12 +4409,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
     const uint64_t currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
     HMENU menu       = CreatePopupMenu();
-    auto menuCleanup = wil::scope_exit(
-        [&]
-        {
-            if (menu)
-                DestroyMenu(menu);
-        });
+    auto menuCleanup = wil::scope_exit([&]
+    {
+        if (menu)
+            DestroyMenu(menu);
+    });
     if (! menu)
     {
         return;
@@ -4542,12 +4533,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
     const std::vector<std::filesystem::path> history          = folderWindow->GetFolderHistory(destinationPane);
 
     HMENU menu       = CreatePopupMenu();
-    auto menuCleanup = wil::scope_exit(
-        [&]
-        {
-            if (menu)
-                DestroyMenu(menu);
-        });
+    auto menuCleanup = wil::scope_exit([&]
+    {
+        if (menu)
+            DestroyMenu(menu);
+    });
     if (! menu)
     {
         return;

@@ -58,8 +58,8 @@ struct FolderWindow::FileOperationState
         uint64_t completedBytes      = 0;
 
         // When pre-calc is skipped, totals may be unknown; keep a best-effort top-level type breakdown for UI.
-        bool preCalcSkipped           = false;
-        unsigned long completedFiles  = 0;
+        bool preCalcSkipped            = false;
+        unsigned long completedFiles   = 0;
         unsigned long completedFolders = 0;
         std::wstring sourcePath;
         std::wstring destinationPath;

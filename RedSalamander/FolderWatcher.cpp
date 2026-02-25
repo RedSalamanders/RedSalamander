@@ -112,13 +112,13 @@ void FolderWatcher::OnPluginDirectoryChanged(bool overflow) noexcept
         Callback* raw = deferred.release();
         const BOOL ok = TrySubmitThreadpoolCallback(
             [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        {
+            std::unique_ptr<Callback> callback(static_cast<Callback*>(context));
+            if (callback && *callback)
             {
-                std::unique_ptr<Callback> callback(static_cast<Callback*>(context));
-                if (callback && *callback)
-                {
-                    (*callback)();
-                }
-            },
+                (*callback)();
+            }
+        },
             raw,
             nullptr);
 

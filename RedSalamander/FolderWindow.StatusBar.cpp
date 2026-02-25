@@ -93,7 +93,7 @@ void PaintSortIndicatorGlyph(HDC hdc, const RECT& rc, HFONT iconFont, HFONT arro
 
     if (hasArrow && arrowCh != 0 && arrowFont)
     {
-        RECT arrowRect  = indicatorRect;
+        RECT arrowRect       = indicatorRect;
         const LONG widthPx   = static_cast<LONG>(width);
         const LONG arrowArea = std::clamp(static_cast<LONG>(MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI)), 0L, widthPx);
         const LONG split     = indicatorRect.left + arrowArea;
@@ -107,7 +107,7 @@ void PaintSortIndicatorGlyph(HDC hdc, const RECT& rc, HFONT iconFont, HFONT arro
     }
 
     {
-        auto oldIconFont    = wil::SelectObject(hdc, iconFont);
+        auto oldIconFont     = wil::SelectObject(hdc, iconFont);
         const UINT iconAlign = (hasArrow && arrowCh != 0) ? DT_LEFT : DT_CENTER;
         DrawTextW(hdc, &icon, 1, &iconRect, iconAlign | DT_VCENTER | DT_SINGLELINE);
     }
