@@ -130,6 +130,8 @@ interface __declspec(uuid("0d9ef549-4e54-4086-8a5c-f9d3e6120211")) __declspec(no
 {
     // Returns the head of a contiguous buffer containing FileInfo entries linked by NextEntryOffset.
     // The buffer is owned by the IFilesInformation instance; the caller MUST NOT free it.
+    // The returned pointer remains valid until the IFilesInformation instance is released.
+    // Implementations MUST NOT mutate/reallocate the buffer after returning it (no async mutation after ReadDirectoryInfo returns).
     // If there are no entries, *ppFileInfo is set to nullptr and S_OK is returned.
     virtual HRESULT STDMETHODCALLTYPE GetBuffer(FileInfo * *ppFileInfo) noexcept = 0;
     // Returns how many bytes in the buffer are committed/used by the current result set.
@@ -354,6 +356,9 @@ struct FileSystemDirectorySizeResult
 //   and SHOULD reach progress checkpoints frequently enough for responsiveness.
 interface __declspec(novtable) IFileSystemDirectorySizeCallback
 {
+    // Notes:
+    // - This is a per-call callback passed to IFileSystemDirectoryOperations::GetDirectorySize.
+    // - Implementations MUST NOT invoke these callbacks after GetDirectorySize returns.
     virtual HRESULT STDMETHODCALLTYPE DirectorySizeProgress(
         uint64_t scannedEntries, uint64_t totalBytes, uint64_t fileCount, uint64_t directoryCount, const wchar_t* currentPath, void* cookie) noexcept = 0;
 

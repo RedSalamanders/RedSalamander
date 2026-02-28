@@ -10,7 +10,7 @@
 
 #include "FileSystemDummy.h"
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* /*host*/, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, void** result)
 {
     if (result == nullptr)
     {
@@ -21,7 +21,7 @@ extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptio
 
     if (riid == __uuidof(IFileSystem))
     {
-        auto* instance = new (std::nothrow) FileSystemDummy();
+        auto* instance = new (std::nothrow) FileSystemDummy(host);
         if (instance == nullptr)
         {
             return E_OUTOFMEMORY;

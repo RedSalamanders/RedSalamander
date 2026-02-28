@@ -105,7 +105,7 @@ While scanning:
 - Direct2D 1.1 + DirectWrite
 - Hwnd render target; handle `D2DERR_RECREATE_TARGET`
 - Use `ViewerTheme.backgroundArgb`, `textArgb`, and `accentArgb` for styling; in high-contrast, prioritize strong borders/readability.
-- First-show background MUST match the current theme (avoid a white/high-contrast flash before the first Direct2D paint); implement via a themed `WNDCLASSEXW::hbrBackground` + `WM_ERASEBKGND` behavior consistent with `Specs/PluginsViewer.md`.
+- First-show background MUST match the current theme (avoid a white/high-contrast flash before the first Direct2D paint); implement via a themed `WNDCLASSEXW::hbrBackground` + `WM_ERASEBKGND` behavior consistent with `Specs/Plugins/Plugins_ViewerPlugins.md`.
 
 ## Threading and Cancellation
 

@@ -129,7 +129,7 @@ Detailed patterns in `.github/skills/`:
 ## Specifications
 
 Detailed component specs in `Specs/` folder:
-- FolderViewSpec.md, FolderWindowSpec.md, NavigationViewSpec.md
-- PluginsVirtualFileSystem.md, PluginsViewer.md, PluginAPI.md
-- PreferencesDialogSpec.md, SettingsStore.schema.json
-- RedSalamanderMonitorSpec.md
+- `Specs/UI/UI_FolderView.md`, `Specs/UI/UI_FolderWindow.md`, `Specs/UI/UI_NavigationView.md`
+- `Specs/Plugins/Plugins_VirtualFileSystem.md`, `Specs/Plugins/Plugins_ViewerPlugins.md`, `Specs/Plugins/Plugins_PluginAPI.md`
+- `Specs/UI/UI_PreferencesDialog.md`, `Specs/SettingsStore.schema.json`
+- `Specs/Core/Core_RedSalamanderMonitor.md`

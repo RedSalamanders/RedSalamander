@@ -3425,7 +3425,14 @@ void ColorTextView::StartLayoutWorker(float layoutWidth, UINT32 seq)
         auto* self            = ctx->self;
         const float width     = std::clamp(ctx->width, kMinLayoutWidthDip, kMaxLayoutWidthDip);
         const UINT32 seqLocal = ctx->seq;
-        auto res              = wil::CoInitializeEx();
+
+        const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        if (FAILED(coinitHr))
+        {
+            Debug::Error(L"ColorTextView layout worker: CoInitializeEx(COINIT_MULTITHREADED) failed: 0x{:08X}", coinitHr);
+            FAIL_FAST_IF_FAILED(coinitHr);
+        }
+        [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
         wil::com_ptr<IDWriteTextLayout> lay;
 
         if (self->_dwriteFactory && ! ctx->text.empty())
@@ -4291,7 +4298,13 @@ void ColorTextView::EnsureWidthAsync()
         if (! self)
             return;
 
-        auto res = wil::CoInitializeEx();
+        const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        if (FAILED(coinitHr))
+        {
+            Debug::Error(L"ColorTextView width worker: CoInitializeEx(COINIT_MULTITHREADED) failed: 0x{:08X}", coinitHr);
+            FAIL_FAST_IF_FAILED(coinitHr);
+        }
+        [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
         auto pkt     = std::make_unique<ColorTextView::WidthPacket>();
         pkt->seq     = widthCtx->seq;

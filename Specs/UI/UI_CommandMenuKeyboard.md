@@ -184,7 +184,7 @@ This section is the single source of truth for the command ID catalog.
 
 ### Requirements (Normative)
 
-- The menu bar structure and static labels MUST be defined in `.rc` resources (`RedSalamander/RedSalamander.rc`) to support localization (see `Specs/LocalizationSpec.md`).
+- The menu bar structure and static labels MUST be defined in `.rc` resources (`RedSalamander/RedSalamander.rc`) to support localization (see `Specs/Core/Core_Localization.md`).
 - Each menu item that triggers application behavior MUST map to a `cmd/*` command ID (shown in brackets below).
   - If the menu item is dynamic and requires a parameter (history path, hot path, plugin ID, theme ID), the menu item MUST still map to a stable `cmd/*` command ID; the parameter is carried in the menu item payload.
 - The displayed shortcut text (when present) MUST reflect the effective current bindings (default or user-customized).
@@ -436,13 +436,13 @@ Right menu is identical to Left menu, except:
 
 #### Toggle Hidden Files (`cmd/pane/viewOptions/toggleHiddenFiles`)
 
-- Invoking the command MUST toggle `folders.showHiddenFiles` (see `Specs/SettingsStoreSpec.md`).
+- Invoking the command MUST toggle `folders.showHiddenFiles` (see `Specs/Core/Core_SettingsStore.md`).
 - Default is `true` (shown).
 - When `true`, hidden items (Windows `FILE_ATTRIBUTE_HIDDEN`) MUST be visible and MUST display a dimmed icon.
 
 #### Toggle System Files (`cmd/pane/viewOptions/toggleSystemFiles`)
 
-- Invoking the command MUST toggle `folders.showSystemFiles` (see `Specs/SettingsStoreSpec.md`).
+- Invoking the command MUST toggle `folders.showSystemFiles` (see `Specs/Core/Core_SettingsStore.md`).
 - Default is `true` (shown).
 
 #### Toggle Fullscreen (`cmd/app/fullScreen`)
@@ -477,7 +477,7 @@ Right menu is identical to Left menu, except:
 
                        [ OK ] [ Cancel ]
   ```
-- The dialog MUST be theme-aware (title bar + background + input + buttons) and follow `Specs/VisualStyleSpec.md` for framed inputs and owner-draw buttons (skip custom drawing in high contrast).
+- The dialog MUST be theme-aware (title bar + background + input + buttons) and follow `Specs/UI/UI_VisualStyle.md` for framed inputs and owner-draw buttons (skip custom drawing in high contrast).
 - Layout:
   - The dialog SHOULD default to a wide size (same width as the Select/Unselect mask dialog) to accommodate long names.
   - The dialog MUST be centered on the main window.
@@ -622,7 +622,7 @@ Resolution order (normative):
 - When focus is inside the `FolderWindow` but not in a `FolderView`: chords in `settings.shortcuts.folderView` are evaluated only when at least one modifier (Ctrl/Alt/Shift) is down and the key is not `Tab`; if bound, the host MUST execute the bound command and MUST consume the key message.
 - Otherwise, the message continues through the normal routing pipeline (accelerators, then `FolderView`’s built-in key handling).
 
-This means any key listed as a valid `vk` in `Specs/SettingsStoreSpec.md` (including Arrow keys / PageUp / PageDown / Home / End / `0`-`9`) can be made configurable by adding a binding entry; unbound chords keep their built-in behavior.
+This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` (including Arrow keys / PageUp / PageDown / Home / End / `0`-`9`) can be made configurable by adding a binding entry; unbound chords keep their built-in behavior.
 
 `⊘` means “no shortcut assigned”.
 
@@ -677,7 +677,7 @@ Notes:
 ### RedSalamander (main app)
 
 **Menu bar**
-- `Alt` (alone) temporarily shows the menu bar when hidden and starts menu interaction (see `Specs/SettingsStoreSpec.md`).
+- `Alt` (alone) temporarily shows the menu bar when hidden and starts menu interaction (see `Specs/Core/Core_SettingsStore.md`).
 
 **Accelerators** (see `RedSalamander/RedSalamander.rc`)
 - None. (Reserved for legacy / future use.)
@@ -710,7 +710,7 @@ Notes:
 
 ### RedSalamanderMonitor
 
-**ColorTextView** (see `Specs/RedSalamanderMonitorSpec.md`)
+**ColorTextView** (see `Specs/Core/Core_RedSalamanderMonitor.md`)
 - `Ctrl+F`: open find UI
 - `F3`: find next
 - `Ctrl+C`, `Ctrl+A`: selection/copy

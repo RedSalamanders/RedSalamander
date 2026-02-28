@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <condition_variable>
+#include <deque>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -9,6 +10,383 @@
 #include <unordered_map>
 
 using namespace FileSystemCurlInternal;
+
+namespace FileSystemCurlInternal
+{
+class SharedCopyMoveJobScheduler final
+{
+public:
+    SharedCopyMoveJobScheduler() = default;
+    ~SharedCopyMoveJobScheduler() noexcept
+    {
+        ShutdownAndJoin();
+    }
+
+    SharedCopyMoveJobScheduler(const SharedCopyMoveJobScheduler&)            = delete;
+    SharedCopyMoveJobScheduler(SharedCopyMoveJobScheduler&&)                 = delete;
+    SharedCopyMoveJobScheduler& operator=(const SharedCopyMoveJobScheduler&) = delete;
+    SharedCopyMoveJobScheduler& operator=(SharedCopyMoveJobScheduler&&)      = delete;
+
+    struct Job final
+    {
+        Job() noexcept = default;
+
+        Job(const Job&)            = delete;
+        Job(Job&&)                 = delete;
+        Job& operator=(const Job&) = delete;
+        Job& operator=(Job&&)      = delete;
+
+        std::function<void(size_t, uint64_t)> processIndex;
+        size_t totalItems           = 0;
+        unsigned int maxConcurrency = 1;
+
+        // Protected by the scheduler mutex.
+        size_t nextIndex      = 0;
+        unsigned int inFlight = 0;
+
+        std::atomic<bool> done{false};
+        std::mutex doneMutex;
+        std::condition_variable doneCv;
+    };
+
+    using JobPtr = std::shared_ptr<Job>;
+
+    JobPtr StartJob(unsigned int maxConcurrency, size_t totalItems, std::function<void(size_t, uint64_t)> processIndex)
+    {
+        auto job            = std::make_shared<Job>();
+        job->totalItems     = totalItems;
+        job->processIndex   = std::move(processIndex);
+        job->maxConcurrency = std::max(1u, maxConcurrency);
+        if (job->totalItems > 0)
+        {
+            job->maxConcurrency =
+                std::min<unsigned int>(job->maxConcurrency, static_cast<unsigned int>((std::min)(job->totalItems, static_cast<size_t>(UINT_MAX))));
+        }
+
+        ensureWorkers();
+
+        if (_workers.empty())
+        {
+            if (job->processIndex)
+            {
+                for (size_t i = 0; i < job->totalItems; ++i)
+                {
+                    job->processIndex(i, 0);
+                }
+            }
+
+            finishJob(*job);
+            return job;
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            _jobs.push_back(job);
+        }
+
+        _cv.notify_all();
+        return job;
+    }
+
+    [[nodiscard]] bool EnsureWorkersAvailable() noexcept
+    {
+        ensureWorkers();
+
+        std::scoped_lock lock(_initMutex);
+        return ! _workers.empty();
+    }
+
+    void WaitJob(const JobPtr& job) noexcept
+    {
+        if (! job)
+        {
+            return;
+        }
+
+        std::unique_lock lock(job->doneMutex);
+        job->doneCv.wait(lock, [&]() noexcept { return job->done.load(std::memory_order_acquire); });
+    }
+
+    void Shutdown() noexcept
+    {
+        {
+            std::scoped_lock lock(_initMutex);
+            if (! _initialized)
+            {
+                return;
+            }
+
+            for (std::jthread& worker : _workers)
+            {
+                worker.request_stop();
+            }
+        }
+
+        // Ensure any thread blocked in WaitJob can proceed during teardown.
+        {
+            std::scoped_lock lock(_mutex);
+            for (const JobPtr& job : _jobs)
+            {
+                if (job)
+                {
+                    finishJob(*job);
+                }
+            }
+            _jobs.clear();
+            _rrCursor = 0;
+        }
+
+        _cv.notify_all();
+    }
+
+    void ShutdownAndJoin() noexcept
+    {
+        std::vector<std::jthread> workers;
+        {
+            std::scoped_lock lock(_initMutex);
+            if (_initialized)
+            {
+                for (std::jthread& worker : _workers)
+                {
+                    worker.request_stop();
+                }
+
+                workers      = std::move(_workers);
+                _initialized = false;
+            }
+        }
+
+        // Ensure any thread blocked in WaitJob can proceed during teardown.
+        {
+            std::scoped_lock lock(_mutex);
+            for (const JobPtr& job : _jobs)
+            {
+                if (job)
+                {
+                    finishJob(*job);
+                }
+            }
+            _jobs.clear();
+            _rrCursor = 0;
+        }
+
+        _cv.notify_all();
+
+        // 'workers' destructs here (joining the worker threads) outside any locks.
+    }
+
+private:
+    void ensureWorkers()
+    {
+        std::scoped_lock lock(_initMutex);
+        if (_initialized)
+        {
+            return;
+        }
+
+        unsigned int workerCount = std::thread::hardware_concurrency();
+        if (workerCount == 0)
+        {
+            workerCount = 4;
+        }
+
+        constexpr unsigned int kMaxWorkers = 8u;
+        workerCount                        = std::max(1u, std::min(workerCount, kMaxWorkers));
+
+        _workers.reserve(workerCount);
+        for (unsigned int i = 0; i < workerCount; ++i)
+        {
+            try
+            {
+                _workers.emplace_back([this, i](std::stop_token stopToken) noexcept { workerMain(stopToken, static_cast<uint64_t>(i)); });
+            }
+            catch (const std::system_error&)
+            {
+                break;
+            }
+        }
+
+        _initialized = true;
+    }
+
+    void finishJob(Job& job) noexcept
+    {
+        {
+            std::scoped_lock lock(job.doneMutex);
+            job.done.store(true, std::memory_order_release);
+        }
+        job.doneCv.notify_all();
+    }
+
+    void cleanupJobsLocked() noexcept
+    {
+        size_t write = 0;
+        for (size_t read = 0; read < _jobs.size(); ++read)
+        {
+            const JobPtr& job = _jobs[read];
+            if (! job)
+            {
+                continue;
+            }
+
+            const bool finished = job->nextIndex >= job->totalItems;
+            if (finished && job->inFlight == 0)
+            {
+                finishJob(*job);
+                continue;
+            }
+
+            if (write != read)
+            {
+                _jobs[write] = job;
+            }
+            ++write;
+        }
+
+        if (write < _jobs.size())
+        {
+            _jobs.resize(write);
+        }
+
+        if (_rrCursor >= _jobs.size())
+        {
+            _rrCursor = 0;
+        }
+    }
+
+    [[nodiscard]] bool hasSchedulableWorkLocked() noexcept
+    {
+        cleanupJobsLocked();
+
+        for (const JobPtr& job : _jobs)
+        {
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    [[nodiscard]] bool tryDequeueWorkLocked(JobPtr& outJob, size_t& outIndex) noexcept
+    {
+        const size_t jobCount = _jobs.size();
+        if (jobCount == 0)
+        {
+            return false;
+        }
+
+        const size_t start = _rrCursor % jobCount;
+        for (size_t attempt = 0; attempt < jobCount; ++attempt)
+        {
+            const size_t idx = (start + attempt) % jobCount;
+            JobPtr& job      = _jobs[idx];
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            outJob   = job;
+            outIndex = job->nextIndex;
+            job->nextIndex += 1;
+            job->inFlight += 1;
+
+            _rrCursor = (idx + 1u) % jobCount;
+            return true;
+        }
+
+        return false;
+    }
+
+    void executeWorkItem(JobPtr job, size_t index, uint64_t streamId) noexcept
+    {
+        if (job && job->processIndex)
+        {
+            job->processIndex(index, streamId);
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            if (job && job->inFlight > 0)
+            {
+                job->inFlight -= 1;
+            }
+            cleanupJobsLocked();
+        }
+
+        _cv.notify_all();
+    }
+
+    void workerMain(std::stop_token stopToken, uint64_t streamId) noexcept
+    {
+        for (;;)
+        {
+            JobPtr job;
+            size_t index = 0;
+            {
+                std::unique_lock lock(_mutex);
+                _cv.wait(lock, [&]() noexcept { return stopToken.stop_requested() || hasSchedulableWorkLocked(); });
+                if (stopToken.stop_requested())
+                {
+                    break;
+                }
+
+                cleanupJobsLocked();
+                if (! tryDequeueWorkLocked(job, index))
+                {
+                    continue;
+                }
+            }
+
+            executeWorkItem(std::move(job), index, streamId);
+        }
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    std::vector<JobPtr> _jobs;
+    size_t _rrCursor = 0;
+
+    std::mutex _initMutex;
+    bool _initialized = false;
+    std::vector<std::jthread> _workers;
+};
+
+SharedCopyMoveJobScheduler& GetSharedCopyMoveJobScheduler() noexcept
+{
+    static SharedCopyMoveJobScheduler scheduler;
+    return scheduler;
+}
+
+void ShutdownSharedCopyMoveJobScheduler() noexcept
+{
+    GetSharedCopyMoveJobScheduler().ShutdownAndJoin();
+}
+} // namespace FileSystemCurlInternal
 
 namespace
 {
@@ -27,6 +405,243 @@ namespace
     return OrdinalString::EqualsNoCase(left, right);
 }
 
+class ConnectionConcurrencyLimiter final
+{
+public:
+    ConnectionConcurrencyLimiter() = default;
+    ~ConnectionConcurrencyLimiter() = default;
+
+    ConnectionConcurrencyLimiter(const ConnectionConcurrencyLimiter&)            = delete;
+    ConnectionConcurrencyLimiter& operator=(const ConnectionConcurrencyLimiter&) = delete;
+    ConnectionConcurrencyLimiter(ConnectionConcurrencyLimiter&&)                 = delete;
+    ConnectionConcurrencyLimiter& operator=(ConnectionConcurrencyLimiter&&)      = delete;
+
+    enum class Kind : uint8_t
+    {
+        CopyMove,
+        Delete,
+    };
+
+    class Permit final
+    {
+    public:
+        Permit() = default;
+
+        Permit(ConnectionConcurrencyLimiter* limiter, std::wstring key, Kind kind) noexcept
+            : _limiter(limiter),
+              _key(std::move(key)),
+              _kind(kind)
+        {
+        }
+
+        Permit(const Permit&)            = delete;
+        Permit& operator=(const Permit&) = delete;
+
+        Permit(Permit&& other) noexcept
+            : _limiter(std::exchange(other._limiter, nullptr)),
+              _key(std::move(other._key)),
+              _kind(other._kind)
+        {
+        }
+
+        Permit& operator=(Permit&& other) noexcept
+        {
+            if (this == &other)
+            {
+                return *this;
+            }
+
+            Release();
+            _limiter = std::exchange(other._limiter, nullptr);
+            _key     = std::move(other._key);
+            _kind    = other._kind;
+            return *this;
+        }
+
+        ~Permit()
+        {
+            Release();
+        }
+
+        explicit operator bool() const noexcept
+        {
+            return _limiter != nullptr;
+        }
+
+    private:
+        void Release() noexcept
+        {
+            if (! _limiter)
+            {
+                return;
+            }
+
+            _limiter->Release(_key, _kind);
+            _limiter = nullptr;
+        }
+
+        ConnectionConcurrencyLimiter* _limiter = nullptr;
+        std::wstring _key;
+        Kind _kind = Kind::CopyMove;
+    };
+
+    template <typename CancelPredicate>
+    [[nodiscard]] Permit AcquireCopyMove(std::wstring_view key, uint32_t max, CancelPredicate&& shouldCancel) noexcept
+    {
+        return Acquire(key, Kind::CopyMove, max, std::forward<CancelPredicate>(shouldCancel));
+    }
+
+    template <typename CancelPredicate>
+    [[nodiscard]] Permit AcquireDelete(std::wstring_view key, uint32_t max, CancelPredicate&& shouldCancel) noexcept
+    {
+        return Acquire(key, Kind::Delete, max, std::forward<CancelPredicate>(shouldCancel));
+    }
+
+private:
+    struct Entry final
+    {
+        uint32_t maxCopyMove      = 1;
+        uint32_t inFlightCopyMove = 0;
+        uint32_t maxDelete        = 1;
+        uint32_t inFlightDelete   = 0;
+    };
+
+    void Release(const std::wstring& key, Kind kind) noexcept
+    {
+        std::lock_guard lock(_mutex);
+
+        const auto it = _entries.find(key);
+        if (it == _entries.end())
+        {
+            return;
+        }
+
+        Entry& entry = it->second;
+        if (kind == Kind::CopyMove)
+        {
+            if (entry.inFlightCopyMove > 0)
+            {
+                --entry.inFlightCopyMove;
+            }
+        }
+        else
+        {
+            if (entry.inFlightDelete > 0)
+            {
+                --entry.inFlightDelete;
+            }
+        }
+
+        _cv.notify_all();
+    }
+
+    template <typename CancelPredicate>
+    [[nodiscard]] Permit Acquire(std::wstring_view keyView, Kind kind, uint32_t max, CancelPredicate&& shouldCancel) noexcept
+    {
+        if (keyView.empty())
+        {
+            return {};
+        }
+
+        std::wstring key(keyView);
+        const uint32_t maxEffective = (std::max)(1u, max);
+
+        std::unique_lock lock(_mutex);
+        for (;;)
+        {
+            lock.unlock();
+            if (shouldCancel())
+            {
+                return {};
+            }
+            lock.lock();
+
+            Entry& entry = _entries[key];
+            if (kind == Kind::CopyMove)
+            {
+                entry.maxCopyMove = maxEffective;
+                if (entry.inFlightCopyMove < entry.maxCopyMove)
+                {
+                    ++entry.inFlightCopyMove;
+                    return Permit(this, std::move(key), kind);
+                }
+            }
+            else
+            {
+                entry.maxDelete = maxEffective;
+                if (entry.inFlightDelete < entry.maxDelete)
+                {
+                    ++entry.inFlightDelete;
+                    return Permit(this, std::move(key), kind);
+                }
+            }
+
+            _cv.wait_for(lock, std::chrono::milliseconds(100));
+        }
+    }
+
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    std::unordered_map<std::wstring, Entry> _entries;
+};
+
+ConnectionConcurrencyLimiter& GetConnectionConcurrencyLimiter() noexcept
+{
+    static ConnectionConcurrencyLimiter limiter;
+    return limiter;
+}
+
+[[nodiscard]] HRESULT RemoteDeleteFileWithPermit(const ConnectionInfo& conn,
+                                                 std::wstring_view remotePath,
+                                                 FileOperationProgress& progress,
+                                                 ConnectionConcurrencyLimiter::Kind kind) noexcept
+{
+    if (conn.limiterKey.empty())
+    {
+        return RemoteDeleteFile(conn, remotePath);
+    }
+
+    auto shouldCancel = [&]() noexcept { return FAILED(progress.CheckCancel()); };
+
+    ConnectionConcurrencyLimiter& limiter = GetConnectionConcurrencyLimiter();
+    const uint32_t max = kind == ConnectionConcurrencyLimiter::Kind::CopyMove ? conn.effectiveCopyMoveMaxConcurrency : conn.effectiveDeleteMaxConcurrency;
+
+    ConnectionConcurrencyLimiter::Permit permit = kind == ConnectionConcurrencyLimiter::Kind::CopyMove ? limiter.AcquireCopyMove(conn.limiterKey, max, shouldCancel)
+                                                                                                      : limiter.AcquireDelete(conn.limiterKey, max, shouldCancel);
+    if (! permit)
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    return RemoteDeleteFile(conn, remotePath);
+}
+
+[[nodiscard]] HRESULT RemoteRemoveDirectoryWithPermit(const ConnectionInfo& conn,
+                                                      std::wstring_view remotePath,
+                                                      FileOperationProgress& progress,
+                                                      ConnectionConcurrencyLimiter::Kind kind) noexcept
+{
+    if (conn.limiterKey.empty())
+    {
+        return RemoteRemoveDirectory(conn, remotePath);
+    }
+
+    auto shouldCancel = [&]() noexcept { return FAILED(progress.CheckCancel()); };
+
+    ConnectionConcurrencyLimiter& limiter = GetConnectionConcurrencyLimiter();
+    const uint32_t max = kind == ConnectionConcurrencyLimiter::Kind::CopyMove ? conn.effectiveCopyMoveMaxConcurrency : conn.effectiveDeleteMaxConcurrency;
+
+    ConnectionConcurrencyLimiter::Permit permit = kind == ConnectionConcurrencyLimiter::Kind::CopyMove ? limiter.AcquireCopyMove(conn.limiterKey, max, shouldCancel)
+                                                                                                      : limiter.AcquireDelete(conn.limiterKey, max, shouldCancel);
+    if (! permit)
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    return RemoteRemoveDirectory(conn, remotePath);
+}
+
+#if 0 // Legacy (moved to FileSystemCurlInternal for explicit shutdown/join at plugin quiet point)
 class SharedCopyMoveJobScheduler final
 {
 public:
@@ -346,6 +961,7 @@ SharedCopyMoveJobScheduler& GetSharedCopyMoveJobScheduler() noexcept
     static SharedCopyMoveJobScheduler scheduler;
     return scheduler;
 }
+#endif // 0
 
 constexpr size_t kHashMixConstant = 0x9e3779b97f4a7c15ull;
 
@@ -590,6 +1206,17 @@ private:
     downloadCtx.scaleForCopy           = true;
     downloadCtx.scaleForCopySecond     = false;
 
+    ConnectionConcurrencyLimiter::Permit downloadPermit;
+    if (! sourceConn.limiterKey.empty())
+    {
+        auto shouldCancel = [&]() noexcept { return FAILED(progress.CheckCancel()); };
+        downloadPermit    = GetConnectionConcurrencyLimiter().AcquireCopyMove(sourceConn.limiterKey, sourceConn.effectiveCopyMoveMaxConcurrency, shouldCancel);
+        if (! downloadPermit)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+    }
+
     hr = CurlDownloadToFile(sourceConn, sourceRemotePath, tempFile.get(), nullptr, &downloadCtx);
     if (FAILED(hr))
     {
@@ -626,6 +1253,19 @@ private:
     uploadCtx.isUpload               = true;
     uploadCtx.scaleForCopy           = true;
     uploadCtx.scaleForCopySecond     = true;
+
+    ConnectionConcurrencyLimiter::Permit uploadPermit;
+    if (! destinationConn.limiterKey.empty())
+    {
+        auto shouldCancel = [&]() noexcept { return FAILED(progress.CheckCancel()); };
+        uploadPermit      = GetConnectionConcurrencyLimiter().AcquireCopyMove(destinationConn.limiterKey,
+                                                                        destinationConn.effectiveCopyMoveMaxConcurrency,
+                                                                        shouldCancel);
+        if (! uploadPermit)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+    }
 
     hr = CurlUploadFromFile(destinationConn, destinationRemotePath, tempFile.get(), fileSize, nullptr, &uploadCtx);
     if (FAILED(hr))
@@ -673,13 +1313,378 @@ private:
                                              std::wstring_view destinationRemoteDir,
                                              std::wstring_view destinationFullDir,
                                              FileSystemFlags flags,
+                                             unsigned int maxConcurrency,
                                              FileOperationProgress& progress,
                                              std::atomic<uint64_t>* concurrentOverallBytes) noexcept
 {
+    const bool continueOnError = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+    bool hadFailure            = false;
+
     HRESULT hr = EnsureDirectoryExists(destinationConn, destinationRemoteDir);
     if (FAILED(hr))
     {
         return hr;
+    }
+
+    const unsigned int requestedConcurrency = std::clamp(maxConcurrency, 1u, 8u);
+    if (requestedConcurrency > 1u && progress.callback != nullptr && GetSharedCopyMoveJobScheduler().EnsureWorkersAvailable())
+    {
+        struct CopyFileWorkItem final
+        {
+            std::wstring sourceRemotePath;
+            std::wstring sourceDisplayPath;
+            std::wstring destinationRemotePath;
+            std::wstring destinationDisplayPath;
+            uint64_t expectedSizeBytes = 0;
+        };
+
+        struct CopyFileQueue final
+        {
+            CopyFileQueue() = default;
+            CopyFileQueue(const CopyFileQueue&)            = delete;
+            CopyFileQueue(CopyFileQueue&&)                 = delete;
+            CopyFileQueue& operator=(const CopyFileQueue&) = delete;
+            CopyFileQueue& operator=(CopyFileQueue&&)      = delete;
+
+            std::mutex mutex;
+            std::condition_variable notEmptyCv;
+            std::condition_variable notFullCv;
+            std::deque<CopyFileWorkItem> items;
+            bool enumerationDone = false;
+        };
+
+        CopyFileQueue queue{};
+        const size_t maxQueuedItems = std::max<size_t>(256u, static_cast<size_t>(requestedConcurrency) * 32u);
+
+        std::atomic<bool> cancelRequested{false};
+        std::atomic<bool> stopRequested{false};
+        std::atomic<long> firstFailure{S_OK};
+        std::atomic<bool> hadAnyFailure{false};
+
+        // Ensure progress.completedBytes is only touched under the callback lock by using the concurrentOverallBytes path.
+        std::atomic<uint64_t> localOverallBytes{0};
+        if (! concurrentOverallBytes)
+        {
+            concurrentOverallBytes = &localOverallBytes;
+        }
+
+        const auto recordFailure = [&](HRESULT failureHr) noexcept
+        {
+            if (SUCCEEDED(failureHr))
+            {
+                return;
+            }
+
+            long expected = S_OK;
+            static_cast<void>(firstFailure.compare_exchange_strong(expected, static_cast<long>(failureHr), std::memory_order_acq_rel));
+        };
+
+        const auto requestCancel = [&]() noexcept
+        {
+            cancelRequested.store(true, std::memory_order_release);
+            queue.notEmptyCv.notify_all();
+            queue.notFullCv.notify_all();
+        };
+
+        const auto requestStop = [&](HRESULT failureHr) noexcept
+        {
+            recordFailure(failureHr);
+            stopRequested.store(true, std::memory_order_release);
+            queue.notEmptyCv.notify_all();
+            queue.notFullCv.notify_all();
+        };
+
+        const auto enqueueFile = [&](CopyFileWorkItem item) noexcept -> bool
+        {
+            for (;;)
+            {
+                if (cancelRequested.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire))
+                {
+                    return false;
+                }
+
+                std::unique_lock lock(queue.mutex);
+                if (queue.items.size() < maxQueuedItems)
+                {
+                    queue.items.push_back(std::move(item));
+                    lock.unlock();
+                    queue.notEmptyCv.notify_one();
+                    return true;
+                }
+
+                queue.notFullCv.wait(lock, [&]() noexcept
+                {
+                    return cancelRequested.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire) ||
+                           queue.items.size() < maxQueuedItems;
+                });
+            }
+        };
+
+        const unsigned int concurrency = std::max(2u, requestedConcurrency);
+
+        auto job = GetSharedCopyMoveJobScheduler().StartJob(concurrency,
+                                                            concurrency,
+                                                            [&](size_t /*index*/, uint64_t schedulerStreamId) noexcept
+        {
+            const uint64_t progressStreamId = schedulerStreamId;
+            FileOperationProgress::ProgressStreamScope streamScope(progressStreamId);
+
+            for (;;)
+            {
+                if (cancelRequested.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire))
+                {
+                    return;
+                }
+
+                CopyFileWorkItem item{};
+                {
+                    std::unique_lock lock(queue.mutex);
+                    queue.notEmptyCv.wait(lock, [&]() noexcept
+                    {
+                        return cancelRequested.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire) ||
+                               ! queue.items.empty() || queue.enumerationDone;
+                    });
+
+                    if (cancelRequested.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire))
+                    {
+                        return;
+                    }
+
+                    if (queue.items.empty())
+                    {
+                        return;
+                    }
+
+                    item = std::move(queue.items.front());
+                    queue.items.pop_front();
+                }
+
+                queue.notFullCv.notify_one();
+
+                HRESULT itemHr = CopyFileViaTemp(sourceConn,
+                                                 item.sourceRemotePath,
+                                                 item.sourceDisplayPath,
+                                                 destinationConn,
+                                                 item.destinationRemotePath,
+                                                 item.destinationDisplayPath,
+                                                 flags,
+                                                 progress,
+                                                 item.expectedSizeBytes,
+                                                 concurrentOverallBytes);
+                if (FAILED(itemHr))
+                {
+                    itemHr = NormalizeCancellation(itemHr);
+                    if (itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+                    {
+                        requestCancel();
+                    }
+                    else if (IsAuthenticationFailureHr(itemHr))
+                    {
+                        requestStop(itemHr);
+                    }
+                    else if (! continueOnError)
+                    {
+                        requestStop(itemHr);
+                    }
+                    else
+                    {
+                        hadAnyFailure.store(true, std::memory_order_release);
+                    }
+                }
+
+                queue.notFullCv.notify_all();
+            }
+        });
+
+        const auto produceDirectory = [&](auto&& self,
+                                          std::wstring_view currentSourceRemoteDir,
+                                          std::wstring_view currentSourceFullDir,
+                                          std::wstring_view currentDestinationRemoteDir,
+                                          std::wstring_view currentDestinationFullDir,
+                                          bool isRootDir) noexcept -> HRESULT
+        {
+            if (cancelRequested.load(std::memory_order_acquire))
+            {
+                return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            }
+
+            if (stopRequested.load(std::memory_order_acquire))
+            {
+                return S_OK;
+            }
+
+            if (! isRootDir)
+            {
+                const HRESULT ensureHr = EnsureDirectoryExists(destinationConn, currentDestinationRemoteDir);
+                if (FAILED(ensureHr))
+                {
+                    if (! continueOnError)
+                    {
+                        requestStop(ensureHr);
+                        return ensureHr;
+                    }
+
+                    hadAnyFailure.store(true, std::memory_order_release);
+                    return S_OK;
+                }
+            }
+
+            std::vector<FilesInformationCurl::Entry> entries;
+            HRESULT hr = ReadDirectoryEntries(sourceConn, currentSourceRemoteDir, entries);
+            if (FAILED(hr))
+            {
+                if (! continueOnError || isRootDir)
+                {
+                    requestStop(hr);
+                    return hr;
+                }
+
+                hadAnyFailure.store(true, std::memory_order_release);
+                return S_OK;
+            }
+
+            uint64_t cancelCheckCounter = 0;
+            for (const auto& entry : entries)
+            {
+                if (cancelRequested.load(std::memory_order_acquire))
+                {
+                    return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                }
+                if (stopRequested.load(std::memory_order_acquire))
+                {
+                    return S_OK;
+                }
+
+                if (IsDotOrDotDotName(entry.name))
+                {
+                    continue;
+                }
+
+                if ((++cancelCheckCounter % 64u) == 0u)
+                {
+                    const HRESULT cancelHr = progress.CheckCancel();
+                    if (FAILED(cancelHr))
+                    {
+                        hr = NormalizeCancellation(cancelHr);
+                        if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+                        {
+                            requestCancel();
+                        }
+                        else
+                        {
+                            requestStop(hr);
+                        }
+                        return hr;
+                    }
+                }
+
+                const std::wstring sourceChildRemote      = JoinPluginPath(currentSourceRemoteDir, entry.name);
+                const std::wstring destinationChildRemote = JoinPluginPath(currentDestinationRemoteDir, entry.name);
+                const std::wstring sourceChildFull        = JoinDisplayPath(currentSourceFullDir, entry.name);
+                const std::wstring destinationChildFull   = JoinDisplayPath(currentDestinationFullDir, entry.name);
+
+                if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+                {
+                    if (! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
+                    {
+                        if (continueOnError)
+                        {
+                            hadAnyFailure.store(true, std::memory_order_release);
+                            continue;
+                        }
+
+                        const HRESULT notSupported = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                        requestStop(notSupported);
+                        return notSupported;
+                    }
+
+                    const std::wstring sourceSubRemote      = EnsureTrailingSlash(sourceChildRemote);
+                    const std::wstring destinationSubRemote = EnsureTrailingSlash(destinationChildRemote);
+                    const std::wstring sourceSubFull        = EnsureTrailingSlashDisplay(sourceChildFull);
+                    const std::wstring destinationSubFull   = EnsureTrailingSlashDisplay(destinationChildFull);
+
+                    const HRESULT childHr =
+                        self(self, sourceSubRemote, sourceSubFull, destinationSubRemote, destinationSubFull, false);
+                    if (FAILED(childHr))
+                    {
+                        hr = NormalizeCancellation(childHr);
+                        if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || IsAuthenticationFailureHr(hr) || ! continueOnError)
+                        {
+                            return hr;
+                        }
+
+                        hadAnyFailure.store(true, std::memory_order_release);
+                        continue;
+                    }
+                }
+                else
+                {
+                    CopyFileWorkItem task{};
+                    task.sourceRemotePath       = sourceChildRemote;
+                    task.destinationRemotePath  = destinationChildRemote;
+                    task.sourceDisplayPath      = sourceChildFull;
+                    task.destinationDisplayPath = destinationChildFull;
+                    task.expectedSizeBytes      = entry.sizeBytes;
+
+                    if (! enqueueFile(std::move(task)))
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return S_OK;
+        };
+
+        const HRESULT rootHr = produceDirectory(produceDirectory,
+                                                sourceRemoteDir,
+                                                sourceFullDir,
+                                                destinationRemoteDir,
+                                                destinationFullDir,
+                                                true);
+        if (FAILED(rootHr))
+        {
+            const HRESULT normalized = NormalizeCancellation(rootHr);
+            if (normalized == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            {
+                requestCancel();
+            }
+            else if (IsAuthenticationFailureHr(normalized) || ! continueOnError)
+            {
+                requestStop(normalized);
+            }
+            else
+            {
+                hadAnyFailure.store(true, std::memory_order_release);
+            }
+        }
+
+        {
+            std::scoped_lock lock(queue.mutex);
+            queue.enumerationDone = true;
+        }
+        queue.notEmptyCv.notify_all();
+        queue.notFullCv.notify_all();
+
+        GetSharedCopyMoveJobScheduler().WaitJob(job);
+
+        if (cancelRequested.load(std::memory_order_acquire))
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        if (stopRequested.load(std::memory_order_acquire))
+        {
+            const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+            return FAILED(failureHr) ? failureHr : HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
+        }
+
+        if (hadAnyFailure.load(std::memory_order_acquire))
+        {
+            return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        }
+
+        return S_OK;
     }
 
     std::vector<FilesInformationCurl::Entry> entries;
@@ -711,7 +1716,13 @@ private:
         {
             if (! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
             {
-                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                if (! continueOnError)
+                {
+                    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                }
+
+                hadFailure = true;
+                continue;
             }
 
             const std::wstring sourceSubRemote      = EnsureTrailingSlash(sourceChildRemote);
@@ -720,10 +1731,26 @@ private:
             const std::wstring destinationSubFull   = EnsureTrailingSlashDisplay(destinationChildFull);
 
             hr = CopyDirectoryRecursive(
-                sourceConn, sourceSubRemote, sourceSubFull, destinationConn, destinationSubRemote, destinationSubFull, flags, progress, concurrentOverallBytes);
+                sourceConn,
+                sourceSubRemote,
+                sourceSubFull,
+                destinationConn,
+                destinationSubRemote,
+                destinationSubFull,
+                flags,
+                1u,
+                progress,
+                concurrentOverallBytes);
             if (FAILED(hr))
             {
-                return hr;
+                hr = NormalizeCancellation(hr);
+                if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || IsAuthenticationFailureHr(hr) || ! continueOnError)
+                {
+                    return hr;
+                }
+
+                hadFailure = true;
+                continue;
             }
         }
         else
@@ -740,19 +1767,34 @@ private:
                                  concurrentOverallBytes);
             if (FAILED(hr))
             {
-                return hr;
+                hr = NormalizeCancellation(hr);
+                if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || IsAuthenticationFailureHr(hr) || ! continueOnError)
+                {
+                    return hr;
+                }
+
+                hadFailure = true;
+                continue;
             }
         }
     }
 
-    return S_OK;
+    return hadFailure ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
 }
 
-[[nodiscard]] HRESULT DeleteDirectoryRecursive(const ConnectionInfo& conn,
-                                               std::wstring_view directoryRemotePath,
-                                               std::wstring_view directoryFullPath,
-                                               FileSystemFlags flags,
-                                               FileOperationProgress& progress) noexcept
+struct DeleteTreeWorkItem final
+{
+    std::wstring remotePath;
+    std::wstring displayPath;
+};
+
+[[nodiscard]] HRESULT CollectDeleteDirectoryWork(const ConnectionInfo& conn,
+                                                 std::wstring_view directoryRemotePath,
+                                                 std::wstring_view directoryFullPath,
+                                                 FileSystemFlags flags,
+                                                 FileOperationProgress& progress,
+                                                 std::vector<DeleteTreeWorkItem>& outFiles,
+                                                 std::vector<DeleteTreeWorkItem>& outDirectoriesPostOrder) noexcept
 {
     const std::wstring directoryRemote = EnsureTrailingSlash(directoryRemotePath);
     const std::wstring directoryFull   = EnsureTrailingSlashDisplay(directoryFullPath);
@@ -763,6 +1805,207 @@ private:
     {
         return hr;
     }
+
+    for (const auto& entry : entries)
+    {
+        if (IsDotOrDotDotName(entry.name))
+        {
+            continue;
+        }
+
+        hr = progress.CheckCancel();
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        const std::wstring childRemote = JoinPluginPath(directoryRemote, entry.name);
+        const std::wstring childFull   = JoinDisplayPath(directoryFull, entry.name);
+
+        if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            if (! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
+            {
+                return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            }
+
+            hr = CollectDeleteDirectoryWork(conn, childRemote, childFull, flags, progress, outFiles, outDirectoriesPostOrder);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        else
+        {
+            outFiles.push_back(DeleteTreeWorkItem{childRemote, childFull});
+        }
+    }
+
+    const std::wstring normalizedRemote = NormalizePluginPath(directoryRemotePath);
+    if (normalizedRemote == L"/")
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    outDirectoriesPostOrder.push_back(DeleteTreeWorkItem{normalizedRemote, std::wstring(directoryFullPath)});
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT DeleteDirectoryRecursiveParallel(const ConnectionInfo& conn,
+                                                       std::wstring_view directoryRemotePath,
+                                                       std::wstring_view directoryFullPath,
+                                                       FileSystemFlags flags,
+                                                       ConnectionConcurrencyLimiter::Kind kind,
+                                                       unsigned int requestedConcurrency,
+                                                       FileOperationProgress& progress) noexcept
+{
+    const bool continueOnError = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+
+    std::vector<DeleteTreeWorkItem> files;
+    std::vector<DeleteTreeWorkItem> directoriesPostOrder;
+
+    HRESULT hr = CollectDeleteDirectoryWork(conn, directoryRemotePath, directoryFullPath, flags, progress, files, directoriesPostOrder);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    std::atomic_bool internalCancel{false};
+    std::atomic_bool hadFailure{false};
+    std::atomic<HRESULT> firstFailure{S_OK};
+
+    auto recordFailure = [&](HRESULT itemHr) noexcept
+    {
+        itemHr = NormalizeCancellation(itemHr);
+        if (FAILED(itemHr) && itemHr != HRESULT_FROM_WIN32(ERROR_CANCELLED))
+        {
+            hadFailure.store(true, std::memory_order_release);
+            HRESULT expected = S_OK;
+            static_cast<void>(firstFailure.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
+        }
+    };
+
+    const unsigned long maxWorkers = std::clamp<unsigned long>(static_cast<unsigned long>(requestedConcurrency), 1u, 8u);
+    const unsigned long desiredParallelism =
+        (std::min)(maxWorkers, static_cast<unsigned long>((std::min)(files.size(), static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))));
+
+    const unsigned int concurrency = std::max(1u, static_cast<unsigned int>(desiredParallelism));
+
+    const auto processFile = [&](size_t fileIndex, uint64_t schedulerStreamId) noexcept
+    {
+        if (fileIndex >= files.size())
+        {
+            return;
+        }
+
+        if (internalCancel.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        const uint64_t progressStreamId = schedulerStreamId;
+        FileOperationProgress::ProgressStreamScope streamScope(progressStreamId);
+
+        const DeleteTreeWorkItem& item = files[fileIndex];
+
+        HRESULT itemHr = progress.CheckCancel();
+        if (SUCCEEDED(itemHr))
+        {
+            itemHr = progress.ReportProgress(0, 0, item.displayPath, {});
+        }
+        if (SUCCEEDED(itemHr))
+        {
+            itemHr = RemoteDeleteFileWithPermit(conn, item.remotePath, progress, kind);
+        }
+
+        if (FAILED(itemHr))
+        {
+            recordFailure(itemHr);
+            if (! continueOnError || NormalizeCancellation(itemHr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            {
+                internalCancel.store(true, std::memory_order_release);
+                progress.internalCancel.store(true, std::memory_order_release);
+            }
+        }
+    };
+
+    if (concurrency <= 1u)
+    {
+        for (size_t i = 0; i < files.size(); ++i)
+        {
+            processFile(i, 0);
+            if (internalCancel.load(std::memory_order_acquire))
+            {
+                break;
+            }
+        }
+    }
+    else
+    {
+        auto job = GetSharedCopyMoveJobScheduler().StartJob(concurrency, files.size(), processFile);
+        GetSharedCopyMoveJobScheduler().WaitJob(job);
+    }
+
+    if (internalCancel.load(std::memory_order_acquire))
+    {
+        const HRESULT failureHr = firstFailure.load(std::memory_order_acquire);
+        return FAILED(failureHr) ? failureHr : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    for (const DeleteTreeWorkItem& directory : directoriesPostOrder)
+    {
+        hr = progress.CheckCancel();
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        hr = progress.ReportProgress(0, 0, directory.displayPath, {});
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        hr = RemoteRemoveDirectoryWithPermit(conn, directory.remotePath, progress, kind);
+        if (FAILED(hr))
+        {
+            recordFailure(hr);
+            if (! continueOnError || NormalizeCancellation(hr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            {
+                return NormalizeCancellation(hr);
+            }
+        }
+    }
+
+    if (hadFailure.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    const HRESULT failureHr = firstFailure.load(std::memory_order_acquire);
+    return FAILED(failureHr) ? failureHr : S_OK;
+}
+
+[[nodiscard]] HRESULT DeleteDirectoryRecursive(const ConnectionInfo& conn,
+                                               std::wstring_view directoryRemotePath,
+                                               std::wstring_view directoryFullPath,
+                                               FileSystemFlags flags,
+                                               ConnectionConcurrencyLimiter::Kind kind,
+                                               FileOperationProgress& progress) noexcept
+{
+    const bool continueOnError = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+
+    const std::wstring directoryRemote = EnsureTrailingSlash(directoryRemotePath);
+    const std::wstring directoryFull   = EnsureTrailingSlashDisplay(directoryFullPath);
+
+    std::vector<FilesInformationCurl::Entry> entries;
+    HRESULT hr = ReadDirectoryEntries(conn, directoryRemote, entries);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    bool hadFailure = false;
 
     for (const auto& entry : entries)
     {
@@ -792,16 +2035,23 @@ private:
                 return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
             }
 
-            hr = DeleteDirectoryRecursive(conn, childRemote, childFull, flags, progress);
+            hr = DeleteDirectoryRecursive(conn, childRemote, childFull, flags, kind, progress);
         }
         else
         {
-            hr = RemoteDeleteFile(conn, childRemote);
+            hr = RemoteDeleteFileWithPermit(conn, childRemote, progress, kind);
         }
 
         if (FAILED(hr))
         {
-            return hr;
+            hr = NormalizeCancellation(hr);
+            if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || IsAuthenticationFailureHr(hr) || ! continueOnError)
+            {
+                return hr;
+            }
+
+            hadFailure = true;
+            continue;
         }
     }
 
@@ -811,7 +2061,19 @@ private:
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     }
 
-    return RemoteRemoveDirectory(conn, normalizedRemote);
+    hr = RemoteRemoveDirectoryWithPermit(conn, normalizedRemote, progress, kind);
+    if (FAILED(hr))
+    {
+        hr = NormalizeCancellation(hr);
+        if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || IsAuthenticationFailureHr(hr) || ! continueOnError)
+        {
+            return hr;
+        }
+
+        hadFailure = true;
+    }
+
+    return hadFailure ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
 }
 } // namespace
 
@@ -894,14 +2156,16 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
                                             EnsureTrailingSlash(sourceResolved.remotePath),
                                             EnsureTrailingSlashDisplay(sourceDisplay),
                                             destinationResolved.connection,
-                                            EnsureTrailingSlash(destinationResolved.remotePath),
-                                            EnsureTrailingSlashDisplay(destinationDisplay),
-                                            flags,
-                                            progress,
-                                            nullptr);
-            }
-        }
-    }
+                                             EnsureTrailingSlash(destinationResolved.remotePath),
+                                             EnsureTrailingSlashDisplay(destinationDisplay),
+                                             flags,
+                                             std::min(sourceResolved.connection.effectiveCopyMoveMaxConcurrency,
+                                                      destinationResolved.connection.effectiveCopyMoveMaxConcurrency),
+                                             progress,
+                                             nullptr);
+             }
+         }
+     }
     else
     {
         hr = CopyFileViaTemp(sourceResolved.connection,
@@ -1009,14 +2273,21 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                                                 EnsureTrailingSlash(sourceResolved.remotePath),
                                                 EnsureTrailingSlashDisplay(sourceDisplay),
                                                 destinationResolved.connection,
-                                                EnsureTrailingSlash(destinationResolved.remotePath),
-                                                EnsureTrailingSlashDisplay(destinationDisplay),
-                                                flags,
-                                                progress,
-                                                nullptr);
-                    if (SUCCEEDED(hr))
-                    {
-                        hr = DeleteDirectoryRecursive(sourceResolved.connection, sourceResolved.remotePath, sourceDisplay, FILESYSTEM_FLAG_RECURSIVE, progress);
+                                                 EnsureTrailingSlash(destinationResolved.remotePath),
+                                                 EnsureTrailingSlashDisplay(destinationDisplay),
+                                                 flags,
+                                                 std::min(sourceResolved.connection.effectiveCopyMoveMaxConcurrency,
+                                                          destinationResolved.connection.effectiveCopyMoveMaxConcurrency),
+                                                 progress,
+                                                 nullptr);
+                     if (SUCCEEDED(hr))
+                     {
+                        hr = DeleteDirectoryRecursive(sourceResolved.connection,
+                                                      sourceResolved.remotePath,
+                                                      sourceDisplay,
+                                                      FILESYSTEM_FLAG_RECURSIVE,
+                                                      ConnectionConcurrencyLimiter::Kind::CopyMove,
+                                                      progress);
                     }
                 }
             }
@@ -1034,7 +2305,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                                      nullptr);
                 if (SUCCEEDED(hr))
                 {
-                    hr = RemoteDeleteFile(sourceResolved.connection, sourceResolved.remotePath);
+                    hr = RemoteDeleteFileWithPermit(sourceResolved.connection,
+                                                   sourceResolved.remotePath,
+                                                   progress,
+                                                   ConnectionConcurrencyLimiter::Kind::CopyMove);
                 }
             }
         }
@@ -1095,16 +2369,32 @@ FileSystemCurl::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fil
         {
             if (HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
             {
-                hr = DeleteDirectoryRecursive(resolved.connection, resolved.remotePath, displayPath, flags, progress);
+                const unsigned int concurrency = std::clamp(resolved.connection.effectiveDeleteMaxConcurrency, 1u, 8u);
+                hr = (concurrency > 1u) ? DeleteDirectoryRecursiveParallel(resolved.connection,
+                                                                           resolved.remotePath,
+                                                                           displayPath,
+                                                                           flags,
+                                                                           ConnectionConcurrencyLimiter::Kind::Delete,
+                                                                           concurrency,
+                                                                           progress)
+                                        : DeleteDirectoryRecursive(resolved.connection,
+                                                                   resolved.remotePath,
+                                                                   displayPath,
+                                                                   flags,
+                                                                   ConnectionConcurrencyLimiter::Kind::Delete,
+                                                                   progress);
             }
             else
             {
-                hr = RemoteRemoveDirectory(resolved.connection, resolved.remotePath);
+                hr = RemoteRemoveDirectoryWithPermit(resolved.connection,
+                                                     resolved.remotePath,
+                                                     progress,
+                                                     ConnectionConcurrencyLimiter::Kind::Delete);
             }
         }
         else
         {
-            hr = RemoteDeleteFile(resolved.connection, resolved.remotePath);
+            hr = RemoteDeleteFileWithPermit(resolved.connection, resolved.remotePath, progress, ConnectionConcurrencyLimiter::Kind::Delete);
         }
     }
 
@@ -1240,6 +2530,9 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
     const std::wstring destinationDisplayRoot = EnsureTrailingSlashDisplay(BuildDisplayPath(_protocol, destinationFolder));
     DirectoryEntryCache entryCache;
 
+    unsigned int requestedConcurrency = std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
+    requestedConcurrency              = std::min(requestedConcurrency, std::clamp(destinationResolved.connection.effectiveCopyMoveMaxConcurrency, 1u, 8u));
+
     struct CopyTask
     {
         unsigned long index = 0;
@@ -1329,6 +2622,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
             continue;
         }
 
+        requestedConcurrency = std::min(requestedConcurrency, std::clamp(sourceResolved.connection.effectiveCopyMoveMaxConcurrency, 1u, 8u));
+
         CopyTask task{};
         task.index                  = index;
         task.sourceConn             = std::move(sourceResolved.connection);
@@ -1349,7 +2644,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
 
     std::atomic<uint64_t> overallBytes{0};
 
-    const unsigned long maxWorkers = 4u;
+    const unsigned long maxWorkers = std::clamp<unsigned long>(static_cast<unsigned long>(requestedConcurrency), 1u, 8u);
     const unsigned long desiredParallelism =
         (std::min)(maxWorkers, static_cast<unsigned long>((std::min)(tasks.size(), static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))));
 
@@ -1367,7 +2662,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
             return;
         }
 
-        const uint64_t progressStreamId = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
+        const uint64_t progressStreamId = schedulerStreamId;
         FileOperationProgress::ProgressStreamScope streamScope(progressStreamId);
 
         const CopyTask& task = tasks[taskIndex];
@@ -1383,6 +2678,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
                 }
                 else
                 {
+                    const unsigned int directoryConcurrency = (concurrency <= 1u) ? requestedConcurrency : 1u;
                     itemHr = CopyDirectoryRecursive(task.sourceConn,
                                                     EnsureTrailingSlash(task.sourceRemotePath),
                                                     EnsureTrailingSlashDisplay(task.sourceDisplayPath),
@@ -1390,6 +2686,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
                                                     EnsureTrailingSlash(task.destinationRemotePath),
                                                     EnsureTrailingSlashDisplay(task.destinationDisplayPath),
                                                     flags,
+                                                    directoryConcurrency,
                                                     progress,
                                                     &overallBytes);
                 }
@@ -1503,15 +2800,44 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
     const std::wstring destinationDisplayRoot = EnsureTrailingSlashDisplay(BuildDisplayPath(_protocol, destinationFolder));
     const bool allowOverwrite                 = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
 
-    HRESULT firstFailure = S_OK;
+    unsigned int requestedConcurrency = std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
+    requestedConcurrency              = std::min(requestedConcurrency, std::clamp(destinationResolved.connection.effectiveCopyMoveMaxConcurrency, 1u, 8u));
+
+    struct MoveTask
+    {
+        unsigned long index = 0;
+        ConnectionInfo sourceConn{};
+        std::wstring sourceRemotePath;
+        std::wstring sourceDisplayPath;
+        std::wstring destinationRemotePath;
+        std::wstring destinationDisplayPath;
+        uint64_t expectedSizeBytes = 0;
+        bool isDirectory           = false;
+        bool canServerSideRename   = false;
+    };
+
+    std::vector<MoveTask> tasks;
+    tasks.reserve(count);
+
+    const bool continueOnError = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+
+    std::atomic<unsigned long> completedCount{0};
+    std::atomic<long> firstFailure{S_OK};
+
+    const auto recordFailure = [&](HRESULT failureHr) noexcept
+    {
+        long expected = S_OK;
+        static_cast<void>(firstFailure.compare_exchange_strong(expected, static_cast<long>(failureHr), std::memory_order_acq_rel));
+    };
+
     DirectoryEntryCache entryCache;
 
     for (unsigned long index = 0; index < count; ++index)
     {
         if (! sourcePaths[index] || sourcePaths[index][0] == L'\0')
         {
-            firstFailure = FAILED(firstFailure) ? firstFailure : E_INVALIDARG;
-            if (! HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR))
+            recordFailure(E_INVALIDARG);
+            if (! continueOnError)
             {
                 return E_INVALIDARG;
             }
@@ -1525,6 +2851,13 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
         const std::wstring destDisplay       = JoinDisplayPath(destinationDisplayRoot, leaf);
         const std::wstring destinationRemote = JoinPluginPath(destinationRemoteRoot, leaf);
 
+        const HRESULT cancelHr = progress.CheckCancel();
+        if (FAILED(cancelHr))
+        {
+            progress.internalCancel.store(true, std::memory_order_release);
+            return cancelHr;
+        }
+
         hr = progress.ReportProgress(0, 0, sourceDisplay, destDisplay);
         if (FAILED(hr))
         {
@@ -1533,89 +2866,195 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
 
         ResolvedLocation sourceResolved{};
         HRESULT itemHr = ResolveLocation(_protocol, settings, source, _hostConnections.get(), true, sourceResolved);
+        FilesInformationCurl::Entry sourceInfo{};
+        bool canServerSideRename = false;
         if (SUCCEEDED(itemHr))
         {
-            if (CanServerSideRename(sourceResolved.connection, destinationResolved.connection))
+            canServerSideRename = CanServerSideRename(sourceResolved.connection, destinationResolved.connection);
+            if (! canServerSideRename)
             {
-                const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationRemote);
-                if (! isSelfRename)
-                {
-                    itemHr = EnsureOverwriteTargetForRename(destinationResolved.connection, destinationRemote, allowOverwrite);
-                }
-                if (SUCCEEDED(itemHr))
-                {
-                    itemHr = RemoteRename(destinationResolved.connection, sourceResolved.remotePath, destinationRemote);
-                }
-            }
-            else
-            {
-                FilesInformationCurl::Entry sourceInfo{};
                 itemHr = entryCache.GetEntryInfoCached(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
-                if (SUCCEEDED(itemHr))
-                {
-                    if ((sourceInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
-                    {
-                        if (! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
-                        {
-                            itemHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-                        }
-                        else
-                        {
-                            itemHr = CopyDirectoryRecursive(sourceResolved.connection,
-                                                            EnsureTrailingSlash(sourceResolved.remotePath),
-                                                            EnsureTrailingSlashDisplay(sourceDisplay),
-                                                            destinationResolved.connection,
-                                                            EnsureTrailingSlash(destinationRemote),
-                                                            EnsureTrailingSlashDisplay(destDisplay),
-                                                            flags,
-                                                            progress,
-                                                            nullptr);
-                            if (SUCCEEDED(itemHr))
-                            {
-                                itemHr = DeleteDirectoryRecursive(
-                                    sourceResolved.connection, sourceResolved.remotePath, sourceDisplay, FILESYSTEM_FLAG_RECURSIVE, progress);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        itemHr = CopyFileViaTemp(sourceResolved.connection,
-                                                 sourceResolved.remotePath,
-                                                 sourceDisplay,
-                                                 destinationResolved.connection,
-                                                 destinationRemote,
-                                                 destDisplay,
-                                                 flags,
-                                                 progress,
-                                                 sourceInfo.sizeBytes,
-                                                 nullptr);
-                        if (SUCCEEDED(itemHr))
-                        {
-                            itemHr = RemoteDeleteFile(sourceResolved.connection, sourceResolved.remotePath);
-                        }
-                    }
-                }
             }
-        }
-
-        progress.completedItems = index + 1u;
-        const HRESULT cbHr      = progress.ReportItemCompleted(index, sourceDisplay, destDisplay, itemHr);
-        if (FAILED(cbHr))
-        {
-            return cbHr;
         }
 
         if (FAILED(itemHr))
         {
-            firstFailure = FAILED(firstFailure) ? firstFailure : itemHr;
-            if (! HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR))
+            recordFailure(itemHr);
+
+            const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+            progress.SetCompletedItems(done);
+
+            const HRESULT cbHr = progress.ReportItemCompleted(index, sourceDisplay, destDisplay, itemHr);
+            if (FAILED(cbHr))
             {
+                progress.internalCancel.store(true, std::memory_order_release);
+                return cbHr;
+            }
+
+            if (! continueOnError)
+            {
+                progress.internalCancel.store(true, std::memory_order_release);
                 return itemHr;
+            }
+
+            continue;
+        }
+
+        requestedConcurrency = std::min(requestedConcurrency, std::clamp(sourceResolved.connection.effectiveCopyMoveMaxConcurrency, 1u, 8u));
+
+        MoveTask task{};
+        task.index                = index;
+        task.sourceConn           = std::move(sourceResolved.connection);
+        task.sourceRemotePath     = std::move(sourceResolved.remotePath);
+        task.sourceDisplayPath    = sourceDisplay;
+        task.destinationRemotePath  = destinationRemote;
+        task.destinationDisplayPath = destDisplay;
+        task.expectedSizeBytes    = sourceInfo.sizeBytes;
+        task.isDirectory          = (sourceInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        task.canServerSideRename  = canServerSideRename;
+        tasks.push_back(std::move(task));
+    }
+
+    if (tasks.empty())
+    {
+        const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+        return FAILED(failureHr) ? failureHr : S_OK;
+    }
+
+    std::atomic<uint64_t> overallBytes{0};
+
+    const unsigned long maxWorkers = std::clamp<unsigned long>(static_cast<unsigned long>(requestedConcurrency), 1u, 8u);
+    const unsigned long desiredParallelism =
+        (std::min)(maxWorkers, static_cast<unsigned long>((std::min)(tasks.size(), static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))));
+
+    const unsigned int concurrency = std::max(1u, static_cast<unsigned int>(desiredParallelism));
+
+    const auto processTask = [&](size_t taskIndex, uint64_t schedulerStreamId) noexcept
+    {
+        if (taskIndex >= tasks.size())
+        {
+            return;
+        }
+
+        if (progress.internalCancel.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        const uint64_t progressStreamId = schedulerStreamId;
+        FileOperationProgress::ProgressStreamScope streamScope(progressStreamId);
+
+        const MoveTask& task = tasks[taskIndex];
+
+        HRESULT itemHr = progress.CheckCancel();
+        if (SUCCEEDED(itemHr))
+        {
+            if (task.canServerSideRename)
+            {
+                const bool isSelfRename = EqualsInsensitive(task.sourceRemotePath, task.destinationRemotePath);
+                if (! isSelfRename)
+                {
+                    itemHr = EnsureOverwriteTargetForRename(destinationResolved.connection, task.destinationRemotePath, allowOverwrite);
+                }
+                if (SUCCEEDED(itemHr))
+                {
+                    itemHr = RemoteRename(destinationResolved.connection, task.sourceRemotePath, task.destinationRemotePath);
+                }
+            }
+            else if (task.isDirectory)
+            {
+                if (! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
+                {
+                    itemHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+                }
+                else
+                {
+                    const unsigned int directoryConcurrency = (concurrency <= 1u) ? requestedConcurrency : 1u;
+                    itemHr = CopyDirectoryRecursive(task.sourceConn,
+                                                    EnsureTrailingSlash(task.sourceRemotePath),
+                                                    EnsureTrailingSlashDisplay(task.sourceDisplayPath),
+                                                    destinationResolved.connection,
+                                                    EnsureTrailingSlash(task.destinationRemotePath),
+                                                    EnsureTrailingSlashDisplay(task.destinationDisplayPath),
+                                                    flags,
+                                                    directoryConcurrency,
+                                                    progress,
+                                                    &overallBytes);
+                    if (SUCCEEDED(itemHr))
+                    {
+                        itemHr = DeleteDirectoryRecursive(task.sourceConn,
+                                                          task.sourceRemotePath,
+                                                          task.sourceDisplayPath,
+                                                          FILESYSTEM_FLAG_RECURSIVE,
+                                                          ConnectionConcurrencyLimiter::Kind::CopyMove,
+                                                          progress);
+                    }
+                }
+            }
+            else
+            {
+                itemHr = CopyFileViaTemp(task.sourceConn,
+                                         task.sourceRemotePath,
+                                         task.sourceDisplayPath,
+                                         destinationResolved.connection,
+                                         task.destinationRemotePath,
+                                         task.destinationDisplayPath,
+                                         flags,
+                                         progress,
+                                         task.expectedSizeBytes,
+                                         &overallBytes);
+                if (SUCCEEDED(itemHr))
+                {
+                    itemHr = RemoteDeleteFileWithPermit(task.sourceConn, task.sourceRemotePath, progress, ConnectionConcurrencyLimiter::Kind::CopyMove);
+                }
+            }
+        }
+
+        if (FAILED(itemHr))
+        {
+            recordFailure(itemHr);
+            if (! continueOnError || NormalizeCancellation(itemHr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            {
+                progress.internalCancel.store(true, std::memory_order_release);
+            }
+        }
+
+        const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+        progress.SetCompletedItems(done);
+
+        const HRESULT cbHr = progress.ReportItemCompleted(task.index, task.sourceDisplayPath, task.destinationDisplayPath, itemHr);
+        if (FAILED(cbHr))
+        {
+            recordFailure(cbHr);
+            progress.internalCancel.store(true, std::memory_order_release);
+            return;
+        }
+
+        if (FAILED(itemHr) && ! continueOnError)
+        {
+            return;
+        }
+    };
+
+    if (concurrency <= 1u)
+    {
+        for (size_t i = 0; i < tasks.size(); ++i)
+        {
+            processTask(i, 0);
+            if (progress.internalCancel.load(std::memory_order_acquire))
+            {
+                break;
             }
         }
     }
+    else
+    {
+        auto job = GetSharedCopyMoveJobScheduler().StartJob(concurrency, tasks.size(), processTask);
+        GetSharedCopyMoveJobScheduler().WaitJob(job);
+    }
 
-    return FAILED(firstFailure) ? firstFailure : S_OK;
+    const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+    return FAILED(failureHr) ? failureHr : S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* paths,
@@ -1635,6 +3074,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
         return S_OK;
     }
 
+    const bool continueOnError = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+
     Settings settings;
     {
         std::lock_guard lock(_stateMutex);
@@ -1648,22 +3089,57 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
         return hr;
     }
 
-    HRESULT firstFailure = S_OK;
     DirectoryEntryCache entryCache;
+
+    std::atomic<unsigned long> completedCount{0};
+    std::atomic_bool hadFailure{false};
+    std::atomic<HRESULT> firstFailure{S_OK};
+
+    auto recordFailure = [&](HRESULT itemHr) noexcept
+    {
+        itemHr = NormalizeCancellation(itemHr);
+        if (FAILED(itemHr) && itemHr != HRESULT_FROM_WIN32(ERROR_CANCELLED))
+        {
+            hadFailure.store(true, std::memory_order_release);
+            HRESULT expected = S_OK;
+            static_cast<void>(firstFailure.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
+        }
+    };
+
+    struct DeleteTask final
+    {
+        unsigned long index = 0;
+        ConnectionInfo connection;
+        std::wstring remotePath;
+        std::wstring displayPath;
+        bool isDirectory = false;
+    };
+
+    std::vector<DeleteTask> tasks;
+    tasks.reserve(count);
+
+    unsigned int requestedConcurrency = std::clamp(settings.deleteMaxConcurrency, 1u, 8u);
 
     for (unsigned long index = 0; index < count; ++index)
     {
-        if (! paths[index] || paths[index][0] == L'\0')
+        const wchar_t* const rawPath = paths[index];
+        if (! rawPath || rawPath[0] == L'\0')
         {
-            firstFailure = FAILED(firstFailure) ? firstFailure : E_INVALIDARG;
-            if (! HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR))
+            recordFailure(E_INVALIDARG);
+
+            const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+            progress.SetCompletedItems(done);
+
+            static_cast<void>(progress.ReportItemCompleted(index, {}, {}, E_INVALIDARG));
+
+            if (! continueOnError)
             {
                 return E_INVALIDARG;
             }
             continue;
         }
 
-        const std::wstring displayPath = BuildDisplayPath(_protocol, paths[index]);
+        const std::wstring displayPath = BuildDisplayPath(_protocol, rawPath);
         hr                             = progress.ReportProgress(0, 0, displayPath, {});
         if (FAILED(hr))
         {
@@ -1671,49 +3147,172 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
         }
 
         ResolvedLocation resolved{};
-        HRESULT itemHr = ResolveLocation(_protocol, settings, paths[index], _hostConnections.get(), true, resolved);
+        HRESULT itemHr = ResolveLocation(_protocol, settings, rawPath, _hostConnections.get(), true, resolved);
         if (SUCCEEDED(itemHr))
         {
             FilesInformationCurl::Entry info{};
             itemHr = entryCache.GetEntryInfoCached(resolved.connection, resolved.remotePath, info);
             if (SUCCEEDED(itemHr))
             {
-                if ((info.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
-                {
-                    if (HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
-                    {
-                        itemHr = DeleteDirectoryRecursive(resolved.connection, resolved.remotePath, displayPath, flags, progress);
-                    }
-                    else
-                    {
-                        itemHr = RemoteRemoveDirectory(resolved.connection, resolved.remotePath);
-                    }
-                }
-                else
-                {
-                    itemHr = RemoteDeleteFile(resolved.connection, resolved.remotePath);
-                }
-            }
-        }
+                requestedConcurrency = std::min(requestedConcurrency, std::clamp(resolved.connection.effectiveDeleteMaxConcurrency, 1u, 8u));
 
-        progress.completedItems = index + 1u;
-        const HRESULT cbHr      = progress.ReportItemCompleted(index, displayPath, {}, itemHr);
-        if (FAILED(cbHr))
-        {
-            return cbHr;
+                DeleteTask task{};
+                task.index      = index;
+                task.connection = std::move(resolved.connection);
+                task.remotePath = std::move(resolved.remotePath);
+                task.displayPath.assign(displayPath);
+                task.isDirectory = (info.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                tasks.push_back(std::move(task));
+            }
         }
 
         if (FAILED(itemHr))
         {
-            firstFailure = FAILED(firstFailure) ? firstFailure : itemHr;
-            if (! HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR))
+            recordFailure(itemHr);
+
+            const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+            progress.SetCompletedItems(done);
+
+            const HRESULT cbHr = progress.ReportItemCompleted(index, displayPath, {}, itemHr);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            if (! continueOnError)
             {
                 return itemHr;
             }
         }
     }
 
-    return FAILED(firstFailure) ? firstFailure : S_OK;
+    if (tasks.empty())
+    {
+        const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+        return FAILED(failureHr) ? failureHr : S_OK;
+    }
+
+    // Avoid nested parallelism when already parallel across top-level items.
+    const unsigned long maxWorkers = std::clamp<unsigned long>(static_cast<unsigned long>(requestedConcurrency), 1u, 8u);
+    const unsigned long desiredParallelism =
+        (std::min)(maxWorkers, static_cast<unsigned long>((std::min)(tasks.size(), static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))));
+
+    const unsigned int concurrency = std::max(1u, static_cast<unsigned int>(desiredParallelism));
+
+    const unsigned int directoryConcurrency = (concurrency <= 1u) ? requestedConcurrency : 1u;
+
+    const auto processTask = [&](size_t taskIndex, uint64_t schedulerStreamId) noexcept
+    {
+        if (taskIndex >= tasks.size())
+        {
+            return;
+        }
+
+        if (progress.internalCancel.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        const uint64_t progressStreamId = schedulerStreamId;
+        FileOperationProgress::ProgressStreamScope streamScope(progressStreamId);
+
+        const DeleteTask& task = tasks[taskIndex];
+
+        HRESULT itemHr = progress.CheckCancel();
+        if (SUCCEEDED(itemHr))
+        {
+            itemHr = progress.ReportProgress(0, 0, task.displayPath, {});
+        }
+        if (SUCCEEDED(itemHr))
+        {
+            if (task.isDirectory)
+            {
+                if (HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
+                {
+                    itemHr = directoryConcurrency > 1u ? DeleteDirectoryRecursiveParallel(task.connection,
+                                                                                          task.remotePath,
+                                                                                          task.displayPath,
+                                                                                          flags,
+                                                                                          ConnectionConcurrencyLimiter::Kind::Delete,
+                                                                                          directoryConcurrency,
+                                                                                          progress)
+                                                       : DeleteDirectoryRecursive(task.connection,
+                                                                                  task.remotePath,
+                                                                                  task.displayPath,
+                                                                                  flags,
+                                                                                  ConnectionConcurrencyLimiter::Kind::Delete,
+                                                                                  progress);
+                }
+                else
+                {
+                    itemHr = RemoteRemoveDirectoryWithPermit(task.connection,
+                                                             task.remotePath,
+                                                             progress,
+                                                             ConnectionConcurrencyLimiter::Kind::Delete);
+                }
+            }
+            else
+            {
+                itemHr = RemoteDeleteFileWithPermit(task.connection, task.remotePath, progress, ConnectionConcurrencyLimiter::Kind::Delete);
+            }
+        }
+
+        if (FAILED(itemHr))
+        {
+            recordFailure(itemHr);
+            if (! continueOnError || NormalizeCancellation(itemHr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            {
+                progress.internalCancel.store(true, std::memory_order_release);
+            }
+        }
+
+        const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+        progress.SetCompletedItems(done);
+
+        const HRESULT cbHr = progress.ReportItemCompleted(task.index, task.displayPath, {}, itemHr);
+        if (FAILED(cbHr))
+        {
+            recordFailure(cbHr);
+            progress.internalCancel.store(true, std::memory_order_release);
+            return;
+        }
+
+        if (FAILED(itemHr) && ! continueOnError)
+        {
+            return;
+        }
+    };
+
+    if (concurrency <= 1u)
+    {
+        for (size_t i = 0; i < tasks.size(); ++i)
+        {
+            processTask(i, 0);
+            if (progress.internalCancel.load(std::memory_order_acquire))
+            {
+                break;
+            }
+        }
+    }
+    else
+    {
+        auto job = GetSharedCopyMoveJobScheduler().StartJob(concurrency, tasks.size(), processTask);
+        GetSharedCopyMoveJobScheduler().WaitJob(job);
+    }
+
+    if (progress.internalCancel.load(std::memory_order_acquire))
+    {
+        const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+        return FAILED(failureHr) ? failureHr : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (hadFailure.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+    return FAILED(failureHr) ? failureHr : S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair* items,
@@ -1781,7 +3380,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
 
         const unsigned long index = static_cast<unsigned long>(taskIndex);
 
-        const uint64_t progressStreamId = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
+        const uint64_t progressStreamId = schedulerStreamId;
         FileOperationProgress::ProgressStreamScope streamScope(progressStreamId);
 
         std::wstring sourceDisplay;

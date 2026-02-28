@@ -76,7 +76,7 @@ public:
     // Contract:
     // - Requires IconCache::Initialize(...) to have run.
     // - Caller thread must have COM initialized. UI thread is STA; worker threads must initialize COM as MTA
-    //   (e.g. `[[maybe_unused]] auto coInit = wil::CoInitializeEx(COINIT_MULTITHREADED);`).
+    //   (prefer `[[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast(COINIT_MULTITHREADED);` at thread entrypoints).
     // targetDipSize: Target icon size in DIPs (e.g., 16.0f, 32.0f, 48.0f). Defaults to 16.0f (FolderView default).
     // Automatically selects the optimal system image list based on DPI scaling.
     wil::unique_hicon ExtractSystemIcon(int iconIndex, float targetDipSize = 16.0f);

@@ -16,7 +16,7 @@ Goals:
 
 ViewerImgRaw is invoked via the standard viewer association mechanism:
 - **Shortcut**: `F3` (View)
-- Host chooses the viewer by file extension using `extensions.openWithViewerByExtension` (see `Specs/PluginsViewer.md` and `Specs/SettingsStoreSpec.md`).
+- Host chooses the viewer by file extension using `extensions.openWithViewerByExtension` (see `Specs/Plugins/Plugins_ViewerPlugins.md` and `Specs/Core/Core_SettingsStore.md`).
 
 Deployment:
 - The host loads the built-in DLL from `<exeDir>\\Plugins\\ViewerImgRaw.dll`; required runtime DLLs are deployed next to the plugin DLL.

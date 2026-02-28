@@ -79,6 +79,7 @@ constexpr ProtocolEntry kProtocols[] = {
     {L"builtin/file-system-imap", L"IMAP"},
     {L"builtin/file-system-s3", L"S3"},
     {L"builtin/file-system-s3table", L"S3 Table"},
+    {L"builtin/file-system-dummy", L"Dummy"},
 };
 
 struct AwsRegionEntry
@@ -523,6 +524,33 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     return true;
 }
 
+[[nodiscard]] bool TryParseUInt32(std::wstring_view text, uint32_t& out) noexcept
+{
+    out = 0;
+    if (text.empty())
+    {
+        return true;
+    }
+
+    uint32_t value = 0;
+    for (wchar_t ch : text)
+    {
+        if (ch < L'0' || ch > L'9')
+        {
+            return false;
+        }
+        const uint32_t digit = static_cast<uint32_t>(ch - L'0');
+        if (value > (std::numeric_limits<uint32_t>::max() - digit) / 10u)
+        {
+            return false;
+        }
+        value = (value * 10u) + digit;
+    }
+
+    out = value;
+    return true;
+}
+
 [[nodiscard]] bool HasCredential(std::wstring_view targetName) noexcept
 {
     if (targetName.empty())
@@ -742,6 +770,62 @@ void ExtraSetBool(Common::Settings::JsonValue& extra, std::string_view key, bool
     obj->members.emplace_back(keyUtf8, std::move(v));
 }
 
+void ExtraSetUInt32(Common::Settings::JsonValue& extra, std::string_view key, uint32_t value)
+{
+    Common::Settings::JsonValue::ObjectPtr obj;
+    if (auto* existing = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value); existing && *existing)
+    {
+        obj = *existing;
+    }
+    else
+    {
+        obj         = std::make_shared<Common::Settings::JsonObject>();
+        extra.value = obj;
+    }
+
+    const std::string keyUtf8(key);
+    if (keyUtf8.empty())
+    {
+        return;
+    }
+
+    for (auto& member : obj->members)
+    {
+        if (member.first != keyUtf8)
+        {
+            continue;
+        }
+
+        member.second.value = static_cast<uint64_t>(value);
+        return;
+    }
+
+    Common::Settings::JsonValue v;
+    v.value = static_cast<uint64_t>(value);
+    obj->members.emplace_back(keyUtf8, std::move(v));
+}
+
+void ExtraRemoveKey(Common::Settings::JsonValue& extra, std::string_view key) noexcept
+{
+    auto* objPtr = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value);
+    if (! objPtr || ! *objPtr)
+    {
+        return;
+    }
+
+    const std::string keyUtf8(key);
+    if (keyUtf8.empty())
+    {
+        return;
+    }
+
+    auto& members = (*objPtr)->members;
+    members.erase(std::remove_if(members.begin(),
+                                 members.end(),
+                                 [&](const auto& member) noexcept { return member.first == keyUtf8; }),
+                  members.end());
+}
+
 struct DialogState
 {
     DialogState()                              = default;
@@ -796,6 +880,8 @@ struct DialogState
     wil::unique_hwnd awsRegionFrame;
     wil::unique_hwnd portFrame;
     wil::unique_hwnd initialPathFrame;
+    wil::unique_hwnd copyMoveMaxConcurrencyFrame;
+    wil::unique_hwnd deleteMaxConcurrencyFrame;
     wil::unique_hwnd userFrame;
     wil::unique_hwnd secretFrame;
     wil::unique_hwnd s3EndpointOverrideFrame;
@@ -811,6 +897,8 @@ struct DialogState
     HWND hostLabel                   = nullptr;
     HWND portLabel                   = nullptr;
     HWND initialPathLabel            = nullptr;
+    HWND copyMoveMaxConcurrencyLabel = nullptr;
+    HWND deleteMaxConcurrencyLabel   = nullptr;
     HWND anonymousLabel              = nullptr;
     HWND userLabel                   = nullptr;
     HWND secretLabel                 = nullptr;
@@ -839,6 +927,8 @@ struct DialogState
     HWND awsRegionCombo               = nullptr;
     HWND portEdit                     = nullptr;
     HWND initialPathEdit              = nullptr;
+    HWND copyMoveMaxConcurrencyEdit   = nullptr;
+    HWND deleteMaxConcurrencyEdit     = nullptr;
     HWND anonymousToggle              = nullptr;
     HWND userEdit                     = nullptr;
     HWND secretEdit                   = nullptr;
@@ -1026,6 +1116,8 @@ void EnsureControls(DialogState& state, HWND dlg) noexcept
     state.hostLabel                    = GetDlgItem(dlg, IDC_CONNECTION_LABEL_HOST);
     state.portLabel                    = GetDlgItem(dlg, IDC_CONNECTION_LABEL_PORT);
     state.initialPathLabel             = GetDlgItem(dlg, IDC_CONNECTION_LABEL_INITIAL_PATH);
+    state.copyMoveMaxConcurrencyLabel  = GetDlgItem(dlg, IDC_CONNECTION_LABEL_COPYMOVE_CONCURRENCY);
+    state.deleteMaxConcurrencyLabel    = GetDlgItem(dlg, IDC_CONNECTION_LABEL_DELETE_CONCURRENCY);
     state.anonymousLabel               = GetDlgItem(dlg, IDC_CONNECTION_LABEL_ANONYMOUS);
     state.userLabel                    = GetDlgItem(dlg, IDC_CONNECTION_LABEL_USER);
     state.secretLabel                  = GetDlgItem(dlg, IDC_CONNECTION_LABEL_SECRET);
@@ -1043,6 +1135,8 @@ void EnsureControls(DialogState& state, HWND dlg) noexcept
     state.hostEdit                     = GetDlgItem(dlg, IDC_CONNECTION_HOST);
     state.portEdit                     = GetDlgItem(dlg, IDC_CONNECTION_PORT);
     state.initialPathEdit              = GetDlgItem(dlg, IDC_CONNECTION_INITIAL_PATH);
+    state.copyMoveMaxConcurrencyEdit   = GetDlgItem(dlg, IDC_CONNECTION_COPYMOVE_CONCURRENCY);
+    state.deleteMaxConcurrencyEdit     = GetDlgItem(dlg, IDC_CONNECTION_DELETE_CONCURRENCY);
     state.anonymousToggle              = GetDlgItem(dlg, IDC_CONNECTION_ANONYMOUS);
     state.userEdit                     = GetDlgItem(dlg, IDC_CONNECTION_USER);
     state.secretEdit                   = GetDlgItem(dlg, IDC_CONNECTION_PASSWORD);
@@ -1631,6 +1725,14 @@ void UpdateControlEnabledState(DialogState& state) noexcept
     show(state.hostEdit, showHostEdit);
     showFrame(state.hostFrame, showHostEdit);
 
+    const bool showConcurrency = hasSelection;
+    show(state.copyMoveMaxConcurrencyLabel, showConcurrency);
+    show(state.copyMoveMaxConcurrencyEdit, showConcurrency);
+    showFrame(state.copyMoveMaxConcurrencyFrame, showConcurrency);
+    show(state.deleteMaxConcurrencyLabel, showConcurrency);
+    show(state.deleteMaxConcurrencyEdit, showConcurrency);
+    showFrame(state.deleteMaxConcurrencyFrame, showConcurrency);
+
     const bool showAnonymous = hasSelection && isFtp;
     show(state.anonymousLabel, showAnonymous);
     show(state.anonymousToggle, showAnonymous);
@@ -1671,6 +1773,10 @@ void UpdateControlEnabledState(DialogState& state) noexcept
     EnableWindow(state.awsRegionCombo, hasSelection && isAwsS3);
     EnableWindow(state.portEdit, hasSelection && ! isAwsS3);
     EnableWindow(state.initialPathEdit, hasSelection);
+
+    const bool supportsCopyMoveOps = hasSelection && ! isImap;
+    EnableWindow(state.copyMoveMaxConcurrencyEdit, supportsCopyMoveOps);
+    EnableWindow(state.deleteMaxConcurrencyEdit, hasSelection);
     EnableWindow(state.anonymousToggle, showAnonymous);
     EnableWindow(state.btnRename, hasSelection && ! isQuickConnect);
     EnableWindow(state.btnRemove, hasSelection && ! isQuickConnect);
@@ -1729,6 +1835,28 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
 
     const std::wstring initialPath = profile.initialPath.empty() ? L"/" : profile.initialPath;
     SetWindowTextW(state.initialPathEdit, initialPath.c_str());
+
+    {
+        const uint32_t copyMoveOverride = ExtraGetUInt32(profile.extra, "copyMoveMaxConcurrency").value_or(0);
+        if (copyMoveOverride > 0)
+        {
+            SetWindowTextW(state.copyMoveMaxConcurrencyEdit, std::to_wstring(copyMoveOverride).c_str());
+        }
+        else
+        {
+            SetWindowTextW(state.copyMoveMaxConcurrencyEdit, L"");
+        }
+
+        const uint32_t deleteOverride = ExtraGetUInt32(profile.extra, "deleteMaxConcurrency").value_or(0);
+        if (deleteOverride > 0)
+        {
+            SetWindowTextW(state.deleteMaxConcurrencyEdit, std::to_wstring(deleteOverride).c_str());
+        }
+        else
+        {
+            SetWindowTextW(state.deleteMaxConcurrencyEdit, L"");
+        }
+    }
 
     const bool anonymous = profile.authMode == Common::Settings::ConnectionAuthMode::Anonymous;
     SetTwoStateToggleState(state.anonymousToggle, state.theme, anonymous);
@@ -1926,6 +2054,46 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
     if (! profile.initialPath.empty() && profile.initialPath.front() != L'/')
     {
         profile.initialPath.insert(profile.initialPath.begin(), L'/');
+    }
+
+    {
+        uint32_t copyMoveOverride = 0;
+        const std::wstring copyMoveText = TrimWhitespace(Win32Text::GetWindowTextString(state.copyMoveMaxConcurrencyEdit));
+        if (TryParseUInt32(copyMoveText, copyMoveOverride))
+        {
+            copyMoveOverride = std::min<uint32_t>(copyMoveOverride, 8u);
+            if (copyMoveOverride == 0)
+            {
+                ExtraRemoveKey(profile.extra, "copyMoveMaxConcurrency");
+            }
+            else
+            {
+                ExtraSetUInt32(profile.extra, "copyMoveMaxConcurrency", copyMoveOverride);
+            }
+        }
+        else
+        {
+            ExtraRemoveKey(profile.extra, "copyMoveMaxConcurrency");
+        }
+
+        uint32_t deleteOverride = 0;
+        const std::wstring deleteText = TrimWhitespace(Win32Text::GetWindowTextString(state.deleteMaxConcurrencyEdit));
+        if (TryParseUInt32(deleteText, deleteOverride))
+        {
+            deleteOverride = std::min<uint32_t>(deleteOverride, 64u);
+            if (deleteOverride == 0)
+            {
+                ExtraRemoveKey(profile.extra, "deleteMaxConcurrency");
+            }
+            else
+            {
+                ExtraSetUInt32(profile.extra, "deleteMaxConcurrency", deleteOverride);
+            }
+        }
+        else
+        {
+            ExtraRemoveKey(profile.extra, "deleteMaxConcurrency");
+        }
     }
 
     const bool anonymous = GetTwoStateToggleState(state.anonymousToggle, state.theme);
@@ -2969,7 +3137,7 @@ void LayoutDialog(HWND dlg, DialogState& state) noexcept
         return headerHeight + sectionGapY + cardHeight + cardSpacingY;
     };
 
-    const int connectionRows      = state.filterPluginId.empty() ? 4 : 3;
+    const int connectionRows      = state.filterPluginId.empty() ? 6 : 5;
     const int authRowsForEstimate = 5;
     const int s3Rows              = 1 /* endpoint */ + 2 /* useHttps + verifyTls */ + (isS3Selection ? 1 : 0);
     const int sshRows             = 2;
@@ -3180,7 +3348,7 @@ void LayoutDialog(HWND dlg, DialogState& state) noexcept
     {
         pushSectionHeader(state.sectionConnection, LoadStringResource(nullptr, IDS_CONNECTIONS_SECTION_CONNECTION));
 
-        const int rows       = state.filterPluginId.empty() ? 4 : 3;
+        const int rows       = state.filterPluginId.empty() ? 6 : 5;
         const int cardHeight = (2 * cardPaddingY) + (rows * rowHeight) + ((rows - 1) * gapY);
         const RECT card      = pushCard(cardHeight);
 
@@ -3253,6 +3421,34 @@ void LayoutDialog(HWND dlg, DialogState& state) noexcept
                       LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_INITIAL_PATH));
         positionFramed(state.initialPathFrame,
                        state.initialPathEdit,
+                       card.left + cardPaddingX + labelWidth + gapX,
+                       cy,
+                       std::max(0, rightWidth - 2 * cardPaddingX - labelWidth - gapX));
+        cy += rowHeight + gapY;
+
+        positionLabel(state.copyMoveMaxConcurrencyLabel,
+                      dialogFont,
+                      card.left + cardPaddingX,
+                      cy + (rowHeight - headerHeight) / 2,
+                      labelWidth,
+                      headerHeight,
+                      LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_COPYMOVE_CONCURRENCY));
+        positionFramed(state.copyMoveMaxConcurrencyFrame,
+                       state.copyMoveMaxConcurrencyEdit,
+                       card.left + cardPaddingX + labelWidth + gapX,
+                       cy,
+                       std::max(0, rightWidth - 2 * cardPaddingX - labelWidth - gapX));
+        cy += rowHeight + gapY;
+
+        positionLabel(state.deleteMaxConcurrencyLabel,
+                      dialogFont,
+                      card.left + cardPaddingX,
+                      cy + (rowHeight - headerHeight) / 2,
+                      labelWidth,
+                      headerHeight,
+                      LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_DELETE_CONCURRENCY));
+        positionFramed(state.deleteMaxConcurrencyFrame,
+                       state.deleteMaxConcurrencyEdit,
                        card.left + cardPaddingX + labelWidth + gapX,
                        cy,
                        std::max(0, rightWidth - 2 * cardPaddingX - labelWidth - gapX));
@@ -3451,6 +3647,8 @@ INT_PTR OnInitDialog(HWND dlg, DialogState* init) noexcept
         reparent(init->hostLabel);
         reparent(init->portLabel);
         reparent(init->initialPathLabel);
+        reparent(init->copyMoveMaxConcurrencyLabel);
+        reparent(init->deleteMaxConcurrencyLabel);
         reparent(init->anonymousLabel);
         reparent(init->userLabel);
         reparent(init->secretLabel);
@@ -3469,6 +3667,8 @@ INT_PTR OnInitDialog(HWND dlg, DialogState* init) noexcept
         reparent(init->hostEdit);
         reparent(init->portEdit);
         reparent(init->initialPathEdit);
+        reparent(init->copyMoveMaxConcurrencyEdit);
+        reparent(init->deleteMaxConcurrencyEdit);
         reparent(init->anonymousToggle);
         reparent(init->userEdit);
         reparent(init->secretEdit);
@@ -3676,11 +3876,13 @@ INT_PTR OnInitDialog(HWND dlg, DialogState* init) noexcept
         ApplyThemeToListView(init->list, init->theme);
     }
 
-    const std::array<HWND, 8> edits = {
+    const std::array<HWND, 10> edits = {
         init->nameEdit,
         init->hostEdit,
         init->portEdit,
         init->initialPathEdit,
+        init->copyMoveMaxConcurrencyEdit,
+        init->deleteMaxConcurrencyEdit,
         init->userEdit,
         init->secretEdit,
         init->s3EndpointOverrideEdit,
@@ -3696,6 +3898,15 @@ INT_PTR OnInitDialog(HWND dlg, DialogState* init) noexcept
 
         PrepareFlatControl(edit);
         PrepareEditMargins(edit);
+    }
+
+    if (init->copyMoveMaxConcurrencyEdit)
+    {
+        static_cast<void>(SendMessageW(init->copyMoveMaxConcurrencyEdit, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"0 = inherit (max 8)")));
+    }
+    if (init->deleteMaxConcurrencyEdit)
+    {
+        static_cast<void>(SendMessageW(init->deleteMaxConcurrencyEdit, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"0 = inherit (max 64)")));
     }
 
     if (init->sshKnownHostsEdit)
@@ -3732,6 +3943,8 @@ INT_PTR OnInitDialog(HWND dlg, DialogState* init) noexcept
         createFrame(init->awsRegionFrame, init->awsRegionCombo);
         createFrame(init->portFrame, init->portEdit);
         createFrame(init->initialPathFrame, init->initialPathEdit);
+        createFrame(init->copyMoveMaxConcurrencyFrame, init->copyMoveMaxConcurrencyEdit);
+        createFrame(init->deleteMaxConcurrencyFrame, init->deleteMaxConcurrencyEdit);
         createFrame(init->userFrame, init->userEdit);
         createFrame(init->secretFrame, init->secretEdit);
         createFrame(init->s3EndpointOverrideFrame, init->s3EndpointOverrideEdit);

@@ -13,7 +13,7 @@ It exposes three logical viewer plugins (one DLL, three plugin IDs):
 
 ViewerWeb is invoked via the standard viewer association mechanism:
 - **Shortcut**: `F3` (View)
-- Host chooses the viewer by file extension using `extensions.openWithViewerByExtension` (see `Specs/PluginsViewer.md` and `Specs/SettingsStoreSpec.md`).
+- Host chooses the viewer by file extension using `extensions.openWithViewerByExtension` (see `Specs/Plugins/Plugins_ViewerPlugins.md` and `Specs/Core/Core_SettingsStore.md`).
 
 Deployment:
 - The host loads the optional DLL from `<exeDir>\\Plugins\\ViewerWeb.dll` when present.

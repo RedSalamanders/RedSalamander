@@ -18,13 +18,13 @@ Key points:
 
 Embedded:
 - `builtin/viewer-text`: baseline Text/Hex viewer (reference behavior is specified in this document).
-- `builtin/viewer-space`: folder disk-usage treemap (see `Specs/ViewerSpacePluginSpec.md`).
-- `builtin/viewer-imgraw`: image viewer using WIC + LibRaw (see `Specs/ViewerImgRawPluginSpec.md`).
+- `builtin/viewer-space`: folder disk-usage treemap (see `Specs/Plugins/Plugins_ViewerSpace.md`).
+- `builtin/viewer-imgraw`: image viewer using WIC + LibRaw (see `Specs/Plugins/Plugins_ViewerImgRaw.md`).
 
 Optional (loaded from `<exeDir>\\Plugins` when present):
-- `builtin/viewer-web`: WebView2-based HTML/PDF viewer (see `Specs/ViewerWebPluginSpec.md`).
-- `builtin/viewer-json`: WebView2-based JSON/JSON5 viewer (see `Specs/ViewerWebPluginSpec.md`).
-- `builtin/viewer-markdown`: WebView2-based Markdown viewer (see `Specs/ViewerWebPluginSpec.md`).
+- `builtin/viewer-web`: WebView2-based HTML/PDF viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
+- `builtin/viewer-json`: WebView2-based JSON/JSON5 viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
+- `builtin/viewer-markdown`: WebView2-based Markdown viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
 
 ## Settings (host responsibility)
 

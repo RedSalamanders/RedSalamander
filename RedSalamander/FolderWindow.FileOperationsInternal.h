@@ -252,6 +252,7 @@ struct FolderWindow::FileOperationState
         bool _enablePreCalc    = true;
 
         unsigned long _perItemTotalItems     = 0;
+        unsigned int _perItemMaxConcurrencyBudget = 1;
         unsigned int _perItemMaxConcurrency  = 1;
         unsigned long _perItemCompletedItems = 0;
         uint64_t _perItemCompletedEntryCount = 0;
@@ -264,6 +265,7 @@ struct FolderWindow::FileOperationState
             unsigned long completedItems = 0;
             uint64_t completedBytes      = 0;
             unsigned long totalItems     = 0;
+            ULONGLONG lastUpdateTick     = 0;
         };
 
         std::array<PerItemInFlightCall, kMaxInFlightFiles> _perItemInFlightCalls{};
@@ -338,6 +340,14 @@ struct FolderWindow::FileOperationState
 
         std::array<InFlightFileProgress, kMaxInFlightFiles> _inFlightFiles{};
         size_t _inFlightFileCount = 0;
+
+#ifdef _DEBUG
+        unsigned int _dbgConfiguredMaxConcurrency = 1;
+        ULONGLONG _dbgSingleInFlightStartTick     = 0;
+        ULONGLONG _dbgLastSingleInFlightWarnTick  = 0;
+        bool _dbgObservedMultipleInFlightFiles    = false;
+        ULONGLONG _dbgLastPerItemInFlightEvictWarnTick = 0;
+#endif
 
         std::jthread _thread;
     };

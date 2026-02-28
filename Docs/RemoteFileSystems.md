@@ -78,6 +78,6 @@ Security note:
 
 For deep implementation details, see the specs:
 
-- `Specs/FileSystemFtpSftpScpPluginSpec.md`
-- `Specs/FileSystemImapPluginSpec.md`
+- `Specs/FileSystem/FileSystem_FtpSftpScp.md`
+- `Specs/FileSystem/FileSystem_Imap.md`
 

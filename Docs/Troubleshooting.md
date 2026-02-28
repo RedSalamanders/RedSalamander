@@ -54,3 +54,41 @@ What to do:
 
 - Check the Visual Studio **Output** window for the leaked interface list and reference counts.
 - Identify which window owns the leaked resources and ensure its `WM_CLOSE` / `WM_DESTROY` path releases device resources (swap chain target detached, COM pointers reset, etc.).
+
+## Comparing file-operations self-test runs
+
+Selftests write their raw artifacts under `%LOCALAPPDATA%\\RedSalamander\\SelfTest\\last_run\\`.
+
+In Debug builds from a repo checkout, the selftest harness automatically archives the meaningful artifacts under `Specs\\TestRuns\\<ComputerHashName>\\...` after each run. If repo auto-detection fails, the trace includes `ArchiveToRepo: repo root not found; skipping.` — re-run from a repo checkout, set `REDSALAMANDER_REPO_ROOT` to the repo root, or manually copy from `%LOCALAPPDATA%\\RedSalamander\\SelfTest\\last_run\\` into `Specs\\TestRuns\\...`.
+
+Then use `Tools\CompareTestRuns.ps1` to diff two archived runs and spot regressions:
+
+```powershell
+# Compare two runs (summary + file changes + case changes)
+.\Tools\CompareTestRuns.ps1 `
+    Specs\TestRuns\<ComputerHashName>\FileOps\2026-02-27_085402 `
+    Specs\TestRuns\<ComputerHashName>\FileOps\2026-02-28_000800
+
+# Include a line-level trace-log diff (capped at 50 lines)
+.\Tools\CompareTestRuns.ps1 `
+    Specs\TestRuns\<ComputerHashName>\FileOps\2026-02-27_121904 `
+    Specs\TestRuns\<ComputerHashName>\FileOps\2026-02-27_141202 `
+    -ShowTraceDiff -MaxTraceDiffLines 50
+```
+
+The script reports:
+
+| Section | What it shows |
+|---------|---------------|
+| **Summary** | Passed / failed / skipped counts and duration delta |
+| **Files** | Files added, removed, or changed (SHA-256) between the two folders |
+| **Cases** | Individual test cases whose status, reason, or duration changed |
+| **Trace** | (with `-ShowTraceDiff`) Line-level diff of `trace.txt` / `fileops_trace.txt` |
+
+Run `Get-Help .\Tools\CompareTestRuns.ps1 -Detailed` for parameter documentation.
+
+To see timing evolution over many runs, use `Tools\\AnalyzeTestRuns.ps1`:
+
+```powershell
+.\Tools\AnalyzeTestRuns.ps1 Specs\TestRuns\<ComputerHashName>\FileOps -TopN 10
+```

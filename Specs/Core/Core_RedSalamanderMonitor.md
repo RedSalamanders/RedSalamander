@@ -14,7 +14,7 @@
 ## Localization and Menu Resources
 
 - The main menu and all static UI strings are defined in `.rc` resources (`RedSalamanderMonitor/RedSalamanderMonitor.rc`) for localization.
-- Runtime code may only populate truly dynamic menu content (e.g., themes discovered from `Themes\\*.theme.json5` and custom themes from settings); see `Specs/LocalizationSpec.md`.
+- Runtime code may only populate truly dynamic menu content (e.g., themes discovered from `Themes\\*.theme.json5` and custom themes from settings); see `Specs/Core/Core_Localization.md`.
 
 ### Two-Mode Rendering Architecture
 
@@ -355,7 +355,7 @@ bool IsLineVisible(size_t sourceIndex) const;     // Check if source line is vis
 - Quick actions: copy current line, copy visible region, and copy filtered result set; expose hotkeys and context menu entries.
 - Allow pause-on-select to freeze intake/auto-scroll while selecting; resume restores live tail.
 - Stretch goals: block (column) selection for timestamps/PIDs and multi-range copy (spec stays optional but keep state machine ready).
-- Selection highlight uses small rounded corners to match the rest of the UI (see `Specs/VisualStyleSpec.md`).
+- Selection highlight uses small rounded corners to match the rest of the UI (see `Specs/UI/UI_VisualStyle.md`).
 
 ### Filtering and navigation
 

@@ -148,7 +148,7 @@ Audit steps (do before changing layout assumptions):
 Files:
 
 - `Common/PlugInterfaces/FileSystem.h`
-- (Optional) `Specs/FileOperationsSpec.md`, `Specs/FolderWindowSpec.md` (add brief references)
+- (Optional) `Specs/FileSystem/FileSystem_FileOperations.md`, `Specs/UI/UI_FolderWindow.md` (add brief references)
 
 Tasks:
 
@@ -370,7 +370,7 @@ Instrumentation (optional but recommended):
   - `.github/skills/compiler-warnings/SKILL.md`
   - `.github/skills/cpp-build/SKILL.md`
 - Related specs:
-  - `Specs/FileOperationsSpec.md`
-  - `Specs/FolderWindowSpec.md`
-  - `Specs/DirectoryInfoCacheSpec.md`
-  - `Specs/PluginAPI.md`
+  - `Specs/FileSystem/FileSystem_FileOperations.md`
+  - `Specs/UI/UI_FolderWindow.md`
+  - `Specs/Core/Core_DirectoryInfoCache.md`
+  - `Specs/Plugins/Plugins_PluginAPI.md`

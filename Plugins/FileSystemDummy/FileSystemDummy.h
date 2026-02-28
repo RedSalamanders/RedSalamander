@@ -27,6 +27,9 @@
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
+struct IHost;
+struct IHostConnections;
+
 class DummyFilesInformation final : public IFilesInformation
 {
 public:
@@ -68,7 +71,7 @@ class FileSystemDummy final : public IFileSystem,
                               public IDriveInfo
 {
 public:
-    FileSystemDummy();
+    explicit FileSystemDummy(IHost* host) noexcept;
 
     // Explicitly delete copy/move operations (COM objects are not copyable/movable).
     FileSystemDummy(const FileSystemDummy&)            = delete;
@@ -300,6 +303,7 @@ private:
     };
 
     std::mutex _stateMutex;
+    wil::com_ptr<IHostConnections> _hostConnections;
 
     std::vector<MenuEntry> _menuEntries;
     std::vector<NavigationMenuItem> _menuEntryView;
@@ -317,7 +321,7 @@ private:
     // Must be called while _mutex is held.
     static void ClearRootsIteratively() noexcept;
 
-    std::filesystem::path NormalizePath(std::wstring_view path) const;
+    [[nodiscard]] HRESULT NormalizePath(std::wstring_view path, std::filesystem::path& normalized) const noexcept;
     DummyRoot* FindRoot(std::wstring_view rootPath) noexcept;
     DummyRoot* GetOrCreateRoot(std::wstring_view rootPath);
     HRESULT ResolvePath(const std::filesystem::path& path, DummyNode** outNode, bool createMissing, bool requireDirectory) noexcept;

@@ -94,7 +94,7 @@ Security note:
 
 Both plugins support host-reserved navigation:
 
-- `/@conn:<connectionName>/...` (see `Specs/ConnectionManagerSpec.md`)
+- `/@conn:<connectionName>/...` (see `Specs/Core/Core_ConnectionManager.md`)
 - Optional shorthand authority form: `// @conn / <connectionName> / ...` (e.g. `s3://@conn/<connectionName>/...`)
 
 Profile mapping:
@@ -117,8 +117,14 @@ Supported `extra` keys (from `ConnectionProfile.extra` and surfaced to plugins v
 - `verifyTls` (bool)
 - `useVirtualAddressing` (bool, S3 only)
 
+Host-level extra keys:
+
+- `copyMoveMaxConcurrency` / `deleteMaxConcurrency` (integer): global per-connection overrides used by the host to clamp file-op concurrency (see `Specs/Core/Core_ConnectionManager.md`).
+
 ## Operations and Behavior Notes
 
-- Browsing and file reads are implemented as **read-only** operations.
-- Mutating operations (copy/move/delete/rename) currently return `ERROR_NOT_SUPPORTED`.
-- File reads download the remote content/metadata to a local delete-on-close temporary file before streaming it to the host.
+- **Read** is supported. File reads download the remote object to a local delete-on-close temporary file before streaming it to the host.
+- **Write** is supported (uploads/overwrites objects).
+- **Delete** is supported for **objects only** (paths that resolve to a key). Deleting “folders” / prefixes (paths ending with `/`) and recursive prefix deletes are **denied**.
+- **Copy/Move/Rename** are not supported as server-side operations; cross-filesystem copy uses the host bridge via `read`/`write`.
+- `concurrency.deleteMax` is `8` so the host can parallelize deletes when many objects are selected.

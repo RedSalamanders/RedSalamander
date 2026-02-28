@@ -1,6 +1,9 @@
 #include "FileSystemS3.Internal.h"
 
+#include <aws/s3-crt/model/Delete.h>
 #include <aws/s3-crt/model/DeleteObjectRequest.h>
+#include <aws/s3-crt/model/DeleteObjectsRequest.h>
+#include <aws/s3-crt/model/ObjectIdentifier.h>
 
 #include <format>
 
@@ -134,13 +137,18 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem([[maybe_unused]] const wchar_t*
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem([[maybe_unused]] const wchar_t* path,
+HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(const wchar_t* path,
                                                    [[maybe_unused]] FileSystemFlags flags,
-                                                   [[maybe_unused]] const FileSystemOptions* options,
-                                                   [[maybe_unused]] IFileSystemCallback* callback,
-                                                   [[maybe_unused]] void* cookie) noexcept
+                                                   const FileSystemOptions* options,
+                                                   IFileSystemCallback* callback,
+                                                   void* cookie) noexcept
 {
-    if (path == nullptr || path[0] == L'\0')
+    if (path == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    if (path[0] == L'\0')
     {
         return E_INVALIDARG;
     }
@@ -149,6 +157,66 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem([[maybe_unused]] const wchar_
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
+
+    FileSystemOptions optionsState{};
+    if (options != nullptr)
+    {
+        optionsState = *options;
+    }
+
+    FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+
+    const auto normalizeCancellation = [](HRESULT hr) noexcept
+    {
+        if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        return hr;
+    };
+
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        BOOL cancel = FALSE;
+        HRESULT hr  = callback->FileSystemShouldCancel(&cancel, cookie);
+        hr          = normalizeCancellation(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (cancel)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        return S_OK;
+    };
+
+    const auto reportProgress = [&](unsigned long completedItems, std::wstring_view currentPath) noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        const HRESULT hr = callback->FileSystemProgress(FILESYSTEM_DELETE,
+                                                        1,
+                                                        completedItems,
+                                                        0,
+                                                        0,
+                                                        currentPath.empty() ? nullptr : currentPath.data(),
+                                                        nullptr,
+                                                        0,
+                                                        0,
+                                                        callbackOptions,
+                                                        0,
+                                                        cookie);
+        return normalizeCancellation(hr);
+    };
 
     Settings settings;
     {
@@ -206,21 +274,62 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem([[maybe_unused]] const wchar_
         return hr;
     }
 
+    hr = checkCancel();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = reportProgress(0, normalized);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = checkCancel();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
     Aws::S3Crt::S3CrtClient client = FsS3::MakeS3Client(bucketCtx);
     Aws::S3Crt::Model::DeleteObjectRequest req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     req.SetKey(Aws::String(key.data(), key.size()));
 
     const auto outcome = client.DeleteObject(req);
+    HRESULT itemHr     = S_OK;
     if (! outcome.IsSuccess())
     {
         const auto& err            = outcome.GetError();
         const std::wstring details = std::format(L"bucket='{}' key='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(key));
         FsS3::LogAwsFailure(L"S3", L"DeleteObject", bucketCtx, err, details);
-        return FsS3::HresultFromAwsError(err);
+        itemHr = FsS3::HresultFromAwsError(err);
     }
 
-    return S_OK;
+    if (callback)
+    {
+        hr = callback->FileSystemItemCompleted(FILESYSTEM_DELETE, 0, normalized.c_str(), nullptr, itemHr, callbackOptions, cookie);
+        hr = normalizeCancellation(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    hr = reportProgress(1, normalized);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = checkCancel();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    return itemHr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::RenameItem([[maybe_unused]] const wchar_t* sourcePath,
@@ -255,14 +364,538 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItems([[maybe_unused]] const wchar_t
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems([[maybe_unused]] const wchar_t* const* paths,
-                                                    [[maybe_unused]] unsigned long count,
-                                                    [[maybe_unused]] FileSystemFlags flags,
-                                                    [[maybe_unused]] const FileSystemOptions* options,
-                                                    [[maybe_unused]] IFileSystemCallback* callback,
-                                                    [[maybe_unused]] void* cookie) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
+                                                    unsigned long count,
+                                                    FileSystemFlags flags,
+                                                    const FileSystemOptions* options,
+                                                    IFileSystemCallback* callback,
+                                                    void* cookie) noexcept
 {
-    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    if (! paths && count > 0)
+    {
+        return E_POINTER;
+    }
+
+    if (count == 0)
+    {
+        return S_OK;
+    }
+
+    if (_mode != FileSystemS3Mode::S3)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    FileSystemOptions optionsState{};
+    if (options != nullptr)
+    {
+        optionsState = *options;
+    }
+
+    FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+
+    const auto normalizeCancellation = [](HRESULT hr) noexcept
+    {
+        if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        return hr;
+    };
+
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        BOOL cancel = FALSE;
+        HRESULT hr  = callback->FileSystemShouldCancel(&cancel, cookie);
+        hr          = normalizeCancellation(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (cancel)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        return S_OK;
+    };
+
+    const auto reportProgress = [&](unsigned long completedItems, const wchar_t* currentPath) noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        const HRESULT hr = callback->FileSystemProgress(FILESYSTEM_DELETE,
+                                                        count,
+                                                        completedItems,
+                                                        0,
+                                                        0,
+                                                        currentPath,
+                                                        nullptr,
+                                                        0,
+                                                        0,
+                                                        callbackOptions,
+                                                        0,
+                                                        cookie);
+        return normalizeCancellation(hr);
+    };
+
+    const auto reportItemCompleted = [&](unsigned long itemIndex, const wchar_t* currentPath, HRESULT status) noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        HRESULT hr = callback->FileSystemItemCompleted(FILESYSTEM_DELETE, itemIndex, currentPath, nullptr, status, callbackOptions, cookie);
+        hr         = normalizeCancellation(hr);
+        return hr;
+    };
+
+    Settings settings;
+    {
+        std::lock_guard lock(_stateMutex);
+        settings = _settings;
+    }
+
+    const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
+
+    struct DeleteEntry final
+    {
+        unsigned long itemIndex = 0;
+        std::string key;
+        std::wstring normalizedPath;
+    };
+
+    struct DeleteGroup final
+    {
+        FsS3::ResolvedAwsContext ctx;
+        std::string bucket;
+        std::vector<DeleteEntry> entries;
+    };
+
+    const auto isSameClientContext = [](const FsS3::ResolvedAwsContext& left, const FsS3::ResolvedAwsContext& right) noexcept
+    {
+        return left.connectionName == right.connectionName && left.region == right.region && left.explicitRegion == right.explicitRegion &&
+               left.endpointOverride == right.endpointOverride && left.useHttps == right.useHttps && left.verifyTls == right.verifyTls &&
+               left.useVirtualAddressing == right.useVirtualAddressing && left.accessKeyId == right.accessKeyId &&
+               left.secretAccessKey == right.secretAccessKey;
+    };
+
+    const auto hresultFromErrorCode = [](std::string_view code) noexcept -> HRESULT
+    {
+        if (code.empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
+        }
+
+        if (code == "AccessDenied")
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+        if (code == "NoSuchKey")
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+        if (code == "InvalidRequest" || code == "InvalidArgument")
+        {
+            return E_INVALIDARG;
+        }
+
+        return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
+    };
+
+    std::vector<DeleteGroup> groups;
+    groups.reserve(4);
+
+    unsigned long completedItems = 0;
+    HRESULT firstFailure         = S_OK;
+    bool hadFailure              = false;
+
+    HRESULT hr = reportProgress(0, (count > 0 && paths) ? paths[0] : nullptr);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    for (unsigned long index = 0; index < count; ++index)
+    {
+        const wchar_t* path = paths[index];
+        if (! path)
+        {
+            return E_POINTER;
+        }
+
+        if (path[0] == L'\0')
+        {
+            return E_INVALIDARG;
+        }
+
+        hr = checkCancel();
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        FsS3::ResolvedAwsContext ctx{};
+        std::wstring canonical;
+        hr = FsS3::ResolveAwsContext(_mode, settings, path, _hostConnections.get(), true, ctx, canonical);
+        if (FAILED(hr))
+        {
+            hadFailure = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = hr;
+            }
+
+            HRESULT cbHr = reportItemCompleted(index, path, hr);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            ++completedItems;
+            cbHr = reportProgress(completedItems, path);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            if (! continueOnError)
+            {
+                return hr;
+            }
+            continue;
+        }
+
+        const std::wstring normalized = FsS3::NormalizePluginPath(canonical);
+        if (normalized == L"/" || normalized.empty() || (! normalized.empty() && normalized.back() == L'/'))
+        {
+            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+            hadFailure           = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = itemHr;
+            }
+
+            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            ++completedItems;
+            cbHr = reportProgress(completedItems, path);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            if (! continueOnError)
+            {
+                return itemHr;
+            }
+            continue;
+        }
+
+        const auto segments = FsS3::SplitPathSegments(normalized);
+        if (segments.size() < 2)
+        {
+            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+            hadFailure           = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = itemHr;
+            }
+
+            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            ++completedItems;
+            cbHr = reportProgress(completedItems, path);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            if (! continueOnError)
+            {
+                return itemHr;
+            }
+            continue;
+        }
+
+        const std::string bucket = FsS3::Utf8FromUtf16(segments[0]);
+        if (bucket.empty())
+        {
+            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+            hadFailure           = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = itemHr;
+            }
+
+            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            ++completedItems;
+            cbHr = reportProgress(completedItems, path);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            if (! continueOnError)
+            {
+                return itemHr;
+            }
+            continue;
+        }
+
+        std::wstring keyWide;
+        for (size_t i = 1; i < segments.size(); ++i)
+        {
+            if (i > 1)
+            {
+                keyWide.push_back(L'/');
+            }
+            keyWide.append(segments[i]);
+        }
+
+        const std::string key = FsS3::Utf8FromUtf16(keyWide);
+        if (key.empty())
+        {
+            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+            hadFailure           = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = itemHr;
+            }
+
+            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            ++completedItems;
+            cbHr = reportProgress(completedItems, path);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            if (! continueOnError)
+            {
+                return itemHr;
+            }
+            continue;
+        }
+
+        FsS3::ResolvedAwsContext bucketCtx{};
+        hr = FsS3::ResolveS3ContextForBucket(*this, ctx, segments[0], bucketCtx);
+        if (FAILED(hr))
+        {
+            hadFailure = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = hr;
+            }
+
+            HRESULT cbHr = reportItemCompleted(index, path, hr);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            ++completedItems;
+            cbHr = reportProgress(completedItems, path);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            if (! continueOnError)
+            {
+                return hr;
+            }
+            continue;
+        }
+
+        size_t groupIndex = groups.size();
+        for (size_t i = 0; i < groups.size(); ++i)
+        {
+            if (groups[i].bucket == bucket && isSameClientContext(groups[i].ctx, bucketCtx))
+            {
+                groupIndex = i;
+                break;
+            }
+        }
+
+        if (groupIndex == groups.size())
+        {
+            DeleteGroup added{};
+            added.ctx    = std::move(bucketCtx);
+            added.bucket = bucket;
+            groups.push_back(std::move(added));
+        }
+
+        DeleteEntry entry{};
+        entry.itemIndex      = index;
+        entry.key            = key;
+        entry.normalizedPath = normalized;
+        groups[groupIndex].entries.push_back(std::move(entry));
+    }
+
+    constexpr size_t kMaxBatchSize = 1000u;
+
+    for (const auto& group : groups)
+    {
+        Aws::S3Crt::S3CrtClient client = FsS3::MakeS3Client(group.ctx);
+
+        for (size_t batchStart = 0; batchStart < group.entries.size(); batchStart += kMaxBatchSize)
+        {
+            const size_t batchEnd = std::min(group.entries.size(), batchStart + kMaxBatchSize);
+
+            hr = checkCancel();
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+
+            Aws::S3Crt::Model::DeleteObjectsRequest req;
+            req.SetBucket(Aws::String(group.bucket.data(), group.bucket.size()));
+
+            Aws::S3Crt::Model::Delete deletePayload;
+            deletePayload.SetQuiet(true);
+
+            for (size_t i = batchStart; i < batchEnd; ++i)
+            {
+                Aws::S3Crt::Model::ObjectIdentifier obj;
+                const std::string& key = group.entries[i].key;
+                obj.SetKey(Aws::String(key.data(), key.size()));
+                deletePayload.AddObjects(std::move(obj));
+            }
+
+            req.SetDelete(std::move(deletePayload));
+
+            const auto outcome = client.DeleteObjects(req);
+            if (! outcome.IsSuccess())
+            {
+                const auto& err = outcome.GetError();
+                FsS3::LogAwsFailure(L"S3", L"DeleteObjects", group.ctx, err, FsS3::Utf16FromUtf8(group.bucket));
+                const HRESULT batchHr = FsS3::HresultFromAwsError(err);
+
+                hadFailure = true;
+                if (firstFailure == S_OK)
+                {
+                    firstFailure = batchHr;
+                }
+
+                for (size_t i = batchStart; i < batchEnd; ++i)
+                {
+                    const unsigned long itemIndex = group.entries[i].itemIndex;
+                    const wchar_t* currentPath     = paths[itemIndex];
+
+                    HRESULT cbHr = reportItemCompleted(itemIndex, currentPath, batchHr);
+                    if (FAILED(cbHr))
+                    {
+                        return cbHr;
+                    }
+
+                    ++completedItems;
+                    cbHr = reportProgress(completedItems, currentPath);
+                    if (FAILED(cbHr))
+                    {
+                        return cbHr;
+                    }
+                }
+
+                if (! continueOnError)
+                {
+                    return batchHr;
+                }
+
+                continue;
+            }
+
+            std::unordered_map<std::string, HRESULT> errors;
+            const auto& errList = outcome.GetResult().GetErrors();
+            errors.reserve(errList.size());
+            for (const auto& e : errList)
+            {
+                const std::string keyUtf8  = std::string(e.GetKey().c_str(), e.GetKey().size());
+                const std::string codeUtf8 = std::string(e.GetCode().c_str(), e.GetCode().size());
+                errors[keyUtf8]            = hresultFromErrorCode(codeUtf8);
+            }
+
+            for (size_t i = batchStart; i < batchEnd; ++i)
+            {
+                const unsigned long itemIndex = group.entries[i].itemIndex;
+                const wchar_t* currentPath     = paths[itemIndex];
+
+                HRESULT itemHr = S_OK;
+                if (const auto it = errors.find(group.entries[i].key); it != errors.end())
+                {
+                    itemHr    = it->second;
+                    hadFailure = true;
+                    if (firstFailure == S_OK)
+                    {
+                        firstFailure = itemHr;
+                    }
+                }
+
+                HRESULT cbHr = reportItemCompleted(itemIndex, currentPath, itemHr);
+                if (FAILED(cbHr))
+                {
+                    return cbHr;
+                }
+
+                ++completedItems;
+                cbHr = reportProgress(completedItems, currentPath);
+                if (FAILED(cbHr))
+                {
+                    return cbHr;
+                }
+
+                if (FAILED(itemHr) && ! continueOnError)
+                {
+                    return itemHr;
+                }
+            }
+        }
+    }
+
+    hr = reportProgress(completedItems, (count > 0 && paths) ? paths[count - 1] : nullptr);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = checkCancel();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (hadFailure)
+    {
+        return continueOnError ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure;
+    }
+
+    return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::RenameItems([[maybe_unused]] const FileSystemRenamePair* items,

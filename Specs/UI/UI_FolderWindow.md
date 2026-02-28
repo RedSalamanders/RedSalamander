@@ -32,7 +32,7 @@ Some features embed a `FolderWindow` but require additional host integration (e.
 
 - **Pane callbacks**: path changed, enumeration completed, and per-item details text provider.
 - **Selection helpers**: apply selection based on display-name predicates.
-- **Informational tasks**: create/update/dismiss read-only task cards in the File Operations popup for background work that is not a file operation (see `Specs/FileOperationsSpec.md`).
+- **Informational tasks**: create/update/dismiss read-only task cards in the File Operations popup for background work that is not a file operation (see `Specs/FileSystem/FileSystem_FileOperations.md`).
 
 ## File System Plugin (v2)
 
@@ -104,7 +104,7 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
 - Double-clicking the splitter resets the ratio to `0.5` (equal split).
 - `cmd/pane/zoomPanel` toggles the focused pane between maximized (splitter at the edge) and restored (using `folders.layout.zoomRestoreSplitRatio`).
   - If the user drags the splitter while maximized, the restore state is cleared; the next toggle maximizes again.
-- The splitter renders a small centered grip handle to indicate it is draggable (see `Specs/VisualStyleSpec.md`).
+- The splitter renders a small centered grip handle to indicate it is draggable (see `Specs/UI/UI_VisualStyle.md`).
 
 ## Active/Focused Pane
 
@@ -113,7 +113,7 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
 
 ## Keyboard Management
 
-The canonical shortcut and routing spec is `Specs/CommandMenuKeyboardSpec.md`.
+The canonical shortcut and routing spec is `Specs/UI/UI_CommandMenuKeyboard.md`.
 
 FolderWindow responsibilities:
 - Define “focused pane” vs “active pane” routing and apply pane-targeted commands accordingly.
@@ -178,7 +178,7 @@ FolderWindow exposes two top-level pane menus in the application menu bar:
 - **Left** (left side)
 - **Right** (right-justified)
 
-**Localization requirement**: the menu structure and static labels are declared in resources (`RedSalamander/RedSalamander.rc`). Runtime code must only rebuild the dynamic **History** submenu entries (see `Specs/LocalizationSpec.md`).
+**Localization requirement**: the menu structure and static labels are declared in resources (`RedSalamander/RedSalamander.rc`). Runtime code must only rebuild the dynamic **History** submenu entries (see `Specs/Core/Core_Localization.md`).
 
 Each menu controls its corresponding pane.
 
@@ -247,7 +247,7 @@ Detailed mode (v1) is multi-line per item: name + a single details line.
 
 ## Persistence
 
-FolderWindow state is persisted in settings (see `Specs/SettingsStoreSpec.md`):
+FolderWindow state is persisted in settings (see `Specs/Core/Core_SettingsStore.md`):
 
 - `folders.active`
 - `folders.layout.splitRatio`

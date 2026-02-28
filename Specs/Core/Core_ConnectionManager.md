@@ -64,6 +64,10 @@ Stored in Settings Store (non-secret fields only):
     - SFTP/SCP: `sshPrivateKey`, `sshKnownHosts`.
     - IMAP: `ignoreSslTrust` (bool): skip TLS certificate validation (allows self-signed certificates; not recommended).
     - S3/S3 Table: `endpointOverride`, `useHttps`, `verifyTls` (and `useVirtualAddressing` for S3 only).
+    - Global file operations (all file-op capable protocols):
+      - `copyMoveMaxConcurrency` (uint32): `0 = inherit plugin setting`, else clamp to `1..8`.
+      - `deleteMaxConcurrency` (uint32): `0 = inherit plugin setting`, else clamp to `1..64`.
+      - These overrides apply **globally per connection profile across the whole app** (concurrent tasks share the cap).
 
 When serialized to JSON, default-valued fields may be omitted (e.g. `authMode=password`, `savePassword=false`, `requireWindowsHello=true`, `initialPath=/`; for S3/S3 Table, `host` may be omitted when empty to represent “auto region”).
 
@@ -202,6 +206,7 @@ Layout (using RedSalamander theming):
 - Right pane: connection editor
   - Scrollable when the editor content exceeds the available height (bottom buttons remain pinned and content does not overlap them).
   - Address (host), Port, Initial path
+  - Copy/Move max concurrency (0 = default), Delete max concurrency (0 = default)
   - User name, Password/Passphrase (masked, with Show/Hide control)
     - If a secret is already stored, the field shows a random-length masked placeholder to indicate “a password is saved” without leaking the real length.
   - `Save password`

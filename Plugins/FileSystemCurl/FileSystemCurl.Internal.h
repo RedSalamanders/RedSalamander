@@ -104,6 +104,12 @@ struct ConnectionInfo
     bool connectionSavePassword = false;
     bool connectionRequireHello = false;
 
+    // Effective per-connection caps after applying ConnectionProfile.extra overrides.
+    // Used both for scheduling and for the global per-connection limiter.
+    unsigned int effectiveCopyMoveMaxConcurrency = 1;
+    unsigned int effectiveDeleteMaxConcurrency   = 1;
+    std::wstring limiterKey;
+
     std::string host;
     std::optional<unsigned int> port;
     std::string user;
@@ -130,6 +136,10 @@ struct ResolvedLocation
 
 [[nodiscard]] bool HasFlag(FileSystemFlags flags, FileSystemFlags flag) noexcept;
 [[nodiscard]] HRESULT NormalizeCancellation(HRESULT hr) noexcept;
+
+// Stops and joins the shared background copy/move worker threads.
+// Intended to be invoked at a host "quiet point" when the last FileSystemCurl instance is being destroyed.
+void ShutdownSharedCopyMoveJobScheduler() noexcept;
 
 [[nodiscard]] inline bool IsAuthenticationFailureHr(HRESULT hr) noexcept
 {
@@ -321,6 +331,7 @@ struct FileOperationProgress
     void* cookie                  = nullptr;
 
     std::atomic_bool internalCancel{false};
+    std::atomic<uint64_t> bandwidthLimitBytesPerSecond{0};
 
     ArenaOwner arenaOwner{};
 
@@ -338,6 +349,7 @@ struct FileOperationProgress
         {
             options = *initialOptions;
         }
+        bandwidthLimitBytesPerSecond.store(options.bandwidthLimitBytesPerSecond, std::memory_order_release);
 
         if (callback)
         {
@@ -419,6 +431,7 @@ struct FileOperationProgress
                                                         &options,
                                                         tlsProgressStreamId,
                                                         cookie);
+        bandwidthLimitBytesPerSecond.store(options.bandwidthLimitBytesPerSecond, std::memory_order_release);
         return NormalizeCancellation(hr);
     }
 
@@ -463,6 +476,7 @@ struct FileOperationProgress
                                                         &options,
                                                         tlsProgressStreamId,
                                                         cookie);
+        bandwidthLimitBytesPerSecond.store(options.bandwidthLimitBytesPerSecond, std::memory_order_release);
         return NormalizeCancellation(hr);
     }
 

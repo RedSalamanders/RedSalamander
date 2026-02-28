@@ -20,7 +20,7 @@ Primary files:
 
 ## Non-Goals
 
-- No MSI details in this document (see `Specs/InstallerMsiSpec.md`).
+- No MSI details in this document (see `Specs/Installer/Installer_Msi.md`).
 - No automatic certificate issuance.
 - No Store submission automation.
 

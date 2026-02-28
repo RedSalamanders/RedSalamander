@@ -303,7 +303,13 @@ enum class ExportFormat
         return std::nullopt;
     }
 
-    [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+    const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    if (FAILED(coinitHr))
+    {
+        Debug::Error(L"ViewerPE export: CoInitializeEx(COINIT_APARTMENTTHREADED) failed: 0x{:08X}", coinitHr);
+        FAIL_FAST_IF_FAILED(coinitHr);
+    }
+    [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
     wil::com_ptr<IFileSaveDialog> dialog;
     const HRESULT hr = CoCreateInstance(CLSID_FileSaveDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));

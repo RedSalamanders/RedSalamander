@@ -122,7 +122,7 @@ RedSalamander is a dual-pane UI. Users must be able to identify the **focused pa
 - **Unfocused pane**: the `Current item` draws **border only** (no background fill) and uses a **thinner + dimmer** focus stroke (reduced opacity).
 - `Selected items` remain visually distinct in both panes; the unfocused-pane selection palette comes from theme tokens (`FolderViewTheme.itemBackgroundSelectedInactive` / `FolderViewTheme.textSelectedInactive`) and must not be hard-coded.
 
-See `Specs/CommandMenuKeyboardSpec.md` for the behavioral definition of focused/active pane.
+See `Specs/UI/UI_CommandMenuKeyboard.md` for the behavioral definition of focused/active pane.
 
 ## Plugin Configuration / Plugins Manager Dialogs
 

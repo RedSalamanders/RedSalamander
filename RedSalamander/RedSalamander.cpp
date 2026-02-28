@@ -446,6 +446,30 @@ bool g_selfTestRunFinalized = false;
         L"{0:04}-{1:02}-{2:02}T{3:02}:{4:02}:{5:02}.{6:03}Z", utc.tm_year + 1900, utc.tm_mon + 1, utc.tm_mday, utc.tm_hour, utc.tm_min, utc.tm_sec, millisPart);
 }
 
+[[nodiscard]] std::wstring_view GetSelfTestArchiveArea() noexcept
+{
+    const int count = (g_runFileOpsSelfTest ? 1 : 0) + (g_runCompareDirectoriesSelfTest ? 1 : 0) + (g_runCommandsSelfTest ? 1 : 0);
+    if (count != 1)
+    {
+        return L"SelfTest";
+    }
+
+    if (g_runFileOpsSelfTest)
+    {
+        return L"FileOps";
+    }
+    if (g_runCompareDirectoriesSelfTest)
+    {
+        return L"CompareDirectories";
+    }
+    if (g_runCommandsSelfTest)
+    {
+        return L"Commands";
+    }
+
+    return L"SelfTest";
+}
+
 void FinalizeSelfTestRun() noexcept
 {
     if (g_selfTestRunFinalized || ! g_selfTestRunStart.has_value())
@@ -462,6 +486,7 @@ void FinalizeSelfTestRun() noexcept
 
     const std::filesystem::path runJsonPath = SelfTest::SelfTestRoot() / L"last_run" / L"results.json";
     SelfTest::WriteRunJson(g_selfTestRunResult, runJsonPath);
+    SelfTest::TryArchiveLastRunToRepo(GetSelfTestArchiveArea(), g_selfTestExitCode, g_selfTestRunResult.durationMs);
     g_selfTestRunFinalized = true;
 }
 

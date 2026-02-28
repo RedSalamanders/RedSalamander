@@ -6,6 +6,11 @@
 //   %LOCALAPPDATA%\RedSalamander\SelfTest\last_run\   (current run)
 //   %LOCALAPPDATA%\RedSalamander\SelfTest\previous_run\  (previous run, kept for diffing)
 //
+// When running selftests from a developer checkout, the harness also attempts to archive the
+// key artifacts into the repo under:
+//   Specs\TestRuns\<ComputerHashName>\<Area>\yyyy-MM-dd_HHmmss\
+// so runs can be compared over time without relying on external scripts.
+//
 // Everything in this header is compiled only in _DEBUG builds.  Release builds produce
 // empty stub implementations so that call-sites do not need conditional compilation.
 
@@ -189,6 +194,11 @@ inline std::chrono::milliseconds Scale(std::chrono::milliseconds base) noexcept
 
 void WriteSuiteJson(const SelfTestSuiteResult& result, const std::filesystem::path& path);
 void WriteRunJson(const SelfTestRunResult& result, const std::filesystem::path& path);
+
+// Copies the meaningful artifacts from %LOCALAPPDATA%\RedSalamander\SelfTest\last_run\
+// into the repo under Specs\TestRuns\<ComputerHashName>\<Area>\yyyy-MM-dd_HHmmss\.
+// If the repo root cannot be found (e.g. installed build), this is a no-op.
+void TryArchiveLastRunToRepo(std::wstring_view area, int exitCode, uint64_t durationMs) noexcept;
 
 } // namespace SelfTest
 

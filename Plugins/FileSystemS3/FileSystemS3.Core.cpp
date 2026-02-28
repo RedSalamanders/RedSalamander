@@ -138,6 +138,6 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetCapabilities(const char** jsonUtf8) n
         return E_POINTER;
     }
 
-    *jsonUtf8 = kCapabilitiesJson;
+    *jsonUtf8 = (_mode == FileSystemS3Mode::S3) ? kCapabilitiesJsonS3 : kCapabilitiesJsonS3Table;
     return S_OK;
 }
