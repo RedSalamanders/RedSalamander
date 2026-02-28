@@ -199,7 +199,7 @@ MSIX output is written to:
 .build\AppPackages\
 ```
 
-See `Specs/InstallerMsixSpec.md` for signing and deployment details.
+See `Specs/Installer/Installer_Msix.md` for signing and deployment details.
 
 ### MSI Installer
 
@@ -215,7 +215,7 @@ MSI output is written to:
 .build\AppPackages\
 ```
 
-See `Specs/InstallerMsiSpec.md` for details.
+See `Specs/Installer/Installer_Msi.md` for details.
 
 ## vcpkg
 

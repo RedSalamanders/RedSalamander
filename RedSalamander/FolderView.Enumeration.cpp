@@ -159,7 +159,13 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
 {
     // Icon extraction calls COM (IImageList::GetIcon via IconCache::ExtractSystemIcon). This worker runs in the background,
     // so initialize COM as MTA here.
-    [[maybe_unused]] auto coInit = wil::CoInitializeEx(COINIT_MULTITHREADED);
+    const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(coinitHr))
+    {
+        Debug::Error(L"FolderView enumeration: CoInitializeEx(COINIT_MULTITHREADED) failed: 0x{:08X}", coinitHr);
+        FAIL_FAST_IF_FAILED(coinitHr);
+    }
+    [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
     [[maybe_unused]] const std::stop_callback notifyOnStop(stopToken, [this]() noexcept { _enumerationCv.notify_all(); });
     while (! stopToken.stop_requested())

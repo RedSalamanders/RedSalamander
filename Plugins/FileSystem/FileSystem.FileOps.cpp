@@ -21,6 +21,430 @@
 
 using namespace FileSystemInternal;
 
+namespace FileSystemInternal
+{
+class SharedFileOpsJobScheduler final
+{
+public:
+    SharedFileOpsJobScheduler() = default;
+    ~SharedFileOpsJobScheduler() noexcept
+    {
+        ShutdownAndJoin();
+    }
+
+    SharedFileOpsJobScheduler(const SharedFileOpsJobScheduler&)            = delete;
+    SharedFileOpsJobScheduler(SharedFileOpsJobScheduler&&)                 = delete;
+    SharedFileOpsJobScheduler& operator=(const SharedFileOpsJobScheduler&) = delete;
+    SharedFileOpsJobScheduler& operator=(SharedFileOpsJobScheduler&&)      = delete;
+
+    struct Job final
+    {
+        Job() noexcept = default;
+
+        Job(const Job&)            = delete;
+        Job(Job&&)                 = delete;
+        Job& operator=(const Job&) = delete;
+        Job& operator=(Job&&)      = delete;
+
+        std::function<void(size_t, uint64_t)> processIndex;
+        size_t totalItems           = 0;
+        unsigned int maxConcurrency = 1;
+
+        // Protected by the scheduler mutex.
+        size_t nextIndex      = 0;
+        unsigned int inFlight = 0;
+
+        std::atomic<bool> done{false};
+        std::mutex doneMutex;
+        std::condition_variable doneCv;
+    };
+
+    using JobPtr = std::shared_ptr<Job>;
+
+    JobPtr StartJob(unsigned int maxConcurrency, size_t totalItems, std::function<void(size_t, uint64_t)> processIndex)
+    {
+        auto job            = std::make_shared<Job>();
+        job->totalItems     = totalItems;
+        job->processIndex   = std::move(processIndex);
+        job->maxConcurrency = std::max(1u, maxConcurrency);
+        if (job->totalItems > 0)
+        {
+            job->maxConcurrency =
+                std::min<unsigned int>(job->maxConcurrency, static_cast<unsigned int>((std::min)(job->totalItems, static_cast<size_t>(UINT_MAX))));
+        }
+
+        ensureWorkers();
+
+        if (_workers.empty())
+        {
+            if (job->processIndex)
+            {
+                for (size_t i = 0; i < job->totalItems; ++i)
+                {
+                    job->processIndex(i, 0);
+                }
+            }
+
+            finishJob(*job);
+            return job;
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            _jobs.push_back(job);
+        }
+
+        _cv.notify_all();
+        return job;
+    }
+
+    void WaitJob(const JobPtr& job) noexcept
+    {
+        if (! job)
+        {
+            return;
+        }
+
+        if (IsWorkerThread())
+        {
+            // Avoid deadlocks when a file operation recursively starts parallel work from within a worker.
+            while (! job->done.load(std::memory_order_acquire))
+            {
+                JobPtr dequeued;
+                size_t index = 0;
+                {
+                    std::unique_lock lock(_mutex);
+                    _cv.wait(lock, [&]() noexcept { return job->done.load(std::memory_order_acquire) || hasSchedulableWorkLocked(); });
+                    if (job->done.load(std::memory_order_acquire))
+                    {
+                        break;
+                    }
+
+                    if (! tryDequeueWorkLocked(dequeued, index))
+                    {
+                        continue;
+                    }
+                }
+
+                executeWorkItem(std::move(dequeued), index, tls_workerStreamId);
+            }
+
+            return;
+        }
+
+        std::unique_lock lock(job->doneMutex);
+        job->doneCv.wait(lock, [&]() noexcept { return job->done.load(std::memory_order_acquire); });
+    }
+
+    void Shutdown() noexcept
+    {
+        {
+            std::scoped_lock lock(_initMutex);
+            if (! _initialized)
+            {
+                return;
+            }
+
+            for (std::jthread& worker : _workers)
+            {
+                worker.request_stop();
+            }
+        }
+
+        // Ensure any thread blocked in WaitJob can proceed during teardown.
+        {
+            std::scoped_lock lock(_mutex);
+            for (const JobPtr& job : _jobs)
+            {
+                if (job)
+                {
+                    finishJob(*job);
+                }
+            }
+            _jobs.clear();
+            _rrCursor = 0;
+        }
+
+        _cv.notify_all();
+    }
+
+    void ShutdownAndJoin() noexcept
+    {
+        std::vector<std::jthread> workers;
+        {
+            std::scoped_lock lock(_initMutex);
+            if (_initialized)
+            {
+                for (std::jthread& worker : _workers)
+                {
+                    worker.request_stop();
+                }
+
+                workers      = std::move(_workers);
+                _initialized = false;
+            }
+        }
+
+        // Ensure any thread blocked in WaitJob can proceed during teardown.
+        {
+            std::scoped_lock lock(_mutex);
+            for (const JobPtr& job : _jobs)
+            {
+                if (job)
+                {
+                    finishJob(*job);
+                }
+            }
+            _jobs.clear();
+            _rrCursor = 0;
+        }
+
+        _cv.notify_all();
+
+        // 'workers' destructs here (joining the worker threads) outside any locks.
+    }
+
+    [[nodiscard]] bool IsWorkerThread() const noexcept
+    {
+        return tls_scheduler == this;
+    }
+
+    [[nodiscard]] uint64_t CurrentWorkerStreamId() const noexcept
+    {
+        return IsWorkerThread() ? tls_workerStreamId : 0;
+    }
+
+    [[nodiscard]] bool EnsureWorkersAvailable()
+    {
+        ensureWorkers();
+        return ! _workers.empty();
+    }
+
+private:
+    static inline thread_local const SharedFileOpsJobScheduler* tls_scheduler = nullptr;
+    static inline thread_local uint64_t tls_workerStreamId                    = 0;
+
+    void ensureWorkers()
+    {
+        std::scoped_lock lock(_initMutex);
+        if (_initialized)
+        {
+            return;
+        }
+
+        unsigned int workerCount = std::thread::hardware_concurrency();
+        if (workerCount == 0)
+        {
+            workerCount = 4;
+        }
+
+        constexpr unsigned int kMaxWorkers = 8u;
+        workerCount                        = std::max(1u, std::min(workerCount, kMaxWorkers));
+
+        _workers.reserve(workerCount);
+        for (unsigned int i = 0; i < workerCount; ++i)
+        {
+            try
+            {
+                _workers.emplace_back([this, i](std::stop_token stopToken) noexcept { workerMain(stopToken, static_cast<uint64_t>(i)); });
+            }
+            catch (const std::system_error&)
+            {
+                break;
+            }
+        }
+
+        _initialized = true;
+    }
+
+    void finishJob(Job& job) noexcept
+    {
+        {
+            std::scoped_lock lock(job.doneMutex);
+            job.done.store(true, std::memory_order_release);
+        }
+        job.doneCv.notify_all();
+    }
+
+    void cleanupJobsLocked() noexcept
+    {
+        size_t write = 0;
+        for (size_t read = 0; read < _jobs.size(); ++read)
+        {
+            const JobPtr& job = _jobs[read];
+            if (! job)
+            {
+                continue;
+            }
+
+            const bool finished = job->nextIndex >= job->totalItems;
+            if (finished && job->inFlight == 0)
+            {
+                finishJob(*job);
+                continue;
+            }
+
+            if (write != read)
+            {
+                _jobs[write] = job;
+            }
+            ++write;
+        }
+
+        if (write < _jobs.size())
+        {
+            _jobs.resize(write);
+        }
+
+        if (_rrCursor >= _jobs.size())
+        {
+            _rrCursor = 0;
+        }
+    }
+
+    [[nodiscard]] bool hasSchedulableWorkLocked() noexcept
+    {
+        cleanupJobsLocked();
+
+        for (const JobPtr& job : _jobs)
+        {
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    [[nodiscard]] bool tryDequeueWorkLocked(JobPtr& outJob, size_t& outIndex) noexcept
+    {
+        const size_t jobCount = _jobs.size();
+        if (jobCount == 0)
+        {
+            return false;
+        }
+
+        const size_t start = _rrCursor % jobCount;
+        for (size_t attempt = 0; attempt < jobCount; ++attempt)
+        {
+            const size_t idx = (start + attempt) % jobCount;
+            JobPtr& job      = _jobs[idx];
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            outJob   = job;
+            outIndex = job->nextIndex;
+            job->nextIndex += 1;
+            job->inFlight += 1;
+
+            _rrCursor = (idx + 1u) % jobCount;
+            return true;
+        }
+
+        return false;
+    }
+
+    void executeWorkItem(JobPtr job, size_t index, uint64_t streamId) noexcept
+    {
+        if (job && job->processIndex)
+        {
+            job->processIndex(index, streamId);
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            if (job && job->inFlight > 0)
+            {
+                job->inFlight -= 1;
+            }
+            cleanupJobsLocked();
+        }
+
+        _cv.notify_all();
+    }
+
+    void workerMain(std::stop_token stopToken, uint64_t streamId) noexcept
+    {
+        tls_scheduler      = this;
+        tls_workerStreamId = streamId;
+
+        [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast();
+
+        while (! stopToken.stop_requested())
+        {
+            JobPtr job;
+            size_t index = 0;
+
+            {
+                std::unique_lock lock(_mutex);
+                _cv.wait(lock, [&]() noexcept { return stopToken.stop_requested() || hasSchedulableWorkLocked(); });
+                if (stopToken.stop_requested())
+                {
+                    break;
+                }
+
+                cleanupJobsLocked();
+                if (! tryDequeueWorkLocked(job, index))
+                {
+                    continue;
+                }
+            }
+
+            executeWorkItem(std::move(job), index, streamId);
+        }
+
+        tls_scheduler      = nullptr;
+        tls_workerStreamId = 0;
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    std::vector<JobPtr> _jobs;
+    size_t _rrCursor = 0;
+
+    std::mutex _initMutex;
+    bool _initialized = false;
+    std::vector<std::jthread> _workers;
+};
+
+SharedFileOpsJobScheduler& GetSharedFileOpsJobScheduler() noexcept
+{
+    static SharedFileOpsJobScheduler scheduler;
+    return scheduler;
+}
+
+void ShutdownSharedFileOpsJobScheduler() noexcept
+{
+    GetSharedFileOpsJobScheduler().ShutdownAndJoin();
+}
+} // namespace FileSystemInternal
+
 namespace
 {
 #pragma warning(push)
@@ -66,6 +490,7 @@ struct OperationContext
     bool allowReplaceReadonly    = false;
     bool recursive               = false;
     bool useRecycleBin           = false;
+    unsigned int deleteConcurrencyBudget = 1;
     FileSystemArenaOwner itemArena;
     FileSystemArenaOwner progressArena;
     const wchar_t* itemSource          = nullptr;
@@ -91,6 +516,7 @@ struct CopyProgressContext
     ULONGLONG startTick               = 0; // Used only for sequential operations.
 };
 
+#if 0 // Legacy (moved to FileSystemInternal for explicit shutdown/join at plugin quiet point)
 class SharedFileOpsJobScheduler final
 {
 public:
@@ -414,7 +840,7 @@ private:
         tls_scheduler      = this;
         tls_workerStreamId = streamId;
 
-        [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+        [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast();
 
         for (;;)
         {
@@ -452,12 +878,7 @@ private:
     bool _initialized = false;
     std::vector<std::jthread> _workers;
 };
-
-SharedFileOpsJobScheduler& GetSharedFileOpsJobScheduler() noexcept
-{
-    static SharedFileOpsJobScheduler scheduler;
-    return scheduler;
-}
+#endif // 0
 
 bool HasFlag(FileSystemFlags flags, FileSystemFlags flag) noexcept
 {
@@ -588,6 +1009,16 @@ void NormalizeSlashes(std::wstring& path) noexcept
     while (path.size() > rootLength && ! path.empty() && IsPathSeparator(path.back()))
     {
         path.pop_back();
+    }
+    return path;
+}
+
+[[nodiscard]] std::wstring_view TrimTrailingSeparatorsPreserveRootView(std::wstring_view path) noexcept
+{
+    const size_t rootLength = GetRootLength(path);
+    while (path.size() > rootLength && ! path.empty() && IsPathSeparator(path.back()))
+    {
+        path.remove_suffix(1);
     }
     return path;
 }
@@ -837,9 +1268,29 @@ struct FileIdentity final
                                                   std::wstring_view destinationRootPath,
                                                   std::wstring& mappedOut) noexcept
 {
-    std::wstring normalizedTarget = TrimTrailingSeparatorsPreserveRoot(std::wstring(absoluteTargetPath));
-    std::wstring normalizedSource = TrimTrailingSeparatorsPreserveRoot(std::wstring(sourceRootPath));
-    std::wstring normalizedDest   = TrimTrailingSeparatorsPreserveRoot(std::wstring(destinationRootPath));
+    std::wstring normalizedTargetStorage;
+    std::wstring normalizedSourceStorage;
+    std::wstring normalizedDestStorage;
+
+    const auto normalizeIfNeeded = [](std::wstring_view path, std::wstring& storage) noexcept -> std::wstring_view
+    {
+        if (path.find(L'/') == std::wstring_view::npos)
+        {
+            return path;
+        }
+
+        storage.assign(path);
+        NormalizeSlashes(storage);
+        return storage;
+    };
+
+    std::wstring_view normalizedTarget = normalizeIfNeeded(absoluteTargetPath, normalizedTargetStorage);
+    std::wstring_view normalizedSource = normalizeIfNeeded(sourceRootPath, normalizedSourceStorage);
+    std::wstring_view normalizedDest   = normalizeIfNeeded(destinationRootPath, normalizedDestStorage);
+
+    normalizedTarget = TrimTrailingSeparatorsPreserveRootView(normalizedTarget);
+    normalizedSource = TrimTrailingSeparatorsPreserveRootView(normalizedSource);
+    normalizedDest   = TrimTrailingSeparatorsPreserveRootView(normalizedDest);
 
     if (normalizedTarget.empty() || normalizedSource.empty() || normalizedDest.empty())
     {
@@ -851,17 +1302,19 @@ struct FileIdentity final
         return false;
     }
 
-    std::wstring suffix;
+    std::wstring_view suffix;
     if (normalizedTarget.size() > normalizedSource.size())
     {
         suffix = normalizedTarget.substr(normalizedSource.size());
         while (! suffix.empty() && IsPathSeparator(suffix.front()))
         {
-            suffix.erase(suffix.begin());
+            suffix.remove_prefix(1);
         }
     }
 
-    mappedOut = normalizedDest;
+    mappedOut.clear();
+    mappedOut.reserve(normalizedDest.size() + (suffix.empty() ? 0 : 1 + suffix.size()));
+    mappedOut.append(normalizedDest);
     if (! suffix.empty())
     {
         if (! mappedOut.empty() && ! IsPathSeparator(mappedOut.back()))
@@ -871,7 +1324,7 @@ struct FileIdentity final
         mappedOut.append(suffix);
     }
 
-    mappedOut = TrimTrailingSeparatorsPreserveRoot(mappedOut);
+    mappedOut = TrimTrailingSeparatorsPreserveRoot(std::move(mappedOut));
     return true;
 }
 
@@ -1554,6 +2007,7 @@ void InitializeOperationContext(OperationContext& context,
     context.allowReplaceReadonly = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
     context.recursive            = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
     context.useRecycleBin        = HasFlag(flags, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+    context.deleteConcurrencyBudget = 1;
     context.itemSource           = nullptr;
     context.itemDestination      = nullptr;
     context.progressSource       = nullptr;
@@ -1826,7 +2280,19 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
                 const DWORD sleepMs      = remaining > std::numeric_limits<DWORD>::max() ? std::numeric_limits<DWORD>::max() : static_cast<DWORD>(remaining);
                 if (sleepMs > 0)
                 {
-                    ::Sleep(sleepMs);
+                    constexpr DWORD kSleepSliceMs = 50u;
+                    DWORD remainingSleepMs        = sleepMs;
+                    while (remainingSleepMs > 0)
+                    {
+                        const DWORD sliceMs = remainingSleepMs > kSleepSliceMs ? kSleepSliceMs : remainingSleepMs;
+                        ::Sleep(sliceMs);
+                        remainingSleepMs -= sliceMs;
+
+                        if (FAILED(CheckCancel(opContext)))
+                        {
+                            return PROGRESS_CANCEL;
+                        }
+                    }
                 }
             }
         }
@@ -1869,7 +2335,19 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
                 const DWORD sleepMs      = remaining > std::numeric_limits<DWORD>::max() ? std::numeric_limits<DWORD>::max() : static_cast<DWORD>(remaining);
                 if (sleepMs > 0)
                 {
-                    ::Sleep(sleepMs);
+                    constexpr DWORD kSleepSliceMs = 50u;
+                    DWORD remainingSleepMs        = sleepMs;
+                    while (remainingSleepMs > 0)
+                    {
+                        const DWORD sliceMs = remainingSleepMs > kSleepSliceMs ? kSleepSliceMs : remainingSleepMs;
+                        ::Sleep(sliceMs);
+                        remainingSleepMs -= sliceMs;
+
+                        if (FAILED(CheckCancel(opContext)))
+                        {
+                            return PROGRESS_CANCEL;
+                        }
+                    }
                 }
             }
         }
@@ -2461,6 +2939,12 @@ struct DirectoryChildWorkItem
         return failure;
     };
 
+    const unsigned int requestedConcurrency = std::max(1u, maxConcurrency);
+    if (requestedConcurrency <= 1u)
+    {
+        return CopyDirectoryInternal(rootContext, source, destination, bytesCopied);
+    }
+
     std::wstring searchPattern = AppendPath(source.extended, L"*");
     WIN32_FIND_DATAW data{};
     wil::unique_hfind findHandle(FindFirstFileExW(searchPattern.c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
@@ -2474,34 +2958,42 @@ struct DirectoryChildWorkItem
         return returnFailure(HRESULT_FROM_WIN32(error));
     }
 
-    std::vector<DirectoryChildWorkItem> work;
-    work.reserve(128);
+    std::vector<DirectoryChildWorkItem> prefetched;
+    prefetched.reserve(2);
 
-    do
+    for (;;)
     {
-        if (IsDotOrDotDot(data.cFileName))
+        if (! IsDotOrDotDot(data.cFileName))
         {
-            continue;
+            DirectoryChildWorkItem item{};
+            item.name.assign(data.cFileName);
+            prefetched.push_back(std::move(item));
+            if (prefetched.size() >= 2)
+            {
+                break;
+            }
         }
 
-        DirectoryChildWorkItem item{};
-        item.name.assign(data.cFileName);
-        work.push_back(std::move(item));
-    } while (FindNextFileW(findHandle.get(), &data));
-
-    const DWORD enumError = GetLastError();
-    if (enumError != ERROR_NO_MORE_FILES)
-    {
-        return returnFailure(HRESULT_FROM_WIN32(enumError));
+        if (! FindNextFileW(findHandle.get(), &data))
+        {
+            break;
+        }
     }
 
-    if (work.empty())
+    if (prefetched.size() < 2)
     {
+        const DWORD enumError = GetLastError();
+        if (enumError != ERROR_NO_MORE_FILES)
+        {
+            return returnFailure(HRESULT_FROM_WIN32(enumError));
+        }
+
         return CopyDirectoryInternal(rootContext, source, destination, bytesCopied);
     }
 
-    const unsigned int concurrency = std::max(1u, std::min<unsigned int>(maxConcurrency, static_cast<unsigned int>(work.size())));
-    if (concurrency <= 1u)
+    constexpr unsigned int kMaxWorkers = 8u;
+    const unsigned int concurrency     = std::max(2u, std::min<unsigned int>(requestedConcurrency, kMaxWorkers));
+    if (! GetSharedFileOpsJobScheduler().EnsureWorkersAvailable())
     {
         return CopyDirectoryInternal(rootContext, source, destination, bytesCopied);
     }
@@ -2538,39 +3030,53 @@ struct DirectoryChildWorkItem
     const std::wstring rootSource      = rootContext.reparseRootSourcePath;
     const std::wstring rootDestination = rootContext.reparseRootDestinationPath;
 
-    auto job = GetSharedFileOpsJobScheduler().StartJob(concurrency,
-                                                       work.size(),
-                                                       [&](size_t index, uint64_t schedulerStreamId) noexcept
+    struct DirectoryChildQueue final
+    {
+        DirectoryChildQueue()                                  = default;
+        DirectoryChildQueue(const DirectoryChildQueue&)        = delete;
+        DirectoryChildQueue& operator=(const DirectoryChildQueue&) = delete;
+        DirectoryChildQueue(DirectoryChildQueue&&)             = delete;
+        DirectoryChildQueue& operator=(DirectoryChildQueue&&)  = delete;
+
+        std::mutex mutex;
+        std::condition_variable notEmptyCv;
+        std::condition_variable notFullCv;
+        std::deque<DirectoryChildWorkItem> items;
+        bool enumerationDone = false;
+    };
+
+    DirectoryChildQueue queue{};
+    const size_t maxQueuedItems = std::max<size_t>(256u, static_cast<size_t>(concurrency) * 32u);
+
+    const bool callerIsWorker         = GetSharedFileOpsJobScheduler().IsWorkerThread();
+    const uint64_t callerWorkerStream = GetSharedFileOpsJobScheduler().CurrentWorkerStreamId();
+
+    const auto initializeChildContext = [&](OperationContext& context, uint64_t progressStreamId) noexcept
+    {
+        InitializeOperationContext(
+            context, FILESYSTEM_COPY, flags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 1, reparsePointPolicy);
+        context.options                    = sharedOptionsState;
+        context.parallel                   = &parallel;
+        context.totalBytes                 = 0; // let the host provide totals via pre-calc
+        context.progressStreamId           = progressStreamId;
+        context.reparseRootSourcePath      = rootSource;
+        context.reparseRootDestinationPath = rootDestination;
+    };
+
+    const auto processChild = [&](OperationContext& context, const std::wstring& childName) noexcept
     {
         if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
         {
             return;
         }
 
-        OperationContext context{};
-        InitializeOperationContext(
-            context, FILESYSTEM_COPY, flags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 1, reparsePointPolicy);
-        context.options                    = sharedOptionsState;
-        context.parallel                   = &parallel;
-        context.totalBytes                 = 0; // let the host provide totals via pre-calc
-        context.progressStreamId           = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
-        context.reparseRootSourcePath      = rootSource;
-        context.reparseRootDestinationPath = rootDestination;
-
-        if (index >= work.size())
-        {
-            return;
-        }
-
-        const DirectoryChildWorkItem& item = work[index];
-
         PathInfo childSource{};
-        childSource.display  = AppendPath(source.display, item.name);
-        childSource.extended = AppendPath(source.extended, item.name);
+        childSource.display  = AppendPath(source.display, childName);
+        childSource.extended = AppendPath(source.extended, childName);
 
         PathInfo childDestination{};
-        childDestination.display  = AppendPath(destination.display, item.name);
-        childDestination.extended = AppendPath(destination.extended, item.name);
+        childDestination.display  = AppendPath(destination.display, childName);
+        childDestination.extended = AppendPath(destination.extended, childName);
 
         HRESULT itemHr      = S_OK;
         uint64_t childBytes = 0;
@@ -2588,6 +3094,8 @@ struct DirectoryChildWorkItem
             if (IsCancellationHr(itemHr))
             {
                 parallel.cancelRequested.store(true, std::memory_order_release);
+                queue.notEmptyCv.notify_all();
+                queue.notFullCv.notify_all();
                 return;
             }
 
@@ -2610,6 +3118,8 @@ struct DirectoryChildWorkItem
             if (FAILED(issueHr))
             {
                 parallel.cancelRequested.store(true, std::memory_order_release);
+                queue.notEmptyCv.notify_all();
+                queue.notFullCv.notify_all();
                 return;
             }
 
@@ -2625,18 +3135,206 @@ struct DirectoryChildWorkItem
                     break;
                 case FileSystemIssueAction::Cancel:
                 case FileSystemIssueAction::None:
-                default: parallel.cancelRequested.store(true, std::memory_order_release); return;
+                default:
+                    parallel.cancelRequested.store(true, std::memory_order_release);
+                    queue.notEmptyCv.notify_all();
+                    queue.notFullCv.notify_all();
+                    return;
             }
 
             break;
         }
+    };
+
+    OperationContext producerContext{};
+    initializeChildContext(producerContext, 0);
+
+    OperationContext callerContext{};
+    if (callerIsWorker)
+    {
+        initializeChildContext(callerContext, callerWorkerStream);
+    }
+
+    const auto enqueueItem = [&](DirectoryChildWorkItem item) noexcept -> bool
+    {
+        for (;;)
+        {
+            if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+            {
+                return false;
+            }
+
+            std::unique_lock lock(queue.mutex);
+            if (queue.items.size() < maxQueuedItems)
+            {
+                queue.items.push_back(std::move(item));
+                lock.unlock();
+                queue.notEmptyCv.notify_one();
+                return true;
+            }
+
+            if (! callerIsWorker)
+            {
+                queue.notFullCv.wait(lock, [&]() noexcept
+                {
+                    return parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire)
+                        || queue.items.size() < maxQueuedItems;
+                });
+                continue;
+            }
+
+            DirectoryChildWorkItem drain{};
+            if (! queue.items.empty())
+            {
+                drain = std::move(queue.items.front());
+                queue.items.pop_front();
+            }
+            lock.unlock();
+            queue.notFullCv.notify_one();
+
+            if (! drain.name.empty())
+            {
+                processChild(callerContext, drain.name);
+            }
+        }
+    };
+
+    auto job = GetSharedFileOpsJobScheduler().StartJob(concurrency,
+                                                       concurrency,
+                                                       [&](size_t /*index*/, uint64_t schedulerStreamId) noexcept
+    {
+        if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        OperationContext context{};
+        initializeChildContext(context, schedulerStreamId);
+
+        for (;;)
+        {
+            if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+            {
+                return;
+            }
+
+            DirectoryChildWorkItem item{};
+            {
+                std::unique_lock lock(queue.mutex);
+                queue.notEmptyCv.wait(lock, [&]() noexcept
+                {
+                    return parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire)
+                        || ! queue.items.empty() || queue.enumerationDone;
+                });
+
+                if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+                {
+                    return;
+                }
+
+                if (queue.items.empty())
+                {
+                    return;
+                }
+
+                item = std::move(queue.items.front());
+                queue.items.pop_front();
+            }
+
+            queue.notFullCv.notify_one();
+            processChild(context, item.name);
+        }
     });
+
+    for (DirectoryChildWorkItem& item : prefetched)
+    {
+        if (! enqueueItem(std::move(item)))
+        {
+            break;
+        }
+    }
+
+    uint64_t cancelCheckCounter = 0;
+    for (;;)
+    {
+        if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+        {
+            break;
+        }
+
+        if ((++cancelCheckCounter % 64u) == 0u)
+        {
+            hr = CheckCancel(producerContext);
+            if (FAILED(hr))
+            {
+                hr = NormalizeCancellation(hr);
+                if (IsCancellationHr(hr))
+                {
+                    parallel.cancelRequested.store(true, std::memory_order_release);
+                    queue.notEmptyCv.notify_all();
+                    queue.notFullCv.notify_all();
+                    break;
+                }
+
+                HRESULT expected = S_OK;
+                parallel.firstError.compare_exchange_strong(expected, hr, std::memory_order_acq_rel);
+                parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                queue.notEmptyCv.notify_all();
+                queue.notFullCv.notify_all();
+                break;
+            }
+        }
+
+        if (! FindNextFileW(findHandle.get(), &data))
+        {
+            break;
+        }
+
+        if (IsDotOrDotDot(data.cFileName))
+        {
+            continue;
+        }
+
+        DirectoryChildWorkItem item{};
+        item.name.assign(data.cFileName);
+        if (! enqueueItem(std::move(item)))
+        {
+            break;
+        }
+    }
+
+    const DWORD enumError = GetLastError();
+    if (enumError != ERROR_NO_MORE_FILES && ! parallel.cancelRequested.load(std::memory_order_acquire)
+        && ! parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+    {
+        hr               = HRESULT_FROM_WIN32(enumError);
+        HRESULT expected = S_OK;
+        parallel.firstError.compare_exchange_strong(expected, hr, std::memory_order_acq_rel);
+        parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+        queue.notEmptyCv.notify_all();
+        queue.notFullCv.notify_all();
+    }
+
+    {
+        std::scoped_lock lock(queue.mutex);
+        queue.enumerationDone = true;
+    }
+    queue.notEmptyCv.notify_all();
 
     GetSharedFileOpsJobScheduler().WaitJob(job);
 
     if (parallel.cancelRequested.load(std::memory_order_acquire))
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+    {
+        const HRESULT firstError = parallel.firstError.load(std::memory_order_acquire);
+        if (FAILED(firstError))
+        {
+            return returnFailure(firstError);
+        }
     }
 
     *bytesCopied = parallel.completedBytes.load(std::memory_order_acquire);
@@ -3408,6 +4106,8 @@ HRESULT DeleteToRecycleBin(OperationContext& context, const PathInfo& path) noex
 }
 
 HRESULT DeleteDirectoryRecursive(OperationContext& context, const PathInfo& path) noexcept;
+HRESULT DeleteDirectoryRecursiveSequential(OperationContext& context, const PathInfo& path) noexcept;
+HRESULT DeleteDirectoryRecursiveParallel(OperationContext& context, const PathInfo& path, unsigned int requestedConcurrency) noexcept;
 
 HRESULT DeletePathInternal(OperationContext& context, const PathInfo& path) noexcept
 {
@@ -3494,7 +4194,266 @@ HRESULT DeletePathInternal(OperationContext& context, const PathInfo& path) noex
     return S_OK;
 }
 
+struct DeleteFlattenFrame final
+{
+    PathInfo directory;
+    bool enumerated = false;
+};
+
+[[nodiscard]] HRESULT FlattenDeleteDirectoryTree(OperationContext& context,
+                                                const PathInfo& root,
+                                                std::vector<PathInfo>& outFiles,
+                                                std::vector<PathInfo>& outDirectoriesPostOrder) noexcept
+{
+    constexpr size_t kMaxWorkItems = 200000u;
+
+    std::vector<DeleteFlattenFrame> stack;
+    stack.reserve(256);
+    stack.push_back(DeleteFlattenFrame{root, false});
+
+    while (! stack.empty())
+    {
+        if (! stack.back().enumerated)
+        {
+            stack.back().enumerated = true;
+            const size_t frameIndex  = stack.size() - 1;
+
+            HRESULT hr = CheckCancel(context);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+
+            // NOTE: We may push child frames onto the same vector while enumerating this directory.
+            // Avoid holding references into `stack` when calling `push_back` (realloc can invalidate).
+            std::wstring searchPattern = AppendPath(stack[frameIndex].directory.extended, L"*");
+            WIN32_FIND_DATAW data{};
+            wil::unique_hfind findHandle(
+                FindFirstFileExW(searchPattern.c_str(), FindExInfoBasic, &data, FindExSearchNameMatch, nullptr, FIND_FIRST_EX_LARGE_FETCH));
+            if (! findHandle)
+            {
+                const DWORD error = GetLastError();
+                if (error == ERROR_FILE_NOT_FOUND)
+                {
+                    continue;
+                }
+                return HRESULT_FROM_WIN32(error);
+            }
+
+            do
+            {
+                if (IsDotOrDotDot(data.cFileName))
+                {
+                    continue;
+                }
+
+                PathInfo child{};
+                child.display  = AppendPath(stack[frameIndex].directory.display, data.cFileName);
+                child.extended = AppendPath(stack[frameIndex].directory.extended, data.cFileName);
+
+                const bool isDirectory = (data.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                if (isDirectory)
+                {
+                    if (IsReparsePoint(data.dwFileAttributes))
+                    {
+                        outDirectoriesPostOrder.push_back(std::move(child));
+                    }
+                    else
+                    {
+                        stack.push_back(DeleteFlattenFrame{std::move(child), false});
+                    }
+                }
+                else
+                {
+                    outFiles.push_back(std::move(child));
+                }
+
+                if (outFiles.size() + outDirectoriesPostOrder.size() >= kMaxWorkItems)
+                {
+                    return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+                }
+            } while (FindNextFileW(findHandle.get(), &data));
+
+            const DWORD error = GetLastError();
+            if (error != ERROR_NO_MORE_FILES)
+            {
+                return HRESULT_FROM_WIN32(error);
+            }
+        }
+        else
+        {
+            outDirectoriesPostOrder.push_back(std::move(stack.back().directory));
+            stack.pop_back();
+        }
+    }
+
+    return S_OK;
+}
+
+HRESULT DeleteDirectoryRecursiveParallel(OperationContext& rootContext, const PathInfo& path, unsigned int requestedConcurrency) noexcept
+{
+    constexpr unsigned int kMaxWorkers = 8u;
+    const unsigned int concurrency     = std::clamp(requestedConcurrency, 1u, kMaxWorkers);
+
+    std::vector<PathInfo> files;
+    std::vector<PathInfo> directoriesPostOrder;
+    HRESULT hr = FlattenDeleteDirectoryTree(rootContext, path, files, directoriesPostOrder);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    FileSystemOptions* sharedOptionsState = rootContext.options;
+
+    ParallelOperationState parallel{};
+    parallel.startTick = GetTickCount64();
+    parallel.bandwidthLimitBytesPerSecond.store(sharedOptionsState ? sharedOptionsState->bandwidthLimitBytesPerSecond : 0ull, std::memory_order_release);
+
+    const FileSystemFlags workerFlags = static_cast<FileSystemFlags>(
+        (rootContext.continueOnError ? FILESYSTEM_FLAG_CONTINUE_ON_ERROR : FILESYSTEM_FLAG_NONE) |
+        (rootContext.allowReplaceReadonly ? FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY : FILESYSTEM_FLAG_NONE));
+
+    const auto initializeWorkerContext = [&](OperationContext& context, uint64_t progressStreamId) noexcept
+    {
+        InitializeOperationContext(context, FILESYSTEM_DELETE, workerFlags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 0, rootContext.reparsePointPolicy);
+        context.options                    = sharedOptionsState;
+        context.parallel                   = &parallel;
+        context.totalBytes                 = 0; // let the host provide totals via pre-calc
+        context.progressStreamId           = progressStreamId;
+        context.recursive                  = false;
+        context.useRecycleBin              = false;
+        context.deleteConcurrencyBudget    = 1;
+    };
+
+    const auto processFile = [&](size_t index, uint64_t schedulerStreamId) noexcept
+    {
+        if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        if (index >= files.size())
+        {
+            return;
+        }
+
+        OperationContext context{};
+        initializeWorkerContext(context, schedulerStreamId);
+
+        HRESULT itemHr = DeletePathInternal(context, files[index]);
+        if (FAILED(itemHr))
+        {
+            if (itemHr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            {
+                const bool stopOnError = parallel.stopOnErrorRequested.load(std::memory_order_acquire);
+                if (! stopOnError)
+                {
+                    parallel.cancelRequested.store(true, std::memory_order_release);
+                }
+                return;
+            }
+
+            parallel.hadFailure.store(true, std::memory_order_release);
+            if (! context.continueOnError)
+            {
+                parallel.stopOnErrorRequested.store(true, std::memory_order_release);
+                HRESULT expected = S_OK;
+                static_cast<void>(parallel.firstError.compare_exchange_strong(expected, itemHr, std::memory_order_acq_rel));
+                return;
+            }
+        }
+    };
+
+    if (files.size() >= 2 && concurrency > 1u && GetSharedFileOpsJobScheduler().EnsureWorkersAvailable())
+    {
+        auto job = GetSharedFileOpsJobScheduler().StartJob(concurrency, files.size(), processFile);
+        GetSharedFileOpsJobScheduler().WaitJob(job);
+    }
+    else
+    {
+        for (size_t i = 0; i < files.size(); ++i)
+        {
+            processFile(i, 0);
+            if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+            {
+                break;
+            }
+        }
+    }
+
+    if (parallel.cancelRequested.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+    {
+        const HRESULT first = parallel.firstError.load(std::memory_order_acquire);
+        return FAILED(first) ? first : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    OperationContext dirContext{};
+    initializeWorkerContext(dirContext, 0);
+
+    for (const PathInfo& directory : directoriesPostOrder)
+    {
+        hr = DeletePathInternal(dirContext, directory);
+        if (FAILED(hr))
+        {
+            if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED))
+            {
+                return hr;
+            }
+
+            parallel.hadFailure.store(true, std::memory_order_release);
+            if (! dirContext.continueOnError)
+            {
+                return hr;
+            }
+        }
+
+        if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+        {
+            break;
+        }
+    }
+
+    if (parallel.cancelRequested.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+    {
+        const HRESULT first = parallel.firstError.load(std::memory_order_acquire);
+        return FAILED(first) ? first : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (parallel.hadFailure.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
+    return S_OK;
+}
+
 HRESULT DeleteDirectoryRecursive(OperationContext& context, const PathInfo& path) noexcept
+{
+    const unsigned int requestedConcurrency = std::clamp(context.deleteConcurrencyBudget, 1u, 8u);
+    if (context.recursive && ! context.useRecycleBin && context.parallel == nullptr && requestedConcurrency > 1u &&
+        GetSharedFileOpsJobScheduler().EnsureWorkersAvailable())
+    {
+        const HRESULT parallelHr = DeleteDirectoryRecursiveParallel(context, path, requestedConcurrency);
+        if (parallelHr != HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY))
+        {
+            return parallelHr;
+        }
+    }
+
+    return DeleteDirectoryRecursiveSequential(context, path);
+}
+
+HRESULT DeleteDirectoryRecursiveSequential(OperationContext& context, const PathInfo& path) noexcept
 {
     std::wstring searchPattern = AppendPath(path.extended, L"*");
     WIN32_FIND_DATAW data{};
@@ -3653,11 +4612,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItem(const wchar_t* sourcePath,
     {
         return E_INVALIDARG;
     }
-
+ 
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
+    unsigned int deleteMaxConcurrency               = 1;
+    unsigned int deleteRecycleBinMaxConcurrency     = 1;
     {
         std::lock_guard lock(_stateMutex);
-        reparsePointPolicy = _reparsePointPolicy;
+        reparsePointPolicy             = _reparsePointPolicy;
+        deleteMaxConcurrency           = _deleteMaxConcurrency;
+        deleteRecycleBinMaxConcurrency = _deleteRecycleBinMaxConcurrency;
     }
 
     OperationContext context{};
@@ -3703,14 +4666,22 @@ FileSystem::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSys
     }
 
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
+    unsigned int deleteMaxConcurrency               = 1;
+    unsigned int deleteRecycleBinMaxConcurrency     = 1;
     {
         std::lock_guard lock(_stateMutex);
         reparsePointPolicy = _reparsePointPolicy;
+        deleteMaxConcurrency           = _deleteMaxConcurrency;
+        deleteRecycleBinMaxConcurrency = _deleteRecycleBinMaxConcurrency;
     }
 
     OperationContext context{};
     // totalItems is 0 because the plugin does not know recursive totals; the host may provide totals via pre-calculation.
     InitializeOperationContext(context, FILESYSTEM_DELETE, flags, options, callback, cookie, 0, reparsePointPolicy);
+    const bool useRecycleBin                      = HasFlag(flags, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+    const unsigned int maxConcurrencyFast         = std::clamp(deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency);
+    const unsigned int maxConcurrencyRecycleBin   = std::clamp(deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency);
+    context.deleteConcurrencyBudget               = useRecycleBin ? maxConcurrencyRecycleBin : maxConcurrencyFast;
 
     const PathInfo target = MakePathInfo(path);
 
@@ -3948,7 +4919,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
         context.options          = &sharedOptionsState;
         context.parallel         = &parallel;
         context.totalBytes       = 0; // let the host provide totals via pre-calc
-        context.progressStreamId = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
+        context.progressStreamId = schedulerStreamId;
 
         const unsigned long itemIndex = static_cast<unsigned long>((std::min)(index, static_cast<size_t>(ULONG_MAX)));
         const wchar_t* sourcePath     = sourcePaths[itemIndex];
@@ -4196,7 +5167,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItems(const wchar_t* const* sourcePath
         context.options          = &sharedOptionsState;
         context.parallel         = &parallel;
         context.totalBytes       = 0; // let the host provide totals via pre-calc
-        context.progressStreamId = (concurrency > 0) ? (schedulerStreamId % static_cast<uint64_t>(concurrency)) : 0;
+        context.progressStreamId = schedulerStreamId;
 
         const unsigned long itemIndex = static_cast<unsigned long>((std::min)(index, static_cast<size_t>(ULONG_MAX)));
         const wchar_t* sourcePath     = sourcePaths[itemIndex];
@@ -4436,10 +5407,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
         unsigned long remainingWork = count;
 
         auto job = GetSharedFileOpsJobScheduler().StartJob(concurrency,
-                                                           concurrency,
-                                                           [&](size_t /*workerIndex*/, uint64_t streamId) noexcept
+                                                          concurrency,
+                                                          [&](size_t /*workerIndex*/, uint64_t streamId) noexcept
         {
-            [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+            [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast();
 
             OperationContext context{};
             // totalItems is 0 because the plugin does not know recursive totals; the host may provide totals via pre-calculation.
@@ -4606,6 +5577,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
     OperationContext context{};
     // totalItems is 0 because the plugin does not know recursive totals; the host may provide totals via pre-calculation.
     InitializeOperationContext(context, FILESYSTEM_DELETE, flags, options, callback, cookie, 0, reparsePointPolicy);
+    context.deleteConcurrencyBudget = maxConcurrency;
 
     bool hadFailure = false;
 
@@ -4721,7 +5693,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::RenameItems(const FileSystemRenamePair* it
                 return;
             }
 
-            [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+            [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast();
 
             OperationContext context{};
             InitializeOperationContext(context, FILESYSTEM_RENAME, flags, &sharedOptionsState, callback, cookie, count, reparsePointPolicy);

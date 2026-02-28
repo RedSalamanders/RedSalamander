@@ -9,9 +9,14 @@
 #include <limits>
 #include <span>
 #include <string>
+#include <vector>
 
 #include "FileSystemPluginManager.h"
 #include <shlobj_core.h>
+#include <winreg.h>
+
+#include <bcrypt.h>
+#pragma comment(lib, "bcrypt.lib")
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027)
@@ -42,6 +47,8 @@ constexpr std::wstring_view kCompareDirName{L"compare"};
 constexpr std::wstring_view kFileOpsDirName{L"fileops"};
 constexpr std::wstring_view kCommandsDirName{L"commands"};
 constexpr std::wstring_view kTraceFileName{L"trace.txt"};
+constexpr std::wstring_view kRepoSpecsDirName{L"Specs"};
+constexpr std::wstring_view kRepoTestRunsDirName{L"TestRuns"};
 constexpr const char* kSuiteCompareName  = "CompareDirectories";
 constexpr const char* kSuiteFileOpsName  = "FileOperations";
 constexpr const char* kSuiteCommandsName = "Commands";
@@ -218,6 +225,561 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
     }
 
     return WriteBinaryFile(path, std::as_bytes(std::span<const char>(json, jsonLen)));
+}
+
+[[nodiscard]] std::wstring GetEnvironmentString(const wchar_t* name) noexcept
+{
+    if (! name || ! *name)
+    {
+        return {};
+    }
+
+    const DWORD required = GetEnvironmentVariableW(name, nullptr, 0);
+    if (required == 0)
+    {
+        return {};
+    }
+
+    std::wstring buffer(static_cast<size_t>(required), L'\0');
+    const DWORD written = GetEnvironmentVariableW(name, buffer.data(), required);
+    if (written == 0 || written >= required)
+    {
+        return {};
+    }
+
+    buffer.resize(static_cast<size_t>(written));
+    return buffer;
+}
+
+[[nodiscard]] std::wstring GetComputerNameString() noexcept
+{
+    wchar_t buf[MAX_COMPUTERNAME_LENGTH + 1]{};
+    DWORD len = static_cast<DWORD>(std::size(buf));
+    if (GetComputerNameW(buf, &len) == FALSE || len == 0)
+    {
+        return {};
+    }
+    return std::wstring(buf, buf + len);
+}
+
+[[nodiscard]] std::wstring GetUserNameString() noexcept
+{
+    wchar_t buf[256]{};
+    DWORD len = static_cast<DWORD>(std::size(buf));
+    if (GetUserNameW(buf, &len) == FALSE || len <= 1)
+    {
+        return {};
+    }
+    // GetUserNameW includes null terminator in len.
+    return std::wstring(buf, buf + (len - 1));
+}
+
+[[nodiscard]] std::filesystem::path GetModuleDirectory() noexcept
+{
+    std::array<wchar_t, 4096> buffer{};
+    const DWORD written = GetModuleFileNameW(nullptr, buffer.data(), static_cast<DWORD>(buffer.size()));
+    if (written == 0 || written >= buffer.size())
+    {
+        return {};
+    }
+
+    std::filesystem::path p(buffer.data());
+    if (p.has_parent_path())
+    {
+        return p.parent_path();
+    }
+    return {};
+}
+
+[[nodiscard]] std::filesystem::path TryFindRepoRoot() noexcept
+{
+    const std::wstring envRoot = GetEnvironmentString(L"REDSALAMANDER_REPO_ROOT");
+    if (! envRoot.empty())
+    {
+        std::error_code ec;
+        const std::filesystem::path root = std::filesystem::path(envRoot);
+        if (std::filesystem::exists(root / kRepoSpecsDirName / kRepoTestRunsDirName, ec) && ! ec)
+        {
+            return root;
+        }
+    }
+
+    std::filesystem::path cursor = GetModuleDirectory();
+    if (cursor.empty())
+    {
+        return {};
+    }
+
+    std::error_code ec;
+    for (int i = 0; i < 10; ++i)
+    {
+        const std::filesystem::path candidate = cursor;
+        const std::filesystem::path testRuns  = candidate / kRepoSpecsDirName / kRepoTestRunsDirName;
+        const std::filesystem::path sln       = candidate / L"RedSalamander.sln";
+        if (std::filesystem::exists(testRuns, ec) && ! ec && std::filesystem::exists(sln, ec) && ! ec)
+        {
+            return candidate;
+        }
+
+        if (! cursor.has_parent_path())
+        {
+            break;
+        }
+        cursor = cursor.parent_path();
+    }
+
+    return {};
+}
+
+[[nodiscard]] std::filesystem::path TryFindTestRunsRoot() noexcept
+{
+    const std::filesystem::path repoRoot = TryFindRepoRoot();
+    if (repoRoot.empty())
+    {
+        return {};
+    }
+
+    return repoRoot / kRepoSpecsDirName / kRepoTestRunsDirName;
+}
+
+[[nodiscard]] std::wstring TryReadRegistryStringValue(HKEY root, const wchar_t* subKey, const wchar_t* valueName) noexcept
+{
+    if (! subKey || ! valueName)
+    {
+        return {};
+    }
+
+    DWORD type = 0;
+    DWORD bytes = 0;
+    LONG rc     = RegGetValueW(root, subKey, valueName, RRF_RT_REG_SZ, &type, nullptr, &bytes);
+    if (rc != ERROR_SUCCESS || bytes < sizeof(wchar_t))
+    {
+        return {};
+    }
+
+    std::wstring buffer;
+    buffer.resize(bytes / sizeof(wchar_t), L'\0');
+    rc = RegGetValueW(root, subKey, valueName, RRF_RT_REG_SZ, &type, buffer.data(), &bytes);
+    if (rc != ERROR_SUCCESS || bytes < sizeof(wchar_t))
+    {
+        return {};
+    }
+
+    // Ensure null-terminated / trim trailing nulls.
+    while (! buffer.empty() && buffer.back() == L'\0')
+    {
+        buffer.pop_back();
+    }
+
+    return buffer;
+}
+
+void CloseBcryptAlgorithmProvider(BCRYPT_ALG_HANDLE h) noexcept
+{
+    if (h)
+    {
+        static_cast<void>(BCryptCloseAlgorithmProvider(h, 0));
+    }
+}
+
+void DestroyBcryptHash(BCRYPT_HASH_HANDLE h) noexcept
+{
+    if (h)
+    {
+        static_cast<void>(BCryptDestroyHash(h));
+    }
+}
+
+[[nodiscard]] bool TryComputeSha256(std::span<const std::byte> data, std::array<std::byte, 32>& outHash) noexcept
+{
+    outHash.fill(std::byte{0});
+
+    if (data.size() > static_cast<size_t>(std::numeric_limits<ULONG>::max()))
+    {
+        return false;
+    }
+
+    BCRYPT_ALG_HANDLE algHandleRaw = nullptr;
+    const NTSTATUS openStatus      = BCryptOpenAlgorithmProvider(&algHandleRaw, BCRYPT_SHA256_ALGORITHM, nullptr, 0);
+    if (! BCRYPT_SUCCESS(openStatus) || ! algHandleRaw)
+    {
+        return false;
+    }
+
+    auto closeAlg = wil::unique_any<BCRYPT_ALG_HANDLE, decltype(&CloseBcryptAlgorithmProvider), CloseBcryptAlgorithmProvider>(algHandleRaw);
+
+    DWORD objLen  = 0;
+    DWORD cbData  = 0;
+    NTSTATUS prop = BCryptGetProperty(closeAlg.get(), BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&objLen), sizeof(objLen), &cbData, 0);
+    if (! BCRYPT_SUCCESS(prop) || objLen == 0)
+    {
+        return false;
+    }
+
+    DWORD hashLen = 0;
+    cbData        = 0;
+    prop = BCryptGetProperty(closeAlg.get(), BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&hashLen), sizeof(hashLen), &cbData, 0);
+    if (! BCRYPT_SUCCESS(prop) || hashLen != static_cast<DWORD>(outHash.size()))
+    {
+        return false;
+    }
+
+    std::vector<std::byte> hashObject(static_cast<size_t>(objLen));
+    BCRYPT_HASH_HANDLE hashHandleRaw = nullptr;
+    const NTSTATUS createStatus =
+        BCryptCreateHash(closeAlg.get(), &hashHandleRaw, reinterpret_cast<PUCHAR>(hashObject.data()), objLen, nullptr, 0, 0);
+    if (! BCRYPT_SUCCESS(createStatus) || ! hashHandleRaw)
+    {
+        return false;
+    }
+
+    auto destroyHash = wil::unique_any<BCRYPT_HASH_HANDLE, decltype(&DestroyBcryptHash), DestroyBcryptHash>(hashHandleRaw);
+
+    const NTSTATUS hashStatus = BCryptHashData(destroyHash.get(), reinterpret_cast<PUCHAR>(const_cast<std::byte*>(data.data())), static_cast<ULONG>(data.size()), 0);
+    if (! BCRYPT_SUCCESS(hashStatus))
+    {
+        return false;
+    }
+
+    const NTSTATUS finishStatus = BCryptFinishHash(destroyHash.get(), reinterpret_cast<PUCHAR>(outHash.data()), hashLen, 0);
+    if (! BCRYPT_SUCCESS(finishStatus))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] std::wstring GetComputerHashName() noexcept
+{
+    // Prefer MachineGuid for stability. If it's unavailable, fall back to computer name.
+    std::wstring seed = TryReadRegistryStringValue(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Cryptography", L"MachineGuid");
+    if (seed.empty())
+    {
+        seed = GetComputerNameString();
+    }
+    if (seed.empty())
+    {
+        return L"unknown";
+    }
+
+    std::string seedUtf8;
+    if (! ConvertUtf8(seed, seedUtf8))
+    {
+        return L"unknown";
+    }
+
+    std::array<std::byte, 32> hash{};
+    if (! TryComputeSha256(std::as_bytes(std::span<const char>(seedUtf8.data(), seedUtf8.size())), hash))
+    {
+        return L"unknown";
+    }
+
+    constexpr wchar_t kHex[] = L"0123456789abcdef";
+    std::wstring out;
+    out.reserve(12);
+    for (size_t i = 0; i < 6; ++i)
+    {
+        const uint8_t b = std::to_integer<uint8_t>(hash[i]);
+        out.push_back(kHex[(b >> 4) & 0xF]);
+        out.push_back(kHex[b & 0xF]);
+    }
+
+    return out;
+}
+
+[[nodiscard]] std::wstring GetTimestampFolderNameLocal() noexcept
+{
+    SYSTEMTIME st{};
+    GetLocalTime(&st);
+    return std::format(L"{0:04}-{1:02}-{2:02}_{3:02}{4:02}{5:02}", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+}
+
+[[nodiscard]] bool ReadSmallTextFile(const std::filesystem::path& path, std::string& out) noexcept
+{
+    out.clear();
+
+    if (path.empty())
+    {
+        return false;
+    }
+
+    wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! file)
+    {
+        return false;
+    }
+
+    LARGE_INTEGER size{};
+    if (! GetFileSizeEx(file.get(), &size) || size.QuadPart <= 0 || size.QuadPart > 1024 * 1024)
+    {
+        return false;
+    }
+
+    out.resize(static_cast<size_t>(size.QuadPart));
+    DWORD read = 0;
+    if (! ReadFile(file.get(), out.data(), static_cast<DWORD>(out.size()), &read, nullptr) || read != out.size())
+    {
+        out.clear();
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] std::string TrimAscii(std::string_view s) noexcept
+{
+    size_t start = 0;
+    while (start < s.size() && (s[start] == ' ' || s[start] == '\t' || s[start] == '\r' || s[start] == '\n'))
+    {
+        ++start;
+    }
+
+    size_t end = s.size();
+    while (end > start && (s[end - 1] == ' ' || s[end - 1] == '\t' || s[end - 1] == '\r' || s[end - 1] == '\n'))
+    {
+        --end;
+    }
+
+    return std::string(s.substr(start, end - start));
+}
+
+[[nodiscard]] std::filesystem::path ResolveGitDir(const std::filesystem::path& repoRoot) noexcept
+{
+    std::error_code ec;
+    const std::filesystem::path dotGit = repoRoot / L".git";
+    if (std::filesystem::is_directory(dotGit, ec) && ! ec)
+    {
+        return dotGit;
+    }
+
+    if (! std::filesystem::is_regular_file(dotGit, ec) || ec)
+    {
+        return {};
+    }
+
+    std::string text;
+    if (! ReadSmallTextFile(dotGit, text))
+    {
+        return {};
+    }
+
+    const std::string line = TrimAscii(text);
+    constexpr std::string_view kPrefix{"gitdir:"};
+    if (line.size() <= kPrefix.size() || line.rfind(kPrefix, 0) != 0)
+    {
+        return {};
+    }
+
+    std::string_view rest(line);
+    rest.remove_prefix(kPrefix.size());
+    while (! rest.empty() && (rest.front() == ' ' || rest.front() == '\t'))
+    {
+        rest.remove_prefix(1);
+    }
+
+    if (rest.empty())
+    {
+        return {};
+    }
+
+    std::wstring restW;
+    {
+        const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, rest.data(), static_cast<int>(rest.size()), nullptr, 0);
+        if (required <= 0)
+        {
+            return {};
+        }
+        restW.resize(static_cast<size_t>(required));
+        const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, rest.data(), static_cast<int>(rest.size()), restW.data(), required);
+        if (written != required)
+        {
+            return {};
+        }
+    }
+
+    std::filesystem::path gitDir(restW);
+    if (! gitDir.is_absolute())
+    {
+        gitDir = repoRoot / gitDir;
+    }
+
+    if (! std::filesystem::is_directory(gitDir, ec) || ec)
+    {
+        return {};
+    }
+
+    return gitDir;
+}
+
+[[nodiscard]] bool TryReadGitHeadInfo(const std::filesystem::path& repoRoot, std::wstring& outBranch, std::wstring& outCommit) noexcept
+{
+    outBranch.clear();
+    outCommit.clear();
+
+    const std::filesystem::path gitDir = ResolveGitDir(repoRoot);
+    if (gitDir.empty())
+    {
+        return false;
+    }
+
+    std::string headText;
+    if (! ReadSmallTextFile(gitDir / L"HEAD", headText))
+    {
+        return false;
+    }
+
+    const std::string head = TrimAscii(headText);
+    constexpr std::string_view kRefPrefix{"ref:"};
+    if (head.size() > kRefPrefix.size() && head.rfind(kRefPrefix, 0) == 0)
+    {
+        std::string_view ref(head);
+        ref.remove_prefix(kRefPrefix.size());
+        while (! ref.empty() && (ref.front() == ' ' || ref.front() == '\t'))
+        {
+            ref.remove_prefix(1);
+        }
+        if (ref.empty())
+        {
+            return false;
+        }
+
+        // Convert ref to wide
+        std::wstring refW;
+        {
+            const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, ref.data(), static_cast<int>(ref.size()), nullptr, 0);
+            if (required <= 0)
+            {
+                return false;
+            }
+            refW.resize(static_cast<size_t>(required));
+            const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, ref.data(), static_cast<int>(ref.size()), refW.data(), required);
+            if (written != required)
+            {
+                return false;
+            }
+        }
+
+        outBranch = std::filesystem::path(refW).filename().wstring();
+
+        // Try loose ref first
+        std::string commitText;
+        const std::filesystem::path looseRefPath = gitDir / std::filesystem::path(refW);
+        if (ReadSmallTextFile(looseRefPath, commitText))
+        {
+            const std::string commit = TrimAscii(commitText);
+            if (! commit.empty())
+            {
+                outCommit.assign(commit.begin(), commit.end());
+                return true;
+            }
+        }
+
+        // Fall back to packed-refs
+        std::string packedText;
+        if (ReadSmallTextFile(gitDir / L"packed-refs", packedText))
+        {
+            size_t pos = 0;
+            while (pos < packedText.size())
+            {
+                const size_t lineEnd = packedText.find('\n', pos);
+                const std::string_view line =
+                    (lineEnd == std::string::npos) ? std::string_view(packedText).substr(pos) : std::string_view(packedText).substr(pos, lineEnd - pos);
+
+                pos = (lineEnd == std::string::npos) ? packedText.size() : (lineEnd + 1);
+
+                if (line.empty() || line[0] == '#' || line[0] == '^')
+                {
+                    continue;
+                }
+
+                const size_t space = line.find(' ');
+                if (space == std::string::npos)
+                {
+                    continue;
+                }
+
+                const std::string_view hash = line.substr(0, space);
+                const std::string_view refName = line.substr(space + 1);
+                if (refName == ref)
+                {
+                    const std::string commit(hash);
+                    outCommit.assign(commit.begin(), commit.end());
+                    return true;
+                }
+            }
+        }
+
+        return ! outBranch.empty();
+    }
+
+    // Detached HEAD (hash in HEAD file)
+    if (! head.empty())
+    {
+        outBranch = L"(detached)";
+        outCommit.assign(head.begin(), head.end());
+        return true;
+    }
+
+    return false;
+}
+
+void CopyIfExists(const std::filesystem::path& source, const std::filesystem::path& dest) noexcept
+{
+    if (source.empty() || dest.empty())
+    {
+        return;
+    }
+
+    std::error_code ec;
+    if (! std::filesystem::exists(source, ec) || ec)
+    {
+        return;
+    }
+
+    if (dest.has_parent_path())
+    {
+        EnsureDirectory(dest.parent_path());
+    }
+
+    static_cast<void>(CopyFileW(source.c_str(), dest.c_str(), FALSE));
+}
+
+[[nodiscard]] std::filesystem::path CreateUniqueRunFolder(const std::filesystem::path& base) noexcept
+{
+    if (base.empty())
+    {
+        return {};
+    }
+
+    const std::wstring ts = GetTimestampFolderNameLocal();
+    std::error_code ec;
+
+    std::filesystem::path candidate = base / ts;
+    if (! std::filesystem::exists(candidate, ec) && ! ec)
+    {
+        std::filesystem::create_directories(candidate, ec);
+        if (! ec)
+        {
+            return candidate;
+        }
+    }
+
+    for (int i = 1; i < 1000; ++i)
+    {
+        candidate = base / std::format(L"{0}_{1:03}", ts, i);
+        ec.clear();
+        if (! std::filesystem::exists(candidate, ec) && ! ec)
+        {
+            std::filesystem::create_directories(candidate, ec);
+            if (! ec)
+            {
+                return candidate;
+            }
+        }
+    }
+
+    return {};
 }
 
 // JSON serialization helpers (yyjson mutable API, UTF-8 output)
@@ -701,6 +1263,130 @@ void WriteRunJson(const SelfTestRunResult& result, const std::filesystem::path& 
     yyjson_mut_obj_add_int(doc, root, "skipped", skipped);
 
     static_cast<void>(WriteJsonBlob(path, doc));
+}
+
+void TryArchiveLastRunToRepo(std::wstring_view area, int exitCode, uint64_t durationMs) noexcept
+{
+    if (area.empty())
+    {
+        area = L"SelfTest";
+    }
+
+    const std::filesystem::path testRunsRoot = TryFindTestRunsRoot();
+    if (testRunsRoot.empty())
+    {
+        AppendSelfTestTrace(L"ArchiveToRepo: repo root not found; skipping.");
+        return;
+    }
+
+    const std::wstring profile = GetComputerHashName();
+
+    std::filesystem::path repoRoot = testRunsRoot;
+    if (repoRoot.has_parent_path())
+    {
+        repoRoot = repoRoot.parent_path();
+    }
+    if (repoRoot.has_parent_path())
+    {
+        repoRoot = repoRoot.parent_path();
+    }
+
+    std::wstring gitBranch;
+    std::wstring gitCommit;
+    static_cast<void>(TryReadGitHeadInfo(repoRoot, gitBranch, gitCommit));
+
+    std::error_code ec;
+    const std::filesystem::path areaRoot = testRunsRoot / profile / std::filesystem::path(area);
+    std::filesystem::create_directories(areaRoot, ec);
+
+    const std::filesystem::path runRoot = CreateUniqueRunFolder(areaRoot);
+    if (runRoot.empty())
+    {
+        AppendSelfTestTrace(L"ArchiveToRepo: could not create run folder; skipping.");
+        return;
+    }
+
+    // Log before copying so the archived trace includes the archive destination.
+    AppendSelfTestTrace(std::format(L"ArchiveToRepo: {}", runRoot.wstring()));
+
+    // Copy meaningful artifacts (explicit allow-list; never copy secrets or large work/ dirs).
+    const std::filesystem::path lastRunRoot = SelfTestRoot() / kLastRunDirName;
+    CopyIfExists(lastRunRoot / L"results.json", runRoot / L"selftest_run_results.json");
+    CopyIfExists(lastRunRoot / kTraceFileName, runRoot / L"selftest_run_trace.txt");
+    CopyIfExists(lastRunRoot / L"discovery.txt", runRoot / L"discovery.txt");
+
+    auto copySuite = [&](std::wstring_view suiteDir, std::wstring_view prefix)
+    {
+        const std::filesystem::path suiteRoot = lastRunRoot / std::filesystem::path(suiteDir);
+        CopyIfExists(suiteRoot / L"results.json", runRoot / std::format(L"{}_results.json", prefix));
+        CopyIfExists(suiteRoot / kTraceFileName, runRoot / std::format(L"{}_trace.txt", prefix));
+        CopyIfExists(suiteRoot / L"discovery.txt", runRoot / std::format(L"{}_discovery.txt", prefix));
+    };
+
+    copySuite(kFileOpsDirName, L"fileops");
+    copySuite(kCompareDirName, L"compare");
+    copySuite(kCommandsDirName, L"commands");
+
+    // env.txt (UTF-8 key/value lines, safe to check in; no secrets)
+    {
+        const std::wstring computerName = GetComputerNameString();
+        const std::wstring userName     = GetUserNameString();
+        const std::wstring exeDir       = GetModuleDirectory().wstring();
+        const std::wstring cmdLine      = GetCommandLineW() ? GetCommandLineW() : L"";
+
+        const SYSTEMTIME st = []()
+        {
+            SYSTEMTIME t{};
+            GetSystemTime(&t);
+            return t;
+        }();
+        const std::wstring nowUtcIso = std::format(L"{0:04}-{1:02}-{2:02}T{3:02}:{4:02}:{5:02}Z", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+
+        std::wstring envText;
+        envText.reserve(1024);
+        envText.append(std::format(L"date: {}\n", nowUtcIso));
+        if (! gitBranch.empty())
+        {
+            envText.append(std::format(L"git_branch: {}\n", gitBranch));
+        }
+        if (! gitCommit.empty())
+        {
+            envText.append(std::format(L"git_commit: {}\n", gitCommit));
+        }
+        envText.append(std::format(L"profile: {}\n", profile));
+        envText.append(std::format(L"computer_hash: {}\n", profile));
+        if (! computerName.empty())
+        {
+            envText.append(std::format(L"machine: {}\n", computerName));
+        }
+        if (! userName.empty())
+        {
+            envText.append(std::format(L"user: {}\n", userName));
+        }
+        envText.append(std::format(L"area: {}\n", std::wstring(area)));
+        if (! exeDir.empty())
+        {
+            envText.append(std::format(L"exe_dir: {}\n", exeDir));
+        }
+        envText.append(std::format(L"repo_root: {}\n", repoRoot.wstring()));
+        envText.append(std::format(L"selftest_root: {}\n", lastRunRoot.wstring()));
+        if (! cmdLine.empty())
+        {
+            envText.append(std::format(L"command_line: {}\n", cmdLine));
+        }
+
+        static_cast<void>(WriteTextFile(runRoot / L"env.txt", envText));
+    }
+
+    // selftest.txt (lightweight run summary)
+    {
+        std::wstring text;
+        text.reserve(512);
+        text.append(std::format(L"=== selftest start (utc): {} ===\n", g_runStartedUtcIso.empty() ? L"<unknown>" : g_runStartedUtcIso));
+        text.append(std::format(L"duration_ms: {}\n", durationMs));
+        text.append(std::format(L"exit_code: {}\n", exitCode));
+        static_cast<void>(WriteTextFile(runRoot / L"selftest.txt", text));
+    }
 }
 
 } // namespace SelfTest

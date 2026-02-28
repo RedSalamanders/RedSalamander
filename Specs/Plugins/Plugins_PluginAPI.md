@@ -3,8 +3,8 @@
 This document describes **host-provided services** that plugins can use at runtime.
 It complements (and does not replace) the existing per-plugin-type specs:
 
-- Viewer plugins: `Specs/PluginsViewer.md`
-- Virtual file system plugins: `Specs/PluginsVirtualFileSystem.md`
+- Viewer plugins: `Specs/Plugins/Plugins_ViewerPlugins.md`
+- Virtual file system plugins: `Specs/Plugins/Plugins_VirtualFileSystem.md`
 
 ## Problem Statement
 

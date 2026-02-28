@@ -820,9 +820,25 @@
         "extra": {
           "type": "object",
           "title": "Extra",
-          "description": "Plugin-specific non-secret fields. Known keys: sshPrivateKey, sshKnownHosts (SFTP/SCP); ignoreSslTrust (IMAP).",
+          "description": "Plugin-specific non-secret fields. Known keys: sshPrivateKey, sshKnownHosts (SFTP/SCP); ignoreSslTrust (IMAP); copyMoveMaxConcurrency, deleteMaxConcurrency (global per connection profile).",
           "default": {},
-          "additionalProperties": true
+          "additionalProperties": true,
+          "properties": {
+            "copyMoveMaxConcurrency": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 8,
+              "default": 0,
+              "description": "0 = inherit plugin setting; global per connection profile."
+            },
+            "deleteMaxConcurrency": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64,
+              "default": 0,
+              "description": "0 = inherit plugin setting; global per connection profile."
+            }
+          }
         }
       },
       "additionalProperties": false

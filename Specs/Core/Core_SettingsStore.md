@@ -181,10 +181,10 @@ Notes:
 `plugins.configurationByPluginId[...]` entries are plugin-defined and intentionally treated as an opaque JSON object by the settings store schema.
 
 Built-in plugin configuration keys are documented in their respective plugin specs (or in the plugin-type spec when appropriate):
-- `builtin/file-system-dummy`: `Specs/PluginsVirtualFileSystem.md`
-- `builtin/viewer-imgraw`: `Specs/ViewerImgRawPluginSpec.md`
-- `builtin/viewer-space`: `Specs/ViewerSpacePluginSpec.md`
-- `builtin/viewer-web`, `builtin/viewer-json`, `builtin/viewer-markdown`: `Specs/ViewerWebPluginSpec.md`
+- `builtin/file-system-dummy`: `Specs/Plugins/Plugins_VirtualFileSystem.md`
+- `builtin/viewer-imgraw`: `Specs/Plugins/Plugins_ViewerImgRaw.md`
+- `builtin/viewer-space`: `Specs/Plugins/Plugins_ViewerSpace.md`
+- `builtin/viewer-web`, `builtin/viewer-json`, `builtin/viewer-markdown`: `Specs/Plugins/Plugins_ViewerWeb.md`
 
 
 ## Extensions (v6)
@@ -226,7 +226,7 @@ Each binding entry:
 
 Notes:
 - Command IDs are stable; UI display names are localized resource strings. No user-facing command names are hard-coded in C++.
-- If a binding references a command that is not implemented, invoking it shows a localized “not yet implemented” message box and does nothing else (see `Specs/CommandMenuKeyboardSpec.md`).
+- If a binding references a command that is not implemented, invoking it shows a localized “not yet implemented” message box and does nothing else (see `Specs/UI/UI_CommandMenuKeyboard.md`).
 
 ## Window Placement
 
@@ -292,9 +292,9 @@ Supported keys:
 - `mruWatched` (integer, optional): In addition to pinned/on-screen folders, watch up to this many **MRU** cached folders (best-effort).
 
 Defaults (when keys are missing):
-- `maxBytes`: computed from physical RAM at runtime (see `Specs/DirectoryInfoCacheSpec.md`)
-- `maxWatchers`: implementation default (see `Specs/DirectoryInfoCacheSpec.md`)
-- `mruWatched`: implementation default (see `Specs/DirectoryInfoCacheSpec.md`)
+- `maxBytes`: computed from physical RAM at runtime (see `Specs/Core/Core_DirectoryInfoCache.md`)
+- `maxWatchers`: implementation default (see `Specs/Core/Core_DirectoryInfoCache.md`)
+- `mruWatched`: implementation default (see `Specs/Core/Core_DirectoryInfoCache.md`)
 
 ## Theme System (customizable)
 
@@ -328,7 +328,7 @@ Custom themes are stored in `theme.themes[]`. Each custom theme:
 
 - `RedSalamander` exposes theme selection in `View → Theme`.
 - The menu includes built-in themes and any `user/*` themes found in `theme.themes[]`.
-- Built-in menu structure/labels must be declared in `.rc` resources; runtime code only appends dynamic theme entries (see `Specs/LocalizationSpec.md`).
+- Built-in menu structure/labels must be declared in `.rc` resources; runtime code only appends dynamic theme entries (see `Specs/Core/Core_Localization.md`).
 
 ### Theme files (predefined / disk)
 
@@ -409,11 +409,11 @@ This list is the initial contract; additional keys may be added over time.
 
 Whenever you add/remove/rename a theme color key (or change its semantics), update all of:
 - `Specs/SettingsStore.schema.json` (settings validation + editor IntelliSense)
-- `Specs/SettingsStoreSpec.md` (this contract list)
+- `Specs/Core/Core_SettingsStore.md` (this contract list)
 - Built-in theme defaults in `RedSalamander/AppTheme.h` / `RedSalamander/AppTheme.cpp`
 - Theme override mapping and fallbacks in `RedSalamander/RedSalamander.cpp` (`ApplyThemeOverrides`)
 - Shipped theme files (`Specs/Themes/*.theme.json5` and `Themes\\*.theme.json5` next to `RedSalamander.exe` if present)
-- Any component spec that references the token (e.g. `Specs/FolderViewSpec.md`)
+- Any component spec that references the token (e.g. `Specs/UI/UI_FolderView.md`)
 
 ### Monitor (RedSalamanderMonitor / ColorTextView)
 

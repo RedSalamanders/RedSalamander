@@ -5764,7 +5764,13 @@ void FolderWindow::CommandChangeCase(Pane pane)
 
     state.changeCaseThread = std::jthread([ownerHwnd, pane, fileSystem, paths, options, title](std::stop_token stopToken) noexcept
     {
-        [[maybe_unused]] auto coInit = wil::CoInitializeEx();
+        const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+        if (FAILED(coinitHr))
+        {
+            Debug::Error(L"ChangeCase task: CoInitializeEx(COINIT_MULTITHREADED) failed: 0x{:08X}", coinitHr);
+            FAIL_FAST_IF_FAILED(coinitHr);
+        }
+        [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
         struct ProgressState final
         {

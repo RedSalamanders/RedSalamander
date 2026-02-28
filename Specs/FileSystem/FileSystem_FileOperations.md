@@ -49,8 +49,8 @@ It also defines the **speed limit** behavior (host-provided bandwidth cap) and t
 
 ### Related specs
 
-- Plugin operation and callback contracts: `Specs/PluginsVirtualFileSystem.md`
-- Theme key list (including file ops keys): `Specs/SettingsStoreSpec.md`
+- Plugin operation and callback contracts: `Specs/Plugins/Plugins_VirtualFileSystem.md`
+- Theme key list (including file ops keys): `Specs/Core/Core_SettingsStore.md`
 
 ## Execution Model (Normative)
 
@@ -179,6 +179,14 @@ When Copy/Move must execute across different filesystem contexts, the host MAY p
 - The host SHOULD prefer in-memory streaming using `IFileReader` → `IFileWriter` (no temp files).
 - If streaming is not possible for a given plugin pair, the host MAY fall back to a temp-folder materialization strategy (implementation-defined), but MUST preserve cancel/pause responsiveness and MUST not block the UI thread.
 
+**Single top-level directory copy** under the bridge:
+
+- The host MUST create destination directories **sequentially**.
+- The host SHOULD copy the contained files **in parallel** subject to the effective task concurrency budget (and any per-connection caps), so the popup can show multiple in-flight lines even when the user copied only one folder.
+- When the bridge runs parallel workers, it MUST:
+  - use a unique `progressStreamId` per concurrent worker (stable within the operation),
+  - serialize `IFileSystemCallback` invocations (no concurrent callback entry).
+
 Move semantics under the bridge:
 
 - Cross-filesystem **Move** SHOULD be implemented as Copy + Delete (delete after successful copy).
@@ -305,7 +313,7 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
   - Delete: `Deleting:` line
   - During pre-calc, the host SHOULD display the current directory being scanned (from `IFileSystemDirectorySizeCallback::DirectorySizeProgress.currentPath`) when available; otherwise it SHOULD display the first planned source path.
   - Parallel Copy/Move (multi-file in-flight):
-    - When a single Task is executing Copy/Move with multiple files actively copying at once (plugin internal parallelism), the UI MUST display multiple `From:` file lines with per-file progress (instead of only one “current item”).
+    - When a single Task is executing Copy/Move with multiple files actively copying at once (plugin internal parallelism **or host bridge parallelism**), the UI MUST display multiple `From:` file lines with per-file progress (instead of only one “current item”).
     - The UI SHOULD display one stable line per active progress stream (up to max concurrency lines).
       - A stream is identified by `(cookie, progressStreamId)` from `IFileSystemCallback::FileSystemProgress(...)`.
       - A line SHOULD be updated in-place as the stream advances to new items (so completed items are replaced by the next item rather than lingering at `100%`).
@@ -471,10 +479,10 @@ This plan is explicitly tied to the existing specs and current codebase state (a
 
 ### References (read first)
 
-- Filesystem plugin improvements: `Specs/FileSystemPluginImprovementPlan.md`
+- Filesystem plugin improvements: `Specs/Plans/WIP/FileSystem_PluginImprovementPlan.md`
 - Plugin interface definitions: `Common/PlugInterfaces/FileSystem.h`
-- VFS contract notes: `Specs/PluginsVirtualFileSystem.md`
-- Theme key list: `Specs/SettingsStoreSpec.md`
+- VFS contract notes: `Specs/Plugins/Plugins_VirtualFileSystem.md`
+- Theme key list: `Specs/Core/Core_SettingsStore.md`
 
 ### Current Implementation Snapshot (2026-02-03)
 
@@ -560,8 +568,8 @@ These are the “product rules” that determine the safest implementation strat
 Files:
 
 - `Common/PlugInterfaces/FileSystem.h`
-- `Specs/FileOperationsSpec.md`
-- `Specs/FileSystemPluginImprovementPlan.md`
+- `Specs/FileSystem/FileSystem_FileOperations.md`
+- `Specs/Plans/WIP/FileSystem_PluginImprovementPlan.md`
 
 Tasks:
 
@@ -573,7 +581,7 @@ Tasks:
   - out-of-order `itemIndex` completion is allowed
   - `totalBytes` may be unknown/0 (host pre-calc provides totals when available)
   - delete bytes policy (see Decision #3)
-- [x] Update `Specs/FileOperationsSpec.md` to explicitly define popup close behavior (Decision #5).
+- [x] Update `Specs/FileSystem/FileSystem_FileOperations.md` to explicitly define popup close behavior (Decision #5).
 
 Acceptance:
 
@@ -694,7 +702,7 @@ Acceptance:
 Files:
 
 - `RedSalamander/FolderWindow.FileOperations.Popup.cpp`
-- `Specs/FileOperationsSpec.md`
+- `Specs/FileSystem/FileSystem_FileOperations.md`
 
 Tasks:
 
@@ -774,8 +782,8 @@ Files:
 
 - Contracts:
   - `Common/PlugInterfaces/FileSystem.h`
-  - `Specs/PluginsVirtualFileSystem.md`
-  - `Specs/FileOperationsSpec.md`
+  - `Specs/Plugins/Plugins_VirtualFileSystem.md`
+  - `Specs/FileSystem/FileSystem_FileOperations.md`
 - Host:
   - `RedSalamander/FolderWindow.FileOperationsInternal.h`
   - `RedSalamander/FolderWindow.FileOperations.State.cpp`

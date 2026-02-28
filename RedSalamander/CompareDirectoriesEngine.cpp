@@ -2267,7 +2267,13 @@ std::shared_ptr<const CompareDirectoriesFolderDecision> CompareDirectoriesSessio
 
 void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, uint32_t workerIndex) noexcept
 {
-    [[maybe_unused]] auto coInit = wil::CoInitializeEx(COINIT_MULTITHREADED);
+    const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(coinitHr))
+    {
+        Debug::Error(L"CompareDirectories worker: CoInitializeEx(COINIT_MULTITHREADED) failed: 0x{:08X}", coinitHr);
+        FAIL_FAST_IF_FAILED(coinitHr);
+    }
+    [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
     uint64_t lastProgressNotifyTickMs = 0;
 

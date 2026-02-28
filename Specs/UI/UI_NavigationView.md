@@ -13,7 +13,7 @@
 
 ## Localization
 
-- All fixed user-facing labels (menu items, message boxes, captions) must be loaded from `.rc` resources (see `Specs/LocalizationSpec.md`).
+- All fixed user-facing labels (menu items, message boxes, captions) must be loaded from `.rc` resources (see `Specs/Core/Core_Localization.md`).
 - Dynamic UI labels (current path, drive names, WSL distro names, disk sizes, etc.) remain runtime data, but any surrounding UI text should come from resource **format strings**.
 
 ## Path Model (Canonical vs Plugin vs UI)
@@ -147,7 +147,7 @@ else
 - Removed 3D borders for modern appearance
 - Press state kept when menu is open
 - Current folder icon or hamburger icon fallback (now rendered with Direct2D)
-- Keyboard focus ring uses small rounded corners (see `Specs/VisualStyleSpec.md`).
+- Keyboard focus ring uses small rounded corners (see `Specs/UI/UI_VisualStyle.md`).
 
 ✅ **Breadcrumb separator enhancements**:
 - Hover and pressed states for separators
@@ -969,7 +969,7 @@ For path `C:\Users\aUser\Downloads`:
 **Section 2 (Breadcrumb Segments)**:
 - **Normal**: Transparent background
 - **Hover**: `RGB(243, 243, 243)` subtle background highlight
-- **Implementation**: Direct2D `FillRoundedRectangle` on an inset rect of the segment bounds (1 DIP inset, 2 DIP corner radius; see `Specs/VisualStyleSpec.md`)
+- **Implementation**: Direct2D `FillRoundedRectangle` on an inset rect of the segment bounds (1 DIP inset, 2 DIP corner radius; see `Specs/UI/UI_VisualStyle.md`)
 - **Padding**: Breadcrumb segment text uses symmetric left/right padding so hover backgrounds show equal gaps on both sides
 - **Coordinate Transform**: Mouse coordinates transformed from window space to Section 2 local space:
   ```cpp
@@ -986,7 +986,7 @@ For path `C:\Users\aUser\Downloads`:
 - **Hover**: `RGB(243, 243, 243)` background (same as segments)
 - **Pressed**: `RGB(230, 230, 230)` background (darker, persists while menu is open)
 - **Active State**: Remains in pressed state during entire TrackPopupMenu call
-- **Implementation**: Hover/pressed backgrounds use the same inset rounded rectangle style as segments (see `Specs/VisualStyleSpec.md`)
+- **Implementation**: Hover/pressed backgrounds use the same inset rounded rectangle style as segments (see `Specs/UI/UI_VisualStyle.md`)
 - **Coordinate Transform**: Same as segments (local space)
 - **Hover Cleanup**: Explicitly clears separator hover states when cursor leaves Section 2
 - **Trigger**: `HOVER_TIMER_ID` timer with coordinate transformation
@@ -1198,8 +1198,8 @@ C:\Users\Username\Documents\Projects\RedSalamander
 - Full text selection initially
 - Caret blinking at insertion point
 - Native keyboard handling (Ctrl+A, Ctrl+C, Ctrl+V)
-- Edit underline: `2 DIP` line at the bottom of the edit field (see `Specs/VisualStyleSpec.md`)
-- Close button (`X`) at the right side to cancel/exit edit mode (see `Specs/VisualStyleSpec.md`)
+- Edit underline: `2 DIP` line at the bottom of the edit field (see `Specs/UI/UI_VisualStyle.md`)
+- Close button (`X`) at the right side to cancel/exit edit mode (see `Specs/UI/UI_VisualStyle.md`)
 - Autosuggest popup under the edit while typing:
   - Shows up to `10` items.
     - If there are more than `10` matching folders, the last item is a disabled `...` indicator (the popup shows `9` actual folders).
@@ -1242,7 +1242,7 @@ void EnterEditMode() {
         int width = static_cast<int>(_sectionPathRect.right - _sectionPathRect.left);
         int height = static_cast<int>(_sectionPathRect.bottom - _sectionPathRect.top);
 
-        // Layout leaves space for the edit underline + close button (see VisualStyleSpec).
+        // Layout leaves space for the edit underline + close button (see UI_VisualStyle).
         RECT editRect = _sectionPathRect;
         
         _pathEdit = CreateWindowExW(
@@ -1901,7 +1901,7 @@ _navView.SetPathChangedCallback([this](const auto& path) {
 
 ## Keyboard Shortcuts
 
-- Canonical shortcut map and cross-pane routing rules are defined in `Specs/CommandMenuKeyboardSpec.md`.
+- Canonical shortcut map and cross-pane routing rules are defined in `Specs/UI/UI_CommandMenuKeyboard.md`.
 - **F4**: Enter edit mode in Section 2, select all text
 - **Alt+D**: Same as F4 (Windows Explorer standard) *(default chord binding is settings-backed)*
 - **Ctrl+L**: Same as F4 (browser standard) *(default chord binding is settings-backed)*
@@ -1913,7 +1913,7 @@ _navView.SetPathChangedCallback([this](const auto& path) {
 
 **Routing Requirement:**
 - `F4` / `Alt+D` / `Ctrl+L` and `Alt+F12` MUST work even when **FolderView** has focus (settings-backed shortcuts are routed at the host level).
-- `Tab` / `Shift+Tab` inside FolderView are reserved for pane switching (see `Specs/CommandMenuKeyboardSpec.md`) and are not forwarded to NavigationView.
+- `Tab` / `Shift+Tab` inside FolderView are reserved for pane switching (see `Specs/UI/UI_CommandMenuKeyboard.md`) and are not forwarded to NavigationView.
 
 ## Focus Traversal and Activation
 

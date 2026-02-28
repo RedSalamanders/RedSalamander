@@ -2,6 +2,11 @@
 
 using namespace FileSystemCurlInternal;
 
+namespace
+{
+std::atomic<unsigned long> g_fileSystemCurlInstanceCount{0};
+} // namespace
+
 namespace FileSystemCurlInternal
 {
 [[nodiscard]] std::wstring NormalizePluginPath(std::wstring_view rawPath) noexcept;
@@ -794,6 +799,61 @@ namespace FileSystemCurlInternal
     out.connection.sshKeyPassphrase   = Utf8FromUtf16(settings.sshKeyPassphrase);
     out.connection.sshKnownHosts      = Utf8FromUtf16(settings.sshKnownHosts);
 
+    const unsigned int pluginCopyMoveMax =
+        protocol == Protocol::Imap ? 1u : std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
+    const unsigned int pluginDeleteMax =
+        protocol == Protocol::Imap ? 1u : std::clamp(settings.deleteMaxConcurrency, 1u, 8u);
+
+    const auto protocolKey = [&](Protocol p) noexcept -> std::wstring_view
+    {
+        switch (p)
+        {
+            case Protocol::Ftp: return L"ftp";
+            case Protocol::Sftp: return L"sftp";
+            case Protocol::Scp: return L"scp";
+            case Protocol::Imap: return L"imap";
+        }
+        return L"unknown";
+    };
+
+    auto finalizeConnection = [&](unsigned int copyMoveOverride, unsigned int deleteOverride) noexcept
+    {
+        out.connection.effectiveCopyMoveMaxConcurrency = pluginCopyMoveMax;
+        out.connection.effectiveDeleteMaxConcurrency   = pluginDeleteMax;
+
+        if (copyMoveOverride != 0)
+        {
+            const unsigned int clamped = std::clamp(copyMoveOverride, 1u, 8u);
+            out.connection.effectiveCopyMoveMaxConcurrency = std::min(out.connection.effectiveCopyMoveMaxConcurrency, clamped);
+        }
+
+        if (deleteOverride != 0)
+        {
+            const unsigned int clamped = std::clamp(deleteOverride, 1u, 64u);
+            out.connection.effectiveDeleteMaxConcurrency =
+                std::min(out.connection.effectiveDeleteMaxConcurrency, std::min(clamped, 8u));
+        }
+
+        if (out.connection.fromConnectionManagerProfile)
+        {
+            if (! out.connection.connectionId.empty())
+            {
+                out.connection.limiterKey = out.connection.connectionId;
+                return;
+            }
+
+            if (! out.connection.connectionName.empty())
+            {
+                out.connection.limiterKey = std::format(L"{}|@conn:{}", protocolKey(protocol), out.connection.connectionName);
+                return;
+            }
+        }
+
+        const unsigned int portOut = out.connection.port.has_value() ? out.connection.port.value() : 0u;
+        out.connection.limiterKey =
+            std::format(L"{}|{}|{}|{}", protocolKey(protocol), Utf16FromUtf8(out.connection.host), portOut, Utf16FromUtf8(out.connection.user));
+    };
+
     const std::wstring normalizedFull = NormalizePluginPath(pluginPath);
 
     std::wstring_view authority;
@@ -925,6 +985,40 @@ namespace FileSystemCurlInternal
             const uint64_t value = yyjson_get_uint(v);
             outUInt              = static_cast<unsigned int>(std::min<uint64_t>(value, 0xFFFFFFFFull));
             return true;
+        };
+
+        auto getUIntFromObj = [&](yyjson_val* obj, const char* key, unsigned int& outUInt) noexcept -> bool
+        {
+            if (! obj || ! yyjson_is_obj(obj))
+            {
+                return false;
+            }
+
+            yyjson_val* v = yyjson_obj_get(obj, key);
+            if (! v)
+            {
+                return false;
+            }
+
+            if (yyjson_is_uint(v))
+            {
+                const uint64_t value = yyjson_get_uint(v);
+                outUInt              = static_cast<unsigned int>(std::min<uint64_t>(value, 0xFFFFFFFFull));
+                return true;
+            }
+
+            if (yyjson_is_sint(v))
+            {
+                const int64_t value = yyjson_get_sint(v);
+                if (value < 0)
+                {
+                    return false;
+                }
+                outUInt = static_cast<unsigned int>(std::min<int64_t>(value, 0x7FFFFFFFll));
+                return true;
+            }
+
+            return false;
         };
 
         const auto pluginIdUtf8 = getStr("pluginId");
@@ -1211,6 +1305,16 @@ namespace FileSystemCurlInternal
                     out.connection.ignoreSslTrust ? 1 : 0,
                     passphrasePresent ? 1 : 0);
 
+        unsigned int copyMoveOverride = 0;
+        unsigned int deleteOverride   = 0;
+        if (yyjson_val* extra = yyjson_obj_get(root, "extra"); extra && yyjson_is_obj(extra))
+        {
+            static_cast<void>(getUIntFromObj(extra, "copyMoveMaxConcurrency", copyMoveOverride));
+            static_cast<void>(getUIntFromObj(extra, "deleteMaxConcurrency", deleteOverride));
+        }
+
+        finalizeConnection(copyMoveOverride, deleteOverride);
+
         return S_OK;
     }
 
@@ -1323,6 +1427,7 @@ namespace FileSystemCurlInternal
             }
         }
 
+        finalizeConnection(0, 0);
         return S_OK;
     }
 
@@ -1382,6 +1487,7 @@ namespace FileSystemCurlInternal
         out.remotePath = L"/";
     }
 
+    finalizeConnection(0, 0);
     return S_OK;
 }
 } // namespace FileSystemCurlInternal
@@ -2000,6 +2106,22 @@ namespace FileSystemCurlInternal
     return S_OK;
 }
 
+[[nodiscard]] HRESULT ResetFileForRewrite(HANDLE file) noexcept
+{
+    HRESULT hr = ResetFilePointerToStart(file);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (SetEndOfFile(file) == 0)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    return S_OK;
+}
+
 [[nodiscard]] HRESULT GetFileSizeBytes(HANDLE file, uint64_t& out) noexcept
 {
     out = 0;
@@ -2190,7 +2312,7 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
     }
 
     // Soft bandwidth limiting with Sleep in the progress callback (enables dynamic updates from host).
-    const uint64_t limit = ctx->progress->options.bandwidthLimitBytesPerSecond;
+    const uint64_t limit = ctx->progress->bandwidthLimitBytesPerSecond.load(std::memory_order_acquire);
     if (limit > 0 && ctx->throttleStartTick != 0)
     {
         const uint64_t elapsedMs = nowTick - ctx->throttleStartTick;
@@ -2374,6 +2496,101 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
     return HResultFromCurl(code);
 }
 
+namespace
+{
+[[nodiscard]] CURL* GetThreadLocalEasyHandle() noexcept
+{
+    static thread_local unique_curl_easy tlsCurl{};
+    if (! tlsCurl)
+    {
+        tlsCurl.reset(curl_easy_init());
+    }
+    if (! tlsCurl)
+    {
+        return nullptr;
+    }
+
+    curl_easy_reset(tlsCurl.get());
+    return tlsCurl.get();
+}
+
+[[nodiscard]] bool IsCurlTransientTransferError(CURLcode code) noexcept
+{
+    switch (code)
+    {
+        case CURLE_OPERATION_TIMEDOUT:
+        case CURLE_RECV_ERROR:
+        case CURLE_SEND_ERROR:
+        case CURLE_GOT_NOTHING:
+        case CURLE_COULDNT_CONNECT: return true;
+        default: return false;
+    }
+}
+
+[[nodiscard]] unsigned long CurlRetryDelayMs(unsigned int retryIndex) noexcept
+{
+    // retryIndex is 1 for the first retry.
+    constexpr unsigned long kBaseDelayMs = 200;
+    constexpr unsigned long kMaxDelayMs  = 2000;
+
+    unsigned long delay = kBaseDelayMs;
+    for (unsigned int i = 1; i < retryIndex; ++i)
+    {
+        if (delay >= kMaxDelayMs / 4u)
+        {
+            delay = kMaxDelayMs;
+            break;
+        }
+        delay *= 4u;
+    }
+
+    return delay;
+}
+
+[[nodiscard]] HRESULT SleepWithCancelCheck(unsigned long totalMs, TransferProgressContext* progressCtx) noexcept
+{
+    if (totalMs == 0)
+    {
+        return S_OK;
+    }
+
+    constexpr unsigned long kSliceMs = 50;
+
+    unsigned long remaining = totalMs;
+    while (remaining > 0)
+    {
+        const unsigned long slice = remaining < kSliceMs ? remaining : kSliceMs;
+        Sleep(slice);
+        remaining -= slice;
+
+        if (progressCtx && progressCtx->progress)
+        {
+            const HRESULT cancelHr = progressCtx->progress->CheckCancel();
+            if (FAILED(cancelHr))
+            {
+                return cancelHr;
+            }
+        }
+    }
+
+    return S_OK;
+}
+
+void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexcept
+{
+    if (! progressCtx)
+    {
+        return;
+    }
+
+    progressCtx->throttleStartTick = GetTickCount64();
+    progressCtx->lastThrottleBytes = 0;
+    progressCtx->lastCancelTick    = 0;
+    progressCtx->lastReportTick    = 0;
+    progressCtx->abortHr           = S_OK;
+}
+} // namespace
+
 [[nodiscard]] HRESULT CurlDownloadToFile(
     const ConnectionInfo& conn, std::wstring_view pluginPath, HANDLE file, const FileSystemOptions* options, TransferProgressContext* progressCtx) noexcept
 {
@@ -2383,44 +2600,90 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
         return hr;
     }
 
-    unique_curl_easy curl{curl_easy_init()};
-    if (! curl)
-    {
-        return E_OUTOFMEMORY;
-    }
-
     const std::string url = BuildUrl(conn, pluginPath, false, false);
     if (url.empty())
     {
         return E_INVALIDARG;
     }
 
-    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToFile);
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, file);
-    curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
-
-    if (progressCtx)
+    constexpr unsigned int kMaxAttempts = 2u; // at least one retry for transient network errors
+    for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
     {
-        progressCtx->Begin();
-        curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, CurlXferInfo);
-        curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, progressCtx);
-        curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
-        ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
-    }
-    else
-    {
-        curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 1L);
-        ApplyCommonCurlOptions(curl.get(), conn, options, false);
+        if (attempt > 0)
+        {
+            hr = ResetFileForRewrite(file);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+
+        CURL* curl = GetThreadLocalEasyHandle();
+        if (! curl)
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteToFile);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
+        curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+
+        if (progressCtx)
+        {
+            if (attempt == 0)
+            {
+                progressCtx->Begin();
+            }
+            else
+            {
+                PrepareProgressContextForRetry(progressCtx);
+            }
+
+            curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlXferInfo);
+            curl_easy_setopt(curl, CURLOPT_XFERINFODATA, progressCtx);
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+            ApplyCommonCurlOptions(curl, conn, nullptr, false);
+        }
+        else
+        {
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+            ApplyCommonCurlOptions(curl, conn, options, false);
+        }
+
+        const CURLcode code = curl_easy_perform(curl);
+        if (code == CURLE_OK)
+        {
+            return S_OK;
+        }
+
+        if (code == CURLE_ABORTED_BY_CALLBACK && progressCtx && FAILED(progressCtx->abortHr))
+        {
+            return progressCtx->abortHr;
+        }
+
+        if (attempt + 1u >= kMaxAttempts || ! IsCurlTransientTransferError(code))
+        {
+            return HResultFromCurl(code);
+        }
+
+        if (progressCtx && progressCtx->progress)
+        {
+            const HRESULT cancelHr = progressCtx->progress->CheckCancel();
+            if (FAILED(cancelHr))
+            {
+                return cancelHr;
+            }
+        }
+
+        hr = SleepWithCancelCheck(CurlRetryDelayMs(attempt + 1u), progressCtx);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
     }
 
-    const CURLcode code = curl_easy_perform(curl.get());
-    if (code == CURLE_ABORTED_BY_CALLBACK && progressCtx && FAILED(progressCtx->abortHr))
-    {
-        return progressCtx->abortHr;
-    }
-
-    return HResultFromCurl(code);
+    return E_FAIL;
 }
 
 [[nodiscard]] HRESULT CurlUploadFromFile(const ConnectionInfo& conn,
@@ -2436,48 +2699,94 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
         return hr;
     }
 
-    unique_curl_easy curl{curl_easy_init()};
-    if (! curl)
-    {
-        return E_OUTOFMEMORY;
-    }
-
     const std::string url = BuildUrl(conn, pluginPath, false, false);
     if (url.empty())
     {
         return E_INVALIDARG;
     }
 
-    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl.get(), CURLOPT_UPLOAD, 1L);
-    curl_easy_setopt(curl.get(), CURLOPT_READFUNCTION, CurlReadFromFile);
-    curl_easy_setopt(curl.get(), CURLOPT_READDATA, file);
-    curl_easy_setopt(curl.get(),
-                     CURLOPT_INFILESIZE_LARGE,
-                     static_cast<curl_off_t>(std::min<uint64_t>(sizeBytes, static_cast<uint64_t>((std::numeric_limits<curl_off_t>::max)()))));
-    curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
-
-    if (progressCtx)
+    constexpr unsigned int kMaxAttempts = 2u; // at least one retry for transient network errors
+    for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
     {
-        progressCtx->Begin();
-        curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, CurlXferInfo);
-        curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, progressCtx);
-        curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
-        ApplyCommonCurlOptions(curl.get(), conn, nullptr, true);
-    }
-    else
-    {
-        curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 1L);
-        ApplyCommonCurlOptions(curl.get(), conn, options, true);
+        if (attempt > 0)
+        {
+            hr = ResetFilePointerToStart(file);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+
+        CURL* curl = GetThreadLocalEasyHandle();
+        if (! curl)
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
+        curl_easy_setopt(curl, CURLOPT_READFUNCTION, CurlReadFromFile);
+        curl_easy_setopt(curl, CURLOPT_READDATA, file);
+        curl_easy_setopt(curl,
+                         CURLOPT_INFILESIZE_LARGE,
+                         static_cast<curl_off_t>(std::min<uint64_t>(sizeBytes, static_cast<uint64_t>((std::numeric_limits<curl_off_t>::max)()))));
+        curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+
+        if (progressCtx)
+        {
+            if (attempt == 0)
+            {
+                progressCtx->Begin();
+            }
+            else
+            {
+                PrepareProgressContextForRetry(progressCtx);
+            }
+
+            curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlXferInfo);
+            curl_easy_setopt(curl, CURLOPT_XFERINFODATA, progressCtx);
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+            ApplyCommonCurlOptions(curl, conn, nullptr, true);
+        }
+        else
+        {
+            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
+            ApplyCommonCurlOptions(curl, conn, options, true);
+        }
+
+        const CURLcode code = curl_easy_perform(curl);
+        if (code == CURLE_OK)
+        {
+            return S_OK;
+        }
+
+        if (code == CURLE_ABORTED_BY_CALLBACK && progressCtx && FAILED(progressCtx->abortHr))
+        {
+            return progressCtx->abortHr;
+        }
+
+        if (attempt + 1u >= kMaxAttempts || ! IsCurlTransientTransferError(code))
+        {
+            return HResultFromCurl(code);
+        }
+
+        if (progressCtx && progressCtx->progress)
+        {
+            const HRESULT cancelHr = progressCtx->progress->CheckCancel();
+            if (FAILED(cancelHr))
+            {
+                return cancelHr;
+            }
+        }
+
+        hr = SleepWithCancelCheck(CurlRetryDelayMs(attempt + 1u), progressCtx);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
     }
 
-    const CURLcode code = curl_easy_perform(curl.get());
-    if (code == CURLE_ABORTED_BY_CALLBACK && progressCtx && FAILED(progressCtx->abortHr))
-    {
-        return progressCtx->abortHr;
-    }
-
-    return HResultFromCurl(code);
+    return E_FAIL;
 }
 } // namespace FileSystemCurlInternal
 
@@ -2485,6 +2794,8 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
 
 FileSystemCurl::FileSystemCurl(FileSystemCurlProtocol protocol, IHost* host) : _protocol(protocol)
 {
+    g_fileSystemCurlInstanceCount.fetch_add(1, std::memory_order_relaxed);
+
     switch (_protocol)
     {
         case FileSystemCurlProtocol::Ftp:
@@ -2588,6 +2899,12 @@ ULONG STDMETHODCALLTYPE FileSystemCurl::Release() noexcept
     const ULONG result = _refCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
     if (result == 0)
     {
+        const unsigned long remainingInstances = g_fileSystemCurlInstanceCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
+        if (remainingInstances == 0)
+        {
+            ShutdownSharedCopyMoveJobScheduler();
+        }
+
         delete this;
     }
     return result;
@@ -2698,6 +3015,34 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::SetConfiguration(const char* configura
     if (operationTimeoutMs.has_value())
     {
         _settings.operationTimeoutMs = static_cast<unsigned long>(std::min<uint64_t>(operationTimeoutMs.value(), (std::numeric_limits<unsigned long>::max)()));
+    }
+
+    const auto copyMoveMaxConcurrency = TryGetJsonUInt(root, "copyMoveMaxConcurrency");
+    if (copyMoveMaxConcurrency.has_value())
+    {
+        const uint64_t value = copyMoveMaxConcurrency.value();
+        if (value == 0)
+        {
+            _settings.copyMoveMaxConcurrency = 1;
+        }
+        else
+        {
+            _settings.copyMoveMaxConcurrency = static_cast<unsigned int>(std::min<uint64_t>(value, 8u));
+        }
+    }
+
+    const auto deleteMaxConcurrency = TryGetJsonUInt(root, "deleteMaxConcurrency");
+    if (deleteMaxConcurrency.has_value())
+    {
+        const uint64_t value = deleteMaxConcurrency.value();
+        if (value == 0)
+        {
+            _settings.deleteMaxConcurrency = 1;
+        }
+        else
+        {
+            _settings.deleteMaxConcurrency = static_cast<unsigned int>(std::min<uint64_t>(value, 8u));
+        }
     }
 
     const auto ignoreSslTrust = TryGetJsonBool(root, "ignoreSslTrust");
@@ -2946,12 +3291,67 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetCapabilities(const char** jsonUtf8)
         return E_POINTER;
     }
 
-    switch (_protocol)
+    std::lock_guard lock(_stateMutex);
+
+    const unsigned int copyMoveMax =
+        (_protocol == FileSystemCurlProtocol::Imap) ? 1u : std::clamp(_settings.copyMoveMaxConcurrency, 1u, 8u);
+    const unsigned int deleteMax =
+        (_protocol == FileSystemCurlProtocol::Imap) ? 1u : std::clamp(_settings.deleteMaxConcurrency, 1u, 8u);
+
+    if (_protocol == FileSystemCurlProtocol::Imap)
     {
-        case FileSystemCurlProtocol::Ftp: *jsonUtf8 = kCapabilitiesJsonFtp; break;
-        case FileSystemCurlProtocol::Sftp: *jsonUtf8 = kCapabilitiesJsonSftp; break;
-        case FileSystemCurlProtocol::Scp: *jsonUtf8 = kCapabilitiesJsonScp; break;
-        case FileSystemCurlProtocol::Imap: *jsonUtf8 = kCapabilitiesJsonImap; break;
+        _capabilitiesJson = R"json(
+{
+  "version": 1,
+  "operations": {
+    "copy": false,
+    "move": false,
+    "delete": true,
+    "rename": false,
+    "properties": true,
+    "read": true,
+    "write": false
+  },
+  "concurrency": {
+    "copyMoveMax": 1,
+    "deleteMax": 1,
+    "deleteRecycleBinMax": 1
+  },
+  "crossFileSystem": {
+    "export": { "copy": ["*"], "move": ["*"] },
+    "import": { "copy": [], "move": [] }
+  }
+}
+)json";
     }
+    else
+    {
+        _capabilitiesJson = std::format(
+            R"json({{
+  "version": 1,
+  "operations": {{
+    "copy": true,
+    "move": true,
+    "delete": true,
+    "rename": true,
+    "properties": true,
+    "read": true,
+    "write": true
+  }},
+  "concurrency": {{
+    "copyMoveMax": {},
+    "deleteMax": {},
+    "deleteRecycleBinMax": 1
+  }},
+  "crossFileSystem": {{
+    "export": {{ "copy": ["*"], "move": ["*"] }},
+    "import": {{ "copy": ["*"], "move": ["*"] }}
+  }}
+}})json",
+            copyMoveMax,
+            deleteMax);
+    }
+
+    *jsonUtf8 = _capabilitiesJson.c_str();
     return S_OK;
 }

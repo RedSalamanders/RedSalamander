@@ -1,5 +1,6 @@
 #include "FileSystem.Internal.h"
 
+#include <atomic>
 #include <array>
 #include <deque>
 #include <limits>
@@ -13,6 +14,8 @@ constexpr size_t kDefaultWatchBufferPool  = 4u;
 constexpr size_t kMaxPendingWatchBuffers  = 4u;
 constexpr DWORD kDefaultWatchFilter = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY_CHANGE_DIR_NAME | FILE_NOTIFY_CHANGE_ATTRIBUTES | FILE_NOTIFY_CHANGE_SIZE |
                                       FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_CREATION | FILE_NOTIFY_CHANGE_SECURITY;
+
+std::atomic<unsigned long> g_fileSystemInstanceCount{0};
 
 FileSystemDirectoryChangeAction MapDirectoryWatchAction(DWORD action) noexcept
 {
@@ -655,6 +658,8 @@ private:
 
 FileSystem::FileSystem()
 {
+    g_fileSystemInstanceCount.fetch_add(1, std::memory_order_relaxed);
+
     _metaData.id          = kPluginId;
     _metaData.shortId     = kPluginShortId;
     _metaData.name        = kPluginName;
@@ -693,6 +698,12 @@ FileSystem::~FileSystem()
         {
             watcher->Stop();
         }
+    }
+
+    const unsigned long remainingInstances = g_fileSystemInstanceCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
+    if (remainingInstances == 0)
+    {
+        ShutdownSharedFileOpsJobScheduler();
     }
 }
 

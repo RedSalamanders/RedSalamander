@@ -235,7 +235,31 @@ private:
     static constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
     static constexpr wchar_t kPluginVersion[] = L"0.1";
 
-    static constexpr char kCapabilitiesJson[] = R"json(
+    static constexpr char kCapabilitiesJsonS3[] = R"json(
+{
+  "version": 1,
+  "operations": {
+    "copy": false,
+    "move": false,
+    "delete": true,
+    "rename": false,
+    "properties": true,
+    "read": true,
+    "write": true
+  },
+  "concurrency": {
+    "copyMoveMax": 1,
+    "deleteMax": 8,
+    "deleteRecycleBinMax": 1
+  },
+  "crossFileSystem": {
+    "export": { "copy": ["*"], "move": [] },
+    "import": { "copy": ["*"], "move": ["*"] }
+  }
+}
+)json";
+
+    static constexpr char kCapabilitiesJsonS3Table[] = R"json(
 {
   "version": 1,
   "operations": {

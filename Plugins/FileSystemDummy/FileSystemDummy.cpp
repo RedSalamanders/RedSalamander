@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "FileSystemDummy.h"
+#include "PlugInterfaces/Host.h"
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -2765,7 +2766,7 @@ HRESULT DummyFilesInformation::LocateEntry(unsigned long index, FileInfo** ppEnt
     return HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES);
 }
 
-FileSystemDummy::FileSystemDummy()
+FileSystemDummy::FileSystemDummy(IHost* host) noexcept
 {
     _metaData.id          = kPluginId;
     _metaData.shortId     = kPluginShortId;
@@ -2773,6 +2774,11 @@ FileSystemDummy::FileSystemDummy()
     _metaData.description = kPluginDescription;
     _metaData.author      = kPluginAuthor;
     _metaData.version     = kPluginVersion;
+
+    if (host)
+    {
+        static_cast<void>(host->QueryInterface(__uuidof(IHostConnections), _hostConnections.put_void()));
+    }
 
     bool needsDefaultConfig = false;
     {
@@ -3260,9 +3266,162 @@ ULONG STDMETHODCALLTYPE FileSystemDummy::Release() noexcept
     return remaining;
 }
 
-std::filesystem::path FileSystemDummy::NormalizePath(std::wstring_view path) const
+HRESULT FileSystemDummy::NormalizePath(std::wstring_view path, std::filesystem::path& normalizedOut) const noexcept
 {
+    normalizedOut.clear();
+
     std::wstring text(path);
+
+    // Connection Manager prefix:
+    // - /@conn:<connectionName>/...
+    // Resolve to: <initialPath> + <suffix> (for connections targeting this plugin).
+    constexpr std::wstring_view kConnPrefixForward = L"/@conn:";
+    constexpr std::wstring_view kConnPrefixBack    = L"\\@conn:";
+
+    const auto tryResolveConnPrefix = [&]() noexcept -> HRESULT
+    {
+        const std::wstring_view full(path);
+
+        std::wstring_view rest;
+        if (full.size() >= kConnPrefixForward.size() && full.substr(0, kConnPrefixForward.size()) == kConnPrefixForward)
+        {
+            rest = full.substr(kConnPrefixForward.size());
+        }
+        else if (full.size() >= kConnPrefixBack.size() && full.substr(0, kConnPrefixBack.size()) == kConnPrefixBack)
+        {
+            rest = full.substr(kConnPrefixBack.size());
+        }
+        else
+        {
+            return S_FALSE;
+        }
+
+        if (! _hostConnections)
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+
+        const size_t slashPos = rest.find_first_of(L"/\\");
+        const std::wstring_view connectionNameView = (slashPos == std::wstring_view::npos) ? rest : rest.substr(0, slashPos);
+        const std::wstring_view suffix             = (slashPos == std::wstring_view::npos) ? std::wstring_view(L"/") : rest.substr(slashPos);
+
+        if (connectionNameView.empty())
+        {
+            return E_INVALIDARG;
+        }
+
+        std::wstring connectionName;
+        connectionName.assign(connectionNameView);
+
+        wil::unique_cotaskmem_ptr<char> json;
+        {
+            char* rawJson        = nullptr;
+            const HRESULT jsonHr = _hostConnections->GetConnectionJsonUtf8(connectionName.c_str(), &rawJson);
+            if (FAILED(jsonHr))
+            {
+                return jsonHr;
+            }
+            json.reset(rawJson);
+        }
+
+        if (! json || ! json.get()[0])
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        yyjson_doc* doc = yyjson_read(json.get(), strlen(json.get()), YYJSON_READ_ALLOW_BOM);
+        if (! doc)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
+
+        yyjson_val* root = yyjson_doc_get_root(doc);
+        if (! root || ! yyjson_is_obj(root))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        yyjson_val* pluginIdVal = yyjson_obj_get(root, "pluginId");
+        if (! pluginIdVal || ! yyjson_is_str(pluginIdVal))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        const char* pluginId = yyjson_get_str(pluginIdVal);
+        if (! pluginId || strcmp(pluginId, "builtin/file-system-dummy") != 0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        }
+
+        std::wstring basePath = L"/";
+        if (yyjson_val* initialPathVal = yyjson_obj_get(root, "initialPath"); initialPathVal && yyjson_is_str(initialPathVal))
+        {
+            const char* initialPathUtf8 = yyjson_get_str(initialPathVal);
+            if (initialPathUtf8 && initialPathUtf8[0] != '\0')
+            {
+                basePath = Utf16FromUtf8(initialPathUtf8);
+            }
+        }
+
+        if (basePath.empty())
+        {
+            basePath = L"/";
+        }
+        if (! basePath.empty() && basePath.front() != L'/')
+        {
+            basePath.insert(basePath.begin(), L'/');
+        }
+
+        // Join basePath + suffix (normalize separators to '/' for the join).
+        for (wchar_t& ch : basePath)
+        {
+            if (ch == L'\\')
+            {
+                ch = L'/';
+            }
+        }
+
+        std::wstring suffixText(suffix);
+        for (wchar_t& ch : suffixText)
+        {
+            if (ch == L'\\')
+            {
+                ch = L'/';
+            }
+        }
+
+        while (! basePath.empty() && basePath.size() > 1u && basePath.back() == L'/')
+        {
+            basePath.pop_back();
+        }
+
+        while (! suffixText.empty() && suffixText.front() == L'/')
+        {
+            suffixText.erase(suffixText.begin());
+        }
+
+        std::wstring resolved = basePath;
+        if (! suffixText.empty())
+        {
+            if (resolved.empty() || resolved.back() != L'/')
+            {
+                resolved.push_back(L'/');
+            }
+            resolved.append(suffixText);
+        }
+
+        text = std::move(resolved);
+        return S_OK;
+    };
+
+    const HRESULT connHr = tryResolveConnPrefix();
+    if (FAILED(connHr))
+    {
+        return connHr;
+    }
+
     for (auto& ch : text)
     {
         if (ch == L'/')
@@ -3300,7 +3459,8 @@ std::filesystem::path FileSystemDummy::NormalizePath(std::wstring_view path) con
         normalizedText = rootText;
     }
 
-    return std::filesystem::path(normalizedText);
+    normalizedOut = std::filesystem::path(normalizedText);
+    return S_OK;
 }
 
 FileSystemDummy::DummyRoot* FileSystemDummy::FindRoot(std::wstring_view rootPath) noexcept
@@ -4461,7 +4621,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::ReadDirectoryInfo(const wchar_t* path
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     DummyNode* node                        = nullptr;
     std::vector<DummyEntry> entries;
     unsigned long count = 0;
@@ -4525,7 +4690,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetAttributes(const wchar_t* path, un
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     DummyNode* node                        = nullptr;
 
     {
@@ -4561,7 +4731,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileReader(const wchar_t* path,
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
 
     DummyFileSnapshot snapshot{};
 
@@ -4666,7 +4841,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileWriter(const wchar_t* path,
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::filesystem::path parentPath = normalized.parent_path();
     const std::wstring name                = normalized.filename().wstring();
     if (name.empty() || ! IsNameValid(name))
@@ -4730,7 +4910,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetFileBasicInformation(const wchar_t
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     DummyNode* node                        = nullptr;
 
     {
@@ -4767,7 +4952,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetFileBasicInformation(const wchar_t
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
 
     {
         std::scoped_lock lock(_mutex);
@@ -4832,7 +5022,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetItemProperties(const wchar_t* path
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
 
     DummyEntry entry{};
     bool isDirectory = false;
@@ -4929,7 +5124,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateDirectory(const wchar_t* path) 
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::filesystem::path parentPath = normalized.parent_path();
     const std::wstring name                = normalized.filename().wstring();
     if (name.empty() || ! IsNameValid(name))
@@ -5002,7 +5202,13 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
     result->directoryCount = 0;
     result->status         = S_OK;
 
-    const std::filesystem::path normalized           = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        result->status = normalizeHr;
+        return normalizeHr;
+    }
     const bool recursive                             = (flags & FILESYSTEM_FLAG_RECURSIVE) != 0;
     constexpr unsigned long kProgressIntervalEntries = 100;
     constexpr ULONGLONG kProgressIntervalMs          = 200;
@@ -5229,7 +5435,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::WatchDirectory(const wchar_t* path, I
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::wstring watchedPathText     = normalized.wstring();
 
     {
@@ -5288,7 +5499,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::UnwatchDirectory(const wchar_t* path)
         return E_INVALIDARG;
     }
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::wstring watchedPathText     = normalized.wstring();
 
     std::shared_ptr<DirectoryWatchRegistration> removed;
@@ -5352,8 +5568,19 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_COPY, flags, options, callback, cookie, 1);
 
-    const std::filesystem::path normalizedSource      = NormalizePath(sourcePath);
-    const std::filesystem::path normalizedDestination = NormalizePath(destinationPath);
+    std::filesystem::path normalizedSource;
+    HRESULT normalizeHr = NormalizePath(sourcePath, normalizedSource);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
+
+    std::filesystem::path normalizedDestination;
+    normalizeHr = NormalizePath(destinationPath, normalizedDestination);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::wstring sourceText                     = normalizedSource.wstring();
     const std::wstring destinationText                = normalizedDestination.wstring();
     const std::wstring destinationParentText          = normalizedDestination.parent_path().wstring();
@@ -5473,8 +5700,19 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_MOVE, flags, options, callback, cookie, 1);
 
-    const std::filesystem::path normalizedSource      = NormalizePath(sourcePath);
-    const std::filesystem::path normalizedDestination = NormalizePath(destinationPath);
+    std::filesystem::path normalizedSource;
+    HRESULT normalizeHr = NormalizePath(sourcePath, normalizedSource);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
+
+    std::filesystem::path normalizedDestination;
+    normalizeHr = NormalizePath(destinationPath, normalizedDestination);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::wstring sourceText                     = normalizedSource.wstring();
     const std::wstring destinationText                = normalizedDestination.wstring();
     const std::wstring sourceParentText               = normalizedSource.parent_path().wstring();
@@ -5614,7 +5852,12 @@ FileSystemDummy::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fi
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_DELETE, flags, options, callback, cookie, 1);
 
-    const std::filesystem::path normalized = NormalizePath(path);
+    std::filesystem::path normalized;
+    const HRESULT normalizeHr = NormalizePath(path, normalized);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::wstring pathText            = normalized.wstring();
     const std::wstring parentText          = normalized.parent_path().wstring();
     const std::wstring leafText            = normalized.filename().wstring();
@@ -5716,8 +5959,19 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_RENAME, flags, options, callback, cookie, 1);
 
-    const std::filesystem::path normalizedSource      = NormalizePath(sourcePath);
-    const std::filesystem::path normalizedDestination = NormalizePath(destinationPath);
+    std::filesystem::path normalizedSource;
+    HRESULT normalizeHr = NormalizePath(sourcePath, normalizedSource);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
+
+    std::filesystem::path normalizedDestination;
+    normalizeHr = NormalizePath(destinationPath, normalizedDestination);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::wstring sourceText                     = normalizedSource.wstring();
     const std::wstring destinationText                = normalizedDestination.wstring();
 
@@ -5836,7 +6090,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
     const uint64_t virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
     context.virtualLimitBytesPerSecond        = virtualLimitBytesPerSecond;
 
-    const std::filesystem::path normalizedDestinationFolder = NormalizePath(destinationFolder);
+    std::filesystem::path normalizedDestinationFolder;
+    const HRESULT normalizeHr = NormalizePath(destinationFolder, normalizedDestinationFolder);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::wstring destinationFolderText                = normalizedDestinationFolder.wstring();
 
     DummyNode* destinationRoot = nullptr;
@@ -5881,7 +6140,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
             return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
         }
 
-        const std::filesystem::path normalizedSource = NormalizePath(sourcePath);
+        std::filesystem::path normalizedSource;
+        const HRESULT normalizeSourceHr = NormalizePath(sourcePath, normalizedSource);
+        if (FAILED(normalizeSourceHr))
+        {
+            return normalizeSourceHr;
+        }
         const std::wstring sourceText                = normalizedSource.wstring();
 
         CopyWorkItem item{};
@@ -6115,7 +6379,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
     const uint64_t virtualLimitBytesPerSecond = _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
     context.virtualLimitBytesPerSecond        = virtualLimitBytesPerSecond;
 
-    const std::filesystem::path normalizedDestinationFolder = NormalizePath(destinationFolder);
+    std::filesystem::path normalizedDestinationFolder;
+    const HRESULT normalizeHr = NormalizePath(destinationFolder, normalizedDestinationFolder);
+    if (FAILED(normalizeHr))
+    {
+        return normalizeHr;
+    }
     const std::wstring destinationFolderText                = normalizedDestinationFolder.wstring();
 
     {
@@ -6165,7 +6434,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
             return HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
         }
 
-        const std::filesystem::path normalizedSource = NormalizePath(sourcePath);
+        std::filesystem::path normalizedSource;
+        const HRESULT normalizeSourceHr = NormalizePath(sourcePath, normalizedSource);
+        if (FAILED(normalizeSourceHr))
+        {
+            return normalizeSourceHr;
+        }
         const std::wstring sourceText                = normalizedSource.wstring();
 
         MoveWorkItem item{};
@@ -6466,7 +6740,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::DeleteItems(const wchar_t* const* pat
             return hr;
         }
 
-        const std::filesystem::path normalized = NormalizePath(path);
+        std::filesystem::path normalized;
+        const HRESULT normalizeHr = NormalizePath(path, normalized);
+        if (FAILED(normalizeHr))
+        {
+            return normalizeHr;
+        }
         const std::wstring pathText            = normalized.wstring();
         const std::wstring parentText          = normalized.parent_path().wstring();
         const std::wstring leafText            = normalized.filename().wstring();
@@ -6593,7 +6872,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItems(const FileSystemRenamePai
             return hr;
         }
 
-        const std::filesystem::path normalizedSource = NormalizePath(item.sourcePath);
+        std::filesystem::path normalizedSource;
+        const HRESULT normalizeHr = NormalizePath(item.sourcePath, normalizedSource);
+        if (FAILED(normalizeHr))
+        {
+            return normalizeHr;
+        }
         const std::wstring sourceText                = normalizedSource.wstring();
         const std::wstring directory                 = normalizedSource.parent_path().wstring();
         const std::wstring sourceLeafText            = normalizedSource.filename().wstring();

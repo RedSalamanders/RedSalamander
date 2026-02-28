@@ -69,7 +69,7 @@ Examples:
 
 ### IMAP
 
-See `Specs/FileSystemImapPluginSpec.md`.
+See `Specs/FileSystem/FileSystem_Imap.md`.
 
 ### Path normalization rules
 
@@ -90,6 +90,8 @@ Each of the four plugins exposes its own configuration schema via `IInformations
 - `defaultBasePath` (string): remote base folder for `scheme:/...`
 - `connectTimeoutMs` (integer)
 - `operationTimeoutMs` (integer, `0` = no timeout)
+- `copyMoveMaxConcurrency` (integer, default `4`, min `1`, max `8`): maximum concurrency for copy/move (top-level items and files within a single folder copy). Higher values may open multiple connections; some servers may throttle or reject parallel transfers.
+- `deleteMaxConcurrency` (integer, default `4`, min `1`, max `8`): maximum concurrency for delete (top-level items and deletes within a single recursive directory delete). Higher values may open multiple connections; some servers may throttle or reject parallel deletes.
 
 URI override behavior:
 - If the navigated URI specifies `user`, `password`, or `port`, those values override the defaults for that navigation path.
@@ -113,13 +115,24 @@ Security note:
 
 - File copy/move across different endpoints (host/user/port) within the same protocol plugin is implemented as **download → upload** via a local temporary file.
 - Directory operations support recursion when `FILESYSTEM_FLAG_RECURSIVE` is provided.
+- For a **single** top-level directory copy/move or delete, contained file work SHOULD still parallelize (within-folder parallelism) subject to the effective concurrency limits.
 - SCP has protocol limitations; directory listing and command-style operations require the server to support SFTP over SSH.
 
 ## Connection Manager Integration
 
 All four protocols support host-reserved navigation:
 
-- `/@conn:<connectionName>/...` (see `Specs/ConnectionManagerSpec.md`)
+- `/@conn:<connectionName>/...` (see `Specs/Core/Core_ConnectionManager.md`)
+
+Concurrency overrides (Connection Manager profiles):
+
+- Connection profiles may specify host-level concurrency caps in `ConnectionProfile.extra`:
+  - `copyMoveMaxConcurrency` (integer): `0`/missing = inherit the plugin setting; otherwise clamp `1..8`.
+  - `deleteMaxConcurrency` (integer): `0`/missing = inherit the plugin setting; otherwise clamp `1..8`.
+- These overrides are global per connection profile across the app:
+  - the host uses them to clamp per-task file-op concurrency when `@conn` paths are involved,
+  - and the plugin enforces a global per-profile limiter so multiple simultaneous tasks do not exceed the cap.
+- Note: IMAP is not currently used for file operations (copy/move/delete), so these keys have no practical effect for IMAP profiles.
 
 Resolution + secret acquisition (high level):
 

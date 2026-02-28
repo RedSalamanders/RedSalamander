@@ -376,9 +376,27 @@ private:
       "max": 3600000
     },
      {
-       "key": "ftpUseEpsv",
-       "label": "FTP: Use EPSV",
-       "type": "bool",
+       "key": "copyMoveMaxConcurrency",
+       "type": "value",
+       "label": "Copy/Move max concurrency",
+       "description": "Maximum concurrency for Copy/Move (top-level items and files within a single folder copy). Higher values may open multiple connections; some servers may throttle or reject parallel transfers.",
+       "default": 4,
+       "min": 1,
+       "max": 8
+     },
+     {
+       "key": "deleteMaxConcurrency",
+       "type": "value",
+       "label": "Delete max concurrency",
+       "description": "Maximum concurrency for Delete (top-level items and entries within a single folder delete). Higher values may open multiple connections; some servers may throttle or reject parallel operations.",
+       "default": 4,
+       "min": 1,
+       "max": 8
+     },
+      {
+        "key": "ftpUseEpsv",
+        "label": "FTP: Use EPSV",
+        "type": "bool",
        "default": true,
        "description": "Enables EPSV for FTP (recommended; disable only for legacy servers)."
      }
@@ -443,10 +461,28 @@ private:
       "min": 0,
       "max": 3600000
     },
-    {
-      "key": "sshPrivateKey",
-      "label": "SSH private key file",
-      "type": "text",
+     {
+       "key": "copyMoveMaxConcurrency",
+       "type": "value",
+       "label": "Copy/Move max concurrency",
+       "description": "Maximum concurrency for Copy/Move (top-level items and files within a single folder copy). Higher values may open multiple connections; some servers may throttle or reject parallel transfers.",
+       "default": 4,
+       "min": 1,
+       "max": 8
+     },
+     {
+       "key": "deleteMaxConcurrency",
+       "type": "value",
+       "label": "Delete max concurrency",
+       "description": "Maximum concurrency for Delete (top-level items and entries within a single folder delete). Higher values may open multiple connections; some servers may throttle or reject parallel operations.",
+       "default": 4,
+       "min": 1,
+       "max": 8
+     },
+     {
+       "key": "sshPrivateKey",
+       "label": "SSH private key file",
+       "type": "text",
       "default": "",
       "description": "Optional path to private key file for SFTP authentication."
     },
@@ -532,10 +568,28 @@ private:
       "min": 0,
       "max": 3600000
     },
-    {
-      "key": "sshPrivateKey",
-      "label": "SSH private key file",
-      "type": "text",
+     {
+       "key": "copyMoveMaxConcurrency",
+       "type": "value",
+       "label": "Copy/Move max concurrency",
+       "description": "Maximum concurrency for Copy/Move (top-level items and files within a single folder copy). Higher values may open multiple connections; some servers may throttle or reject parallel transfers.",
+       "default": 4,
+       "min": 1,
+       "max": 8
+     },
+     {
+       "key": "deleteMaxConcurrency",
+       "type": "value",
+       "label": "Delete max concurrency",
+       "description": "Maximum concurrency for Delete (top-level items and entries within a single folder delete). Higher values may open multiple connections; some servers may throttle or reject parallel operations.",
+       "default": 4,
+       "min": 1,
+       "max": 8
+     },
+     {
+       "key": "sshPrivateKey",
+       "label": "SSH private key file",
+       "type": "text",
       "default": "",
       "description": "Optional path to private key file for SCP authentication."
     },
@@ -644,6 +698,9 @@ public:
         unsigned long connectTimeoutMs   = 10000;
         unsigned long operationTimeoutMs = 0;
 
+        unsigned int copyMoveMaxConcurrency = 4;
+        unsigned int deleteMaxConcurrency   = 4;
+
         bool ignoreSslTrust = false;
         bool ftpUseEpsv     = true;
 
@@ -669,6 +726,7 @@ private:
     FileSystemCurlProtocol _protocol = FileSystemCurlProtocol::Sftp;
     PluginMetaData _metaData{};
     std::string _configurationJson;
+    std::string _capabilitiesJson;
     Settings _settings;
     wil::com_ptr<IHostConnections> _hostConnections;
 

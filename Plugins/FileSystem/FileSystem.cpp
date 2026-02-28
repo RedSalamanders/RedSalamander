@@ -412,7 +412,7 @@ ULONG STDMETHODCALLTYPE FileSystem::AddRef() noexcept
 
 ULONG STDMETHODCALLTYPE FileSystem::Release() noexcept
 {
-    const ULONG current = static_cast<ULONG>(_refCount.fetch_sub(1, std::memory_order_relaxed) - 1);
+    const ULONG current = static_cast<ULONG>(_refCount.fetch_sub(1, std::memory_order_acq_rel) - 1);
     if (current == 0)
     {
         delete this;

@@ -9,6 +9,7 @@
 #include <limits>
 #include <mutex>
 #include <new>
+#include <stop_token>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -808,30 +809,62 @@ void FileSystem7z::ClearIndexLocked() noexcept
 
 HRESULT FileSystem7z::EnsureIndex() noexcept
 {
-    std::lock_guard lock(_stateMutex);
+    std::wstring archivePath;
+    std::wstring password;
 
-    if (_archivePath.empty())
+    for (;;)
     {
-        return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        {
+            std::lock_guard lock(_stateMutex);
+
+            if (_archivePath.empty())
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+            }
+
+            const bool matches = _indexReady && EqualsNoCase(_indexedArchivePath, _archivePath) && _indexedPassword == _password;
+            if (matches)
+            {
+                return _indexStatus;
+            }
+
+            archivePath = _archivePath;
+            password    = _password;
+
+            ClearIndexLocked();
+        }
+
+        std::unordered_map<std::wstring, ArchiveEntry> entries;
+        std::unordered_map<std::wstring, std::vector<std::wstring>> children;
+
+        const HRESULT buildHr = BuildIndex(archivePath, password, entries, children);
+
+        {
+            std::lock_guard lock(_stateMutex);
+
+            if (_archivePath.empty())
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+            }
+
+            if (! EqualsNoCase(_archivePath, archivePath) || _password != password)
+            {
+                continue;
+            }
+
+            _indexStatus = buildHr;
+            _indexReady  = true;
+            if (SUCCEEDED(buildHr))
+            {
+                _entries = std::move(entries);
+                _children = std::move(children);
+                _indexedArchivePath = _archivePath;
+                _indexedPassword    = _password;
+            }
+
+            return _indexStatus;
+        }
     }
-
-    const bool matches = _indexReady && EqualsNoCase(_indexedArchivePath, _archivePath) && _indexedPassword == _password;
-    if (matches)
-    {
-        return _indexStatus;
-    }
-
-    ClearIndexLocked();
-
-    _indexStatus = BuildIndexLocked();
-    _indexReady  = true;
-    if (SUCCEEDED(_indexStatus))
-    {
-        _indexedArchivePath = _archivePath;
-        _indexedPassword    = _password;
-    }
-
-    return _indexStatus;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem7z::ReadDirectoryInfo(const wchar_t* path, IFilesInformation** ppFilesInformation) noexcept
@@ -1250,10 +1283,21 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
         if (entryThreshold || timeThreshold)
         {
             lastProgressTime = now;
-            callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
+            const HRESULT progressHr =
+                callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
+            if (FAILED(progressHr))
+            {
+                result->status = progressHr;
+                return false;
+            }
 
             BOOL cancel = FALSE;
-            callback->DirectorySizeShouldCancel(&cancel, cookie);
+            const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
+            if (FAILED(cancelHr))
+            {
+                result->status = cancelHr;
+                return false;
+            }
             if (cancel)
             {
                 result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -1263,8 +1307,16 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
         return true;
     };
 
+    struct SizeEntry
+    {
+        bool isDirectory   = false;
+        uint64_t sizeBytes = 0;
+    };
+
     bool rootIsFile       = false;
     uint64_t rootFileSize = 0;
+    std::vector<SizeEntry> entries;
+
     {
         std::scoped_lock lock(_stateMutex);
 
@@ -1284,15 +1336,10 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
             }
         }
 
-        if (rootIsFile)
+        if (! rootIsFile)
         {
-            // File root: nothing else to enumerate in archive index.
-            result->totalBytes = rootFileSize;
-            result->fileCount  = 1;
-            scannedEntries     = 1;
-        }
-        else
-        {
+            entries.reserve(256);
+
             for (const auto& [key, entry] : _entries)
             {
                 // Skip root itself.
@@ -1327,38 +1374,58 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
                     }
                 }
 
-                ++scannedEntries;
-
-                if (entry.isDirectory)
-                {
-                    ++result->directoryCount;
-                }
-                else
-                {
-                    ++result->fileCount;
-                    result->totalBytes += entry.sizeBytes;
-                }
-
-                if (! maybeReportProgress(path))
-                {
-                    return result->status;
-                }
+                SizeEntry e{};
+                e.isDirectory = entry.isDirectory;
+                e.sizeBytes   = entry.sizeBytes;
+                entries.emplace_back(e);
             }
         }
     }
 
     if (rootIsFile)
     {
+        // File root: nothing else to enumerate in archive index.
+        result->totalBytes = rootFileSize;
+        result->fileCount  = 1;
+        scannedEntries     = 1;
+
         if (! maybeReportProgress(path))
         {
             return result->status;
+        }
+    }
+    else
+    {
+        for (const SizeEntry& entry : entries)
+        {
+            ++scannedEntries;
+
+            if (entry.isDirectory)
+            {
+                ++result->directoryCount;
+            }
+            else
+            {
+                ++result->fileCount;
+                result->totalBytes += entry.sizeBytes;
+            }
+
+            if (! maybeReportProgress(path))
+            {
+                return result->status;
+            }
         }
     }
 
     // Final progress report.
     if (callback != nullptr)
     {
-        callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+        const HRESULT progressHr =
+            callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+        if (FAILED(progressHr))
+        {
+            result->status = progressHr;
+        }
     }
 
     return result->status;
@@ -1606,14 +1673,104 @@ bool FileSystem7z::TryParseModifiedLocalTime(std::wstring_view text, int64_t& ou
         return false;
     }
 
-    int year   = 0;
-    int month  = 0;
-    int day    = 0;
-    int hour   = 0;
-    int minute = 0;
-    int second = 0;
+    const auto parseUInt = [](std::wstring_view& rest, uint32_t& value) noexcept -> bool
+    {
+        value = 0;
 
-    if (swscanf_s(std::wstring(text).c_str(), L"%d-%d-%d %d:%d:%d", &year, &month, &day, &hour, &minute, &second) != 6)
+        if (rest.empty())
+        {
+            return false;
+        }
+
+        uint32_t v = 0;
+        size_t digits = 0;
+        while (! rest.empty())
+        {
+            const wchar_t ch = rest.front();
+            if (ch < L'0' || ch > L'9')
+            {
+                break;
+            }
+
+            const uint32_t digit = static_cast<uint32_t>(ch - L'0');
+            if (v > (std::numeric_limits<uint32_t>::max() - digit) / 10u)
+            {
+                return false;
+            }
+
+            v = (v * 10u) + digit;
+            rest.remove_prefix(1);
+            ++digits;
+        }
+
+        if (digits == 0)
+        {
+            return false;
+        }
+
+        value = v;
+        return true;
+    };
+
+    const auto consumeChar = [](std::wstring_view& rest, wchar_t expected) noexcept -> bool
+    {
+        if (rest.empty() || rest.front() != expected)
+        {
+            return false;
+        }
+
+        rest.remove_prefix(1);
+        return true;
+    };
+
+    const auto consumeWhitespaceOrT = [](std::wstring_view& rest) noexcept -> bool
+    {
+        if (! rest.empty() && rest.front() == L'T')
+        {
+            rest.remove_prefix(1);
+            return true;
+        }
+
+        size_t consumed = 0;
+        while (! rest.empty() && std::iswspace(static_cast<wint_t>(rest.front())) != 0)
+        {
+            rest.remove_prefix(1);
+            ++consumed;
+        }
+
+        return consumed > 0;
+    };
+
+    uint32_t year   = 0;
+    uint32_t month  = 0;
+    uint32_t day    = 0;
+    uint32_t hour   = 0;
+    uint32_t minute = 0;
+    uint32_t second = 0;
+
+    std::wstring_view rest = text;
+    if (! parseUInt(rest, year) || ! consumeChar(rest, L'-') || ! parseUInt(rest, month) || ! consumeChar(rest, L'-') || ! parseUInt(rest, day) ||
+        ! consumeWhitespaceOrT(rest) || ! parseUInt(rest, hour) || ! consumeChar(rest, L':') || ! parseUInt(rest, minute) || ! consumeChar(rest, L':') ||
+        ! parseUInt(rest, second))
+    {
+        return false;
+    }
+
+    rest = Trim(rest);
+    if (! rest.empty())
+    {
+        return false;
+    }
+
+    if (year < 1601u || year > static_cast<uint32_t>(std::numeric_limits<WORD>::max()))
+    {
+        return false;
+    }
+    if (month < 1u || month > 12u || day < 1u || day > 31u)
+    {
+        return false;
+    }
+    if (hour > 23u || minute > 59u || second > 59u)
     {
         return false;
     }
@@ -1670,9 +1827,7 @@ HRESULT FileSystem7z::GetEntriesForDirectory(std::wstring_view dirKey, std::vect
         return S_OK;
     }
 
-    std::vector<std::wstring> children = it->second;
-    std::sort(children.begin(), children.end());
-    children.erase(std::unique(children.begin(), children.end()), children.end());
+    const std::vector<std::wstring>& children = it->second;
 
     out.reserve(children.size());
 
@@ -2513,11 +2668,7 @@ public:
     {
         if (_extractThread.joinable())
         {
-            {
-                std::lock_guard lock(_extractMutex);
-                _extractStopRequested = true;
-            }
-
+            _extractThread.request_stop();
             _extractCv.notify_all();
             _extractThread.join();
         }
@@ -2844,13 +2995,38 @@ private:
             return current;
         }
 
-        HRESULT STDMETHODCALLTYPE SetTotal(UInt64 /*total*/) noexcept override
+        HRESULT STDMETHODCALLTYPE SetTotal(UInt64 total) noexcept override
         {
+            if (_owner == nullptr)
+            {
+                return E_POINTER;
+            }
+
+            if (_owner->_extractStopRequested.load(std::memory_order_acquire))
+            {
+                return E_ABORT;
+            }
+
+            _owner->_extractTotalBytes.store(static_cast<uint64_t>(total), std::memory_order_relaxed);
             return S_OK;
         }
 
-        HRESULT STDMETHODCALLTYPE SetCompleted(const UInt64* /*completeValue*/) noexcept override
+        HRESULT STDMETHODCALLTYPE SetCompleted(const UInt64* completeValue) noexcept override
         {
+            if (_owner == nullptr)
+            {
+                return E_POINTER;
+            }
+
+            if (_owner->_extractStopRequested.load(std::memory_order_acquire))
+            {
+                return E_ABORT;
+            }
+
+            if (completeValue)
+            {
+                _owner->_extractCompletedBytes.store(static_cast<uint64_t>(*completeValue), std::memory_order_relaxed);
+            }
             return S_OK;
         }
 
@@ -2876,6 +3052,11 @@ private:
             if (_owner == nullptr)
             {
                 return E_POINTER;
+            }
+
+            if (_owner->_extractStopRequested.load(std::memory_order_acquire))
+            {
+                return E_ABORT;
             }
 
             if (! _stream)
@@ -3121,11 +3302,7 @@ private:
     {
         if (_extractThread.joinable())
         {
-            {
-                std::lock_guard lock(_extractMutex);
-                _extractStopRequested = true;
-            }
-
+            _extractThread.request_stop();
             _extractCv.notify_all();
             _extractThread.join();
         }
@@ -3173,8 +3350,10 @@ private:
 
             _extractStarted       = false;
             _extractFinished      = false;
-            _extractStopRequested = false;
+            _extractStopRequested.store(false, std::memory_order_release);
             _extractWantedBytes   = 0;
+            _extractTotalBytes.store(0, std::memory_order_relaxed);
+            _extractCompletedBytes.store(0, std::memory_order_relaxed);
             _extractStatus        = S_OK;
 
             _terminalReadStatus     = S_OK;
@@ -3217,12 +3396,12 @@ private:
         {
             const uint64_t needSkip = _positionBytes - _pipeStartOffsetBytes;
 
-            while (_pipeSizeBytes == 0 && ! _extractFinished && ! _extractStopRequested)
+            while (_pipeSizeBytes == 0 && ! _extractFinished && ! _extractStopRequested.load(std::memory_order_acquire))
             {
                 _extractCv.wait(lock);
             }
 
-            if (_extractStopRequested)
+            if (_extractStopRequested.load(std::memory_order_acquire))
             {
                 return E_ABORT;
             }
@@ -3278,12 +3457,12 @@ private:
         const uint64_t remaining      = _fileSizeBytes - _positionBytes;
         const unsigned long requested = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
-        while (_pipeSizeBytes == 0 && ! _extractFinished && ! _extractStopRequested)
+        while (_pipeSizeBytes == 0 && ! _extractFinished && ! _extractStopRequested.load(std::memory_order_acquire))
         {
             _extractCv.wait(lock);
         }
 
-        if (_extractStopRequested)
+        if (_extractStopRequested.load(std::memory_order_acquire))
         {
             return E_ABORT;
         }
@@ -3332,18 +3511,27 @@ private:
                 return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
             }
 
+            if (_fileSizeBytes != 0)
+            {
+                const uint64_t producedBytes = _pipeStartOffsetBytes + static_cast<uint64_t>(_pipeSizeBytes);
+                if (producedBytes > _fileSizeBytes || static_cast<uint64_t>(size) > (_fileSizeBytes - producedBytes))
+                {
+                    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+                }
+            }
+
             const auto* src  = static_cast<const uint8_t*>(data);
             size_t remaining = size;
             size_t offset    = 0;
 
             while (remaining != 0)
             {
-                while (_pipeSizeBytes >= _pipe.size() && ! _extractStopRequested && ! _extractFinished)
+                while (_pipeSizeBytes >= _pipe.size() && ! _extractStopRequested.load(std::memory_order_acquire) && ! _extractFinished)
                 {
                     _extractCv.wait(lock);
                 }
 
-                if (_extractStopRequested)
+                if (_extractStopRequested.load(std::memory_order_acquire))
                 {
                     return E_ABORT;
                 }
@@ -3389,13 +3577,26 @@ private:
         }
 
         constexpr uint64_t kExtractPrefetchBytes = 256u * 1024u;
+        constexpr uint64_t kMaxInMemorySpoolBytes = 32u * 1024u * 1024u;
+        const uint64_t maxAllowedBytes =
+            (_fileSizeBytes != 0) ? std::min<uint64_t>(_fileSizeBytes, kMaxInMemorySpoolBytes) : kMaxInMemorySpoolBytes;
 
-        while (! _extractStopRequested && ! _extractFinished)
+        if (_spooledBytes > maxAllowedBytes)
         {
-            uint64_t limit = std::numeric_limits<uint64_t>::max();
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        if (static_cast<uint64_t>(size) > (maxAllowedBytes - _spooledBytes))
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        }
+
+        while (! _extractStopRequested.load(std::memory_order_acquire) && ! _extractFinished)
+        {
+            uint64_t limit = maxAllowedBytes;
             if (_extractWantedBytes <= (std::numeric_limits<uint64_t>::max() - kExtractPrefetchBytes))
             {
-                limit = _extractWantedBytes + kExtractPrefetchBytes;
+                limit = std::min<uint64_t>(maxAllowedBytes, _extractWantedBytes + kExtractPrefetchBytes);
             }
 
             if (_spooledBytes < limit)
@@ -3406,7 +3607,7 @@ private:
             _extractCv.wait(lock);
         }
 
-        if (_extractStopRequested)
+        if (_extractStopRequested.load(std::memory_order_acquire))
         {
             return E_ABORT;
         }
@@ -3445,15 +3646,23 @@ private:
         _extractStarted       = true;
         _extractFinished      = false;
         _extractStatus        = S_OK;
-        _extractStopRequested = false;
+        _extractStopRequested.store(false, std::memory_order_release);
+        _extractTotalBytes.store(0, std::memory_order_relaxed);
+        _extractCompletedBytes.store(0, std::memory_order_relaxed);
 
-        _extractThread = std::thread([this] { ExtractThreadMain(); });
+        _extractThread = std::jthread([this](std::stop_token stopToken) noexcept { ExtractThreadMain(stopToken); });
 
         return S_OK;
     }
 
-    void ExtractThreadMain() noexcept
+    void ExtractThreadMain(std::stop_token stopToken) noexcept
     {
+        const std::stop_callback stopCallback(stopToken, [this] noexcept
+        {
+            _extractStopRequested.store(true, std::memory_order_release);
+            _extractCv.notify_all();
+        });
+
         HRESULT status = S_OK;
 
         auto* callbackImpl = new (std::nothrow) ExtractCallback(this, static_cast<UInt32>(_itemIndex), &_password);
@@ -3688,12 +3897,14 @@ private:
 
     std::mutex _extractMutex;
     std::condition_variable _extractCv;
-    std::thread _extractThread;
+    std::jthread _extractThread;
     uint64_t _extractWantedBytes = 0;
+    std::atomic<uint64_t> _extractTotalBytes{0};
+    std::atomic<uint64_t> _extractCompletedBytes{0};
     HRESULT _extractStatus       = S_OK;
     bool _extractStarted         = false;
     bool _extractFinished        = false;
-    bool _extractStopRequested   = false;
+    std::atomic<bool> _extractStopRequested{false};
 };
 
 HRESULT
@@ -3847,9 +4058,15 @@ bool ArchiveFileTimePropertyUtc(IInArchive* archive, UInt32 index, PROPID propId
 }
 } // namespace
 
-HRESULT FileSystem7z::BuildIndexLocked() noexcept
+HRESULT FileSystem7z::BuildIndex(const std::wstring& archivePath,
+                                 const std::wstring& password,
+                                 std::unordered_map<std::wstring, ArchiveEntry>& outEntries,
+                                 std::unordered_map<std::wstring, std::vector<std::wstring>>& outChildren) noexcept
 {
-    const DWORD attrs = GetFileAttributesW(_archivePath.c_str());
+    outEntries.clear();
+    outChildren.clear();
+
+    const DWORD attrs = GetFileAttributesW(archivePath.c_str());
     if (attrs == INVALID_FILE_ATTRIBUTES)
     {
         const DWORD lastError = GetLastError();
@@ -3874,7 +4091,7 @@ HRESULT FileSystem7z::BuildIndexLocked() noexcept
     wil::com_ptr<IInStream> stream;
     wil::com_ptr<IArchiveOpenCallback> openCallback;
 
-    const HRESULT openHr = OpenArchiveAuto(api, _archivePath, _password, archive, stream, openCallback);
+    const HRESULT openHr = OpenArchiveAuto(api, archivePath, password, archive, stream, openCallback);
     if (FAILED(openHr))
     {
         return openHr;
@@ -3887,6 +4104,12 @@ HRESULT FileSystem7z::BuildIndexLocked() noexcept
     if (FAILED(hr))
     {
         return hr;
+    }
+
+    constexpr UInt32 kMaxIndexItems = 1'000'000u;
+    if (numItems > kMaxIndexItems)
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     struct Raw
@@ -3943,10 +4166,7 @@ HRESULT FileSystem7z::BuildIndexLocked() noexcept
         raws.emplace_back(std::move(raw));
     }
 
-    _entries.clear();
-    _children.clear();
-
-    _entries.emplace(std::wstring(), ArchiveEntry{true, 0, 0, std::nullopt});
+    outEntries.emplace(std::wstring(), ArchiveEntry{true, 0, 0, std::nullopt});
 
     const auto ensureDir = [&](const std::wstring& key)
     {
@@ -3955,15 +4175,15 @@ HRESULT FileSystem7z::BuildIndexLocked() noexcept
             return;
         }
 
-        if (_entries.contains(key))
+        if (outEntries.contains(key))
         {
             return;
         }
 
-        _entries.emplace(key, ArchiveEntry{true, 0, 0, std::nullopt});
+        outEntries.emplace(key, ArchiveEntry{true, 0, 0, std::nullopt});
 
         const std::wstring parent = ParentKey(key);
-        _children[parent].push_back(key);
+        outChildren[parent].push_back(key);
     };
 
     for (const auto& raw : raws)
@@ -4002,11 +4222,11 @@ HRESULT FileSystem7z::BuildIndexLocked() noexcept
         entry.lastWriteTime = raw.lastWriteTime;
         entry.itemIndex     = raw.itemIndex;
 
-        _entries[raw.key] = entry;
-        _children[parent].push_back(raw.key);
+        outEntries[raw.key] = entry;
+        outChildren[parent].push_back(raw.key);
     }
 
-    for (auto& [_, list] : _children)
+    for (auto& [_, list] : outChildren)
     {
         std::sort(list.begin(), list.end());
         list.erase(std::unique(list.begin(), list.end()), list.end());

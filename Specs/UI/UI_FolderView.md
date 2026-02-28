@@ -158,7 +158,7 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
 - **Hovered**: Light blue background (theme-defined)
 - **Selected**: Accent color background (theme-defined)
 - **Focused**: 2 DIP border (theme-defined); when the item is also **Selected**, the border uses a contrasting color (e.g., selected text color) to remain visible.
-- Selection/hover backgrounds and the focus border use small rounded corners (see `Specs/VisualStyleSpec.md`).
+- Selection/hover backgrounds and the focus border use small rounded corners (see `Specs/UI/UI_VisualStyle.md`).
 
 **Multi-Selection Visual:**
 - Multiple items show selection background
@@ -304,7 +304,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 
 **Trigger:** Right-click on file/folder or selected items
 
-**Localization requirement:** the context menu template is defined in `.rc` resources (see `Specs/LocalizationSpec.md`) and loaded at runtime.
+**Localization requirement:** the context menu template is defined in `.rc` resources (see `Specs/Core/Core_Localization.md`) and loaded at runtime.
 
 **Resource menu:**
 - `IDR_FOLDERVIEW_CONTEXT` in `RedSalamander/RedSalamander.rc`
@@ -324,7 +324,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - Menu rendering uses the active `MenuTheme` (owner-draw for themed background/selection colors).
 ### 4. Keyboard Navigation
 
-**Canonical shortcut map**: `Specs/CommandMenuKeyboardSpec.md` is the source of truth for global shortcuts and routing; this section focuses on FolderView-specific behavior.
+**Canonical shortcut map**: `Specs/UI/UI_CommandMenuKeyboard.md` is the source of truth for global shortcuts and routing; this section focuses on FolderView-specific behavior.
 
 **Arrow Key Navigation:**
 - **Left/Right**: Move between columns
@@ -360,7 +360,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - **Delete**: Delete selected items (with confirmation)
 - **F2**: Rename focused item
 - **Backspace**: Navigate to parent folder
-- **F3/F5/F6/F7/F8**: FolderWindow-global operations (view/copy/move/mkdir/delete) per `Specs/CommandMenuKeyboardSpec.md`.
+- **F3/F5/F6/F7/F8**: FolderWindow-global operations (view/copy/move/mkdir/delete) per `Specs/UI/UI_CommandMenuKeyboard.md`.
 
 **Clipboard Keys:**
 - **Ctrl+C**: Copy selected items to clipboard (or `Current item` when selection is empty) *(default chord binding is settings-backed)*
@@ -385,7 +385,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 
 ### Incremental Search (FolderView)
 
-FolderView implements **incremental search mode** (type-to-search) as specified in `Specs/CommandMenuKeyboardSpec.md`:
+FolderView implements **incremental search mode** (type-to-search) as specified in `Specs/UI/UI_CommandMenuKeyboard.md`:
 - Typing printable characters searches item display names (substring match) and moves focus to the next match.
 - Matching text is highlighted while the mode is active.
   - All **visible** items whose display name matches the query show the highlight on the matched substring.
@@ -403,7 +403,7 @@ FolderView implements **incremental search mode** (type-to-search) as specified 
 
 **Visual Feedback:**
 - On folder entry (after enumeration), FolderView sets the `Current item` to the first item (or nearest preserved focus), and starts with **no selection**.
-- Selected items: Selection background differs between the focused vs unfocused pane (subtle inactive selection), per `Specs/CommandMenuKeyboardSpec.md`.
+- Selected items: Selection background differs between the focused vs unfocused pane (subtle inactive selection), per `Specs/UI/UI_CommandMenuKeyboard.md`.
 - Current item: Focus border always; in the focused pane it also has a background fill.
 - Selected + Current item: Draw selection background plus a contrasting focus border stroke so the focus state remains visible on top of selection.
 - Item state matrix (visual):

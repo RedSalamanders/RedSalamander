@@ -234,7 +234,10 @@ private:
     HRESULT EnsureIndex() noexcept;
     void ClearIndexLocked() noexcept;
 
-    HRESULT BuildIndexLocked() noexcept;
+    static HRESULT BuildIndex(const std::wstring& archivePath,
+                              const std::wstring& password,
+                              std::unordered_map<std::wstring, ArchiveEntry>& outEntries,
+                              std::unordered_map<std::wstring, std::vector<std::wstring>>& outChildren) noexcept;
 
     static std::wstring NormalizeInternalPath(std::wstring_view path) noexcept;
     static std::wstring NormalizeArchiveEntryKey(std::wstring_view path) noexcept;

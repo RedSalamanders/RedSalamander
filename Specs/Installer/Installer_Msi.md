@@ -23,7 +23,7 @@ Primary files:
 
 ## Non-Goals
 
-- No MSIX details in this document (see `Specs/InstallerMsixSpec.md`).
+- No MSIX details in this document (see `Specs/Installer/Installer_Msix.md`).
 - No auto-download of WiX in `build.ps1` (WiX must be installed on the build machine / CI).
 
 ## Tooling
