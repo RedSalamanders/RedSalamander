@@ -5,12 +5,14 @@
 #include <algorithm>
 #include <format>
 #include <limits>
+#include <unordered_set>
 
 namespace FsS3 = FileSystemS3Internal;
 
 namespace
 {
-[[nodiscard]] HRESULT TryGetS3ObjectSummary(const FsS3::ResolvedAwsContext& bucketCtx,
+[[nodiscard]] HRESULT TryGetS3ObjectSummary(FileSystemS3& fs,
+                                            const FsS3::ResolvedAwsContext& bucketCtx,
                                             std::string_view bucket,
                                             std::string_view key,
                                             uint64_t& outSizeBytes,
@@ -26,13 +28,13 @@ namespace
         return E_INVALIDARG;
     }
 
-    Aws::S3Crt::S3CrtClient client = FsS3::MakeS3Client(bucketCtx);
+    const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = FsS3::GetS3Client(fs, bucketCtx);
     Aws::S3Crt::Model::ListObjectsV2Request req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     req.SetPrefix(Aws::String(key.data(), key.size()));
     req.SetMaxKeys(1);
 
-    const auto outcome = client.ListObjectsV2(req);
+    const auto outcome = client->ListObjectsV2(req);
     if (! outcome.IsSuccess())
     {
         const auto& err            = outcome.GetError();
@@ -102,8 +104,15 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
         return E_POINTER;
     }
 
-    *result        = {};
-    result->status = S_OK;
+    if (result->sizeBytes != sizeof(FileSystemDirectorySizeResult))
+    {
+        return E_INVALIDARG;
+    }
+
+    result->totalBytes     = 0;
+    result->fileCount      = 0;
+    result->directoryCount = 0;
+    result->status         = S_OK;
 
     if (path == nullptr || path[0] == L'\0')
     {
@@ -187,7 +196,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
         uint64_t sizeBytes     = 0;
         __int64 lastWriteTime  = 0;
         bool found             = false;
-        const HRESULT existsHr = TryGetS3ObjectSummary(bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
+        const HRESULT existsHr = TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
         if (FAILED(existsHr))
         {
             result->status = existsHr;
@@ -257,7 +266,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
         return true;
     };
 
-    Aws::S3Crt::S3CrtClient client = FsS3::MakeS3Client(bucketCtx);
+    const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = FsS3::GetS3Client(*this, bucketCtx);
     Aws::S3Crt::Model::ListObjectsV2Request req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     if (! prefix.empty())
@@ -270,9 +279,17 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
     }
     req.SetMaxKeys(static_cast<int>(std::min<unsigned long>(settings.maxKeys, 1000u)));
 
+    std::unordered_set<std::string> seenCommonPrefixesUtf8;
+    if (! recursive)
+    {
+        // With delimiter set, CommonPrefixes can repeat across pages if a page boundary lands inside a prefix group.
+        // Dedupe by full prefix (UTF-8, case-sensitive) so directoryCount matches ReadDirectoryInfo.
+        seenCommonPrefixesUtf8.reserve(256);
+    }
+
     while (true)
     {
-        const auto outcome = client.ListObjectsV2(req);
+        const auto outcome = client->ListObjectsV2(req);
         if (! outcome.IsSuccess())
         {
             const auto& err            = outcome.GetError();
@@ -288,7 +305,14 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
         {
             for (const auto& cp : res.GetCommonPrefixes())
             {
-                (void)cp;
+                const Aws::String& full = cp.GetPrefix();
+                std::string_view fullView(full.c_str(), full.size());
+
+                if (! seenCommonPrefixesUtf8.emplace(fullView).second)
+                {
+                    continue;
+                }
+
                 ++result->directoryCount;
                 ++scannedEntries;
                 if (! maybeReportProgress())

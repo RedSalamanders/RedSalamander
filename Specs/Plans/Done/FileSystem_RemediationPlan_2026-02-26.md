@@ -54,7 +54,7 @@ This checklist is the “do this next” index for every improvement in this doc
 - [x] **P2-13:** `Plugins/FileSystemS3/FileSystemS3.h` — fix capabilities JSON (`"delete": true`).
 
 ### Phase 3 (P3) — long-term debt (stage after P0–P2)
-- [ ] **P3 architecture:** RFC + implementation for callback lifetime model, ABI versioning, and reducing single vs. batch API duplication (keep behavior identical). RFC drafted (2026-02-27): `Specs/Plans/WIP/RFC_FileSystem_P3Architecture.md` (implementation pending).
+- [x] **P3 architecture:** Callback lifetime model + ABI versioning (`sizeBytes`) + debug guards (keep behavior identical). Implemented: `Specs/Plans/Done/RFC_FileSystem_P3Architecture.md` (Validated: `Specs/TestRuns/4cb089111a23/FileOps/2026-03-01_145535/`, `Specs/TestRuns/4cb089111a23/SelfTest/2026-03-01_141839/`.)
 - [x] **P3-1:** `Plugins/FileSystem7z/FileSystem7z.cpp` — replace `swscanf_s` parsing + temporary allocation in time parsing (style/perf).
 - [x] **P3-2:** `Plugins/FileSystem7z/FileSystem7z.cpp` — harden spool growth / extracted-byte bounds for corrupted archives.
 - [x] **P3-3:** `Plugins/FileSystem7z/FileSystem7z.cpp` — convert extract thread to `std::jthread` + `stop_token`.

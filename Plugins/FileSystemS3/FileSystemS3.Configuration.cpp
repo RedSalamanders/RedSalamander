@@ -7,6 +7,9 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::SetConfiguration(const char* configurati
     std::lock_guard lock(_stateMutex);
 
     _settings = {};
+    _s3BucketRegionByName.clear();
+    _s3ClientsByCtxKey.clear();
+    _s3TableBucketArnByName.clear();
 
     if (configurationJsonUtf8 == nullptr || configurationJsonUtf8[0] == '\0')
     {

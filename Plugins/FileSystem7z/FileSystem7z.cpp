@@ -1038,7 +1038,15 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetFileBasicInformation([[maybe_unused]]
         return E_POINTER;
     }
 
-    *info = {};
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
+    }
+
+    info->creationTime   = 0;
+    info->lastAccessTime = 0;
+    info->lastWriteTime  = 0;
+    info->attributes     = 0;
 
     if (path == nullptr || path[0] == L'\0')
     {
@@ -1091,11 +1099,16 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetFileBasicInformation([[maybe_unused]]
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem7z::SetFileBasicInformation([[maybe_unused]] const wchar_t* path,
-                                                                [[maybe_unused]] const FileSystemBasicInformation* info) noexcept
+                                                                 [[maybe_unused]] const FileSystemBasicInformation* info) noexcept
 {
     if (info == nullptr)
     {
         return E_POINTER;
+    }
+
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
     }
 
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -1246,6 +1259,11 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
     if (path == nullptr || result == nullptr)
     {
         return E_POINTER;
+    }
+
+    if (result->sizeBytes != sizeof(FileSystemDirectorySizeResult))
+    {
+        return E_INVALIDARG;
     }
 
     result->totalBytes     = 0;

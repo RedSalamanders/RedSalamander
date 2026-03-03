@@ -361,6 +361,7 @@ When paths do not fit, the UI MUST truncate using a **middle ellipsis** (`…`) 
 ### Semantics
 
 - The per-task speed limit applies to Copy/Move via `FileSystemOptions::bandwidthLimitBytesPerSecond`.
+- When passing `FileSystemOptions` across the host↔plugin boundary (including via callbacks), the creator MUST set `FileSystemOptions::sizeBytes = sizeof(FileSystemOptions)` and the consumer MUST validate it (treat mismatch as `E_INVALIDARG` in this in-repo ABI sweep).
 - `0` means unlimited.
 - Plugins MAY clamp the host-provided limit and report an effective applied limit by writing back to `FileSystemOptions::bandwidthLimitBytesPerSecond` before progress callbacks.
 - Presets (bytes/sec):

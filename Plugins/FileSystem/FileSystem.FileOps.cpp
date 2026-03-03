@@ -516,370 +516,6 @@ struct CopyProgressContext
     ULONGLONG startTick               = 0; // Used only for sequential operations.
 };
 
-#if 0 // Legacy (moved to FileSystemInternal for explicit shutdown/join at plugin quiet point)
-class SharedFileOpsJobScheduler final
-{
-public:
-    SharedFileOpsJobScheduler() = default;
-    ~SharedFileOpsJobScheduler() noexcept
-    {
-        Shutdown();
-    }
-
-    SharedFileOpsJobScheduler(const SharedFileOpsJobScheduler&)            = delete;
-    SharedFileOpsJobScheduler(SharedFileOpsJobScheduler&&)                 = delete;
-    SharedFileOpsJobScheduler& operator=(const SharedFileOpsJobScheduler&) = delete;
-    SharedFileOpsJobScheduler& operator=(SharedFileOpsJobScheduler&&)      = delete;
-
-    struct Job final
-    {
-        Job() noexcept = default;
-
-        Job(const Job&)            = delete;
-        Job(Job&&)                 = delete;
-        Job& operator=(const Job&) = delete;
-        Job& operator=(Job&&)      = delete;
-
-        std::function<void(size_t, uint64_t)> processIndex;
-        size_t totalItems           = 0;
-        unsigned int maxConcurrency = 1;
-
-        // Protected by the scheduler mutex.
-        size_t nextIndex      = 0;
-        unsigned int inFlight = 0;
-
-        std::atomic<bool> done{false};
-        std::mutex doneMutex;
-        std::condition_variable doneCv;
-    };
-
-    using JobPtr = std::shared_ptr<Job>;
-
-    JobPtr StartJob(unsigned int maxConcurrency, size_t totalItems, std::function<void(size_t, uint64_t)> processIndex)
-    {
-        auto job            = std::make_shared<Job>();
-        job->totalItems     = totalItems;
-        job->processIndex   = std::move(processIndex);
-        job->maxConcurrency = std::max(1u, maxConcurrency);
-        if (job->totalItems > 0)
-        {
-            job->maxConcurrency =
-                std::min<unsigned int>(job->maxConcurrency, static_cast<unsigned int>((std::min)(job->totalItems, static_cast<size_t>(UINT_MAX))));
-        }
-
-        ensureWorkers();
-
-        if (_workers.empty())
-        {
-            if (job->processIndex)
-            {
-                for (size_t i = 0; i < job->totalItems; ++i)
-                {
-                    job->processIndex(i, 0);
-                }
-            }
-
-            finishJob(*job);
-            return job;
-        }
-
-        {
-            std::scoped_lock lock(_mutex);
-            _jobs.push_back(job);
-        }
-
-        _cv.notify_all();
-        return job;
-    }
-
-    void WaitJob(const JobPtr& job) noexcept
-    {
-        if (! job)
-        {
-            return;
-        }
-
-        if (IsWorkerThread())
-        {
-            // Avoid deadlocks when a file operation recursively starts parallel work from within a worker.
-            while (! job->done.load(std::memory_order_acquire))
-            {
-                JobPtr dequeued;
-                size_t index = 0;
-                {
-                    std::unique_lock lock(_mutex);
-                    _cv.wait(lock, [&]() noexcept { return job->done.load(std::memory_order_acquire) || hasSchedulableWorkLocked(); });
-                    if (job->done.load(std::memory_order_acquire))
-                    {
-                        break;
-                    }
-
-                    if (! tryDequeueWorkLocked(dequeued, index))
-                    {
-                        continue;
-                    }
-                }
-
-                executeWorkItem(std::move(dequeued), index, tls_workerStreamId);
-            }
-
-            return;
-        }
-
-        std::unique_lock lock(job->doneMutex);
-        job->doneCv.wait(lock, [&]() noexcept { return job->done.load(std::memory_order_acquire); });
-    }
-
-    void Shutdown() noexcept
-    {
-        {
-            std::scoped_lock lock(_initMutex);
-            if (! _initialized)
-            {
-                return;
-            }
-
-            for (std::jthread& worker : _workers)
-            {
-                worker.request_stop();
-            }
-        }
-
-        // Ensure any thread blocked in WaitJob can proceed during teardown.
-        {
-            std::scoped_lock lock(_mutex);
-            for (const JobPtr& job : _jobs)
-            {
-                if (job)
-                {
-                    finishJob(*job);
-                }
-            }
-            _jobs.clear();
-            _rrCursor = 0;
-        }
-
-        _cv.notify_all();
-    }
-
-private:
-    static inline thread_local const SharedFileOpsJobScheduler* tls_scheduler = nullptr;
-    static inline thread_local uint64_t tls_workerStreamId                    = 0;
-
-    [[nodiscard]] bool IsWorkerThread() const noexcept
-    {
-        return tls_scheduler == this;
-    }
-
-    void ensureWorkers()
-    {
-        std::scoped_lock lock(_initMutex);
-        if (_initialized)
-        {
-            return;
-        }
-
-        unsigned int workerCount = std::thread::hardware_concurrency();
-        if (workerCount == 0)
-        {
-            workerCount = 4;
-        }
-
-        constexpr unsigned int kMaxWorkers = 8u;
-        workerCount                        = std::max(1u, std::min(workerCount, kMaxWorkers));
-
-        _workers.reserve(workerCount);
-        for (unsigned int i = 0; i < workerCount; ++i)
-        {
-            try
-            {
-                _workers.emplace_back([this, i](std::stop_token stopToken) noexcept { workerMain(stopToken, static_cast<uint64_t>(i)); });
-            }
-            catch (const std::system_error&)
-            {
-                break;
-            }
-        }
-
-        _initialized = true;
-    }
-
-    void finishJob(Job& job) noexcept
-    {
-        {
-            std::scoped_lock lock(job.doneMutex);
-            job.done.store(true, std::memory_order_release);
-        }
-        job.doneCv.notify_all();
-    }
-
-    void cleanupJobsLocked() noexcept
-    {
-        size_t write = 0;
-        for (size_t read = 0; read < _jobs.size(); ++read)
-        {
-            const JobPtr& job = _jobs[read];
-            if (! job)
-            {
-                continue;
-            }
-
-            const bool finished = job->nextIndex >= job->totalItems;
-            if (finished && job->inFlight == 0)
-            {
-                finishJob(*job);
-                continue;
-            }
-
-            if (write != read)
-            {
-                _jobs[write] = job;
-            }
-            ++write;
-        }
-
-        if (write < _jobs.size())
-        {
-            _jobs.resize(write);
-        }
-
-        if (_rrCursor >= _jobs.size())
-        {
-            _rrCursor = 0;
-        }
-    }
-
-    [[nodiscard]] bool hasSchedulableWorkLocked() noexcept
-    {
-        cleanupJobsLocked();
-
-        for (const JobPtr& job : _jobs)
-        {
-            if (! job)
-            {
-                continue;
-            }
-
-            if (job->inFlight >= job->maxConcurrency)
-            {
-                continue;
-            }
-
-            if (job->nextIndex >= job->totalItems)
-            {
-                continue;
-            }
-
-            return true;
-        }
-
-        return false;
-    }
-
-    [[nodiscard]] bool tryDequeueWorkLocked(JobPtr& outJob, size_t& outIndex) noexcept
-    {
-        const size_t jobCount = _jobs.size();
-        if (jobCount == 0)
-        {
-            return false;
-        }
-
-        const size_t start = _rrCursor % jobCount;
-        for (size_t attempt = 0; attempt < jobCount; ++attempt)
-        {
-            const size_t idx = (start + attempt) % jobCount;
-            JobPtr& job      = _jobs[idx];
-            if (! job)
-            {
-                continue;
-            }
-
-            if (job->inFlight >= job->maxConcurrency)
-            {
-                continue;
-            }
-
-            if (job->nextIndex >= job->totalItems)
-            {
-                continue;
-            }
-
-            outJob   = job;
-            outIndex = job->nextIndex;
-            job->nextIndex += 1;
-            job->inFlight += 1;
-
-            _rrCursor = (idx + 1u) % jobCount;
-            return true;
-        }
-
-        return false;
-    }
-
-    void executeWorkItem(JobPtr job, size_t index, uint64_t streamId) noexcept
-    {
-        if (job && job->processIndex)
-        {
-            job->processIndex(index, streamId);
-        }
-
-        {
-            std::scoped_lock lock(_mutex);
-            if (job && job->inFlight > 0)
-            {
-                job->inFlight -= 1;
-            }
-            cleanupJobsLocked();
-        }
-
-        _cv.notify_all();
-    }
-
-    void workerMain(std::stop_token stopToken, uint64_t streamId) noexcept
-    {
-        tls_scheduler      = this;
-        tls_workerStreamId = streamId;
-
-        [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast();
-
-        for (;;)
-        {
-            JobPtr job;
-            size_t index = 0;
-            {
-                std::unique_lock lock(_mutex);
-                _cv.wait(lock, [&]() noexcept { return stopToken.stop_requested() || hasSchedulableWorkLocked(); });
-                if (stopToken.stop_requested())
-                {
-                    break;
-                }
-
-                cleanupJobsLocked();
-                if (! tryDequeueWorkLocked(job, index))
-                {
-                    continue;
-                }
-            }
-
-            executeWorkItem(std::move(job), index, streamId);
-        }
-
-        tls_scheduler      = nullptr;
-        tls_workerStreamId = 0;
-    }
-
-private:
-    std::mutex _mutex;
-    std::condition_variable _cv;
-    std::vector<JobPtr> _jobs;
-    size_t _rrCursor = 0;
-
-    std::mutex _initMutex;
-    bool _initialized = false;
-    std::vector<std::jthread> _workers;
-};
-#endif // 0
-
 bool HasFlag(FileSystemFlags flags, FileSystemFlags flag) noexcept
 {
     return (static_cast<unsigned long>(flags) & static_cast<unsigned long>(flag)) != 0u;
@@ -1997,6 +1633,7 @@ void InitializeOperationContext(OperationContext& context,
     {
         context.optionsState = *options;
     }
+    context.optionsState.sizeBytes = sizeof(FileSystemOptions);
     context.options              = &context.optionsState;
     context.totalItems           = totalItems;
     context.completedItems       = 0;
@@ -4541,6 +4178,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItem(const wchar_t* sourcePath,
         return E_INVALIDARG;
     }
 
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
     unsigned int copyMoveMaxConcurrency             = 1u;
     {
@@ -4612,6 +4254,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItem(const wchar_t* sourcePath,
     {
         return E_INVALIDARG;
     }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
  
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
     unsigned int deleteMaxConcurrency               = 1;
@@ -4661,6 +4308,11 @@ FileSystem::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSys
     }
 
     if (path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
     {
         return E_INVALIDARG;
     }
@@ -4729,6 +4381,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::RenameItem(const wchar_t* sourcePath,
         return E_INVALIDARG;
     }
 
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
     {
         std::lock_guard lock(_stateMutex);
@@ -4782,6 +4439,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
     }
 
     if (destinationFolder[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
     {
         return E_INVALIDARG;
     }
@@ -4895,6 +4557,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::CopyItems(const wchar_t* const* sourcePath
     {
         sharedOptionsState = *options;
     }
+    sharedOptionsState.sizeBytes = sizeof(FileSystemOptions);
 
     ParallelOperationState parallel{};
     parallel.startTick = GetTickCount64();
@@ -5039,6 +4702,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItems(const wchar_t* const* sourcePath
         return E_INVALIDARG;
     }
 
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
     unsigned int copyMoveMaxConcurrency             = 1;
     {
@@ -5143,6 +4811,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItems(const wchar_t* const* sourcePath
     {
         sharedOptionsState = *options;
     }
+    sharedOptionsState.sizeBytes = sizeof(FileSystemOptions);
 
     ParallelOperationState parallel{};
     parallel.startTick = GetTickCount64();
@@ -5272,6 +4941,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
         return S_OK;
     }
 
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
     unsigned int deleteMaxConcurrency               = 1;
     unsigned int deleteRecycleBinMaxConcurrency     = 1;
@@ -5398,6 +5072,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
         {
             sharedOptionsState = *options;
         }
+        sharedOptionsState.sizeBytes = sizeof(FileSystemOptions);
 
         ParallelOperationState parallel{};
         parallel.startTick = GetTickCount64();
@@ -5656,6 +5331,19 @@ HRESULT STDMETHODCALLTYPE FileSystem::RenameItems(const FileSystemRenamePair* it
         return S_OK;
     }
 
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
+    for (unsigned long index = 0; index < count; ++index)
+    {
+        if (items[index].sizeBytes != sizeof(FileSystemRenamePair))
+        {
+            return E_INVALIDARG;
+        }
+    }
+
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
     unsigned int copyMoveMaxConcurrency             = 1;
     {
@@ -5674,6 +5362,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::RenameItems(const FileSystemRenamePair* it
         {
             sharedOptionsState = *options;
         }
+        sharedOptionsState.sizeBytes = sizeof(FileSystemOptions);
 
         ParallelOperationState parallel{};
         parallel.startTick = GetTickCount64();

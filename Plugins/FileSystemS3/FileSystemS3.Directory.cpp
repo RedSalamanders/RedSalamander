@@ -67,7 +67,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::ReadDirectoryInfo(const wchar_t* path, I
                 return hr;
             }
 
-            hr = FsS3::ListS3Objects(bucketCtx, loc, entries);
+            hr = FsS3::ListS3Objects(*this, bucketCtx, loc, entries);
         }
         if (FAILED(hr))
         {
@@ -158,11 +158,17 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(const wchar_t* path,
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
     FileSystemOptions optionsState{};
     if (options != nullptr)
     {
         optionsState = *options;
     }
+    optionsState.sizeBytes = sizeof(FileSystemOptions);
 
     FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
 
@@ -292,12 +298,12 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(const wchar_t* path,
         return hr;
     }
 
-    Aws::S3Crt::S3CrtClient client = FsS3::MakeS3Client(bucketCtx);
+    const auto client = FsS3::GetS3Client(*this, bucketCtx);
     Aws::S3Crt::Model::DeleteObjectRequest req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     req.SetKey(Aws::String(key.data(), key.size()));
 
-    const auto outcome = client.DeleteObject(req);
+    const auto outcome = client->DeleteObject(req);
     HRESULT itemHr     = S_OK;
     if (! outcome.IsSuccess())
     {
@@ -386,11 +392,17 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
     FileSystemOptions optionsState{};
     if (options != nullptr)
     {
         optionsState = *options;
     }
+    optionsState.sizeBytes = sizeof(FileSystemOptions);
 
     FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
 
@@ -763,7 +775,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
 
     for (const auto& group : groups)
     {
-        Aws::S3Crt::S3CrtClient client = FsS3::MakeS3Client(group.ctx);
+        const auto client = FsS3::GetS3Client(*this, group.ctx);
 
         for (size_t batchStart = 0; batchStart < group.entries.size(); batchStart += kMaxBatchSize)
         {
@@ -791,7 +803,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
 
             req.SetDelete(std::move(deletePayload));
 
-            const auto outcome = client.DeleteObjects(req);
+            const auto outcome = client->DeleteObjects(req);
             if (! outcome.IsSuccess())
             {
                 const auto& err = outcome.GetError();

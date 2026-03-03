@@ -602,6 +602,14 @@
         "compareDateTime": { "type": "boolean", "default": false, "title": "Compare Date and Time" },
         "compareAttributes": { "type": "boolean", "default": false, "title": "Compare Attributes" },
         "compareContent": { "type": "boolean", "default": false, "title": "Compare Content" },
+        "contentCompareWorkerCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4,
+          "default": 0,
+          "title": "Content Compare Workers",
+          "description": "0 = auto (clamped to <= 4), 1..4 = fixed worker count for background content compare."
+        },
         "compareSubdirectories": { "type": "boolean", "default": false, "title": "Compare Subdirectories" },
         "compareSubdirectoryAttributes": { "type": "boolean", "default": false, "title": "Compare Attributes of Subdirectories" },
         "selectSubdirsOnlyInOnePane": { "type": "boolean", "default": true, "title": "Select Unique Subdirectories" },

@@ -38,6 +38,11 @@ FileSystemS3::FileSystemS3(FileSystemS3Mode mode, IHost* host) : _mode(mode)
 
 FileSystemS3::~FileSystemS3()
 {
+    // Destroy cached AWS clients before shutting down the AWS SDK to avoid UAF/UB during teardown.
+    {
+        std::lock_guard lock(_stateMutex);
+        _s3ClientsByCtxKey.clear();
+    }
     FsS3::AwsSdkLifetime::Release();
 }
 

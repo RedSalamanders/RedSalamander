@@ -135,9 +135,10 @@ function Load-Json([string]$PathText) {
 function Get-RunFileMap([string]$RunRoot) {
     $map = @{}
     $root = (Resolve-Path -LiteralPath $RunRoot).Path
+    $prefix = if ($root.EndsWith([System.IO.Path]::DirectorySeparatorChar)) { $root } else { ($root + [System.IO.Path]::DirectorySeparatorChar) }
 
-    Get-ChildItem -LiteralPath $root -File | ForEach-Object {
-        $rel = $_.Name
+    Get-ChildItem -LiteralPath $root -File -Recurse | ForEach-Object {
+        $rel = $_.FullName.Substring($prefix.Length)
         $hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash
         $map[$rel] = [pscustomobject]@{
             Name = $rel
@@ -289,12 +290,12 @@ Write-Host ("New: suite={0} cases={1} passed={2} ({3}) failed={4} ({5}) skipped=
 $durDelta = Format-DurationDelta $oldMs $newMs
 $durDeltaPct = Format-DeltaPercent $oldMs $newMs
 $durColor = if ($null -eq $durDelta -or $durDelta -eq '0') { 'Gray' } elseif ($durDelta.StartsWith('+')) { 'Red' } else { 'Green' }
-Write-Host ("Δduration_ms={0} ({1})" -f $durDelta, $durDeltaPct) -ForegroundColor $durColor
+Write-Host ("delta_duration_ms={0} ({1})" -f $durDelta, $durDeltaPct) -ForegroundColor $durColor
 
 $caseDelta = $newTotal - $oldTotal
 $caseDeltaText = if ($caseDelta -eq 0) { '0' } elseif ($caseDelta -gt 0) { "+$caseDelta" } else { "$caseDelta" }
 $caseDeltaPct = Format-DeltaPercent $oldTotal $newTotal
-Write-Host ("Δcases={0} ({1})" -f $caseDeltaText, $caseDeltaPct)
+Write-Host ("delta_cases={0} ({1})" -f $caseDeltaText, $caseDeltaPct)
 
 Write-Host ""
 Write-Host "Files"

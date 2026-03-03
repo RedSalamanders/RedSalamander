@@ -19,6 +19,7 @@
 #include "AppTheme.h"
 #include "FluentIcons.h"
 #include "MaskSyntax.h"
+#include "NavigationLocation.h"
 #include "SettingsStore.h"
 #include "resource.h"
 
@@ -684,7 +685,7 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
             }
             TraceSelfTestExitCode(L"FileOpsSelfTest: end", g_selfTestExitCode);
             FinalizeSelfTestRun();
-            PostMessageW(hWnd, WM_CLOSE, 0, 0);
+            PostQuitMessage(g_selfTestExitCode);
         }
         return 0;
     }
@@ -4309,7 +4310,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         }
 
         std::wstring boxed(text);
-        MessageBoxW(nullptr, boxed.c_str(), L"RedSalamander Help", MB_OK | MB_ICONINFORMATION);
+        ShowFatalErrorDialog(nullptr, L"RedSalamander Help", boxed.c_str());
     };
 
     if (hasArg(L"--help") || hasArg(L"-h") || hasArg(L"/?"))
@@ -4506,7 +4507,13 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         g_settings.theme.currentThemeId = ThemeIdFromThemeMode(envTheme);
     }
 
-    const bool showSplash      = ! g_settings.startup.has_value() || g_settings.startup->showSplash;
+#ifdef _DEBUG
+    const bool runHeadlessCompareSelfTest = g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest && ! g_runCommandsSelfTest;
+#else
+    const bool runHeadlessCompareSelfTest = false;
+#endif
+
+    const bool showSplash = ! runHeadlessCompareSelfTest && (! g_settings.startup.has_value() || g_settings.startup->showSplash);
     const auto setSplashStatus = [&](std::wstring_view status) noexcept
     {
         if (showSplash)
@@ -4527,8 +4534,12 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             setSplashStatus(L"Warming visual resources...");
         }
         Debug::Perf::Scope perf(L"App.Startup.QueueNavigationViewWarmup");
-        const BOOL queued = TrySubmitThreadpoolCallback(
-            [](PTP_CALLBACK_INSTANCE /*instance*/, void* /*context*/) noexcept { NavigationView::WarmSharedDeviceResources(); }, nullptr, nullptr);
+        const BOOL queued = runHeadlessCompareSelfTest
+                                ? TRUE
+                                : TrySubmitThreadpoolCallback(
+                                      [](PTP_CALLBACK_INSTANCE /*instance*/, void* /*context*/) noexcept { NavigationView::WarmSharedDeviceResources(); },
+                                      nullptr,
+                                      nullptr);
         perf.SetHr(queued ? S_OK : E_FAIL);
     }
 
@@ -4583,6 +4594,43 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         DirectoryInfoCache::GetInstance().ApplySettings(g_settings);
     }
 
+#ifdef _DEBUG
+    if (runHeadlessCompareSelfTest)
+    {
+        SelfTest::SelfTestSuiteResult compareResult;
+        Debug::Info(L"CompareSelfTest: running (headless)");
+        SelfTest::InitSelfTestRun(g_selfTestOptions);
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, L"CompareSelfTest: begin");
+        SelfTest::AppendSelfTestTrace(L"CompareSelfTest: begin");
+        g_selfTestExitCode |= CompareDirectoriesSelfTest::Run(g_selfTestOptions, &compareResult) ? 0 : 1;
+        RecordSelfTestSuite(compareResult);
+        if (g_selfTestExitCode != 0)
+        {
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, L"CompareSelfTest: FAIL");
+            SelfTest::AppendSelfTestTrace(L"CompareSelfTest: FAIL");
+            if (! compareResult.failureMessage.empty())
+            {
+                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, compareResult.failureMessage);
+                SelfTest::AppendSelfTestTrace(compareResult.failureMessage);
+            }
+        }
+        else
+        {
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::CompareDirectories, L"CompareSelfTest: PASS");
+            SelfTest::AppendSelfTestTrace(L"CompareSelfTest: PASS");
+        }
+        TraceSelfTestExitCode(L"CompareSelfTest: end", g_selfTestExitCode);
+        FinalizeSelfTestRun();
+
+        FileSystemPluginManager::GetInstance().Shutdown(g_settings);
+        ViewerPluginManager::GetInstance().Shutdown(g_settings);
+
+        startupPerf->SetHr(S_OK);
+        startupPerf.reset();
+        return g_selfTestExitCode;
+    }
+#endif
+
     // Perform application initialization:
     std::optional<HWND> hWnd;
     {
@@ -4590,6 +4638,12 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         {
             setSplashStatus(L"Creating main window...");
         }
+#ifdef _DEBUG
+        if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+        {
+            SelfTest::AppendSelfTestTrace(L"RunApplication: InitInstance begin");
+        }
+#endif
         Debug::Perf::Scope perf(L"App.Startup.InitInstance");
         hWnd = InitInstance(hInstance, nCmdShow);
         perf.SetHr(hWnd.has_value() ? S_OK : E_FAIL);
@@ -4606,10 +4660,22 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         {
             setSplashStatus(L"Loading menu accelerators...");
         }
+#ifdef _DEBUG
+        if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+        {
+            SelfTest::AppendSelfTestTrace(L"RunApplication: LoadAccelerators begin");
+        }
+#endif
         Debug::Perf::Scope perf(L"App.Startup.LoadAccelerators");
         hAccelTable.reset(LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_REDSALAMANDER)));
         perf.SetHr(hAccelTable ? S_OK : E_FAIL);
     }
+#ifdef _DEBUG
+    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+    {
+        SelfTest::AppendSelfTestTrace(L"RunApplication: entering message loop");
+    }
+#endif
 
     startupPerf->SetHr(S_OK);
     startupPerf.reset();
@@ -5307,13 +5373,20 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
             g_selfTestExitCode |= 1;
             TraceSelfTestExitCode(L"FileOpsSelfTest: scheduling failed", g_selfTestExitCode);
             FinalizeSelfTestRun();
-            PostMessageW(hWnd, WM_CLOSE, 0, 0);
+            PostQuitMessage(g_selfTestExitCode);
         }
     }
 
     if ((g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) && ! g_runFileOpsSelfTest)
     {
-        PostMessageW(hWnd, WM_CLOSE, 0, 0);
+        // Selftests may exit before the app reaches its normal "input ready" phase.
+        // Close the splash and route shutdown through WM_CLOSE/WM_DESTROY so graphics resources are torn down
+        // before CRT/static destruction (avoids late D2D/D3D/icon-cache access during process shutdown).
+        SplashScreen::CloseIfExist();
+        if (PostMessageW(hWnd, WM_CLOSE, 0, 0) == 0)
+        {
+            PostQuitMessage(g_selfTestExitCode);
+        }
     }
 #endif
 
@@ -5554,15 +5627,9 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
                 static_cast<void>(HostShowAlert(request));
             };
 
-            const std::wstring_view leftFileSystemId  = g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left);
-            const std::wstring_view rightFileSystemId = g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right);
-            if (leftFileSystemId != rightFileSystemId)
-            {
-                showErrorAlert(IDS_MSG_PANE_OP_REQUIRES_SAME_FS);
-                break;
-            }
-
-            if (leftFileSystemId != L"builtin/file-system")
+            const std::wstring_view leftPluginId  = g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left);
+            const std::wstring_view rightPluginId = g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Right);
+            if (leftPluginId.empty() || rightPluginId.empty())
             {
                 showErrorAlert(IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS);
                 break;
@@ -5589,25 +5656,52 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
                 break;
             }
 
-            wil::com_ptr<IFileSystem> baseFileSystem;
-            for (const FileSystemPluginManager::PluginEntry& entry : FileSystemPluginManager::GetInstance().GetPlugins())
+            const std::optional<std::filesystem::path> leftCurrent  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+            const std::optional<std::filesystem::path> rightCurrent = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+
+            NavigationLocation::Location leftLocation{};
+            NavigationLocation::Location rightLocation{};
+            if (! leftCurrent.has_value() || ! rightCurrent.has_value() || ! NavigationLocation::TryParseLocation(leftCurrent->native(), leftLocation) ||
+                ! NavigationLocation::TryParseLocation(rightCurrent->native(), rightLocation))
             {
-                if (CompareStringOrdinal(entry.id.c_str(), -1, L"builtin/file-system", -1, TRUE) == CSTR_EQUAL)
-                {
-                    baseFileSystem = entry.fileSystem;
-                    break;
-                }
+                showInvalidPathAlert({});
+                break;
             }
 
-            if (! baseFileSystem)
+            const auto findPluginById = [](std::wstring_view id) noexcept -> const FileSystemPluginManager::PluginEntry*
+            {
+                for (const FileSystemPluginManager::PluginEntry& entry : FileSystemPluginManager::GetInstance().GetPlugins())
+                {
+                    if (CompareStringOrdinal(entry.id.c_str(), -1, id.data(), static_cast<int>(id.size()), TRUE) == CSTR_EQUAL)
+                    {
+                        return &entry;
+                    }
+                }
+
+                return nullptr;
+            };
+
+            const FileSystemPluginManager::PluginEntry* leftPlugin  = findPluginById(leftPluginId);
+            const FileSystemPluginManager::PluginEntry* rightPlugin = findPluginById(rightPluginId);
+            if (! leftPlugin || ! rightPlugin || leftPlugin->disabled || rightPlugin->disabled || ! leftPlugin->loadable || ! rightPlugin->loadable)
             {
                 showErrorAlert(IDS_MSG_PANE_OP_REQUIRES_COMPATIBLE_FS);
                 break;
             }
 
+            CompareDirectoriesPaneContext left{};
+            left.pluginId         = std::wstring(leftPluginId);
+            left.instanceContext  = std::move(leftLocation.instanceContext);
+            left.rootPluginPath   = leftRoot.value();
+
+            CompareDirectoriesPaneContext right{};
+            right.pluginId        = std::wstring(rightPluginId);
+            right.instanceContext = std::move(rightLocation.instanceContext);
+            right.rootPluginPath  = rightRoot.value();
+
             const AppTheme theme = ResolveConfiguredTheme();
             static_cast<void>(
-                ShowCompareDirectoriesWindow(hWnd, g_settings, theme, &g_shortcutManager, std::move(baseFileSystem), leftRoot.value(), rightRoot.value()));
+                ShowCompareDirectoriesWindow(hWnd, g_settings, theme, &g_shortcutManager, std::move(left), std::move(right)));
             break;
         }
         case IDM_APP_SWAP_PANES: g_folderWindow.SwapPanes(); break;
@@ -6861,6 +6955,17 @@ LRESULT OnMainWindowClose(HWND hWnd)
 
 LRESULT OnMainWindowDestroy(HWND hWnd)
 {
+#ifdef _DEBUG
+    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+    {
+        ShutdownSelfTestMonitor();
+        TraceSelfTestExitCode(L"OnMainWindowDestroy: PostQuitMessage",
+                              (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
+        PostQuitMessage((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
+        return 0;
+    }
+#endif
+
     SaveAppSettings(hWnd);
 
 #ifdef _DEBUG

@@ -194,6 +194,7 @@ public:
     void SetPaneDetailsTextProvider(Pane pane, FolderView::DetailsTextProvider provider);
     void SetPaneMetadataTextProvider(Pane pane, FolderView::MetadataTextProvider provider);
     void SetPaneEmptyStateMessage(Pane pane, std::wstring message);
+    void SetPaneBackgroundWatermark(Pane pane, std::wstring message, bool animated);
     void RefreshPaneDetailsText(Pane pane);
     void SetPaneSelectionByDisplayNamePredicate(Pane pane,
                                                 const std::function<bool(std::wstring_view)>& shouldSelect,

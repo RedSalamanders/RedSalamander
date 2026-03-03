@@ -2207,6 +2207,12 @@ void ParseCompareDirectories(yyjson_val* root, Common::Settings::Settings& out)
     GetBool(compare, "ignoreDirectories", settings.ignoreDirectories);
     GetBool(compare, "showIdenticalItems", settings.showIdenticalItems);
 
+    uint32_t contentCompareWorkerCount = 0;
+    if (GetUInt32(compare, "contentCompareWorkerCount", contentCompareWorkerCount))
+    {
+        settings.contentCompareWorkerCount = std::clamp(contentCompareWorkerCount, 0u, 4u);
+    }
+
     if (const auto ignoreFilesPatterns = GetString(compare, "ignoreFilesPatterns"))
     {
         settings.ignoreFilesPatterns = Utf16FromUtf8(ignoreFilesPatterns.value());
@@ -2223,7 +2229,8 @@ void ParseCompareDirectories(yyjson_val* root, Common::Settings::Settings& out)
                                settings.compareSubdirectoryAttributes != defaults.compareSubdirectoryAttributes ||
                                settings.selectSubdirsOnlyInOnePane != defaults.selectSubdirsOnlyInOnePane || settings.ignoreFiles != defaults.ignoreFiles ||
                                settings.ignoreDirectories != defaults.ignoreDirectories || settings.showIdenticalItems != defaults.showIdenticalItems ||
-                               ! settings.ignoreFilesPatterns.empty() || ! settings.ignoreDirectoriesPatterns.empty();
+                               settings.contentCompareWorkerCount != defaults.contentCompareWorkerCount || ! settings.ignoreFilesPatterns.empty() ||
+                               ! settings.ignoreDirectoriesPatterns.empty();
 
     if (hasNonDefault)
     {
@@ -4095,7 +4102,8 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                                   compare.compareSubdirectoryAttributes != defaults.compareSubdirectoryAttributes ||
                                   compare.selectSubdirsOnlyInOnePane != defaults.selectSubdirsOnlyInOnePane || compare.ignoreFiles != defaults.ignoreFiles ||
                                   compare.ignoreDirectories != defaults.ignoreDirectories || compare.showIdenticalItems != defaults.showIdenticalItems ||
-                                  ! compare.ignoreFilesPatterns.empty() || ! compare.ignoreDirectoriesPatterns.empty();
+                                  compare.contentCompareWorkerCount != defaults.contentCompareWorkerCount || ! compare.ignoreFilesPatterns.empty() ||
+                                  ! compare.ignoreDirectoriesPatterns.empty();
 
         if (wroteCompare)
         {
@@ -4153,6 +4161,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             if (compare.showIdenticalItems != defaults.showIdenticalItems)
             {
                 yyjson_mut_obj_add_bool(doc, compareObj, "showIdenticalItems", compare.showIdenticalItems);
+            }
+            if (compare.contentCompareWorkerCount != defaults.contentCompareWorkerCount)
+            {
+                yyjson_mut_obj_add_uint(doc, compareObj, "contentCompareWorkerCount", compare.contentCompareWorkerCount);
             }
         }
     }

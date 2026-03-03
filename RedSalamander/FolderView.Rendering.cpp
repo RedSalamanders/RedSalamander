@@ -230,6 +230,7 @@ void FolderView::RecreateThemeBrushes()
     // Reset existing brushes
     _backgroundBrush.reset();
     _filterWatermarkBrush.reset();
+    _backgroundWatermarkBrush.reset();
     _textBrush.reset();
     _detailsTextBrush.reset();
     _metadataTextBrush.reset();
@@ -261,6 +262,13 @@ void FolderView::RecreateThemeBrushes()
         watermarkColor.a            = _theme.darkBase ? 0.07f : 0.04f;
         const HRESULT hrWatermark   = _d2dContext->CreateSolidColorBrush(watermarkColor, _filterWatermarkBrush.addressof());
         static_cast<void>(CheckHR(hrWatermark, L"ID2D1DeviceContext::CreateSolidColorBrush(filter watermark)"));
+    }
+
+    {
+        D2D1::ColorF watermarkColor = _theme.textNormal;
+        watermarkColor.a            = 1.0f;
+        const HRESULT hrWatermark   = _d2dContext->CreateSolidColorBrush(watermarkColor, _backgroundWatermarkBrush.addressof());
+        static_cast<void>(CheckHR(hrWatermark, L"ID2D1DeviceContext::CreateSolidColorBrush(background watermark)"));
     }
 
     D2D1::ColorF detailsColor    = _theme.textNormal;
@@ -583,6 +591,7 @@ void FolderView::DiscardDeviceResources()
 
     _backgroundBrush.reset();
     _filterWatermarkBrush.reset();
+    _backgroundWatermarkBrush.reset();
     _textBrush.reset();
     _selectionBrush.reset();
     _focusedBackgroundBrush.reset();
@@ -610,6 +619,11 @@ void FolderView::DiscardDeviceResources()
     _filterWatermarkBadgeLayoutClientSizePx = {};
     _filterWatermarkBadgeLayoutDpi          = 0.0f;
     _filterWatermarkBadgeLayoutFontSizeDip  = 0.0f;
+    _backgroundWatermarkLayout.reset();
+    _backgroundWatermarkLayoutClientSizePx = {};
+    _backgroundWatermarkLayoutDpi          = 0.0f;
+    _backgroundWatermarkLayoutText.clear();
+    _backgroundWatermarkLayoutFontSizeDip = 0.0f;
     _incrementalSearchIndicatorLayout.reset();
     _incrementalSearchIndicatorLayoutText.clear();
     _incrementalSearchIndicatorLayoutMaxWidthDip = 0.0f;
@@ -980,6 +994,74 @@ void FolderView::Render(const RECT& invalidRect)
                     constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
                     _d2dContext->DrawTextLayout(D2D1::Point2F(paddingDip, paddingDip), _filterWatermarkBadgeLayout.get(), _filterWatermarkBrush.get(), options);
                 }
+            }
+        }
+
+        const bool canRenderBackgroundWatermark = ! _backgroundWatermarkMessage.empty() && _dwriteFactory && (_detailsFormat || _labelFormat) &&
+                                                  _backgroundWatermarkBrush;
+        if (canRenderBackgroundWatermark)
+        {
+            const float clientWidthDip  = std::max(1.0f, DipFromPx(_clientSize.cx));
+            const float clientHeightDip = std::max(1.0f, DipFromPx(_clientSize.cy));
+            const float minDimDip       = std::min(clientWidthDip, clientHeightDip);
+
+            const float fontSizeDip = std::clamp(minDimDip * 0.07f, 18.0f, 44.0f);
+
+            const bool needsLayoutRebuild = ! _backgroundWatermarkLayout || _backgroundWatermarkLayoutClientSizePx.cx != _clientSize.cx ||
+                                            _backgroundWatermarkLayoutClientSizePx.cy != _clientSize.cy || _backgroundWatermarkLayoutDpi != _dpi ||
+                                            _backgroundWatermarkLayoutText != _backgroundWatermarkMessage;
+            if (needsLayoutRebuild)
+            {
+                _backgroundWatermarkLayout.reset();
+
+                if (_backgroundWatermarkMessage.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+                {
+                    const UINT32 length = static_cast<UINT32>(_backgroundWatermarkMessage.size());
+                    const HRESULT hrLayout =
+                        _dwriteFactory->CreateTextLayout(_backgroundWatermarkMessage.data(),
+                                                         length,
+                                                         _detailsFormat ? _detailsFormat.get() : _labelFormat.get(),
+                                                         clientWidthDip,
+                                                         clientHeightDip,
+                                                         _backgroundWatermarkLayout.addressof());
+                    if (SUCCEEDED(hrLayout) && _backgroundWatermarkLayout)
+                    {
+                        _backgroundWatermarkLayoutClientSizePx = _clientSize;
+                        _backgroundWatermarkLayoutDpi          = _dpi;
+                        _backgroundWatermarkLayoutText         = _backgroundWatermarkMessage;
+                        _backgroundWatermarkLayoutFontSizeDip  = 0.0f;
+
+                        _backgroundWatermarkLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                        _backgroundWatermarkLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+                        _backgroundWatermarkLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+                    }
+                }
+            }
+
+            if (_backgroundWatermarkLayout)
+            {
+                const UINT32 length = static_cast<UINT32>(_backgroundWatermarkLayoutText.size());
+                if (length > 0 && _backgroundWatermarkLayoutFontSizeDip != fontSizeDip)
+                {
+                    const DWRITE_TEXT_RANGE range{0, length};
+                    _backgroundWatermarkLayout->SetFontSize(fontSizeDip, range);
+                    _backgroundWatermarkLayoutFontSizeDip = fontSizeDip;
+                }
+
+                float opacity = _theme.darkBase ? 0.08f : 0.05f;
+                if (_backgroundWatermarkAnimated)
+                {
+                    constexpr float kPi              = 3.14159265358979323846f;
+                    constexpr float kTwoPi           = 2.0f * kPi;
+                    constexpr uint64_t kPulsePeriodMs = 1400u;
+                    const float t = static_cast<float>(nowTickMs % kPulsePeriodMs) / static_cast<float>(kPulsePeriodMs);
+                    const float pulse = 0.75f + 0.25f * std::sin(t * kTwoPi);
+                    opacity           = std::clamp(opacity * pulse, 0.0f, 1.0f);
+                }
+                _backgroundWatermarkBrush->SetOpacity(opacity);
+
+                constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), _backgroundWatermarkLayout.get(), _backgroundWatermarkBrush.get(), options);
             }
         }
 

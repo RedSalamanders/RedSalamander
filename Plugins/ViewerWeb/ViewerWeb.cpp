@@ -2490,9 +2490,33 @@ void ViewerWeb::ShowHostAlert(HWND targetWindow, HostAlertSeverity severity, con
 
     const std::wstring title = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_TITLE);
 
+    if (! _hostAlerts && _host)
+    {
+        wil::com_ptr<IHostAlerts> alerts;
+        const HRESULT hr = _host->QueryInterface(__uuidof(IHostAlerts), alerts.put_void());
+        if (SUCCEEDED(hr) && alerts)
+        {
+            _hostAlerts = std::move(alerts);
+        }
+    }
+
     if (! _hostAlerts)
     {
-        MessageBoxW(targetWindow, message.c_str(), title.empty() ? L"ViewerWeb" : title.c_str(), MB_OK | MB_ICONERROR);
+        const std::wstring_view normalizedTitle = title.empty() ? L"ViewerWeb" : std::wstring_view(title);
+        switch (severity)
+        {
+            case HOST_ALERT_WARNING:
+                Debug::Warning(L"ViewerWeb: Host alert dropped ({}): {}", normalizedTitle, message);
+                break;
+            case HOST_ALERT_INFO:
+            case HOST_ALERT_BUSY:
+                Debug::Info(L"ViewerWeb: Host alert dropped ({}): {}", normalizedTitle, message);
+                break;
+            case HOST_ALERT_ERROR:
+            default:
+                Debug::Error(L"ViewerWeb: Host alert dropped ({}): {}", normalizedTitle, message);
+                break;
+        }
         return;
     }
 

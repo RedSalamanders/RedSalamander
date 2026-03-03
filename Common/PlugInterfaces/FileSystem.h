@@ -57,8 +57,16 @@ enum class FileSystemIssueAction : uint8_t
     Cancel,
 };
 
+// ABI versioning note:
+// For any struct that includes a `sizeBytes` field, the creator MUST set `sizeBytes = sizeof(StructName)` before
+// passing it across the host<->plugin boundary. Consumers MUST validate `sizeBytes` before reading other fields.
+// In this repo's ABI-breaking sweep, mismatched `sizeBytes` is treated as a contract violation: fail the call with `E_INVALIDARG`.
+// For [out] structs, the caller MUST initialize `sizeBytes` before calling into the callee, and the callee MUST NOT
+// write beyond `sizeBytes`.
 struct FileSystemOptions
 {
+    uint32_t sizeBytes; // sizeof(FileSystemOptions)
+
     // 0 = unlimited (use all available bandwidth).
     // Callbacks receive an in/out FileSystemOptions* so the host can tweak it on progress updates (e.g. changing the limit mid-flight).
     // Plugins MAY also write back an effective applied limit (e.g. internal clamping or combining with a plugin-specific cap).
@@ -67,6 +75,8 @@ struct FileSystemOptions
 
 struct FileSystemRenamePair
 {
+    uint32_t sizeBytes; // sizeof(FileSystemRenamePair)
+
     // Pointers reference NUL-terminated UTF-16 strings stored in a caller-owned arena.
     // Arrays of FileSystemRenamePair are allocated from the same arena as their strings.
     const wchar_t* sourcePath;
@@ -98,6 +108,8 @@ enum FileSystemSearchFlags : uint32_t
 
 struct FileSystemSearchQuery
 {
+    uint32_t sizeBytes; // sizeof(FileSystemSearchQuery)
+
     const wchar_t* rootPath;
     const wchar_t* pattern; // nullptr/empty = L"*"
     FileSystemSearchFlags flags;
@@ -106,6 +118,8 @@ struct FileSystemSearchQuery
 
 struct FileSystemSearchMatch
 {
+    uint32_t sizeBytes; // sizeof(FileSystemSearchMatch)
+
     const wchar_t* fullPath;
     unsigned long fullPathSize;
     unsigned long fileAttributes;
@@ -119,6 +133,8 @@ struct FileSystemSearchMatch
 
 struct FileSystemSearchProgress
 {
+    uint32_t sizeBytes; // sizeof(FileSystemSearchProgress)
+
     uint64_t scannedEntries;
     uint64_t matchedEntries;
     const wchar_t* currentPath;
@@ -149,10 +165,16 @@ interface __declspec(uuid("0d9ef549-4e54-4086-8a5c-f9d3e6120211")) __declspec(no
 // Notes:
 // - This is NOT a COM interface (no IUnknown inheritance); lifetime is managed by the host.
 // - The cookie is provided by the host at call time and must be passed back verbatim by the plugin.
+// - This is a per-call callback passed to Copy*/Move*/Delete*/Rename* operations.
+// - Implementations MUST NOT invoke these callbacks after the operation returns.
 // - Plugins MUST NOT invoke these callbacks concurrently for a single operation (the host is not required to be thread-safe).
 // - Callbacks may be invoked on background threads.
 // - Callbacks may block (e.g. host-driven Pause); plugins SHOULD avoid holding locks that could deadlock if callbacks block,
 //   and SHOULD reach progress checkpoints frequently enough for pause/cancel responsiveness.
+// Host obligations:
+// - The host MUST keep the callback object and its backing state alive until the operation call returns.
+// - To tear down early, the host MUST signal cancellation via FileSystemShouldCancel and wait for the operation
+//   to return before destroying callback-referenced state.
 interface __declspec(novtable) IFileSystemCallback
 {
     // options may be nullptr; implementations must check before reading/writing to it.
@@ -312,6 +334,8 @@ interface __declspec(uuid("b6f0a9e1-8c8b-4b72-9f3e-2f2b4b8b9c41")) __declspec(no
 
 struct FileSystemBasicInformation
 {
+    uint32_t sizeBytes = 0; // sizeof(FileSystemBasicInformation)
+
     __int64 creationTime     = 0; // FILETIME ticks (100ns intervals since 1601-01-01 UTC)
     __int64 lastAccessTime   = 0; // FILETIME ticks
     __int64 lastWriteTime    = 0; // FILETIME ticks
@@ -342,6 +366,8 @@ interface __declspec(uuid("2c7c32b3-8a0f-4e25-8d3a-6a5f1d0a1e2c")) __declspec(no
 // Result structure for directory size computation.
 struct FileSystemDirectorySizeResult
 {
+    uint32_t sizeBytes; // sizeof(FileSystemDirectorySizeResult)
+
     uint64_t totalBytes;     // Total size in bytes (sum of file sizes).
     uint64_t fileCount;      // Number of files counted.
     uint64_t directoryCount; // Number of directories counted (excluding root).
@@ -354,6 +380,8 @@ struct FileSystemDirectorySizeResult
 // - The cookie is provided by the host at call time and must be passed back verbatim by the plugin.
 // - Callbacks may block (e.g. host-driven Pause/Skip); plugins SHOULD avoid holding locks that could deadlock if callbacks block,
 //   and SHOULD reach progress checkpoints frequently enough for responsiveness.
+// - This is a per-call callback; the same host obligations apply as for IFileSystemCallback above.
+// - Plugins MUST NOT invoke these callbacks concurrently for a single GetDirectorySize call.
 interface __declspec(novtable) IFileSystemDirectorySizeCallback
 {
     // Notes:
@@ -410,6 +438,8 @@ struct FileSystemDirectoryChange
 
 struct FileSystemDirectoryChangeNotification
 {
+    uint32_t sizeBytes; // sizeof(FileSystemDirectoryChangeNotification)
+
     // Path originally passed to WatchDirectory; NUL-terminated UTF-16.
     const wchar_t* watchedPath;
     unsigned long watchedPathSize; // bytes (not characters)
@@ -427,6 +457,14 @@ struct FileSystemDirectoryChangeNotification
 // - The cookie is provided by the host at WatchDirectory time and must be passed back verbatim by the plugin.
 // - Plugins MUST NOT invoke these callbacks concurrently for a single watch registration (the host is not required to be thread-safe).
 // - Callbacks may be invoked on background threads.
+// Host obligations:
+// - The host MUST NOT destroy callback-referenced state until UnwatchDirectory returns.
+// - The callback implementation MUST be safe to invoke from any thread at any time before UnwatchDirectory returns.
+// - The callback implementation MUST tolerate invocation racing with a teardown request (e.g. check an atomic
+//   _stopping flag at entry; see FolderWatcher::OnPluginDirectoryChanged for the reference pattern).
+// Deadlock avoidance:
+// - Watch callbacks MUST NOT perform synchronous calls that depend on the thread calling UnwatchDirectory.
+//   Use PostMessage / TrySubmitThreadpoolCallback, never SendMessage, from a watch callback.
 interface __declspec(novtable) IFileSystemDirectoryWatchCallback
 {
     virtual HRESULT STDMETHODCALLTYPE FileSystemDirectoryChanged(const FileSystemDirectoryChangeNotification* notification, void* cookie) noexcept = 0;
@@ -435,7 +473,11 @@ interface __declspec(novtable) IFileSystemDirectoryWatchCallback
 // Optional directory watch interface for plugins that can report change notifications.
 // Notes:
 // - The host obtains this interface via QueryInterface on the active IFileSystem instance.
-// - UnwatchDirectory MUST guarantee no callbacks for that path after it returns.
+// - UnwatchDirectory MUST synchronously drain: after UnwatchDirectory returns, no thread may still invoke callbacks
+//   for that path, and any in-flight callback invocation for that registration must have completed.
+// - The plugin's drain wait MUST NOT hold a lock that callback delivery also acquires.
+//   (FileSystem unlocks _mutex before WaitForThreadpool*Callbacks; FileSystemDummy uses a CV wait that releases the lock.)
+// - The _stopping / active flag MUST be set before initiating the drain wait.
 interface __declspec(uuid("d00f72a2-faf2-47c4-abbe-85dab1e67132")) __declspec(novtable) IFileSystemDirectoryWatch : public IUnknown
 {
     virtual HRESULT STDMETHODCALLTYPE WatchDirectory(const wchar_t* path, IFileSystemDirectoryWatchCallback* callback, void* cookie) noexcept = 0;
@@ -455,6 +497,14 @@ interface __declspec(uuid("a4bdbb56-4f3f-4c1b-9b28-2f4c4a08d7af")) __declspec(no
 // Notes:
 // - This is NOT a COM interface (no IUnknown inheritance); lifetime is managed by the host.
 // - The cookie is provided by the host at call time and must be passed back verbatim by the plugin.
+// - This is a per-call callback passed to IFileSystemSearch::Search.
+// - Implementations MUST NOT invoke these callbacks after Search returns.
+// - Plugins MUST NOT invoke these callbacks concurrently for a single Search call (the host is not required to be thread-safe).
+// - Callbacks may be invoked on background threads.
+// Host obligations:
+// - The host MUST keep the callback object and its backing state alive until Search returns.
+// - To tear down early, the host MUST signal cancellation via FileSystemSearchShouldCancel and wait for Search
+//   to return before destroying callback-referenced state.
 interface __declspec(novtable) IFileSystemSearchCallback
 {
     virtual HRESULT STDMETHODCALLTYPE FileSystemSearchMatch(const FileSystemSearchMatch* match, void* cookie) noexcept          = 0;

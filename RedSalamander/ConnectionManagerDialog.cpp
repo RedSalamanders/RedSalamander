@@ -873,6 +873,8 @@ struct DialogState
     std::wstring toggleOnLabel;
     std::wstring toggleOffLabel;
     std::wstring quickConnectLabel;
+    std::wstring copyMoveMaxConcurrencyCue;
+    std::wstring deleteMaxConcurrencyCue;
 
     wil::unique_hwnd nameFrame;
     wil::unique_hwnd protocolFrame;
@@ -3902,11 +3904,19 @@ INT_PTR OnInitDialog(HWND dlg, DialogState* init) noexcept
 
     if (init->copyMoveMaxConcurrencyEdit)
     {
-        static_cast<void>(SendMessageW(init->copyMoveMaxConcurrencyEdit, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"0 = inherit (max 8)")));
+        init->copyMoveMaxConcurrencyCue = LoadStringResource(nullptr, IDS_CONNECTIONS_CUE_COPYMOVE_CONCURRENCY);
+        static_cast<void>(SendMessageW(init->copyMoveMaxConcurrencyEdit,
+                                       EM_SETCUEBANNER,
+                                       TRUE,
+                                       reinterpret_cast<LPARAM>(init->copyMoveMaxConcurrencyCue.c_str())));
     }
     if (init->deleteMaxConcurrencyEdit)
     {
-        static_cast<void>(SendMessageW(init->deleteMaxConcurrencyEdit, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(L"0 = inherit (max 64)")));
+        init->deleteMaxConcurrencyCue = LoadStringResource(nullptr, IDS_CONNECTIONS_CUE_DELETE_CONCURRENCY);
+        static_cast<void>(SendMessageW(init->deleteMaxConcurrencyEdit,
+                                       EM_SETCUEBANNER,
+                                       TRUE,
+                                       reinterpret_cast<LPARAM>(init->deleteMaxConcurrencyCue.c_str())));
     }
 
     if (init->sshKnownHostsEdit)

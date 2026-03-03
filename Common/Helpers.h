@@ -1283,8 +1283,9 @@ struct PostedMessagePayloadRegistry final
 
 [[nodiscard]] inline PostedMessagePayloadRegistry& GetPostedMessagePayloadRegistry() noexcept
 {
-    static PostedMessagePayloadRegistry registry;
-    return registry;
+    // Intentionally leaked to avoid shutdown UAF from static destruction order issues.
+    static PostedMessagePayloadRegistry* registry = new PostedMessagePayloadRegistry();
+    return *registry;
 }
 
 inline void InitPostedPayloadWindow(HWND hwnd) noexcept

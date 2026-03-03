@@ -607,11 +607,8 @@ namespace FileSystemCurlInternal
 
     uint64_t sizeBytes = 0;
     {
-        unsigned long long parsed = 0;
-        if (sscanf_s(std::string(sizeTok.value()).c_str(), "%llu", &parsed) == 1)
-        {
-            sizeBytes = static_cast<uint64_t>(parsed);
-        }
+        const auto sv = sizeTok.value();
+        std::from_chars(sv.data(), sv.data() + sv.size(), sizeBytes);
     }
 
     out            = {};
@@ -685,8 +682,10 @@ namespace FileSystemCurlInternal
     }
     else
     {
-        unsigned long long parsed = 0;
-        if (sscanf_s(std::string(sizeOrDir.value()).c_str(), "%llu", &parsed) != 1)
+        const auto sv     = sizeOrDir.value();
+        uint64_t parsed   = 0;
+        const auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), parsed);
+        if (ec != std::errc{} || ptr == sv.data())
         {
             return false;
         }
@@ -1842,6 +1841,95 @@ void CurlShareUnlock(CURL* /*handle*/, curl_lock_data data, void* userptr) noexc
 }
 } // namespace
 
+CurlEasyPool::BorrowedHandle CurlEasyPool::Borrow(std::wstring_view limiterKey) noexcept
+{
+    std::wstring key{limiterKey};
+    std::vector<unique_curl_easy> cleanup;
+    unique_curl_easy handle;
+
+    const uint64_t now = GetTickCount64();
+    {
+        std::scoped_lock lock(_mutex);
+        EvictExpired(now, cleanup);
+
+        auto it = _idle.find(key);
+        if (it != _idle.end() && ! it->second.empty())
+        {
+            IdleEntry entry = std::move(it->second.back());
+            it->second.pop_back();
+            if (it->second.empty())
+            {
+                _idle.erase(it);
+            }
+            handle = std::move(entry.handle);
+        }
+    }
+
+    if (! handle)
+    {
+        handle.reset(curl_easy_init());
+        if (! handle)
+        {
+            return {};
+        }
+    }
+    else
+    {
+        curl_easy_reset(handle.get());
+    }
+
+    return BorrowedHandle(this, std::move(key), std::move(handle));
+}
+
+void CurlEasyPool::ReturnHandle(std::wstring key, unique_curl_easy handle) noexcept
+{
+    if (! handle)
+    {
+        return;
+    }
+
+    const uint64_t now = GetTickCount64();
+
+    std::scoped_lock lock(_mutex);
+
+    auto& vec = _idle[std::move(key)];
+    if (vec.size() >= kMaxIdlePerConnection)
+    {
+        return; // drop handle — pool is full for this connection
+    }
+    vec.push_back(IdleEntry(std::move(handle), now));
+}
+
+void CurlEasyPool::EvictExpired(uint64_t now, std::vector<unique_curl_easy>& cleanup) noexcept
+{
+    for (auto it = _idle.begin(); it != _idle.end();)
+    {
+        auto& vec = it->second;
+        for (auto& entry : vec)
+        {
+            if ((now - entry.returnedAtMs) >= kIdleExpiryMs && entry.handle)
+            {
+                cleanup.push_back(std::move(entry.handle));
+            }
+        }
+        std::erase_if(vec, [&](const IdleEntry& e) { return (now - e.returnedAtMs) >= kIdleExpiryMs; });
+        if (vec.empty())
+        {
+            it = _idle.erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+[[nodiscard]] CurlEasyPool& GetCurlEasyPool() noexcept
+{
+    static CurlEasyPool pool;
+    return pool;
+}
+
 [[nodiscard]] HRESULT HResultFromCurl(CURLcode code) noexcept
 {
 #pragma warning(push)
@@ -1999,6 +2087,130 @@ size_t CurlWriteToString(void* ptr, size_t size, size_t nmemb, void* userdata) n
     out->append(static_cast<const char*>(ptr), total);
     return total;
 }
+
+namespace
+{
+struct CurlListParseContext final
+{
+    explicit CurlListParseContext(std::vector<FilesInformationCurl::Entry>& outEntries) noexcept : _outEntries(&outEntries)
+    {
+    }
+
+    CurlListParseContext(const CurlListParseContext&)            = delete;
+    CurlListParseContext& operator=(const CurlListParseContext&) = delete;
+    CurlListParseContext(CurlListParseContext&&)                 = delete;
+    CurlListParseContext& operator=(CurlListParseContext&&)      = delete;
+
+    void AppendBytes(const char* bytes, size_t bytesCount) noexcept
+    {
+        if (bytes == nullptr || bytesCount == 0)
+        {
+            return;
+        }
+
+        _pending.append(bytes, bytesCount);
+
+        size_t start = 0;
+        while (true)
+        {
+            const size_t end = _pending.find('\n', start);
+            if (end == std::string::npos)
+            {
+                break;
+            }
+
+            ProcessLine(std::string_view(_pending).substr(start, end - start));
+            start = end + 1u;
+        }
+
+        if (start > 0)
+        {
+            _pending.erase(0, start);
+        }
+    }
+
+    void ProcessLine(std::string_view line) noexcept
+    {
+        if (! line.empty() && line.back() == '\r')
+        {
+            line.remove_suffix(1);
+        }
+        if (line.empty())
+        {
+            return;
+        }
+
+        FilesInformationCurl::Entry entry{};
+        if (TryParseUnixListLine(line, entry) || TryParseDosListLine(line, entry))
+        {
+            _anyParsed = true;
+            _fallbackNamesUtf8.clear();
+            _outEntries->push_back(std::move(entry));
+            return;
+        }
+
+        if (_anyParsed)
+        {
+            return;
+        }
+
+        std::string trimmed = TrimAscii(line);
+        if (trimmed.empty() || IsDotOrDotDotName(trimmed))
+        {
+            return;
+        }
+
+        _fallbackNamesUtf8.push_back(std::move(trimmed));
+    }
+
+    void FinalizePendingLine() noexcept
+    {
+        if (_pending.empty())
+        {
+            return;
+        }
+
+        const std::string pending = std::move(_pending);
+        _pending.clear();
+        ProcessLine(pending);
+    }
+
+    [[nodiscard]] bool HasFallbackNames() const noexcept
+    {
+        return ! _anyParsed && ! _fallbackNamesUtf8.empty();
+    }
+
+    [[nodiscard]] const std::vector<std::string>& GetFallbackNamesUtf8() const noexcept
+    {
+        return _fallbackNamesUtf8;
+    }
+
+private:
+    std::string _pending;
+    std::vector<FilesInformationCurl::Entry>* _outEntries = nullptr;
+    bool _anyParsed                                       = false;
+    std::vector<std::string> _fallbackNamesUtf8;
+};
+
+size_t CurlWriteToListParser(void* ptr, size_t size, size_t nmemb, void* userdata) noexcept
+{
+    if (! ptr || ! userdata)
+    {
+        return 0;
+    }
+
+    const size_t total = size * nmemb;
+    if (total == 0)
+    {
+        return 0;
+    }
+
+    auto* ctx = static_cast<CurlListParseContext*>(userdata);
+    ctx->AppendBytes(static_cast<const char*>(ptr), total);
+
+    return total;
+}
+} // namespace
 
 size_t CurlWriteToFile(void* ptr, size_t size, size_t nmemb, void* userdata) noexcept
 {
@@ -2354,7 +2566,7 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
         return hr;
     }
 
-    unique_curl_easy curl{curl_easy_init()};
+    auto curl = GetCurlEasyPool().Borrow(conn.limiterKey);
     if (! curl)
     {
         return E_OUTOFMEMORY;
@@ -2410,6 +2622,102 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
     return HResultFromCurl(code);
 }
 
+[[nodiscard]] HRESULT CurlPerformListAndParse(const ConnectionInfo& conn,
+                                              std::wstring_view pluginPath,
+                                              std::vector<FilesInformationCurl::Entry>& outEntries) noexcept
+{
+    outEntries.clear();
+
+    HRESULT hr = EnsureCurlInitialized();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    auto curl = GetCurlEasyPool().Borrow(conn.limiterKey);
+    if (! curl)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    const std::string url = BuildUrl(conn, pluginPath, true, true);
+    if (url.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    CurlListParseContext parse(outEntries);
+
+    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToListParser);
+    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &parse);
+    curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
+
+    char errorBuffer[CURL_ERROR_SIZE]{};
+    curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
+
+    ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
+
+    const CURLcode code = curl_easy_perform(curl.get());
+    if (code != CURLE_OK)
+    {
+        long responseCode = 0;
+        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &responseCode);
+
+        Debug::Error(L"curl list failed protocol={} url='{}' user='{}' connProfile={} conn='{}' id='{}' authMode='{}' savePassword={} requireHello={} "
+                     L"passwordPresent={} sshKeyPresent={} sshPassphrasePresent={} knownHostsPresent={} responseCode={} curlCode={} ({}) error='{}'",
+                     ProtocolToDisplay(conn.protocol),
+                     Utf16FromUtf8(url),
+                     Utf16FromUtf8(conn.user),
+                     conn.fromConnectionManagerProfile ? 1 : 0,
+                     conn.connectionName.empty() ? L"(none)" : conn.connectionName,
+                     conn.connectionId,
+                     conn.connectionAuthMode,
+                     conn.connectionSavePassword ? 1 : 0,
+                     conn.connectionRequireHello ? 1 : 0,
+                     conn.password.empty() ? 0 : 1,
+                     conn.sshPrivateKey.empty() ? 0 : 1,
+                     conn.sshKeyPassphrase.empty() ? 0 : 1,
+                     conn.sshKnownHosts.empty() ? 0 : 1,
+                     responseCode,
+                     static_cast<unsigned long>(code),
+                     Utf16FromUtf8(curl_easy_strerror(code)),
+                     Utf16FromUtf8(errorBuffer));
+
+        if (conn.protocol == Protocol::Ftp && responseCode == 530 && conn.password.empty() && ! conn.user.empty() && conn.user != "anonymous")
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
+        }
+    }
+
+    hr = HResultFromCurl(code);
+    if (FAILED(hr))
+    {
+        outEntries.clear();
+        return hr;
+    }
+
+    parse.FinalizePendingLine();
+
+    if (parse.HasFallbackNames())
+    {
+        const auto& names = parse.GetFallbackNamesUtf8();
+        outEntries.reserve(names.size());
+        for (const std::string& nameUtf8 : names)
+        {
+            FilesInformationCurl::Entry entry{};
+            entry.name       = Utf16FromUtf8(nameUtf8);
+            entry.attributes = FILE_ATTRIBUTE_NORMAL;
+            if (! entry.name.empty())
+            {
+                outEntries.push_back(std::move(entry));
+            }
+        }
+    }
+
+    return S_OK;
+}
+
 [[nodiscard]] HRESULT CurlPerformQuote(const ConnectionInfo& conn, const std::vector<std::string>& commands) noexcept
 {
     if (commands.empty())
@@ -2423,7 +2731,7 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
         return hr;
     }
 
-    unique_curl_easy curl{curl_easy_init()};
+    auto curl = GetCurlEasyPool().Borrow(conn.limiterKey);
     if (! curl)
     {
         return E_OUTOFMEMORY;
@@ -2498,22 +2806,6 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
 
 namespace
 {
-[[nodiscard]] CURL* GetThreadLocalEasyHandle() noexcept
-{
-    static thread_local unique_curl_easy tlsCurl{};
-    if (! tlsCurl)
-    {
-        tlsCurl.reset(curl_easy_init());
-    }
-    if (! tlsCurl)
-    {
-        return nullptr;
-    }
-
-    curl_easy_reset(tlsCurl.get());
-    return tlsCurl.get();
-}
-
 [[nodiscard]] bool IsCurlTransientTransferError(CURLcode code) noexcept
 {
     switch (code)
@@ -2606,6 +2898,12 @@ void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexce
         return E_INVALIDARG;
     }
 
+    auto curl = GetCurlEasyPool().Borrow(conn.limiterKey);
+    if (! curl)
+    {
+        return E_OUTOFMEMORY;
+    }
+
     constexpr unsigned int kMaxAttempts = 2u; // at least one retry for transient network errors
     for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
     {
@@ -2616,18 +2914,14 @@ void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexce
             {
                 return hr;
             }
+
+            curl_easy_reset(curl.get());
         }
 
-        CURL* curl = GetThreadLocalEasyHandle();
-        if (! curl)
-        {
-            return E_OUTOFMEMORY;
-        }
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, CurlWriteToFile);
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
-        curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+        curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToFile);
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, file);
+        curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
 
         if (progressCtx)
         {
@@ -2640,18 +2934,18 @@ void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexce
                 PrepareProgressContextForRetry(progressCtx);
             }
 
-            curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlXferInfo);
-            curl_easy_setopt(curl, CURLOPT_XFERINFODATA, progressCtx);
-            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-            ApplyCommonCurlOptions(curl, conn, nullptr, false);
+            curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, CurlXferInfo);
+            curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, progressCtx);
+            curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
+            ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
         }
         else
         {
-            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-            ApplyCommonCurlOptions(curl, conn, options, false);
+            curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 1L);
+            ApplyCommonCurlOptions(curl.get(), conn, options, false);
         }
 
-        const CURLcode code = curl_easy_perform(curl);
+        const CURLcode code = curl_easy_perform(curl.get());
         if (code == CURLE_OK)
         {
             return S_OK;
@@ -2705,6 +2999,12 @@ void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexce
         return E_INVALIDARG;
     }
 
+    auto curl = GetCurlEasyPool().Borrow(conn.limiterKey);
+    if (! curl)
+    {
+        return E_OUTOFMEMORY;
+    }
+
     constexpr unsigned int kMaxAttempts = 2u; // at least one retry for transient network errors
     for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
     {
@@ -2715,22 +3015,18 @@ void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexce
             {
                 return hr;
             }
+
+            curl_easy_reset(curl.get());
         }
 
-        CURL* curl = GetThreadLocalEasyHandle();
-        if (! curl)
-        {
-            return E_OUTOFMEMORY;
-        }
-
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
-        curl_easy_setopt(curl, CURLOPT_READFUNCTION, CurlReadFromFile);
-        curl_easy_setopt(curl, CURLOPT_READDATA, file);
-        curl_easy_setopt(curl,
+        curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl.get(), CURLOPT_UPLOAD, 1L);
+        curl_easy_setopt(curl.get(), CURLOPT_READFUNCTION, CurlReadFromFile);
+        curl_easy_setopt(curl.get(), CURLOPT_READDATA, file);
+        curl_easy_setopt(curl.get(),
                          CURLOPT_INFILESIZE_LARGE,
                          static_cast<curl_off_t>(std::min<uint64_t>(sizeBytes, static_cast<uint64_t>((std::numeric_limits<curl_off_t>::max)()))));
-        curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+        curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
 
         if (progressCtx)
         {
@@ -2743,18 +3039,18 @@ void PrepareProgressContextForRetry(TransferProgressContext* progressCtx) noexce
                 PrepareProgressContextForRetry(progressCtx);
             }
 
-            curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CurlXferInfo);
-            curl_easy_setopt(curl, CURLOPT_XFERINFODATA, progressCtx);
-            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
-            ApplyCommonCurlOptions(curl, conn, nullptr, true);
+            curl_easy_setopt(curl.get(), CURLOPT_XFERINFOFUNCTION, CurlXferInfo);
+            curl_easy_setopt(curl.get(), CURLOPT_XFERINFODATA, progressCtx);
+            curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 0L);
+            ApplyCommonCurlOptions(curl.get(), conn, nullptr, true);
         }
         else
         {
-            curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 1L);
-            ApplyCommonCurlOptions(curl, conn, options, true);
+            curl_easy_setopt(curl.get(), CURLOPT_NOPROGRESS, 1L);
+            ApplyCommonCurlOptions(curl.get(), conn, options, true);
         }
 
-        const CURLcode code = curl_easy_perform(curl);
+        const CURLcode code = curl_easy_perform(curl.get());
         if (code == CURLE_OK)
         {
             return S_OK;

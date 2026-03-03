@@ -10,23 +10,26 @@ Status: **DONE** — there are no remaining `MessageBox*` call sites under `RedS
 
 - **DONE**: Copy/Move confirmation now uses `IHostPrompts::ShowPrompt` (overlay prompt) instead of `MessageBox*` (`RedSalamander/FolderViewInternal.h`, `RedSalamander/FolderWindow.FileOperations.State.cpp`).
 - **DONE**: Cancel-all confirmations now use `IHostPrompts::ShowPrompt` (`RedSalamander/FolderWindow.FileOperations.Popup.cpp`, `RedSalamander/FolderWindow.FileOperations.cpp`).
+- **DONE (Monitor)**: ETW elevation prompt now uses `IDD_MODAL_CONFIRM` (modal dialog, not `MessageBox*`) via `ShowModalConfirmDialog(...)` (`RedSalamanderMonitor/RedSalamanderMonitor.cpp`).
 
 ### Fatal/startup (replaces modal `MessageBoxResource` / `MessageBoxW`)
 
 - **DONE (RedSalamander)**: Startup and fatal crash paths show `IDD_FATAL_ERROR` (modal dialog, not `MessageBox*`) via `ShowFatalErrorDialog(...)` in `RedSalamander/RedSalamander.cpp`.
+- **DONE (RedSalamander)**: `--help` fallback UI uses `IDD_FATAL_ERROR` via `ShowFatalErrorDialog(...)` (no `MessageBox*`) (`RedSalamander/RedSalamander.cpp`).
 - **DONE (Monitor)**: Startup/fatal paths show `IDD_MODAL_MESSAGE` (modal dialog, not `MessageBox*`) via `ShowModalMessageDialog(...)` in `RedSalamanderMonitor/RedSalamanderMonitor.cpp`.
 - **DONE**: FolderWindow creation now fails cleanly when WM_CREATE initialization fails (`RedSalamander/FolderWindow.cpp`), allowing the fatal path to be centralized in the caller.
 
 ### Inline validation (no modal UI)
 
 - **DONE**: Navigation invalid path validation uses edit balloon tips (`EM_SHOWBALLOONTIP`) (`RedSalamander/NavigationView.Edit.cpp`, `RedSalamander/NavigationView.FullPathPopup.cpp`).
-- **DONE**: Preferences invalid shortcut command id uses an edit balloon tip (`RedSalamander/PreferencesDialog.cpp`).
+- **DONE**: Preferences invalid shortcut command id uses an edit balloon tip (`RedSalamander/Preferences.Dialog.cpp`).
 
 ### Non-blocking alerts / info (overlay)
 
 - **DONE**: “Command not implemented” uses `IHostAlerts::ShowAlert` (overlay alert) (`RedSalamander/RedSalamander.cpp`).
 - **DONE**: Plugins manager errors/info use `IHostAlerts::ShowAlert` (overlay alert) (`RedSalamander/ManagePluginsDialog.cpp`).
 - **DONE**: FolderView and ViewerText already render in-window alerts using `RedSalamander::Ui::AlertOverlay`.
+- **DONE**: ViewerWeb surfaces errors via `IHostAlerts::ShowAlert` and does not fall back to `MessageBox*` (`Plugins/ViewerWeb/ViewerWeb.cpp`).
 
 ## Follow-ups (optional)
 

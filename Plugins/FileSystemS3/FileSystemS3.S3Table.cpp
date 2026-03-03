@@ -109,34 +109,51 @@ namespace
     req.SetTableBucketARN(bucketArn);
     req.SetMaxNamespaces(static_cast<int>(std::min<unsigned long>(ctx.maxTableResults, 1000u)));
 
-    const auto outcome = client.ListNamespaces(req);
-    if (! outcome.IsSuccess())
+    // S3 Tables paginates via a continuation token (no IsTruncated boolean).
+    Aws::String token;
+    while (true)
     {
-        const auto& err            = outcome.GetError();
-        const std::wstring details = std::format(L"bucket='{}'", bucketName);
-        LogAwsFailure(L"S3Tables", L"ListNamespaces", ctx, err, details);
-        return HresultFromAwsError(err);
-    }
-
-    for (const auto& ns : outcome.GetResult().GetNamespaces())
-    {
-        std::string joined;
-        for (const auto& part : ns.GetNamespace())
+        if (! token.empty())
         {
-            if (! joined.empty())
-            {
-                joined.push_back('.');
-            }
-            joined.append(part.c_str(), part.size());
+            req.SetContinuationToken(token);
         }
 
-        FilesInformationS3::Entry e{};
-        e.name          = Utf16FromUtf8(joined);
-        e.attributes    = FILE_ATTRIBUTE_DIRECTORY;
-        e.creationTime  = AwsDateTimeToFileTime64(ns.GetCreatedAt());
-        e.lastWriteTime = e.creationTime;
-        e.changeTime    = e.creationTime;
-        out.push_back(std::move(e));
+        const auto outcome = client.ListNamespaces(req);
+        if (! outcome.IsSuccess())
+        {
+            const auto& err            = outcome.GetError();
+            const std::wstring details = std::format(L"bucket='{}'", bucketName);
+            LogAwsFailure(L"S3Tables", L"ListNamespaces", ctx, err, details);
+            return HresultFromAwsError(err);
+        }
+
+        const auto& result = outcome.GetResult();
+        for (const auto& ns : result.GetNamespaces())
+        {
+            std::string joined;
+            for (const auto& part : ns.GetNamespace())
+            {
+                if (! joined.empty())
+                {
+                    joined.push_back('.');
+                }
+                joined.append(part.c_str(), part.size());
+            }
+
+            FilesInformationS3::Entry e{};
+            e.name          = Utf16FromUtf8(joined);
+            e.attributes    = FILE_ATTRIBUTE_DIRECTORY;
+            e.creationTime  = AwsDateTimeToFileTime64(ns.GetCreatedAt());
+            e.lastWriteTime = e.creationTime;
+            e.changeTime    = e.creationTime;
+            out.push_back(std::move(e));
+        }
+
+        token = result.GetContinuationToken();
+        if (token.empty())
+        {
+            break;
+        }
     }
 
     return S_OK;
@@ -172,30 +189,47 @@ namespace
     }
     req.SetMaxTables(static_cast<int>(std::min<unsigned long>(ctx.maxTableResults, 1000u)));
 
-    const auto outcome = client.ListTables(req);
-    if (! outcome.IsSuccess())
+    // S3 Tables paginates via a continuation token (no IsTruncated boolean).
+    Aws::String token;
+    while (true)
     {
-        const auto& err            = outcome.GetError();
-        const std::wstring details = std::format(L"bucket='{}' namespace='{}'", bucketName, nsName);
-        LogAwsFailure(L"S3Tables", L"ListTables", ctx, err, details);
-        return HresultFromAwsError(err);
-    }
-
-    for (const auto& table : outcome.GetResult().GetTables())
-    {
-        const std::wstring name = Utf16FromUtf8(table.GetName());
-        if (name.empty())
+        if (! token.empty())
         {
-            continue;
+            req.SetContinuationToken(token);
         }
 
-        FilesInformationS3::Entry e{};
-        e.name          = std::format(L"{}.table.json", name);
-        e.attributes    = FILE_ATTRIBUTE_NORMAL;
-        e.creationTime  = AwsDateTimeToFileTime64(table.GetCreatedAt());
-        e.lastWriteTime = AwsDateTimeToFileTime64(table.GetModifiedAt());
-        e.changeTime    = e.lastWriteTime;
-        out.push_back(std::move(e));
+        const auto outcome = client.ListTables(req);
+        if (! outcome.IsSuccess())
+        {
+            const auto& err            = outcome.GetError();
+            const std::wstring details = std::format(L"bucket='{}' namespace='{}'", bucketName, nsName);
+            LogAwsFailure(L"S3Tables", L"ListTables", ctx, err, details);
+            return HresultFromAwsError(err);
+        }
+
+        const auto& result = outcome.GetResult();
+        for (const auto& table : result.GetTables())
+        {
+            const std::wstring name = Utf16FromUtf8(table.GetName());
+            if (name.empty())
+            {
+                continue;
+            }
+
+            FilesInformationS3::Entry e{};
+            e.name          = std::format(L"{}.table.json", name);
+            e.attributes    = FILE_ATTRIBUTE_NORMAL;
+            e.creationTime  = AwsDateTimeToFileTime64(table.GetCreatedAt());
+            e.lastWriteTime = AwsDateTimeToFileTime64(table.GetModifiedAt());
+            e.changeTime    = e.lastWriteTime;
+            out.push_back(std::move(e));
+        }
+
+        token = result.GetContinuationToken();
+        if (token.empty())
+        {
+            break;
+        }
     }
 
     return S_OK;

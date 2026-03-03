@@ -6,6 +6,7 @@
 #include "SettingsSave.h"
 #include "SettingsStore.h"
 
+#include <cassert>
 #include <bit>
 #include <chrono>
 #include <cstring>
@@ -1622,9 +1623,18 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
                                                                                      uint64_t progressStreamId,
                                                                                      void* cookie) noexcept
 {
+#ifdef _DEBUG
+    assert(_dbgCallbackActiveScopeCount.load(std::memory_order_acquire) > 0u);
+#endif
+
     if (operationType != _operation)
     {
         return S_OK;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
     }
 
     const ULONGLONG nowTick = GetTickCount64();
@@ -2051,9 +2061,18 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemItem
                                                                                           FileSystemOptions* options,
                                                                                           void* cookie) noexcept
 {
+#ifdef _DEBUG
+    assert(_dbgCallbackActiveScopeCount.load(std::memory_order_acquire) > 0u);
+#endif
+
     if (operationType != _operation)
     {
         return S_OK;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
     }
 
     {
@@ -2164,6 +2183,10 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemItem
 
 HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemShouldCancel(BOOL* pCancel, void* /*cookie*/) noexcept
 {
+#ifdef _DEBUG
+    assert(_dbgCallbackActiveScopeCount.load(std::memory_order_acquire) > 0u);
+#endif
+
     if (! pCancel)
     {
         return E_POINTER;
@@ -2182,9 +2205,18 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
                                                                                   [[maybe_unused]] FileSystemOptions* options,
                                                                                   void* cookie) noexcept
 {
+#ifdef _DEBUG
+    assert(_dbgCallbackActiveScopeCount.load(std::memory_order_acquire) > 0u);
+#endif
+
     if (! action)
     {
         return E_POINTER;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
     }
 
     *action = FileSystemIssueAction::Cancel;
@@ -2469,6 +2501,10 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemIssu
 HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::DirectorySizeProgress(
     uint64_t /*scannedEntries*/, uint64_t totalBytes, uint64_t fileCount, uint64_t directoryCount, const wchar_t* currentPath, void* cookie) noexcept
 {
+#ifdef _DEBUG
+    assert(_dbgCallbackActiveScopeCount.load(std::memory_order_acquire) > 0u);
+#endif
+
     WaitWhilePreCalcPaused();
 
     const bool shouldCancel = _cancelled.load(std::memory_order_acquire) || _preCalcSkipped.load(std::memory_order_acquire) || _stopToken.stop_requested();
@@ -2552,6 +2588,10 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::DirectorySizeP
 
 HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::DirectorySizeShouldCancel(BOOL* pCancel, void* /*cookie*/) noexcept
 {
+#ifdef _DEBUG
+    assert(_dbgCallbackActiveScopeCount.load(std::memory_order_acquire) > 0u);
+#endif
+
     if (! pCancel)
     {
         return E_POINTER;
@@ -2588,6 +2628,14 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
     {
         return; // Interface not supported, proceed without totals
     }
+
+#ifdef _DEBUG
+    _dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);
+    const auto dbgCallbackScope = wil::scope_exit([&] noexcept
+    {
+        _dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed);
+    });
+#endif
 
     _preCalcInProgress.store(true, std::memory_order_release);
     _preCalcStartTick.store(GetTickCount64(), std::memory_order_release);
@@ -2626,6 +2674,7 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
         progressCookie.acceptUpdates = &acceptUpdates;
 
         FileSystemDirectorySizeResult result{};
+        result.sizeBytes = sizeof(FileSystemDirectorySizeResult);
         const HRESULT hr     = dirOps->GetDirectorySize(path.c_str(), sizeFlags, this, &progressCookie, &result);
         const HRESULT status = FAILED(hr) ? hr : result.status;
 
@@ -3287,6 +3336,14 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
     _operationStartTick.store(GetTickCount64(), std::memory_order_release);
 
 #ifdef _DEBUG
+    _dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);
+    const auto dbgCallbackScope = wil::scope_exit([&] noexcept
+    {
+        _dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed);
+    });
+#endif
+
+#ifdef _DEBUG
     _dbgConfiguredMaxConcurrency = DeterminePerItemMaxConcurrency(_fileSystem, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles));
     _dbgConfiguredMaxConcurrency = std::max(1u, _dbgConfiguredMaxConcurrency);
     _dbgSingleInFlightStartTick  = 0;
@@ -3867,6 +3924,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                   totalBytes(totalBytesIn)
             {
                 const uint64_t initialBandwidth = task._desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+                options.sizeBytes                   = sizeof(FileSystemOptions);
                 options.bandwidthLimitBytesPerSecond = initialBandwidth;
                 bandwidthLimitBytesPerSecond.store(initialBandwidth, std::memory_order_release);
 
@@ -4210,6 +4268,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 }
 
                 FileSystemBasicInformation sourceBasicInfo{};
+                sourceBasicInfo.sizeBytes = sizeof(FileSystemBasicInformation);
                 bool hasSourceBasicInfo  = false;
                 const HRESULT hrGetBasic = sourceIo.GetFileBasicInformation(sourcePath.c_str(), &sourceBasicInfo);
                 if (SUCCEEDED(hrGetBasic))
@@ -4390,6 +4449,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 }
 
                 FileSystemBasicInformation sourceBasicInfo{};
+                sourceBasicInfo.sizeBytes = sizeof(FileSystemBasicInformation);
                 bool hasSourceBasicInfo  = false;
                 const HRESULT hrGetBasic = sourceIo.GetFileBasicInformation(sourcePath.c_str(), &sourceBasicInfo);
                 if (SUCCEEDED(hrGetBasic))
@@ -5149,6 +5209,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         else
                         {
                             FileSystemOptions options{};
+                            options.sizeBytes                   = sizeof(FileSystemOptions);
                             options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                             itemHr =
                                 _fileSystem->CopyItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
@@ -5157,6 +5218,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     else if (_operation == FILESYSTEM_MOVE)
                     {
                         FileSystemOptions options{};
+                        options.sizeBytes                   = sizeof(FileSystemOptions);
                         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                         itemHr = _fileSystem->MoveItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                     }
@@ -5606,6 +5668,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     else
                     {
                         FileSystemOptions options{};
+                        options.sizeBytes                   = sizeof(FileSystemOptions);
                         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                         itemHr = _fileSystem->CopyItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                     }
@@ -5652,6 +5715,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                             if (moveCopiedBytes > 0)
                             {
                                 FileSystemOptions options{};
+                                options.sizeBytes                   = sizeof(FileSystemOptions);
                                 options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                                 const HRESULT hrProgress             = FileSystemProgress(_operation,
                                                                               1,
@@ -5685,6 +5749,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     else
                     {
                         FileSystemOptions options{};
+                        options.sizeBytes                   = sizeof(FileSystemOptions);
                         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                         itemHr = _fileSystem->MoveItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                     }
@@ -6043,6 +6108,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         }
 
         FileSystemOptions options{};
+        options.sizeBytes                   = sizeof(FileSystemOptions);
         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         const HRESULT operationHr            = _fileSystem->CopyItems(pathArray, count, destinationFolder.c_str(), _flags, &options, this, nullptr);
         if (operationHr == S_OK && _observedSkipAction.load(std::memory_order_acquire))
@@ -6060,6 +6126,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         }
 
         FileSystemOptions options{};
+        options.sizeBytes                   = sizeof(FileSystemOptions);
         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         const HRESULT operationHr            = _fileSystem->MoveItems(pathArray, count, destinationFolder.c_str(), _flags, &options, this, nullptr);
         if (operationHr == S_OK && _observedSkipAction.load(std::memory_order_acquire))

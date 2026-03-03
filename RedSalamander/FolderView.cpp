@@ -204,9 +204,36 @@ void FolderView::SetEmptyStateMessage(std::wstring message)
     }
 }
 
+void FolderView::SetBackgroundWatermark(std::wstring message, bool animated)
+{
+    if (message == _backgroundWatermarkMessage && animated == _backgroundWatermarkAnimated)
+    {
+        return;
+    }
+
+    _backgroundWatermarkMessage  = std::move(message);
+    _backgroundWatermarkAnimated = animated;
+
+    _backgroundWatermarkLayout.reset();
+    _backgroundWatermarkLayoutClientSizePx = {};
+    _backgroundWatermarkLayoutDpi          = 0.0f;
+    _backgroundWatermarkLayoutText.clear();
+    _backgroundWatermarkLayoutFontSizeDip = 0.0f;
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+}
+
 bool FolderView::CanShowEmptyFolderState() const noexcept
 {
     if (! _emptyStateMessage.empty())
+    {
+        return false;
+    }
+
+    if (! _backgroundWatermarkMessage.empty())
     {
         return false;
     }

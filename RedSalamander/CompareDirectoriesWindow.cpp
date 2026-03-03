@@ -11,6 +11,8 @@
 #include <format>
 #include <limits>
 #include <optional>
+#include <system_error>
+#include <thread>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -28,10 +30,15 @@
 
 #include "CommandRegistry.h"
 #include "CompareDirectoriesEngine.h"
+#include "FileSystemPluginManager.h"
 #include "FluentIcons.h"
 #include "FolderView.h"
 #include "FolderWindow.h"
 #include "Helpers.h"
+#include "HostServices.h"
+#include "NavigationLocation.h"
+#include "PlugInterfaces/Factory.h"
+#include "PlugInterfaces/Informations.h"
 #include "ShortcutManager.h"
 #include "ThemedControls.h"
 #include "ThemedInputFrames.h"
@@ -57,17 +64,198 @@ constexpr UINT_PTR kCompareTaskAutoDismissTimerId    = 1005;
 constexpr UINT kCompareTaskAutoDismissDelayMs        = 5000;
 constexpr UINT_PTR kCompareBannerSpinnerTimerId      = 1006;
 constexpr UINT kCompareBannerSpinnerTimerIntervalMs  = 16;
+constexpr UINT_PTR kCompareDecisionRefreshTimerId     = 1007;
+constexpr UINT kCompareDecisionRefreshTimerIntervalMs = 200;
 constexpr UINT_PTR kCompareProgressSpinnerSubclassId = 3u;
 
 constexpr int kScanStatusHeightDip      = 22;
 constexpr int kScanStatusPaddingXDip    = 6;
-constexpr int kScanProgressBarWidthDip  = 18;
-constexpr int kScanProgressBarHeightDip = 18;
 constexpr int kSplitterGripDotSizeDip   = 2;
 constexpr int kSplitterGripDotGapDip    = 2;
 constexpr int kSplitterGripDotCount     = 3;
 constexpr float kMinSplitRatio          = 0.0f;
 constexpr float kMaxSplitRatio          = 1.0f;
+
+using CreateFactoryFunc   = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, void**);
+using CreateFactoryExFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+
+void LogComparePerfStats(std::wstring_view reason, const std::shared_ptr<CompareDirectoriesSession>& session, HRESULT resultHr) noexcept
+{
+    if (! session)
+    {
+        return;
+    }
+
+    const CompareDirectoriesPerfStats stats = session->GetPerfStats();
+    const auto toMiB                       = [](uint64_t bytes) noexcept -> uint64_t { return bytes / (1024u * 1024u); };
+
+    Debug::Info(
+        L"ComparePerf({}): hr=0x{:08X} v={} ui={} scanActive={} scanQ(H={},L={},sched={},inflight={},pendingSubdir={}) content(pending={},done={}/{},QH={},QL={},inflight={},updates={}) decisionCache(entries={},~{}MiB/{}MiB) dirCache(cur={}MiB,max={}MiB,hits={},misses={},enum={},evict={})",
+        reason,
+        static_cast<unsigned>(resultHr),
+        stats.version,
+        stats.uiVersion,
+        stats.scanActiveScans,
+        stats.scanQueueHighSize,
+        stats.scanQueueLowSize,
+        stats.scanScheduledKeys,
+        stats.scanInFlightKeys,
+        stats.pendingSubdirUpdates,
+        stats.contentPendingCompares,
+        stats.contentCompletedCompares,
+        stats.contentTotalCompares,
+        stats.contentQueueHighSize,
+        stats.contentQueueLowSize,
+        stats.contentInFlightSize,
+        stats.pendingContentUpdates,
+        stats.decisionCacheEntries,
+        toMiB(stats.decisionCacheEstimatedBytes),
+        toMiB(stats.decisionCacheBudgetBytes),
+        toMiB(stats.directoryInfoCache.currentBytes),
+        toMiB(stats.directoryInfoCache.maxBytes),
+        stats.directoryInfoCache.cacheHits,
+        stats.directoryInfoCache.cacheMisses,
+        stats.directoryInfoCache.enumerations,
+        stats.directoryInfoCache.evictions);
+}
+
+struct CreatedFileSystemInstance
+{
+    wil::unique_hmodule module;
+    wil::com_ptr<IFileSystem> fileSystem;
+    std::wstring pluginShortId;
+
+    CreatedFileSystemInstance() = default;
+    CreatedFileSystemInstance(const CreatedFileSystemInstance&)            = delete;
+    CreatedFileSystemInstance& operator=(const CreatedFileSystemInstance&) = delete;
+    CreatedFileSystemInstance(CreatedFileSystemInstance&&)                 = default;
+    CreatedFileSystemInstance& operator=(CreatedFileSystemInstance&&)      = default;
+};
+
+[[nodiscard]] const FileSystemPluginManager::PluginEntry* FindFileSystemPluginById(std::wstring_view pluginId) noexcept
+{
+    if (pluginId.empty())
+    {
+        return nullptr;
+    }
+
+    const auto& plugins = FileSystemPluginManager::GetInstance().GetPlugins();
+    for (const FileSystemPluginManager::PluginEntry& entry : plugins)
+    {
+        if (entry.id.empty())
+        {
+            continue;
+        }
+
+        if (CompareStringOrdinal(entry.id.c_str(), -1, pluginId.data(), static_cast<int>(pluginId.size()), TRUE) == CSTR_EQUAL)
+        {
+            return &entry;
+        }
+    }
+
+    return nullptr;
+}
+
+[[nodiscard]] std::optional<CreatedFileSystemInstance> TryCreateFileSystemInstance(std::wstring_view pluginId, const std::wstring& instanceContext) noexcept
+{
+    const FileSystemPluginManager::PluginEntry* entry = FindFileSystemPluginById(pluginId);
+    if (! entry || entry->id.empty() || entry->disabled || ! entry->loadable || ! entry->fileSystem || entry->path.empty())
+    {
+        return std::nullopt;
+    }
+
+    wil::unique_hmodule module(LoadLibraryExW(entry->path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
+    if (! module)
+    {
+        const DWORD lastError = Debug::ErrorWithLastError(L"CompareDirectories: LoadLibraryExW failed for '{}' (pluginId={})",
+                                                          entry->path.wstring(),
+                                                          entry->id);
+        static_cast<void>(lastError);
+        return std::nullopt;
+    }
+
+#pragma warning(push)
+#pragma warning(disable : 4191) // unsafe conversion from FARPROC
+    const auto createFactory   = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(module.get(), "RedSalamanderCreate"));
+    const auto createFactoryEx = reinterpret_cast<CreateFactoryExFunc>(GetProcAddress(module.get(), "RedSalamanderCreateEx"));
+#pragma warning(pop)
+    if (! createFactory)
+    {
+        Debug::Error(L"CompareDirectories: Missing export RedSalamanderCreate in '{}' (pluginId={}).", entry->path.wstring(), entry->id);
+        return std::nullopt;
+    }
+
+    FactoryOptions options{};
+    options.debugLevel = DEBUG_LEVEL_NONE;
+
+    wil::com_ptr<IFileSystem> fileSystem;
+    HRESULT createHr = E_FAIL;
+    if (entry->factoryPluginId.empty())
+    {
+        createHr = createFactory(__uuidof(IFileSystem), &options, GetHostServices(), fileSystem.put_void());
+    }
+    else if (createFactoryEx)
+    {
+        createHr = createFactoryEx(__uuidof(IFileSystem), &options, GetHostServices(), entry->factoryPluginId.c_str(), fileSystem.put_void());
+    }
+    else
+    {
+        Debug::Error(L"CompareDirectories: Missing export RedSalamanderCreateEx in '{}' for multi-plugin DLL (pluginId={}).", entry->path.wstring(), entry->id);
+        return std::nullopt;
+    }
+
+    if (FAILED(createHr) || ! fileSystem)
+    {
+        Debug::Error(L"CompareDirectories: RedSalamanderCreate failed for '{}' (pluginId={} hr=0x{:08X}).",
+                     entry->path.wstring(),
+                     entry->id,
+                     static_cast<unsigned long>(createHr));
+        return std::nullopt;
+    }
+
+    wil::com_ptr<IInformations> informations;
+    const HRESULT qiInfos = fileSystem->QueryInterface(__uuidof(IInformations), informations.put_void());
+    if (FAILED(qiInfos) || ! informations)
+    {
+        Debug::Error(
+            L"CompareDirectories: IInformations not supported by '{}' (pluginId={} hr=0x{:08X}).", entry->path.wstring(), entry->id, static_cast<unsigned long>(qiInfos));
+        return std::nullopt;
+    }
+
+    if (entry->informations)
+    {
+        const char* configuration = nullptr;
+        static_cast<void>(entry->informations->GetConfiguration(&configuration));
+        if (configuration && configuration[0] != '\0')
+        {
+            static_cast<void>(informations->SetConfiguration(configuration));
+        }
+    }
+
+    if (! instanceContext.empty())
+    {
+        wil::com_ptr<IFileSystemInitialize> initializer;
+        const HRESULT qiInit = fileSystem->QueryInterface(__uuidof(IFileSystemInitialize), initializer.put_void());
+        if (FAILED(qiInit) || ! initializer)
+        {
+            Debug::Error(L"CompareDirectories: IFileSystemInitialize not supported (pluginId={} hr=0x{:08X}).", entry->id, static_cast<unsigned long>(qiInit));
+            return std::nullopt;
+        }
+
+        const HRESULT initHr = initializer->Initialize(instanceContext.c_str(), nullptr);
+        if (FAILED(initHr))
+        {
+            Debug::Error(L"CompareDirectories: Initialize failed (pluginId={} hr=0x{:08X}).", entry->id, static_cast<unsigned long>(initHr));
+            return std::nullopt;
+        }
+    }
+
+    CreatedFileSystemInstance created{};
+    created.module        = std::move(module);
+    created.fileSystem    = std::move(fileSystem);
+    created.pluginShortId = entry->shortId;
+    return created;
+}
 
 LRESULT CALLBACK CompareProgressSpinnerSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
 
@@ -406,9 +594,8 @@ public:
     CompareDirectoriesWindow(Common::Settings::Settings& settings,
                              AppTheme theme,
                              const ShortcutManager* shortcuts,
-                             wil::com_ptr<IFileSystem> baseFileSystem,
-                             std::filesystem::path leftRoot,
-                             std::filesystem::path rightRoot) noexcept;
+                             CompareDirectoriesPaneContext left,
+                             CompareDirectoriesPaneContext right) noexcept;
 
     [[nodiscard]] bool Create(HWND owner) noexcept;
     void UpdateTheme(const AppTheme& theme) noexcept;
@@ -512,7 +699,10 @@ private:
     LRESULT OnContentProgress(LPARAM lp) noexcept;
     void UpdateProgressControls() noexcept;
     void OnProgressSpinnerTimer() noexcept;
+    void InvalidateSpinnerPens() noexcept;
+    void EnsureSpinnerPens(COLORREF background, COLORREF accent, bool rainbowSpinner, uint32_t rainbowSeedHash, int stroke) noexcept;
     void DrawProgressSpinner(HDC hdc, const RECT& bounds) noexcept;
+    void UpdateCompareWatermark() noexcept;
     void UpdateRescanButtonText() noexcept;
     void UpdateCompareTaskCard(bool finished) noexcept;
     void MaybeCompleteCompareRun() noexcept;
@@ -525,6 +715,8 @@ private:
     void SaveOptionsControlsToSettings() noexcept;
     void UpdateOptionsVisibility() noexcept;
     void RefreshBothPanes() noexcept;
+    void ScheduleDecisionRefresh() noexcept;
+    void OnDecisionRefreshTimer() noexcept;
 
     wil::unique_hwnd _hWnd;
     wil::unique_hwnd _optionsDlg;
@@ -574,6 +766,33 @@ private:
     float _progressSpinnerAngleDeg       = 0.0f;
     ULONGLONG _progressSpinnerLastTickMs = 0;
     bool _progressSpinnerTimerActive     = false;
+    ULONGLONG _paneWatermarkLastInvalidateTickMs = 0;
+
+    static constexpr int kProgressSpinnerSegments = 12;
+
+    struct ProgressSpinnerPenKey
+    {
+        COLORREF background = 0;
+        COLORREF accent     = 0;
+        bool rainbow        = false;
+        bool darkBase       = false;
+        uint32_t seedHash   = 0;
+        int strokeWidthPx   = 0;
+
+        bool operator==(const ProgressSpinnerPenKey&) const noexcept = default;
+    };
+
+    ProgressSpinnerPenKey _progressSpinnerPenKey{};
+    bool _progressSpinnerPenKeyValid = false;
+    std::array<wil::unique_hpen, kProgressSpinnerSegments> _progressSpinnerPens{};
+
+    bool _decisionRefreshPending     = false;
+    bool _decisionRefreshTimerActive = false;
+
+    std::optional<std::filesystem::path> _lastRefreshedLeftRelativeFolder;
+    std::optional<std::filesystem::path> _lastRefreshedRightRelativeFolder;
+    std::shared_ptr<const CompareDirectoriesFolderDecision> _lastRefreshedLeftDecision;
+    std::shared_ptr<const CompareDirectoriesFolderDecision> _lastRefreshedRightDecision;
 
     uint64_t _contentEtaLastTickMs         = 0;
     uint64_t _contentEtaLastCompletedBytes = 0;
@@ -629,9 +848,15 @@ private:
     Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};
     const ShortcutManager* _shortcuts = nullptr;
-    wil::com_ptr<IFileSystem> _baseFs;
-    std::filesystem::path _leftRoot;
-    std::filesystem::path _rightRoot;
+    CompareDirectoriesPaneContext _leftContext;
+    CompareDirectoriesPaneContext _rightContext;
+
+    wil::unique_hmodule _leftBaseModule;
+    wil::unique_hmodule _rightBaseModule;
+    wil::com_ptr<IFileSystem> _leftBaseFs;
+    wil::com_ptr<IFileSystem> _rightBaseFs;
+    std::wstring _leftPluginShortId;
+    std::wstring _rightPluginShortId;
 
     std::shared_ptr<CompareDirectoriesSession> _session;
     wil::com_ptr<IFileSystem> _fsLeft;
@@ -685,10 +910,20 @@ private:
     bool _compareRunPending         = false;
     bool _compareRunSawScanProgress = false;
     bool _bannerRescanIsCancel      = false;
+    bool _rescanAfterCancel         = false;
     bool _syncingPaths              = false;
     uint64_t _compareRunId          = 0;
     uint64_t _compareTaskId         = 0;
     HRESULT _compareRunResultHr     = S_OK;
+
+    enum class CompareWatermarkState
+    {
+        Hidden,
+        InProgress,
+        Cancelled,
+    };
+
+    CompareWatermarkState _watermarkState = CompareWatermarkState::Hidden;
 
     enum class DeferredStartPhase
     {
@@ -711,15 +946,13 @@ private:
 CompareDirectoriesWindow::CompareDirectoriesWindow(Common::Settings::Settings& settings,
                                                    AppTheme theme,
                                                    const ShortcutManager* shortcuts,
-                                                   wil::com_ptr<IFileSystem> baseFileSystem,
-                                                   std::filesystem::path leftRoot,
-                                                   std::filesystem::path rightRoot) noexcept
+                                                   CompareDirectoriesPaneContext left,
+                                                   CompareDirectoriesPaneContext right) noexcept
     : _settings(&settings),
       _theme(std::move(theme)),
       _shortcuts(shortcuts),
-      _baseFs(std::move(baseFileSystem)),
-      _leftRoot(std::move(leftRoot)),
-      _rightRoot(std::move(rightRoot))
+      _leftContext(std::move(left)),
+      _rightContext(std::move(right))
 {
 }
 
@@ -793,6 +1026,11 @@ LRESULT CompareDirectoriesWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
                 OnProgressSpinnerTimer();
                 return 0;
             }
+            if (wp == kCompareDecisionRefreshTimerId)
+            {
+                OnDecisionRefreshTimer();
+                return 0;
+            }
             break;
         case WM_ACTIVATE:
             if (_hWnd)
@@ -836,8 +1074,7 @@ LRESULT CompareDirectoriesWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
         case WndMsg::kCompareDirectoriesDecisionUpdated:
             if (_compareActive && _session && static_cast<uint64_t>(wp) == _compareRunId)
             {
-                _session->FlushPendingContentCompareUpdates();
-                RefreshBothPanes();
+                ScheduleDecisionRefresh();
             }
             return 0;
         case WndMsg::kCompareDirectoriesExecuteCommand: return OnExecuteShortcutCommand(lp);
@@ -953,11 +1190,19 @@ bool CompareDirectoriesWindow::OnCreate(HWND hwnd) noexcept
 
 void CompareDirectoriesWindow::OnDestroy() noexcept
 {
+    if (_session)
+    {
+        LogComparePerfStats(L"window_destroy", _session, _compareRunResultHr);
+    }
+
     if (_hWnd)
     {
         KillTimer(_hWnd.get(), kCompareTaskAutoDismissTimerId);
         KillTimer(_hWnd.get(), kCompareBannerSpinnerTimerId);
+        KillTimer(_hWnd.get(), kCompareDecisionRefreshTimerId);
         _progressSpinnerTimerActive = false;
+        _decisionRefreshTimerActive = false;
+        _decisionRefreshPending     = false;
     }
     DismissCompareTaskCard();
 
@@ -971,6 +1216,7 @@ void CompareDirectoriesWindow::OnDestroy() noexcept
         _session->SetScanProgressCallback({});
         _session->SetContentProgressCallback({});
         _session->SetDecisionUpdatedCallback({});
+        _session->SetBackgroundWorkEnabled(false);
     }
 
     _folderWindow.SetShowSortMenuCallback({});
@@ -992,6 +1238,56 @@ void CompareDirectoriesWindow::OnDestroy() noexcept
     _bannerTitle.reset();
     _bannerOptionsButton.reset();
     _bannerRescanButton.reset();
+
+    if (_session || _fsLeft || _fsRight || _leftBaseFs || _rightBaseFs || _leftBaseModule || _rightBaseModule)
+    {
+        struct CompareDestroyCleanup final
+        {
+            wil::unique_hmodule leftModule;
+            wil::unique_hmodule rightModule;
+            wil::com_ptr<IFileSystem> leftBaseFs;
+            wil::com_ptr<IFileSystem> rightBaseFs;
+            wil::com_ptr<IFileSystem> fsLeft;
+            wil::com_ptr<IFileSystem> fsRight;
+            std::shared_ptr<CompareDirectoriesSession> session;
+
+            CompareDestroyCleanup() = default;
+            CompareDestroyCleanup(const CompareDestroyCleanup&)            = delete;
+            CompareDestroyCleanup(CompareDestroyCleanup&&)                 = delete;
+            CompareDestroyCleanup& operator=(const CompareDestroyCleanup&) = delete;
+            CompareDestroyCleanup& operator=(CompareDestroyCleanup&&)      = delete;
+        };
+
+        auto cleanup     = std::make_unique<CompareDestroyCleanup>();
+        cleanup->session = std::move(_session);
+        cleanup->fsLeft  = std::move(_fsLeft);
+        cleanup->fsRight = std::move(_fsRight);
+        cleanup->leftBaseFs   = std::move(_leftBaseFs);
+        cleanup->rightBaseFs  = std::move(_rightBaseFs);
+        cleanup->leftModule   = std::move(_leftBaseModule);
+        cleanup->rightModule  = std::move(_rightBaseModule);
+
+        CompareDestroyCleanup* raw = cleanup.release();
+        const BOOL ok = TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
+        {
+            std::unique_ptr<CompareDestroyCleanup> owned(static_cast<CompareDestroyCleanup*>(context));
+        }, raw, nullptr);
+
+        if (! ok)
+        {
+            // Never block UI teardown if background cleanup scheduling fails (rare).
+            // Fall back to a detached std::thread, and leak on failure.
+            try
+            {
+                std::thread([raw]() noexcept { std::unique_ptr<CompareDestroyCleanup> owned(static_cast<CompareDestroyCleanup*>(raw)); }).detach();
+            }
+            catch (const std::system_error& ex)
+            {
+                Debug::Error(L"CompareDirectories: cleanup fallback thread creation failed: {}", ex.code().value());
+            }
+        }
+    }
+
     _folderWindow.Destroy();
 }
 
@@ -1211,6 +1507,7 @@ void CompareDirectoriesWindow::OnCommand(UINT id) noexcept
                 _compareRunResultHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 _session->SetBackgroundWorkEnabled(false);
                 _session->Invalidate();
+                UpdateCompareWatermark();
             }
             else
             {
@@ -1224,23 +1521,60 @@ void CompareDirectoriesWindow::OnCommand(UINT id) noexcept
                 break;
             }
 
-            Common::Settings::CompareDirectoriesSettings s = GetEffectiveCompareSettings();
-            s.showIdenticalItems                           = ! s.showIdenticalItems;
-            _settings->compareDirectories                  = s;
-            if (_session)
+            const Common::Settings::CompareDirectoriesSettings currentSettings = GetEffectiveCompareSettings();
+            const Common::Settings::CompareDirectoriesSettings updatedSettings = [&]() noexcept
             {
-                _session->SetSettings(s);
+                Common::Settings::CompareDirectoriesSettings s = currentSettings;
+                s.showIdenticalItems                           = ! s.showIdenticalItems;
+                return s;
+            }();
+
+            const bool compareRunBusy = _compareActive && (_compareRunPending || _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u) && _session;
+            if (_compareActive && _session && _hWnd)
+            {
+                const int result = MessageBoxCentered(_hWnd.get(),
+                                                     GetModuleHandleW(nullptr),
+                                                     IDS_COMPARE_TOGGLE_IDENTICAL_RESCAN_MESSAGE,
+                                                     IDS_COMPARE_TOGGLE_IDENTICAL_RESCAN_TITLE,
+                                                     MB_OKCANCEL | MB_ICONWARNING);
+                if (result == IDCANCEL)
+                {
+                    break;
+                }
             }
+
+            _settings->compareDirectories = updatedSettings;
 
             if (_hWnd)
             {
                 if (HMENU menu = GetMenu(_hWnd.get()))
                 {
-                    CheckMenuItem(menu, IDM_COMPARE_TOGGLE_IDENTICAL, static_cast<UINT>(MF_BYCOMMAND | (s.showIdenticalItems ? MF_CHECKED : MF_UNCHECKED)));
+                    CheckMenuItem(menu,
+                                  IDM_COMPARE_TOGGLE_IDENTICAL,
+                                  static_cast<UINT>(MF_BYCOMMAND | (updatedSettings.showIdenticalItems ? MF_CHECKED : MF_UNCHECKED)));
                 }
             }
 
-            RefreshBothPanes();
+            if (_compareActive && _session)
+            {
+                if (compareRunBusy)
+                {
+                    _rescanAfterCancel   = true;
+                    _compareRunResultHr  = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                    _session->SetBackgroundWorkEnabled(false);
+                    _session->Invalidate();
+                    UpdateCompareWatermark();
+                }
+                else
+                {
+                    ScheduleBeginOrRescanCompare();
+                }
+            }
+            else if (_session)
+            {
+                _session->SetSettings(updatedSettings);
+                RefreshBothPanes();
+            }
             break;
         }
         case IDM_COMPARE_RESTORE_DIFFERENCES_SELECTION:
@@ -1281,7 +1615,7 @@ void CompareDirectoriesWindow::OnCommand(UINT id) noexcept
                     return;
                 }
 
-                const auto decision = _session->GetOrComputeDecision(relOpt.value());
+                const auto decision = _session->TryGetCachedDecision(relOpt.value());
                 if (! decision || FAILED(decision->hr))
                 {
                     return;
@@ -2140,6 +2474,8 @@ void CompareDirectoriesWindow::ApplyTheme() noexcept
     _backgroundBrush.reset(CreateSolidBrush(_theme.windowBackground));
     _menuBackgroundBrush.reset(CreateSolidBrush(_theme.menu.background));
     _optionsBackgroundBrush.reset(CreateSolidBrush(_theme.windowBackground));
+
+    InvalidateSpinnerPens();
 
     const COLORREF surface = ThemedControls::GetControlSurfaceColor(_theme);
     _optionsCardBrush.reset(CreateSolidBrush(surface));
@@ -3219,6 +3555,16 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         return;
     }
 
+    EnsureCompareSession();
+    const bool contentCompareSupported = ! _session || _session->IsContentCompareSupported();
+    const UINT contentCompareDescId =
+        contentCompareSupported ? IDS_COMPARE_OPTIONS_CONTENT_DESC : IDS_COMPARE_OPTIONS_CONTENT_DESC_UNSUPPORTED;
+
+    if (_optionsUi.compareContent.toggle)
+    {
+        EnableWindow(_optionsUi.compareContent.toggle, contentCompareSupported ? TRUE : FALSE);
+    }
+
     RECT rcDlg{};
     if (! GetClientRect(_optionsDlg.get(), &rcDlg))
     {
@@ -3380,7 +3726,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
             y += computeToggleCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC), toggleW) + cardSpacingY;
             y += computeToggleCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC), toggleW) + cardSpacingY;
             y += computeToggleCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC), toggleW) + cardSpacingY;
-            y += computeToggleCardHeight(contentW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_CONTENT_DESC), toggleW) + cardSpacingY;
+            y += computeToggleCardHeight(contentW, LoadStringResourceView(nullptr, contentCompareDescId), toggleW) + cardSpacingY;
 
             y += sectionSpacing;
             y += headerHeight + gapY;
@@ -3413,7 +3759,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         leftY += computeToggleCardHeight(leftW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC), toggleWLeft) + cardSpacingY;
         leftY += computeToggleCardHeight(leftW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC), toggleWLeft) + cardSpacingY;
         leftY += computeToggleCardHeight(leftW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC), toggleWLeft) + cardSpacingY;
-        leftY += computeToggleCardHeight(leftW, LoadStringResourceView(nullptr, IDS_COMPARE_OPTIONS_CONTENT_DESC), toggleWLeft) + cardSpacingY;
+        leftY += computeToggleCardHeight(leftW, LoadStringResourceView(nullptr, contentCompareDescId), toggleWLeft) + cardSpacingY;
 
         int rightY = 0;
         rightY += headerHeight + gapY;
@@ -3649,7 +3995,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         layoutToggleCard(_optionsUi.compareDateTime, IDS_COMPARE_OPTIONS_DATETIME_TITLE, IDS_COMPARE_OPTIONS_DATETIME_DESC, true, 0, viewportW2, toggleW, y);
         layoutToggleCard(
             _optionsUi.compareAttributes, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC, true, 0, viewportW2, toggleW, y);
-        layoutToggleCard(_optionsUi.compareContent, IDS_COMPARE_OPTIONS_CONTENT_TITLE, IDS_COMPARE_OPTIONS_CONTENT_DESC, true, 0, viewportW2, toggleW, y);
+        layoutToggleCard(_optionsUi.compareContent, IDS_COMPARE_OPTIONS_CONTENT_TITLE, contentCompareDescId, true, 0, viewportW2, toggleW, y);
 
         y += sectionSpacing;
         layoutSectionHeader(_optionsUi.headerAdvanced, IDS_COMPARE_OPTIONS_SECTION_ADVANCED, 0, viewportW2, y);
@@ -3711,7 +4057,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
         layoutToggleCard(_optionsUi.compareDateTime, IDS_COMPARE_OPTIONS_DATETIME_TITLE, IDS_COMPARE_OPTIONS_DATETIME_DESC, true, 0, leftW, toggleWLeft, leftY);
         layoutToggleCard(
             _optionsUi.compareAttributes, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC, true, 0, leftW, toggleWLeft, leftY);
-        layoutToggleCard(_optionsUi.compareContent, IDS_COMPARE_OPTIONS_CONTENT_TITLE, IDS_COMPARE_OPTIONS_CONTENT_DESC, true, 0, leftW, toggleWLeft, leftY);
+        layoutToggleCard(_optionsUi.compareContent, IDS_COMPARE_OPTIONS_CONTENT_TITLE, contentCompareDescId, true, 0, leftW, toggleWLeft, leftY);
 
         int rightY = 0;
         layoutSectionHeader(_optionsUi.headerAdvanced, IDS_COMPARE_OPTIONS_SECTION_ADVANCED, rightX, rightW, rightY);
@@ -3791,13 +4137,20 @@ void CompareDirectoriesWindow::Layout() noexcept
     const int buttonW        = std::max(1, MulDiv(110, dpi, USER_DEFAULT_SCREEN_DPI));
     const int buttonH        = std::max(1, MulDiv(28, dpi, USER_DEFAULT_SCREEN_DPI));
     const int buttonGap      = std::max(0, MulDiv(10, dpi, USER_DEFAULT_SCREEN_DPI));
-    const int buttonY        = std::max(0, bannerPaddingY + (std::max(0, bannerBaseHeight - (2 * bannerPaddingY) - buttonH) / 2));
+    const int buttonY        = std::max(0, bannerPaddingY + (std::max(0, bannerHeight - (2 * bannerPaddingY) - buttonH) / 2));
 
     int rightX = std::max(0, w - bannerPaddingX);
     if (_bannerRescanButton)
     {
         rightX = std::max(0, rightX - buttonW);
         SetWindowPos(_bannerRescanButton.get(), nullptr, rightX, buttonY, buttonW, buttonH, flags);
+        rightX = std::max(0, rightX - buttonGap);
+    }
+    if (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0)
+    {
+        const int spinnerSize = std::clamp(buttonH, 1, std::max(1, bannerHeight));
+        rightX                = std::max(0, rightX - spinnerSize);
+        SetWindowPos(_scanProgressBar.get(), nullptr, rightX, buttonY, spinnerSize, spinnerSize, flags);
         rightX = std::max(0, rightX - buttonGap);
     }
     if (_bannerOptionsButton)
@@ -3817,29 +4170,15 @@ void CompareDirectoriesWindow::Layout() noexcept
         SetWindowPos(fw, nullptr, 0, bannerHeight, w, contentHeight, flags);
     }
 
-    if (showStatus && (_scanProgressText || _scanProgressBar))
+    if (showStatus && _scanProgressText)
     {
         const int statusTop = bannerBaseHeight;
         const int paddingX  = std::max(0, MulDiv(kScanStatusPaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI));
 
-        int progressBarW = std::max(1, MulDiv(kScanProgressBarWidthDip, dpi, USER_DEFAULT_SCREEN_DPI));
-        progressBarW     = std::clamp(progressBarW, 1, std::max(1, w / 2));
-
-        int progressBarH = std::max(1, MulDiv(kScanProgressBarHeightDip, dpi, USER_DEFAULT_SCREEN_DPI));
-        progressBarH     = std::clamp(progressBarH, 1, std::max(1, statusHeight));
-
-        const int progressBarX = std::max(0, w - paddingX - progressBarW);
-        const int progressBarY = statusTop + std::max(0, (statusHeight - progressBarH) / 2);
-
-        if (_scanProgressBar)
-        {
-            SetWindowPos(_scanProgressBar.get(), nullptr, progressBarX, progressBarY, progressBarW, progressBarH, flags);
-        }
-
         if (_scanProgressText)
         {
             const int textX = paddingX;
-            const int textW = std::max(0, progressBarX - paddingX - paddingX);
+            const int textW = std::max(0, rightX - paddingX);
             SetWindowPos(_scanProgressText.get(), nullptr, textX, statusTop, textW, statusHeight, flags);
         }
     }
@@ -3865,13 +4204,39 @@ void CompareDirectoriesWindow::EnsureCompareSession() noexcept
         return;
     }
 
-    if (! _baseFs)
+    if (_leftContext.pluginId.empty() || _rightContext.pluginId.empty())
     {
         return;
     }
 
+    if (! _leftBaseFs)
+    {
+        std::optional<CreatedFileSystemInstance> created = TryCreateFileSystemInstance(_leftContext.pluginId, _leftContext.instanceContext);
+        if (! created.has_value())
+        {
+            return;
+        }
+
+        _leftBaseModule    = std::move(created->module);
+        _leftBaseFs        = std::move(created->fileSystem);
+        _leftPluginShortId = std::move(created->pluginShortId);
+    }
+
+    if (! _rightBaseFs)
+    {
+        std::optional<CreatedFileSystemInstance> created = TryCreateFileSystemInstance(_rightContext.pluginId, _rightContext.instanceContext);
+        if (! created.has_value())
+        {
+            return;
+        }
+
+        _rightBaseModule    = std::move(created->module);
+        _rightBaseFs        = std::move(created->fileSystem);
+        _rightPluginShortId = std::move(created->pluginShortId);
+    }
+
     Common::Settings::CompareDirectoriesSettings settings = GetEffectiveCompareSettings();
-    _session                                              = std::make_shared<CompareDirectoriesSession>(_baseFs, _leftRoot, _rightRoot, settings);
+    _session = std::make_shared<CompareDirectoriesSession>(_leftBaseFs, _rightBaseFs, _leftContext.rootPluginPath, _rightContext.rootPluginPath, settings);
 
     _fsLeft  = CreateCompareDirectoriesFileSystem(ComparePane::Left, _session);
     _fsRight = CreateCompareDirectoriesFileSystem(ComparePane::Right, _session);
@@ -3892,9 +4257,9 @@ void CompareDirectoriesWindow::StartCompare() noexcept
     }
 
     static_cast<void>(_folderWindow.SetFileSystemInstanceForPane(
-        FolderWindow::Pane::Left, _fsLeft, std::wstring(L"builtin/file-system"), std::wstring(L"file"), std::wstring{}));
+        FolderWindow::Pane::Left, _fsLeft, _leftContext.pluginId, _leftPluginShortId, _leftContext.instanceContext));
     static_cast<void>(_folderWindow.SetFileSystemInstanceForPane(
-        FolderWindow::Pane::Right, _fsRight, std::wstring(L"builtin/file-system"), std::wstring(L"file"), std::wstring{}));
+        FolderWindow::Pane::Right, _fsRight, _rightContext.pluginId, _rightPluginShortId, _rightContext.instanceContext));
 
     _folderWindow.SetStatusBarVisible(FolderWindow::Pane::Left, true);
     _folderWindow.SetStatusBarVisible(FolderWindow::Pane::Right, true);
@@ -3913,8 +4278,8 @@ void CompareDirectoriesWindow::StartCompare() noexcept
     Layout();
 
     _syncingPaths = true;
-    _folderWindow.SetFolderPath(FolderWindow::Pane::Left, _leftRoot);
-    _folderWindow.SetFolderPath(FolderWindow::Pane::Right, _rightRoot);
+    _folderWindow.SetFolderPath(FolderWindow::Pane::Left, _leftContext.rootPluginPath);
+    _folderWindow.SetFolderPath(FolderWindow::Pane::Right, _rightContext.rootPluginPath);
     _syncingPaths = false;
 
     SetFocus(_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left));
@@ -4004,11 +4369,11 @@ void CompareDirectoriesWindow::UpdateCompareRootsFromCurrentPanes() noexcept
 
     if (const auto leftCurrent = _folderWindow.GetCurrentPluginPath(FolderWindow::Pane::Left); leftCurrent.has_value())
     {
-        _leftRoot = leftCurrent.value();
+        _leftContext.rootPluginPath = leftCurrent.value();
     }
     if (const auto rightCurrent = _folderWindow.GetCurrentPluginPath(FolderWindow::Pane::Right); rightCurrent.has_value())
     {
-        _rightRoot = rightCurrent.value();
+        _rightContext.rootPluginPath = rightCurrent.value();
     }
 }
 
@@ -4050,6 +4415,7 @@ std::optional<CompareDirectoriesWindow::PreparedCompareRun> CompareDirectoriesWi
 
     ++_compareRunId;
     prepared.runId = _compareRunId;
+    _rescanAfterCancel = false;
 
     EnsureCompareSession();
     if (! _session)
@@ -4073,7 +4439,9 @@ std::optional<CompareDirectoriesWindow::PreparedCompareRun> CompareDirectoriesWi
         _session->SetSettings(_settings->compareDirectories.value());
     }
 
-    _session->SetRoots(_leftRoot, _rightRoot);
+    _session->SetRoots(_leftContext.rootPluginPath, _rightContext.rootPluginPath);
+    _session->StartScan();
+    _session->SetPinnedFolders({}, {});
 
     _progress                      = {};
     _scanStartTickMs               = GetTickCount64();
@@ -4106,8 +4474,8 @@ void CompareDirectoriesWindow::ExecutePreparedCompareRun(uint64_t runId, bool st
     if (startedBefore)
     {
         _syncingPaths = true;
-        _folderWindow.SetFolderPath(FolderWindow::Pane::Left, _leftRoot);
-        _folderWindow.SetFolderPath(FolderWindow::Pane::Right, _rightRoot);
+        _folderWindow.SetFolderPath(FolderWindow::Pane::Left, _leftContext.rootPluginPath);
+        _folderWindow.SetFolderPath(FolderWindow::Pane::Right, _rightContext.rootPluginPath);
         _syncingPaths = false;
     }
 
@@ -4172,6 +4540,8 @@ void CompareDirectoriesWindow::CancelCompareMode() noexcept
         return;
     }
 
+    _rescanAfterCancel = false;
+
     if (_compareRunPending)
     {
         _compareRunResultHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -4189,6 +4559,7 @@ void CompareDirectoriesWindow::CancelCompareMode() noexcept
 
     if (_session)
     {
+        LogComparePerfStats(L"cancel", _session, _compareRunResultHr);
         _session->SetBackgroundWorkEnabled(false);
         _session->SetCompareEnabled(false);
         _session->Invalidate();
@@ -4243,6 +4614,7 @@ void CompareDirectoriesWindow::ShowOptionsPanel(bool show) noexcept
         SetWindowPos(_optionsDlg.get(), HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
         RedrawWindow(_optionsDlg.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
         SetFocus(_optionsDlg.get());
+        UpdateCompareWatermark();
         return;
     }
 
@@ -4260,6 +4632,8 @@ void CompareDirectoriesWindow::ShowOptionsPanel(bool show) noexcept
             SetFocus(_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left));
         }
     }
+
+    UpdateCompareWatermark();
 }
 
 void CompareDirectoriesWindow::SyncOtherPanePath(ComparePane changedPane,
@@ -4268,6 +4642,40 @@ void CompareDirectoriesWindow::SyncOtherPanePath(ComparePane changedPane,
 {
     if (! _compareStarted || ! _compareActive || _syncingPaths || ! _session || ! newPath.has_value())
     {
+        return;
+    }
+
+    const auto hasContextChanged = [&](ComparePane pane) noexcept -> bool
+    {
+        const FolderWindow::Pane fwPane = (pane == ComparePane::Left) ? FolderWindow::Pane::Left : FolderWindow::Pane::Right;
+        const CompareDirectoriesPaneContext& expected = (pane == ComparePane::Left) ? _leftContext : _rightContext;
+
+        const std::wstring_view currentPluginId = _folderWindow.GetFileSystemPluginId(fwPane);
+        if (! OrdinalString::EqualsNoCase(currentPluginId, expected.pluginId))
+        {
+            return true;
+        }
+
+        const std::optional<std::filesystem::path> currentPath = _folderWindow.GetCurrentPath(fwPane);
+        if (! currentPath.has_value())
+        {
+            return ! expected.instanceContext.empty();
+        }
+
+        NavigationLocation::Location loc{};
+        if (! NavigationLocation::TryParseLocation(currentPath->native(), loc))
+        {
+            return true;
+        }
+
+        return loc.instanceContext != expected.instanceContext;
+    };
+
+    if (hasContextChanged(ComparePane::Left) || hasContextChanged(ComparePane::Right))
+    {
+        // Compare session scope is defined by (pluginId, instanceContext, roots). If the pane context changes,
+        // cancel compare mode to avoid continuing with the wrong filesystem instance.
+        CancelCompareMode();
         return;
     }
 
@@ -4318,6 +4726,8 @@ void CompareDirectoriesWindow::SyncOtherPanePath(ComparePane changedPane,
         _folderWindow.SetFolderPath(FolderWindow::Pane::Right, otherAbs);
     }
     _syncingPaths = false;
+
+    _session->SetPinnedFolders(relOpt.value(), relOpt.value());
 }
 
 void CompareDirectoriesWindow::ApplySelectionForFolder(ComparePane pane, const std::filesystem::path& folder) noexcept
@@ -4333,7 +4743,7 @@ void CompareDirectoriesWindow::ApplySelectionForFolder(ComparePane pane, const s
         return;
     }
 
-    const auto decision = _session->GetOrComputeDecision(relOpt.value());
+    const auto decision = _session->TryGetCachedDecision(relOpt.value());
     if (! decision || FAILED(decision->hr))
     {
         return;
@@ -4383,7 +4793,7 @@ void CompareDirectoriesWindow::UpdateEmptyStateForFolder(ComparePane pane, const
         return;
     }
 
-    const auto decision = _session->GetOrComputeDecision(relOpt.value());
+    const auto decision = _session->TryGetCachedDecision(relOpt.value());
     if (! decision || FAILED(decision->hr))
     {
         _folderWindow.SetPaneEmptyStateMessage(fwPane, {});
@@ -4394,6 +4804,15 @@ void CompareDirectoriesWindow::UpdateEmptyStateForFolder(ComparePane pane, const
     if (missing)
     {
         _folderWindow.SetPaneEmptyStateMessage(fwPane, LoadStringResource(nullptr, IDS_COMPARE_FOLDER_NOT_FOUND));
+        return;
+    }
+
+    const Common::Settings::CompareDirectoriesSettings s = GetEffectiveCompareSettings();
+    const bool runBusy = _compareRunPending || _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u;
+    if (! s.showIdenticalItems && ! runBusy && _compareRunResultHr == S_OK && ! decision->anyDifferent && ! decision->anyPending &&
+        decision->pendingContentCompareCount == 0)
+    {
+        _folderWindow.SetPaneEmptyStateMessage(fwPane, LoadStringResource(nullptr, IDS_COMPARE_NO_DIFFERENCES));
         return;
     }
 
@@ -4436,7 +4855,7 @@ std::wstring CompareDirectoriesWindow::BuildDetailsTextForCompareItem(ComparePan
 
         if (const auto relOpt = _session->TryMakeRelative(pane, folder))
         {
-            cache.decision = _session->GetOrComputeDecision(relOpt.value());
+            cache.decision = _session->TryGetCachedDecision(relOpt.value());
         }
     }
 
@@ -4574,6 +4993,129 @@ void CompareDirectoriesWindow::RefreshBothPanes() noexcept
     _folderWindow.SetActivePane(pane);
     _folderWindow.CommandRefresh(FolderWindow::Pane::Left);
     _folderWindow.CommandRefresh(FolderWindow::Pane::Right);
+}
+
+void CompareDirectoriesWindow::ScheduleDecisionRefresh() noexcept
+{
+    _decisionRefreshPending = true;
+
+    if (_decisionRefreshTimerActive || ! _hWnd)
+    {
+        return;
+    }
+
+    _decisionRefreshTimerActive = SetTimer(_hWnd.get(), kCompareDecisionRefreshTimerId, kCompareDecisionRefreshTimerIntervalMs, nullptr) != 0;
+}
+
+void CompareDirectoriesWindow::OnDecisionRefreshTimer() noexcept
+{
+    if (! _hWnd)
+    {
+        return;
+    }
+
+    KillTimer(_hWnd.get(), kCompareDecisionRefreshTimerId);
+    _decisionRefreshTimerActive = false;
+
+    if (! _decisionRefreshPending)
+    {
+        return;
+    }
+    _decisionRefreshPending = false;
+
+    if (! _compareStarted || ! _compareActive || ! _session)
+    {
+        return;
+    }
+
+    constexpr size_t kMaxFlushContentFoldersPerTick = 8;
+    constexpr size_t kMaxFlushSubdirKeysPerTick     = 16;
+
+    const bool moreContentPending = _session->FlushPendingContentCompareUpdatesBudgeted(kMaxFlushContentFoldersPerTick);
+    const bool moreSubdirPending  = _session->FlushPendingSubdirUpdatesBudgeted(kMaxFlushSubdirKeysPerTick);
+    const bool morePending        = moreContentPending || moreSubdirPending;
+
+    const Common::Settings::CompareDirectoriesSettings s = GetEffectiveCompareSettings();
+    if (s.showIdenticalItems)
+    {
+        _folderWindow.RefreshPaneDetailsText(FolderWindow::Pane::Left);
+        _folderWindow.RefreshPaneDetailsText(FolderWindow::Pane::Right);
+
+        if (const auto leftPath = _folderWindow.GetCurrentPath(FolderWindow::Pane::Left))
+        {
+            ApplySelectionForFolder(ComparePane::Left, leftPath.value());
+            UpdateEmptyStateForFolder(ComparePane::Left, leftPath.value());
+        }
+        if (const auto rightPath = _folderWindow.GetCurrentPath(FolderWindow::Pane::Right))
+        {
+            ApplySelectionForFolder(ComparePane::Right, rightPath.value());
+            UpdateEmptyStateForFolder(ComparePane::Right, rightPath.value());
+        }
+
+        if (morePending)
+        {
+            ScheduleDecisionRefresh();
+        }
+        return;
+    }
+
+    struct RefreshDecisionSnapshot
+    {
+        std::optional<std::filesystem::path> relativeFolder;
+        std::shared_ptr<const CompareDirectoriesFolderDecision> decision;
+    };
+
+    const auto snapshotForPane = [&](ComparePane pane, FolderWindow::Pane fwPane) noexcept -> RefreshDecisionSnapshot
+    {
+        RefreshDecisionSnapshot snap{};
+        if (! _session)
+        {
+            return snap;
+        }
+
+        const auto currentPathOpt = _folderWindow.GetCurrentPath(fwPane);
+        if (! currentPathOpt.has_value())
+        {
+            return snap;
+        }
+
+        const std::filesystem::path absolute = currentPathOpt.value();
+        const auto relativeOpt              = _session->TryMakeRelative(pane, absolute);
+        if (! relativeOpt.has_value())
+        {
+            return snap;
+        }
+
+        snap.relativeFolder = relativeOpt.value();
+        snap.decision       = _session->TryGetCachedDecision(snap.relativeFolder.value());
+        return snap;
+    };
+
+    const auto changedSinceLast = [](const RefreshDecisionSnapshot& snap,
+                                    const std::optional<std::filesystem::path>& lastFolder,
+                                    const std::shared_ptr<const CompareDirectoriesFolderDecision>& lastDecision) noexcept -> bool
+    {
+        return snap.relativeFolder != lastFolder || snap.decision != lastDecision;
+    };
+
+    const RefreshDecisionSnapshot leftSnapshot  = snapshotForPane(ComparePane::Left, FolderWindow::Pane::Left);
+    const RefreshDecisionSnapshot rightSnapshot = snapshotForPane(ComparePane::Right, FolderWindow::Pane::Right);
+
+    const bool shouldRefresh = changedSinceLast(leftSnapshot, _lastRefreshedLeftRelativeFolder, _lastRefreshedLeftDecision) ||
+                               changedSinceLast(rightSnapshot, _lastRefreshedRightRelativeFolder, _lastRefreshedRightDecision);
+
+    if (shouldRefresh)
+    {
+        RefreshBothPanes();
+        _lastRefreshedLeftRelativeFolder  = leftSnapshot.relativeFolder;
+        _lastRefreshedLeftDecision        = leftSnapshot.decision;
+        _lastRefreshedRightRelativeFolder = rightSnapshot.relativeFolder;
+        _lastRefreshedRightDecision       = rightSnapshot.decision;
+    }
+    if (morePending)
+    {
+        ScheduleDecisionRefresh();
+    }
 }
 
 void CompareDirectoriesWindow::OnFolderWindowFileOperationCompleted(const FolderWindow::FileOperationCompletedEvent& e) noexcept
@@ -4755,6 +5297,7 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
 {
     if (! _scanProgressText && ! _scanProgressBar)
     {
+        UpdateCompareWatermark();
         return;
     }
 
@@ -4783,6 +5326,7 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
         {
             Layout();
         }
+        UpdateCompareWatermark();
         return;
     }
 
@@ -4905,6 +5449,7 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
     {
         Layout();
     }
+    UpdateCompareWatermark();
 }
 
 void CompareDirectoriesWindow::OnProgressSpinnerTimer() noexcept
@@ -4937,6 +5482,98 @@ void CompareDirectoriesWindow::OnProgressSpinnerTimer() noexcept
     }
 
     InvalidateRect(_scanProgressBar.get(), nullptr, FALSE);
+    if (_watermarkState == CompareWatermarkState::InProgress)
+    {
+        constexpr ULONGLONG kInvalidateIntervalMs = 100;
+        if (_paneWatermarkLastInvalidateTickMs == 0 || (now - _paneWatermarkLastInvalidateTickMs) >= kInvalidateIntervalMs)
+        {
+            _paneWatermarkLastInvalidateTickMs = now;
+
+            if (const HWND left = _folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left))
+            {
+                InvalidateRect(left, nullptr, FALSE);
+            }
+            if (const HWND right = _folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Right))
+            {
+                InvalidateRect(right, nullptr, FALSE);
+            }
+        }
+    }
+}
+
+void CompareDirectoriesWindow::InvalidateSpinnerPens() noexcept
+{
+    _progressSpinnerPenKeyValid = false;
+    for (auto& pen : _progressSpinnerPens)
+    {
+        pen.reset();
+    }
+}
+
+void CompareDirectoriesWindow::EnsureSpinnerPens(COLORREF background, COLORREF accent, bool rainbowSpinner, uint32_t rainbowSeedHash, int stroke) noexcept
+{
+    if (stroke <= 0)
+    {
+        InvalidateSpinnerPens();
+        return;
+    }
+
+    ProgressSpinnerPenKey key{};
+    key.background    = background;
+    key.accent        = accent;
+    key.rainbow       = rainbowSpinner;
+    key.darkBase      = _theme.menu.darkBase;
+    key.seedHash      = rainbowSpinner ? rainbowSeedHash : 0u;
+    key.strokeWidthPx = stroke;
+
+    if (_progressSpinnerPenKeyValid && _progressSpinnerPenKey == key)
+    {
+        bool allValid = true;
+        for (const auto& pen : _progressSpinnerPens)
+        {
+            allValid = allValid && static_cast<bool>(pen);
+        }
+        if (allValid)
+        {
+            return;
+        }
+    }
+
+    _progressSpinnerPenKey      = key;
+    _progressSpinnerPenKeyValid = true;
+    for (auto& pen : _progressSpinnerPens)
+    {
+        pen.reset();
+    }
+
+    float rainbowHue = 0.0f;
+    float rainbowSat = 0.0f;
+    float rainbowVal = 0.0f;
+    if (rainbowSpinner)
+    {
+        rainbowHue = static_cast<float>(rainbowSeedHash % 360u);
+        rainbowSat = key.darkBase ? 0.70f : 0.55f;
+        rainbowVal = key.darkBase ? 0.95f : 0.85f;
+    }
+
+    for (int i = 0; i < kProgressSpinnerSegments; ++i)
+    {
+        const float t     = static_cast<float>(i) / static_cast<float>(kProgressSpinnerSegments);
+        const float alpha = 0.15f + 0.85f * (1.0f - t);
+
+        COLORREF segmentBase = accent;
+        if (rainbowSpinner)
+        {
+            const float hueStep    = 360.0f / static_cast<float>(kProgressSpinnerSegments);
+            const float hueDegrees = rainbowHue + static_cast<float>(i) * hueStep;
+            segmentBase            = ColorToCOLORREF(ColorFromHSV(hueDegrees, rainbowSat, rainbowVal));
+        }
+
+        const int overlayWeight = static_cast<int>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255.0f));
+        const COLORREF color    = ThemedControls::BlendColor(background, segmentBase, overlayWeight, 255);
+
+        _progressSpinnerPens[static_cast<size_t>(i)].reset(CreatePen(PS_SOLID, stroke, color));
+    }
 }
 
 void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) noexcept
@@ -4963,10 +5600,11 @@ void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) 
         return;
     }
 
-    const float radius = std::max(1.0f, (minDim * 0.5f) - 1.0f);
+    // Keep a small safety margin so wide pen strokes never clip at the edges (which can cause visible artifacts).
+    const int stroke   = std::clamp(static_cast<int>(std::lround(minDim * 0.08f)), 1, 2);
+    const float radius = std::max(1.0f, (minDim * 0.5f) - (static_cast<float>(stroke) * 0.5f + 1.0f));
     const float innerR = radius * 0.55f;
     const float outerR = radius;
-    const int stroke   = std::clamp(static_cast<int>(std::lround(radius * 0.20f)), 1, 3);
 
     const float cx = static_cast<float>(rc.left) + width * 0.5f;
     const float cy = static_cast<float>(rc.top) + height * 0.5f;
@@ -4975,26 +5613,22 @@ void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) 
     const COLORREF accent = _theme.menu.selectionBg;
 
     const bool rainbowSpinner = _theme.menu.rainbowMode && ! _theme.highContrast;
-    float rainbowHue          = 0.0f;
-    float rainbowSat          = 0.0f;
-    float rainbowVal          = 0.0f;
+    uint32_t rainbowSeedHash  = 0u;
     if (rainbowSpinner)
     {
-        const std::wstring_view seed = _leftRoot.empty() ? std::wstring_view(L"compare") : std::wstring_view(_leftRoot.native());
-        const uint32_t h             = StableHash32(seed);
-        rainbowHue                   = static_cast<float>(h % 360u);
-        rainbowSat                   = _theme.menu.darkBase ? 0.70f : 0.55f;
-        rainbowVal                   = _theme.menu.darkBase ? 0.95f : 0.85f;
+        const std::wstring_view seed =
+            _leftContext.rootPluginPath.empty() ? std::wstring_view(L"compare") : std::wstring_view(_leftContext.rootPluginPath.native());
+        rainbowSeedHash = StableHash32(seed);
     }
 
-    constexpr int kSegments = 12;
     constexpr float kPi     = 3.14159265358979323846f;
     const float baseRad     = (_progressSpinnerAngleDeg - 90.0f) * (kPi / 180.0f);
 
-    for (int i = 0; i < kSegments; ++i)
+    EnsureSpinnerPens(bg, accent, rainbowSpinner, rainbowSeedHash, stroke);
+
+    for (int i = 0; i < kProgressSpinnerSegments; ++i)
     {
-        const float t     = static_cast<float>(i) / static_cast<float>(kSegments);
-        const float alpha = 0.15f + 0.85f * (1.0f - t);
+        const float t     = static_cast<float>(i) / static_cast<float>(kProgressSpinnerSegments);
         const float angle = baseRad + t * (2.0f * kPi);
         const float s     = std::sin(angle);
         const float c     = std::cos(angle);
@@ -5004,27 +5638,69 @@ void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) 
         const int x2 = static_cast<int>(std::lround(cx + c * outerR));
         const int y2 = static_cast<int>(std::lround(cy + s * outerR));
 
-        COLORREF segmentBase = accent;
-        if (rainbowSpinner)
+        wil::unique_hpen penFallback;
+        HPEN pen = _progressSpinnerPens[static_cast<size_t>(i)].get();
+        if (! pen)
         {
-            const float hueStep    = 360.0f / static_cast<float>(kSegments);
-            const float hueDegrees = rainbowHue + static_cast<float>(i) * hueStep;
-            segmentBase            = ColorToCOLORREF(ColorFromHSV(hueDegrees, rainbowSat, rainbowVal));
+            penFallback.reset(CreatePen(PS_SOLID, stroke, accent));
+            pen = penFallback.get();
         }
 
-        const int overlayWeight = static_cast<int>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255.0f));
-        const COLORREF color    = ThemedControls::BlendColor(bg, segmentBase, overlayWeight, 255);
-
-        wil::unique_hpen pen(CreatePen(PS_SOLID, stroke, color));
         if (! pen)
         {
             continue;
         }
 
-        [[maybe_unused]] auto oldPen = wil::SelectObject(hdc, pen.get());
+        [[maybe_unused]] auto oldPen = wil::SelectObject(hdc, pen);
         MoveToEx(hdc, x1, y1, nullptr);
         LineTo(hdc, x2, y2);
     }
+}
+
+void CompareDirectoriesWindow::UpdateCompareWatermark() noexcept
+{
+    const bool optionsVisible = _optionsDlg && IsWindowVisible(_optionsDlg.get()) != 0;
+    const HRESULT cancelledHr = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+
+    CompareWatermarkState desired = CompareWatermarkState::Hidden;
+    if (_compareStarted && ! optionsVisible && _compareActive)
+    {
+        if (_compareRunResultHr == cancelledHr)
+        {
+            desired = CompareWatermarkState::Cancelled;
+        }
+        else
+        {
+            const bool runBusy = _compareRunPending || _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u;
+            if (runBusy)
+            {
+                desired = CompareWatermarkState::InProgress;
+            }
+        }
+    }
+
+    if (desired == _watermarkState)
+    {
+        return;
+    }
+
+    _watermarkState = desired;
+    if (desired == CompareWatermarkState::Hidden)
+    {
+        _folderWindow.SetPaneBackgroundWatermark(FolderWindow::Pane::Left, {}, false);
+        _folderWindow.SetPaneBackgroundWatermark(FolderWindow::Pane::Right, {}, false);
+        return;
+    }
+
+    const UINT textId =
+        (desired == CompareWatermarkState::InProgress) ? IDS_COMPARE_WATERMARK_IN_PROGRESS : IDS_COMPARE_WATERMARK_CANCELLED;
+
+    const std::wstring text = LoadStringResource(nullptr, textId);
+    const bool animated     = desired == CompareWatermarkState::InProgress;
+
+    _paneWatermarkLastInvalidateTickMs = 0;
+    _folderWindow.SetPaneBackgroundWatermark(FolderWindow::Pane::Left, text, animated);
+    _folderWindow.SetPaneBackgroundWatermark(FolderWindow::Pane::Right, text, animated);
 }
 
 void CompareDirectoriesWindow::UpdateRescanButtonText() noexcept
@@ -5055,8 +5731,8 @@ void CompareDirectoriesWindow::UpdateCompareTaskCard(bool finished) noexcept
     update.kind      = FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories;
     update.taskId    = _compareTaskId;
     update.title     = LoadStringResource(nullptr, IDS_COMPARE_BANNER_TITLE);
-    update.leftRoot  = _leftRoot;
-    update.rightRoot = _rightRoot;
+    update.leftRoot  = _leftContext.rootPluginPath;
+    update.rightRoot = _rightContext.rootPluginPath;
 
     update.scanActive = _compareRunPending && (_progress.scanActiveScans > 0u || ! _compareRunSawScanProgress);
     if (_progress.scanActiveScans > 0u)
@@ -5160,6 +5836,11 @@ void CompareDirectoriesWindow::MaybeCompleteCompareRun() noexcept
         return;
     }
 
+    if (_session)
+    {
+        LogComparePerfStats(L"done", _session, _compareRunResultHr);
+    }
+
     _compareRunPending = false;
     UpdateRescanButtonText();
 
@@ -5170,6 +5851,21 @@ void CompareDirectoriesWindow::MaybeCompleteCompareRun() noexcept
     }
 
     UpdateProgressControls();
+
+    if (const auto leftPath = _folderWindow.GetCurrentPath(FolderWindow::Pane::Left))
+    {
+        UpdateEmptyStateForFolder(ComparePane::Left, leftPath.value());
+    }
+    if (const auto rightPath = _folderWindow.GetCurrentPath(FolderWindow::Pane::Right))
+    {
+        UpdateEmptyStateForFolder(ComparePane::Right, rightPath.value());
+    }
+
+    if (_rescanAfterCancel)
+    {
+        _rescanAfterCancel = false;
+        ScheduleBeginOrRescanCompare();
+    }
 }
 
 void CompareDirectoriesWindow::DismissCompareTaskCard() noexcept
@@ -5281,11 +5977,10 @@ bool ShowCompareDirectoriesWindow(HWND owner,
                                   Common::Settings::Settings& settings,
                                   const AppTheme& theme,
                                   const ShortcutManager* shortcuts,
-                                  wil::com_ptr<IFileSystem> baseFileSystem,
-                                  std::filesystem::path leftRoot,
-                                  std::filesystem::path rightRoot) noexcept
+                                  CompareDirectoriesPaneContext left,
+                                  CompareDirectoriesPaneContext right) noexcept
 {
-    auto window = std::make_unique<CompareDirectoriesWindow>(settings, theme, shortcuts, std::move(baseFileSystem), std::move(leftRoot), std::move(rightRoot));
+    auto window = std::make_unique<CompareDirectoriesWindow>(settings, theme, shortcuts, std::move(left), std::move(right));
     if (! window->Create(owner))
     {
         return false;

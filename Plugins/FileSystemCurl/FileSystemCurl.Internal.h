@@ -6,6 +6,7 @@
 #include "Helpers.h"
 
 #include <algorithm>
+#include <charconv>
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -21,6 +22,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -63,6 +65,102 @@ struct CurlEasyDeleter
 };
 
 using unique_curl_easy = std::unique_ptr<CURL, CurlEasyDeleter>;
+
+class CurlEasyPool
+{
+    CurlEasyPool(const CurlEasyPool&)            = delete;
+    CurlEasyPool(CurlEasyPool&&)                 = delete;
+    CurlEasyPool& operator=(const CurlEasyPool&) = delete;
+    CurlEasyPool& operator=(CurlEasyPool&&)      = delete;
+
+public:
+    CurlEasyPool() = default;
+
+    class BorrowedHandle
+    {
+    public:
+        BorrowedHandle() noexcept = default;
+        BorrowedHandle(CurlEasyPool* pool, std::wstring key, unique_curl_easy handle) noexcept
+            : _pool(pool), _key(std::move(key)), _handle(std::move(handle))
+        {
+        }
+
+        ~BorrowedHandle()
+        {
+            if (_pool && _handle)
+            {
+                _pool->ReturnHandle(std::move(_key), std::move(_handle));
+            }
+        }
+
+        BorrowedHandle(const BorrowedHandle&)            = delete;
+        BorrowedHandle& operator=(const BorrowedHandle&) = delete;
+
+        BorrowedHandle(BorrowedHandle&& other) noexcept
+            : _pool(std::exchange(other._pool, nullptr)), _key(std::move(other._key)), _handle(std::move(other._handle))
+        {
+        }
+
+        BorrowedHandle& operator=(BorrowedHandle&& other) noexcept
+        {
+            if (this != &other)
+            {
+                if (_pool && _handle)
+                {
+                    _pool->ReturnHandle(std::move(_key), std::move(_handle));
+                }
+                _pool   = std::exchange(other._pool, nullptr);
+                _key    = std::move(other._key);
+                _handle = std::move(other._handle);
+            }
+            return *this;
+        }
+
+        [[nodiscard]] CURL* get() const noexcept
+        {
+            return _handle.get();
+        }
+
+        explicit operator bool() const noexcept
+        {
+            return _handle != nullptr;
+        }
+
+    private:
+        CurlEasyPool* _pool = nullptr;
+        std::wstring _key;
+        unique_curl_easy _handle;
+    };
+
+    [[nodiscard]] BorrowedHandle Borrow(std::wstring_view limiterKey) noexcept;
+
+private:
+    struct IdleEntry
+    {
+        IdleEntry(unique_curl_easy h, uint64_t ts) noexcept : handle(std::move(h)), returnedAtMs(ts)
+        {
+        }
+
+        IdleEntry(const IdleEntry&)            = delete;
+        IdleEntry& operator=(const IdleEntry&) = delete;
+        IdleEntry(IdleEntry&&)                 = default;
+        IdleEntry& operator=(IdleEntry&&)      = default;
+
+        unique_curl_easy handle;
+        uint64_t returnedAtMs = 0;
+    };
+
+    static constexpr size_t kMaxIdlePerConnection = 4;
+    static constexpr uint64_t kIdleExpiryMs       = 60000;
+
+    void ReturnHandle(std::wstring key, unique_curl_easy handle) noexcept;
+    void EvictExpired(uint64_t now, std::vector<unique_curl_easy>& cleanup) noexcept;
+
+    std::mutex _mutex;
+    std::unordered_map<std::wstring, std::vector<IdleEntry>> _idle;
+};
+
+[[nodiscard]] CurlEasyPool& GetCurlEasyPool() noexcept;
 
 struct ArenaOwner
 {
@@ -283,6 +381,7 @@ size_t CurlWriteToString(void* buffer, size_t size, size_t nitems, void* outstre
 
 [[nodiscard]] std::string RemotePathForCommand(const ConnectionInfo& conn, std::wstring_view pluginPath) noexcept;
 [[nodiscard]] HRESULT CurlPerformList(const ConnectionInfo& conn, std::wstring_view pluginPath, std::string& outListing) noexcept;
+[[nodiscard]] HRESULT CurlPerformListAndParse(const ConnectionInfo& conn, std::wstring_view pluginPath, std::vector<FilesInformationCurl::Entry>& outEntries) noexcept;
 [[nodiscard]] HRESULT CurlPerformQuote(const ConnectionInfo& conn, const std::vector<std::string>& commands) noexcept;
 
 constexpr unsigned long kCallbackArenaBytes = 64u * 1024u;
@@ -345,10 +444,15 @@ struct FileOperationProgress
         cookie     = ck;
 
         options = {};
+        if (initialOptions && initialOptions->sizeBytes != sizeof(FileSystemOptions))
+        {
+            return E_INVALIDARG;
+        }
         if (initialOptions)
         {
             options = *initialOptions;
         }
+        options.sizeBytes = sizeof(FileSystemOptions);
         bandwidthLimitBytesPerSecond.store(options.bandwidthLimitBytesPerSecond, std::memory_order_release);
 
         if (callback)

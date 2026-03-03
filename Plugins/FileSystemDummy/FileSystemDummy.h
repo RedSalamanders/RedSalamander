@@ -362,6 +362,9 @@ private:
         void* cookie                                = nullptr;
         std::atomic_uint32_t inFlight{0};
         std::atomic_bool active{true};
+#ifdef _DEBUG
+        std::atomic_bool dead{false};
+#endif
     };
 
     void NotifyDirectoryWatchers(std::wstring_view watchedPath, std::wstring_view relativePath, FileSystemDirectoryChangeAction action) noexcept;
