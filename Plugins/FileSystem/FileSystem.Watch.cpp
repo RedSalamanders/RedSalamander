@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <array>
+#include <cassert>
 #include <deque>
 #include <limits>
 
@@ -74,6 +75,9 @@ public:
         }
 
         _stopping.store(false, std::memory_order_release);
+#ifdef _DEBUG
+        _dead.store(false, std::memory_order_release);
+#endif
 
         _directory.reset(::CreateFileW(_extendedPath.c_str(),
                                        FILE_LIST_DIRECTORY,
@@ -176,6 +180,9 @@ public:
         _directory.reset();
         std::memset(&_overlapped, 0, sizeof(_overlapped));
         _running.store(false, std::memory_order_release);
+#ifdef _DEBUG
+        _dead.store(true, std::memory_order_release);
+#endif
 
         const ULONGLONG startTick = _watchStartTick.exchange(0, std::memory_order_relaxed);
         if (startTick > 0 && Debug::Perf::IsEnabled())
@@ -363,6 +370,10 @@ private:
 
     void NotifyOverflow() noexcept
     {
+#ifdef _DEBUG
+        assert(! _dead.load(std::memory_order_acquire));
+#endif
+
         if (_stopping.load(std::memory_order_acquire))
         {
             return;
@@ -379,6 +390,7 @@ private:
         }
 
         FileSystemDirectoryChangeNotification notification{};
+        notification.sizeBytes      = sizeof(FileSystemDirectoryChangeNotification);
         notification.watchedPath     = _watchedPath.c_str();
         notification.watchedPathSize = static_cast<unsigned long>(_watchedPath.size() * sizeof(wchar_t));
         notification.changes         = nullptr;
@@ -390,6 +402,10 @@ private:
 
     void NotifyChanged(const std::byte* bufferBegin, size_t bytesTransferred) noexcept
     {
+#ifdef _DEBUG
+        assert(! _dead.load(std::memory_order_acquire));
+#endif
+
         if (_stopping.load(std::memory_order_acquire))
         {
             return;
@@ -468,6 +484,7 @@ private:
         }
 
         FileSystemDirectoryChangeNotification notification{};
+        notification.sizeBytes      = sizeof(FileSystemDirectoryChangeNotification);
         notification.watchedPath     = _watchedPath.c_str();
         notification.watchedPathSize = static_cast<unsigned long>(_watchedPath.size() * sizeof(wchar_t));
         notification.changes         = changeCount > 0 ? changes.data() : nullptr;
@@ -643,6 +660,9 @@ private:
 
     std::atomic<bool> _running{false};
     std::atomic<bool> _stopping{false};
+#ifdef _DEBUG
+    std::atomic<bool> _dead{false};
+#endif
 
     std::atomic<ULONGLONG> _watchStartTick{0};
     std::atomic<uint64_t> _peakPendingEvents{0};

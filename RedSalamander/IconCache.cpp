@@ -106,8 +106,9 @@ constexpr std::wstring_view kWslDollarPrefix       = L"\\\\wsl$\\";
 
 IconCache& IconCache::GetInstance()
 {
-    static IconCache instance;
-    return instance;
+    // Intentionally leaked to avoid shutdown UAF from static destruction order issues.
+    static IconCache* instance = new IconCache();
+    return *instance;
 }
 
 void IconCache::Initialize(ID2D1DeviceContext* d2dContext, float dpi)

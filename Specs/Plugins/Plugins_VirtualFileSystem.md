@@ -522,11 +522,22 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21"))
 Optional (but currently required by the host) I/O interface for:
 - fast attribute queries (without doing a full `ReadDirectoryInfo()` enumeration)
 - opening a read-only stream for file contents (`IFileReader`)
+- propagating basic metadata (timestamps + attributes) across filesystems (`GetFileBasicInformation` / `SetFileBasicInformation`)
 - retrieving item properties for a themed Properties dialog (see `GetItemProperties`)
 
 The host obtains this interface via `QueryInterface` on the active `IFileSystem` instance.
 
 ```cpp
+struct FileSystemBasicInformation
+{
+    uint32_t sizeBytes; // sizeof(FileSystemBasicInformation)
+
+    __int64 creationTime;     // FILETIME ticks (100ns intervals since 1601-01-01 UTC)
+    __int64 lastAccessTime;   // FILETIME ticks
+    __int64 lastWriteTime;    // FILETIME ticks
+    unsigned long attributes; // FILE_ATTRIBUTE_* flags
+};
+
 interface __declspec(uuid("2c7c32b3-8a0f-4e25-8d3a-6a5f1d0a1e2c"))
          __declspec(novtable)
          IFileSystemIO : public IUnknown
@@ -551,17 +562,28 @@ interface __declspec(uuid("2c7c32b3-8a0f-4e25-8d3a-6a5f1d0a1e2c"))
     // Flags:
     // - FILESYSTEM_FLAG_ALLOW_OVERWRITE: replace existing file.
     // - FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY: allow replacing read-only targets (filesystem-defined behavior).
-    virtual HRESULT STDMETHODCALLTYPE CreateFileWriter(
-        const wchar_t* path,
-        FileSystemFlags flags,
-        IFileWriter** writer
-    ) noexcept = 0;
+     virtual HRESULT STDMETHODCALLTYPE CreateFileWriter(
+         const wchar_t* path,
+         FileSystemFlags flags,
+         IFileWriter** writer
+     ) noexcept = 0;
 
-    // Returns a UTF-8 JSON/JSON5 string describing properties for a single item.
-    // The string pointer is owned by the plugin and remains valid until the next call or object release.
-    // Implementations SHOULD return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) when unsupported.
-    virtual HRESULT STDMETHODCALLTYPE GetItemProperties(
-        const wchar_t* path,
+     // Basic metadata (best-effort; may return E_NOTIMPL / HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)).
+     virtual HRESULT STDMETHODCALLTYPE GetFileBasicInformation(
+         const wchar_t* path,
+         FileSystemBasicInformation* info
+     ) noexcept = 0;
+
+     virtual HRESULT STDMETHODCALLTYPE SetFileBasicInformation(
+         const wchar_t* path,
+         const FileSystemBasicInformation* info
+     ) noexcept = 0;
+
+     // Returns a UTF-8 JSON/JSON5 string describing properties for a single item.
+     // The string pointer is owned by the plugin and remains valid until the next call or object release.
+     // Implementations SHOULD return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) when unsupported.
+     virtual HRESULT STDMETHODCALLTYPE GetItemProperties(
+         const wchar_t* path,
         const char** jsonUtf8
     ) noexcept = 0;
 };
@@ -602,6 +624,8 @@ The host obtains this interface via `QueryInterface` on the active `IFileSystem`
 ```cpp
 struct FileSystemDirectorySizeResult
 {
+    uint32_t sizeBytes; // sizeof(FileSystemDirectorySizeResult)
+
     uint64_t totalBytes;     // Total size in bytes (sum of file sizes).
     uint64_t fileCount;      // Number of files counted.
     uint64_t directoryCount; // Number of directories counted (excluding root).
@@ -638,7 +662,7 @@ interface __declspec(uuid("4a8f7cf2-f81c-4278-b182-7183e6bed6f3"))
     // - flags: Use FILESYSTEM_FLAG_RECURSIVE for recursive computation; otherwise only immediate children.
     // - callback: Optional progress callback (may be nullptr for synchronous completion).
     // - cookie: Opaque value passed to callback.
-    // - result: [out] Output result structure.
+    // - result: [out] Output result structure (caller must set result->sizeBytes).
     // Returns: S_OK on success, HRESULT_FROM_WIN32(ERROR_CANCELLED) if cancelled via callback.
     virtual HRESULT STDMETHODCALLTYPE GetDirectorySize(
         const wchar_t* path,
@@ -740,7 +764,7 @@ Computes the total size of a directory tree, optionally recursively.
 - `flags`: Use `FILESYSTEM_FLAG_RECURSIVE` for recursive computation; otherwise only immediate children are counted.
 - `callback`: Optional progress callback (may be `nullptr` for synchronous completion without progress).
 - `cookie`: Opaque value passed to callback methods.
-- `result`: [out] Output result structure containing totals and status.
+- `result`: [out] Output result structure (caller must set `result->sizeBytes`) containing totals and status.
 
 **Return Value:**
 - `S_OK`: Computation completed successfully.
@@ -940,6 +964,10 @@ This linked-list approach allows variable-length entries (since `FileName` is va
 
 The buffer is NOT an array of fixed-size structures. Each entry has a variable length due to the `FileName` field. The `Get(index)` convenience method internally traverses using `NextEntryOffset` to find the requested index, making it less efficient for full enumeration compared to direct traversal.
 
+**ABI extension note:**
+- Do not change `FileInfo` layout (it is intentionally pinned to the Win32 `FILE_FULL_DIR_INFO` shape).
+- If you need additional per-entry fields, add a new interface/method that returns side-band metadata (e.g. via JSON) rather than extending `FileInfo` in-place.
+
 ### 4. File Operations (Copy/Move/Delete/Rename)
 
 File operations are exposed as methods on `IFileSystem`.
@@ -969,6 +997,8 @@ typedef enum FileSystemFlags
 
 typedef struct FileSystemOptions
 {
+    uint32_t sizeBytes; // sizeof(FileSystemOptions)
+
     // 0 = unlimited (use all available bandwidth).
     // Callbacks receive an in/out FileSystemOptions* so the caller can tweak it on progress updates.
     uint64_t bandwidthLimitBytesPerSecond;
@@ -976,6 +1006,8 @@ typedef struct FileSystemOptions
 
 typedef struct FileSystemRenamePair
 {
+    uint32_t sizeBytes; // sizeof(FileSystemRenamePair)
+
     // Pointers reference NUL-terminated UTF-16 strings stored in a caller-owned arena.
     const wchar_t* sourcePath;
     const wchar_t* newName; // Leaf name only (no path separators).
@@ -999,6 +1031,9 @@ typedef struct FileSystemArena
 - For `RenameItems`, callback `destinationPath` values are the full target paths computed from `sourcePath` + `newName`.
 - `totalItems`/`totalBytes` may be `0` when unknown.
 - Pointer parameters passed to callbacks are only valid for the duration of the callback call.
+- For any struct that includes `sizeBytes`, the creator MUST set `sizeBytes = sizeof(StructName)` before passing it across the host↔plugin boundary, and the consumer MUST validate it before reading other fields.
+- For this in-repo ABI sweep, `sizeBytes != sizeof(StructName)` is treated as a contract violation and implementations SHOULD fail the call with `E_INVALIDARG`.
+- For `[out]` structs (e.g. `FileSystemDirectorySizeResult* result`), the caller MUST initialize `result->sizeBytes` before calling into the plugin.
 - `FileSystemOptions::bandwidthLimitBytesPerSecond` applies to data-transfer operations (copy/move) and MAY be ignored for rename/delete.
 - The callback receives an in/out `FileSystemOptions* options` parameter; callers MAY adjust it and plugins SHOULD use the updated values for subsequent work.
 - Callback `options` may be `nullptr`; callers must check before writing to it.
@@ -1155,6 +1190,8 @@ enum FileSystemSearchFlags : uint32_t
 
 struct FileSystemSearchQuery
 {
+    uint32_t sizeBytes; // sizeof(FileSystemSearchQuery)
+
     const wchar_t* rootPath;
     const wchar_t* pattern; // nullptr/empty = L"*"
     FileSystemSearchFlags flags;
@@ -1163,6 +1200,8 @@ struct FileSystemSearchQuery
 
 struct FileSystemSearchMatch
 {
+    uint32_t sizeBytes; // sizeof(FileSystemSearchMatch)
+
     const wchar_t* fullPath;
     unsigned long fullPathSize;
     unsigned long fileAttributes;
@@ -1176,6 +1215,8 @@ struct FileSystemSearchMatch
 
 struct FileSystemSearchProgress
 {
+    uint32_t sizeBytes; // sizeof(FileSystemSearchProgress)
+
     uint64_t scannedEntries;
     uint64_t matchedEntries;
     const wchar_t* currentPath;
@@ -1198,19 +1239,19 @@ struct FileSystemSearchProgress
 interface __declspec(novtable) IFileSystemSearchCallback
 {
     // Called for every match. Return E_ABORT or HRESULT_FROM_WIN32(ERROR_CANCELLED) to cancel.
-    virtual HRESULT STDMETHODCALLTYPE OnMatch(
+    virtual HRESULT STDMETHODCALLTYPE FileSystemSearchMatch(
         const FileSystemSearchMatch* match,
         void* cookie
     ) noexcept = 0;
 
     // Periodic progress updates (optional but recommended for long searches).
-    virtual HRESULT STDMETHODCALLTYPE OnProgress(
+    virtual HRESULT STDMETHODCALLTYPE FileSystemSearchProgress(
         const FileSystemSearchProgress* progress,
         void* cookie
     ) noexcept = 0;
 
     // Called by the plugin to check for cancellation.
-    virtual HRESULT STDMETHODCALLTYPE ShouldCancel(BOOL* pCancel, void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE FileSystemSearchShouldCancel(BOOL* pCancel, void* cookie) noexcept = 0;
 };
 ```
 
@@ -1234,8 +1275,10 @@ interface __declspec(uuid("00417f3e-f0f5-4add-8dea-4407d5169ef6"))
 
 **Search Contract:**
 - `Search` is synchronous; the host should invoke it on a worker thread.
+- The host MUST set `query->sizeBytes` before calling `Search`; plugins MUST validate it before reading fields.
+- Plugins MUST set `match->sizeBytes` / `progress->sizeBytes` before invoking callbacks.
 - All callback pointers are only valid for the duration of the call; the host must copy strings if needed.
-- If `ShouldCancel` returns `TRUE`, or a callback returns `E_ABORT`/`HRESULT_FROM_WIN32(ERROR_CANCELLED)`, the plugin MUST stop and return `HRESULT_FROM_WIN32(ERROR_CANCELLED)`.
+- If `FileSystemSearchShouldCancel` sets `*pCancel = TRUE`, or a callback returns `E_ABORT`/`HRESULT_FROM_WIN32(ERROR_CANCELLED)`, the plugin MUST stop and return `HRESULT_FROM_WIN32(ERROR_CANCELLED)`.
 
 
 ## Implementation Details
@@ -1535,6 +1578,8 @@ This is used by the host (`DirectoryInfoCache`) to drive watch-based refresh aft
 - Callbacks MAY be invoked on arbitrary background threads; callback implementations MUST be thread-safe and fast.
 - `WatchDirectory` watches a single directory (non-recursive).
 - `UnwatchDirectory` MUST guarantee no further callbacks for that path after it returns (including in-flight callbacks).
+- Plugins MUST set `notification->sizeBytes = sizeof(FileSystemDirectoryChangeNotification)` before invoking the callback; hosts MUST validate it before reading fields.
+- If `FileSystemDirectoryChange` ever needs to grow, add a stride field on `FileSystemDirectoryChangeNotification` or add `sizeBytes` to each entry (don’t silently reinterpret the array layout).
 - The callback SHOULD include “what changed”: action + affected entry name/path (relative to the watched folder), and MAY batch multiple changes per call. If changes were dropped/coalesced, set `overflow = TRUE` and `changes` MAY be empty.
 
 ```cpp
@@ -1554,6 +1599,8 @@ struct FileSystemDirectoryChange {
 };
 
 struct FileSystemDirectoryChangeNotification {
+    uint32_t sizeBytes;              // sizeof(FileSystemDirectoryChangeNotification)
+
     const wchar_t* watchedPath;       // NUL-terminated
     unsigned long watchedPathSize;    // bytes (not chars)
     const FileSystemDirectoryChange* changes;

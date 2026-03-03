@@ -147,6 +147,7 @@ struct SelfTestState
         Phase7_ParallelDeleteKnobs,
         Phase8_TightDefaults_NoOverwrite,
         Phase8_InvalidDestinationRejected,
+        Phase8_InvalidSizeBytesRejected,
         Phase8_PerItemOrchestration,
         Phase9_ConflictPrompt_OverwriteReplaceReadonly,
         Phase9_ConflictPrompt_ApplyToAllUiCache,
@@ -229,7 +230,7 @@ struct SelfTestState
     wil::com_ptr<IFileSystemDirectoryWatch> directoryWatch;
     std::unique_ptr<WatchCallback> directoryWatchCallback;
     std::filesystem::path watchDir;
-    uint32_t watchCounter = 0;
+    uint64_t watchCounter = 0;
     wil::unique_handle lockedFileHandle;
 
     size_t copyKnobIndex        = 0;
@@ -281,6 +282,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase7_ParallelDeleteKnobs: return L"Phase7_ParallelDeleteKnobs";
         case SelfTestState::Step::Phase8_TightDefaults_NoOverwrite: return L"Phase8_TightDefaults_NoOverwrite";
         case SelfTestState::Step::Phase8_InvalidDestinationRejected: return L"Phase8_InvalidDestinationRejected";
+        case SelfTestState::Step::Phase8_InvalidSizeBytesRejected: return L"Phase8_InvalidSizeBytesRejected";
         case SelfTestState::Step::Phase8_PerItemOrchestration: return L"Phase8_PerItemOrchestration";
         case SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly: return L"Phase9_ConflictPrompt_OverwriteReplaceReadonly";
         case SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache: return L"Phase9_ConflictPrompt_ApplyToAllUiCache";
@@ -317,7 +319,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
     return L"(unknown)";
 }
 
-constexpr std::array<SelfTestState::Step, 45> kFileOpsPhaseOrder = {
+constexpr std::array<SelfTestState::Step, 46> kFileOpsPhaseOrder = {
     {SelfTestState::Step::Setup,                                            // Environment setup and plugin loading
      SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot,                 // Phase 5 — pre-calc: cancel releases the queued slot
      SelfTestState::Step::Phase5_PreCalcSkipContinues,                      // Phase 5 — pre-calc: skip continues to the next item
@@ -333,11 +335,12 @@ constexpr std::array<SelfTestState::Step, 45> kFileOpsPhaseOrder = {
       SelfTestState::Step::Phase7_SharedPerItemScheduler,                    // Phase 7 — shared per-item scheduler across parallel tasks
       SelfTestState::Step::Phase7_ParallelDeleteKnobs,                       // Phase 7 — speed limits and parallelism knobs for delete
      SelfTestState::Step::Phase8_TightDefaults_NoOverwrite,                 // Phase 8 — no-overwrite default returns correct HRESULT
-     SelfTestState::Step::Phase8_InvalidDestinationRejected,                // Phase 8 — invalid destination is rejected before op starts
-     SelfTestState::Step::Phase8_PerItemOrchestration,                      // Phase 8 — per-item mode orchestrates items one by one
-     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly,   // Phase 9 — overwrite read-only via conflict prompt
-     SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache,          // Phase 9 — apply-to-all caching in conflict prompt UI
-     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap,           // Phase 9 — auto-cap on overwrite conflict
+      SelfTestState::Step::Phase8_InvalidDestinationRejected,                // Phase 8 — invalid destination is rejected before op starts
+     SelfTestState::Step::Phase8_InvalidSizeBytesRejected,                  // Phase 8 — invalid sizeBytes is rejected at the ABI boundary
+      SelfTestState::Step::Phase8_PerItemOrchestration,                      // Phase 8 — per-item mode orchestrates items one by one
+      SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly,   // Phase 9 — overwrite read-only via conflict prompt
+      SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache,          // Phase 9 — apply-to-all caching in conflict prompt UI
+      SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap,           // Phase 9 — auto-cap on overwrite conflict
      SelfTestState::Step::Phase9_ConflictPrompt_SkipAll,                    // Phase 9 — skip-all in conflict prompt
      SelfTestState::Step::Phase9_ConflictPrompt_RetryCap,                   // Phase 9 — retry cap in conflict prompt
      SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy, // Phase 9 — skip continues directory copy
@@ -2169,11 +2172,17 @@ struct WatchCallback final : public IFileSystemDirectoryWatchCallback
 
     std::atomic<uint64_t> callbackCount{0};
     std::atomic<uint64_t> overflowCount{0};
+    std::atomic<uint64_t> badNotificationSizeCount{0};
 
     HRESULT STDMETHODCALLTYPE FileSystemDirectoryChanged(const FileSystemDirectoryChangeNotification* notification, void* /*cookie*/) noexcept override
     {
         callbackCount.fetch_add(1, std::memory_order_relaxed);
-        if (notification && notification->overflow)
+        if (notification == nullptr || notification->sizeBytes != sizeof(FileSystemDirectoryChangeNotification))
+        {
+            badNotificationSizeCount.fetch_add(1, std::memory_order_relaxed);
+        }
+
+        if (notification && notification->sizeBytes == sizeof(FileSystemDirectoryChangeNotification) && notification->overflow)
         {
             overflowCount.fetch_add(1, std::memory_order_relaxed);
         }
@@ -3515,6 +3524,19 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 }
 
                 static_cast<void>(state.directoryWatch->UnwatchDirectory(state.watchDir.c_str()));
+                state.watchCounter = cb ? cb->callbackCount.load(std::memory_order_relaxed) : 0ull;
+
+                // After UnwatchDirectory returns, no further callbacks are allowed for that registration.
+                for (int i = 0; i < 100; ++i)
+                {
+                    const std::filesystem::path p1 = state.watchDir / std::format(L"postunwatch_{:04}.tmp", i);
+                    const std::filesystem::path p2 = state.watchDir / std::format(L"postunwatch_{:04}.renamed", i);
+
+                    static_cast<void>(WriteTestFile(p1, 32));
+                    static_cast<void>(MoveFileExW(p1.c_str(), p2.c_str(), MOVEFILE_REPLACE_EXISTING));
+                    static_cast<void>(DeleteFileW(p2.c_str()));
+                }
+
                 state.markerTick = nowTick;
                 state.stepState  = 2;
                 return false;
@@ -3528,6 +3550,19 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (callbackCount == 0)
             {
                 Fail(L"Watcher churn did not produce any callbacks.");
+                return true;
+            }
+
+            const uint64_t badSizeCount = cb ? cb->badNotificationSizeCount.load(std::memory_order_relaxed) : 0ull;
+            if (badSizeCount != 0)
+            {
+                Fail(std::format(L"Watcher churn produced notifications with invalid sizeBytes (count={}).", badSizeCount));
+                return true;
+            }
+
+            if (callbackCount != state.watchCounter)
+            {
+                Fail(std::format(L"Watcher received callbacks after UnwatchDirectory returned (before={} after={}).", state.watchCounter, callbackCount));
                 return true;
             }
 
@@ -4642,10 +4677,92 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
-                NextStep(state, SelfTestState::Step::Phase8_PerItemOrchestration);
+                NextStep(state, SelfTestState::Step::Phase8_InvalidSizeBytesRejected);
                 return false;
             }
 
+            return false;
+        }
+        case SelfTestState::Step::Phase8_InvalidSizeBytesRejected:
+        {
+            const ULONGLONG nowTick = GetTickCount64();
+            if (HasTimedOut(state, nowTick))
+            {
+                Fail(L"Phase8_InvalidSizeBytesRejected timed out.");
+                return true;
+            }
+
+            if (! state.fsDummy)
+            {
+                Fail(L"Phase8_InvalidSizeBytesRejected: dummy filesystem plugin was not loaded.");
+                return true;
+            }
+
+            FileSystemOptions badOptions{};
+            badOptions.sizeBytes                   = sizeof(FileSystemOptions) - 1u;
+            badOptions.bandwidthLimitBytesPerSecond = 0;
+
+            const HRESULT copyHr = state.fsDummy->CopyItem(L"/src.bin", L"/dst.bin", FILESYSTEM_FLAG_NONE, &badOptions, nullptr, nullptr);
+            if (copyHr != E_INVALIDARG)
+            {
+                Fail(std::format(L"Expected CopyItem to reject invalid FileSystemOptions::sizeBytes with E_INVALIDARG, got 0x{:08X}.",
+                                 static_cast<unsigned long>(copyHr)));
+                return true;
+            }
+
+            wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
+            const HRESULT qiDirHr = state.fsDummy->QueryInterface(IID_PPV_ARGS(dirOps.addressof()));
+            if (FAILED(qiDirHr) || ! dirOps)
+            {
+                Fail(std::format(L"Phase8_InvalidSizeBytesRejected: dummy filesystem missing IFileSystemDirectoryOperations (hr=0x{:08X}).",
+                                 static_cast<unsigned long>(qiDirHr)));
+                return true;
+            }
+
+            FileSystemDirectorySizeResult badSize{};
+            badSize.sizeBytes = sizeof(FileSystemDirectorySizeResult) - 1u;
+
+            const HRESULT sizeHr = dirOps->GetDirectorySize(L"/", FILESYSTEM_FLAG_NONE, nullptr, nullptr, &badSize);
+            if (sizeHr != E_INVALIDARG)
+            {
+                Fail(std::format(L"Expected GetDirectorySize to reject invalid FileSystemDirectorySizeResult::sizeBytes with E_INVALIDARG, got 0x{:08X}.",
+                                 static_cast<unsigned long>(sizeHr)));
+                return true;
+            }
+
+            wil::com_ptr<IFileSystemIO> io;
+            const HRESULT qiIoHr = state.fsDummy->QueryInterface(IID_PPV_ARGS(io.addressof()));
+            if (FAILED(qiIoHr) || ! io)
+            {
+                Fail(std::format(L"Phase8_InvalidSizeBytesRejected: dummy filesystem missing IFileSystemIO (hr=0x{:08X}).", static_cast<unsigned long>(qiIoHr)));
+                return true;
+            }
+
+            FileSystemBasicInformation badBasic{};
+            badBasic.sizeBytes = sizeof(FileSystemBasicInformation) - 1u;
+
+            const HRESULT basicHr = io->GetFileBasicInformation(L"/src.bin", &badBasic);
+            if (basicHr != E_INVALIDARG)
+            {
+                Fail(std::format(L"Expected GetFileBasicInformation to reject invalid FileSystemBasicInformation::sizeBytes with E_INVALIDARG, got 0x{:08X}.",
+                                 static_cast<unsigned long>(basicHr)));
+                return true;
+            }
+
+            FileSystemRenamePair badRename{};
+            badRename.sizeBytes   = sizeof(FileSystemRenamePair) - 1u;
+            badRename.sourcePath  = L"/src.bin";
+            badRename.newName     = L"renamed.bin";
+
+            const HRESULT renameHr = state.fsDummy->RenameItems(&badRename, 1, FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+            if (renameHr != E_INVALIDARG)
+            {
+                Fail(std::format(L"Expected RenameItems to reject invalid FileSystemRenamePair::sizeBytes with E_INVALIDARG, got 0x{:08X}.",
+                                 static_cast<unsigned long>(renameHr)));
+                return true;
+            }
+
+            NextStep(state, SelfTestState::Step::Phase8_PerItemOrchestration);
             return false;
         }
         case SelfTestState::Step::Phase8_PerItemOrchestration:
@@ -5954,6 +6071,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
 
             FileSystemDirectorySizeResult localSizeResult{};
+            localSizeResult.sizeBytes = sizeof(FileSystemDirectorySizeResult);
             const HRESULT localSizeHr = localDirOps->GetDirectorySize(localSizeFile.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, &localSizeResult);
             if (FAILED(localSizeHr) || FAILED(localSizeResult.status))
             {
@@ -6050,6 +6168,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
 
             FileSystemDirectorySizeResult dummySizeResult{};
+            dummySizeResult.sizeBytes = sizeof(FileSystemDirectorySizeResult);
             const HRESULT dummySizeHr = dummyDirOps->GetDirectorySize(dummyFilePath.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, &dummySizeResult);
             if (FAILED(dummySizeHr) || FAILED(dummySizeResult.status))
             {
@@ -6418,6 +6537,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 }
 
                 FileSystemBasicInformation sourceBasic{};
+                sourceBasic.sizeBytes = sizeof(FileSystemBasicInformation);
                 const std::filesystem::path overwriteFile = srcDir / L"a.bin";
                 if (FAILED(localIo->GetFileBasicInformation(overwriteFile.c_str(), &sourceBasic)))
                 {
@@ -6426,6 +6546,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 }
 
                 FileSystemBasicInformation destinationBasic{};
+                destinationBasic.sizeBytes = sizeof(FileSystemBasicInformation);
                 if (FAILED(dummyIo->GetFileBasicInformation(dummyOverwrittenPath.c_str(), &destinationBasic)))
                 {
                     Fail(L"Cross-filesystem metadata test: failed to query destination file basic information.");

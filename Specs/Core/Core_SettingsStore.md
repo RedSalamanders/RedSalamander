@@ -498,6 +498,7 @@ Defaults for the Compare Directories feature live under:
 
 Keys map to `Common::Settings::CompareDirectoriesSettings`:
 - Compare files: `compareSize`, `compareDateTime`, `compareAttributes`, `compareContent`
+- Content compare: `contentCompareWorkerCount` (integer, `0` = auto (≤4), `1..4` = fixed worker count)
 - Subdirectories: `compareSubdirectories`, `compareSubdirectoryAttributes`, `selectSubdirsOnlyInOnePane`
 - Ignore patterns: `ignoreFiles` + `ignoreFilesPatterns`, `ignoreDirectories` + `ignoreDirectoriesPatterns`
 - Display: `showIdenticalItems`

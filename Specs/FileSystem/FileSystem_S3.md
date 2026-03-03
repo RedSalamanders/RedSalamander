@@ -34,7 +34,7 @@ Root behavior:
 Within a bucket:
 
 - `s3:/<bucket>/` lists “folders” (common prefixes) and objects under the current prefix.
-- Folder traversal is modeled via `ListObjectsV2` with delimiter `/`.
+- Folder traversal is modeled via `ListObjectsV2` with delimiter `/` and is **paginated** (directory listings are complete; not capped at 1000 items).
 
 Authority form:
 
@@ -76,7 +76,7 @@ Each plugin exposes its own configuration schema via `IInformations::GetConfigur
 - `useHttps` (bool, default `true`)
 - `verifyTls` (bool, default `true`)
 - `useVirtualAddressing` (bool, default `true`)
-- `maxKeys` (integer, `1..1000`, default `1000`)
+- `maxKeys` (integer, `1..1000`, default `1000`): page size (max keys requested per `ListObjectsV2` request).
 
 ### S3 Table keys
 
@@ -84,7 +84,7 @@ Each plugin exposes its own configuration schema via `IInformations::GetConfigur
 - `defaultEndpointOverride` (string, default empty)
 - `useHttps` (bool, default `true`)
 - `verifyTls` (bool, default `true`)
-- `maxTableResults` (integer, `1..1000`, default `1000`)
+- `maxTableResults` (integer, `1..1000`, default `1000`): page size (max results requested per `ListNamespaces` / `ListTables` request).
 
 Security note:
 

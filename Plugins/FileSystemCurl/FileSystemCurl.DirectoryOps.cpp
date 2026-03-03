@@ -695,7 +695,7 @@ private:
                 return;
             }
 
-            unique_curl_easy curl{curl_easy_init()};
+            auto curl = GetCurlEasyPool().Borrow(_conn.limiterKey);
             if (! curl)
             {
                 std::scoped_lock lock(_mutex);
@@ -1104,7 +1104,7 @@ private:
             return;
         }
 
-        unique_curl_easy curl{curl_easy_init()};
+        auto curl = GetCurlEasyPool().Borrow(_conn.limiterKey);
         if (! curl)
         {
             std::scoped_lock lock(_mutex);
@@ -1442,7 +1442,15 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetFileBasicInformation([[maybe_unused
         return E_POINTER;
     }
 
-    *info = {};
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
+    }
+
+    info->creationTime   = 0;
+    info->lastAccessTime = 0;
+    info->lastWriteTime  = 0;
+    info->attributes     = 0;
 
     if (path == nullptr || path[0] == L'\0')
     {
@@ -1490,6 +1498,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::SetFileBasicInformation([[maybe_unused
     if (info == nullptr)
     {
         return E_POINTER;
+    }
+
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
     }
 
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -1545,8 +1558,15 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
         return E_POINTER;
     }
 
-    *result        = {};
-    result->status = S_OK;
+    if (result->sizeBytes != sizeof(FileSystemDirectorySizeResult))
+    {
+        return E_INVALIDARG;
+    }
+
+    result->totalBytes     = 0;
+    result->fileCount      = 0;
+    result->directoryCount = 0;
+    result->status         = S_OK;
 
     if (path == nullptr || path[0] == L'\0')
     {

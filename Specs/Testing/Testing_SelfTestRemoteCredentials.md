@@ -13,6 +13,26 @@ These phases are **conditional**:
 - If the connection profile and secret are present, the phase **passes**.
 - Otherwise the phase is **skipped** (selftests stay green by default).
 
+## CompareDirectories remote smoke (optional)
+
+`RedSalamander.exe --compare-selftest` includes optional remote smoke cases that exercise **cross‑plugin Compare Directories** with Connection Manager profiles:
+
+- `remote_file_s3` (file ↔ S3)
+- `remote_file_ftp` (file ↔ FTP)
+- `remote_s3_pagination` (S3 folder listing pagination: compares non-recursive `GetDirectorySize` vs `ReadDirectoryInfo` count)
+
+These cases are **conditional** and use the same profile naming/env var rules as the Phase 16 checks below:
+
+- If the connection profile + secret are present *and* `initialPath` passes the sandbox rules, the case **runs**.
+- Otherwise the case is **skipped**.
+
+The smoke cases are **read-only** (directory listing + one root compare decision) and target the remote root as:
+
+- `/@conn:<profileName><initialPath>`
+
+Note: `remote_s3_pagination` can only *prove* multi-page behavior when the chosen S3 root has **more than 1000 immediate children**
+(or when the profile’s S3 `maxKeys` is configured below the expected count).
+
 ## Security model
 
 - Secrets are **not** stored in the repo.

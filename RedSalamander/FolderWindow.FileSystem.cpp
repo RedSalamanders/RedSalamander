@@ -3960,7 +3960,7 @@ HRESULT FolderWindow::EnsurePaneFileSystem(Pane pane, std::wstring_view pluginId
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
-    if (state.fileSystem && state.fileSystemModule && EqualsNoCase(state.pluginId, pluginId))
+    if (state.fileSystem && EqualsNoCase(state.pluginId, pluginId))
     {
         state.pluginShortId = entry->shortId;
 
@@ -4275,6 +4275,8 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
     {
         return;
     }
+
+    const std::optional<std::filesystem::path> previousPluginPath = state.folderView.GetFolderPath();
 
     FileSystemPluginManager& pluginManager  = FileSystemPluginManager::GetInstance();
     const auto& plugins                     = pluginManager.GetPlugins();
@@ -4817,6 +4819,15 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
         {
             Common::Settings::FoldersSettings& folders = _settings->folders.has_value() ? _settings->folders.value() : _settings->folders.emplace();
             PruneFolderHistoryFilters(folders, _folderHistory, static_cast<size_t>(_folderHistoryMax));
+        }
+    }
+
+    if (_panePathChangedCallback)
+    {
+        const bool changed = ! previousPluginPath.has_value() || previousPluginPath->native() != pluginPath.native();
+        if (changed)
+        {
+            _panePathChangedCallback(pane, pluginPath);
         }
     }
 }

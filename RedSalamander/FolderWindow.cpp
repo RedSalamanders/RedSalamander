@@ -201,6 +201,12 @@ void FolderWindow::SetPaneEmptyStateMessage(Pane pane, std::wstring message)
     state.folderView.SetEmptyStateMessage(std::move(message));
 }
 
+void FolderWindow::SetPaneBackgroundWatermark(Pane pane, std::wstring message, bool animated)
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.SetBackgroundWatermark(std::move(message), animated);
+}
+
 void FolderWindow::RefreshPaneDetailsText(Pane pane)
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;

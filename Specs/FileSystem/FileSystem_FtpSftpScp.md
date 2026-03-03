@@ -115,6 +115,7 @@ Security note:
 
 - File copy/move across different endpoints (host/user/port) within the same protocol plugin is implemented as **download → upload** via a local temporary file.
 - Directory operations support recursion when `FILESYSTEM_FLAG_RECURSIVE` is provided.
+- Directory listing is parsed incrementally (streamed) to avoid buffering the full LIST output in memory, improving large-directory memory behavior.
 - For a **single** top-level directory copy/move or delete, contained file work SHOULD still parallelize (within-folder parallelism) subject to the effective concurrency limits.
 - SCP has protocol limitations; directory listing and command-style operations require the server to support SFTP over SSH.
 

@@ -22,11 +22,20 @@ FolderWatcher::~FolderWatcher()
 HRESULT STDMETHODCALLTYPE FolderWatcher::PluginCallback::FileSystemDirectoryChanged(const FileSystemDirectoryChangeNotification* notification,
                                                                                     void* /*cookie*/) noexcept
 {
+    if (! notification || notification->sizeBytes != sizeof(FileSystemDirectoryChangeNotification))
+    {
+        if (_owner)
+        {
+            _owner->OnPluginDirectoryChanged(true);
+        }
+        return notification ? E_INVALIDARG : E_POINTER;
+    }
+
     if (_owner)
     {
-        const bool overflow = notification && notification->overflow;
-        _owner->OnPluginDirectoryChanged(overflow);
+        _owner->OnPluginDirectoryChanged(notification->overflow);
     }
+
     return S_OK;
 }
 

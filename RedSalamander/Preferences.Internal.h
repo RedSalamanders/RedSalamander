@@ -560,6 +560,10 @@ struct PreferencesDialogState
     wil::unique_hwnd advancedCompareContentLabel;
     wil::unique_hwnd advancedCompareContentToggle;
     wil::unique_hwnd advancedCompareContentDescription;
+    wil::unique_hwnd advancedCompareContentWorkersLabel;
+    wil::unique_hwnd advancedCompareContentWorkersFrame;
+    wil::unique_hwnd advancedCompareContentWorkersCombo;
+    wil::unique_hwnd advancedCompareContentWorkersDescription;
 
     wil::unique_hwnd advancedCompareSubdirectoriesLabel;
     wil::unique_hwnd advancedCompareSubdirectoriesToggle;

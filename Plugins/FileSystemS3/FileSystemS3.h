@@ -7,6 +7,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <mutex>
 #include <new>
 #include <optional>
@@ -27,6 +28,22 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
+
+namespace Aws
+{
+namespace S3Crt
+{
+class S3CrtClient;
+} // namespace S3Crt
+} // namespace Aws
+
+class FileSystemS3;
+
+namespace FileSystemS3Internal
+{
+struct ResolvedAwsContext;
+[[nodiscard]] std::shared_ptr<Aws::S3Crt::S3CrtClient> GetS3Client(FileSystemS3& fs, const ResolvedAwsContext& ctx) noexcept;
+}
 
 enum class FileSystemS3Mode
 {
@@ -323,9 +340,10 @@ private:
     },
     {
       "key": "maxKeys",
-      "label": "Max keys per listing",
+      "label": "Max keys per request",
       "type": "value",
       "default": 1000,
+      "description": "S3 folder listings are paginated; this controls the number of keys requested per page (1..1000).",
       "min": 1,
       "max": 1000
     }
@@ -364,9 +382,10 @@ private:
     },
     {
       "key": "maxTableResults",
-      "label": "Max results per listing",
+      "label": "Max results per request",
       "type": "value",
       "default": 1000,
+      "description": "S3 Table listings are paginated; this controls the number of results requested per page (1..1000).",
       "min": 1,
       "max": 1000
     }
@@ -400,6 +419,7 @@ private:
 
     // S3 cache (best-effort)
     std::unordered_map<std::wstring, std::string> _s3BucketRegionByName;
+    std::unordered_map<std::string, std::shared_ptr<Aws::S3Crt::S3CrtClient>> _s3ClientsByCtxKey;
 
     // S3 Tables cache (best-effort)
     std::unordered_map<std::wstring, std::string> _s3TableBucketArnByName;
@@ -411,4 +431,6 @@ private:
                                       const FileSystemS3Internal::ResolvedAwsContext& ctx,
                                       std::vector<FilesInformationS3::Entry>& out) noexcept;
     friend std::optional<std::string> LookupS3TableBucketArn(FileSystemS3& fs, std::wstring_view bucketName) noexcept;
+    friend std::shared_ptr<Aws::S3Crt::S3CrtClient> FileSystemS3Internal::GetS3Client(
+        FileSystemS3& fs, const FileSystemS3Internal::ResolvedAwsContext& ctx) noexcept;
 };

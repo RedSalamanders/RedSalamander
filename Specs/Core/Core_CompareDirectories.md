@@ -26,7 +26,7 @@ The comparison is directory-oriented and matches items by **name under the same 
 
 - `RedSalamander/CompareDirectoriesWindow.h/.cpp` (window, banner, options panel, sync logic, progress UI)
 - `RedSalamander/CompareDirectoriesEngine.h/.cpp` (compare session/engine + compare-scoped filesystem wrappers)
-- `Common/SettingsStore.h` + `Common/SettingsStore.cpp` (persisted settings: `compareDirectories`)
+- `Common/SettingsStore.h` + `Common/Common/SettingsStore.cpp` (persisted settings: `compareDirectories`)
 - `Common/WindowMessages.h` (custom message IDs; no `WM_APP`/`WM_USER` definitions outside this file)
   - Posted payload helpers: `Common/Helpers.h` (`PostMessagePayload` / `TakeMessagePayload` / `DrainPostedPayloadsForWindow`)
 
@@ -68,10 +68,22 @@ When scanning is active and/or background content compare is pending, a **progre
 
 - A status text describing what is being processed (scan path + counts; and/or content compare path + bytes).
 - Scan elapsed time and (when possible) a content-compare ETA.
-- **Indeterminate progress**: a themed spinner/indeterminate animation while directory scanning is active or when total content bytes are unknown (no Win32 default marquee visuals).
-- **Determinate progress**: a themed progress bar (following the current theme colors and rainbow mode, consistent with the file operations dialog — see `FolderWindow.FileOperations.Popup` rendering) when content compare reports a known total byte count.
+- A themed indeterminate spinner is shown **to the left of the Rescan/Cancel button** while any scan/content compare work is pending.
+  - The buttons + spinner are vertically centered within the banner region; when the progress row appears/disappears, they re-center.
 
 The progress row hides automatically when there are no active scans and no pending content compares.
+
+### In‑pane background watermark (run state)
+
+While a compare run is active, both panes MUST render a centered watermark in the **pane background** (drawn behind items; not a separate overlay window) to make it obvious the comparison is still in progress:
+
+- **In progress** (scan/content work running): show an **animated** watermark (e.g., pulsing text opacity).
+- **Cancelled** (user pressed **Cancel**): show a **static** watermark indicating the run was cancelled, and keep it visible until the next explicit **Rescan** / **Options → OK**.
+- **Done** (run finished successfully): show **no** watermark.
+
+Because the watermark is rendered as part of the pane background, it is inherently click‑through (must not block normal pane interaction).
+
+While a compare watermark is visible, panes MUST suppress the standard **Empty folder** empty‑state UI (it is misleading for differences‑filtered compare views).
 
 ### File Operations popup integration (scan/content progress)
 
@@ -106,6 +118,8 @@ The compare window has two user-visible modes:
 - **Compare mode (active)**:
   - The panes are synchronized by relative path under the current roots.
   - Enumeration is driven by the compare engine (differences filter, per-item status text, background content compare).
+    - Enumeration MUST be cache-only: the compare filesystem wrapper MUST NOT compute decisions synchronously during `ReadDirectoryInfo()`.
+      - When background work is enabled and a folder decision is not yet cached, the host MUST queue a background scan for that folder and MAY return an empty enumeration until the decision becomes available.
   - Progress UI is shown while scanning/content compare is running.
   - The banner **Rescan** button changes to **Cancel**.
 - **Browsing mode (inactive)**:
@@ -117,10 +131,26 @@ Compare mode is entered (or re-entered) only by **Options → OK** or **Rescan**
 
 ## Navigation & Scope Sync
 
-Comparison is defined by two roots:
+Comparison scope is defined by the combination of **filesystem context** and **roots**:
 
-- Left root (`_leftRoot`)
-- Right root (`_rightRoot`)
+- Left filesystem context: `(pluginId, instanceContext)`
+- Right filesystem context: `(pluginId, instanceContext)`
+- Left root (`_leftRoot`) — a pane-local filesystem path (Win32 absolute for `file`, plugin path like `/...` for non-`file` plugins)
+- Right root (`_rightRoot`) — same rules as left
+
+While compare mode is active, the filesystem contexts are **fixed**:
+
+- If either pane’s `(pluginId, instanceContext)` changes, the host MUST cancel compare mode before doing any further compare-root/path calculations.
+
+### Root/path semantics (Win32 vs plugin paths)
+
+- If the pane uses the `file` filesystem (Win32 paths), roots and navigation are treated as **Windows absolute paths** (case-insensitive; extended paths like `\\?\` are accepted).
+- Otherwise, roots and navigation are treated as **plugin paths**:
+  - forward slashes (`/`)
+  - a leading `/` is required
+  - host normalization uses `NavigationLocation::NormalizePluginPathText(...)` rules (and MUST NOT apply Win32 `\\?\`-style normalization).
+
+### Synchronized navigation (relative path under roots)
 
 While compare mode is active, when the user navigates within one pane:
 
@@ -188,6 +218,7 @@ Options are organized in four sections:
 - `compareDateTime` — Different timestamps mark the item different; the newer side is selected.
 - `compareAttributes` — Different attributes mark the item different; both sides are selected.
 - `compareContent` — Different content marks the item different; both sides are selected. Content is evaluated asynchronously (see [Content Compare Architecture](#content-compare-architecture)).
+  - If either side does not support `IFileSystemIO`, content comparison is unavailable for that compare scope. The host MUST disable the toggle in the options UI for that compare run and treat `compareContent` as **off** (no `Content`/`ContentPending` differences are computed).
 
 **Subdirectories**
 
@@ -233,7 +264,7 @@ For each relative folder, the engine computes an item decision per (normalized) 
 | `ContentPending` | Content compare is queued or in progress (not yet resolved) |
 | `SubdirAttributes` | Directory attributes differ (when `compareSubdirectoryAttributes` enabled) |
 | `SubdirContent` | A descendant differs (when `compareSubdirectories` enabled) |
-| `SubdirPending` | A descendant comparison is pending (e.g., content compares still running) |
+| `SubdirPending` | A descendant comparison is pending (descendant folder scans and/or content compares still running) |
 
 ### Name matching
 
@@ -249,18 +280,26 @@ By default, the panes show only different items:
 - Type mismatches
 - Items different by any enabled compare criterion
 - Directories that differ (when `compareSubdirectories` is enabled)
-- Items that are still in-flight (`ContentPending` / `SubdirPending`) so the user can see progress even when `showIdenticalItems` is off.
+- Items that are still in-flight:
+  - Directories that are still computing (`SubdirPending`), so subtree progress is visible.
+  - File-level `ContentPending` placeholders MAY be elided when `showIdenticalItems` is off to keep memory bounded on very large folders. In that mode, the host MUST still surface progress via folder-level UI (scan/content progress indicators) and MUST set `anyPending` until work completes.
 
 The menu item **Compare → Show Identical Items** (`showIdenticalItems`) toggles the differences filter globally for all folders in the compare session. When enabled, identical items are shown alongside different items. The setting is persisted in `CompareDirectoriesSettings`.
 
-Toggling the filter triggers an immediate pane refresh (re-enumeration through the compare filesystem wrapper with the updated filter).
+Because differences-only mode may prune identical entries to keep memory bounded, toggling this setting invalidates cached decisions and requires restarting the compare scan to fully reflect the new filter. When compare mode is active, the host MUST warn the user and ask for confirmation before restarting the scan (canceling any in-flight work).
+
+When `showIdenticalItems` is off and a folder has no differences after a successful compare run completes, panes MUST show a localized **No differences** empty‑state message instead of the standard **Empty folder** UI.
 
 ### Subdirectory traversal
 
 When `compareSubdirectories` is enabled:
 
-- Subtree comparison is performed **iteratively** using an explicit stack/worklist (no recursive call stack growth, safe for deeply nested trees like `node_modules`).
+- Subtree comparison is performed by **background scan workers** and is **progressive**:
+  - A directory may initially show `SubdirPending` ("Computing...") until descendant folders are scanned and any in-flight content compares complete.
+  - The UI MUST tolerate intermediate states (pending bits) and refresh via coalesced, budgeted updates (see [Transition behavior for content-pending items](#transition-behavior-for-content-pending-items)).
+- Subtree traversal uses an iterative worklist (no recursive call-stack growth, safe for deeply nested trees like `node_modules`).
 - Directory reparse points (symlinks/junctions) are **not** followed.
+- The UI thread MUST NOT perform subtree traversal or synchronous folder enumeration as part of rendering (details/selection/empty-state). It may only read cached decisions and apply budgeted pending updates.
 
 ### Error handling for enumeration failures
 
@@ -353,10 +392,13 @@ Items should have a clear visual distinction (foreground color or icon) based on
 
 When a content compare completes for an item:
 
-- The `ContentPending` bit is cleared.
+- If a per-item `ContentPending` placeholder exists, the `ContentPending` bit is cleared.
 - If content differs, the final `Content` bit is set and the item becomes different/selected.
 - If content is equal, the item remains identical and unselected (no content bits remain set).
-- The pane refreshes via `WndMsg::kCompareDirectoriesDecisionUpdated`.
+- If the item was not surfaced as a per-item placeholder (differences-only mode elision), the item appears only if it becomes different; otherwise it remains absent from the filtered list.
+- The pane refreshes via `WndMsg::kCompareDirectoriesDecisionUpdated`. The UI MUST coalesce refresh work (apply pending updates + refresh panes) to avoid UI-thread stalls during large content-compare bursts.
+  - When there is a large backlog, the UI SHOULD apply pending updates in bounded batches (e.g., N folders per tick) and schedule additional refresh ticks until drained.
+  - The UI MUST treat decision computation as background-only work: no UI-thread code path should trigger subtree traversal or synchronous `ReadDirectoryInfo()` I/O for compare decisions.
 - If the item is now identical and `showIdenticalItems` is off, the item is removed from the list on the next enumeration refresh.
 - No explicit animation or fade-out is applied — the item simply disappears from the filtered list or updates its details text.
   - Ancestor directories update `SubdirPending` / `SubdirContent` so directory status transitions correctly (e.g., "Computing..." → final).
@@ -369,20 +411,27 @@ Content comparison uses a **two-phase** model to keep the UI responsive:
 
 When `GetOrComputeDecision` is called for a folder:
 
-1. Enumerate both left and right sides.
+1. Enumerate both left and right sides by calling `IFileSystem::ReadDirectoryInfo` on the base filesystems.
+   - Compare background scans MUST NOT enumerate via `DirectoryInfoCache::BorrowDirectoryInfo(..., AllowEnumerate)`: `DirectoryInfoCache` is a global cache sized for interactive browsing and can grow to GiB scale when a subtree scan touches many folders.
 2. Match entries by name (case-insensitive ordinal).
 3. Compare metadata (existence, type, size, date/time, attributes) based on enabled settings.
-4. For files that need content comparison (same size or size-unknown, and `compareContent` is enabled): set the `ContentPending` diff bit and enqueue a content-compare job. `ContentPending` does not imply a final difference and must not select the item.
-5. Return the decision immediately — the UI shows "Comparing..." for content-pending items.
+4. For files that need content comparison (same size or size-unknown, and `compareContent` is enabled):
+   - Enqueue a content-compare job.
+   - When the item is surfaced in the list, set the `ContentPending` diff bit. `ContentPending` does not imply a final difference and must not select the item.
+   - When `showIdenticalItems` is off, the host MAY elide per-file `ContentPending` placeholders to keep memory bounded, but it MUST keep folder-level pending state (`anyPending`) accurate until all content jobs complete.
+5. Return the decision immediately — the UI shows progress via per-item "Comparing..." (when placeholders are surfaced) and/or folder-level progress indicators.
 
 ### Phase 2: Background content compare (asynchronous, worker pool)
 
-- A pool of `std::jthread` workers (sized to `std::thread::hardware_concurrency() / 2`, minimum 1) processes the content-compare queue (add a setting for the level of paraellelism 0 or no setting use default value).
+- A pool of `std::jthread` workers processes the content-compare queue:
+  - If `contentCompareWorkerCount == 0` (Auto): use `std::thread::hardware_concurrency()` (fallback `2` when it returns `0`), clamped to `1..4`.
+  - Otherwise: use `contentCompareWorkerCount` clamped to `1..4`.
 - Workers are created lazily on first content-compare enqueue (`EnsureContentCompareWorkersLocked`).
 - Each worker dequeues a `ContentCompareJob`, checks the version (bail out if stale), opens both files via `IFileSystemIO::CreateFileReader`, and streams/compares until a difference or EOF.
-- Results are stored in `_pendingContentCompareUpdates`, keyed by folder and entry name.
-- Pending updates are applied by `FlushPendingContentCompareUpdates()` (called by the UI when `WndMsg::kCompareDirectoriesDecisionUpdated` is received) and also on-demand the next time `GetOrComputeDecision` runs for a specific folder.
-- Applying a pending update must also update ancestor directories' subtree state (`SubdirPending` / `SubdirContent`) so directory status transitions correctly without requiring navigation.
+- Results are applied to cached decisions and must update ancestor directories' subtree state (`SubdirPending` / `SubdirContent`) so directory status transitions correctly without requiring navigation.
+- Implementations may apply completed results directly from workers, or queue them and apply them on the UI thread via `FlushPendingContentCompareUpdatesBudgeted()`.
+  - The UI SHOULD batch/coalesce decision-update refreshes (e.g., timer-based) instead of doing a full refresh on every posted notification.
+  - Budgeted application may require multiple UI ticks when many updates are outstanding.
 - On completion, the engine posts `WndMsg::kCompareDirectoriesDecisionUpdated` so the panes refresh.
 
 ### Cancellation
@@ -393,6 +442,12 @@ When `GetOrComputeDecision` is called for a folder:
 ### Notification throttling
 
 Progress callbacks (`ScanProgressCallback`, `ContentProgressCallback`, `DecisionUpdatedCallback`) are throttled by a minimum interval (tracked via `_*LastNotifyTickMs` atomics) to avoid flooding the UI thread with `PostMessage` calls. A final forced notification is always sent when a scan or the last content-compare completes, ensuring the UI reaches the final state.
+
+### Performance and memory bounds (normative)
+
+- The engine MUST keep background compare memory bounded (bounded work queues and bounded caches).
+- Under sustained backlog (“backpressure”), the engine MUST prioritize work for **currently visible folders** over low-priority background subtree scanning.
+- UI thread work MUST remain bounded and coalesced (see [Transition behavior for content-pending items](#transition-behavior-for-content-pending-items)).
 
 ## Cache Coherence & Version Model
 
@@ -430,7 +485,8 @@ The wrapper implements `IFileSystem` and `IInformations`. Behavior:
 ### `ReadDirectoryInfo` (enumeration)
 
 - If compare mode is **active** and the requested folder is **within** the pane's root:
-  - Call `session->GetOrComputeDecision(relativeFolder)` to get the folder decision.
+  - Call `session->TryGetCachedDecision(relativeFolder)` to get the cached folder decision (cache-only; no synchronous I/O).
+  - If no cached decision exists yet, the wrapper MUST call `session->RequestScanForFolder(relativeFolder)` and return an empty enumeration.
   - For each item in the decision:
     - Skip items that don't exist on this pane's side (`existsLeft`/`existsRight`).
     - Skip identical items if `showIdenticalItems` is off and `isDifferent` is false.
@@ -438,7 +494,7 @@ The wrapper implements `IFileSystem` and `IInformations`. Behavior:
     - Set the per-item details text from the decision's difference mask.
   - Apply the decision model's selection rules to the returned entries.
 - If compare mode is **inactive**, or the folder is **outside** the roots:
-  - Delegate to the base filesystem (`_baseFileSystem->ReadDirectoryInfo`).
+  - Delegate to the wrapper's base filesystem for that pane.
 
 ### Missing-side folders
 
@@ -449,7 +505,7 @@ When one side doesn't exist for a relative path:
 
 ### File operations (copy/move/delete/rename)
 
-All mutation operations delegate to the base filesystem. The compare wrapper does not intercept or filter these — filtering for sync-copy is handled at a higher level (see [Directory sync-copy](#directory-copymove-behavior-sync)).
+All mutation operations delegate to the wrapper's base filesystem for that pane. The compare wrapper does not intercept or filter these — filtering for sync-copy is handled at a higher level (see [Directory sync-copy](#directory-copymove-behavior-sync)).
 
 ## Scanning & Progress Notifications
 
@@ -494,9 +550,11 @@ When compare mode is active, after file operations complete the compare session 
 
 ## Content Compare I/O Contract
 
-Content comparison uses the active filesystem plugin I/O:
+Content comparison uses per-side filesystem plugin I/O:
 
-- Use `IFileSystemIO::CreateFileReader` to open files on both sides.
+- If either side does not support `IFileSystemIO`, content comparison MUST be treated as unavailable for that compare scope (see the `compareContent` option notes above).
+- Use `leftIo->CreateFileReader(leftPath)` to open the left file.
+- Use `rightIo->CreateFileReader(rightPath)` to open the right file.
 - Read with `IFileReader::Read` (streaming, 256 KB buffer) until a difference is found or EOF is reached.
 - Short reads are permitted by the `IFileReader` contract; content compare must tolerate them (continue reading until EOF or a mismatch).
 - If `IFileReader::GetSize` succeeds for both sides and sizes differ, return "different" immediately without reading content.
@@ -523,6 +581,7 @@ The global **Preferences** dialog includes a dedicated **Compare Directories** p
 This section maps directly to `Common::Settings::CompareDirectoriesSettings`:
 
 - Compare files: `compareSize`, `compareDateTime`, `compareAttributes`, `compareContent`
+- Content compare: `contentCompareWorkerCount`
 - Subdirectories: `compareSubdirectories`, `compareSubdirectoryAttributes`, `selectSubdirsOnlyInOnePane`
 - Ignore patterns: `ignoreFiles` + `ignoreFilesPatterns`, `ignoreDirectories` + `ignoreDirectoriesPatterns`
 - Display: `showIdenticalItems`

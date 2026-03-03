@@ -1,5 +1,7 @@
 #include "FileSystemS3.Internal.h"
 
+#include <functional>
+
 namespace FileSystemS3Internal
 {
 void AwsSdkLifetime::AddRef() noexcept
@@ -676,11 +678,11 @@ namespace
 
     // Conservative defaults; can be made configurable later.
     cfg.connectTimeoutMs = 10'000;
-    cfg.requestTimeoutMs = 0;
+    cfg.requestTimeoutMs = 30'000;
     return cfg;
 }
 
-[[nodiscard]] Aws::S3Crt::S3CrtClient MakeS3Client(const ResolvedAwsContext& ctx) noexcept
+[[nodiscard]] std::shared_ptr<Aws::S3Crt::S3CrtClient> MakeS3Client(const ResolvedAwsContext& ctx) noexcept
 {
     Aws::Client::ClientConfiguration legacy = MakeClientConfig(ctx);
     Aws::S3Crt::ClientConfiguration s3cfg(
@@ -689,10 +691,81 @@ namespace
     if (ctx.accessKeyId.has_value() && ctx.secretAccessKey.has_value())
     {
         Aws::Auth::AWSCredentials creds(ctx.accessKeyId.value(), ctx.secretAccessKey.value());
-        return Aws::S3Crt::S3CrtClient(creds, s3cfg);
+        return std::make_shared<Aws::S3Crt::S3CrtClient>(creds, s3cfg);
     }
 
-    return Aws::S3Crt::S3CrtClient(s3cfg);
+    return std::make_shared<Aws::S3Crt::S3CrtClient>(s3cfg);
+}
+
+namespace
+{
+void AppendHexU64(std::string& out, uint64_t value) noexcept
+{
+    constexpr std::string_view kHex = "0123456789ABCDEF";
+    for (int shift = 60; shift >= 0; shift -= 4)
+    {
+        out.push_back(kHex[(value >> shift) & 0xFu]);
+    }
+}
+
+[[nodiscard]] std::string MakeS3ClientCacheKey(const ResolvedAwsContext& ctx) noexcept
+{
+    uint64_t secretHash = 0;
+    if (ctx.secretAccessKey.has_value())
+    {
+        secretHash = std::hash<std::string>{}(ctx.secretAccessKey.value());
+    }
+
+    const std::string conn = Utf8FromUtf16(ctx.connectionName);
+
+    std::string key;
+    key.reserve(conn.size() + ctx.region.size() + ctx.endpointOverride.size() + 64u + (ctx.accessKeyId.has_value() ? ctx.accessKeyId->size() : 0u));
+
+    key.append(conn);
+    key.push_back('|');
+    key.append(ctx.region);
+    key.push_back('|');
+    key.append(ctx.endpointOverride);
+    key.push_back('|');
+    key.push_back(ctx.useHttps ? 'H' : 'h');
+    key.push_back(ctx.verifyTls ? '1' : '0');
+    key.push_back(ctx.useVirtualAddressing ? '1' : '0');
+    key.push_back('|');
+    if (ctx.accessKeyId.has_value())
+    {
+        key.append(ctx.accessKeyId.value());
+    }
+    key.push_back('|');
+    AppendHexU64(key, secretHash);
+
+    return key;
+}
+} // namespace
+
+std::shared_ptr<Aws::S3Crt::S3CrtClient> GetS3Client(FileSystemS3& fs, const ResolvedAwsContext& ctx) noexcept
+{
+    const std::string key = MakeS3ClientCacheKey(ctx);
+
+    {
+        std::lock_guard lock(fs._stateMutex);
+        if (const auto it = fs._s3ClientsByCtxKey.find(key); it != fs._s3ClientsByCtxKey.end() && it->second)
+        {
+            return it->second;
+        }
+    }
+
+    // Client creation can be expensive; do it outside the lock.
+    const std::shared_ptr<Aws::S3Crt::S3CrtClient> created = MakeS3Client(ctx);
+
+    std::lock_guard lock(fs._stateMutex);
+    auto it = fs._s3ClientsByCtxKey.find(key);
+    if (it != fs._s3ClientsByCtxKey.end() && it->second)
+    {
+        return it->second;
+    }
+
+    fs._s3ClientsByCtxKey.emplace(key, created);
+    return created;
 }
 
 [[nodiscard]] Aws::S3Tables::S3TablesClient MakeS3TablesClient(const ResolvedAwsContext& ctx) noexcept

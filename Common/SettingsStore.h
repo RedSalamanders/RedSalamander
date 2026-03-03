@@ -294,6 +294,9 @@ struct CompareDirectoriesSettings
     std::wstring ignoreDirectoriesPatterns;
 
     bool showIdenticalItems = false; // Show full list (not just differences).
+
+    // 0 = Auto (current behavior, clamped to <= 4), 1..4 = fixed worker count for background content compare.
+    uint32_t contentCompareWorkerCount = 0;
 };
 
 struct HotPathSlot

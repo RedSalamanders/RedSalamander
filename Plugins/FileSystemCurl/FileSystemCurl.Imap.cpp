@@ -63,7 +63,7 @@ static constexpr DWORD kImapFileAttributeDeleted = 0x08000000u;
         return hr;
     }
 
-    unique_curl_easy curl{curl_easy_init()};
+    auto curl = GetCurlEasyPool().Borrow(conn.limiterKey);
     if (! curl)
     {
         return E_OUTOFMEMORY;
@@ -3249,7 +3249,7 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
         return hr;
     }
 
-    unique_curl_easy curl{curl_easy_init()};
+    auto curl = GetCurlEasyPool().Borrow(conn.limiterKey);
     if (! curl)
     {
         return E_OUTOFMEMORY;
@@ -3779,60 +3779,7 @@ size_t CurlWriteImapFetchToFile(void* ptr, size_t size, size_t nmemb, void* user
         return ImapReadDirectoryEntries(conn, path, entries);
     }
 
-    std::string listing;
-    HRESULT hr = CurlPerformList(conn, path, listing);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    hr = ParseDirectoryListing(listing, entries);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    entries.erase(
-        std::remove_if(entries.begin(), entries.end(), [](const FilesInformationCurl::Entry& entry) noexcept { return IsDotOrDotDotName(entry.name); }),
-        entries.end());
-
-    if (! entries.empty() || listing.empty())
-    {
-        return S_OK;
-    }
-
-    // Fallback: treat each line as a name-only entry (best-effort).
-    size_t start = 0;
-    while (start < listing.size())
-    {
-        size_t end = listing.find('\n', start);
-        if (end == std::string::npos)
-        {
-            end = listing.size();
-        }
-
-        std::string_view line = std::string_view(listing).substr(start, end - start);
-        if (! line.empty() && line.back() == '\r')
-        {
-            line.remove_suffix(1);
-        }
-
-        const std::string trimmed = TrimAscii(line);
-        if (! trimmed.empty() && ! IsDotOrDotDotName(trimmed))
-        {
-            FilesInformationCurl::Entry entry{};
-            entry.name       = Utf16FromUtf8(trimmed);
-            entry.attributes = FILE_ATTRIBUTE_NORMAL;
-            if (! entry.name.empty())
-            {
-                entries.push_back(std::move(entry));
-            }
-        }
-
-        start = end + 1u;
-    }
-
-    return S_OK;
+    return CurlPerformListAndParse(conn, path, entries);
 }
 
 [[nodiscard]] HRESULT GetEntryInfo(const ConnectionInfo& conn, std::wstring_view path, FilesInformationCurl::Entry& out) noexcept

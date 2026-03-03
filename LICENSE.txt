@@ -29,7 +29,7 @@ are reproduced below.
 
 ### WIL (Windows Implementation Libraries)
 
-- Version: 1.0.250325.1+
+- Version: 1.0.260126.7
 - License: MIT
 - Copyright (c) Microsoft Corporation. All rights reserved.
 
@@ -82,15 +82,15 @@ https://www.libraw.org/
 
 ### 7-Zip
 
-- Version: 25.01
+- Version: 26.00
 - License: GNU LGPL-2.1-or-later (most files), with BSD-3-Clause and
   BSD-2-Clause for some components
-- Copyright (C) 1999-2025 Igor Pavlov
+- Copyright (C) 1999-2026 Igor Pavlov
 
 Additional copyrights for bundled components:
 - LZFSE: Copyright (c) 2015-2016 Apple Inc. (BSD-3-Clause)
-- ZSTD: Copyright (c) Facebook, Inc. (BSD-3-Clause)
-- XXH64: Copyright (c) 2012-2021 Yann Collet (BSD-2-Clause)
+- ZSTD: Copyright (c) Facebook, Inc. (BSD-3-Clause); Copyright (c) 2023-2026 Igor Pavlov
+- XXH64: Copyright (c) 2012-2021 Yann Collet; Copyright (c) 2023-2026 Igor Pavlov (BSD-2-Clause)
 
 Note: RAR-related files (CPP/7zip/Compress/Rar*) are subject to the
 unRAR license restriction (see unRAR below).
@@ -153,7 +153,7 @@ https://libssh2.org/
 
 ### OpenSSL
 
-- Version: 3.6.1
+- Version: 3.6.0
 - License: Apache-2.0
 - Copyright (c) 1998-2025 The OpenSSL Project Authors. All Rights Reserved.
 
@@ -205,7 +205,7 @@ https://www.littlecms.com/
 
 ### WebView2
 
-- Version: 1.0.3650.58+
+- Version: 1.0.3719.77
 - License: BSD-3-Clause
 - Copyright (C) Microsoft Corporation. All rights reserved.
 
@@ -215,23 +215,23 @@ https://developer.microsoft.com/en-us/microsoft-edge/webview2/
 
 ### AWS SDK for C++
 
-- Version: 1.11.724+
+- Version: 1.11.740
 - License: Apache-2.0
 - Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 
 Includes the following AWS C Runtime libraries, all licensed under Apache-2.0:
-- aws-crt-cpp
-- aws-c-common
-- aws-c-s3
-- aws-c-auth
-- aws-c-cal
-- aws-c-io
-- aws-c-http
-- aws-c-mqtt
-- aws-c-compression
-- aws-c-event-stream
-- aws-c-sdkutils
-- aws-checksums
+- aws-crt-cpp 0.37.0
+- aws-c-common 0.12.6
+- aws-c-s3 0.11.4
+- aws-c-auth 0.9.5
+- aws-c-cal 0.9.13
+- aws-c-io 0.26.0
+- aws-c-http 0.10.9
+- aws-c-mqtt 0.13.3
+- aws-c-compression 0.3.2
+- aws-c-event-stream 0.5.9
+- aws-c-sdkutils 0.2.4
+- aws-checksums 0.2.8
 
 https://github.com/aws/aws-sdk-cpp
 
@@ -239,8 +239,9 @@ https://github.com/aws/aws-sdk-cpp
 
 ### highlight.js (ViewerWeb plugin)
 
+- Version: 11.11.1
 - License: BSD-3-Clause
-- Copyright (c) 2006 Ivan Sagalaev. All rights reserved.
+- Copyright (c) 2006-2024 Josh Goebel and other contributors.
 
 https://highlightjs.org/
 
@@ -248,6 +249,7 @@ https://highlightjs.org/
 
 ### jsoneditor (ViewerWeb plugin)
 
+- Version: 10.4.2
 - License: Apache-2.0
 - Copyright (c) Jos de Jong
 
@@ -257,6 +259,7 @@ https://github.com/josdejong/jsoneditor
 
 ### markdown-it (ViewerWeb plugin)
 
+- Version: 14.1.0
 - License: MIT
 - Copyright (c) 2014 Vitaly Puzrin, Alex Kocharin.
 

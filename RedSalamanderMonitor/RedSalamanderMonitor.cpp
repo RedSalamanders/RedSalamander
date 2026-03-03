@@ -101,6 +101,12 @@ struct ModalMessageDialogState
     const wchar_t* message = nullptr;
 };
 
+struct ModalConfirmDialogState
+{
+    const wchar_t* caption = nullptr;
+    const wchar_t* message = nullptr;
+};
+
 INT_PTR CALLBACK ModalMessageDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
 {
     auto* state = reinterpret_cast<ModalMessageDialogState*>(GetWindowLongPtrW(dlg, DWLP_USER));
@@ -147,6 +153,69 @@ INT_PTR CALLBACK ModalMessageDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
     return static_cast<INT_PTR>(FALSE);
 }
 
+INT_PTR CALLBACK ModalConfirmDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+{
+    auto* state = reinterpret_cast<ModalConfirmDialogState*>(GetWindowLongPtrW(dlg, DWLP_USER));
+    switch (msg)
+    {
+        case WM_INITDIALOG:
+        {
+            state = reinterpret_cast<ModalConfirmDialogState*>(lp);
+            SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
+
+            if (state)
+            {
+                if (state->caption && state->caption[0] != L'\0')
+                {
+                    SetWindowTextW(dlg, state->caption);
+                }
+
+                if (state->message && state->message[0] != L'\0')
+                {
+                    SetDlgItemTextW(dlg, IDC_MODAL_MESSAGE_TEXT, state->message);
+                }
+            }
+
+            wchar_t yesText[64]{};
+            const int yesLength = LoadStringW(GetModuleHandleW(nullptr), IDS_BTN_YES, yesText, static_cast<int>(sizeof(yesText) / sizeof(yesText[0])));
+            if (yesLength > 0)
+            {
+                SetDlgItemTextW(dlg, IDYES, yesText);
+            }
+
+            wchar_t noText[64]{};
+            const int noLength = LoadStringW(GetModuleHandleW(nullptr), IDS_BTN_NO, noText, static_cast<int>(sizeof(noText) / sizeof(noText[0])));
+            if (noLength > 0)
+            {
+                SetDlgItemTextW(dlg, IDNO, noText);
+            }
+
+            SetFocus(GetDlgItem(dlg, IDYES));
+            return static_cast<INT_PTR>(FALSE);
+        }
+        case WM_COMMAND:
+        {
+            const WORD id = LOWORD(wp);
+            if (id == IDYES || id == IDNO)
+            {
+                EndDialog(dlg, id);
+                return static_cast<INT_PTR>(TRUE);
+            }
+
+            if (id == IDCANCEL)
+            {
+                EndDialog(dlg, IDNO);
+                return static_cast<INT_PTR>(TRUE);
+            }
+            break;
+        }
+        case WM_CLOSE:
+            EndDialog(dlg, IDNO);
+            return static_cast<INT_PTR>(TRUE);
+    }
+    return static_cast<INT_PTR>(FALSE);
+}
+
 void ShowModalMessageDialog(HINSTANCE instance, HWND owner, const wchar_t* caption, const wchar_t* message) noexcept
 {
     ModalMessageDialogState state{};
@@ -157,6 +226,20 @@ void ShowModalMessageDialog(HINSTANCE instance, HWND owner, const wchar_t* capti
 #pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
     DialogBoxParamW(instance, MAKEINTRESOURCEW(IDD_MODAL_MESSAGE), owner, ModalMessageDialogProc, reinterpret_cast<LPARAM>(&state));
 #pragma warning(pop)
+}
+
+bool ShowModalConfirmDialog(HINSTANCE instance, HWND owner, const wchar_t* caption, const wchar_t* message) noexcept
+{
+    ModalConfirmDialogState state{};
+    state.caption = caption;
+    state.message = message;
+
+#pragma warning(push)
+#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
+    const INT_PTR result = DialogBoxParamW(instance, MAKEINTRESOURCEW(IDD_MODAL_CONFIRM), owner, ModalConfirmDialogProc, reinterpret_cast<LPARAM>(&state));
+#pragma warning(pop)
+
+    return result == IDYES;
 }
 
 std::filesystem::path GetThemesDirectory() noexcept
@@ -1910,9 +1993,8 @@ LRESULT OnCreateMainWindow(HWND hWnd)
             const std::wstring caption = LoadStringResource(g_hInstance, IDS_CAPTION_ETW_WARNING);
             const std::wstring message = LoadStringResource(g_hInstance, IDS_MSG_ETW_ELEVATE_PROMPT);
 
-            const int choice = MessageBoxW(hWnd, message.c_str(), caption.empty() ? L"" : caption.c_str(), MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON1);
-
-            if (choice == IDYES && RelaunchSelfElevated(hWnd, kWaitInstanceArg))
+            const bool elevateNow = ShowModalConfirmDialog(g_hInstance, hWnd, caption.empty() ? L"" : caption.c_str(), message.c_str());
+            if (elevateNow && RelaunchSelfElevated(hWnd, kWaitInstanceArg))
             {
                 return -1;
             }

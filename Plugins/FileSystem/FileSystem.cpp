@@ -536,7 +536,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetFileBasicInformation(const wchar_t* pat
         return E_POINTER;
     }
 
-    *info = {};
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
+    }
+
+    info->creationTime   = 0;
+    info->lastAccessTime = 0;
+    info->lastWriteTime  = 0;
+    info->attributes     = 0;
 
     if (path == nullptr || path[0] == L'\0')
     {
@@ -570,6 +578,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetFileBasicInformation(const wchar_t* pat
     if (info == nullptr)
     {
         return E_POINTER;
+    }
+
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
     }
 
     if (path == nullptr || path[0] == L'\0')

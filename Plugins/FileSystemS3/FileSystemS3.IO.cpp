@@ -1,6 +1,16 @@
 #include "FileSystemS3.Internal.h"
 
+#include <aws/s3-crt/model/GetObjectRequest.h>
 #include <aws/s3-crt/model/ListObjectsV2Request.h>
+
+#include <algorithm>
+#include <array>
+#include <cstddef>
+#include <cstring>
+#include <format>
+#include <limits>
+#include <string>
+#include <vector>
 
 namespace FsS3 = FileSystemS3Internal;
 
@@ -41,12 +51,13 @@ namespace
     return S_OK;
 }
 
-[[nodiscard]] HRESULT TryGetS3ObjectSummary(const FsS3::ResolvedAwsContext& bucketCtx,
-                                            std::string_view bucket,
-                                            std::string_view key,
-                                            uint64_t& outSizeBytes,
-                                            __int64& outLastWriteTime,
-                                            bool& outFound) noexcept
+[[nodiscard]] HRESULT TryGetS3ObjectSummaryImpl(Aws::S3Crt::S3CrtClient& client,
+                                               const FsS3::ResolvedAwsContext& bucketCtx,
+                                               std::string_view bucket,
+                                               std::string_view key,
+                                               uint64_t& outSizeBytes,
+                                               __int64& outLastWriteTime,
+                                               bool& outFound) noexcept
 {
     outSizeBytes     = 0;
     outLastWriteTime = 0;
@@ -57,7 +68,6 @@ namespace
         return E_INVALIDARG;
     }
 
-    Aws::S3Crt::S3CrtClient client = FsS3::MakeS3Client(bucketCtx);
     Aws::S3Crt::Model::ListObjectsV2Request req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     req.SetPrefix(Aws::String(key.data(), key.size()));
@@ -89,6 +99,18 @@ namespace
 
     outFound = false;
     return S_OK;
+}
+
+[[nodiscard]] HRESULT TryGetS3ObjectSummary(FileSystemS3& fs,
+                                           const FsS3::ResolvedAwsContext& bucketCtx,
+                                           std::string_view bucket,
+                                           std::string_view key,
+                                           uint64_t& outSizeBytes,
+                                           __int64& outLastWriteTime,
+                                           bool& outFound) noexcept
+{
+    const auto client = FsS3::GetS3Client(fs, bucketCtx);
+    return TryGetS3ObjectSummaryImpl(*client, bucketCtx, bucket, key, outSizeBytes, outLastWriteTime, outFound);
 }
 
 class TempFileReader final : public IFileReader
@@ -224,6 +246,333 @@ private:
     std::atomic_ulong _refCount{1};
     wil::unique_hfile _file;
     uint64_t _sizeBytes = 0;
+};
+
+class S3RangedFileReader final : public IFileReader
+{
+public:
+    S3RangedFileReader(FsS3::ResolvedAwsContext bucketCtx,
+                       std::string bucket,
+                       std::string key,
+                       std::shared_ptr<Aws::S3Crt::S3CrtClient> client) noexcept
+        : _bucketCtx(std::move(bucketCtx)),
+          _bucket(std::move(bucket)),
+          _key(std::move(key)),
+          _client(std::move(client))
+    {
+        FsS3::AwsSdkLifetime::AddRef();
+    }
+
+    S3RangedFileReader(const S3RangedFileReader&)            = delete;
+    S3RangedFileReader(S3RangedFileReader&&)                 = delete;
+    S3RangedFileReader& operator=(const S3RangedFileReader&) = delete;
+    S3RangedFileReader& operator=(S3RangedFileReader&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
+    {
+        if (! ppvObject)
+        {
+            return E_POINTER;
+        }
+
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileReader))
+        {
+            *ppvObject = static_cast<IFileReader*>(this);
+            AddRef();
+            return S_OK;
+        }
+
+        *ppvObject = nullptr;
+        return E_NOINTERFACE;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _refCount.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG current = _refCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
+        if (current == 0)
+        {
+            delete this;
+        }
+        return current;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetSize(uint64_t* sizeBytes) noexcept override
+    {
+        if (! sizeBytes)
+        {
+            return E_POINTER;
+        }
+
+        *sizeBytes = 0;
+
+        const HRESULT hr = EnsureSizeKnown();
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        *sizeBytes = _sizeBytes;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Seek(__int64 offset, unsigned long origin, uint64_t* newPosition) noexcept override
+    {
+        if (! newPosition)
+        {
+            return E_POINTER;
+        }
+
+        *newPosition = 0;
+
+        if (origin != FILE_BEGIN && origin != FILE_CURRENT && origin != FILE_END)
+        {
+            return E_INVALIDARG;
+        }
+
+        uint64_t base = 0;
+        if (origin == FILE_BEGIN)
+        {
+            base = 0;
+        }
+        else if (origin == FILE_CURRENT)
+        {
+            base = _position;
+        }
+        else
+        {
+            const HRESULT hr = EnsureSizeKnown();
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+            base = _sizeBytes;
+        }
+
+        uint64_t moved = 0;
+        if (offset >= 0)
+        {
+            const uint64_t delta = static_cast<uint64_t>(offset);
+            if (base > std::numeric_limits<uint64_t>::max() - delta)
+            {
+                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            }
+            moved = base + delta;
+        }
+        else
+        {
+            const uint64_t delta = static_cast<uint64_t>(-(offset + 1)) + 1u;
+            if (base < delta)
+            {
+                return HRESULT_FROM_WIN32(ERROR_NEGATIVE_SEEK);
+            }
+            moved = base - delta;
+        }
+
+        _position = moved;
+        _bufferHave = 0;
+        _bufferStart = _position;
+        *newPosition = _position;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Read(void* buffer, unsigned long bytesToRead, unsigned long* bytesRead) noexcept override
+    {
+        if (! bytesRead)
+        {
+            return E_POINTER;
+        }
+        *bytesRead = 0;
+
+        if (bytesToRead == 0)
+        {
+            return S_OK;
+        }
+
+        if (! buffer)
+        {
+            return E_POINTER;
+        }
+
+        if (_sizeKnown && _position >= _sizeBytes)
+        {
+            return S_OK;
+        }
+
+        unsigned long totalRead = 0;
+        auto* out               = static_cast<std::byte*>(buffer);
+
+        while (totalRead < bytesToRead)
+        {
+            if (_bufferHave == 0 || _position < _bufferStart || _position >= (_bufferStart + _bufferHave))
+            {
+                const HRESULT hr = FillBufferFrom(_position);
+                if (FAILED(hr))
+                {
+                    return hr;
+                }
+
+                if (_bufferHave == 0)
+                {
+                    break; // EOF
+                }
+            }
+
+            const uint64_t offset64 = _position - _bufferStart;
+            if (offset64 > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
+            {
+                return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+            }
+
+            const size_t offset = static_cast<size_t>(offset64);
+            if (offset >= _bufferHave)
+            {
+                _bufferHave = 0;
+                continue;
+            }
+
+            const size_t available = _bufferHave - offset;
+            const size_t wanted    = static_cast<size_t>(bytesToRead - totalRead);
+            const size_t take      = std::min(available, wanted);
+
+            std::memcpy(out + totalRead, _buffer.data() + offset, take);
+            totalRead += static_cast<unsigned long>(take);
+            _position += static_cast<uint64_t>(take);
+
+            if (_sizeKnown && _position >= _sizeBytes)
+            {
+                break;
+            }
+        }
+
+        *bytesRead = totalRead;
+        return S_OK;
+    }
+
+private:
+    ~S3RangedFileReader() { FsS3::AwsSdkLifetime::Release(); }
+
+    [[nodiscard]] HRESULT EnsureSizeKnown() noexcept
+    {
+        if (_sizeKnown)
+        {
+            return S_OK;
+        }
+
+        uint64_t sizeBytes     = 0;
+        __int64 lastWriteTime  = 0;
+        bool found             = false;
+        const HRESULT hr       = TryGetS3ObjectSummaryImpl(*_client, _bucketCtx, _bucket, _key, sizeBytes, lastWriteTime, found);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (! found)
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+
+        _sizeBytes = sizeBytes;
+        _sizeKnown = true;
+        return S_OK;
+    }
+
+    [[nodiscard]] HRESULT FillBufferFrom(uint64_t start) noexcept
+    {
+        constexpr size_t kChunkBytes = 8 * 1024 * 1024;
+
+        _bufferStart = start;
+        _bufferHave  = 0;
+
+        if (_sizeKnown && start >= _sizeBytes)
+        {
+            return S_OK;
+        }
+
+        uint64_t maxBytes = kChunkBytes;
+        if (_sizeKnown)
+        {
+            const uint64_t remaining = _sizeBytes - start;
+            maxBytes                 = std::min<uint64_t>(maxBytes, remaining);
+        }
+
+        if (maxBytes == 0u)
+        {
+            return S_OK;
+        }
+
+        if (maxBytes > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+        }
+
+        if (_buffer.size() < static_cast<size_t>(maxBytes))
+        {
+            _buffer.resize(static_cast<size_t>(maxBytes));
+        }
+
+        const uint64_t endInclusive = start + maxBytes - 1u;
+        const std::string range     = std::string("bytes=") + std::to_string(start) + "-" + std::to_string(endInclusive);
+
+        Aws::S3Crt::Model::GetObjectRequest req;
+        req.SetBucket(Aws::String(_bucket.data(), _bucket.size()));
+        req.SetKey(Aws::String(_key.data(), _key.size()));
+        req.SetRange(Aws::String(range.data(), range.size()));
+
+        auto outcome = _client->GetObject(req);
+        if (! outcome.IsSuccess())
+        {
+            const auto& err            = outcome.GetError();
+            const std::wstring details = std::format(L"bucket='{}' key='{}' range='{}'", FsS3::Utf16FromUtf8(_bucket), FsS3::Utf16FromUtf8(_key), FsS3::Utf16FromUtf8(range));
+            FsS3::LogAwsFailure(L"S3", L"GetObject", _bucketCtx, err, details);
+            return FsS3::HresultFromAwsError(err);
+        }
+
+        auto result           = outcome.GetResultWithOwnership();
+        Aws::IOStream& stream = result.GetBody();
+
+        size_t total = 0;
+        while (stream.good() && total < static_cast<size_t>(maxBytes))
+        {
+            const size_t want = static_cast<size_t>(maxBytes) - total;
+            stream.read(reinterpret_cast<char*>(_buffer.data()) + total, static_cast<std::streamsize>(want));
+            const std::streamsize got = stream.gcount();
+            if (got <= 0)
+            {
+                break;
+            }
+            total += static_cast<size_t>(got);
+        }
+
+        _bufferHave = total;
+        if (! _sizeKnown && total < static_cast<size_t>(maxBytes))
+        {
+            _sizeBytes = _bufferStart + static_cast<uint64_t>(total);
+            _sizeKnown = true;
+        }
+
+        return S_OK;
+    }
+
+    std::atomic_ulong _refCount{1};
+
+    FsS3::ResolvedAwsContext _bucketCtx;
+    std::string _bucket;
+    std::string _key;
+    std::shared_ptr<Aws::S3Crt::S3CrtClient> _client;
+
+    bool _sizeKnown    = false;
+    uint64_t _sizeBytes = 0;
+
+    uint64_t _position    = 0;
+    uint64_t _bufferStart = 0;
+    size_t _bufferHave    = 0;
+    std::vector<std::byte> _buffer;
 };
 
 class TempFileWriter final : public IFileWriter
@@ -441,7 +790,8 @@ public:
             uint64_t existingSize     = 0;
             __int64 existingLastWrite = 0;
             bool found                = false;
-            const HRESULT existsHr    = TryGetS3ObjectSummary(bucketCtx, bucket, key, existingSize, existingLastWrite, found);
+            const HRESULT existsHr =
+                TryGetS3ObjectSummary(*_owner.get(), bucketCtx, bucket, key, existingSize, existingLastWrite, found);
             if (FAILED(existsHr))
             {
                 return existsHr;
@@ -458,13 +808,13 @@ public:
                 prefix.push_back('/');
             }
 
-            Aws::S3Crt::S3CrtClient client = FsS3::MakeS3Client(bucketCtx);
+            const auto client = FsS3::GetS3Client(*_owner.get(), bucketCtx);
             Aws::S3Crt::Model::ListObjectsV2Request req;
             req.SetBucket(Aws::String(bucket.data(), bucket.size()));
             req.SetPrefix(Aws::String(prefix.data(), prefix.size()));
             req.SetMaxKeys(1);
 
-            const auto outcome = client.ListObjectsV2(req);
+            const auto outcome = client->ListObjectsV2(req);
             if (! outcome.IsSuccess())
             {
                 const auto& err            = outcome.GetError();
@@ -479,7 +829,7 @@ public:
             }
         }
 
-        hr = FsS3::UploadS3ObjectFromFile(bucketCtx, bucket, key, _file.get(), sizeBytes);
+        hr = FsS3::UploadS3ObjectFromFile(*_owner.get(), bucketCtx, bucket, key, _file.get(), sizeBytes);
         if (FAILED(hr))
         {
             return hr;
@@ -587,7 +937,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetAttributes(const wchar_t* path, unsig
         uint64_t sizeBytes    = 0;
         __int64 lastWriteTime = 0;
         bool foundFile        = false;
-        const HRESULT objHr   = TryGetS3ObjectSummary(bucketCtx, bucket, key, sizeBytes, lastWriteTime, foundFile);
+        const HRESULT objHr   = TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, foundFile);
         if (FAILED(objHr))
         {
             return objHr;
@@ -605,13 +955,13 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetAttributes(const wchar_t* path, unsig
             prefix.push_back('/');
         }
 
-        Aws::S3Crt::S3CrtClient client = FsS3::MakeS3Client(bucketCtx);
+        const auto client = FsS3::GetS3Client(*this, bucketCtx);
         Aws::S3Crt::Model::ListObjectsV2Request req;
         req.SetBucket(Aws::String(bucket.data(), bucket.size()));
         req.SetPrefix(Aws::String(prefix.data(), prefix.size()));
         req.SetMaxKeys(1);
 
-        const auto outcome = client.ListObjectsV2(req);
+        const auto outcome = client->ListObjectsV2(req);
         if (! outcome.IsSuccess())
         {
             const auto& err            = outcome.GetError();
@@ -685,8 +1035,6 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileReader(const wchar_t* path, IF
         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
     }
 
-    wil::unique_hfile file;
-
     if (_mode == FileSystemS3Mode::S3)
     {
         const auto segments = FsS3::SplitPathSegments(normalized);
@@ -695,7 +1043,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileReader(const wchar_t* path, IF
             return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
         }
 
-        const std::string bucket = FsS3::Utf8FromUtf16(segments[0]);
+        std::string bucket = FsS3::Utf8FromUtf16(segments[0]);
         if (bucket.empty())
         {
             return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
@@ -711,7 +1059,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileReader(const wchar_t* path, IF
             keyWide.append(segments[i]);
         }
 
-        const std::string key = FsS3::Utf8FromUtf16(keyWide);
+        std::string key = FsS3::Utf8FromUtf16(keyWide);
         if (key.empty())
         {
             return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
@@ -724,37 +1072,47 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileReader(const wchar_t* path, IF
             return hr;
         }
 
-        hr = FsS3::DownloadS3ObjectToTempFile(bucketCtx, bucket, key, file);
-        if (FAILED(hr))
+        const auto client = FsS3::GetS3Client(*this, bucketCtx);
+
+        auto* impl = new (std::nothrow) S3RangedFileReader(std::move(bucketCtx), std::move(bucket), std::move(key), client);
+        if (! impl)
         {
-            return hr;
+            return E_OUTOFMEMORY;
         }
+
+        *reader = impl;
+        return S_OK;
     }
-    else
+
+    // S3 Tables: materialize the JSON document into a temp file (small, seekable).
+    const auto segments = FsS3::SplitPathSegments(normalized);
+    if (segments.size() != 3)
     {
-        const auto segments = FsS3::SplitPathSegments(normalized);
-        if (segments.size() != 3)
-        {
-            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-        }
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
 
-        std::wstring_view tableLeaf         = segments[2];
-        constexpr std::wstring_view kSuffix = L".table.json";
-        if (tableLeaf.size() >= kSuffix.size() && OrdinalString::EqualsNoCase(tableLeaf.substr(tableLeaf.size() - kSuffix.size()), kSuffix))
-        {
-            tableLeaf = tableLeaf.substr(0, tableLeaf.size() - kSuffix.size());
-        }
+    std::wstring_view tableLeaf         = segments[2];
+    constexpr std::wstring_view kSuffix = L".table.json";
+    if (tableLeaf.size() >= kSuffix.size() && OrdinalString::EqualsNoCase(tableLeaf.substr(tableLeaf.size() - kSuffix.size()), kSuffix))
+    {
+        tableLeaf = tableLeaf.substr(0, tableLeaf.size() - kSuffix.size());
+    }
 
-        if (tableLeaf.empty())
-        {
-            return E_INVALIDARG;
-        }
+    if (tableLeaf.empty())
+    {
+        return E_INVALIDARG;
+    }
 
-        hr = FsS3::WriteS3TableInfoJson(*this, ctx, segments[0], segments[1], tableLeaf, file);
-        if (FAILED(hr))
-        {
-            return hr;
-        }
+    wil::unique_hfile file = FsS3::CreateTemporaryDeleteOnCloseFile();
+    if (! file)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    hr = FsS3::WriteS3TableInfoJson(*this, ctx, segments[0], segments[1], tableLeaf, file);
+    if (FAILED(hr))
+    {
+        return hr;
     }
 
     uint64_t sizeBytes = 0;
@@ -851,7 +1209,15 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetFileBasicInformation([[maybe_unused]]
         return E_POINTER;
     }
 
-    *info = {};
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
+    }
+
+    info->creationTime   = 0;
+    info->lastAccessTime = 0;
+    info->lastWriteTime  = 0;
+    info->attributes     = 0;
 
     if (path == nullptr || path[0] == L'\0')
     {
@@ -923,7 +1289,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetFileBasicInformation([[maybe_unused]]
     uint64_t sizeBytes    = 0;
     __int64 lastWriteTime = 0;
     bool found            = false;
-    const HRESULT objHr   = TryGetS3ObjectSummary(bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
+    const HRESULT objHr   = TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
     if (FAILED(objHr))
     {
         return objHr;
@@ -947,11 +1313,16 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetFileBasicInformation([[maybe_unused]]
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::SetFileBasicInformation([[maybe_unused]] const wchar_t* path,
-                                                                [[maybe_unused]] const FileSystemBasicInformation* info) noexcept
+                                                                 [[maybe_unused]] const FileSystemBasicInformation* info) noexcept
 {
     if (info == nullptr)
     {
         return E_POINTER;
+    }
+
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
     }
 
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -1097,7 +1468,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetItemProperties([[maybe_unused]] const
             uint64_t sizeBytes    = 0;
             __int64 lastWriteTime = 0;
             bool found            = false;
-            hr                    = TryGetS3ObjectSummary(bucketCtx, bucketUtf8, keyUtf8, sizeBytes, lastWriteTime, found);
+            hr = TryGetS3ObjectSummary(*this, bucketCtx, bucketUtf8, keyUtf8, sizeBytes, lastWriteTime, found);
             if (FAILED(hr))
             {
                 return hr;

@@ -225,6 +225,7 @@ struct RenameOp final
         ::CopyMemory(nameBuf, name.data(), nameLen * sizeof(wchar_t));
         nameBuf[nameLen] = L'\0';
 
+        pairs[i].sizeBytes = sizeof(FileSystemRenamePair);
         pairs[i].sourcePath = sourceBuf;
         pairs[i].newName    = nameBuf;
     }

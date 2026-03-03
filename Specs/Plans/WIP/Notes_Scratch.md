@@ -1415,7 +1415,7 @@ https://github.com/microsoft/fluentui-system-icons/blob/main/icons_filled.md
 - Themed dialog: `RedSalamander/ConnectionManagerDialog.*`, `RedSalamander/RedSalamander.rc`
 - Host<->plugin API: `IHostConnections` in `Common/PlugInterfaces/Host.h` + implementation in `RedSalamander/HostServices.cpp`
 - Navigation: `nav:<connectionName>` and `ftp:`/`sftp:`/`scp:` (no host) opens Connection Manager: `RedSalamander/FolderWindow.FileSystem.cpp`
-- Plugin `/@conn/<id>` resolution (FileSystemCurl): `Plugins/FileSystemCurl/FileSystemCurl.cpp`
+- Plugin `/@conn/<id>` resolution (FileSystemCurl): `Plugins/FileSystemCurl/FileSystemCurl.Shared.cpp`
 
 ### Biggest missing piece (required): prompting + ephemeral credentials
 - Today, password-based connections require `savePassword == true` (no prompt path yet).

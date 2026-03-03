@@ -395,6 +395,10 @@ public:
     // Caller controls when it is set/cleared (e.g. "This folder doesn't exist in this hierarchy.").
     void SetEmptyStateMessage(std::wstring message);
 
+    // Optional non-interactive background watermark drawn behind items.
+    // When `animated` is true, the caller is responsible for triggering periodic invalidation.
+    void SetBackgroundWatermark(std::wstring message, bool animated);
+
     // Recompute `detailsText` for currently displayed items using the active DetailsTextProvider.
     // Useful when the provider's output depends on external state.
     void RefreshDetailsText();
@@ -510,6 +514,8 @@ private:
     std::optional<std::filesystem::path> _currentFolder;
     std::optional<std::filesystem::path> _displayedFolder;
     std::wstring _emptyStateMessage;
+    std::wstring _backgroundWatermarkMessage;
+    bool _backgroundWatermarkAnimated = false;
 
     struct EmptyFolderState
     {
@@ -622,10 +628,16 @@ private:
     SIZE _filterWatermarkBadgeLayoutClientSizePx = {};
     float _filterWatermarkBadgeLayoutDpi         = 0.0f;
     float _filterWatermarkBadgeLayoutFontSizeDip = 0.0f;
+    wil::com_ptr<IDWriteTextLayout> _backgroundWatermarkLayout;
+    SIZE _backgroundWatermarkLayoutClientSizePx = {};
+    float _backgroundWatermarkLayoutDpi         = 0.0f;
+    std::wstring _backgroundWatermarkLayoutText;
+    float _backgroundWatermarkLayoutFontSizeDip = 0.0f;
     wil::com_ptr<IDWriteInlineObject> _ellipsisSign;
     wil::com_ptr<IDWriteInlineObject> _detailsEllipsisSign;
     wil::com_ptr<ID2D1SolidColorBrush> _backgroundBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _filterWatermarkBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _backgroundWatermarkBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _textBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _detailsTextBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _metadataTextBrush;

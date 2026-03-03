@@ -14,8 +14,10 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <system_error>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -26,7 +28,9 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "DirectoryInfoCache.h"
 #include "Helpers.h"
+#include "NavigationLocation.h"
 
 namespace
 {
@@ -75,6 +79,11 @@ struct SideEntry
 
 [[nodiscard]] bool AnyChildPending(const CompareDirectoriesFolderDecision& decision) noexcept
 {
+    if (decision.pendingContentCompareCount != 0u)
+    {
+        return true;
+    }
+
     for (const auto& kv : decision.items)
     {
         const uint32_t mask = kv.second.differenceMask;
@@ -239,35 +248,59 @@ struct SideEntry
 }
 } // namespace
 
-CompareDirectoriesSession::CompareDirectoriesSession(wil::com_ptr<IFileSystem> baseFileSystem,
+CompareDirectoriesSession::CompareDirectoriesSession(wil::com_ptr<IFileSystem> leftFileSystem,
+                                                     wil::com_ptr<IFileSystem> rightFileSystem,
                                                      std::filesystem::path leftRoot,
                                                      std::filesystem::path rightRoot,
                                                      Common::Settings::CompareDirectoriesSettings settings)
-    : _baseFileSystem(std::move(baseFileSystem)),
+    : _leftFileSystem(std::move(leftFileSystem)),
+      _rightFileSystem(std::move(rightFileSystem)),
       _leftRoot(std::move(leftRoot)),
       _rightRoot(std::move(rightRoot)),
       _settings(std::move(settings))
 {
-    if (_baseFileSystem)
+    if (_leftFileSystem)
     {
         wil::com_ptr<IInformations> infos;
-        const HRESULT qiHr = _baseFileSystem->QueryInterface(__uuidof(IInformations), infos.put_void());
+        const HRESULT qiHr = _leftFileSystem->QueryInterface(__uuidof(IInformations), infos.put_void());
         if (SUCCEEDED(qiHr) && infos)
         {
-            _baseInformations = std::move(infos);
+            _leftInformations = std::move(infos);
         }
 
         wil::com_ptr<IFileSystemIO> io;
-        const HRESULT qiIo = _baseFileSystem->QueryInterface(__uuidof(IFileSystemIO), io.put_void());
+        const HRESULT qiIo = _leftFileSystem->QueryInterface(__uuidof(IFileSystemIO), io.put_void());
         if (SUCCEEDED(qiIo) && io)
         {
-            _baseFileSystemIo = std::move(io);
+            _leftFileSystemIo = std::move(io);
+        }
+    }
+
+    if (_rightFileSystem)
+    {
+        wil::com_ptr<IInformations> infos;
+        const HRESULT qiHr = _rightFileSystem->QueryInterface(__uuidof(IInformations), infos.put_void());
+        if (SUCCEEDED(qiHr) && infos)
+        {
+            _rightInformations = std::move(infos);
+        }
+
+        wil::com_ptr<IFileSystemIO> io;
+        const HRESULT qiIo = _rightFileSystem->QueryInterface(__uuidof(IFileSystemIO), io.put_void());
+        if (SUCCEEDED(qiIo) && io)
+        {
+            _rightFileSystemIo = std::move(io);
         }
     }
 }
 
 CompareDirectoriesSession::~CompareDirectoriesSession()
 {
+    for (auto& worker : _scanWorkers)
+    {
+        worker.request_stop();
+    }
+
     for (auto& worker : _contentCompareWorkers)
     {
         worker.request_stop();
@@ -275,18 +308,31 @@ CompareDirectoriesSession::~CompareDirectoriesSession()
 
     {
         std::lock_guard guard(_mutex);
-        _contentCompareQueue.clear();
+
+        _scanQueueHigh.clear();
+        _scanQueueLow.clear();
+        _scanScheduledKeys.clear();
+        _scanHighQueuedKeys.clear();
+        _scanInFlightKeys.clear();
+        _pendingSubdirUpdates.clear();
+        _scanActiveScans.store(0u, std::memory_order_release);
+        _scanFoldersScanned.store(0u, std::memory_order_release);
+        _scanEntriesScanned.store(0u, std::memory_order_release);
+
+        _contentCompareQueueHigh.clear();
+        _contentCompareQueueLow.clear();
         _contentCompareInFlight.clear();
         _pendingContentCompareUpdates.clear();
     }
 
+    _scanCv.notify_all();
     _contentCompareCv.notify_all();
+    _contentCompareQueueNotFullCv.notify_all();
 }
 
 size_t CompareDirectoriesSession::ContentCompareKeyHash::operator()(const ContentCompareKey& key) const noexcept
 {
-    size_t hash = std::hash<std::wstring_view>{}(key.leftPath);
-    hash        = CombineHash(hash, std::hash<std::wstring_view>{}(key.rightPath));
+    size_t hash = std::hash<std::wstring_view>{}(key.relativeFileKey);
     hash        = CombineHash(hash, std::hash<uint64_t>{}(key.leftSizeBytes));
     hash        = CombineHash(hash, std::hash<uint64_t>{}(key.rightSizeBytes));
     hash        = CombineHash(hash, std::hash<int64_t>{}(key.leftLastWriteTime));
@@ -297,7 +343,7 @@ size_t CompareDirectoriesSession::ContentCompareKeyHash::operator()(const Conten
 bool CompareDirectoriesSession::ContentCompareKeyEq::operator()(const ContentCompareKey& a, const ContentCompareKey& b) const noexcept
 {
     return a.leftSizeBytes == b.leftSizeBytes && a.rightSizeBytes == b.rightSizeBytes && a.leftLastWriteTime == b.leftLastWriteTime &&
-           a.rightLastWriteTime == b.rightLastWriteTime && a.leftPath == b.leftPath && a.rightPath == b.rightPath;
+           a.rightLastWriteTime == b.rightLastWriteTime && a.relativeFileKey == b.relativeFileKey;
 }
 
 void CompareDirectoriesSession::SetRoots(std::filesystem::path leftRoot, std::filesystem::path rightRoot)
@@ -322,16 +368,17 @@ void CompareDirectoriesSession::SetSettings(Common::Settings::CompareDirectories
     {
         std::lock_guard guard(_mutex);
 
-        // Note: showIdenticalItems is intentionally excluded from this check — it only affects
-        // which items are surfaced by ReadDirectoryInfo, not the cached decision objects themselves.
+        // Note: showIdenticalItems is included here because the cached decisions are pruned in differences-only mode
+        // to keep memory bounded on large trees. Toggling it requires invalidating decisions.
         const bool comparisonChanged = _settings.compareSize != settings.compareSize || _settings.compareDateTime != settings.compareDateTime ||
-                                       _settings.compareAttributes != settings.compareAttributes || _settings.compareContent != settings.compareContent ||
-                                       _settings.compareSubdirectories != settings.compareSubdirectories ||
-                                       _settings.compareSubdirectoryAttributes != settings.compareSubdirectoryAttributes ||
-                                       _settings.selectSubdirsOnlyInOnePane != settings.selectSubdirsOnlyInOnePane ||
-                                       _settings.ignoreFiles != settings.ignoreFiles || _settings.ignoreFilesPatterns != settings.ignoreFilesPatterns ||
-                                       _settings.ignoreDirectories != settings.ignoreDirectories ||
-                                       _settings.ignoreDirectoriesPatterns != settings.ignoreDirectoriesPatterns;
+                                        _settings.compareAttributes != settings.compareAttributes || _settings.compareContent != settings.compareContent ||
+                                        _settings.compareSubdirectories != settings.compareSubdirectories ||
+                                        _settings.compareSubdirectoryAttributes != settings.compareSubdirectoryAttributes ||
+                                        _settings.selectSubdirsOnlyInOnePane != settings.selectSubdirsOnlyInOnePane ||
+                                        _settings.showIdenticalItems != settings.showIdenticalItems ||
+                                        _settings.ignoreFiles != settings.ignoreFiles || _settings.ignoreFilesPatterns != settings.ignoreFilesPatterns ||
+                                        _settings.ignoreDirectories != settings.ignoreDirectories ||
+                                        _settings.ignoreDirectoriesPatterns != settings.ignoreDirectoriesPatterns;
 
         _settings = std::move(settings);
         if (comparisonChanged)
@@ -375,8 +422,22 @@ void CompareDirectoriesSession::SetBackgroundWorkEnabled(bool enabled) noexcept
     auto cleanup = std::make_unique<ResetCleanup>();
     {
         std::lock_guard guard(_mutex);
+        cleanup->scanQueueHigh.swap(_scanQueueHigh);
+        cleanup->scanQueueLow.swap(_scanQueueLow);
+        cleanup->scanScheduledKeys.swap(_scanScheduledKeys);
+        cleanup->scanHighQueuedKeys.swap(_scanHighQueuedKeys);
+        cleanup->scanInFlightKeys.swap(_scanInFlightKeys);
+        cleanup->pendingSubdirUpdates.swap(_pendingSubdirUpdates);
+
+        _scanActiveScans.store(0u, std::memory_order_release);
+        _scanFoldersScanned.store(0u, std::memory_order_release);
+        _scanEntriesScanned.store(0u, std::memory_order_release);
+        _scanLastNotifyTickMs.store(0u, std::memory_order_release);
+        _scanCv.notify_all();
+
         cleanup->contentCompareInFlight.swap(_contentCompareInFlight);
-        cleanup->contentCompareQueue.swap(_contentCompareQueue);
+        cleanup->contentCompareQueueHigh.swap(_contentCompareQueueHigh);
+        cleanup->contentCompareQueueLow.swap(_contentCompareQueueLow);
         cleanup->pendingContentCompareUpdates.swap(_pendingContentCompareUpdates);
 
         _contentComparePendingCompares.store(0u, std::memory_order_release);
@@ -386,9 +447,11 @@ void CompareDirectoriesSession::SetBackgroundWorkEnabled(bool enabled) noexcept
         _contentCompareCompletedBytes.store(0u, std::memory_order_release);
 
         _contentCompareCv.notify_all();
+        _contentCompareQueueNotFullCv.notify_all();
     }
 
     ScheduleResetCleanup(std::move(cleanup));
+    NotifyScanProgress({}, {}, true);
     NotifyContentProgress(0u, {}, {}, 0, 0);
 }
 
@@ -410,10 +473,6 @@ void CompareDirectoriesSession::Invalidate() noexcept
     NotifyContentProgress(0u, {}, {}, 0, 0);
 }
 
-namespace
-{
-} // namespace
-
 void CompareDirectoriesSession::InvalidateForRelativePathLocked(const std::filesystem::path& relativePath, bool includeSubtree) noexcept
 {
     std::filesystem::path folder = relativePath.lexically_normal();
@@ -433,6 +492,9 @@ void CompareDirectoriesSession::InvalidateForRelativePathLocked(const std::files
         if (folder.empty())
         {
             _cache.clear();
+            _decisionCacheLru.clear();
+            _decisionCacheMeta.clear();
+            _decisionCacheEstimatedBytes = 0;
             _pendingContentCompareUpdates.clear();
         }
         else
@@ -450,6 +512,7 @@ void CompareDirectoriesSession::InvalidateForRelativePathLocked(const std::files
                 if (isMatch)
                 {
                     _pendingContentCompareUpdates.erase(it->first);
+                    TrackDecisionCacheEraseLocked(key);
                     it = _cache.erase(it);
                 }
                 else
@@ -463,6 +526,7 @@ void CompareDirectoriesSession::InvalidateForRelativePathLocked(const std::files
     for (std::filesystem::path current = folder;; current = current.parent_path())
     {
         const std::wstring key = MakeCacheKey(current);
+        TrackDecisionCacheEraseLocked(key);
         _cache.erase(key);
         _pendingContentCompareUpdates.erase(key);
         if (current.empty())
@@ -530,14 +594,145 @@ void CompareDirectoriesSession::SetDecisionUpdatedCallback(DecisionUpdatedCallba
 
 void CompareDirectoriesSession::FlushPendingContentCompareUpdates() noexcept
 {
+    static_cast<void>(FlushPendingContentCompareUpdatesBudgeted(std::numeric_limits<size_t>::max()));
+}
+
+bool CompareDirectoriesSession::FlushPendingContentCompareUpdatesBudgeted(size_t maxFoldersToApply) noexcept
+{
+    if (maxFoldersToApply == 0)
+    {
+        std::lock_guard guard(_mutex);
+        return ! _pendingContentCompareUpdates.empty();
+    }
+
     std::lock_guard guard(_mutex);
 
-    // Apply in a loop because ApplyPendingContentCompareUpdatesLocked erases the entry being applied.
-    while (! _pendingContentCompareUpdates.empty())
+    size_t attemptedFolders = 0;
+    // Apply in a bounded pass. Some folders may not have decisions cached yet (race with scan workers);
+    // keep pending updates so they can be applied later once the decision exists.
+    for (auto it = _pendingContentCompareUpdates.begin(); it != _pendingContentCompareUpdates.end() && attemptedFolders < maxFoldersToApply;)
     {
-        const std::wstring key = _pendingContentCompareUpdates.begin()->first;
+        const std::wstring key = it->first;
+        ++it;
         ApplyPendingContentCompareUpdatesLocked(key);
+        ++attemptedFolders;
     }
+
+    return ! _pendingContentCompareUpdates.empty();
+}
+
+void CompareDirectoriesSession::StartScan() noexcept
+{
+    if (! _backgroundWorkEnabled.load(std::memory_order_acquire))
+    {
+        return;
+    }
+
+    const uint64_t version     = _version.load(std::memory_order_acquire);
+    const uint64_t cancelToken = _backgroundWorkCancelToken.load(std::memory_order_acquire);
+
+    {
+        std::lock_guard guard(_mutex);
+        EnsureScanWorkersLocked();
+        EnqueueScanLocked(std::filesystem::path{}, version, cancelToken, ScanPriority::Low);
+    }
+
+    NotifyScanProgress({}, {}, true);
+}
+
+void CompareDirectoriesSession::RequestScanForFolder(const std::filesystem::path& relativeFolder) noexcept
+{
+    if (! _backgroundWorkEnabled.load(std::memory_order_acquire))
+    {
+        return;
+    }
+
+    const uint64_t version     = _version.load(std::memory_order_acquire);
+    const uint64_t cancelToken = _backgroundWorkCancelToken.load(std::memory_order_acquire);
+
+    {
+        std::lock_guard guard(_mutex);
+        EnsureScanWorkersLocked();
+        EnqueueScanLocked(relativeFolder, version, cancelToken, ScanPriority::High);
+    }
+
+    NotifyScanProgress(relativeFolder, {}, true);
+}
+
+std::shared_ptr<const CompareDirectoriesFolderDecision> CompareDirectoriesSession::TryGetCachedDecision(const std::filesystem::path& relativeFolder) noexcept
+{
+    std::lock_guard guard(_mutex);
+    const uint64_t version       = _version.load(std::memory_order_relaxed);
+    const std::wstring folderKey = MakeCacheKey(relativeFolder);
+
+    const auto it = _cache.find(folderKey);
+    if (it != _cache.end() && it->second && it->second->version == version)
+    {
+        TouchDecisionCacheKeyLocked(folderKey);
+        return it->second;
+    }
+
+    return {};
+}
+
+void CompareDirectoriesSession::SetPinnedFolders(
+    const std::filesystem::path& leftRelativeFolder, const std::filesystem::path& rightRelativeFolder) noexcept
+{
+    std::lock_guard guard(_mutex);
+
+    _decisionCachePinnedKeys.clear();
+    _decisionCachePinnedKeys.insert(L".");
+
+    const auto addAncestors = [&](std::filesystem::path rel) noexcept
+    {
+        rel = rel.lexically_normal();
+        for (;;)
+        {
+            _decisionCachePinnedKeys.insert(MakeCacheKey(rel));
+            if (rel.empty())
+            {
+                break;
+            }
+            rel = rel.parent_path();
+        }
+    };
+
+    addAncestors(leftRelativeFolder);
+    addAncestors(rightRelativeFolder);
+}
+
+bool CompareDirectoriesSession::FlushPendingSubdirUpdatesBudgeted(size_t maxFoldersToApply) noexcept
+{
+    if (maxFoldersToApply == 0)
+    {
+        std::lock_guard guard(_mutex);
+        return ! _pendingSubdirUpdates.empty();
+    }
+
+    std::lock_guard guard(_mutex);
+    const uint64_t currentVersion                           = _version.load(std::memory_order_relaxed);
+    const Common::Settings::CompareDirectoriesSettings settings = _settings;
+
+    bool anyChanged     = false;
+    size_t appliedKeys  = 0;
+    while (! _pendingSubdirUpdates.empty() && appliedKeys < maxFoldersToApply)
+    {
+        const std::wstring key = *_pendingSubdirUpdates.begin();
+        _pendingSubdirUpdates.erase(_pendingSubdirUpdates.begin());
+
+        if (PropagateChildAggregateToAncestorsLocked(key, settings, currentVersion))
+        {
+            anyChanged = true;
+        }
+        ++appliedKeys;
+    }
+
+    if (anyChanged)
+    {
+        ++_uiVersion;
+    }
+
+    return ! _pendingSubdirUpdates.empty();
 }
 
 Common::Settings::CompareDirectoriesSettings CompareDirectoriesSession::GetSettings() const
@@ -563,24 +758,128 @@ uint64_t CompareDirectoriesSession::GetUiVersion() const noexcept
     return _uiVersion;
 }
 
-wil::com_ptr<IFileSystem> CompareDirectoriesSession::GetBaseFileSystem() const noexcept
+CompareDirectoriesPerfStats CompareDirectoriesSession::GetPerfStats() const noexcept
 {
-    return _baseFileSystem;
+    CompareDirectoriesPerfStats stats{};
+    {
+        std::lock_guard guard(_mutex);
+
+        stats.version   = _version.load(std::memory_order_relaxed);
+        stats.uiVersion = _uiVersion;
+
+        stats.scanActiveScans    = _scanActiveScans.load(std::memory_order_relaxed);
+        stats.scanFoldersScanned = _scanFoldersScanned.load(std::memory_order_relaxed);
+        stats.scanEntriesScanned = _scanEntriesScanned.load(std::memory_order_relaxed);
+        stats.scanQueueHighSize  = _scanQueueHigh.size();
+        stats.scanQueueLowSize   = _scanQueueLow.size();
+        stats.scanQueueSize      = stats.scanQueueHighSize + stats.scanQueueLowSize;
+        stats.scanScheduledKeys  = _scanScheduledKeys.size();
+        stats.scanInFlightKeys   = _scanInFlightKeys.size();
+        stats.pendingSubdirUpdates = _pendingSubdirUpdates.size();
+
+        stats.scanQueueHighWater     = _scanQueueHighWater;
+        stats.scanQueueHighHighWater = _scanQueueHighHighWater;
+        stats.scanQueueLowHighWater  = _scanQueueLowHighWater;
+        stats.scanScheduledHighWater = _scanScheduledHighWater;
+        stats.scanInFlightHighWater  = _scanInFlightHighWater;
+        stats.pendingSubdirHighWater = _pendingSubdirHighWater;
+
+        stats.contentPendingCompares   = _contentComparePendingCompares.load(std::memory_order_relaxed);
+        stats.contentTotalCompares     = _contentCompareTotalCompares.load(std::memory_order_relaxed);
+        stats.contentCompletedCompares = _contentCompareCompletedCompares.load(std::memory_order_relaxed);
+        stats.contentTotalBytes        = _contentCompareTotalBytes.load(std::memory_order_relaxed);
+        stats.contentCompletedBytes    = _contentCompareCompletedBytes.load(std::memory_order_relaxed);
+        stats.contentQueueHighSize     = _contentCompareQueueHigh.size();
+        stats.contentQueueLowSize      = _contentCompareQueueLow.size();
+        stats.contentQueueSize         = stats.contentQueueHighSize + stats.contentQueueLowSize;
+        stats.contentInFlightSize      = _contentCompareInFlight.size();
+        stats.contentCacheSize         = _contentCompareCache.size();
+        stats.pendingContentUpdates    = _pendingContentCompareUpdates.size();
+
+        stats.contentQueueHighWater    = _contentQueueHighWater;
+        stats.contentQueueHighHighWater = _contentQueueHighHighWater;
+        stats.contentQueueLowHighWater  = _contentQueueLowHighWater;
+        stats.contentInFlightHighWater = _contentInFlightHighWater;
+        stats.contentCacheHighWater    = _contentCacheHighWater;
+        stats.pendingContentHighWater  = _pendingContentHighWater;
+
+        stats.decisionCacheEntries                  = _cache.size();
+        stats.decisionCacheEntriesHighWater         = _decisionCacheEntriesHighWater;
+        stats.decisionCacheEstimatedBytes           = _decisionCacheEstimatedBytes;
+        stats.decisionCacheEstimatedBytesHighWater  = _decisionCacheEstimatedBytesHighWater;
+        stats.decisionCacheBudgetBytes              = _decisionCacheBudgetBytes;
+    }
+
+    stats.directoryInfoCache = DirectoryInfoCache::GetInstance().GetStats();
+    return stats;
 }
 
-wil::com_ptr<IInformations> CompareDirectoriesSession::GetBaseInformations() const noexcept
+#ifdef _DEBUG
+void CompareDirectoriesSession::SetDecisionCacheBudgetBytesForSelfTest(uint64_t budgetBytes) noexcept
 {
-    return _baseInformations;
+    std::lock_guard guard(_mutex);
+    _decisionCacheBudgetBytes = budgetBytes;
+    MaybeEvictDecisionCacheLocked();
+}
+#endif
+
+wil::com_ptr<IFileSystem> CompareDirectoriesSession::GetFileSystem(ComparePane pane) const noexcept
+{
+    return pane == ComparePane::Left ? _leftFileSystem : _rightFileSystem;
 }
 
-wil::com_ptr<IFileSystemIO> CompareDirectoriesSession::GetBaseFileSystemIO() const noexcept
+wil::com_ptr<IInformations> CompareDirectoriesSession::GetInformations(ComparePane pane) const noexcept
 {
-    return _baseFileSystemIo;
+    return pane == ComparePane::Left ? _leftInformations : _rightInformations;
+}
+
+wil::com_ptr<IFileSystemIO> CompareDirectoriesSession::GetFileSystemIO(ComparePane pane) const noexcept
+{
+    return pane == ComparePane::Left ? _leftFileSystemIo : _rightFileSystemIo;
+}
+
+bool CompareDirectoriesSession::IsContentCompareSupported() const noexcept
+{
+    return _leftFileSystemIo && _rightFileSystemIo;
 }
 
 std::optional<std::filesystem::path> CompareDirectoriesSession::TryMakeRelative(ComparePane pane, const std::filesystem::path& absoluteFolder) const
 {
-    const std::filesystem::path rootPath = GetRoot(pane).lexically_normal();
+    const std::filesystem::path rootPathRaw = GetRoot(pane);
+    if (! NavigationLocation::LooksLikeWindowsAbsolutePath(rootPathRaw.native()))
+    {
+        const std::wstring rootNorm = NavigationLocation::NormalizePluginPathText(rootPathRaw.native(),
+                                                                                  NavigationLocation::EmptyPathPolicy::Root,
+                                                                                  NavigationLocation::LeadingSlashPolicy::Ensure,
+                                                                                  NavigationLocation::TrailingSlashPolicy::Trim);
+        const std::wstring absNorm = NavigationLocation::NormalizePluginPathText(absoluteFolder.native(),
+                                                                                 NavigationLocation::EmptyPathPolicy::Root,
+                                                                                 NavigationLocation::LeadingSlashPolicy::Ensure,
+                                                                                 NavigationLocation::TrailingSlashPolicy::Trim);
+
+        if (absNorm == rootNorm)
+        {
+            return std::filesystem::path{};
+        }
+
+        std::wstring rootPrefix = rootNorm;
+        if (! rootPrefix.empty() && rootPrefix.back() != L'/')
+        {
+            rootPrefix.push_back(L'/');
+        }
+
+        if (absNorm.rfind(rootPrefix, 0) != 0)
+        {
+            return std::nullopt;
+        }
+
+        const std::wstring_view relativeText(absNorm.c_str() + rootPrefix.size());
+        std::filesystem::path relative(relativeText);
+        relative = relative.lexically_normal();
+        return relative;
+    }
+
+    const std::filesystem::path rootPath = rootPathRaw.lexically_normal();
     const std::filesystem::path absPath  = absoluteFolder.lexically_normal();
 
     auto normalizeText = [](std::filesystem::path value, bool lower) noexcept -> std::wstring
@@ -643,11 +942,46 @@ std::optional<std::filesystem::path> CompareDirectoriesSession::TryMakeRelative(
 std::filesystem::path CompareDirectoriesSession::ResolveAbsolute(ComparePane pane, const std::filesystem::path& relativeFolder) const
 {
     const std::filesystem::path root = GetRoot(pane);
+    if (NavigationLocation::LooksLikeWindowsAbsolutePath(root.native()))
+    {
+        if (relativeFolder.empty())
+        {
+            return root;
+        }
+        return (root / relativeFolder).lexically_normal();
+    }
+
+    const std::wstring rootNorm = NavigationLocation::NormalizePluginPathText(root.native(),
+                                                                              NavigationLocation::EmptyPathPolicy::Root,
+                                                                              NavigationLocation::LeadingSlashPolicy::Ensure,
+                                                                              NavigationLocation::TrailingSlashPolicy::Trim);
     if (relativeFolder.empty())
     {
-        return root;
+        return std::filesystem::path(rootNorm);
     }
-    return (root / relativeFolder).lexically_normal();
+
+    std::wstring relativeText = relativeFolder.generic_wstring();
+    while (! relativeText.empty() && (relativeText.front() == L'/' || relativeText.front() == L'\\'))
+    {
+        relativeText.erase(relativeText.begin());
+    }
+
+    if (relativeText.empty())
+    {
+        return std::filesystem::path(rootNorm);
+    }
+
+    std::wstring joined = rootNorm;
+    if (! joined.empty() && joined.back() != L'/')
+    {
+        joined.push_back(L'/');
+    }
+    joined += relativeText;
+
+    return std::filesystem::path(NavigationLocation::NormalizePluginPathText(joined,
+                                                                             NavigationLocation::EmptyPathPolicy::Root,
+                                                                             NavigationLocation::LeadingSlashPolicy::Ensure,
+                                                                             NavigationLocation::TrailingSlashPolicy::Preserve));
 }
 
 std::wstring CompareDirectoriesSession::MakeCacheKey(const std::filesystem::path& relativeFolder) const
@@ -657,6 +991,159 @@ std::wstring CompareDirectoriesSession::MakeCacheKey(const std::filesystem::path
         return std::wstring(L".");
     }
     return relativeFolder.generic_wstring();
+}
+
+uint64_t CompareDirectoriesSession::EstimateDecisionBytes(std::wstring_view folderKey, const CompareDirectoriesFolderDecision& decision) noexcept
+{
+    // Heuristic budget accounting for decision cache eviction.
+    // Over-estimation is intentional: it keeps memory bounded without needing allocator-specific introspection.
+    constexpr uint64_t kDecisionOverheadBytes = 512;
+    constexpr uint64_t kItemNodeOverheadBytes = 160;
+
+    uint64_t bytes = kDecisionOverheadBytes;
+    bytes += static_cast<uint64_t>(folderKey.size()) * sizeof(wchar_t);
+
+    bytes += static_cast<uint64_t>(decision.items.size()) * kItemNodeOverheadBytes;
+    for (const auto& [name, item] : decision.items)
+    {
+        bytes += static_cast<uint64_t>(name.size()) * sizeof(wchar_t);
+        bytes += sizeof(item);
+    }
+
+    return bytes;
+}
+
+void CompareDirectoriesSession::TouchDecisionCacheKeyLocked(std::wstring_view folderKey) noexcept
+{
+    const auto metaIt = _decisionCacheMeta.find(folderKey);
+    if (metaIt == _decisionCacheMeta.end())
+    {
+        return;
+    }
+
+    _decisionCacheLru.splice(_decisionCacheLru.begin(), _decisionCacheLru, metaIt->second.lruIt);
+}
+
+void CompareDirectoriesSession::TrackDecisionCacheInsertOrUpdateLocked(
+    std::wstring_view folderKey, const std::shared_ptr<const CompareDirectoriesFolderDecision>& decision) noexcept
+{
+    if (! decision)
+    {
+        return;
+    }
+
+    const uint64_t estimatedBytes = EstimateDecisionBytes(folderKey, *decision);
+
+    auto metaIt = _decisionCacheMeta.find(folderKey);
+    if (metaIt == _decisionCacheMeta.end())
+    {
+        std::wstring key(folderKey);
+        _decisionCacheLru.emplace_front(key);
+
+        DecisionCacheLruEntry entry{};
+        entry.estimatedBytes = estimatedBytes;
+        entry.lruIt          = _decisionCacheLru.begin();
+
+        metaIt = _decisionCacheMeta.emplace(std::move(key), entry).first;
+
+        _decisionCacheEstimatedBytes += estimatedBytes;
+    }
+    else
+    {
+        const uint64_t oldBytes = metaIt->second.estimatedBytes;
+        metaIt->second.estimatedBytes = estimatedBytes;
+
+        if (estimatedBytes >= oldBytes)
+        {
+            _decisionCacheEstimatedBytes += estimatedBytes - oldBytes;
+        }
+        else
+        {
+            const uint64_t delta = oldBytes - estimatedBytes;
+            _decisionCacheEstimatedBytes = (delta >= _decisionCacheEstimatedBytes) ? 0 : (_decisionCacheEstimatedBytes - delta);
+        }
+
+        _decisionCacheLru.splice(_decisionCacheLru.begin(), _decisionCacheLru, metaIt->second.lruIt);
+    }
+
+    _decisionCacheEstimatedBytesHighWater = std::max(_decisionCacheEstimatedBytesHighWater, _decisionCacheEstimatedBytes);
+}
+
+void CompareDirectoriesSession::TrackDecisionCacheEraseLocked(std::wstring_view folderKey) noexcept
+{
+    const auto metaIt = _decisionCacheMeta.find(folderKey);
+    if (metaIt == _decisionCacheMeta.end())
+    {
+        return;
+    }
+
+    const uint64_t oldBytes = metaIt->second.estimatedBytes;
+    _decisionCacheEstimatedBytes = (oldBytes >= _decisionCacheEstimatedBytes) ? 0 : (_decisionCacheEstimatedBytes - oldBytes);
+
+    _decisionCacheLru.erase(metaIt->second.lruIt);
+    _decisionCacheMeta.erase(metaIt);
+}
+
+void CompareDirectoriesSession::MaybeEvictDecisionCacheLocked() noexcept
+{
+    if (_decisionCacheEstimatedBytes <= _decisionCacheBudgetBytes)
+    {
+        return;
+    }
+
+    // Eviction can be expensive on large trees; keep it bounded so we don't stall other threads
+    // contending on _mutex (including the UI thread).
+    constexpr size_t kMaxEvictionsPerCall       = 64;
+    constexpr size_t kMaxKeysInspectedPerCall   = 16384;
+
+    size_t evictions     = 0;
+    size_t inspectedKeys = 0;
+
+    while (_decisionCacheEstimatedBytes > _decisionCacheBudgetBytes && ! _decisionCacheLru.empty() && evictions < kMaxEvictionsPerCall &&
+           inspectedKeys < kMaxKeysInspectedPerCall)
+    {
+        std::optional<std::wstring> candidateKey;
+        for (auto it = _decisionCacheLru.rbegin(); it != _decisionCacheLru.rend(); ++it)
+        {
+            ++inspectedKeys;
+            if (inspectedKeys >= kMaxKeysInspectedPerCall)
+            {
+                break;
+            }
+
+            const std::wstring_view keyView = *it;
+            if (keyView == L"." || _decisionCachePinnedKeys.find(keyView) != _decisionCachePinnedKeys.end() ||
+                _pendingSubdirUpdates.find(keyView) != _pendingSubdirUpdates.end())
+            {
+                continue;
+            }
+
+            const auto cacheIt = _cache.find(keyView);
+            if (cacheIt == _cache.end() || ! cacheIt->second)
+            {
+                candidateKey.emplace(keyView);
+                break;
+            }
+
+            if (cacheIt->second->anyPending)
+            {
+                continue;
+            }
+
+            candidateKey.emplace(keyView);
+            break;
+        }
+
+        if (! candidateKey.has_value())
+        {
+            break;
+        }
+
+        _cache.erase(candidateKey.value());
+        _pendingContentCompareUpdates.erase(candidateKey.value());
+        TrackDecisionCacheEraseLocked(candidateKey.value());
+        ++evictions;
+    }
 }
 
 void CompareDirectoriesSession::NotifyScanProgress(const std::filesystem::path& relativeFolder, std::wstring_view currentEntryName, bool force) noexcept
@@ -746,9 +1233,9 @@ void CompareDirectoriesSession::NotifyDecisionUpdated(bool force) noexcept
     (*cb)();
 }
 
-void CompareDirectoriesSession::EnsureContentCompareWorkersLocked() noexcept
+void CompareDirectoriesSession::EnsureScanWorkersLocked() noexcept
 {
-    if (! _baseFileSystemIo || ! _contentCompareWorkers.empty())
+    if (! _scanWorkers.empty())
     {
         return;
     }
@@ -759,6 +1246,96 @@ void CompareDirectoriesSession::EnsureContentCompareWorkersLocked() noexcept
         workers = 2u;
     }
     workers = std::clamp(workers, 1u, 4u);
+
+    _scanWorkers.reserve(workers);
+    for (unsigned int i = 0; i < workers; ++i)
+    {
+        const uint32_t workerIndex = i;
+        _scanWorkers.emplace_back([this, workerIndex](std::stop_token stopToken) noexcept { ScanWorker(stopToken, workerIndex); });
+    }
+}
+
+void CompareDirectoriesSession::EnqueueScanLocked(
+    const std::filesystem::path& relativeFolder, uint64_t version, uint64_t cancelToken, ScanPriority priority) noexcept
+{
+    const std::wstring key = MakeCacheKey(relativeFolder);
+    const bool alreadyScheduled = _scanScheduledKeys.contains(key);
+
+    FolderScanJob job{};
+    job.version        = version;
+    job.cancelToken    = cancelToken;
+    job.relativeFolder = relativeFolder;
+    job.key            = key;
+    job.priority       = priority;
+
+    if (alreadyScheduled)
+    {
+        // Visible-first: if a folder is already scheduled as low-priority (background subtree scan),
+        // and the UI requests it, queue a single high-priority duplicate to ensure it is serviced soon.
+        // The duplicate is safe because ScanWorker gates execution on _scanInFlightKeys and _scanScheduledKeys.
+        if (priority == ScanPriority::High && ! _scanHighQueuedKeys.contains(key) && ! _scanInFlightKeys.contains(key))
+        {
+            job.priority = ScanPriority::High;
+            _scanQueueHigh.emplace_back(std::move(job));
+            _scanHighQueuedKeys.insert(key);
+
+            _scanQueueHighWater      = std::max(_scanQueueHighWater, _scanQueueHigh.size() + _scanQueueLow.size());
+            _scanQueueHighHighWater  = std::max(_scanQueueHighHighWater, _scanQueueHigh.size());
+            _scanQueueLowHighWater   = std::max(_scanQueueLowHighWater, _scanQueueLow.size());
+            _scanScheduledHighWater  = std::max(_scanScheduledHighWater, _scanScheduledKeys.size());
+
+            _scanCv.notify_one();
+        }
+        return;
+    }
+
+    _scanScheduledKeys.insert(key);
+    if (priority == ScanPriority::High)
+    {
+        _scanQueueHigh.emplace_back(std::move(job));
+        _scanHighQueuedKeys.insert(key);
+    }
+    else
+    {
+        _scanQueueLow.emplace_back(std::move(job));
+    }
+    _scanQueueHighWater      = std::max(_scanQueueHighWater, _scanQueueHigh.size() + _scanQueueLow.size());
+    _scanQueueHighHighWater  = std::max(_scanQueueHighHighWater, _scanQueueHigh.size());
+    _scanQueueLowHighWater   = std::max(_scanQueueLowHighWater, _scanQueueLow.size());
+    _scanScheduledHighWater  = std::max(_scanScheduledHighWater, _scanScheduledKeys.size());
+
+    const uint32_t activeBefore = _scanActiveScans.fetch_add(1u, std::memory_order_acq_rel);
+    if (activeBefore == 0u)
+    {
+        _scanFoldersScanned.store(0u, std::memory_order_release);
+        _scanEntriesScanned.store(0u, std::memory_order_release);
+        _scanLastNotifyTickMs.store(0u, std::memory_order_release);
+    }
+
+    _scanCv.notify_one();
+}
+
+void CompareDirectoriesSession::EnsureContentCompareWorkersLocked() noexcept
+{
+    if (! IsContentCompareSupported() || ! _contentCompareWorkers.empty())
+    {
+        return;
+    }
+
+    unsigned int workers = 0;
+    if (_settings.contentCompareWorkerCount == 0u)
+    {
+        workers = std::thread::hardware_concurrency();
+        if (workers == 0u)
+        {
+            workers = 2u;
+        }
+        workers = std::clamp(workers, 1u, 4u);
+    }
+    else
+    {
+        workers = std::clamp(static_cast<unsigned int>(_settings.contentCompareWorkerCount), 1u, 4u);
+    }
 
     _contentCompareWorkers.reserve(workers);
     for (unsigned int i = 0; i < workers; ++i)
@@ -782,16 +1359,42 @@ void CompareDirectoriesSession::ScheduleResetCleanup(std::unique_ptr<ResetCleanu
 
     if (! ok)
     {
-        std::unique_ptr<ResetCleanup> reclaimed(raw);
+        // Never block the caller thread if background cleanup scheduling fails (rare).
+        // Fall back to a detached std::thread, and leak on failure.
+        try
+        {
+            std::thread([raw]() noexcept { std::unique_ptr<ResetCleanup> owned(static_cast<ResetCleanup*>(raw)); }).detach();
+        }
+        catch (const std::system_error& ex)
+        {
+            Debug::Error(L"CompareDirectories: reset-cleanup fallback thread creation failed: {}", ex.code().value());
+        }
     }
 }
 
 void CompareDirectoriesSession::ResetCompareStateLocked(ResetCleanup& outCleanup) noexcept
 {
     outCleanup.cache.swap(_cache);
+    outCleanup.decisionCacheLru.swap(_decisionCacheLru);
+    outCleanup.decisionCacheMeta.swap(_decisionCacheMeta);
+    outCleanup.decisionCachePinnedKeys.swap(_decisionCachePinnedKeys);
+    _decisionCacheEstimatedBytes = 0;
+    outCleanup.scanQueueHigh.swap(_scanQueueHigh);
+    outCleanup.scanQueueLow.swap(_scanQueueLow);
+    outCleanup.scanScheduledKeys.swap(_scanScheduledKeys);
+    outCleanup.scanHighQueuedKeys.swap(_scanHighQueuedKeys);
+    outCleanup.scanInFlightKeys.swap(_scanInFlightKeys);
+    outCleanup.pendingSubdirUpdates.swap(_pendingSubdirUpdates);
     outCleanup.contentCompareInFlight.swap(_contentCompareInFlight);
-    outCleanup.contentCompareQueue.swap(_contentCompareQueue);
+    outCleanup.contentCompareQueueHigh.swap(_contentCompareQueueHigh);
+    outCleanup.contentCompareQueueLow.swap(_contentCompareQueueLow);
     outCleanup.pendingContentCompareUpdates.swap(_pendingContentCompareUpdates);
+
+    _scanActiveScans.store(0u, std::memory_order_release);
+    _scanFoldersScanned.store(0u, std::memory_order_release);
+    _scanEntriesScanned.store(0u, std::memory_order_release);
+    _scanLastNotifyTickMs.store(0u, std::memory_order_release);
+    _scanCv.notify_all();
 
     _contentComparePendingCompares.store(0u, std::memory_order_release);
     _contentCompareTotalCompares.store(0u, std::memory_order_release);
@@ -800,11 +1403,13 @@ void CompareDirectoriesSession::ResetCompareStateLocked(ResetCleanup& outCleanup
     _contentCompareCompletedBytes.store(0u, std::memory_order_release);
 
     _contentCompareCv.notify_all();
+    _contentCompareQueueNotFullCv.notify_all();
 }
 
 void CompareDirectoriesSession::ClearContentCompareStateLocked() noexcept
 {
-    _contentCompareQueue.clear();
+    _contentCompareQueueHigh.clear();
+    _contentCompareQueueLow.clear();
     _contentCompareInFlight.clear();
     _pendingContentCompareUpdates.clear();
     _contentComparePendingCompares.store(0u, std::memory_order_release);
@@ -814,6 +1419,149 @@ void CompareDirectoriesSession::ClearContentCompareStateLocked() noexcept
     _contentCompareCompletedBytes.store(0u, std::memory_order_release);
 
     _contentCompareCv.notify_all();
+    _contentCompareQueueNotFullCv.notify_all();
+}
+
+bool CompareDirectoriesSession::PropagateChildAggregateToAncestorsLocked(
+    std::wstring_view childKeyView, const Common::Settings::CompareDirectoriesSettings& settings, uint64_t currentVersion) noexcept
+{
+    if (! settings.compareSubdirectories)
+    {
+        return false;
+    }
+
+    if (childKeyView.empty() || childKeyView == L".")
+    {
+        return false;
+    }
+
+    std::filesystem::path childRel = std::filesystem::path(childKeyView).lexically_normal();
+    if (childRel.empty())
+    {
+        return false;
+    }
+
+    bool anyChanged = false;
+    for (;;)
+    {
+        const std::filesystem::path parentRel = childRel.parent_path();
+        const std::wstring parentKey          = MakeCacheKey(parentRel);
+        const std::wstring childKey           = MakeCacheKey(childRel);
+
+        const auto parentIt = _cache.find(parentKey);
+        if (parentIt == _cache.end() || ! parentIt->second || parentIt->second->version != currentVersion)
+        {
+            break;
+        }
+
+        const auto childIt = _cache.find(childKey);
+        const std::shared_ptr<const CompareDirectoriesFolderDecision> childDecision =
+            (childIt != _cache.end() && childIt->second && childIt->second->version == currentVersion) ? childIt->second : nullptr;
+        if (! childDecision)
+        {
+            break;
+        }
+
+        const std::wstring childName = childRel.filename().wstring();
+        auto updatedParent           = std::make_shared<CompareDirectoriesFolderDecision>(*parentIt->second);
+
+        const auto itemIt = updatedParent->items.find(childName);
+        if (itemIt == updatedParent->items.end())
+        {
+            break;
+        }
+
+        CompareDirectoriesItemDecision& item = itemIt->second;
+        if (! item.existsLeft || ! item.existsRight)
+        {
+            break;
+        }
+
+        const bool leftIsDir  = (item.leftFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        const bool rightIsDir = (item.rightFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        if (! leftIsDir || ! rightIsDir)
+        {
+            break;
+        }
+
+        // Avoid following directory reparse points (symlinks/junctions).
+        if (IsReparsePairEntry(item))
+        {
+            break;
+        }
+
+        const bool childPending   = SUCCEEDED(childDecision->hr) && childDecision->anyPending;
+        const bool childDifferent = FAILED(childDecision->hr) || childDecision->anyDifferent;
+
+        const uint32_t oldMask    = item.differenceMask;
+        const bool oldDifferent   = item.isDifferent;
+        const bool oldSelectLeft  = item.selectLeft;
+        const bool oldSelectRight = item.selectRight;
+
+        const uint32_t subtreeMask =
+            static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirContent) | static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirPending);
+
+        uint32_t newMask        = oldMask & ~subtreeMask;
+        const uint32_t baseMask = newMask;
+        if (childPending)
+        {
+            newMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirPending);
+        }
+        if (childDifferent)
+        {
+            newMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirContent);
+        }
+
+        const bool baseDifferent = baseMask != 0u;
+        const bool newDifferent  = baseDifferent || childDifferent;
+
+        bool newSelectLeft  = false;
+        bool newSelectRight = false;
+
+        if (HasFlag(newMask, CompareDirectoriesDiffBit::OnlyInLeft))
+        {
+            newSelectLeft = settings.selectSubdirsOnlyInOnePane;
+        }
+        if (HasFlag(newMask, CompareDirectoriesDiffBit::OnlyInRight))
+        {
+            newSelectRight = settings.selectSubdirsOnlyInOnePane;
+        }
+        if (HasFlag(newMask, CompareDirectoriesDiffBit::TypeMismatch) || HasFlag(newMask, CompareDirectoriesDiffBit::SubdirAttributes) ||
+            HasFlag(newMask, CompareDirectoriesDiffBit::SubdirContent))
+        {
+            newSelectLeft  = true;
+            newSelectRight = true;
+        }
+
+        const bool changed =
+            (newMask != oldMask) || (newDifferent != oldDifferent) || (newSelectLeft != oldSelectLeft) || (newSelectRight != oldSelectRight);
+        if (! changed)
+        {
+            break;
+        }
+
+        item.differenceMask = newMask;
+        item.isDifferent    = newDifferent;
+        item.selectLeft     = newSelectLeft;
+        item.selectRight    = newSelectRight;
+
+        // Recompute aggregate flags so the next ancestor iteration can rely on them.
+        updatedParent->anyDifferent = AnyChildDifferent(*updatedParent);
+        updatedParent->anyPending   = AnyChildPending(*updatedParent);
+
+        const std::shared_ptr<const CompareDirectoriesFolderDecision> storedUpdatedParent = updatedParent;
+        _cache[parentKey] = std::move(updatedParent);
+        TrackDecisionCacheInsertOrUpdateLocked(parentKey, storedUpdatedParent);
+        anyChanged        = true;
+
+        childRel = parentRel;
+        if (childRel.empty())
+        {
+            break;
+        }
+    }
+
+    return anyChanged;
 }
 
 void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const std::wstring& folderKey) noexcept
@@ -825,10 +1573,28 @@ void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const st
     }
 
     const uint64_t currentVersion = _version.load(std::memory_order_relaxed);
+
+    // Drop stale updates eagerly to avoid accumulating work after resets / version bumps.
+    for (auto it = pendingIt->second.begin(); it != pendingIt->second.end();)
+    {
+        if (it->second.version != currentVersion)
+        {
+            it = pendingIt->second.erase(it);
+            continue;
+        }
+        ++it;
+    }
+
+    if (pendingIt->second.empty())
+    {
+        _pendingContentCompareUpdates.erase(pendingIt);
+        return;
+    }
+
     const auto cacheIt            = _cache.find(folderKey);
     if (cacheIt == _cache.end() || ! cacheIt->second || cacheIt->second->version != currentVersion)
     {
-        _pendingContentCompareUpdates.erase(pendingIt);
+        // Decision not cached yet (race with scan workers). Keep the updates and apply them later.
         return;
     }
 
@@ -838,14 +1604,93 @@ void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const st
 
     for (const auto& [entryName, update] : pendingIt->second)
     {
-        if (update.version != currentVersion)
-        {
-            continue;
-        }
-
         const auto itemIt = updated->items.find(entryName);
         if (itemIt == updated->items.end())
         {
+            // In differences-only mode, file-level ContentPending entries can be elided (tracked per-folder).
+            if (updated->pendingContentCompareCount != 0u)
+            {
+                --updated->pendingContentCompareCount;
+                anyApplied = true;
+            }
+
+            const bool sizeDifferent  = update.leftSizeBytes != update.rightSizeBytes;
+            const bool timeDifferent  = update.leftLastWriteTime != update.rightLastWriteTime;
+            const bool attrsDifferent = update.leftFileAttributes != update.rightFileAttributes;
+
+            const bool canCompareContent = settings.compareContent && IsContentCompareSupported();
+            const bool contentDifferent  = canCompareContent ? (sizeDifferent || ! update.areEqual) : false;
+
+            const bool anyCriteriaDifferent = (settings.compareSize && sizeDifferent) || (settings.compareDateTime && timeDifferent) ||
+                                              (settings.compareAttributes && attrsDifferent) || (canCompareContent && contentDifferent);
+            if (anyCriteriaDifferent)
+            {
+                CompareDirectoriesItemDecision item{};
+                item.existsLeft          = true;
+                item.existsRight         = true;
+                item.isDirectory         = false;
+                item.leftSizeBytes       = update.leftSizeBytes;
+                item.rightSizeBytes      = update.rightSizeBytes;
+                item.leftLastWriteTime   = update.leftLastWriteTime;
+                item.rightLastWriteTime  = update.rightLastWriteTime;
+                item.leftFileAttributes  = update.leftFileAttributes;
+                item.rightFileAttributes = update.rightFileAttributes;
+
+                item.differenceMask = 0;
+                if (settings.compareSize && sizeDifferent)
+                {
+                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Size);
+                }
+                if (settings.compareDateTime && timeDifferent)
+                {
+                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::DateTime);
+                }
+                if (settings.compareAttributes && attrsDifferent)
+                {
+                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Attributes);
+                }
+                if (canCompareContent && contentDifferent)
+                {
+                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Content);
+                }
+
+                item.isDifferent = true;
+                if (settings.compareSize && sizeDifferent)
+                {
+                    if (item.leftSizeBytes > item.rightSizeBytes)
+                    {
+                        item.selectLeft = true;
+                    }
+                    else
+                    {
+                        item.selectRight = true;
+                    }
+                }
+                if (settings.compareDateTime && timeDifferent)
+                {
+                    if (item.leftLastWriteTime > item.rightLastWriteTime)
+                    {
+                        item.selectLeft = true;
+                    }
+                    else
+                    {
+                        item.selectRight = true;
+                    }
+                }
+                if (settings.compareAttributes && attrsDifferent)
+                {
+                    item.selectLeft  = true;
+                    item.selectRight = true;
+                }
+                if (canCompareContent && contentDifferent)
+                {
+                    item.selectLeft  = true;
+                    item.selectRight = true;
+                }
+
+                updated->items.emplace(entryName, std::move(item));
+                anyApplied = true;
+            }
             continue;
         }
 
@@ -874,7 +1719,8 @@ void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const st
         const bool timeDifferent  = item.leftLastWriteTime != item.rightLastWriteTime;
         const bool attrsDifferent = item.leftFileAttributes != item.rightFileAttributes;
 
-        const bool contentDifferent = settings.compareContent ? (sizeDifferent || ! update.areEqual) : false;
+        const bool canCompareContent = settings.compareContent && IsContentCompareSupported();
+        const bool contentDifferent  = canCompareContent ? (sizeDifferent || ! update.areEqual) : false;
 
         item.differenceMask = 0;
         if (settings.compareSize && sizeDifferent)
@@ -889,7 +1735,7 @@ void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const st
         {
             item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Attributes);
         }
-        if (settings.compareContent && contentDifferent)
+        if (canCompareContent && contentDifferent)
         {
             item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Content);
         }
@@ -899,7 +1745,7 @@ void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const st
         item.selectRight = false;
 
         const bool anyCriteriaDifferent = (settings.compareSize && sizeDifferent) || (settings.compareDateTime && timeDifferent) ||
-                                          (settings.compareAttributes && attrsDifferent) || (settings.compareContent && contentDifferent);
+                                          (settings.compareAttributes && attrsDifferent) || (canCompareContent && contentDifferent);
         if (anyCriteriaDifferent)
         {
             item.isDifferent = true;
@@ -934,7 +1780,7 @@ void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const st
                 item.selectRight = true;
             }
 
-            if (settings.compareContent && contentDifferent)
+            if (canCompareContent && contentDifferent)
             {
                 item.selectLeft  = true;
                 item.selectRight = true;
@@ -951,148 +1797,12 @@ void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const st
         // Recompute aggregate flags after applying updates, so ancestor propagation can use them.
         updated->anyDifferent = AnyChildDifferent(*updated);
         updated->anyPending   = AnyChildPending(*updated);
+        const std::shared_ptr<const CompareDirectoriesFolderDecision> storedUpdated = updated;
         _cache[folderKey]     = updated;
+        TrackDecisionCacheInsertOrUpdateLocked(folderKey, storedUpdated);
+        MaybeEvictDecisionCacheLocked();
 
-        const auto updateAncestors = [&]() noexcept -> bool
-        {
-            if (! settings.compareSubdirectories)
-            {
-                return false;
-            }
-
-            if (folderKey == L".")
-            {
-                return false;
-            }
-
-            std::filesystem::path childRel = std::filesystem::path(folderKey).lexically_normal();
-            if (childRel.empty())
-            {
-                return false;
-            }
-
-            bool anyChanged = false;
-            for (;;)
-            {
-                const std::filesystem::path parentRel = childRel.parent_path();
-                const std::wstring parentKey          = MakeCacheKey(parentRel);
-                const std::wstring childKey           = MakeCacheKey(childRel);
-
-                const auto parentIt = _cache.find(parentKey);
-                if (parentIt == _cache.end() || ! parentIt->second || parentIt->second->version != currentVersion)
-                {
-                    break;
-                }
-
-                const auto childIt = _cache.find(childKey);
-                const std::shared_ptr<const CompareDirectoriesFolderDecision> childDecision =
-                    (childIt != _cache.end() && childIt->second && childIt->second->version == currentVersion) ? childIt->second : nullptr;
-                if (! childDecision)
-                {
-                    break;
-                }
-
-                const std::wstring childName = childRel.filename().wstring();
-                auto updatedParent           = std::make_shared<CompareDirectoriesFolderDecision>(*parentIt->second);
-
-                const auto itemIt = updatedParent->items.find(childName);
-                if (itemIt == updatedParent->items.end())
-                {
-                    break;
-                }
-
-                CompareDirectoriesItemDecision& item = itemIt->second;
-                if (! item.existsLeft || ! item.existsRight)
-                {
-                    break;
-                }
-
-                const bool leftIsDir  = (item.leftFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                const bool rightIsDir = (item.rightFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                if (! leftIsDir || ! rightIsDir)
-                {
-                    break;
-                }
-
-                // Avoid following directory reparse points (symlinks/junctions).
-                if (IsReparsePairEntry(item))
-                {
-                    break;
-                }
-
-                const bool childPending   = SUCCEEDED(childDecision->hr) && childDecision->anyPending;
-                const bool childDifferent = FAILED(childDecision->hr) || childDecision->anyDifferent;
-
-                const uint32_t oldMask    = item.differenceMask;
-                const bool oldDifferent   = item.isDifferent;
-                const bool oldSelectLeft  = item.selectLeft;
-                const bool oldSelectRight = item.selectRight;
-
-                const uint32_t subtreeMask =
-                    static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirContent) | static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirPending);
-
-                uint32_t newMask        = oldMask & ~subtreeMask;
-                const uint32_t baseMask = newMask;
-                if (childPending)
-                {
-                    newMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirPending);
-                }
-                if (childDifferent)
-                {
-                    newMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirContent);
-                }
-
-                const bool baseDifferent = baseMask != 0u;
-                const bool newDifferent  = baseDifferent || childDifferent;
-
-                bool newSelectLeft  = false;
-                bool newSelectRight = false;
-
-                if (HasFlag(newMask, CompareDirectoriesDiffBit::OnlyInLeft))
-                {
-                    newSelectLeft = settings.selectSubdirsOnlyInOnePane;
-                }
-                if (HasFlag(newMask, CompareDirectoriesDiffBit::OnlyInRight))
-                {
-                    newSelectRight = settings.selectSubdirsOnlyInOnePane;
-                }
-                if (HasFlag(newMask, CompareDirectoriesDiffBit::TypeMismatch) || HasFlag(newMask, CompareDirectoriesDiffBit::SubdirAttributes) ||
-                    HasFlag(newMask, CompareDirectoriesDiffBit::SubdirContent))
-                {
-                    newSelectLeft  = true;
-                    newSelectRight = true;
-                }
-
-                const bool changed =
-                    (newMask != oldMask) || (newDifferent != oldDifferent) || (newSelectLeft != oldSelectLeft) || (newSelectRight != oldSelectRight);
-                if (! changed)
-                {
-                    break;
-                }
-
-                item.differenceMask = newMask;
-                item.isDifferent    = newDifferent;
-                item.selectLeft     = newSelectLeft;
-                item.selectRight    = newSelectRight;
-
-                // Recompute aggregate flags so the next ancestor iteration can rely on them.
-                updatedParent->anyDifferent = AnyChildDifferent(*updatedParent);
-                updatedParent->anyPending   = AnyChildPending(*updatedParent);
-
-                _cache[parentKey] = std::move(updatedParent);
-                anyChanged        = true;
-
-                childRel = parentRel;
-                if (childRel.empty())
-                {
-                    break;
-                }
-            }
-
-            return anyChanged;
-        };
-
-        static_cast<void>(updateAncestors());
+        static_cast<void>(PropagateChildAggregateToAncestorsLocked(folderKey, settings, currentVersion));
         ++_uiVersion;
     }
 }
@@ -1149,8 +1859,15 @@ namespace
         return false;
     }
 
+    // Compare subtree scans can touch a very large number of folders (especially on remote filesystems).
+    // Avoid enumerating through DirectoryInfoCache here: it is a global cache sized for interactive browsing
+    // and can legitimately grow to GiB scale during large scans.
     wil::com_ptr<IFilesInformation> info;
+    Debug::Perf::Scope perf(L"CompareDirectories.ReadDirectoryInfo");
+    perf.SetDetail(absoluteFolder.native());
     const HRESULT hr = baseFs->ReadDirectoryInfo(absoluteFolder.c_str(), info.put());
+    perf.SetHr(hr);
+
     if (FAILED(hr))
     {
         if (IsMissingPathError(hr))
@@ -1161,6 +1878,12 @@ namespace
         }
 
         outHr = hr;
+        return false;
+    }
+
+    if (! info)
+    {
+        outHr = E_UNEXPECTED;
         return false;
     }
 
@@ -1208,7 +1931,8 @@ enum class FileContentCompareResult : uint8_t
 };
 
 template <typename ProgressCallback>
-[[nodiscard]] FileContentCompareResult CompareFileContent(IFileSystemIO* io,
+[[nodiscard]] FileContentCompareResult CompareFileContent(IFileSystemIO* leftIo,
+                                                          IFileSystemIO* rightIo,
                                                           const std::filesystem::path& leftPath,
                                                           const std::filesystem::path& rightPath,
                                                           const std::atomic_uint64_t* versionCounter,
@@ -1238,20 +1962,23 @@ template <typename ProgressCallback>
         return FileContentCompareResult::Cancelled;
     }
 
-    if (! io)
+    if (! leftIo || ! rightIo)
     {
-        return FileContentCompareResult::Different;
+        return FileContentCompareResult::Cancelled;
     }
 
+    // Allow the UI to reflect "starting" even if the underlying reader creation does network/disk work.
+    progress(0u, 0u, true);
+
     wil::com_ptr<IFileReader> left;
-    const HRESULT hrLeft = io->CreateFileReader(leftPath.c_str(), left.put());
+    const HRESULT hrLeft = leftIo->CreateFileReader(leftPath.c_str(), left.put());
     if (FAILED(hrLeft) || ! left)
     {
         return FileContentCompareResult::Different;
     }
 
     wil::com_ptr<IFileReader> right;
-    const HRESULT hrRight = io->CreateFileReader(rightPath.c_str(), right.put());
+    const HRESULT hrRight = rightIo->CreateFileReader(rightPath.c_str(), right.put());
     if (FAILED(hrRight) || ! right)
     {
         return FileContentCompareResult::Different;
@@ -1653,6 +2380,490 @@ struct OutEntry
 }
 } // namespace
 
+std::shared_ptr<CompareDirectoriesFolderDecision> CompareDirectoriesSession::ComputeDecisionForFolder(
+    const std::filesystem::path& relativeFolder,
+    const Common::Settings::CompareDirectoriesSettings& settings,
+    const std::vector<std::wstring>& ignoreFilePatterns,
+    const std::vector<std::wstring>& ignoreDirectoryPatterns,
+    uint64_t version,
+    uint64_t cancelToken,
+    bool allowBackgroundWork,
+    bool reportScanProgress,
+    bool forceNotifyFolderStart,
+    ScanPriority scanPriority,
+    std::stop_token stopToken) noexcept
+{
+    const std::filesystem::path leftFolder  = ResolveAbsolute(ComparePane::Left, relativeFolder);
+    const std::filesystem::path rightFolder = ResolveAbsolute(ComparePane::Right, relativeFolder);
+
+    struct ContentCompareActivation
+    {
+        std::filesystem::path relativeFolder;
+        std::wstring entryName;
+        uint64_t totalBytes = 0;
+    };
+
+    const auto isCancelled = [&]() noexcept -> bool
+    {
+        if (stopToken.stop_requested())
+        {
+            return true;
+        }
+
+        if (_version.load(std::memory_order_acquire) != version)
+        {
+            return true;
+        }
+
+        if (_backgroundWorkCancelToken.load(std::memory_order_acquire) != cancelToken)
+        {
+            return true;
+        }
+
+        if (allowBackgroundWork && ! _backgroundWorkEnabled.load(std::memory_order_acquire))
+        {
+            return true;
+        }
+
+        return false;
+    };
+
+    if (reportScanProgress)
+    {
+        static_cast<void>(_scanFoldersScanned.fetch_add(1u, std::memory_order_acq_rel));
+        NotifyScanProgress(relativeFolder, {}, forceNotifyFolderStart);
+    }
+
+    std::optional<ContentCompareActivation> contentActivated;
+
+    auto decision     = std::make_shared<CompareDirectoriesFolderDecision>();
+    decision->version = version;
+    decision->hr      = S_OK;
+
+    if (isCancelled())
+    {
+        return decision;
+    }
+
+    std::map<std::wstring, SideEntry, WStringViewNoCaseLess> leftEntries;
+    std::map<std::wstring, SideEntry, WStringViewNoCaseLess> rightEntries;
+
+    bool leftMissing = false;
+    HRESULT leftHr   = S_OK;
+    if (! TryReadDirectoryEntries(_leftFileSystem, leftFolder, settings, ignoreFilePatterns, ignoreDirectoryPatterns, leftEntries, leftMissing, leftHr))
+    {
+        decision->hr = leftHr;
+    }
+    decision->leftFolderMissing = leftMissing;
+
+    if (isCancelled())
+    {
+        return decision;
+    }
+
+    bool rightMissing = false;
+    HRESULT rightHr   = S_OK;
+    if (SUCCEEDED(decision->hr) &&
+        ! TryReadDirectoryEntries(_rightFileSystem, rightFolder, settings, ignoreFilePatterns, ignoreDirectoryPatterns, rightEntries, rightMissing, rightHr))
+    {
+        decision->hr = rightHr;
+    }
+    decision->rightFolderMissing = rightMissing;
+
+    if (SUCCEEDED(decision->hr))
+    {
+        // Seed with left entries first (preserves left casing as key when both exist).
+        for (const auto& [name, entry] : leftEntries)
+        {
+            CompareDirectoriesItemDecision item{};
+            item.existsLeft         = true;
+            item.isDirectory        = entry.isDirectory;
+            item.leftSizeBytes      = entry.sizeBytes;
+            item.leftLastWriteTime  = entry.lastWriteTime;
+            item.leftFileAttributes = entry.fileAttributes;
+            decision->items.emplace(name, item);
+        }
+
+        for (const auto& [name, entry] : rightEntries)
+        {
+            auto it = decision->items.find(name);
+            if (it == decision->items.end())
+            {
+                CompareDirectoriesItemDecision item{};
+                item.existsRight         = true;
+                item.isDirectory         = entry.isDirectory;
+                item.rightSizeBytes      = entry.sizeBytes;
+                item.rightLastWriteTime  = entry.lastWriteTime;
+                item.rightFileAttributes = entry.fileAttributes;
+                decision->items.emplace(name, item);
+                continue;
+            }
+
+            CompareDirectoriesItemDecision& item = it->second;
+            item.existsRight                     = true;
+            item.isDirectory                     = item.isDirectory || entry.isDirectory;
+            item.rightSizeBytes                  = entry.sizeBytes;
+            item.rightLastWriteTime              = entry.lastWriteTime;
+            item.rightFileAttributes             = entry.fileAttributes;
+        }
+
+        for (auto& [name, item] : decision->items)
+        {
+            if (reportScanProgress)
+            {
+                const uint64_t scannedEntries = _scanEntriesScanned.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+                if ((scannedEntries & 0x3Fu) == 0u)
+                {
+                    NotifyScanProgress(relativeFolder, name, false);
+                    if (isCancelled())
+                    {
+                        break;
+                    }
+                }
+            }
+            else if (isCancelled())
+            {
+                break;
+            }
+
+            item.isDifferent    = false;
+            item.selectLeft     = false;
+            item.selectRight    = false;
+            item.differenceMask = 0;
+
+            if (item.existsLeft != item.existsRight)
+            {
+                item.isDifferent = true;
+                if (item.existsLeft)
+                {
+                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::OnlyInLeft);
+                    item.selectLeft = ! item.isDirectory || settings.selectSubdirsOnlyInOnePane;
+                }
+                if (item.existsRight)
+                {
+                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::OnlyInRight);
+                    item.selectRight = ! item.isDirectory || settings.selectSubdirsOnlyInOnePane;
+                }
+            }
+            else if (item.existsLeft && item.existsRight)
+            {
+                const bool leftIsDir  = (item.leftFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                const bool rightIsDir = (item.rightFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+                if (leftIsDir != rightIsDir)
+                {
+                    item.isDifferent = true;
+                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::TypeMismatch);
+                    item.selectLeft  = true;
+                    item.selectRight = true;
+                }
+                else if (leftIsDir)
+                {
+                    bool attrsDifferent = false;
+                    if (settings.compareSubdirectoryAttributes && item.leftFileAttributes != item.rightFileAttributes)
+                    {
+                        attrsDifferent = true;
+                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirAttributes);
+                    }
+
+                    if (attrsDifferent)
+                    {
+                        item.isDifferent = true;
+                        item.selectLeft  = true;
+                        item.selectRight = true;
+                    }
+                }
+                else
+                {
+                    const bool sizeDifferent  = item.leftSizeBytes != item.rightSizeBytes;
+                    const bool timeDifferent  = item.leftLastWriteTime != item.rightLastWriteTime;
+                    const bool attrsDifferent = item.leftFileAttributes != item.rightFileAttributes;
+                    const bool nonContentDifferent =
+                        (settings.compareSize && sizeDifferent) || (settings.compareDateTime && timeDifferent) || (settings.compareAttributes && attrsDifferent);
+
+                    bool contentDifferent = false;
+                    bool contentPending   = false;
+                    const bool canCompareContent = settings.compareContent && IsContentCompareSupported();
+                    if (canCompareContent && ! nonContentDifferent)
+                    {
+                        if (sizeDifferent)
+                        {
+                            contentDifferent = true;
+                        }
+                        else
+                        {
+                            const std::filesystem::path relativeFile = (relativeFolder / std::filesystem::path(name)).lexically_normal();
+
+                            ContentCompareKey compareKey{};
+                            compareKey.relativeFileKey    = MakeCacheKey(relativeFile);
+                            compareKey.leftSizeBytes      = item.leftSizeBytes;
+                            compareKey.rightSizeBytes     = item.rightSizeBytes;
+                            compareKey.leftLastWriteTime  = item.leftLastWriteTime;
+                            compareKey.rightLastWriteTime = item.rightLastWriteTime;
+
+                            std::optional<bool> cachedEqual;
+                            {
+                                std::unique_lock lock(_mutex);
+                                if (const auto it = _contentCompareCache.find(compareKey); it != _contentCompareCache.end())
+                                {
+                                    cachedEqual = it->second;
+                                }
+                                else if (allowBackgroundWork)
+                                {
+                                    const auto inflightIt    = _contentCompareInFlight.find(compareKey);
+                                    const bool alreadyQueued = (inflightIt != _contentCompareInFlight.end() && inflightIt->second == version);
+                                    if (! alreadyQueued)
+                                    {
+                                        EnsureContentCompareWorkersLocked();
+
+                                        constexpr size_t kContentCompareQueueMaxHighJobs = 128;
+                                        constexpr size_t kContentCompareQueueMaxLowJobs  = 896;
+
+                                        const bool high = scanPriority == ScanPriority::High;
+                                        auto& targetQueue = high ? _contentCompareQueueHigh : _contentCompareQueueLow;
+                                        const size_t maxJobs = high ? kContentCompareQueueMaxHighJobs : kContentCompareQueueMaxLowJobs;
+
+                                        while (targetQueue.size() >= maxJobs && ! isCancelled())
+                                        {
+                                            _contentCompareQueueNotFullCv.wait(lock, [&]() noexcept { return isCancelled() || targetQueue.size() < maxJobs; });
+                                        }
+
+                                        if (! isCancelled() && targetQueue.size() < maxJobs)
+                                        {
+                                            _contentCompareInFlight[compareKey] = version;
+                                            _contentInFlightHighWater = std::max(_contentInFlightHighWater, _contentCompareInFlight.size());
+
+                                            static_cast<void>(_contentCompareTotalCompares.fetch_add(1u, std::memory_order_acq_rel));
+                                            static_cast<void>(_contentCompareTotalBytes.fetch_add(item.leftSizeBytes, std::memory_order_acq_rel));
+
+                                            const uint64_t pendingBefore = _contentComparePendingCompares.fetch_add(1u, std::memory_order_acq_rel);
+                                            if (pendingBefore == 0u && ! contentActivated.has_value())
+                                            {
+                                                ContentCompareActivation activation{};
+                                                activation.relativeFolder = relativeFolder;
+                                                activation.entryName      = name;
+                                                activation.totalBytes     = item.leftSizeBytes;
+                                                contentActivated.emplace(std::move(activation));
+                                            }
+
+                                            ContentCompareJob job{};
+                                            job.version             = version;
+                                            job.cancelToken         = cancelToken;
+                                            job.relativeFolder      = relativeFolder;
+                                            job.entryName           = name;
+                                            job.key                 = std::move(compareKey);
+                                            job.priority            = scanPriority;
+                                            job.leftFileAttributes  = item.leftFileAttributes;
+                                            job.rightFileAttributes = item.rightFileAttributes;
+
+                                            targetQueue.emplace_back(std::move(job));
+                                            _contentQueueHighWater = std::max(_contentQueueHighWater, _contentCompareQueueHigh.size() + _contentCompareQueueLow.size());
+                                            _contentQueueHighHighWater = std::max(_contentQueueHighHighWater, _contentCompareQueueHigh.size());
+                                            _contentQueueLowHighWater  = std::max(_contentQueueLowHighWater, _contentCompareQueueLow.size());
+
+                                            _contentCompareCv.notify_one();
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (contentActivated.has_value())
+                            {
+                                NotifyContentProgress(std::numeric_limits<uint32_t>::max(),
+                                                      contentActivated->relativeFolder,
+                                                      contentActivated->entryName,
+                                                      contentActivated->totalBytes,
+                                                      0);
+                                contentActivated.reset();
+                            }
+
+                            if (cachedEqual.has_value())
+                            {
+                                contentDifferent = ! cachedEqual.value();
+                            }
+                            else if (allowBackgroundWork && ! isCancelled())
+                            {
+                                contentPending = true;
+                            }
+                        }
+                    }
+
+                    if (settings.compareSize && sizeDifferent)
+                    {
+                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Size);
+                    }
+
+                    if (settings.compareDateTime && timeDifferent)
+                    {
+                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::DateTime);
+                    }
+
+                    if (settings.compareAttributes && attrsDifferent)
+                    {
+                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Attributes);
+                    }
+
+                    if (canCompareContent && contentDifferent)
+                    {
+                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Content);
+                    }
+
+                    if (canCompareContent && contentPending)
+                    {
+                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::ContentPending);
+                    }
+
+                    const bool anyCriteriaDifferent = (settings.compareSize && sizeDifferent) || (settings.compareDateTime && timeDifferent) ||
+                                                      (settings.compareAttributes && attrsDifferent) || (canCompareContent && contentDifferent);
+
+                    if (anyCriteriaDifferent)
+                    {
+                        item.isDifferent = true;
+
+                        if (settings.compareSize && sizeDifferent)
+                        {
+                            if (item.leftSizeBytes > item.rightSizeBytes)
+                            {
+                                item.selectLeft = true;
+                            }
+                            else
+                            {
+                                item.selectRight = true;
+                            }
+                        }
+
+                        if (settings.compareDateTime && timeDifferent)
+                        {
+                            if (item.leftLastWriteTime > item.rightLastWriteTime)
+                            {
+                                item.selectLeft = true;
+                            }
+                            else
+                            {
+                                item.selectRight = true;
+                            }
+                        }
+
+                        if (settings.compareAttributes && attrsDifferent)
+                        {
+                            item.selectLeft  = true;
+                            item.selectRight = true;
+                        }
+
+                        if (canCompareContent && contentDifferent)
+                        {
+                            item.selectLeft  = true;
+                            item.selectRight = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (settings.compareSubdirectories && SUCCEEDED(decision->hr))
+    {
+        for (auto& [name, item] : decision->items)
+        {
+            if (isCancelled())
+            {
+                break;
+            }
+
+            if (! item.existsLeft || ! item.existsRight)
+            {
+                continue;
+            }
+
+            const bool leftIsDir  = (item.leftFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+            const bool rightIsDir = (item.rightFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+            if (! leftIsDir || ! rightIsDir)
+            {
+                continue;
+            }
+
+            // Avoid following directory reparse points (symlinks/junctions).
+            if (IsReparsePairEntry(item))
+            {
+                continue;
+            }
+
+            const std::filesystem::path childRel = relativeFolder / std::filesystem::path(name);
+            const std::wstring childKey          = MakeCacheKey(childRel);
+
+            std::shared_ptr<const CompareDirectoriesFolderDecision> childDecision;
+            {
+                std::lock_guard guard(_mutex);
+                const auto it = _cache.find(childKey);
+                if (it != _cache.end() && it->second && it->second->version == version)
+                {
+                    childDecision = it->second;
+                }
+            }
+
+            if (! childDecision)
+            {
+                if (allowBackgroundWork)
+                {
+                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirPending);
+                }
+                continue;
+            }
+
+            const bool childPending = SUCCEEDED(childDecision->hr) && childDecision->anyPending;
+            if (allowBackgroundWork && childPending)
+            {
+                item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirPending);
+            }
+
+            const bool childDifferent = FAILED(childDecision->hr) || childDecision->anyDifferent;
+            if (childDifferent)
+            {
+                item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirContent);
+                item.isDifferent = true;
+                item.selectLeft  = true;
+                item.selectRight = true;
+            }
+        }
+    }
+
+    if (! settings.showIdenticalItems && SUCCEEDED(decision->hr))
+    {
+        for (auto it = decision->items.begin(); it != decision->items.end();)
+        {
+            const uint32_t diffMask    = it->second.differenceMask;
+            const bool pendingSubdir   = HasFlag(diffMask, CompareDirectoriesDiffBit::SubdirPending);
+            const bool pendingContent  = HasFlag(diffMask, CompareDirectoriesDiffBit::ContentPending);
+            const bool anyPendingItem  = pendingSubdir || pendingContent;
+
+            if (! it->second.isDifferent && ! pendingSubdir)
+            {
+                // In differences-only mode, file-level ContentPending entries can explode memory
+                // for large folders. Keep the compare running, but elide the per-item entries.
+                if (pendingContent)
+                {
+                    ++decision->pendingContentCompareCount;
+                    it = decision->items.erase(it);
+                    continue;
+                }
+
+                // Drop identical entries to keep cached decisions bounded.
+                if (! anyPendingItem && diffMask == 0u)
+                {
+                    it = decision->items.erase(it);
+                    continue;
+                }
+            }
+
+            ++it;
+        }
+    }
+
+    decision->anyDifferent = AnyChildDifferent(*decision);
+    decision->anyPending   = AnyChildPending(*decision);
+    return decision;
+}
+
 std::shared_ptr<const CompareDirectoriesFolderDecision> CompareDirectoriesSession::GetOrComputeDecision(const std::filesystem::path& relativeFolder)
 {
     const std::wstring rootKey     = MakeCacheKey(relativeFolder);
@@ -1673,501 +2884,187 @@ std::shared_ptr<const CompareDirectoriesFolderDecision> CompareDirectoriesSessio
         }
     }
 
-    uint32_t activeBefore = 0;
-    if (allowBackgroundWork)
-    {
-        activeBefore = _scanActiveScans.fetch_add(1u, std::memory_order_acq_rel);
-        if (activeBefore == 0u)
-        {
-            _scanFoldersScanned.store(0u, std::memory_order_release);
-            _scanEntriesScanned.store(0u, std::memory_order_release);
-            _scanLastNotifyTickMs.store(0u, std::memory_order_release);
-        }
-    }
-
-    const bool scanStarted = allowBackgroundWork && (activeBefore == 0u);
-
-    auto scanCleanup = wil::scope_exit([&]
-    {
-        if (! allowBackgroundWork)
-        {
-            return;
-        }
-
-        const uint32_t activeAfter = _scanActiveScans.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
-        if (activeAfter == 0u)
-        {
-            NotifyScanProgress(relativeFolder, {}, true);
-        }
-    });
-
     const Common::Settings::CompareDirectoriesSettings settings = GetSettings();
     const std::vector<std::wstring> ignoreFilePatterns          = SplitPatterns(settings.ignoreFilesPatterns);
     const std::vector<std::wstring> ignoreDirectoryPatterns     = SplitPatterns(settings.ignoreDirectoriesPatterns);
 
-    const auto isCancelled = [&]() noexcept -> bool
-    {
-        if (_version.load(std::memory_order_acquire) != version)
-        {
-            return true;
-        }
+    constexpr bool reportScanProgress = false;
+    const std::shared_ptr<CompareDirectoriesFolderDecision> decision =
+        ComputeDecisionForFolder(relativeFolder,
+                                 settings,
+                                 ignoreFilePatterns,
+                                 ignoreDirectoryPatterns,
+                                 version,
+                                 cancelToken,
+                                 allowBackgroundWork,
+                                 reportScanProgress,
+                                 false,
+                                 ScanPriority::Low,
+                                 std::stop_token{});
 
-        return _backgroundWorkCancelToken.load(std::memory_order_acquire) != cancelToken;
-    };
-
-    auto beginFolderScan = [&](const std::filesystem::path& folder, bool forceNotify) noexcept
-    {
-        if (! allowBackgroundWork)
-        {
-            return;
-        }
-
-        static_cast<void>(_scanFoldersScanned.fetch_add(1u, std::memory_order_acq_rel));
-        NotifyScanProgress(folder, {}, forceNotify);
-    };
-
-    auto tryGetCachedDecision = [&](const std::wstring& key) -> std::shared_ptr<const CompareDirectoriesFolderDecision>
+    const std::shared_ptr<const CompareDirectoriesFolderDecision> finalDecision = decision;
     {
         std::lock_guard guard(_mutex);
-        ApplyPendingContentCompareUpdatesLocked(key);
-        const auto it = _cache.find(key);
-        if (it != _cache.end() && it->second && it->second->version == version)
+        if (_version.load(std::memory_order_relaxed) == version)
         {
-            return it->second;
+            _cache[rootKey] = finalDecision;
+            _decisionCacheEntriesHighWater = std::max(_decisionCacheEntriesHighWater, _cache.size());
+            TrackDecisionCacheInsertOrUpdateLocked(rootKey, finalDecision);
+            MaybeEvictDecisionCacheLocked();
         }
-        return {};
-    };
+    }
 
-    auto computeDecisionBase = [&](const std::filesystem::path& folderRel) -> std::shared_ptr<CompareDirectoriesFolderDecision>
+    return finalDecision ? finalDecision : std::make_shared<CompareDirectoriesFolderDecision>();
+}
+
+void CompareDirectoriesSession::ScanWorker(std::stop_token stopToken, uint32_t workerIndex) noexcept
+{
+    UNREFERENCED_PARAMETER(workerIndex);
+
+    const HRESULT coinitHr = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
+    if (FAILED(coinitHr))
     {
-        const std::filesystem::path leftFolder  = ResolveAbsolute(ComparePane::Left, folderRel);
-        const std::filesystem::path rightFolder = ResolveAbsolute(ComparePane::Right, folderRel);
-        const std::wstring folderKey            = MakeCacheKey(folderRel);
+        Debug::Error(L"CompareDirectories scan worker: CoInitializeEx(COINIT_MULTITHREADED) failed: 0x{:08X}", coinitHr);
+        FAIL_FAST_IF_FAILED(coinitHr);
+    }
+    [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
-        struct ContentCompareActivation
+    if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL) == 0)
+    {
+        Debug::ErrorWithLastError(L"CompareDirectories scan worker: SetThreadPriority(BELOW_NORMAL) failed");
+    }
+
+    while (! stopToken.stop_requested())
+    {
+        FolderScanJob job{};
         {
-            std::filesystem::path relativeFolder;
-            std::wstring entryName;
-            uint64_t totalBytes = 0;
-        };
+            std::unique_lock lock(_mutex);
+            _scanCv.wait(lock, [&]() { return stopToken.stop_requested() || ! _scanQueueHigh.empty() || ! _scanQueueLow.empty(); });
 
-        std::optional<ContentCompareActivation> contentActivated;
-
-        auto decision     = std::make_shared<CompareDirectoriesFolderDecision>();
-        decision->version = version;
-        decision->hr      = S_OK;
-
-        if (isCancelled())
-        {
-            return decision;
-        }
-
-        std::map<std::wstring, SideEntry, WStringViewNoCaseLess> leftEntries;
-        std::map<std::wstring, SideEntry, WStringViewNoCaseLess> rightEntries;
-
-        bool leftMissing = false;
-        HRESULT leftHr   = S_OK;
-        if (! TryReadDirectoryEntries(_baseFileSystem, leftFolder, settings, ignoreFilePatterns, ignoreDirectoryPatterns, leftEntries, leftMissing, leftHr))
-        {
-            decision->hr = leftHr;
-        }
-        decision->leftFolderMissing = leftMissing;
-
-        if (isCancelled())
-        {
-            return decision;
-        }
-
-        bool rightMissing = false;
-        HRESULT rightHr   = S_OK;
-        if (SUCCEEDED(decision->hr) &&
-            ! TryReadDirectoryEntries(_baseFileSystem, rightFolder, settings, ignoreFilePatterns, ignoreDirectoryPatterns, rightEntries, rightMissing, rightHr))
-        {
-            decision->hr = rightHr;
-        }
-        decision->rightFolderMissing = rightMissing;
-
-        if (SUCCEEDED(decision->hr))
-        {
-            // Seed with left entries first (preserves left casing as key when both exist).
-            for (const auto& [name, entry] : leftEntries)
+            if (stopToken.stop_requested())
             {
-                CompareDirectoriesItemDecision item{};
-                item.existsLeft         = true;
-                item.isDirectory        = entry.isDirectory;
-                item.leftSizeBytes      = entry.sizeBytes;
-                item.leftLastWriteTime  = entry.lastWriteTime;
-                item.leftFileAttributes = entry.fileAttributes;
-                decision->items.emplace(name, item);
+                break;
             }
 
-            for (const auto& [name, entry] : rightEntries)
+            if (! _scanQueueHigh.empty())
             {
-                auto it = decision->items.find(name);
-                if (it == decision->items.end())
-                {
-                    CompareDirectoriesItemDecision item{};
-                    item.existsRight         = true;
-                    item.isDirectory         = entry.isDirectory;
-                    item.rightSizeBytes      = entry.sizeBytes;
-                    item.rightLastWriteTime  = entry.lastWriteTime;
-                    item.rightFileAttributes = entry.fileAttributes;
-                    decision->items.emplace(name, item);
-                    continue;
-                }
-
-                CompareDirectoriesItemDecision& item = it->second;
-                item.existsRight                     = true;
-                item.isDirectory                     = item.isDirectory || entry.isDirectory;
-                item.rightSizeBytes                  = entry.sizeBytes;
-                item.rightLastWriteTime              = entry.lastWriteTime;
-                item.rightFileAttributes             = entry.fileAttributes;
+                job = std::move(_scanQueueHigh.front());
+                _scanQueueHigh.pop_front();
+                _scanHighQueuedKeys.erase(job.key);
+            }
+            else
+            {
+                job = std::move(_scanQueueLow.front());
+                _scanQueueLow.pop_front();
             }
 
-            for (auto& [name, item] : decision->items)
+            // Stale duplicate (upgrade) jobs can remain in the queues after the scheduled work is completed.
+            if (! _scanScheduledKeys.contains(job.key))
             {
-                if (allowBackgroundWork)
+                continue;
+            }
+
+            const bool inserted = _scanInFlightKeys.insert(job.key).second;
+            if (! inserted)
+            {
+                continue;
+            }
+            _scanInFlightHighWater = std::max(_scanInFlightHighWater, _scanInFlightKeys.size());
+        }
+
+        auto completeJob = wil::scope_exit([&]
+        {
+            bool notifyIdle = false;
+            {
+                std::lock_guard guard(_mutex);
+                const bool erased = _scanInFlightKeys.erase(job.key) != 0;
+                if (erased)
                 {
-                    const uint64_t scannedEntries = _scanEntriesScanned.fetch_add(1u, std::memory_order_acq_rel) + 1u;
-                    if ((scannedEntries & 0x3Fu) == 0u)
-                    {
-                        NotifyScanProgress(folderRel, name, false);
-                        if (isCancelled())
-                        {
-                            break;
-                        }
-                    }
-                }
-                else if (isCancelled())
-                {
-                    break;
-                }
-
-                item.isDifferent    = false;
-                item.selectLeft     = false;
-                item.selectRight    = false;
-                item.differenceMask = 0;
-
-                if (item.existsLeft != item.existsRight)
-                {
-                    item.isDifferent = true;
-                    if (item.existsLeft)
-                    {
-                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::OnlyInLeft);
-                        item.selectLeft = ! item.isDirectory || settings.selectSubdirsOnlyInOnePane;
-                    }
-                    if (item.existsRight)
-                    {
-                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::OnlyInRight);
-                        item.selectRight = ! item.isDirectory || settings.selectSubdirsOnlyInOnePane;
-                    }
-                }
-                else if (item.existsLeft && item.existsRight)
-                {
-                    const bool leftIsDir  = (item.leftFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                    const bool rightIsDir = (item.rightFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-
-                    if (leftIsDir != rightIsDir)
-                    {
-                        item.isDifferent = true;
-                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::TypeMismatch);
-                        item.selectLeft  = true;
-                        item.selectRight = true;
-                    }
-                    else if (leftIsDir)
-                    {
-                        bool attrsDifferent = false;
-                        if (settings.compareSubdirectoryAttributes && item.leftFileAttributes != item.rightFileAttributes)
-                        {
-                            attrsDifferent = true;
-                            item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirAttributes);
-                        }
-
-                        if (attrsDifferent)
-                        {
-                            item.isDifferent = true;
-                            item.selectLeft  = true;
-                            item.selectRight = true;
-                        }
-                    }
-                    else
-                    {
-                        const bool sizeDifferent  = item.leftSizeBytes != item.rightSizeBytes;
-                        const bool timeDifferent  = item.leftLastWriteTime != item.rightLastWriteTime;
-                        const bool attrsDifferent = item.leftFileAttributes != item.rightFileAttributes;
-
-                        bool contentDifferent = false;
-                        bool contentPending   = false;
-                        if (settings.compareContent)
-                        {
-                            if (sizeDifferent)
-                            {
-                                contentDifferent = true;
-                            }
-                            else
-                            {
-                                if (! _baseFileSystemIo)
-                                {
-                                    contentDifferent = true;
-                                }
-                                else
-                                {
-                                    const std::filesystem::path leftPath  = leftFolder / std::filesystem::path(name);
-                                    const std::filesystem::path rightPath = rightFolder / std::filesystem::path(name);
-
-                                    ContentCompareKey compareKey{};
-                                    compareKey.leftPath           = leftPath.wstring();
-                                    compareKey.rightPath          = rightPath.wstring();
-                                    compareKey.leftSizeBytes      = item.leftSizeBytes;
-                                    compareKey.rightSizeBytes     = item.rightSizeBytes;
-                                    compareKey.leftLastWriteTime  = item.leftLastWriteTime;
-                                    compareKey.rightLastWriteTime = item.rightLastWriteTime;
-
-                                    std::optional<bool> cachedEqual;
-                                    {
-                                        std::lock_guard guard(_mutex);
-                                        if (const auto it = _contentCompareCache.find(compareKey); it != _contentCompareCache.end())
-                                        {
-                                            cachedEqual = it->second;
-                                        }
-                                        else if (allowBackgroundWork)
-                                        {
-                                            const auto inflightIt    = _contentCompareInFlight.find(compareKey);
-                                            const bool alreadyQueued = (inflightIt != _contentCompareInFlight.end() && inflightIt->second == version);
-                                            if (! alreadyQueued)
-                                            {
-                                                EnsureContentCompareWorkersLocked();
-                                                _contentCompareInFlight[compareKey] = version;
-
-                                                static_cast<void>(_contentCompareTotalCompares.fetch_add(1u, std::memory_order_acq_rel));
-                                                static_cast<void>(_contentCompareTotalBytes.fetch_add(item.leftSizeBytes, std::memory_order_acq_rel));
-
-                                                const uint64_t pendingBefore = _contentComparePendingCompares.fetch_add(1u, std::memory_order_acq_rel);
-                                                if (pendingBefore == 0u && ! contentActivated.has_value())
-                                                {
-                                                    ContentCompareActivation activation{};
-                                                    activation.relativeFolder = folderRel;
-                                                    activation.entryName      = name;
-                                                    activation.totalBytes     = item.leftSizeBytes;
-                                                    contentActivated.emplace(std::move(activation));
-                                                }
-
-                                                ContentCompareJob job{};
-                                                job.version             = version;
-                                                job.cancelToken         = cancelToken;
-                                                job.folderKey           = folderKey;
-                                                job.relativeFolder      = folderRel;
-                                                job.entryName           = name;
-                                                job.key                 = compareKey;
-                                                job.leftPath            = leftPath;
-                                                job.rightPath           = rightPath;
-                                                job.leftFileAttributes  = item.leftFileAttributes;
-                                                job.rightFileAttributes = item.rightFileAttributes;
-                                                _contentCompareQueue.emplace_back(std::move(job));
-                                                _contentCompareCv.notify_one();
-                                            }
-                                        }
-                                    }
-
-                                    if (contentActivated.has_value())
-                                    {
-                                        NotifyContentProgress(std::numeric_limits<uint32_t>::max(),
-                                                              contentActivated->relativeFolder,
-                                                              contentActivated->entryName,
-                                                              contentActivated->totalBytes,
-                                                              0);
-                                        contentActivated.reset();
-                                    }
-
-                                    if (cachedEqual.has_value())
-                                    {
-                                        contentDifferent = ! cachedEqual.value();
-                                    }
-                                    else if (allowBackgroundWork)
-                                    {
-                                        contentPending = true;
-                                    }
-                                }
-                            }
-                        }
-
-                        if (settings.compareSize && sizeDifferent)
-                        {
-                            item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Size);
-                        }
-
-                        if (settings.compareDateTime && timeDifferent)
-                        {
-                            item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::DateTime);
-                        }
-
-                        if (settings.compareAttributes && attrsDifferent)
-                        {
-                            item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Attributes);
-                        }
-
-                        if (settings.compareContent && contentDifferent)
-                        {
-                            item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::Content);
-                        }
-
-                        if (settings.compareContent && contentPending)
-                        {
-                            item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::ContentPending);
-                        }
-
-                        const bool anyCriteriaDifferent = (settings.compareSize && sizeDifferent) || (settings.compareDateTime && timeDifferent) ||
-                                                          (settings.compareAttributes && attrsDifferent) || (settings.compareContent && contentDifferent);
-
-                        if (anyCriteriaDifferent)
-                        {
-                            item.isDifferent = true;
-
-                            if (settings.compareSize && sizeDifferent)
-                            {
-                                if (item.leftSizeBytes > item.rightSizeBytes)
-                                {
-                                    item.selectLeft = true;
-                                }
-                                else
-                                {
-                                    item.selectRight = true;
-                                }
-                            }
-
-                            if (settings.compareDateTime && timeDifferent)
-                            {
-                                if (item.leftLastWriteTime > item.rightLastWriteTime)
-                                {
-                                    item.selectLeft = true;
-                                }
-                                else
-                                {
-                                    item.selectRight = true;
-                                }
-                            }
-
-                            if (settings.compareAttributes && attrsDifferent)
-                            {
-                                item.selectLeft  = true;
-                                item.selectRight = true;
-                            }
-
-                            if (settings.compareContent && contentDifferent)
-                            {
-                                item.selectLeft  = true;
-                                item.selectRight = true;
-                            }
-                        }
-                    }
+                    _scanScheduledKeys.erase(job.key);
+                    const uint32_t activeAfter = _scanActiveScans.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+                    notifyIdle                 = activeAfter == 0u;
                 }
             }
-        }
 
-        return decision;
-    };
+            if (notifyIdle)
+            {
+                NotifyScanProgress({}, {}, true);
+                NotifyDecisionUpdated(true);
+            }
+        });
 
-    struct FolderFrame
-    {
-        enum class State : uint8_t
+        const uint64_t currentVersion = _version.load(std::memory_order_acquire);
+        if (currentVersion != job.version)
         {
-            NeedScan,
-            NeedFinalize,
-        };
-
-        std::filesystem::path relativeFolder;
-        std::wstring key;
-        State state = State::NeedScan;
-        std::shared_ptr<CompareDirectoriesFolderDecision> decision;
-    };
-
-    std::map<std::wstring, std::shared_ptr<const CompareDirectoriesFolderDecision>, WStringViewNoCaseLess> computed;
-    std::shared_ptr<const CompareDirectoriesFolderDecision> bestRootDecision;
-    std::deque<FolderFrame> stack;
-    stack.push_back(FolderFrame{relativeFolder, rootKey});
-
-    while (! stack.empty())
-    {
-        if (isCancelled())
-        {
-            break;
-        }
-
-        FolderFrame& frame = stack.back();
-
-        if (computed.find(frame.key) != computed.end())
-        {
-            stack.pop_back();
             continue;
         }
 
-        if (auto cached = tryGetCachedDecision(frame.key))
+        const uint64_t currentCancelToken = _backgroundWorkCancelToken.load(std::memory_order_acquire);
+        if (! _backgroundWorkEnabled.load(std::memory_order_acquire) || currentCancelToken != job.cancelToken)
         {
-            computed.emplace(frame.key, std::move(cached));
-            stack.pop_back();
             continue;
         }
 
-        if (frame.state == FolderFrame::State::NeedScan)
+        const Common::Settings::CompareDirectoriesSettings settings = GetSettings();
+        const std::vector<std::wstring> ignoreFilePatterns          = SplitPatterns(settings.ignoreFilesPatterns);
+        const std::vector<std::wstring> ignoreDirectoryPatterns     = SplitPatterns(settings.ignoreDirectoriesPatterns);
+
+        std::shared_ptr<const CompareDirectoriesFolderDecision> decisionConst;
         {
-            beginFolderScan(frame.relativeFolder, frame.key == rootKey ? scanStarted : false);
-            frame.decision = computeDecisionBase(frame.relativeFolder);
-            if (frame.key == rootKey)
+            std::lock_guard guard(_mutex);
+            const auto it = _cache.find(job.key);
+            if (it != _cache.end() && it->second && it->second->version == job.version)
             {
-                bestRootDecision = frame.decision;
+                decisionConst = it->second;
             }
-            frame.state = FolderFrame::State::NeedFinalize;
+        }
 
-            if (allowBackgroundWork && settings.compareSubdirectories && frame.decision && SUCCEEDED(frame.decision->hr))
+        std::shared_ptr<CompareDirectoriesFolderDecision> computedDecision;
+        if (! decisionConst)
+        {
+            computedDecision = ComputeDecisionForFolder(job.relativeFolder,
+                                                        settings,
+                                                        ignoreFilePatterns,
+                                                        ignoreDirectoryPatterns,
+                                                        job.version,
+                                                        job.cancelToken,
+                                                        true,
+                                                        true,
+                                                        job.key == L".",
+                                                        job.priority,
+                                                        stopToken);
+            decisionConst = computedDecision;
+
             {
-                for (const auto& [name, item] : frame.decision->items)
+                std::lock_guard guard(_mutex);
+                if (_version.load(std::memory_order_relaxed) == job.version)
                 {
-                    if (isCancelled())
-                    {
-                        break;
-                    }
-
-                    if (! item.existsLeft || ! item.existsRight)
-                    {
-                        continue;
-                    }
-
-                    const bool leftIsDir  = (item.leftFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                    const bool rightIsDir = (item.rightFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                    if (! leftIsDir || ! rightIsDir)
-                    {
-                        continue;
-                    }
-
-                    // Avoid following directory reparse points (symlinks/junctions).
-                    if (IsReparsePairEntry(item))
-                    {
-                        continue;
-                    }
-
-                    const std::filesystem::path childRel = frame.relativeFolder / std::filesystem::path(name);
-                    const std::wstring childKey          = MakeCacheKey(childRel);
-                    if (computed.find(childKey) != computed.end())
-                    {
-                        continue;
-                    }
-
-                    stack.push_back(FolderFrame{childRel, std::move(childKey)});
+                    const std::shared_ptr<const CompareDirectoriesFolderDecision> storedDecision = computedDecision;
+                    _cache[job.key] = storedDecision;
+                    _decisionCacheEntriesHighWater = std::max(_decisionCacheEntriesHighWater, _cache.size());
+                    TrackDecisionCacheInsertOrUpdateLocked(job.key, storedDecision);
+                    MaybeEvictDecisionCacheLocked();
                 }
             }
+        }
+        else
+        {
+            static_cast<void>(_scanFoldersScanned.fetch_add(1u, std::memory_order_acq_rel));
+            NotifyScanProgress(job.relativeFolder, {}, job.key == L".");
+        }
 
+        if (! decisionConst)
+        {
             continue;
         }
 
-        if (settings.compareSubdirectories && frame.decision && SUCCEEDED(frame.decision->hr))
+        if (settings.compareSubdirectories && SUCCEEDED(decisionConst->hr))
         {
-            for (auto& [name, item] : frame.decision->items)
-            {
-                if (isCancelled())
-                {
-                    break;
-                }
+            std::vector<std::filesystem::path> childFolders;
+            childFolders.reserve(decisionConst->items.size());
 
+            for (const auto& [name, item] : decisionConst->items)
+            {
                 if (! item.existsLeft || ! item.existsRight)
                 {
                     continue;
@@ -2186,83 +3083,36 @@ std::shared_ptr<const CompareDirectoriesFolderDecision> CompareDirectoriesSessio
                     continue;
                 }
 
-                const std::filesystem::path childRel = frame.relativeFolder / std::filesystem::path(name);
-                const std::wstring childKey          = MakeCacheKey(childRel);
+                childFolders.emplace_back(job.relativeFolder / std::filesystem::path(name));
+            }
 
-                std::shared_ptr<const CompareDirectoriesFolderDecision> childDecision;
-                if (const auto it = computed.find(childKey); it != computed.end())
+            if (! childFolders.empty())
+            {
+                std::lock_guard guard(_mutex);
+                const uint64_t nowVersion = _version.load(std::memory_order_relaxed);
+                if (nowVersion == job.version && _backgroundWorkEnabled.load(std::memory_order_relaxed) &&
+                    _backgroundWorkCancelToken.load(std::memory_order_relaxed) == job.cancelToken)
                 {
-                    childDecision = it->second;
-                }
-                else
-                {
-                    childDecision = tryGetCachedDecision(childKey);
-                }
-
-                if (! childDecision)
-                {
-                    if (allowBackgroundWork)
+                    for (const auto& childRel : childFolders)
                     {
-                        item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirPending);
+                        EnqueueScanLocked(childRel, job.version, job.cancelToken, ScanPriority::Low);
                     }
-                    continue;
-                }
-
-                const bool childPending = SUCCEEDED(childDecision->hr) && childDecision->anyPending;
-                if (allowBackgroundWork && childPending)
-                {
-                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirPending);
-                }
-
-                const bool childDifferent = FAILED(childDecision->hr) || childDecision->anyDifferent;
-                if (childDifferent)
-                {
-                    item.differenceMask |= static_cast<uint32_t>(CompareDirectoriesDiffBit::SubdirContent);
-                    item.isDifferent = true;
-                    item.selectLeft  = true;
-                    item.selectRight = true;
                 }
             }
         }
 
-        // Compute aggregate flags once, after all item bits (including subdir) are finalized.
-        if (frame.decision)
-        {
-            frame.decision->anyDifferent = AnyChildDifferent(*frame.decision);
-            frame.decision->anyPending   = AnyChildPending(*frame.decision);
-        }
-
-        const std::shared_ptr<const CompareDirectoriesFolderDecision> finalDecision = frame.decision;
+        if (settings.compareSubdirectories && job.key != L".")
         {
             std::lock_guard guard(_mutex);
-            if (_version.load(std::memory_order_relaxed) == version)
+            if (_version.load(std::memory_order_relaxed) == job.version)
             {
-                _cache[frame.key] = finalDecision;
+                _pendingSubdirUpdates.insert(job.key);
+                _pendingSubdirHighWater = std::max(_pendingSubdirHighWater, _pendingSubdirUpdates.size());
             }
         }
 
-        computed.emplace(frame.key, finalDecision);
-        if (frame.key == rootKey)
-        {
-            bestRootDecision = finalDecision;
-        }
-        stack.pop_back();
+        NotifyDecisionUpdated(false);
     }
-
-    if (const auto it = computed.find(rootKey); it != computed.end())
-    {
-        return it->second;
-    }
-
-    if (bestRootDecision)
-    {
-        return bestRootDecision;
-    }
-
-    auto decision     = std::make_shared<CompareDirectoriesFolderDecision>();
-    decision->version = version;
-    decision->hr      = S_OK;
-    return decision;
 }
 
 void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, uint32_t workerIndex) noexcept
@@ -2275,39 +3125,65 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
     }
     [[maybe_unused]] const wil::unique_couninitialize_call coUninit;
 
+    if (SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_BELOW_NORMAL) == 0)
+    {
+        Debug::ErrorWithLastError(L"CompareDirectories worker: SetThreadPriority(BELOW_NORMAL) failed");
+    }
+
     uint64_t lastProgressNotifyTickMs = 0;
+    uint32_t highBurstCount           = 0;
 
     while (! stopToken.stop_requested())
     {
         ContentCompareJob job{};
         {
             std::unique_lock lock(_mutex);
-            _contentCompareCv.wait(lock, [&]() { return stopToken.stop_requested() || ! _contentCompareQueue.empty(); });
+            _contentCompareCv.wait(lock, [&]() { return stopToken.stop_requested() || ! _contentCompareQueueHigh.empty() || ! _contentCompareQueueLow.empty(); });
 
             if (stopToken.stop_requested())
             {
                 break;
             }
 
-            job = std::move(_contentCompareQueue.front());
-            _contentCompareQueue.pop_front();
+            const bool haveHigh = ! _contentCompareQueueHigh.empty();
+            const bool haveLow  = ! _contentCompareQueueLow.empty();
+
+            // Visible-first: prefer high-priority work, but allow low-priority progress under sustained high load.
+            constexpr uint32_t kHighBurstBeforeLow = 8;
+            const bool shouldTakeLow = haveLow && (! haveHigh || highBurstCount >= kHighBurstBeforeLow);
+
+            if (shouldTakeLow)
+            {
+                job = std::move(_contentCompareQueueLow.front());
+                _contentCompareQueueLow.pop_front();
+                highBurstCount = 0;
+            }
+            else
+            {
+                job = std::move(_contentCompareQueueHigh.front());
+                _contentCompareQueueHigh.pop_front();
+                ++highBurstCount;
+            }
         }
+
+        _contentCompareQueueNotFullCv.notify_all();
 
         const uint64_t currentVersion = _version.load(std::memory_order_acquire);
         if (currentVersion != job.version)
         {
-            bool erased = false;
+            bool notifyIdle = false;
             {
                 std::lock_guard guard(_mutex);
-                erased = _contentCompareInFlight.erase(job.key) != 0;
-            }
-            if (erased)
-            {
-                const uint64_t pendingAfter = _contentComparePendingCompares.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
-                if (pendingAfter == 0u)
+                const bool erased = _contentCompareInFlight.erase(job.key) != 0;
+                if (erased)
                 {
-                    NotifyContentProgress(workerIndex, {}, {}, 0, 0);
+                    const uint64_t pendingAfter = _contentComparePendingCompares.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+                    notifyIdle                  = pendingAfter == 0u;
                 }
+            }
+            if (notifyIdle)
+            {
+                NotifyContentProgress(workerIndex, {}, {}, 0, 0);
             }
             continue;
         }
@@ -2315,18 +3191,19 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
         const uint64_t currentCancelToken = _backgroundWorkCancelToken.load(std::memory_order_acquire);
         if (! _backgroundWorkEnabled.load(std::memory_order_acquire) || currentCancelToken != job.cancelToken)
         {
-            bool erased = false;
+            bool notifyIdle = false;
             {
                 std::lock_guard guard(_mutex);
-                erased = _contentCompareInFlight.erase(job.key) != 0;
-            }
-            if (erased)
-            {
-                const uint64_t pendingAfter = _contentComparePendingCompares.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
-                if (pendingAfter == 0u)
+                const bool erased = _contentCompareInFlight.erase(job.key) != 0;
+                if (erased)
                 {
-                    NotifyContentProgress(workerIndex, {}, {}, 0, 0);
+                    const uint64_t pendingAfter = _contentComparePendingCompares.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+                    notifyIdle                  = pendingAfter == 0u;
                 }
+            }
+            if (notifyIdle)
+            {
+                NotifyContentProgress(workerIndex, {}, {}, 0, 0);
             }
             continue;
         }
@@ -2345,63 +3222,93 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
             NotifyContentProgress(workerIndex, job.relativeFolder, job.entryName, totalBytes, completedBytes);
         };
 
-        const FileContentCompareResult compareResult = CompareFileContent(
-            _baseFileSystemIo.get(), job.leftPath, job.rightPath, &_version, job.version, &_backgroundWorkCancelToken, job.cancelToken, stopToken, progress);
+        const std::filesystem::path relativeFile = (job.relativeFolder / std::filesystem::path(job.entryName)).lexically_normal();
+        const std::filesystem::path leftPath     = ResolveAbsolute(ComparePane::Left, relativeFile);
+        const std::filesystem::path rightPath    = ResolveAbsolute(ComparePane::Right, relativeFile);
+
+        const FileContentCompareResult compareResult = CompareFileContent(_leftFileSystemIo.get(),
+                                                                          _rightFileSystemIo.get(),
+                                                                          leftPath,
+                                                                          rightPath,
+                                                                          &_version,
+                                                                          job.version,
+                                                                          &_backgroundWorkCancelToken,
+                                                                          job.cancelToken,
+                                                                          stopToken,
+                                                                          progress);
         if (compareResult == FileContentCompareResult::Cancelled)
         {
-            bool erased = false;
+            bool notifyIdle = false;
             {
                 std::lock_guard guard(_mutex);
-                erased = _contentCompareInFlight.erase(job.key) != 0;
-            }
-            if (erased)
-            {
-                const uint64_t pendingAfter = _contentComparePendingCompares.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
-                if (pendingAfter == 0u)
+                const bool erased = _contentCompareInFlight.erase(job.key) != 0;
+                if (erased)
                 {
-                    NotifyContentProgress(workerIndex, {}, {}, 0, 0);
+                    const uint64_t pendingAfter = _contentComparePendingCompares.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+                    notifyIdle                  = pendingAfter == 0u;
                 }
+            }
+            if (notifyIdle)
+            {
+                NotifyContentProgress(workerIndex, {}, {}, 0, 0);
             }
             continue;
         }
 
         const bool areEqual = compareResult == FileContentCompareResult::Equal;
 
-        bool shouldNotify     = false;
-        bool forceNotifyFinal = false;
-        bool erased           = false;
+        bool shouldNotify         = false;
+        bool forceNotifyFinal     = false;
+        bool erased               = false;
+        uint64_t pendingAfter     = 0;
+        bool pendingAfterComputed = false;
         {
             std::lock_guard guard(_mutex);
 
             erased = _contentCompareInFlight.erase(job.key) != 0;
 
             // Bound the cache to avoid unbounded memory growth in long-running sessions.
-            // When the limit is hit, clear entirely (simple and safe — the cache is an optimisation only).
+            // Evict in batches to avoid the worst-case "nuclear clear" churn.
             constexpr size_t kContentCacheMaxEntries = 16384;
+            constexpr size_t kContentCacheEvictBatch = 4096;
             if (_contentCompareCache.size() >= kContentCacheMaxEntries)
             {
-                _contentCompareCache.clear();
+                size_t evicted = 0;
+                for (auto it = _contentCompareCache.begin(); it != _contentCompareCache.end() && evicted < kContentCacheEvictBatch;)
+                {
+                    it = _contentCompareCache.erase(it);
+                    ++evicted;
+                }
             }
             static_cast<void>(_contentCompareCache.emplace(job.key, areEqual));
+            _contentCacheHighWater = std::max(_contentCacheHighWater, _contentCompareCache.size());
 
-            const auto decisionIt = _cache.find(job.folderKey);
-            if (decisionIt != _cache.end() && decisionIt->second && decisionIt->second->version == job.version)
+            if (erased)
             {
-                PendingContentCompareUpdate update{};
-                update.version             = job.version;
-                update.leftSizeBytes       = job.key.leftSizeBytes;
-                update.rightSizeBytes      = job.key.rightSizeBytes;
-                update.leftLastWriteTime   = job.key.leftLastWriteTime;
-                update.rightLastWriteTime  = job.key.rightLastWriteTime;
-                update.leftFileAttributes  = job.leftFileAttributes;
-                update.rightFileAttributes = job.rightFileAttributes;
-                update.areEqual            = areEqual;
+                const std::wstring folderKey = MakeCacheKey(job.relativeFolder);
 
-                _pendingContentCompareUpdates[job.folderKey][job.entryName] = std::move(update);
-                shouldNotify                                                = true;
+                PendingContentCompareUpdate update{};
+                update.version           = job.version;
+                update.leftSizeBytes     = job.key.leftSizeBytes;
+                update.rightSizeBytes    = job.key.rightSizeBytes;
+                update.leftLastWriteTime = job.key.leftLastWriteTime;
+                update.rightLastWriteTime = job.key.rightLastWriteTime;
+                update.leftFileAttributes = job.leftFileAttributes;
+                update.rightFileAttributes = job.rightFileAttributes;
+                update.areEqual          = areEqual;
+
+                _pendingContentCompareUpdates[folderKey][job.entryName] = update;
+                _pendingContentHighWater = std::max(_pendingContentHighWater, _pendingContentCompareUpdates.size());
+                shouldNotify             = true;
             }
 
-            forceNotifyFinal = _contentCompareQueue.empty() && _contentCompareInFlight.empty();
+            forceNotifyFinal = _contentCompareQueueHigh.empty() && _contentCompareQueueLow.empty() && _contentCompareInFlight.empty();
+
+            if (erased)
+            {
+                pendingAfter         = _contentComparePendingCompares.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+                pendingAfterComputed = true;
+            }
         }
 
         if (erased)
@@ -2409,12 +3316,11 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
             static_cast<void>(_contentCompareCompletedCompares.fetch_add(1u, std::memory_order_acq_rel));
             static_cast<void>(_contentCompareCompletedBytes.fetch_add(job.key.leftSizeBytes, std::memory_order_acq_rel));
 
-            const uint64_t pendingAfter = _contentComparePendingCompares.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
-            if (pendingAfter == 0u)
+            if (pendingAfterComputed && pendingAfter == 0u)
             {
                 NotifyContentProgress(workerIndex, {}, {}, 0, 0);
             }
-            else
+            else if (pendingAfterComputed)
             {
                 NotifyContentProgress(workerIndex, job.relativeFolder, job.entryName, job.key.leftSizeBytes, job.key.leftSizeBytes);
             }
@@ -2439,8 +3345,8 @@ public:
     {
         if (_session)
         {
-            _baseFs    = _session->GetBaseFileSystem();
-            _baseInfos = _session->GetBaseInformations();
+            _baseFs    = _session->GetFileSystem(_pane);
+            _baseInfos = _session->GetInformations(_pane);
         }
     }
 
@@ -2468,6 +3374,11 @@ public:
             *ppvObject = static_cast<IInformations*>(this);
             AddRef();
             return S_OK;
+        }
+
+        if (_baseFs)
+        {
+            return _baseFs->QueryInterface(riid, ppvObject);
         }
 
         *ppvObject = nullptr;
@@ -2563,10 +3474,20 @@ public:
             return _baseFs->ReadDirectoryInfo(path, ppFilesInformation);
         }
 
-        const auto decision = _session->GetOrComputeDecision(relOpt.value());
+        auto decision = _session->TryGetCachedDecision(relOpt.value());
         if (! decision)
         {
-            return E_FAIL;
+            _session->RequestScanForFolder(relOpt.value());
+
+            HRESULT infoHr                       = S_OK;
+            wil::com_ptr<IFilesInformation> info = BuildFilesInformation({}, infoHr);
+            if (FAILED(infoHr) || ! info)
+            {
+                return FAILED(infoHr) ? infoHr : E_FAIL;
+            }
+
+            *ppFilesInformation = info.detach();
+            return S_OK;
         }
 
         if (FAILED(decision->hr))
@@ -2609,25 +3530,6 @@ public:
 
             out.emplace_back(std::move(e));
         }
-
-        const auto compareName = [](const OutEntry& a, const OutEntry& b) noexcept
-        {
-            const int cmp = OrdinalString::Compare(a.name, b.name, true);
-            if (cmp != 0)
-            {
-                return cmp < 0;
-            }
-
-            const int caseCmp = OrdinalString::Compare(a.name, b.name, false);
-            if (caseCmp != 0)
-            {
-                return caseCmp < 0;
-            }
-
-            return a.name < b.name;
-        };
-
-        std::sort(out.begin(), out.end(), compareName);
 
         HRESULT infoHr                       = S_OK;
         wil::com_ptr<IFilesInformation> info = BuildFilesInformation(out, infoHr);

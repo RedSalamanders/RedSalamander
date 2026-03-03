@@ -551,6 +551,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         return E_INVALIDARG;
     }
 
+    if (result->sizeBytes != sizeof(FileSystemDirectorySizeResult))
+    {
+        return E_INVALIDARG;
+    }
+
     result->totalBytes     = 0;
     result->fileCount      = 0;
     result->directoryCount = 0;

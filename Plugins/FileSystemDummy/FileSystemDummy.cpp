@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <array>
+#include <cassert>
 #include <charconv>
 #include <chrono>
 #include <cstring>
@@ -2203,6 +2204,7 @@ void InitializeOperationContext(OperationContext& context,
     if (options)
     {
         context.optionsState = *options;
+        context.optionsState.sizeBytes = sizeof(FileSystemOptions);
         context.options      = &context.optionsState;
     }
     else
@@ -4497,6 +4499,7 @@ void FileSystemDummy::NotifyDirectoryWatchers(std::wstring_view watchedPath, std
         }
 
         FileSystemDirectoryChangeNotification notification{};
+        notification.sizeBytes      = sizeof(FileSystemDirectoryChangeNotification);
         notification.watchedPath     = watcher->watchedPath.c_str();
         notification.watchedPathSize = static_cast<unsigned long>(watcher->watchedPath.size() * sizeof(wchar_t));
         notification.changes         = &change;
@@ -4505,6 +4508,9 @@ void FileSystemDummy::NotifyDirectoryWatchers(std::wstring_view watchedPath, std
 
         if (watcher->active.load(std::memory_order_acquire) && watcher->callback)
         {
+#ifdef _DEBUG
+            assert(! watcher->dead.load(std::memory_order_acquire));
+#endif
             DirectoryWatchCallbackScope callbackScope(watcher.get());
             watcher->callback->FileSystemDirectoryChanged(&notification, watcher->cookie);
         }
@@ -4587,6 +4593,7 @@ void FileSystemDummy::NotifyDirectoryWatchers(std::wstring_view watchedPath, std
         }
 
         FileSystemDirectoryChangeNotification notification{};
+        notification.sizeBytes      = sizeof(FileSystemDirectoryChangeNotification);
         notification.watchedPath     = watcher->watchedPath.c_str();
         notification.watchedPathSize = static_cast<unsigned long>(watcher->watchedPath.size() * sizeof(wchar_t));
         notification.changes         = changes;
@@ -4595,6 +4602,9 @@ void FileSystemDummy::NotifyDirectoryWatchers(std::wstring_view watchedPath, std
 
         if (watcher->active.load(std::memory_order_acquire) && watcher->callback)
         {
+#ifdef _DEBUG
+            assert(! watcher->dead.load(std::memory_order_acquire));
+#endif
             DirectoryWatchCallbackScope callbackScope(watcher.get());
             watcher->callback->FileSystemDirectoryChanged(&notification, watcher->cookie);
         }
@@ -4903,7 +4913,15 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetFileBasicInformation(const wchar_t
         return E_POINTER;
     }
 
-    *info = {};
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
+    }
+
+    info->creationTime   = 0;
+    info->lastAccessTime = 0;
+    info->lastWriteTime  = 0;
+    info->attributes     = 0;
 
     if (path == nullptr || path[0] == L'\0')
     {
@@ -4945,6 +4963,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetFileBasicInformation(const wchar_t
     if (info == nullptr)
     {
         return E_POINTER;
+    }
+
+    if (info->sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
     }
 
     if (path == nullptr || path[0] == L'\0')
@@ -5193,6 +5216,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
     }
 
     if (path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (result->sizeBytes != sizeof(FileSystemDirectorySizeResult))
     {
         return E_INVALIDARG;
     }
@@ -5545,6 +5573,10 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::UnwatchDirectory(const wchar_t* path)
         _watchCv.wait(lock, [&] { return removed->inFlight.load(std::memory_order_acquire) <= desiredInFlight; });
     }
 
+#ifdef _DEBUG
+    removed->dead.store(true, std::memory_order_release);
+#endif
+
     return S_OK;
 }
 
@@ -5561,6 +5593,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
     }
 
     if (sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
     {
         return E_INVALIDARG;
     }
@@ -5693,6 +5730,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
     }
 
     if (sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
     {
         return E_INVALIDARG;
     }
@@ -5849,6 +5891,11 @@ FileSystemDummy::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fi
         return E_INVALIDARG;
     }
 
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_DELETE, flags, options, callback, cookie, 1);
 
@@ -5952,6 +5999,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
     }
 
     if (sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
     {
         return E_INVALIDARG;
     }
@@ -6074,6 +6126,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
     }
 
     if (destinationFolder[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
     {
         return E_INVALIDARG;
     }
@@ -6363,6 +6420,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
     }
 
     if (destinationFolder[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
     {
         return E_INVALIDARG;
     }
@@ -6693,6 +6755,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::DeleteItems(const wchar_t* const* pat
         return S_OK;
     }
 
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
     OperationContext context{};
     InitializeOperationContext(context, FILESYSTEM_DELETE, flags, options, callback, cookie, count);
 
@@ -6841,6 +6908,19 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItems(const FileSystemRenamePai
     if (count == 0)
     {
         return S_OK;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
+    for (unsigned long index = 0; index < count; ++index)
+    {
+        if (items[index].sizeBytes != sizeof(FileSystemRenamePair))
+        {
+            return E_INVALIDARG;
+        }
     }
 
     OperationContext context{};

@@ -7,6 +7,8 @@
 #include <aws/s3-crt/model/ListObjectsV2Request.h>
 #include <aws/s3-crt/model/PutObjectRequest.h>
 
+#include <unordered_set>
+
 std::optional<std::string> LookupS3BucketRegion(FileSystemS3& fs, std::wstring_view bucketName) noexcept
 {
     std::lock_guard lock(fs._stateMutex);
@@ -82,11 +84,11 @@ namespace
         return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
     }
 
-    Aws::S3Crt::S3CrtClient client = MakeS3Client(ctx);
+    const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = GetS3Client(fs, ctx);
     Aws::S3Crt::Model::GetBucketLocationRequest req;
     req.SetBucket(bucket);
 
-    const auto outcome = client.GetBucketLocation(req);
+    const auto outcome = client->GetBucketLocation(req);
     if (! outcome.IsSuccess())
     {
         const auto& err            = outcome.GetError();
@@ -109,7 +111,7 @@ namespace
 
 [[nodiscard]] HRESULT ListS3BucketsForConnection(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept
 {
-    const HRESULT hr = ListS3Buckets(ctx, out);
+    const HRESULT hr = ListS3Buckets(fs, ctx, out);
     if (FAILED(hr) || ! ctx.explicitRegion.has_value())
     {
         return hr;
@@ -180,13 +182,13 @@ namespace
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ListS3Buckets(const ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept
+[[nodiscard]] HRESULT ListS3Buckets(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept
 {
     out.clear();
 
-    Aws::S3Crt::S3CrtClient client = MakeS3Client(ctx);
+    const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = GetS3Client(fs, ctx);
     Aws::S3Crt::Model::ListBucketsRequest req;
-    const auto outcome = client.ListBuckets(req);
+    const auto outcome = client->ListBuckets(req);
     if (! outcome.IsSuccess())
     {
         const auto& err = outcome.GetError();
@@ -265,11 +267,11 @@ namespace
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ListS3Objects(const ResolvedAwsContext& ctx, const S3Location& loc, std::vector<FilesInformationS3::Entry>& out) noexcept
+[[nodiscard]] HRESULT ListS3Objects(FileSystemS3& fs, const ResolvedAwsContext& ctx, const S3Location& loc, std::vector<FilesInformationS3::Entry>& out) noexcept
 {
     out.clear();
 
-    Aws::S3Crt::S3CrtClient client = MakeS3Client(ctx);
+    const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = GetS3Client(fs, ctx);
     Aws::S3Crt::Model::ListObjectsV2Request req;
     req.SetBucket(loc.bucket);
     req.SetDelimiter("/");
@@ -279,81 +281,108 @@ namespace
     }
     req.SetMaxKeys(static_cast<int>(std::min<unsigned long>(ctx.maxKeys, 1000u)));
 
-    const auto outcome = client.ListObjectsV2(req);
-    if (! outcome.IsSuccess())
+    // With delimiter set, CommonPrefixes can repeat across pages if a page boundary lands inside a prefix group.
+    // Dedupe by the immediate-child name (UTF-8, case-sensitive) to avoid emitting duplicate directory entries.
+    std::unordered_set<std::string> seenDirectoryNamesUtf8;
+    seenDirectoryNamesUtf8.reserve(256);
+
+    while (true)
     {
-        const auto& err            = outcome.GetError();
-        const std::wstring details = std::format(L"bucket='{}' prefix='{}'", Utf16FromUtf8(loc.bucket), Utf16FromUtf8(loc.keyOrPrefix));
-        LogAwsFailure(L"S3", L"ListObjectsV2", ctx, err, details);
-        return HresultFromAwsError(err);
-    }
-
-    const auto& result = outcome.GetResult();
-
-    // Directories (common prefixes)
-    for (const auto& cp : result.GetCommonPrefixes())
-    {
-        const Aws::String& full = cp.GetPrefix();
-        std::string_view fullView(full.c_str(), full.size());
-
-        if (! loc.keyOrPrefix.empty() && fullView.rfind(loc.keyOrPrefix, 0) == 0)
+        const auto outcome = client->ListObjectsV2(req);
+        if (! outcome.IsSuccess())
         {
-            fullView.remove_prefix(loc.keyOrPrefix.size());
+            const auto& err            = outcome.GetError();
+            const std::wstring details = std::format(L"bucket='{}' prefix='{}'", Utf16FromUtf8(loc.bucket), Utf16FromUtf8(loc.keyOrPrefix));
+            LogAwsFailure(L"S3", L"ListObjectsV2", ctx, err, details);
+            return HresultFromAwsError(err);
         }
 
-        while (! fullView.empty() && fullView.back() == '/')
+        const auto& result = outcome.GetResult();
+
+        // Directories (common prefixes)
+        for (const auto& cp : result.GetCommonPrefixes())
         {
-            fullView.remove_suffix(1);
+            const Aws::String& full = cp.GetPrefix();
+            std::string_view fullView(full.c_str(), full.size());
+
+            if (! loc.keyOrPrefix.empty() && fullView.rfind(loc.keyOrPrefix, 0) == 0)
+            {
+                fullView.remove_prefix(loc.keyOrPrefix.size());
+            }
+
+            while (! fullView.empty() && fullView.back() == '/')
+            {
+                fullView.remove_suffix(1);
+            }
+
+            if (fullView.empty())
+            {
+                continue;
+            }
+
+            if (! seenDirectoryNamesUtf8.emplace(fullView).second)
+            {
+                continue;
+            }
+
+            FilesInformationS3::Entry e{};
+            e.name       = Utf16FromUtf8(fullView);
+            e.attributes = FILE_ATTRIBUTE_DIRECTORY;
+            out.push_back(std::move(e));
         }
 
-        FilesInformationS3::Entry e{};
-        e.name       = Utf16FromUtf8(fullView);
-        e.attributes = FILE_ATTRIBUTE_DIRECTORY;
-        out.push_back(std::move(e));
-    }
-
-    // Files
-    for (const auto& obj : result.GetContents())
-    {
-        const Aws::String& key = obj.GetKey();
-        std::string_view keyView(key.c_str(), key.size());
-
-        // Skip the "folder marker" for the current prefix.
-        if (! loc.keyOrPrefix.empty() && keyView == loc.keyOrPrefix)
+        // Files
+        for (const auto& obj : result.GetContents())
         {
-            continue;
+            const Aws::String& key = obj.GetKey();
+            std::string_view keyView(key.c_str(), key.size());
+
+            // Skip the "folder marker" for the current prefix.
+            if (! loc.keyOrPrefix.empty() && keyView == loc.keyOrPrefix)
+            {
+                continue;
+            }
+
+            if (! loc.keyOrPrefix.empty() && keyView.rfind(loc.keyOrPrefix, 0) == 0)
+            {
+                keyView.remove_prefix(loc.keyOrPrefix.size());
+            }
+
+            if (keyView.empty())
+            {
+                continue;
+            }
+
+            // With delimiter set, keys should not contain '/', but be defensive.
+            const size_t slash = keyView.find('/');
+            if (slash != std::string_view::npos)
+            {
+                keyView = keyView.substr(0, slash);
+            }
+
+            FilesInformationS3::Entry e{};
+            e.name          = Utf16FromUtf8(keyView);
+            e.attributes    = FILE_ATTRIBUTE_NORMAL;
+            e.sizeBytes     = static_cast<uint64_t>(obj.GetSize());
+            e.lastWriteTime = AwsDateTimeToFileTime64(obj.GetLastModified());
+            e.changeTime    = e.lastWriteTime;
+            out.push_back(std::move(e));
         }
 
-        if (! loc.keyOrPrefix.empty() && keyView.rfind(loc.keyOrPrefix, 0) == 0)
+        if (! result.GetIsTruncated())
         {
-            keyView.remove_prefix(loc.keyOrPrefix.size());
+            break;
         }
 
-        if (keyView.empty())
-        {
-            continue;
-        }
-
-        // With delimiter set, keys should not contain '/', but be defensive.
-        const size_t slash = keyView.find('/');
-        if (slash != std::string_view::npos)
-        {
-            keyView = keyView.substr(0, slash);
-        }
-
-        FilesInformationS3::Entry e{};
-        e.name          = Utf16FromUtf8(keyView);
-        e.attributes    = FILE_ATTRIBUTE_NORMAL;
-        e.sizeBytes     = static_cast<uint64_t>(obj.GetSize());
-        e.lastWriteTime = AwsDateTimeToFileTime64(obj.GetLastModified());
-        e.changeTime    = e.lastWriteTime;
-        out.push_back(std::move(e));
+        const Aws::String& token = result.GetNextContinuationToken();
+        req.SetContinuationToken(token);
     }
 
     return S_OK;
 }
 
-[[nodiscard]] HRESULT DownloadS3ObjectToTempFile(const ResolvedAwsContext& ctx,
+[[nodiscard]] HRESULT DownloadS3ObjectToTempFile(FileSystemS3& fs,
+                                                 const ResolvedAwsContext& ctx,
                                                  std::string_view bucket,
                                                  std::string_view key,
                                                  wil::unique_hfile& outFile) noexcept
@@ -371,12 +400,12 @@ namespace
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    Aws::S3Crt::S3CrtClient client = MakeS3Client(ctx);
+    const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = GetS3Client(fs, ctx);
     Aws::S3Crt::Model::GetObjectRequest req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     req.SetKey(Aws::String(key.data(), key.size()));
 
-    auto outcome = client.GetObject(req);
+    auto outcome = client->GetObject(req);
     if (! outcome.IsSuccess())
     {
         const auto& err            = outcome.GetError();
@@ -510,7 +539,7 @@ private:
 } // namespace
 
 [[nodiscard]] HRESULT UploadS3ObjectFromFile(
-    const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept
+    FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept
 {
     if (bucket.empty() || key.empty())
     {
@@ -527,7 +556,7 @@ private:
         return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
     }
 
-    Aws::S3Crt::S3CrtClient client = MakeS3Client(ctx);
+    const std::shared_ptr<Aws::S3Crt::S3CrtClient> client = GetS3Client(fs, ctx);
     Aws::S3Crt::Model::PutObjectRequest req;
     req.SetBucket(Aws::String(bucket.data(), bucket.size()));
     req.SetKey(Aws::String(key.data(), key.size()));
@@ -536,7 +565,7 @@ private:
     auto body = Aws::MakeShared<HandleReadIStream>("rs3-put", file);
     req.SetBody(body);
 
-    const auto outcome = client.PutObject(req);
+    const auto outcome = client->PutObject(req);
 
     const HRESULT readHr = body->GetReadError();
     if (FAILED(readHr))

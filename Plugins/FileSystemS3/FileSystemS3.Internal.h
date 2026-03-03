@@ -162,8 +162,9 @@ template <typename AwsErrors> [[nodiscard]] HRESULT HresultFromAwsError(const Aw
 }
 
 [[nodiscard]] Aws::Client::ClientConfiguration MakeClientConfig(const ResolvedAwsContext& ctx) noexcept;
-[[nodiscard]] Aws::S3Crt::S3CrtClient MakeS3Client(const ResolvedAwsContext& ctx) noexcept;
+[[nodiscard]] std::shared_ptr<Aws::S3Crt::S3CrtClient> MakeS3Client(const ResolvedAwsContext& ctx) noexcept;
 [[nodiscard]] Aws::S3Tables::S3TablesClient MakeS3TablesClient(const ResolvedAwsContext& ctx) noexcept;
+[[nodiscard]] std::shared_ptr<Aws::S3Crt::S3CrtClient> GetS3Client(FileSystemS3& fs, const ResolvedAwsContext& ctx) noexcept;
 
 [[nodiscard]] constexpr std::wstring_view CoreErrorNameFromInt(int code) noexcept
 {
@@ -220,19 +221,24 @@ inline void LogAwsFailure(std::wstring_view prefix,
 [[nodiscard]] std::vector<std::wstring_view> SplitPathSegments(std::wstring_view path) noexcept;
 
 [[nodiscard]] HRESULT ParseS3LocationForDirectory(std::wstring_view canonicalPath, S3Location& out) noexcept;
-[[nodiscard]] HRESULT ListS3Buckets(const ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept;
+[[nodiscard]] HRESULT ListS3Buckets(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept;
 [[nodiscard]] HRESULT ListS3BucketsForConnection(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept;
-[[nodiscard]] HRESULT ListS3Objects(const ResolvedAwsContext& ctx, const S3Location& loc, std::vector<FilesInformationS3::Entry>& out) noexcept;
+[[nodiscard]] HRESULT ListS3Objects(FileSystemS3& fs, const ResolvedAwsContext& ctx, const S3Location& loc, std::vector<FilesInformationS3::Entry>& out) noexcept;
 [[nodiscard]] HRESULT ResolveS3ContextForBucket(FileSystemS3& fs,
                                                 const ResolvedAwsContext& ctx,
                                                 std::wstring_view bucketName,
                                                 ResolvedAwsContext& out) noexcept;
-[[nodiscard]] HRESULT DownloadS3ObjectToTempFile(const ResolvedAwsContext& ctx,
+[[nodiscard]] HRESULT DownloadS3ObjectToTempFile(FileSystemS3& fs,
+                                                 const ResolvedAwsContext& ctx,
                                                  std::string_view bucket,
                                                  std::string_view key,
                                                  wil::unique_hfile& outFile) noexcept;
-[[nodiscard]] HRESULT UploadS3ObjectFromFile(
-    const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept;
+[[nodiscard]] HRESULT UploadS3ObjectFromFile(FileSystemS3& fs,
+                                            const ResolvedAwsContext& ctx,
+                                            std::string_view bucket,
+                                            std::string_view key,
+                                            HANDLE file,
+                                            uint64_t sizeBytes) noexcept;
 
 [[nodiscard]] HRESULT ListS3TableNamespaces(FileSystemS3& fs,
                                             const ResolvedAwsContext& ctx,

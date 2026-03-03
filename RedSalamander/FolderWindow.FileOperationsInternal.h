@@ -347,6 +347,7 @@ struct FolderWindow::FileOperationState
         ULONGLONG _dbgLastSingleInFlightWarnTick  = 0;
         bool _dbgObservedMultipleInFlightFiles    = false;
         ULONGLONG _dbgLastPerItemInFlightEvictWarnTick = 0;
+        std::atomic_uint32_t _dbgCallbackActiveScopeCount{0};
 #endif
 
         std::jthread _thread;

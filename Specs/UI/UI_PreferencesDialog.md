@@ -404,6 +404,7 @@ Entry point:
 
 Defaults for the **Compare Directories** command:
 - Compare criteria toggles (size, date/time, attributes, content)
+- Content compare workers (Auto ≤4 or 1..4 fixed)
 - Subdirectory comparison controls
 - Ignore patterns (files/directories) and pattern strings
 - Display: Show Identical Items

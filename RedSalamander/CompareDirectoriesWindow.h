@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <string>
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -14,13 +15,19 @@
 struct IFileSystem;
 class ShortcutManager;
 
+struct CompareDirectoriesPaneContext
+{
+    std::wstring pluginId;
+    std::wstring instanceContext;
+    std::filesystem::path rootPluginPath;
+};
+
 [[nodiscard]] bool ShowCompareDirectoriesWindow(HWND owner,
                                                 Common::Settings::Settings& settings,
                                                 const AppTheme& theme,
                                                 const ShortcutManager* shortcuts,
-                                                wil::com_ptr<IFileSystem> baseFileSystem,
-                                                std::filesystem::path leftRoot,
-                                                std::filesystem::path rightRoot) noexcept;
+                                                CompareDirectoriesPaneContext left,
+                                                CompareDirectoriesPaneContext right) noexcept;
 
 void UpdateCompareDirectoriesWindowsTheme(const AppTheme& theme) noexcept;
 
