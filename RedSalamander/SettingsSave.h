@@ -63,7 +63,8 @@ namespace SettingsSave
                                    compare.compareSubdirectories != defaults.compareSubdirectories ||
                                    compare.compareSubdirectoryAttributes != defaults.compareSubdirectoryAttributes ||
                                    compare.selectSubdirsOnlyInOnePane != defaults.selectSubdirsOnlyInOnePane || compare.ignoreFiles != defaults.ignoreFiles ||
-                                   compare.ignoreDirectories != defaults.ignoreDirectories || compare.showIdenticalItems != defaults.showIdenticalItems ||
+                                   compare.ignoreDirectories != defaults.ignoreDirectories || compare.keepIdenticalItems != defaults.keepIdenticalItems ||
+                                   compare.showIdenticalItems != defaults.showIdenticalItems ||
                                    compare.contentCompareWorkerCount != defaults.contentCompareWorkerCount || ! compare.ignoreFilesPatterns.empty() ||
                                    ! compare.ignoreDirectoriesPatterns.empty();
         if (! hasNonDefault)

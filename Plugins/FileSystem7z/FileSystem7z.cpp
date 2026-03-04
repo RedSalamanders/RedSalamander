@@ -856,8 +856,8 @@ HRESULT FileSystem7z::EnsureIndex() noexcept
             _indexReady  = true;
             if (SUCCEEDED(buildHr))
             {
-                _entries = std::move(entries);
-                _children = std::move(children);
+                _entries            = std::move(entries);
+                _children           = std::move(children);
                 _indexedArchivePath = _archivePath;
                 _indexedPassword    = _password;
             }
@@ -1099,7 +1099,7 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetFileBasicInformation([[maybe_unused]]
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem7z::SetFileBasicInformation([[maybe_unused]] const wchar_t* path,
-                                                                 [[maybe_unused]] const FileSystemBasicInformation* info) noexcept
+                                                                [[maybe_unused]] const FileSystemBasicInformation* info) noexcept
 {
     if (info == nullptr)
     {
@@ -1309,7 +1309,7 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
                 return false;
             }
 
-            BOOL cancel = FALSE;
+            BOOL cancel            = FALSE;
             const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
             if (FAILED(cancelHr))
             {
@@ -1700,7 +1700,7 @@ bool FileSystem7z::TryParseModifiedLocalTime(std::wstring_view text, int64_t& ou
             return false;
         }
 
-        uint32_t v = 0;
+        uint32_t v    = 0;
         size_t digits = 0;
         while (! rest.empty())
         {
@@ -3366,13 +3366,13 @@ private:
             _pipeSizeBytes        = 0;
             _pipeStartOffsetBytes = 0;
 
-            _extractStarted       = false;
-            _extractFinished      = false;
+            _extractStarted  = false;
+            _extractFinished = false;
             _extractStopRequested.store(false, std::memory_order_release);
-            _extractWantedBytes   = 0;
+            _extractWantedBytes = 0;
             _extractTotalBytes.store(0, std::memory_order_relaxed);
             _extractCompletedBytes.store(0, std::memory_order_relaxed);
-            _extractStatus        = S_OK;
+            _extractStatus = S_OK;
 
             _terminalReadStatus     = S_OK;
             _terminalStatusReported = false;
@@ -3594,10 +3594,9 @@ private:
             return S_OK;
         }
 
-        constexpr uint64_t kExtractPrefetchBytes = 256u * 1024u;
+        constexpr uint64_t kExtractPrefetchBytes  = 256u * 1024u;
         constexpr uint64_t kMaxInMemorySpoolBytes = 32u * 1024u * 1024u;
-        const uint64_t maxAllowedBytes =
-            (_fileSizeBytes != 0) ? std::min<uint64_t>(_fileSizeBytes, kMaxInMemorySpoolBytes) : kMaxInMemorySpoolBytes;
+        const uint64_t maxAllowedBytes            = (_fileSizeBytes != 0) ? std::min<uint64_t>(_fileSizeBytes, kMaxInMemorySpoolBytes) : kMaxInMemorySpoolBytes;
 
         if (_spooledBytes > maxAllowedBytes)
         {
@@ -3661,9 +3660,9 @@ private:
             return E_FAIL;
         }
 
-        _extractStarted       = true;
-        _extractFinished      = false;
-        _extractStatus        = S_OK;
+        _extractStarted  = true;
+        _extractFinished = false;
+        _extractStatus   = S_OK;
         _extractStopRequested.store(false, std::memory_order_release);
         _extractTotalBytes.store(0, std::memory_order_relaxed);
         _extractCompletedBytes.store(0, std::memory_order_relaxed);
@@ -3675,7 +3674,8 @@ private:
 
     void ExtractThreadMain(std::stop_token stopToken) noexcept
     {
-        const std::stop_callback stopCallback(stopToken, [this] noexcept
+        const std::stop_callback stopCallback(stopToken,
+                                              [this] noexcept
         {
             _extractStopRequested.store(true, std::memory_order_release);
             _extractCv.notify_all();
@@ -3919,9 +3919,9 @@ private:
     uint64_t _extractWantedBytes = 0;
     std::atomic<uint64_t> _extractTotalBytes{0};
     std::atomic<uint64_t> _extractCompletedBytes{0};
-    HRESULT _extractStatus       = S_OK;
-    bool _extractStarted         = false;
-    bool _extractFinished        = false;
+    HRESULT _extractStatus = S_OK;
+    bool _extractStarted   = false;
+    bool _extractFinished  = false;
     std::atomic<bool> _extractStopRequested{false};
 };
 

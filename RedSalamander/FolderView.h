@@ -514,6 +514,35 @@ private:
     std::optional<std::filesystem::path> _currentFolder;
     std::optional<std::filesystem::path> _displayedFolder;
     std::wstring _emptyStateMessage;
+
+    enum class EmptyStateMessageKind : uint8_t
+    {
+        None,
+        Generic,
+        CompareNoDifferences,
+    };
+    EmptyStateMessageKind _emptyStateMessageKind = EmptyStateMessageKind::None;
+
+    wil::com_ptr<IDWriteTextLayout> _emptyMessageIconLayout;
+    wil::com_ptr<IDWriteTextLayout> _emptyMessageTitleLayout;
+    wil::com_ptr<IDWriteTextLayout> _emptyMessageFunLayout;
+    SIZE _emptyMessageLayoutClientSizePx = {};
+    float _emptyMessageLayoutDpi         = 0.0f;
+    UINT _emptyMessageLayoutMessageId    = 0;
+    float _emptyMessageIconFontSizeDip   = 0.0f;
+    DWRITE_TEXT_METRICS _emptyMessageIconMetrics{};
+    DWRITE_TEXT_METRICS _emptyMessageTitleMetrics{};
+    DWRITE_TEXT_METRICS _emptyMessageFunMetrics{};
+
+    struct CompareNoDifferencesState
+    {
+        std::wstring folderKey;
+        UINT funMessageResourceId = 0;
+        std::wstring emoji;
+        std::wstring funMessage;
+    };
+    std::optional<CompareNoDifferencesState> _compareNoDifferencesState;
+
     std::wstring _backgroundWatermarkMessage;
     bool _backgroundWatermarkAnimated = false;
 
@@ -875,6 +904,7 @@ private:
     void EnumerateFolder();
     void NavigateUp() noexcept;
     [[nodiscard]] bool CanShowEmptyFolderState() const noexcept;
+    void UpdateCompareNoDifferencesState() noexcept;
     void EnsureEnumerationThread();
     void EnumerationWorker(std::stop_token stopToken);
     std::unique_ptr<EnumerationPayload> ExecuteEnumeration(const std::filesystem::path& folder, uint64_t generation, std::stop_token stopToken);

@@ -6,8 +6,8 @@
 #include "SettingsSave.h"
 #include "SettingsStore.h"
 
-#include <cassert>
 #include <bit>
+#include <cassert>
 #include <chrono>
 #include <cstring>
 #include <deque>
@@ -752,7 +752,7 @@ struct ProcessMemorySnapshot
         return std::nullopt;
     }
 
-    const size_t slash = rest.find_first_of(L"/\\");
+    const size_t slash           = rest.find_first_of(L"/\\");
     const std::wstring_view name = slash == std::wstring_view::npos ? rest : rest.substr(0, slash);
     if (name.empty())
     {
@@ -829,7 +829,7 @@ struct ProcessMemorySnapshot
 class ConnectionConcurrencyLimiter final
 {
 public:
-    ConnectionConcurrencyLimiter() = default;
+    ConnectionConcurrencyLimiter()  = default;
     ~ConnectionConcurrencyLimiter() = default;
 
     ConnectionConcurrencyLimiter(const ConnectionConcurrencyLimiter&)            = delete;
@@ -858,10 +858,7 @@ public:
         Permit(const Permit&)            = delete;
         Permit& operator=(const Permit&) = delete;
 
-        Permit(Permit&& other) noexcept
-            : _limiter(std::exchange(other._limiter, nullptr)),
-              _connectionId(std::move(other._connectionId)),
-              _kind(other._kind)
+        Permit(Permit&& other) noexcept : _limiter(std::exchange(other._limiter, nullptr)), _connectionId(std::move(other._connectionId)), _kind(other._kind)
         {
         }
 
@@ -1640,15 +1637,15 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
     const ULONGLONG nowTick = GetTickCount64();
 
 #ifdef _DEBUG
-    bool warnSingleInFlightProgress           = false;
-    unsigned int dbgConfiguredConcurrency     = 1u;
-    size_t dbgInFlightFileCount               = 0;
-    unsigned long dbgPlannedTopLevelFiles     = 0;
-    unsigned long dbgPlannedTopLevelFolders   = 0;
-    bool warnPerItemInFlightEviction          = false;
-    const void* dbgPerItemEvictedCookie       = nullptr;
-    size_t dbgPerItemCapacity                 = 0;
-    size_t dbgPerItemInFlightCount            = 0;
+    bool warnSingleInFlightProgress         = false;
+    unsigned int dbgConfiguredConcurrency   = 1u;
+    size_t dbgInFlightFileCount             = 0;
+    unsigned long dbgPlannedTopLevelFiles   = 0;
+    unsigned long dbgPlannedTopLevelFolders = 0;
+    bool warnPerItemInFlightEviction        = false;
+    const void* dbgPerItemEvictedCookie     = nullptr;
+    size_t dbgPerItemCapacity               = 0;
+    size_t dbgPerItemInFlightCount          = 0;
 #endif
 
     {
@@ -1675,9 +1672,9 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
 
                 if (found < _perItemInFlightCallCount)
                 {
-                    _perItemInFlightCalls[found].completedItems  = completedItems;
-                    _perItemInFlightCalls[found].completedBytes  = completedBytes;
-                    _perItemInFlightCalls[found].lastUpdateTick  = nowTick;
+                    _perItemInFlightCalls[found].completedItems = completedItems;
+                    _perItemInFlightCalls[found].completedBytes = completedBytes;
+                    _perItemInFlightCalls[found].lastUpdateTick = nowTick;
                     if (totalItems > 0)
                     {
                         _perItemInFlightCalls[found].totalItems = (std::max)(_perItemInFlightCalls[found].totalItems, totalItems);
@@ -1717,14 +1714,13 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
 #ifdef _DEBUG
                         const void* evictedCookie = _perItemInFlightCalls[replaceIndex].cookie;
                         if (_dbgLastPerItemInFlightEvictWarnTick == 0 ||
-                            (nowTick >= _dbgLastPerItemInFlightEvictWarnTick &&
-                             (nowTick - _dbgLastPerItemInFlightEvictWarnTick) > 5'000ull))
+                            (nowTick >= _dbgLastPerItemInFlightEvictWarnTick && (nowTick - _dbgLastPerItemInFlightEvictWarnTick) > 5'000ull))
                         {
                             _dbgLastPerItemInFlightEvictWarnTick = nowTick;
                             warnPerItemInFlightEviction          = true;
                             dbgPerItemEvictedCookie              = evictedCookie;
-                            dbgPerItemCapacity                    = _perItemInFlightCalls.size();
-                            dbgPerItemInFlightCount               = _perItemInFlightCallCount;
+                            dbgPerItemCapacity                   = _perItemInFlightCalls.size();
+                            dbgPerItemInFlightCount              = _perItemInFlightCallCount;
                         }
 #endif
 
@@ -2031,15 +2027,15 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
 
     if (warnPerItemInFlightEviction)
     {
-        Debug::Warning(
-            L"FileOps: per-item in-flight call table overflow; evicted oldest entry (taskId={} op={} execMode={} perItemTableSize={} perItemInFlightCount={} newCookie={:p} evictedCookie={:p}).",
-            _taskId,
-            static_cast<unsigned int>(_operation),
-            static_cast<unsigned int>(_executionMode),
-            dbgPerItemCapacity,
-            dbgPerItemInFlightCount,
-            cookie,
-            dbgPerItemEvictedCookie);
+        Debug::Warning(L"FileOps: per-item in-flight call table overflow; evicted oldest entry (taskId={} op={} execMode={} perItemTableSize={} "
+                       L"perItemInFlightCount={} newCookie={:p} evictedCookie={:p}).",
+                       _taskId,
+                       static_cast<unsigned int>(_operation),
+                       static_cast<unsigned int>(_executionMode),
+                       dbgPerItemCapacity,
+                       dbgPerItemInFlightCount,
+                       cookie,
+                       dbgPerItemEvictedCookie);
     }
 #endif
 
@@ -2631,10 +2627,7 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
 
 #ifdef _DEBUG
     _dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);
-    const auto dbgCallbackScope = wil::scope_exit([&] noexcept
-    {
-        _dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed);
-    });
+    const auto dbgCallbackScope = wil::scope_exit([&] noexcept { _dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed); });
 #endif
 
     _preCalcInProgress.store(true, std::memory_order_release);
@@ -2674,7 +2667,7 @@ void FolderWindow::FileOperationState::Task::RunPreCalculation() noexcept
         progressCookie.acceptUpdates = &acceptUpdates;
 
         FileSystemDirectorySizeResult result{};
-        result.sizeBytes = sizeof(FileSystemDirectorySizeResult);
+        result.sizeBytes     = sizeof(FileSystemDirectorySizeResult);
         const HRESULT hr     = dirOps->GetDirectorySize(path.c_str(), sizeFlags, this, &progressCookie, &result);
         const HRESULT status = FAILED(hr) ? hr : result.status;
 
@@ -3337,18 +3330,15 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
 #ifdef _DEBUG
     _dbgCallbackActiveScopeCount.fetch_add(1u, std::memory_order_relaxed);
-    const auto dbgCallbackScope = wil::scope_exit([&] noexcept
-    {
-        _dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed);
-    });
+    const auto dbgCallbackScope = wil::scope_exit([&] noexcept { _dbgCallbackActiveScopeCount.fetch_sub(1u, std::memory_order_relaxed); });
 #endif
 
 #ifdef _DEBUG
-    _dbgConfiguredMaxConcurrency = DeterminePerItemMaxConcurrency(_fileSystem, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles));
-    _dbgConfiguredMaxConcurrency = std::max(1u, _dbgConfiguredMaxConcurrency);
-    _dbgSingleInFlightStartTick  = 0;
-    _dbgLastSingleInFlightWarnTick = 0;
-    _dbgObservedMultipleInFlightFiles = false;
+    _dbgConfiguredMaxConcurrency         = DeterminePerItemMaxConcurrency(_fileSystem, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles));
+    _dbgConfiguredMaxConcurrency         = std::max(1u, _dbgConfiguredMaxConcurrency);
+    _dbgSingleInFlightStartTick          = 0;
+    _dbgLastSingleInFlightWarnTick       = 0;
+    _dbgObservedMultipleInFlightFiles    = false;
     _dbgLastPerItemInFlightEvictWarnTick = 0;
 #endif
 
@@ -3401,9 +3391,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
 
-        _perItemTotalItems     = static_cast<unsigned long>(count64);
-        _perItemMaxConcurrencyBudget =
-            DeterminePerItemMaxConcurrency(_fileSystem, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles));
+        _perItemTotalItems           = static_cast<unsigned long>(count64);
+        _perItemMaxConcurrencyBudget = DeterminePerItemMaxConcurrency(_fileSystem, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles));
         _perItemMaxConcurrencyBudget = std::max(1u, _perItemMaxConcurrencyBudget);
         if (useCrossFileSystemBridge)
         {
@@ -3479,8 +3468,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             }
         }
 
-        _perItemMaxConcurrency =
-            std::min<unsigned int>(_perItemMaxConcurrencyBudget, static_cast<unsigned int>(_perItemTotalItems));
+        _perItemMaxConcurrency      = std::min<unsigned int>(_perItemMaxConcurrencyBudget, static_cast<unsigned int>(_perItemTotalItems));
         _perItemCompletedItems      = 0;
         _perItemCompletedEntryCount = 0;
         _perItemTotalEntryCount     = 0;
@@ -3860,13 +3848,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
             IFileSystem& destinationFs;
             IFileSystemIO& sourceIo;
             IFileSystemIO& destinationIo;
-            IFileSystemDirectoryOperations* destinationDirOps = nullptr;
-            unsigned int sourcePluginMaxConcurrencyBudget     = 1;
+            IFileSystemDirectoryOperations* destinationDirOps  = nullptr;
+            unsigned int sourcePluginMaxConcurrencyBudget      = 1;
             unsigned int destinationPluginMaxConcurrencyBudget = 1;
-            FileSystemFlags flags                             = FILESYSTEM_FLAG_NONE;
-            void* cookie                                      = nullptr;
-            DWORD sourceRootAttributesHint                    = 0;
-            ReparsePointPolicy reparsePointPolicy             = ReparsePointPolicy::CopyReparse;
+            FileSystemFlags flags                              = FILESYSTEM_FLAG_NONE;
+            void* cookie                                       = nullptr;
+            DWORD sourceRootAttributesHint                     = 0;
+            ReparsePointPolicy reparsePointPolicy              = ReparsePointPolicy::CopyReparse;
 
             // Total bytes is best-effort: if unknown, keep 0.
             uint64_t totalBytes                         = 0;
@@ -3923,8 +3911,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                   reparsePointPolicy(reparsePointPolicyIn),
                   totalBytes(totalBytesIn)
             {
-                const uint64_t initialBandwidth = task._desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-                options.sizeBytes                   = sizeof(FileSystemOptions);
+                const uint64_t initialBandwidth      = task._desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+                options.sizeBytes                    = sizeof(FileSystemOptions);
                 options.bandwidthLimitBytesPerSecond = initialBandwidth;
                 bandwidthLimitBytesPerSecond.store(initialBandwidth, std::memory_order_release);
 
@@ -4022,18 +4010,18 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                 std::scoped_lock lock(callbackMutex);
                 options.bandwidthLimitBytesPerSecond = bandwidthLimitBytesPerSecond.load(std::memory_order_acquire);
-                const HRESULT hr = task.FileSystemProgress(task._operation,
-                                                          1,
-                                                          0,
-                                                          totalBytesSnapshot,
-                                                          clampedCallCompleted,
-                                                          currentSourcePath.c_str(),
-                                                          currentDestinationPath.c_str(),
-                                                          currentItemTotalBytes,
-                                                          currentItemCompletedBytes,
-                                                          &options,
-                                                          progressStreamId,
-                                                          cookie);
+                const HRESULT hr                     = task.FileSystemProgress(task._operation,
+                                                           1,
+                                                           0,
+                                                           totalBytesSnapshot,
+                                                           clampedCallCompleted,
+                                                           currentSourcePath.c_str(),
+                                                           currentDestinationPath.c_str(),
+                                                           currentItemTotalBytes,
+                                                           currentItemCompletedBytes,
+                                                           &options,
+                                                           progressStreamId,
+                                                           cookie);
                 bandwidthLimitBytesPerSecond.store(options.bandwidthLimitBytesPerSecond, std::memory_order_release);
                 return hr;
             }
@@ -4089,11 +4077,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                    HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY),
                                    L"bridge.reparse.skip",
                                    isRoot ? L"Skipped root directory reparse point by policy." : L"Skipped directory reparse point by policy.",
-                                    sourcePath,
-                                    destinationPath);
+                                   sourcePath,
+                                   destinationPath);
 
-                const uint64_t callCompleted =
-                    (completedBytesAtomic != nullptr) ? completedBytesAtomic->load(std::memory_order_acquire) : completedBytes;
+                const uint64_t callCompleted = (completedBytesAtomic != nullptr) ? completedBytesAtomic->load(std::memory_order_acquire) : completedBytes;
                 static_cast<void>(ReportProgress(sourcePath, destinationPath, 0, 0, callCompleted, 0));
             }
 
@@ -4127,7 +4114,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                     const uint32_t pluginCap = static_cast<uint32_t>(isSource ? sourcePluginMaxConcurrencyBudget : destinationPluginMaxConcurrencyBudget);
 
-                    uint32_t maxEffective = (std::max)(1u, pluginCap);
+                    uint32_t maxEffective      = (std::max)(1u, pluginCap);
                     const uint32_t overrideRaw = ExtraGetUInt32(profile->extra, "copyMoveMaxConcurrency").value_or(0);
                     if (overrideRaw != 0)
                     {
@@ -4136,7 +4123,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     }
 
                     ConnectionLimit limit{};
-                    limit.id         = profile->id;
+                    limit.id          = profile->id;
                     limit.maxCopyMove = maxEffective;
 
                     if (isSource)
@@ -4153,7 +4140,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 initSide(destinationPath, false);
             }
 
-            [[nodiscard]] HRESULT AcquireCopyMovePermits(ConnectionConcurrencyLimiter::Permit& outFirst, ConnectionConcurrencyLimiter::Permit& outSecond) noexcept
+            [[nodiscard]] HRESULT AcquireCopyMovePermits(ConnectionConcurrencyLimiter::Permit& outFirst,
+                                                         ConnectionConcurrencyLimiter::Permit& outSecond) noexcept
             {
                 outFirst  = {};
                 outSecond = {};
@@ -4171,10 +4159,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 ConnectionConcurrencyLimiter& limiter = GetConnectionConcurrencyLimiter();
                 const auto shouldCancel               = [&]() noexcept { return CancelRequested(); };
 
-                if (sourceConnectionLimit.has_value() && destinationConnectionLimit.has_value() &&
-                    sourceConnectionLimit->id == destinationConnectionLimit->id)
+                if (sourceConnectionLimit.has_value() && destinationConnectionLimit.has_value() && sourceConnectionLimit->id == destinationConnectionLimit->id)
                 {
-                    const uint32_t mergedMax = std::min(sourceConnectionLimit->maxCopyMove, destinationConnectionLimit->maxCopyMove);
+                    const uint32_t mergedMax                    = std::min(sourceConnectionLimit->maxCopyMove, destinationConnectionLimit->maxCopyMove);
                     ConnectionConcurrencyLimiter::Permit permit = limiter.AcquireCopyMove(sourceConnectionLimit->id, mergedMax, shouldCancel);
                     if (! permit)
                     {
@@ -4189,7 +4176,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                 if (! firstLimit || ! secondLimit)
                 {
-                    const ConnectionLimit* only = firstLimit ? firstLimit : secondLimit;
+                    const ConnectionLimit* only                 = firstLimit ? firstLimit : secondLimit;
                     ConnectionConcurrencyLimiter::Permit permit = limiter.AcquireCopyMove(only->id, only->maxCopyMove, shouldCancel);
                     if (! permit)
                     {
@@ -4199,7 +4186,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     return S_OK;
                 }
 
-                const bool sourceFirst = firstLimit->id <= secondLimit->id;
+                const bool sourceFirst          = firstLimit->id <= secondLimit->id;
                 const ConnectionLimit* acquireA = sourceFirst ? firstLimit : secondLimit;
                 const ConnectionLimit* acquireB = sourceFirst ? secondLimit : firstLimit;
 
@@ -4269,15 +4256,16 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                 FileSystemBasicInformation sourceBasicInfo{};
                 sourceBasicInfo.sizeBytes = sizeof(FileSystemBasicInformation);
-                bool hasSourceBasicInfo  = false;
-                const HRESULT hrGetBasic = sourceIo.GetFileBasicInformation(sourcePath.c_str(), &sourceBasicInfo);
+                bool hasSourceBasicInfo   = false;
+                const HRESULT hrGetBasic  = sourceIo.GetFileBasicInformation(sourcePath.c_str(), &sourceBasicInfo);
                 if (SUCCEEDED(hrGetBasic))
                 {
                     hasSourceBasicInfo = true;
                 }
                 else if (hrGetBasic != E_NOTIMPL && hrGetBasic != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
                 {
-                    Debug::Warning(L"CrossFileSystemBridge: GetFileBasicInformation failed for '{}' (hr={:#x})", sourcePath, static_cast<unsigned long>(hrGetBasic));
+                    Debug::Warning(
+                        L"CrossFileSystemBridge: GetFileBasicInformation failed for '{}' (hr={:#x})", sourcePath, static_cast<unsigned long>(hrGetBasic));
                     task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Warning,
                                        hrGetBasic,
                                        L"bridge.metadata.read",
@@ -4297,12 +4285,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 }
 
                 uint64_t fileCompletedBytes = 0;
-                hr = ReportProgress(sourcePath,
-                                    destinationPath,
-                                    fileTotalBytes,
-                                    fileCompletedBytes,
-                                    overallCompletedBytes.load(std::memory_order_acquire),
-                                    progressStreamId);
+                hr                          = ReportProgress(
+                    sourcePath, destinationPath, fileTotalBytes, fileCompletedBytes, overallCompletedBytes.load(std::memory_order_acquire), progressStreamId);
                 if (FAILED(hr))
                 {
                     return hr;
@@ -4379,7 +4363,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     if (fileTotalBytes <= kSmallFileCommitIndeterminateThresholdBytes)
                     {
                         const uint64_t overallNow = overallCompletedBytes.load(std::memory_order_acquire);
-                        hr = ReportProgress(sourcePath, destinationPath, 0, 0, overallNow, progressStreamId);
+                        hr                        = ReportProgress(sourcePath, destinationPath, 0, 0, overallNow, progressStreamId);
                         if (FAILED(hr))
                         {
                             return hr;
@@ -4398,7 +4382,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     const HRESULT hrSetBasic = destinationIo.SetFileBasicInformation(destinationPath.c_str(), &sourceBasicInfo);
                     if (FAILED(hrSetBasic) && hrSetBasic != E_NOTIMPL && hrSetBasic != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
                     {
-                        Debug::Warning(L"CrossFileSystemBridge: SetFileBasicInformation failed for '{}' (hr={:#x})", destinationPath, static_cast<unsigned long>(hrSetBasic));
+                        Debug::Warning(L"CrossFileSystemBridge: SetFileBasicInformation failed for '{}' (hr={:#x})",
+                                       destinationPath,
+                                       static_cast<unsigned long>(hrSetBasic));
                         task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Warning,
                                            hrSetBasic,
                                            L"bridge.metadata.write",
@@ -4408,8 +4394,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     }
                 }
 
-                const uint64_t overallFinal  = overallCompletedBytes.load(std::memory_order_acquire);
-                const uint64_t finalTotal    = fileTotalBytes > 0 ? fileTotalBytes : fileCompletedBytes;
+                const uint64_t overallFinal   = overallCompletedBytes.load(std::memory_order_acquire);
+                const uint64_t finalTotal     = fileTotalBytes > 0 ? fileTotalBytes : fileCompletedBytes;
                 const uint64_t finalCompleted = fileCompletedBytes;
 
                 hr = ReportProgress(sourcePath, destinationPath, finalTotal, finalCompleted, overallFinal, progressStreamId);
@@ -4450,8 +4436,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
 
                 FileSystemBasicInformation sourceBasicInfo{};
                 sourceBasicInfo.sizeBytes = sizeof(FileSystemBasicInformation);
-                bool hasSourceBasicInfo  = false;
-                const HRESULT hrGetBasic = sourceIo.GetFileBasicInformation(sourcePath.c_str(), &sourceBasicInfo);
+                bool hasSourceBasicInfo   = false;
+                const HRESULT hrGetBasic  = sourceIo.GetFileBasicInformation(sourcePath.c_str(), &sourceBasicInfo);
                 if (SUCCEEDED(hrGetBasic))
                 {
                     hasSourceBasicInfo = true;
@@ -4941,10 +4927,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         return E_OUTOFMEMORY;
                     }
 
-                    const unsigned long localBufferBytes =
-                        BufferSize() > static_cast<size_t>(std::numeric_limits<unsigned long>::max()) ? std::numeric_limits<unsigned long>::max()
-                                                                                                       : static_cast<unsigned long>(BufferSize());
-                    const uint64_t progressStreamId = static_cast<uint64_t>(workerIndex);
+                    const unsigned long localBufferBytes = BufferSize() > static_cast<size_t>(std::numeric_limits<unsigned long>::max())
+                                                               ? std::numeric_limits<unsigned long>::max()
+                                                               : static_cast<unsigned long>(BufferSize());
+                    const uint64_t progressStreamId      = static_cast<uint64_t>(workerIndex);
 
                     for (;;)
                     {
@@ -5185,8 +5171,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     HRESULT itemHr = E_NOTIMPL;
                     if (_operation == FILESYSTEM_COPY)
                     {
-                         if (useCrossFileSystemBridge)
-                         {
+                        if (useCrossFileSystemBridge)
+                        {
                             const unsigned int sourceMaxConcurrencyBudget =
                                 DeterminePerItemMaxConcurrency(_fileSystem, _operation, itemFlags, static_cast<unsigned int>(kMaxInFlightFiles));
                             const unsigned int destinationMaxConcurrencyBudget =
@@ -5205,11 +5191,11 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                                          (index < _sourcePathAttributesHint.size()) ? _sourcePathAttributesHint[index] : 0,
                                                          reparsePointPolicy);
                             itemHr = bridge.CopyPath(sourceText, destinationItemText);
-                         }
+                        }
                         else
                         {
                             FileSystemOptions options{};
-                            options.sizeBytes                   = sizeof(FileSystemOptions);
+                            options.sizeBytes                    = sizeof(FileSystemOptions);
                             options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                             itemHr =
                                 _fileSystem->CopyItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
@@ -5218,7 +5204,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     else if (_operation == FILESYSTEM_MOVE)
                     {
                         FileSystemOptions options{};
-                        options.sizeBytes                   = sizeof(FileSystemOptions);
+                        options.sizeBytes                    = sizeof(FileSystemOptions);
                         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                         itemHr = _fileSystem->MoveItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                     }
@@ -5622,10 +5608,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     _perItemInFlightCallCount = 0;
                     if (! _perItemInFlightCalls.empty())
                     {
-                        _perItemInFlightCalls[0]               = {};
-                        _perItemInFlightCalls[0].cookie        = &cookie;
+                        _perItemInFlightCalls[0]                = {};
+                        _perItemInFlightCalls[0].cookie         = &cookie;
                         _perItemInFlightCalls[0].lastUpdateTick = GetTickCount64();
-                        _perItemInFlightCallCount = 1;
+                        _perItemInFlightCallCount               = 1;
                     }
 
                     _progressCompletedItems = _perItemCompletedItems;
@@ -5668,7 +5654,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     else
                     {
                         FileSystemOptions options{};
-                        options.sizeBytes                   = sizeof(FileSystemOptions);
+                        options.sizeBytes                    = sizeof(FileSystemOptions);
                         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                         itemHr = _fileSystem->CopyItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                     }
@@ -5715,7 +5701,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                             if (moveCopiedBytes > 0)
                             {
                                 FileSystemOptions options{};
-                                options.sizeBytes                   = sizeof(FileSystemOptions);
+                                options.sizeBytes                    = sizeof(FileSystemOptions);
                                 options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                                 const HRESULT hrProgress             = FileSystemProgress(_operation,
                                                                               1,
@@ -5749,7 +5735,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     else
                     {
                         FileSystemOptions options{};
-                        options.sizeBytes                   = sizeof(FileSystemOptions);
+                        options.sizeBytes                    = sizeof(FileSystemOptions);
                         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
                         itemHr = _fileSystem->MoveItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                     }
@@ -6108,7 +6094,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         }
 
         FileSystemOptions options{};
-        options.sizeBytes                   = sizeof(FileSystemOptions);
+        options.sizeBytes                    = sizeof(FileSystemOptions);
         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         const HRESULT operationHr            = _fileSystem->CopyItems(pathArray, count, destinationFolder.c_str(), _flags, &options, this, nullptr);
         if (operationHr == S_OK && _observedSkipAction.load(std::memory_order_acquire))
@@ -6126,7 +6112,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         }
 
         FileSystemOptions options{};
-        options.sizeBytes                   = sizeof(FileSystemOptions);
+        options.sizeBytes                    = sizeof(FileSystemOptions);
         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
         const HRESULT operationHr            = _fileSystem->MoveItems(pathArray, count, destinationFolder.c_str(), _flags, &options, this, nullptr);
         if (operationHr == S_OK && _observedSkipAction.load(std::memory_order_acquire))

@@ -2203,9 +2203,9 @@ void InitializeOperationContext(OperationContext& context,
     context.optionsState     = {};
     if (options)
     {
-        context.optionsState = *options;
+        context.optionsState           = *options;
         context.optionsState.sizeBytes = sizeof(FileSystemOptions);
-        context.options      = &context.optionsState;
+        context.options                = &context.optionsState;
     }
     else
     {
@@ -3303,7 +3303,7 @@ HRESULT FileSystemDummy::NormalizePath(std::wstring_view path, std::filesystem::
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
 
-        const size_t slashPos = rest.find_first_of(L"/\\");
+        const size_t slashPos                      = rest.find_first_of(L"/\\");
         const std::wstring_view connectionNameView = (slashPos == std::wstring_view::npos) ? rest : rest.substr(0, slashPos);
         const std::wstring_view suffix             = (slashPos == std::wstring_view::npos) ? std::wstring_view(L"/") : rest.substr(slashPos);
 
@@ -4499,7 +4499,7 @@ void FileSystemDummy::NotifyDirectoryWatchers(std::wstring_view watchedPath, std
         }
 
         FileSystemDirectoryChangeNotification notification{};
-        notification.sizeBytes      = sizeof(FileSystemDirectoryChangeNotification);
+        notification.sizeBytes       = sizeof(FileSystemDirectoryChangeNotification);
         notification.watchedPath     = watcher->watchedPath.c_str();
         notification.watchedPathSize = static_cast<unsigned long>(watcher->watchedPath.size() * sizeof(wchar_t));
         notification.changes         = &change;
@@ -4593,7 +4593,7 @@ void FileSystemDummy::NotifyDirectoryWatchers(std::wstring_view watchedPath, std
         }
 
         FileSystemDirectoryChangeNotification notification{};
-        notification.sizeBytes      = sizeof(FileSystemDirectoryChangeNotification);
+        notification.sizeBytes       = sizeof(FileSystemDirectoryChangeNotification);
         notification.watchedPath     = watcher->watchedPath.c_str();
         notification.watchedPathSize = static_cast<unsigned long>(watcher->watchedPath.size() * sizeof(wchar_t));
         notification.changes         = changes;
@@ -4637,7 +4637,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::ReadDirectoryInfo(const wchar_t* path
     {
         return normalizeHr;
     }
-    DummyNode* node                        = nullptr;
+    DummyNode* node = nullptr;
     std::vector<DummyEntry> entries;
     unsigned long count = 0;
     std::vector<std::byte> buffer;
@@ -4706,7 +4706,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetAttributes(const wchar_t* path, un
     {
         return normalizeHr;
     }
-    DummyNode* node                        = nullptr;
+    DummyNode* node = nullptr;
 
     {
         std::scoped_lock lock(_mutex);
@@ -4934,7 +4934,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetFileBasicInformation(const wchar_t
     {
         return normalizeHr;
     }
-    DummyNode* node                        = nullptr;
+    DummyNode* node = nullptr;
 
     {
         std::scoped_lock lock(_mutex);
@@ -5469,7 +5469,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::WatchDirectory(const wchar_t* path, I
     {
         return normalizeHr;
     }
-    const std::wstring watchedPathText     = normalized.wstring();
+    const std::wstring watchedPathText = normalized.wstring();
 
     {
         std::scoped_lock lock(_mutex);
@@ -5533,7 +5533,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::UnwatchDirectory(const wchar_t* path)
     {
         return normalizeHr;
     }
-    const std::wstring watchedPathText     = normalized.wstring();
+    const std::wstring watchedPathText = normalized.wstring();
 
     std::shared_ptr<DirectoryWatchRegistration> removed;
 
@@ -5618,10 +5618,10 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
     {
         return normalizeHr;
     }
-    const std::wstring sourceText                     = normalizedSource.wstring();
-    const std::wstring destinationText                = normalizedDestination.wstring();
-    const std::wstring destinationParentText          = normalizedDestination.parent_path().wstring();
-    const std::wstring destinationLeafText            = normalizedDestination.filename().wstring();
+    const std::wstring sourceText            = normalizedSource.wstring();
+    const std::wstring destinationText       = normalizedDestination.wstring();
+    const std::wstring destinationParentText = normalizedDestination.parent_path().wstring();
+    const std::wstring destinationLeafText   = normalizedDestination.filename().wstring();
 
     HRESULT hr = CheckCancel(context);
     if (FAILED(hr))
@@ -5755,12 +5755,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
     {
         return normalizeHr;
     }
-    const std::wstring sourceText                     = normalizedSource.wstring();
-    const std::wstring destinationText                = normalizedDestination.wstring();
-    const std::wstring sourceParentText               = normalizedSource.parent_path().wstring();
-    const std::wstring sourceLeafText                 = normalizedSource.filename().wstring();
-    const std::wstring destinationParentText          = normalizedDestination.parent_path().wstring();
-    const std::wstring destinationLeafText            = normalizedDestination.filename().wstring();
+    const std::wstring sourceText            = normalizedSource.wstring();
+    const std::wstring destinationText       = normalizedDestination.wstring();
+    const std::wstring sourceParentText      = normalizedSource.parent_path().wstring();
+    const std::wstring sourceLeafText        = normalizedSource.filename().wstring();
+    const std::wstring destinationParentText = normalizedDestination.parent_path().wstring();
+    const std::wstring destinationLeafText   = normalizedDestination.filename().wstring();
 
     HRESULT hr = CheckCancel(context);
     if (FAILED(hr))
@@ -5905,9 +5905,9 @@ FileSystemDummy::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fi
     {
         return normalizeHr;
     }
-    const std::wstring pathText            = normalized.wstring();
-    const std::wstring parentText          = normalized.parent_path().wstring();
-    const std::wstring leafText            = normalized.filename().wstring();
+    const std::wstring pathText   = normalized.wstring();
+    const std::wstring parentText = normalized.parent_path().wstring();
+    const std::wstring leafText   = normalized.filename().wstring();
 
     HRESULT hr = CheckCancel(context);
     if (FAILED(hr))
@@ -6024,8 +6024,8 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
     {
         return normalizeHr;
     }
-    const std::wstring sourceText                     = normalizedSource.wstring();
-    const std::wstring destinationText                = normalizedDestination.wstring();
+    const std::wstring sourceText      = normalizedSource.wstring();
+    const std::wstring destinationText = normalizedDestination.wstring();
 
     HRESULT hr = CheckCancel(context);
     if (FAILED(hr))
@@ -6153,7 +6153,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
     {
         return normalizeHr;
     }
-    const std::wstring destinationFolderText                = normalizedDestinationFolder.wstring();
+    const std::wstring destinationFolderText = normalizedDestinationFolder.wstring();
 
     DummyNode* destinationRoot = nullptr;
     {
@@ -6203,7 +6203,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
         {
             return normalizeSourceHr;
         }
-        const std::wstring sourceText                = normalizedSource.wstring();
+        const std::wstring sourceText = normalizedSource.wstring();
 
         CopyWorkItem item{};
         item.source                = nullptr;
@@ -6447,7 +6447,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
     {
         return normalizeHr;
     }
-    const std::wstring destinationFolderText                = normalizedDestinationFolder.wstring();
+    const std::wstring destinationFolderText = normalizedDestinationFolder.wstring();
 
     {
         std::scoped_lock lock(_mutex);
@@ -6502,7 +6502,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
         {
             return normalizeSourceHr;
         }
-        const std::wstring sourceText                = normalizedSource.wstring();
+        const std::wstring sourceText = normalizedSource.wstring();
 
         MoveWorkItem item{};
         item.kind                  = MoveWorkKind::MoveNode;
@@ -6813,9 +6813,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::DeleteItems(const wchar_t* const* pat
         {
             return normalizeHr;
         }
-        const std::wstring pathText            = normalized.wstring();
-        const std::wstring parentText          = normalized.parent_path().wstring();
-        const std::wstring leafText            = normalized.filename().wstring();
+        const std::wstring pathText   = normalized.wstring();
+        const std::wstring parentText = normalized.parent_path().wstring();
+        const std::wstring leafText   = normalized.filename().wstring();
 
         HRESULT itemHr = S_OK;
         {
@@ -6958,10 +6958,10 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItems(const FileSystemRenamePai
         {
             return normalizeHr;
         }
-        const std::wstring sourceText                = normalizedSource.wstring();
-        const std::wstring directory                 = normalizedSource.parent_path().wstring();
-        const std::wstring sourceLeafText            = normalizedSource.filename().wstring();
-        const std::wstring destinationText           = AppendPath(directory, item.newName);
+        const std::wstring sourceText      = normalizedSource.wstring();
+        const std::wstring directory       = normalizedSource.parent_path().wstring();
+        const std::wstring sourceLeafText  = normalizedSource.filename().wstring();
+        const std::wstring destinationText = AppendPath(directory, item.newName);
 
         uint64_t itemBytes = 0;
         HRESULT itemHr     = S_OK;

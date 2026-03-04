@@ -46,4 +46,22 @@ void SetQuickConnectProfile(const Common::Settings::ConnectionProfile& profile) 
 [[nodiscard]] HRESULT LoadQuickConnectSecret(SecretKind kind, std::wstring& secretOut) noexcept;
 void SetQuickConnectSecret(SecretKind kind, std::wstring_view secret) noexcept;
 void ClearQuickConnectSecret(SecretKind kind) noexcept;
+
+// Tracks whether the user recently approved secret access for a given connection profile id.
+//
+// This is used to avoid re-prompting Windows Hello when the user recently:
+// - completed Windows Hello verification, or
+// - manually entered a password/passphrase to connect.
+//
+// `reauthTimeoutMs == 0` is treated as "always prompt" (never considered authorized).
+void NoteSecretAccessAuthorized(std::wstring_view connectionId) noexcept;
+[[nodiscard]] bool HasSecretAccessAuthorization(std::wstring_view connectionId) noexcept;
+[[nodiscard]] bool IsSecretAccessAuthorized(std::wstring_view connectionId, uint64_t reauthTimeoutMs) noexcept;
+void ClearSecretAccessAuthorization(std::wstring_view connectionId) noexcept;
+void ClearAllSecretAccessAuthorizations() noexcept;
+
+#ifdef _DEBUG
+// Test hook: allows selftests to simulate an expired authorization timestamp without sleeping.
+void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId, uint64_t tick) noexcept;
+#endif
 } // namespace RedSalamander::Connections

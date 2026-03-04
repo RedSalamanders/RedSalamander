@@ -5,6 +5,7 @@
 #include <limits>
 #include <mutex>
 #include <optional>
+#include <unordered_map>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -179,6 +180,9 @@ std::wstring g_quickConnectPassphrase;
 bool g_quickConnectHasPassword   = false;
 bool g_quickConnectHasPassphrase = false;
 
+std::mutex g_secretAccessAuthorizationMutex;
+std::unordered_map<std::wstring, uint64_t> g_lastSecretAccessAuthorizationTickByConnectionId;
+
 void TryAssign(std::wstring& target, std::wstring_view value) noexcept
 {
     target.assign(value);
@@ -350,4 +354,75 @@ void ClearQuickConnectSecret(SecretKind kind) noexcept
 {
     SetQuickConnectSecret(kind, {});
 }
+
+void NoteSecretAccessAuthorized(std::wstring_view connectionId) noexcept
+{
+    if (connectionId.empty())
+    {
+        return;
+    }
+
+    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
+    g_lastSecretAccessAuthorizationTickByConnectionId[std::wstring(connectionId)] = GetTickCount64();
+}
+
+bool HasSecretAccessAuthorization(std::wstring_view connectionId) noexcept
+{
+    if (connectionId.empty())
+    {
+        return false;
+    }
+
+    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
+    return g_lastSecretAccessAuthorizationTickByConnectionId.find(std::wstring(connectionId)) != g_lastSecretAccessAuthorizationTickByConnectionId.end();
+}
+
+bool IsSecretAccessAuthorized(std::wstring_view connectionId, uint64_t reauthTimeoutMs) noexcept
+{
+    if (reauthTimeoutMs == 0 || connectionId.empty())
+    {
+        return false;
+    }
+
+    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
+    const auto it = g_lastSecretAccessAuthorizationTickByConnectionId.find(std::wstring(connectionId));
+    if (it == g_lastSecretAccessAuthorizationTickByConnectionId.end())
+    {
+        return false;
+    }
+
+    const uint64_t now     = GetTickCount64();
+    const uint64_t elapsed = now - it->second;
+    return elapsed < reauthTimeoutMs;
+}
+
+void ClearSecretAccessAuthorization(std::wstring_view connectionId) noexcept
+{
+    if (connectionId.empty())
+    {
+        return;
+    }
+
+    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
+    g_lastSecretAccessAuthorizationTickByConnectionId.erase(std::wstring(connectionId));
+}
+
+void ClearAllSecretAccessAuthorizations() noexcept
+{
+    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
+    g_lastSecretAccessAuthorizationTickByConnectionId.clear();
+}
+
+#ifdef _DEBUG
+void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId, uint64_t tick) noexcept
+{
+    if (connectionId.empty())
+    {
+        return;
+    }
+
+    std::scoped_lock lock(g_secretAccessAuthorizationMutex);
+    g_lastSecretAccessAuthorizationTickByConnectionId[std::wstring(connectionId)] = tick;
+}
+#endif
 } // namespace RedSalamander::Connections

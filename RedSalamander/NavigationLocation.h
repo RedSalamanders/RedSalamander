@@ -304,8 +304,7 @@ enum class TrailingSlashPolicy
             return true;
         }
 
-        const int byteLen =
-            static_cast<int>(std::min<size_t>(bytes.size(), static_cast<size_t>((std::numeric_limits<int>::max)())));
+        const int byteLen = static_cast<int>(std::min<size_t>(bytes.size(), static_cast<size_t>((std::numeric_limits<int>::max)())));
         if (byteLen <= 0)
         {
             bytes.clear();

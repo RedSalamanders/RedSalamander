@@ -2505,17 +2505,11 @@ void ViewerWeb::ShowHostAlert(HWND targetWindow, HostAlertSeverity severity, con
         const std::wstring_view normalizedTitle = title.empty() ? L"ViewerWeb" : std::wstring_view(title);
         switch (severity)
         {
-            case HOST_ALERT_WARNING:
-                Debug::Warning(L"ViewerWeb: Host alert dropped ({}): {}", normalizedTitle, message);
-                break;
+            case HOST_ALERT_WARNING: Debug::Warning(L"ViewerWeb: Host alert dropped ({}): {}", normalizedTitle, message); break;
             case HOST_ALERT_INFO:
-            case HOST_ALERT_BUSY:
-                Debug::Info(L"ViewerWeb: Host alert dropped ({}): {}", normalizedTitle, message);
-                break;
+            case HOST_ALERT_BUSY: Debug::Info(L"ViewerWeb: Host alert dropped ({}): {}", normalizedTitle, message); break;
             case HOST_ALERT_ERROR:
-            default:
-                Debug::Error(L"ViewerWeb: Host alert dropped ({}): {}", normalizedTitle, message);
-                break;
+            default: Debug::Error(L"ViewerWeb: Host alert dropped ({}): {}", normalizedTitle, message); break;
         }
         return;
     }

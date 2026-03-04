@@ -63,6 +63,7 @@
 #include "ShortcutsWindow.h"
 #include "SplashScreen.h"
 #include "StartupMetrics.h"
+#include "Ui/AnimationDispatcher.h"
 #include "ViewerPluginManager.h"
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
@@ -4469,6 +4470,15 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         }
     });
 
+    const auto shutdownProcessSingletons = wil::scope_exit([]
+    {
+        // Process-lifetime singletons are intentionally leaked to avoid static destruction order hazards.
+        // Explicitly release their resources before COM/CRT teardown to keep shutdown smooth and memory-bounded.
+        RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
+        DirectoryInfoCache::GetInstance().Shutdown();
+        IconCache::GetInstance().Shutdown();
+    });
+
     const ThemeMode envTheme = GetInitialThemeModeFromEnvironment();
     g_themeMode              = envTheme;
 
@@ -4513,7 +4523,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     const bool runHeadlessCompareSelfTest = false;
 #endif
 
-    const bool showSplash = ! runHeadlessCompareSelfTest && (! g_settings.startup.has_value() || g_settings.startup->showSplash);
+    const bool showSplash      = ! runHeadlessCompareSelfTest && (! g_settings.startup.has_value() || g_settings.startup->showSplash);
     const auto setSplashStatus = [&](std::wstring_view status) noexcept
     {
         if (showSplash)
@@ -4534,12 +4544,9 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             setSplashStatus(L"Warming visual resources...");
         }
         Debug::Perf::Scope perf(L"App.Startup.QueueNavigationViewWarmup");
-        const BOOL queued = runHeadlessCompareSelfTest
-                                ? TRUE
-                                : TrySubmitThreadpoolCallback(
-                                      [](PTP_CALLBACK_INSTANCE /*instance*/, void* /*context*/) noexcept { NavigationView::WarmSharedDeviceResources(); },
-                                      nullptr,
-                                      nullptr);
+        const BOOL queued = runHeadlessCompareSelfTest ? TRUE : TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* /*context*/) noexcept {
+            NavigationView::WarmSharedDeviceResources();
+        }, nullptr, nullptr);
         perf.SetHr(queued ? S_OK : E_FAIL);
     }
 
@@ -5690,9 +5697,9 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             }
 
             CompareDirectoriesPaneContext left{};
-            left.pluginId         = std::wstring(leftPluginId);
-            left.instanceContext  = std::move(leftLocation.instanceContext);
-            left.rootPluginPath   = leftRoot.value();
+            left.pluginId        = std::wstring(leftPluginId);
+            left.instanceContext = std::move(leftLocation.instanceContext);
+            left.rootPluginPath  = leftRoot.value();
 
             CompareDirectoriesPaneContext right{};
             right.pluginId        = std::wstring(rightPluginId);
@@ -5700,8 +5707,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             right.rootPluginPath  = rightRoot.value();
 
             const AppTheme theme = ResolveConfiguredTheme();
-            static_cast<void>(
-                ShowCompareDirectoriesWindow(hWnd, g_settings, theme, &g_shortcutManager, std::move(left), std::move(right)));
+            static_cast<void>(ShowCompareDirectoriesWindow(hWnd, g_settings, theme, &g_shortcutManager, std::move(left), std::move(right)));
             break;
         }
         case IDM_APP_SWAP_PANES: g_folderWindow.SwapPanes(); break;

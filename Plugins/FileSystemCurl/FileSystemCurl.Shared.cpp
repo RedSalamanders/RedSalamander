@@ -682,8 +682,8 @@ namespace FileSystemCurlInternal
     }
     else
     {
-        const auto sv     = sizeOrDir.value();
-        uint64_t parsed   = 0;
+        const auto sv        = sizeOrDir.value();
+        uint64_t parsed      = 0;
         const auto [ptr, ec] = std::from_chars(sv.data(), sv.data() + sv.size(), parsed);
         if (ec != std::errc{} || ptr == sv.data())
         {
@@ -798,10 +798,8 @@ namespace FileSystemCurlInternal
     out.connection.sshKeyPassphrase   = Utf8FromUtf16(settings.sshKeyPassphrase);
     out.connection.sshKnownHosts      = Utf8FromUtf16(settings.sshKnownHosts);
 
-    const unsigned int pluginCopyMoveMax =
-        protocol == Protocol::Imap ? 1u : std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
-    const unsigned int pluginDeleteMax =
-        protocol == Protocol::Imap ? 1u : std::clamp(settings.deleteMaxConcurrency, 1u, 8u);
+    const unsigned int pluginCopyMoveMax = protocol == Protocol::Imap ? 1u : std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
+    const unsigned int pluginDeleteMax   = protocol == Protocol::Imap ? 1u : std::clamp(settings.deleteMaxConcurrency, 1u, 8u);
 
     const auto protocolKey = [&](Protocol p) noexcept -> std::wstring_view
     {
@@ -822,15 +820,14 @@ namespace FileSystemCurlInternal
 
         if (copyMoveOverride != 0)
         {
-            const unsigned int clamped = std::clamp(copyMoveOverride, 1u, 8u);
+            const unsigned int clamped                     = std::clamp(copyMoveOverride, 1u, 8u);
             out.connection.effectiveCopyMoveMaxConcurrency = std::min(out.connection.effectiveCopyMoveMaxConcurrency, clamped);
         }
 
         if (deleteOverride != 0)
         {
-            const unsigned int clamped = std::clamp(deleteOverride, 1u, 64u);
-            out.connection.effectiveDeleteMaxConcurrency =
-                std::min(out.connection.effectiveDeleteMaxConcurrency, std::min(clamped, 8u));
+            const unsigned int clamped                   = std::clamp(deleteOverride, 1u, 64u);
+            out.connection.effectiveDeleteMaxConcurrency = std::min(out.connection.effectiveDeleteMaxConcurrency, std::min(clamped, 8u));
         }
 
         if (out.connection.fromConnectionManagerProfile)
@@ -3589,10 +3586,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetCapabilities(const char** jsonUtf8)
 
     std::lock_guard lock(_stateMutex);
 
-    const unsigned int copyMoveMax =
-        (_protocol == FileSystemCurlProtocol::Imap) ? 1u : std::clamp(_settings.copyMoveMaxConcurrency, 1u, 8u);
-    const unsigned int deleteMax =
-        (_protocol == FileSystemCurlProtocol::Imap) ? 1u : std::clamp(_settings.deleteMaxConcurrency, 1u, 8u);
+    const unsigned int copyMoveMax = (_protocol == FileSystemCurlProtocol::Imap) ? 1u : std::clamp(_settings.copyMoveMaxConcurrency, 1u, 8u);
+    const unsigned int deleteMax   = (_protocol == FileSystemCurlProtocol::Imap) ? 1u : std::clamp(_settings.deleteMaxConcurrency, 1u, 8u);
 
     if (_protocol == FileSystemCurlProtocol::Imap)
     {

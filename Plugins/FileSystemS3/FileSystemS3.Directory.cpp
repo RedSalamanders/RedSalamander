@@ -137,11 +137,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem([[maybe_unused]] const wchar_t*
     return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(const wchar_t* path,
-                                                   [[maybe_unused]] FileSystemFlags flags,
-                                                   const FileSystemOptions* options,
-                                                   IFileSystemCallback* callback,
-                                                   void* cookie) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(
+    const wchar_t* path, [[maybe_unused]] FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept
 {
     if (path == nullptr)
     {
@@ -209,18 +206,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(const wchar_t* path,
             return S_OK;
         }
 
-        const HRESULT hr = callback->FileSystemProgress(FILESYSTEM_DELETE,
-                                                        1,
-                                                        completedItems,
-                                                        0,
-                                                        0,
-                                                        currentPath.empty() ? nullptr : currentPath.data(),
-                                                        nullptr,
-                                                        0,
-                                                        0,
-                                                        callbackOptions,
-                                                        0,
-                                                        cookie);
+        const HRESULT hr = callback->FileSystemProgress(
+            FILESYSTEM_DELETE, 1, completedItems, 0, 0, currentPath.empty() ? nullptr : currentPath.data(), nullptr, 0, 0, callbackOptions, 0, cookie);
         return normalizeCancellation(hr);
     };
 
@@ -443,18 +430,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
             return S_OK;
         }
 
-        const HRESULT hr = callback->FileSystemProgress(FILESYSTEM_DELETE,
-                                                        count,
-                                                        completedItems,
-                                                        0,
-                                                        0,
-                                                        currentPath,
-                                                        nullptr,
-                                                        0,
-                                                        0,
-                                                        callbackOptions,
-                                                        0,
-                                                        cookie);
+        const HRESULT hr = callback->FileSystemProgress(FILESYSTEM_DELETE, count, completedItems, 0, 0, currentPath, nullptr, 0, 0, callbackOptions, 0, cookie);
         return normalizeCancellation(hr);
     };
 
@@ -819,7 +795,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
                 for (size_t i = batchStart; i < batchEnd; ++i)
                 {
                     const unsigned long itemIndex = group.entries[i].itemIndex;
-                    const wchar_t* currentPath     = paths[itemIndex];
+                    const wchar_t* currentPath    = paths[itemIndex];
 
                     HRESULT cbHr = reportItemCompleted(itemIndex, currentPath, batchHr);
                     if (FAILED(cbHr))
@@ -856,12 +832,12 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
             for (size_t i = batchStart; i < batchEnd; ++i)
             {
                 const unsigned long itemIndex = group.entries[i].itemIndex;
-                const wchar_t* currentPath     = paths[itemIndex];
+                const wchar_t* currentPath    = paths[itemIndex];
 
                 HRESULT itemHr = S_OK;
                 if (const auto it = errors.find(group.entries[i].key); it != errors.end())
                 {
-                    itemHr    = it->second;
+                    itemHr     = it->second;
                     hadFailure = true;
                     if (firstFailure == S_OK)
                     {

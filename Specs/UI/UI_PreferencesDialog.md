@@ -407,7 +407,7 @@ Defaults for the **Compare Directories** command:
 - Content compare workers (Auto ≤4 or 1..4 fixed)
 - Subdirectory comparison controls
 - Ignore patterns (files/directories) and pattern strings
-- Display: Show Identical Items
+- Display: Keep identical items + Show Identical Items
 
 ### Hot Paths
 

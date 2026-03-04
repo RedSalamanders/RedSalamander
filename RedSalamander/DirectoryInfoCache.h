@@ -104,6 +104,11 @@ public:
     void ApplySettings(const Common::Settings::Settings& settings) noexcept;
     void SetLimits(uint64_t maxBytes, uint32_t maxWatchers, uint32_t mruWatched) noexcept;
     Stats GetStats() const noexcept;
+
+    // Releases all cached entries and stops watchers. The singleton object itself is intentionally not destroyed
+    // (static destruction order safety).
+    void Shutdown() noexcept;
+
     void ClearForFileSystem(IFileSystem* fileSystem) noexcept;
     void InvalidateFolder(IFileSystem* fileSystem, const std::filesystem::path& folder) noexcept;
     bool IsFolderWatched(IFileSystem* fileSystem, const std::filesystem::path& folder) const noexcept;
@@ -190,6 +195,7 @@ private:
     std::shared_ptr<Entry> GetOrCreateEntryLocked(const Key& key) noexcept;
 
     mutable std::mutex _mutex;
+    std::atomic<bool> _shuttingDown{false};
     uint64_t _maxBytes     = 0;
     uint64_t _currentBytes = 0;
     uint32_t _maxWatchers  = 64;

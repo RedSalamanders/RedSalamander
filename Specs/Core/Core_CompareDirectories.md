@@ -17,7 +17,7 @@ TODO
 
 - The user navigates each pane to the desired folders, then presses **Options → OK** or **Rescan** to establish (or re-establish) the compare roots and start a scan.
 - The panes show differences between the two directory hierarchies.
-- When **Show Identical Items** is off, the panes show only items that differ (a "differences filter").
+- By default, the panes show only items that differ (a "differences filter"). If `keepIdenticalItems` is enabled, the user can toggle **Compare → Show Identical Items** to include identical items in the view.
 - Standard file operations (copy/move/delete/rename/view, etc.) are available via the normal `FolderWindow` command set and shortcuts.
 
 The comparison is directory-oriented and matches items by **name under the same relative folder**.
@@ -187,6 +187,8 @@ Scan options are configured via an in-window panel shown on first open and acces
 - Banner **Options…**
 - Menu **Compare → Options…**
 
+While the panel is visible, the **Options…** command MUST be disabled/greyed out (to prevent re-entrant panel activation).
+
 The panel uses themed preference-style cards (title + description + toggle) and supports vertical scrolling when the window is small.
 
 ### Panel layout
@@ -197,7 +199,7 @@ Options are organized in four sections:
 |---------|---------|
 | **Compare files with same name by** (`IDS_COMPARE_OPTIONS_SECTION_COMPARE`) | `compareSize`, `compareDateTime`, `compareAttributes`, `compareContent` |
 | **Subdirectories** (`IDS_COMPARE_OPTIONS_SECTION_SUBDIRS`) | `compareSubdirectories` |
-| **Additional** (`IDS_COMPARE_OPTIONS_SECTION_ADVANCED`) | `compareSubdirectoryAttributes`, `selectSubdirsOnlyInOnePane` |
+| **Additional** (`IDS_COMPARE_OPTIONS_SECTION_ADVANCED`) | `compareSubdirectoryAttributes`, `selectSubdirsOnlyInOnePane`, `keepIdenticalItems` |
 | **Ignore patterns** (`IDS_COMPARE_OPTIONS_SECTION_IGNORE`) | `ignoreFiles` + `ignoreFilesPatterns`, `ignoreDirectories` + `ignoreDirectoriesPatterns` |
 
 ### Panel actions
@@ -228,6 +230,7 @@ Options are organized in four sections:
 
 - `compareSubdirectoryAttributes` — Directories with different attributes are selected in both panes.
 - `selectSubdirsOnlyInOnePane` — When enabled, directories that exist only on one side are selected on that side. (Files that exist only on one side are always selected regardless of this setting.)
+- `keepIdenticalItems` — Retain identical entries so **Compare → Show Identical Items** can be toggled without rescanning. Uses more memory on very large trees.
 
 **Ignore patterns**
 
@@ -282,11 +285,15 @@ By default, the panes show only different items:
 - Directories that differ (when `compareSubdirectories` is enabled)
 - Items that are still in-flight:
   - Directories that are still computing (`SubdirPending`), so subtree progress is visible.
-  - File-level `ContentPending` placeholders MAY be elided when `showIdenticalItems` is off to keep memory bounded on very large folders. In that mode, the host MUST still surface progress via folder-level UI (scan/content progress indicators) and MUST set `anyPending` until work completes.
+  - File-level `ContentPending` placeholders MAY be elided when `keepIdenticalItems` is off to keep memory bounded on very large folders. In that mode, the host MUST still surface progress via folder-level UI (scan/content progress indicators) and MUST set `anyPending` until work completes.
 
-The menu item **Compare → Show Identical Items** (`showIdenticalItems`) toggles the differences filter globally for all folders in the compare session. When enabled, identical items are shown alongside different items. The setting is persisted in `CompareDirectoriesSettings`.
+The menu item **Compare → Show Identical Items** (`showIdenticalItems`) is a view filter toggle for all folders in the compare session. When enabled, identical items are shown alongside different items. The setting is persisted in `CompareDirectoriesSettings`.
 
-Because differences-only mode may prune identical entries to keep memory bounded, toggling this setting invalidates cached decisions and requires restarting the compare scan to fully reflect the new filter. When compare mode is active, the host MUST warn the user and ask for confirmation before restarting the scan (canceling any in-flight work).
+Availability and scan impact:
+
+- When `keepIdenticalItems` is off, the host MAY prune identical entries from cached decisions to keep memory bounded. In this mode, the **Compare → Show Identical Items** menu item MUST be disabled/greyed out.
+- When `keepIdenticalItems` is on, cached decisions retain identical entries so `showIdenticalItems` can be toggled without invalidating cached decisions or restarting the compare scan.
+- Changing `keepIdenticalItems` changes the cached decision shape; the host MUST invalidate cached decisions and restart the compare scan.
 
 When `showIdenticalItems` is off and a folder has no differences after a successful compare run completes, panes MUST show a localized **No differences** empty‑state message instead of the standard **Empty folder** UI.
 
@@ -418,7 +425,7 @@ When `GetOrComputeDecision` is called for a folder:
 4. For files that need content comparison (same size or size-unknown, and `compareContent` is enabled):
    - Enqueue a content-compare job.
    - When the item is surfaced in the list, set the `ContentPending` diff bit. `ContentPending` does not imply a final difference and must not select the item.
-   - When `showIdenticalItems` is off, the host MAY elide per-file `ContentPending` placeholders to keep memory bounded, but it MUST keep folder-level pending state (`anyPending`) accurate until all content jobs complete.
+   - When `keepIdenticalItems` is off, the host MAY elide per-file `ContentPending` placeholders to keep memory bounded, but it MUST keep folder-level pending state (`anyPending`) accurate until all content jobs complete.
 5. Return the decision immediately — the UI shows progress via per-item "Comparing..." (when placeholders are surfaced) and/or folder-level progress indicators.
 
 ### Phase 2: Background content compare (asynchronous, worker pool)
@@ -584,7 +591,7 @@ This section maps directly to `Common::Settings::CompareDirectoriesSettings`:
 - Content compare: `contentCompareWorkerCount`
 - Subdirectories: `compareSubdirectories`, `compareSubdirectoryAttributes`, `selectSubdirsOnlyInOnePane`
 - Ignore patterns: `ignoreFiles` + `ignoreFilesPatterns`, `ignoreDirectories` + `ignoreDirectoriesPatterns`
-- Display: `showIdenticalItems`
+- Display: `keepIdenticalItems`, `showIdenticalItems`
 
 The Compare Directories Options panel reads/writes the same settings; Preferences provides a centralized way to configure these defaults outside the compare window.
 

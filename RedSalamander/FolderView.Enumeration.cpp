@@ -124,6 +124,91 @@ std::wstring NormalizeFocusMemoryRootKey(const std::filesystem::path& folder)
 }
 } // namespace
 
+void FolderView::UpdateCompareNoDifferencesState() noexcept
+{
+    const auto resetCompareNoDifferencesLayouts = [&]() noexcept
+    {
+        _emptyMessageIconLayout.reset();
+        _emptyMessageTitleLayout.reset();
+        _emptyMessageFunLayout.reset();
+        _emptyMessageLayoutClientSizePx = {};
+        _emptyMessageLayoutDpi          = 0.0f;
+        _emptyMessageLayoutMessageId    = 0;
+        _emptyMessageIconFontSizeDip    = 0.0f;
+        _emptyMessageIconMetrics        = {};
+        _emptyMessageTitleMetrics       = {};
+        _emptyMessageFunMetrics         = {};
+    };
+
+    const bool shouldShowNoDifferences =
+        _items.empty() && _emptyStateMessageKind == EmptyStateMessageKind::CompareNoDifferences && _displayedFolder.has_value();
+    if (! shouldShowNoDifferences)
+    {
+        if (_compareNoDifferencesState.has_value())
+        {
+            _compareNoDifferencesState.reset();
+            resetCompareNoDifferencesLayouts();
+        }
+        return;
+    }
+
+    constexpr UINT kFunMessages[] = {
+        IDS_COMPARE_NO_DIFFERENCES_FUN_1,
+        IDS_COMPARE_NO_DIFFERENCES_FUN_2,
+        IDS_COMPARE_NO_DIFFERENCES_FUN_3,
+        IDS_COMPARE_NO_DIFFERENCES_FUN_4,
+        IDS_COMPARE_NO_DIFFERENCES_FUN_5,
+        IDS_COMPARE_NO_DIFFERENCES_FUN_6,
+        IDS_COMPARE_NO_DIFFERENCES_FUN_7,
+        IDS_COMPARE_NO_DIFFERENCES_FUN_8,
+        IDS_COMPARE_NO_DIFFERENCES_FUN_9,
+        IDS_COMPARE_NO_DIFFERENCES_FUN_10,
+    };
+
+    const std::wstring folderKey = NormalizeFocusMemoryFolderKey(_displayedFolder.value());
+    const bool needsNewMessage =
+        ! _compareNoDifferencesState.has_value() || _compareNoDifferencesState->folderKey != folderKey || _compareNoDifferencesState->funMessageResourceId == 0;
+    if (! needsNewMessage)
+    {
+        return;
+    }
+
+    const ULONGLONG tick  = GetTickCount64();
+    const uint32_t tick32 = static_cast<uint32_t>(tick ^ (tick >> 32));
+    const uint32_t seed   = StableHash32(std::wstring_view(folderKey)) ^ tick32;
+    const UINT messageId  = kFunMessages[static_cast<size_t>(seed % static_cast<uint32_t>(std::size(kFunMessages)))];
+
+    std::wstring raw = LoadStringResource(nullptr, messageId);
+    std::wstring emoji;
+    std::wstring funMessage;
+
+    const size_t breakPos = raw.find_first_of(L"\r\n");
+    if (breakPos == std::wstring::npos)
+    {
+        funMessage = StringUtils::TrimWhitespaceCopy(raw);
+    }
+    else
+    {
+        emoji = StringUtils::TrimWhitespaceCopy(std::wstring_view(raw).substr(0, breakPos));
+
+        size_t messageStart = breakPos;
+        while (messageStart < raw.size() && (raw[messageStart] == L'\r' || raw[messageStart] == L'\n'))
+        {
+            ++messageStart;
+        }
+        funMessage = StringUtils::TrimWhitespaceCopy(std::wstring_view(raw).substr(messageStart));
+    }
+
+    CompareNoDifferencesState state{};
+    state.folderKey            = folderKey;
+    state.funMessageResourceId = messageId;
+    state.emoji                = std::move(emoji);
+    state.funMessage           = std::move(funMessage);
+    _compareNoDifferencesState = std::move(state);
+
+    resetCompareNoDifferencesLayouts();
+}
+
 void FolderView::EnsureEnumerationThread()
 {
     if (_enumerationThreadStarted)
@@ -1552,6 +1637,8 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
             resetEmptyFolderLayouts();
         }
     }
+
+    UpdateCompareNoDifferencesState();
 
     // Schedule idle-time layout pre-creation for off-screen items
     // This creates layouts gradually during UI idle periods for smoother scrolling

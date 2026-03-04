@@ -408,7 +408,7 @@ namespace
 class ConnectionConcurrencyLimiter final
 {
 public:
-    ConnectionConcurrencyLimiter() = default;
+    ConnectionConcurrencyLimiter()  = default;
     ~ConnectionConcurrencyLimiter() = default;
 
     ConnectionConcurrencyLimiter(const ConnectionConcurrencyLimiter&)            = delete;
@@ -427,20 +427,14 @@ public:
     public:
         Permit() = default;
 
-        Permit(ConnectionConcurrencyLimiter* limiter, std::wstring key, Kind kind) noexcept
-            : _limiter(limiter),
-              _key(std::move(key)),
-              _kind(kind)
+        Permit(ConnectionConcurrencyLimiter* limiter, std::wstring key, Kind kind) noexcept : _limiter(limiter), _key(std::move(key)), _kind(kind)
         {
         }
 
         Permit(const Permit&)            = delete;
         Permit& operator=(const Permit&) = delete;
 
-        Permit(Permit&& other) noexcept
-            : _limiter(std::exchange(other._limiter, nullptr)),
-              _key(std::move(other._key)),
-              _kind(other._kind)
+        Permit(Permit&& other) noexcept : _limiter(std::exchange(other._limiter, nullptr)), _key(std::move(other._key)), _kind(other._kind)
         {
         }
 
@@ -485,14 +479,12 @@ public:
         Kind _kind = Kind::CopyMove;
     };
 
-    template <typename CancelPredicate>
-    [[nodiscard]] Permit AcquireCopyMove(std::wstring_view key, uint32_t max, CancelPredicate&& shouldCancel) noexcept
+    template <typename CancelPredicate> [[nodiscard]] Permit AcquireCopyMove(std::wstring_view key, uint32_t max, CancelPredicate&& shouldCancel) noexcept
     {
         return Acquire(key, Kind::CopyMove, max, std::forward<CancelPredicate>(shouldCancel));
     }
 
-    template <typename CancelPredicate>
-    [[nodiscard]] Permit AcquireDelete(std::wstring_view key, uint32_t max, CancelPredicate&& shouldCancel) noexcept
+    template <typename CancelPredicate> [[nodiscard]] Permit AcquireDelete(std::wstring_view key, uint32_t max, CancelPredicate&& shouldCancel) noexcept
     {
         return Acquire(key, Kind::Delete, max, std::forward<CancelPredicate>(shouldCancel));
     }
@@ -606,8 +598,9 @@ ConnectionConcurrencyLimiter& GetConnectionConcurrencyLimiter() noexcept
     ConnectionConcurrencyLimiter& limiter = GetConnectionConcurrencyLimiter();
     const uint32_t max = kind == ConnectionConcurrencyLimiter::Kind::CopyMove ? conn.effectiveCopyMoveMaxConcurrency : conn.effectiveDeleteMaxConcurrency;
 
-    ConnectionConcurrencyLimiter::Permit permit = kind == ConnectionConcurrencyLimiter::Kind::CopyMove ? limiter.AcquireCopyMove(conn.limiterKey, max, shouldCancel)
-                                                                                                      : limiter.AcquireDelete(conn.limiterKey, max, shouldCancel);
+    ConnectionConcurrencyLimiter::Permit permit = kind == ConnectionConcurrencyLimiter::Kind::CopyMove
+                                                      ? limiter.AcquireCopyMove(conn.limiterKey, max, shouldCancel)
+                                                      : limiter.AcquireDelete(conn.limiterKey, max, shouldCancel);
     if (! permit)
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -631,8 +624,9 @@ ConnectionConcurrencyLimiter& GetConnectionConcurrencyLimiter() noexcept
     ConnectionConcurrencyLimiter& limiter = GetConnectionConcurrencyLimiter();
     const uint32_t max = kind == ConnectionConcurrencyLimiter::Kind::CopyMove ? conn.effectiveCopyMoveMaxConcurrency : conn.effectiveDeleteMaxConcurrency;
 
-    ConnectionConcurrencyLimiter::Permit permit = kind == ConnectionConcurrencyLimiter::Kind::CopyMove ? limiter.AcquireCopyMove(conn.limiterKey, max, shouldCancel)
-                                                                                                      : limiter.AcquireDelete(conn.limiterKey, max, shouldCancel);
+    ConnectionConcurrencyLimiter::Permit permit = kind == ConnectionConcurrencyLimiter::Kind::CopyMove
+                                                      ? limiter.AcquireCopyMove(conn.limiterKey, max, shouldCancel)
+                                                      : limiter.AcquireDelete(conn.limiterKey, max, shouldCancel);
     if (! permit)
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -936,9 +930,8 @@ private:
     if (! destinationConn.limiterKey.empty())
     {
         auto shouldCancel = [&]() noexcept { return FAILED(progress.CheckCancel()); };
-        uploadPermit      = GetConnectionConcurrencyLimiter().AcquireCopyMove(destinationConn.limiterKey,
-                                                                        destinationConn.effectiveCopyMoveMaxConcurrency,
-                                                                        shouldCancel);
+        uploadPermit =
+            GetConnectionConcurrencyLimiter().AcquireCopyMove(destinationConn.limiterKey, destinationConn.effectiveCopyMoveMaxConcurrency, shouldCancel);
         if (! uploadPermit)
         {
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -1018,7 +1011,7 @@ private:
 
         struct CopyFileQueue final
         {
-            CopyFileQueue() = default;
+            CopyFileQueue()                                = default;
             CopyFileQueue(const CopyFileQueue&)            = delete;
             CopyFileQueue(CopyFileQueue&&)                 = delete;
             CopyFileQueue& operator=(const CopyFileQueue&) = delete;
@@ -1090,8 +1083,7 @@ private:
                     return true;
                 }
 
-                queue.notFullCv.wait(lock, [&]() noexcept
-                {
+                queue.notFullCv.wait(lock, [&]() noexcept {
                     return cancelRequested.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire) ||
                            queue.items.size() < maxQueuedItems;
                 });
@@ -1117,10 +1109,9 @@ private:
                 CopyFileWorkItem item{};
                 {
                     std::unique_lock lock(queue.mutex);
-                    queue.notEmptyCv.wait(lock, [&]() noexcept
-                    {
-                        return cancelRequested.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire) ||
-                               ! queue.items.empty() || queue.enumerationDone;
+                    queue.notEmptyCv.wait(lock, [&]() noexcept {
+                        return cancelRequested.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire) || ! queue.items.empty() ||
+                               queue.enumerationDone;
                     });
 
                     if (cancelRequested.load(std::memory_order_acquire) || stopRequested.load(std::memory_order_acquire))
@@ -1281,8 +1272,7 @@ private:
                     const std::wstring sourceSubFull        = EnsureTrailingSlashDisplay(sourceChildFull);
                     const std::wstring destinationSubFull   = EnsureTrailingSlashDisplay(destinationChildFull);
 
-                    const HRESULT childHr =
-                        self(self, sourceSubRemote, sourceSubFull, destinationSubRemote, destinationSubFull, false);
+                    const HRESULT childHr = self(self, sourceSubRemote, sourceSubFull, destinationSubRemote, destinationSubFull, false);
                     if (FAILED(childHr))
                     {
                         hr = NormalizeCancellation(childHr);
@@ -1314,12 +1304,7 @@ private:
             return S_OK;
         };
 
-        const HRESULT rootHr = produceDirectory(produceDirectory,
-                                                sourceRemoteDir,
-                                                sourceFullDir,
-                                                destinationRemoteDir,
-                                                destinationFullDir,
-                                                true);
+        const HRESULT rootHr = produceDirectory(produceDirectory, sourceRemoteDir, sourceFullDir, destinationRemoteDir, destinationFullDir, true);
         if (FAILED(rootHr))
         {
             const HRESULT normalized = NormalizeCancellation(rootHr);
@@ -1408,17 +1393,16 @@ private:
             const std::wstring sourceSubFull        = EnsureTrailingSlashDisplay(sourceChildFull);
             const std::wstring destinationSubFull   = EnsureTrailingSlashDisplay(destinationChildFull);
 
-            hr = CopyDirectoryRecursive(
-                sourceConn,
-                sourceSubRemote,
-                sourceSubFull,
-                destinationConn,
-                destinationSubRemote,
-                destinationSubFull,
-                flags,
-                1u,
-                progress,
-                concurrentOverallBytes);
+            hr = CopyDirectoryRecursive(sourceConn,
+                                        sourceSubRemote,
+                                        sourceSubFull,
+                                        destinationConn,
+                                        destinationSubRemote,
+                                        destinationSubFull,
+                                        flags,
+                                        1u,
+                                        progress,
+                                        concurrentOverallBytes);
             if (FAILED(hr))
             {
                 hr = NormalizeCancellation(hr);
@@ -1830,20 +1814,20 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
             hr = EnsureDirectoryExists(destinationResolved.connection, destinationResolved.remotePath);
             if (SUCCEEDED(hr))
             {
-                hr = CopyDirectoryRecursive(sourceResolved.connection,
-                                            EnsureTrailingSlash(sourceResolved.remotePath),
-                                            EnsureTrailingSlashDisplay(sourceDisplay),
-                                            destinationResolved.connection,
-                                             EnsureTrailingSlash(destinationResolved.remotePath),
-                                             EnsureTrailingSlashDisplay(destinationDisplay),
-                                             flags,
-                                             std::min(sourceResolved.connection.effectiveCopyMoveMaxConcurrency,
-                                                      destinationResolved.connection.effectiveCopyMoveMaxConcurrency),
-                                             progress,
-                                             nullptr);
-             }
-         }
-     }
+                hr = CopyDirectoryRecursive(
+                    sourceResolved.connection,
+                    EnsureTrailingSlash(sourceResolved.remotePath),
+                    EnsureTrailingSlashDisplay(sourceDisplay),
+                    destinationResolved.connection,
+                    EnsureTrailingSlash(destinationResolved.remotePath),
+                    EnsureTrailingSlashDisplay(destinationDisplay),
+                    flags,
+                    std::min(sourceResolved.connection.effectiveCopyMoveMaxConcurrency, destinationResolved.connection.effectiveCopyMoveMaxConcurrency),
+                    progress,
+                    nullptr);
+            }
+        }
+    }
     else
     {
         hr = CopyFileViaTemp(sourceResolved.connection,
@@ -1947,19 +1931,19 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                 }
                 else
                 {
-                    hr = CopyDirectoryRecursive(sourceResolved.connection,
-                                                EnsureTrailingSlash(sourceResolved.remotePath),
-                                                EnsureTrailingSlashDisplay(sourceDisplay),
-                                                destinationResolved.connection,
-                                                 EnsureTrailingSlash(destinationResolved.remotePath),
-                                                 EnsureTrailingSlashDisplay(destinationDisplay),
-                                                 flags,
-                                                 std::min(sourceResolved.connection.effectiveCopyMoveMaxConcurrency,
-                                                          destinationResolved.connection.effectiveCopyMoveMaxConcurrency),
-                                                 progress,
-                                                 nullptr);
-                     if (SUCCEEDED(hr))
-                     {
+                    hr = CopyDirectoryRecursive(
+                        sourceResolved.connection,
+                        EnsureTrailingSlash(sourceResolved.remotePath),
+                        EnsureTrailingSlashDisplay(sourceDisplay),
+                        destinationResolved.connection,
+                        EnsureTrailingSlash(destinationResolved.remotePath),
+                        EnsureTrailingSlashDisplay(destinationDisplay),
+                        flags,
+                        std::min(sourceResolved.connection.effectiveCopyMoveMaxConcurrency, destinationResolved.connection.effectiveCopyMoveMaxConcurrency),
+                        progress,
+                        nullptr);
+                    if (SUCCEEDED(hr))
+                    {
                         hr = DeleteDirectoryRecursive(sourceResolved.connection,
                                                       sourceResolved.remotePath,
                                                       sourceDisplay,
@@ -1983,10 +1967,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                                      nullptr);
                 if (SUCCEEDED(hr))
                 {
-                    hr = RemoteDeleteFileWithPermit(sourceResolved.connection,
-                                                   sourceResolved.remotePath,
-                                                   progress,
-                                                   ConnectionConcurrencyLimiter::Kind::CopyMove);
+                    hr = RemoteDeleteFileWithPermit(
+                        sourceResolved.connection, sourceResolved.remotePath, progress, ConnectionConcurrencyLimiter::Kind::CopyMove);
                 }
             }
         }
@@ -2048,26 +2030,15 @@ FileSystemCurl::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fil
             if (HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
             {
                 const unsigned int concurrency = std::clamp(resolved.connection.effectiveDeleteMaxConcurrency, 1u, 8u);
-                hr = (concurrency > 1u) ? DeleteDirectoryRecursiveParallel(resolved.connection,
-                                                                           resolved.remotePath,
-                                                                           displayPath,
-                                                                           flags,
-                                                                           ConnectionConcurrencyLimiter::Kind::Delete,
-                                                                           concurrency,
-                                                                           progress)
-                                        : DeleteDirectoryRecursive(resolved.connection,
-                                                                   resolved.remotePath,
-                                                                   displayPath,
-                                                                   flags,
-                                                                   ConnectionConcurrencyLimiter::Kind::Delete,
-                                                                   progress);
+                hr                             = (concurrency > 1u)
+                                                     ? DeleteDirectoryRecursiveParallel(
+                               resolved.connection, resolved.remotePath, displayPath, flags, ConnectionConcurrencyLimiter::Kind::Delete, concurrency, progress)
+                                                     : DeleteDirectoryRecursive(
+                               resolved.connection, resolved.remotePath, displayPath, flags, ConnectionConcurrencyLimiter::Kind::Delete, progress);
             }
             else
             {
-                hr = RemoteRemoveDirectoryWithPermit(resolved.connection,
-                                                     resolved.remotePath,
-                                                     progress,
-                                                     ConnectionConcurrencyLimiter::Kind::Delete);
+                hr = RemoteRemoveDirectoryWithPermit(resolved.connection, resolved.remotePath, progress, ConnectionConcurrencyLimiter::Kind::Delete);
             }
         }
         else
@@ -2357,7 +2328,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
                 else
                 {
                     const unsigned int directoryConcurrency = (concurrency <= 1u) ? requestedConcurrency : 1u;
-                    itemHr = CopyDirectoryRecursive(task.sourceConn,
+                    itemHr                                  = CopyDirectoryRecursive(task.sourceConn,
                                                     EnsureTrailingSlash(task.sourceRemotePath),
                                                     EnsureTrailingSlashDisplay(task.sourceDisplayPath),
                                                     destinationResolved.connection,
@@ -2581,15 +2552,15 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
         requestedConcurrency = std::min(requestedConcurrency, std::clamp(sourceResolved.connection.effectiveCopyMoveMaxConcurrency, 1u, 8u));
 
         MoveTask task{};
-        task.index                = index;
-        task.sourceConn           = std::move(sourceResolved.connection);
-        task.sourceRemotePath     = std::move(sourceResolved.remotePath);
-        task.sourceDisplayPath    = sourceDisplay;
+        task.index                  = index;
+        task.sourceConn             = std::move(sourceResolved.connection);
+        task.sourceRemotePath       = std::move(sourceResolved.remotePath);
+        task.sourceDisplayPath      = sourceDisplay;
         task.destinationRemotePath  = destinationRemote;
         task.destinationDisplayPath = destDisplay;
-        task.expectedSizeBytes    = sourceInfo.sizeBytes;
-        task.isDirectory          = (sourceInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-        task.canServerSideRename  = canServerSideRename;
+        task.expectedSizeBytes      = sourceInfo.sizeBytes;
+        task.isDirectory            = (sourceInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+        task.canServerSideRename    = canServerSideRename;
         tasks.push_back(std::move(task));
     }
 
@@ -2648,7 +2619,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
                 else
                 {
                     const unsigned int directoryConcurrency = (concurrency <= 1u) ? requestedConcurrency : 1u;
-                    itemHr = CopyDirectoryRecursive(task.sourceConn,
+                    itemHr                                  = CopyDirectoryRecursive(task.sourceConn,
                                                     EnsureTrailingSlash(task.sourceRemotePath),
                                                     EnsureTrailingSlashDisplay(task.sourceDisplayPath),
                                                     destinationResolved.connection,
@@ -2907,26 +2878,20 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
             {
                 if (HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
                 {
-                    itemHr = directoryConcurrency > 1u ? DeleteDirectoryRecursiveParallel(task.connection,
-                                                                                          task.remotePath,
-                                                                                          task.displayPath,
-                                                                                          flags,
-                                                                                          ConnectionConcurrencyLimiter::Kind::Delete,
-                                                                                          directoryConcurrency,
-                                                                                          progress)
-                                                       : DeleteDirectoryRecursive(task.connection,
-                                                                                  task.remotePath,
-                                                                                  task.displayPath,
-                                                                                  flags,
-                                                                                  ConnectionConcurrencyLimiter::Kind::Delete,
-                                                                                  progress);
+                    itemHr = directoryConcurrency > 1u
+                                 ? DeleteDirectoryRecursiveParallel(task.connection,
+                                                                    task.remotePath,
+                                                                    task.displayPath,
+                                                                    flags,
+                                                                    ConnectionConcurrencyLimiter::Kind::Delete,
+                                                                    directoryConcurrency,
+                                                                    progress)
+                                 : DeleteDirectoryRecursive(
+                                       task.connection, task.remotePath, task.displayPath, flags, ConnectionConcurrencyLimiter::Kind::Delete, progress);
                 }
                 else
                 {
-                    itemHr = RemoteRemoveDirectoryWithPermit(task.connection,
-                                                             task.remotePath,
-                                                             progress,
-                                                             ConnectionConcurrencyLimiter::Kind::Delete);
+                    itemHr = RemoteRemoveDirectoryWithPermit(task.connection, task.remotePath, progress, ConnectionConcurrencyLimiter::Kind::Delete);
                 }
             }
             else

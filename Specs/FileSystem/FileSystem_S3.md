@@ -75,6 +75,8 @@ Each plugin exposes its own configuration schema via `IInformations::GetConfigur
 - `defaultEndpointOverride` (string, default empty)
 - `useHttps` (bool, default `true`)
 - `verifyTls` (bool, default `true`)
+- `connectTimeoutMs` (integer, `1..600000`, default `10000`): TCP connect timeout used for S3 requests (ms).
+- `requestTimeoutMs` (integer, `1..600000`, default `30000`): network stall / socket-read timeout for S3 requests (ms). Does not cap total transfer time if data keeps flowing.
 - `useVirtualAddressing` (bool, default `true`)
 - `maxKeys` (integer, `1..1000`, default `1000`): page size (max keys requested per `ListObjectsV2` request).
 
@@ -84,6 +86,8 @@ Each plugin exposes its own configuration schema via `IInformations::GetConfigur
 - `defaultEndpointOverride` (string, default empty)
 - `useHttps` (bool, default `true`)
 - `verifyTls` (bool, default `true`)
+- `connectTimeoutMs` (integer, `1..600000`, default `10000`): TCP connect timeout used for S3 requests (ms).
+- `requestTimeoutMs` (integer, `1..600000`, default `30000`): network stall / socket-read timeout for S3 requests (ms). Does not cap total transfer time if data keeps flowing.
 - `maxTableResults` (integer, `1..1000`, default `1000`): page size (max results requested per `ListNamespaces` / `ListTables` request).
 
 Security note:

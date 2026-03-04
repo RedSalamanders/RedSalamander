@@ -38,6 +38,10 @@ public:
     // Get the singleton instance of the icon cache.
     static IconCache& GetInstance();
 
+    // Releases cached resources and stops any further use for this process instance.
+    // The singleton object itself is intentionally not destroyed (static destruction order safety).
+    void Shutdown() noexcept;
+
     // Initialize the cache (must be called before first use).
     // Contract:
     // - UI thread responsibility: call after COM is initialized as STA (CoInitializeEx(COINIT_APARTMENTTHREADED)).

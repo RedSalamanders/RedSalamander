@@ -1,7 +1,7 @@
 #include "FileSystem.Internal.h"
 
-#include <atomic>
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <deque>
 #include <limits>
@@ -390,7 +390,7 @@ private:
         }
 
         FileSystemDirectoryChangeNotification notification{};
-        notification.sizeBytes      = sizeof(FileSystemDirectoryChangeNotification);
+        notification.sizeBytes       = sizeof(FileSystemDirectoryChangeNotification);
         notification.watchedPath     = _watchedPath.c_str();
         notification.watchedPathSize = static_cast<unsigned long>(_watchedPath.size() * sizeof(wchar_t));
         notification.changes         = nullptr;
@@ -484,7 +484,7 @@ private:
         }
 
         FileSystemDirectoryChangeNotification notification{};
-        notification.sizeBytes      = sizeof(FileSystemDirectoryChangeNotification);
+        notification.sizeBytes       = sizeof(FileSystemDirectoryChangeNotification);
         notification.watchedPath     = _watchedPath.c_str();
         notification.watchedPathSize = static_cast<unsigned long>(_watchedPath.size() * sizeof(wchar_t));
         notification.changes         = changeCount > 0 ? changes.data() : nullptr;

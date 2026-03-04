@@ -81,6 +81,24 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::SetConfiguration(const char* configurati
         }
     }
 
+    if (const auto v = FsS3::TryGetJsonUInt(root, "connectTimeoutMs"); v.has_value())
+    {
+        const uint64_t raw = v.value();
+        if (raw >= 1u)
+        {
+            _settings.connectTimeoutMs = static_cast<uint32_t>(std::min<uint64_t>(raw, 600'000ull));
+        }
+    }
+
+    if (const auto v = FsS3::TryGetJsonUInt(root, "requestTimeoutMs"); v.has_value())
+    {
+        const uint64_t raw = v.value();
+        if (raw >= 1u)
+        {
+            _settings.requestTimeoutMs = static_cast<uint32_t>(std::min<uint64_t>(raw, 600'000ull));
+        }
+    }
+
     return S_OK;
 }
 

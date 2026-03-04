@@ -170,7 +170,7 @@ interface __declspec(uuid("018b09cf-dd4e-47ac-b013-baef06220cff")) __declspec(no
     // On success, the host allocates a NUL-terminated UTF-16 string with CoTaskMemAlloc and stores it in *secretOut.
     // Callers must free it with CoTaskMemFree().
     //
-    // This function does NOT prompt. If the secret is not available (not saved and no session-cached secret),
+    // This function does NOT prompt for secret entry. If the secret is not available (not saved and no session-cached secret),
     // it returns HRESULT_FROM_WIN32(ERROR_NOT_FOUND).
     virtual HRESULT STDMETHODCALLTYPE GetConnectionSecret(
         const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut) noexcept = 0;

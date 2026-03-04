@@ -38,8 +38,20 @@ public:
 
     [[nodiscard]] static AnimationDispatcher& GetInstance() noexcept
     {
+        // Intentionally leaked to avoid shutdown UAF from static destruction order issues.
         static AnimationDispatcher* instance = new AnimationDispatcher();
         return *instance;
+    }
+
+    void Shutdown() noexcept
+    {
+        StopTimer();
+        _subscriptions.clear();
+        _pendingAdds.clear();
+        _inTick             = false;
+        _timerRunning       = false;
+        _nextSubscriptionId = 1;
+        _hwnd.reset();
     }
 
     [[nodiscard]] uint64_t Subscribe(TickCallback callback, void* context) noexcept
