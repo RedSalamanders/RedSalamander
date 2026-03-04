@@ -501,9 +501,23 @@ Keys map to `Common::Settings::CompareDirectoriesSettings`:
 - Content compare: `contentCompareWorkerCount` (integer, `0` = auto (≤4), `1..4` = fixed worker count)
 - Subdirectories: `compareSubdirectories`, `compareSubdirectoryAttributes`, `selectSubdirsOnlyInOnePane`
 - Ignore patterns: `ignoreFiles` + `ignoreFilesPatterns`, `ignoreDirectories` + `ignoreDirectoriesPatterns`
-- Display: `showIdenticalItems`
+- Display: `keepIdenticalItems`, `showIdenticalItems`
 
 These defaults are edited in **Preferences → Compare Directories** and are used by the Compare Directories window.
+
+## Connections (Connection Manager)
+
+Global Connection Manager settings live under:
+- `connections`
+
+Keys map to `Common::Settings::ConnectionsSettings`:
+- `bypassWindowsHello` (bool, default: `false`): when `true`, Windows Hello verification is skipped even if a connection profile requires it (intended for automation).
+- `windowsHelloReauthTimeoutMinute` (integer, default: `10`): how long recent interactive authentication is reused for a given connection id (Windows Hello verification or user-entered secret). `0` = re-ask every time.
+  - For long-running background operations (copy/compare), the host reuses successful interactive authentication for the remainder of the app run to avoid mid-operation Windows Hello prompts.
+- `items` (array): saved `ConnectionProfile` entries (non-secret fields only).
+
+Notes:
+- Secrets are not written to the Settings Store JSON; they are stored in Windows Credential Manager (WinCred) or cached in memory for the current app run.
 
 ## Hot Paths
 

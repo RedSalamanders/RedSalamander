@@ -1507,17 +1507,15 @@ private:
         if (profile->requireWindowsHello && ! bypassWindowsHello)
         {
             bool shouldPrompt = true;
-            if (windowsHelloReauthTimeoutMs != 0 && ! profile->id.empty())
+            if (windowsHelloReauthTimeoutMs != 0 && RedSalamander::Connections::IsSecretAccessAuthorized(profile->id, windowsHelloReauthTimeoutMs))
             {
-                const uint64_t now = GetTickCount64();
-                if (const auto it = _lastHelloVerificationTickByConnectionId.find(profile->id); it != _lastHelloVerificationTickByConnectionId.end())
-                {
-                    const uint64_t elapsed = now - it->second;
-                    if (elapsed < windowsHelloReauthTimeoutMs)
-                    {
-                        shouldPrompt = false;
-                    }
-                }
+                shouldPrompt = false;
+            }
+            else if (windowsHelloReauthTimeoutMs != 0 && RedSalamander::Connections::HasSecretAccessAuthorization(profile->id))
+            {
+                // Once the user has performed interactive authentication for a connection during this app run,
+                // do not re-prompt Windows Hello for background reconnects/long-running operations.
+                shouldPrompt = false;
             }
 
             if (shouldPrompt)
@@ -1535,7 +1533,7 @@ private:
 
                 if (windowsHelloReauthTimeoutMs != 0 && ! profile->id.empty())
                 {
-                    _lastHelloVerificationTickByConnectionId[profile->id] = GetTickCount64();
+                    RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
                 }
             }
         }
@@ -1861,7 +1859,6 @@ private:
     std::atomic<ULONG> _refCount;
     std::unique_ptr<RedSalamander::Ui::AlertOverlayWindow> _applicationOverlay;
     std::unordered_map<HWND, std::unique_ptr<RedSalamander::Ui::AlertOverlayWindow>> _windowOverlays;
-    std::unordered_map<std::wstring, uint64_t> _lastHelloVerificationTickByConnectionId;
     std::unordered_map<std::wstring, SessionSecretEntry> _sessionPasswordByConnectionId;
     std::unordered_map<std::wstring, SessionSecretEntry> _sessionPassphraseByConnectionId;
 };
@@ -1965,6 +1962,7 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
         }
         entry.present = true;
         entry.secret.assign(secret);
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
     }
 
     const size_t bytes = (secret.size() + 1u) * sizeof(wchar_t);
@@ -2012,6 +2010,8 @@ HRESULT HostServices::ClearCachedConnectionSecretOnUiThread(const wchar_t* conne
         SecureClear(it->second.secret);
         map.erase(it);
     }
+
+    RedSalamander::Connections::ClearSecretAccessAuthorization(profile->id);
 
     if (RedSalamander::Connections::IsQuickConnectConnectionId(profile->id))
     {
@@ -2101,6 +2101,7 @@ HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* con
         }
         entry.present = true;
         entry.secret.assign(password);
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
     }
 
     SecureClear(password);

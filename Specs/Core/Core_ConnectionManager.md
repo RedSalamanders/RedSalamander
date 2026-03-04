@@ -94,9 +94,11 @@ Stored in Settings Store under `connections`:
 
 - `items` (array of ConnectionProfile)
 - Global Windows Hello settings (Preferences → Advanced → Windows Hello for Connections):
-  - `bypassWindowsHello` (bool, default `false`): when `true`, Windows Hello verification is skipped even if a profile requires it.
-  - `windowsHelloReauthTimeoutMinute` (uint32, default `10`): how long a successful Windows Hello verification is reused for a given connection id (in minutes).
+  - `bypassWindowsHello` (bool, default `false`): when `true`, Windows Hello verification is skipped even if a profile requires it (intended for automation).
+  - `windowsHelloReauthTimeoutMinute` (uint32, default `10`): how long recent interactive authentication is reused for a given connection id (in minutes) for interactive prompts/UX.
+    - Interactive authentication includes Windows Hello verification and manual secret entry (password/passphrase).
     - `0` means re-ask Windows Hello on every secret access.
+    - For long-running background operations (copy/compare) the host reuses successful interactive authentication for the remainder of the app run to avoid mid-operation Windows Hello prompts.
 
 ### Secret Storage (not persisted in JSON)
 
@@ -156,7 +158,7 @@ The Connection Manager is exposed to plugins via a host service queried from `IH
 - `ShowConnectionManager(...)`: opens the host dialog and returns a selected connection name (`S_OK`) or cancel (`S_FALSE`).
 - `GetConnectionJsonUtf8(...)`: returns the non-secret ConnectionProfile JSON (UTF-8).
   - Includes an `extra` object containing the full `ConnectionProfile.extra` payload (plugin-specific non-secret fields).
-- `GetConnectionSecret(...)`: returns a secret if available (WinCred when `savePassword == true`, or session cache); does **not** prompt.
+- `GetConnectionSecret(...)`: returns a secret if available (WinCred when `savePassword == true`, or session cache); does **not** prompt for secret entry.
 - `PromptForConnectionSecret(...)`: prompts and stores a session-only cached secret; does not persist to WinCred.
 - `ClearCachedConnectionSecret(...)`: clears a session-cached secret (does not modify WinCred).
 - `UpgradeFtpAnonymousToPassword(...)`: FTP-only: prompts for credentials, persistently flips `authMode` to `password`, and stages a session-only password.
@@ -170,8 +172,9 @@ The Connection Manager is exposed to plugins via a host service queried from `IH
   - if `savePassword == true`, the host loads secrets from WinCred (generic credentials),
   - if `savePassword == false`, the host never loads secrets from WinCred; instead it may:
     - return a **per-session cached** secret (from a prior prompt), or
-    - prompt the user to enter a secret and cache it **in memory only** for the current app run,
-  - if `requireWindowsHello == true`, the host performs Windows Hello verification prior to returning a secret from WinCred (host policy),
+    - prompt the user to enter a secret via `PromptForConnectionSecret(...)` and cache it **in memory only** for the current app run,
+  - if `requireWindowsHello == true` (and `bypassWindowsHello == false`), the host may perform Windows Hello verification prior to returning a secret from WinCred (host policy),
+    - The host MUST reuse successful interactive authentication for the remainder of the app run for background secret access (so long-running compare/copy does not re-prompt Windows Hello mid-operation).
   - session-cached secrets are cleared on exit (and may expire after a host-defined TTL).
 
 ### Secret retrieval (prompting + session cache)
@@ -180,7 +183,8 @@ Plugins may request secrets in two phases:
 
 - `GetConnectionSecret(...)`:
   - returns a secret if it is available (WinCred when `savePassword == true`, or a session-cached secret),
-  - does **not** prompt,
+  - does **not** prompt for secret entry,
+  - may require Windows Hello verification prior to returning a secret from WinCred (host policy),
   - returns `ERROR_NOT_FOUND` when no secret is available.
 - `PromptForConnectionSecret(...)`:
   - shows a themed prompt for a secret (password/passphrase),

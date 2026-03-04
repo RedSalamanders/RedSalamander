@@ -997,8 +997,8 @@ void FolderView::Render(const RECT& invalidRect)
             }
         }
 
-        const bool canRenderBackgroundWatermark = ! _backgroundWatermarkMessage.empty() && _dwriteFactory && (_detailsFormat || _labelFormat) &&
-                                                  _backgroundWatermarkBrush;
+        const bool canRenderBackgroundWatermark =
+            ! _backgroundWatermarkMessage.empty() && _dwriteFactory && (_detailsFormat || _labelFormat) && _backgroundWatermarkBrush;
         if (canRenderBackgroundWatermark)
         {
             const float clientWidthDip  = std::max(1.0f, DipFromPx(_clientSize.cx));
@@ -1016,14 +1016,13 @@ void FolderView::Render(const RECT& invalidRect)
 
                 if (_backgroundWatermarkMessage.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
                 {
-                    const UINT32 length = static_cast<UINT32>(_backgroundWatermarkMessage.size());
-                    const HRESULT hrLayout =
-                        _dwriteFactory->CreateTextLayout(_backgroundWatermarkMessage.data(),
-                                                         length,
-                                                         _detailsFormat ? _detailsFormat.get() : _labelFormat.get(),
-                                                         clientWidthDip,
-                                                         clientHeightDip,
-                                                         _backgroundWatermarkLayout.addressof());
+                    const UINT32 length    = static_cast<UINT32>(_backgroundWatermarkMessage.size());
+                    const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(_backgroundWatermarkMessage.data(),
+                                                                              length,
+                                                                              _detailsFormat ? _detailsFormat.get() : _labelFormat.get(),
+                                                                              clientWidthDip,
+                                                                              clientHeightDip,
+                                                                              _backgroundWatermarkLayout.addressof());
                     if (SUCCEEDED(hrLayout) && _backgroundWatermarkLayout)
                     {
                         _backgroundWatermarkLayoutClientSizePx = _clientSize;
@@ -1051,12 +1050,12 @@ void FolderView::Render(const RECT& invalidRect)
                 float opacity = _theme.darkBase ? 0.08f : 0.05f;
                 if (_backgroundWatermarkAnimated)
                 {
-                    constexpr float kPi              = 3.14159265358979323846f;
-                    constexpr float kTwoPi           = 2.0f * kPi;
+                    constexpr float kPi               = 3.14159265358979323846f;
+                    constexpr float kTwoPi            = 2.0f * kPi;
                     constexpr uint64_t kPulsePeriodMs = 1400u;
-                    const float t = static_cast<float>(nowTickMs % kPulsePeriodMs) / static_cast<float>(kPulsePeriodMs);
-                    const float pulse = 0.75f + 0.25f * std::sin(t * kTwoPi);
-                    opacity           = std::clamp(opacity * pulse, 0.0f, 1.0f);
+                    const float t                     = static_cast<float>(nowTickMs % kPulsePeriodMs) / static_cast<float>(kPulsePeriodMs);
+                    const float pulse                 = 0.75f + 0.25f * std::sin(t * kTwoPi);
+                    opacity                           = std::clamp(opacity * pulse, 0.0f, 1.0f);
                 }
                 _backgroundWatermarkBrush->SetOpacity(opacity);
 
@@ -1185,6 +1184,10 @@ void FolderView::Render(const RECT& invalidRect)
                     layout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
                     layout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
 
+                    const float messageFontSizeDip = std::clamp(minDimDip * 0.085f, 18.0f, 34.0f);
+                    const DWRITE_TEXT_RANGE range{0, length};
+                    static_cast<void>(layout->SetFontSize(messageFontSizeDip, range));
+
                     ID2D1SolidColorBrush* brush = _detailsTextBrush ? _detailsTextBrush.get() : _textBrush.get();
                     if (! brush)
                     {
@@ -1197,7 +1200,173 @@ void FolderView::Render(const RECT& invalidRect)
 
                 if (! _emptyStateMessage.empty())
                 {
-                    drawCenteredText(_emptyStateMessage);
+                    const bool canDrawNoDifferences = _emptyStateMessageKind == EmptyStateMessageKind::CompareNoDifferences && ! _appTheme.highContrast &&
+                                                      ! _appTheme.systemHighContrast && _filterWatermarkBrush && (_detailsTextBrush || _textBrush) &&
+                                                      _filterWatermarkFormat;
+                    if (canDrawNoDifferences)
+                    {
+                        const UINT messageId = _compareNoDifferencesState ? _compareNoDifferencesState->funMessageResourceId : 0;
+                        const bool needsLayoutRebuild =
+                            ! _emptyMessageIconLayout || ! _emptyMessageTitleLayout || _emptyMessageLayoutClientSizePx.cx != _clientSize.cx ||
+                            _emptyMessageLayoutClientSizePx.cy != _clientSize.cy || _emptyMessageLayoutDpi != _dpi || _emptyMessageLayoutMessageId != messageId;
+                        if (needsLayoutRebuild)
+                        {
+                            _emptyMessageIconLayout.reset();
+                            _emptyMessageTitleLayout.reset();
+                            _emptyMessageFunLayout.reset();
+                            _emptyMessageIconMetrics  = {};
+                            _emptyMessageTitleMetrics = {};
+                            _emptyMessageFunMetrics   = {};
+
+                            const float iconFontSizeDip    = std::clamp(minDimDip * 0.30f, 64.0f, 200.0f);
+                            const float titleFontSizeDip   = std::clamp(minDimDip * 0.09f, 18.0f, 32.0f);
+                            const float emojiFontSizeDip   = std::clamp(minDimDip * 0.11f, 28.0f, 52.0f);
+                            const float messageFontSizeDip = std::clamp(minDimDip * 0.05f, 13.0f, 18.0f);
+
+                            const wchar_t iconText[2]{FluentIcons::kLedLight, 0};
+                            const HRESULT hrIconLayout = _dwriteFactory->CreateTextLayout(
+                                iconText, 1u, _filterWatermarkFormat.get(), clientWidthDip, clientHeightDip, _emptyMessageIconLayout.addressof());
+                            if (SUCCEEDED(hrIconLayout) && _emptyMessageIconLayout)
+                            {
+                                _emptyMessageIconLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                                _emptyMessageIconLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+                                _emptyMessageIconLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+
+                                const DWRITE_TEXT_RANGE range{0, 1};
+                                static_cast<void>(_emptyMessageIconLayout->SetFontSize(iconFontSizeDip, range));
+                                static_cast<void>(_emptyMessageIconLayout->GetMetrics(&_emptyMessageIconMetrics));
+                                _emptyMessageIconFontSizeDip = iconFontSizeDip;
+                            }
+
+                            const std::wstring_view title = _emptyStateMessage;
+                            const UINT32 titleLength =
+                                static_cast<UINT32>(std::min<size_t>(title.size(), static_cast<size_t>(std::numeric_limits<UINT32>::max())));
+                            if (titleLength > 0)
+                            {
+                                const float maxTextWidthDip = std::max(1.0f, clientWidthDip - std::clamp(minDimDip * 0.18f, 80.0f, 200.0f));
+                                const HRESULT hrTitleLayout = _dwriteFactory->CreateTextLayout(title.data(),
+                                                                                               titleLength,
+                                                                                               _labelFormat ? _labelFormat.get() : _detailsFormat.get(),
+                                                                                               maxTextWidthDip,
+                                                                                               clientHeightDip,
+                                                                                               _emptyMessageTitleLayout.addressof());
+                                if (SUCCEEDED(hrTitleLayout) && _emptyMessageTitleLayout)
+                                {
+                                    _emptyMessageTitleLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                                    _emptyMessageTitleLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+                                    _emptyMessageTitleLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+
+                                    const DWRITE_TEXT_RANGE range{0, titleLength};
+                                    static_cast<void>(_emptyMessageTitleLayout->SetFontSize(titleFontSizeDip, range));
+                                    static_cast<void>(_emptyMessageTitleLayout->SetFontWeight(DWRITE_FONT_WEIGHT_SEMI_BOLD, range));
+                                    static_cast<void>(_emptyMessageTitleLayout->GetMetrics(&_emptyMessageTitleMetrics));
+                                }
+                            }
+
+                            std::wstring funText;
+                            if (_compareNoDifferencesState && (! _compareNoDifferencesState->emoji.empty() || ! _compareNoDifferencesState->funMessage.empty()))
+                            {
+                                funText = _compareNoDifferencesState->emoji;
+                                if (! funText.empty() && ! _compareNoDifferencesState->funMessage.empty())
+                                {
+                                    funText.append(L"\r\n");
+                                }
+                                funText.append(_compareNoDifferencesState->funMessage);
+                            }
+
+                            const UINT32 funLength =
+                                static_cast<UINT32>(std::min<size_t>(funText.size(), static_cast<size_t>(std::numeric_limits<UINT32>::max())));
+                            if (funLength > 0)
+                            {
+                                const float maxTextWidthDip = std::max(1.0f, clientWidthDip - std::clamp(minDimDip * 0.18f, 80.0f, 200.0f));
+                                const HRESULT hrFunLayout   = _dwriteFactory->CreateTextLayout(funText.data(),
+                                                                                             funLength,
+                                                                                             _labelFormat ? _labelFormat.get() : _detailsFormat.get(),
+                                                                                             maxTextWidthDip,
+                                                                                             clientHeightDip,
+                                                                                             _emptyMessageFunLayout.addressof());
+                                if (SUCCEEDED(hrFunLayout) && _emptyMessageFunLayout)
+                                {
+                                    _emptyMessageFunLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+                                    _emptyMessageFunLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+                                    _emptyMessageFunLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+
+                                    if (_compareNoDifferencesState && ! _compareNoDifferencesState->emoji.empty())
+                                    {
+                                        const auto emojiLen = static_cast<UINT32>(std::min<size_t>(_compareNoDifferencesState->emoji.size(),
+                                                                                                   static_cast<size_t>(std::numeric_limits<UINT32>::max())));
+                                        if (emojiLen > 0 && emojiLen <= funLength)
+                                        {
+                                            const DWRITE_TEXT_RANGE emojiRange{0, emojiLen};
+                                            _emptyMessageFunLayout->SetFontSize(emojiFontSizeDip, emojiRange);
+                                            _emptyMessageFunLayout->SetFontFamilyName(L"Segoe UI Emoji", emojiRange);
+                                        }
+
+                                        const UINT32 messageStart = emojiLen;
+                                        if (messageStart < funLength)
+                                        {
+                                            const DWRITE_TEXT_RANGE messageRange{messageStart, funLength - messageStart};
+                                            _emptyMessageFunLayout->SetFontSize(messageFontSizeDip, messageRange);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        const DWRITE_TEXT_RANGE range{0, funLength};
+                                        _emptyMessageFunLayout->SetFontSize(messageFontSizeDip, range);
+                                    }
+
+                                    static_cast<void>(_emptyMessageFunLayout->GetMetrics(&_emptyMessageFunMetrics));
+                                }
+                            }
+
+                            _emptyMessageLayoutClientSizePx = _clientSize;
+                            _emptyMessageLayoutDpi          = _dpi;
+                            _emptyMessageLayoutMessageId    = messageId;
+                        }
+
+                        ID2D1SolidColorBrush* textBrush = _detailsTextBrush ? _detailsTextBrush.get() : _textBrush.get();
+                        constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                        if (_emptyMessageIconLayout && _filterWatermarkBrush && textBrush)
+                        {
+                            const float spacingIconToTitleDip = std::clamp(minDimDip * 0.03f, 8.0f, 16.0f);
+                            const float spacingTitleToFunDip  = _emptyMessageFunLayout ? std::clamp(minDimDip * 0.025f, 6.0f, 14.0f) : 0.0f;
+
+                            const float iconHeightDip  = std::max(0.0f, _emptyMessageIconMetrics.height);
+                            const float titleHeightDip = std::max(0.0f, _emptyMessageTitleMetrics.height);
+                            const float funHeightDip   = _emptyMessageFunLayout ? std::max(0.0f, _emptyMessageFunMetrics.height) : 0.0f;
+
+                            const float groupHeightDip = iconHeightDip + spacingIconToTitleDip + titleHeightDip + spacingTitleToFunDip + funHeightDip;
+                            float topDip               = (clientHeightDip - groupHeightDip) * 0.5f;
+                            topDip                     = std::max(0.0f, topDip);
+
+                            float yDip = topDip;
+                            _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, yDip), _emptyMessageIconLayout.get(), _filterWatermarkBrush.get(), options);
+
+                            yDip += iconHeightDip + spacingIconToTitleDip;
+                            if (_emptyMessageTitleLayout)
+                            {
+                                const float maxTextWidthDip = std::max(1.0f, clientWidthDip - std::clamp(minDimDip * 0.18f, 80.0f, 200.0f));
+                                const float leftDip         = (clientWidthDip - maxTextWidthDip) * 0.5f;
+                                _d2dContext->DrawTextLayout(D2D1::Point2F(leftDip, yDip), _emptyMessageTitleLayout.get(), textBrush, options);
+                            }
+
+                            if (_emptyMessageFunLayout)
+                            {
+                                yDip += titleHeightDip + spacingTitleToFunDip;
+                                const float maxTextWidthDip = std::max(1.0f, clientWidthDip - std::clamp(minDimDip * 0.18f, 80.0f, 200.0f));
+                                const float leftDip         = (clientWidthDip - maxTextWidthDip) * 0.5f;
+                                _d2dContext->DrawTextLayout(D2D1::Point2F(leftDip, yDip), _emptyMessageFunLayout.get(), textBrush, options);
+                            }
+                        }
+                        else
+                        {
+                            drawCenteredText(_emptyStateMessage);
+                        }
+                    }
+                    else
+                    {
+                        drawCenteredText(_emptyStateMessage);
+                    }
                 }
                 else if (CanShowEmptyFolderState() && _emptyFolderState.has_value() && _filterWatermarkBrush && (_detailsTextBrush || _textBrush) &&
                          _filterWatermarkFormat)

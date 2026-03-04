@@ -267,7 +267,10 @@ namespace
     return S_OK;
 }
 
-[[nodiscard]] HRESULT ListS3Objects(FileSystemS3& fs, const ResolvedAwsContext& ctx, const S3Location& loc, std::vector<FilesInformationS3::Entry>& out) noexcept
+[[nodiscard]] HRESULT ListS3Objects(FileSystemS3& fs,
+                                    const ResolvedAwsContext& ctx,
+                                    const S3Location& loc,
+                                    std::vector<FilesInformationS3::Entry>& out) noexcept
 {
     out.clear();
 
@@ -381,11 +384,8 @@ namespace
     return S_OK;
 }
 
-[[nodiscard]] HRESULT DownloadS3ObjectToTempFile(FileSystemS3& fs,
-                                                 const ResolvedAwsContext& ctx,
-                                                 std::string_view bucket,
-                                                 std::string_view key,
-                                                 wil::unique_hfile& outFile) noexcept
+[[nodiscard]] HRESULT DownloadS3ObjectToTempFile(
+    FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, wil::unique_hfile& outFile) noexcept
 {
     outFile.reset();
 

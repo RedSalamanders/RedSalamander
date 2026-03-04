@@ -233,10 +233,10 @@ struct SelfTestState
     uint64_t watchCounter = 0;
     wil::unique_handle lockedFileHandle;
 
-    size_t copyKnobIndex        = 0;
-    size_t deleteKnobIndex      = 0;
-    bool copySpeedLimitCleared  = false;
-    ULONGLONG copyTaskStartTick = 0;
+    size_t copyKnobIndex                = 0;
+    size_t deleteKnobIndex              = 0;
+    bool copySpeedLimitCleared          = false;
+    ULONGLONG copyTaskStartTick         = 0;
     size_t connGateMaxActiveCopyStreams = 0;
     bool connGateObservedSaturation     = false;
 
@@ -320,52 +320,52 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
 }
 
 constexpr std::array<SelfTestState::Step, 46> kFileOpsPhaseOrder = {
-    {SelfTestState::Step::Setup,                                            // Environment setup and plugin loading
-     SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot,                 // Phase 5 — pre-calc: cancel releases the queued slot
-     SelfTestState::Step::Phase5_PreCalcSkipContinues,                      // Phase 5 — pre-calc: skip continues to the next item
-     SelfTestState::Step::Phase5_CancelQueuedTask,                          // Phase 5 — canceling a queued (not-yet-running) task
-     SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc,         // Phase 5 — mode switch parallel→wait mid-pre-calc
-     SelfTestState::Step::Phase5_SwitchWaitToParallelResume,                // Phase 5 — mode switch wait→parallel and resume
-     SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,                  // Phase 6 — popup resize and pause-button interaction
-     SelfTestState::Step::Phase6_DeleteBytesMeaningful,                     // Phase 6 — delete reports meaningful byte counts in progress
-      SelfTestState::Step::Phase7_WatcherChurn,                              // Phase 7 — directory watcher fires correctly under heavy churn
-      SelfTestState::Step::Phase7_LargeDirectoryEnumeration,                 // Phase 7 — enumerate a directory with many entries
-      SelfTestState::Step::Phase7_ParallelCopyMoveKnobs,                     // Phase 7 — speed limits and parallelism knobs for copy/move
-      SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines,         // Phase 7 — per-item directory copy uses internal parallelism (popup lines)
-      SelfTestState::Step::Phase7_SharedPerItemScheduler,                    // Phase 7 — shared per-item scheduler across parallel tasks
-      SelfTestState::Step::Phase7_ParallelDeleteKnobs,                       // Phase 7 — speed limits and parallelism knobs for delete
-     SelfTestState::Step::Phase8_TightDefaults_NoOverwrite,                 // Phase 8 — no-overwrite default returns correct HRESULT
-      SelfTestState::Step::Phase8_InvalidDestinationRejected,                // Phase 8 — invalid destination is rejected before op starts
-     SelfTestState::Step::Phase8_InvalidSizeBytesRejected,                  // Phase 8 — invalid sizeBytes is rejected at the ABI boundary
-      SelfTestState::Step::Phase8_PerItemOrchestration,                      // Phase 8 — per-item mode orchestrates items one by one
-      SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly,   // Phase 9 — overwrite read-only via conflict prompt
-      SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache,          // Phase 9 — apply-to-all caching in conflict prompt UI
-      SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap,           // Phase 9 — auto-cap on overwrite conflict
-     SelfTestState::Step::Phase9_ConflictPrompt_SkipAll,                    // Phase 9 — skip-all in conflict prompt
-     SelfTestState::Step::Phase9_ConflictPrompt_RetryCap,                   // Phase 9 — retry cap in conflict prompt
-     SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy, // Phase 9 — skip continues directory copy
-     SelfTestState::Step::Phase9_PerItemConcurrency,                        // Phase 9 — per-item mode with concurrent operations
-     SelfTestState::Step::Phase10_PermanentDeleteWithValidation,            // Phase 10 — permanent delete with post-delete validation
-     SelfTestState::Step::Phase11_CrossFileSystemBridge,                    // Phase 11 — copy/move across different file-system plugins
+    {SelfTestState::Step::Setup,                                               // Environment setup and plugin loading
+     SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot,                    // Phase 5 — pre-calc: cancel releases the queued slot
+     SelfTestState::Step::Phase5_PreCalcSkipContinues,                         // Phase 5 — pre-calc: skip continues to the next item
+     SelfTestState::Step::Phase5_CancelQueuedTask,                             // Phase 5 — canceling a queued (not-yet-running) task
+     SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc,            // Phase 5 — mode switch parallel→wait mid-pre-calc
+     SelfTestState::Step::Phase5_SwitchWaitToParallelResume,                   // Phase 5 — mode switch wait→parallel and resume
+     SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,                     // Phase 6 — popup resize and pause-button interaction
+     SelfTestState::Step::Phase6_DeleteBytesMeaningful,                        // Phase 6 — delete reports meaningful byte counts in progress
+     SelfTestState::Step::Phase7_WatcherChurn,                                 // Phase 7 — directory watcher fires correctly under heavy churn
+     SelfTestState::Step::Phase7_LargeDirectoryEnumeration,                    // Phase 7 — enumerate a directory with many entries
+     SelfTestState::Step::Phase7_ParallelCopyMoveKnobs,                        // Phase 7 — speed limits and parallelism knobs for copy/move
+     SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines,            // Phase 7 — per-item directory copy uses internal parallelism (popup lines)
+     SelfTestState::Step::Phase7_SharedPerItemScheduler,                       // Phase 7 — shared per-item scheduler across parallel tasks
+     SelfTestState::Step::Phase7_ParallelDeleteKnobs,                          // Phase 7 — speed limits and parallelism knobs for delete
+     SelfTestState::Step::Phase8_TightDefaults_NoOverwrite,                    // Phase 8 — no-overwrite default returns correct HRESULT
+     SelfTestState::Step::Phase8_InvalidDestinationRejected,                   // Phase 8 — invalid destination is rejected before op starts
+     SelfTestState::Step::Phase8_InvalidSizeBytesRejected,                     // Phase 8 — invalid sizeBytes is rejected at the ABI boundary
+     SelfTestState::Step::Phase8_PerItemOrchestration,                         // Phase 8 — per-item mode orchestrates items one by one
+     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly,      // Phase 9 — overwrite read-only via conflict prompt
+     SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache,             // Phase 9 — apply-to-all caching in conflict prompt UI
+     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap,              // Phase 9 — auto-cap on overwrite conflict
+     SelfTestState::Step::Phase9_ConflictPrompt_SkipAll,                       // Phase 9 — skip-all in conflict prompt
+     SelfTestState::Step::Phase9_ConflictPrompt_RetryCap,                      // Phase 9 — retry cap in conflict prompt
+     SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy,    // Phase 9 — skip continues directory copy
+     SelfTestState::Step::Phase9_PerItemConcurrency,                           // Phase 9 — per-item mode with concurrent operations
+     SelfTestState::Step::Phase10_PermanentDeleteWithValidation,               // Phase 10 — permanent delete with post-delete validation
+     SelfTestState::Step::Phase11_CrossFileSystemBridge,                       // Phase 11 — copy/move across different file-system plugins
      SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines, // Phase 11 — bridge: single-folder copy uses within-folder parallelism
-     SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines, // Phase 11 — bridge: multi-folder copy still uses within-folder parallelism
-     SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate,             // Phase 11 — connection overrides apply globally across tasks
-     SelfTestState::Step::Phase11_ConnectionOverrideClamp,                  // Phase 11 — connection manager overrides clamp per-task concurrency
-     SelfTestState::Step::Phase12_ReparsePointPolicy,                       // Phase 12 — reparse-point (symlink/junction) handling policy
-     SelfTestState::Step::Phase13_PostMortemDiagnostics,                    // Phase 13 — post-mortem diagnostics on task failure
-     SelfTestState::Step::Phase14_PopupHostLifetimeGuard,                   // Phase 14 — popup host lifetime guard (no UAF on late input)
-     SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke,                // Phase 15 — 7z IFileReader read/seek smoke on a large (>32MB) entry
-     SelfTestState::Step::Phase16_RemoteFtpSecret,                          // Phase 16 — secure secret retrieval (FTP)
-     SelfTestState::Step::Phase16_RemoteFtpSandbox,                         // Phase 16 — remote sandbox root configuration (FTP)
-     SelfTestState::Step::Phase16_RemoteSftpSecret,                         // Phase 16 — secure secret retrieval (SFTP)
-     SelfTestState::Step::Phase16_RemoteSftpSandbox,                        // Phase 16 — remote sandbox root configuration (SFTP)
-     SelfTestState::Step::Phase16_RemoteScpSecret,                          // Phase 16 — secure secret retrieval (SCP)
-     SelfTestState::Step::Phase16_RemoteScpSandbox,                         // Phase 16 — remote sandbox root configuration (SCP)
-     SelfTestState::Step::Phase16_RemoteImapSecret,                         // Phase 16 — secure secret retrieval (IMAP)
-     SelfTestState::Step::Phase16_RemoteImapSandbox,                        // Phase 16 — remote sandbox root configuration (IMAP)
-     SelfTestState::Step::Phase16_RemoteS3Secret,                           // Phase 16 — secure secret retrieval (S3)
-     SelfTestState::Step::Phase16_RemoteS3Sandbox,                          // Phase 16 — remote sandbox root configuration (S3)
-     SelfTestState::Step::Cleanup_RestorePluginConfig}};                    // Restore plugin config and delete temp files
+     SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,  // Phase 11 — bridge: multi-folder copy still uses within-folder parallelism
+     SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate,                // Phase 11 — connection overrides apply globally across tasks
+     SelfTestState::Step::Phase11_ConnectionOverrideClamp,                     // Phase 11 — connection manager overrides clamp per-task concurrency
+     SelfTestState::Step::Phase12_ReparsePointPolicy,                          // Phase 12 — reparse-point (symlink/junction) handling policy
+     SelfTestState::Step::Phase13_PostMortemDiagnostics,                       // Phase 13 — post-mortem diagnostics on task failure
+     SelfTestState::Step::Phase14_PopupHostLifetimeGuard,                      // Phase 14 — popup host lifetime guard (no UAF on late input)
+     SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke,                   // Phase 15 — 7z IFileReader read/seek smoke on a large (>32MB) entry
+     SelfTestState::Step::Phase16_RemoteFtpSecret,                             // Phase 16 — secure secret retrieval (FTP)
+     SelfTestState::Step::Phase16_RemoteFtpSandbox,                            // Phase 16 — remote sandbox root configuration (FTP)
+     SelfTestState::Step::Phase16_RemoteSftpSecret,                            // Phase 16 — secure secret retrieval (SFTP)
+     SelfTestState::Step::Phase16_RemoteSftpSandbox,                           // Phase 16 — remote sandbox root configuration (SFTP)
+     SelfTestState::Step::Phase16_RemoteScpSecret,                             // Phase 16 — secure secret retrieval (SCP)
+     SelfTestState::Step::Phase16_RemoteScpSandbox,                            // Phase 16 — remote sandbox root configuration (SCP)
+     SelfTestState::Step::Phase16_RemoteImapSecret,                            // Phase 16 — secure secret retrieval (IMAP)
+     SelfTestState::Step::Phase16_RemoteImapSandbox,                           // Phase 16 — remote sandbox root configuration (IMAP)
+     SelfTestState::Step::Phase16_RemoteS3Secret,                              // Phase 16 — secure secret retrieval (S3)
+     SelfTestState::Step::Phase16_RemoteS3Sandbox,                             // Phase 16 — remote sandbox root configuration (S3)
+     SelfTestState::Step::Cleanup_RestorePluginConfig}};                       // Restore plugin config and delete temp files
 
 void AppendLog(std::wstring_view message) noexcept
 {
@@ -875,10 +875,10 @@ void RemoveConnectionProfileByName(std::wstring_view name) noexcept
     }
 
     auto& items = g_settings.connections->items;
-    items.erase(std::remove_if(items.begin(), items.end(), [&](const Common::Settings::ConnectionProfile& profile) noexcept
-    {
-        return ! profile.name.empty() && EqualsIgnoreCase(profile.name, name);
-    }),
+    items.erase(std::remove_if(items.begin(),
+                               items.end(),
+                               [&](const Common::Settings::ConnectionProfile& profile) noexcept
+    { return ! profile.name.empty() && EqualsIgnoreCase(profile.name, name); }),
                 items.end());
 }
 
@@ -972,11 +972,10 @@ struct PhaseCheckResult
     std::wstring reason;
 };
 
-[[nodiscard]] PhaseCheckResult CheckRemoteConnectionSecret(
-    std::wstring_view protocolLabel,
-    std::wstring_view envVarName,
-    std::wstring_view defaultProfileName,
-    std::wstring_view expectedPluginId) noexcept
+[[nodiscard]] PhaseCheckResult CheckRemoteConnectionSecret(std::wstring_view protocolLabel,
+                                                           std::wstring_view envVarName,
+                                                           std::wstring_view defaultProfileName,
+                                                           std::wstring_view expectedPluginId) noexcept
 {
     const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
     const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
@@ -1012,7 +1011,8 @@ struct PhaseCheckResult
 
     if (! profile->savePassword)
     {
-        return {.status = SelfTest::SelfTestCaseResult::Status::skipped, .reason = std::format(L"{}: savePassword=false (secret is not persisted).", protocolLabel)};
+        return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
+                .reason = std::format(L"{}: savePassword=false (secret is not persisted).", protocolLabel)};
     }
 
     HostConnectionSecretKind kind = HOST_CONNECTION_SECRET_PASSWORD;
@@ -1046,7 +1046,8 @@ struct PhaseCheckResult
 
     if (! secret)
     {
-        return {.status = SelfTest::SelfTestCaseResult::Status::failed, .reason = std::format(L"{}: GetConnectionSecret returned success but no secret.", protocolLabel)};
+        return {.status = SelfTest::SelfTestCaseResult::Status::failed,
+                .reason = std::format(L"{}: GetConnectionSecret returned success but no secret.", protocolLabel)};
     }
 
     SecureClearAndFreeSecret(secret);
@@ -1105,11 +1106,10 @@ struct PhaseCheckResult
     return path;
 }
 
-[[nodiscard]] PhaseCheckResult CheckRemoteConnectionSandbox(
-    std::wstring_view protocolLabel,
-    std::wstring_view envVarName,
-    std::wstring_view defaultProfileName,
-    std::wstring_view expectedPluginId) noexcept
+[[nodiscard]] PhaseCheckResult CheckRemoteConnectionSandbox(std::wstring_view protocolLabel,
+                                                            std::wstring_view envVarName,
+                                                            std::wstring_view defaultProfileName,
+                                                            std::wstring_view expectedPluginId) noexcept
 {
     const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
     const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
@@ -1178,14 +1178,16 @@ struct PhaseCheckResult
     if (isS3 && segmentCount < 2)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
-                .reason = std::format(L"{}: HARD REQUIREMENT: initialPath must include a bucket and a dedicated selftest prefix (e.g. '/bucket/red-salamander-selftest').",
-                                     protocolLabel)};
+                .reason = std::format(
+                    L"{}: HARD REQUIREMENT: initialPath must include a bucket and a dedicated selftest prefix (e.g. '/bucket/red-salamander-selftest').",
+                    protocolLabel)};
     }
 
     if (! ContainsIgnoreCase(initialPath, L"selftest"))
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
-                .reason = std::format(L"{}: HARD REQUIREMENT: initialPath must include 'selftest' (case-insensitive) to prove it is test-only.", protocolLabel)};
+                .reason =
+                    std::format(L"{}: HARD REQUIREMENT: initialPath must include 'selftest' (case-insensitive) to prove it is test-only.", protocolLabel)};
     }
 
     return {.status = SelfTest::SelfTestCaseResult::Status::passed};
@@ -1343,7 +1345,7 @@ bool WriteAllToHandle(HANDLE handle, const void* data, size_t bytes) noexcept
         return false;
     }
 
-    const auto* src = static_cast<const unsigned char*>(data);
+    const auto* src  = static_cast<const unsigned char*>(data);
     size_t remaining = bytes;
     while (remaining > 0)
     {
@@ -1527,7 +1529,7 @@ bool CreateZipArchiveWithStoredPatternFile(const std::filesystem::path& zipPath,
     std::vector<unsigned char> buffer;
     buffer.resize(256u * 1024u);
 
-    uint32_t crc = 0xFFFFFFFFu;
+    uint32_t crc    = 0xFFFFFFFFu;
     uint64_t offset = 0;
     while (offset < fileSizeBytes)
     {
@@ -1558,8 +1560,7 @@ bool CreateZipArchiveWithStoredPatternFile(const std::filesystem::path& zipPath,
         return false;
     }
 
-    const uint32_t centralDirOffset =
-        static_cast<uint32_t>(sizeof(local) + static_cast<size_t>(nameLen) + static_cast<size_t>(fileSizeBytes) + sizeof(desc));
+    const uint32_t centralDirOffset = static_cast<uint32_t>(sizeof(local) + static_cast<size_t>(nameLen) + static_cast<size_t>(fileSizeBytes) + sizeof(desc));
 
     ZipCentralDirectoryHeader cen{};
     cen.signature              = kCenSig;
@@ -4699,7 +4700,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
 
             FileSystemOptions badOptions{};
-            badOptions.sizeBytes                   = sizeof(FileSystemOptions) - 1u;
+            badOptions.sizeBytes                    = sizeof(FileSystemOptions) - 1u;
             badOptions.bandwidthLimitBytesPerSecond = 0;
 
             const HRESULT copyHr = state.fsDummy->CopyItem(L"/src.bin", L"/dst.bin", FILESYSTEM_FLAG_NONE, &badOptions, nullptr, nullptr);
@@ -4734,7 +4735,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             const HRESULT qiIoHr = state.fsDummy->QueryInterface(IID_PPV_ARGS(io.addressof()));
             if (FAILED(qiIoHr) || ! io)
             {
-                Fail(std::format(L"Phase8_InvalidSizeBytesRejected: dummy filesystem missing IFileSystemIO (hr=0x{:08X}).", static_cast<unsigned long>(qiIoHr)));
+                Fail(
+                    std::format(L"Phase8_InvalidSizeBytesRejected: dummy filesystem missing IFileSystemIO (hr=0x{:08X}).", static_cast<unsigned long>(qiIoHr)));
                 return true;
             }
 
@@ -4750,9 +4752,9 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
 
             FileSystemRenamePair badRename{};
-            badRename.sizeBytes   = sizeof(FileSystemRenamePair) - 1u;
-            badRename.sourcePath  = L"/src.bin";
-            badRename.newName     = L"renamed.bin";
+            badRename.sizeBytes  = sizeof(FileSystemRenamePair) - 1u;
+            badRename.sourcePath = L"/src.bin";
+            badRename.newName    = L"renamed.bin";
 
             const HRESULT renameHr = state.fsDummy->RenameItems(&badRename, 1, FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
             if (renameHr != E_INVALIDARG)
@@ -6537,7 +6539,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 }
 
                 FileSystemBasicInformation sourceBasic{};
-                sourceBasic.sizeBytes = sizeof(FileSystemBasicInformation);
+                sourceBasic.sizeBytes                     = sizeof(FileSystemBasicInformation);
                 const std::filesystem::path overwriteFile = srcDir / L"a.bin";
                 if (FAILED(localIo->GetFileBasicInformation(overwriteFile.c_str(), &sourceBasic)))
                 {
@@ -6687,8 +6689,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             const std::filesystem::path srcDir = state.tempRoot / L"bridge-singlefolder-src";
             const std::wstring dummyRoot       = L"/bridge-singlefolder";
 
-            constexpr int kFileCount         = 12;
-            constexpr size_t kFileBytes      = 2ull * 1024ull * 1024ull;
+            constexpr int kFileCount          = 12;
+            constexpr size_t kFileBytes       = 2ull * 1024ull * 1024ull;
             constexpr uint64_t kSpeedLimitBps = 1ull * 1024ull * 1024ull;
 
             if (state.stepState == 0)
@@ -6760,8 +6762,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             {
                 if (task)
                 {
-                    size_t inFlightCount      = 0;
-                    size_t inFlightItemCalls  = 0;
+                    size_t inFlightCount     = 0;
+                    size_t inFlightItemCalls = 0;
                     {
                         std::scoped_lock lock(task->_progressMutex);
                         inFlightCount     = task->_inFlightFileCount;
@@ -6813,9 +6815,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return true;
             }
 
-            const std::wstring dummyProbe =
-                std::format(L"{}/{}/sf_{:02}.bin", dummyRoot, srcDir.filename().wstring(), 0);
-            unsigned long attrs = 0;
+            const std::wstring dummyProbe = std::format(L"{}/{}/sf_{:02}.bin", dummyRoot, srcDir.filename().wstring(), 0);
+            unsigned long attrs           = 0;
             if (FAILED(dummyIo->GetAttributes(dummyProbe.c_str(), &attrs)))
             {
                 Fail(L"Bridge single-folder output file missing in dummy filesystem.");
@@ -7015,10 +7016,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return true;
             }
 
-            const std::filesystem::path srcDir = state.tempRoot / L"conn-gate-src";
-            constexpr int kFileCount           = 8;
-            constexpr size_t kFileBytes        = 2ull * 1024ull * 1024ull;
-            constexpr uint64_t kSpeedLimitBps  = 1ull * 1024ull * 1024ull;
+            const std::filesystem::path srcDir  = state.tempRoot / L"conn-gate-src";
+            constexpr int kFileCount            = 8;
+            constexpr size_t kFileBytes         = 2ull * 1024ull * 1024ull;
+            constexpr uint64_t kSpeedLimitBps   = 1ull * 1024ull * 1024ull;
             constexpr size_t kGlobalCopyMoveMax = 2u;
 
             const auto countActiveStreams = [](const FolderWindow::FileOperationState::Task& task) noexcept -> size_t
@@ -7057,12 +7058,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 RemoveConnectionProfileByName(state.connOverrideProfileName);
 
                 Common::Settings::ConnectionProfile profile{};
-                profile.id          = NewGuidString();
-                profile.name        = state.connOverrideProfileName;
-                profile.pluginId    = std::wstring(kPluginIdDummy);
-                profile.initialPath = L"/conn-gate";
+                profile.id                  = NewGuidString();
+                profile.name                = state.connOverrideProfileName;
+                profile.pluginId            = std::wstring(kPluginIdDummy);
+                profile.initialPath         = L"/conn-gate";
                 profile.requireWindowsHello = false;
-                profile.extra = MakeJsonObjectWithUIntMembers({{"copyMoveMaxConcurrency", static_cast<uint64_t>(kGlobalCopyMoveMax)}});
+                profile.extra               = MakeJsonObjectWithUIntMembers({{"copyMoveMaxConcurrency", static_cast<uint64_t>(kGlobalCopyMoveMax)}});
 
                 g_settings.connections->items.push_back(profile);
 
@@ -7104,8 +7105,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     sourcesB.push_back(file);
                 }
 
-                const FileSystemFlags flags =
-                    static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+                const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
 
                 state.connGateMaxActiveCopyStreams = 0;
                 state.connGateObservedSaturation   = false;
@@ -7180,7 +7180,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                         activeB = countActiveStreams(*taskB);
                     }
 
-                    const size_t totalActive = activeA + activeB;
+                    const size_t totalActive           = activeA + activeB;
                     state.connGateMaxActiveCopyStreams = (std::max)(state.connGateMaxActiveCopyStreams, totalActive);
                     if (totalActive == kGlobalCopyMoveMax)
                     {
@@ -7257,12 +7257,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 RemoveConnectionProfileByName(state.connOverrideProfileName);
 
                 Common::Settings::ConnectionProfile profile{};
-                profile.id          = NewGuidString();
-                profile.name        = state.connOverrideProfileName;
-                profile.pluginId    = std::wstring(kPluginIdDummy);
-                profile.initialPath = L"/conn-selftest";
+                profile.id                  = NewGuidString();
+                profile.name                = state.connOverrideProfileName;
+                profile.pluginId            = std::wstring(kPluginIdDummy);
+                profile.initialPath         = L"/conn-selftest";
                 profile.requireWindowsHello = false;
-                profile.extra = MakeJsonObjectWithUIntMembers({{"copyMoveMaxConcurrency", 1ull}, {"deleteMaxConcurrency", 1ull}});
+                profile.extra               = MakeJsonObjectWithUIntMembers({{"copyMoveMaxConcurrency", 1ull}, {"deleteMaxConcurrency", 1ull}});
 
                 g_settings.connections->items.push_back(profile);
 
@@ -7272,7 +7272,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
-                const std::wstring destinationFolder = std::format(L"/@conn:{}/copy", state.connOverrideProfileName);
+                const std::wstring destinationFolder         = std::format(L"/@conn:{}/copy", state.connOverrideProfileName);
                 const std::wstring resolvedDestinationFolder = std::format(L"{}/copy", profile.initialPath);
                 if (! EnsureDummyFolderExists(state.fsDummy.get(), resolvedDestinationFolder))
                 {
@@ -7288,18 +7288,17 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 }
 
                 {
-                    unsigned long attrs = 0;
+                    unsigned long attrs  = 0;
                     const HRESULT hrAttr = dummyIo->GetAttributes(resolvedDestinationFolder.c_str(), &attrs);
                     if (FAILED(hrAttr) || (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0)
                     {
-                        Fail(std::format(L"@conn override preflight: resolved destination folder missing (hr=0x{:08X}).",
-                                         static_cast<unsigned long>(hrAttr)));
+                        Fail(std::format(L"@conn override preflight: resolved destination folder missing (hr=0x{:08X}).", static_cast<unsigned long>(hrAttr)));
                         return true;
                     }
                 }
 
                 {
-                    unsigned long attrs = 0;
+                    unsigned long attrs  = 0;
                     const HRESULT hrAttr = dummyIo->GetAttributes(destinationFolder.c_str(), &attrs);
                     if (FAILED(hrAttr) || (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0)
                     {
@@ -7328,8 +7327,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     sources.push_back(file);
                 }
 
-                const FileSystemFlags flags =
-                    static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+                const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
 
                 state.taskA = StartFileOperationAndGetId(state.fileOps,
                                                          FILESYSTEM_COPY,
@@ -7362,7 +7360,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return false;
                 }
 
-                unsigned int budget = 0;
+                unsigned int budget  = 0;
                 unsigned int maxConc = 0;
                 {
                     std::scoped_lock lock(task->_progressMutex);
@@ -7407,7 +7405,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                                                          std::nullopt,
                                                          state.fsDummy,
                                                          std::move(deletePaths),
-                                                         {},
+                                                                         {},
                                                          flags,
                                                          false,
                                                          0,
@@ -7430,7 +7428,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return false;
                 }
 
-                unsigned int budget = 0;
+                unsigned int budget  = 0;
                 unsigned int maxConc = 0;
                 {
                     std::scoped_lock lock(task->_progressMutex);
@@ -8403,7 +8401,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
-                FileInfo* head = nullptr;
+                FileInfo* head      = nullptr;
                 const HRESULT hrBuf = rootFiles->GetBuffer(&head);
                 if (FAILED(hrBuf))
                 {
@@ -8413,11 +8411,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
                 if (! head)
                 {
-                    unsigned long count = 0;
+                    unsigned long count   = 0;
                     const HRESULT hrCount = rootFiles->GetCount(&count);
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke root directory is empty. hrCount=0x{:08X} count={}",
-                                     static_cast<unsigned long>(hrCount),
-                                     count));
+                    Fail(std::format(
+                        L"Phase15_FileSystem7zReadSeekSmoke root directory is empty. hrCount=0x{:08X} count={}", static_cast<unsigned long>(hrCount), count));
                     return true;
                 }
 
@@ -8472,7 +8469,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
-                uint64_t sizeBytes = 0;
+                uint64_t sizeBytes   = 0;
                 const HRESULT hrSize = reader->GetSize(&sizeBytes);
                 if (FAILED(hrSize) || sizeBytes != kPayloadBytes)
                 {
@@ -8485,15 +8482,15 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
                 std::array<unsigned char, kReadBytes> buffer{};
                 unsigned long bytesRead = 0;
-                const HRESULT hrRead0 =
-                    reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &bytesRead);
+                const HRESULT hrRead0   = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &bytesRead);
                 if (FAILED(hrRead0) || bytesRead != buffer.size() || ! VerifyPatternBytes(buffer.data(), bytesRead, 0))
                 {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke read@0 failed. hr=0x{:08X} bytesRead={}", static_cast<unsigned long>(hrRead0), bytesRead));
+                    Fail(std::format(
+                        L"Phase15_FileSystem7zReadSeekSmoke read@0 failed. hr=0x{:08X} bytesRead={}", static_cast<unsigned long>(hrRead0), bytesRead));
                     return true;
                 }
 
-                uint64_t newPos = 0;
+                uint64_t newPos         = 0;
                 const HRESULT hrSeekFwd = reader->Seek(static_cast<__int64>(kSeekOffset), FILE_BEGIN, &newPos);
                 if (FAILED(hrSeekFwd) || newPos != kSeekOffset)
                 {
@@ -8506,12 +8503,13 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
                 bytesRead = 0;
                 buffer.fill(0);
-                const HRESULT hrRead1 =
-                    reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &bytesRead);
+                const HRESULT hrRead1 = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &bytesRead);
                 if (FAILED(hrRead1) || bytesRead != buffer.size() || ! VerifyPatternBytes(buffer.data(), bytesRead, kSeekOffset))
                 {
-                    Fail(std::format(
-                        L"Phase15_FileSystem7zReadSeekSmoke read@{} failed. hr=0x{:08X} bytesRead={}", kSeekOffset, static_cast<unsigned long>(hrRead1), bytesRead));
+                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke read@{} failed. hr=0x{:08X} bytesRead={}",
+                                     kSeekOffset,
+                                     static_cast<unsigned long>(hrRead1),
+                                     bytesRead));
                     return true;
                 }
 
@@ -8525,8 +8523,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
                 bytesRead = 0;
                 buffer.fill(0);
-                const HRESULT hrRead2 =
-                    reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &bytesRead);
+                const HRESULT hrRead2 = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &bytesRead);
                 if (FAILED(hrRead2) || bytesRead != buffer.size() || ! VerifyPatternBytes(buffer.data(), bytesRead, 0))
                 {
                     Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke read@0(after backward seek) failed. hr=0x{:08X} bytesRead={}",

@@ -1,6 +1,6 @@
 # Compare Directories — Implementation tracker
 
-Last updated: 2026-03-03
+Last updated: 2026-03-04
 
 This is the living engineering tracker for **Compare Directories**:
 
@@ -33,7 +33,7 @@ This is the living engineering tracker for **Compare Directories**:
 - [x] Engine: skip content compare enqueue when enabled non-content criteria already differ (avoid useless remote reads)
 - [x] UI: replace UI-thread `GetOrComputeDecision` calls with cache-only (`TryGetCachedDecision`)
 - [x] UI: extend decision refresh timer to flush both content + subdir updates (budgeted)
-- [x] UI: warn + confirm before restarting scan when toggling **Show Identical Items** (`RedSalamander/CompareDirectoriesWindow.cpp`, `Specs/Core/Core_CompareDirectories.md`)
+- [x] UI: add `keepIdenticalItems` retention toggle + gate **Compare → Show Identical Items** view toggle (no rescan for view toggle) (`RedSalamander/CompareDirectoriesWindow.cpp`, `Specs/Core/Core_CompareDirectories.md`)
 - [x] Selftests: update `compareSubdirectories` cases for progressive scan completion
 - [x] Selftests: add regression proving `GetOrComputeDecision` does not enumerate descendants
 - [x] Selftests: add regression for differences-only content-compare elision (`content_pending_elided`)

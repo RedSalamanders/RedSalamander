@@ -820,10 +820,7 @@ void ExtraRemoveKey(Common::Settings::JsonValue& extra, std::string_view key) no
     }
 
     auto& members = (*objPtr)->members;
-    members.erase(std::remove_if(members.begin(),
-                                 members.end(),
-                                 [&](const auto& member) noexcept { return member.first == keyUtf8; }),
-                  members.end());
+    members.erase(std::remove_if(members.begin(), members.end(), [&](const auto& member) noexcept { return member.first == keyUtf8; }), members.end());
 }
 
 struct DialogState
@@ -850,7 +847,6 @@ struct DialogState
     std::unordered_map<std::wstring, std::wstring> stagedPassphraseById;
     std::unordered_map<std::wstring, std::wstring> secretPlaceholderById;
     std::unordered_set<std::wstring> secretDirtyIds;
-    std::unordered_map<std::wstring, uint64_t> lastHelloVerificationTickByConnectionId;
 
     std::wstring selectedConnectionName;
 
@@ -977,7 +973,6 @@ void PopulateStateFromSettings(DialogState& state, const Common::Settings::Setti
     state.stagedPassphraseById.clear();
     state.secretPlaceholderById.clear();
     state.secretDirtyIds.clear();
-    state.lastHelloVerificationTickByConnectionId.clear();
     state.selectedConnectionName.clear();
 
     if (settings.connections)
@@ -1222,17 +1217,9 @@ void UpdateSecretVisibility(DialogState& state) noexcept
     const uint64_t windowsHelloReauthTimeoutMs = static_cast<uint64_t>(windowsHelloReauthTimeoutMinute) * 60'000ull;
 
     bool shouldPrompt = true;
-    if (windowsHelloReauthTimeoutMs != 0 && ! profile.id.empty())
+    if (RedSalamander::Connections::IsSecretAccessAuthorized(profile.id, windowsHelloReauthTimeoutMs))
     {
-        const uint64_t now = GetTickCount64();
-        if (const auto it = state.lastHelloVerificationTickByConnectionId.find(profile.id); it != state.lastHelloVerificationTickByConnectionId.end())
-        {
-            const uint64_t elapsed = now - it->second;
-            if (elapsed < windowsHelloReauthTimeoutMs)
-            {
-                shouldPrompt = false;
-            }
-        }
+        shouldPrompt = false;
     }
 
     if (! shouldPrompt)
@@ -1252,7 +1239,7 @@ void UpdateSecretVisibility(DialogState& state) noexcept
 
     if (windowsHelloReauthTimeoutMs != 0 && ! profile.id.empty())
     {
-        state.lastHelloVerificationTickByConnectionId[profile.id] = GetTickCount64();
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id);
     }
 
     return S_OK;
@@ -2059,7 +2046,7 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
     }
 
     {
-        uint32_t copyMoveOverride = 0;
+        uint32_t copyMoveOverride       = 0;
         const std::wstring copyMoveText = TrimWhitespace(Win32Text::GetWindowTextString(state.copyMoveMaxConcurrencyEdit));
         if (TryParseUInt32(copyMoveText, copyMoveOverride))
         {
@@ -2078,7 +2065,7 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
             ExtraRemoveKey(profile.extra, "copyMoveMaxConcurrency");
         }
 
-        uint32_t deleteOverride = 0;
+        uint32_t deleteOverride       = 0;
         const std::wstring deleteText = TrimWhitespace(Win32Text::GetWindowTextString(state.deleteMaxConcurrencyEdit));
         if (TryParseUInt32(deleteText, deleteOverride))
         {
@@ -2278,6 +2265,7 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
         }
     }
     state.stagedPasswordById[profile.id] = std::move(secret);
+    RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id);
 
     return S_OK;
 }
@@ -3905,18 +3893,13 @@ INT_PTR OnInitDialog(HWND dlg, DialogState* init) noexcept
     if (init->copyMoveMaxConcurrencyEdit)
     {
         init->copyMoveMaxConcurrencyCue = LoadStringResource(nullptr, IDS_CONNECTIONS_CUE_COPYMOVE_CONCURRENCY);
-        static_cast<void>(SendMessageW(init->copyMoveMaxConcurrencyEdit,
-                                       EM_SETCUEBANNER,
-                                       TRUE,
-                                       reinterpret_cast<LPARAM>(init->copyMoveMaxConcurrencyCue.c_str())));
+        static_cast<void>(
+            SendMessageW(init->copyMoveMaxConcurrencyEdit, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(init->copyMoveMaxConcurrencyCue.c_str())));
     }
     if (init->deleteMaxConcurrencyEdit)
     {
         init->deleteMaxConcurrencyCue = LoadStringResource(nullptr, IDS_CONNECTIONS_CUE_DELETE_CONCURRENCY);
-        static_cast<void>(SendMessageW(init->deleteMaxConcurrencyEdit,
-                                       EM_SETCUEBANNER,
-                                       TRUE,
-                                       reinterpret_cast<LPARAM>(init->deleteMaxConcurrencyCue.c_str())));
+        static_cast<void>(SendMessageW(init->deleteMaxConcurrencyEdit, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(init->deleteMaxConcurrencyCue.c_str())));
     }
 
     if (init->sshKnownHostsEdit)
@@ -4178,6 +4161,20 @@ INT_PTR OnCommand(HWND dlg, DialogState& state, int controlId) noexcept
         {
             ShowDialogAlert(dlg, HOST_ALERT_ERROR, LoadStringResource(nullptr, IDS_CAPTION_ERROR), FormatHresultForUi(promptHr));
             return TRUE;
+        }
+
+        if (! state.connections[model.value()].id.empty())
+        {
+            const auto& profile = state.connections[model.value()];
+            if (const auto itPassword = state.stagedPasswordById.find(profile.id); itPassword != state.stagedPasswordById.end() && ! itPassword->second.empty())
+            {
+                RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id);
+            }
+            else if (const auto itPassphrase = state.stagedPassphraseById.find(profile.id);
+                     itPassphrase != state.stagedPassphraseById.end() && ! itPassphrase->second.empty())
+            {
+                RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id);
+            }
         }
 
         const HRESULT validateHr = ValidateProfileForConnect(dlg, state, state.connections[model.value()]);

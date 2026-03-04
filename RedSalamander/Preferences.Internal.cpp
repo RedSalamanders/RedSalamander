@@ -1915,8 +1915,8 @@ void MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(Common::Settings::Settin
         compare.compareSubdirectories != defaults.compareSubdirectories || compare.compareSubdirectoryAttributes != defaults.compareSubdirectoryAttributes ||
         compare.selectSubdirsOnlyInOnePane != defaults.selectSubdirsOnlyInOnePane || compare.ignoreFiles != defaults.ignoreFiles ||
         compare.ignoreFilesPatterns != defaults.ignoreFilesPatterns || compare.ignoreDirectories != defaults.ignoreDirectories ||
-        compare.ignoreDirectoriesPatterns != defaults.ignoreDirectoriesPatterns || compare.showIdenticalItems != defaults.showIdenticalItems ||
-        compare.contentCompareWorkerCount != defaults.contentCompareWorkerCount;
+        compare.ignoreDirectoriesPatterns != defaults.ignoreDirectoriesPatterns || compare.keepIdenticalItems != defaults.keepIdenticalItems ||
+        compare.showIdenticalItems != defaults.showIdenticalItems || compare.contentCompareWorkerCount != defaults.contentCompareWorkerCount;
 
     if (! hasNonDefault)
     {

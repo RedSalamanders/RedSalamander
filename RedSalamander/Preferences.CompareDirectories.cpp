@@ -68,6 +68,7 @@ void CompareDirectoriesPane::CreateControls(HWND parent, PreferencesDialogState&
     createToggle(
         state.advancedCompareSelectSubdirsOnlyInOnePaneToggle, IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE);
 
+    createToggle(state.advancedCompareKeepIdenticalToggle, IDC_PREFS_ADV_COMPARE_KEEP_IDENTICAL_TOGGLE, IDS_PREFS_COMPARE_KEEP_IDENTICAL_TITLE);
     createToggle(state.advancedCompareShowIdenticalToggle, IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE, IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE);
 
     createToggle(state.advancedCompareIgnoreFilesToggle, IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE);
@@ -92,13 +93,9 @@ void CompareDirectoriesPane::CreateControls(HWND parent, PreferencesDialogState&
     state.advancedCompareContentDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
 
     state.advancedCompareContentWorkersLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    PrefsInput::CreateFramedComboBox(state,
-                                    parent,
-                                    state.advancedCompareContentWorkersFrame,
-                                    state.advancedCompareContentWorkersCombo,
-                                    IDC_PREFS_ADV_COMPARE_CONTENT_WORKERS_COMBO);
-    state.advancedCompareContentWorkersDescription.reset(
-        CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+    PrefsInput::CreateFramedComboBox(
+        state, parent, state.advancedCompareContentWorkersFrame, state.advancedCompareContentWorkersCombo, IDC_PREFS_ADV_COMPARE_CONTENT_WORKERS_COMBO);
+    state.advancedCompareContentWorkersDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
 
     state.advancedCompareSubdirectoriesLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
     state.advancedCompareSubdirectoriesDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
@@ -112,6 +109,9 @@ void CompareDirectoriesPane::CreateControls(HWND parent, PreferencesDialogState&
         CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
     state.advancedCompareSelectSubdirsOnlyInOnePaneDescription.reset(
         CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+
+    state.advancedCompareKeepIdenticalLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
+    state.advancedCompareKeepIdenticalDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
 
     state.advancedCompareShowIdenticalLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
     state.advancedCompareShowIdenticalDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
@@ -151,8 +151,7 @@ void CompareDirectoriesPane::CreateControls(HWND parent, PreferencesDialogState&
         SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_RESETCONTENT, 0, 0);
 
         const std::wstring autoLabel = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_AUTO);
-        const LRESULT autoIndex =
-            SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(autoLabel.c_str()));
+        const LRESULT autoIndex = SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(autoLabel.c_str()));
         if (autoIndex != CB_ERR && autoIndex != CB_ERRSPACE)
         {
             SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(autoIndex), static_cast<LPARAM>(0));
@@ -161,8 +160,7 @@ void CompareDirectoriesPane::CreateControls(HWND parent, PreferencesDialogState&
         for (uint32_t i = 1; i <= 4; ++i)
         {
             const std::wstring label = std::to_wstring(i);
-            const LRESULT index =
-                SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
+            const LRESULT index      = SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
             if (index != CB_ERR && index != CB_ERRSPACE)
             {
                 SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(index), static_cast<LPARAM>(i));
@@ -188,7 +186,25 @@ void CompareDirectoriesPane::Refresh(HWND /*host*/, PreferencesDialogState& stat
     PrefsUi::SetTwoStateToggleState(state.advancedCompareSubdirectoryAttributesToggle, state.theme.systemHighContrast, compare.compareSubdirectoryAttributes);
     PrefsUi::SetTwoStateToggleState(state.advancedCompareSelectSubdirsOnlyInOnePaneToggle, state.theme.systemHighContrast, compare.selectSubdirsOnlyInOnePane);
 
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareShowIdenticalToggle, state.theme.systemHighContrast, compare.showIdenticalItems);
+    PrefsUi::SetTwoStateToggleState(state.advancedCompareKeepIdenticalToggle, state.theme.systemHighContrast, compare.keepIdenticalItems);
+
+    const bool showIdenticalEnabled = compare.keepIdenticalItems;
+    PrefsUi::SetTwoStateToggleState(
+        state.advancedCompareShowIdenticalToggle, state.theme.systemHighContrast, showIdenticalEnabled && compare.showIdenticalItems);
+
+    const BOOL enableShowIdenticalUi = showIdenticalEnabled ? TRUE : FALSE;
+    if (state.advancedCompareShowIdenticalLabel)
+    {
+        EnableWindow(state.advancedCompareShowIdenticalLabel.get(), enableShowIdenticalUi);
+    }
+    if (state.advancedCompareShowIdenticalToggle)
+    {
+        EnableWindow(state.advancedCompareShowIdenticalToggle.get(), enableShowIdenticalUi);
+    }
+    if (state.advancedCompareShowIdenticalDescription)
+    {
+        EnableWindow(state.advancedCompareShowIdenticalDescription.get(), enableShowIdenticalUi);
+    }
 
     PrefsUi::SetTwoStateToggleState(state.advancedCompareIgnoreFilesToggle, state.theme.systemHighContrast, compare.ignoreFiles);
     PrefsUi::SetTwoStateToggleState(state.advancedCompareIgnoreDirectoriesToggle, state.theme.systemHighContrast, compare.ignoreDirectories);
@@ -301,12 +317,7 @@ void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& s
         y += cardHeight + cardSpacingY;
     };
 
-    auto layoutFramedComboCard = [&](HWND label,
-                                    std::wstring_view labelText,
-                                    HWND frame,
-                                    HWND combo,
-                                    HWND descLabel,
-                                    std::wstring_view descText) noexcept
+    auto layoutFramedComboCard = [&](HWND label, std::wstring_view labelText, HWND frame, HWND combo, HWND descLabel, std::wstring_view descText) noexcept
     {
         int desiredWidth          = combo ? ThemedControls::MeasureComboBoxPreferredWidth(combo, dpi) : 0;
         desiredWidth              = std::max(desiredWidth, ThemedControls::ScaleDip(dpi, kMinEditWidthDip));
@@ -542,6 +553,11 @@ void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& s
                      state.advancedCompareSelectSubdirsOnlyInOnePaneToggle.get(),
                      state.advancedCompareSelectSubdirsOnlyInOnePaneDescription.get(),
                      LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC));
+    layoutToggleCard(state.advancedCompareKeepIdenticalLabel.get(),
+                     LoadStringResource(nullptr, IDS_PREFS_COMPARE_KEEP_IDENTICAL_TITLE),
+                     state.advancedCompareKeepIdenticalToggle.get(),
+                     state.advancedCompareKeepIdenticalDescription.get(),
+                     LoadStringResource(nullptr, IDS_PREFS_COMPARE_KEEP_IDENTICAL_DESC));
     layoutToggleCard(state.advancedCompareShowIdenticalLabel.get(),
                      LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE),
                      state.advancedCompareShowIdenticalToggle.get(),
@@ -656,12 +672,12 @@ bool CompareDirectoriesPane::HandleCommand(HWND host, PreferencesDialogState& st
 
     if (notifyCode == BN_CLICKED)
     {
-        const bool isCompareToggle =
-            (commandId == IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE ||
-             commandId == IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE ||
-             commandId == IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE ||
-             commandId == IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE ||
-             commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE);
+        const bool isCompareToggle = (commandId == IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE ||
+                                      commandId == IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE ||
+                                      commandId == IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE ||
+                                      commandId == IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE ||
+                                      commandId == IDC_PREFS_ADV_COMPARE_KEEP_IDENTICAL_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE ||
+                                      commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE);
         if (isCompareToggle)
         {
             if (hwndCtl)
@@ -691,7 +707,20 @@ bool CompareDirectoriesPane::HandleCommand(HWND host, PreferencesDialogState& st
                 case IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE: compare->compareSubdirectories = toggledOn; break;
                 case IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE: compare->compareSubdirectoryAttributes = toggledOn; break;
                 case IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE: compare->selectSubdirsOnlyInOnePane = toggledOn; break;
-                case IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE: compare->showIdenticalItems = toggledOn; break;
+                case IDC_PREFS_ADV_COMPARE_KEEP_IDENTICAL_TOGGLE:
+                    compare->keepIdenticalItems = toggledOn;
+                    if (! toggledOn)
+                    {
+                        compare->showIdenticalItems = false;
+                    }
+                    break;
+                case IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE:
+                    compare->showIdenticalItems = toggledOn;
+                    if (toggledOn)
+                    {
+                        compare->keepIdenticalItems = true;
+                    }
+                    break;
                 case IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE: compare->ignoreFiles = toggledOn; break;
                 case IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE: compare->ignoreDirectories = toggledOn; break;
                 default: break;

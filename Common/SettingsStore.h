@@ -293,7 +293,12 @@ struct CompareDirectoriesSettings
     bool ignoreDirectories = false;
     std::wstring ignoreDirectoriesPatterns;
 
-    bool showIdenticalItems = false; // Show full list (not just differences).
+    // Keep identical entries in cached decisions so "Show Identical Items" can be toggled as a view filter (no rescan).
+    // Uses more memory on very large trees.
+    bool keepIdenticalItems = false;
+
+    // Display identical items (requires keepIdenticalItems).
+    bool showIdenticalItems = false;
 
     // 0 = Auto (current behavior, clamped to <= 4), 1..4 = fixed worker count for background content compare.
     uint32_t contentCompareWorkerCount = 0;

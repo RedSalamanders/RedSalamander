@@ -197,7 +197,27 @@ void FolderView::SetEmptyStateMessage(std::wstring message)
         return;
     }
 
-    _emptyStateMessage = std::move(message);
+    _emptyStateMessage     = std::move(message);
+    _emptyStateMessageKind = EmptyStateMessageKind::None;
+    if (! _emptyStateMessage.empty())
+    {
+        const std::wstring compareNoDiff = LoadStringResource(nullptr, IDS_COMPARE_NO_DIFFERENCES);
+        _emptyStateMessageKind           = (_emptyStateMessage == compareNoDiff) ? EmptyStateMessageKind::CompareNoDifferences : EmptyStateMessageKind::Generic;
+    }
+
+    _emptyMessageIconLayout.reset();
+    _emptyMessageTitleLayout.reset();
+    _emptyMessageFunLayout.reset();
+    _emptyMessageLayoutClientSizePx = {};
+    _emptyMessageLayoutDpi          = 0.0f;
+    _emptyMessageLayoutMessageId    = 0;
+    _emptyMessageIconFontSizeDip    = 0.0f;
+    _emptyMessageIconMetrics        = {};
+    _emptyMessageTitleMetrics       = {};
+    _emptyMessageFunMetrics         = {};
+
+    UpdateCompareNoDifferencesState();
+
     if (_hWnd)
     {
         InvalidateRect(_hWnd.get(), nullptr, FALSE);

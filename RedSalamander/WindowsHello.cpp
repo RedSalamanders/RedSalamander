@@ -6,6 +6,7 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include <atomic>
 #include <memory>
 #include <new>
 #include <optional>
@@ -31,6 +32,10 @@ namespace RedSalamander::Security
 {
 namespace
 {
+#ifdef _DEBUG
+std::atomic<WindowsHelloTestVerifier> g_testVerifier{nullptr};
+#endif
+
 [[nodiscard]] HRESULT WaitForHandleWithMessagePump(HANDLE handle) noexcept
 {
     if (! handle)
@@ -130,8 +135,22 @@ template <typename T> [[nodiscard]] HRESULT WaitForOperationWithMessagePump(winr
 }
 } // namespace
 
+#ifdef _DEBUG
+WindowsHelloTestVerifier SetWindowsHelloTestVerifier(WindowsHelloTestVerifier verifier) noexcept
+{
+    return g_testVerifier.exchange(verifier, std::memory_order_acq_rel);
+}
+#endif
+
 HRESULT VerifyWindowsHelloForWindow(HWND ownerWindow, std::wstring_view message) noexcept
 {
+#ifdef _DEBUG
+    if (const WindowsHelloTestVerifier verifier = g_testVerifier.load(std::memory_order_acquire))
+    {
+        return verifier(ownerWindow, message);
+    }
+#endif
+
     if (! ownerWindow || ! IsWindow(ownerWindow))
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);

@@ -575,6 +575,10 @@ struct PreferencesDialogState
     wil::unique_hwnd advancedCompareSelectSubdirsOnlyInOnePaneToggle;
     wil::unique_hwnd advancedCompareSelectSubdirsOnlyInOnePaneDescription;
 
+    wil::unique_hwnd advancedCompareKeepIdenticalLabel;
+    wil::unique_hwnd advancedCompareKeepIdenticalToggle;
+    wil::unique_hwnd advancedCompareKeepIdenticalDescription;
+
     wil::unique_hwnd advancedCompareShowIdenticalLabel;
     wil::unique_hwnd advancedCompareShowIdenticalToggle;
     wil::unique_hwnd advancedCompareShowIdenticalDescription;

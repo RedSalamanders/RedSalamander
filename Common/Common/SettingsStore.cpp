@@ -2205,7 +2205,14 @@ void ParseCompareDirectories(yyjson_val* root, Common::Settings::Settings& out)
     GetBool(compare, "selectSubdirsOnlyInOnePane", settings.selectSubdirsOnlyInOnePane);
     GetBool(compare, "ignoreFiles", settings.ignoreFiles);
     GetBool(compare, "ignoreDirectories", settings.ignoreDirectories);
+    GetBool(compare, "keepIdenticalItems", settings.keepIdenticalItems);
     GetBool(compare, "showIdenticalItems", settings.showIdenticalItems);
+
+    // Backward/compat normalization: "show identical" implies the session must retain identical entries.
+    if (settings.showIdenticalItems)
+    {
+        settings.keepIdenticalItems = true;
+    }
 
     uint32_t contentCompareWorkerCount = 0;
     if (GetUInt32(compare, "contentCompareWorkerCount", contentCompareWorkerCount))
@@ -2223,14 +2230,14 @@ void ParseCompareDirectories(yyjson_val* root, Common::Settings::Settings& out)
     }
 
     const Common::Settings::CompareDirectoriesSettings defaults{};
-    const bool hasNonDefault = settings.compareSize != defaults.compareSize || settings.compareDateTime != defaults.compareDateTime ||
-                               settings.compareAttributes != defaults.compareAttributes || settings.compareContent != defaults.compareContent ||
-                               settings.compareSubdirectories != defaults.compareSubdirectories ||
-                               settings.compareSubdirectoryAttributes != defaults.compareSubdirectoryAttributes ||
-                               settings.selectSubdirsOnlyInOnePane != defaults.selectSubdirsOnlyInOnePane || settings.ignoreFiles != defaults.ignoreFiles ||
-                               settings.ignoreDirectories != defaults.ignoreDirectories || settings.showIdenticalItems != defaults.showIdenticalItems ||
-                               settings.contentCompareWorkerCount != defaults.contentCompareWorkerCount || ! settings.ignoreFilesPatterns.empty() ||
-                               ! settings.ignoreDirectoriesPatterns.empty();
+    const bool hasNonDefault =
+        settings.compareSize != defaults.compareSize || settings.compareDateTime != defaults.compareDateTime ||
+        settings.compareAttributes != defaults.compareAttributes || settings.compareContent != defaults.compareContent ||
+        settings.compareSubdirectories != defaults.compareSubdirectories || settings.compareSubdirectoryAttributes != defaults.compareSubdirectoryAttributes ||
+        settings.selectSubdirsOnlyInOnePane != defaults.selectSubdirsOnlyInOnePane || settings.ignoreFiles != defaults.ignoreFiles ||
+        settings.ignoreDirectories != defaults.ignoreDirectories || settings.keepIdenticalItems != defaults.keepIdenticalItems ||
+        settings.showIdenticalItems != defaults.showIdenticalItems || settings.contentCompareWorkerCount != defaults.contentCompareWorkerCount ||
+        ! settings.ignoreFilesPatterns.empty() || ! settings.ignoreDirectoriesPatterns.empty();
 
     if (hasNonDefault)
     {
@@ -4101,7 +4108,8 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                                   compare.compareSubdirectories != defaults.compareSubdirectories ||
                                   compare.compareSubdirectoryAttributes != defaults.compareSubdirectoryAttributes ||
                                   compare.selectSubdirsOnlyInOnePane != defaults.selectSubdirsOnlyInOnePane || compare.ignoreFiles != defaults.ignoreFiles ||
-                                  compare.ignoreDirectories != defaults.ignoreDirectories || compare.showIdenticalItems != defaults.showIdenticalItems ||
+                                  compare.ignoreDirectories != defaults.ignoreDirectories || compare.keepIdenticalItems != defaults.keepIdenticalItems ||
+                                  compare.showIdenticalItems != defaults.showIdenticalItems ||
                                   compare.contentCompareWorkerCount != defaults.contentCompareWorkerCount || ! compare.ignoreFilesPatterns.empty() ||
                                   ! compare.ignoreDirectoriesPatterns.empty();
 
@@ -4157,6 +4165,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             if (! compare.ignoreDirectoriesPatterns.empty())
             {
                 yyjson_mut_obj_add_val(doc, compareObj, "ignoreDirectoriesPatterns", NewString(doc, compare.ignoreDirectoriesPatterns));
+            }
+            if (compare.keepIdenticalItems != defaults.keepIdenticalItems)
+            {
+                yyjson_mut_obj_add_bool(doc, compareObj, "keepIdenticalItems", compare.keepIdenticalItems);
             }
             if (compare.showIdenticalItems != defaults.showIdenticalItems)
             {

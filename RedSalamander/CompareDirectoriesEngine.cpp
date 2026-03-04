@@ -14,9 +14,9 @@
 #include <limits>
 #include <mutex>
 #include <optional>
-#include <system_error>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <thread>
 #include <utility>
 #include <vector>
@@ -368,17 +368,16 @@ void CompareDirectoriesSession::SetSettings(Common::Settings::CompareDirectories
     {
         std::lock_guard guard(_mutex);
 
-        // Note: showIdenticalItems is included here because the cached decisions are pruned in differences-only mode
-        // to keep memory bounded on large trees. Toggling it requires invalidating decisions.
-        const bool comparisonChanged = _settings.compareSize != settings.compareSize || _settings.compareDateTime != settings.compareDateTime ||
-                                        _settings.compareAttributes != settings.compareAttributes || _settings.compareContent != settings.compareContent ||
-                                        _settings.compareSubdirectories != settings.compareSubdirectories ||
-                                        _settings.compareSubdirectoryAttributes != settings.compareSubdirectoryAttributes ||
-                                        _settings.selectSubdirsOnlyInOnePane != settings.selectSubdirsOnlyInOnePane ||
-                                        _settings.showIdenticalItems != settings.showIdenticalItems ||
-                                        _settings.ignoreFiles != settings.ignoreFiles || _settings.ignoreFilesPatterns != settings.ignoreFilesPatterns ||
-                                        _settings.ignoreDirectories != settings.ignoreDirectories ||
-                                        _settings.ignoreDirectoriesPatterns != settings.ignoreDirectoriesPatterns;
+        // Note: keepIdenticalItems is included here because cached decisions are pruned when it is off
+        // (keeps memory bounded on large trees). Toggling it requires invalidating decisions.
+        const bool comparisonChanged =
+            _settings.compareSize != settings.compareSize || _settings.compareDateTime != settings.compareDateTime ||
+            _settings.compareAttributes != settings.compareAttributes || _settings.compareContent != settings.compareContent ||
+            _settings.compareSubdirectories != settings.compareSubdirectories ||
+            _settings.compareSubdirectoryAttributes != settings.compareSubdirectoryAttributes ||
+            _settings.selectSubdirsOnlyInOnePane != settings.selectSubdirsOnlyInOnePane || _settings.keepIdenticalItems != settings.keepIdenticalItems ||
+            _settings.ignoreFiles != settings.ignoreFiles || _settings.ignoreFilesPatterns != settings.ignoreFilesPatterns ||
+            _settings.ignoreDirectories != settings.ignoreDirectories || _settings.ignoreDirectoriesPatterns != settings.ignoreDirectoriesPatterns;
 
         _settings = std::move(settings);
         if (comparisonChanged)
@@ -675,8 +674,7 @@ std::shared_ptr<const CompareDirectoriesFolderDecision> CompareDirectoriesSessio
     return {};
 }
 
-void CompareDirectoriesSession::SetPinnedFolders(
-    const std::filesystem::path& leftRelativeFolder, const std::filesystem::path& rightRelativeFolder) noexcept
+void CompareDirectoriesSession::SetPinnedFolders(const std::filesystem::path& leftRelativeFolder, const std::filesystem::path& rightRelativeFolder) noexcept
 {
     std::lock_guard guard(_mutex);
 
@@ -710,11 +708,11 @@ bool CompareDirectoriesSession::FlushPendingSubdirUpdatesBudgeted(size_t maxFold
     }
 
     std::lock_guard guard(_mutex);
-    const uint64_t currentVersion                           = _version.load(std::memory_order_relaxed);
+    const uint64_t currentVersion                               = _version.load(std::memory_order_relaxed);
     const Common::Settings::CompareDirectoriesSettings settings = _settings;
 
-    bool anyChanged     = false;
-    size_t appliedKeys  = 0;
+    bool anyChanged    = false;
+    size_t appliedKeys = 0;
     while (! _pendingSubdirUpdates.empty() && appliedKeys < maxFoldersToApply)
     {
         const std::wstring key = *_pendingSubdirUpdates.begin();
@@ -767,14 +765,14 @@ CompareDirectoriesPerfStats CompareDirectoriesSession::GetPerfStats() const noex
         stats.version   = _version.load(std::memory_order_relaxed);
         stats.uiVersion = _uiVersion;
 
-        stats.scanActiveScans    = _scanActiveScans.load(std::memory_order_relaxed);
-        stats.scanFoldersScanned = _scanFoldersScanned.load(std::memory_order_relaxed);
-        stats.scanEntriesScanned = _scanEntriesScanned.load(std::memory_order_relaxed);
-        stats.scanQueueHighSize  = _scanQueueHigh.size();
-        stats.scanQueueLowSize   = _scanQueueLow.size();
-        stats.scanQueueSize      = stats.scanQueueHighSize + stats.scanQueueLowSize;
-        stats.scanScheduledKeys  = _scanScheduledKeys.size();
-        stats.scanInFlightKeys   = _scanInFlightKeys.size();
+        stats.scanActiveScans      = _scanActiveScans.load(std::memory_order_relaxed);
+        stats.scanFoldersScanned   = _scanFoldersScanned.load(std::memory_order_relaxed);
+        stats.scanEntriesScanned   = _scanEntriesScanned.load(std::memory_order_relaxed);
+        stats.scanQueueHighSize    = _scanQueueHigh.size();
+        stats.scanQueueLowSize     = _scanQueueLow.size();
+        stats.scanQueueSize        = stats.scanQueueHighSize + stats.scanQueueLowSize;
+        stats.scanScheduledKeys    = _scanScheduledKeys.size();
+        stats.scanInFlightKeys     = _scanInFlightKeys.size();
         stats.pendingSubdirUpdates = _pendingSubdirUpdates.size();
 
         stats.scanQueueHighWater     = _scanQueueHighWater;
@@ -796,18 +794,18 @@ CompareDirectoriesPerfStats CompareDirectoriesSession::GetPerfStats() const noex
         stats.contentCacheSize         = _contentCompareCache.size();
         stats.pendingContentUpdates    = _pendingContentCompareUpdates.size();
 
-        stats.contentQueueHighWater    = _contentQueueHighWater;
+        stats.contentQueueHighWater     = _contentQueueHighWater;
         stats.contentQueueHighHighWater = _contentQueueHighHighWater;
         stats.contentQueueLowHighWater  = _contentQueueLowHighWater;
-        stats.contentInFlightHighWater = _contentInFlightHighWater;
-        stats.contentCacheHighWater    = _contentCacheHighWater;
-        stats.pendingContentHighWater  = _pendingContentHighWater;
+        stats.contentInFlightHighWater  = _contentInFlightHighWater;
+        stats.contentCacheHighWater     = _contentCacheHighWater;
+        stats.pendingContentHighWater   = _pendingContentHighWater;
 
-        stats.decisionCacheEntries                  = _cache.size();
-        stats.decisionCacheEntriesHighWater         = _decisionCacheEntriesHighWater;
-        stats.decisionCacheEstimatedBytes           = _decisionCacheEstimatedBytes;
-        stats.decisionCacheEstimatedBytesHighWater  = _decisionCacheEstimatedBytesHighWater;
-        stats.decisionCacheBudgetBytes              = _decisionCacheBudgetBytes;
+        stats.decisionCacheEntries                 = _cache.size();
+        stats.decisionCacheEntriesHighWater        = _decisionCacheEntriesHighWater;
+        stats.decisionCacheEstimatedBytes          = _decisionCacheEstimatedBytes;
+        stats.decisionCacheEstimatedBytesHighWater = _decisionCacheEstimatedBytesHighWater;
+        stats.decisionCacheBudgetBytes             = _decisionCacheBudgetBytes;
     }
 
     stats.directoryInfoCache = DirectoryInfoCache::GetInstance().GetStats();
@@ -852,7 +850,7 @@ std::optional<std::filesystem::path> CompareDirectoriesSession::TryMakeRelative(
                                                                                   NavigationLocation::EmptyPathPolicy::Root,
                                                                                   NavigationLocation::LeadingSlashPolicy::Ensure,
                                                                                   NavigationLocation::TrailingSlashPolicy::Trim);
-        const std::wstring absNorm = NavigationLocation::NormalizePluginPathText(absoluteFolder.native(),
+        const std::wstring absNorm  = NavigationLocation::NormalizePluginPathText(absoluteFolder.native(),
                                                                                  NavigationLocation::EmptyPathPolicy::Root,
                                                                                  NavigationLocation::LeadingSlashPolicy::Ensure,
                                                                                  NavigationLocation::TrailingSlashPolicy::Trim);
@@ -978,10 +976,8 @@ std::filesystem::path CompareDirectoriesSession::ResolveAbsolute(ComparePane pan
     }
     joined += relativeText;
 
-    return std::filesystem::path(NavigationLocation::NormalizePluginPathText(joined,
-                                                                             NavigationLocation::EmptyPathPolicy::Root,
-                                                                             NavigationLocation::LeadingSlashPolicy::Ensure,
-                                                                             NavigationLocation::TrailingSlashPolicy::Preserve));
+    return std::filesystem::path(NavigationLocation::NormalizePluginPathText(
+        joined, NavigationLocation::EmptyPathPolicy::Root, NavigationLocation::LeadingSlashPolicy::Ensure, NavigationLocation::TrailingSlashPolicy::Preserve));
 }
 
 std::wstring CompareDirectoriesSession::MakeCacheKey(const std::filesystem::path& relativeFolder) const
@@ -1024,8 +1020,8 @@ void CompareDirectoriesSession::TouchDecisionCacheKeyLocked(std::wstring_view fo
     _decisionCacheLru.splice(_decisionCacheLru.begin(), _decisionCacheLru, metaIt->second.lruIt);
 }
 
-void CompareDirectoriesSession::TrackDecisionCacheInsertOrUpdateLocked(
-    std::wstring_view folderKey, const std::shared_ptr<const CompareDirectoriesFolderDecision>& decision) noexcept
+void CompareDirectoriesSession::TrackDecisionCacheInsertOrUpdateLocked(std::wstring_view folderKey,
+                                                                       const std::shared_ptr<const CompareDirectoriesFolderDecision>& decision) noexcept
 {
     if (! decision)
     {
@@ -1050,7 +1046,7 @@ void CompareDirectoriesSession::TrackDecisionCacheInsertOrUpdateLocked(
     }
     else
     {
-        const uint64_t oldBytes = metaIt->second.estimatedBytes;
+        const uint64_t oldBytes       = metaIt->second.estimatedBytes;
         metaIt->second.estimatedBytes = estimatedBytes;
 
         if (estimatedBytes >= oldBytes)
@@ -1059,7 +1055,7 @@ void CompareDirectoriesSession::TrackDecisionCacheInsertOrUpdateLocked(
         }
         else
         {
-            const uint64_t delta = oldBytes - estimatedBytes;
+            const uint64_t delta         = oldBytes - estimatedBytes;
             _decisionCacheEstimatedBytes = (delta >= _decisionCacheEstimatedBytes) ? 0 : (_decisionCacheEstimatedBytes - delta);
         }
 
@@ -1077,7 +1073,7 @@ void CompareDirectoriesSession::TrackDecisionCacheEraseLocked(std::wstring_view 
         return;
     }
 
-    const uint64_t oldBytes = metaIt->second.estimatedBytes;
+    const uint64_t oldBytes      = metaIt->second.estimatedBytes;
     _decisionCacheEstimatedBytes = (oldBytes >= _decisionCacheEstimatedBytes) ? 0 : (_decisionCacheEstimatedBytes - oldBytes);
 
     _decisionCacheLru.erase(metaIt->second.lruIt);
@@ -1093,8 +1089,8 @@ void CompareDirectoriesSession::MaybeEvictDecisionCacheLocked() noexcept
 
     // Eviction can be expensive on large trees; keep it bounded so we don't stall other threads
     // contending on _mutex (including the UI thread).
-    constexpr size_t kMaxEvictionsPerCall       = 64;
-    constexpr size_t kMaxKeysInspectedPerCall   = 16384;
+    constexpr size_t kMaxEvictionsPerCall     = 64;
+    constexpr size_t kMaxKeysInspectedPerCall = 16384;
 
     size_t evictions     = 0;
     size_t inspectedKeys = 0;
@@ -1255,10 +1251,12 @@ void CompareDirectoriesSession::EnsureScanWorkersLocked() noexcept
     }
 }
 
-void CompareDirectoriesSession::EnqueueScanLocked(
-    const std::filesystem::path& relativeFolder, uint64_t version, uint64_t cancelToken, ScanPriority priority) noexcept
+void CompareDirectoriesSession::EnqueueScanLocked(const std::filesystem::path& relativeFolder,
+                                                  uint64_t version,
+                                                  uint64_t cancelToken,
+                                                  ScanPriority priority) noexcept
 {
-    const std::wstring key = MakeCacheKey(relativeFolder);
+    const std::wstring key      = MakeCacheKey(relativeFolder);
     const bool alreadyScheduled = _scanScheduledKeys.contains(key);
 
     FolderScanJob job{};
@@ -1279,10 +1277,10 @@ void CompareDirectoriesSession::EnqueueScanLocked(
             _scanQueueHigh.emplace_back(std::move(job));
             _scanHighQueuedKeys.insert(key);
 
-            _scanQueueHighWater      = std::max(_scanQueueHighWater, _scanQueueHigh.size() + _scanQueueLow.size());
-            _scanQueueHighHighWater  = std::max(_scanQueueHighHighWater, _scanQueueHigh.size());
-            _scanQueueLowHighWater   = std::max(_scanQueueLowHighWater, _scanQueueLow.size());
-            _scanScheduledHighWater  = std::max(_scanScheduledHighWater, _scanScheduledKeys.size());
+            _scanQueueHighWater     = std::max(_scanQueueHighWater, _scanQueueHigh.size() + _scanQueueLow.size());
+            _scanQueueHighHighWater = std::max(_scanQueueHighHighWater, _scanQueueHigh.size());
+            _scanQueueLowHighWater  = std::max(_scanQueueLowHighWater, _scanQueueLow.size());
+            _scanScheduledHighWater = std::max(_scanScheduledHighWater, _scanScheduledKeys.size());
 
             _scanCv.notify_one();
         }
@@ -1299,10 +1297,10 @@ void CompareDirectoriesSession::EnqueueScanLocked(
     {
         _scanQueueLow.emplace_back(std::move(job));
     }
-    _scanQueueHighWater      = std::max(_scanQueueHighWater, _scanQueueHigh.size() + _scanQueueLow.size());
-    _scanQueueHighHighWater  = std::max(_scanQueueHighHighWater, _scanQueueHigh.size());
-    _scanQueueLowHighWater   = std::max(_scanQueueLowHighWater, _scanQueueLow.size());
-    _scanScheduledHighWater  = std::max(_scanScheduledHighWater, _scanScheduledKeys.size());
+    _scanQueueHighWater     = std::max(_scanQueueHighWater, _scanQueueHigh.size() + _scanQueueLow.size());
+    _scanQueueHighHighWater = std::max(_scanQueueHighHighWater, _scanQueueHigh.size());
+    _scanQueueLowHighWater  = std::max(_scanQueueLowHighWater, _scanQueueLow.size());
+    _scanScheduledHighWater = std::max(_scanScheduledHighWater, _scanScheduledKeys.size());
 
     const uint32_t activeBefore = _scanActiveScans.fetch_add(1u, std::memory_order_acq_rel);
     if (activeBefore == 0u)
@@ -1422,8 +1420,9 @@ void CompareDirectoriesSession::ClearContentCompareStateLocked() noexcept
     _contentCompareQueueNotFullCv.notify_all();
 }
 
-bool CompareDirectoriesSession::PropagateChildAggregateToAncestorsLocked(
-    std::wstring_view childKeyView, const Common::Settings::CompareDirectoriesSettings& settings, uint64_t currentVersion) noexcept
+bool CompareDirectoriesSession::PropagateChildAggregateToAncestorsLocked(std::wstring_view childKeyView,
+                                                                         const Common::Settings::CompareDirectoriesSettings& settings,
+                                                                         uint64_t currentVersion) noexcept
 {
     if (! settings.compareSubdirectories)
     {
@@ -1533,8 +1532,7 @@ bool CompareDirectoriesSession::PropagateChildAggregateToAncestorsLocked(
             newSelectRight = true;
         }
 
-        const bool changed =
-            (newMask != oldMask) || (newDifferent != oldDifferent) || (newSelectLeft != oldSelectLeft) || (newSelectRight != oldSelectRight);
+        const bool changed = (newMask != oldMask) || (newDifferent != oldDifferent) || (newSelectLeft != oldSelectLeft) || (newSelectRight != oldSelectRight);
         if (! changed)
         {
             break;
@@ -1550,9 +1548,9 @@ bool CompareDirectoriesSession::PropagateChildAggregateToAncestorsLocked(
         updatedParent->anyPending   = AnyChildPending(*updatedParent);
 
         const std::shared_ptr<const CompareDirectoriesFolderDecision> storedUpdatedParent = updatedParent;
-        _cache[parentKey] = std::move(updatedParent);
+        _cache[parentKey]                                                                 = std::move(updatedParent);
         TrackDecisionCacheInsertOrUpdateLocked(parentKey, storedUpdatedParent);
-        anyChanged        = true;
+        anyChanged = true;
 
         childRel = parentRel;
         if (childRel.empty())
@@ -1591,7 +1589,7 @@ void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const st
         return;
     }
 
-    const auto cacheIt            = _cache.find(folderKey);
+    const auto cacheIt = _cache.find(folderKey);
     if (cacheIt == _cache.end() || ! cacheIt->second || cacheIt->second->version != currentVersion)
     {
         // Decision not cached yet (race with scan workers). Keep the updates and apply them later.
@@ -1795,10 +1793,10 @@ void CompareDirectoriesSession::ApplyPendingContentCompareUpdatesLocked(const st
     if (anyApplied)
     {
         // Recompute aggregate flags after applying updates, so ancestor propagation can use them.
-        updated->anyDifferent = AnyChildDifferent(*updated);
-        updated->anyPending   = AnyChildPending(*updated);
+        updated->anyDifferent                                                       = AnyChildDifferent(*updated);
+        updated->anyPending                                                         = AnyChildPending(*updated);
         const std::shared_ptr<const CompareDirectoriesFolderDecision> storedUpdated = updated;
-        _cache[folderKey]     = updated;
+        _cache[folderKey]                                                           = updated;
         TrackDecisionCacheInsertOrUpdateLocked(folderKey, storedUpdated);
         MaybeEvictDecisionCacheLocked();
 
@@ -2575,14 +2573,14 @@ std::shared_ptr<CompareDirectoriesFolderDecision> CompareDirectoriesSession::Com
                 }
                 else
                 {
-                    const bool sizeDifferent  = item.leftSizeBytes != item.rightSizeBytes;
-                    const bool timeDifferent  = item.leftLastWriteTime != item.rightLastWriteTime;
-                    const bool attrsDifferent = item.leftFileAttributes != item.rightFileAttributes;
-                    const bool nonContentDifferent =
-                        (settings.compareSize && sizeDifferent) || (settings.compareDateTime && timeDifferent) || (settings.compareAttributes && attrsDifferent);
+                    const bool sizeDifferent       = item.leftSizeBytes != item.rightSizeBytes;
+                    const bool timeDifferent       = item.leftLastWriteTime != item.rightLastWriteTime;
+                    const bool attrsDifferent      = item.leftFileAttributes != item.rightFileAttributes;
+                    const bool nonContentDifferent = (settings.compareSize && sizeDifferent) || (settings.compareDateTime && timeDifferent) ||
+                                                     (settings.compareAttributes && attrsDifferent);
 
-                    bool contentDifferent = false;
-                    bool contentPending   = false;
+                    bool contentDifferent        = false;
+                    bool contentPending          = false;
                     const bool canCompareContent = settings.compareContent && IsContentCompareSupported();
                     if (canCompareContent && ! nonContentDifferent)
                     {
@@ -2619,8 +2617,8 @@ std::shared_ptr<CompareDirectoriesFolderDecision> CompareDirectoriesSession::Com
                                         constexpr size_t kContentCompareQueueMaxHighJobs = 128;
                                         constexpr size_t kContentCompareQueueMaxLowJobs  = 896;
 
-                                        const bool high = scanPriority == ScanPriority::High;
-                                        auto& targetQueue = high ? _contentCompareQueueHigh : _contentCompareQueueLow;
+                                        const bool high      = scanPriority == ScanPriority::High;
+                                        auto& targetQueue    = high ? _contentCompareQueueHigh : _contentCompareQueueLow;
                                         const size_t maxJobs = high ? kContentCompareQueueMaxHighJobs : kContentCompareQueueMaxLowJobs;
 
                                         while (targetQueue.size() >= maxJobs && ! isCancelled())
@@ -2631,7 +2629,7 @@ std::shared_ptr<CompareDirectoriesFolderDecision> CompareDirectoriesSession::Com
                                         if (! isCancelled() && targetQueue.size() < maxJobs)
                                         {
                                             _contentCompareInFlight[compareKey] = version;
-                                            _contentInFlightHighWater = std::max(_contentInFlightHighWater, _contentCompareInFlight.size());
+                                            _contentInFlightHighWater           = std::max(_contentInFlightHighWater, _contentCompareInFlight.size());
 
                                             static_cast<void>(_contentCompareTotalCompares.fetch_add(1u, std::memory_order_acq_rel));
                                             static_cast<void>(_contentCompareTotalBytes.fetch_add(item.leftSizeBytes, std::memory_order_acq_rel));
@@ -2657,7 +2655,8 @@ std::shared_ptr<CompareDirectoriesFolderDecision> CompareDirectoriesSession::Com
                                             job.rightFileAttributes = item.rightFileAttributes;
 
                                             targetQueue.emplace_back(std::move(job));
-                                            _contentQueueHighWater = std::max(_contentQueueHighWater, _contentCompareQueueHigh.size() + _contentCompareQueueLow.size());
+                                            _contentQueueHighWater =
+                                                std::max(_contentQueueHighWater, _contentCompareQueueHigh.size() + _contentCompareQueueLow.size());
                                             _contentQueueHighHighWater = std::max(_contentQueueHighHighWater, _contentCompareQueueHigh.size());
                                             _contentQueueLowHighWater  = std::max(_contentQueueLowHighWater, _contentCompareQueueLow.size());
 
@@ -2827,14 +2826,14 @@ std::shared_ptr<CompareDirectoriesFolderDecision> CompareDirectoriesSession::Com
         }
     }
 
-    if (! settings.showIdenticalItems && SUCCEEDED(decision->hr))
+    if (! settings.keepIdenticalItems && SUCCEEDED(decision->hr))
     {
         for (auto it = decision->items.begin(); it != decision->items.end();)
         {
-            const uint32_t diffMask    = it->second.differenceMask;
-            const bool pendingSubdir   = HasFlag(diffMask, CompareDirectoriesDiffBit::SubdirPending);
-            const bool pendingContent  = HasFlag(diffMask, CompareDirectoriesDiffBit::ContentPending);
-            const bool anyPendingItem  = pendingSubdir || pendingContent;
+            const uint32_t diffMask   = it->second.differenceMask;
+            const bool pendingSubdir  = HasFlag(diffMask, CompareDirectoriesDiffBit::SubdirPending);
+            const bool pendingContent = HasFlag(diffMask, CompareDirectoriesDiffBit::ContentPending);
+            const bool anyPendingItem = pendingSubdir || pendingContent;
 
             if (! it->second.isDifferent && ! pendingSubdir)
             {
@@ -2888,26 +2887,25 @@ std::shared_ptr<const CompareDirectoriesFolderDecision> CompareDirectoriesSessio
     const std::vector<std::wstring> ignoreFilePatterns          = SplitPatterns(settings.ignoreFilesPatterns);
     const std::vector<std::wstring> ignoreDirectoryPatterns     = SplitPatterns(settings.ignoreDirectoriesPatterns);
 
-    constexpr bool reportScanProgress = false;
-    const std::shared_ptr<CompareDirectoriesFolderDecision> decision =
-        ComputeDecisionForFolder(relativeFolder,
-                                 settings,
-                                 ignoreFilePatterns,
-                                 ignoreDirectoryPatterns,
-                                 version,
-                                 cancelToken,
-                                 allowBackgroundWork,
-                                 reportScanProgress,
-                                 false,
-                                 ScanPriority::Low,
-                                 std::stop_token{});
+    constexpr bool reportScanProgress                                = false;
+    const std::shared_ptr<CompareDirectoriesFolderDecision> decision = ComputeDecisionForFolder(relativeFolder,
+                                                                                                settings,
+                                                                                                ignoreFilePatterns,
+                                                                                                ignoreDirectoryPatterns,
+                                                                                                version,
+                                                                                                cancelToken,
+                                                                                                allowBackgroundWork,
+                                                                                                reportScanProgress,
+                                                                                                false,
+                                                                                                ScanPriority::Low,
+                                                                                                std::stop_token{});
 
     const std::shared_ptr<const CompareDirectoriesFolderDecision> finalDecision = decision;
     {
         std::lock_guard guard(_mutex);
         if (_version.load(std::memory_order_relaxed) == version)
         {
-            _cache[rootKey] = finalDecision;
+            _cache[rootKey]                = finalDecision;
             _decisionCacheEntriesHighWater = std::max(_decisionCacheEntriesHighWater, _cache.size());
             TrackDecisionCacheInsertOrUpdateLocked(rootKey, finalDecision);
             MaybeEvictDecisionCacheLocked();
@@ -3033,15 +3031,15 @@ void CompareDirectoriesSession::ScanWorker(std::stop_token stopToken, uint32_t w
                                                         job.key == L".",
                                                         job.priority,
                                                         stopToken);
-            decisionConst = computedDecision;
+            decisionConst    = computedDecision;
 
             {
                 std::lock_guard guard(_mutex);
                 if (_version.load(std::memory_order_relaxed) == job.version)
                 {
                     const std::shared_ptr<const CompareDirectoriesFolderDecision> storedDecision = computedDecision;
-                    _cache[job.key] = storedDecision;
-                    _decisionCacheEntriesHighWater = std::max(_decisionCacheEntriesHighWater, _cache.size());
+                    _cache[job.key]                                                              = storedDecision;
+                    _decisionCacheEntriesHighWater                                               = std::max(_decisionCacheEntriesHighWater, _cache.size());
                     TrackDecisionCacheInsertOrUpdateLocked(job.key, storedDecision);
                     MaybeEvictDecisionCacheLocked();
                 }
@@ -3138,7 +3136,8 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
         ContentCompareJob job{};
         {
             std::unique_lock lock(_mutex);
-            _contentCompareCv.wait(lock, [&]() { return stopToken.stop_requested() || ! _contentCompareQueueHigh.empty() || ! _contentCompareQueueLow.empty(); });
+            _contentCompareCv.wait(lock,
+                                   [&]() { return stopToken.stop_requested() || ! _contentCompareQueueHigh.empty() || ! _contentCompareQueueLow.empty(); });
 
             if (stopToken.stop_requested())
             {
@@ -3150,7 +3149,7 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
 
             // Visible-first: prefer high-priority work, but allow low-priority progress under sustained high load.
             constexpr uint32_t kHighBurstBeforeLow = 8;
-            const bool shouldTakeLow = haveLow && (! haveHigh || highBurstCount >= kHighBurstBeforeLow);
+            const bool shouldTakeLow               = haveLow && (! haveHigh || highBurstCount >= kHighBurstBeforeLow);
 
             if (shouldTakeLow)
             {
@@ -3288,18 +3287,18 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
                 const std::wstring folderKey = MakeCacheKey(job.relativeFolder);
 
                 PendingContentCompareUpdate update{};
-                update.version           = job.version;
-                update.leftSizeBytes     = job.key.leftSizeBytes;
-                update.rightSizeBytes    = job.key.rightSizeBytes;
-                update.leftLastWriteTime = job.key.leftLastWriteTime;
-                update.rightLastWriteTime = job.key.rightLastWriteTime;
-                update.leftFileAttributes = job.leftFileAttributes;
+                update.version             = job.version;
+                update.leftSizeBytes       = job.key.leftSizeBytes;
+                update.rightSizeBytes      = job.key.rightSizeBytes;
+                update.leftLastWriteTime   = job.key.leftLastWriteTime;
+                update.rightLastWriteTime  = job.key.rightLastWriteTime;
+                update.leftFileAttributes  = job.leftFileAttributes;
                 update.rightFileAttributes = job.rightFileAttributes;
-                update.areEqual          = areEqual;
+                update.areEqual            = areEqual;
 
                 _pendingContentCompareUpdates[folderKey][job.entryName] = update;
-                _pendingContentHighWater = std::max(_pendingContentHighWater, _pendingContentCompareUpdates.size());
-                shouldNotify             = true;
+                _pendingContentHighWater                                = std::max(_pendingContentHighWater, _pendingContentCompareUpdates.size());
+                shouldNotify                                            = true;
             }
 
             forceNotifyFinal = _contentCompareQueueHigh.empty() && _contentCompareQueueLow.empty() && _contentCompareInFlight.empty();

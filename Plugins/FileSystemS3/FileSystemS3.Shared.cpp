@@ -451,6 +451,8 @@ namespace
     out.useVirtualAddressing = defaults.useVirtualAddressing;
     out.maxKeys              = defaults.maxKeys;
     out.maxTableResults      = defaults.maxTableResults;
+    out.connectTimeoutMs     = defaults.connectTimeoutMs;
+    out.requestTimeoutMs     = defaults.requestTimeoutMs;
 
     // extra payload (optional; forwarded by host as `extra`)
     if (yyjson_val* extra = yyjson_obj_get(root, "extra"); extra && yyjson_is_obj(extra))
@@ -614,6 +616,8 @@ namespace
     outContext.useVirtualAddressing = defaults.useVirtualAddressing;
     outContext.maxKeys              = defaults.maxKeys;
     outContext.maxTableResults      = defaults.maxTableResults;
+    outContext.connectTimeoutMs     = defaults.connectTimeoutMs;
+    outContext.requestTimeoutMs     = defaults.requestTimeoutMs;
 
     // Canonicalize authority-based paths (s3://bucket/...) into "/bucket/..."
     if (! authority.empty())
@@ -676,9 +680,8 @@ namespace
         }
     }
 
-    // Conservative defaults; can be made configurable later.
-    cfg.connectTimeoutMs = 10'000;
-    cfg.requestTimeoutMs = 30'000;
+    cfg.connectTimeoutMs = static_cast<long>(std::min<uint64_t>(ctx.connectTimeoutMs, static_cast<uint64_t>((std::numeric_limits<long>::max)())));
+    cfg.requestTimeoutMs = static_cast<long>(std::min<uint64_t>(ctx.requestTimeoutMs, static_cast<uint64_t>((std::numeric_limits<long>::max)())));
     return cfg;
 }
 

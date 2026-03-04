@@ -204,8 +204,42 @@ uint32_t ClampMruWatched(uint32_t value) noexcept
 
 DirectoryInfoCache& DirectoryInfoCache::GetInstance()
 {
+    // Intentionally leaked to avoid shutdown UAF from static destruction order issues.
     static DirectoryInfoCache* instance = new DirectoryInfoCache();
     return *instance;
+}
+
+void DirectoryInfoCache::Shutdown() noexcept
+{
+    _shuttingDown.store(true, std::memory_order_release);
+
+    std::vector<std::unique_ptr<FolderWatcher>> watchersToStop;
+    {
+        std::lock_guard lock(_mutex);
+
+        for (const auto& pair : _entries)
+        {
+            const std::shared_ptr<Entry>& entry = pair.second;
+            StopWatcherLocked(entry, watchersToStop);
+        }
+
+        _entries.clear();
+        _lru.clear();
+
+        _currentBytes = 0;
+        _cacheHits    = 0;
+        _cacheMisses  = 0;
+        _enumerations = 0;
+        _evictions    = 0;
+        _dirtyMarks   = 0;
+
+        _initialized = false;
+        _maxBytes    = 0;
+        _maxWatchers = 0;
+        _mruWatched  = 0;
+    }
+
+    Debug::Info(L"DirectoryInfoCache: Shutdown (stopped {} watcher(s))", watchersToStop.size());
 }
 
 size_t DirectoryInfoCache::KeyHash::operator()(const Key& key) const noexcept
@@ -903,6 +937,11 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
         return E_INVALIDARG;
     }
 
+    if (_shuttingDown.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
     if (stopToken.stop_requested())
     {
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -1051,6 +1090,12 @@ DirectoryInfoCache::Borrowed DirectoryInfoCache::BorrowDirectoryInfo(IFileSystem
     Borrowed result{};
     result._owner = this;
 
+    if (_shuttingDown.load(std::memory_order_acquire))
+    {
+        result._status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        return result;
+    }
+
     const auto keyOpt = MakeKey(fileSystem, folder);
     if (! keyOpt)
     {
@@ -1087,6 +1132,11 @@ DirectoryInfoCache::Pin DirectoryInfoCache::PinFolder(IFileSystem* fileSystem, c
     pin._owner   = this;
     pin._hwnd    = hwnd;
     pin._message = message;
+
+    if (_shuttingDown.load(std::memory_order_acquire))
+    {
+        return pin;
+    }
 
     const auto keyOpt = MakeKey(fileSystem, folder);
     if (! keyOpt)

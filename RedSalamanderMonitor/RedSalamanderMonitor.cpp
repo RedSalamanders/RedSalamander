@@ -209,9 +209,7 @@ INT_PTR CALLBACK ModalConfirmDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
             }
             break;
         }
-        case WM_CLOSE:
-            EndDialog(dlg, IDNO);
-            return static_cast<INT_PTR>(TRUE);
+        case WM_CLOSE: EndDialog(dlg, IDNO); return static_cast<INT_PTR>(TRUE);
     }
     return static_cast<INT_PTR>(FALSE);
 }

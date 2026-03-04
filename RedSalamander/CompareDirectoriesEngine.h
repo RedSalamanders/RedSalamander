@@ -6,8 +6,8 @@
 #include <deque>
 #include <filesystem>
 #include <functional>
-#include <list>
 #include <limits>
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -117,7 +117,7 @@ struct CompareDirectoriesFolderDecision
     bool leftFolderMissing  = false;
     bool rightFolderMissing = false;
     // Pending content-compare jobs for files in this folder that are intentionally not surfaced
-    // as per-item ContentPending entries when `showIdenticalItems` is off (keeps memory bounded).
+    // as per-item ContentPending entries when `keepIdenticalItems` is off (keeps memory bounded).
     uint32_t pendingContentCompareCount = 0;
     // Precomputed aggregates over items (+ pendingContentCompareCount) — avoids O(n) scans in hot paths.
     bool anyDifferent = false;
@@ -130,22 +130,22 @@ struct CompareDirectoriesPerfStats
     uint64_t version   = 0;
     uint64_t uiVersion = 0;
 
-    uint32_t scanActiveScans     = 0;
-    uint64_t scanFoldersScanned  = 0;
-    uint64_t scanEntriesScanned  = 0;
-    size_t scanQueueHighSize     = 0;
-    size_t scanQueueLowSize      = 0;
-    size_t scanQueueSize         = 0;
-    size_t scanScheduledKeys     = 0;
-    size_t scanInFlightKeys      = 0;
-    size_t pendingSubdirUpdates  = 0;
+    uint32_t scanActiveScans    = 0;
+    uint64_t scanFoldersScanned = 0;
+    uint64_t scanEntriesScanned = 0;
+    size_t scanQueueHighSize    = 0;
+    size_t scanQueueLowSize     = 0;
+    size_t scanQueueSize        = 0;
+    size_t scanScheduledKeys    = 0;
+    size_t scanInFlightKeys     = 0;
+    size_t pendingSubdirUpdates = 0;
 
-    size_t scanQueueHighWater        = 0;
-    size_t scanQueueHighHighWater    = 0;
-    size_t scanQueueLowHighWater     = 0;
-    size_t scanScheduledHighWater    = 0;
-    size_t scanInFlightHighWater     = 0;
-    size_t pendingSubdirHighWater    = 0;
+    size_t scanQueueHighWater     = 0;
+    size_t scanQueueHighHighWater = 0;
+    size_t scanQueueLowHighWater  = 0;
+    size_t scanScheduledHighWater = 0;
+    size_t scanInFlightHighWater  = 0;
+    size_t pendingSubdirHighWater = 0;
 
     uint64_t contentPendingCompares   = 0;
     uint64_t contentTotalCompares     = 0;
@@ -159,18 +159,18 @@ struct CompareDirectoriesPerfStats
     size_t contentCacheSize           = 0;
     size_t pendingContentUpdates      = 0;
 
-    size_t contentQueueHighWater      = 0;
-    size_t contentQueueHighHighWater  = 0;
-    size_t contentQueueLowHighWater   = 0;
-    size_t contentInFlightHighWater   = 0;
-    size_t contentCacheHighWater      = 0;
-    size_t pendingContentHighWater    = 0;
+    size_t contentQueueHighWater     = 0;
+    size_t contentQueueHighHighWater = 0;
+    size_t contentQueueLowHighWater  = 0;
+    size_t contentInFlightHighWater  = 0;
+    size_t contentCacheHighWater     = 0;
+    size_t pendingContentHighWater   = 0;
 
-    size_t decisionCacheEntries                 = 0;
-    size_t decisionCacheEntriesHighWater        = 0;
-    uint64_t decisionCacheEstimatedBytes        = 0;
+    size_t decisionCacheEntries                   = 0;
+    size_t decisionCacheEntriesHighWater          = 0;
+    uint64_t decisionCacheEstimatedBytes          = 0;
     uint64_t decisionCacheEstimatedBytesHighWater = 0;
-    uint64_t decisionCacheBudgetBytes           = 0;
+    uint64_t decisionCacheBudgetBytes             = 0;
 
     DirectoryInfoCache::Stats directoryInfoCache{};
 };
@@ -376,24 +376,23 @@ private:
     void ClearContentCompareStateLocked() noexcept;
     static uint64_t EstimateDecisionBytes(std::wstring_view folderKey, const CompareDirectoriesFolderDecision& decision) noexcept;
     void TouchDecisionCacheKeyLocked(std::wstring_view folderKey) noexcept;
-    void TrackDecisionCacheInsertOrUpdateLocked(
-        std::wstring_view folderKey, const std::shared_ptr<const CompareDirectoriesFolderDecision>& decision) noexcept;
+    void TrackDecisionCacheInsertOrUpdateLocked(std::wstring_view folderKey, const std::shared_ptr<const CompareDirectoriesFolderDecision>& decision) noexcept;
     void TrackDecisionCacheEraseLocked(std::wstring_view folderKey) noexcept;
     void MaybeEvictDecisionCacheLocked() noexcept;
-    [[nodiscard]] bool PropagateChildAggregateToAncestorsLocked(
-        std::wstring_view childKey, const Common::Settings::CompareDirectoriesSettings& settings, uint64_t currentVersion) noexcept;
-    [[nodiscard]] std::shared_ptr<CompareDirectoriesFolderDecision> ComputeDecisionForFolder(
-        const std::filesystem::path& relativeFolder,
-        const Common::Settings::CompareDirectoriesSettings& settings,
-        const std::vector<std::wstring>& ignoreFilePatterns,
-        const std::vector<std::wstring>& ignoreDirectoryPatterns,
-        uint64_t version,
-        uint64_t cancelToken,
-        bool allowBackgroundWork,
-        bool reportScanProgress,
-        bool forceNotifyFolderStart,
-        ScanPriority scanPriority,
-        std::stop_token stopToken) noexcept;
+    [[nodiscard]] bool PropagateChildAggregateToAncestorsLocked(std::wstring_view childKey,
+                                                                const Common::Settings::CompareDirectoriesSettings& settings,
+                                                                uint64_t currentVersion) noexcept;
+    [[nodiscard]] std::shared_ptr<CompareDirectoriesFolderDecision> ComputeDecisionForFolder(const std::filesystem::path& relativeFolder,
+                                                                                             const Common::Settings::CompareDirectoriesSettings& settings,
+                                                                                             const std::vector<std::wstring>& ignoreFilePatterns,
+                                                                                             const std::vector<std::wstring>& ignoreDirectoryPatterns,
+                                                                                             uint64_t version,
+                                                                                             uint64_t cancelToken,
+                                                                                             bool allowBackgroundWork,
+                                                                                             bool reportScanProgress,
+                                                                                             bool forceNotifyFolderStart,
+                                                                                             ScanPriority scanPriority,
+                                                                                             std::stop_token stopToken) noexcept;
     void ApplyPendingContentCompareUpdatesLocked(const std::wstring& folderKey) noexcept;
     void ScanWorker(std::stop_token stopToken, uint32_t workerIndex) noexcept;
     void ContentCompareWorker(std::stop_token stopToken, uint32_t workerIndex) noexcept;
@@ -421,7 +420,7 @@ private:
     std::set<std::wstring, WStringViewNoCaseLess> _decisionCachePinnedKeys;
 
     static constexpr uint64_t kDecisionCacheBudgetBytes = 300ull * 1024ull * 1024ull;
-    uint64_t _decisionCacheBudgetBytes                 = kDecisionCacheBudgetBytes;
+    uint64_t _decisionCacheBudgetBytes                  = kDecisionCacheBudgetBytes;
 
     std::atomic_uint32_t _scanActiveScans{0};
     std::atomic_uint64_t _scanFoldersScanned{0};
@@ -458,20 +457,20 @@ private:
     std::vector<std::jthread> _contentCompareWorkers;
 
     // Perf stats (best-effort, under _mutex).
-    size_t _scanQueueHighWater          = 0;
-    size_t _scanQueueHighHighWater      = 0;
-    size_t _scanQueueLowHighWater       = 0;
-    size_t _scanScheduledHighWater      = 0;
-    size_t _scanInFlightHighWater       = 0;
-    size_t _pendingSubdirHighWater      = 0;
-    size_t _contentQueueHighWater       = 0;
-    size_t _contentQueueHighHighWater   = 0;
-    size_t _contentQueueLowHighWater    = 0;
-    size_t _contentInFlightHighWater    = 0;
-    size_t _contentCacheHighWater       = 0;
-    size_t _pendingContentHighWater     = 0;
-    size_t _decisionCacheEntriesHighWater = 0;
-    uint64_t _decisionCacheEstimatedBytes = 0;
+    size_t _scanQueueHighWater                     = 0;
+    size_t _scanQueueHighHighWater                 = 0;
+    size_t _scanQueueLowHighWater                  = 0;
+    size_t _scanScheduledHighWater                 = 0;
+    size_t _scanInFlightHighWater                  = 0;
+    size_t _pendingSubdirHighWater                 = 0;
+    size_t _contentQueueHighWater                  = 0;
+    size_t _contentQueueHighHighWater              = 0;
+    size_t _contentQueueLowHighWater               = 0;
+    size_t _contentInFlightHighWater               = 0;
+    size_t _contentCacheHighWater                  = 0;
+    size_t _pendingContentHighWater                = 0;
+    size_t _decisionCacheEntriesHighWater          = 0;
+    uint64_t _decisionCacheEstimatedBytes          = 0;
     uint64_t _decisionCacheEstimatedBytesHighWater = 0;
 };
 

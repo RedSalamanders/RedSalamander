@@ -46,6 +46,7 @@ inline constexpr wchar_t kClear             = L'\uE894';
 inline constexpr wchar_t kMapDrive          = L'\uE8CE';
 inline constexpr wchar_t kSyncFolder        = L'\uE8F7';
 inline constexpr wchar_t kPreview           = L'\uE8FF';
+inline constexpr wchar_t kLedLight          = L'\uE781';
 inline constexpr wchar_t kConnections       = L'\uED5C';
 inline constexpr wchar_t kHistory           = L'\uE81C';
 inline constexpr wchar_t kFind              = L'\uE721';

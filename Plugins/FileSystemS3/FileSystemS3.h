@@ -43,7 +43,7 @@ namespace FileSystemS3Internal
 {
 struct ResolvedAwsContext;
 [[nodiscard]] std::shared_ptr<Aws::S3Crt::S3CrtClient> GetS3Client(FileSystemS3& fs, const ResolvedAwsContext& ctx) noexcept;
-}
+} // namespace FileSystemS3Internal
 
 enum class FileSystemS3Mode
 {
@@ -225,6 +225,8 @@ public:
         bool useVirtualAddressing     = true;
         unsigned long maxKeys         = 1000;
         unsigned long maxTableResults = 1000;
+        uint32_t connectTimeoutMs     = 10'000;
+        uint32_t requestTimeoutMs     = 30'000;
     };
 
 private:
@@ -332,6 +334,24 @@ private:
       "default": true
     },
     {
+      "key": "connectTimeoutMs",
+      "label": "Connect timeout (ms)",
+      "type": "value",
+      "default": 10000,
+      "description": "TCP connect timeout used for S3 requests (ms).",
+      "min": 1,
+      "max": 600000
+    },
+    {
+      "key": "requestTimeoutMs",
+      "label": "Network stall timeout (ms)",
+      "type": "value",
+      "default": 30000,
+      "description": "No-progress / socket-read timeout for S3 requests (ms). Does not cap total transfer time if data keeps flowing.",
+      "min": 1,
+      "max": 600000
+    },
+    {
       "key": "useVirtualAddressing",
       "label": "Use virtual-hosted style addressing",
       "type": "bool",
@@ -379,6 +399,24 @@ private:
       "label": "Verify TLS certificate",
       "type": "bool",
       "default": true
+    },
+    {
+      "key": "connectTimeoutMs",
+      "label": "Connect timeout (ms)",
+      "type": "value",
+      "default": 10000,
+      "description": "TCP connect timeout used for S3 requests (ms).",
+      "min": 1,
+      "max": 600000
+    },
+    {
+      "key": "requestTimeoutMs",
+      "label": "Network stall timeout (ms)",
+      "type": "value",
+      "default": 30000,
+      "description": "No-progress / socket-read timeout for S3 requests (ms). Does not cap total transfer time if data keeps flowing.",
+      "min": 1,
+      "max": 600000
     },
     {
       "key": "maxTableResults",
@@ -431,6 +469,6 @@ private:
                                       const FileSystemS3Internal::ResolvedAwsContext& ctx,
                                       std::vector<FilesInformationS3::Entry>& out) noexcept;
     friend std::optional<std::string> LookupS3TableBucketArn(FileSystemS3& fs, std::wstring_view bucketName) noexcept;
-    friend std::shared_ptr<Aws::S3Crt::S3CrtClient> FileSystemS3Internal::GetS3Client(
-        FileSystemS3& fs, const FileSystemS3Internal::ResolvedAwsContext& ctx) noexcept;
+    friend std::shared_ptr<Aws::S3Crt::S3CrtClient> FileSystemS3Internal::GetS3Client(FileSystemS3& fs,
+                                                                                      const FileSystemS3Internal::ResolvedAwsContext& ctx) noexcept;
 };

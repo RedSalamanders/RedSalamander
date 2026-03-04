@@ -771,8 +771,8 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
            a.compareContent == b.compareContent && a.compareSubdirectories == b.compareSubdirectories &&
            a.compareSubdirectoryAttributes == b.compareSubdirectoryAttributes && a.selectSubdirsOnlyInOnePane == b.selectSubdirsOnlyInOnePane &&
            a.ignoreFiles == b.ignoreFiles && a.ignoreFilesPatterns == b.ignoreFilesPatterns && a.ignoreDirectories == b.ignoreDirectories &&
-           a.ignoreDirectoriesPatterns == b.ignoreDirectoriesPatterns && a.showIdenticalItems == b.showIdenticalItems &&
-           a.contentCompareWorkerCount == b.contentCompareWorkerCount;
+           a.ignoreDirectoriesPatterns == b.ignoreDirectoriesPatterns && a.keepIdenticalItems == b.keepIdenticalItems &&
+           a.showIdenticalItems == b.showIdenticalItems && a.contentCompareWorkerCount == b.contentCompareWorkerCount;
 }
 
 [[nodiscard]] bool IsEmptyHotPathSlot(const Common::Settings::HotPathSlot& slot) noexcept
@@ -1825,6 +1825,9 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     setVisible(state.advancedCompareSelectSubdirsOnlyInOnePaneLabel, showCompareDirectories);
     setVisible(state.advancedCompareSelectSubdirsOnlyInOnePaneToggle, showCompareDirectories);
     setVisible(state.advancedCompareSelectSubdirsOnlyInOnePaneDescription, showCompareDirectories);
+    setVisible(state.advancedCompareKeepIdenticalLabel, showCompareDirectories);
+    setVisible(state.advancedCompareKeepIdenticalToggle, showCompareDirectories);
+    setVisible(state.advancedCompareKeepIdenticalDescription, showCompareDirectories);
     setVisible(state.advancedCompareShowIdenticalLabel, showCompareDirectories);
     setVisible(state.advancedCompareShowIdenticalToggle, showCompareDirectories);
     setVisible(state.advancedCompareShowIdenticalDescription, showCompareDirectories);

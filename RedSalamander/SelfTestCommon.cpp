@@ -349,7 +349,7 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
         return {};
     }
 
-    DWORD type = 0;
+    DWORD type  = 0;
     DWORD bytes = 0;
     LONG rc     = RegGetValueW(root, subKey, valueName, RRF_RT_REG_SZ, &type, nullptr, &bytes);
     if (rc != ERROR_SUCCESS || bytes < sizeof(wchar_t))
@@ -418,7 +418,7 @@ void DestroyBcryptHash(BCRYPT_HASH_HANDLE h) noexcept
 
     DWORD hashLen = 0;
     cbData        = 0;
-    prop = BCryptGetProperty(closeAlg.get(), BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&hashLen), sizeof(hashLen), &cbData, 0);
+    prop          = BCryptGetProperty(closeAlg.get(), BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&hashLen), sizeof(hashLen), &cbData, 0);
     if (! BCRYPT_SUCCESS(prop) || hashLen != static_cast<DWORD>(outHash.size()))
     {
         return false;
@@ -426,8 +426,7 @@ void DestroyBcryptHash(BCRYPT_HASH_HANDLE h) noexcept
 
     std::vector<std::byte> hashObject(static_cast<size_t>(objLen));
     BCRYPT_HASH_HANDLE hashHandleRaw = nullptr;
-    const NTSTATUS createStatus =
-        BCryptCreateHash(closeAlg.get(), &hashHandleRaw, reinterpret_cast<PUCHAR>(hashObject.data()), objLen, nullptr, 0, 0);
+    const NTSTATUS createStatus      = BCryptCreateHash(closeAlg.get(), &hashHandleRaw, reinterpret_cast<PUCHAR>(hashObject.data()), objLen, nullptr, 0, 0);
     if (! BCRYPT_SUCCESS(createStatus) || ! hashHandleRaw)
     {
         return false;
@@ -435,7 +434,8 @@ void DestroyBcryptHash(BCRYPT_HASH_HANDLE h) noexcept
 
     auto destroyHash = wil::unique_any<BCRYPT_HASH_HANDLE, decltype(&DestroyBcryptHash), DestroyBcryptHash>(hashHandleRaw);
 
-    const NTSTATUS hashStatus = BCryptHashData(destroyHash.get(), reinterpret_cast<PUCHAR>(const_cast<std::byte*>(data.data())), static_cast<ULONG>(data.size()), 0);
+    const NTSTATUS hashStatus =
+        BCryptHashData(destroyHash.get(), reinterpret_cast<PUCHAR>(const_cast<std::byte*>(data.data())), static_cast<ULONG>(data.size()), 0);
     if (! BCRYPT_SUCCESS(hashStatus))
     {
         return false;
@@ -504,7 +504,8 @@ void DestroyBcryptHash(BCRYPT_HASH_HANDLE h) noexcept
         return false;
     }
 
-    wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    wil::unique_handle file(CreateFileW(
+        path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         return false;
@@ -699,7 +700,7 @@ void DestroyBcryptHash(BCRYPT_HASH_HANDLE h) noexcept
                     continue;
                 }
 
-                const std::string_view hash = line.substr(0, space);
+                const std::string_view hash    = line.substr(0, space);
                 const std::string_view refName = line.substr(space + 1);
                 if (refName == ref)
                 {
@@ -1340,7 +1341,8 @@ void TryArchiveLastRunToRepo(std::wstring_view area, int exitCode, uint64_t dura
             GetSystemTime(&t);
             return t;
         }();
-        const std::wstring nowUtcIso = std::format(L"{0:04}-{1:02}-{2:02}T{3:02}:{4:02}:{5:02}Z", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+        const std::wstring nowUtcIso =
+            std::format(L"{0:04}-{1:02}-{2:02}T{3:02}:{4:02}:{5:02}Z", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
 
         std::wstring envText;
         envText.reserve(1024);

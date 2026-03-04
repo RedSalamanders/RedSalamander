@@ -627,7 +627,18 @@
           "title": "Ignore Directory Patterns",
           "description": "Wildcard patterns separated by ';' (e.g. .git;node_modules)."
         },
-        "showIdenticalItems": { "type": "boolean", "default": false, "title": "Show Identical Items" }
+        "keepIdenticalItems": {
+          "type": "boolean",
+          "default": false,
+          "title": "Keep Identical Items",
+          "description": "Retain identical entries so the 'Show Identical Items' view toggle is available. Uses more memory on very large trees."
+        },
+        "showIdenticalItems": {
+          "type": "boolean",
+          "default": false,
+          "title": "Show Identical Items",
+          "description": "Show identical items (not just differences) by default. Requires keepIdenticalItems."
+        }
       },
       "additionalProperties": false
     },
@@ -860,15 +871,15 @@
         "bypassWindowsHello": {
           "type": "boolean",
           "default": false,
-          "title": "Bypass Windows Hello",
-          "description": "When true, Windows Hello verification is skipped even if a connection profile requires it."
+          "title": "Skip Windows Hello verification",
+          "description": "When true, Windows Hello verification is skipped even if a connection profile requires it. Intended for automation."
         },
         "windowsHelloReauthTimeoutMinute": {
           "type": "integer",
           "default": 10,
           "minimum": 0,
           "title": "Windows Hello Reauth Timeout (minutes)",
-          "description": "How long a successful Windows Hello verification is reused for a given connection. 0 = re-ask every time."
+          "description": "How long recent interactive authentication is reused for a given connection (Windows Hello verification or user-entered secret). For long-running background operations (copy/compare), the host reuses successful interactive authentication for the remainder of the app run to avoid mid-operation prompts. 0 = re-ask every time."
         },
         "items": {
           "type": "array",

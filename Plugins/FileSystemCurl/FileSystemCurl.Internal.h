@@ -6,9 +6,9 @@
 #include "Helpers.h"
 
 #include <algorithm>
-#include <charconv>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -80,8 +80,7 @@ public:
     {
     public:
         BorrowedHandle() noexcept = default;
-        BorrowedHandle(CurlEasyPool* pool, std::wstring key, unique_curl_easy handle) noexcept
-            : _pool(pool), _key(std::move(key)), _handle(std::move(handle))
+        BorrowedHandle(CurlEasyPool* pool, std::wstring key, unique_curl_easy handle) noexcept : _pool(pool), _key(std::move(key)), _handle(std::move(handle))
         {
         }
 
@@ -97,7 +96,9 @@ public:
         BorrowedHandle& operator=(const BorrowedHandle&) = delete;
 
         BorrowedHandle(BorrowedHandle&& other) noexcept
-            : _pool(std::exchange(other._pool, nullptr)), _key(std::move(other._key)), _handle(std::move(other._handle))
+            : _pool(std::exchange(other._pool, nullptr)),
+              _key(std::move(other._key)),
+              _handle(std::move(other._handle))
         {
         }
 
@@ -381,7 +382,9 @@ size_t CurlWriteToString(void* buffer, size_t size, size_t nitems, void* outstre
 
 [[nodiscard]] std::string RemotePathForCommand(const ConnectionInfo& conn, std::wstring_view pluginPath) noexcept;
 [[nodiscard]] HRESULT CurlPerformList(const ConnectionInfo& conn, std::wstring_view pluginPath, std::string& outListing) noexcept;
-[[nodiscard]] HRESULT CurlPerformListAndParse(const ConnectionInfo& conn, std::wstring_view pluginPath, std::vector<FilesInformationCurl::Entry>& outEntries) noexcept;
+[[nodiscard]] HRESULT CurlPerformListAndParse(const ConnectionInfo& conn,
+                                              std::wstring_view pluginPath,
+                                              std::vector<FilesInformationCurl::Entry>& outEntries) noexcept;
 [[nodiscard]] HRESULT CurlPerformQuote(const ConnectionInfo& conn, const std::vector<std::string>& commands) noexcept;
 
 constexpr unsigned long kCallbackArenaBytes = 64u * 1024u;

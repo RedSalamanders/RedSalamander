@@ -251,13 +251,13 @@ struct FolderWindow::FileOperationState
         FileSystemFlags _flags = FILESYSTEM_FLAG_NONE;
         bool _enablePreCalc    = true;
 
-        unsigned long _perItemTotalItems     = 0;
+        unsigned long _perItemTotalItems          = 0;
         unsigned int _perItemMaxConcurrencyBudget = 1;
-        unsigned int _perItemMaxConcurrency  = 1;
-        unsigned long _perItemCompletedItems = 0;
-        uint64_t _perItemCompletedEntryCount = 0;
-        uint64_t _perItemTotalEntryCount     = 0;
-        uint64_t _perItemCompletedBytes      = 0;
+        unsigned int _perItemMaxConcurrency       = 1;
+        unsigned long _perItemCompletedItems      = 0;
+        uint64_t _perItemCompletedEntryCount      = 0;
+        uint64_t _perItemTotalEntryCount          = 0;
+        uint64_t _perItemCompletedBytes           = 0;
 
         struct PerItemInFlightCall
         {
@@ -342,10 +342,10 @@ struct FolderWindow::FileOperationState
         size_t _inFlightFileCount = 0;
 
 #ifdef _DEBUG
-        unsigned int _dbgConfiguredMaxConcurrency = 1;
-        ULONGLONG _dbgSingleInFlightStartTick     = 0;
-        ULONGLONG _dbgLastSingleInFlightWarnTick  = 0;
-        bool _dbgObservedMultipleInFlightFiles    = false;
+        unsigned int _dbgConfiguredMaxConcurrency      = 1;
+        ULONGLONG _dbgSingleInFlightStartTick          = 0;
+        ULONGLONG _dbgLastSingleInFlightWarnTick       = 0;
+        bool _dbgObservedMultipleInFlightFiles         = false;
         ULONGLONG _dbgLastPerItemInFlightEvictWarnTick = 0;
         std::atomic_uint32_t _dbgCallbackActiveScopeCount{0};
 #endif

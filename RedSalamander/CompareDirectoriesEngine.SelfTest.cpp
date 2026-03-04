@@ -31,6 +31,7 @@
 #pragma warning(pop)
 
 #include "CompareDirectoriesEngine.h"
+#include "ConnectionSecrets.h"
 #include "CrashHandler.h"
 #include "FileSystemPluginManager.h"
 #include "Helpers.h"
@@ -38,8 +39,9 @@
 #include "PlugInterfaces/Factory.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
-#include "SettingsStore.h"
 #include "SelfTestCommon.h"
+#include "SettingsStore.h"
+#include "WindowsHello.h"
 
 extern Common::Settings::Settings g_settings;
 
@@ -55,6 +57,14 @@ constexpr std::wstring_view kSelfTestEnvConnS3  = L"REDSALAMANDER_SELFTEST_CONN_
 
 constexpr std::wstring_view kSelfTestDefaultConnFtp = L"FileOpsSelfTest FTP";
 constexpr std::wstring_view kSelfTestDefaultConnS3  = L"FileOpsSelfTest S3";
+
+std::atomic<uint32_t> g_windowsHelloVerifierCalls{0};
+
+HRESULT TestWindowsHelloVerifier(HWND /*ownerWindow*/, std::wstring_view /*message*/) noexcept
+{
+    g_windowsHelloVerifierCalls.fetch_add(1u, std::memory_order_relaxed);
+    return S_OK;
+}
 
 void Trace(std::wstring_view message) noexcept
 {
@@ -240,9 +250,9 @@ struct PhaseCheckResult
 };
 
 [[nodiscard]] PhaseCheckResult CheckRemoteConnectionSecret(std::wstring_view protocolLabel,
-                                                          std::wstring_view envVarName,
-                                                          std::wstring_view defaultProfileName,
-                                                          std::wstring_view expectedPluginId) noexcept
+                                                           std::wstring_view envVarName,
+                                                           std::wstring_view defaultProfileName,
+                                                           std::wstring_view expectedPluginId) noexcept
 {
     const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
     const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
@@ -278,7 +288,8 @@ struct PhaseCheckResult
 
     if (! profile->savePassword)
     {
-        return {.status = SelfTest::SelfTestCaseResult::Status::skipped, .reason = std::format(L"{}: savePassword=false (secret is not persisted).", protocolLabel)};
+        return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
+                .reason = std::format(L"{}: savePassword=false (secret is not persisted).", protocolLabel)};
     }
 
     HostConnectionSecretKind kind = HOST_CONNECTION_SECRET_PASSWORD;
@@ -334,9 +345,9 @@ struct PhaseCheckResult
 }
 
 [[nodiscard]] PhaseCheckResult CheckRemoteConnectionSandbox(std::wstring_view protocolLabel,
-                                                           std::wstring_view envVarName,
-                                                           std::wstring_view defaultProfileName,
-                                                           std::wstring_view expectedPluginId) noexcept
+                                                            std::wstring_view envVarName,
+                                                            std::wstring_view defaultProfileName,
+                                                            std::wstring_view expectedPluginId) noexcept
 {
     const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
     const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
@@ -405,14 +416,16 @@ struct PhaseCheckResult
     if (isS3 && segmentCount < 2)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
-                .reason = std::format(L"{}: HARD REQUIREMENT: initialPath must include a bucket and a dedicated selftest prefix (e.g. '/bucket/red-salamander-selftest').",
-                                     protocolLabel)};
+                .reason = std::format(
+                    L"{}: HARD REQUIREMENT: initialPath must include a bucket and a dedicated selftest prefix (e.g. '/bucket/red-salamander-selftest').",
+                    protocolLabel)};
     }
 
     if (! ContainsIgnoreCase(initialPath, L"selftest"))
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
-                .reason = std::format(L"{}: HARD REQUIREMENT: initialPath must include 'selftest' (case-insensitive) to prove it is test-only.", protocolLabel)};
+                .reason =
+                    std::format(L"{}: HARD REQUIREMENT: initialPath must include 'selftest' (case-insensitive) to prove it is test-only.", protocolLabel)};
     }
 
     return {.status = SelfTest::SelfTestCaseResult::Status::passed};
@@ -426,7 +439,7 @@ struct CreatedFileSystemInstance
     wil::unique_hmodule module;
     wil::com_ptr<IFileSystem> fileSystem;
 
-    CreatedFileSystemInstance() = default;
+    CreatedFileSystemInstance()                                            = default;
     CreatedFileSystemInstance(const CreatedFileSystemInstance&)            = delete;
     CreatedFileSystemInstance& operator=(const CreatedFileSystemInstance&) = delete;
     CreatedFileSystemInstance(CreatedFileSystemInstance&&)                 = default;
@@ -1102,11 +1115,8 @@ public:
         return _base ? _base->MoveItem(MapPath(sourcePath).c_str(), MapPath(destinationPath).c_str(), flags, options, callback, cookie) : E_POINTER;
     }
 
-    HRESULT STDMETHODCALLTYPE DeleteItem(const wchar_t* path,
-                                         FileSystemFlags flags,
-                                         const FileSystemOptions* options,
-                                         IFileSystemCallback* callback,
-                                         void* cookie) noexcept override
+    HRESULT STDMETHODCALLTYPE
+    DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept override
     {
         return _base ? _base->DeleteItem(MapPath(path).c_str(), flags, options, callback, cookie) : E_POINTER;
     }
@@ -1425,11 +1435,8 @@ public:
         return _base ? _base->MoveItem(MapPath(sourcePath).c_str(), MapPath(destinationPath).c_str(), flags, options, callback, cookie) : E_POINTER;
     }
 
-    HRESULT STDMETHODCALLTYPE DeleteItem(const wchar_t* path,
-                                         FileSystemFlags flags,
-                                         const FileSystemOptions* options,
-                                         IFileSystemCallback* callback,
-                                         void* cookie) noexcept override
+    HRESULT STDMETHODCALLTYPE
+    DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept override
     {
         return _base ? _base->DeleteItem(MapPath(path).c_str(), flags, options, callback, cookie) : E_POINTER;
     }
@@ -1599,9 +1606,7 @@ private:
 class CountingReadDirectoryFileSystem final : public IFileSystem
 {
 public:
-    CountingReadDirectoryFileSystem(wil::com_ptr<IFileSystem> base, std::atomic_uint32_t* counter) noexcept
-        : _base(std::move(base)),
-          _counter(counter)
+    CountingReadDirectoryFileSystem(wil::com_ptr<IFileSystem> base, std::atomic_uint32_t* counter) noexcept : _base(std::move(base)), _counter(counter)
     {
     }
 
@@ -1684,11 +1689,8 @@ public:
         return _base ? _base->MoveItem(sourcePath, destinationPath, flags, options, callback, cookie) : E_POINTER;
     }
 
-    HRESULT STDMETHODCALLTYPE DeleteItem(const wchar_t* path,
-                                         FileSystemFlags flags,
-                                         const FileSystemOptions* options,
-                                         IFileSystemCallback* callback,
-                                         void* cookie) noexcept override
+    HRESULT STDMETHODCALLTYPE
+    DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept override
     {
         return _base ? _base->DeleteItem(path, flags, options, callback, cookie) : E_POINTER;
     }
@@ -1784,8 +1786,7 @@ private:
     return wrapped;
 }
 
-[[nodiscard]] wil::com_ptr<IFileSystem> CreateCountingReadDirectoryFileSystem(const wil::com_ptr<IFileSystem>& base,
-                                                                              std::atomic_uint32_t* counter) noexcept
+[[nodiscard]] wil::com_ptr<IFileSystem> CreateCountingReadDirectoryFileSystem(const wil::com_ptr<IFileSystem>& base, std::atomic_uint32_t* counter) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
     auto* wrapper = new (std::nothrow) CountingReadDirectoryFileSystem(base, counter);
@@ -2064,8 +2065,7 @@ void InvokeGetRootDecision(void* rawContext) noexcept
     return decision;
 }
 
-[[nodiscard]] bool StartScanAndWaitForIdle(const std::shared_ptr<CompareDirectoriesSession>& session,
-                                          std::chrono::milliseconds timeout) noexcept
+[[nodiscard]] bool StartScanAndWaitForIdle(const std::shared_ptr<CompareDirectoriesSession>& session, std::chrono::milliseconds timeout) noexcept
 {
     if (! session)
     {
@@ -2077,13 +2077,7 @@ void InvokeGetRootDecision(void* rawContext) noexcept
     bool started = false;
     bool done    = false;
 
-    session->SetScanProgressCallback([&](const std::filesystem::path&,
-                                         std::wstring_view,
-                                         uint64_t,
-                                         uint64_t,
-                                         uint32_t activeScans,
-                                         uint64_t,
-                                         uint64_t) noexcept
+    session->SetScanProgressCallback([&](const std::filesystem::path&, std::wstring_view, uint64_t, uint64_t, uint32_t activeScans, uint64_t, uint64_t) noexcept
     {
         std::lock_guard lock(mutex);
         if (activeScans != 0u)
@@ -2292,6 +2286,122 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
     {
         SelfTest::RunCase(options,
                           suite,
+                          L"windows_hello_cache",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            const auto restoreVerifier = wil::scope_exit([&] noexcept { static_cast<void>(RedSalamander::Security::SetWindowsHelloTestVerifier(nullptr)); });
+            g_windowsHelloVerifierCalls.store(0u, std::memory_order_relaxed);
+            RedSalamander::Security::SetWindowsHelloTestVerifier(&TestWindowsHelloVerifier);
+
+            std::wstring id = MakeGuidText();
+            state.Require(! id.empty(), L"Failed to generate a connection profile id.");
+
+            Common::Settings::ConnectionProfile profile;
+            profile.id                  = id;
+            profile.name                = std::format(L"SelfTest WindowsHello {}", id);
+            profile.pluginId            = std::wstring(kBuiltinFtpFileSystemId);
+            profile.host                = L"example.invalid";
+            profile.initialPath         = L"/";
+            profile.userName            = L"user";
+            profile.authMode            = Common::Settings::ConnectionAuthMode::Password;
+            profile.savePassword        = true;
+            profile.requireWindowsHello = true;
+
+            const bool hadConnectionsSettings = g_settings.connections.has_value();
+            if (! hadConnectionsSettings)
+            {
+                g_settings.connections.emplace();
+            }
+
+            const bool previousBypassHello     = g_settings.connections->bypassWindowsHello;
+            const uint32_t previousTimeoutMins = g_settings.connections->windowsHelloReauthTimeoutMinute;
+
+            g_settings.connections->bypassWindowsHello              = false;
+            g_settings.connections->windowsHelloReauthTimeoutMinute = 10;
+            g_settings.connections->items.push_back(profile);
+
+            const auto restoreSettings = wil::scope_exit([&] noexcept
+            {
+                RedSalamander::Connections::ClearSecretAccessAuthorization(id);
+
+                if (! g_settings.connections)
+                {
+                    return;
+                }
+
+                auto& items = g_settings.connections->items;
+                items.erase(std::remove_if(items.begin(), items.end(), [&](const Common::Settings::ConnectionProfile& item) noexcept { return item.id == id; }),
+                            items.end());
+
+                g_settings.connections->bypassWindowsHello              = previousBypassHello;
+                g_settings.connections->windowsHelloReauthTimeoutMinute = previousTimeoutMins;
+
+                if (! hadConnectionsSettings)
+                {
+                    g_settings.connections.reset();
+                }
+            });
+
+            const std::wstring targetName = RedSalamander::Connections::BuildCredentialTargetName(profile.id, RedSalamander::Connections::SecretKind::Password);
+            state.Require(! targetName.empty(), L"Failed to build WinCred target name.");
+
+            const std::wstring password = L"pw";
+            const HRESULT saveHr        = RedSalamander::Connections::SaveGenericCredential(targetName, profile.userName, password);
+            state.Require(SUCCEEDED(saveHr), std::format(L"SaveGenericCredential failed. hr=0x{:08X}", static_cast<unsigned long>(saveHr)));
+            const auto deleteCredential = wil::scope_exit([&] noexcept
+            {
+                const HRESULT delHr = RedSalamander::Connections::DeleteGenericCredential(targetName);
+                if (FAILED(delHr) && delHr != HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
+                {
+                    Debug::Warning(L"SelfTest: DeleteGenericCredential failed target='{}' hr=0x{:08X}", targetName, static_cast<unsigned long>(delHr));
+                }
+            });
+
+            RedSalamander::Connections::ClearSecretAccessAuthorization(profile.id);
+
+            wil::com_ptr<IHostConnections> hostConnections;
+            const HRESULT qiHr = GetHostServices()->QueryInterface(IID_PPV_ARGS(hostConnections.put()));
+            state.Require(SUCCEEDED(qiHr) && hostConnections, std::format(L"Missing IHostConnections. hr=0x{:08X}", static_cast<unsigned long>(qiHr)));
+
+            wil::unique_cotaskmem_string secret;
+            HRESULT hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secret.put());
+            state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            state.Require(secret && std::wstring_view(secret.get()) == password, L"Unexpected secret value.");
+            SecureClearAndFreeSecret(secret);
+            state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 1u, L"Expected Windows Hello to be requested once.");
+
+            wil::unique_cotaskmem_string secret2;
+            hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secret2.put());
+            state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret (second call) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            SecureClearAndFreeSecret(secret2);
+            state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 1u, L"Expected Windows Hello to be cached (no second prompt).");
+
+#ifdef _DEBUG
+            // Simulate an expired authorization timestamp to ensure long-running operations (compare/copy) won't re-prompt.
+            RedSalamander::Connections::SetSecretAccessAuthorizationTickForTesting(profile.id, 0);
+
+            wil::unique_cotaskmem_string secretExpired;
+            hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secretExpired.put());
+            state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret (expired auth) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            SecureClearAndFreeSecret(secretExpired);
+            state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 1u, L"Expected Windows Hello not to re-prompt after session auth.");
+#endif
+
+            RedSalamander::Connections::ClearSecretAccessAuthorization(profile.id);
+            RedSalamander::Connections::NoteSecretAccessAuthorized(profile.id);
+            g_windowsHelloVerifierCalls.store(0u, std::memory_order_relaxed);
+
+            wil::unique_cotaskmem_string secret3;
+            hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_PASSWORD, nullptr, secret3.put());
+            state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret (manual auth) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            SecureClearAndFreeSecret(secret3);
+            state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 0u, L"Manual secret entry should suppress Windows Hello prompts.");
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
                           L"unique",
                           [&](SelfTest::CaseState& state) noexcept
         {
@@ -2349,8 +2459,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                         state.Require(item == nullptr, L"same.txt expected elided from decision in differences-only mode.");
                     }
 
-                    auto session =
-                        std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+                    auto session = std::make_shared<CompareDirectoriesSession>(
+                        baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
                     const auto fsLeft  = CreateCompareDirectoriesFileSystem(ComparePane::Left, session);
                     const auto fsRight = CreateCompareDirectoriesFileSystem(ComparePane::Right, session);
 
@@ -2649,8 +2759,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(static_cast<bool>(rightFs), L"Failed to create right mapped filesystem (no IO).");
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                settings.compareContent = true;
-                settings.showIdenticalItems = true;
+                settings.compareContent     = true;
+                settings.keepIdenticalItems = true;
 
                 const std::filesystem::path pluginRoot(L"/");
                 const auto session = std::make_shared<CompareDirectoriesSession>(leftFs, rightFs, pluginRoot, pluginRoot, settings);
@@ -2774,8 +2884,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(WriteFileFill(folders.right / L"emoji_\U0001F600.bin", 'B', 64), L"Failed to create emoji file (right).");
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                settings.compareContent = true;
-                settings.showIdenticalItems = true;
+                settings.compareContent     = true;
+                settings.keepIdenticalItems = true;
 
                 auto session  = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
                 auto decision = WaitForContentCompare(session, std::filesystem::path{}, L"emoji_\U0001F600.bin", state);
@@ -2824,8 +2934,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(WriteFileFill(folders.right / L"a.bin", 'Z', 4096), L"Failed to create a.bin (right).");
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                settings.compareContent = true;
-                settings.showIdenticalItems = true;
+                settings.compareContent     = true;
+                settings.keepIdenticalItems = true;
 
                 wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left, 1u, 0u);
                 state.Require(static_cast<bool>(wrapped), L"Failed to create short-read file system wrapper.");
@@ -2873,7 +2983,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 Common::Settings::CompareDirectoriesSettings settings{};
                 settings.compareContent        = true;
                 settings.compareSubdirectories = true;
-                settings.showIdenticalItems    = true;
+                settings.keepIdenticalItems    = true;
 
                 wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left, 1024u, 1u);
                 state.Require(static_cast<bool>(wrapped), L"Failed to create short-read file system wrapper (subdir pending).");
@@ -3057,8 +3167,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 state.Require(SelfTest::EnsureDirectory(leftRoot / L"sub" / L"sub2"), L"no_sync_deep_scan: failed to create sub tree (left).");
                 state.Require(SelfTest::EnsureDirectory(rightRoot / L"sub" / L"sub2"), L"no_sync_deep_scan: failed to create sub tree (right).");
-                state.Require(SelfTest::WriteTextFile(leftRoot / L"sub" / L"sub2" / L"leaf.txt", "L"),
-                              L"no_sync_deep_scan: failed to create leaf.txt (left).");
+                state.Require(SelfTest::WriteTextFile(leftRoot / L"sub" / L"sub2" / L"leaf.txt", "L"), L"no_sync_deep_scan: failed to create leaf.txt (left).");
 
                 std::atomic_uint32_t readDirCalls{0};
 
@@ -3077,8 +3186,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 const uint32_t after = readDirCalls.load(std::memory_order_acquire);
 
                 state.Require((after - before) == 2u,
-                              std::format(L"no_sync_deep_scan: expected exactly 2 ReadDirectoryInfo calls (root left+right), got {}.",
-                                          (after - before)));
+                              std::format(L"no_sync_deep_scan: expected exactly 2 ReadDirectoryInfo calls (root left+right), got {}.", (after - before)));
             }
             else
             {
@@ -3198,7 +3306,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                     Common::Settings::CompareDirectoriesSettings settings{};
                     settings.compareSubdirectories = true;
-                    settings.showIdenticalItems    = true;
+                    settings.keepIdenticalItems    = true;
 
                     auto decision = ComputeRootDecision(baseFs, folders, settings, state);
                     if (decision)
@@ -3240,8 +3348,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(WriteFileTextFsIo(dummyIo, rightRoot / L"a.bin", "SAME"), L"Dummy: failed to write a.bin (right).");
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                settings.compareContent = true;
-                settings.showIdenticalItems = true;
+                settings.compareContent     = true;
+                settings.keepIdenticalItems = true;
 
                 auto session  = std::make_shared<CompareDirectoriesSession>(dummyFs, dummyFs, leftRoot, rightRoot, settings);
                 auto decision = WaitForContentCompare(session, std::filesystem::path{}, L"a.bin", state);
@@ -3368,13 +3476,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 std::condition_variable progressCv;
                 bool scanInProgress = false;
 
-                session->SetScanProgressCallback([&](const std::filesystem::path&,
-                                                     std::wstring_view,
-                                                     uint64_t scannedFolders,
-                                                     uint64_t,
-                                                     uint32_t activeScans,
-                                                     uint64_t,
-                                                     uint64_t) noexcept
+                session->SetScanProgressCallback(
+                    [&](const std::filesystem::path&, std::wstring_view, uint64_t scannedFolders, uint64_t, uint32_t activeScans, uint64_t, uint64_t) noexcept
                 {
                     if (scannedFolders == 0u || activeScans == 0u)
                     {
@@ -3390,9 +3493,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 {
                     std::unique_lock lock(progressMutex);
-                    static_cast<void>(progressCv.wait_for(lock,
-                                                         std::chrono::milliseconds{SelfTest::ScaleTimeout(5'000)},
-                                                         [&] { return scanInProgress; }));
+                    static_cast<void>(progressCv.wait_for(lock, std::chrono::milliseconds{SelfTest::ScaleTimeout(5'000)}, [&] { return scanInProgress; }));
                 }
                 session->SetScanProgressCallback({});
 
@@ -3557,7 +3658,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                           L"showIdentical",
                           [&](SelfTest::CaseState& state) noexcept
         {
-            // Case: showIdenticalItems includes identical files.
+            // Case: keepIdenticalItems retains identical files; showIdenticalItems toggles view without invalidating decisions.
             if (const auto foldersOpt = CreateCaseFolders(root, L"identical"))
             {
                 const auto& folders = *foldersOpt;
@@ -3565,9 +3666,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(SelfTest::WriteTextFile(folders.right / L"same.txt", "SAME"), L"Failed to create same.txt (right).");
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                auto session       = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
-                const auto fsLeft  = CreateCompareDirectoriesFileSystem(ComparePane::Left, session);
-                const auto fsRight = CreateCompareDirectoriesFileSystem(ComparePane::Right, session);
+                settings.keepIdenticalItems = true;
+                auto session                = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
+                const auto fsLeft           = CreateCompareDirectoriesFileSystem(ComparePane::Left, session);
+                const auto fsRight          = CreateCompareDirectoriesFileSystem(ComparePane::Right, session);
 
                 const uint64_t versionBefore = session->GetVersion();
                 const auto decisionBefore    = session->GetOrComputeDecision(std::filesystem::path{});
@@ -3575,7 +3677,12 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 if (decisionBefore)
                 {
                     const auto* item = FindItem(*decisionBefore, L"same.txt");
-                    state.Require(item == nullptr, L"same.txt should be elided from the cached decision in differences-only mode.");
+                    state.Require(item != nullptr, L"same.txt missing from cached decision when keepIdenticalItems is enabled.");
+                    if (item)
+                    {
+                        state.Require(! item->isDifferent, L"same.txt expected identical (before showIdentical).");
+                        state.Require(item->differenceMask == 0u, L"same.txt expected differenceMask=0 (before showIdentical).");
+                    }
                 }
 
                 state.Require(! ContainsName(EnumerateDirectoryNames(fsLeft, folders.left, state), L"same.txt"),
@@ -3587,10 +3694,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 session->SetSettings(settings);
 
                 const uint64_t versionAfter = session->GetVersion();
-                state.Require(versionAfter != versionBefore, L"SetSettings(showIdenticalItems) should invalidate decisions.");
+                state.Require(versionAfter == versionBefore, L"SetSettings(showIdenticalItems) must not invalidate decisions.");
 
                 const auto decisionAfter = session->GetOrComputeDecision(std::filesystem::path{});
-                state.Require(decisionAfter != decisionBefore, L"Decision should be recomputed across showIdenticalItems toggle.");
+                state.Require(decisionAfter == decisionBefore, L"Decision should remain cached across showIdenticalItems toggle.");
                 state.Require(static_cast<bool>(decisionAfter), L"Decision missing (after showIdentical).");
                 if (decisionAfter)
                 {
@@ -3621,7 +3728,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                           L"content_pending_elided",
                           [&](SelfTest::CaseState& state) noexcept
         {
-            // Case: In differences-only mode, file-level ContentPending placeholders are elided (tracked per-folder)
+            // Case: When keepIdenticalItems is off, file-level ContentPending placeholders are elided (tracked per-folder)
             // so content compare does not explode memory on very large folders.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_pending_elided"))
             {
@@ -3644,11 +3751,11 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 }
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                settings.compareSize       = false;
-                settings.compareDateTime   = false;
-                settings.compareAttributes = false;
-                settings.compareContent    = true;
-                settings.showIdenticalItems = false;
+                settings.compareSize        = false;
+                settings.compareDateTime    = false;
+                settings.compareAttributes  = false;
+                settings.compareContent     = true;
+                settings.keepIdenticalItems = false;
 
                 auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
 
@@ -3660,15 +3767,15 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 uint64_t lastComplete = 0;
 
                 session->SetContentProgressCallback([&](uint32_t /*workerIndex*/,
-                                                       const std::filesystem::path& /*relativeFolder*/,
-                                                       std::wstring_view /*entryName*/,
-                                                       uint64_t /*fileTotalBytes*/,
-                                                       uint64_t /*fileCompletedBytes*/,
-                                                       uint64_t /*overallTotalBytes*/,
-                                                       uint64_t /*overallCompletedBytes*/,
-                                                       uint64_t pendingContentCompares,
-                                                       uint64_t totalContentCompares,
-                                                       uint64_t completedContentCompares) noexcept
+                                                        const std::filesystem::path& /*relativeFolder*/,
+                                                        std::wstring_view /*entryName*/,
+                                                        uint64_t /*fileTotalBytes*/,
+                                                        uint64_t /*fileCompletedBytes*/,
+                                                        uint64_t /*overallTotalBytes*/,
+                                                        uint64_t /*overallCompletedBytes*/,
+                                                        uint64_t pendingContentCompares,
+                                                        uint64_t totalContentCompares,
+                                                        uint64_t completedContentCompares) noexcept
                 {
                     std::lock_guard guard(mutex);
                     lastPending  = pendingContentCompares;
@@ -3685,7 +3792,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(static_cast<bool>(decisionInitial), L"content_pending_elided: decision missing.");
                 if (decisionInitial)
                 {
-                    state.Require(decisionInitial->items.empty(), L"content_pending_elided: expected no per-file ContentPending items in differences-only mode.");
+                    state.Require(decisionInitial->items.empty(),
+                                  L"content_pending_elided: expected no per-file ContentPending items in differences-only mode.");
                     state.Require(decisionInitial->pendingContentCompareCount == static_cast<uint32_t>(kFileCount),
                                   L"content_pending_elided: expected pendingContentCompareCount to match the file count.");
                     state.Require(decisionInitial->anyPending, L"content_pending_elided: expected anyPending=true while compares are queued.");
@@ -3698,8 +3806,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     cv.wait_until(lock, deadline, [&] { return contentDone; });
                 }
 
-                state.Require(contentDone,
-                              std::format(L"content_pending_elided: content compares did not complete. pending={} total={} completed={}", lastPending, lastTotal, lastComplete));
+                state.Require(
+                    contentDone,
+                    std::format(
+                        L"content_pending_elided: content compares did not complete. pending={} total={} completed={}", lastPending, lastTotal, lastComplete));
                 state.Require(lastTotal == static_cast<uint64_t>(kFileCount), L"content_pending_elided: unexpected totalContentCompares.");
                 state.Require(lastComplete == static_cast<uint64_t>(kFileCount), L"content_pending_elided: unexpected completedContentCompares.");
 
@@ -3708,7 +3818,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 if (decisionFinal)
                 {
                     state.Require(decisionFinal->items.empty(), L"content_pending_elided: expected no surfaced items after equal content compares.");
-                    state.Require(decisionFinal->pendingContentCompareCount == 0u, L"content_pending_elided: expected pendingContentCompareCount=0 after completion.");
+                    state.Require(decisionFinal->pendingContentCompareCount == 0u,
+                                  L"content_pending_elided: expected pendingContentCompareCount=0 after completion.");
                     state.Require(! decisionFinal->anyPending, L"content_pending_elided: expected anyPending=false after completion.");
                 }
             }
@@ -3732,7 +3843,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "A"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"b.txt", "B"), L"Failed to create b.txt (right).");
 
-                auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+                auto session =
+                    std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
 
                 state.Require(session->IsCompareEnabled(), L"IsCompareEnabled should be true by default.");
 
@@ -3805,7 +3917,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(SelfTest::WriteTextFile(folders.left / L"sub2" / L"g.txt", "Y"), L"Failed to create sub2/g.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"sub2" / L"g.txt", "Y"), L"Failed to create sub2/g.txt (right).");
 
-                auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+                auto session =
+                    std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
 
                 // Warm up both subtrees.
                 const auto decisionSub1Before = session->GetOrComputeDecision(std::filesystem::path(L"sub1"));
@@ -3897,7 +4010,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "A"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "A"), L"Failed to create a.txt (right).");
 
-                auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+                auto session =
+                    std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
 
                 const uint64_t uiV0 = session->GetUiVersion();
                 const uint64_t ver0 = session->GetVersion();
@@ -4000,7 +4114,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             if (const auto foldersOpt = CreateCaseFolders(root, L"try_make_relative_outside_root"))
             {
                 const auto& folders = *foldersOpt;
-                auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+                auto session =
+                    std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
 
                 const std::filesystem::path outsideLeft = folders.left.parent_path();
                 const auto relLeft                      = session->TryMakeRelative(ComparePane::Left, outsideLeft);
@@ -4058,7 +4173,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "CacheA"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "CacheA"), L"Failed to create a.txt (right).");
 
-                auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+                auto session =
+                    std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
 
                 const auto decision1 = session->GetOrComputeDecision(std::filesystem::path{});
                 state.Require(static_cast<bool>(decision1), L"First call should return a valid decision.");
@@ -4115,8 +4231,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(SelfTest::WriteBinaryFile(folders.right / L"empty.txt", {}), L"Failed to create empty.txt (right).");
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                settings.compareContent = true;
-                settings.showIdenticalItems = true;
+                settings.compareContent     = true;
+                settings.keepIdenticalItems = true;
 
                 auto decision = ComputeRootDecision(baseFs, folders, settings, state);
                 if (decision)
@@ -4144,7 +4260,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                           L"setSettingsInvalidates",
                           [&](SelfTest::CaseState& state) noexcept
         {
-            // Case: SetSettings with a meaningful change increments GetVersion(); a no-op toggle does not.
+            // Case: SetSettings with a comparison-changing setting increments GetVersion(); a view-only toggle does not.
             if (const auto foldersOpt = CreateCaseFolders(root, L"setSettingsInvalidates"))
             {
                 const auto& folders = *foldersOpt;
@@ -4157,22 +4273,34 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 const uint64_t v0 = session->GetVersion();
 
+                // keepIdenticalItems affects cached decision shape (pruning), so it must invalidate.
+                settings.keepIdenticalItems = true;
+                session->SetSettings(settings);
+                const uint64_t v1 = session->GetVersion();
+                state.Require(v1 != v0, L"SetSettings with keepIdenticalItems toggled must increment GetVersion().");
+
+                // showIdenticalItems is view-only and must NOT invalidate when keepIdenticalItems is unchanged.
+                settings.showIdenticalItems = true;
+                session->SetSettings(settings);
+                const uint64_t v2 = session->GetVersion();
+                state.Require(v2 == v1, L"SetSettings with showIdenticalItems toggled must not increment GetVersion().");
+
                 // Changing compareContent must invalidate the cache (version bump).
                 settings.compareContent = true;
                 session->SetSettings(settings);
-                const uint64_t v1 = session->GetVersion();
-                state.Require(v1 != v0, L"SetSettings with compareContent toggled must increment GetVersion().");
+                const uint64_t v3 = session->GetVersion();
+                state.Require(v3 != v2, L"SetSettings with compareContent toggled must increment GetVersion().");
 
                 // Setting the same value again must NOT bump the version.
                 session->SetSettings(settings);
-                const uint64_t v2 = session->GetVersion();
-                state.Require(v2 == v1, L"SetSettings with identical settings must not increment GetVersion().");
+                const uint64_t v4 = session->GetVersion();
+                state.Require(v4 == v3, L"SetSettings with identical settings must not increment GetVersion().");
 
                 // Changing compareSize must also invalidate.
                 settings.compareSize = ! settings.compareSize;
                 session->SetSettings(settings);
-                const uint64_t v3 = session->GetVersion();
-                state.Require(v3 != v2, L"SetSettings with compareSize toggled must increment GetVersion().");
+                const uint64_t v5 = session->GetVersion();
+                state.Require(v5 != v4, L"SetSettings with compareSize toggled must increment GetVersion().");
             }
             else
             {
@@ -4208,10 +4336,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     for (size_t j = 0; j < kFileCount; ++j)
                     {
                         const std::wstring fileName = std::format(L"f{:03}.txt", j);
-                        state.Require(SelfTest::WriteTextFile(leftSub / fileName, "X"),
-                                      std::format(L"Failed to create {} (left).", fileName));
-                        state.Require(SelfTest::WriteTextFile(rightSub / fileName, "X"),
-                                      std::format(L"Failed to create {} (right).", fileName));
+                        state.Require(SelfTest::WriteTextFile(leftSub / fileName, "X"), std::format(L"Failed to create {} (left).", fileName));
+                        state.Require(SelfTest::WriteTextFile(rightSub / fileName, "X"), std::format(L"Failed to create {} (right).", fileName));
                     }
                 }
 
@@ -4284,13 +4410,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 bool started = false;
                 bool done    = false;
 
-                session->SetScanProgressCallback([&](const std::filesystem::path&,
-                                                     std::wstring_view,
-                                                     uint64_t,
-                                                     uint64_t,
-                                                     uint32_t activeScans,
-                                                     uint64_t,
-                                                     uint64_t) noexcept
+                session->SetScanProgressCallback(
+                    [&](const std::filesystem::path&, std::wstring_view, uint64_t, uint64_t, uint32_t activeScans, uint64_t, uint64_t) noexcept
                 {
                     std::lock_guard lock(mutex);
                     if (activeScans != 0u)
@@ -4309,9 +4430,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 {
                     std::unique_lock lock(mutex);
-                    static_cast<void>(cv.wait_for(lock,
-                                                  std::chrono::milliseconds{SelfTest::ScaleTimeout(60'000)},
-                                                  [&] { return done; }));
+                    static_cast<void>(cv.wait_for(lock, std::chrono::milliseconds{SelfTest::ScaleTimeout(60'000)}, [&] { return done; }));
                 }
 
                 session->SetScanProgressCallback({});
@@ -4361,7 +4480,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 for (size_t i = 0; i < kSpillDirs; ++i)
                 {
-                    const std::wstring dirName = std::format(L"d{:04}", i);
+                    const std::wstring dirName           = std::format(L"d{:04}", i);
                     const std::filesystem::path leftDir  = folders.left / L"spill" / dirName;
                     const std::filesystem::path rightDir = folders.right / L"spill" / dirName;
 
@@ -4377,7 +4496,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 }
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                settings.showIdenticalItems = true;
+                settings.keepIdenticalItems = true;
 
                 auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
                 session->SetDecisionCacheBudgetBytesForSelfTest(64u * 1024u);
@@ -4388,13 +4507,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 bool started = false;
                 bool done    = false;
 
-                session->SetScanProgressCallback([&](const std::filesystem::path&,
-                                                     std::wstring_view,
-                                                     uint64_t,
-                                                     uint64_t,
-                                                     uint32_t activeScans,
-                                                     uint64_t,
-                                                     uint64_t) noexcept
+                session->SetScanProgressCallback(
+                    [&](const std::filesystem::path&, std::wstring_view, uint64_t, uint64_t, uint32_t activeScans, uint64_t, uint64_t) noexcept
                 {
                     std::lock_guard lock(mutex);
                     if (activeScans != 0u)
@@ -4418,9 +4532,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 {
                     std::unique_lock lock(mutex);
-                    static_cast<void>(cv.wait_for(lock,
-                                                  std::chrono::milliseconds{SelfTest::ScaleTimeout(60'000)},
-                                                  [&] { return done; }));
+                    static_cast<void>(cv.wait_for(lock, std::chrono::milliseconds{SelfTest::ScaleTimeout(60'000)}, [&] { return done; }));
                 }
 
                 session->SetScanProgressCallback({});
@@ -4476,7 +4588,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 state.Require(static_cast<bool>(wrapped), L"Failed to create short-read file system wrapper (cancel).");
 
                 const wil::com_ptr<IFileSystem> compareFs = wrapped ? wrapped : baseFs;
-                auto session                              = std::make_shared<CompareDirectoriesSession>(compareFs, compareFs, folders.left, folders.right, settings);
+                auto session = std::make_shared<CompareDirectoriesSession>(compareFs, compareFs, folders.left, folders.right, settings);
 
                 static_cast<void>(session->GetOrComputeDecision(std::filesystem::path{}));
 
@@ -4548,10 +4660,13 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 return;
             }
 
-            SelfTest::RunCase(options, suite, caseName, [&](SelfTest::CaseState& state) noexcept
+            SelfTest::RunCase(options,
+                              suite,
+                              caseName,
+                              [&](SelfTest::CaseState& state) noexcept
             {
-                const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
-                const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
+                const std::wstring overrideName                    = GetEnvVarTrimmed(envVarName);
+                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
                 const Common::Settings::ConnectionProfile* profile = FindConnectionProfileByName(profileName);
                 state.Require(profile != nullptr, L"Remote compare: profile missing after preconditions passed.");
                 if (! profile)
@@ -4576,7 +4691,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 CreatedFileSystemInstance remoteCreated{};
                 const HRESULT createHr = TryCreateFileSystemInstance(pluginId, {}, remoteCreated);
-                state.Require(SUCCEEDED(createHr), std::format(L"Remote compare: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+                state.Require(SUCCEEDED(createHr),
+                              std::format(L"Remote compare: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
                 if (FAILED(createHr) || ! remoteCreated.fileSystem)
                 {
                     return false;
@@ -4593,7 +4709,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                state.Require(SUCCEEDED(decision->hr), std::format(L"Remote compare: decision hr failed. hr=0x{:08X}", static_cast<unsigned long>(decision->hr)));
+                state.Require(SUCCEEDED(decision->hr),
+                              std::format(L"Remote compare: decision hr failed. hr=0x{:08X}", static_cast<unsigned long>(decision->hr)));
                 state.Require(! decision->rightFolderMissing, L"Remote compare: remote root reported missing.");
                 if (FAILED(decision->hr) || decision->rightFolderMissing)
                 {
@@ -4642,10 +4759,13 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 return;
             }
 
-            SelfTest::RunCase(options, suite, caseName, [&](SelfTest::CaseState& state) noexcept
+            SelfTest::RunCase(options,
+                              suite,
+                              caseName,
+                              [&](SelfTest::CaseState& state) noexcept
             {
-                const std::wstring overrideName = GetEnvVarTrimmed(kSelfTestEnvConnS3);
-                const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnS3);
+                const std::wstring overrideName                    = GetEnvVarTrimmed(kSelfTestEnvConnS3);
+                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnS3);
                 const Common::Settings::ConnectionProfile* profile = FindConnectionProfileByName(profileName);
                 state.Require(profile != nullptr, L"Remote S3 pagination: profile missing after preconditions passed.");
                 if (! profile)
@@ -4681,8 +4801,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 FileSystemDirectorySizeResult sizeResult{};
                 sizeResult.sizeBytes = sizeof(FileSystemDirectorySizeResult);
-                const HRESULT sizeHr =
-                    dirOps->GetDirectorySize(remoteRoot.c_str(), FileSystemFlags{}, nullptr, nullptr, &sizeResult);
+                const HRESULT sizeHr = dirOps->GetDirectorySize(remoteRoot.c_str(), FileSystemFlags{}, nullptr, nullptr, &sizeResult);
                 state.Require(SUCCEEDED(sizeHr) && SUCCEEDED(sizeResult.status),
                               std::format(L"Remote S3 pagination: GetDirectorySize failed. hr=0x{:08X} status=0x{:08X}",
                                           static_cast<unsigned long>(sizeHr),
@@ -4710,10 +4829,9 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                unsigned long got = 0;
+                unsigned long got     = 0;
                 const HRESULT countHr = listing->GetCount(&got);
-                state.Require(SUCCEEDED(countHr),
-                              std::format(L"Remote S3 pagination: GetCount failed. hr=0x{:08X}", static_cast<unsigned long>(countHr)));
+                state.Require(SUCCEEDED(countHr), std::format(L"Remote S3 pagination: GetCount failed. hr=0x{:08X}", static_cast<unsigned long>(countHr)));
                 if (FAILED(countHr))
                 {
                     return false;
@@ -4725,8 +4843,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                         std::format(L"Remote S3 pagination: expected={} (<=1000; paging may not be exercised unless maxKeys < expected)", expected));
                 }
 
-                state.Require(got == expected,
-                              std::format(L"Remote S3 pagination: listing count mismatch. expected={} got={}", expected, got));
+                state.Require(got == expected, std::format(L"Remote S3 pagination: listing count mismatch. expected={} got={}", expected, got));
                 return state.failure.empty();
             });
         };

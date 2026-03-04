@@ -480,16 +480,16 @@ struct OperationContext
     void* callbackCookie          = nullptr;
     uint64_t progressStreamId     = 0;
     FileSystemOptions optionsState{};
-    FileSystemOptions* options   = nullptr;
-    unsigned long totalItems     = 0;
-    unsigned long completedItems = 0;
-    uint64_t totalBytes          = 0;
-    uint64_t completedBytes      = 0;
-    bool continueOnError         = false;
-    bool allowOverwrite          = false;
-    bool allowReplaceReadonly    = false;
-    bool recursive               = false;
-    bool useRecycleBin           = false;
+    FileSystemOptions* options           = nullptr;
+    unsigned long totalItems             = 0;
+    unsigned long completedItems         = 0;
+    uint64_t totalBytes                  = 0;
+    uint64_t completedBytes              = 0;
+    bool continueOnError                 = false;
+    bool allowOverwrite                  = false;
+    bool allowReplaceReadonly            = false;
+    bool recursive                       = false;
+    bool useRecycleBin                   = false;
     unsigned int deleteConcurrencyBudget = 1;
     FileSystemArenaOwner itemArena;
     FileSystemArenaOwner progressArena;
@@ -1633,23 +1633,23 @@ void InitializeOperationContext(OperationContext& context,
     {
         context.optionsState = *options;
     }
-    context.optionsState.sizeBytes = sizeof(FileSystemOptions);
-    context.options              = &context.optionsState;
-    context.totalItems           = totalItems;
-    context.completedItems       = 0;
-    context.totalBytes           = 0;
-    context.completedBytes       = 0;
-    context.continueOnError      = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
-    context.allowOverwrite       = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
-    context.allowReplaceReadonly = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
-    context.recursive            = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
-    context.useRecycleBin        = HasFlag(flags, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+    context.optionsState.sizeBytes  = sizeof(FileSystemOptions);
+    context.options                 = &context.optionsState;
+    context.totalItems              = totalItems;
+    context.completedItems          = 0;
+    context.totalBytes              = 0;
+    context.completedBytes          = 0;
+    context.continueOnError         = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+    context.allowOverwrite          = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
+    context.allowReplaceReadonly    = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+    context.recursive               = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
+    context.useRecycleBin           = HasFlag(flags, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
     context.deleteConcurrencyBudget = 1;
-    context.itemSource           = nullptr;
-    context.itemDestination      = nullptr;
-    context.progressSource       = nullptr;
-    context.progressDestination  = nullptr;
-    context.reparsePointPolicy   = reparsePointPolicy;
+    context.itemSource              = nullptr;
+    context.itemDestination         = nullptr;
+    context.progressSource          = nullptr;
+    context.progressDestination     = nullptr;
+    context.reparsePointPolicy      = reparsePointPolicy;
     context.reparseRootSourcePath.clear();
     context.reparseRootDestinationPath.clear();
 }
@@ -2669,11 +2669,11 @@ struct DirectoryChildWorkItem
 
     struct DirectoryChildQueue final
     {
-        DirectoryChildQueue()                                  = default;
-        DirectoryChildQueue(const DirectoryChildQueue&)        = delete;
+        DirectoryChildQueue()                                      = default;
+        DirectoryChildQueue(const DirectoryChildQueue&)            = delete;
         DirectoryChildQueue& operator=(const DirectoryChildQueue&) = delete;
-        DirectoryChildQueue(DirectoryChildQueue&&)             = delete;
-        DirectoryChildQueue& operator=(DirectoryChildQueue&&)  = delete;
+        DirectoryChildQueue(DirectoryChildQueue&&)                 = delete;
+        DirectoryChildQueue& operator=(DirectoryChildQueue&&)      = delete;
 
         std::mutex mutex;
         std::condition_variable notEmptyCv;
@@ -2812,10 +2812,11 @@ struct DirectoryChildWorkItem
 
             if (! callerIsWorker)
             {
-                queue.notFullCv.wait(lock, [&]() noexcept
+                queue.notFullCv.wait(lock,
+                                     [&]() noexcept
                 {
-                    return parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire)
-                        || queue.items.size() < maxQueuedItems;
+                    return parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire) ||
+                           queue.items.size() < maxQueuedItems;
                 });
                 continue;
             }
@@ -2858,10 +2859,11 @@ struct DirectoryChildWorkItem
             DirectoryChildWorkItem item{};
             {
                 std::unique_lock lock(queue.mutex);
-                queue.notEmptyCv.wait(lock, [&]() noexcept
+                queue.notEmptyCv.wait(lock,
+                                      [&]() noexcept
                 {
-                    return parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire)
-                        || ! queue.items.empty() || queue.enumerationDone;
+                    return parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire) ||
+                           ! queue.items.empty() || queue.enumerationDone;
                 });
 
                 if (parallel.cancelRequested.load(std::memory_order_acquire) || parallel.stopOnErrorRequested.load(std::memory_order_acquire))
@@ -2941,8 +2943,8 @@ struct DirectoryChildWorkItem
     }
 
     const DWORD enumError = GetLastError();
-    if (enumError != ERROR_NO_MORE_FILES && ! parallel.cancelRequested.load(std::memory_order_acquire)
-        && ! parallel.stopOnErrorRequested.load(std::memory_order_acquire))
+    if (enumError != ERROR_NO_MORE_FILES && ! parallel.cancelRequested.load(std::memory_order_acquire) &&
+        ! parallel.stopOnErrorRequested.load(std::memory_order_acquire))
     {
         hr               = HRESULT_FROM_WIN32(enumError);
         HRESULT expected = S_OK;
@@ -3838,9 +3840,9 @@ struct DeleteFlattenFrame final
 };
 
 [[nodiscard]] HRESULT FlattenDeleteDirectoryTree(OperationContext& context,
-                                                const PathInfo& root,
-                                                std::vector<PathInfo>& outFiles,
-                                                std::vector<PathInfo>& outDirectoriesPostOrder) noexcept
+                                                 const PathInfo& root,
+                                                 std::vector<PathInfo>& outFiles,
+                                                 std::vector<PathInfo>& outDirectoriesPostOrder) noexcept
 {
     constexpr size_t kMaxWorkItems = 200000u;
 
@@ -3853,7 +3855,7 @@ struct DeleteFlattenFrame final
         if (! stack.back().enumerated)
         {
             stack.back().enumerated = true;
-            const size_t frameIndex  = stack.size() - 1;
+            const size_t frameIndex = stack.size() - 1;
 
             HRESULT hr = CheckCancel(context);
             if (FAILED(hr))
@@ -3946,20 +3948,21 @@ HRESULT DeleteDirectoryRecursiveParallel(OperationContext& rootContext, const Pa
     parallel.startTick = GetTickCount64();
     parallel.bandwidthLimitBytesPerSecond.store(sharedOptionsState ? sharedOptionsState->bandwidthLimitBytesPerSecond : 0ull, std::memory_order_release);
 
-    const FileSystemFlags workerFlags = static_cast<FileSystemFlags>(
-        (rootContext.continueOnError ? FILESYSTEM_FLAG_CONTINUE_ON_ERROR : FILESYSTEM_FLAG_NONE) |
-        (rootContext.allowReplaceReadonly ? FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY : FILESYSTEM_FLAG_NONE));
+    const FileSystemFlags workerFlags =
+        static_cast<FileSystemFlags>((rootContext.continueOnError ? FILESYSTEM_FLAG_CONTINUE_ON_ERROR : FILESYSTEM_FLAG_NONE) |
+                                     (rootContext.allowReplaceReadonly ? FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY : FILESYSTEM_FLAG_NONE));
 
     const auto initializeWorkerContext = [&](OperationContext& context, uint64_t progressStreamId) noexcept
     {
-        InitializeOperationContext(context, FILESYSTEM_DELETE, workerFlags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 0, rootContext.reparsePointPolicy);
-        context.options                    = sharedOptionsState;
-        context.parallel                   = &parallel;
-        context.totalBytes                 = 0; // let the host provide totals via pre-calc
-        context.progressStreamId           = progressStreamId;
-        context.recursive                  = false;
-        context.useRecycleBin              = false;
-        context.deleteConcurrencyBudget    = 1;
+        InitializeOperationContext(
+            context, FILESYSTEM_DELETE, workerFlags, sharedOptionsState, rootContext.callback, rootContext.callbackCookie, 0, rootContext.reparsePointPolicy);
+        context.options                 = sharedOptionsState;
+        context.parallel                = &parallel;
+        context.totalBytes              = 0; // let the host provide totals via pre-calc
+        context.progressStreamId        = progressStreamId;
+        context.recursive               = false;
+        context.useRecycleBin           = false;
+        context.deleteConcurrencyBudget = 1;
     };
 
     const auto processFile = [&](size_t index, uint64_t schedulerStreamId) noexcept
@@ -4259,7 +4262,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::MoveItem(const wchar_t* sourcePath,
     {
         return E_INVALIDARG;
     }
- 
+
     FileSystemReparsePointPolicy reparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
     unsigned int deleteMaxConcurrency               = 1;
     unsigned int deleteRecycleBinMaxConcurrency     = 1;
@@ -4322,7 +4325,7 @@ FileSystem::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSys
     unsigned int deleteRecycleBinMaxConcurrency     = 1;
     {
         std::lock_guard lock(_stateMutex);
-        reparsePointPolicy = _reparsePointPolicy;
+        reparsePointPolicy             = _reparsePointPolicy;
         deleteMaxConcurrency           = _deleteMaxConcurrency;
         deleteRecycleBinMaxConcurrency = _deleteRecycleBinMaxConcurrency;
     }
@@ -4330,10 +4333,10 @@ FileSystem::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSys
     OperationContext context{};
     // totalItems is 0 because the plugin does not know recursive totals; the host may provide totals via pre-calculation.
     InitializeOperationContext(context, FILESYSTEM_DELETE, flags, options, callback, cookie, 0, reparsePointPolicy);
-    const bool useRecycleBin                      = HasFlag(flags, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
-    const unsigned int maxConcurrencyFast         = std::clamp(deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency);
-    const unsigned int maxConcurrencyRecycleBin   = std::clamp(deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency);
-    context.deleteConcurrencyBudget               = useRecycleBin ? maxConcurrencyRecycleBin : maxConcurrencyFast;
+    const bool useRecycleBin                    = HasFlag(flags, FILESYSTEM_FLAG_USE_RECYCLE_BIN);
+    const unsigned int maxConcurrencyFast       = std::clamp(deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency);
+    const unsigned int maxConcurrencyRecycleBin = std::clamp(deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency);
+    context.deleteConcurrencyBudget             = useRecycleBin ? maxConcurrencyRecycleBin : maxConcurrencyFast;
 
     const PathInfo target = MakePathInfo(path);
 
@@ -5082,8 +5085,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::DeleteItems(const wchar_t* const* paths,
         unsigned long remainingWork = count;
 
         auto job = GetSharedFileOpsJobScheduler().StartJob(concurrency,
-                                                          concurrency,
-                                                          [&](size_t /*workerIndex*/, uint64_t streamId) noexcept
+                                                           concurrency,
+                                                           [&](size_t /*workerIndex*/, uint64_t streamId) noexcept
         {
             [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast();
 

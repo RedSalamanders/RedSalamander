@@ -111,6 +111,37 @@ IconCache& IconCache::GetInstance()
     return *instance;
 }
 
+void IconCache::Shutdown() noexcept
+{
+    size_t bitmapCount = 0;
+    size_t extCount    = 0;
+    {
+        std::lock_guard lock(_mutex);
+
+        for (const auto& entry : _deviceCaches)
+        {
+            bitmapCount += entry.second.bitmaps.size();
+        }
+        extCount = _extensionToIconIndex.size();
+
+        _deviceCaches.clear();
+        _extensionToIconIndex.clear();
+        _extractionFailureCount.clear();
+
+        _systemImageListJumbo.reset();
+        _systemImageListXL.reset();
+        _systemImageListLarge.reset();
+        _systemImageListSmall.reset();
+        _wicFactory.reset();
+
+        _initialized.store(false, std::memory_order_release);
+        _warmingCompleted.store(false, std::memory_order_release);
+        _warmingInProgress.store(false, std::memory_order_release);
+    }
+
+    DBGOUT_INFO(L"IconCache: Shutdown (cleared {} cached icons and {} extension mappings)", bitmapCount, extCount);
+}
+
 void IconCache::Initialize(ID2D1DeviceContext* d2dContext, float dpi)
 {
     if (! d2dContext)
