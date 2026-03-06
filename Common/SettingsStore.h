@@ -255,6 +255,7 @@ struct ConnectionsSettings
 {
     std::vector<ConnectionProfile> items;
     bool bypassWindowsHello                  = false;
+    bool allowInsecureTlsInAutomation        = false;
     uint32_t windowsHelloReauthTimeoutMinute = 10;
 };
 

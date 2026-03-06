@@ -4,6 +4,8 @@
 
 #include "Framework.h"
 
+#include "ConnectionProfileUtils.h"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -11,6 +13,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <filesystem>
 #include <format>
 #include <limits>
@@ -33,12 +36,14 @@
 #include "CompareDirectoriesEngine.h"
 #include "ConnectionSecrets.h"
 #include "CrashHandler.h"
+#include "CrashQuarantine.h"
 #include "FileSystemPluginManager.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "PlugInterfaces/Factory.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
+#include "SessionState.h"
 #include "SelfTestCommon.h"
 #include "SettingsStore.h"
 #include "WindowsHello.h"
@@ -49,6 +54,7 @@ namespace
 {
 constexpr std::wstring_view kBuiltinLocalFileSystemId = L"builtin/file-system";
 constexpr std::wstring_view kBuiltinDummyFileSystemId = L"builtin/file-system-dummy";
+constexpr std::wstring_view kBuiltin7zFileSystemId    = L"builtin/file-system-7z";
 constexpr std::wstring_view kBuiltinFtpFileSystemId   = L"builtin/file-system-ftp";
 constexpr std::wstring_view kBuiltinS3FileSystemId    = L"builtin/file-system-s3";
 
@@ -212,24 +218,6 @@ void AppendCaseResult(SelfTest::SelfTestSuiteResult& suite,
     return TrimWhitespace(value);
 }
 
-[[nodiscard]] const Common::Settings::ConnectionProfile* FindConnectionProfileByName(std::wstring_view name) noexcept
-{
-    if (! g_settings.connections || name.empty())
-    {
-        return nullptr;
-    }
-
-    for (const Common::Settings::ConnectionProfile& profile : g_settings.connections->items)
-    {
-        if (! profile.name.empty() && EqualsIgnoreCase(profile.name, name))
-        {
-            return &profile;
-        }
-    }
-
-    return nullptr;
-}
-
 void SecureClearAndFreeSecret(wil::unique_cotaskmem_string& secret) noexcept
 {
     if (wchar_t* text = secret.get())
@@ -257,7 +245,7 @@ struct PhaseCheckResult
     const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
     const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
 
-    const Common::Settings::ConnectionProfile* profile = FindConnectionProfileByName(profileName);
+    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
     if (! profile)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
@@ -352,7 +340,7 @@ struct PhaseCheckResult
     const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
     const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
 
-    const Common::Settings::ConnectionProfile* profile = FindConnectionProfileByName(profileName);
+    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
     if (! profile)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
@@ -384,6 +372,7 @@ struct PhaseCheckResult
     }
 
     size_t segmentCount = 0;
+    std::wstring_view soleSegment;
     for (size_t i = 0; i < initialPath.size();)
     {
         while (i < initialPath.size() && initialPath[i] == L'/')
@@ -410,14 +399,25 @@ struct PhaseCheckResult
         }
 
         ++segmentCount;
+        if (segmentCount == 1u)
+        {
+            soleSegment = segment;
+        }
     }
 
     const bool isS3 = EqualsIgnoreCase(expectedPluginId, kBuiltinS3FileSystemId);
     if (isS3 && segmentCount < 2)
     {
+        const bool bucketRootIsSelfTestOnly = segmentCount == 1u && ContainsIgnoreCase(soleSegment, L"selftest");
+        if (bucketRootIsSelfTestOnly)
+        {
+            return {.status = SelfTest::SelfTestCaseResult::Status::passed};
+        }
+
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
                 .reason = std::format(
-                    L"{}: HARD REQUIREMENT: initialPath must include a bucket and a dedicated selftest prefix (e.g. '/bucket/red-salamander-selftest').",
+                    L"{}: HARD REQUIREMENT: initialPath must include a bucket and a dedicated selftest prefix (e.g. '/bucket/red-salamander-selftest'), "
+                    L"or use a dedicated selftest bucket root whose bucket name includes 'selftest'.",
                     protocolLabel)};
     }
 
@@ -1004,6 +1004,397 @@ private:
     {
         return {};
     }
+    wrapped.attach(wrapper);
+    return wrapped;
+}
+
+struct ReadDirectoryTestBehavior
+{
+    std::filesystem::path targetPath;
+    DWORD delayMs           = 0;
+    bool returnMalformed    = false;
+    unsigned long fakeCount = 1;
+};
+
+[[nodiscard]] std::wstring NormalizePathForNoCaseCompare(std::filesystem::path value) noexcept
+{
+    value = value.lexically_normal();
+    while (! value.empty() && ! value.has_filename() && value != value.root_path())
+    {
+        value = value.parent_path();
+    }
+
+    std::wstring text = value.wstring();
+    std::replace(text.begin(), text.end(), L'/', L'\\');
+
+    if (text.rfind(L"\\\\?\\UNC\\", 0) == 0)
+    {
+        text.erase(0, 8);
+        text.insert(0, L"\\\\");
+    }
+    else if (text.rfind(L"\\\\?\\", 0) == 0)
+    {
+        text.erase(0, 4);
+    }
+
+    if (! text.empty())
+    {
+        ::CharLowerBuffW(text.data(), static_cast<DWORD>(text.size()));
+    }
+
+    return text;
+}
+
+class RawFilesInformation final : public IFilesInformation
+{
+public:
+    RawFilesInformation(std::vector<unsigned char> buffer, unsigned long count) noexcept
+        : _buffer(std::move(buffer)),
+          _count(count)
+    {
+    }
+
+    RawFilesInformation(const RawFilesInformation&)            = delete;
+    RawFilesInformation(RawFilesInformation&&)                 = delete;
+    RawFilesInformation& operator=(const RawFilesInformation&) = delete;
+    RawFilesInformation& operator=(RawFilesInformation&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
+    {
+        if (ppvObject == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IFilesInformation))
+        {
+            *ppvObject = static_cast<IFilesInformation*>(this);
+            AddRef();
+            return S_OK;
+        }
+
+        *ppvObject = nullptr;
+        return E_NOINTERFACE;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _refCount.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG current = _refCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
+        if (current == 0)
+        {
+            delete this;
+        }
+        return current;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetBuffer(FileInfo** ppFileInfo) noexcept override
+    {
+        if (ppFileInfo == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        if (_buffer.empty())
+        {
+            *ppFileInfo = nullptr;
+            return S_OK;
+        }
+
+        *ppFileInfo = reinterpret_cast<FileInfo*>(_buffer.data());
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetBufferSize(unsigned long* pSize) noexcept override
+    {
+        if (pSize == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        *pSize = static_cast<unsigned long>(_buffer.size());
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetAllocatedSize(unsigned long* pSize) noexcept override
+    {
+        if (pSize == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        *pSize = static_cast<unsigned long>(_buffer.capacity());
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetCount(unsigned long* pCount) noexcept override
+    {
+        if (pCount == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        *pCount = _count;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE Get(unsigned long index, FileInfo** ppEntry) noexcept override
+    {
+        if (ppEntry == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        *ppEntry = nullptr;
+        if (index != 0 || _buffer.empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_INDEX);
+        }
+
+        *ppEntry = reinterpret_cast<FileInfo*>(_buffer.data());
+        return S_OK;
+    }
+
+private:
+    ~RawFilesInformation() = default;
+
+    std::atomic_ulong _refCount{1};
+    std::vector<unsigned char> _buffer;
+    unsigned long _count = 0;
+};
+
+[[nodiscard]] std::vector<unsigned char> BuildMalformedDirectoryBuffer(std::wstring_view name) noexcept
+{
+    const size_t nameBytes = name.size() * sizeof(wchar_t);
+    const size_t totalSize = offsetof(FileInfo, FileName) + nameBytes;
+
+    std::vector<unsigned char> buffer(totalSize);
+    if (buffer.empty())
+    {
+        return buffer;
+    }
+
+    auto* entry = reinterpret_cast<FileInfo*>(buffer.data());
+    entry->NextEntryOffset = static_cast<unsigned long>(sizeof(FileInfo) + 16u); // Intentionally larger than the backing buffer.
+    entry->FileIndex       = 1;
+    entry->CreationTime    = 0;
+    entry->LastAccessTime  = 0;
+    entry->LastWriteTime   = 0;
+    entry->ChangeTime      = 0;
+    entry->EndOfFile       = 1;
+    entry->AllocationSize  = 1;
+    entry->FileAttributes  = FILE_ATTRIBUTE_ARCHIVE;
+    entry->FileNameSize    = static_cast<unsigned long>(nameBytes);
+    entry->EaSize          = 0;
+
+    if (nameBytes != 0)
+    {
+        std::memcpy(entry->FileName, name.data(), nameBytes);
+    }
+
+    return buffer;
+}
+
+class ReadDirectoryBehaviorFileSystem final : public IFileSystem
+{
+public:
+    ReadDirectoryBehaviorFileSystem(wil::com_ptr<IFileSystem> base, ReadDirectoryTestBehavior behavior) noexcept
+        : _base(std::move(base)),
+          _behavior(std::move(behavior))
+    {
+        _normalizedTargetPath = NormalizePathForNoCaseCompare(_behavior.targetPath);
+    }
+
+    ReadDirectoryBehaviorFileSystem(const ReadDirectoryBehaviorFileSystem&)            = delete;
+    ReadDirectoryBehaviorFileSystem(ReadDirectoryBehaviorFileSystem&&)                 = delete;
+    ReadDirectoryBehaviorFileSystem& operator=(const ReadDirectoryBehaviorFileSystem&) = delete;
+    ReadDirectoryBehaviorFileSystem& operator=(ReadDirectoryBehaviorFileSystem&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
+    {
+        if (ppvObject == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
+        {
+            *ppvObject = static_cast<IFileSystem*>(this);
+            AddRef();
+            return S_OK;
+        }
+
+        if (_base)
+        {
+            return _base->QueryInterface(riid, ppvObject);
+        }
+
+        *ppvObject = nullptr;
+        return E_NOINTERFACE;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _refCount.fetch_add(1, std::memory_order_relaxed) + 1;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG current = _refCount.fetch_sub(1, std::memory_order_acq_rel) - 1;
+        if (current == 0)
+        {
+            delete this;
+        }
+        return current;
+    }
+
+    HRESULT STDMETHODCALLTYPE ReadDirectoryInfo(const wchar_t* path, IFilesInformation** ppFilesInformation) noexcept override
+    {
+        if (ppFilesInformation == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        *ppFilesInformation = nullptr;
+        if (! _base)
+        {
+            return E_POINTER;
+        }
+
+        const std::filesystem::path requestedPath(path ? path : L"");
+        const std::wstring requested = NormalizePathForNoCaseCompare(requestedPath);
+        const bool intercept         = _normalizedTargetPath.empty() || requested == _normalizedTargetPath;
+        if (! intercept)
+        {
+            return _base->ReadDirectoryInfo(path, ppFilesInformation);
+        }
+
+        if (_behavior.delayMs != 0u)
+        {
+            ::Sleep(_behavior.delayMs);
+        }
+
+        if (! _behavior.returnMalformed)
+        {
+            return _base->ReadDirectoryInfo(path, ppFilesInformation);
+        }
+
+        auto* info = new (std::nothrow) RawFilesInformation(BuildMalformedDirectoryBuffer(L"corrupt-entry.txt"), _behavior.fakeCount);
+        if (! info)
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        *ppFilesInformation = info;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE CopyItem(const wchar_t* sourcePath,
+                                       const wchar_t* destinationPath,
+                                       FileSystemFlags flags,
+                                       const FileSystemOptions* options,
+                                       IFileSystemCallback* callback,
+                                       void* cookie) noexcept override
+    {
+        return _base ? _base->CopyItem(sourcePath, destinationPath, flags, options, callback, cookie) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE MoveItem(const wchar_t* sourcePath,
+                                       const wchar_t* destinationPath,
+                                       FileSystemFlags flags,
+                                       const FileSystemOptions* options,
+                                       IFileSystemCallback* callback,
+                                       void* cookie) noexcept override
+    {
+        return _base ? _base->MoveItem(sourcePath, destinationPath, flags, options, callback, cookie) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE
+    DeleteItem(const wchar_t* itemPath, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept override
+    {
+        return _base ? _base->DeleteItem(itemPath, flags, options, callback, cookie) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE RenameItem(const wchar_t* sourcePath,
+                                         const wchar_t* destinationPath,
+                                         FileSystemFlags flags,
+                                         const FileSystemOptions* options,
+                                         IFileSystemCallback* callback,
+                                         void* cookie) noexcept override
+    {
+        return _base ? _base->RenameItem(sourcePath, destinationPath, flags, options, callback, cookie) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE CopyItems(const wchar_t* const* sourcePaths,
+                                        unsigned long count,
+                                        const wchar_t* destinationFolder,
+                                        FileSystemFlags flags,
+                                        const FileSystemOptions* options,
+                                        IFileSystemCallback* callback,
+                                        void* cookie) noexcept override
+    {
+        return _base ? _base->CopyItems(sourcePaths, count, destinationFolder, flags, options, callback, cookie) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE MoveItems(const wchar_t* const* sourcePaths,
+                                        unsigned long count,
+                                        const wchar_t* destinationFolder,
+                                        FileSystemFlags flags,
+                                        const FileSystemOptions* options,
+                                        IFileSystemCallback* callback,
+                                        void* cookie) noexcept override
+    {
+        return _base ? _base->MoveItems(sourcePaths, count, destinationFolder, flags, options, callback, cookie) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE DeleteItems(const wchar_t* const* paths,
+                                          unsigned long count,
+                                          FileSystemFlags flags,
+                                          const FileSystemOptions* options,
+                                          IFileSystemCallback* callback,
+                                          void* cookie) noexcept override
+    {
+        return _base ? _base->DeleteItems(paths, count, flags, options, callback, cookie) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE RenameItems(const FileSystemRenamePair* items,
+                                          unsigned long count,
+                                          FileSystemFlags flags,
+                                          const FileSystemOptions* options,
+                                          IFileSystemCallback* callback,
+                                          void* cookie) noexcept override
+    {
+        return _base ? _base->RenameItems(items, count, flags, options, callback, cookie) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
+    {
+        return _base ? _base->GetCapabilities(jsonUtf8) : E_POINTER;
+    }
+
+private:
+    ~ReadDirectoryBehaviorFileSystem() = default;
+
+    std::atomic_ulong _refCount{1};
+    wil::com_ptr<IFileSystem> _base;
+    ReadDirectoryTestBehavior _behavior;
+    std::wstring _normalizedTargetPath;
+};
+
+[[nodiscard]] wil::com_ptr<IFileSystem> CreateReadDirectoryBehaviorFileSystem(const wil::com_ptr<IFileSystem>& base,
+                                                                               ReadDirectoryTestBehavior behavior) noexcept
+{
+    wil::com_ptr<IFileSystem> wrapped;
+    auto* wrapper = new (std::nothrow) ReadDirectoryBehaviorFileSystem(base, std::move(behavior));
+    if (! wrapper)
+    {
+        return {};
+    }
+
     wrapped.attach(wrapper);
     return wrapped;
 }
@@ -1895,6 +2286,438 @@ private:
 {
     return WriteFileBytesFsIo(io, path, text.data(), text.size());
 }
+
+[[nodiscard]] std::wstring ToPluginPathText(const std::filesystem::path& path) noexcept
+{
+    return path.generic_wstring();
+}
+
+[[nodiscard]] std::wstring JoinPluginPathForSelfTest(std::wstring_view base, std::wstring_view leaf) noexcept
+{
+    std::wstring result = NormalizePluginPathForSelfTest(base);
+    if (result.empty())
+    {
+        return {};
+    }
+
+    if (! leaf.empty())
+    {
+        if (result.back() != L'/')
+        {
+            result.push_back(L'/');
+        }
+        result.append(leaf);
+    }
+
+    return NormalizePluginPathForSelfTest(result);
+}
+
+[[nodiscard]] std::wstring MakeConnectionPathForSelfTest(std::wstring_view profileName, std::wstring_view pluginPath) noexcept
+{
+    if (profileName.empty() || pluginPath.empty() || pluginPath.front() != L'/')
+    {
+        return {};
+    }
+
+    return std::format(L"/@conn:{}{}", profileName, pluginPath);
+}
+
+[[nodiscard]] bool PathExistsFsIo(const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, unsigned long* attributes = nullptr) noexcept
+{
+    if (! io)
+    {
+        return false;
+    }
+
+    unsigned long attrs            = 0;
+    const std::wstring pluginPath  = ToPluginPathText(path);
+    const HRESULT hr               = io->GetAttributes(pluginPath.c_str(), &attrs);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    if (attributes)
+    {
+        *attributes = attrs;
+    }
+    return true;
+}
+
+[[nodiscard]] std::filesystem::path GetWorkspaceRootFromSourcePath() noexcept
+{
+    return std::filesystem::path(__FILE__).parent_path().parent_path();
+}
+
+[[nodiscard]] std::optional<std::wstring> FindFirstRegularEntryPath(const wil::com_ptr<IFileSystem>& fs, std::wstring_view rootPath) noexcept
+{
+    if (! fs || rootPath.empty())
+    {
+        return std::nullopt;
+    }
+
+    std::vector<std::wstring> pending{std::wstring(rootPath)};
+    while (! pending.empty())
+    {
+        const std::wstring current = std::move(pending.back());
+        pending.pop_back();
+
+        wil::com_ptr<IFilesInformation> info;
+        const HRESULT hr = fs->ReadDirectoryInfo(current.c_str(), info.put());
+        if (FAILED(hr) || ! info)
+        {
+            continue;
+        }
+
+        FileInfo* head = nullptr;
+        if (FAILED(info->GetBuffer(&head)) || head == nullptr)
+        {
+            continue;
+        }
+
+        for (FileInfo* entry = head; entry != nullptr;)
+        {
+            if (entry->FileNameSize >= sizeof(wchar_t))
+            {
+                const size_t charCount = entry->FileNameSize / sizeof(wchar_t);
+                std::wstring path(current);
+                if (! path.empty() && path.back() != L'/')
+                {
+                    path.push_back(L'/');
+                }
+                path.append(entry->FileName, entry->FileName + charCount);
+
+                const bool isDirectory = (entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+                if (! isDirectory)
+                {
+                    return path;
+                }
+
+                pending.push_back(std::move(path));
+            }
+
+            if (entry->NextEntryOffset == 0)
+            {
+                break;
+            }
+
+            entry = reinterpret_cast<FileInfo*>(reinterpret_cast<std::byte*>(entry) + entry->NextEntryOffset);
+        }
+    }
+
+    return std::nullopt;
+}
+
+enum class DirectorySizeCallbackMode : uint8_t
+{
+    Success,
+    FailProgress,
+    FailCancel,
+    Cancel,
+};
+
+constexpr HRESULT kDirectorySizeProgressFailureHr = HRESULT_FROM_WIN32(ERROR_RETRY);
+constexpr HRESULT kDirectorySizeCancelFailureHr   = E_ACCESSDENIED;
+
+class RecordingDirectorySizeCallback final : public IFileSystemDirectorySizeCallback
+{
+public:
+    explicit RecordingDirectorySizeCallback(DirectorySizeCallbackMode mode) noexcept : _mode(mode)
+    {
+    }
+
+    RecordingDirectorySizeCallback(const RecordingDirectorySizeCallback&)            = delete;
+    RecordingDirectorySizeCallback(RecordingDirectorySizeCallback&&)                 = delete;
+    RecordingDirectorySizeCallback& operator=(const RecordingDirectorySizeCallback&) = delete;
+    RecordingDirectorySizeCallback& operator=(RecordingDirectorySizeCallback&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE DirectorySizeProgress(
+        uint64_t scannedEntries, uint64_t totalBytes, uint64_t fileCount, uint64_t directoryCount, const wchar_t* currentPath, [[maybe_unused]] void* cookie) noexcept override
+    {
+        _progressCalls.fetch_add(1u, std::memory_order_relaxed);
+        _lastScannedEntries.store(scannedEntries, std::memory_order_release);
+        _lastTotalBytes.store(totalBytes, std::memory_order_release);
+        _lastFileCount.store(fileCount, std::memory_order_release);
+        _lastDirectoryCount.store(directoryCount, std::memory_order_release);
+
+        if (currentPath == nullptr)
+        {
+            _nullPathProgressCalls.fetch_add(1u, std::memory_order_relaxed);
+        }
+
+        if (_mode == DirectorySizeCallbackMode::FailProgress)
+        {
+            return kDirectorySizeProgressFailureHr;
+        }
+
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE DirectorySizeShouldCancel(BOOL* pCancel, [[maybe_unused]] void* cookie) noexcept override
+    {
+        if (pCancel == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        _cancelCalls.fetch_add(1u, std::memory_order_relaxed);
+
+        if (_mode == DirectorySizeCallbackMode::FailCancel)
+        {
+            return kDirectorySizeCancelFailureHr;
+        }
+
+        *pCancel = (_mode == DirectorySizeCallbackMode::Cancel) ? TRUE : FALSE;
+        return S_OK;
+    }
+
+    [[nodiscard]] uint32_t ProgressCalls() const noexcept
+    {
+        return _progressCalls.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] uint32_t CancelCalls() const noexcept
+    {
+        return _cancelCalls.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] uint32_t NullPathProgressCalls() const noexcept
+    {
+        return _nullPathProgressCalls.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] uint64_t LastTotalBytes() const noexcept
+    {
+        return _lastTotalBytes.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] uint64_t LastFileCount() const noexcept
+    {
+        return _lastFileCount.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] uint64_t LastDirectoryCount() const noexcept
+    {
+        return _lastDirectoryCount.load(std::memory_order_acquire);
+    }
+
+private:
+    DirectorySizeCallbackMode _mode = DirectorySizeCallbackMode::Success;
+    std::atomic<uint32_t> _progressCalls{0};
+    std::atomic<uint32_t> _cancelCalls{0};
+    std::atomic<uint32_t> _nullPathProgressCalls{0};
+    std::atomic<uint64_t> _lastScannedEntries{0};
+    std::atomic<uint64_t> _lastTotalBytes{0};
+    std::atomic<uint64_t> _lastFileCount{0};
+    std::atomic<uint64_t> _lastDirectoryCount{0};
+};
+
+[[nodiscard]] bool ValidateDirectorySizeCallbackContract(SelfTest::CaseState& state,
+                                                         IFileSystemDirectoryOperations* dirOps,
+                                                         const std::wstring& path,
+                                                         FileSystemFlags flags = FILESYSTEM_FLAG_NONE) noexcept
+{
+    if (dirOps == nullptr || path.empty())
+    {
+        state.Require(false, L"Directory size callback contract: invalid test inputs.");
+        return false;
+    }
+
+    FileSystemDirectorySizeResult baseline{};
+    baseline.sizeBytes = sizeof(FileSystemDirectorySizeResult);
+    const HRESULT baselineHr = dirOps->GetDirectorySize(path.c_str(), flags, nullptr, nullptr, &baseline);
+    state.Require(SUCCEEDED(baselineHr) && SUCCEEDED(baseline.status),
+                  std::format(L"Directory size callback contract: baseline GetDirectorySize failed. hr=0x{:08X} status=0x{:08X}",
+                              static_cast<unsigned long>(baselineHr),
+                              static_cast<unsigned long>(baseline.status)));
+    if (FAILED(baselineHr) || FAILED(baseline.status))
+    {
+        return false;
+    }
+
+    const auto runCase = [&](DirectorySizeCallbackMode mode, HRESULT expectedHr, std::wstring_view label) noexcept
+    {
+        RecordingDirectorySizeCallback callback(mode);
+        FileSystemDirectorySizeResult result{};
+        result.sizeBytes = sizeof(FileSystemDirectorySizeResult);
+
+        const HRESULT hr = dirOps->GetDirectorySize(path.c_str(), flags, &callback, nullptr, &result);
+        state.Require(hr == expectedHr && result.status == expectedHr,
+                      std::format(L"Directory size callback contract ({}): expected hr/status 0x{:08X}, got hr=0x{:08X} status=0x{:08X}.",
+                                  label,
+                                  static_cast<unsigned long>(expectedHr),
+                                  static_cast<unsigned long>(hr),
+                                  static_cast<unsigned long>(result.status)));
+        state.Require(callback.ProgressCalls() >= 1u,
+                      std::format(L"Directory size callback contract ({}): expected at least one progress callback.", label));
+        if (mode != DirectorySizeCallbackMode::FailProgress)
+        {
+            state.Require(callback.CancelCalls() >= 1u,
+                          std::format(L"Directory size callback contract ({}): expected at least one cancel callback.", label));
+        }
+    };
+
+    runCase(DirectorySizeCallbackMode::FailProgress, kDirectorySizeProgressFailureHr, L"progress failure");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    runCase(DirectorySizeCallbackMode::FailCancel, kDirectorySizeCancelFailureHr, L"cancel failure");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    runCase(DirectorySizeCallbackMode::Cancel, HRESULT_FROM_WIN32(ERROR_CANCELLED), L"cancel");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    RecordingDirectorySizeCallback successCallback(DirectorySizeCallbackMode::Success);
+    FileSystemDirectorySizeResult success{};
+    success.sizeBytes = sizeof(FileSystemDirectorySizeResult);
+    const HRESULT successHr = dirOps->GetDirectorySize(path.c_str(), flags, &successCallback, nullptr, &success);
+    state.Require(SUCCEEDED(successHr) && SUCCEEDED(success.status),
+                  std::format(L"Directory size callback contract (success): hr=0x{:08X} status=0x{:08X}.",
+                              static_cast<unsigned long>(successHr),
+                              static_cast<unsigned long>(success.status)));
+    state.Require(success.totalBytes == baseline.totalBytes,
+                  std::format(L"Directory size callback contract (success): totalBytes mismatch. expected={} got={}.",
+                              baseline.totalBytes,
+                              success.totalBytes));
+    state.Require(success.fileCount == baseline.fileCount,
+                  std::format(L"Directory size callback contract (success): fileCount mismatch. expected={} got={}.",
+                              baseline.fileCount,
+                              success.fileCount));
+    state.Require(success.directoryCount == baseline.directoryCount,
+                  std::format(L"Directory size callback contract (success): directoryCount mismatch. expected={} got={}.",
+                              baseline.directoryCount,
+                              success.directoryCount));
+    state.Require(successCallback.NullPathProgressCalls() >= 1u,
+                  L"Directory size callback contract (success): expected a final progress callback with currentPath=nullptr.");
+
+    return state.failure.empty();
+}
+
+struct RecordedFileSystemItem final
+{
+    bool seen = false;
+    HRESULT status = S_OK;
+    std::wstring sourcePath;
+    std::wstring destinationPath;
+};
+
+class RecordingFileSystemCallback final : public IFileSystemCallback
+{
+public:
+    explicit RecordingFileSystemCallback(unsigned long expectedItemCount) : _items(expectedItemCount)
+    {
+    }
+
+    RecordingFileSystemCallback(const RecordingFileSystemCallback&)            = delete;
+    RecordingFileSystemCallback(RecordingFileSystemCallback&&)                 = delete;
+    RecordingFileSystemCallback& operator=(const RecordingFileSystemCallback&) = delete;
+    RecordingFileSystemCallback& operator=(RecordingFileSystemCallback&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE FileSystemProgress([[maybe_unused]] FileSystemOperation operationType,
+                                                 [[maybe_unused]] unsigned long totalItems,
+                                                 [[maybe_unused]] unsigned long completedItems,
+                                                 [[maybe_unused]] uint64_t totalBytes,
+                                                 [[maybe_unused]] uint64_t completedBytes,
+                                                 [[maybe_unused]] const wchar_t* currentSourcePath,
+                                                 [[maybe_unused]] const wchar_t* currentDestinationPath,
+                                                 [[maybe_unused]] uint64_t currentItemTotalBytes,
+                                                 [[maybe_unused]] uint64_t currentItemCompletedBytes,
+                                                 [[maybe_unused]] FileSystemOptions* options,
+                                                 [[maybe_unused]] uint64_t progressStreamId,
+                                                 [[maybe_unused]] void* cookie) noexcept override
+    {
+        _progressCalls.fetch_add(1u, std::memory_order_relaxed);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemItemCompleted([[maybe_unused]] FileSystemOperation operationType,
+                                                      unsigned long itemIndex,
+                                                      const wchar_t* sourcePath,
+                                                      const wchar_t* destinationPath,
+                                                      HRESULT status,
+                                                      [[maybe_unused]] FileSystemOptions* options,
+                                                      [[maybe_unused]] void* cookie) noexcept override
+    {
+        {
+            std::lock_guard lock(_mutex);
+            if (itemIndex < _items.size())
+            {
+                RecordedFileSystemItem& item = _items[itemIndex];
+                item.seen                    = true;
+                item.status                  = status;
+                item.sourcePath              = sourcePath ? sourcePath : L"";
+                item.destinationPath         = destinationPath ? destinationPath : L"";
+            }
+        }
+
+        _completedCalls.fetch_add(1u, std::memory_order_relaxed);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemShouldCancel(BOOL* pCancel, [[maybe_unused]] void* cookie) noexcept override
+    {
+        if (pCancel == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        *pCancel = FALSE;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemIssue([[maybe_unused]] FileSystemOperation operationType,
+                                              [[maybe_unused]] const wchar_t* sourcePath,
+                                              [[maybe_unused]] const wchar_t* destinationPath,
+                                              [[maybe_unused]] HRESULT status,
+                                              FileSystemIssueAction* action,
+                                              [[maybe_unused]] FileSystemOptions* options,
+                                              [[maybe_unused]] void* cookie) noexcept override
+    {
+        _unexpectedIssue.store(true, std::memory_order_release);
+        if (action != nullptr)
+        {
+            *action = FileSystemIssueAction::Cancel;
+        }
+        return E_UNEXPECTED;
+    }
+
+    [[nodiscard]] bool TryGetItem(unsigned long itemIndex, RecordedFileSystemItem& outItem) const noexcept
+    {
+        std::lock_guard lock(_mutex);
+        if (itemIndex >= _items.size() || ! _items[itemIndex].seen)
+        {
+            return false;
+        }
+
+        outItem = _items[itemIndex];
+        return true;
+    }
+
+    [[nodiscard]] unsigned long CompletedCount() const noexcept
+    {
+        return _completedCalls.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] bool SawUnexpectedIssue() const noexcept
+    {
+        return _unexpectedIssue.load(std::memory_order_acquire);
+    }
+
+private:
+    mutable std::mutex _mutex;
+    std::vector<RecordedFileSystemItem> _items;
+    std::atomic<unsigned long> _progressCalls{0};
+    std::atomic<unsigned long> _completedCalls{0};
+    std::atomic<bool> _unexpectedIssue{false};
+};
 
 #ifndef SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE
 #define SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE 0x2u
@@ -3511,6 +4334,12 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(30'000)}),
                               L"Invalidate: scan did not become idle within timeout after invalidation.");
+
+                const CompareDirectoriesPerfStats stats = session->GetPerfStats();
+                state.Require(stats.scanActiveScans == 0u, L"Invalidate: expected scanActiveScans == 0 after idle.");
+                state.Require(stats.scanQueueSize == 0u, L"Invalidate: expected scanQueueSize == 0 after idle.");
+                state.Require(stats.scanScheduledKeys == 0u, L"Invalidate: expected scanScheduledKeys == 0 after idle.");
+                state.Require(stats.scanInFlightKeys == 0u, L"Invalidate: expected scanInFlightKeys == 0 after idle.");
             }
             else
             {
@@ -3585,6 +4414,39 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
         SelfTest::RunCase(options,
                           suite,
+                          L"empty_directories",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            // Case: Empty trees produce an empty decision and scan reaches idle.
+            if (const auto foldersOpt = CreateCaseFolders(root, L"empty_directories"))
+            {
+                const auto& folders = *foldersOpt;
+
+                Common::Settings::CompareDirectoriesSettings settings{};
+                const auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
+
+                session->StartScan();
+                state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(10'000)}),
+                              L"Empty directories: scan did not become idle within timeout.");
+
+                const auto decision = session->GetOrComputeDecision(std::filesystem::path{});
+                state.Require(static_cast<bool>(decision), L"Empty directories: decision is null.");
+                if (decision)
+                {
+                    state.Require(SUCCEEDED(decision->hr), L"Empty directories: expected decision hr success.");
+                    state.Require(decision->items.empty(), L"Empty directories: expected no items.");
+                }
+            }
+            else
+            {
+                state.Require(false, L"Failed to create case folders: empty_directories.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
                           L"ignore",
                           [&](SelfTest::CaseState& state) noexcept
         {
@@ -3649,6 +4511,334 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             {
                 state.Require(false, L"Failed to create case folders: ignore_multiple_patterns.");
             }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"ignore_pattern_length_cap",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            // Case: Overly long ignore patterns are dropped (harden against pathological inputs).
+            if (const auto foldersOpt = CreateCaseFolders(root, L"ignore_pattern_length_cap"))
+            {
+                const auto& folders = *foldersOpt;
+                state.Require(SelfTest::WriteTextFile(folders.left / L"cap.txt", "C"), L"Failed to create cap.txt (left).");
+
+                Common::Settings::CompareDirectoriesSettings settings{};
+                settings.ignoreFiles         = true;
+                settings.ignoreFilesPatterns = std::wstring(129, L'*'); // exceeds cap (128) => dropped
+
+                auto decision = ComputeRootDecision(baseFs, folders, settings, state);
+                if (decision)
+                {
+                    state.Require(FindItem(*decision, L"cap.txt") != nullptr, L"cap.txt expected in decision (pattern too long must not ignore).");
+                }
+            }
+            else
+            {
+                state.Require(false, L"Failed to create case folders: ignore_pattern_length_cap.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"ignore_pattern_count_cap",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            // Case: Ignore patterns are capped to a bounded count to keep matching work bounded.
+            if (const auto foldersOpt = CreateCaseFolders(root, L"ignore_pattern_count_cap"))
+            {
+                const auto& folders = *foldersOpt;
+                state.Require(SelfTest::WriteTextFile(folders.left / L"cap.log", "C"), L"Failed to create cap.log (left).");
+
+                std::wstring patterns;
+                for (int i = 0; i < 32; ++i)
+                {
+                    patterns.append(std::format(L"p{:02};", i)); // non-matching
+                }
+                patterns.append(L"*.log"); // would match, but is beyond the cap
+
+                Common::Settings::CompareDirectoriesSettings settings{};
+                settings.ignoreFiles         = true;
+                settings.ignoreFilesPatterns = patterns;
+
+                auto decision = ComputeRootDecision(baseFs, folders, settings, state);
+                if (decision)
+                {
+                    state.Require(FindItem(*decision, L"cap.log") != nullptr, L"cap.log expected in decision (pattern beyond cap must not ignore).");
+                }
+            }
+            else
+            {
+                state.Require(false, L"Failed to create case folders: ignore_pattern_count_cap.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"ignore_wildcard_pathology_runtime_bound",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            // Case: A pathological wildcard pattern list must not hang the scan (work is bounded by pattern caps + matcher budgets).
+            if (const auto foldersOpt = CreateCaseFolders(root, L"ignore_wildcard_pathology_runtime_bound"))
+            {
+                const auto& folders = *foldersOpt;
+
+                constexpr int kFileCount = 256;
+                for (int i = 0; i < kFileCount; ++i)
+                {
+                    const std::wstring name = std::format(L"file{:04}.txt", i);
+                    state.Require(SelfTest::WriteTextFile(folders.left / name, "X"), L"Failed to create file (left).");
+                    if (i != 0)
+                    {
+                        state.Require(SelfTest::WriteTextFile(folders.right / name, "X"), L"Failed to create file (right).");
+                    }
+                }
+
+                std::wstring longWildcard;
+                longWildcard.reserve(128);
+                for (int i = 0; i < 64; ++i)
+                {
+                    longWildcard.append(L"*a"); // length 128; requires many 'a' (won't match our file names)
+                }
+
+                std::wstring patterns;
+                patterns.reserve((longWildcard.size() + 1) * 32);
+                for (int i = 0; i < 32; ++i)
+                {
+                    patterns.append(longWildcard);
+                    patterns.push_back(L';');
+                }
+
+                Common::Settings::CompareDirectoriesSettings settings{};
+                settings.ignoreFiles         = true;
+                settings.ignoreFilesPatterns = patterns;
+
+                const auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
+                state.Require(StartScanAndWaitForIdle(session, std::chrono::milliseconds{SelfTest::ScaleTimeout(10'000)}),
+                              L"Wildcard patterns: scan did not become idle within timeout.");
+
+                const auto decision = session->GetOrComputeDecision(std::filesystem::path{});
+                state.Require(static_cast<bool>(decision), L"Wildcard patterns: decision is null.");
+                if (decision)
+                {
+                    state.Require(SUCCEEDED(decision->hr), L"Wildcard patterns: expected decision hr success.");
+                    const auto* item = FindItem(*decision, L"file0000.txt");
+                    state.Require(item != nullptr, L"file0000.txt expected in decision.");
+                    if (item)
+                    {
+                        state.Require(item->isDifferent, L"file0000.txt should remain surfaced as a differing item.");
+                        state.Require(item->existsLeft && ! item->existsRight,
+                                      L"file0000.txt should be present only on the left side.");
+                    }
+                }
+            }
+            else
+            {
+                state.Require(false, L"Failed to create case folders: ignore_wildcard_pathology_runtime_bound.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"crash_quarantine_synthetic_marker",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            // Case: A synthetic crash marker should trigger crash-quarantine to disable the last-active filesystem plugin.
+            constexpr std::wstring_view kPluginId = L"builtin/file-system-s3";
+
+            const std::filesystem::path sessionPath = SessionState::GetSessionStatePath();
+            state.Require(! sessionPath.empty(), L"SessionState::GetSessionStatePath returned empty path.");
+            const std::filesystem::path baseDir = sessionPath.parent_path();
+            state.Require(! baseDir.empty(), L"SessionState base directory is empty.");
+
+            const std::filesystem::path crashDir   = baseDir / L"Crashes";
+            const std::filesystem::path markerPath = crashDir / L"last_crash.txt";
+
+            struct Backup
+            {
+                bool hadFile = false;
+                std::vector<std::byte> bytes;
+            };
+
+            const auto readAllBytes = [&](const std::filesystem::path& path, Backup& backup) noexcept -> bool
+            {
+                backup.hadFile = false;
+                backup.bytes.clear();
+
+                std::error_code ec;
+                if (! std::filesystem::exists(path, ec))
+                {
+                    return true;
+                }
+
+                backup.hadFile = true;
+
+                wil::unique_handle file(CreateFileW(path.c_str(),
+                                                    GENERIC_READ,
+                                                    FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                    nullptr,
+                                                    OPEN_EXISTING,
+                                                    FILE_ATTRIBUTE_NORMAL,
+                                                    nullptr));
+                if (! file)
+                {
+                    state.Require(false, L"Failed to open backup file for read.");
+                    return false;
+                }
+
+                LARGE_INTEGER size{};
+                if (GetFileSizeEx(file.get(), &size) == 0)
+                {
+                    state.Require(false, L"Failed to get backup file size.");
+                    return false;
+                }
+
+                if (size.QuadPart < 0 || size.QuadPart > static_cast<LONGLONG>((std::numeric_limits<DWORD>::max)()))
+                {
+                    state.Require(false, L"Backup file too large.");
+                    return false;
+                }
+
+                const DWORD bytesToRead = static_cast<DWORD>(size.QuadPart);
+                backup.bytes.resize(bytesToRead);
+
+                DWORD readBytes = 0;
+                if (bytesToRead > 0)
+                {
+                    if (ReadFile(file.get(), backup.bytes.data(), bytesToRead, &readBytes, nullptr) == 0 || readBytes != bytesToRead)
+                    {
+                        state.Require(false, L"Failed to read backup file bytes.");
+                        return false;
+                    }
+                }
+
+                return true;
+            };
+
+            Backup sessionBackup{};
+            Backup markerBackup{};
+            if (! readAllBytes(sessionPath, sessionBackup) || ! readAllBytes(markerPath, markerBackup))
+            {
+                return state.failure.empty();
+            }
+
+            const auto restore = wil::scope_exit([&] noexcept
+            {
+                const auto restoreFile = [&](const std::filesystem::path& path, const Backup& backup) noexcept
+                {
+                    std::error_code ec;
+                    if (! backup.hadFile)
+                    {
+                        static_cast<void>(std::filesystem::remove(path, ec));
+                        return;
+                    }
+
+                    static_cast<void>(std::filesystem::create_directories(path.parent_path(), ec));
+                    wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+                    if (! file)
+                    {
+                        return;
+                    }
+
+                    if (! backup.bytes.empty())
+                    {
+                        DWORD written = 0;
+                        static_cast<void>(WriteFile(file.get(),
+                                                    backup.bytes.data(),
+                                                    static_cast<DWORD>(backup.bytes.size()),
+                                                    &written,
+                                                    nullptr));
+                    }
+
+                    static_cast<void>(FlushFileBuffers(file.get()));
+                };
+
+                restoreFile(sessionPath, sessionBackup);
+                restoreFile(markerPath, markerBackup);
+            });
+
+            const auto writeUtf16File = [&](const std::filesystem::path& path, std::wstring_view content) noexcept -> bool
+            {
+                std::error_code ec;
+                std::filesystem::create_directories(path.parent_path(), ec);
+                if (ec)
+                {
+                    state.Require(false, L"Failed to create directory for marker file.");
+                    return false;
+                }
+
+                wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+                if (! file)
+                {
+                    state.Require(false, L"Failed to create marker file.");
+                    return false;
+                }
+
+                const wchar_t bom = 0xFEFF;
+                DWORD written     = 0;
+                if (! WriteFile(file.get(), &bom, sizeof(bom), &written, nullptr))
+                {
+                    state.Require(false, L"Failed to write marker BOM.");
+                    return false;
+                }
+
+                const DWORD bytes = static_cast<DWORD>(content.size() * sizeof(wchar_t));
+                if (bytes > 0)
+                {
+                    if (! WriteFile(file.get(), content.data(), bytes, &written, nullptr))
+                    {
+                        state.Require(false, L"Failed to write marker content.");
+                        return false;
+                    }
+                }
+
+                static_cast<void>(FlushFileBuffers(file.get()));
+                return true;
+            };
+
+            std::wstring sessionText;
+            sessionText.reserve(32 + kPluginId.size());
+            sessionText.append(L"fsPlugin=");
+            sessionText.append(kPluginId);
+            sessionText.append(L"\r\nop=browse\r\n");
+
+            if (! writeUtf16File(sessionPath, sessionText) || ! writeUtf16File(markerPath, L"synthetic"))
+            {
+                return state.failure.empty();
+            }
+
+            Common::Settings::Settings settings{};
+            settings.plugins.currentFileSystemPluginId = std::wstring(kPluginId);
+
+            const bool oldAutoAccept = HostGetAutoAcceptPrompts();
+            HostSetAutoAcceptPrompts(true);
+            const auto restoreAutoAccept = wil::scope_exit([&] noexcept { HostSetAutoAcceptPrompts(oldAutoAccept); });
+
+            CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected(settings);
+
+            const auto isDisabled = [&](std::wstring_view id) noexcept -> bool
+            {
+                for (const std::wstring& disabled : settings.plugins.disabledPluginIds)
+                {
+                    if (OrdinalString::EqualsNoCase(disabled, id))
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            };
+
+            state.Require(isDisabled(kPluginId), L"Crash quarantine did not disable the expected plugin id.");
+            state.Require(settings.plugins.currentFileSystemPluginId.empty(), L"Crash quarantine did not clear currentFileSystemPluginId.");
 
             return state.failure.empty();
         });
@@ -4402,6 +5592,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 settings.compareSize       = false;
                 settings.compareDateTime   = false;
                 settings.compareAttributes = false;
+                settings.keepIdenticalItems = true;
 
                 auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
 
@@ -4634,6 +5825,355 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
+        SelfTest::RunCase(options,
+                          suite,
+                          L"invalid_directory_entry_buffer",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            // Case: Corrupt FileInfo buffers are rejected with ERROR_INVALID_DATA (no crash / OOB walk).
+            if (const auto foldersOpt = CreateCaseFolders(root, L"invalid_directory_entry_buffer"))
+            {
+                const auto& folders = *foldersOpt;
+                state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "L"), L"Failed to create a.txt (left).");
+                state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "R"), L"Failed to create a.txt (right).");
+
+                ReadDirectoryTestBehavior behavior{};
+                behavior.targetPath      = folders.left;
+                behavior.returnMalformed = true;
+
+                wil::com_ptr<IFileSystem> malformedLeft = CreateReadDirectoryBehaviorFileSystem(baseFs, behavior);
+                state.Require(static_cast<bool>(malformedLeft), L"Failed to create malformed ReadDirectoryInfo wrapper.");
+
+                auto session = std::make_shared<CompareDirectoriesSession>(
+                    malformedLeft ? malformedLeft : baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+
+                const auto decision = session->GetOrComputeDecision(std::filesystem::path{});
+                state.Require(static_cast<bool>(decision), L"invalid_directory_entry_buffer: decision is null.");
+                if (decision)
+                {
+                    state.Require(FAILED(decision->hr), L"invalid_directory_entry_buffer: expected failure HRESULT.");
+                    state.Require(decision->hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                                  std::format(L"invalid_directory_entry_buffer: expected ERROR_INVALID_DATA, got 0x{:08X}.",
+                                              static_cast<unsigned int>(decision->hr)));
+                }
+            }
+            else
+            {
+                state.Require(false, L"Failed to create case folders: invalid_directory_entry_buffer.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"scan_inflight_stamp_guards_restart",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            // Case: Stale scan worker completion must not clear active tracking for a restarted run.
+            if (const auto foldersOpt = CreateCaseFolders(root, L"scan_inflight_stamp_guards_restart"))
+            {
+                const auto& folders = *foldersOpt;
+                state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "L"), L"Failed to create a.txt (left).");
+                state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "R"), L"Failed to create a.txt (right).");
+
+                ReadDirectoryTestBehavior behavior{};
+                behavior.targetPath = folders.left;
+                behavior.delayMs    = static_cast<DWORD>(SelfTest::ScaleTimeout(1200));
+
+                wil::com_ptr<IFileSystem> delayedLeft = CreateReadDirectoryBehaviorFileSystem(baseFs, behavior);
+                state.Require(static_cast<bool>(delayedLeft), L"Failed to create delayed ReadDirectoryInfo wrapper.");
+
+                auto session = std::make_shared<CompareDirectoriesSession>(
+                    delayedLeft ? delayedLeft : baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
+
+                session->StartScan();
+
+                const auto startDeadline =
+                    std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(5'000))};
+                bool sawActive = false;
+                while (std::chrono::steady_clock::now() < startDeadline)
+                {
+                    if (session->GetPerfStats().scanActiveScans != 0u)
+                    {
+                        sawActive = true;
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+                state.Require(sawActive, L"scan_inflight_stamp_guards_restart: initial scan did not become active.");
+
+                std::this_thread::sleep_for(std::chrono::milliseconds(SelfTest::ScaleTimeout(800)));
+
+                session->SetBackgroundWorkEnabled(false);
+                session->InvalidateForAbsolutePath(folders.left, true);
+                session->SetBackgroundWorkEnabled(true);
+                session->StartScan();
+
+                // This point is after stale run completion should have happened, but before the restarted run can finish.
+                std::this_thread::sleep_for(std::chrono::milliseconds(SelfTest::ScaleTimeout(1000)));
+                const CompareDirectoriesPerfStats midStats = session->GetPerfStats();
+                state.Require(midStats.scanActiveScans != 0u,
+                              L"scan_inflight_stamp_guards_restart: restarted scan lost active tracking before completion.");
+
+                const auto doneDeadline =
+                    std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(15'000))};
+                bool idle = false;
+                while (std::chrono::steady_clock::now() < doneDeadline)
+                {
+                    const CompareDirectoriesPerfStats stats = session->GetPerfStats();
+                    if (stats.scanActiveScans == 0u && stats.scanQueueSize == 0u && stats.scanInFlightKeys == 0u)
+                    {
+                        idle = true;
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+                state.Require(idle, L"scan_inflight_stamp_guards_restart: restarted scan did not become idle within timeout.");
+            }
+            else
+            {
+                state.Require(false, L"Failed to create case folders: scan_inflight_stamp_guards_restart.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"content_inflight_stamp_guards_restart",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            // Case: Stale content worker completion must not consume a restarted run's in-flight slot.
+            if (const auto foldersOpt = CreateCaseFolders(root, L"content_inflight_stamp_guards_restart"))
+            {
+                const auto& folders = *foldersOpt;
+                constexpr size_t kBytes = 8u * 1024u * 1024u;
+                state.Require(WriteFileFill(folders.left / L"a.bin", 'A', kBytes), L"Failed to create a.bin (left).");
+                state.Require(WriteFileFill(folders.right / L"a.bin", 'B', kBytes), L"Failed to create a.bin (right).");
+
+                Common::Settings::CompareDirectoriesSettings settings{};
+                settings.compareContent    = true;
+                settings.compareSize       = false;
+                settings.compareDateTime   = false;
+                settings.compareAttributes = false;
+                settings.keepIdenticalItems = true;
+
+                wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left, 4096u, static_cast<DWORD>(SelfTest::ScaleTimeout(2)));
+                state.Require(static_cast<bool>(wrapped), L"Failed to create short-read file system wrapper (content restart stamp).");
+
+                const wil::com_ptr<IFileSystem> compareFs = wrapped ? wrapped : baseFs;
+                auto session = std::make_shared<CompareDirectoriesSession>(compareFs, compareFs, folders.left, folders.right, settings);
+
+                static_cast<void>(session->GetOrComputeDecision(std::filesystem::path{}));
+
+                const auto startDeadline =
+                    std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(10'000))};
+                bool sawInFlight = false;
+                while (std::chrono::steady_clock::now() < startDeadline)
+                {
+                    const CompareDirectoriesPerfStats stats = session->GetPerfStats();
+                    if (stats.contentPendingCompares != 0u && stats.contentInFlightSize != 0u)
+                    {
+                        sawInFlight = true;
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+                state.Require(sawInFlight, L"content_inflight_stamp_guards_restart: initial content compare did not become active.");
+
+                session->SetBackgroundWorkEnabled(false);
+                session->InvalidateForAbsolutePath(folders.left, true);
+                session->SetBackgroundWorkEnabled(true);
+                session->StartScan();
+
+                const auto restartedDecision = session->GetOrComputeDecision(std::filesystem::path{});
+                state.Require(static_cast<bool>(restartedDecision),
+                              L"content_inflight_stamp_guards_restart: restarted decision is null.");
+                if (restartedDecision)
+                {
+                    const auto* restartedItem = FindItem(*restartedDecision, L"a.bin");
+                    state.Require(restartedItem != nullptr,
+                                  L"content_inflight_stamp_guards_restart: a.bin missing from restarted decision.");
+                    if (restartedItem)
+                    {
+                        state.Require(HasFlag(restartedItem->differenceMask, CompareDirectoriesDiffBit::ContentPending),
+                                      L"content_inflight_stamp_guards_restart: restarted decision did not re-enter ContentPending.");
+                    }
+                }
+
+                const auto restartedDeadline =
+                    std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(10'000))};
+                bool restartedObserved = false;
+                while (std::chrono::steady_clock::now() < restartedDeadline)
+                {
+                    const CompareDirectoriesPerfStats stats = session->GetPerfStats();
+                    if (stats.contentPendingCompares != 0u || stats.contentInFlightSize != 0u)
+                    {
+                        restartedObserved = true;
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+                state.Require(restartedObserved,
+                              L"content_inflight_stamp_guards_restart: restarted content compare did not become pending or in-flight.");
+
+                const auto doneDeadline =
+                    std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(30'000))};
+                bool done = false;
+                while (std::chrono::steady_clock::now() < doneDeadline)
+                {
+                    const CompareDirectoriesPerfStats stats = session->GetPerfStats();
+                    if (stats.scanActiveScans == 0u && stats.contentPendingCompares == 0u && stats.contentQueueSize == 0u && stats.contentInFlightSize == 0u)
+                    {
+                        done = true;
+                        break;
+                    }
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                }
+                state.Require(done, L"content_inflight_stamp_guards_restart: compare did not complete within timeout.");
+
+                session->FlushPendingContentCompareUpdates();
+                const auto decision = session->GetOrComputeDecision(std::filesystem::path{});
+                state.Require(static_cast<bool>(decision), L"content_inflight_stamp_guards_restart: final decision is null.");
+                if (decision)
+                {
+                    const auto* item = FindItem(*decision, L"a.bin");
+                    state.Require(item != nullptr, L"content_inflight_stamp_guards_restart: a.bin missing from final decision.");
+                    if (item)
+                    {
+                        state.Require(! HasFlag(item->differenceMask, CompareDirectoriesDiffBit::ContentPending),
+                                      L"content_inflight_stamp_guards_restart: ContentPending should be cleared after completion.");
+                        state.Require(HasFlag(item->differenceMask, CompareDirectoriesDiffBit::Content),
+                                      L"content_inflight_stamp_guards_restart: expected Content difference after completion.");
+                        state.Require(item->isDifferent, L"content_inflight_stamp_guards_restart: a.bin should be marked different.");
+                    }
+                }
+            }
+            else
+            {
+                state.Require(false, L"Failed to create case folders: content_inflight_stamp_guards_restart.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"directory_size_local_callback_contract",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            if (const auto foldersOpt = CreateCaseFolders(root, L"directory_size_local_callback_contract"))
+            {
+                const auto& folders = *foldersOpt;
+                const std::filesystem::path filePath = folders.left / L"probe.bin";
+                state.Require(WriteFileFill(filePath, 'L', 13u), L"Directory size local callback: failed to create probe file.");
+
+                wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
+                state.Require(CreateFileSystemDirectoryOperations(baseFs, dirOps), L"Directory size local callback: missing IFileSystemDirectoryOperations.");
+                if (dirOps)
+                {
+                    static_cast<void>(ValidateDirectorySizeCallbackContract(state, dirOps.get(), filePath.wstring()));
+                }
+            }
+            else
+            {
+                state.Require(false, L"Directory size local callback: failed to create case folders.");
+            }
+
+            return state.failure.empty();
+        });
+
+        AppendCaseResult(
+            suite, L"directory_size_local_overflow", SelfTest::SelfTestCaseResult::Status::skipped, L"no deterministic overflow harness for the local filesystem");
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"directory_size_dummy_callback_contract",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            state.Require(dummyFs && dummyIo && dummyOps, L"Directory size dummy callback: dummy filesystem setup is unavailable.");
+            if (! dummyFs || ! dummyIo || ! dummyOps)
+            {
+                return false;
+            }
+
+            const std::filesystem::path dirPath(std::format(L"/directory-size-dummy-{}", guid));
+            const std::filesystem::path filePath = dirPath / L"probe.txt";
+            const std::wstring fileText          = ToPluginPathText(filePath);
+            const auto cleanup = wil::scope_exit([&]() noexcept
+            {
+                static_cast<void>(
+                    dummyFs->DeleteItem(dirPath.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, nullptr, nullptr));
+            });
+
+            state.Require(EnsureDirectoryExistsFsOps(dummyOps, dirPath), L"Directory size dummy callback: failed to create dummy sandbox directory.");
+            state.Require(WriteFileTextFsIo(dummyIo, filePath, "dummy-directory-size"), L"Directory size dummy callback: failed to write probe file.");
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            static_cast<void>(ValidateDirectorySizeCallbackContract(state, dummyOps.get(), fileText));
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"directory_size_7z_callback_contract",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            CreatedFileSystemInstance archiveCreated{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltin7zFileSystemId, {}, archiveCreated);
+            state.Require(SUCCEEDED(createHr) && archiveCreated.fileSystem,
+                          std::format(L"Directory size 7z callback: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! archiveCreated.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IFileSystemInitialize> init;
+            const HRESULT initQiHr = archiveCreated.fileSystem->QueryInterface(IID_PPV_ARGS(init.put()));
+            state.Require(SUCCEEDED(initQiHr) && init, L"Directory size 7z callback: missing IFileSystemInitialize.");
+            if (FAILED(initQiHr) || ! init)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
+            const HRESULT dirQiHr = archiveCreated.fileSystem->QueryInterface(IID_PPV_ARGS(dirOps.put()));
+            state.Require(SUCCEEDED(dirQiHr) && dirOps, L"Directory size 7z callback: missing IFileSystemDirectoryOperations.");
+            if (FAILED(dirQiHr) || ! dirOps)
+            {
+                return false;
+            }
+
+            const std::filesystem::path archivePath = GetWorkspaceRootFromSourcePath() / L"Plugins" / L"FileSystem7z" / L"Tests" / L"Tests.zip";
+            state.Require(SelfTest::PathExists(archivePath), std::format(L"Directory size 7z callback: fixture archive missing: {}", archivePath.wstring()));
+            if (! SelfTest::PathExists(archivePath))
+            {
+                return false;
+            }
+
+            const HRESULT initHr = init->Initialize(archivePath.c_str(), nullptr);
+            state.Require(SUCCEEDED(initHr),
+                          std::format(L"Directory size 7z callback: Initialize failed. hr=0x{:08X}", static_cast<unsigned long>(initHr)));
+            if (FAILED(initHr))
+            {
+                return false;
+            }
+
+            const auto filePathOpt = FindFirstRegularEntryPath(archiveCreated.fileSystem, L"/");
+            state.Require(filePathOpt.has_value(), L"Directory size 7z callback: no regular file found in fixture archive.");
+            if (! filePathOpt.has_value())
+            {
+                return false;
+            }
+
+            static_cast<void>(ValidateDirectorySizeCallbackContract(state, dirOps.get(), filePathOpt.value()));
+            return state.failure.empty();
+        });
+
         const auto runRemoteFileCompare = [&](std::wstring_view caseName,
                                               std::wstring_view protocolLabel,
                                               std::wstring_view envVarName,
@@ -4667,7 +6207,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             {
                 const std::wstring overrideName                    = GetEnvVarTrimmed(envVarName);
                 const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
-                const Common::Settings::ConnectionProfile* profile = FindConnectionProfileByName(profileName);
+    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
                 state.Require(profile != nullptr, L"Remote compare: profile missing after preconditions passed.");
                 if (! profile)
                 {
@@ -4737,6 +6277,128 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             });
         };
 
+        const auto runRemoteDirectorySizeCallbackContract = [&](std::wstring_view caseName,
+                                                                std::wstring_view protocolLabel,
+                                                                std::wstring_view envVarName,
+                                                                std::wstring_view defaultProfileName,
+                                                                std::wstring_view pluginId) noexcept
+        {
+            if (options.failFast && suite.failed != 0)
+            {
+                AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
+                return;
+            }
+
+            const PhaseCheckResult secretOutcome = CheckRemoteConnectionSecret(protocolLabel, envVarName, defaultProfileName, pluginId);
+            if (secretOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, secretOutcome.status, secretOutcome.reason);
+                return;
+            }
+
+            const PhaseCheckResult sandboxOutcome = CheckRemoteConnectionSandbox(protocolLabel, envVarName, defaultProfileName, pluginId);
+            if (sandboxOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, sandboxOutcome.status, sandboxOutcome.reason);
+                return;
+            }
+
+            SelfTest::RunCase(options,
+                              suite,
+                              caseName,
+                              [&](SelfTest::CaseState& state) noexcept
+            {
+                const std::wstring overrideName                    = GetEnvVarTrimmed(envVarName);
+                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
+                const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                state.Require(profile != nullptr, std::format(L"Remote {} directory size: profile missing after preconditions passed.", protocolLabel));
+                if (! profile)
+                {
+                    return false;
+                }
+
+                const std::wstring initialPath = NormalizePluginPathForSelfTest(profile->initialPath);
+                state.Require(! initialPath.empty() && initialPath[0] == L'/',
+                              std::format(L"Remote {} directory size: initialPath must be an absolute plugin path.", protocolLabel));
+                if (initialPath.empty() || initialPath[0] != L'/')
+                {
+                    return false;
+                }
+
+                CreatedFileSystemInstance remoteCreated{};
+                const HRESULT createHr = TryCreateFileSystemInstance(pluginId, {}, remoteCreated);
+                state.Require(SUCCEEDED(createHr) && remoteCreated.fileSystem,
+                              std::format(L"Remote {} directory size: failed to create filesystem instance. hr=0x{:08X}",
+                                          protocolLabel,
+                                          static_cast<unsigned long>(createHr)));
+                if (FAILED(createHr) || ! remoteCreated.fileSystem)
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileSystemIO> io;
+                const HRESULT ioHr = remoteCreated.fileSystem->QueryInterface(IID_PPV_ARGS(io.put()));
+                state.Require(SUCCEEDED(ioHr) && io, std::format(L"Remote {} directory size: filesystem instance missing IFileSystemIO.", protocolLabel));
+                if (FAILED(ioHr) || ! io)
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
+                const HRESULT dirHr = remoteCreated.fileSystem->QueryInterface(IID_PPV_ARGS(dirOps.put()));
+                state.Require(SUCCEEDED(dirHr) && dirOps,
+                              std::format(L"Remote {} directory size: filesystem instance missing IFileSystemDirectoryOperations.", protocolLabel));
+                if (FAILED(dirHr) || ! dirOps)
+                {
+                    return false;
+                }
+
+                const std::wstring caseRootPlugin =
+                    JoinPluginPathForSelfTest(initialPath, std::format(L"compare-selftest-dirsize-{}-{}", protocolLabel, guid));
+                state.Require(! caseRootPlugin.empty(), std::format(L"Remote {} directory size: failed to build sandbox path.", protocolLabel));
+                if (caseRootPlugin.empty())
+                {
+                    return false;
+                }
+
+                const std::wstring caseRootText = MakeConnectionPathForSelfTest(profileName, caseRootPlugin);
+                state.Require(! caseRootText.empty(), std::format(L"Remote {} directory size: failed to build connection path.", protocolLabel));
+                if (caseRootText.empty())
+                {
+                    return false;
+                }
+
+                const std::filesystem::path caseRoot(caseRootText);
+                const auto cleanup = wil::scope_exit([&]() noexcept
+                {
+                    static_cast<void>(remoteCreated.fileSystem->DeleteItem(caseRootText.c_str(),
+                                                                          static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                                          nullptr,
+                                                                          nullptr,
+                                                                          nullptr));
+                });
+
+                state.Require(EnsureDirectoryExistsFsOps(dirOps, caseRoot),
+                              std::format(L"Remote {} directory size: failed to prepare sandbox prefix.", protocolLabel));
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                const std::filesystem::path objectPath = caseRoot / L"probe.txt";
+                const std::wstring objectText          = ToPluginPathText(objectPath);
+                state.Require(WriteFileTextFsIo(io, objectPath, "directory-size-remote"),
+                              std::format(L"Remote {} directory size: failed to write probe object.", protocolLabel));
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                static_cast<void>(ValidateDirectorySizeCallbackContract(state, dirOps.get(), objectText));
+                return state.failure.empty();
+            });
+        };
+
         const auto runRemoteS3Pagination = [&](std::wstring_view caseName) noexcept
         {
             if (options.failFast && suite.failed != 0)
@@ -4766,7 +6428,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             {
                 const std::wstring overrideName                    = GetEnvVarTrimmed(kSelfTestEnvConnS3);
                 const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnS3);
-                const Common::Settings::ConnectionProfile* profile = FindConnectionProfileByName(profileName);
+    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
                 state.Require(profile != nullptr, L"Remote S3 pagination: profile missing after preconditions passed.");
                 if (! profile)
                 {
@@ -4780,13 +6442,19 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                const std::filesystem::path remoteRoot = std::filesystem::path(std::format(L"/@conn:{}{}", profileName, initialPath));
-
                 CreatedFileSystemInstance remoteCreated{};
                 const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinS3FileSystemId, {}, remoteCreated);
                 state.Require(SUCCEEDED(createHr),
                               std::format(L"Remote S3 pagination: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
                 if (FAILED(createHr) || ! remoteCreated.fileSystem)
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileSystemIO> io;
+                const HRESULT ioHr = remoteCreated.fileSystem->QueryInterface(IID_PPV_ARGS(io.put()));
+                state.Require(SUCCEEDED(ioHr) && io, L"Remote S3 pagination: filesystem instance missing IFileSystemIO.");
+                if (FAILED(ioHr) || ! io)
                 {
                     return false;
                 }
@@ -4799,9 +6467,52 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
+                const std::wstring caseRootPlugin = JoinPluginPathForSelfTest(initialPath, std::format(L"compare-selftest-s3-pagination-{}", guid));
+                state.Require(! caseRootPlugin.empty(), L"Remote S3 pagination: failed to build sandbox path.");
+                if (caseRootPlugin.empty())
+                {
+                    return false;
+                }
+
+                const std::wstring caseRootText = MakeConnectionPathForSelfTest(profileName, caseRootPlugin);
+                state.Require(! caseRootText.empty(), L"Remote S3 pagination: failed to build connection path.");
+                if (caseRootText.empty())
+                {
+                    return false;
+                }
+
+                const std::filesystem::path caseRoot(caseRootText);
+                const auto cleanup = wil::scope_exit([&]() noexcept
+                {
+                    static_cast<void>(remoteCreated.fileSystem->DeleteItem(caseRootText.c_str(),
+                                                                          static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                                          nullptr,
+                                                                          nullptr,
+                                                                          nullptr));
+                });
+
+                state.Require(EnsureDirectoryExistsFsOps(dirOps, caseRoot), L"Remote S3 pagination: failed to prepare sandbox prefix.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                constexpr unsigned long kObjectCount = 1005u;
+                constexpr std::string_view kPayload  = "p";
+                for (unsigned long index = 0; index < kObjectCount; ++index)
+                {
+                    const std::filesystem::path objectPath = caseRoot / std::format(L"object_{:04}.txt", index);
+                    state.Require(WriteFileTextFsIo(io, objectPath, kPayload),
+                                  std::format(L"Remote S3 pagination: failed to write object {}", objectPath.wstring()));
+                    if (! state.failure.empty())
+                    {
+                        return false;
+                    }
+                }
+
                 FileSystemDirectorySizeResult sizeResult{};
                 sizeResult.sizeBytes = sizeof(FileSystemDirectorySizeResult);
-                const HRESULT sizeHr = dirOps->GetDirectorySize(remoteRoot.c_str(), FileSystemFlags{}, nullptr, nullptr, &sizeResult);
+                const HRESULT sizeHr = dirOps->GetDirectorySize(caseRootText.c_str(), FileSystemFlags{}, nullptr, nullptr, &sizeResult);
                 state.Require(SUCCEEDED(sizeHr) && SUCCEEDED(sizeResult.status),
                               std::format(L"Remote S3 pagination: GetDirectorySize failed. hr=0x{:08X} status=0x{:08X}",
                                           static_cast<unsigned long>(sizeHr),
@@ -4811,17 +6522,21 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                const uint64_t expectedRaw = static_cast<uint64_t>(sizeResult.fileCount) + static_cast<uint64_t>(sizeResult.directoryCount);
-                state.Require(expectedRaw <= static_cast<uint64_t>((std::numeric_limits<unsigned long>::max)()),
-                              L"Remote S3 pagination: expected count exceeds IFilesInformation::GetCount range.");
-                if (expectedRaw > static_cast<uint64_t>((std::numeric_limits<unsigned long>::max)()))
+                state.Require(sizeResult.fileCount == kObjectCount,
+                              std::format(L"Remote S3 pagination: fileCount mismatch. expected={} got={}", kObjectCount, sizeResult.fileCount));
+                state.Require(sizeResult.directoryCount == 0u,
+                              std::format(L"Remote S3 pagination: expected directoryCount=0, got {}.", sizeResult.directoryCount));
+                state.Require(sizeResult.totalBytes == static_cast<uint64_t>(kObjectCount * kPayload.size()),
+                              std::format(L"Remote S3 pagination: totalBytes mismatch. expected={} got={}.",
+                                          static_cast<uint64_t>(kObjectCount * kPayload.size()),
+                                          sizeResult.totalBytes));
+                if (! state.failure.empty())
                 {
                     return false;
                 }
-                const unsigned long expected = static_cast<unsigned long>(expectedRaw);
 
                 wil::com_ptr<IFilesInformation> listing;
-                const HRESULT listHr = remoteCreated.fileSystem->ReadDirectoryInfo(remoteRoot.c_str(), listing.put());
+                const HRESULT listHr = remoteCreated.fileSystem->ReadDirectoryInfo(caseRootText.c_str(), listing.put());
                 state.Require(SUCCEEDED(listHr) && listing,
                               std::format(L"Remote S3 pagination: ReadDirectoryInfo failed. hr=0x{:08X}", static_cast<unsigned long>(listHr)));
                 if (FAILED(listHr) || ! listing)
@@ -4837,21 +6552,609 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                if (expected <= 1000u)
+                state.Require(got == kObjectCount,
+                              std::format(L"Remote S3 pagination: listing count mismatch. expected={} got={}", kObjectCount, got));
+                return state.failure.empty();
+            });
+        };
+
+        const auto runRemoteFtpPartialContinue = [&](std::wstring_view caseName) noexcept
+        {
+            if (options.failFast && suite.failed != 0)
+            {
+                AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
+                return;
+            }
+
+            const PhaseCheckResult secretOutcome = CheckRemoteConnectionSecret(L"FTP", kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);
+            if (secretOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, secretOutcome.status, secretOutcome.reason);
+                return;
+            }
+
+            const PhaseCheckResult sandboxOutcome = CheckRemoteConnectionSandbox(L"FTP", kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);
+            if (sandboxOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, sandboxOutcome.status, sandboxOutcome.reason);
+                return;
+            }
+
+            SelfTest::RunCase(options,
+                              suite,
+                              caseName,
+                              [&](SelfTest::CaseState& state) noexcept
+            {
+                const std::wstring overrideName                    = GetEnvVarTrimmed(kSelfTestEnvConnFtp);
+                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnFtp);
+                const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                state.Require(profile != nullptr, L"Remote FTP partial: profile missing after preconditions passed.");
+                if (! profile)
                 {
-                    AppendCompareSelfTestTraceLine(
-                        std::format(L"Remote S3 pagination: expected={} (<=1000; paging may not be exercised unless maxKeys < expected)", expected));
+                    return false;
                 }
 
-                state.Require(got == expected, std::format(L"Remote S3 pagination: listing count mismatch. expected={} got={}", expected, got));
+                const std::wstring initialPath = NormalizePluginPathForSelfTest(profile->initialPath);
+                state.Require(! initialPath.empty() && initialPath[0] == L'/', L"Remote FTP partial: initialPath must be an absolute plugin path.");
+                if (initialPath.empty() || initialPath[0] != L'/')
+                {
+                    return false;
+                }
+
+                CreatedFileSystemInstance remoteCreated{};
+                const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinFtpFileSystemId, {}, remoteCreated);
+                state.Require(SUCCEEDED(createHr),
+                              std::format(L"Remote FTP partial: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+                if (FAILED(createHr) || ! remoteCreated.fileSystem)
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileSystemIO> io;
+                const HRESULT ioHr = remoteCreated.fileSystem->QueryInterface(IID_PPV_ARGS(io.put()));
+                state.Require(SUCCEEDED(ioHr) && io, L"Remote FTP partial: filesystem instance missing IFileSystemIO.");
+                if (FAILED(ioHr) || ! io)
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
+                const HRESULT dirHr = remoteCreated.fileSystem->QueryInterface(IID_PPV_ARGS(dirOps.put()));
+                state.Require(SUCCEEDED(dirHr) && dirOps, L"Remote FTP partial: filesystem instance missing IFileSystemDirectoryOperations.");
+                if (FAILED(dirHr) || ! dirOps)
+                {
+                    return false;
+                }
+
+                const std::wstring caseRootPlugin = JoinPluginPathForSelfTest(initialPath, std::format(L"compare-selftest-ftp-partial-{}", guid));
+                state.Require(! caseRootPlugin.empty(), L"Remote FTP partial: failed to build sandbox path.");
+                if (caseRootPlugin.empty())
+                {
+                    return false;
+                }
+
+                const std::wstring caseRootText = MakeConnectionPathForSelfTest(profileName, caseRootPlugin);
+                state.Require(! caseRootText.empty(), L"Remote FTP partial: failed to build connection path.");
+                if (caseRootText.empty())
+                {
+                    return false;
+                }
+
+                const std::filesystem::path caseRoot(caseRootText);
+                const auto cleanup = wil::scope_exit([&]() noexcept
+                {
+                    const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+                    const std::wstring cleanupPath     = ToPluginPathText(caseRoot);
+                    static_cast<void>(remoteCreated.fileSystem->DeleteItem(cleanupPath.c_str(), cleanupFlags, nullptr, nullptr, nullptr));
+                });
+
+                const std::filesystem::path srcDir     = caseRoot / L"src";
+                const std::filesystem::path copyDst    = caseRoot / L"copy-dst";
+                const std::filesystem::path moveDst    = caseRoot / L"move-dst";
+                const std::filesystem::path copyGood   = srcDir / L"copy-good.txt";
+                const std::filesystem::path copyMiss   = srcDir / L"copy-missing.txt";
+                const std::filesystem::path moveGood   = srcDir / L"move-good.txt";
+                const std::filesystem::path moveMiss   = srcDir / L"move-missing.txt";
+                const std::filesystem::path renameGood = srcDir / L"rename-good.txt";
+                const std::filesystem::path renameMiss = srcDir / L"rename-missing.txt";
+
+                state.Require(EnsureDirectoryExistsFsOps(dirOps, srcDir), L"Remote FTP partial: failed to create source directory.");
+                state.Require(EnsureDirectoryExistsFsOps(dirOps, copyDst), L"Remote FTP partial: failed to create copy destination.");
+                state.Require(EnsureDirectoryExistsFsOps(dirOps, moveDst), L"Remote FTP partial: failed to create move destination.");
+                state.Require(WriteFileTextFsIo(io, copyGood, "copy-good"), L"Remote FTP partial: failed to write copy-good.txt.");
+                state.Require(WriteFileTextFsIo(io, moveGood, "move-good"), L"Remote FTP partial: failed to write move-good.txt.");
+                state.Require(WriteFileTextFsIo(io, renameGood, "rename-good"), L"Remote FTP partial: failed to write rename-good.txt.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                const std::wstring copyGoodText = ToPluginPathText(copyGood);
+                const std::wstring copyMissText = ToPluginPathText(copyMiss);
+                const std::wstring copyDstText  = ToPluginPathText(copyDst);
+                const wchar_t* copySources[]    = {copyGoodText.c_str(), copyMissText.c_str()};
+                RecordingFileSystemCallback copyCallback(2);
+                const HRESULT copyHr = remoteCreated.fileSystem->CopyItems(copySources,
+                                                                           2,
+                                                                           copyDstText.c_str(),
+                                                                           static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                                           nullptr,
+                                                                           &copyCallback,
+                                                                           nullptr);
+                const HRESULT partialHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+                state.Require(copyHr == partialHr,
+                              std::format(L"Remote FTP partial: CopyItems expected 0x{:08X}, got 0x{:08X}.",
+                                          static_cast<unsigned long>(partialHr),
+                                          static_cast<unsigned long>(copyHr)));
+                state.Require(! copyCallback.SawUnexpectedIssue(), L"Remote FTP partial: CopyItems triggered an unexpected issue callback.");
+                state.Require(copyCallback.CompletedCount() == 2u,
+                              std::format(L"Remote FTP partial: CopyItems expected 2 completion callbacks, got {}.", copyCallback.CompletedCount()));
+                RecordedFileSystemItem copyItem0{};
+                RecordedFileSystemItem copyItem1{};
+                state.Require(copyCallback.TryGetItem(0, copyItem0), L"Remote FTP partial: CopyItems missing callback for item 0.");
+                state.Require(copyCallback.TryGetItem(1, copyItem1), L"Remote FTP partial: CopyItems missing callback for item 1.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                state.Require(SUCCEEDED(copyItem0.status),
+                              std::format(L"Remote FTP partial: CopyItems item 0 expected success, got 0x{:08X}.",
+                                          static_cast<unsigned long>(copyItem0.status)));
+                state.Require(copyItem1.status == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
+                              std::format(L"Remote FTP partial: CopyItems item 1 expected ERROR_FILE_NOT_FOUND, got 0x{:08X}.",
+                                          static_cast<unsigned long>(copyItem1.status)));
+                state.Require(PathExistsFsIo(io, copyGood), L"Remote FTP partial: CopyItems removed the successful source unexpectedly.");
+                state.Require(PathExistsFsIo(io, copyDst / L"copy-good.txt"), L"Remote FTP partial: CopyItems did not materialize the successful destination file.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                const std::wstring moveGoodText = ToPluginPathText(moveGood);
+                const std::wstring moveMissText = ToPluginPathText(moveMiss);
+                const std::wstring moveDstText  = ToPluginPathText(moveDst);
+                const wchar_t* moveSources[]    = {moveGoodText.c_str(), moveMissText.c_str()};
+                RecordingFileSystemCallback moveCallback(2);
+                const HRESULT moveHr = remoteCreated.fileSystem->MoveItems(moveSources,
+                                                                           2,
+                                                                           moveDstText.c_str(),
+                                                                           static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                                           nullptr,
+                                                                           &moveCallback,
+                                                                           nullptr);
+                state.Require(moveHr == partialHr,
+                              std::format(L"Remote FTP partial: MoveItems expected 0x{:08X}, got 0x{:08X}.",
+                                          static_cast<unsigned long>(partialHr),
+                                          static_cast<unsigned long>(moveHr)));
+                state.Require(! moveCallback.SawUnexpectedIssue(), L"Remote FTP partial: MoveItems triggered an unexpected issue callback.");
+                state.Require(moveCallback.CompletedCount() == 2u,
+                              std::format(L"Remote FTP partial: MoveItems expected 2 completion callbacks, got {}.", moveCallback.CompletedCount()));
+                RecordedFileSystemItem moveItem0{};
+                RecordedFileSystemItem moveItem1{};
+                state.Require(moveCallback.TryGetItem(0, moveItem0), L"Remote FTP partial: MoveItems missing callback for item 0.");
+                state.Require(moveCallback.TryGetItem(1, moveItem1), L"Remote FTP partial: MoveItems missing callback for item 1.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                state.Require(SUCCEEDED(moveItem0.status),
+                              std::format(L"Remote FTP partial: MoveItems item 0 expected success, got 0x{:08X}.",
+                                          static_cast<unsigned long>(moveItem0.status)));
+                state.Require(moveItem1.status == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
+                              std::format(L"Remote FTP partial: MoveItems item 1 expected ERROR_FILE_NOT_FOUND, got 0x{:08X}.",
+                                          static_cast<unsigned long>(moveItem1.status)));
+                state.Require(! PathExistsFsIo(io, moveGood), L"Remote FTP partial: MoveItems left the successful source in place.");
+                state.Require(PathExistsFsIo(io, moveDst / L"move-good.txt"), L"Remote FTP partial: MoveItems did not create the successful destination file.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                const std::wstring renameGoodText = ToPluginPathText(renameGood);
+                const std::wstring renameMissText = ToPluginPathText(renameMiss);
+                FileSystemRenamePair renamePairs[2]{};
+                renamePairs[0].sizeBytes  = sizeof(FileSystemRenamePair);
+                renamePairs[0].sourcePath = renameGoodText.c_str();
+                renamePairs[0].newName    = L"rename-good-dst.txt";
+                renamePairs[1].sizeBytes  = sizeof(FileSystemRenamePair);
+                renamePairs[1].sourcePath = renameMissText.c_str();
+                renamePairs[1].newName    = L"rename-missing-dst.txt";
+
+                RecordingFileSystemCallback renameCallback(2);
+                const HRESULT renameHr = remoteCreated.fileSystem->RenameItems(renamePairs,
+                                                                               2,
+                                                                               static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                                               nullptr,
+                                                                               &renameCallback,
+                                                                               nullptr);
+                state.Require(renameHr == partialHr,
+                              std::format(L"Remote FTP partial: RenameItems expected 0x{:08X}, got 0x{:08X}.",
+                                          static_cast<unsigned long>(partialHr),
+                                          static_cast<unsigned long>(renameHr)));
+                state.Require(! renameCallback.SawUnexpectedIssue(), L"Remote FTP partial: RenameItems triggered an unexpected issue callback.");
+                state.Require(renameCallback.CompletedCount() == 2u,
+                              std::format(L"Remote FTP partial: RenameItems expected 2 completion callbacks, got {}.", renameCallback.CompletedCount()));
+                RecordedFileSystemItem renameItem0{};
+                RecordedFileSystemItem renameItem1{};
+                state.Require(renameCallback.TryGetItem(0, renameItem0), L"Remote FTP partial: RenameItems missing callback for item 0.");
+                state.Require(renameCallback.TryGetItem(1, renameItem1), L"Remote FTP partial: RenameItems missing callback for item 1.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                state.Require(SUCCEEDED(renameItem0.status),
+                              std::format(L"Remote FTP partial: RenameItems item 0 expected success, got 0x{:08X}.",
+                                          static_cast<unsigned long>(renameItem0.status)));
+                state.Require(renameItem1.status == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
+                              std::format(L"Remote FTP partial: RenameItems item 1 expected ERROR_FILE_NOT_FOUND, got 0x{:08X}.",
+                                          static_cast<unsigned long>(renameItem1.status)));
+                state.Require(! PathExistsFsIo(io, renameGood), L"Remote FTP partial: RenameItems left the successful source in place.");
+                state.Require(PathExistsFsIo(io, srcDir / L"rename-good-dst.txt"),
+                              L"Remote FTP partial: RenameItems did not create the successful destination name.");
+                return state.failure.empty();
+            });
+        };
+
+        const auto runRemoteS3MetadataSmoke = [&](std::wstring_view caseName) noexcept
+        {
+            if (options.failFast && suite.failed != 0)
+            {
+                AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
+                return;
+            }
+
+            const PhaseCheckResult secretOutcome = CheckRemoteConnectionSecret(L"S3", kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
+            if (secretOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, secretOutcome.status, secretOutcome.reason);
+                return;
+            }
+
+            const PhaseCheckResult sandboxOutcome = CheckRemoteConnectionSandbox(L"S3", kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
+            if (sandboxOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, sandboxOutcome.status, sandboxOutcome.reason);
+                return;
+            }
+
+            SelfTest::RunCase(options,
+                              suite,
+                              caseName,
+                              [&](SelfTest::CaseState& state) noexcept
+            {
+                const std::wstring overrideName                    = GetEnvVarTrimmed(kSelfTestEnvConnS3);
+                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnS3);
+                const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                state.Require(profile != nullptr, L"Remote S3 metadata: profile missing after preconditions passed.");
+                if (! profile)
+                {
+                    return false;
+                }
+
+                const std::wstring initialPath = NormalizePluginPathForSelfTest(profile->initialPath);
+                state.Require(! initialPath.empty() && initialPath[0] == L'/', L"Remote S3 metadata: initialPath must be an absolute plugin path.");
+                if (initialPath.empty() || initialPath[0] != L'/')
+                {
+                    return false;
+                }
+
+                CreatedFileSystemInstance remoteCreated{};
+                const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinS3FileSystemId, {}, remoteCreated);
+                state.Require(SUCCEEDED(createHr),
+                              std::format(L"Remote S3 metadata: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+                if (FAILED(createHr) || ! remoteCreated.fileSystem)
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileSystemIO> io;
+                const HRESULT ioHr = remoteCreated.fileSystem->QueryInterface(IID_PPV_ARGS(io.put()));
+                state.Require(SUCCEEDED(ioHr) && io, L"Remote S3 metadata: filesystem instance missing IFileSystemIO.");
+                if (FAILED(ioHr) || ! io)
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
+                const HRESULT dirHr = remoteCreated.fileSystem->QueryInterface(IID_PPV_ARGS(dirOps.put()));
+                state.Require(SUCCEEDED(dirHr) && dirOps, L"Remote S3 metadata: filesystem instance missing IFileSystemDirectoryOperations.");
+                if (FAILED(dirHr) || ! dirOps)
+                {
+                    return false;
+                }
+
+                const std::wstring caseRootPlugin = JoinPluginPathForSelfTest(initialPath, std::format(L"compare-selftest-s3-metadata-{}", guid));
+                state.Require(! caseRootPlugin.empty(), L"Remote S3 metadata: failed to build sandbox path.");
+                if (caseRootPlugin.empty())
+                {
+                    return false;
+                }
+
+                const std::wstring caseRootText = MakeConnectionPathForSelfTest(profileName, caseRootPlugin);
+                state.Require(! caseRootText.empty(), L"Remote S3 metadata: failed to build connection path.");
+                if (caseRootText.empty())
+                {
+                    return false;
+                }
+
+                const std::filesystem::path caseRoot(caseRootText);
+                state.Require(EnsureDirectoryExistsFsOps(dirOps, caseRoot), L"Remote S3 metadata: failed to prepare sandbox prefix.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                const std::filesystem::path objectPath = caseRoot / L"metadata.txt";
+                const std::wstring objectText          = ToPluginPathText(objectPath);
+                const auto cleanup = wil::scope_exit([&]() noexcept
+                {
+                    static_cast<void>(remoteCreated.fileSystem->DeleteItem(objectText.c_str(),
+                                                                          static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                                          nullptr,
+                                                                          nullptr,
+                                                                          nullptr));
+                });
+
+                constexpr std::string_view kPayload = "s3-metadata-smoke";
+                state.Require(WriteFileTextFsIo(io, objectPath, kPayload), L"Remote S3 metadata: failed to write test object.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                FileSystemBasicInformation info{};
+                info.sizeBytes = sizeof(FileSystemBasicInformation);
+                const HRESULT infoHr = io->GetFileBasicInformation(objectText.c_str(), &info);
+                state.Require(SUCCEEDED(infoHr),
+                              std::format(L"Remote S3 metadata: GetFileBasicInformation failed. hr=0x{:08X}", static_cast<unsigned long>(infoHr)));
+                if (FAILED(infoHr))
+                {
+                    return false;
+                }
+
+                state.Require((info.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0, L"Remote S3 metadata: object reported as a directory.");
+                state.Require(info.lastWriteTime != 0, L"Remote S3 metadata: object lastWriteTime was not populated.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileReader> reader;
+                const HRESULT readerHr = io->CreateFileReader(objectText.c_str(), reader.put());
+                state.Require(SUCCEEDED(readerHr) && reader,
+                              std::format(L"Remote S3 metadata: CreateFileReader failed. hr=0x{:08X}", static_cast<unsigned long>(readerHr)));
+                if (FAILED(readerHr) || ! reader)
+                {
+                    return false;
+                }
+
+                uint64_t sizeBytes = 0;
+                const HRESULT sizeHr = reader->GetSize(&sizeBytes);
+                state.Require(SUCCEEDED(sizeHr),
+                              std::format(L"Remote S3 metadata: reader->GetSize failed. hr=0x{:08X}", static_cast<unsigned long>(sizeHr)));
+                state.Require(sizeBytes == static_cast<uint64_t>(kPayload.size()),
+                              std::format(L"Remote S3 metadata: expected size {} but got {}.", kPayload.size(), sizeBytes));
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                std::string readBack;
+                readBack.resize(kPayload.size());
+                size_t totalRead = 0;
+                while (totalRead < readBack.size())
+                {
+                    unsigned long chunkRead = 0;
+                    const unsigned long requestBytes = static_cast<unsigned long>((std::min)(readBack.size() - totalRead,
+                                                                                               static_cast<size_t>((std::numeric_limits<unsigned long>::max)())));
+                    const HRESULT readHr = reader->Read(readBack.data() + totalRead, requestBytes, &chunkRead);
+                    state.Require(SUCCEEDED(readHr),
+                                  std::format(L"Remote S3 metadata: reader->Read failed after {} bytes. hr=0x{:08X}",
+                                              totalRead,
+                                              static_cast<unsigned long>(readHr)));
+                    if (FAILED(readHr))
+                    {
+                        return false;
+                    }
+                    if (chunkRead == 0)
+                    {
+                        break;
+                    }
+                    totalRead += chunkRead;
+                }
+
+                state.Require(totalRead == kPayload.size(),
+                              std::format(L"Remote S3 metadata: expected to read {} bytes but got {}.", kPayload.size(), totalRead));
+                state.Require(std::string_view(readBack.data(), totalRead) == kPayload,
+                              L"Remote S3 metadata: reader contents did not match the uploaded payload.");
+                return state.failure.empty();
+            });
+        };
+
+        const auto runRemoteS3DeleteMissing = [&](std::wstring_view caseName) noexcept
+        {
+            if (options.failFast && suite.failed != 0)
+            {
+                AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
+                return;
+            }
+
+            const PhaseCheckResult secretOutcome = CheckRemoteConnectionSecret(L"S3", kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
+            if (secretOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, secretOutcome.status, secretOutcome.reason);
+                return;
+            }
+
+            const PhaseCheckResult sandboxOutcome = CheckRemoteConnectionSandbox(L"S3", kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
+            if (sandboxOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, sandboxOutcome.status, sandboxOutcome.reason);
+                return;
+            }
+
+            SelfTest::RunCase(options,
+                              suite,
+                              caseName,
+                              [&](SelfTest::CaseState& state) noexcept
+            {
+                const std::wstring overrideName                    = GetEnvVarTrimmed(kSelfTestEnvConnS3);
+                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnS3);
+                const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                state.Require(profile != nullptr, L"Remote S3 delete: profile missing after preconditions passed.");
+                if (! profile)
+                {
+                    return false;
+                }
+
+                const std::wstring initialPath = NormalizePluginPathForSelfTest(profile->initialPath);
+                state.Require(! initialPath.empty() && initialPath[0] == L'/', L"Remote S3 delete: initialPath must be an absolute plugin path.");
+                if (initialPath.empty() || initialPath[0] != L'/')
+                {
+                    return false;
+                }
+
+                CreatedFileSystemInstance remoteCreated{};
+                const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinS3FileSystemId, {}, remoteCreated);
+                state.Require(SUCCEEDED(createHr),
+                              std::format(L"Remote S3 delete: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+                if (FAILED(createHr) || ! remoteCreated.fileSystem)
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileSystemIO> io;
+                const HRESULT ioHr = remoteCreated.fileSystem->QueryInterface(IID_PPV_ARGS(io.put()));
+                state.Require(SUCCEEDED(ioHr) && io, L"Remote S3 delete: filesystem instance missing IFileSystemIO.");
+                if (FAILED(ioHr) || ! io)
+                {
+                    return false;
+                }
+
+                wil::com_ptr<IFileSystemDirectoryOperations> dirOps;
+                const HRESULT dirHr = remoteCreated.fileSystem->QueryInterface(IID_PPV_ARGS(dirOps.put()));
+                state.Require(SUCCEEDED(dirHr) && dirOps, L"Remote S3 delete: filesystem instance missing IFileSystemDirectoryOperations.");
+                if (FAILED(dirHr) || ! dirOps)
+                {
+                    return false;
+                }
+
+                const std::wstring caseRootPlugin = JoinPluginPathForSelfTest(initialPath, std::format(L"compare-selftest-s3-delete-{}", guid));
+                state.Require(! caseRootPlugin.empty(), L"Remote S3 delete: failed to build sandbox path.");
+                if (caseRootPlugin.empty())
+                {
+                    return false;
+                }
+
+                const std::wstring caseRootText = MakeConnectionPathForSelfTest(profileName, caseRootPlugin);
+                state.Require(! caseRootText.empty(), L"Remote S3 delete: failed to build connection path.");
+                if (caseRootText.empty())
+                {
+                    return false;
+                }
+
+                const std::filesystem::path caseRoot(caseRootText);
+                state.Require(EnsureDirectoryExistsFsOps(dirOps, caseRoot), L"Remote S3 delete: failed to prepare sandbox prefix.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                const std::filesystem::path singlePath    = caseRoot / L"single-delete.txt";
+                const std::filesystem::path batchGoodPath = caseRoot / L"batch-existing.txt";
+                const std::filesystem::path batchMissPath = caseRoot / L"batch-missing.txt";
+                const std::wstring singleText             = ToPluginPathText(singlePath);
+                const std::wstring batchGoodText          = ToPluginPathText(batchGoodPath);
+                const std::wstring batchMissText          = ToPluginPathText(batchMissPath);
+                const auto cleanup = wil::scope_exit([&]() noexcept
+                {
+                    const wchar_t* cleanupPaths[] = {singleText.c_str(), batchGoodText.c_str()};
+                    static_cast<void>(remoteCreated.fileSystem->DeleteItems(cleanupPaths,
+                                                                            2,
+                                                                            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                                            nullptr,
+                                                                            nullptr,
+                                                                            nullptr));
+                });
+
+                state.Require(WriteFileTextFsIo(io, singlePath, "single-delete"), L"Remote S3 delete: failed to write single-delete.txt.");
+                state.Require(WriteFileTextFsIo(io, batchGoodPath, "batch-delete"), L"Remote S3 delete: failed to write batch-existing.txt.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                const HRESULT deleteHr = remoteCreated.fileSystem->DeleteItem(singleText.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+                state.Require(SUCCEEDED(deleteHr),
+                              std::format(L"Remote S3 delete: first DeleteItem failed. hr=0x{:08X}", static_cast<unsigned long>(deleteHr)));
+                state.Require(! PathExistsFsIo(io, singlePath), L"Remote S3 delete: first DeleteItem did not remove the object.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                const HRESULT deleteMissingHr = remoteCreated.fileSystem->DeleteItem(singleText.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+                const HRESULT notFoundHr      = HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+                state.Require(deleteMissingHr == notFoundHr,
+                              std::format(L"Remote S3 delete: second DeleteItem expected 0x{:08X}, got 0x{:08X}.",
+                                          static_cast<unsigned long>(notFoundHr),
+                                          static_cast<unsigned long>(deleteMissingHr)));
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                RecordingFileSystemCallback deleteCallback(2);
+                const wchar_t* deletePaths[] = {batchGoodText.c_str(), batchMissText.c_str()};
+                const HRESULT batchDeleteHr  = remoteCreated.fileSystem->DeleteItems(deletePaths,
+                                                                                    2,
+                                                                                    static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                                                    nullptr,
+                                                                                    &deleteCallback,
+                                                                                    nullptr);
+                const HRESULT partialHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+                state.Require(batchDeleteHr == partialHr,
+                              std::format(L"Remote S3 delete: DeleteItems expected 0x{:08X}, got 0x{:08X}.",
+                                          static_cast<unsigned long>(partialHr),
+                                          static_cast<unsigned long>(batchDeleteHr)));
+                state.Require(! deleteCallback.SawUnexpectedIssue(), L"Remote S3 delete: DeleteItems triggered an unexpected issue callback.");
+                state.Require(deleteCallback.CompletedCount() == 2u,
+                              std::format(L"Remote S3 delete: DeleteItems expected 2 completion callbacks, got {}.", deleteCallback.CompletedCount()));
+                RecordedFileSystemItem deleteItem0{};
+                RecordedFileSystemItem deleteItem1{};
+                state.Require(deleteCallback.TryGetItem(0, deleteItem0), L"Remote S3 delete: DeleteItems missing callback for item 0.");
+                state.Require(deleteCallback.TryGetItem(1, deleteItem1), L"Remote S3 delete: DeleteItems missing callback for item 1.");
+                if (! state.failure.empty())
+                {
+                    return false;
+                }
+
+                state.Require(SUCCEEDED(deleteItem0.status),
+                              std::format(L"Remote S3 delete: DeleteItems item 0 expected success, got 0x{:08X}.",
+                                          static_cast<unsigned long>(deleteItem0.status)));
+                state.Require(deleteItem1.status == notFoundHr,
+                              std::format(L"Remote S3 delete: DeleteItems item 1 expected 0x{:08X}, got 0x{:08X}.",
+                                          static_cast<unsigned long>(notFoundHr),
+                                          static_cast<unsigned long>(deleteItem1.status)));
+                state.Require(! PathExistsFsIo(io, batchGoodPath), L"Remote S3 delete: DeleteItems did not remove the existing object.");
                 return state.failure.empty();
             });
         };
 
         // Optional remote smoke: runs only when Connection Manager profiles + secrets exist.
         runRemoteFileCompare(L"remote_file_s3", L"S3", kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
+        runRemoteDirectorySizeCallbackContract(
+            L"remote_s3_directory_size_callback_contract", L"S3", kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
         runRemoteS3Pagination(L"remote_s3_pagination");
         runRemoteFileCompare(L"remote_file_ftp", L"FTP", kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);
+        runRemoteDirectorySizeCallbackContract(
+            L"remote_ftp_directory_size_callback_contract", L"FTP", kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);
+        runRemoteFtpPartialContinue(L"remote_ftp_continue_on_error_partial");
+        runRemoteS3MetadataSmoke(L"remote_s3_metadata_smoke");
+        runRemoteS3DeleteMissing(L"remote_s3_delete_missing");
     }
 
     AppendCompareSelfTestTraceLine(L"Run: finalizing");

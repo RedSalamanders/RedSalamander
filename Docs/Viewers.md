@@ -3,6 +3,7 @@
 Press `F3` to open the focused file in a dedicated **viewer window**.
 
 Viewer selection is controlled by Preferences → **Viewers** (extension → viewer plugin).
+That page lets you search mappings, add/update/remove overrides, and reset everything back to the defaults.
 
 If there is no mapping (or the mapped plugin is missing/disabled), RedSalamander falls back to the **Text viewer**.
 

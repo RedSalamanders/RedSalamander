@@ -47,6 +47,7 @@
 #include "CompareDirectoriesWindow.h"
 #include "ConnectionManagerDialog.h"
 #include "CrashHandler.h"
+#include "CrashQuarantine.h"
 #include "DirectoryInfoCache.h"
 #include "FileSystemPluginManager.h"
 #include "FolderWindow.h"
@@ -58,6 +59,7 @@
 #include "RedSalamander.h"
 #include "SettingsSave.h"
 #include "SettingsSchemaExport.h"
+#include "SessionState.h"
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutsWindow.h"
@@ -3045,6 +3047,7 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
                     case IDM_PANE_CONNECTION_MANAGER: return FluentIcons::kConnections;
                     case IDM_PANE_CLIPBOARD_CUT: return FluentIcons::kCut;
                     case IDM_PANE_CLIPBOARD_COPY: return FluentIcons::kCopy;
+                    case IDM_PANE_COPY_PATH_AND_FILE_NAME: return FluentIcons::kCopy;
                     case IDM_PANE_CLIPBOARD_PASTE: return FluentIcons::kPaste;
                     case IDM_PANE_RENAME: return FluentIcons::kRename;
                     case IDM_PANE_DELETE: return FluentIcons::kDelete;
@@ -4517,6 +4520,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         g_settings.theme.currentThemeId = ThemeIdFromThemeMode(envTheme);
     }
 
+    CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected(g_settings);
+
 #ifdef _DEBUG
     const bool runHeadlessCompareSelfTest = g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest && ! g_runCommandsSelfTest;
 #else
@@ -5840,6 +5845,12 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             static_cast<void>(SendCommandToFolderView(pane, IDM_FOLDERVIEW_CONTEXT_COPY));
             break;
         }
+        case IDM_PANE_COPY_PATH_AND_FILE_NAME:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandCopyPathAndFileNameAsText(pane);
+            break;
+        }
         case IDM_PANE_SELECTION_SELECT_ALL:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
@@ -6973,6 +6984,7 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
 #endif
 
     SaveAppSettings(hWnd);
+    SessionState::Clear();
 
 #ifdef _DEBUG
     ShutdownSelfTestMonitor();

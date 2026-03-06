@@ -54,6 +54,18 @@ Display and sort (defaults):
 
 ![Folder view](res/folder-view.png)
 
+### Selection helpers
+
+- `Ctrl+A`: select all items in the focused pane.
+- `Esc`: clear the current selection.
+- `Ctrl` + the key left of `Backspace`: open the select-by-mask dialog.
+- `Ctrl` + the key right of `0`: open the unselect-by-mask dialog.
+- `Ctrl+Shift` + those same keys: select/unselect same extension.
+- `Ctrl+Shift+F5`: save the current selection.
+- `Ctrl+Shift+F6`: restore the saved selection.
+- `Alt+Up` / `Alt+Down`: jump to the previous/next selected item.
+- The **Edit** menu also exposes **Invert Selection**, **Hide Selected Names**, **Hide Unselected Names**, and **Show Hidden Names**.
+
 ### View options
 
 - **View → Pane → Show Hidden Files**: toggle display of hidden items (hidden items use a dim icon when shown).

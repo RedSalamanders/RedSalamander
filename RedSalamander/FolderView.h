@@ -702,6 +702,7 @@ private:
     mutable uint64_t _overlayAnimationSubscriptionId = 0;
     mutable UINT_PTR _overlayTimer                   = 0;
     mutable UINT _overlayTimerIntervalMs             = 0;
+    mutable uint64_t _operationInfoOverlayAutoDismissDueTick = 0;
 
     struct PendingBusyOverlay
     {

@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -260,15 +261,22 @@ private:
     std::wstring _defaultPassword;
 
     std::mutex _stateMutex;
+    std::condition_variable _indexBuildCv;
     std::mutex _propertiesMutex;
     std::string _lastPropertiesJson;
     std::wstring _archivePath;
     std::wstring _password;
 
     bool _indexReady     = false;
+    bool _indexBuildInProgress = false;
     HRESULT _indexStatus = S_OK;
     std::wstring _indexedArchivePath;
     std::wstring _indexedPassword;
+
+#ifdef _DEBUG
+    unsigned long _debugIndexBuildDelayMs = 0;
+    std::atomic<uint32_t> _debugIndexBuildCount{0};
+#endif
 
     // Key format: forward-slash-separated, no leading slash. Root is "".
     std::unordered_map<std::wstring, ArchiveEntry> _entries;

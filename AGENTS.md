@@ -14,7 +14,7 @@
 - **Platform**: Windows development (Windows 10/11 minimum)
 - **Language Standard**: C++23
 - **Character Encoding**: Unicode UTF-16
-- **Build System**: Visual Studio 2022 with MSBuild
+- **Build System**: Visual Studio 2026 with MSBuild
 - **Package Manager**: vcpkg
 - **Graphics APIs**: Direct2D, DirectWrite, Direct3D 11, DXGI
 

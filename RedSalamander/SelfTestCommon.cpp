@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "AppDataPaths.h"
 #include "FileSystemPluginManager.h"
 #include <shlobj_core.h>
 #include <winreg.h>
@@ -55,35 +56,6 @@ constexpr const char* kSuiteCommandsName = "Commands";
 
 SelfTestOptions g_options{};
 std::wstring g_runStartedUtcIso;
-
-// Path helpers
-// Resolves %LOCALAPPDATA% via SHGetKnownFolderPath first; falls back to
-// GetEnvironmentVariableW in case the COM shell API is unavailable.
-[[nodiscard]] std::filesystem::path GetLocalAppDataPath() noexcept
-{
-    wil::unique_cotaskmem_string localAppData;
-    const HRESULT hr = SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, localAppData.put());
-    if (SUCCEEDED(hr) && localAppData)
-    {
-        return std::filesystem::path(localAppData.get());
-    }
-
-    const DWORD required = GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
-    if (required == 0)
-    {
-        return {};
-    }
-
-    std::wstring buffer(static_cast<size_t>(required), L'\0');
-    const DWORD written = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer.data(), required);
-    if (written == 0 || written >= required)
-    {
-        return {};
-    }
-
-    buffer.resize(static_cast<size_t>(written));
-    return std::filesystem::path(buffer);
-}
 
 [[nodiscard]] const char* SuiteName(SelfTestSuite suite) noexcept
 {
@@ -872,7 +844,7 @@ const std::filesystem::path& SelfTestRoot() noexcept
 {
     static const std::filesystem::path root = []
     {
-        const std::filesystem::path base = GetLocalAppDataPath();
+    const std::filesystem::path base = AppDataPaths::GetLocalAppDataPath();
         if (base.empty())
         {
             return std::filesystem::path{};

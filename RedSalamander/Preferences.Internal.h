@@ -471,6 +471,9 @@ struct PreferencesDialogState
     wil::unique_hwnd advancedConnectionsBypassHelloLabel;
     wil::unique_hwnd advancedConnectionsBypassHelloToggle;
     wil::unique_hwnd advancedConnectionsBypassHelloDescription;
+    wil::unique_hwnd advancedConnectionsAllowInsecureTlsAutomationLabel;
+    wil::unique_hwnd advancedConnectionsAllowInsecureTlsAutomationToggle;
+    wil::unique_hwnd advancedConnectionsAllowInsecureTlsAutomationDescription;
     wil::unique_hwnd advancedConnectionsHelloTimeoutLabel;
     wil::unique_hwnd advancedConnectionsHelloTimeoutFrame;
     wil::unique_hwnd advancedConnectionsHelloTimeoutEdit;

@@ -5545,6 +5545,83 @@ void FolderWindow::CommandSelectionSave(Pane pane)
     }
 }
 
+void FolderWindow::CommandCopyPathAndFileNameAsText(Pane pane)
+{
+    SetActivePane(pane);
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+
+    const std::vector<std::filesystem::path> paths = state.folderView.GetSelectedOrFocusedPaths();
+    if (paths.empty())
+    {
+        MessageBeep(MB_ICONWARNING);
+        return;
+    }
+
+    Debug::Info(L"event=share_copy_path_and_file_name_clicked count={}", static_cast<uint64_t>(paths.size()));
+
+    std::wstring clipboardText;
+    {
+        size_t reserveChars = 2u;
+        for (const auto& path : paths)
+        {
+            reserveChars += path.native().size() + 2u;
+        }
+        clipboardText.reserve(reserveChars);
+
+        bool first = true;
+        for (const auto& path : paths)
+        {
+            const std::wstring_view native = path.native();
+            if (native.empty())
+            {
+                continue;
+            }
+
+            if (! first)
+            {
+                clipboardText.append(L"\r\n");
+            }
+            clipboardText.append(native);
+            first = false;
+        }
+        clipboardText.append(L"\r\n");
+    }
+
+    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    if (! ownerWindow)
+    {
+        ownerWindow = _hWnd.get();
+    }
+
+    if (! SetClipboardUnicodeText(ownerWindow, clipboardText))
+    {
+        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+        std::wstring message = LoadStringResource(nullptr, IDS_MSG_SELECTION_SAVE_CLIPBOARD_FAILED);
+        ShowPaneAlertOverlay(
+            pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), S_OK, true, false);
+        return;
+    }
+
+    Debug::Info(L"event=share_copy_path_and_file_name_succeeded count={}", static_cast<uint64_t>(paths.size()));
+
+    std::wstring title = LoadStringResource(nullptr, IDS_CMD_COPY_PATH_AND_FILE_NAME);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_OVERLAY_TITLE_INFORMATION);
+    }
+
+    const unsigned long long count = static_cast<unsigned long long>(paths.size());
+    const std::wstring_view suffix = count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s");
+    std::wstring message           = FormatStringResource(nullptr, IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED, count, suffix);
+    if (message.empty())
+    {
+        message = std::format(L"Copied {} path{} to clipboard.", count, suffix);
+    }
+
+    ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Information, std::move(title), std::move(message), S_OK, false, false);
+}
+
 void FolderWindow::CommandSelectionRestore(Pane pane)
 {
     SetActivePane(pane);

@@ -2,7 +2,14 @@
 
 The user documentation in `Docs/` references screenshots in this folder.
 
-All `*.png` files currently contain a tiny **placeholder** image so Markdown renders without broken links. Replace each file with a real screenshot (keep the same filename) when you update the docs.
+Some `*.png` files may be tiny **placeholder** images so Markdown renders without broken links. Replace each placeholder file with a real screenshot (keep the same filename) when you update the docs.
+
+Current placeholders (1×1 PNG):
+
+- `compare-directories.png`
+- `drive-menu.png`
+- `monitor.png`
+- `placeholder.png` (template placeholder image)
 
 ## Capture guidelines
 
@@ -20,6 +27,7 @@ All `*.png` files currently contain a tiny **placeholder** image so Markdown ren
 - `history-dropdown.png`: NavigationView history dropdown open.
 - `file-operations-popup.png`: File operations popup with at least one active task.
 - `file-operations-issues.png`: File operations “Failed Items / Issues” pane with an example issue.
+- `compare-directories.png`: Compare Directories window showing a scan result (differences visible).
 - `preferences.png`: Preferences dialog overview.
 - `preferences-plugins.png`: Preferences → Plugins (plugin list + a plugin details subpage).
 - `preferences-viewers.png`: Preferences → Viewers (extension → viewer mapping).
@@ -34,4 +42,3 @@ All `*.png` files currently contain a tiny **placeholder** image so Markdown ren
 - `viewer-pe.png`: PE viewer showing parsed info and export options.
 - `viewer-vlc.png`: VLC viewer playing a media file (or the “VLC required” message).
 - `monitor.png`: RedSalamanderMonitor main window with live/loaded logs and filter menu visible.
-

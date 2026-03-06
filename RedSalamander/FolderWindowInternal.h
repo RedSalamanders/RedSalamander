@@ -48,6 +48,7 @@ constexpr UINT_PTR kRightStatusBarId  = 1006;
 
 constexpr wchar_t kStatusBarOwnerProp[]         = L"RedSalamander.StatusBar.Owner";
 constexpr wchar_t kStatusBarSelectionTextProp[] = L"RedSalamander.StatusBar.SelectionText";
+constexpr wchar_t kStatusBarSecurityTextProp[]  = L"RedSalamander.StatusBar.SecurityText";
 constexpr wchar_t kStatusBarSortTextProp[]      = L"RedSalamander.StatusBar.SortText";
 constexpr wchar_t kStatusBarFocusHueProp[]      = L"RedSalamander.StatusBar.FocusHue";
 constexpr wchar_t kStatusBarSortHotProp[]       = L"RedSalamander.StatusBar.SortHot";

@@ -18,21 +18,23 @@ Note:
 
 - **High Contrast (System)** is shown as an indicator when Windows high-contrast is enabled.
 
-## Custom themes
+## Theme sources
 
 RedSalamander supports theme files:
 
 - `Themes\*.theme.json5` next to `RedSalamander.exe`
 
-And user themes stored in your settings file.
+It also supports user themes stored in your settings file as `user/*` themes.
 
-In Preferences → **Themes** you can typically:
+## Preferences → Themes
 
-- Select a theme
-- Create/edit a user theme
-- Load/save `*.theme.json5`
+- Select a built-in, file-based, or user theme.
+- Create a new user theme or duplicate an existing theme into a user theme.
+- Edit explicit color overrides while inherited values remain visible.
+- Preview a theme immediately with **Apply Temporarily**.
+- Load/save `*.theme.json5` theme files.
 
-## Not implemented yet
+## Notes
 
-Theme-related future work is tracked in the specs; if something is missing in the Themes page, treat it as planned work rather than a broken config.
-
+- Cancelling Preferences after a temporary preview restores the previously applied theme.
+- The main **View → Theme** menu is the fastest way to switch between the standard built-in themes.

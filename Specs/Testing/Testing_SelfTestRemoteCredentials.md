@@ -20,13 +20,16 @@ These phases are **conditional**:
 - `remote_file_s3` (file ↔ S3)
 - `remote_file_ftp` (file ↔ FTP)
 - `remote_s3_pagination` (S3 folder listing pagination: compares non-recursive `GetDirectorySize` vs `ReadDirectoryInfo` count)
+- `remote_ftp_continue_on_error_partial` (FTP batch copy/move/rename must return `ERROR_PARTIAL_COPY` when one item succeeds and one item is missing)
+- `remote_s3_metadata_smoke` (S3 object metadata + reader path smoke via `GetFileBasicInformation` and `CreateFileReader`)
+- `remote_s3_delete_missing` (S3 delete contract: repeated delete returns `ERROR_FILE_NOT_FOUND`; mixed batch delete returns `ERROR_PARTIAL_COPY`)
 
 These cases are **conditional** and use the same profile naming/env var rules as the Phase 16 checks below:
 
 - If the connection profile + secret are present *and* `initialPath` passes the sandbox rules, the case **runs**.
 - Otherwise the case is **skipped**.
 
-The smoke cases are **read-only** (directory listing + one root compare decision) and target the remote root as:
+The compare-only smoke cases are read-only (`remote_file_*`, `remote_s3_pagination`). The FTP/S3 contract cases perform writes and deletes, but only inside a unique per-run child of the configured sandbox root. All remote cases target the remote root as:
 
 - `/@conn:<profileName><initialPath>`
 
@@ -52,7 +55,8 @@ Selftest enforces this requirement via `ConnectionProfile.initialPath` (configur
 
 - Must be an absolute plugin path (starts with `/`) and must not be `/`.
 - Must include `selftest` (case-insensitive) to prove the path is test-only.
-- For S3, must include **bucket + prefix** (at least two path segments), e.g. `/my-test-bucket/red-salamander-selftest`.
+- For S3, must normally include **bucket + prefix** (at least two path segments), e.g. `/my-test-bucket/red-salamander-selftest`.
+- S3 may also use a **bucket root** when the bucket name itself clearly indicates it is test-only, meaning the single bucket segment includes `selftest`, e.g. `/redsalamander-selftest`.
 
 ## Setup
 

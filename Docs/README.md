@@ -24,10 +24,12 @@ RedSalamander is a Windows dual-pane file manager with:
 - [Plugins (File systems & Viewers)](Plugins.md)
 - [Viewers (F3)](Viewers.md)
 - [Themes](Themes.md)
+- [Settings File & Advanced Configuration](SettingsFile.md)
 
 ## Specific topics
 
 - [Remote File Systems (FTP/SFTP/SCP/IMAP)](RemoteFileSystems.md)
+- [S3 / S3 Table](S3AndS3Table.md)
 - [RedSalamanderMonitor (ETW/log viewer)](Monitor.md)
 - [Troubleshooting / Reset](Troubleshooting.md)
 - [Planned / TODO features](Todo.md)

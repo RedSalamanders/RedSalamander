@@ -187,6 +187,182 @@ namespace StringUtils
 }
 } // namespace StringUtils
 
+namespace Redaction
+{
+[[nodiscard]] inline bool EqualsNoCaseAscii(std::wstring_view a, std::wstring_view b) noexcept
+{
+    if (a.size() != b.size())
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < a.size(); ++i)
+    {
+        const wchar_t ca = a[i];
+        const wchar_t cb = b[i];
+
+        const wchar_t la = (ca >= L'A' && ca <= L'Z') ? static_cast<wchar_t>(ca - L'A' + L'a') : ca;
+        const wchar_t lb = (cb >= L'A' && cb <= L'Z') ? static_cast<wchar_t>(cb - L'A' + L'a') : cb;
+        if (la != lb)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+[[nodiscard]] inline bool IsSensitiveQueryKey(std::wstring_view key) noexcept
+{
+    constexpr std::wstring_view kKeys[] = {
+        L"password",
+        L"pass",
+        L"pwd",
+        L"token",
+        L"access_key",
+        L"accesskey",
+        L"secret",
+        L"secret_key",
+        L"apikey",
+        L"api_key",
+        L"signature",
+        L"sig",
+        // S3-style presigned URL keys.
+        L"x-amz-credential",
+        L"x-amz-security-token",
+        L"x-amz-signature",
+    };
+
+    for (const std::wstring_view k : kKeys)
+    {
+        if (EqualsNoCaseAscii(key, k))
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+inline void RedactUserInfoPassword(std::wstring& text) noexcept
+{
+    const size_t schemeSep = text.find(L"://");
+    if (schemeSep == std::wstring::npos)
+    {
+        return;
+    }
+
+    const size_t authorityStart = schemeSep + 3u;
+    if (authorityStart >= text.size())
+    {
+        return;
+    }
+
+    const size_t authorityEnd = text.find_first_of(L"/?#", authorityStart);
+    const size_t end          = (authorityEnd == std::wstring::npos) ? text.size() : authorityEnd;
+    if (end <= authorityStart)
+    {
+        return;
+    }
+
+    const size_t at = text.rfind(L'@', end - 1u);
+    if (at == std::wstring::npos || at <= authorityStart)
+    {
+        return;
+    }
+
+    const size_t colon = text.find(L':', authorityStart);
+    if (colon == std::wstring::npos || colon >= at)
+    {
+        return;
+    }
+
+    constexpr std::wstring_view kRedacted = L"<redacted>";
+    text.replace(colon + 1u, at - (colon + 1u), kRedacted);
+}
+
+inline void RedactSensitiveQueryParams(std::wstring& text) noexcept
+{
+    const size_t q = text.find(L'?');
+    if (q == std::wstring::npos || (q + 1u) >= text.size())
+    {
+        return;
+    }
+
+    const size_t frag = text.find(L'#', q + 1u);
+    const size_t end  = (frag == std::wstring::npos) ? text.size() : frag;
+
+    const std::wstring_view query = std::wstring_view(text).substr(q + 1u, end - (q + 1u));
+    if (query.empty())
+    {
+        return;
+    }
+
+    std::wstring redacted;
+    redacted.reserve(query.size());
+
+    size_t pos = 0;
+    while (pos < query.size())
+    {
+        const size_t delimPos = query.find_first_of(L"&;", pos);
+        const size_t segEnd   = (delimPos == std::wstring_view::npos) ? query.size() : delimPos;
+        const std::wstring_view seg(query.substr(pos, segEnd - pos));
+
+        const size_t eq = seg.find(L'=');
+        if (eq != std::wstring_view::npos)
+        {
+            const std::wstring_view key = seg.substr(0, eq);
+            if (IsSensitiveQueryKey(key))
+            {
+                redacted.append(key);
+                redacted.push_back(L'=');
+                redacted.append(L"<redacted>");
+            }
+            else
+            {
+                redacted.append(seg);
+            }
+        }
+        else
+        {
+            redacted.append(seg);
+        }
+
+        if (delimPos != std::wstring_view::npos)
+        {
+            redacted.push_back(query[delimPos]);
+            pos = delimPos + 1u;
+        }
+        else
+        {
+            pos = query.size();
+        }
+    }
+
+    std::wstring rebuilt;
+    rebuilt.reserve(text.size() - query.size() + redacted.size());
+    rebuilt.append(text, 0, q + 1u);
+    rebuilt.append(redacted);
+    rebuilt.append(text, end, std::wstring::npos);
+    text.swap(rebuilt);
+}
+
+// Best-effort redaction for log/diagnostics strings (URLs, endpoints, etc.).
+// Intended to strip passwords/userinfo and common secret-bearing query parameters.
+[[nodiscard]] inline std::wstring ForLog(std::wstring_view text) noexcept
+{
+    if (text.empty())
+    {
+        return {};
+    }
+
+    std::wstring out(text);
+    RedactUserInfoPassword(out);
+    RedactSensitiveQueryParams(out);
+    return out;
+}
+} // namespace Redaction
+
 namespace Win32Text
 {
 [[nodiscard]] inline std::wstring GetWindowTextString(HWND hwnd) noexcept

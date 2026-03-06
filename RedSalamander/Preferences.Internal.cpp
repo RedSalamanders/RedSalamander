@@ -1822,6 +1822,7 @@ void MaybeResetWorkingConnectionsSettingsIfEmpty(Common::Settings::Settings& set
 
     const Common::Settings::ConnectionsSettings defaults{};
     const bool wroteGlobals = settings.connections->bypassWindowsHello != defaults.bypassWindowsHello ||
+                              settings.connections->allowInsecureTlsInAutomation != defaults.allowInsecureTlsInAutomation ||
                               settings.connections->windowsHelloReauthTimeoutMinute != defaults.windowsHelloReauthTimeoutMinute;
     if (! wroteGlobals)
     {

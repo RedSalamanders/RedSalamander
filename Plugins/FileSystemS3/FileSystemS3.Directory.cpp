@@ -285,19 +285,34 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(
         return hr;
     }
 
-    const auto client = FsS3::GetS3Client(*this, bucketCtx);
-    Aws::S3Crt::Model::DeleteObjectRequest req;
-    req.SetBucket(Aws::String(bucket.data(), bucket.size()));
-    req.SetKey(Aws::String(key.data(), key.size()));
-
-    const auto outcome = client->DeleteObject(req);
-    HRESULT itemHr     = S_OK;
-    if (! outcome.IsSuccess())
+    HRESULT itemHr                    = S_OK;
+    [[maybe_unused]] uint64_t sizeBytes    = 0;
+    [[maybe_unused]] __int64 lastWriteTime = 0;
+    bool found                        = false;
+    hr = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
+    if (FAILED(hr))
     {
-        const auto& err            = outcome.GetError();
-        const std::wstring details = std::format(L"bucket='{}' key='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(key));
-        FsS3::LogAwsFailure(L"S3", L"DeleteObject", bucketCtx, err, details);
-        itemHr = FsS3::HresultFromAwsError(err);
+        itemHr = hr;
+    }
+    else if (! found)
+    {
+        itemHr = HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    }
+    else
+    {
+        const auto client = FsS3::GetS3Client(*this, bucketCtx);
+        Aws::S3Crt::Model::DeleteObjectRequest req;
+        req.SetBucket(Aws::String(bucket.data(), bucket.size()));
+        req.SetKey(Aws::String(key.data(), key.size()));
+
+        const auto outcome = client->DeleteObject(req);
+        if (! outcome.IsSuccess())
+        {
+            const auto& err            = outcome.GetError();
+            const std::wstring details = std::format(L"bucket='{}' key='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(key));
+            FsS3::LogAwsFailure(L"S3", L"DeleteObject", bucketCtx, err, details);
+            itemHr = FsS3::HresultFromAwsError(err);
+        }
     }
 
     if (callback)
@@ -718,6 +733,66 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
             if (! continueOnError)
             {
                 return hr;
+            }
+            continue;
+        }
+
+        [[maybe_unused]] uint64_t sizeBytes    = 0;
+        [[maybe_unused]] __int64 lastWriteTime = 0;
+        bool found                             = false;
+        hr = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
+        if (FAILED(hr))
+        {
+            hadFailure = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = hr;
+            }
+
+            HRESULT cbHr = reportItemCompleted(index, path, hr);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            ++completedItems;
+            cbHr = reportProgress(completedItems, path);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            if (! continueOnError)
+            {
+                return hr;
+            }
+            continue;
+        }
+        if (! found)
+        {
+            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+            hadFailure           = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = itemHr;
+            }
+
+            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            ++completedItems;
+            cbHr = reportProgress(completedItems, path);
+            if (FAILED(cbHr))
+            {
+                return cbHr;
+            }
+
+            if (! continueOnError)
+            {
+                return itemHr;
             }
             continue;
         }

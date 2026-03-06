@@ -1,6 +1,7 @@
 #include "FileSystemS3.Internal.h"
 
 #include <aws/s3-crt/model/GetObjectRequest.h>
+#include <aws/s3-crt/model/HeadObjectRequest.h>
 #include <aws/s3-crt/model/ListObjectsV2Request.h>
 
 #include <algorithm>
@@ -13,6 +14,62 @@
 #include <vector>
 
 namespace FsS3 = FileSystemS3Internal;
+
+static HRESULT TryGetS3ObjectSummaryFromClient(Aws::S3Crt::S3CrtClient& client,
+                                               const FsS3::ResolvedAwsContext& bucketCtx,
+                                               std::string_view bucket,
+                                               std::string_view key,
+                                               uint64_t& outSizeBytes,
+                                               __int64& outLastWriteTime,
+                                               bool& outFound) noexcept
+{
+    outSizeBytes     = 0;
+    outLastWriteTime = 0;
+    outFound         = false;
+
+    if (bucket.empty() || key.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    Aws::S3Crt::Model::HeadObjectRequest req;
+    req.SetBucket(Aws::String(bucket.data(), bucket.size()));
+    req.SetKey(Aws::String(key.data(), key.size()));
+
+    const auto outcome = client.HeadObject(req);
+    if (! outcome.IsSuccess())
+    {
+        const auto& err  = outcome.GetError();
+        const HRESULT hr = FsS3::HresultFromAwsError(err);
+        if (hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+        {
+            outFound = false;
+            return S_OK;
+        }
+
+        const std::wstring details = std::format(L"bucket='{}' key='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(key));
+        FsS3::LogAwsFailure(L"S3", L"HeadObject", bucketCtx, err, details);
+        return hr;
+    }
+
+    const auto& result = outcome.GetResult();
+    outFound           = true;
+    outSizeBytes       = static_cast<uint64_t>(result.GetContentLength());
+    outLastWriteTime   = FsS3::AwsDateTimeToFileTime64(result.GetLastModified());
+    return S_OK;
+}
+
+HRESULT FsS3::TryGetS3ObjectSummary(FileSystemS3& fs,
+                                    const ResolvedAwsContext& bucketCtx,
+                                    std::string_view bucket,
+                                    std::string_view key,
+                                    uint64_t& outSizeBytes,
+                                    __int64& outLastWriteTime,
+                                    bool& outFound) noexcept
+{
+    const auto client = GetS3Client(fs, bucketCtx);
+    return TryGetS3ObjectSummaryFromClient(*client, bucketCtx, bucket, key, outSizeBytes, outLastWriteTime, outFound);
+}
 
 namespace
 {
@@ -49,68 +106,6 @@ namespace
     }
 
     return S_OK;
-}
-
-[[nodiscard]] HRESULT TryGetS3ObjectSummaryImpl(Aws::S3Crt::S3CrtClient& client,
-                                                const FsS3::ResolvedAwsContext& bucketCtx,
-                                                std::string_view bucket,
-                                                std::string_view key,
-                                                uint64_t& outSizeBytes,
-                                                __int64& outLastWriteTime,
-                                                bool& outFound) noexcept
-{
-    outSizeBytes     = 0;
-    outLastWriteTime = 0;
-    outFound         = false;
-
-    if (bucket.empty() || key.empty())
-    {
-        return E_INVALIDARG;
-    }
-
-    Aws::S3Crt::Model::ListObjectsV2Request req;
-    req.SetBucket(Aws::String(bucket.data(), bucket.size()));
-    req.SetPrefix(Aws::String(key.data(), key.size()));
-    req.SetMaxKeys(1);
-
-    const auto outcome = client.ListObjectsV2(req);
-    if (! outcome.IsSuccess())
-    {
-        const auto& err            = outcome.GetError();
-        const std::wstring details = std::format(L"bucket='{}' key='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(key));
-        FsS3::LogAwsFailure(L"S3", L"ListObjectsV2", bucketCtx, err, details);
-        return FsS3::HresultFromAwsError(err);
-    }
-
-    const auto& objects = outcome.GetResult().GetContents();
-    for (const auto& obj : objects)
-    {
-        const Aws::String& objKey = obj.GetKey();
-        if (std::string_view(objKey.c_str(), objKey.size()) != key)
-        {
-            continue;
-        }
-
-        outFound         = true;
-        outSizeBytes     = static_cast<uint64_t>(obj.GetSize());
-        outLastWriteTime = FsS3::AwsDateTimeToFileTime64(obj.GetLastModified());
-        return S_OK;
-    }
-
-    outFound = false;
-    return S_OK;
-}
-
-[[nodiscard]] HRESULT TryGetS3ObjectSummary(FileSystemS3& fs,
-                                            const FsS3::ResolvedAwsContext& bucketCtx,
-                                            std::string_view bucket,
-                                            std::string_view key,
-                                            uint64_t& outSizeBytes,
-                                            __int64& outLastWriteTime,
-                                            bool& outFound) noexcept
-{
-    const auto client = FsS3::GetS3Client(fs, bucketCtx);
-    return TryGetS3ObjectSummaryImpl(*client, bucketCtx, bucket, key, outSizeBytes, outLastWriteTime, outFound);
 }
 
 class TempFileReader final : public IFileReader
@@ -466,7 +461,7 @@ private:
         uint64_t sizeBytes    = 0;
         __int64 lastWriteTime = 0;
         bool found            = false;
-        const HRESULT hr      = TryGetS3ObjectSummaryImpl(*_client, _bucketCtx, _bucket, _key, sizeBytes, lastWriteTime, found);
+        const HRESULT hr      = TryGetS3ObjectSummaryFromClient(*_client, _bucketCtx, _bucket, _key, sizeBytes, lastWriteTime, found);
         if (FAILED(hr))
         {
             return hr;
@@ -791,7 +786,7 @@ public:
             uint64_t existingSize     = 0;
             __int64 existingLastWrite = 0;
             bool found                = false;
-            const HRESULT existsHr    = TryGetS3ObjectSummary(*_owner.get(), bucketCtx, bucket, key, existingSize, existingLastWrite, found);
+        const HRESULT existsHr    = FsS3::TryGetS3ObjectSummary(*_owner.get(), bucketCtx, bucket, key, existingSize, existingLastWrite, found);
             if (FAILED(existsHr))
             {
                 return existsHr;
@@ -937,7 +932,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetAttributes(const wchar_t* path, unsig
         uint64_t sizeBytes    = 0;
         __int64 lastWriteTime = 0;
         bool foundFile        = false;
-        const HRESULT objHr   = TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, foundFile);
+    const HRESULT objHr   = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, foundFile);
         if (FAILED(objHr))
         {
             return objHr;
@@ -1289,7 +1284,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetFileBasicInformation([[maybe_unused]]
     uint64_t sizeBytes    = 0;
     __int64 lastWriteTime = 0;
     bool found            = false;
-    const HRESULT objHr   = TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
+    const HRESULT objHr   = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
     if (FAILED(objHr))
     {
         return objHr;
@@ -1468,7 +1463,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetItemProperties([[maybe_unused]] const
             uint64_t sizeBytes    = 0;
             __int64 lastWriteTime = 0;
             bool found            = false;
-            hr                    = TryGetS3ObjectSummary(*this, bucketCtx, bucketUtf8, keyUtf8, sizeBytes, lastWriteTime, found);
+    hr                    = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucketUtf8, keyUtf8, sizeBytes, lastWriteTime, found);
             if (FAILED(hr))
             {
                 return hr;

@@ -47,7 +47,7 @@
     },
     {
       "name": "webview2",
-      "version>=": "1.0.3719.77"
+      "version>=": "1.0.3800.47"
     },
     {
       "name": "aws-sdk-cpp",

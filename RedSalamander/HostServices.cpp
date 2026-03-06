@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <format>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -23,6 +24,7 @@
 
 #include "ConnectionCredentialPromptDialog.h"
 #include "ConnectionManagerDialog.h"
+#include "ConnectionProfileUtils.h"
 #include "ConnectionSecrets.h"
 #include "FolderWindow.h"
 #include "Helpers.h"
@@ -115,6 +117,53 @@ struct PendingExecuteInPane
     std::wstring focusItemDisplayName;
     unsigned int folderViewCommandId = 0;
 };
+
+[[nodiscard]] bool IsAutomationModeFromCommandLine() noexcept
+{
+    static std::once_flag initOnce;
+    static bool cached = false;
+
+    std::call_once(initOnce,
+                   []() noexcept
+    {
+        bool result = false;
+
+        int argc = 0;
+        wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
+        if (argv && argc > 1)
+        {
+            constexpr std::wstring_view kArgs[] = {
+                L"--selftest",
+                L"--compare-selftest",
+                L"--commands-selftest",
+                L"--fileops-selftest",
+            };
+
+            for (int i = 1; i < argc && ! result; ++i)
+            {
+                const wchar_t* arg = argv.get()[i];
+                if (! arg || arg[0] == L'\0')
+                {
+                    continue;
+                }
+
+                const std::wstring_view argView(arg);
+                for (const std::wstring_view needle : kArgs)
+                {
+                    if (OrdinalString::EqualsNoCase(argView, needle))
+                    {
+                        result = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        cached = result;
+    });
+
+    return cached;
+}
 
 FolderView::OverlaySeverity ToFolderOverlaySeverity(HostAlertSeverity severity) noexcept
 {
@@ -529,12 +578,7 @@ public:
         }
 
         const HWND hostWindow = GetInitializedHostWindow();
-        if (! hostWindow)
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
-        }
-
-        if (! IsCurrentThreadWindowThread(hostWindow))
+        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
         {
             auto data            = std::make_unique<PendingConnectionJson>();
             data->connectionName = connectionName;
@@ -574,12 +618,7 @@ public:
         }
 
         const HWND hostWindow = GetInitializedHostWindow();
-        if (! hostWindow)
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
-        }
-
-        if (! IsCurrentThreadWindowThread(hostWindow))
+        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
         {
             auto data            = std::make_unique<PendingConnectionSecret>();
             data->connectionName = connectionName;
@@ -1153,33 +1192,6 @@ private:
         return std::nullopt;
     }
 
-    [[nodiscard]] static std::optional<bool> ExtraGetBool(const Common::Settings::JsonValue& extra, std::string_view key) noexcept
-    {
-        const auto* objPtr = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value);
-        if (! objPtr || ! *objPtr)
-        {
-            return std::nullopt;
-        }
-
-        for (const auto& [k, v] : (*objPtr)->members)
-        {
-            if (k != key)
-            {
-                continue;
-            }
-
-            const auto* b = std::get_if<bool>(&v.value);
-            if (! b)
-            {
-                return std::nullopt;
-            }
-
-            return *b;
-        }
-
-        return std::nullopt;
-    }
-
     HRESULT ShowConnectionManagerOnUiThread(const HostConnectionManagerRequest& request, HostConnectionManagerResult* result) noexcept
     {
         if (! result)
@@ -1187,12 +1199,7 @@ private:
             return E_POINTER;
         }
 
-        HWND hostWindow           = nullptr;
-        const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
-        if (FAILED(hrHostReady))
-        {
-            return hrHostReady;
-        }
+        HWND hostWindow = nullptr;
 
         result->version        = 1;
         result->sizeBytes      = sizeof(HostConnectionManagerResult);
@@ -1240,17 +1247,31 @@ private:
         }
         *jsonUtf8 = nullptr;
 
-        HWND hostWindow           = nullptr;
-        const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
-        if (FAILED(hrHostReady))
+        HWND hostWindow = GetInitializedHostWindow();
+        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
         {
-            return hrHostReady;
+            return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
         }
 
         const Common::Settings::ConnectionProfile* profile = FindConnectionProfile(connectionName);
         if (! profile)
         {
             return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+        }
+
+        if (IsAutomationModeFromCommandLine() && ConnectionProfileUtils::ConnectionProfileUsesInsecureTls(*profile))
+        {
+            const bool allowInAutomation = g_settings.connections ? g_settings.connections->allowInsecureTlsInAutomation : false;
+            const bool acked             = ConnectionProfileUtils::ExtraGetBool(profile->extra, "insecureTlsAck").value_or(false);
+            if (! allowInAutomation || ! acked)
+            {
+                Debug::Warning(L"Blocked insecure TLS connection in automation: connection='{}' pluginId='{}' allowInsecureTlsInAutomation={} acked={}",
+                               profile->name,
+                               profile->pluginId,
+                               allowInAutomation ? 1 : 0,
+                               acked ? 1 : 0);
+                return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+            }
         }
 
         yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
@@ -1340,7 +1361,7 @@ private:
         }
         if (profile->pluginId == L"builtin/file-system-imap")
         {
-            if (const auto ignoreSslTrust = ExtraGetBool(profile->extra, "ignoreSslTrust"); ignoreSslTrust.has_value())
+            if (const auto ignoreSslTrust = ConnectionProfileUtils::ExtraGetBool(profile->extra, "ignoreSslTrust"); ignoreSslTrust.has_value())
             {
                 yyjson_mut_obj_add_bool(doc, root, "ignoreSslTrust", ignoreSslTrust.value());
             }
@@ -1397,11 +1418,10 @@ private:
         }
         *secretOut = nullptr;
 
-        HWND hostWindow           = nullptr;
-        const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
-        if (FAILED(hrHostReady))
+        HWND hostWindow = GetInitializedHostWindow();
+        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
         {
-            return hrHostReady;
+            return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
         }
 
         const Common::Settings::ConnectionProfile* profile = FindConnectionProfile(connectionName);
@@ -1439,10 +1459,6 @@ private:
         }
 
         HWND owner = ownerWindow;
-        if (! owner || ! IsWindow(owner))
-        {
-            owner = hostWindow;
-        }
 
         const Common::Settings::ConnectionsSettings defaults{};
         bool bypassWindowsHello                  = false;
@@ -1520,6 +1536,17 @@ private:
 
             if (shouldPrompt)
             {
+                if (! owner || ! IsWindow(owner))
+                {
+                    HWND fallbackWindow     = nullptr;
+                    const HRESULT hostReady = EnsureHostUiThreadReady(fallbackWindow);
+                    if (SUCCEEDED(hostReady))
+                    {
+                        hostWindow = fallbackWindow;
+                        owner      = hostWindow;
+                    }
+                }
+
                 const HRESULT helloHr =
                     RedSalamander::Security::VerifyWindowsHelloForWindow(owner, LoadStringResource(nullptr, IDS_CONNECTIONS_HELLO_PROMPT_CREDENTIAL));
                 if (FAILED(helloHr))

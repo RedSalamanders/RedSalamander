@@ -2,6 +2,9 @@
 
 **Compare Directories** opens a dedicated window that compares two folder trees (Left vs Right) and highlights differences.
 
+![Compare Directories window](res/compare-directories.png)
+<!-- TODO(screenshot): replace placeholder with a real screenshot -->
+
 ## Open
 
 - Menu: **Commands → Compare Directories…**
@@ -33,4 +36,3 @@ When Compare mode is active, copying/moving a **directory** to the other pane ac
 
 - Only items that differ (or exist on only one side) are copied/moved.
 - Identical descendants are skipped.
-

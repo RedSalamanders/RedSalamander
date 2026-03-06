@@ -89,6 +89,8 @@ Use the `build.ps1` PowerShell script for easy building:
 - `-ProjectName` : Specific project name (builds entire solution if not specified)
 - `-Clean` : Perform clean build
 - `-Rebuild` : Rebuild all projects
+- `-Msix` : Build an MSIX package after a successful Release build
+- `-Msi` : Build an MSI package after a successful Release build
 
 #### Visual Studio Build
 
@@ -100,12 +102,12 @@ Use the `build.ps1` PowerShell script for easy building:
 
 The solution contains the following projects:
 
-- **RedSalamander**: Main application
-- **RedSalamanderMonitor**: Monitoring application with advanced text rendering
-- **Common**: Shared library with utilities
-- **FileSystem**: Plugin for virtual file system
-- **FileSystemCurl**: Plugin providing FTP/SFTP/SCP/IMAP virtual file systems
-- **PoC Projects**: ls1, ls2, ls3, ls4, FlipSequentialDiscard (proof-of-concept)
+- **Applications**: `RedSalamander`, `RedSalamanderMonitor`
+- **Installer**: `RedSalamanderInstaller` (MSIX packaging)
+- **Shared library**: `Common`
+- **File-system plugins**: `FileSystem`, `FileSystem7z`, `FileSystemCurl`, `FileSystemS3`, `FileSystemDummy`
+- **Viewer plugins**: `ViewerText`, `ViewerSpace`, `ViewerImgRaw`, `ViewerVLC`, `ViewerPE`, `ViewerWeb`
+- **PoC projects**: `ls1`, `ls2`, `ls3`, `ls4`, `FlipSequentialDiscard`, `MonitorTest`
 
 ### Output
 

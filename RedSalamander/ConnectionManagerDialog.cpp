@@ -22,6 +22,7 @@
 
 #include "ConnectionCredentialPromptDialog.h"
 #include "ConnectionSecrets.h"
+#include "ConnectionProfileUtils.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "SettingsSave.h"
@@ -614,72 +615,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 
         const std::wstring wide = Utf16FromUtf8(*str);
         return wide.empty() && ! str->empty() ? std::nullopt : std::make_optional(wide);
-    }
-
-    return std::nullopt;
-}
-
-[[nodiscard]] std::optional<bool> ExtraGetBool(const Common::Settings::JsonValue& extra, std::string_view key) noexcept
-{
-    const auto* objPtr = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value);
-    if (! objPtr || ! *objPtr)
-    {
-        return std::nullopt;
-    }
-
-    for (const auto& [k, v] : (*objPtr)->members)
-    {
-        if (k != key)
-        {
-            continue;
-        }
-
-        const auto* b = std::get_if<bool>(&v.value);
-        if (! b)
-        {
-            return std::nullopt;
-        }
-
-        return *b;
-    }
-
-    return std::nullopt;
-}
-
-[[nodiscard]] std::optional<uint32_t> ExtraGetUInt32(const Common::Settings::JsonValue& extra, std::string_view key) noexcept
-{
-    const auto* objPtr = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value);
-    if (! objPtr || ! *objPtr)
-    {
-        return std::nullopt;
-    }
-
-    for (const auto& [k, v] : (*objPtr)->members)
-    {
-        if (k != key)
-        {
-            continue;
-        }
-
-        if (const auto* n = std::get_if<uint64_t>(&v.value))
-        {
-            if (*n <= std::numeric_limits<uint32_t>::max())
-            {
-                return static_cast<uint32_t>(*n);
-            }
-            return std::nullopt;
-        }
-
-        if (const auto* n = std::get_if<int64_t>(&v.value))
-        {
-            if (*n >= 0 && *n <= static_cast<int64_t>(std::numeric_limits<uint32_t>::max()))
-            {
-                return static_cast<uint32_t>(*n);
-            }
-            return std::nullopt;
-        }
-
-        return std::nullopt;
     }
 
     return std::nullopt;
@@ -1402,17 +1337,17 @@ void ApplyPluginDefaultsToNewProfile(const DialogState& state, Common::Settings:
         {
             ExtraSetString(profile.extra, "endpointOverride", *endpoint);
         }
-        if (const auto useHttps = ExtraGetBool(config, "useHttps"); useHttps.has_value())
+        if (const auto useHttps = ConnectionProfileUtils::ExtraGetBool(config, "useHttps"); useHttps.has_value())
         {
             ExtraSetBool(profile.extra, "useHttps", useHttps.value());
         }
-        if (const auto verifyTls = ExtraGetBool(config, "verifyTls"); verifyTls.has_value())
+        if (const auto verifyTls = ConnectionProfileUtils::ExtraGetBool(config, "verifyTls"); verifyTls.has_value())
         {
             ExtraSetBool(profile.extra, "verifyTls", verifyTls.value());
         }
         if (IsS3PluginId(profile.pluginId))
         {
-            if (const auto virtualHost = ExtraGetBool(config, "useVirtualAddressing"); virtualHost.has_value())
+            if (const auto virtualHost = ConnectionProfileUtils::ExtraGetBool(config, "useVirtualAddressing"); virtualHost.has_value())
             {
                 ExtraSetBool(profile.extra, "useVirtualAddressing", virtualHost.value());
             }
@@ -1431,7 +1366,7 @@ void ApplyPluginDefaultsToNewProfile(const DialogState& state, Common::Settings:
 
     if (profile.port == 0)
     {
-        if (const auto port = ExtraGetUInt32(config, "defaultPort"); port.has_value() && *port <= 65535u)
+        if (const auto port = ConnectionProfileUtils::ExtraGetUInt32(config, "defaultPort"); port.has_value() && *port <= 65535u)
         {
             profile.port = *port;
         }
@@ -1826,7 +1761,7 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
     SetWindowTextW(state.initialPathEdit, initialPath.c_str());
 
     {
-        const uint32_t copyMoveOverride = ExtraGetUInt32(profile.extra, "copyMoveMaxConcurrency").value_or(0);
+    const uint32_t copyMoveOverride = ConnectionProfileUtils::ExtraGetUInt32(profile.extra, "copyMoveMaxConcurrency").value_or(0);
         if (copyMoveOverride > 0)
         {
             SetWindowTextW(state.copyMoveMaxConcurrencyEdit, std::to_wstring(copyMoveOverride).c_str());
@@ -1836,7 +1771,7 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
             SetWindowTextW(state.copyMoveMaxConcurrencyEdit, L"");
         }
 
-        const uint32_t deleteOverride = ExtraGetUInt32(profile.extra, "deleteMaxConcurrency").value_or(0);
+    const uint32_t deleteOverride = ConnectionProfileUtils::ExtraGetUInt32(profile.extra, "deleteMaxConcurrency").value_or(0);
         if (deleteOverride > 0)
         {
             SetWindowTextW(state.deleteMaxConcurrencyEdit, std::to_wstring(deleteOverride).c_str());
@@ -1889,7 +1824,9 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
 
     SetTwoStateToggleState(state.savePasswordToggle, state.theme, profile.savePassword);
     SetTwoStateToggleState(state.requireHelloToggle, state.theme, profile.savePassword && profile.requireWindowsHello);
-    SetTwoStateToggleState(state.ignoreSslTrustToggle, state.theme, ExtraGetBool(profile.extra, "ignoreSslTrust").value_or(false));
+    SetTwoStateToggleState(state.ignoreSslTrustToggle,
+                           state.theme,
+                           ConnectionProfileUtils::ExtraGetBool(profile.extra, "ignoreSslTrust").value_or(false));
 
     if (const auto v = ExtraGetString(profile.extra, "sshPrivateKey"); v.has_value())
     {
@@ -1918,9 +1855,15 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
         SetWindowTextW(state.s3EndpointOverrideEdit, L"");
     }
 
-    SetTwoStateToggleState(state.s3UseHttpsToggle, state.theme, ExtraGetBool(profile.extra, "useHttps").value_or(true));
-    SetTwoStateToggleState(state.s3VerifyTlsToggle, state.theme, ExtraGetBool(profile.extra, "verifyTls").value_or(true));
-    SetTwoStateToggleState(state.s3UseVirtualAddressingToggle, state.theme, ExtraGetBool(profile.extra, "useVirtualAddressing").value_or(true));
+    SetTwoStateToggleState(state.s3UseHttpsToggle,
+                           state.theme,
+                           ConnectionProfileUtils::ExtraGetBool(profile.extra, "useHttps").value_or(true));
+    SetTwoStateToggleState(state.s3VerifyTlsToggle,
+                           state.theme,
+                           ConnectionProfileUtils::ExtraGetBool(profile.extra, "verifyTls").value_or(true));
+    SetTwoStateToggleState(state.s3UseVirtualAddressingToggle,
+                           state.theme,
+                           ConnectionProfileUtils::ExtraGetBool(profile.extra, "useVirtualAddressing").value_or(true));
 
     state.loadingControls = false;
 }
@@ -2134,6 +2077,18 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
     }
 
     StageSecretsFromEditor(state, profile);
+}
+
+[[nodiscard]] bool ConfirmEnableInsecureTls(HWND owner, const Common::Settings::ConnectionProfile& profile) noexcept
+{
+    const std::wstring title   = LoadStringResource(nullptr, IDS_INSECURE_TLS_TITLE);
+    const std::wstring message = FormatStringResource(nullptr, IDS_INSECURE_TLS_MESSAGE_FMT, profile.name);
+
+    const std::wstring fallbackTitle   = title.empty() ? L"Insecure TLS" : title;
+    const std::wstring fallbackMessage = message.empty() ? L"This connection will use insecure TLS settings.\r\n\r\nContinue?" : message;
+
+    const int result = MessageBoxW(owner, fallbackMessage.c_str(), fallbackTitle.c_str(), MB_ICONWARNING | MB_YESNO | MB_DEFBUTTON2);
+    return result == IDYES;
 }
 
 [[nodiscard]] bool HasDuplicateConnectionName(const std::vector<Common::Settings::ConnectionProfile>& connections) noexcept
@@ -4492,9 +4447,11 @@ INT_PTR CALLBACK ConnectionManagerDialogProc(HWND dlg, UINT msg, WPARAM wp, LPAR
             if (id == IDC_CONNECTION_ANONYMOUS || id == IDC_CONNECTION_SAVE_PASSWORD || id == IDC_CONNECTION_IGNORE_SSL_TRUST ||
                 id == IDC_CONNECTION_S3_USE_HTTPS || id == IDC_CONNECTION_S3_VERIFY_TLS || id == IDC_CONNECTION_S3_USE_VIRTUAL_ADDRESSING)
             {
-                if (HIWORD(wp) == BN_CLICKED && ! state->theme.highContrast)
+                const bool clicked = HIWORD(wp) == BN_CLICKED;
+                const HWND button  = reinterpret_cast<HWND>(lp);
+
+                if (clicked && ! state->theme.highContrast)
                 {
-                    const HWND button = reinterpret_cast<HWND>(lp);
                     if (button)
                     {
                         const bool toggledOn = GetTwoStateToggleState(button, state->theme);
@@ -4504,8 +4461,49 @@ INT_PTR CALLBACK ConnectionManagerDialogProc(HWND dlg, UINT msg, WPARAM wp, LPAR
 
                 if (const auto model = GetSelectedModelIndex(*state); model.has_value())
                 {
-                    CommitEditorToProfile(*state, state->connections[model.value()]);
-                    SetTwoStateToggleState(state->requireHelloToggle, state->theme, state->connections[model.value()].requireWindowsHello);
+                    Common::Settings::ConnectionProfile& profile = state->connections[model.value()];
+
+                    if (clicked &&
+                        (id == IDC_CONNECTION_IGNORE_SSL_TRUST || id == IDC_CONNECTION_S3_USE_HTTPS || id == IDC_CONNECTION_S3_VERIFY_TLS))
+                    {
+    const bool acked = ConnectionProfileUtils::ExtraGetBool(profile.extra, "insecureTlsAck").value_or(false);
+                        if (! acked)
+                        {
+                            bool insecureNow = false;
+
+                            if (id == IDC_CONNECTION_IGNORE_SSL_TRUST && IsImapPluginId(profile.pluginId))
+                            {
+                                const bool ignoreSslTrust = GetTwoStateToggleState(state->ignoreSslTrustToggle, state->theme);
+                                insecureNow               = ignoreSslTrust;
+                            }
+                            else if ((id == IDC_CONNECTION_S3_USE_HTTPS || id == IDC_CONNECTION_S3_VERIFY_TLS) && IsAwsS3PluginId(profile.pluginId))
+                            {
+                                const bool useHttps  = GetTwoStateToggleState(state->s3UseHttpsToggle, state->theme);
+                                const bool verifyTls = GetTwoStateToggleState(state->s3VerifyTlsToggle, state->theme);
+                                insecureNow          = ! useHttps || ! verifyTls;
+                            }
+
+                            if (insecureNow)
+                            {
+                                if (! ConfirmEnableInsecureTls(dlg, profile))
+                                {
+                                    if (button)
+                                    {
+                                        const bool current = GetTwoStateToggleState(button, state->theme);
+                                        SetTwoStateToggleState(button, state->theme, ! current);
+                                    }
+
+                                    UpdateControlEnabledState(*state);
+                                    return TRUE;
+                                }
+
+                                ExtraSetBool(profile.extra, "insecureTlsAck", true);
+                            }
+                        }
+                    }
+
+                    CommitEditorToProfile(*state, profile);
+                    SetTwoStateToggleState(state->requireHelloToggle, state->theme, profile.requireWindowsHello);
                     UpdateControlEnabledState(*state);
                 }
                 return TRUE;

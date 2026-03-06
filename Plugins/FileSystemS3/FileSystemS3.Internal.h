@@ -167,6 +167,13 @@ template <typename AwsErrors> [[nodiscard]] HRESULT HresultFromAwsError(const Aw
 [[nodiscard]] std::shared_ptr<Aws::S3Crt::S3CrtClient> MakeS3Client(const ResolvedAwsContext& ctx) noexcept;
 [[nodiscard]] Aws::S3Tables::S3TablesClient MakeS3TablesClient(const ResolvedAwsContext& ctx) noexcept;
 [[nodiscard]] std::shared_ptr<Aws::S3Crt::S3CrtClient> GetS3Client(FileSystemS3& fs, const ResolvedAwsContext& ctx) noexcept;
+[[nodiscard]] HRESULT TryGetS3ObjectSummary(FileSystemS3& fs,
+                                            const ResolvedAwsContext& bucketCtx,
+                                            std::string_view bucket,
+                                            std::string_view key,
+                                            uint64_t& outSizeBytes,
+                                            __int64& outLastWriteTime,
+                                            bool& outFound) noexcept;
 
 [[nodiscard]] constexpr std::wstring_view CoreErrorNameFromInt(int code) noexcept
 {
@@ -204,7 +211,7 @@ inline void LogAwsFailure(std::wstring_view prefix,
                  details,
                  ctx.connectionName,
                  Utf16FromUtf8(cfg.region),
-                 Utf16FromUtf8(cfg.endpointOverride),
+                 Redaction::ForLog(Utf16FromUtf8(cfg.endpointOverride)),
                  scheme,
                  cfg.verifySSL ? 1 : 0,
                  cfg.connectTimeoutMs,
