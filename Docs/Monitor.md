@@ -3,6 +3,7 @@
 `RedSalamanderMonitor.exe` is a high-throughput, append-only log viewer designed for real-time streaming (ETW) as well as reviewing captured logs.
 
 ![Monitor](res/monitor.png)
+<!-- TODO(screenshot): replace placeholder with a real screenshot -->
 
 ## Getting access (ETW)
 

@@ -64,6 +64,10 @@ void AdvancedPane::CreateControls(HWND parent, PreferencesDialogState& state) no
         CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
     state.advancedConnectionsBypassHelloDescription.reset(
         CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
+    state.advancedConnectionsAllowInsecureTlsAutomationLabel.reset(
+        CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
+    state.advancedConnectionsAllowInsecureTlsAutomationDescription.reset(
+        CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
     state.advancedConnectionsHelloTimeoutLabel.reset(
         CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
     PrefsInput::CreateFramedEditBox(state,
@@ -160,6 +164,20 @@ void AdvancedPane::CreateControls(HWND parent, PreferencesDialogState& state) no
                         10,
                         parent,
                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_ADV_CONNECTIONS_BYPASS_HELLO_TOGGLE)),
+                        GetModuleHandleW(nullptr),
+                        nullptr));
+
+    state.advancedConnectionsAllowInsecureTlsAutomationToggle.reset(
+        CreateWindowExW(0,
+                        L"Button",
+                        customButtons ? L"" : LoadStringResource(nullptr, IDS_PREFS_ADV_CHECK_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION).c_str(),
+                        monitorToggleStyle,
+                        0,
+                        0,
+                        10,
+                        10,
+                        parent,
+                        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_ADV_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION_TOGGLE)),
                         GetModuleHandleW(nullptr),
                         nullptr));
 
@@ -315,6 +333,7 @@ void AdvancedPane::CreateControls(HWND parent, PreferencesDialogState& state) no
                         nullptr));
 
     PrefsInput::EnableMouseWheelForwarding(state.advancedConnectionsBypassHelloToggle);
+    PrefsInput::EnableMouseWheelForwarding(state.advancedConnectionsAllowInsecureTlsAutomationToggle);
     PrefsInput::EnableMouseWheelForwarding(state.advancedMonitorToolbarToggle);
     PrefsInput::EnableMouseWheelForwarding(state.advancedMonitorLineNumbersToggle);
     PrefsInput::EnableMouseWheelForwarding(state.advancedMonitorAlwaysOnTopToggle);
@@ -652,9 +671,13 @@ void AdvancedPane::LayoutControls(HWND host, PreferencesDialogState& state, int 
     };
 
     const std::wstring labelBypassHelloText  = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_BYPASS_HELLO);
+    const std::wstring labelAllowInsecureTlsAutomationText =
+        LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION);
     const std::wstring labelHelloTimeoutText = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_HELLO_TIMEOUT);
 
     const std::wstring descBypassHelloText  = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_CONNECTIONS_BYPASS_HELLO);
+    const std::wstring descAllowInsecureTlsAutomationText =
+        LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION);
     const std::wstring descHelloTimeoutText = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_CONNECTIONS_HELLO_TIMEOUT);
 
     layoutToggleCard(state.advancedConnectionsBypassHelloLabel.get(),
@@ -662,6 +685,11 @@ void AdvancedPane::LayoutControls(HWND host, PreferencesDialogState& state, int 
                      state.advancedConnectionsBypassHelloToggle.get(),
                      state.advancedConnectionsBypassHelloDescription.get(),
                      descBypassHelloText);
+    layoutToggleCard(state.advancedConnectionsAllowInsecureTlsAutomationLabel.get(),
+                     labelAllowInsecureTlsAutomationText,
+                     state.advancedConnectionsAllowInsecureTlsAutomationToggle.get(),
+                     state.advancedConnectionsAllowInsecureTlsAutomationDescription.get(),
+                     descAllowInsecureTlsAutomationText);
     layoutEditCard(state.advancedConnectionsHelloTimeoutLabel.get(),
                    labelHelloTimeoutText,
                    state.advancedConnectionsHelloTimeoutFrame.get(),
@@ -852,6 +880,8 @@ void AdvancedPane::Refresh(HWND /*host*/, PreferencesDialogState& state) noexcep
 {
     const auto& connections = GetConnectionsSettingsOrDefault(state.workingSettings);
     PrefsUi::SetTwoStateToggleState(state.advancedConnectionsBypassHelloToggle, state.theme.systemHighContrast, connections.bypassWindowsHello);
+    PrefsUi::SetTwoStateToggleState(
+        state.advancedConnectionsAllowInsecureTlsAutomationToggle, state.theme.systemHighContrast, connections.allowInsecureTlsInAutomation);
     if (state.advancedConnectionsHelloTimeoutEdit)
     {
         std::wstring text;
@@ -1379,7 +1409,9 @@ bool AdvancedPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT 
 
     if (notifyCode == BN_CLICKED)
     {
-        const bool isToggle = (commandId == IDC_PREFS_ADV_CONNECTIONS_BYPASS_HELLO_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_TOOLBAR_TOGGLE ||
+        const bool isToggle = (commandId == IDC_PREFS_ADV_CONNECTIONS_BYPASS_HELLO_TOGGLE ||
+                               commandId == IDC_PREFS_ADV_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION_TOGGLE ||
+                               commandId == IDC_PREFS_ADV_MONITOR_TOOLBAR_TOGGLE ||
                                commandId == IDC_PREFS_ADV_MONITOR_LINE_NUMBERS_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_ALWAYS_ON_TOP_TOGGLE ||
                                commandId == IDC_PREFS_ADV_MONITOR_SHOW_IDS_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_AUTO_SCROLL_TOGGLE ||
                                commandId == IDC_PREFS_ADV_MONITOR_FILTER_TEXT_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_FILTER_ERROR_TOGGLE ||
@@ -1414,6 +1446,21 @@ bool AdvancedPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT 
             }
 
             connections->bypassWindowsHello = toggledOn;
+            MaybeResetWorkingConnectionsSettingsIfEmpty(state.workingSettings);
+            SetDirty(GetParent(host), state);
+            Refresh(host, state);
+            return true;
+        }
+
+        if (commandId == IDC_PREFS_ADV_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION_TOGGLE)
+        {
+            auto* connections = EnsureWorkingConnectionsSettings(state.workingSettings);
+            if (! connections)
+            {
+                return true;
+            }
+
+            connections->allowInsecureTlsInAutomation = toggledOn;
             MaybeResetWorkingConnectionsSettingsIfEmpty(state.workingSettings);
             SetDirty(GetParent(host), state);
             Refresh(host, state);

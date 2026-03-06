@@ -18,6 +18,8 @@ A schema file is written next to it for reference:
 
 - `RedSalamander.settings.schema.json`
 
+For safe manual edits and concrete JSON examples, see: [Settings File & Advanced Configuration](SettingsFile.md)
+
 ## Reset to defaults
 
 1. Close RedSalamander.
@@ -40,9 +42,13 @@ A schema file is written next to it for reference:
 - Prefer [Connection Manager](Connections.md) instead of storing defaults in plugin settings.
 - If “Save password” is unchecked, the secret is kept session-only and you may be prompted again after restart.
 
-## S3 is read-only
+## S3 / S3 Table limitations
 
-The S3 and S3 Table file systems currently implement browsing and reading, but not uploads/deletes/renames.
+- `s3:` supports browsing, reading, uploading/overwriting objects, and deleting objects.
+- `s3:` does not support server-side rename/move, and deleting a virtual "folder" / prefix is not supported.
+- `s3table:` is browse/read only. It exposes tables as generated `*.table.json` documents.
+
+See: [S3 / S3 Table](S3AndS3Table.md)
 
 ## Debug build breaks in `d2d1debug3.dll` on exit
 

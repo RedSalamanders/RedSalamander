@@ -1941,6 +1941,11 @@ void ParseConnections(yyjson_val* root, Common::Settings::Settings& out)
         settings.bypassWindowsHello = yyjson_get_bool(v) != 0;
     }
 
+    if (yyjson_val* v = yyjson_obj_get(connections, "allowInsecureTlsInAutomation"); v && yyjson_is_bool(v))
+    {
+        settings.allowInsecureTlsInAutomation = yyjson_get_bool(v) != 0;
+    }
+
     const auto parseTimeoutValue = [&](yyjson_val* v, uint64_t defaultValue) noexcept -> uint64_t
     {
         if (! v)
@@ -3930,6 +3935,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                         [&](const Common::Settings::ConnectionProfile& profile) noexcept { return isProfilePersistable(profile); });
 
         const bool wroteConnections = hasProfilesToPersist || settings.connections->bypassWindowsHello != defaults.bypassWindowsHello ||
+                                      settings.connections->allowInsecureTlsInAutomation != defaults.allowInsecureTlsInAutomation ||
                                       settings.connections->windowsHelloReauthTimeoutMinute != defaults.windowsHelloReauthTimeoutMinute;
 
         if (wroteConnections)
@@ -3944,6 +3950,12 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             if (settings.connections->bypassWindowsHello != defaults.bypassWindowsHello)
             {
                 yyjson_mut_obj_add_bool(doc, connections, "bypassWindowsHello", settings.connections->bypassWindowsHello);
+            }
+
+            if (settings.connections->allowInsecureTlsInAutomation != defaults.allowInsecureTlsInAutomation)
+            {
+                yyjson_mut_obj_add_bool(
+                    doc, connections, "allowInsecureTlsInAutomation", settings.connections->allowInsecureTlsInAutomation);
             }
 
             if (settings.connections->windowsHelloReauthTimeoutMinute != defaults.windowsHelloReauthTimeoutMinute)

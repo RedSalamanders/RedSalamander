@@ -109,6 +109,8 @@ constexpr float kMetadataTextAlpha                = 0.55f;
 constexpr UINT kSwapChainBufferCount              = 2;
 constexpr UINT_PTR kOverlayTimerId                = 1;
 constexpr uint64_t kBusyOverlayDelayMs            = 300;
+constexpr uint64_t kOperationInfoOverlayAutoDismissMs = 1800;
+constexpr uint64_t kOverlayTimerRetryMs               = 120;
 
 bool ConfirmNonRevertableFileOperation(HWND owner,
                                        [[maybe_unused]] IFileSystem* fileSystem,

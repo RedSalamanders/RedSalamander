@@ -1769,6 +1769,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
         return hr;
     }
 
+    const unsigned int requestedConcurrency = std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
+
     const std::wstring sourceDisplay      = BuildDisplayPath(_protocol, sourcePath);
     const std::wstring destinationDisplay = BuildDisplayPath(_protocol, destinationPath);
 
@@ -1822,7 +1824,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
                     EnsureTrailingSlash(destinationResolved.remotePath),
                     EnsureTrailingSlashDisplay(destinationDisplay),
                     flags,
-                    std::min(sourceResolved.connection.effectiveCopyMoveMaxConcurrency, destinationResolved.connection.effectiveCopyMoveMaxConcurrency),
+                    requestedConcurrency,
                     progress,
                     nullptr);
             }
@@ -1877,6 +1879,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
         return hr;
     }
 
+    const unsigned int requestedConcurrency = std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
+
     const std::wstring sourceDisplay      = BuildDisplayPath(_protocol, sourcePath);
     const std::wstring destinationDisplay = BuildDisplayPath(_protocol, destinationPath);
 
@@ -1907,8 +1911,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
 
     if (CanServerSideRename(sourceResolved.connection, destinationResolved.connection))
     {
+        FilesInformationCurl::Entry sourceInfo{};
+        hr = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
         const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
-        if (! isSelfRename)
+        if (SUCCEEDED(hr) && ! isSelfRename)
         {
             hr = EnsureOverwriteTargetForRename(sourceResolved.connection, destinationResolved.remotePath, allowOverwrite);
         }
@@ -1939,7 +1945,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                         EnsureTrailingSlash(destinationResolved.remotePath),
                         EnsureTrailingSlashDisplay(destinationDisplay),
                         flags,
-                        std::min(sourceResolved.connection.effectiveCopyMoveMaxConcurrency, destinationResolved.connection.effectiveCopyMoveMaxConcurrency),
+                        requestedConcurrency,
                         progress,
                         nullptr);
                     if (SUCCEEDED(hr))
@@ -2116,8 +2122,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
     }
     else
     {
+        FilesInformationCurl::Entry sourceInfo{};
+        hr = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
         const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
-        if (! isSelfRename)
+        if (SUCCEEDED(hr) && ! isSelfRename)
         {
             hr = EnsureOverwriteTargetForRename(sourceResolved.connection, destinationResolved.remotePath, allowOverwrite);
         }
@@ -2179,8 +2187,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
     const std::wstring destinationDisplayRoot = EnsureTrailingSlashDisplay(BuildDisplayPath(_protocol, destinationFolder));
     DirectoryEntryCache entryCache;
 
-    unsigned int requestedConcurrency = std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
-    requestedConcurrency              = std::min(requestedConcurrency, std::clamp(destinationResolved.connection.effectiveCopyMoveMaxConcurrency, 1u, 8u));
+    const unsigned int requestedConcurrency = std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
 
     struct CopyTask
     {
@@ -2201,6 +2208,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
 
     std::atomic<unsigned long> completedCount{0};
     std::atomic<long> firstFailure{S_OK};
+    std::atomic<bool> hadItemFailure{false};
 
     const auto recordFailure = [&](HRESULT failureHr) noexcept
     {
@@ -2212,6 +2220,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
     {
         if (! sourcePaths[index] || sourcePaths[index][0] == L'\0')
         {
+            hadItemFailure.store(true, std::memory_order_release);
             recordFailure(E_INVALIDARG);
             if (! continueOnError)
             {
@@ -2250,6 +2259,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
 
         if (FAILED(itemHr))
         {
+            hadItemFailure.store(true, std::memory_order_release);
             recordFailure(itemHr);
 
             const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
@@ -2270,8 +2280,6 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
 
             continue;
         }
-
-        requestedConcurrency = std::min(requestedConcurrency, std::clamp(sourceResolved.connection.effectiveCopyMoveMaxConcurrency, 1u, 8u));
 
         CopyTask task{};
         task.index                  = index;
@@ -2357,6 +2365,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
 
         if (FAILED(itemHr))
         {
+            hadItemFailure.store(true, std::memory_order_release);
             recordFailure(itemHr);
             if (! continueOnError || NormalizeCancellation(itemHr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
             {
@@ -2399,6 +2408,16 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
     }
 
     const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+    if (progress.internalCancel.load(std::memory_order_acquire))
+    {
+        return FAILED(failureHr) ? failureHr : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (continueOnError && hadItemFailure.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
     return FAILED(failureHr) ? failureHr : S_OK;
 }
 
@@ -2449,8 +2468,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
     const std::wstring destinationDisplayRoot = EnsureTrailingSlashDisplay(BuildDisplayPath(_protocol, destinationFolder));
     const bool allowOverwrite                 = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
 
-    unsigned int requestedConcurrency = std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
-    requestedConcurrency              = std::min(requestedConcurrency, std::clamp(destinationResolved.connection.effectiveCopyMoveMaxConcurrency, 1u, 8u));
+    const unsigned int requestedConcurrency = std::clamp(settings.copyMoveMaxConcurrency, 1u, 8u);
 
     struct MoveTask
     {
@@ -2472,6 +2490,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
 
     std::atomic<unsigned long> completedCount{0};
     std::atomic<long> firstFailure{S_OK};
+    std::atomic<bool> hadItemFailure{false};
 
     const auto recordFailure = [&](HRESULT failureHr) noexcept
     {
@@ -2485,6 +2504,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
     {
         if (! sourcePaths[index] || sourcePaths[index][0] == L'\0')
         {
+            hadItemFailure.store(true, std::memory_order_release);
             recordFailure(E_INVALIDARG);
             if (! continueOnError)
             {
@@ -2520,14 +2540,12 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
         if (SUCCEEDED(itemHr))
         {
             canServerSideRename = CanServerSideRename(sourceResolved.connection, destinationResolved.connection);
-            if (! canServerSideRename)
-            {
-                itemHr = entryCache.GetEntryInfoCached(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
-            }
+            itemHr               = entryCache.GetEntryInfoCached(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
         }
 
         if (FAILED(itemHr))
         {
+            hadItemFailure.store(true, std::memory_order_release);
             recordFailure(itemHr);
 
             const unsigned long done = completedCount.fetch_add(1u, std::memory_order_acq_rel) + 1u;
@@ -2548,8 +2566,6 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
 
             continue;
         }
-
-        requestedConcurrency = std::min(requestedConcurrency, std::clamp(sourceResolved.connection.effectiveCopyMoveMaxConcurrency, 1u, 8u));
 
         MoveTask task{};
         task.index                  = index;
@@ -2661,6 +2677,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
 
         if (FAILED(itemHr))
         {
+            hadItemFailure.store(true, std::memory_order_release);
             recordFailure(itemHr);
             if (! continueOnError || NormalizeCancellation(itemHr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
             {
@@ -2703,6 +2720,16 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
     }
 
     const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+    if (progress.internalCancel.load(std::memory_order_acquire))
+    {
+        return FAILED(failureHr) ? failureHr : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (continueOnError && hadItemFailure.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
     return FAILED(failureHr) ? failureHr : S_OK;
 }
 
@@ -2998,9 +3025,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
 
     const bool allowOverwrite  = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
     const bool continueOnError = HasFlag(flags, FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+    DirectoryEntryCache entryCache;
 
     std::atomic<HRESULT> firstFailure{S_OK};
     std::atomic<unsigned long> completedCount{0};
+    std::atomic<bool> hadItemFailure{false};
 
     const auto recordFailure = [&](HRESULT failure) noexcept
     {
@@ -3073,6 +3102,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
                     itemHr = ResolveLocation(_protocol, settings, source, _hostConnections.get(), true, sourceResolved);
                     if (SUCCEEDED(itemHr))
                     {
+                        FilesInformationCurl::Entry sourceInfo{};
+                        itemHr = entryCache.GetEntryInfoCached(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
+                    }
+                    if (SUCCEEDED(itemHr))
+                    {
                         ResolvedLocation destinationResolved{};
                         itemHr = ResolveLocation(_protocol, settings, dest, _hostConnections.get(), true, destinationResolved);
                         if (SUCCEEDED(itemHr))
@@ -3101,6 +3135,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
 
         if (FAILED(itemHr))
         {
+            hadItemFailure.store(true, std::memory_order_release);
             recordFailure(itemHr);
             if (! continueOnError || NormalizeCancellation(itemHr) == HRESULT_FROM_WIN32(ERROR_CANCELLED))
             {
@@ -3124,5 +3159,15 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
     GetSharedCopyMoveJobScheduler().WaitJob(job);
 
     const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
+    if (progress.internalCancel.load(std::memory_order_acquire))
+    {
+        return FAILED(failureHr) ? failureHr : HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+
+    if (continueOnError && hadItemFailure.load(std::memory_order_acquire))
+    {
+        return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+    }
+
     return FAILED(failureHr) ? failureHr : S_OK;
 }

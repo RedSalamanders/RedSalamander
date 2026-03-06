@@ -9,6 +9,8 @@ RedSalamander includes four remote virtual file systems:
 
 They are implemented by a single plugin DLL: `Plugins/FileSystemCurl/FileSystemCurl.dll`.
 
+For S3 and S3 Table, see: [S3 / S3 Table](S3AndS3Table.md)
+
 ## Recommended: use Connection Manager (secure secrets)
 
 Instead of embedding passwords in URIs or storing defaults in plain text plugin settings, prefer the host-owned **Connection Manager**:
@@ -16,6 +18,7 @@ Instead of embedding passwords in URIs or storing defaults in plain text plugin 
 - Open it from **Commands → Connections Manager…**
 - Navigate to a saved connection by name:
   - `nav:<connectionName>`
+  - `nav://<connectionName>`
   - `@conn:<connectionName>`
 
 See: [Connections](Connections.md)
@@ -48,6 +51,7 @@ Examples:
 - `imap://user@example.com/INBOX/`
 - `ftp:/pub/` *(after configuring plugin defaults)*
 - `nav:MySftpServer` *(saved connection profile)*
+- `nav://MySftpServer` *(same profile, alternate form)*
 - `sftp://@conn/MySftpServer/var/log/`
 
 ## Plugin settings (plain-text defaults)
@@ -56,6 +60,7 @@ Open **View → Preferences… → Plugins** → select the desired file system 
 
 - `defaultHost`, `defaultPort`, `defaultUser`, `defaultPassword`, `defaultBasePath`
 - Timeouts: `connectTimeoutMs`, `operationTimeoutMs`
+- Concurrency: `copyMoveMaxConcurrency`, `deleteMaxConcurrency`
 - FTP-only: `ftpUseEpsv`
 - SFTP/SCP: SSH key paths (`sshPrivateKey`, `sshPublicKey`), passphrase, `sshKnownHosts`
 - IMAP: `ignoreSslTrust` and mailbox prefix via `defaultBasePath`

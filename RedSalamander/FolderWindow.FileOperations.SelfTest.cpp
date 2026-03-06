@@ -24,6 +24,7 @@
 #include <algorithm>
 #include <array>
 #include <atomic>
+#include <charconv>
 #include <chrono>
 #include <cstring>
 #include <cwctype>
@@ -35,6 +36,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <vector>
 
@@ -54,6 +56,7 @@
 #include "FolderWindow.FileOperations.Popup.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.h"
+#include "ConnectionProfileUtils.h"
 #include "HostServices.h"
 #include "SplashScreen.h"
 #include "WindowMessages.h"
@@ -214,6 +217,7 @@ struct SelfTestState
 
     wil::com_ptr<IFileSystem> fs7z;
     wil::com_ptr<IInformations> info7z;
+    std::string config7zOriginal;
 
     std::vector<std::wstring> dummyPaths;
 
@@ -539,6 +543,64 @@ bool SetPluginConfiguration(IInformations* info, std::string_view configUtf8) no
     return SUCCEEDED(hr);
 }
 
+std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wchar_t* path, std::string_view key) noexcept
+{
+    if (! io || ! path || key.empty())
+    {
+        return std::nullopt;
+    }
+
+    const char* jsonUtf8 = nullptr;
+    const HRESULT hr     = io->GetItemProperties(path, &jsonUtf8);
+    if (FAILED(hr) || ! jsonUtf8)
+    {
+        return std::nullopt;
+    }
+
+    std::string_view json(jsonUtf8);
+    const std::string needle = std::format("\"key\":\"{}\"", key);
+    const size_t keyPos      = json.find(needle);
+    if (keyPos == std::string_view::npos)
+    {
+        return std::nullopt;
+    }
+
+    const size_t valuePos = json.find("\"value\":\"", keyPos + needle.size());
+    if (valuePos == std::string_view::npos)
+    {
+        return std::nullopt;
+    }
+
+    const size_t begin = valuePos + std::string_view("\"value\":\"").size();
+    const size_t end   = json.find('"', begin);
+    if (end == std::string_view::npos || end < begin)
+    {
+        return std::nullopt;
+    }
+
+    return std::string(json.substr(begin, end - begin));
+}
+
+std::optional<uint32_t> TryGetPropertyFieldUInt32(IFileSystemIO* io, const wchar_t* path, std::string_view key) noexcept
+{
+    const auto valueOpt = TryGetPropertyFieldValue(io, path, key);
+    if (! valueOpt.has_value())
+    {
+        return std::nullopt;
+    }
+
+    uint32_t parsed = 0;
+    const char* begin = valueOpt->c_str();
+    const char* end   = begin + valueOpt->size();
+    const std::from_chars_result conv = std::from_chars(begin, end, parsed);
+    if (conv.ec != std::errc{} || conv.ptr != end)
+    {
+        return std::nullopt;
+    }
+
+    return parsed;
+}
+
 void PerformCleanup(SelfTestState& state) noexcept
 {
     if (state.fileOps)
@@ -553,6 +615,10 @@ void PerformCleanup(SelfTestState& state) noexcept
     if (! state.dummyConfigOriginal.empty())
     {
         static_cast<void>(SetPluginConfiguration(state.infoDummy.get(), state.dummyConfigOriginal));
+    }
+    if (! state.config7zOriginal.empty())
+    {
+        static_cast<void>(SetPluginConfiguration(state.info7z.get(), state.config7zOriginal));
     }
 
     if (state.connectionsBackedUp)
@@ -592,6 +658,7 @@ void PerformCleanup(SelfTestState& state) noexcept
     state.infoDummy.reset();
     state.fs7z.reset();
     state.info7z.reset();
+    state.config7zOriginal.clear();
     state.dummyPaths.clear();
     state.completedTasks.clear();
     state.tempRoot.clear();
@@ -605,9 +672,9 @@ void PerformCleanup(SelfTestState& state) noexcept
 bool LoadPlugins(SelfTestState& state) noexcept
 {
     FileSystemPluginManager& mgr = FileSystemPluginManager::GetInstance();
-    static_cast<void>(mgr.TestPlugin(kPluginIdLocal));
-    static_cast<void>(mgr.TestPlugin(kPluginIdDummy));
-    static_cast<void>(mgr.TestPlugin(kPluginId7z));
+    static_cast<void>(mgr.EnablePlugin(kPluginIdLocal, g_settings));
+    static_cast<void>(mgr.EnablePlugin(kPluginIdDummy, g_settings));
+    static_cast<void>(mgr.EnablePlugin(kPluginId7z, g_settings));
 
     for (const auto& p : mgr.GetPlugins())
     {
@@ -882,24 +949,6 @@ void RemoveConnectionProfileByName(std::wstring_view name) noexcept
                 items.end());
 }
 
-[[nodiscard]] const Common::Settings::ConnectionProfile* FindConnectionProfileByName(std::wstring_view name) noexcept
-{
-    if (! g_settings.connections || name.empty())
-    {
-        return nullptr;
-    }
-
-    for (const Common::Settings::ConnectionProfile& profile : g_settings.connections->items)
-    {
-        if (! profile.name.empty() && EqualsIgnoreCase(profile.name, name))
-        {
-            return &profile;
-        }
-    }
-
-    return nullptr;
-}
-
 [[nodiscard]] std::wstring TrimWhitespace(std::wstring_view text) noexcept
 {
     size_t start = 0;
@@ -980,7 +1029,7 @@ struct PhaseCheckResult
     const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
     const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
 
-    const Common::Settings::ConnectionProfile* profile = FindConnectionProfileByName(profileName);
+    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
     if (! profile)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
@@ -1114,7 +1163,7 @@ struct PhaseCheckResult
     const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
     const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
 
-    const Common::Settings::ConnectionProfile* profile = FindConnectionProfileByName(profileName);
+    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
     if (! profile)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
@@ -1274,6 +1323,26 @@ size_t CountFiles(const std::filesystem::path& dir) noexcept
         }
     }
     return count;
+}
+
+bool WaitForFileCount(const std::filesystem::path& dir, size_t expectedCount, ULONGLONG timeoutMs) noexcept
+{
+    const ULONGLONG startTick = GetTickCount64();
+    for (;;)
+    {
+        if (CountFiles(dir) == expectedCount)
+        {
+            return true;
+        }
+
+        const ULONGLONG nowTick = GetTickCount64();
+        if ((nowTick - startTick) >= timeoutMs)
+        {
+            return CountFiles(dir) == expectedCount;
+        }
+
+        ::Sleep(50);
+    }
 }
 
 bool WriteTestFile(const std::filesystem::path& path, size_t bytes) noexcept
@@ -2191,6 +2260,46 @@ struct WatchCallback final : public IFileSystemDirectoryWatchCallback
     }
 };
 
+struct DummyReentrantWatchCallback final : public IFileSystemDirectoryWatchCallback
+{
+    IFileSystemDirectoryWatch* watch = nullptr;
+    std::wstring watchedPath;
+    std::atomic<uint64_t> callbackCount{0};
+    std::atomic<uint64_t> changeCount{0};
+    std::atomic<bool> unwatchAttempted{false};
+    std::atomic<HRESULT> unwatchHr{S_OK};
+    std::atomic<uint64_t> renamedOldCount{0};
+    std::atomic<uint64_t> renamedNewCount{0};
+
+    HRESULT STDMETHODCALLTYPE FileSystemDirectoryChanged(const FileSystemDirectoryChangeNotification* notification, void* /*cookie*/) noexcept override
+    {
+        callbackCount.fetch_add(1u, std::memory_order_relaxed);
+        if (notification != nullptr && notification->changes != nullptr)
+        {
+            changeCount.fetch_add(notification->changeCount, std::memory_order_relaxed);
+            for (unsigned long index = 0; index < notification->changeCount; ++index)
+            {
+                if (notification->changes[index].action == FILESYSTEM_DIR_CHANGE_RENAMED_OLD_NAME)
+                {
+                    renamedOldCount.fetch_add(1u, std::memory_order_relaxed);
+                }
+                else if (notification->changes[index].action == FILESYSTEM_DIR_CHANGE_RENAMED_NEW_NAME)
+                {
+                    renamedNewCount.fetch_add(1u, std::memory_order_relaxed);
+                }
+            }
+        }
+
+        bool expected = false;
+        if (watch != nullptr && unwatchAttempted.compare_exchange_strong(expected, true, std::memory_order_acq_rel))
+        {
+            unwatchHr.store(watch->UnwatchDirectory(watchedPath.c_str()), std::memory_order_release);
+        }
+
+        return S_OK;
+    }
+};
+
 } // namespace
 
 void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOptions& options) noexcept
@@ -2213,6 +2322,7 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     state.fsDummy.reset();
     state.infoDummy.reset();
     state.dummyConfigOriginal.clear();
+    state.config7zOriginal.clear();
     state.connectionsBackedUp = false;
     state.connectionsOriginal.reset();
     state.connOverrideProfileName.clear();
@@ -2364,6 +2474,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             if (state.dummyConfigOriginal.empty())
             {
                 static_cast<void>(BackupPluginConfiguration(state.infoDummy.get(), state.dummyConfigOriginal));
+            }
+            if (state.config7zOriginal.empty())
+            {
+                static_cast<void>(BackupPluginConfiguration(state.info7z.get(), state.config7zOriginal));
             }
 
             if (! state.connectionsBackedUp)
@@ -3567,6 +3681,121 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return true;
             }
 
+            wil::com_ptr<IFileSystemDirectoryWatch> dummyWatch;
+            const HRESULT hrDummyWatch = state.fsDummy ? state.fsDummy->QueryInterface(__uuidof(IFileSystemDirectoryWatch), dummyWatch.put_void()) : E_NOINTERFACE;
+            if (FAILED(hrDummyWatch) || ! dummyWatch)
+            {
+                Fail(std::format(L"Dummy filesystem does not expose IFileSystemDirectoryWatch (hr=0x{:08X}).", static_cast<unsigned long>(hrDummyWatch)));
+                return true;
+            }
+
+            wil::com_ptr<IFileSystemIO> dummyIo;
+            const HRESULT hrDummyIo = state.fsDummy->QueryInterface(IID_PPV_ARGS(dummyIo.addressof()));
+            if (FAILED(hrDummyIo) || ! dummyIo)
+            {
+                Fail(std::format(L"Dummy filesystem does not expose IFileSystemIO for watch validation (hr=0x{:08X}).", static_cast<unsigned long>(hrDummyIo)));
+                return true;
+            }
+
+            const std::wstring dummyWatchDir = std::format(L"/watch-selftest-{}", GetTickCount64());
+            const std::wstring fileA         = std::format(L"{}/original.txt", dummyWatchDir);
+            const std::wstring fileB         = std::format(L"{}/renamed.txt", dummyWatchDir);
+            const std::wstring fileC         = std::format(L"{}/final.txt", dummyWatchDir);
+            const auto cleanupDummyWatch = wil::scope_exit([&]() noexcept
+            {
+                static_cast<void>(dummyWatch->UnwatchDirectory(dummyWatchDir.c_str()));
+                static_cast<void>(state.fsDummy->DeleteItem(dummyWatchDir.c_str(),
+                                                           static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                           nullptr,
+                                                           nullptr,
+                                                           nullptr));
+            });
+
+            if (! EnsureDummyFolderExists(state.fsDummy.get(), dummyWatchDir))
+            {
+                Fail(L"Dummy watcher regression: failed to create watch directory.");
+                return true;
+            }
+
+            {
+                wil::com_ptr<IFileWriter> writer;
+                const HRESULT hrWriter = dummyIo->CreateFileWriter(fileA.c_str(), FILESYSTEM_FLAG_NONE, writer.put());
+                if (FAILED(hrWriter) || ! writer)
+                {
+                    Fail(std::format(L"Dummy watcher regression: CreateFileWriter failed (hr=0x{:08X}).", static_cast<unsigned long>(hrWriter)));
+                    return true;
+                }
+
+                static constexpr char kDummyText[] = "watch";
+                unsigned long written              = 0;
+                const HRESULT hrWrite = writer->Write(kDummyText, static_cast<unsigned long>(sizeof(kDummyText) - 1u), &written);
+                if (FAILED(hrWrite) || written != (sizeof(kDummyText) - 1u) || FAILED(writer->Commit()))
+                {
+                    Fail(std::format(L"Dummy watcher regression: failed to seed file (write hr=0x{:08X} written={}).",
+                                     static_cast<unsigned long>(hrWrite),
+                                     written));
+                    return true;
+                }
+            }
+
+            DummyReentrantWatchCallback callbackA{};
+            callbackA.watch       = dummyWatch.get();
+            callbackA.watchedPath = dummyWatchDir;
+
+            const HRESULT hrWatchA         = dummyWatch->WatchDirectory(dummyWatchDir.c_str(), &callbackA, nullptr);
+            const HRESULT hrDuplicateWatch = dummyWatch->WatchDirectory(dummyWatchDir.c_str(), &callbackA, nullptr);
+            if (FAILED(hrWatchA))
+            {
+                Fail(std::format(L"Dummy watcher regression: WatchDirectory failed (hr=0x{:08X}).", static_cast<unsigned long>(hrWatchA)));
+                return true;
+            }
+            if (hrDuplicateWatch != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS))
+            {
+                Fail(std::format(L"Dummy watcher regression: duplicate WatchDirectory should return ERROR_ALREADY_EXISTS, got 0x{:08X}.",
+                                 static_cast<unsigned long>(hrDuplicateWatch)));
+                return true;
+            }
+
+            const HRESULT hrRename1 = state.fsDummy->RenameItem(fileA.c_str(), fileB.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+            if (FAILED(hrRename1))
+            {
+                Fail(std::format(L"Dummy watcher regression: first RenameItem failed (hr=0x{:08X}).", static_cast<unsigned long>(hrRename1)));
+                return true;
+            }
+
+            if (callbackA.callbackCount.load(std::memory_order_acquire) != 1u)
+            {
+                Fail(std::format(L"Dummy watcher regression: reentrant watcher expected exactly one callback, got {}.",
+                                 callbackA.callbackCount.load(std::memory_order_acquire)));
+                return true;
+            }
+            if (FAILED(callbackA.unwatchHr.load(std::memory_order_acquire)))
+            {
+                Fail(std::format(L"Dummy watcher regression: reentrant UnwatchDirectory failed (hr=0x{:08X}).",
+                                 static_cast<unsigned long>(callbackA.unwatchHr.load(std::memory_order_acquire))));
+                return true;
+            }
+            if (callbackA.renamedOldCount.load(std::memory_order_acquire) == 0u || callbackA.renamedNewCount.load(std::memory_order_acquire) == 0u)
+            {
+                Fail(L"Dummy watcher regression: reentrant watcher did not receive rename old/new notifications.");
+                return true;
+            }
+
+            const uint64_t callbackACountBefore = callbackA.callbackCount.load(std::memory_order_acquire);
+
+            const HRESULT hrRename2 = state.fsDummy->RenameItem(fileB.c_str(), fileC.c_str(), FILESYSTEM_FLAG_NONE, nullptr, nullptr, nullptr);
+            if (FAILED(hrRename2))
+            {
+                Fail(std::format(L"Dummy watcher regression: second RenameItem failed (hr=0x{:08X}).", static_cast<unsigned long>(hrRename2)));
+                return true;
+            }
+
+            if (callbackA.callbackCount.load(std::memory_order_acquire) != callbackACountBefore)
+            {
+                Fail(L"Dummy watcher regression: reentrant watcher received callbacks after UnwatchDirectory returned.");
+                return true;
+            }
+
             NextStep(state, SelfTestState::Step::Phase7_LargeDirectoryEnumeration);
             return false;
         }
@@ -3834,9 +4063,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 return false;
             }
 
-            const size_t dstCount = CountFiles(dstDir);
-            if (dstCount != expectedCount)
+            // Task completion can beat a final directory enumeration refresh on disk by a short window.
+            if (! WaitForFileCount(dstDir, expectedCount, 5'000ull))
             {
+                const size_t dstCount = CountFiles(dstDir);
                 Fail(std::format(L"Copy output mismatch: expected {} files, got {}.", expectedCount, dstCount));
                 return true;
             }
@@ -4188,7 +4418,6 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return false;
                 });
             };
-
             const size_t expectedSelectionCount = static_cast<size_t>(kFileCount + 2);
 
             if (state.stepState == 1)
@@ -6249,6 +6478,9 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
             const std::wstring dummyCopyRoot                = L"/bridge-copy";
             const std::wstring dummyMoveRoot                = L"/bridge-move";
+            const std::wstring dummyCancelRoot              = L"/bridge-cancel";
+            constexpr size_t kBridgeCancelFileBytes         = 8ull * 1024ull * 1024ull;
+            constexpr uint64_t kBridgeCancelSpeedLimitBytes = 1ull * 1024ull * 1024ull;
             constexpr size_t kBridgeConcurrencyFileBytes    = 2ull * 1024ull * 1024ull;
             constexpr uint64_t kBridgeConcurrencySpeedLimit = 1ull * 1024ull * 1024ull;
             constexpr int kBridgeConcurrencyFileCount       = 4;
@@ -6569,6 +6801,127 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
+                if (! EnsureDummyFolderExists(state.fsDummy.get(), dummyCancelRoot))
+                {
+                    Fail(L"Failed to create dummy folder for bridge cancel atomicity test.");
+                    return true;
+                }
+
+                const std::filesystem::path cancelSource = srcDir / L"bridge_cancel.bin";
+                if (! WriteTestFile(cancelSource, kBridgeCancelFileBytes))
+                {
+                    Fail(L"Failed to write bridge cancel atomicity test file.");
+                    return true;
+                }
+
+                const std::wstring dummyCancelPath = std::wstring(dummyCancelRoot) + L"/bridge_cancel.bin";
+                unsigned long cancelAttrs          = 0;
+                if (SUCCEEDED(dummyIo->GetAttributes(dummyCancelPath.c_str(), &cancelAttrs)))
+                {
+                    const HRESULT hrDel = state.fsDummy->DeleteItem(dummyCancelPath.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_NONE), nullptr, nullptr, nullptr);
+                    if (FAILED(hrDel))
+                    {
+                        Fail(L"Failed to clear existing bridge cancel test file in dummy filesystem.");
+                        return true;
+                    }
+                }
+
+                const FileSystemFlags cancelFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_NONE);
+                state.taskB                       = StartFileOperationAndGetId(state.fileOps,
+                                                         FILESYSTEM_COPY,
+                                                         FolderWindow::Pane::Left,
+                                                         FolderWindow::Pane::Right,
+                                                         state.fsLocal,
+                                                         {cancelSource},
+                                                         std::filesystem::path(dummyCancelRoot),
+                                                         cancelFlags,
+                                                         false,
+                                                         kBridgeCancelSpeedLimitBytes,
+                                                         FolderWindow::FileOperationState::ExecutionMode::PerItem,
+                                                         false,
+                                                         state.fsDummy);
+                if (! state.taskB.has_value())
+                {
+                    Fail(L"Failed to start bridge cancel atomicity copy test (local -> dummy).");
+                    return true;
+                }
+
+                state.markerTick = 0;
+                state.stepState  = 6;
+                return false;
+            }
+
+            if (state.stepState == 6)
+            {
+                const auto it = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
+                if (it != state.completedTasks.end())
+                {
+                    Fail(L"Bridge cancel atomicity copy completed before cancel could be requested.");
+                    return true;
+                }
+
+                FolderWindow::FileOperationState::Task* task = state.taskB.has_value() ? state.fileOps->FindTask(state.taskB.value()) : nullptr;
+                if (task && task->HasEnteredOperation())
+                {
+                    uint64_t completedBytes = 0;
+                    {
+                        std::scoped_lock lock(task->_progressMutex);
+                        completedBytes = task->_progressItemCompletedBytes;
+                    }
+
+                    if (state.markerTick == 0)
+                    {
+                        state.markerTick = nowTick;
+                    }
+
+                    // Cancel as soon as we see any progress, or after a short delay to ensure the transfer has started.
+                    if (completedBytes != 0 || (nowTick >= state.markerTick && (nowTick - state.markerTick) > 500ull))
+                    {
+                        task->RequestCancel();
+                        state.stepState = 7;
+                    }
+                }
+                return false;
+            }
+
+            if (state.stepState == 7)
+            {
+                const auto it = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
+                if (it == state.completedTasks.end())
+                {
+                    return false;
+                }
+
+                const HRESULT hr = it->second.hr;
+                if (hr != HRESULT_FROM_WIN32(ERROR_CANCELLED) && hr != E_ABORT)
+                {
+                    Fail(std::format(L"Bridge cancel atomicity copy unexpectedly completed: 0x{:08X}.", static_cast<unsigned long>(hr)));
+                    return true;
+                }
+
+                wil::com_ptr<IFileSystemIO> dummyIo;
+                if (FAILED(state.fsDummy->QueryInterface(IID_PPV_ARGS(dummyIo.addressof()))) || ! dummyIo)
+                {
+                    Fail(L"Dummy filesystem does not support IFileSystemIO for bridge cancel atomicity validation.");
+                    return true;
+                }
+
+                const std::wstring dummyCancelPath = std::wstring(dummyCancelRoot) + L"/bridge_cancel.bin";
+                unsigned long cancelAttrs          = 0;
+                if (SUCCEEDED(dummyIo->GetAttributes(dummyCancelPath.c_str(), &cancelAttrs)))
+                {
+                    Fail(L"Bridge cancel atomicity test produced a final destination file on cancel.");
+                    return true;
+                }
+
+                const std::filesystem::path cancelSource = srcDir / L"bridge_cancel.bin";
+                std::error_code ec;
+                if (! std::filesystem::exists(cancelSource, ec))
+                {
+                    Fail(L"Bridge cancel atomicity test unexpectedly removed the source file.");
+                    return true;
+                }
+
                 std::vector<std::filesystem::path> concurrencySources;
                 concurrencySources.reserve(static_cast<size_t>(kBridgeConcurrencyFileCount));
                 for (int i = 0; i < kBridgeConcurrencyFileCount; ++i)
@@ -6602,11 +6955,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
-                state.stepState = 6;
+                state.markerTick = 0;
+                state.stepState  = 8;
                 return false;
             }
 
-            if (state.stepState == 6)
+            if (state.stepState == 8)
             {
                 FolderWindow::FileOperationState::Task* task = state.taskC.has_value() ? state.fileOps->FindTask(state.taskC.value()) : nullptr;
                 if (task && task->HasStarted())
@@ -8362,6 +8716,12 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     return true;
                 }
 
+                if (state.info7z && ! SetPluginConfiguration(state.info7z.get(), R"json({"debugIndexBuildDelayMs":200})json"))
+                {
+                    Fail(L"Phase15_FileSystem7zReadSeekSmoke failed to set debug 7z configuration.");
+                    return true;
+                }
+
                 wil::com_ptr<IFileSystemInitialize> init;
                 const HRESULT hrQI = state.fs7z->QueryInterface(IID_PPV_ARGS(init.addressof()));
                 if (FAILED(hrQI) || ! init)
@@ -8390,6 +8750,52 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 if (FAILED(hrIO) || ! io)
                 {
                     Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke missing IFileSystemIO. hr=0x{:08X}", static_cast<unsigned long>(hrIO)));
+                    return true;
+                }
+
+                constexpr size_t kParallelReaders = 6u;
+                std::vector<std::thread> threads;
+                threads.reserve(kParallelReaders);
+                std::atomic<long> firstThreadFailure{S_OK};
+                for (size_t index = 0; index < kParallelReaders; ++index)
+                {
+                    threads.emplace_back([&]() noexcept
+                    {
+                        wil::com_ptr<IFilesInformation> info;
+                        const HRESULT hr = state.fs7z->ReadDirectoryInfo(L"/", info.put());
+                        if (FAILED(hr) || ! info)
+                        {
+                            long expected = S_OK;
+                            static_cast<void>(firstThreadFailure.compare_exchange_strong(
+                                expected, static_cast<long>(FAILED(hr) ? hr : E_FAIL), std::memory_order_acq_rel));
+                        }
+                    });
+                }
+                for (auto& thread : threads)
+                {
+                    if (thread.joinable())
+                    {
+                        thread.join();
+                    }
+                }
+
+                const HRESULT threadHr = static_cast<HRESULT>(firstThreadFailure.load(std::memory_order_acquire));
+                if (FAILED(threadHr))
+                {
+                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke parallel ReadDirectoryInfo failed. hr=0x{:08X}",
+                                     static_cast<unsigned long>(threadHr)));
+                    return true;
+                }
+
+                const auto buildCountOpt = TryGetPropertyFieldUInt32(io.get(), L"/", "debugIndexBuildCount");
+                if (! buildCountOpt.has_value())
+                {
+                    Fail(L"Phase15_FileSystem7zReadSeekSmoke missing debugIndexBuildCount property.");
+                    return true;
+                }
+                if (buildCountOpt.value() != 1u)
+                {
+                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke expected debugIndexBuildCount=1, got {}.", buildCountOpt.value()));
                     return true;
                 }
 

@@ -312,42 +312,75 @@ void FolderView::OnTimerMessage(UINT_PTR timerId)
         return;
     }
 
-    if (! _pendingBusyOverlay)
-    {
-        StopOverlayTimer();
-        return;
-    }
-
     const uint64_t now = GetTickCount64();
 
-    const uint64_t currentGeneration = _enumerationGeneration.load(std::memory_order_acquire);
-    if (_pendingBusyOverlay->generation != currentGeneration)
+    if (_operationInfoOverlayAutoDismissDueTick != 0 && now >= _operationInfoOverlayAutoDismissDueTick)
     {
-        _pendingBusyOverlay.reset();
-        StopOverlayTimer();
-        return;
-    }
-
-    const uint64_t dueTick = _pendingBusyOverlay->startTick + kBusyOverlayDelayMs;
-    if (now >= dueTick)
-    {
-        bool canShow = false;
+        bool shouldDismiss = false;
         {
             std::lock_guard lock(_errorOverlayMutex);
-            canShow = ! _errorOverlay.has_value();
+            if (_errorOverlay && _errorOverlay->kind == ErrorOverlayKind::Operation && _errorOverlay->severity == OverlaySeverity::Information && ! _errorOverlay->closable &&
+                ! _errorOverlay->blocksInput)
+            {
+                shouldDismiss = true;
+            }
         }
 
-        if (canShow)
+        _operationInfoOverlayAutoDismissDueTick = 0;
+        if (shouldDismiss)
         {
-            ShowBusyOverlayNow(_pendingBusyOverlay->folder);
+            DismissAlertOverlay();
         }
+    }
 
-        _pendingBusyOverlay.reset();
+    uint64_t nextDueTick = 0;
+    if (_pendingBusyOverlay)
+    {
+        const uint64_t currentGeneration = _enumerationGeneration.load(std::memory_order_acquire);
+        if (_pendingBusyOverlay->generation != currentGeneration)
+        {
+            _pendingBusyOverlay.reset();
+        }
+        else
+        {
+            const uint64_t dueTick = _pendingBusyOverlay->startTick + kBusyOverlayDelayMs;
+            if (now >= dueTick)
+            {
+                bool canShow = false;
+                {
+                    std::lock_guard lock(_errorOverlayMutex);
+                    canShow = ! _errorOverlay.has_value();
+                }
+
+                if (canShow)
+                {
+                    ShowBusyOverlayNow(_pendingBusyOverlay->folder);
+                    _pendingBusyOverlay.reset();
+                }
+                else
+                {
+                    nextDueTick = now + kOverlayTimerRetryMs;
+                }
+            }
+            else
+            {
+                nextDueTick = dueTick;
+            }
+        }
+    }
+
+    if (_operationInfoOverlayAutoDismissDueTick != 0 && (nextDueTick == 0 || _operationInfoOverlayAutoDismissDueTick < nextDueTick))
+    {
+        nextDueTick = _operationInfoOverlayAutoDismissDueTick;
+    }
+
+    if (nextDueTick == 0)
+    {
         StopOverlayTimer();
         return;
     }
 
-    const uint64_t remaining     = dueTick > now ? (dueTick - now) : 1u;
+    const uint64_t remaining     = nextDueTick > now ? (nextDueTick - now) : kOverlayTimerRetryMs;
     const UINT pendingIntervalMs = static_cast<UINT>(std::clamp<uint64_t>(remaining, 1u, 1000u));
     StartOverlayTimer(std::max(pendingIntervalMs, 1u));
 }
@@ -542,6 +575,11 @@ void FolderView::ClearErrorOverlay(ErrorOverlayKind kind) const
         }
     }
 
+    if (cleared)
+    {
+        _operationInfoOverlayAutoDismissDueTick = 0;
+    }
+
     if (cleared && _hWnd)
     {
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
@@ -560,6 +598,9 @@ void FolderView::ClearErrorOverlay(ErrorOverlayKind kind) const
 void FolderView::ShowAlertOverlay(
     ErrorOverlayKind kind, OverlaySeverity severity, std::wstring title, std::wstring message, HRESULT hr, bool closable, bool blocksInput)
 {
+    const bool wantsAutoDismiss =
+        kind == ErrorOverlayKind::Operation && severity == OverlaySeverity::Information && ! closable && ! blocksInput;
+
     ErrorOverlayState overlay{};
     overlay.kind        = kind;
     overlay.severity    = severity;
@@ -571,15 +612,33 @@ void FolderView::ShowAlertOverlay(
     overlay.blocksInput = blocksInput;
 
     bool changed = false;
+    bool suppressed = false;
     {
         std::lock_guard lock(_errorOverlayMutex);
-        if (! _errorOverlay || _errorOverlay->kind != overlay.kind || _errorOverlay->severity != overlay.severity || _errorOverlay->hr != overlay.hr ||
-            _errorOverlay->title != overlay.title || _errorOverlay->message != overlay.message || _errorOverlay->closable != overlay.closable ||
-            _errorOverlay->blocksInput != overlay.blocksInput)
+        if (wantsAutoDismiss && _errorOverlay && _errorOverlay->blocksInput)
+        {
+            suppressed = true;
+        }
+
+        const bool samePresentation =
+            _errorOverlay && _errorOverlay->kind == overlay.kind && _errorOverlay->severity == overlay.severity && _errorOverlay->hr == overlay.hr &&
+            _errorOverlay->title == overlay.title && _errorOverlay->message == overlay.message && _errorOverlay->closable == overlay.closable &&
+            _errorOverlay->blocksInput == overlay.blocksInput;
+        if (! suppressed && (! samePresentation || wantsAutoDismiss))
         {
             _errorOverlay = overlay;
             changed       = true;
         }
+    }
+
+    if (wantsAutoDismiss && ! suppressed)
+    {
+        _operationInfoOverlayAutoDismissDueTick = overlay.startTick + kOperationInfoOverlayAutoDismissMs;
+        StartOverlayTimer(static_cast<UINT>(std::clamp<uint64_t>(kOperationInfoOverlayAutoDismissMs, 1u, 1000u)));
+    }
+    else
+    {
+        _operationInfoOverlayAutoDismissDueTick = 0;
     }
 
     if (changed && _hWnd)
@@ -603,6 +662,11 @@ void FolderView::DismissAlertOverlay()
             _errorOverlay.reset();
             cleared = true;
         }
+    }
+
+    if (cleared)
+    {
+        _operationInfoOverlayAutoDismissDueTick = 0;
     }
 
     if (cleared && _alertOverlay)

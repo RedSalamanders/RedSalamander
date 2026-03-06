@@ -585,16 +585,34 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
 
         if (callback != nullptr)
         {
-            callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, path, cookie);
+            const HRESULT progressHr =
+                callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, path, cookie);
+            if (FAILED(progressHr))
+            {
+                result->status = progressHr;
+                return result->status;
+            }
+
             BOOL cancel = FALSE;
-            callback->DirectorySizeShouldCancel(&cancel, cookie);
+            const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
+            if (FAILED(cancelHr))
+            {
+                result->status = cancelHr;
+                return result->status;
+            }
             if (cancel)
             {
                 result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 return result->status;
             }
 
-            callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+            const HRESULT finalProgressHr =
+                callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+            if (FAILED(finalProgressHr))
+            {
+                result->status = finalProgressHr;
+                return result->status;
+            }
         }
 
         result->status = S_OK;
@@ -635,10 +653,21 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         if (entryThreshold || timeThreshold)
         {
             lastProgressTime = now;
-            callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
+            const HRESULT progressHr = callback->DirectorySizeProgress(
+                scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
+            if (FAILED(progressHr))
+            {
+                result->status = progressHr;
+                return false;
+            }
 
             BOOL cancel = FALSE;
-            callback->DirectorySizeShouldCancel(&cancel, cookie);
+            const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
+            if (FAILED(cancelHr))
+            {
+                result->status = cancelHr;
+                return false;
+            }
             if (cancel)
             {
                 result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -766,6 +795,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         {
             ++result->fileCount;
             const uint64_t fileSize = (static_cast<uint64_t>(currentData.nFileSizeHigh) << 32) | static_cast<uint64_t>(currentData.nFileSizeLow);
+            if ((std::numeric_limits<uint64_t>::max)() - result->totalBytes < fileSize)
+            {
+                result->status = HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+                return result->status;
+            }
             result->totalBytes += fileSize;
         }
 
@@ -796,7 +830,12 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
     // Final progress report.
     if (callback != nullptr)
     {
-        callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+        const HRESULT progressHr =
+            callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+        if (FAILED(progressHr))
+        {
+            result->status = progressHr;
+        }
     }
 
     return result->status;

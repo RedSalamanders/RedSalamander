@@ -1602,29 +1602,32 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
     const bool recursive    = HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE);
     uint64_t scannedEntries = 0;
 
-    auto shouldCancel = [&]() noexcept -> bool
+    auto shouldCancel = [&](bool& cancelRequested) noexcept -> HRESULT
     {
+        cancelRequested = false;
         if (! callback)
         {
-            return false;
+            return S_OK;
         }
 
         BOOL cancel = FALSE;
-        if (FAILED(callback->DirectorySizeShouldCancel(&cancel, cookie)))
+        const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
+        if (FAILED(cancelHr))
         {
-            return false;
+            return cancelHr;
         }
-        return cancel != FALSE;
+        cancelRequested = cancel != FALSE;
+        return S_OK;
     };
 
-    auto reportProgress = [&](const wchar_t* currentPath) noexcept
+    auto reportProgress = [&](const wchar_t* currentPath) noexcept -> HRESULT
     {
         if (! callback)
         {
-            return;
+            return S_OK;
         }
 
-        callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
+        return callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
     };
 
     if ((rootInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
@@ -1633,22 +1636,45 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
         result->totalBytes = rootInfo.sizeBytes;
         result->fileCount  = 1;
 
-        reportProgress(path);
-        if (shouldCancel())
+        HRESULT hr = reportProgress(path);
+        if (FAILED(hr))
         {
-            result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-            reportProgress(nullptr);
+            result->status = hr;
             return result->status;
         }
 
-        reportProgress(nullptr);
+        bool cancelRequested = false;
+        hr                   = shouldCancel(cancelRequested);
+        if (FAILED(hr))
+        {
+            result->status = hr;
+            return result->status;
+        }
+        if (cancelRequested)
+        {
+            result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            static_cast<void>(reportProgress(nullptr));
+            return result->status;
+        }
+
+        hr = reportProgress(nullptr);
+        if (FAILED(hr))
+        {
+            result->status = hr;
+        }
         return result->status;
     }
 
     std::function<HRESULT(const std::wstring&)> scan;
     scan = [&](const std::wstring& directory) noexcept -> HRESULT
     {
-        if (shouldCancel())
+        bool cancelRequested = false;
+        HRESULT cancelHr     = shouldCancel(cancelRequested);
+        if (FAILED(cancelHr))
+        {
+            return cancelHr;
+        }
+        if (cancelRequested)
         {
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         }
@@ -1689,12 +1715,20 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
             else
             {
                 ++result->fileCount;
+                if ((std::numeric_limits<uint64_t>::max)() - result->totalBytes < entry.sizeBytes)
+                {
+                    return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+                }
                 result->totalBytes += entry.sizeBytes;
             }
 
             if ((scannedEntries % 128u) == 0u)
             {
-                reportProgress(childPath.c_str());
+                hr = reportProgress(childPath.c_str());
+                if (FAILED(hr))
+                {
+                    return hr;
+                }
             }
         }
 
@@ -1706,6 +1740,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
     hr                          = NormalizeCancellation(hr);
     result->status              = hr;
 
-    reportProgress(nullptr);
+    const HRESULT finalProgressHr = reportProgress(nullptr);
+    if (FAILED(finalProgressHr))
+    {
+        result->status = finalProgressHr;
+    }
     return result->status;
 }

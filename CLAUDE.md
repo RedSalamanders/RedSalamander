@@ -121,9 +121,9 @@ Detailed patterns in `.github/skills/`:
 ## Technology Stack
 
 - **Language**: C++23, Unicode UTF-16
-- **Build**: Visual Studio 2022+, MSBuild, vcpkg
+- **Build**: Visual Studio 2026 / toolset v145, MSBuild, vcpkg
 - **Graphics**: Direct2D, DirectWrite, Direct3D 11, DXGI
-- **Platform**: Windows 10/11 x64 only
+- **Platform**: Windows 10/11, x64 and ARM64
 - **Key Dependencies**: WIL, fmt, yyjson, libraw, libjpeg-turbo, 7zip, pe-parse
 
 ## Specifications

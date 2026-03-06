@@ -5258,10 +5258,21 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
         if (entryThreshold || timeThreshold)
         {
             lastProgressTime = now;
-            callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
+            const HRESULT progressHr = callback->DirectorySizeProgress(
+                scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
+            if (FAILED(progressHr))
+            {
+                result->status = progressHr;
+                return false;
+            }
 
             BOOL cancel = FALSE;
-            callback->DirectorySizeShouldCancel(&cancel, cookie);
+            const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
+            if (FAILED(cancelHr))
+            {
+                result->status = cancelHr;
+                return false;
+            }
             if (cancel)
             {
                 result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -5296,14 +5307,36 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
         result->totalBytes = rootFileSize;
         result->fileCount  = 1;
 
-        if (! maybeReportProgress(normalized.c_str()))
-        {
-            return result->status;
-        }
-
         if (callback != nullptr)
         {
-            callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+            const HRESULT progressHr =
+                callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, normalized.c_str(), cookie);
+            if (FAILED(progressHr))
+            {
+                result->status = progressHr;
+                return result->status;
+            }
+
+            BOOL cancel            = FALSE;
+            const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
+            if (FAILED(cancelHr))
+            {
+                result->status = cancelHr;
+                return result->status;
+            }
+            if (cancel)
+            {
+                result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                return result->status;
+            }
+
+            const HRESULT finalProgressHr =
+                callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+            if (FAILED(finalProgressHr))
+            {
+                result->status = finalProgressHr;
+                return result->status;
+            }
         }
 
         return result->status;
@@ -5399,6 +5432,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
             else
             {
                 ++result->fileCount;
+                if ((std::numeric_limits<uint64_t>::max)() - result->totalBytes < child.sizeBytes)
+                {
+                    result->status = HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+                    return result->status;
+                }
                 result->totalBytes += child.sizeBytes;
             }
 
@@ -5421,7 +5459,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
                 if (callback != nullptr)
                 {
                     BOOL cancel = FALSE;
-                    callback->DirectorySizeShouldCancel(&cancel, cookie);
+                    const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
+                    if (FAILED(cancelHr))
+                    {
+                        result->status = cancelHr;
+                        return result->status;
+                    }
                     if (cancel)
                     {
                         result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
@@ -5445,7 +5488,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
     // Final progress report.
     if (callback != nullptr)
     {
-        callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+        const HRESULT progressHr =
+            callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+        if (FAILED(progressHr))
+        {
+            result->status = progressHr;
+        }
     }
 
     return result->status;
@@ -6024,8 +6072,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
     {
         return normalizeHr;
     }
-    const std::wstring sourceText      = normalizedSource.wstring();
-    const std::wstring destinationText = normalizedDestination.wstring();
+    const std::wstring sourceText            = normalizedSource.wstring();
+    const std::wstring destinationText       = normalizedDestination.wstring();
+    const std::wstring sourceParentText      = normalizedSource.parent_path().wstring();
+    const std::wstring destinationParentText = normalizedDestination.parent_path().wstring();
+    const std::wstring sourceLeafText        = normalizedSource.filename().wstring();
+    const std::wstring destinationLeafText   = normalizedDestination.filename().wstring();
 
     HRESULT hr = CheckCancel(context);
     if (FAILED(hr))
@@ -6096,6 +6148,23 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
     if (FAILED(itemHr))
     {
         return itemHr;
+    }
+
+    if (sourceParentText == destinationParentText)
+    {
+        if (sourceLeafText != destinationLeafText)
+        {
+            NotifyDirectoryWatchers(destinationParentText, sourceLeafText, destinationLeafText);
+        }
+        else
+        {
+            NotifyDirectoryWatchers(destinationParentText, destinationLeafText, FILESYSTEM_DIR_CHANGE_MODIFIED);
+        }
+    }
+    else
+    {
+        NotifyDirectoryWatchers(sourceParentText, sourceLeafText, FILESYSTEM_DIR_CHANGE_REMOVED);
+        NotifyDirectoryWatchers(destinationParentText, destinationLeafText, FILESYSTEM_DIR_CHANGE_ADDED);
     }
 
     context.completedItems = 1;

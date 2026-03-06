@@ -137,6 +137,7 @@ public:
     void CommandSelectionGoToNextSelectedName(Pane pane);
     void CommandChangeCase(Pane pane);
     void CommandOpenCommandShell(Pane pane);
+    void CommandCopyPathAndFileNameAsText(Pane pane);
     void PrepareForNetworkDriveDisconnect(Pane pane);
     void SwapPanes();
 
@@ -470,6 +471,7 @@ private:
         uint64_t selectionFolderBytes    = 0;
         std::wstring statusSelectionText;
         std::wstring statusSortText;
+        std::wstring statusSecurityText;
         uint32_t statusFocusHueDegrees = 0;
         bool sortIndicatorHot          = false;
 

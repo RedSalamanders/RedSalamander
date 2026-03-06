@@ -11,6 +11,7 @@
 #include "Helpers.h"
 #include "HostServices.h"
 #include "PlugInterfaces/Factory.h"
+#include "SessionState.h"
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -261,6 +262,7 @@ HRESULT FileSystemPluginManager::SetActivePlugin(std::wstring_view pluginId, Com
 
     _activePluginId                            = entry->id;
     settings.plugins.currentFileSystemPluginId = entry->id;
+    SessionState::UpdateActiveFileSystemPluginIdsAndOperation({entry->id}, SessionState::OperationKind::Browse);
     return S_OK;
 }
 

@@ -696,6 +696,32 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
     return a.value == b.value;
 }
 
+[[nodiscard]] bool AreEquivalentConnectionProfile(const Common::Settings::ConnectionProfile& a,
+                                                  const Common::Settings::ConnectionProfile& b) noexcept
+{
+    return a.id == b.id && a.name == b.name && a.pluginId == b.pluginId && a.host == b.host && a.port == b.port &&
+           a.initialPath == b.initialPath && a.userName == b.userName && a.authMode == b.authMode && a.savePassword == b.savePassword &&
+           a.requireWindowsHello == b.requireWindowsHello && AreEquivalentJsonValue(a.extra, b.extra);
+}
+
+[[nodiscard]] bool AreEquivalentConnectionsSettings(const std::optional<Common::Settings::ConnectionsSettings>& a,
+                                                    const std::optional<Common::Settings::ConnectionsSettings>& b) noexcept
+{
+    if (! a.has_value() && ! b.has_value())
+    {
+        return true;
+    }
+
+    const Common::Settings::ConnectionsSettings defaults{};
+    const Common::Settings::ConnectionsSettings& left  = a.has_value() ? a.value() : defaults;
+    const Common::Settings::ConnectionsSettings& right = b.has_value() ? b.value() : defaults;
+
+    return left.bypassWindowsHello == right.bypassWindowsHello &&
+           left.allowInsecureTlsInAutomation == right.allowInsecureTlsInAutomation &&
+           left.windowsHelloReauthTimeoutMinute == right.windowsHelloReauthTimeoutMinute && left.items.size() == right.items.size() &&
+           std::ranges::equal(left.items, right.items, [](const auto& lhs, const auto& rhs) noexcept { return AreEquivalentConnectionProfile(lhs, rhs); });
+}
+
 [[nodiscard]] bool AreEquivalentPluginsDisabledIds(const std::vector<std::wstring>& a, const std::vector<std::wstring>& b) noexcept
 {
     if (a.size() != b.size())
@@ -885,6 +911,10 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
             return true;
         }
     }
+    if (! AreEquivalentConnectionsSettings(state.baselineSettings.connections, state.workingSettings.connections))
+    {
+        return true;
+    }
     if (state.baselineSettings.extensions.openWithViewerByExtension != state.workingSettings.extensions.openWithViewerByExtension)
     {
         return true;
@@ -1040,6 +1070,10 @@ namespace
         {
             merged.fileOperations = state.workingSettings.fileOperations;
         }
+    }
+    if (! AreEquivalentConnectionsSettings(state.baselineSettings.connections, state.workingSettings.connections))
+    {
+        merged.connections = state.workingSettings.connections;
     }
     if (state.baselineSettings.extensions.openWithViewerByExtension != state.workingSettings.extensions.openWithViewerByExtension)
     {
@@ -1866,6 +1900,9 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
     setVisible(state.advancedConnectionsBypassHelloLabel, showAdvanced);
     setVisible(state.advancedConnectionsBypassHelloToggle, showAdvanced);
     setVisible(state.advancedConnectionsBypassHelloDescription, showAdvanced);
+    setVisible(state.advancedConnectionsAllowInsecureTlsAutomationLabel, showAdvanced);
+    setVisible(state.advancedConnectionsAllowInsecureTlsAutomationToggle, showAdvanced);
+    setVisible(state.advancedConnectionsAllowInsecureTlsAutomationDescription, showAdvanced);
     setVisible(state.advancedConnectionsHelloTimeoutLabel, showAdvanced);
     setVisible(state.advancedConnectionsHelloTimeoutFrame, showAdvanced);
     setVisible(state.advancedConnectionsHelloTimeoutEdit, showAdvanced);

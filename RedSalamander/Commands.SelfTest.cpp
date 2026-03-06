@@ -2676,6 +2676,33 @@ void AutomateSelectionMaskDialog(
         state.Require(clipText.find(L"c.txt") != std::wstring::npos, L"Expected clipboard text to contain c.txt.");
     }
 
+    {
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_COPY_PATH_AND_FILE_NAME, 0), 0);
+
+        std::wstring clipText;
+        if (OpenClipboard(mainWindow) != 0)
+        {
+            const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
+            HANDLE hText              = GetClipboardData(CF_UNICODETEXT);
+            if (hText)
+            {
+                const auto* text = static_cast<const wchar_t*>(GlobalLock(hText));
+                if (text)
+                {
+                    clipText.assign(text);
+                    GlobalUnlock(hText);
+                }
+            }
+        }
+
+        const std::wstring aFull = (root / L"a.txt").native();
+        const std::wstring cFull = (root / L"c.txt").native();
+        state.Require(! clipText.empty(), L"Expected Copy Path + File Name to place Unicode text in the clipboard.");
+        state.Require(clipText.find(aFull) != std::wstring::npos, L"Expected clipboard text to contain full path for a.txt.");
+        state.Require(clipText.find(cFull) != std::wstring::npos, L"Expected clipboard text to contain full path for c.txt.");
+    }
+
     // Rename c.txt to change casing before restore-selection, so restore must fall back to case-insensitive match.
     {
         const std::filesystem::path tempName = root / L"c_case_tmp.txt";

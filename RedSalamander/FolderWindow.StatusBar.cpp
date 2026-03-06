@@ -1,10 +1,18 @@
 #include "FolderWindowInternal.h"
 
 #include "FluentIcons.h"
+#include "ConnectionProfileUtils.h"
+#include "SettingsStore.h"
 
 namespace
 {
 constexpr int kStatusBarFocusLineHeightDip = 2;
+constexpr int kStatusBarSecurityMinPartWidthDip = 90;
+constexpr int kStatusBarSecurityMaxPartWidthDip = 240;
+
+constexpr int kStatusBarPartSelection = 0;
+constexpr int kStatusBarPartSecurity  = 1;
+constexpr int kStatusBarPartSort      = 2;
 
 wil::unique_hfont g_statusBarIconFont;
 UINT g_statusBarIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
@@ -34,6 +42,76 @@ bool g_statusBarIconFontValid = false;
     }
 
     return g_statusBarIconFontValid;
+}
+
+[[nodiscard]] int MeasureTextWidthPx(HWND hwnd, HFONT font, std::wstring_view text) noexcept
+{
+    if (! hwnd || ! font || text.empty())
+    {
+        return 0;
+    }
+
+    auto hdc = wil::GetDC(hwnd);
+    if (! hdc)
+    {
+        return 0;
+    }
+
+    auto old = wil::SelectObject(hdc.get(), font);
+
+    SIZE sz{};
+    if (! GetTextExtentPoint32W(hdc.get(), text.data(), static_cast<int>(std::min<size_t>(text.size(), static_cast<size_t>(INT_MAX))), &sz))
+    {
+        return 0;
+    }
+
+    return std::max(0L, sz.cx);
+}
+
+void UpdateStatusBarParts(HWND hwnd) noexcept
+{
+    if (! hwnd)
+    {
+        return;
+    }
+
+    RECT client{};
+    if (! GetClientRect(hwnd, &client))
+    {
+        return;
+    }
+
+    const int width = std::max(0L, client.right - client.left);
+    const int dpi   = std::max(1, static_cast<int>(GetDpiForWindow(hwnd)));
+
+    const int minSortPartWidth = MulDiv(kStatusBarSortMinPartWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
+    const int sortWidth        = std::clamp(minSortPartWidth, 0, width);
+
+    int securityWidth = 0;
+    const auto* securityText = reinterpret_cast<const std::wstring*>(GetPropW(hwnd, kStatusBarSecurityTextProp));
+    if (securityText && ! securityText->empty() && width > sortWidth)
+    {
+        HFONT textFont = reinterpret_cast<HFONT>(SendMessageW(hwnd, WM_GETFONT, 0, 0));
+        if (! textFont)
+        {
+            textFont = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+        }
+
+        const int paddingX = std::max(1, MulDiv(kStatusBarSortPaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI));
+        const int textPx   = MeasureTextWidthPx(hwnd, textFont, *securityText);
+
+        const int desired  = textPx + 2 * paddingX;
+        const int minWidth = MulDiv(kStatusBarSecurityMinPartWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
+        const int maxWidth = MulDiv(kStatusBarSecurityMaxPartWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
+        securityWidth      = std::clamp(desired, minWidth, maxWidth);
+        securityWidth      = std::clamp(securityWidth, 0, width - sortWidth);
+    }
+
+    const int selectionRight = std::max(0, width - sortWidth - securityWidth);
+    const int securityRight  = std::max(selectionRight, width - sortWidth);
+
+    const int parts[] = {selectionRight, securityRight, -1};
+    SendMessageW(hwnd, SB_SETPARTS, 3, reinterpret_cast<LPARAM>(parts));
 }
 
 [[nodiscard]] bool ContainsPrivateUseAreaGlyph(std::wstring_view text) noexcept
@@ -188,8 +266,9 @@ void PaintStatusBar(HWND hwnd, HDC hdc) noexcept
     }
 
     const auto* selectionText = reinterpret_cast<const std::wstring*>(GetPropW(hwnd, kStatusBarSelectionTextProp));
+    const auto* securityText  = reinterpret_cast<const std::wstring*>(GetPropW(hwnd, kStatusBarSecurityTextProp));
     const auto* sortText      = reinterpret_cast<const std::wstring*>(GetPropW(hwnd, kStatusBarSortTextProp));
-    if (! selectionText || ! sortText)
+    if (! selectionText || ! securityText || ! sortText)
     {
         return;
     }
@@ -206,20 +285,22 @@ void PaintStatusBar(HWND hwnd, HDC hdc) noexcept
 
     RECT part0{};
     RECT part1{};
-    const bool has0 = SendMessageW(hwnd, SB_GETRECT, 0, reinterpret_cast<LPARAM>(&part0)) != 0;
-    const bool has1 = SendMessageW(hwnd, SB_GETRECT, 1, reinterpret_cast<LPARAM>(&part1)) != 0;
+    RECT part2{};
+    const bool has0 = SendMessageW(hwnd, SB_GETRECT, kStatusBarPartSelection, reinterpret_cast<LPARAM>(&part0)) != 0;
+    const bool has1 = SendMessageW(hwnd, SB_GETRECT, kStatusBarPartSecurity, reinterpret_cast<LPARAM>(&part1)) != 0;
+    const bool has2 = SendMessageW(hwnd, SB_GETRECT, kStatusBarPartSort, reinterpret_cast<LPARAM>(&part2)) != 0;
 
     wil::unique_hbrush bgBrush(CreateSolidBrush(theme.menu.background));
     FillRect(hdc, &client, bgBrush.get());
 
     const bool hot = GetPropW(hwnd, kStatusBarSortHotProp) != nullptr;
-    if (hot && has1)
+    if (hot && has2)
     {
         const COLORREF hotBg = BlendColor(theme.menu.background, theme.menu.selectionBg, 1, 2);
         wil::unique_hbrush hotBrush(CreateSolidBrush(hotBg));
-        FillRect(hdc, &part1, hotBrush.get());
+        FillRect(hdc, &part2, hotBrush.get());
 
-        RECT frame              = part1;
+        RECT frame              = part2;
         const int dpi           = GetDeviceCaps(hdc, LOGPIXELSX);
         const int focusLineSize = GetStatusBarFocusLineHeightPx(dpi, client);
         frame.top               = std::min(frame.bottom, frame.top + focusLineSize);
@@ -239,12 +320,38 @@ void PaintStatusBar(HWND hwnd, HDC hdc) noexcept
         FillRect(hdc, &topLine, lineBrush.get());
     }
 
+    const bool showSecurity = ! securityText->empty();
+    if (showSecurity && has1)
+    {
+        RECT securityRect = part1;
+        securityRect.top  = std::min(securityRect.bottom, securityRect.top + focusLinePx);
+
+        if (securityRect.bottom > securityRect.top)
+        {
+            const COLORREF securityBg = BlendColor(theme.menu.background, theme.menu.selectionBg, 1, 5);
+            wil::unique_hbrush securityBrush(CreateSolidBrush(securityBg));
+            FillRect(hdc, &securityRect, securityBrush.get());
+        }
+    }
+
     if (has0)
     {
         RECT sepRect  = part0;
         sepRect.left  = std::max(part0.left, part0.right - 1);
         sepRect.right = part0.right;
         sepRect.top   = std::min(part0.bottom, part0.top + focusLinePx);
+        if (sepRect.right > sepRect.left && sepRect.bottom > sepRect.top)
+        {
+            wil::unique_hbrush sepBrush(CreateSolidBrush(theme.menu.separator));
+            FillRect(hdc, &sepRect, sepBrush.get());
+        }
+    }
+    if (has1)
+    {
+        RECT sepRect  = part1;
+        sepRect.left  = std::max(part1.left, part1.right - 1);
+        sepRect.right = part1.right;
+        sepRect.top   = std::min(part1.bottom, part1.top + focusLinePx);
         if (sepRect.right > sepRect.left && sepRect.bottom > sepRect.top)
         {
             wil::unique_hbrush sepBrush(CreateSolidBrush(theme.menu.separator));
@@ -275,35 +382,47 @@ void PaintStatusBar(HWND hwnd, HDC hdc) noexcept
     rc1.right = std::max(rc1.left, rc1.right - sortPaddingX);
     rc1.top   = std::min(rc1.bottom, rc1.top + focusLinePx);
 
+    RECT rc2  = has2 ? part2 : client;
+    rc2.left  = std::min(rc2.right, rc2.left + sortPaddingX);
+    rc2.right = std::max(rc2.left, rc2.right - sortPaddingX);
+    rc2.top   = std::min(rc2.bottom, rc2.top + focusLinePx);
+
     {
         auto oldFont = wil::SelectObject(hdc, textFont);
         SetTextColor(hdc, theme.menu.text);
         DrawTextW(hdc, selectionText->c_str(), static_cast<int>(selectionText->size()), &rc0, DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_LEFT);
     }
 
+    if (showSecurity)
+    {
+        auto oldFont = wil::SelectObject(hdc, textFont);
+        SetTextColor(hdc, theme.menu.text);
+        DrawTextW(hdc, securityText->c_str(), static_cast<int>(securityText->size()), &rc1, DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_CENTER);
+    }
+
     const bool sortUsesIcons = iconFontValid && g_statusBarIconFont && ContainsPrivateUseAreaGlyph(*sortText);
     const COLORREF sortColor = hot ? theme.menu.selectionText : theme.menu.text;
     if (sortUsesIcons && g_statusBarIconFont)
     {
-        PaintSortIndicatorGlyph(hdc, rc1, g_statusBarIconFont.get(), textFont, sortColor, *sortText);
+        PaintSortIndicatorGlyph(hdc, rc2, g_statusBarIconFont.get(), textFont, sortColor, *sortText);
     }
     else
     {
         auto oldFont = wil::SelectObject(hdc, textFont);
         SetTextColor(hdc, sortColor);
-        DrawTextW(hdc, sortText->c_str(), static_cast<int>(sortText->size()), &rc1, DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_RIGHT);
+        DrawTextW(hdc, sortText->c_str(), static_cast<int>(sortText->size()), &rc2, DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_RIGHT);
     }
 }
 
 bool StatusBarCanCustomPaint(HWND hwnd) noexcept
 {
     return GetPropW(hwnd, kStatusBarOwnerProp) != nullptr && GetPropW(hwnd, kStatusBarSelectionTextProp) != nullptr &&
-           GetPropW(hwnd, kStatusBarSortTextProp) != nullptr;
+           GetPropW(hwnd, kStatusBarSecurityTextProp) != nullptr && GetPropW(hwnd, kStatusBarSortTextProp) != nullptr;
 }
 
 void UpdateStatusBarSortHot(HWND hwnd, POINT pt) noexcept
 {
-    const bool hotNow = IsPointInStatusBarPart(hwnd, 1, pt);
+    const bool hotNow = IsPointInStatusBarPart(hwnd, kStatusBarPartSort, pt);
     const bool hotWas = GetPropW(hwnd, kStatusBarSortHotProp) != nullptr;
     if (hotNow == hotWas)
     {
@@ -358,7 +477,7 @@ LRESULT StatusBarOnSetCursor(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
     if (GetCursorPos(&screenPt))
     {
         ScreenToClient(hwnd, &screenPt);
-        if (IsPointInStatusBarPart(hwnd, 1, screenPt))
+        if (IsPointInStatusBarPart(hwnd, kStatusBarPartSort, screenPt))
         {
             SetCursor(LoadCursorW(nullptr, IDC_HAND));
             return TRUE;
@@ -390,16 +509,7 @@ LRESULT StatusBarOnSize(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
 
     if (StatusBarCanCustomPaint(hwnd))
     {
-        RECT client{};
-        if (GetClientRect(hwnd, &client) != 0)
-        {
-            const int width            = std::max(0L, client.right - client.left);
-            const int dpi              = static_cast<int>(GetDpiForWindow(hwnd));
-            const int minSortPartWidth = MulDiv(kStatusBarSortMinPartWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
-            const int clampedSortWidth = std::clamp(minSortPartWidth, 0, width);
-            const int parts[]          = {std::max(0, width - clampedSortWidth), -1};
-            SendMessageW(hwnd, SB_SETPARTS, 2, reinterpret_cast<LPARAM>(parts));
-        }
+        UpdateStatusBarParts(hwnd);
     }
 
     InvalidateRect(hwnd, nullptr, FALSE);
@@ -411,6 +521,7 @@ LRESULT StatusBarOnNcDestroy(HWND hwnd, WPARAM wParam, LPARAM lParam, UINT_PTR u
     RemovePropW(hwnd, kStatusBarSortHotProp);
     RemovePropW(hwnd, kStatusBarOwnerProp);
     RemovePropW(hwnd, kStatusBarSelectionTextProp);
+    RemovePropW(hwnd, kStatusBarSecurityTextProp);
     RemovePropW(hwnd, kStatusBarSortTextProp);
     RemovePropW(hwnd, kStatusBarFocusHueProp);
 #pragma warning(push)
@@ -670,22 +781,38 @@ void FolderWindow::UpdatePaneStatusBar(Pane pane)
     const bool useFluentIcons = EnsureStatusBarIconFont(_dpi, state.hStatusBar.get());
     state.statusSortText      = BuildSortIndicatorText(state.folderView.GetSortBy(), state.folderView.GetSortDirection(), useFluentIcons);
 
-    const int dpi              = static_cast<int>(_dpi);
-    const int minSortPartWidth = MulDiv(kStatusBarSortMinPartWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
+    state.statusSecurityText.clear();
+    if (_settings)
+    {
+        if (const auto connName = ConnectionProfileUtils::TryParseConnNameFromPluginPath(state.currentPath); connName.has_value())
+        {
+            if (const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(_settings, *connName);
+                profile && ConnectionProfileUtils::ConnectionProfileUsesInsecureTls(*profile))
+            {
+                state.statusSecurityText = LoadStringResource(nullptr, IDS_STATUS_INSECURE_TLS);
+            }
+        }
+    }
 
-    const int sortPartWidth = minSortPartWidth;
-
-    const int clampedSortWidth = std::clamp(sortPartWidth, 0, width);
-    const int parts[]          = {std::max(0, width - clampedSortWidth), -1};
-    SendMessageW(state.hStatusBar.get(), SB_SETPARTS, 2, reinterpret_cast<LPARAM>(parts));
+    UpdateStatusBarParts(state.hStatusBar.get());
 
     SendMessageW(state.hStatusBar.get(), SB_SETTEXTW, MAKEWPARAM(0, SBT_NOBORDERS), reinterpret_cast<LPARAM>(state.statusSelectionText.c_str()));
-    SendMessageW(state.hStatusBar.get(), SB_SETTEXTW, MAKEWPARAM(1, SBT_NOBORDERS), reinterpret_cast<LPARAM>(state.statusSortText.c_str()));
+    SendMessageW(state.hStatusBar.get(), SB_SETTEXTW, MAKEWPARAM(1, SBT_NOBORDERS), reinterpret_cast<LPARAM>(state.statusSecurityText.c_str()));
+    SendMessageW(state.hStatusBar.get(), SB_SETTEXTW, MAKEWPARAM(2, SBT_NOBORDERS), reinterpret_cast<LPARAM>(state.statusSortText.c_str()));
+
+    {
+        std::wstring securityTip;
+        if (! state.statusSecurityText.empty())
+        {
+            securityTip = LoadStringResource(nullptr, IDS_TIP_STATUS_INSECURE_TLS);
+        }
+        SendMessageW(state.hStatusBar.get(), SB_SETTIPTEXTW, 1, reinterpret_cast<LPARAM>(securityTip.c_str()));
+    }
 
     const std::wstring sortTip = LoadStringResource(nullptr, IDS_TIP_STATUS_SORT);
     if (! sortTip.empty())
     {
-        SendMessageW(state.hStatusBar.get(), SB_SETTIPTEXTW, 1, reinterpret_cast<LPARAM>(sortTip.c_str()));
+        SendMessageW(state.hStatusBar.get(), SB_SETTIPTEXTW, 2, reinterpret_cast<LPARAM>(sortTip.c_str()));
     }
 
     InvalidateRect(state.hStatusBar.get(), nullptr, FALSE);

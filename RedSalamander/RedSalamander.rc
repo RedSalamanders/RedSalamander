@@ -221,7 +221,7 @@ BEGIN
         MENUITEM "Copy Path + Name as Text [todo]", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
         MENUITEM "Copy Name as Text [todo]",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
         MENUITEM "Copy Path as Text [todo]",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Copy Path + File Name as Text [todo]", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
+        MENUITEM "Copy Path + File Name as Text", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Select...",                           IDM_PANE_SELECTION_SELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "&Unselect...",                         IDM_PANE_SELECTION_UNSELECT_DIALOG,MFT_STRING,MFS_ENABLED
@@ -824,6 +824,13 @@ BEGIN
     IDS_CRASH_DETECTED_TITLE "Previous crash detected"
     IDS_CRASH_DETECTED_MESSAGE "A crash dump from a previous run was found.\r\n\r\nOpen the crash folder?"
     IDS_CRASH_DETECTED_MESSAGE_FMT "A crash dump from a previous run was written to:\r\n{}\r\n\r\nOpen the crash folder?"
+    IDS_CRASH_QUARANTINE_TITLE "Crash recovery"
+    IDS_CRASH_QUARANTINE_MESSAGE_FMT "The previous run crashed while the file-system plugin '{0}' was active.\r\n\r\nDisable this plugin to avoid repeated crashes?"
+    IDS_CRASH_QUARANTINE_MESSAGE_PLURAL_FMT "The previous run crashed while the following file-system plugins were active:\r\n{0}\r\n\r\nDisable these plugins to avoid repeated crashes?"
+    IDS_INSECURE_TLS_TITLE "Insecure TLS"
+    IDS_INSECURE_TLS_MESSAGE_FMT "You are enabling insecure TLS settings for connection '{0}'.\r\n\r\nThis may expose credentials and data in transit.\r\n\r\nContinue?"
+    IDS_STATUS_INSECURE_TLS "Insecure TLS"
+    IDS_TIP_STATUS_INSECURE_TLS "This connection is using insecure TLS settings."
     IDS_PREFS_PANES_HEADER_LEFT "Left pane"
     IDS_PREFS_PANES_HEADER_RIGHT "Right pane"
     IDS_PREFS_PANES_LABEL_DISPLAY "Display"
@@ -952,6 +959,9 @@ BEGIN
     IDS_PREFS_ADV_LABEL_CONNECTIONS_BYPASS_HELLO "Skip Windows Hello verification"
     IDS_PREFS_ADV_DESC_CONNECTIONS_BYPASS_HELLO "When enabled, Windows Hello verification is skipped even if a connection requires it. Intended for automation."
     IDS_PREFS_ADV_CHECK_CONNECTIONS_BYPASS_HELLO "Skip Windows Hello verification"
+    IDS_PREFS_ADV_LABEL_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION "Allow insecure TLS in automation"
+    IDS_PREFS_ADV_DESC_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION "When enabled, insecure TLS settings (certificate verification disabled or HTTPS disabled) are allowed during self-tests/automation. Default: off."
+    IDS_PREFS_ADV_CHECK_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION "Allow insecure TLS in automation"
     IDS_PREFS_ADV_LABEL_CONNECTIONS_HELLO_TIMEOUT "Windows Hello timeout (minutes)"
     IDS_PREFS_ADV_DESC_CONNECTIONS_HELLO_TIMEOUT "How long a successful Windows Hello verification is reused for a connection. 0 = re-ask every time."
     IDS_PREFS_ADV_HEADER_FILEOPS "File Operations"
@@ -1202,6 +1212,7 @@ BEGIN
     IDS_MSG_SELECTION_RESTORE_NO_SAVED                   "No saved selection."
     IDS_FMT_SELECTION_RESTORE_INCOMPLETE                 "Could not restore selection for some items:\r\n{0}{1}"
     IDS_MSG_SELECTION_RESTORE_FILTER_NOTE                "Some items may be hidden by the current filter."
+    IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED               "Copied {0:L} path{1} to clipboard."
     IDS_EMPTY_FOLDER_TITLE                               "Empty folder"
     IDS_EMPTY_FOLDER_FUN_1                               "😌\r\nNothing to see here. Yet."
     IDS_EMPTY_FOLDER_FUN_2                               "🧹\r\nAll clean. This folder is spotless."

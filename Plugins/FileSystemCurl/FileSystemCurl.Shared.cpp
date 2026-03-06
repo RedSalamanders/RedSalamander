@@ -1115,7 +1115,7 @@ namespace FileSystemCurlInternal
                              connectionNameText,
                              Utf16FromUtf8(out.connection.host),
                              Utf16FromUtf8(out.connection.user),
-                             connPath,
+                             Redaction::ForLog(connPath),
                              static_cast<unsigned long>(secretHr));
                 return secretHr;
             }
@@ -1129,7 +1129,7 @@ namespace FileSystemCurlInternal
                              out.connection.connectionId,
                              Utf16FromUtf8(out.connection.host),
                              Utf16FromUtf8(out.connection.user),
-                             connPath);
+                             Redaction::ForLog(connPath));
                 return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
             }
             if (secret.get()[0] == L'\0')
@@ -1140,7 +1140,7 @@ namespace FileSystemCurlInternal
                              out.connection.connectionId,
                              Utf16FromUtf8(out.connection.host),
                              Utf16FromUtf8(out.connection.user),
-                             connPath);
+                             Redaction::ForLog(connPath));
                 return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
             }
 
@@ -1154,7 +1154,7 @@ namespace FileSystemCurlInternal
                     out.connection.connectionId,
                     Utf16FromUtf8(out.connection.host),
                     Utf16FromUtf8(out.connection.user),
-                    connPath);
+                    Redaction::ForLog(connPath));
                 return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
             }
 
@@ -1225,7 +1225,7 @@ namespace FileSystemCurlInternal
                                  connectionNameText,
                                  Utf16FromUtf8(out.connection.host),
                                  Utf16FromUtf8(out.connection.user),
-                                 connPath,
+                                 Redaction::ForLog(connPath),
                                  static_cast<unsigned long>(secretHr));
                     return secretHr;
                 }
@@ -1239,7 +1239,7 @@ namespace FileSystemCurlInternal
                                  out.connection.connectionId,
                                  Utf16FromUtf8(out.connection.host),
                                  Utf16FromUtf8(out.connection.user),
-                                 connPath);
+                                 Redaction::ForLog(connPath));
                     return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
                 }
 
@@ -1255,7 +1255,7 @@ namespace FileSystemCurlInternal
                                      out.connection.connectionId,
                                      Utf16FromUtf8(out.connection.host),
                                      Utf16FromUtf8(out.connection.user),
-                                     connPath);
+                                     Redaction::ForLog(connPath));
                         return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
                     }
                 }
@@ -3301,7 +3301,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::SetConfiguration(const char* configura
     const auto connectTimeoutMs = TryGetJsonUInt(root, "connectTimeoutMs");
     if (connectTimeoutMs.has_value())
     {
-        _settings.connectTimeoutMs = static_cast<unsigned long>(std::min<uint64_t>(connectTimeoutMs.value(), (std::numeric_limits<unsigned long>::max)()));
+        const uint64_t raw = connectTimeoutMs.value();
+        if (raw >= 1u)
+        {
+            _settings.connectTimeoutMs = static_cast<unsigned long>(std::min<uint64_t>(raw, (std::numeric_limits<unsigned long>::max)()));
+        }
     }
 
     const auto operationTimeoutMs = TryGetJsonUInt(root, "operationTimeoutMs");

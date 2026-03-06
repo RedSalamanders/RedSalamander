@@ -18,6 +18,7 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "AppDataPaths.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "resource.h"
@@ -34,35 +35,9 @@ constexpr wchar_t kMarkerFileName[] = L"last_crash.txt";
 
 std::atomic<bool> g_installed{false};
 
-[[nodiscard]] std::filesystem::path GetLocalAppDataPath() noexcept
-{
-    wil::unique_cotaskmem_string localAppData;
-    const HRESULT hr = SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, localAppData.put());
-    if (SUCCEEDED(hr) && localAppData)
-    {
-        return std::filesystem::path(localAppData.get());
-    }
-
-    const DWORD required = GetEnvironmentVariableW(L"LOCALAPPDATA", nullptr, 0);
-    if (required == 0)
-    {
-        return {};
-    }
-
-    std::wstring buffer(static_cast<size_t>(required), L'\0');
-    const DWORD written = GetEnvironmentVariableW(L"LOCALAPPDATA", buffer.data(), required);
-    if (written == 0 || written >= required)
-    {
-        return {};
-    }
-
-    buffer.resize(static_cast<size_t>(written));
-    return std::filesystem::path(buffer);
-}
-
 [[nodiscard]] std::filesystem::path GetCrashDirectory() noexcept
 {
-    const std::filesystem::path base = GetLocalAppDataPath();
+    const std::filesystem::path base = AppDataPaths::GetLocalAppDataPath();
     if (base.empty())
     {
         return {};

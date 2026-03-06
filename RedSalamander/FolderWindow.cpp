@@ -663,6 +663,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             perf.SetDetail(paneName);
             SetPropW(state.hStatusBar.get(), kStatusBarOwnerProp, reinterpret_cast<HANDLE>(this));
             SetPropW(state.hStatusBar.get(), kStatusBarSelectionTextProp, reinterpret_cast<HANDLE>(&state.statusSelectionText));
+            SetPropW(state.hStatusBar.get(), kStatusBarSecurityTextProp, reinterpret_cast<HANDLE>(&state.statusSecurityText));
             SetPropW(state.hStatusBar.get(), kStatusBarSortTextProp, reinterpret_cast<HANDLE>(&state.statusSortText));
             SetPropW(state.hStatusBar.get(), kStatusBarFocusHueProp, reinterpret_cast<HANDLE>(&state.statusFocusHueDegrees));
 #pragma warning(push)

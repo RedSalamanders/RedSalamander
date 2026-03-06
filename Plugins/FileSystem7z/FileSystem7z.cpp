@@ -482,6 +482,9 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::SetConfiguration(const char* configurati
     std::lock_guard lock(_stateMutex);
 
     _defaultPassword.clear();
+#ifdef _DEBUG
+    _debugIndexBuildDelayMs = 0;
+#endif
 
     if (configurationJsonUtf8 == nullptr || configurationJsonUtf8[0] == '\0')
     {
@@ -511,6 +514,14 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::SetConfiguration(const char* configurati
     {
         _defaultPassword = password.value();
     }
+
+#ifdef _DEBUG
+    yyjson_val* debugDelay = yyjson_obj_get(root, "debugIndexBuildDelayMs");
+    if (debugDelay && yyjson_is_uint(debugDelay))
+    {
+        _debugIndexBuildDelayMs = static_cast<unsigned long>(std::min<uint64_t>(yyjson_get_uint(debugDelay), 10'000ull));
+    }
+#endif
 
     return S_OK;
 }
@@ -793,6 +804,9 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::Initialize(const wchar_t* rootPath, cons
     }
 
     ClearIndexLocked();
+#ifdef _DEBUG
+    _debugIndexBuildCount.store(0u, std::memory_order_release);
+#endif
     UpdateDriveInfoStringsLocked();
     return S_OK;
 }
@@ -811,59 +825,97 @@ HRESULT FileSystem7z::EnsureIndex() noexcept
 {
     std::wstring archivePath;
     std::wstring password;
+#ifdef _DEBUG
+    unsigned long buildDelayMs = 0;
+#endif
 
     for (;;)
     {
         {
-            std::lock_guard lock(_stateMutex);
+            std::unique_lock lock(_stateMutex);
 
-            if (_archivePath.empty())
+            for (;;)
             {
-                return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+                if (_archivePath.empty())
+                {
+                    return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+                }
+
+                const bool matches = _indexReady && EqualsNoCase(_indexedArchivePath, _archivePath) && _indexedPassword == _password;
+                if (matches)
+                {
+                    return _indexStatus;
+                }
+
+                if (_indexBuildInProgress)
+                {
+                    _indexBuildCv.wait(lock, [&] { return ! _indexBuildInProgress; });
+                    continue;
+                }
+
+                archivePath = _archivePath;
+                password    = _password;
+
+                ClearIndexLocked();
+                _indexBuildInProgress = true;
+#ifdef _DEBUG
+                buildDelayMs = _debugIndexBuildDelayMs;
+                _debugIndexBuildCount.fetch_add(1u, std::memory_order_acq_rel);
+#endif
+                break;
             }
-
-            const bool matches = _indexReady && EqualsNoCase(_indexedArchivePath, _archivePath) && _indexedPassword == _password;
-            if (matches)
-            {
-                return _indexStatus;
-            }
-
-            archivePath = _archivePath;
-            password    = _password;
-
-            ClearIndexLocked();
         }
+
+#ifdef _DEBUG
+        if (buildDelayMs > 0u)
+        {
+            Sleep(buildDelayMs);
+        }
+#endif
 
         std::unordered_map<std::wstring, ArchiveEntry> entries;
         std::unordered_map<std::wstring, std::vector<std::wstring>> children;
 
         const HRESULT buildHr = BuildIndex(archivePath, password, entries, children);
 
+        bool restart = false;
+        HRESULT resultHr = buildHr;
         {
             std::lock_guard lock(_stateMutex);
 
             if (_archivePath.empty())
             {
-                return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+                resultHr = HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
             }
-
-            if (! EqualsNoCase(_archivePath, archivePath) || _password != password)
+            else if (! EqualsNoCase(_archivePath, archivePath) || _password != password)
             {
-                continue;
+                restart = true;
             }
-
-            _indexStatus = buildHr;
-            _indexReady  = true;
-            if (SUCCEEDED(buildHr))
+            else
             {
-                _entries            = std::move(entries);
-                _children           = std::move(children);
-                _indexedArchivePath = _archivePath;
-                _indexedPassword    = _password;
+                _indexStatus = buildHr;
+                _indexReady  = true;
+                if (SUCCEEDED(buildHr))
+                {
+                    _entries            = std::move(entries);
+                    _children           = std::move(children);
+                    _indexedArchivePath = _archivePath;
+                    _indexedPassword    = _password;
+                }
+
+                resultHr = _indexStatus;
             }
 
-            return _indexStatus;
+            _indexBuildInProgress = false;
         }
+
+        _indexBuildCv.notify_all();
+        if (restart)
+        {
+            continue;
+        }
+
+        return resultHr;
     }
 }
 
@@ -1221,6 +1273,9 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetItemProperties([[maybe_unused]] const
     {
         addField("archivePath", Utf8FromUtf16(archivePath));
     }
+#ifdef _DEBUG
+    addField("debugIndexBuildCount", std::format("{}", _debugIndexBuildCount.load(std::memory_order_acquire)));
+#endif
 
     const char* written = yyjson_mut_write(doc, YYJSON_WRITE_NOFLAG, nullptr);
     if (! written)
@@ -1407,9 +1462,36 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
         result->fileCount  = 1;
         scannedEntries     = 1;
 
-        if (! maybeReportProgress(path))
+        if (callback != nullptr)
         {
-            return result->status;
+            const HRESULT progressHr =
+                callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, path, cookie);
+            if (FAILED(progressHr))
+            {
+                result->status = progressHr;
+                return result->status;
+            }
+
+            BOOL cancel            = FALSE;
+            const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
+            if (FAILED(cancelHr))
+            {
+                result->status = cancelHr;
+                return result->status;
+            }
+            if (cancel)
+            {
+                result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+                return result->status;
+            }
+
+            const HRESULT finalProgressHr =
+                callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+            if (FAILED(finalProgressHr))
+            {
+                result->status = finalProgressHr;
+                return result->status;
+            }
         }
     }
     else
@@ -1425,6 +1507,11 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetDirectorySize(
             else
             {
                 ++result->fileCount;
+                if ((std::numeric_limits<uint64_t>::max)() - result->totalBytes < entry.sizeBytes)
+                {
+                    result->status = HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+                    return result->status;
+                }
                 result->totalBytes += entry.sizeBytes;
             }
 

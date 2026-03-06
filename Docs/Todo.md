@@ -25,10 +25,7 @@ This page is a user-facing summary of what is planned.
 
 ## Selection tools
 
-- [ ] Invert / Restore selection
-- [ ] Save/Load selection
 - [ ] Select/unselect same name
-- [ ] Hide selected/unselected names
 
 ## Commands
 

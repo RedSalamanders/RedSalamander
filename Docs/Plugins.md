@@ -33,13 +33,15 @@ File systems are selected by a **short prefix** in the address bar:
   - Typically opened automatically when you press Enter on an archive in `file:`.
 - `ftp:` / `sftp:` / `scp:` / `imap:` — remote file systems (`Plugins/FileSystemCurl`)
 - `s3:` / `s3table:` — S3 and S3 Table (`Plugins/FileSystemS3`)
-  - Read-only in the current implementation.
+  - `s3:` supports browsing, reading, uploading/overwriting objects, and deleting objects.
+  - `s3table:` is browse/read only and exposes tables as `*.table.json` documents.
 - `fk:` — dummy/test file system (`builtin/file-system-dummy`)
 
 See also:
 
 - [Navigation & Path Syntax](NavigationAndPaths.md)
 - [Remote File Systems](RemoteFileSystems.md)
+- [S3 / S3 Table](S3AndS3Table.md)
 - [Connections](Connections.md)
 
 ### Archive auto-mount (advanced)
@@ -52,7 +54,7 @@ This is controlled by the settings map:
 
 Defaults include many archive/container formats such as `.zip`, `.7z`, `.rar`, `.iso`, `.vhd`, `.vhdx`, `.qcow2`, …
 
-To disable auto-mount behavior, set `extensions.openWithFileSystemByExtension` to `{}` in the settings file. See: [Troubleshooting / Reset](Troubleshooting.md)
+To disable auto-mount behavior, set `extensions.openWithFileSystemByExtension` to `{}` in the settings file. See: [Settings File & Advanced Configuration](SettingsFile.md)
 
 ## Viewer plugins
 

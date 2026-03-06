@@ -21,6 +21,7 @@
 - Filter current folder: `Ctrl+F12`
 
 ![Drive/menu dropdown](res/drive-menu.png)
+<!-- TODO(screenshot): replace placeholder with a real screenshot -->
 
 ### Hot Paths details
 
@@ -58,6 +59,7 @@ Examples:
 
 - `ftp:/`
 - `s3:/`
+- `s3table:/`
 
 Mounted file systems (archives, etc) use a mount context:
 
@@ -67,19 +69,29 @@ Example:
 
 - `7z:C:\Downloads\archive.zip|/`
 
-### 4) Connection Manager routing (`nav:` / `@conn:`)
+### 4) Connection Manager routing (`nav:` / `nav://` / `@conn:`)
 
 To navigate using a saved Connection Manager profile:
 
 - `nav:<connectionName>`
+- `nav://<connectionName>`
 - `@conn:<connectionName>`
 
 Examples:
 
 - `nav:MySftpServer`
+- `nav://MySftpServer`
+- `nav:MyAwsS3`
 - `@conn:WorkImap/INBOX/`
 
-If the name is empty (`nav:` or `@conn:`), RedSalamander opens the Connection Manager dialog.
+If the name is empty (`nav:`, `nav://`, or `@conn:`), RedSalamander opens the Connection Manager dialog.
+
+Advanced protocol-local forms also work:
+
+- `<shortId>:/@conn:<connectionName>/...`
+- `<scheme>://@conn/<connectionName>/...`
+
+See: [Connections](Connections.md)
 
 ## Special shorthand
 

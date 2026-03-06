@@ -290,6 +290,19 @@ private:
         ScanPriority priority = ScanPriority::Low;
     };
 
+    // Generation stamp stored alongside a folder key in `_scanInFlightKeys`.
+    //
+    // Older code tracked in-flight folder scans by key alone; if a scan was restarted (or background work
+    // was toggled) while a worker was still finishing a previous run, the stale completion could erase the
+    // new run's in-flight entry for the same key, undercounting active scans and confusing "idle/drain"
+    // decisions. The (version, cancelToken) pair lets completion verify it is clearing the same run that
+    // originally inserted the entry.
+    struct InFlightScanStamp
+    {
+        uint64_t version     = 0;
+        uint64_t cancelToken = 0;
+    };
+
     struct ContentCompareKey
     {
         // Cache key for the compared file within the current compare roots.
@@ -311,6 +324,13 @@ private:
     struct ContentCompareKeyEq
     {
         bool operator()(const ContentCompareKey& a, const ContentCompareKey& b) const noexcept;
+    };
+
+    // Same idea as `InFlightScanStamp`, but for `_contentCompareInFlight`.
+    struct InFlightContentStamp
+    {
+        uint64_t version     = 0;
+        uint64_t cancelToken = 0;
     };
 
     struct ContentCompareJob
@@ -363,9 +383,9 @@ private:
         std::deque<FolderScanJob> scanQueueLow;
         std::set<std::wstring, WStringViewNoCaseLess> scanScheduledKeys;
         std::set<std::wstring, WStringViewNoCaseLess> scanHighQueuedKeys;
-        std::set<std::wstring, WStringViewNoCaseLess> scanInFlightKeys;
+        std::map<std::wstring, InFlightScanStamp, WStringViewNoCaseLess> scanInFlightKeys;
         std::set<std::wstring, WStringViewNoCaseLess> pendingSubdirUpdates;
-        std::unordered_map<ContentCompareKey, uint64_t, ContentCompareKeyHash, ContentCompareKeyEq> contentCompareInFlight;
+        std::unordered_map<ContentCompareKey, InFlightContentStamp, ContentCompareKeyHash, ContentCompareKeyEq> contentCompareInFlight;
         std::deque<ContentCompareJob> contentCompareQueueHigh;
         std::deque<ContentCompareJob> contentCompareQueueLow;
         std::map<std::wstring, std::map<std::wstring, PendingContentCompareUpdate, WStringViewNoCaseLess>, WStringViewNoCaseLess> pendingContentCompareUpdates;
@@ -374,6 +394,7 @@ private:
     static void ScheduleResetCleanup(std::unique_ptr<ResetCleanup> cleanup) noexcept;
     void ResetCompareStateLocked(ResetCleanup& outCleanup) noexcept;
     void ClearContentCompareStateLocked() noexcept;
+    void EvictContentCompareCacheForRelativePathLocked(const std::filesystem::path& relativePath, bool includeSubtree) noexcept;
     static uint64_t EstimateDecisionBytes(std::wstring_view folderKey, const CompareDirectoriesFolderDecision& decision) noexcept;
     void TouchDecisionCacheKeyLocked(std::wstring_view folderKey) noexcept;
     void TrackDecisionCacheInsertOrUpdateLocked(std::wstring_view folderKey, const std::shared_ptr<const CompareDirectoriesFolderDecision>& decision) noexcept;
@@ -408,6 +429,8 @@ private:
     std::filesystem::path _leftRoot;
     std::filesystem::path _rightRoot;
     Common::Settings::CompareDirectoriesSettings _settings;
+    std::shared_ptr<const std::vector<std::wstring>> _ignoreFilePatterns;
+    std::shared_ptr<const std::vector<std::wstring>> _ignoreDirectoryPatterns;
     std::atomic_uint64_t _version{1};
     std::atomic_bool _compareEnabled{true};
     std::atomic_bool _backgroundWorkEnabled{true};
@@ -432,7 +455,7 @@ private:
     std::deque<FolderScanJob> _scanQueueLow;
     std::set<std::wstring, WStringViewNoCaseLess> _scanScheduledKeys;
     std::set<std::wstring, WStringViewNoCaseLess> _scanHighQueuedKeys;
-    std::set<std::wstring, WStringViewNoCaseLess> _scanInFlightKeys;
+    std::map<std::wstring, InFlightScanStamp, WStringViewNoCaseLess> _scanInFlightKeys;
     std::set<std::wstring, WStringViewNoCaseLess> _pendingSubdirUpdates;
     std::condition_variable _scanCv;
     std::vector<std::jthread> _scanWorkers;
@@ -448,7 +471,7 @@ private:
     std::atomic<std::shared_ptr<const DecisionUpdatedCallback>> _decisionUpdatedCallback;
 
     std::unordered_map<ContentCompareKey, bool, ContentCompareKeyHash, ContentCompareKeyEq> _contentCompareCache;
-    std::unordered_map<ContentCompareKey, uint64_t, ContentCompareKeyHash, ContentCompareKeyEq> _contentCompareInFlight;
+    std::unordered_map<ContentCompareKey, InFlightContentStamp, ContentCompareKeyHash, ContentCompareKeyEq> _contentCompareInFlight;
     std::deque<ContentCompareJob> _contentCompareQueueHigh;
     std::deque<ContentCompareJob> _contentCompareQueueLow;
     std::map<std::wstring, std::map<std::wstring, PendingContentCompareUpdate, WStringViewNoCaseLess>, WStringViewNoCaseLess> _pendingContentCompareUpdates;
