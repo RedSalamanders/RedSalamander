@@ -20,6 +20,7 @@ constexpr wchar_t kFileOperationsPopupClassName[] = L"RedSalamander.FileOperatio
 
 constexpr UINT_PTR kFileOperationsPopupTimerId     = 1;
 constexpr UINT kFileOperationsPopupTimerIntervalMs = 100;
+constexpr ULONGLONG kRateSampleBucketMs            = 100ull;
 
 constexpr std::wstring_view kEllipsisText = L"\u2026";
 
@@ -457,6 +458,77 @@ D2D1::ColorF RainbowProgressColor(const AppTheme& theme, std::wstring_view seed)
     const float sat     = 0.85f;
     const float val     = theme.dark ? 0.80f : 0.90f;
     return ColorFromHSV(hue, sat, val, 1.0f);
+}
+
+float RateSampleHue(std::wstring_view sourcePath) noexcept
+{
+    if (sourcePath.empty())
+    {
+        return -1.0f;
+    }
+
+    const uint32_t pathHash = StableHash32(sourcePath);
+    return static_cast<float>(pathHash % 360u);
+}
+
+bool IsRateSamplingBlocked(const FileOperationsPopupInternal::RateSnapshot& task) noexcept
+{
+    return task.paused || task.queuePaused || task.waitingInQueue;
+}
+
+void AppendRateSample(FileOperationsPopupInternal::RateHistory& history, float sample, float hue, bool itemRate) noexcept
+{
+    history.samples[history.writeIndex] = sample;
+    history.hues[history.writeIndex]    = hue;
+    history.writeIndex                  = (history.writeIndex + 1u) % FileOperationsPopupInternal::RateHistory::kMaxSamples;
+    history.count                       = std::min(FileOperationsPopupInternal::RateHistory::kMaxSamples, history.count + 1u);
+
+    float& smoothed = itemRate ? history.smoothedItemsPerSec : history.smoothedBytesPerSec;
+    if (smoothed <= 0.0f)
+    {
+        smoothed = sample;
+    }
+    else
+    {
+        smoothed = smoothed * 0.85f + sample * 0.15f;
+    }
+}
+
+void ResetPendingRateSample(FileOperationsPopupInternal::RateHistory& history) noexcept
+{
+    history.pendingBucketMs         = 0;
+    history.pendingWeightedSampleMs = 0.0;
+    history.pendingHue              = -1.0f;
+}
+
+void AppendResampledRateSamples(FileOperationsPopupInternal::RateHistory& history, ULONGLONG elapsedMs, float sample, float hue, bool itemRate) noexcept
+{
+    const ULONGLONG maxResampleMs =
+        static_cast<ULONGLONG>(FileOperationsPopupInternal::RateHistory::kMaxSamples) * kRateSampleBucketMs;
+    ULONGLONG remainingMs = (std::min)(elapsedMs, maxResampleMs);
+    while (remainingMs > 0)
+    {
+        const ULONGLONG bucketRemainingMs = kRateSampleBucketMs - history.pendingBucketMs;
+        const ULONGLONG sliceMs           = std::min(remainingMs, bucketRemainingMs);
+
+        history.pendingWeightedSampleMs += static_cast<double>(sample) * static_cast<double>(sliceMs);
+        history.pendingBucketMs += sliceMs;
+        if (hue >= 0.0f)
+        {
+            history.pendingHue = hue;
+        }
+
+        remainingMs -= sliceMs;
+        if (history.pendingBucketMs < kRateSampleBucketMs)
+        {
+            continue;
+        }
+
+        const float bucketHue    = history.pendingHue >= 0.0f ? history.pendingHue : hue;
+        const float bucketSample = static_cast<float>(history.pendingWeightedSampleMs / static_cast<double>(kRateSampleBucketMs));
+        AppendRateSample(history, bucketSample, bucketHue, itemRate);
+        ResetPendingRateSample(history);
+    }
 }
 
 std::wstring TruncatePathMiddleToWidth(IDWriteFactory* factory, IDWriteTextFormat* format, std::wstring_view path, float maxWidth, float height) noexcept
@@ -1098,17 +1170,18 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 
         {
             std::scoped_lock lock(task->_progressMutex);
-            snap.totalItems             = task->_progressTotalItems;
-            snap.completedItems         = task->_progressCompletedItems;
-            snap.totalBytes             = task->_progressTotalBytes;
-            snap.completedBytes         = task->_progressCompletedBytes;
-            snap.itemTotalBytes         = task->_progressItemTotalBytes;
-            snap.itemCompletedBytes     = task->_progressItemCompletedBytes;
-            snap.completedFiles         = task->_completedTopLevelFiles;
-            snap.completedFolders       = task->_completedTopLevelFolders;
-            snap.currentSourcePath      = task->_progressSourcePath;
-            snap.currentDestinationPath = task->_progressDestinationPath;
-            snap.hasProgressCallbacks   = ! task->_lastProgressCallbackSourcePath.empty() || ! task->_lastProgressCallbackDestinationPath.empty();
+            snap.totalItems               = task->_progressTotalItems;
+            snap.completedItems           = task->_progressCompletedItems;
+            snap.totalBytes               = task->_progressTotalBytes;
+            snap.completedBytes           = task->_progressCompletedBytes;
+            snap.itemTotalBytes           = task->_progressItemTotalBytes;
+            snap.itemCompletedBytes       = task->_progressItemCompletedBytes;
+            snap.completedFiles           = task->_completedTopLevelFiles;
+            snap.completedFolders         = task->_completedTopLevelFolders;
+            snap.currentSourcePath        = task->_progressSourcePath;
+            snap.currentDestinationPath   = task->_progressDestinationPath;
+            snap.hasProgressCallbacks     = task->_lastProgressCallbackTick != 0;
+            snap.lastProgressCallbackTick = task->_lastProgressCallbackTick;
 
             snap.inFlightFileCount = std::min(task->_inFlightFileCount, snap.inFlightFiles.size());
             for (size_t i = 0; i < snap.inFlightFileCount; ++i)
@@ -1212,25 +1285,27 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         }
 
         TaskSnapshot snap{};
-        snap.taskId                 = completed.taskId;
-        snap.operation              = completed.operation;
-        snap.totalItems             = completed.totalItems;
-        snap.completedItems         = completed.completedItems;
-        snap.totalBytes             = completed.totalBytes;
-        snap.completedBytes         = completed.completedBytes;
-        snap.completedFiles         = completed.completedFiles;
-        snap.completedFolders       = completed.completedFolders;
-        snap.currentSourcePath      = completed.sourcePath;
-        snap.currentDestinationPath = completed.destinationPath;
-        snap.destinationFolder      = completed.destinationFolder;
-        snap.destinationPane        = completed.destinationPane;
-        snap.started                = true;
-        snap.finished               = true;
-        snap.resultHr               = completed.resultHr;
-        snap.warningCount           = completed.warningCount;
-        snap.errorCount             = completed.errorCount;
-        snap.lastDiagnosticMessage  = completed.lastDiagnosticMessage;
-        snap.preCalcSkipped         = completed.preCalcSkipped;
+        snap.taskId                   = completed.taskId;
+        snap.operation                = completed.operation;
+        snap.totalItems               = completed.totalItems;
+        snap.completedItems           = completed.completedItems;
+        snap.totalBytes               = completed.totalBytes;
+        snap.completedBytes           = completed.completedBytes;
+        snap.completedFiles           = completed.completedFiles;
+        snap.completedFolders         = completed.completedFolders;
+        snap.currentSourcePath        = completed.sourcePath;
+        snap.currentDestinationPath   = completed.destinationPath;
+        snap.destinationFolder        = completed.destinationFolder;
+        snap.destinationPane          = completed.destinationPane;
+        snap.started                  = true;
+        snap.finished                 = true;
+        snap.resultHr                 = completed.resultHr;
+        snap.warningCount             = completed.warningCount;
+        snap.errorCount               = completed.errorCount;
+        snap.lastDiagnosticMessage    = completed.lastDiagnosticMessage;
+        snap.preCalcSkipped           = completed.preCalcSkipped;
+        snap.hasProgressCallbacks     = completed.lastProgressCallbackTick != 0;
+        snap.lastProgressCallbackTick = completed.lastProgressCallbackTick;
 
         if (snap.totalItems > 0)
         {
@@ -1250,13 +1325,18 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState::BuildRateSnapshot() const
 {
     std::vector<FolderWindow::FileOperationState::Task*> tasks;
+    std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completedTasks;
     if (fileOps && hostLifetime.lock())
     {
         fileOps->CollectTasks(tasks);
+        fileOps->CollectCompletedTasks(completedTasks);
     }
 
+    std::unordered_map<uint64_t, bool> activeTaskIds;
+    activeTaskIds.reserve(tasks.size());
+
     std::vector<RateSnapshot> result;
-    result.reserve(tasks.size());
+    result.reserve(tasks.size() + completedTasks.size());
 
     for (auto* task : tasks)
     {
@@ -1266,23 +1346,45 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         }
 
         RateSnapshot snap{};
-        snap.taskId    = task->GetId();
-        snap.operation = task->GetOperation();
+        snap.taskId                = task->GetId();
+        snap.operation             = task->GetOperation();
+        activeTaskIds[snap.taskId] = true;
 
         {
             std::scoped_lock lock(task->_progressMutex);
-            snap.completedItems    = task->_progressCompletedItems;
-            snap.completedBytes    = task->_progressCompletedBytes;
-            snap.currentSourcePath = task->_progressSourcePath;
+            snap.completedItems           = task->_progressCompletedItems;
+            snap.completedBytes           = task->_progressCompletedBytes;
+            snap.currentSourcePath        = task->_progressSourcePath;
+            snap.lastProgressCallbackTick = task->_lastProgressCallbackTick;
         }
 
-        snap.started          = task->HasStarted();
-        snap.paused           = task->IsPaused();
-        snap.waitingForOthers = task->IsWaitingForOthers();
-        snap.waitingInQueue   = task->IsWaitingInQueue();
-        snap.queuePaused      = task->IsQueuePaused();
+        snap.progressStateChangeTick = task->_rateSamplingStateChangeTick.load(std::memory_order_acquire);
+        snap.started                 = task->HasStarted();
+        snap.paused                  = task->IsPaused();
+        snap.waitingForOthers        = task->IsWaitingForOthers();
+        snap.waitingInQueue          = task->IsWaitingInQueue();
+        snap.queuePaused             = task->IsQueuePaused();
 
         result.push_back(snap);
+    }
+
+    for (const auto& completed : completedTasks)
+    {
+        if (activeTaskIds.find(completed.taskId) != activeTaskIds.end())
+        {
+            continue;
+        }
+
+        RateSnapshot snap{};
+        snap.taskId                   = completed.taskId;
+        snap.operation                = completed.operation;
+        snap.completedItems           = completed.completedItems;
+        snap.completedBytes           = completed.completedBytes;
+        snap.currentSourcePath        = completed.sourcePath;
+        snap.lastProgressCallbackTick = completed.lastProgressCallbackTick;
+        snap.started                  = true;
+
+        result.push_back(std::move(snap));
     }
 
     return result;
@@ -1290,7 +1392,6 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 
 void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexcept
 {
-    const ULONGLONG nowTick                  = GetTickCount64();
     const std::vector<RateSnapshot> snapshot = BuildRateSnapshot();
 
     std::unordered_map<uint64_t, bool> seen;
@@ -1300,105 +1401,90 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
     {
         seen[task.taskId] = true;
 
-        RateHistory& history     = _rates[task.taskId];
-        const ULONGLONG lastTick = history.lastTick;
+        RateHistory& history = _rates[task.taskId];
+        const bool blocked   = IsRateSamplingBlocked(task);
 
-        if (task.paused || task.queuePaused || task.waitingInQueue)
+        if (! history.initialized)
         {
-            history.lastBytes = task.completedBytes;
-            history.lastItems = task.completedItems;
-            history.lastTick  = nowTick;
+            history.initialized              = true;
+            history.lastBytes                = task.completedBytes;
+            history.lastItems                = task.completedItems;
+            history.lastProgressCallbackTick = task.lastProgressCallbackTick;
+            history.lastStateChangeTick      = task.progressStateChangeTick;
             continue;
         }
 
-        if (lastTick != 0 && nowTick > lastTick)
+        history.lastBytes = std::min(history.lastBytes, task.completedBytes);
+        history.lastItems = std::min(history.lastItems, task.completedItems);
+
+        if (task.progressStateChangeTick > history.lastStateChangeTick)
         {
-            const double dtSec = static_cast<double>(nowTick - lastTick) / 1000.0;
-            if (dtSec > 0.0)
+            history.lastStateChangeTick = task.progressStateChangeTick;
+            history.resumeTick          = blocked ? 0 : task.progressStateChangeTick;
+            ResetPendingRateSample(history);
+
+            if (blocked)
             {
-                if (task.operation == FILESYSTEM_DELETE)
-                {
-                    unsigned long prevItems = history.lastItems;
-                    if (task.completedItems < prevItems)
-                    {
-                        prevItems = task.completedItems;
-                    }
-
-                    const unsigned long deltaItems = task.completedItems - prevItems;
-                    const double instItemsPerSec   = static_cast<double>(deltaItems) / dtSec;
-                    const float instF              = instItemsPerSec > 0.0 ? static_cast<float>(instItemsPerSec) : 0.0f;
-
-                    history.samples[history.writeIndex] = instF;
-                    // Compute hue from the current source path to match progress bar color
-                    if (task.currentSourcePath.empty())
-                    {
-                        history.hues[history.writeIndex] = -1.0f;
-                    }
-                    else
-                    {
-                        const uint32_t pathHash          = StableHash32(task.currentSourcePath);
-                        history.hues[history.writeIndex] = static_cast<float>(pathHash % 360u);
-                    }
-                    history.writeIndex = (history.writeIndex + 1u) % RateHistory::kMaxSamples;
-                    history.count      = std::min(RateHistory::kMaxSamples, history.count + 1u);
-
-                    if (history.smoothedItemsPerSec <= 0.0f)
-                    {
-                        history.smoothedItemsPerSec = instF;
-                    }
-                    else
-                    {
-                        history.smoothedItemsPerSec = history.smoothedItemsPerSec * 0.85f + instF * 0.15f;
-                    }
-
-                    history.lastItems = task.completedItems;
-                }
-                else
-                {
-                    uint64_t prevBytes = history.lastBytes;
-                    if (task.completedBytes < prevBytes)
-                    {
-                        prevBytes = task.completedBytes;
-                    }
-
-                    const uint64_t deltaBytes    = task.completedBytes - prevBytes;
-                    const double instBytesPerSec = static_cast<double>(deltaBytes) / dtSec;
-                    const float instF            = instBytesPerSec > 0.0 ? static_cast<float>(instBytesPerSec) : 0.0f;
-
-                    history.samples[history.writeIndex] = instF;
-                    // Compute hue from the current source path to match progress bar color
-                    if (task.currentSourcePath.empty())
-                    {
-                        history.hues[history.writeIndex] = -1.0f;
-                    }
-                    else
-                    {
-                        const uint32_t pathHash          = StableHash32(task.currentSourcePath);
-                        history.hues[history.writeIndex] = static_cast<float>(pathHash % 360u);
-                    }
-                    history.writeIndex = (history.writeIndex + 1u) % RateHistory::kMaxSamples;
-                    history.count      = std::min(RateHistory::kMaxSamples, history.count + 1u);
-
-                    if (history.smoothedBytesPerSec <= 0.0f)
-                    {
-                        history.smoothedBytesPerSec = instF;
-                    }
-                    else
-                    {
-                        history.smoothedBytesPerSec = history.smoothedBytesPerSec * 0.85f + instF * 0.15f;
-                    }
-
-                    history.lastBytes = task.completedBytes;
-                }
+                history.lastBytes                = task.completedBytes;
+                history.lastItems                = task.completedItems;
+                history.lastProgressCallbackTick = task.lastProgressCallbackTick;
+                continue;
             }
+        }
+
+        if (blocked)
+        {
+            history.resumeTick               = 0;
+            history.lastBytes                = task.completedBytes;
+            history.lastItems                = task.completedItems;
+            history.lastProgressCallbackTick = task.lastProgressCallbackTick;
+            continue;
+        }
+
+        if (task.lastProgressCallbackTick == 0 || task.lastProgressCallbackTick <= history.lastProgressCallbackTick)
+        {
+            continue;
+        }
+
+        ULONGLONG baselineTick = history.lastProgressCallbackTick;
+        if (baselineTick == 0 || baselineTick > task.lastProgressCallbackTick)
+        {
+            baselineTick = task.lastProgressCallbackTick;
+        }
+        if (history.resumeTick > baselineTick && history.resumeTick <= task.lastProgressCallbackTick)
+        {
+            baselineTick = history.resumeTick;
+        }
+
+        const ULONGLONG elapsedMs = std::max<ULONGLONG>(1ull, task.lastProgressCallbackTick - baselineTick);
+        const double dtSec        = static_cast<double>(elapsedMs) / 1000.0;
+        const float hue           = RateSampleHue(task.currentSourcePath);
+
+        if (task.operation == FILESYSTEM_DELETE)
+        {
+            const unsigned long deltaItems = task.completedItems - history.lastItems;
+            if (deltaItems > 0 && dtSec > 0.0)
+            {
+                const float instItemsPerSec = static_cast<float>(static_cast<double>(deltaItems) / dtSec);
+                AppendResampledRateSamples(history, elapsedMs, instItemsPerSec, hue, true);
+            }
+
+            history.lastItems = task.completedItems;
         }
         else
         {
+            const uint64_t deltaBytes = task.completedBytes - history.lastBytes;
+            if (deltaBytes > 0 && dtSec > 0.0)
+            {
+                const float instBytesPerSec = static_cast<float>(static_cast<double>(deltaBytes) / dtSec);
+                AppendResampledRateSamples(history, elapsedMs, instBytesPerSec, hue, false);
+            }
+
             history.lastBytes = task.completedBytes;
-            history.lastItems = task.completedItems;
         }
 
-        history.lastTick = nowTick;
+        history.lastProgressCallbackTick = task.lastProgressCallbackTick;
+        history.resumeTick               = 0;
     }
 
     for (auto it = _rates.begin(); it != _rates.end();)

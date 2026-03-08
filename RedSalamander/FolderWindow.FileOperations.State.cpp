@@ -1,10 +1,11 @@
 #include "FolderWindow.FileOperationsInternal.h"
 
-#include "FolderWindow.FileOperations.IssuesPane.h"
 #include "ConnectionProfileUtils.h"
+#include "FolderWindow.FileOperations.IssuesPane.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
 #include "SessionState.h"
+#include "SettingsHotReload.h"
 #include "SettingsSave.h"
 #include "SettingsStore.h"
 
@@ -19,7 +20,11 @@
 #include <shellapi.h>
 #include <thread>
 #include <utility>
+
+#pragma warning(push)
+#pragma warning(disable : 6297 28182) // yyjson warnings
 #include <yyjson.h>
+#pragma warning(pop)
 
 namespace
 {
@@ -1062,10 +1067,10 @@ public:
     }
 
 private:
-    static constexpr ULONGLONG kWindowMs         = 30'000ull;
-    static constexpr size_t kFailureThreshold   = 5u;
-    static constexpr ULONGLONG kCooldownMs      = 30'000ull;
-    static constexpr ULONGLONG kProbeBackoffMs  = 5'000ull;
+    static constexpr ULONGLONG kWindowMs       = 30'000ull;
+    static constexpr size_t kFailureThreshold  = 5u;
+    static constexpr ULONGLONG kCooldownMs     = 30'000ull;
+    static constexpr ULONGLONG kProbeBackoffMs = 5'000ull;
 
     [[nodiscard]] static std::wstring MakeEntryKey(std::wstring_view connectionId)
     {
@@ -1084,9 +1089,9 @@ private:
     struct Entry final
     {
         std::deque<ULONGLONG> transientFailureTicks;
-        ULONGLONG openUntilTick       = 0;
+        ULONGLONG openUntilTick        = 0;
         ULONGLONG nextProbeAllowedTick = 0;
-        bool probeInFlight            = false;
+        bool probeInFlight             = false;
     };
 
     void pruneLocked(Entry& entry, ULONGLONG nowTick) noexcept
@@ -1195,9 +1200,9 @@ private:
             return;
         }
 
-        const ULONGLONG nowTick      = GetTickCount64();
-        const bool countableFailure  = FAILED(hr) && ShouldCountCircuitBreakerFailure(hr);
-        const bool isSuccess         = SUCCEEDED(hr);
+        const ULONGLONG nowTick     = GetTickCount64();
+        const bool countableFailure = FAILED(hr) && ShouldCountCircuitBreakerFailure(hr);
+        const bool isSuccess        = SUCCEEDED(hr);
 
         std::lock_guard lock(_mutex);
 
@@ -1239,7 +1244,7 @@ private:
                 it                          = insertedIt;
             }
 
-            Entry& entry       = it->second;
+            Entry& entry        = it->second;
             entry.probeInFlight = false;
             pruneLocked(entry, nowTick);
             entry.transientFailureTicks.push_back(nowTick);
@@ -2080,6 +2085,7 @@ HRESULT STDMETHODCALLTYPE FolderWindow::FileOperationState::Task::FileSystemProg
         _progressDestinationPath             = currentDestinationPath ? currentDestinationPath : L"";
         _lastProgressCallbackSourcePath      = _progressSourcePath;
         _lastProgressCallbackDestinationPath = _progressDestinationPath;
+        _lastProgressCallbackTick            = nowTick;
 
         if (_executionMode == ExecutionMode::PerItem && cookie != nullptr)
         {
@@ -3107,13 +3113,13 @@ void FolderWindow::FileOperationState::Task::ThreadMain(std::stop_token stopToke
 
     // Mark as waiting in queue before entering (visible to UI while blocked). Use the current
     // desired start-gating state to avoid briefly showing "Waiting" for tasks that will start immediately.
-    _waitingInQueue.store(_waitForOthers.load(std::memory_order_acquire), std::memory_order_release);
+    SetWaitingInQueue(_waitForOthers.load(std::memory_order_acquire));
 
     // Enter queue FIRST so both pre-calculation and operation respect Wait/Parallel mode
     const bool canStart = _state->EnterOperation(*this, stopToken);
 
     // No longer waiting in queue (either we got our turn or were cancelled)
-    _waitingInQueue.store(false, std::memory_order_release);
+    SetWaitingInQueue(false);
 
     if (! canStart)
     {
@@ -3362,6 +3368,7 @@ void FolderWindow::FileOperationState::Task::TogglePause() noexcept
 {
     const bool nowPaused = ! _paused.load(std::memory_order_acquire);
     _paused.store(nowPaused, std::memory_order_release);
+    MarkRateSamplingStateChanged();
     if (! nowPaused)
     {
         _pauseCv.notify_all();
@@ -3389,6 +3396,18 @@ void FolderWindow::FileOperationState::Task::SetWaitForOthers(bool wait) noexcep
     }
 }
 
+void FolderWindow::FileOperationState::Task::SetWaitingInQueue(bool waiting) noexcept
+{
+    const bool wasWaiting = _waitingInQueue.load(std::memory_order_acquire);
+    if (wasWaiting == waiting)
+    {
+        return;
+    }
+
+    _waitingInQueue.store(waiting, std::memory_order_release);
+    MarkRateSamplingStateChanged();
+}
+
 void FolderWindow::FileOperationState::Task::SetQueuePaused(bool paused) noexcept
 {
     const bool wasPaused = _queuePaused.load(std::memory_order_acquire);
@@ -3398,12 +3417,18 @@ void FolderWindow::FileOperationState::Task::SetQueuePaused(bool paused) noexcep
     }
 
     _queuePaused.store(paused, std::memory_order_release);
+    MarkRateSamplingStateChanged();
     if (! paused)
     {
         _pauseCv.notify_all();
     }
 
     GetPerItemTaskScheduler().NotifyWorkAvailable();
+}
+
+void FolderWindow::FileOperationState::Task::MarkRateSamplingStateChanged() noexcept
+{
+    _rateSamplingStateChangeTick.store(GetTickCount64(), std::memory_order_release);
 }
 
 void FolderWindow::FileOperationState::Task::ToggleConflictApplyToAllChecked() noexcept
@@ -3626,7 +3651,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         const unsigned int bridgeSourceMaxConcurrencyBudget =
             useCrossFileSystemBridge ? DeterminePerItemMaxConcurrency(_fileSystem, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles)) : 1u;
         const unsigned int bridgeDestinationMaxConcurrencyBudget =
-            useCrossFileSystemBridge ? DeterminePerItemMaxConcurrency(_destinationFileSystem, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles)) : 1u;
+            useCrossFileSystemBridge ? DeterminePerItemMaxConcurrency(_destinationFileSystem, _operation, _flags, static_cast<unsigned int>(kMaxInFlightFiles))
+                                     : 1u;
         const Common::Settings::Settings* settingsSnapshot = (_folderWindow != nullptr) ? _folderWindow->_settings : nullptr;
 
         ReparsePointPolicy reparsePointPolicy = ReparsePointPolicy::CopyReparse;
@@ -3773,9 +3799,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
         }
 
         const auto getSourceCircuitBreakerConnectionId = [&](size_t index) noexcept -> std::wstring_view
-        {
-            return index < sourceCircuitBreakerConnectionIds.size() ? std::wstring_view(sourceCircuitBreakerConnectionIds[index]) : std::wstring_view{};
-        };
+        { return index < sourceCircuitBreakerConnectionIds.size() ? std::wstring_view(sourceCircuitBreakerConnectionIds[index]) : std::wstring_view{}; };
 
         const auto clearConflictPrompt = [&]() noexcept
         {
@@ -4214,18 +4238,17 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 wchar_t suffix[80]{};
                 constexpr size_t suffixMax = (sizeof(suffix) / sizeof(suffix[0])) - 1u;
 
-                const DWORD pid   = GetCurrentProcessId();
-                const DWORD tid   = GetCurrentThreadId();
+                const DWORD pid    = GetCurrentProcessId();
+                const DWORD tid    = GetCurrentThreadId();
                 const uint64_t now = GetTickCount64();
 
-                const auto r = std::format_to_n(
-                    suffix,
-                    suffixMax,
-                    L".rs_tmp_{:08X}_{:08X}_{:016X}_{:X}",
-                    static_cast<unsigned long>(pid),
-                    static_cast<unsigned long>(tid),
-                    static_cast<unsigned long long>(now),
-                    progressStreamId);
+                const auto r         = std::format_to_n(suffix,
+                                                suffixMax,
+                                                L".rs_tmp_{:08X}_{:08X}_{:016X}_{:X}",
+                                                static_cast<unsigned long>(pid),
+                                                static_cast<unsigned long>(tid),
+                                                static_cast<unsigned long long>(now),
+                                                progressStreamId);
                 const size_t written = (r.size < suffixMax) ? r.size : suffixMax;
                 suffix[written]      = L'\0';
 
@@ -4241,16 +4264,14 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     return;
                 }
 
-                const FileSystemFlags cleanupFlags =
-                    static_cast<FileSystemFlags>(static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) | static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY));
+                const FileSystemFlags cleanupFlags = static_cast<FileSystemFlags>(static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
+                                                                                  static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY));
 
                 const HRESULT hrDelete = destinationFs.DeleteItem(tempPath.c_str(), cleanupFlags, nullptr, nullptr, nullptr);
                 if (FAILED(hrDelete) && hrDelete != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) && hrDelete != HRESULT_FROM_WIN32(ERROR_PATH_NOT_FOUND) &&
                     hrDelete != HRESULT_FROM_WIN32(ERROR_INVALID_NAME))
                 {
-                    Debug::Warning(L"CrossFileSystemBridge: failed to delete temp file '{}' (hr={:#x})",
-                                   tempPath,
-                                   static_cast<unsigned long>(hrDelete));
+                    Debug::Warning(L"CrossFileSystemBridge: failed to delete temp file '{}' (hr={:#x})", tempPath, static_cast<unsigned long>(hrDelete));
                     task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Warning,
                                        hrDelete,
                                        L"bridge.temp.cleanup",
@@ -4573,15 +4594,13 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
                     }
 
-                    const bool allowOverwrite =
-                        (static_cast<uint32_t>(flags) & static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE)) != 0u;
+                    const bool allowOverwrite = (static_cast<uint32_t>(flags) & static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE)) != 0u;
                     if (! allowOverwrite)
                     {
                         return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
                     }
 
-                    const bool replaceReadOnly =
-                        (static_cast<uint32_t>(flags) & static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY)) != 0u;
+                    const bool replaceReadOnly = (static_cast<uint32_t>(flags) & static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY)) != 0u;
                     if (! replaceReadOnly && (destinationAttributes & FILE_ATTRIBUTE_READONLY) != 0)
                     {
                         return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
@@ -4658,9 +4677,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     }
                 });
 
-                const FileSystemFlags tempFlags = static_cast<FileSystemFlags>(static_cast<uint32_t>(flags) |
-                                                                               static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
-                                                                               static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY));
+                const FileSystemFlags tempFlags =
+                    static_cast<FileSystemFlags>(static_cast<uint32_t>(flags) | static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
+                                                 static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY));
 
                 wil::com_ptr<IFileWriter> writer;
                 hr = destinationIo.CreateFileWriter(tempPath.c_str(), tempFlags, writer.addressof());
@@ -4748,12 +4767,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     const HRESULT hrMismatch = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
                     const std::wstring message =
                         std::format(L"File copy size mismatch: expected {:L} bytes but wrote {:L} bytes.", fileTotalBytes, fileCompletedBytes);
-                    task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
-                                       hrMismatch,
-                                       L"bridge.integrity.sizeMismatch",
-                                       message,
-                                       sourcePath,
-                                       destinationPath);
+                    task.LogDiagnostic(
+                        FileOperationState::DiagnosticSeverity::Error, hrMismatch, L"bridge.integrity.sizeMismatch", message, sourcePath, destinationPath);
                     return hrMismatch;
                 }
 
@@ -4886,9 +4901,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     }
                 });
 
-                const FileSystemFlags tempFlags = static_cast<FileSystemFlags>(static_cast<uint32_t>(flags) |
-                                                                               static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
-                                                                               static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY));
+                const FileSystemFlags tempFlags =
+                    static_cast<FileSystemFlags>(static_cast<uint32_t>(flags) | static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_OVERWRITE) |
+                                                 static_cast<uint32_t>(FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY));
 
                 wil::com_ptr<IFileWriter> writer;
                 hr = destinationIo.CreateFileWriter(tempPath.c_str(), tempFlags, writer.addressof());
@@ -4969,12 +4984,8 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     const HRESULT hrMismatch = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
                     const std::wstring message =
                         std::format(L"File copy size mismatch: expected {:L} bytes but wrote {:L} bytes.", fileTotalBytes, fileCompletedBytes);
-                    task.LogDiagnostic(FileOperationState::DiagnosticSeverity::Error,
-                                       hrMismatch,
-                                       L"bridge.integrity.sizeMismatch",
-                                       message,
-                                       sourcePath,
-                                       destinationPath);
+                    task.LogDiagnostic(
+                        FileOperationState::DiagnosticSeverity::Error, hrMismatch, L"bridge.integrity.sizeMismatch", message, sourcePath, destinationPath);
                     return hrMismatch;
                 }
 
@@ -5621,10 +5632,10 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     callTotalItems     = 0;
 
                     ConnectionCircuitBreaker& breaker = GetConnectionCircuitBreaker();
-                    const HRESULT itemHr = RunWithCircuitBreaker(breaker,
-                                                                getSourceCircuitBreakerConnectionId(index),
-                                                                destinationCircuitBreakerConnectionId,
-                                                                [&]() noexcept -> HRESULT
+                    const HRESULT itemHr              = RunWithCircuitBreaker(breaker,
+                                                                 getSourceCircuitBreakerConnectionId(index),
+                                                                 destinationCircuitBreakerConnectionId,
+                                                                 [&]() noexcept -> HRESULT
                     {
                         if (_operation == FILESYSTEM_COPY)
                         {
@@ -6076,7 +6087,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                     _progressCompletedBytes = (std::max)(_progressCompletedBytes, mapped);
                 }
 
-                ConnectionCircuitBreaker& breaker                 = GetConnectionCircuitBreaker();
+                ConnectionCircuitBreaker& breaker = GetConnectionCircuitBreaker();
 
                 HRESULT itemHr                                   = E_NOTIMPL;
                 bool failedDuringMoveDelete                      = false;
@@ -6106,7 +6117,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                                          preCalcBytesForItem,
                                                          (index < _sourcePathAttributesHint.size()) ? _sourcePathAttributesHint[index] : 0,
                                                          reparsePointPolicy);
-                            const HRESULT hr = bridge.CopyPath(sourceText, destinationItemText);
+                            const HRESULT hr                   = bridge.CopyPath(sourceText, destinationItemText);
                             bridgeSkippedDirectoryReparseCount = bridge.skippedDirectoryReparseCount;
                             bridgeRootDirectoryReparseSkipped  = bridge.rootDirectoryReparseSkipped;
                             bridgeUnsupportedDirectoryReparse  = bridge.unsupportedDirectoryReparseEncountered;
@@ -6116,8 +6127,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                         FileSystemOptions options{};
                         options.sizeBytes                    = sizeof(FileSystemOptions);
                         options.bandwidthLimitBytesPerSecond = _desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-                        return _fileSystem->CopyItem(
-                            sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
+                        return _fileSystem->CopyItem(sourceText.c_str(), destinationItemText.c_str(), itemFlags, &options, this, static_cast<void*>(&cookie));
                     });
                 }
                 else if (_operation == FILESYSTEM_MOVE)
@@ -6146,7 +6156,7 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                                                              preCalcBytesForItem,
                                                              (index < _sourcePathAttributesHint.size()) ? _sourcePathAttributesHint[index] : 0,
                                                              reparsePointPolicy);
-                                const HRESULT hr = bridge.CopyPath(sourceText, destinationItemText);
+                                const HRESULT hr                   = bridge.CopyPath(sourceText, destinationItemText);
                                 bridgeSkippedDirectoryReparseCount = bridge.skippedDirectoryReparseCount;
                                 bridgeRootDirectoryReparseSkipped  = bridge.rootDirectoryReparseSkipped;
                                 bridgeUnsupportedDirectoryReparse  = bridge.unsupportedDirectoryReparseEncountered;
@@ -6220,11 +6230,9 @@ HRESULT FolderWindow::FileOperationState::Task::ExecuteOperation() noexcept
                 }
                 else if (_operation == FILESYSTEM_DELETE)
                 {
-                    itemHr = RunWithCircuitBreaker(breaker,
-                                                   getSourceCircuitBreakerConnectionId(index),
-                                                   {},
-                                                   [&]() noexcept -> HRESULT
-                    { return _fileSystem->DeleteItem(sourceText.c_str(), itemFlags, nullptr, this, static_cast<void*>(&cookie)); });
+                    itemHr = RunWithCircuitBreaker(breaker, getSourceCircuitBreakerConnectionId(index), {}, [&]() noexcept -> HRESULT {
+                        return _fileSystem->DeleteItem(sourceText.c_str(), itemFlags, nullptr, this, static_cast<void*>(&cookie));
+                    });
                 }
 
                 {
@@ -6787,8 +6795,8 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         std::wstring_view destinationPluginId;
         if (destinationPane.has_value())
         {
-            destinationPluginId =
-                destinationPane.value() == FolderWindow::Pane::Left ? std::wstring_view(_owner._leftPane.pluginId) : std::wstring_view(_owner._rightPane.pluginId);
+            destinationPluginId = destinationPane.value() == FolderWindow::Pane::Left ? std::wstring_view(_owner._leftPane.pluginId)
+                                                                                      : std::wstring_view(_owner._rightPane.pluginId);
         }
 
         SessionState::UpdateActiveFileSystemPluginIdsAndOperation({sourcePluginId, destinationPluginId}, SessionState::OperationKind::Copy);
@@ -7279,7 +7287,7 @@ HRESULT FolderWindow::FileOperationState::StartOperation(FileSystemOperation ope
         task->_waitForOthers.store(waitForOthers, std::memory_order_release);
         task->_desiredSpeedLimitBytesPerSecond.store(initialSpeedLimitBytesPerSecond, std::memory_order_release);
         // Mark as waiting in queue immediately if queuing, so UI shows "Waiting..." right away
-        task->_waitingInQueue.store(waitForOthers, std::memory_order_release);
+        task->SetWaitingInQueue(waitForOthers);
     }
 
     {
@@ -7395,8 +7403,7 @@ void FolderWindow::FileOperationState::Shutdown() noexcept
 
         if (popupHwnd || issuesPaneHwnd)
         {
-            const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(*_owner._settings);
-            const HRESULT saveHr                            = Common::Settings::SaveSettings(kFileOpsAppId, settingsToSave);
+            const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kFileOpsAppId, *_owner._settings);
             if (FAILED(saveHr))
             {
                 const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kFileOpsAppId);
@@ -8107,8 +8114,7 @@ void FolderWindow::FileOperationState::OnPopupDestroyed(HWND hwnd) noexcept
     {
         SavePopupPlacement(hwnd);
 
-        const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(*_owner._settings);
-        const HRESULT saveHr                            = Common::Settings::SaveSettings(kFileOpsAppId, settingsToSave);
+        const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kFileOpsAppId, *_owner._settings);
         if (FAILED(saveHr))
         {
             const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kFileOpsAppId);
@@ -8129,8 +8135,7 @@ void FolderWindow::FileOperationState::OnIssuesPaneDestroyed(HWND hwnd) noexcept
     {
         SaveIssuesPanePlacement(hwnd);
 
-        const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(*_owner._settings);
-        const HRESULT saveHr                            = Common::Settings::SaveSettings(kFileOpsAppId, settingsToSave);
+        const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kFileOpsAppId, *_owner._settings);
         if (FAILED(saveHr))
         {
             const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kFileOpsAppId);
@@ -8584,15 +8589,16 @@ void FolderWindow::FileOperationState::RecordCompletedTask(Task& task) noexcept
 
     {
         std::scoped_lock lock(task._progressMutex);
-        summary.totalItems       = task._progressTotalItems;
-        summary.completedItems   = task._progressCompletedItems;
-        summary.totalBytes       = task._progressTotalBytes;
-        summary.completedBytes   = task._progressCompletedBytes;
-        summary.preCalcSkipped   = task._preCalcSkipped.load(std::memory_order_acquire);
-        summary.completedFiles   = task._completedTopLevelFiles;
-        summary.completedFolders = task._completedTopLevelFolders;
-        summary.sourcePath       = task._progressSourcePath;
-        summary.destinationPath  = task._progressDestinationPath;
+        summary.totalItems               = task._progressTotalItems;
+        summary.completedItems           = task._progressCompletedItems;
+        summary.totalBytes               = task._progressTotalBytes;
+        summary.completedBytes           = task._progressCompletedBytes;
+        summary.lastProgressCallbackTick = task._lastProgressCallbackTick;
+        summary.preCalcSkipped           = task._preCalcSkipped.load(std::memory_order_acquire);
+        summary.completedFiles           = task._completedTopLevelFiles;
+        summary.completedFolders         = task._completedTopLevelFolders;
+        summary.sourcePath               = task._progressSourcePath;
+        summary.destinationPath          = task._progressDestinationPath;
     }
 
     {

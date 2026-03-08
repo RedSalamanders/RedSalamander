@@ -411,15 +411,24 @@ Write-Host "  Action:        $buildTarget"
 Write-Host "  Package:       $packageMode"
 Write-Host ""
 
-# Resolve project build input (building a .vcxproj needs SolutionDir for include paths using $(SolutionDir)).
-$isProjectBuild = $false
 $buildInput = $SolutionFile
 if ($ProjectName) {
-    $buildInput = Resolve-ProjectFileFromSolution -SolutionPath $SolutionFullPath -ProjectName $ProjectName
-    $isProjectBuild = $true
+    # Validate the project name early and build the solution target so solution-level
+    # project dependencies (notably plugin DLLs) are honored for targeted builds.
+    $null = Resolve-ProjectFileFromSolution -SolutionPath $SolutionFullPath -ProjectName $ProjectName
 }
 
-$msbuildTarget = if ($Rebuild) { "Rebuild" } else { "Build" }
+$msbuildTarget = if ($ProjectName) {
+    if ($Rebuild) {
+        "{0}:Rebuild" -f $ProjectName
+    } else {
+        $ProjectName
+    }
+} elseif ($Rebuild) {
+    "Rebuild"
+} else {
+    "Build"
+}
 
 # Build parameters
 $buildParams = @(
@@ -432,9 +441,7 @@ $buildParams = @(
     "/nologo"         # Suppress MSBuild banner
 )
 
-if ($isProjectBuild) {
-    $buildParams += "/p:SolutionDir=$SolutionDirWithSlash"
-}
+$buildParams += "/p:SolutionDir=$SolutionDirWithSlash"
 
 $cleanParams = $null
 if ($Clean) {
@@ -446,9 +453,10 @@ if ($Clean) {
         "/v:minimal"
         "/nologo"
     )
-    if ($isProjectBuild) {
-        $cleanParams += "/p:SolutionDir=$SolutionDirWithSlash"
+    if ($ProjectName) {
+        $cleanParams[1] = "/t:{0}:Clean" -f $ProjectName
     }
+    $cleanParams += "/p:SolutionDir=$SolutionDirWithSlash"
 }
 
 # Start build

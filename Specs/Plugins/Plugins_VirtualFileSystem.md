@@ -7,6 +7,7 @@ The Plugin Interface enables RedSalamander to support multiple file system imple
 - COM-based plugin architecture for binary compatibility
 - Single-call directory enumeration with buffer-based results
 - File operations (copy/move/delete/rename) with batch support, progress callbacks, and cancellation
+- Optional directory invalidation/watch interface used by the host for visible-pane refresh, relocation, and mount retarget
 - Optional search interface for plugin-accelerated search
 - Cross-compiler compatible (no STL in public interfaces)
 - Extensible for future file system types
@@ -235,11 +236,99 @@ interface __declspec(uuid("a4bdbb56-4f3f-4c1b-9b28-2f4c4a08d7af"))
 
 **Host contract:**
 - The host SHOULD call `Initialize()` whenever the mount context changes for a plugin instance.
-- If the host changes the mount context for an existing instance, it MUST invalidate any cached enumeration results for that instance.
+- The host treats `pluginId + normalized instanceContext` as the logical cache/watch identity for a plugin instance.
+- If the host changes the mount context for an existing instance, it MUST re-register that provider under the new logical context and invalidate the old context when it is no longer used.
 
 **Plugin contract:**
 - Plugins MUST treat `Initialize()` as setting the base/root context for subsequent `ReadDirectoryInfo` calls.
 - Plugins MUST copy any input strings they need to keep; callers own the input buffers.
+
+### 0c. Host Mutation Propagation Contract (reference implementation)
+
+The host keeps visible panes correct across plugin instances, panes, and mounted contexts.
+
+**Logical context identity:**
+- Cache and watch sharing are keyed by `pluginId + normalized instanceContext`, not by raw `IFileSystem*`.
+- Multiple live COM instances for the same logical context may coexist; the host shares cache entries and watch state across them.
+
+**Visible-pane correctness rules:**
+- If the direct child list of a visible folder changes, the host refreshes that folder.
+- If the visible current folder is deleted, renamed away, or moved outside its current subtree, the host relocates the pane to the nearest surviving ancestor in that logical context.
+- If no surviving ancestor exists, the host falls back to the plugin root.
+
+**Mounted-context rules:**
+- When a mounted context resolves to a Windows backing path, local file-system rename or move retargets the instance context and preserves the internal plugin path when possible.
+- If that backing item is deleted or no valid retarget exists, the host exits the mount and navigates to the nearest surviving `file:` ancestor or the default local root.
+
+**Watch policy:**
+- Watches are mandatory for visible pinned folders.
+- Additional MRU watches are best-effort and require explicit host opt-in for an off-screen cache entry.
+- The current reference implementation does not opt plain cache borrows into that path, so automatic watch coverage is visible-only by default.
+- Off-screen cache entries may still be invalidated by routed mutations without forcing immediate UI refresh.
+
+### 0d. IFileSystemDirectoryWatch Interface (optional interface, required for mutable built-in plugins)
+
+Plugins MAY provide directory change notifications via `IFileSystemDirectoryWatch`, queried from the active `IFileSystem` instance.
+
+The reference implementation uses this interface for:
+
+- `file` and `dummy` native watch delivery
+- `ftp`, `sftp`, `scp`, `imap`, and `s3` synthetic post-mutation invalidation
+
+Read-only `7z` remains exempt from direct watch support and participates through host backing-path dependency invalidation instead.
+
+**Contract:**
+- `IFileSystemDirectoryWatchCallback` is a raw vtable interface (**NOT COM**). Do not `AddRef/Release` it and do not store it in `wil::com_ptr`.
+- The `cookie` is host-owned and opaque; plugins MUST pass it back verbatim.
+- Callbacks MAY be invoked on background threads and MUST stay fast.
+- The reference host may process a notification batch synchronously in callback order so rename old/new pairs remain coherent; plugins SHOULD NOT assume the host adds another asynchronous reordering stage after callback delivery.
+- `WatchDirectory` watches one directory and is non-recursive.
+- `UnwatchDirectory` MUST guarantee no further callbacks for that watched path after it returns, including in-flight delivery for that registration.
+- Plugins MUST set `notification->sizeBytes = sizeof(FileSystemDirectoryChangeNotification)` before invoking the callback; hosts MUST validate it before reading fields.
+- `overflow = TRUE` means incremental changes are not trustworthy and the host SHOULD perform a full resync of the watched folder.
+- Notifications may come from real backend watches or synthetic plugin-generated invalidations.
+- Synthetic v1 scope: plugins MUST emit notifications for successful RedSalamander/plugin-initiated mutations that affect watched visible folders. They do not need to poll for unrelated backend-side changes in v1.
+
+```cpp
+enum FileSystemDirectoryChangeAction : uint32_t {
+    FILESYSTEM_DIR_CHANGE_UNKNOWN = 0,
+    FILESYSTEM_DIR_CHANGE_ADDED,
+    FILESYSTEM_DIR_CHANGE_REMOVED,
+    FILESYSTEM_DIR_CHANGE_MODIFIED,
+    FILESYSTEM_DIR_CHANGE_RENAMED_OLD_NAME,
+    FILESYSTEM_DIR_CHANGE_RENAMED_NEW_NAME,
+};
+
+struct FileSystemDirectoryChange {
+    FileSystemDirectoryChangeAction action;
+    const wchar_t* relativePath;      // not required to be NUL-terminated
+    unsigned long relativePathSize;   // bytes (not chars)
+};
+
+struct FileSystemDirectoryChangeNotification {
+    uint32_t sizeBytes;               // sizeof(FileSystemDirectoryChangeNotification)
+    const wchar_t* watchedPath;       // NUL-terminated
+    unsigned long watchedPathSize;    // bytes (not chars)
+    const FileSystemDirectoryChange* changes;
+    unsigned long changeCount;
+    BOOL overflow;                    // TRUE if changes were dropped/coalesced
+};
+
+interface __declspec(novtable) IFileSystemDirectoryWatchCallback {
+    virtual HRESULT STDMETHODCALLTYPE FileSystemDirectoryChanged(
+        const FileSystemDirectoryChangeNotification* notification,
+        void* cookie) noexcept = 0;
+};
+
+interface __declspec(uuid("d00f72a2-faf2-47c4-abbe-85dab1e67132")) __declspec(novtable) IFileSystemDirectoryWatch : public IUnknown {
+    virtual HRESULT STDMETHODCALLTYPE WatchDirectory(
+        const wchar_t* path,
+        IFileSystemDirectoryWatchCallback* callback,
+        void* cookie) noexcept = 0;
+
+    virtual HRESULT STDMETHODCALLTYPE UnwatchDirectory(const wchar_t* path) noexcept = 0;
+};
+```
 
 ### 1. INavigationMenu Interface (optional)
 
@@ -1437,6 +1526,19 @@ The `Plugins/FileSystemDummy/` project provides a deterministic in-memory file s
 - `latencyMs` (0..1000)
 - `virtualSpeedLimit` (string, `0` = unlimited; examples: `3KB`, `4MB`)
 
+### Built-in File System Status (2026-03-07)
+
+| Plugin | Plugin IDs / short IDs | Mutating operations | Watch mode | v1 external change coverage | Dependency behavior | Verification |
+| --- | --- | --- | --- | --- | --- | --- |
+| Local file system | `builtin/file-system` / `file` | Copy, move, delete, rename, read, write, create directory | Native Win32-backed `IFileSystemDirectoryWatch` | Local external changes and in-app mutations | Acts as the source of backing-path invalidation for mounted contexts | `Phase7_CacheBorrowNoWatchInvalidation`, `Phase7_CrossPaneVisibleRefreshLocal`, `Phase7_CrossPaneRelocateLocal` |
+| Dummy file system | `builtin/file-system-dummy` / implementation-specific short ID (currently `fk`) | Copy, move, delete, rename, read, write, create directory | Native plugin watch | Deterministic plugin-generated changes and in-app mutations | None | `Phase7_CrossPaneVisibleRefreshDummy` |
+| 7z mount | `builtin/file-system-7z` / `7z` | Read-only | No direct watch interface | None directly; updated through local backing-path impacts | Backing archive rename retargets; delete exits mount | `Phase15_FileSystem7zMountPathImpact` |
+| FTP | `builtin/file-system-ftp` / `ftp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
+| SFTP | `builtin/file-system-sftp` / `sftp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
+| SCP | `builtin/file-system-scp` / `scp` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
+| IMAP | `builtin/file-system-imap` / `imap` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure` plus gated remote phases |
+| S3 | `builtin/file-system-s3` / `s3` | Copy, move, delete, rename, read, write, create directory | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | `Phase16_RemoteWatchContractExposure`; live sandbox phase remains configuration-gated |
+
 ## Error Handling
 
 All interface methods return `HRESULT` values indicating success or failure:
@@ -1522,9 +1624,9 @@ if (FAILED(hr)) {
 - Example: 1000 files × 64 bytes = 64KB initial allocation
 
 **2. Caching:**
-- Plugins MUST NOT implement internal caching of directory listings
-- Cache will be manage outside plugin 
-- Host application is responsible for caching strategies
+- Plugins MUST NOT implement internal caching of directory listings.
+- Cache is managed by the host outside the plugin.
+- Host cache identity is based on logical plugin context (`pluginId + normalized instanceContext`) plus normalized folder path.
 
 **3. Parallel Enumeration:**
 - For network file systems, consider parallel queries across subdirectories
@@ -1566,63 +1668,10 @@ interface IFileSystemStreams : public IUnknown {
 - `IFileSystemIO` (above) provides fast attribute reads (`GetAttributes`).
 - Future versions may add write APIs for attributes/times (either via new methods on a new interface GUID or a separate interface).
 
-**3. Change Notifications (Optional):**
+**3. External remote change polling:**
 
-Plugins MAY provide directory change notifications via the optional `IFileSystemDirectoryWatch` interface queried from the active `IFileSystem` instance.
-
-This is used by the host (`DirectoryInfoCache`) to drive watch-based refresh after file system mutations (the built-in `builtin/file-system` and `builtin/file-system-dummy` plugins implement this).
-
-**Contract:**
-- `IFileSystemDirectoryWatchCallback` is a raw vtable interface (**NOT COM**). Do not `AddRef/Release` it and do not store it in `wil::com_ptr`.
-- `cookie` is host-owned and opaque; plugins MUST pass it back verbatim on every callback.
-- Callbacks MAY be invoked on arbitrary background threads; callback implementations MUST be thread-safe and fast.
-- `WatchDirectory` watches a single directory (non-recursive).
-- `UnwatchDirectory` MUST guarantee no further callbacks for that path after it returns (including in-flight callbacks).
-- Plugins MUST set `notification->sizeBytes = sizeof(FileSystemDirectoryChangeNotification)` before invoking the callback; hosts MUST validate it before reading fields.
-- If `FileSystemDirectoryChange` ever needs to grow, add a stride field on `FileSystemDirectoryChangeNotification` or add `sizeBytes` to each entry (don’t silently reinterpret the array layout).
-- The callback SHOULD include “what changed”: action + affected entry name/path (relative to the watched folder), and MAY batch multiple changes per call. If changes were dropped/coalesced, set `overflow = TRUE` and `changes` MAY be empty.
-
-```cpp
-enum FileSystemDirectoryChangeAction : uint32_t {
-    FILESYSTEM_DIR_CHANGE_UNKNOWN = 0,
-    FILESYSTEM_DIR_CHANGE_ADDED,
-    FILESYSTEM_DIR_CHANGE_REMOVED,
-    FILESYSTEM_DIR_CHANGE_MODIFIED,
-    FILESYSTEM_DIR_CHANGE_RENAMED_OLD_NAME,
-    FILESYSTEM_DIR_CHANGE_RENAMED_NEW_NAME,
-};
-
-struct FileSystemDirectoryChange {
-    FileSystemDirectoryChangeAction action;
-    const wchar_t* relativePath;      // not required to be NUL-terminated
-    unsigned long relativePathSize;   // bytes (not chars)
-};
-
-struct FileSystemDirectoryChangeNotification {
-    uint32_t sizeBytes;              // sizeof(FileSystemDirectoryChangeNotification)
-
-    const wchar_t* watchedPath;       // NUL-terminated
-    unsigned long watchedPathSize;    // bytes (not chars)
-    const FileSystemDirectoryChange* changes;
-    unsigned long changeCount;
-    BOOL overflow;                   // TRUE if changes were dropped/coalesced
-};
-
-interface __declspec(novtable) IFileSystemDirectoryWatchCallback {
-    virtual HRESULT STDMETHODCALLTYPE FileSystemDirectoryChanged(
-        const FileSystemDirectoryChangeNotification* notification,
-        void* cookie) noexcept = 0;
-};
-
-interface __declspec(uuid("d00f72a2-faf2-47c4-abbe-85dab1e67132")) __declspec(novtable) IFileSystemDirectoryWatch : public IUnknown {
-    virtual HRESULT STDMETHODCALLTYPE WatchDirectory(
-        const wchar_t* path,
-        IFileSystemDirectoryWatchCallback* callback,
-        void* cookie) noexcept = 0;
-
-    virtual HRESULT STDMETHODCALLTYPE UnwatchDirectory(const wchar_t* path) noexcept = 0;
-};
-```
+- Synthetic directory-watch implementations only guarantee notifications for successful RedSalamander/plugin-initiated mutations in v1.
+- Unrelated backend-side changes may still require manual refresh or a future polling/subscription mechanism.
 
 **4. Streaming Enumeration:**
 - Paged or streaming directory enumeration for very large folders

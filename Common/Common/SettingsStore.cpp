@@ -1505,6 +1505,10 @@ Common::Settings::ConnectionAuthMode ParseConnectionAuthMode(std::string_view au
     {
         return Common::Settings::ConnectionAuthMode::SshKey;
     }
+    if (auth == "oauth2Pkce")
+    {
+        return Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+    }
     return Common::Settings::ConnectionAuthMode::Password;
 }
 
@@ -1515,6 +1519,7 @@ const char* ConnectionAuthModeToString(Common::Settings::ConnectionAuthMode auth
         case Common::Settings::ConnectionAuthMode::Anonymous: return "anonymous";
         case Common::Settings::ConnectionAuthMode::Password: return "password";
         case Common::Settings::ConnectionAuthMode::SshKey: return "sshKey";
+        case Common::Settings::ConnectionAuthMode::OAuth2Pkce: return "oauth2Pkce";
     }
     return "password";
 }
@@ -2079,7 +2084,9 @@ void ParseConnections(yyjson_val* root, Common::Settings::Settings& out)
                 static_cast<void>(ConvertYyjsonToJsonValue(v, profile.extra));
             }
 
-            const bool hostRequired = profile.pluginId != L"builtin/file-system-s3" && profile.pluginId != L"builtin/file-system-s3table";
+            const bool hostRequired = profile.pluginId != L"builtin/file-system-s3" && profile.pluginId != L"builtin/file-system-s3table" &&
+                                      profile.pluginId != L"builtin/file-system-onedrive-personal" &&
+                                      profile.pluginId != L"builtin/file-system-onedrive-business" && profile.pluginId != L"builtin/file-system-gdrive";
             if (profile.id.empty() || profile.name.empty() || profile.pluginId.empty() || (hostRequired && profile.host.empty()))
             {
                 continue;
@@ -2721,30 +2728,30 @@ std::string_view GetSettingsStoreSchemaJsonUtf8() noexcept
     return cached;
 }
 
-HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
+namespace
 {
-    out = Settings{};
-
-    std::filesystem::path path = GetSettingsPath(appId);
-    if (path.empty())
+[[nodiscard]] HRESULT ResolveSettingsLoadPath(std::wstring_view appId, std::filesystem::path& outPath) noexcept
+{
+    outPath = GetSettingsPath(appId);
+    if (outPath.empty())
     {
         return E_FAIL;
     }
 
 #ifdef _DEBUG
-    if (! IsSettingsFilePresent(path))
+    if (! IsSettingsFilePresent(outPath))
     {
         const std::filesystem::path versionedPath = GetVersionedSettingsPath(appId);
         if (IsSettingsFilePresent(versionedPath))
         {
-            path = versionedPath;
+            outPath = versionedPath;
         }
         else
         {
             const std::filesystem::path legacyPath = GetLegacySettingsPath(appId);
             if (IsSettingsFilePresent(legacyPath))
             {
-                path = legacyPath;
+                outPath = legacyPath;
             }
             else
             {
@@ -2753,12 +2760,12 @@ HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
         }
     }
 #else
-    if (! IsSettingsFilePresent(path))
+    if (! IsSettingsFilePresent(outPath))
     {
         const std::filesystem::path legacyPath = GetLegacySettingsPath(appId);
         if (IsSettingsFilePresent(legacyPath))
         {
-            path = legacyPath;
+            outPath = legacyPath;
         }
         else
         {
@@ -2767,16 +2774,16 @@ HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
     }
 #endif
 
-    if (path.empty())
-    {
-        return S_FALSE;
-    }
+    return outPath.empty() ? S_FALSE : S_OK;
+}
 
+[[nodiscard]] HRESULT LoadSettingsFromResolvedPath(const std::filesystem::path& path, Settings& out, bool backupBadFile, bool fallbackToDefaults) noexcept
+{
     std::string bytes;
     const HRESULT readHr = ReadFileBytes(path, bytes);
     if (FAILED(readHr))
     {
-        return S_FALSE;
+        return fallbackToDefaults ? S_FALSE : readHr;
     }
 
     yyjson_read_err err{};
@@ -2784,8 +2791,12 @@ HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
     if (! doc)
     {
         LogJsonParseError(L"settings file", path, err);
-        BackupBadSettingsFile(path);
-        return S_FALSE;
+        if (backupBadFile)
+        {
+            BackupBadSettingsFile(path);
+            return S_FALSE;
+        }
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
@@ -2794,24 +2805,36 @@ HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
     if (! root || ! yyjson_is_obj(root))
     {
         Debug::Error(L"Failed to parse settings file '{}': expected object at root", path.c_str());
-        BackupBadSettingsFile(path);
-        return S_FALSE;
+        if (backupBadFile)
+        {
+            BackupBadSettingsFile(path);
+            return S_FALSE;
+        }
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     yyjson_val* schema = yyjson_obj_get(root, "schemaVersion");
     if (! schema || ! yyjson_is_int(schema))
     {
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
-        BackupBadSettingsFile(path);
-        return S_FALSE;
+        if (backupBadFile)
+        {
+            BackupBadSettingsFile(path);
+            return S_FALSE;
+        }
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     const int64_t schemaVersion = yyjson_get_int(schema);
     if (schemaVersion != 6 && schemaVersion != 7 && schemaVersion != 8 && schemaVersion != 9 && schemaVersion != 10)
     {
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
-        BackupBadSettingsFile(path);
-        return S_FALSE;
+        if (backupBadFile)
+        {
+            BackupBadSettingsFile(path);
+            return S_FALSE;
+        }
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     out.schemaVersion = static_cast<uint32_t>(schemaVersion);
@@ -2836,8 +2859,101 @@ HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
     ParseSelectionMasks(root, out);
 
     out.schemaVersion = 10;
-
     return S_OK;
+}
+
+[[nodiscard]] HRESULT TryGetSettingsFileStampForPath(const std::filesystem::path& path, SettingsFileStamp& out) noexcept
+{
+    out = SettingsFileStamp{};
+
+    if (path.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    wil::unique_handle file(CreateFileW(
+        path.c_str(), FILE_READ_ATTRIBUTES, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! file)
+    {
+        const DWORD lastError = GetLastError();
+        if (lastError == ERROR_FILE_NOT_FOUND || lastError == ERROR_PATH_NOT_FOUND)
+        {
+            return S_FALSE;
+        }
+
+        const DWORD logged = Debug::ErrorWithLastError(L"Failed to open settings file stamp source '{}'", path.c_str());
+        return HRESULT_FROM_WIN32(logged);
+    }
+
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (! GetFileInformationByHandle(file.get(), &info))
+    {
+        const DWORD logged = Debug::ErrorWithLastError(L"Failed to query settings file stamp for '{}'", path.c_str());
+        return HRESULT_FROM_WIN32(logged);
+    }
+
+    ULARGE_INTEGER lastWrite{};
+    lastWrite.LowPart  = info.ftLastWriteTime.dwLowDateTime;
+    lastWrite.HighPart = info.ftLastWriteTime.dwHighDateTime;
+
+    ULARGE_INTEGER fileSize{};
+    fileSize.LowPart  = info.nFileSizeLow;
+    fileSize.HighPart = info.nFileSizeHigh;
+
+    out.volumeSerialNumber = info.dwVolumeSerialNumber;
+    out.fileIndexHigh      = info.nFileIndexHigh;
+    out.fileIndexLow       = info.nFileIndexLow;
+    out.lastWriteTime      = lastWrite.QuadPart;
+    out.fileSize           = fileSize.QuadPart;
+    return S_OK;
+}
+} // namespace
+
+HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
+{
+    out = Settings{};
+
+    std::filesystem::path path;
+    const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path);
+    if (resolveHr != S_OK)
+    {
+        return resolveHr;
+    }
+
+    return LoadSettingsFromResolvedPath(path, out, true, true);
+}
+
+HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexcept
+{
+    out = Settings{};
+
+    std::filesystem::path path;
+    const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path);
+    if (resolveHr != S_OK)
+    {
+        return resolveHr;
+    }
+
+    return LoadSettingsFromResolvedPath(path, out, false, false);
+}
+
+HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept
+{
+    if (appId.empty())
+    {
+        out = SettingsFileStamp{};
+        return E_INVALIDARG;
+    }
+
+    std::filesystem::path path;
+    const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path);
+    if (resolveHr != S_OK)
+    {
+        out = SettingsFileStamp{};
+        return resolveHr;
+    }
+
+    return TryGetSettingsFileStampForPath(path, out);
 }
 
 std::wstring FormatColor(uint32_t argb)
@@ -3842,6 +3958,11 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
 
         const auto isAwsS3Profile = [&](const Common::Settings::ConnectionProfile& profile) noexcept
         { return profile.pluginId == L"builtin/file-system-s3" || profile.pluginId == L"builtin/file-system-s3table"; };
+        const auto isHostOptionalProfile = [&](const Common::Settings::ConnectionProfile& profile) noexcept
+        {
+            return isAwsS3Profile(profile) || profile.pluginId == L"builtin/file-system-onedrive-personal" ||
+                   profile.pluginId == L"builtin/file-system-onedrive-business" || profile.pluginId == L"builtin/file-system-gdrive";
+        };
 
         const auto isProfilePersistable = [&](const Common::Settings::ConnectionProfile& profile) noexcept
         {
@@ -3853,7 +3974,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             {
                 return false;
             }
-            if (profile.host.empty() && ! isAwsS3Profile(profile))
+            if (profile.host.empty() && ! isHostOptionalProfile(profile))
             {
                 return false;
             }
@@ -3954,8 +4075,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
 
             if (settings.connections->allowInsecureTlsInAutomation != defaults.allowInsecureTlsInAutomation)
             {
-                yyjson_mut_obj_add_bool(
-                    doc, connections, "allowInsecureTlsInAutomation", settings.connections->allowInsecureTlsInAutomation);
+                yyjson_mut_obj_add_bool(doc, connections, "allowInsecureTlsInAutomation", settings.connections->allowInsecureTlsInAutomation);
             }
 
             if (settings.connections->windowsHelloReauthTimeoutMinute != defaults.windowsHelloReauthTimeoutMinute)

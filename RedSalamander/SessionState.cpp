@@ -21,7 +21,7 @@ namespace SessionState
 {
 namespace
 {
-constexpr wchar_t kCompanyDirName[] = L"RedSalamander";
+constexpr wchar_t kCompanyDirName[]  = L"RedSalamander";
 constexpr wchar_t kSessionFileName[] = L"session_state.txt";
 
 std::mutex g_mutex;
@@ -218,8 +218,8 @@ void WriteMarkerFileLocked(const std::vector<std::wstring>& pluginIds, Operation
         return std::nullopt;
     }
 
-    wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING,
-                                        FILE_ATTRIBUTE_NORMAL, nullptr));
+    wil::unique_handle file(CreateFileW(
+        path.c_str(), GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (! file)
     {
         return std::nullopt;
@@ -311,9 +311,9 @@ void UpdateActiveFileSystemPluginIdsAndOperation(std::initializer_list<std::wstr
     std::vector<std::wstring> normalized = NormalizePluginIds(pluginIds);
 
     std::scoped_lock lock(g_mutex);
-    const bool pluginsChanged           = ! EqualNoCase(normalized, g_lastActiveFileSystemPluginIds);
-    const OperationKind previous        = g_lastOperation.load(std::memory_order_acquire);
-    const bool operationChanged         = previous != operation;
+    const bool pluginsChanged    = ! EqualNoCase(normalized, g_lastActiveFileSystemPluginIds);
+    const OperationKind previous = g_lastOperation.load(std::memory_order_acquire);
+    const bool operationChanged  = previous != operation;
     if (! pluginsChanged && ! operationChanged)
     {
         return;
@@ -347,16 +347,16 @@ std::optional<State> TryRead() noexcept
     size_t start = 0;
     while (start < text.size())
     {
-        const size_t end = text.find_first_of(L"\r\n", start);
-        const size_t lineEnd = (end == std::wstring_view::npos) ? text.size() : end;
+        const size_t end       = text.find_first_of(L"\r\n", start);
+        const size_t lineEnd   = (end == std::wstring_view::npos) ? text.size() : end;
         std::wstring_view line = text.substr(start, lineEnd - start);
-        line = Trim(line);
+        line                   = Trim(line);
         if (! line.empty())
         {
             const size_t eq = line.find(L'=');
             if (eq != std::wstring_view::npos)
             {
-                const std::wstring_view key = Trim(line.substr(0, eq));
+                const std::wstring_view key   = Trim(line.substr(0, eq));
                 const std::wstring_view value = Trim(line.substr(eq + 1));
                 if (key.rfind(L"fsPlugin", 0) == 0)
                 {

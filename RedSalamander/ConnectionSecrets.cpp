@@ -33,6 +33,7 @@ constexpr std::wstring_view kTargetPrefix = L"RedSalamander/Connections/";
     {
         case SecretKind::Password: return L"password";
         case SecretKind::SshKeyPassphrase: return L"sshKeyPassphrase";
+        case SecretKind::RefreshToken: return L"refreshToken";
     }
     return L"password";
 }
@@ -177,8 +178,10 @@ std::mutex g_quickConnectMutex;
 std::optional<Common::Settings::ConnectionProfile> g_quickConnectProfile;
 std::wstring g_quickConnectPassword;
 std::wstring g_quickConnectPassphrase;
-bool g_quickConnectHasPassword   = false;
-bool g_quickConnectHasPassphrase = false;
+std::wstring g_quickConnectRefreshToken;
+bool g_quickConnectHasPassword     = false;
+bool g_quickConnectHasPassphrase   = false;
+bool g_quickConnectHasRefreshToken = false;
 
 std::mutex g_secretAccessAuthorizationMutex;
 std::unordered_map<std::wstring, uint64_t> g_lastSecretAccessAuthorizationTickByConnectionId;
@@ -244,11 +247,14 @@ void EnsureQuickConnectProfile(std::wstring_view preferredPluginId) noexcept
     TryAssign(profile.id, kQuickConnectConnectionId);
     TryAssign(profile.name, kQuickConnectConnectionName);
     TryAssign(profile.pluginId, preferredPluginId.empty() ? L"builtin/file-system-ftp" : preferredPluginId);
-    profile.host                = L"";
-    profile.port                = 0;
-    profile.userName            = L"";
-    profile.authMode            = Common::Settings::ConnectionAuthMode::Password;
-    profile.savePassword        = true;
+    profile.host         = L"";
+    profile.port         = 0;
+    profile.userName     = L"";
+    profile.authMode     = (profile.pluginId == L"builtin/file-system-onedrive-personal" || profile.pluginId == L"builtin/file-system-onedrive-business" ||
+                        profile.pluginId == L"builtin/file-system-sharepoint" || profile.pluginId == L"builtin/file-system-gdrive")
+                               ? Common::Settings::ConnectionAuthMode::OAuth2Pkce
+                               : Common::Settings::ConnectionAuthMode::Password;
+    profile.savePassword = true;
     profile.requireWindowsHello = true;
 
     g_quickConnectProfile.emplace(std::move(profile));
@@ -286,6 +292,7 @@ bool HasQuickConnectSecret(SecretKind kind) noexcept
     {
         case SecretKind::Password: return g_quickConnectHasPassword;
         case SecretKind::SshKeyPassphrase: return g_quickConnectHasPassphrase;
+        case SecretKind::RefreshToken: return g_quickConnectHasRefreshToken;
     }
     return false;
 }
@@ -313,6 +320,14 @@ HRESULT LoadQuickConnectSecret(SecretKind kind, std::wstring& secretOut) noexcep
 
             secretOut = g_quickConnectPassphrase;
             return S_OK;
+        case SecretKind::RefreshToken:
+            if (! g_quickConnectHasRefreshToken || g_quickConnectRefreshToken.empty())
+            {
+                return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+            }
+
+            secretOut = g_quickConnectRefreshToken;
+            return S_OK;
     }
 
     return E_INVALIDARG;
@@ -333,6 +348,10 @@ void SetQuickConnectSecret(SecretKind kind, std::wstring_view secret) noexcept
                 g_quickConnectHasPassphrase = false;
                 g_quickConnectPassphrase.clear();
                 return;
+            case SecretKind::RefreshToken:
+                g_quickConnectHasRefreshToken = false;
+                g_quickConnectRefreshToken.clear();
+                return;
         }
         return;
     }
@@ -346,6 +365,10 @@ void SetQuickConnectSecret(SecretKind kind, std::wstring_view secret) noexcept
         case SecretKind::SshKeyPassphrase:
             g_quickConnectPassphrase.assign(secret);
             g_quickConnectHasPassphrase = true;
+            return;
+        case SecretKind::RefreshToken:
+            g_quickConnectRefreshToken.assign(secret);
+            g_quickConnectHasRefreshToken = true;
             return;
     }
 }

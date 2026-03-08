@@ -25,5 +25,5 @@ namespace ConnectionProfileUtils
 [[nodiscard]] std::optional<std::wstring> TryParseConnNameFromPluginPath(const std::optional<std::filesystem::path>& pluginPath) noexcept;
 
 [[nodiscard]] bool ConnectionProfileUsesInsecureTls(const Common::Settings::ConnectionProfile& profile) noexcept;
+[[nodiscard]] std::wstring BuildConnectionDisplayUrl(const Common::Settings::ConnectionProfile& profile) noexcept;
 } // namespace ConnectionProfileUtils
-

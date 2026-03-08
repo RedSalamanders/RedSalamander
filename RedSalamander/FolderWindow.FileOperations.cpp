@@ -6,7 +6,11 @@
 #include "NavigationLocation.h"
 
 #include <limits>
+
+#pragma warning(push)
+#pragma warning(disable : 6297 28182) // yyjson warnings
 #include <yyjson.h>
+#pragma warning(pop)
 
 namespace
 {
@@ -751,19 +755,85 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
     PaneState& src            = sourcePane == Pane::Left ? _leftPane : _rightPane;
     DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
 
-    const auto srcFolder = src.folderView.GetFolderPath();
-    if (! src.fileSystem || ! srcFolder.has_value() || ! cache.IsFolderWatched(src.fileSystem.get(), srcFolder.value()))
+    const auto forceRefreshPane = [&](PaneState& paneState)
     {
-        src.folderView.ForceRefresh();
-    }
-
-    if (destinationPane.has_value())
-    {
-        PaneState& dst       = destinationPane.value() == Pane::Left ? _leftPane : _rightPane;
-        const auto dstFolder = dst.folderView.GetFolderPath();
-        if (! dst.fileSystem || ! dstFolder.has_value() || ! cache.IsFolderWatched(dst.fileSystem.get(), dstFolder.value()))
+        const auto folder = paneState.folderView.GetFolderPath();
+        if (! paneState.fileSystem || ! folder.has_value() || ! cache.IsFolderWatched(paneState.fileSystem.get(), folder.value()))
         {
-            dst.folderView.ForceRefresh();
+            paneState.folderView.ForceRefresh();
+        }
+    };
+
+    if (SUCCEEDED(payload->hr))
+    {
+        PaneState* dst         = destinationPane.has_value() ? &(destinationPane.value() == Pane::Left ? _leftPane : _rightPane) : nullptr;
+        const bool sameContext = dst != nullptr && CompareStringOrdinal(src.pluginId.c_str(), -1, dst->pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
+                                 NavigationLocation::EqualsNoCase(src.instanceContext, dst->instanceContext);
+
+        switch (task->GetOperation())
+        {
+            case FILESYSTEM_COPY:
+                if (dst != nullptr && dst->fileSystem)
+                {
+                    cache.NotifyFolderContentsChanged(dst->fileSystem.get(), task->GetDestinationFolder());
+                }
+                break;
+            case FILESYSTEM_MOVE:
+                if (sameContext && src.fileSystem)
+                {
+                    const std::filesystem::path destinationFolder = task->GetDestinationFolder();
+                    for (const auto& sourcePath : task->_sourcePaths)
+                    {
+                        cache.NotifyPathMoved(src.fileSystem.get(), sourcePath, destinationFolder / sourcePath.filename());
+                    }
+                }
+                else
+                {
+                    if (src.fileSystem)
+                    {
+                        for (const auto& sourcePath : task->_sourcePaths)
+                        {
+                            cache.NotifyPathDeleted(src.fileSystem.get(), sourcePath);
+                        }
+                    }
+                    if (dst != nullptr && dst->fileSystem)
+                    {
+                        cache.NotifyFolderContentsChanged(dst->fileSystem.get(), task->GetDestinationFolder());
+                    }
+                }
+                break;
+            case FILESYSTEM_DELETE:
+                if (src.fileSystem)
+                {
+                    for (const auto& sourcePath : task->_sourcePaths)
+                    {
+                        cache.NotifyPathDeleted(src.fileSystem.get(), sourcePath);
+                    }
+                }
+                break;
+            case FILESYSTEM_RENAME:
+                forceRefreshPane(src);
+                if (dst != nullptr)
+                {
+                    forceRefreshPane(*dst);
+                }
+                break;
+            default:
+                forceRefreshPane(src);
+                if (dst != nullptr)
+                {
+                    forceRefreshPane(*dst);
+                }
+                break;
+        }
+    }
+    else
+    {
+        forceRefreshPane(src);
+        if (destinationPane.has_value())
+        {
+            PaneState& dst = destinationPane.value() == Pane::Left ? _leftPane : _rightPane;
+            forceRefreshPane(dst);
         }
     }
 

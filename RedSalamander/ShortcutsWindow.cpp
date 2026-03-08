@@ -15,7 +15,7 @@
 
 #include "CommandRegistry.h"
 #include "Helpers.h"
-#include "SettingsSave.h"
+#include "SettingsHotReload.h"
 #include "ShortcutManager.h"
 #include "ShortcutText.h"
 #include "ThemedControls.h"
@@ -713,8 +713,7 @@ LRESULT ShortcutsWindow::OnNcDestroyMessage() noexcept
     {
         WindowPlacementPersistence::Save(*_settings, kShortcutsWindowId, _hWnd.get());
 
-        const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(*_settings);
-        const HRESULT saveHr                            = Common::Settings::SaveSettings(kSettingsAppId, settingsToSave);
+        const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kSettingsAppId, *_settings);
         if (FAILED(saveHr))
         {
             const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kSettingsAppId);

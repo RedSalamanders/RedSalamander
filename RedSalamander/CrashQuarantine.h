@@ -11,4 +11,3 @@ namespace CrashQuarantine
 // Must be called after settings load and before plugin initialization.
 void OfferPluginDisableIfPreviousCrashDetected(Common::Settings::Settings& settings) noexcept;
 } // namespace CrashQuarantine
-

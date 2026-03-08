@@ -21,6 +21,7 @@ enum class SecretKind : uint8_t
 {
     Password,
     SshKeyPassphrase,
+    RefreshToken,
 };
 
 [[nodiscard]] std::wstring BuildCredentialTargetName(std::wstring_view connectionId, SecretKind kind);

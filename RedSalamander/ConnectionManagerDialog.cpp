@@ -21,12 +21,11 @@
 #include <vector>
 
 #include "ConnectionCredentialPromptDialog.h"
-#include "ConnectionSecrets.h"
 #include "ConnectionProfileUtils.h"
+#include "ConnectionSecrets.h"
 #include "Helpers.h"
 #include "HostServices.h"
-#include "SettingsSave.h"
-#include "SettingsSchemaExport.h"
+#include "SettingsHotReload.h"
 #include "ThemedControls.h"
 #include "ThemedInputFrames.h"
 #include "WindowMaximizeBehavior.h"
@@ -78,6 +77,10 @@ constexpr ProtocolEntry kProtocols[] = {
     {L"builtin/file-system-sftp", L"SFTP"},
     {L"builtin/file-system-scp", L"SCP"},
     {L"builtin/file-system-imap", L"IMAP"},
+    {L"builtin/file-system-gdrive", L"Google Drive"},
+    {L"builtin/file-system-onedrive-personal", L"OneDrive Personal"},
+    {L"builtin/file-system-onedrive-business", L"OneDrive Business"},
+    {L"builtin/file-system-sharepoint", L"SharePoint"},
     {L"builtin/file-system-s3", L"S3"},
     {L"builtin/file-system-s3table", L"S3 Table"},
     {L"builtin/file-system-dummy", L"Dummy"},
@@ -420,9 +423,34 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     return pluginId == L"builtin/file-system-imap";
 }
 
+[[nodiscard]] bool IsGoogleDrivePluginId(std::wstring_view pluginId) noexcept
+{
+    return pluginId == L"builtin/file-system-gdrive";
+}
+
 [[nodiscard]] bool IsS3PluginId(std::wstring_view pluginId) noexcept
 {
     return pluginId == L"builtin/file-system-s3";
+}
+
+[[nodiscard]] bool IsOneDrivePersonalPluginId(std::wstring_view pluginId) noexcept
+{
+    return pluginId == L"builtin/file-system-onedrive-personal";
+}
+
+[[nodiscard]] bool IsOneDriveBusinessPluginId(std::wstring_view pluginId) noexcept
+{
+    return pluginId == L"builtin/file-system-onedrive-business";
+}
+
+[[nodiscard]] bool IsSharePointPluginId(std::wstring_view pluginId) noexcept
+{
+    return pluginId == L"builtin/file-system-sharepoint";
+}
+
+[[nodiscard]] bool IsMicrosoftPluginId(std::wstring_view pluginId) noexcept
+{
+    return IsOneDrivePersonalPluginId(pluginId) || IsOneDriveBusinessPluginId(pluginId) || IsSharePointPluginId(pluginId);
 }
 
 [[nodiscard]] bool IsS3TablePluginId(std::wstring_view pluginId) noexcept
@@ -433,64 +461,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 [[nodiscard]] bool IsAwsS3PluginId(std::wstring_view pluginId) noexcept
 {
     return IsS3PluginId(pluginId) || IsS3TablePluginId(pluginId);
-}
-
-[[nodiscard]] std::wstring BuildConnectionDisplayUrl(const Common::Settings::ConnectionProfile& profile) noexcept
-{
-    const wchar_t* scheme = nullptr;
-    if (IsFtpPluginId(profile.pluginId))
-    {
-        scheme = L"ftp";
-    }
-    else if (profile.pluginId == L"builtin/file-system-sftp")
-    {
-        scheme = L"sftp";
-    }
-    else if (profile.pluginId == L"builtin/file-system-scp")
-    {
-        scheme = L"scp";
-    }
-    else if (IsImapPluginId(profile.pluginId))
-    {
-        scheme = L"imap";
-    }
-    else if (IsS3PluginId(profile.pluginId))
-    {
-        scheme = L"s3";
-    }
-    else if (IsS3TablePluginId(profile.pluginId))
-    {
-        scheme = L"s3table";
-    }
-
-    if (! scheme || profile.host.empty())
-    {
-        return {};
-    }
-
-    std::wstring authority = profile.host;
-    if (profile.port != 0)
-    {
-        authority = std::format(L"{}:{}", profile.host, profile.port);
-    }
-
-    std::wstring user;
-    if (profile.authMode == Common::Settings::ConnectionAuthMode::Anonymous)
-    {
-        user = L"anonymous";
-    }
-    else if (! profile.userName.empty())
-    {
-        user = profile.userName;
-    }
-
-    const bool hideAnonymous = IsFtpPluginId(profile.pluginId) && (user == L"anonymous");
-    const bool showUser      = ! user.empty() && ! hideAnonymous;
-    if (showUser)
-    {
-        return std::format(L"{}://{}@{}", scheme, user, authority);
-    }
-    return std::format(L"{}://{}", scheme, authority);
 }
 
 [[nodiscard]] bool TryParsePort(std::wstring_view text, uint32_t& out) noexcept
@@ -878,9 +848,10 @@ struct DialogState
     HWND sshKnownHostsEdit            = nullptr;
     HWND sshKnownHostsBrowseBtn       = nullptr;
 
-    int selectedListIndex = -1;
-    bool loadingControls  = false;
-    bool secretVisible    = false;
+    int selectedListIndex        = -1;
+    bool loadingControls         = false;
+    bool secretVisible           = false;
+    bool staleFromExternalReload = false;
 
     RECT settingsViewport{}; // In dialog coordinates (client): the host client viewport where cards are painted.
     int settingsScrollOffset = 0;
@@ -935,6 +906,37 @@ void PopulateStateFromSettings(DialogState& state, const Common::Settings::Setti
     if (! filterPluginId.empty())
     {
         quickConnect.pluginId.assign(filterPluginId);
+        if (IsMicrosoftPluginId(filterPluginId) || IsGoogleDrivePluginId(filterPluginId))
+        {
+            quickConnect.authMode = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+            quickConnect.port     = 0;
+        }
+        if (IsGoogleDrivePluginId(filterPluginId))
+        {
+            quickConnect.host.clear();
+            if (quickConnect.initialPath.empty())
+            {
+                quickConnect.initialPath = L"/";
+            }
+            quickConnect.savePassword        = true;
+            quickConnect.requireWindowsHello = true;
+            if (! ExtraGetString(quickConnect.extra, "rootKind").has_value())
+            {
+                ExtraSetString(quickConnect.extra, "rootKind", L"myDrive");
+            }
+            if (! ConnectionProfileUtils::ExtraGetBool(quickConnect.extra, "readOnly").has_value())
+            {
+                ExtraSetBool(quickConnect.extra, "readOnly", false);
+            }
+            if (! ConnectionProfileUtils::ExtraGetBool(quickConnect.extra, "useDefaultClientId").has_value())
+            {
+                ExtraSetBool(quickConnect.extra, "useDefaultClientId", true);
+            }
+            if (const auto googleDocsMode = ExtraGetString(quickConnect.extra, "googleDocsMode"); ! googleDocsMode.has_value() || googleDocsMode->empty())
+            {
+                ExtraSetString(quickConnect.extra, "googleDocsMode", L"export");
+            }
+        }
     }
     state.connections.insert(state.connections.begin(), std::move(quickConnect));
 }
@@ -1010,15 +1012,9 @@ void PersistSettings(HWND owner, Common::Settings::Settings& settings, std::wstr
         return;
     }
 
-    const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(settings);
-    const HRESULT hr                                = Common::Settings::SaveSettings(appId, settingsToSave);
+    const HRESULT hr = SettingsHotReload::SaveSettingsAndSchema(appId, settings);
     if (SUCCEEDED(hr))
     {
-        const HRESULT schemaHr = SaveAggregatedSettingsSchema(appId, settings);
-        if (FAILED(schemaHr))
-        {
-            Debug::Error(L"Failed to write aggregated settings schema (hr=0x{:08X})", static_cast<unsigned long>(schemaHr));
-        }
         return;
     }
 
@@ -1034,6 +1030,12 @@ void PersistSettings(HWND owner, Common::Settings::Settings& settings, std::wstr
     const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
     ShowDialogAlert(owner, HOST_ALERT_ERROR, title, message);
 }
+
+[[nodiscard]] bool IsConnectionManagerDirty(DialogState& state) noexcept;
+void RefreshConnectionManagerTheme(HWND dlg, DialogState& state) noexcept;
+void ReloadConnectionManagerFromDisk(HWND dlg, DialogState& state) noexcept;
+[[nodiscard]] bool ResolveConnectionManagerStaleSaveConflict(HWND dlg, DialogState& state) noexcept;
+INT_PTR OnConnectionManagerSettingsReloadedFromDisk(HWND dlg, DialogState& state) noexcept;
 
 void EnsureControls(DialogState& state, HWND dlg) noexcept
 {
@@ -1195,7 +1197,7 @@ void UpdateSecretVisibility(DialogState& state) noexcept
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
-    if (profile.authMode == Common::Settings::ConnectionAuthMode::Anonymous)
+    if (profile.authMode == Common::Settings::ConnectionAuthMode::Anonymous || profile.authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
@@ -1259,7 +1261,7 @@ void UpdateSecretVisibility(DialogState& state) noexcept
 
     const bool sshPassphrase = profile.authMode == Common::Settings::ConnectionAuthMode::SshKey;
     const auto& stagedMap    = sshPassphrase ? state.stagedPassphraseById : state.stagedPasswordById;
-    if (const auto it = stagedMap.find(profile.id); it != stagedMap.end() && ! it->second.empty())
+    if (stagedMap.contains(profile.id))
     {
         return true;
     }
@@ -1298,6 +1300,26 @@ void UpdateSecretVisibility(DialogState& state) noexcept
 
 void ApplyPluginDefaultsToNewProfile(const DialogState& state, Common::Settings::ConnectionProfile& profile) noexcept
 {
+    if (IsMicrosoftPluginId(profile.pluginId))
+    {
+        profile.authMode = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+        profile.port     = 0;
+    }
+    else if (IsGoogleDrivePluginId(profile.pluginId))
+    {
+        profile.host.clear();
+        profile.port        = 0;
+        profile.initialPath = L"/";
+        profile.userName.clear();
+        profile.authMode            = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+        profile.savePassword        = true;
+        profile.requireWindowsHello = true;
+        ExtraSetString(profile.extra, "rootKind", L"myDrive");
+        ExtraSetBool(profile.extra, "readOnly", false);
+        ExtraSetBool(profile.extra, "useDefaultClientId", true);
+        ExtraSetString(profile.extra, "googleDocsMode", L"export");
+    }
+
     if (IsAwsS3PluginId(profile.pluginId))
     {
         if (profile.host.empty())
@@ -1619,12 +1641,15 @@ void UpdateControlEnabledState(DialogState& state) noexcept
     const bool isFtp          = profile && IsFtpPluginId(profile->pluginId);
     const bool isSsh          = profile && IsSshPluginId(profile->pluginId);
     const bool isImap         = profile && IsImapPluginId(profile->pluginId);
+    const bool isGoogleDrive  = profile && IsGoogleDrivePluginId(profile->pluginId);
+    const bool isMicrosoft    = profile && IsMicrosoftPluginId(profile->pluginId);
     const bool isS3           = profile && IsS3PluginId(profile->pluginId);
     const bool isS3Table      = profile && IsS3TablePluginId(profile->pluginId);
     const bool isAwsS3        = isS3 || isS3Table;
     const bool isQuickConnect = profile && IsQuickConnectProfile(*profile);
     const bool anonymous      = isFtp && profile && profile->authMode == Common::Settings::ConnectionAuthMode::Anonymous;
     const bool sshKey         = isSsh && profile && profile->authMode == Common::Settings::ConnectionAuthMode::SshKey;
+    const bool oauth2         = (isMicrosoft || isGoogleDrive) && profile && profile->authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce;
 
     const auto show = [&](HWND hwnd, bool visible) noexcept
     {
@@ -1645,7 +1670,8 @@ void UpdateControlEnabledState(DialogState& state) noexcept
     show(state.awsRegionCombo, showAwsRegionCombo);
     showFrame(state.awsRegionFrame, showAwsRegionCombo);
 
-    const bool showHostEdit = hasSelection && ! isAwsS3;
+    const bool showHostEdit = hasSelection && ! isAwsS3 && ! isGoogleDrive && ! IsOneDrivePersonalPluginId(profile ? profile->pluginId : std::wstring_view{}) &&
+                              ! IsOneDriveBusinessPluginId(profile ? profile->pluginId : std::wstring_view{});
     show(state.hostEdit, showHostEdit);
     showFrame(state.hostFrame, showHostEdit);
 
@@ -1691,11 +1717,22 @@ void UpdateControlEnabledState(DialogState& state) noexcept
             static_cast<UINT>(isAwsS3 ? IDS_CONNECTIONS_LABEL_SECRET_ACCESS_KEY : (sshKey ? IDS_CONNECTIONS_LABEL_PASSPHRASE : IDS_CONNECTIONS_LABEL_PASSWORD));
         SetWindowTextW(state.secretLabel, LoadStringResource(nullptr, id).c_str());
     }
+    if (state.savePasswordLabel)
+    {
+        const UINT id = static_cast<UINT>(oauth2 ? IDS_CONNECTIONS_LABEL_REMEMBER_SIGN_IN : IDS_CONNECTIONS_LABEL_SAVE_PASSWORD);
+        SetWindowTextW(state.savePasswordLabel, LoadStringResource(nullptr, id).c_str());
+    }
+
+    const bool showSecretRow = hasSelection && ! oauth2;
+    show(state.secretLabel, showSecretRow);
+    show(state.secretEdit, showSecretRow);
+    showFrame(state.secretFrame, showSecretRow);
+    show(state.showSecretBtn, showSecretRow);
 
     EnableWindow(state.nameEdit, hasSelection && ! isQuickConnect);
-    EnableWindow(state.hostEdit, hasSelection && ! isAwsS3);
+    EnableWindow(state.hostEdit, showHostEdit);
     EnableWindow(state.awsRegionCombo, hasSelection && isAwsS3);
-    EnableWindow(state.portEdit, hasSelection && ! isAwsS3);
+    EnableWindow(state.portEdit, hasSelection && ! isAwsS3 && ! isMicrosoft && ! isGoogleDrive);
     EnableWindow(state.initialPathEdit, hasSelection);
 
     const bool supportsCopyMoveOps = hasSelection && ! isImap;
@@ -1707,8 +1744,8 @@ void UpdateControlEnabledState(DialogState& state) noexcept
 
     const bool authInputsEnabled = hasSelection && ! anonymous;
     EnableWindow(state.userEdit, authInputsEnabled);
-    EnableWindow(state.secretEdit, authInputsEnabled);
-    EnableWindow(state.showSecretBtn, authInputsEnabled);
+    EnableWindow(state.secretEdit, authInputsEnabled && showSecretRow);
+    EnableWindow(state.showSecretBtn, authInputsEnabled && showSecretRow);
     EnableWindow(state.s3EndpointOverrideEdit, showS3Section);
     EnableWindow(state.s3UseHttpsToggle, showS3Section);
     EnableWindow(state.s3VerifyTlsToggle, showS3Section);
@@ -1721,7 +1758,7 @@ void UpdateControlEnabledState(DialogState& state) noexcept
     show(state.ignoreSslTrustToggle, showIgnoreSslTrust);
     EnableWindow(state.ignoreSslTrustToggle, showIgnoreSslTrust);
 
-    const bool showPort = hasSelection && ! isAwsS3;
+    const bool showPort = hasSelection && ! isAwsS3 && ! isMicrosoft && ! isGoogleDrive;
     show(state.portLabel, showPort);
     show(state.portEdit, showPort);
     showFrame(state.portFrame, showPort);
@@ -1761,7 +1798,7 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
     SetWindowTextW(state.initialPathEdit, initialPath.c_str());
 
     {
-    const uint32_t copyMoveOverride = ConnectionProfileUtils::ExtraGetUInt32(profile.extra, "copyMoveMaxConcurrency").value_or(0);
+        const uint32_t copyMoveOverride = ConnectionProfileUtils::ExtraGetUInt32(profile.extra, "copyMoveMaxConcurrency").value_or(0);
         if (copyMoveOverride > 0)
         {
             SetWindowTextW(state.copyMoveMaxConcurrencyEdit, std::to_wstring(copyMoveOverride).c_str());
@@ -1771,7 +1808,7 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
             SetWindowTextW(state.copyMoveMaxConcurrencyEdit, L"");
         }
 
-    const uint32_t deleteOverride = ConnectionProfileUtils::ExtraGetUInt32(profile.extra, "deleteMaxConcurrency").value_or(0);
+        const uint32_t deleteOverride = ConnectionProfileUtils::ExtraGetUInt32(profile.extra, "deleteMaxConcurrency").value_or(0);
         if (deleteOverride > 0)
         {
             SetWindowTextW(state.deleteMaxConcurrencyEdit, std::to_wstring(deleteOverride).c_str());
@@ -1793,8 +1830,9 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
     std::wstring secretText;
     const bool sshKeyAuth    = profile.authMode == Common::Settings::ConnectionAuthMode::SshKey;
     const bool anonymousAuth = profile.authMode == Common::Settings::ConnectionAuthMode::Anonymous;
+    const bool oauthAuth     = profile.authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce;
 
-    if (! profile.id.empty() && profile.savePassword && ! anonymousAuth)
+    if (! profile.id.empty() && profile.savePassword && ! anonymousAuth && ! oauthAuth)
     {
         const auto& stagedMap = sshKeyAuth ? state.stagedPassphraseById : state.stagedPasswordById;
         if (const auto it = stagedMap.find(profile.id); it != stagedMap.end() && ! it->second.empty())
@@ -1824,9 +1862,7 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
 
     SetTwoStateToggleState(state.savePasswordToggle, state.theme, profile.savePassword);
     SetTwoStateToggleState(state.requireHelloToggle, state.theme, profile.savePassword && profile.requireWindowsHello);
-    SetTwoStateToggleState(state.ignoreSslTrustToggle,
-                           state.theme,
-                           ConnectionProfileUtils::ExtraGetBool(profile.extra, "ignoreSslTrust").value_or(false));
+    SetTwoStateToggleState(state.ignoreSslTrustToggle, state.theme, ConnectionProfileUtils::ExtraGetBool(profile.extra, "ignoreSslTrust").value_or(false));
 
     if (const auto v = ExtraGetString(profile.extra, "sshPrivateKey"); v.has_value())
     {
@@ -1855,15 +1891,10 @@ void LoadEditorFromProfile(DialogState& state, const Common::Settings::Connectio
         SetWindowTextW(state.s3EndpointOverrideEdit, L"");
     }
 
-    SetTwoStateToggleState(state.s3UseHttpsToggle,
-                           state.theme,
-                           ConnectionProfileUtils::ExtraGetBool(profile.extra, "useHttps").value_or(true));
-    SetTwoStateToggleState(state.s3VerifyTlsToggle,
-                           state.theme,
-                           ConnectionProfileUtils::ExtraGetBool(profile.extra, "verifyTls").value_or(true));
-    SetTwoStateToggleState(state.s3UseVirtualAddressingToggle,
-                           state.theme,
-                           ConnectionProfileUtils::ExtraGetBool(profile.extra, "useVirtualAddressing").value_or(true));
+    SetTwoStateToggleState(state.s3UseHttpsToggle, state.theme, ConnectionProfileUtils::ExtraGetBool(profile.extra, "useHttps").value_or(true));
+    SetTwoStateToggleState(state.s3VerifyTlsToggle, state.theme, ConnectionProfileUtils::ExtraGetBool(profile.extra, "verifyTls").value_or(true));
+    SetTwoStateToggleState(
+        state.s3UseVirtualAddressingToggle, state.theme, ConnectionProfileUtils::ExtraGetBool(profile.extra, "useVirtualAddressing").value_or(true));
 
     state.loadingControls = false;
 }
@@ -1954,18 +1985,28 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
         profile.pluginId = state.filterPluginId;
     }
 
+    const bool isGoogleDrive          = IsGoogleDrivePluginId(profile.pluginId);
     const HWND hostControl            = IsAwsS3PluginId(profile.pluginId) && state.awsRegionCombo ? state.awsRegionCombo : state.hostEdit;
-    const std::wstring rawHost        = Win32Text::GetWindowTextString(hostControl);
+    const std::wstring rawHost        = isGoogleDrive ? std::wstring{} : Win32Text::GetWindowTextString(hostControl);
     const std::wstring normalizedHost = TrimWhitespace(rawHost);
-    profile.host                      = normalizedHost;
-    if (hostControl && ! state.loadingControls && rawHost != normalizedHost)
+    profile.host                      = isGoogleDrive ? std::wstring{} : normalizedHost;
+    if (! isGoogleDrive && hostControl && ! state.loadingControls && rawHost != normalizedHost)
     {
         SetWindowTextW(hostControl, normalizedHost.c_str());
+    }
+
+    if (IsOneDrivePersonalPluginId(profile.pluginId) || IsOneDriveBusinessPluginId(profile.pluginId))
+    {
+        profile.host.clear();
     }
 
     if (IsAwsS3PluginId(profile.pluginId))
     {
         // S3/S3 Tables connections are region-based; any port value is ignored.
+        profile.port = 0;
+    }
+    else if (IsMicrosoftPluginId(profile.pluginId) || isGoogleDrive)
+    {
         profile.port = 0;
     }
     else
@@ -2066,6 +2107,25 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
             ExtraSetBool(profile.extra, "useVirtualAddressing", GetTwoStateToggleState(state.s3UseVirtualAddressingToggle, state.theme));
         }
     }
+    else if (isGoogleDrive)
+    {
+        if (! ExtraGetString(profile.extra, "rootKind").has_value())
+        {
+            ExtraSetString(profile.extra, "rootKind", L"myDrive");
+        }
+        if (! ConnectionProfileUtils::ExtraGetBool(profile.extra, "readOnly").has_value())
+        {
+            ExtraSetBool(profile.extra, "readOnly", false);
+        }
+        if (! ConnectionProfileUtils::ExtraGetBool(profile.extra, "useDefaultClientId").has_value())
+        {
+            ExtraSetBool(profile.extra, "useDefaultClientId", true);
+        }
+        if (const auto googleDocsMode = ExtraGetString(profile.extra, "googleDocsMode"); ! googleDocsMode.has_value() || googleDocsMode->empty())
+        {
+            ExtraSetString(profile.extra, "googleDocsMode", L"export");
+        }
+    }
 
     const std::wstring sshPrivateKey = Win32Text::GetWindowTextString(state.sshPrivateKeyEdit);
     ExtraSetString(profile.extra, "sshPrivateKey", sshPrivateKey);
@@ -2074,6 +2134,10 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
     if (IsSshPluginId(profile.pluginId))
     {
         profile.authMode = sshPrivateKey.empty() ? Common::Settings::ConnectionAuthMode::Password : Common::Settings::ConnectionAuthMode::SshKey;
+    }
+    else if (IsMicrosoftPluginId(profile.pluginId) || isGoogleDrive)
+    {
+        profile.authMode = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
     }
 
     StageSecretsFromEditor(state, profile);
@@ -2121,7 +2185,9 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
         ShowDialogAlert(dlg, HOST_ALERT_ERROR, LoadStringResource(nullptr, IDS_CAPTION_ERROR), LoadStringResource(nullptr, IDS_CONNECTIONS_ERR_NAME_REQUIRED));
         return E_INVALIDARG;
     }
-    if (profile.host.empty() && ! IsAwsS3PluginId(profile.pluginId))
+    const bool requiresHost = ! IsAwsS3PluginId(profile.pluginId) && ! IsOneDrivePersonalPluginId(profile.pluginId) &&
+                              ! IsOneDriveBusinessPluginId(profile.pluginId) && ! IsGoogleDrivePluginId(profile.pluginId);
+    if (profile.host.empty() && requiresHost)
     {
         ShowDialogAlert(dlg, HOST_ALERT_ERROR, LoadStringResource(nullptr, IDS_CAPTION_ERROR), LoadStringResource(nullptr, IDS_CONNECTIONS_ERR_HOST_REQUIRED));
         return E_INVALIDARG;
@@ -2163,6 +2229,10 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
                 return E_INVALIDARG;
             }
         }
+        else if (profile.authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce)
+        {
+            // OAuth connections may obtain or refresh tokens interactively at connect time.
+        }
     }
 
     return S_OK;
@@ -2197,7 +2267,7 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
     std::wstring message                = FormatStringResource(nullptr, IDS_CONNECTIONS_PROMPT_PASSWORD_MESSAGE_FMT, displayName);
     const std::wstring secretLabel      = LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_PASSWORD);
 
-    if (const std::wstring url = BuildConnectionDisplayUrl(profile); ! url.empty())
+    if (const std::wstring url = ConnectionProfileUtils::BuildConnectionDisplayUrl(profile); ! url.empty())
     {
         message = std::format(L"{}\n{}", message, url);
     }
@@ -2229,37 +2299,53 @@ HRESULT CommitSecretsForProfile(const DialogState& state, const Common::Settings
 {
     const std::wstring passwordTarget   = BuildCredentialTargetName(profile.id, SecretKind::Password);
     const std::wstring passphraseTarget = BuildCredentialTargetName(profile.id, SecretKind::SshKeyPassphrase);
+    const std::wstring refreshTarget    = BuildCredentialTargetName(profile.id, SecretKind::RefreshToken);
+    const auto deleteStoredSecret       = [&](const std::wstring& targetName, std::wstring_view kindLabel) noexcept
+    {
+        if (targetName.empty())
+        {
+            return;
+        }
+
+        const HRESULT delHr = DeleteGenericCredential(targetName);
+        if (FAILED(delHr) && delHr != HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
+        {
+            Debug::Warning(L"ConnectionManager: DeleteGenericCredential failed connection='{}' id='{}' kind='{}' hr=0x{:08X}",
+                           profile.name,
+                           profile.id,
+                           kindLabel,
+                           static_cast<unsigned long>(delHr));
+        }
+    };
 
     if (! profile.savePassword)
     {
         Debug::Info(L"ConnectionManager: clearing stored secrets connection='{}' id='{}'", profile.name, profile.id);
-        if (! passwordTarget.empty())
-        {
-            const HRESULT delHr = DeleteGenericCredential(passwordTarget);
-            if (FAILED(delHr) && delHr != HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
-            {
-                Debug::Warning(L"ConnectionManager: DeleteGenericCredential failed connection='{}' id='{}' kind='password' hr=0x{:08X}",
-                               profile.name,
-                               profile.id,
-                               static_cast<unsigned long>(delHr));
-            }
-        }
-        if (! passphraseTarget.empty())
-        {
-            const HRESULT delHr = DeleteGenericCredential(passphraseTarget);
-            if (FAILED(delHr) && delHr != HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
-            {
-                Debug::Warning(L"ConnectionManager: DeleteGenericCredential failed connection='{}' id='{}' kind='sshKeyPassphrase' hr=0x{:08X}",
-                               profile.name,
-                               profile.id,
-                               static_cast<unsigned long>(delHr));
-            }
-        }
+        deleteStoredSecret(passwordTarget, L"password");
+        deleteStoredSecret(passphraseTarget, L"sshKeyPassphrase");
+        deleteStoredSecret(refreshTarget, L"refreshToken");
+        return S_OK;
+    }
+
+    if (profile.authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce)
+    {
+        deleteStoredSecret(passwordTarget, L"password");
+        deleteStoredSecret(passphraseTarget, L"sshKeyPassphrase");
         return S_OK;
     }
 
     const bool sshPassphrase = profile.authMode == Common::Settings::ConnectionAuthMode::SshKey;
     const SecretKind kind    = sshPassphrase ? SecretKind::SshKeyPassphrase : SecretKind::Password;
+    if (sshPassphrase)
+    {
+        deleteStoredSecret(passwordTarget, L"password");
+    }
+    else
+    {
+        deleteStoredSecret(passphraseTarget, L"sshKeyPassphrase");
+    }
+    deleteStoredSecret(refreshTarget, L"refreshToken");
+
     const auto& stagedMap    = sshPassphrase ? state.stagedPassphraseById : state.stagedPasswordById;
     const auto it            = stagedMap.find(profile.id);
     if (it == stagedMap.end() || it->second.empty())
@@ -2288,6 +2374,12 @@ void CommitQuickConnectSecretsAndProfile(const DialogState& state, const Common:
     {
         RedSalamander::Connections::ClearQuickConnectSecret(SecretKind::Password);
         RedSalamander::Connections::ClearQuickConnectSecret(SecretKind::SshKeyPassphrase);
+        RedSalamander::Connections::ClearQuickConnectSecret(SecretKind::RefreshToken);
+        return;
+    }
+
+    if (profile.authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce)
+    {
         return;
     }
 
@@ -2308,6 +2400,11 @@ void CommitQuickConnectSecretsAndProfile(const DialogState& state, const Common:
     if (! state.baselineSettings)
     {
         return true;
+    }
+
+    if (! ResolveConnectionManagerStaleSaveConflict(dlg, state))
+    {
+        return false;
     }
 
     Common::Settings::ConnectionsSettings connSettings;
@@ -2377,6 +2474,7 @@ void DeleteSecretsForRemovedConnections(const DialogState& state) noexcept
 
         const std::wstring passwordTarget   = BuildCredentialTargetName(id, SecretKind::Password);
         const std::wstring passphraseTarget = BuildCredentialTargetName(id, SecretKind::SshKeyPassphrase);
+        const std::wstring refreshTarget    = BuildCredentialTargetName(id, SecretKind::RefreshToken);
         if (! passwordTarget.empty())
         {
             static_cast<void>(DeleteGenericCredential(passwordTarget));
@@ -2384,6 +2482,10 @@ void DeleteSecretsForRemovedConnections(const DialogState& state) noexcept
         if (! passphraseTarget.empty())
         {
             static_cast<void>(DeleteGenericCredential(passphraseTarget));
+        }
+        if (! refreshTarget.empty())
+        {
+            static_cast<void>(DeleteGenericCredential(refreshTarget));
         }
     }
 }
@@ -3524,6 +3626,237 @@ void LayoutDialog(HWND dlg, DialogState& state) noexcept
     InvalidateRect(dlg, nullptr, TRUE);
 }
 
+[[nodiscard]] bool AreEquivalentJsonValue(const Common::Settings::JsonValue& a, const Common::Settings::JsonValue& b) noexcept
+{
+    return a.value == b.value;
+}
+
+[[nodiscard]] bool AreEquivalentConnectionProfile(const Common::Settings::ConnectionProfile& a, const Common::Settings::ConnectionProfile& b) noexcept
+{
+    return a.id == b.id && a.name == b.name && a.pluginId == b.pluginId && a.host == b.host && a.port == b.port && a.initialPath == b.initialPath &&
+           a.userName == b.userName && a.authMode == b.authMode && a.savePassword == b.savePassword && a.requireWindowsHello == b.requireWindowsHello &&
+           AreEquivalentJsonValue(a.extra, b.extra);
+}
+
+[[nodiscard]] bool AreEquivalentConnectionsSettings(const std::optional<Common::Settings::ConnectionsSettings>& a,
+                                                    const std::optional<Common::Settings::ConnectionsSettings>& b) noexcept
+{
+    if (! a.has_value() && ! b.has_value())
+    {
+        return true;
+    }
+
+    const Common::Settings::ConnectionsSettings defaults{};
+    const Common::Settings::ConnectionsSettings& left  = a.has_value() ? a.value() : defaults;
+    const Common::Settings::ConnectionsSettings& right = b.has_value() ? b.value() : defaults;
+
+    return left.bypassWindowsHello == right.bypassWindowsHello && left.allowInsecureTlsInAutomation == right.allowInsecureTlsInAutomation &&
+           left.windowsHelloReauthTimeoutMinute == right.windowsHelloReauthTimeoutMinute && left.items.size() == right.items.size() &&
+           std::ranges::equal(left.items, right.items, [](const auto& lhs, const auto& rhs) noexcept { return AreEquivalentConnectionProfile(lhs, rhs); });
+}
+
+void CommitActiveEditorToState(DialogState& state) noexcept
+{
+    if (const auto model = GetSelectedModelIndex(state); model.has_value())
+    {
+        CommitEditorToProfile(state, state.connections[model.value()]);
+    }
+}
+
+[[nodiscard]] bool IsConnectionManagerDirty(DialogState& state) noexcept
+{
+    if (! state.baselineSettings)
+    {
+        return false;
+    }
+
+    CommitActiveEditorToState(state);
+
+    Common::Settings::ConnectionsSettings current{};
+    if (state.baselineSettings->connections)
+    {
+        current.bypassWindowsHello              = state.baselineSettings->connections->bypassWindowsHello;
+        current.allowInsecureTlsInAutomation    = state.baselineSettings->connections->allowInsecureTlsInAutomation;
+        current.windowsHelloReauthTimeoutMinute = state.baselineSettings->connections->windowsHelloReauthTimeoutMinute;
+    }
+    current.items = state.connections;
+
+    return ! AreEquivalentConnectionsSettings(state.baselineSettings->connections, current) || ! state.secretDirtyIds.empty();
+}
+
+void RefreshConnectionManagerTheme(HWND dlg, DialogState& state) noexcept
+{
+    if (! dlg)
+    {
+        return;
+    }
+
+    ApplyTitleBarTheme(dlg, state.theme, GetActiveWindow() == dlg);
+
+    state.backgroundBrush.reset(CreateSolidBrush(state.theme.windowBackground));
+    state.cardBackgroundColor          = GetControlSurfaceColor(state.theme);
+    state.inputBackgroundColor         = BlendColor(state.cardBackgroundColor, state.theme.windowBackground, state.theme.dark ? 50 : 30, 255);
+    state.inputFocusedBackgroundColor  = BlendColor(state.inputBackgroundColor, state.theme.menu.text, state.theme.dark ? 20 : 16, 255);
+    state.inputDisabledBackgroundColor = BlendColor(state.theme.windowBackground, state.inputBackgroundColor, state.theme.dark ? 70 : 40, 255);
+    state.cardBrush.reset();
+    state.inputBrush.reset();
+    state.inputFocusedBrush.reset();
+    state.inputDisabledBrush.reset();
+
+    if (! state.theme.highContrast)
+    {
+        state.cardBrush.reset(CreateSolidBrush(state.cardBackgroundColor));
+        state.inputBrush.reset(CreateSolidBrush(state.inputBackgroundColor));
+        state.inputFocusedBrush.reset(CreateSolidBrush(state.inputFocusedBackgroundColor));
+        state.inputDisabledBrush.reset(CreateSolidBrush(state.inputDisabledBackgroundColor));
+    }
+
+    state.inputFrameStyle.theme                        = &state.theme;
+    state.inputFrameStyle.backdropBrush                = state.cardBrush ? state.cardBrush.get() : state.backgroundBrush.get();
+    state.inputFrameStyle.inputBackgroundColor         = state.inputBackgroundColor;
+    state.inputFrameStyle.inputFocusedBackgroundColor  = state.inputFocusedBackgroundColor;
+    state.inputFrameStyle.inputDisabledBackgroundColor = state.inputDisabledBackgroundColor;
+
+    const wchar_t* windowTheme = state.theme.highContrast ? L"" : (state.theme.dark ? L"DarkMode_Explorer" : L"Explorer");
+    SetWindowTheme(dlg, windowTheme, nullptr);
+    SendMessageW(dlg, WM_THEMECHANGED, 0, 0);
+
+    if (state.settingsHost)
+    {
+        SetWindowTheme(state.settingsHost, windowTheme, nullptr);
+        SendMessageW(state.settingsHost, WM_THEMECHANGED, 0, 0);
+    }
+    if (state.protocolCombo)
+    {
+        ApplyThemeToComboBox(state.protocolCombo, state.theme);
+    }
+    if (state.awsRegionCombo)
+    {
+        ApplyThemeToComboBox(state.awsRegionCombo, state.theme);
+    }
+    if (state.list)
+    {
+        ApplyThemeToListView(state.list, state.theme);
+    }
+
+    LayoutDialog(dlg, state);
+    RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
+}
+
+void ReloadConnectionManagerFromDisk(HWND dlg, DialogState& state) noexcept
+{
+    if (! state.baselineSettings)
+    {
+        return;
+    }
+
+    CommitActiveEditorToState(state);
+
+    std::wstring selectedId;
+    std::wstring selectedName;
+    if (const auto selected = GetSelectedModelIndex(state); selected.has_value())
+    {
+        const auto& profile = state.connections[selected.value()];
+        selectedId          = profile.id;
+        selectedName        = profile.name;
+    }
+
+    state.staleFromExternalReload = false;
+    state.theme                   = SettingsHotReload::ResolveDialogThemeFromSettings(*state.baselineSettings);
+
+    PopulateStateFromSettings(state, *state.baselineSettings, state.filterPluginId);
+    state.selectedListIndex = -1;
+
+    RefreshConnectionManagerTheme(dlg, state);
+    RebuildList(dlg, state);
+
+    int desiredSelection = -1;
+    for (int i = 0; i < static_cast<int>(state.viewToModel.size()); ++i)
+    {
+        const auto& profile = state.connections[state.viewToModel[static_cast<size_t>(i)]];
+        if ((! selectedId.empty() && profile.id == selectedId) || (selectedId.empty() && ! selectedName.empty() && profile.name == selectedName))
+        {
+            desiredSelection = i;
+            break;
+        }
+    }
+
+    if (state.list && desiredSelection >= 0)
+    {
+        ListView_SetItemState(state.list, desiredSelection, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+        ListView_SetSelectionMark(state.list, desiredSelection);
+        state.selectedListIndex = desiredSelection;
+    }
+
+    EnsureListSelection(state);
+    if (const auto model = GetSelectedModelIndex(state); model.has_value())
+    {
+        LoadEditorFromProfile(state, state.connections[model.value()]);
+    }
+    UpdateControlEnabledState(state);
+}
+
+[[nodiscard]] bool ResolveConnectionManagerStaleSaveConflict(HWND dlg, DialogState& state) noexcept
+{
+    if (! state.staleFromExternalReload)
+    {
+        return true;
+    }
+
+    SettingsHotReload::StaleSaveChoice choice = SettingsHotReload::StaleSaveChoice::Cancel;
+    const HRESULT promptHr                    = SettingsHotReload::PromptStaleSaveConflict(dlg, LoadStringResource(nullptr, IDS_CAPTION_CONNECTIONS), choice);
+    if (FAILED(promptHr))
+    {
+        Debug::Warning(L"Connections: failed to prompt for stale save conflict (hr=0x{:08X})", static_cast<unsigned long>(promptHr));
+        return false;
+    }
+
+    if (choice == SettingsHotReload::StaleSaveChoice::ReloadFromDisk)
+    {
+        ReloadConnectionManagerFromDisk(dlg, state);
+        return false;
+    }
+
+    if (choice == SettingsHotReload::StaleSaveChoice::Cancel)
+    {
+        return false;
+    }
+
+    state.staleFromExternalReload = false;
+    return true;
+}
+
+INT_PTR OnConnectionManagerSettingsReloadedFromDisk(HWND dlg, DialogState& state) noexcept
+{
+    if (! state.baselineSettings)
+    {
+        return TRUE;
+    }
+
+    state.theme = SettingsHotReload::ResolveDialogThemeFromSettings(*state.baselineSettings);
+    RefreshConnectionManagerTheme(dlg, state);
+
+    if (IsConnectionManagerDirty(state))
+    {
+        SettingsHotReload::ExternalReloadChoice choice = SettingsHotReload::ExternalReloadChoice::KeepEditing;
+        const HRESULT promptHr = SettingsHotReload::PromptExternalReloadConflict(dlg, LoadStringResource(nullptr, IDS_CAPTION_CONNECTIONS), choice);
+        if (FAILED(promptHr))
+        {
+            Debug::Warning(L"Connections: failed to prompt for external reload conflict (hr=0x{:08X})", static_cast<unsigned long>(promptHr));
+            return TRUE;
+        }
+
+        if (choice == SettingsHotReload::ExternalReloadChoice::KeepEditing)
+        {
+            state.staleFromExternalReload = true;
+            return TRUE;
+        }
+    }
+
+    ReloadConnectionManagerFromDisk(dlg, state);
+    return TRUE;
+}
+
 INT_PTR OnCommand(HWND dlg, DialogState& state, int controlId) noexcept;
 
 INT_PTR OnInitDialog(HWND dlg, DialogState* init) noexcept
@@ -3534,6 +3867,7 @@ INT_PTR OnInitDialog(HWND dlg, DialogState* init) noexcept
     }
 
     SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(init));
+    SettingsHotReload::RegisterParticipant(dlg);
 
     EnsureControls(*init, dlg);
     UpdateSecretVisibility(*init);
@@ -3943,7 +4277,8 @@ INT_PTR OnCommand(HWND dlg, DialogState& state, int controlId) noexcept
             if (model.has_value())
             {
                 const auto& profile = state.connections[model.value()];
-                if (! profile.id.empty() && profile.savePassword && profile.authMode != Common::Settings::ConnectionAuthMode::Anonymous)
+                if (! profile.id.empty() && profile.savePassword && profile.authMode != Common::Settings::ConnectionAuthMode::Anonymous &&
+                    profile.authMode != Common::Settings::ConnectionAuthMode::OAuth2Pkce)
                 {
                     const std::wstring current = Win32Text::GetWindowTextString(state.secretEdit);
                     const auto placeholderIt   = state.secretPlaceholderById.find(profile.id);
@@ -4196,6 +4531,12 @@ INT_PTR CALLBACK ConnectionManagerDialogProc(HWND dlg, UINT msg, WPARAM wp, LPAR
             }
             EndDialog(dlg, IDC_CONNECTION_CLOSE);
             return TRUE;
+        case WndMsg::kSettingsReloadedFromDisk:
+            if (state)
+            {
+                return OnConnectionManagerSettingsReloadedFromDisk(dlg, *state);
+            }
+            return TRUE;
         case WM_NCDESTROY:
         {
             std::unique_ptr<DialogState> stateOwner;
@@ -4205,12 +4546,16 @@ INT_PTR CALLBACK ConnectionManagerDialogProc(HWND dlg, UINT msg, WPARAM wp, LPAR
                 stateOwner.reset(state);
             }
 
+            if (state)
+            {
+                SettingsHotReload::UnregisterParticipant(dlg);
+            }
+
             if (state && state->baselineSettings)
             {
                 WindowPlacementPersistence::Save(*state->baselineSettings, kConnectionManagerWindowId, dlg);
 
-                const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(*state->baselineSettings);
-                const HRESULT saveHr                            = Common::Settings::SaveSettings(state->appId, settingsToSave);
+                const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(state->appId, *state->baselineSettings);
                 if (FAILED(saveHr))
                 {
                     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(state->appId);
@@ -4463,10 +4808,9 @@ INT_PTR CALLBACK ConnectionManagerDialogProc(HWND dlg, UINT msg, WPARAM wp, LPAR
                 {
                     Common::Settings::ConnectionProfile& profile = state->connections[model.value()];
 
-                    if (clicked &&
-                        (id == IDC_CONNECTION_IGNORE_SSL_TRUST || id == IDC_CONNECTION_S3_USE_HTTPS || id == IDC_CONNECTION_S3_VERIFY_TLS))
+                    if (clicked && (id == IDC_CONNECTION_IGNORE_SSL_TRUST || id == IDC_CONNECTION_S3_USE_HTTPS || id == IDC_CONNECTION_S3_VERIFY_TLS))
                     {
-    const bool acked = ConnectionProfileUtils::ExtraGetBool(profile.extra, "insecureTlsAck").value_or(false);
+                        const bool acked = ConnectionProfileUtils::ExtraGetBool(profile.extra, "insecureTlsAck").value_or(false);
                         if (! acked)
                         {
                             bool insecureNow = false;

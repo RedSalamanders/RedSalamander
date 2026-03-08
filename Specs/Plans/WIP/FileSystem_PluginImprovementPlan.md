@@ -1,376 +1,187 @@
-# Filesystem Plugin Improvement Plan (Resiliency + Scalability + Parallel Ops)
+# Filesystem Plugin Improvement Plan (Cross-Plugin Mutation Propagation)
 
-Last updated: 2026-02-03
+Last updated: 2026-03-07
 
-## Goal
+Status: Implemented in the `codex/plugin-mutation-propagation` worktree.
 
-Improve the Filesystem plugin’s:
+## Objective
 
-- **Resiliency**: fewer missed directory change events under load; make event loss **detectable** and drive a **host resync**.
-- **Scalability**: handle very large directory enumerations without hard failure (and without retaining huge buffers unnecessarily).
-- **Performance**: parallelize batch operations safely with correct **progress semantics** and **cancellation**.
+Make visible pane state correct across all built-in file system plugins.
 
-Scope includes the built-in local filesystem plugin (`Plugins/FileSystem`) and small host-side behavior in `RedSalamander` to perform a refresh when change notifications overflow.
+Directory watching is an invalidation source, not the source of truth. The host now owns the refresh, relocation, and mount-retarget decisions needed to keep visible panes accurate when a mutation happens in another pane, in another window, or inside a mounted path.
 
-## Non-goals (v1)
+## Mandatory Behavioral Rules
 
-- Rewriting the host directory model / cache (only plug into existing refresh mechanisms).
-- Replacing file copy/move primitives (stick to Win32 APIs already used).
-- Making directory watch “lossless” (Windows change notification is best-effort; overflows are inevitable).
+- If the direct child list of a visible folder changes, the pane refreshes automatically.
+- If the current visible folder is deleted, renamed away, or moved outside the current subtree, the pane relocates to the nearest surviving ancestor in the same logical context.
+- If no surviving ancestor exists inside that context, the pane falls back to the plugin root.
+- If a mounted plugin instance depends on a local backing path and that backing path is renamed or moved, the mounted pane retargets to the new backing path and keeps the internal plugin path when possible.
+- If the mounted backing item is deleted or no valid retarget exists, the pane exits the mount and navigates to the nearest surviving `file:` ancestor or the default local root.
+- This behavior is mandatory for all built-in plugins used by `FolderView`.
+- Off-screen folders may be marked dirty without eager UI refresh.
 
-## Key Constraints (from AGENTS.md + skills)
+## Final Design
 
-- **RAII mandatory** for Windows resources: use WIL wrappers (`.github/skills/wil-raii/SKILL.md`).
-- **Callbacks are raw vtables** (not COM): cookie passthrough; plugin holds weak pointers (`.github/skills/plugin-callbacks/SKILL.md`).
-- **Do not block UI thread**; marshal across threads using message patterns (`.github/skills/async-threading/SKILL.md`, `.github/skills/win32-wndproc/SKILL.md`).
-- **Error handling**: Win32 failures use `Debug::ErrorWithLastError(...)` + `HRESULT_FROM_WIN32` (`.github/skills/error-handling/SKILL.md`).
-- **No global /wd suppressions**; fix warnings locally (`.github/skills/compiler-warnings/SKILL.md`).
-- **C++23 style**: no raw `new/delete`, no `goto`, prefer clear STL patterns (`.github/skills/cpp-modern-style/SKILL.md`).
+### 1. Logical filesystem contexts
 
-## Current State (as of 2026-02-03)
+`DirectoryInfoCache` no longer keys cache and watch state by raw `IFileSystem*`.
 
-### Directory watch
+The host now identifies a logical context by:
 
-File: `Plugins/FileSystem/FileSystem.Watch.cpp`
+- `pluginId`
+- normalized `instanceContext`
+- normalized folder path
 
-- Uses a small buffer pool and re-issues `ReadDirectoryChangesW` **before** invoking the host callback (I/O completion is decoupled from parsing/callback delivery).
-- On `ERROR_NOTIFY_ENUM_DIR` it sets `notification.overflow = TRUE` (already exists in the interface).
-- Hard-caps changes delivered per callback (`kMaxChanges = 128`); exceeding the cap sets `overflow=TRUE`.
+Multiple live COM instances that represent the same plugin and mount context share cache entries, watchers, and mutation impacts. Raw `IFileSystem*` is now only a live provider handle used to enumerate or watch.
 
-### Directory enumeration
+### 2. Central mutation-impact router
 
-File: `Plugins/FileSystem/FileSystem.DirectoryOps.cpp`
+All successful host-side mutations and all watch notifications flow through one router in `DirectoryInfoCache`.
 
-- Uses `NtQueryDirectoryFile` and stores results in an in-memory contiguous `FileInfo` buffer.
-- Uses progressive growth up to a soft cap and resumes enumeration on growth (no restart); falls back to a higher hard cap before returning `ERROR_INSUFFICIENT_BUFFER`.
-  - defaults: 512 MiB soft / 2048 MiB hard
-  - configurable via plugin configuration:
-    - `enumerationSoftMaxBufferMiB` (default 512)
-    - `enumerationHardMaxBufferMiB` (default 2048)
-- Calls `MaybeTrimBuffer()` after `ReadDirectoryInfo()` completes to drop enumeration scratch state and trim large allocations.
-- `ComputeEntrySize`/`AlignUp` currently aligns to 4 bytes (`sizeof(unsigned long)`).
-- `FileInfo` layout is required to match `FILE_FULL_DIR_INFO` (static_assert present).
+The router produces four impact kinds:
 
-### Batch file operations
+- `RefreshCurrentFolder`
+- `RelocateCurrentFolder`
+- `RetargetInstanceContext`
+- `ExitInstanceContext`
 
-File: `Plugins/FileSystem/FileSystem.FileOps.cpp`
+This replaced the previous exact-folder dirty ping plus ad hoc `ForceRefresh()` fallback behavior.
 
-- `CopyItems`/`MoveItems` run with bounded internal parallelism across top-level input items:
-  - default max concurrency: 4
-  - configurable via `copyMoveMaxConcurrency` (max 8)
-- `DeleteItems` parallelizes delete with ordering safety across overlapping inputs (children before parents) and supports Recycle Bin deletes with bounded concurrency:
-  - default max concurrency: 8
-  - default max concurrency (Recycle Bin): 2
-  - configurable via `deleteMaxConcurrency` / `deleteRecycleBinMaxConcurrency`
-- Callbacks are invoked directly from worker progress checkpoints, but are **serialized** via a per-operation mutex (host must never receive concurrent callback calls).
-- Progress struct already supports items + bytes:
-  - `IFileSystemCallback::FileSystemProgress(operationType, totalItems, completedItems, totalBytes, completedBytes, ..., currentItemTotalBytes, currentItemCompletedBytes, ..., progressStreamId, ...)`
-  - `totalBytes` is typically `0` from the plugin; host pre-calc provides totals when available.
-  - `completedBytes` is populated (Copy/Move from progress callbacks; Delete best-effort via file sizes).
+### 3. Posted impact delivery
 
-## Contract Decisions (write first; code follows the contract)
+Visible panes are pinned with `WndMsg::kFolderViewDirectoryImpact`.
 
-### A) Directory watch is best-effort; loss must be detectable
+The host posts `DirectoryImpact` payloads with `PostMessagePayload(...)`, consumes them with `TakeMessagePayload<T>(lParam)`, and drains them on `WM_NCDESTROY`.
 
-Interface: `Common/PlugInterfaces/FileSystem.h`
+`FolderView` still owns refresh debouncing. `FolderWindow` owns the pane-level navigation decisions:
 
-- Change notification delivery is **best-effort**.
-- **If any events are dropped/coalesced** (OS overflow, internal cap, parse failure, queue pressure), the plugin will set `FileSystemDirectoryChangeNotification::overflow = TRUE`.
-- **Host behavior requirement**: `overflow==TRUE` means “incremental events are not trustworthy; perform a full resync”.
-  - No new callback is required because `overflow` already exists.
-  - We should strengthen comments to make “resync required” explicit.
+- relocate current folder
+- retarget mounted instance context
+- exit broken mounts
 
-### B) Callback threading: prefer serialized callbacks (plugin-managed)
+### 4. Watch model
 
-Reason: avoid silently requiring host thread-safety and avoid re-entrancy hazards.
+`IFileSystemDirectoryWatch` remains the single plugin-side invalidation channel.
 
-- **Goal**: the Filesystem plugin invokes `IFileSystemCallback` and `IFileSystemDirectoryWatchCallback` **serially** (never concurrently) for a given operation/watch.
-- Background workers MAY call host callbacks, but the plugin MUST serialize them (e.g., per-operation mutex) so the host does not need to be thread-safe.
+The host now treats all watcher callbacks as one of two sources:
 
-If the host later wants concurrency, add an explicit capability/opt-in (not part of this plan).
+- real/plugin-native watch events
+- synthetic plugin-generated watch events after successful in-app mutations
 
-### C) Progress semantics (items + bytes)
+`overflow = TRUE` always means the incremental event list is not trustworthy and the host must resync the watched folder.
 
-#### Copy/Move
+The host consumes each watch notification batch in callback order. It intentionally does not insert a second host-side async reorder stage after callback delivery, because rename routing depends on preserving `RENAMED_OLD_NAME` and `RENAMED_NEW_NAME` adjacency inside a batch.
 
-- `totalItems`: fixed input count.
-- `completedItems`: number of top-level input items completed (**monotonic**, `0..totalItems`).
-- `totalBytes`/`completedBytes`:
-  - **monotonic** and represent byte progress for the overall operation.
-  - For directories, `totalBytes` may be **discovered incrementally** (e.g., as files are enumerated), so it may increase over time.
-  - `completedBytes` never decreases and never exceeds `totalBytes` (when `totalBytes` is known/updated).
-- `currentSourcePath/currentDestinationPath`:
-  - with parallelism, these represent the **current item for a specific progress stream** (e.g., a worker).
-  - `progressStreamId` MUST be stable per worker and distinct among concurrently active workers so the host can display stable per-stream lines.
-- `currentItemTotalBytes/currentItemCompletedBytes`:
-  - reflect the representative item’s file copy progress (when available).
+### 5. Backing-path dependency tracking
 
-#### Delete
+Mounted contexts whose `instanceContext` resolves to a Windows path are tracked against that backing path.
 
-- `totalItems` / `completedItems` are meaningful and monotonic.
-- `totalBytes` is typically `0` from the plugin (host pre-calc provides totals when available).
-- `completedBytes` is best-effort and monotonic for local filesystem deletes:
-  - increments by deleted file sizes when they can be queried
-  - directories contribute `0`
-- `currentItemTotalBytes/currentItemCompletedBytes` remain `0` for delete (items-focused UI).
+This is how read-only `7z` mounts now stay coherent:
 
-### D) “At least once” and ordering guarantees
+- rename or move of the archive retargets the mount
+- delete of the archive exits the mount
 
-- File ops:
-  - `FileSystemItemCompleted(operationType, itemIndex, ...)` is called **at most once** per item index that started.
-  - Completion order may be **out of input order**; `itemIndex` is the stable identity.
-- Directory watch:
-  - No “at least once” guarantee. Overflows are inevitable; detect via `overflow==TRUE` and resync.
+### 6. Off-screen policy
 
-## Confirming `FileInfo` is in-memory only (ABI safety)
+Pinned visible folders are mandatory watches.
 
-Why: alignment/size changes are dangerous if `FileInfo` is serialized, persisted, or depended on across a stable ABI boundary.
+Additional MRU cache entries may still be watched best-effort, but only when the host explicitly opts those entries into off-screen watch coverage.
 
-Evidence already in code:
+The current reference implementation does not opt plain cache borrows into that path. By default it keeps:
 
-- `Common/PlugInterfaces/FileSystem.h` explicitly documents `IFilesInformation` as an in-memory contiguous buffer.
-- `Plugins/FileSystem/FileSystem.DirectoryOps.cpp` has:
-  - `static_assert(sizeof(FileInfo) == sizeof(FILE_FULL_DIR_INFO))`
-  - `static_assert(offsetof(FileInfo, FileName) == offsetof(FILE_FULL_DIR_INFO, FileName))`
+- cached directory snapshots for performance
+- watcher coverage for visible pinned folders
+- no automatic watcher attachment for off-screen borrows
 
-Audit steps (do before changing layout assumptions):
+Off-screen changes only need to invalidate cache state. They do not need to trigger immediate UI work until the folder becomes visible again.
 
-- Search for any serialization/persistence of `FileInfo`:
-  - `rg -n "FileInfo\\b|GetBuffer\\("`
-  - Verify all consumers treat it as an in-memory buffer and do not store it beyond the `IFilesInformation` lifetime.
-- Confirm host never writes `FileInfo` to disk/IPC and does not expose it to plugins as a long-lived ABI.
-- **Rule**: Do not change `struct FileInfo` layout. Any alignment work must be limited to internal size computations and buffer management.
+## Built-in Plugin Matrix
 
-## Implementation Plan (phased)
-
-### Phase 1 — Spec/Contract updates (documentation-first)
-
-Files:
-
-- `Common/PlugInterfaces/FileSystem.h`
-- (Optional) `Specs/FileSystem/FileSystem_FileOperations.md`, `Specs/UI/UI_FolderWindow.md` (add brief references)
-
-Tasks:
-
-- [x] Update `IFileSystemCallback` comment block to clarify callbacks are invoked **serially** and may block (host-driven Pause/Skip/Cancel).
-- [x] Update directory watch docs:
-  - [x] `FileSystemDirectoryChangeNotification::overflow` explicitly means “**resync required**”.
-  - [x] Clarify watcher event list is best-effort and may be coalesced/dropped.
-- [x] Document progress semantics (Copy/Move bytes; Delete items-only; totalBytes may be unknown).
-- [x] Add an “ordering” note: item completion order may be out-of-order; `itemIndex` is authoritative.
-
-Acceptance:
-
-- No code changes required yet; but the contract is unambiguous and aligns with what we will implement.
-
-### Phase 2 — Directory watch double-buffering + decoupled processing
-
-File: `Plugins/FileSystem/FileSystem.Watch.cpp`
-
-Design:
-
-- Maintain 1 outstanding `ReadDirectoryChangesW` per watch handle.
-- Use a **buffer pool** (2–4 buffers) so we can re-arm immediately on completion.
-- Split work into two stages:
-  1) I/O completion: swap buffers and re-issue the next read **immediately**.
-  2) Processing: parse the completed buffer and invoke the host callback (serialized).
-
-Queue/backpressure:
-
-- Maintain a bounded queue of completed buffers to process.
-- On queue overflow or parse anomalies, set `overflow=TRUE` and coalesce until processed.
-- Keep callback invocation **serialized** (no concurrent calls to `IFileSystemDirectoryWatchCallback` for a given watch).
-
-Stop/unwatch:
-
-- Ensure `UnwatchDirectory` guarantees no callbacks after it returns (already documented).
-- Cancel outstanding I/O with `CancelIoEx` and wait via `WaitForThreadpoolIoCallbacks`.
-
-Tasks:
-
-- [x] Add buffer pool structure and a small processing queue.
-- [x] Re-arm reads before invoking host callback.
-- [x] Ensure `overflow=TRUE` on:
-  - OS overflow (`ERROR_NOTIFY_ENUM_DIR`)
-  - internal cap overflow (`kMaxChanges`)
-  - queue overflow / parse bounds failures
-- [x] Keep all Windows resources under WIL RAII.
-
-Acceptance:
-
-- Under slow host processing, watcher continues re-arming reads and does not stall.
-- Overflow is surfaced via `overflow=TRUE` reliably.
-
-### Phase 3 — Host resync behavior on watch overflow
-
-File: `RedSalamander/FolderWindow.cpp` (or wherever directory watch notifications are handled)
-
-Design:
-
-- On `overflow==TRUE`, schedule a full directory refresh (`ReadDirectoryInfo`) for that watched folder.
-- Coalesce refresh requests (rate-limit per folder).
-- Ensure refresh work is not on UI thread; marshal updates via message pattern.
-
-Tasks:
-
-- [x] Locate directory watch callback handler in the host (`RedSalamander/FolderWatcher.*`).
-- [x] Implement “overflow -> resync” path (host already refreshes on any event; overflow is now logged for visibility).
-- [x] Add rate limiting/coalescing to avoid refresh storms (per-folder coalescing via `DirectoryInfoCache::notifyPosted`).
-
-Acceptance:
-
-- Large churn produces overflow, and the host reliably refreshes state without UI stalls.
-
-### Phase 4 — Directory enumeration scalability (buffer cap + trimming + alignment validation)
-
-File: `Plugins/FileSystem/FileSystem.DirectoryOps.cpp`
-
-Design:
-
-- Use progressive growth up to a 512MB cap and resume enumeration when growing (no restart) to avoid O(N) re-enumeration passes.
-- If the soft cap is exceeded, grow further up to a hard cap as a fallback for extreme cases; if the hard cap is exceeded, return `ERROR_INSUFFICIENT_BUFFER` (or add an additional fallback strategy).
-- Aggressively trim large buffers after use (avoid holding hundreds of MB per instance).
-- Alignment work:
-  - Verify actual alignment requirements for `FILE_FULL_DIR_INFO` chaining and adjust internal `AlignUp` only if validated.
-  - Add debug-only assertions (e.g., `NextEntryOffset` sanity and alignment checks).
-
-Tasks:
-
-- [x] Implement resume-on-grow enumeration up to a 512MB soft cap with a higher hard-cap fallback (single pass; no restart).
-- [x] Ensure `MaybeTrimBuffer` releases large capacity after enumeration.
-- [x] Add a fallback growth path when the soft cap is exceeded (current hard cap: 2GB).
-- [x] Validate alignment before changing it; only adjust internal size computations (never struct layout).
-  - Added runtime alignment validation when consuming `FILE_FULL_DIR_INFO` chaining (`NextEntryOffset` + buffer offsets must stay aligned).
-
-Acceptance:
-
-- Large directories no longer fail with `ERROR_INSUFFICIENT_BUFFER` in common cases; worst-case falls back rather than failing.
-- Memory returns to baseline after operation (no long-lived huge allocations).
-
-### Phase 5 — Parallel batch operations (Copy/Move small; Delete larger)
-
-File: `Plugins/FileSystem/FileSystem.FileOps.cpp`
-
-Design principles:
-
-- Bounded concurrency (prefer a small internal threadpool/queue over `std::execution::par` for better cancellation control).
-- Workers MAY invoke host callbacks, but the plugin MUST serialize callback delivery per operation (the host is not required to be thread-safe).
-- Host pause semantics rely on blocking inside progress callbacks; therefore work must reach progress checkpoints frequently enough that pausing blocks workers.
-
-Parallelism policy:
-
-- Copy/Move: small parallelism (default 2–4).
-- Delete: higher parallelism (default 8), with lower concurrency for Recycle Bin deletes (default 2), and ordering safety:
-  - Avoid deleting a parent directory concurrently with children (delete deepest-first / enforce parent-after-children scheduling).
-
-Progress aggregation:
-
-- Use atomics for counters + a small event queue for per-item completion.
-- Throttle progress callback rate (per worker), while keeping pause/cancel responsive (e.g., ~20 Hz for Copy/Move and ~10 Hz for Delete).
-- Cancellation:
-  - Progress checkpoints call `FileSystemShouldCancel` (serialized) and flip a shared atomic stop flag when cancellation is requested.
-  - If `continueOnError == false`, the first non-cancel error requests stop for remaining work.
-
-Copy-specific note:
-
-- `CopyFileExW` progress callback is invoked on the copying thread; it must remain fast.
-- It should only do minimal bookkeeping and invoke the host callback in a serialized manner (so the host can pause/cancel by blocking).
-
-Tasks:
-
-- [x] Refactor `OperationContext` so mutable shared state is thread-safe (or split into immutable per-item + shared atomics).
-- [x] Implement bounded worker queue for CopyItems/MoveItems.
-- [x] Implement ordered parallel DeleteItems across input items:
-  - schedule parent/child deletes using a dependency graph (children before parents)
-  - support Recycle Bin deletes with bounded concurrency
-- [x] Serialize callback delivery per operation (mutex) and propagate dynamic bandwidth limit updates.
-- [x] Throttle FileSystemProgress callback frequency (per worker; additional global throttling for parallel delete).
-
-Acceptance:
-
-- Copy/Move speed improves on multi-item workloads.
-- Progress is monotonic (items, bytes) and cancellation is responsive.
-- Delete can run with higher concurrency without directory-structure races.
-
-### Phase 5b — Configuration knobs (implemented)
-
-Files:
-
-- `Plugins/FileSystem/FileSystem.h`
-- `Plugins/FileSystem/FileSystem.cpp`
-
-Design:
-
-- Expose safe **concurrency caps** and **enumeration buffer caps** via plugin configuration JSON so power users can tune behavior without code changes.
-- Clamp values to conservative maxima to avoid thread explosions and to keep directory enumeration buffers below Win32 API limits.
-
-Keys (defaults):
-
-- `copyMoveMaxConcurrency` (default 4, max 8)
-- `deleteMaxConcurrency` (default 8, max 64)
-- `deleteRecycleBinMaxConcurrency` (default 2, max 16)
-- `enumerationSoftMaxBufferMiB` (default 512)
-- `enumerationHardMaxBufferMiB` (default 2048; clamped to >= soft cap and <= 4095 MiB)
-
-Tasks:
-
-- [x] Add configuration schema + parsing for caps.
-- [x] Wire caps into Copy/Move/Delete concurrency and enumeration growth logic.
-
-### Phase 6 — Verification + instrumentation
-
-Build:
-
-- `.\build.ps1 -ProjectName FileSystem`
-- `.\build.ps1` (full solution)
-
-Stress scenarios:
-
-- Watcher churn:
-  - Create/rename/delete thousands of files rapidly under a watched folder.
-  - Ensure no crash/hang; overflow triggers resync; steady-state continues.
-- Large directory listing:
-  - Enumerate directories with many entries and long names.
-  - Verify no `ERROR_INSUFFICIENT_BUFFER` hard-fails (or fallback works).
-  - Knob coverage: lower `enumerationSoftMaxBufferMiB` / `enumerationHardMaxBufferMiB` to force fallback / hard-cap paths; confirm memory returns to baseline after enumeration (`MaybeTrimBuffer`).
-- Parallel ops:
-  - Copy/Move: many files (small + large) to see throughput and progress behavior.
-  - Delete: deep trees; verify safe ordering and correctness.
-  - Knob coverage: vary `copyMoveMaxConcurrency`, `deleteMaxConcurrency`, and `deleteRecycleBinMaxConcurrency` and confirm correctness + monotonic progress.
-
-Instrumentation (optional but recommended):
-
-- [x] Add debug-only counters/timers for:
-  - watcher callback latency / queue depth / overflow count (`FileSystem.Watch`)
-  - copy/move throughput and cancel latency (`FileOps.Operation`, `FileOps.CancelLatency`)
-  - directory enumeration growth / peak buffer size / trim events (`FileSystem.DirectoryOps.Enumerate`, `FileSystem.DirectoryOps.TrimBuffer`)
-
-## Next-session “start here” checklist
-
-- [x] Re-read this plan and confirm the contract decisions still match product expectations.
-- [x] Audit host assumptions about callback ordering and progress fields (`IFileSystemCallback` implementations).
-- [x] Confirm all `FileInfo` consumers treat it as in-memory only (no persistence).
-- [x] Implement phases in order (contract → watcher → host resync → enum → parallel ops).
-
-## Open Questions (resolve before coding the risky parts)
-
-1) **Out-of-order completion**: resolved — host tolerates out-of-order `itemIndex` completion; it derives sequencing/progress from monotonic counters and treats `itemIndex` as informational.
-2) **totalBytes growth**: is it acceptable that `totalBytes` may increase during directory copy/move (potentially making derived percent non-monotonic)?
-3) **Configuration knobs**: implemented via plugin configuration JSON (see Phase 5b).
-4) **Delete parallelism**: separate caps for fast delete vs Recycle Bin delete are retained and are configurable (see Phase 5b).
+| Plugin | Mutations | Watch mode | External/backend change coverage in v1 | Dependency behavior | Status |
+| --- | --- | --- | --- | --- | --- |
+| `file` | Yes | Real Win32 watch | Local external changes plus in-app mutations | Source of backing-path invalidation for mounted contexts | Implemented and self-tested |
+| `dummy` | Yes | Native plugin watch | Plugin-generated external-style changes plus in-app mutations | None | Implemented and self-tested |
+| `7z` | Read-only | None | No direct watch; relies on host dependency routing | Backing archive rename retargets, delete exits mount | Implemented and self-tested |
+| `ftp` | Yes | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | Implemented; offline contract self-tested |
+| `sftp` | Yes | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | Implemented; offline contract self-tested |
+| `scp` | Yes | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | Implemented; offline contract self-tested |
+| `imap` | Yes | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | Implemented; offline contract self-tested |
+| `s3` | Yes | Synthetic `IFileSystemDirectoryWatch` | Successful RedSalamander/plugin-initiated mutations affecting watched folders | None | Implemented; offline contract self-tested |
+
+## Implementation Map
+
+### Host
+
+- `RedSalamander/DirectoryInfoCache.*`
+  - logical-context keys
+  - provider registration and refcounted context lifetime
+  - central mutation router
+  - reverse index from Windows backing paths to mounted contexts
+- `RedSalamander/FolderWatcher.*`
+  - structured relative-path change delivery
+  - overflow-to-resync handling
+- `RedSalamander/FolderView.*`
+  - posted impact handling
+  - refresh debouncing via coalescing timer
+  - callback seam into `FolderWindow`
+- `RedSalamander/FolderWindow.*`
+  - provider register/unregister on plugin transitions
+  - relocation, retarget, and mount-exit handling
+  - focus preservation across refresh/relocate
+- `Common/WindowMessages.h`
+  - `WndMsg::kFolderViewDirectoryImpact`
+
+### Plugins
+
+- `Plugins/FileSystem`
+  - remains the real local watch source
+- `Plugins/FileSystemDummy`
+  - remains a plugin-native watch source used for deterministic testing
+- `Plugins/FileSystemCurl`
+  - now exposes `IFileSystemDirectoryWatch` for `ftp`, `sftp`, `scp`, and `imap`
+  - emits synthetic notifications after successful create, write, copy, move, delete, and rename operations
+- `Plugins/FileSystemS3`
+  - now exposes `IFileSystemDirectoryWatch`
+  - emits synthetic notifications after successful create, write, and delete operations
+- `Plugins/FileSystem7z`
+  - still read-only and without direct watch support
+  - participates through host backing-path dependency invalidation
+
+## Test Coverage
+
+Build gates run in the independent worktree:
+
+- `.\build.ps1`
+- `.\.build\x64\Debug\RedSalamander.exe --fileops-selftest`
+
+Latest verified run: 2026-03-07
+
+- `51` passed
+- `0` failed
+- `1` skipped
+
+Key new self-test phases:
+
+- `Phase7_CacheBorrowNoWatchInvalidation`
+- `Phase7_CrossPaneVisibleRefreshLocal`
+- `Phase7_CrossPaneVisibleRefreshDummy`
+- `Phase7_CrossPaneRelocateLocal`
+- `Phase15_FileSystem7zMountPathImpact`
+- `Phase16_RemoteWatchContractExposure`
+
+The skipped case was `Phase16_RemoteS3Sandbox`, which still requires an explicit bucket plus dedicated self-test prefix.
+
+## v1 Limits
+
+- Synthetic remote watches do not poll for unrelated backend-side changes.
+- Off-screen folders may remain dirty until they become visible or are borrowed again.
+- Plain cache borrows are intentionally not watched unless a future host path opts them in explicitly.
+- `7z` remains read-only and does not expose a direct watch interface.
+- Remote live integration remains gated by configured connection profiles and sandbox roots.
 
 ## References
 
-- Skills:
-  - `.github/skills/async-threading/SKILL.md`
-  - `.github/skills/error-handling/SKILL.md`
-  - `.github/skills/wil-raii/SKILL.md`
-  - `.github/skills/plugin-callbacks/SKILL.md`
-  - `.github/skills/cpp-modern-style/SKILL.md`
-  - `.github/skills/compiler-warnings/SKILL.md`
-  - `.github/skills/cpp-build/SKILL.md`
-- Related specs:
-  - `Specs/FileSystem/FileSystem_FileOperations.md`
-  - `Specs/UI/UI_FolderWindow.md`
-  - `Specs/Core/Core_DirectoryInfoCache.md`
-  - `Specs/Plugins/Plugins_PluginAPI.md`
+- `Specs/Core/Core_DirectoryInfoCache.md`
+- `Specs/UI/UI_FolderWindow.md`
+- `Specs/Plugins/Plugins_VirtualFileSystem.md`
+- `RedSalamander/FolderWindow.FileOperations.SelfTest.cpp`

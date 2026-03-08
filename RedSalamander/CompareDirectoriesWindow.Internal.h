@@ -38,9 +38,9 @@
 #include "Helpers.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
-#include "SessionState.h"
 #include "PlugInterfaces/Factory.h"
 #include "PlugInterfaces/Informations.h"
+#include "SessionState.h"
 #include "ShortcutManager.h"
 #include "ThemedControls.h"
 #include "ThemedInputFrames.h"
@@ -142,6 +142,7 @@ private:
     void ApplyTheme() noexcept;
     void ApplyOptionsDialogTheme() noexcept;
     [[nodiscard]] INT_PTR OnOptionsInitDialog(HWND dlg) noexcept;
+    [[nodiscard]] INT_PTR OnOptionsSettingsReloadedFromDisk(HWND dlg) noexcept;
     [[nodiscard]] INT_PTR OnOptionsEraseBkgnd(HWND dlg, HDC hdc) noexcept;
     [[nodiscard]] INT_PTR OnOptionsCommand(HWND dlg, WPARAM wParam, LPARAM lParam) noexcept;
     [[nodiscard]] INT_PTR OnOptionsDrawItem(const DRAWITEMSTRUCT* dis) noexcept;
@@ -211,8 +212,12 @@ private:
     void ExecuteShortcutCommand(std::wstring_view commandId) noexcept;
 
     Common::Settings::CompareDirectoriesSettings GetEffectiveCompareSettings() const noexcept;
+    Common::Settings::CompareDirectoriesSettings ReadOptionsControlsToSettings() const noexcept;
+    [[nodiscard]] bool IsOptionsDialogDirty() const noexcept;
     void LoadOptionsControlsFromSettings() noexcept;
     void SaveOptionsControlsToSettings() noexcept;
+    [[nodiscard]] bool ResolveOptionsStaleSaveConflict(HWND dlg) noexcept;
+    void ReloadOptionsDialogFromDisk() noexcept;
     void UpdateOptionsVisibility() noexcept;
     void RefreshBothPanes() noexcept;
     void ScheduleDecisionRefresh() noexcept;
@@ -340,11 +345,12 @@ private:
 
     OptionsUi _optionsUi{};
     std::vector<RECT> _optionsCards;
-    int _optionsScrollOffset        = 0;
-    int _optionsScrollMax           = 0;
-    int _optionsWheelRemainder      = 0;
-    bool _optionsUseTwoColumns      = false;
-    int _optionsTwoColumnSeparatorX = -1;
+    int _optionsScrollOffset             = 0;
+    int _optionsScrollMax                = 0;
+    int _optionsWheelRemainder           = 0;
+    bool _optionsUseTwoColumns           = false;
+    int _optionsTwoColumnSeparatorX      = -1;
+    bool _optionsStaleFromExternalReload = false;
 
     Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};

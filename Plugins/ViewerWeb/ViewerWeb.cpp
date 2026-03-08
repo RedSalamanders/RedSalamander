@@ -15,7 +15,6 @@
 #include <new>
 #include <optional>
 #include <string_view>
-#include <thread>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -24,6 +23,7 @@
 #include <commdlg.h>
 #include <dwmapi.h>
 #include <shellapi.h>
+#include <shlobj.h>
 #include <shlwapi.h>
 #include <shobjidl.h>
 #include <uxtheme.h>
@@ -431,6 +431,7 @@ bool CopyUnicodeTextToClipboard(HWND hwnd, std::wstring_view text) noexcept;
 [[nodiscard]] bool IsProbablyWin32Path(std::wstring_view path) noexcept;
 std::optional<std::filesystem::path> ShowSaveAsDialog(HWND hwnd, std::wstring_view suggestedFileName) noexcept;
 [[nodiscard]] std::wstring EscapeJavaScriptString(std::wstring_view text) noexcept;
+[[nodiscard]] std::string EscapeJavaScriptStringUtf8(std::string_view text) noexcept;
 
 struct ViewerWebClassBackgroundBrushState
 {
@@ -507,7 +508,7 @@ void ApplyPendingViewerWebClassBackgroundBrush(HWND hwnd) noexcept
     SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(g_viewerWebClassBackgroundBrush.activeBrush.get()));
 }
 
-std::string ResourceBytesToString(HINSTANCE hinst, UINT id)
+std::string_view ResourceBytesView(HINSTANCE hinst, UINT id) noexcept
 {
     HRSRC res = FindResourceW(hinst, MAKEINTRESOURCEW(id), RT_RCDATA);
     if (! res)
@@ -533,7 +534,44 @@ std::string ResourceBytesToString(HINSTANCE hinst, UINT id)
         return {};
     }
 
-    return std::string(reinterpret_cast<const char*>(bytes), reinterpret_cast<const char*>(bytes) + size);
+    return {reinterpret_cast<const char*>(bytes), static_cast<size_t>(size)};
+}
+
+// ----- Shared WebView2 Environment -----
+// A DLL-global environment shared across all viewer instances. Creating a
+// WebView2 environment is the most expensive operation (spawns browser
+// processes). Sharing it means only the first viewer pays the cost.
+
+struct SharedEnvironmentState
+{
+    wil::com_ptr<ICoreWebView2Environment> environment;
+    bool createInProgress = false;
+    // Pending consumers waiting for the first environment creation to complete.
+    struct PendingConsumer
+    {
+        ViewerWeb* viewer = nullptr;
+        HWND hwnd         = nullptr;
+    };
+    std::vector<PendingConsumer> pendingConsumers;
+};
+
+SharedEnvironmentState g_sharedEnvironment;
+
+std::wstring GetWebView2UserDataFolder() noexcept
+{
+    wchar_t appData[MAX_PATH]{};
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, appData)))
+    {
+        return {};
+    }
+    return std::format(L"{}\\RedSalamander\\WebView2UserData", appData);
+}
+
+void ResetSharedEnvironmentImpl() noexcept
+{
+    g_sharedEnvironment.pendingConsumers.clear();
+    g_sharedEnvironment.createInProgress = false;
+    g_sharedEnvironment.environment.reset();
 }
 
 std::wstring UrlFromFilePath(std::wstring_view path)
@@ -679,6 +717,102 @@ constexpr char kViewerMarkdownSchemaJson[] = R"json({
         }
     ]
 })json";
+
+// ----- Cached Resource Helpers -----
+// JS/CSS resource data is immutable and valid for the DLL lifetime via
+// LockResource.  The helpers below avoid repeated allocations by caching
+// derived data (base64-encoded icons, CSS with icons inlined, and the common
+// theme helper JS shared by all three HTML templates).
+
+std::string_view GetHighlightJs() noexcept
+{
+    static const std::string_view s = ResourceBytesView(g_hInstance, IDR_VIEWERWEB_HIGHLIGHT_JS);
+    return s;
+}
+
+std::string_view GetMarkdownItJs() noexcept
+{
+    static const std::string_view s = ResourceBytesView(g_hInstance, IDR_VIEWERWEB_MARKDOWNIT_JS);
+    return s;
+}
+
+std::string_view GetJsonEditorJs() noexcept
+{
+    static const std::string_view s = ResourceBytesView(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_JS);
+    return s;
+}
+
+// Returns the jsoneditor CSS with SVG icon URLs already inlined as data-URIs.
+const std::string& GetJsonEditorCssWithIcons() noexcept
+{
+    static const std::string s = []
+    {
+        auto base64Encode = [](std::string_view bytes) noexcept -> std::string
+        {
+            static constexpr char kTable[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+            std::string out;
+            out.reserve(((bytes.size() + 2) / 3) * 4);
+            size_t i = 0;
+            for (; i + 3 <= bytes.size(); i += 3)
+            {
+                const uint32_t n = (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i])) << 16) |
+                                   (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i + 1])) << 8) | static_cast<uint32_t>(static_cast<uint8_t>(bytes[i + 2]));
+                out.push_back(kTable[(n >> 18) & 0x3F]);
+                out.push_back(kTable[(n >> 12) & 0x3F]);
+                out.push_back(kTable[(n >> 6) & 0x3F]);
+                out.push_back(kTable[n & 0x3F]);
+            }
+            const size_t rem = bytes.size() - i;
+            if (rem == 1)
+            {
+                const uint32_t n = (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i])) << 16);
+                out.push_back(kTable[(n >> 18) & 0x3F]);
+                out.push_back(kTable[(n >> 12) & 0x3F]);
+                out.push_back('=');
+                out.push_back('=');
+            }
+            else if (rem == 2)
+            {
+                const uint32_t n =
+                    (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i])) << 16) | (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i + 1])) << 8);
+                out.push_back(kTable[(n >> 18) & 0x3F]);
+                out.push_back(kTable[(n >> 12) & 0x3F]);
+                out.push_back(kTable[(n >> 6) & 0x3F]);
+                out.push_back('=');
+            }
+            return out;
+        };
+
+        const std::string_view iconsSvg = ResourceBytesView(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_ICONS_SVG);
+        const std::string iconsUrl      = std::string("data:image/svg+xml;base64,") + base64Encode(iconsSvg);
+
+        std::string css(ResourceBytesView(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_CSS));
+
+        auto replaceAll = [](std::string& text, std::string_view needle, std::string_view replacement) noexcept
+        {
+            if (needle.empty())
+                return;
+            size_t pos = 0;
+            while ((pos = text.find(needle, pos)) != std::string::npos)
+            {
+                text.replace(pos, needle.size(), replacement);
+                pos += replacement.size();
+            }
+        };
+
+        replaceAll(css, "./img/jsoneditor-icons.svg", iconsUrl);
+        replaceAll(css, "img/jsoneditor-icons.svg", iconsUrl);
+        return css;
+    }();
+    return s;
+}
+
+// Common theme helper JS shared by all three HTML templates.
+constexpr char kCommonThemeJs[] =
+    "function parseRgb(s){const m=/rgb\\((\\d+),(\\d+),(\\d+)\\)/.exec(s.replace(/\\s+/g,''));return m?{r:+m[1],g:+m[2],b:+m[3]}:{r:0,g:0,b:0};}"
+    "function rgb(c){return `rgb(${c.r},${c.g},${c.b})`;}"
+    "function blend(u,o,a){const inv=255-a;return {r:Math.round((u.r*inv+o.r*a)/255),g:Math.round((u.g*inv+o.g*a)/255),b:Math.round((u.b*inv+o.b*a)/255)};}"
+    "function luma(c){return (c.r*299+c.g*587+c.b*114)/1000;}";
 } // namespace
 
 void ViewerWeb::OnCreate(HWND hwnd)
@@ -1972,6 +2106,7 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
 
     _pendingPath.reset();
     _pendingWebContent.reset();
+    _pendingDocumentUtf8.reset();
 
     if (_kind == ViewerWebKind::Web)
     {
@@ -2024,8 +2159,9 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
     }
     else
     {
-        const std::wstring html = Utf16FromUtf8(result->utf8);
-        if (html.empty() && ! result->utf8.empty())
+        // Store as UTF-8 to avoid doubling memory with a UTF-16 copy.
+        // Conversion to UTF-16 happens lazily at NavigateToString time.
+        if (result->utf8.empty())
         {
             _statusMessage = L"Failed to build HTML document.";
             ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
@@ -2036,7 +2172,7 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
             return;
         }
 
-        _pendingWebContent = html;
+        _pendingDocumentUtf8 = std::move(result->utf8);
     }
 
     if (_hWnd)
@@ -2046,7 +2182,20 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
 
     if (SUCCEEDED(EnsureWebView2(_hWnd.get())) && _webView)
     {
-        if (_pendingWebContent.has_value())
+        if (_pendingDocumentUtf8.has_value())
+        {
+            const std::wstring html = Utf16FromUtf8(_pendingDocumentUtf8.value());
+            _pendingDocumentUtf8.reset();
+            if (! html.empty())
+            {
+                const HRESULT navHr = _webView->NavigateToString(html.c_str());
+                if (FAILED(navHr))
+                {
+                    ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
+                }
+            }
+        }
+        else if (_pendingWebContent.has_value())
         {
             const std::wstring html = std::move(_pendingWebContent.value());
             _pendingWebContent.reset();
@@ -2323,7 +2472,7 @@ void ViewerWeb::ApplyTheme(HWND hwnd) noexcept
         DrawMenuBar(hwnd);
     }
 
-    UpdateWebViewTheme();
+    ApplyWebViewThemeScript();
 }
 
 void ViewerWeb::ApplyTitleBarTheme(bool windowActive) noexcept
@@ -2528,6 +2677,317 @@ void ViewerWeb::ShowHostAlert(HWND targetWindow, HostAlertSeverity severity, con
     static_cast<void>(_hostAlerts->ShowAlert(&request, targetWindow));
 }
 
+HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment) noexcept
+{
+    const HRESULT hr =
+        environment->CreateCoreWebView2Controller(hwnd,
+                                                  MakeComCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
+                                                      [this, hwnd](HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT
+    {
+        _webViewInitInProgress = false;
+        auto releaseSelf       = wil::scope_exit([&] { Release(); });
+
+        if (FAILED(controllerResult) || ! controller)
+        {
+            ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
+            return S_OK;
+        }
+
+        if (! _hWnd || _hWnd.get() != hwnd)
+        {
+            controller->Close();
+            return S_OK;
+        }
+
+        _webViewController = controller;
+
+        wil::com_ptr<ICoreWebView2> webView;
+        const HRESULT webViewHr = controller->get_CoreWebView2(webView.put());
+        if (FAILED(webViewHr) || ! webView)
+        {
+            ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
+            _webViewController = nullptr;
+            return S_OK;
+        }
+
+        _webView = std::move(webView);
+
+        // Configure settings once — these don't change between navigations.
+        ConfigureWebViewSettings();
+
+        static_cast<void>(_webView->add_NavigationStarting(
+            MakeComCallback<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*>(
+                [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT
+        {
+            if (! args)
+            {
+                return S_OK;
+            }
+
+            wil::unique_cotaskmem_string uri;
+            static_cast<void>(args->get_Uri(uri.put()));
+            if (! uri)
+            {
+                return S_OK;
+            }
+
+            const std::wstring_view url(uri.get());
+            const bool isHttp  = OrdinalString::StartsWithNoCase(url, L"http://") || OrdinalString::StartsWithNoCase(url, L"https://");
+            const bool isAbout = OrdinalString::StartsWithNoCase(url, L"about:");
+            const bool isData  = OrdinalString::StartsWithNoCase(url, L"data:");
+
+            if (_kind == ViewerWebKind::Web)
+            {
+                if (isHttp && ! _config.allowExternalNavigation)
+                {
+                    static_cast<void>(args->put_Cancel(TRUE));
+                }
+                return S_OK;
+            }
+
+            // JSON/Markdown: keep viewer content stable and open external links in the system browser.
+            if (isHttp)
+            {
+                static_cast<void>(args->put_Cancel(TRUE));
+                ShellExecuteW(nullptr, L"open", uri.get(), nullptr, nullptr, SW_SHOWNORMAL);
+                return S_OK;
+            }
+
+            if (! isAbout && ! isData)
+            {
+                static_cast<void>(args->put_Cancel(TRUE));
+            }
+
+            return S_OK;
+        }).get(),
+            &_navStartingToken));
+
+        static_cast<void>(_webView->add_NavigationCompleted(
+            MakeComCallback<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*>(
+                [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationCompletedEventArgs* /*args*/) -> HRESULT
+        {
+            ApplyWebViewThemeScript();
+            return S_OK;
+        }).get(),
+            &_navCompletedToken));
+
+        static_cast<void>(_webViewController->add_AcceleratorKeyPressed(
+            MakeComCallback<ICoreWebView2AcceleratorKeyPressedEventHandler, ICoreWebView2Controller*, ICoreWebView2AcceleratorKeyPressedEventArgs*>(
+                [this](ICoreWebView2Controller* /*sender*/, ICoreWebView2AcceleratorKeyPressedEventArgs* args) -> HRESULT
+        {
+            if (! args || ! _hWnd)
+            {
+                return S_OK;
+            }
+
+            COREWEBVIEW2_KEY_EVENT_KIND kind{};
+            if (FAILED(args->get_KeyEventKind(&kind)))
+            {
+                return S_OK;
+            }
+
+            if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
+            {
+                return S_OK;
+            }
+
+            UINT vk = 0;
+            static_cast<void>(args->get_VirtualKey(&vk));
+
+            const bool ctrl          = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+            const bool shift         = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
+            const HKL keyboardLayout = GetKeyboardLayout(0);
+            const UINT zoomInVk      = ZoomInVirtualKeyForLayout(keyboardLayout);
+            const UINT zoomOutVk     = ZoomOutVirtualKeyForLayout(keyboardLayout);
+
+            const auto handle = [&](bool handled) noexcept
+            {
+                if (handled)
+                {
+                    static_cast<void>(args->put_Handled(TRUE));
+                }
+            };
+
+            if (vk == VK_ESCAPE)
+            {
+                _hWnd.reset();
+                handle(true);
+                return S_OK;
+            }
+
+            if (vk == VK_F5)
+            {
+                static_cast<void>(OpenPath(_hWnd.get(), _currentPath, false));
+                handle(true);
+                return S_OK;
+            }
+
+            if (vk == VK_F12)
+            {
+                CommandToggleDevTools();
+                handle(true);
+                return S_OK;
+            }
+
+            if (vk == VK_F3)
+            {
+                shift ? CommandFindPrevious(_hWnd.get()) : CommandFindNext(_hWnd.get());
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && (vk == 'F' || vk == 'f'))
+            {
+                CommandFind(_hWnd.get());
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && (vk == 'S' || vk == 's'))
+            {
+                static_cast<void>(CommandSaveAs(_hWnd.get()));
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && (vk == 'L' || vk == 'l'))
+            {
+                CommandCopyUrl(_hWnd.get());
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && vk == VK_RETURN)
+            {
+                CommandOpenExternal(_hWnd.get());
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && (vk == VK_ADD || vk == zoomInVk || vk == '='))
+            {
+                CommandZoomIn();
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && (vk == VK_SUBTRACT || vk == zoomOutVk || vk == '-'))
+            {
+                CommandZoomOut();
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && vk == '0')
+            {
+                CommandZoomReset();
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && vk == VK_OEM_3)
+            {
+                CommandMarkdownToggleSource();
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && vk == VK_UP)
+            {
+                SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_PREVIOUS, 0);
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && vk == VK_DOWN)
+            {
+                SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_NEXT, 0);
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && vk == VK_HOME)
+            {
+                SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_FIRST, 0);
+                handle(true);
+                return S_OK;
+            }
+
+            if (ctrl && vk == VK_END)
+            {
+                SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_LAST, 0);
+                handle(true);
+                return S_OK;
+            }
+
+            if (_kind != ViewerWebKind::Web && vk == VK_SPACE)
+            {
+                SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_NEXT, 0);
+                handle(true);
+                return S_OK;
+            }
+
+            if (_kind != ViewerWebKind::Web && vk == VK_BACK)
+            {
+                SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_PREVIOUS, 0);
+                handle(true);
+                return S_OK;
+            }
+
+            return S_OK;
+        }).get(),
+            &_accelToken));
+
+        Layout(hwnd);
+        ApplyWebViewThemeScript();
+
+        if (_pendingDocumentUtf8.has_value())
+        {
+            const std::wstring html = Utf16FromUtf8(_pendingDocumentUtf8.value());
+            _pendingDocumentUtf8.reset();
+            if (! html.empty())
+            {
+                const HRESULT navHr = _webView->NavigateToString(html.c_str());
+                if (FAILED(navHr))
+                {
+                    ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
+                }
+            }
+        }
+        else if (_pendingWebContent.has_value())
+        {
+            const std::wstring html = std::move(_pendingWebContent.value());
+            _pendingWebContent.reset();
+            const HRESULT navHr = _webView->NavigateToString(html.c_str());
+            if (FAILED(navHr))
+            {
+                ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
+            }
+        }
+        else if (_pendingPath.has_value())
+        {
+            const std::wstring url = std::move(_pendingPath.value());
+            _pendingPath.reset();
+            const HRESULT navHr = _webView->Navigate(url.c_str());
+            if (FAILED(navHr))
+            {
+                ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"Navigate failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
+            }
+        }
+
+        return S_OK;
+    }).get());
+
+    if (FAILED(hr))
+    {
+        _webViewInitInProgress = false;
+        ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
+        Release();
+    }
+
+    return hr;
+}
+
 HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
 {
     if (_webView)
@@ -2546,15 +3006,35 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
     }
 
     _webViewInitInProgress = true;
-
     AddRef();
+
+    // Fast path: shared environment already exists — create controller immediately.
+    if (g_sharedEnvironment.environment)
+    {
+        return CreateControllerFromEnvironment(hwnd, g_sharedEnvironment.environment.get());
+    }
+
+    // Another instance is already creating the environment — queue ourselves.
+    if (g_sharedEnvironment.createInProgress)
+    {
+        g_sharedEnvironment.pendingConsumers.push_back({this, hwnd});
+        return S_FALSE;
+    }
+
+    // First caller — create the shared environment.
+    g_sharedEnvironment.createInProgress = true;
+
+    const std::wstring userDataFolder = GetWebView2UserDataFolder();
+
     const HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
         nullptr,
-        nullptr,
+        userDataFolder.empty() ? nullptr : userDataFolder.c_str(),
         nullptr,
         MakeComCallback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, HRESULT, ICoreWebView2Environment*>(
             [this, hwnd](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT
     {
+        g_sharedEnvironment.createInProgress = false;
+
         if (FAILED(result) || ! environment)
         {
             _webViewInitInProgress = false;
@@ -2563,300 +3043,36 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
                                    ? IDS_VIEWERWEB_ERROR_WEBVIEW2_RUNTIME_MISSING
                                    : IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED;
             ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, msgId));
+
+            // Notify all pending consumers about the failure.
+            for (auto& pending : g_sharedEnvironment.pendingConsumers)
+            {
+                if (pending.viewer)
+                {
+                    pending.viewer->_webViewInitInProgress = false;
+                    pending.viewer->ShowHostAlert(pending.hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, msgId));
+                    pending.viewer->Release();
+                }
+            }
+            g_sharedEnvironment.pendingConsumers.clear();
+
             Release();
             return S_OK;
         }
 
-        _webViewEnvironment = environment;
+        g_sharedEnvironment.environment = environment;
 
-        const HRESULT createControllerHr = environment->CreateCoreWebView2Controller(
-            hwnd,
-            MakeComCallback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, HRESULT, ICoreWebView2Controller*>(
-                [this, hwnd](HRESULT controllerResult, ICoreWebView2Controller* controller) -> HRESULT
+        // Create our own controller.
+        static_cast<void>(CreateControllerFromEnvironment(hwnd, environment));
+
+        // Drain pending consumers — each creates its own controller from the shared environment.
+        auto pendingConsumers = std::move(g_sharedEnvironment.pendingConsumers);
+        for (auto& pending : pendingConsumers)
         {
-            _webViewInitInProgress = false;
-            auto releaseSelf       = wil::scope_exit([&] { Release(); });
-
-            if (FAILED(controllerResult) || ! controller)
+            if (pending.viewer && pending.hwnd)
             {
-                ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
-                return S_OK;
+                static_cast<void>(pending.viewer->CreateControllerFromEnvironment(pending.hwnd, environment));
             }
-
-            if (! _hWnd || _hWnd.get() != hwnd)
-            {
-                controller->Close();
-                return S_OK;
-            }
-
-            _webViewController = controller;
-
-            wil::com_ptr<ICoreWebView2> webView;
-            const HRESULT webViewHr = controller->get_CoreWebView2(webView.put());
-            if (FAILED(webViewHr) || ! webView)
-            {
-                ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
-                _webViewController = nullptr;
-                return S_OK;
-            }
-
-            _webView = std::move(webView);
-
-            static_cast<void>(_webView->add_NavigationStarting(
-                MakeComCallback<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*>(
-                    [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationStartingEventArgs* args) -> HRESULT
-            {
-                if (! args)
-                {
-                    return S_OK;
-                }
-
-                wil::unique_cotaskmem_string uri;
-                static_cast<void>(args->get_Uri(uri.put()));
-                if (! uri)
-                {
-                    return S_OK;
-                }
-
-                const std::wstring_view url(uri.get());
-                const bool isHttp  = OrdinalString::StartsWithNoCase(url, L"http://") || OrdinalString::StartsWithNoCase(url, L"https://");
-                const bool isAbout = OrdinalString::StartsWithNoCase(url, L"about:");
-                const bool isData  = OrdinalString::StartsWithNoCase(url, L"data:");
-
-                if (_kind == ViewerWebKind::Web)
-                {
-                    if (isHttp && ! _config.allowExternalNavigation)
-                    {
-                        static_cast<void>(args->put_Cancel(TRUE));
-                    }
-                    return S_OK;
-                }
-
-                // JSON/Markdown: keep viewer content stable and open external links in the system browser.
-                if (isHttp)
-                {
-                    static_cast<void>(args->put_Cancel(TRUE));
-                    ShellExecuteW(nullptr, L"open", uri.get(), nullptr, nullptr, SW_SHOWNORMAL);
-                    return S_OK;
-                }
-
-                if (! isAbout && ! isData)
-                {
-                    static_cast<void>(args->put_Cancel(TRUE));
-                }
-
-                return S_OK;
-            }).get(),
-                &_navStartingToken));
-
-            static_cast<void>(_webView->add_NavigationCompleted(
-                MakeComCallback<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*>(
-                    [this](ICoreWebView2* /*sender*/, ICoreWebView2NavigationCompletedEventArgs* /*args*/) -> HRESULT
-            {
-                UpdateWebViewTheme();
-                return S_OK;
-            }).get(),
-                &_navCompletedToken));
-
-            static_cast<void>(_webViewController->add_AcceleratorKeyPressed(
-                MakeComCallback<ICoreWebView2AcceleratorKeyPressedEventHandler, ICoreWebView2Controller*, ICoreWebView2AcceleratorKeyPressedEventArgs*>(
-                    [this](ICoreWebView2Controller* /*sender*/, ICoreWebView2AcceleratorKeyPressedEventArgs* args) -> HRESULT
-            {
-                if (! args || ! _hWnd)
-                {
-                    return S_OK;
-                }
-
-                COREWEBVIEW2_KEY_EVENT_KIND kind{};
-                if (FAILED(args->get_KeyEventKind(&kind)))
-                {
-                    return S_OK;
-                }
-
-                if (kind != COREWEBVIEW2_KEY_EVENT_KIND_KEY_DOWN && kind != COREWEBVIEW2_KEY_EVENT_KIND_SYSTEM_KEY_DOWN)
-                {
-                    return S_OK;
-                }
-
-                UINT vk = 0;
-                static_cast<void>(args->get_VirtualKey(&vk));
-
-                const bool ctrl          = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-                const bool shift         = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-                const HKL keyboardLayout = GetKeyboardLayout(0);
-                const UINT zoomInVk      = ZoomInVirtualKeyForLayout(keyboardLayout);
-                const UINT zoomOutVk     = ZoomOutVirtualKeyForLayout(keyboardLayout);
-
-                const auto handle = [&](bool handled) noexcept
-                {
-                    if (handled)
-                    {
-                        static_cast<void>(args->put_Handled(TRUE));
-                    }
-                };
-
-                if (vk == VK_ESCAPE)
-                {
-                    _hWnd.reset();
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (vk == VK_F5)
-                {
-                    static_cast<void>(OpenPath(_hWnd.get(), _currentPath, false));
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (vk == VK_F12)
-                {
-                    CommandToggleDevTools();
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (vk == VK_F3)
-                {
-                    shift ? CommandFindPrevious(_hWnd.get()) : CommandFindNext(_hWnd.get());
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && (vk == 'F' || vk == 'f'))
-                {
-                    CommandFind(_hWnd.get());
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && (vk == 'S' || vk == 's'))
-                {
-                    static_cast<void>(CommandSaveAs(_hWnd.get()));
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && (vk == 'L' || vk == 'l'))
-                {
-                    CommandCopyUrl(_hWnd.get());
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && vk == VK_RETURN)
-                {
-                    CommandOpenExternal(_hWnd.get());
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && (vk == VK_ADD || vk == zoomInVk || vk == '='))
-                {
-                    CommandZoomIn();
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && (vk == VK_SUBTRACT || vk == zoomOutVk || vk == '-'))
-                {
-                    CommandZoomOut();
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && vk == '0')
-                {
-                    CommandZoomReset();
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && vk == VK_OEM_3)
-                {
-                    CommandMarkdownToggleSource();
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && vk == VK_UP)
-                {
-                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_PREVIOUS, 0);
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && vk == VK_DOWN)
-                {
-                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_NEXT, 0);
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && vk == VK_HOME)
-                {
-                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_FIRST, 0);
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (ctrl && vk == VK_END)
-                {
-                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_LAST, 0);
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (_kind != ViewerWebKind::Web && vk == VK_SPACE)
-                {
-                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_NEXT, 0);
-                    handle(true);
-                    return S_OK;
-                }
-
-                if (_kind != ViewerWebKind::Web && vk == VK_BACK)
-                {
-                    SendMessageW(_hWnd.get(), WM_COMMAND, IDM_VIEWERWEB_OTHER_PREVIOUS, 0);
-                    handle(true);
-                    return S_OK;
-                }
-
-                return S_OK;
-            }).get(),
-                &_accelToken));
-
-            Layout(hwnd);
-            UpdateWebViewTheme();
-
-            if (_pendingWebContent.has_value())
-            {
-                const std::wstring html = std::move(_pendingWebContent.value());
-                _pendingWebContent.reset();
-                const HRESULT navHr = _webView->NavigateToString(html.c_str());
-                if (FAILED(navHr))
-                {
-                    ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-                }
-            }
-            else if (_pendingPath.has_value())
-            {
-                const std::wstring url = std::move(_pendingPath.value());
-                _pendingPath.reset();
-                const HRESULT navHr = _webView->Navigate(url.c_str());
-                if (FAILED(navHr))
-                {
-                    ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"Navigate failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-                }
-            }
-
-            return S_OK;
-        }).get());
-
-        if (FAILED(createControllerHr))
-        {
-            _webViewInitInProgress = false;
-            ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
-            Release();
         }
 
         return S_OK;
@@ -2864,7 +3080,8 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
 
     if (FAILED(hr))
     {
-        _webViewInitInProgress = false;
+        g_sharedEnvironment.createInProgress = false;
+        _webViewInitInProgress               = false;
         ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED));
         Release();
         return hr;
@@ -2902,13 +3119,37 @@ void ViewerWeb::DiscardWebView2() noexcept
         _webViewController->Close();
     }
 
-    // Release COM pointers after initiating close
+    // Release per-instance COM pointers after initiating close.
+    // The shared environment is NOT released here — it lives for the DLL lifetime.
     _webView.reset();
     _webViewController.reset();
-    _webViewEnvironment.reset();
 }
 
-void ViewerWeb::UpdateWebViewTheme() noexcept
+void ViewerWeb::ConfigureWebViewSettings() noexcept
+{
+    if (! _webView)
+    {
+        return;
+    }
+
+    wil::com_ptr<ICoreWebView2Settings> settings;
+    if (SUCCEEDED(_webView->get_Settings(settings.put())) && settings)
+    {
+        static_cast<void>(settings->put_IsScriptEnabled(TRUE));
+        static_cast<void>(settings->put_IsWebMessageEnabled(TRUE));
+        static_cast<void>(settings->put_AreDefaultContextMenusEnabled(TRUE));
+        static_cast<void>(settings->put_IsZoomControlEnabled(TRUE));
+        static_cast<void>(settings->put_AreDevToolsEnabled(_config.devToolsEnabled ? TRUE : FALSE));
+
+        wil::com_ptr<ICoreWebView2Settings3> settings3;
+        if (SUCCEEDED(settings->QueryInterface(IID_PPV_ARGS(settings3.put()))) && settings3)
+        {
+            static_cast<void>(settings3->put_AreBrowserAcceleratorKeysEnabled(TRUE));
+        }
+    }
+}
+
+void ViewerWeb::ApplyWebViewThemeScript() noexcept
 {
     if (_webViewController)
     {
@@ -2927,22 +3168,6 @@ void ViewerWeb::UpdateWebViewTheme() noexcept
 
     if (_webView)
     {
-        wil::com_ptr<ICoreWebView2Settings> settings;
-        if (SUCCEEDED(_webView->get_Settings(settings.put())) && settings)
-        {
-            static_cast<void>(settings->put_IsScriptEnabled(TRUE));
-            static_cast<void>(settings->put_IsWebMessageEnabled(TRUE));
-            static_cast<void>(settings->put_AreDefaultContextMenusEnabled(TRUE));
-            static_cast<void>(settings->put_IsZoomControlEnabled(TRUE));
-            static_cast<void>(settings->put_AreDevToolsEnabled(_config.devToolsEnabled ? TRUE : FALSE));
-
-            wil::com_ptr<ICoreWebView2Settings3> settings3;
-            if (SUCCEEDED(settings->QueryInterface(IID_PPV_ARGS(settings3.put()))) && settings3)
-            {
-                static_cast<void>(settings3->put_AreBrowserAcceleratorKeysEnabled(TRUE));
-            }
-        }
-
         if (_hasTheme)
         {
             const COLORREF bg     = ColorRefFromArgb(_theme.backgroundArgb);
@@ -3160,59 +3385,6 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     const bool markdownShowSource = self->_markdownShowSource;
 
     wil::com_ptr<IFileSystem> fileSystem = self->_fileSystem;
-
-    const auto base64Encode = [](std::string_view bytes) noexcept -> std::string
-    {
-        static constexpr char kTable[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-        std::string out;
-        out.reserve(((bytes.size() + 2) / 3) * 4);
-
-        size_t i = 0;
-        for (; i + 3 <= bytes.size(); i += 3)
-        {
-            const uint32_t n = (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i])) << 16) |
-                               (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i + 1])) << 8) | static_cast<uint32_t>(static_cast<uint8_t>(bytes[i + 2]));
-            out.push_back(kTable[(n >> 18) & 0x3F]);
-            out.push_back(kTable[(n >> 12) & 0x3F]);
-            out.push_back(kTable[(n >> 6) & 0x3F]);
-            out.push_back(kTable[n & 0x3F]);
-        }
-
-        const size_t rem = bytes.size() - i;
-        if (rem == 1)
-        {
-            const uint32_t n = (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i])) << 16);
-            out.push_back(kTable[(n >> 18) & 0x3F]);
-            out.push_back(kTable[(n >> 12) & 0x3F]);
-            out.push_back('=');
-            out.push_back('=');
-        }
-        else if (rem == 2)
-        {
-            const uint32_t n = (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i])) << 16) | (static_cast<uint32_t>(static_cast<uint8_t>(bytes[i + 1])) << 8);
-            out.push_back(kTable[(n >> 18) & 0x3F]);
-            out.push_back(kTable[(n >> 12) & 0x3F]);
-            out.push_back(kTable[(n >> 6) & 0x3F]);
-            out.push_back('=');
-        }
-
-        return out;
-    };
-
-    const auto replaceAll = [](std::string& text, std::string_view needle, std::string_view replacement) noexcept
-    {
-        if (needle.empty())
-        {
-            return;
-        }
-
-        size_t pos = 0;
-        while ((pos = text.find(needle, pos)) != std::string::npos)
-        {
-            text.replace(pos, needle.size(), replacement);
-            pos += replacement.size();
-        }
-    };
 
     const auto normalizeTextUtf8 = [&](std::string_view bytes) noexcept -> std::string
     {
@@ -3490,12 +3662,12 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             return;
         }
 
-        const std::string prettyJson(pretty.get(), prettyLen);
-        const std::string jsonB64 = base64Encode(prettyJson);
+        const std::string_view prettyJson(pretty.get(), prettyLen);
+        const std::string escapedJson = EscapeJavaScriptStringUtf8(prettyJson);
 
         if (config.jsonViewMode == JsonViewMode::Pretty)
         {
-            std::string highlightJs = ResourceBytesToString(g_hInstance, IDR_VIEWERWEB_HIGHLIGHT_JS);
+            const std::string_view highlightJs = GetHighlightJs();
 
             const COLORREF codeBg   = BlendColor(bg, fg, theme.darkMode ? 20u : 10u);
             const COLORREF border   = BlendColor(bg, fg, theme.darkMode ? 35u : 45u);
@@ -3505,7 +3677,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             const COLORREF litColor = BlendColor(accent, fg, 120u);
 
             std::string html;
-            html.reserve(highlightJs.size() + jsonB64.size() + 8192);
+            html.reserve(highlightJs.size() + escapedJson.size() + 8192);
             html += "<!doctype html><html><head><meta charset=\"utf-8\">";
             html += "<style>";
             html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
@@ -3522,16 +3694,11 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             html += ".hljs-punctuation,.hljs-brace{color:var(--rs-muted-fg);} .hljs-comment{opacity:0.8;}";
             html += "</style></head><body><div id=\"app\"><pre><code id=\"code\" class=\"language-json\"></code></pre></div>";
             html += "<script>";
-            html += highlightJs;
+            html.append(highlightJs);
             html += "</script><script>";
             html += "(() => {";
             html += "const initialTheme=" + themeObj + ";";
-            html +=
-                "function parseRgb(s){const m=/rgb\\((\\d+),(\\d+),(\\d+)\\)/.exec(s.replace(/\\s+/g,''));return m?{r:+m[1],g:+m[2],b:+m[3]}:{r:0,g:0,b:0};}";
-            html += "function rgb(c){return `rgb(${c.r},${c.g},${c.b})`;}";
-            html += "function blend(u,o,a){const inv=255-a;return "
-                    "{r:Math.round((u.r*inv+o.r*a)/255),g:Math.round((u.g*inv+o.g*a)/255),b:Math.round((u.b*inv+o.b*a)/255)};}";
-            html += "function luma(c){return (c.r*299+c.g*587+c.b*114)/1000;}";
+            html += kCommonThemeJs;
             html += "function applyTheme(t){const "
                     "r=document.documentElement.style;r.setProperty('--rs-bg',t.bg);r.setProperty('--rs-fg',t.fg);r.setProperty('--rs-sel-bg',t.selBg);r."
                     "setProperty('--rs-sel-fg',t.selFg);r.setProperty('--rs-accent',t.accent);const "
@@ -3539,10 +3706,8 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
                     "dark=luma(bg)<128;r.setProperty('--rs-code-bg',rgb(blend(bg,fg,dark?20:10)));r.setProperty('--rs-border',rgb(blend(bg,fg,dark?35:45)));r."
                     "setProperty('--rs-muted-fg',rgb(blend(bg,fg,140)));r.setProperty('--rs-string',rgb(blend(acc,fg,60)));r.setProperty('--rs-number',rgb("
                     "blend(acc,fg,90)));r.setProperty('--rs-literal',rgb(blend(acc,fg,120)));}";
-            html += "function decodeUtf8(b64){const bin=atob(b64);const bytes=new Uint8Array(bin.length);for(let "
-                    "i=0;i<bin.length;i++){bytes[i]=bin.charCodeAt(i);}return new TextDecoder('utf-8').decode(bytes);}";
             html += "const code=document.getElementById('code');";
-            html += "code.textContent=decodeUtf8('" + jsonB64 + "');";
+            html += "code.textContent='" + escapedJson + "';";
             html += "window.RS={applyTheme:applyTheme};";
             html += "applyTheme(initialTheme);";
             html += "try{hljs.highlightElement(code);}catch(e){}";
@@ -3555,19 +3720,14 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             return;
         }
 
-        std::string jsonEditorJs   = ResourceBytesToString(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_JS);
-        std::string jsonEditorCss  = ResourceBytesToString(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_CSS);
-        const std::string iconsSvg = ResourceBytesToString(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_ICONS_SVG);
-        const std::string iconsB64 = base64Encode(iconsSvg);
-        const std::string iconsUrl = std::string("data:image/svg+xml;base64,") + iconsB64;
-        replaceAll(jsonEditorCss, "./img/jsoneditor-icons.svg", iconsUrl);
-        replaceAll(jsonEditorCss, "img/jsoneditor-icons.svg", iconsUrl);
+        const std::string_view jsonEditorJs = GetJsonEditorJs();
+        const std::string& jsonEditorCss    = GetJsonEditorCssWithIcons();
 
         const COLORREF border  = BlendColor(bg, fg, theme.darkMode ? 45u : 80u);
         const COLORREF mutedFg = BlendColor(bg, fg, 140u);
 
         std::string html;
-        html.reserve(jsonEditorJs.size() + jsonEditorCss.size() + jsonB64.size() + 8192);
+        html.reserve(jsonEditorJs.size() + jsonEditorCss.size() + escapedJson.size() + 8192);
         html += "<!doctype html><html><head><meta charset=\"utf-8\">";
         html += "<style>";
         html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
@@ -3593,24 +3753,18 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         html += ".jsoneditor-contextmenu .jsoneditor-menu button.jsoneditor-expand{border-left:1px solid var(--rs-border)!important;}";
         html += "</style></head><body><div id=\"app\"></div>";
         html += "<script>";
-        html += jsonEditorJs;
+        html.append(jsonEditorJs);
         html += "</script><script>";
         html += "(() => {";
         html += "const initialTheme=" + themeObj + ";";
-        html += "function parseRgb(s){const m=/rgb\\((\\d+),(\\d+),(\\d+)\\)/.exec(s.replace(/\\s+/g,''));return m?{r:+m[1],g:+m[2],b:+m[3]}:{r:0,g:0,b:0};}";
-        html += "function rgb(c){return `rgb(${c.r},${c.g},${c.b})`;}";
-        html += "function blend(u,o,a){const inv=255-a;return "
-                "{r:Math.round((u.r*inv+o.r*a)/255),g:Math.round((u.g*inv+o.g*a)/255),b:Math.round((u.b*inv+o.b*a)/255)};}";
-        html += "function luma(c){return (c.r*299+c.g*587+c.b*114)/1000;}";
+        html += kCommonThemeJs;
         html +=
             "function applyTheme(t){const "
             "r=document.documentElement.style;r.setProperty('--rs-bg',t.bg);r.setProperty('--rs-fg',t.fg);r.setProperty('--rs-sel-bg',t.selBg);r.setProperty('-"
             "-rs-sel-fg',t.selFg);r.setProperty('--rs-accent',t.accent);const bg=parseRgb(t.bg),fg=parseRgb(t.fg),acc=parseRgb(t.accent);const "
             "dark=luma(bg)<128;r.setProperty('--rs-border',rgb(blend(bg,fg,dark?45:80)));r.setProperty('--rs-muted-fg',rgb(blend(bg,fg,140)));r.setProperty('--"
             "rs-string',rgb(blend(acc,fg,60)));r.setProperty('--rs-number',rgb(blend(acc,fg,90)));r.setProperty('--rs-literal',rgb(blend(acc,fg,120)));}";
-        html += "function decodeUtf8(b64){const bin=atob(b64);const bytes=new Uint8Array(bin.length);for(let "
-                "i=0;i<bin.length;i++){bytes[i]=bin.charCodeAt(i);}return new TextDecoder('utf-8').decode(bytes);}";
-        html += "const jsonText=decodeUtf8('" + jsonB64 + "');";
+        html += "const jsonText='" + escapedJson + "';";
         html += "const container=document.getElementById('app');";
         html += "const options={mode:'tree',modes:['tree','view'],onEditable:()=>false,mainMenuBar:false,navigationBar:false,statusBar:false};";
         html += "const editor=new JSONEditor(container,options);";
@@ -3627,9 +3781,9 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     }
 
     // Markdown
-    const std::string markdownB64 = base64Encode(textUtf8);
-    std::string markdownItJs      = ResourceBytesToString(g_hInstance, IDR_VIEWERWEB_MARKDOWNIT_JS);
-    std::string highlightJs       = ResourceBytesToString(g_hInstance, IDR_VIEWERWEB_HIGHLIGHT_JS);
+    const std::string escapedMarkdown   = EscapeJavaScriptStringUtf8(textUtf8);
+    const std::string_view markdownItJs = GetMarkdownItJs();
+    const std::string_view highlightJs  = GetHighlightJs();
 
     const COLORREF codeBg      = BlendColor(bg, fg, theme.darkMode ? 20u : 10u);
     const COLORREF border      = BlendColor(bg, fg, theme.darkMode ? 35u : 45u);
@@ -3638,7 +3792,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     const COLORREF numberColor = BlendColor(accent, fg, 90u);
 
     std::string html;
-    html.reserve(markdownItJs.size() + highlightJs.size() + markdownB64.size() + 8192);
+    html.reserve(markdownItJs.size() + highlightJs.size() + escapedMarkdown.size() + 8192);
     html += "<!doctype html><html><head><meta charset=\"utf-8\">";
     html += "<style>";
     html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
@@ -3654,26 +3808,20 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     html += ".hljs-string{color:var(--rs-string);}.hljs-number{color:var(--rs-number);}.hljs-punctuation,.hljs-brace{color:var(--rs-muted-fg);}";
     html += "</style></head><body><div id=\"app\"></div>";
     html += "<script>";
-    html += markdownItJs;
+    html.append(markdownItJs);
     html += "</script><script>";
-    html += highlightJs;
+    html.append(highlightJs);
     html += "</script><script>";
     html += "(() => {";
     html += "const initialTheme=" + themeObj + ";";
-    html += "function parseRgb(s){const m=/rgb\\((\\d+),(\\d+),(\\d+)\\)/.exec(s.replace(/\\s+/g,''));return m?{r:+m[1],g:+m[2],b:+m[3]}:{r:0,g:0,b:0};}";
-    html += "function rgb(c){return `rgb(${c.r},${c.g},${c.b})`;}";
-    html += "function blend(u,o,a){const inv=255-a;return "
-            "{r:Math.round((u.r*inv+o.r*a)/255),g:Math.round((u.g*inv+o.g*a)/255),b:Math.round((u.b*inv+o.b*a)/255)};}";
-    html += "function luma(c){return (c.r*299+c.g*587+c.b*114)/1000;}";
+    html += kCommonThemeJs;
     html +=
         "function applyTheme(t){const "
         "r=document.documentElement.style;r.setProperty('--rs-bg',t.bg);r.setProperty('--rs-fg',t.fg);r.setProperty('--rs-sel-bg',t.selBg);r.setProperty('--rs-"
         "sel-fg',t.selFg);r.setProperty('--rs-accent',t.accent);const bg=parseRgb(t.bg),fg=parseRgb(t.fg),acc=parseRgb(t.accent);const "
         "dark=luma(bg)<128;r.setProperty('--rs-code-bg',rgb(blend(bg,fg,dark?20:10)));r.setProperty('--rs-border',rgb(blend(bg,fg,dark?35:45)));r.setProperty('"
         "--rs-muted-fg',rgb(blend(bg,fg,140)));r.setProperty('--rs-string',rgb(blend(acc,fg,60)));r.setProperty('--rs-number',rgb(blend(acc,fg,90)));}";
-    html += "function decodeUtf8(b64){const bin=atob(b64);const bytes=new Uint8Array(bin.length);for(let "
-            "i=0;i<bin.length;i++){bytes[i]=bin.charCodeAt(i);}return new TextDecoder('utf-8').decode(bytes);}";
-    html += "const src=decodeUtf8('" + markdownB64 + "');";
+    html += "const src='" + escapedMarkdown + "';";
     html += "const container=document.getElementById('app');";
     html += "let showSource=" + std::string(markdownShowSource ? "true" : "false") + ";";
     html += "const md=window.markdownit({html:false,linkify:true,typographer:true});";
@@ -4150,4 +4298,39 @@ std::optional<std::filesystem::path> ShowSaveAsDialog(HWND hwnd, std::wstring_vi
     }
     return out;
 }
+
+[[nodiscard]] std::string EscapeJavaScriptStringUtf8(std::string_view text) noexcept
+{
+    std::string out;
+    out.reserve(text.size() + text.size() / 8);
+    for (const char ch : text)
+    {
+        const auto u = static_cast<uint8_t>(ch);
+        switch (ch)
+        {
+            case '\\': out += "\\\\"; break;
+            case '\'': out += "\\'"; break;
+            case '\"': out += "\\\""; break;
+            case '\r': out += "\\r"; break;
+            case '\n': out += "\\n"; break;
+            case '\t': out += "\\t"; break;
+            default:
+                if (u < 0x20)
+                {
+                    out += std::format("\\x{:02X}", static_cast<unsigned int>(u));
+                }
+                else
+                {
+                    out.push_back(ch);
+                }
+                break;
+        }
+    }
+    return out;
+}
 } // namespace
+
+void ResetSharedEnvironment() noexcept
+{
+    ResetSharedEnvironmentImpl();
+}

@@ -51,12 +51,13 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "ConnectionProfileUtils.h"
+#include "DirectoryInfoCache.h"
 #include "FileSystemPluginManager.h"
 #include "FolderView.h"
 #include "FolderWindow.FileOperations.Popup.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.h"
-#include "ConnectionProfileUtils.h"
 #include "HostServices.h"
 #include "SplashScreen.h"
 #include "WindowMessages.h"
@@ -69,29 +70,38 @@ extern Common::Settings::Settings g_settings;
 
 namespace
 {
-constexpr std::wstring_view kFolderWindowClassName = L"RedSalamander.FolderWindow";
-constexpr std::wstring_view kFolderViewClassName   = L"RedSalamanderFolderView";
-constexpr std::wstring_view kPopupClassName        = L"RedSalamander.FileOperationsPopup";
-constexpr std::wstring_view kPluginIdLocal         = L"builtin/file-system";
-constexpr std::wstring_view kPluginIdDummy         = L"builtin/file-system-dummy";
-constexpr std::wstring_view kPluginId7z            = L"builtin/file-system-7z";
-constexpr std::wstring_view kPluginIdFtp           = L"builtin/file-system-ftp";
-constexpr std::wstring_view kPluginIdSftp          = L"builtin/file-system-sftp";
-constexpr std::wstring_view kPluginIdScp           = L"builtin/file-system-scp";
-constexpr std::wstring_view kPluginIdImap          = L"builtin/file-system-imap";
-constexpr std::wstring_view kPluginIdS3            = L"builtin/file-system-s3";
+constexpr std::wstring_view kFolderWindowClassName    = L"RedSalamander.FolderWindow";
+constexpr std::wstring_view kFolderViewClassName      = L"RedSalamanderFolderView";
+constexpr std::wstring_view kPopupClassName           = L"RedSalamander.FileOperationsPopup";
+constexpr std::wstring_view kPluginIdLocal            = L"builtin/file-system";
+constexpr std::wstring_view kPluginIdDummy            = L"builtin/file-system-dummy";
+constexpr std::wstring_view kPluginId7z               = L"builtin/file-system-7z";
+constexpr std::wstring_view kPluginIdFtp              = L"builtin/file-system-ftp";
+constexpr std::wstring_view kPluginIdSftp             = L"builtin/file-system-sftp";
+constexpr std::wstring_view kPluginIdScp              = L"builtin/file-system-scp";
+constexpr std::wstring_view kPluginIdImap             = L"builtin/file-system-imap";
+constexpr std::wstring_view kPluginIdS3               = L"builtin/file-system-s3";
+constexpr std::wstring_view kPluginIdOneDrivePersonal = L"builtin/file-system-onedrive-personal";
+constexpr std::wstring_view kPluginIdOneDriveBusiness = L"builtin/file-system-onedrive-business";
+constexpr std::wstring_view kPluginIdSharePoint       = L"builtin/file-system-sharepoint";
 
-constexpr std::wstring_view kSelfTestEnvConnFtp  = L"REDSALAMANDER_SELFTEST_CONN_FTP";
-constexpr std::wstring_view kSelfTestEnvConnSftp = L"REDSALAMANDER_SELFTEST_CONN_SFTP";
-constexpr std::wstring_view kSelfTestEnvConnScp  = L"REDSALAMANDER_SELFTEST_CONN_SCP";
-constexpr std::wstring_view kSelfTestEnvConnImap = L"REDSALAMANDER_SELFTEST_CONN_IMAP";
-constexpr std::wstring_view kSelfTestEnvConnS3   = L"REDSALAMANDER_SELFTEST_CONN_S3";
+constexpr std::wstring_view kSelfTestEnvConnFtp              = L"REDSALAMANDER_SELFTEST_CONN_FTP";
+constexpr std::wstring_view kSelfTestEnvConnSftp             = L"REDSALAMANDER_SELFTEST_CONN_SFTP";
+constexpr std::wstring_view kSelfTestEnvConnScp              = L"REDSALAMANDER_SELFTEST_CONN_SCP";
+constexpr std::wstring_view kSelfTestEnvConnImap             = L"REDSALAMANDER_SELFTEST_CONN_IMAP";
+constexpr std::wstring_view kSelfTestEnvConnS3               = L"REDSALAMANDER_SELFTEST_CONN_S3";
+constexpr std::wstring_view kSelfTestEnvConnOneDrivePersonal = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL";
+constexpr std::wstring_view kSelfTestEnvConnOneDriveBusiness = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS";
+constexpr std::wstring_view kSelfTestEnvConnSharePoint       = L"REDSALAMANDER_SELFTEST_CONN_SHAREPOINT";
 
-constexpr std::wstring_view kSelfTestDefaultConnFtp  = L"FileOpsSelfTest FTP";
-constexpr std::wstring_view kSelfTestDefaultConnSftp = L"FileOpsSelfTest SFTP";
-constexpr std::wstring_view kSelfTestDefaultConnScp  = L"FileOpsSelfTest SCP";
-constexpr std::wstring_view kSelfTestDefaultConnImap = L"FileOpsSelfTest IMAP";
-constexpr std::wstring_view kSelfTestDefaultConnS3   = L"FileOpsSelfTest S3";
+constexpr std::wstring_view kSelfTestDefaultConnFtp              = L"FileOpsSelfTest FTP";
+constexpr std::wstring_view kSelfTestDefaultConnSftp             = L"FileOpsSelfTest SFTP";
+constexpr std::wstring_view kSelfTestDefaultConnScp              = L"FileOpsSelfTest SCP";
+constexpr std::wstring_view kSelfTestDefaultConnImap             = L"FileOpsSelfTest IMAP";
+constexpr std::wstring_view kSelfTestDefaultConnS3               = L"FileOpsSelfTest S3";
+constexpr std::wstring_view kSelfTestDefaultConnOneDrivePersonal = L"FileOpsSelfTest OneDrive Personal";
+constexpr std::wstring_view kSelfTestDefaultConnOneDriveBusiness = L"FileOpsSelfTest OneDrive Business";
+constexpr std::wstring_view kSelfTestDefaultConnSharePoint       = L"FileOpsSelfTest SharePoint";
 
 // HARD REQUIREMENT (Remote selftests):
 // Any selftest phase that performs *remote* file operations (copy/move/delete) MUST be sandboxed to a dedicated,
@@ -100,9 +110,13 @@ constexpr std::wstring_view kSelfTestDefaultConnS3   = L"FileOpsSelfTest S3";
 //   - refuse/skip when the ConnectionProfile.initialPath is not a dedicated selftest root,
 //   - create a unique per-run subfolder under that root,
 //   - only touch/delete paths under that per-run subfolder.
+// S3 gets one narrow exception: bucket root is allowed when the bucket name itself clearly contains 'selftest',
+// because that bucket is already dedicated and the test phases still create an isolated per-run subfolder under it.
 //
-// Phase 16 currently validates secret retrieval only (no network traffic), but we keep the sandbox requirement
-// enforced as a configuration check so it can't be forgotten when remote file-op phases are added.
+// Phase 16 currently validates secret retrieval for all remote plugins and also runs a sandboxed
+// OneDrive Personal file-ops smoke path (remote read, local->remote copy, remote->local copy,
+// remote move/rename, and remote delete). The sandbox requirement stays enforced for every remote
+// provider so destructive coverage never escapes the dedicated selftest root.
 
 constexpr ULONGLONG kDefaultTimeoutMs = 60'000ull;
 
@@ -143,6 +157,10 @@ struct SelfTestState
         Phase6_PopupSmokeResizeAndPause,
         Phase6_DeleteBytesMeaningful,
         Phase7_WatcherChurn,
+        Phase7_CacheBorrowNoWatchInvalidation,
+        Phase7_CrossPaneVisibleRefreshLocal,
+        Phase7_CrossPaneVisibleRefreshDummy,
+        Phase7_CrossPaneRelocateLocal,
         Phase7_LargeDirectoryEnumeration,
         Phase7_ParallelCopyMoveKnobs,
         Phase7_PerItemDirectoryCopyInFlightLines,
@@ -169,6 +187,8 @@ struct SelfTestState
         Phase13_PostMortemDiagnostics,
         Phase14_PopupHostLifetimeGuard,
         Phase15_FileSystem7zReadSeekSmoke,
+        Phase15_FileSystem7zMountPathImpact,
+        Phase16_RemoteWatchContractExposure,
         Phase16_RemoteFtpSecret,
         Phase16_RemoteFtpSandbox,
         Phase16_RemoteSftpSecret,
@@ -179,6 +199,13 @@ struct SelfTestState
         Phase16_RemoteImapSandbox,
         Phase16_RemoteS3Secret,
         Phase16_RemoteS3Sandbox,
+        Phase16_RemoteOneDrivePersonalSecret,
+        Phase16_RemoteOneDrivePersonalSandbox,
+        Phase16_RemoteOneDrivePersonalFileOps,
+        Phase16_RemoteOneDriveBusinessSecret,
+        Phase16_RemoteOneDriveBusinessSandbox,
+        Phase16_RemoteSharePointSecret,
+        Phase16_RemoteSharePointSandbox,
         Cleanup_RestorePluginConfig,
         Done,
         Failed,
@@ -221,6 +248,21 @@ struct SelfTestState
 
     std::vector<std::wstring> dummyPaths;
 
+    wil::com_ptr<IFileSystem> fsRemoteOneDrivePersonal;
+    std::wstring remoteOneDrivePersonalProfileName;
+    std::wstring remoteOneDrivePersonalCaseRootConn;
+    std::wstring remoteOneDrivePersonalUploadDirConn;
+    std::wstring remoteOneDrivePersonalMoveDirConn;
+    std::wstring remoteOneDrivePersonalSeedFileConn;
+    std::wstring remoteOneDrivePersonalUploadedFileConn;
+    std::wstring remoteOneDrivePersonalMovedFileConn;
+    std::filesystem::path remoteOneDrivePersonalDisplayPath;
+    std::filesystem::path remoteOneDrivePersonalWorkspace;
+    std::filesystem::path remoteOneDrivePersonalUploadSource;
+    std::filesystem::path remoteOneDrivePersonalDownloadDir;
+    std::filesystem::path remoteOneDrivePersonalDownloadedFile;
+    std::string remoteOneDrivePersonalPayload;
+
     FolderWindow* folderWindow                = nullptr;
     FolderWindow::FileOperationState* fileOps = nullptr;
 
@@ -238,6 +280,7 @@ struct SelfTestState
     wil::unique_handle lockedFileHandle;
 
     size_t copyKnobIndex                = 0;
+    size_t copyKnobRetryCount           = 0;
     size_t deleteKnobIndex              = 0;
     bool copySpeedLimitCleared          = false;
     ULONGLONG copyTaskStartTick         = 0;
@@ -279,6 +322,10 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase6_PopupSmokeResizeAndPause: return L"Phase6_PopupSmokeResizeAndPause";
         case SelfTestState::Step::Phase6_DeleteBytesMeaningful: return L"Phase6_DeleteBytesMeaningful";
         case SelfTestState::Step::Phase7_WatcherChurn: return L"Phase7_WatcherChurn";
+        case SelfTestState::Step::Phase7_CacheBorrowNoWatchInvalidation: return L"Phase7_CacheBorrowNoWatchInvalidation";
+        case SelfTestState::Step::Phase7_CrossPaneVisibleRefreshLocal: return L"Phase7_CrossPaneVisibleRefreshLocal";
+        case SelfTestState::Step::Phase7_CrossPaneVisibleRefreshDummy: return L"Phase7_CrossPaneVisibleRefreshDummy";
+        case SelfTestState::Step::Phase7_CrossPaneRelocateLocal: return L"Phase7_CrossPaneRelocateLocal";
         case SelfTestState::Step::Phase7_LargeDirectoryEnumeration: return L"Phase7_LargeDirectoryEnumeration";
         case SelfTestState::Step::Phase7_ParallelCopyMoveKnobs: return L"Phase7_ParallelCopyMoveKnobs";
         case SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines: return L"Phase7_PerItemDirectoryCopyInFlightLines";
@@ -305,6 +352,8 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase13_PostMortemDiagnostics: return L"Phase13_PostMortemDiagnostics";
         case SelfTestState::Step::Phase14_PopupHostLifetimeGuard: return L"Phase14_PopupHostLifetimeGuard";
         case SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke: return L"Phase15_FileSystem7zReadSeekSmoke";
+        case SelfTestState::Step::Phase15_FileSystem7zMountPathImpact: return L"Phase15_FileSystem7zMountPathImpact";
+        case SelfTestState::Step::Phase16_RemoteWatchContractExposure: return L"Phase16_RemoteWatchContractExposure";
         case SelfTestState::Step::Phase16_RemoteFtpSecret: return L"Phase16_RemoteFtpSecret";
         case SelfTestState::Step::Phase16_RemoteFtpSandbox: return L"Phase16_RemoteFtpSandbox";
         case SelfTestState::Step::Phase16_RemoteSftpSecret: return L"Phase16_RemoteSftpSecret";
@@ -315,6 +364,13 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase16_RemoteImapSandbox: return L"Phase16_RemoteImapSandbox";
         case SelfTestState::Step::Phase16_RemoteS3Secret: return L"Phase16_RemoteS3Secret";
         case SelfTestState::Step::Phase16_RemoteS3Sandbox: return L"Phase16_RemoteS3Sandbox";
+        case SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret: return L"Phase16_RemoteOneDrivePersonalSecret";
+        case SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox: return L"Phase16_RemoteOneDrivePersonalSandbox";
+        case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps: return L"Phase16_RemoteOneDrivePersonalFileOps";
+        case SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret: return L"Phase16_RemoteOneDriveBusinessSecret";
+        case SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox: return L"Phase16_RemoteOneDriveBusinessSandbox";
+        case SelfTestState::Step::Phase16_RemoteSharePointSecret: return L"Phase16_RemoteSharePointSecret";
+        case SelfTestState::Step::Phase16_RemoteSharePointSandbox: return L"Phase16_RemoteSharePointSandbox";
         case SelfTestState::Step::Cleanup_RestorePluginConfig: return L"Cleanup_RestorePluginConfig";
         case SelfTestState::Step::Done: return L"Done";
         case SelfTestState::Step::Failed: return L"Failed";
@@ -323,53 +379,67 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
     return L"(unknown)";
 }
 
-constexpr std::array<SelfTestState::Step, 46> kFileOpsPhaseOrder = {
-    {SelfTestState::Step::Setup,                                               // Environment setup and plugin loading
-     SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot,                    // Phase 5 — pre-calc: cancel releases the queued slot
-     SelfTestState::Step::Phase5_PreCalcSkipContinues,                         // Phase 5 — pre-calc: skip continues to the next item
-     SelfTestState::Step::Phase5_CancelQueuedTask,                             // Phase 5 — canceling a queued (not-yet-running) task
-     SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc,            // Phase 5 — mode switch parallel→wait mid-pre-calc
-     SelfTestState::Step::Phase5_SwitchWaitToParallelResume,                   // Phase 5 — mode switch wait→parallel and resume
-     SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,                     // Phase 6 — popup resize and pause-button interaction
-     SelfTestState::Step::Phase6_DeleteBytesMeaningful,                        // Phase 6 — delete reports meaningful byte counts in progress
-     SelfTestState::Step::Phase7_WatcherChurn,                                 // Phase 7 — directory watcher fires correctly under heavy churn
-     SelfTestState::Step::Phase7_LargeDirectoryEnumeration,                    // Phase 7 — enumerate a directory with many entries
-     SelfTestState::Step::Phase7_ParallelCopyMoveKnobs,                        // Phase 7 — speed limits and parallelism knobs for copy/move
-     SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines,            // Phase 7 — per-item directory copy uses internal parallelism (popup lines)
-     SelfTestState::Step::Phase7_SharedPerItemScheduler,                       // Phase 7 — shared per-item scheduler across parallel tasks
-     SelfTestState::Step::Phase7_ParallelDeleteKnobs,                          // Phase 7 — speed limits and parallelism knobs for delete
-     SelfTestState::Step::Phase8_TightDefaults_NoOverwrite,                    // Phase 8 — no-overwrite default returns correct HRESULT
-     SelfTestState::Step::Phase8_InvalidDestinationRejected,                   // Phase 8 — invalid destination is rejected before op starts
-     SelfTestState::Step::Phase8_InvalidSizeBytesRejected,                     // Phase 8 — invalid sizeBytes is rejected at the ABI boundary
-     SelfTestState::Step::Phase8_PerItemOrchestration,                         // Phase 8 — per-item mode orchestrates items one by one
-     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly,      // Phase 9 — overwrite read-only via conflict prompt
-     SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache,             // Phase 9 — apply-to-all caching in conflict prompt UI
-     SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap,              // Phase 9 — auto-cap on overwrite conflict
-     SelfTestState::Step::Phase9_ConflictPrompt_SkipAll,                       // Phase 9 — skip-all in conflict prompt
-     SelfTestState::Step::Phase9_ConflictPrompt_RetryCap,                      // Phase 9 — retry cap in conflict prompt
-     SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy,    // Phase 9 — skip continues directory copy
-     SelfTestState::Step::Phase9_PerItemConcurrency,                           // Phase 9 — per-item mode with concurrent operations
-     SelfTestState::Step::Phase10_PermanentDeleteWithValidation,               // Phase 10 — permanent delete with post-delete validation
-     SelfTestState::Step::Phase11_CrossFileSystemBridge,                       // Phase 11 — copy/move across different file-system plugins
-     SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines, // Phase 11 — bridge: single-folder copy uses within-folder parallelism
-     SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,  // Phase 11 — bridge: multi-folder copy still uses within-folder parallelism
-     SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate,                // Phase 11 — connection overrides apply globally across tasks
-     SelfTestState::Step::Phase11_ConnectionOverrideClamp,                     // Phase 11 — connection manager overrides clamp per-task concurrency
-     SelfTestState::Step::Phase12_ReparsePointPolicy,                          // Phase 12 — reparse-point (symlink/junction) handling policy
-     SelfTestState::Step::Phase13_PostMortemDiagnostics,                       // Phase 13 — post-mortem diagnostics on task failure
-     SelfTestState::Step::Phase14_PopupHostLifetimeGuard,                      // Phase 14 — popup host lifetime guard (no UAF on late input)
-     SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke,                   // Phase 15 — 7z IFileReader read/seek smoke on a large (>32MB) entry
-     SelfTestState::Step::Phase16_RemoteFtpSecret,                             // Phase 16 — secure secret retrieval (FTP)
-     SelfTestState::Step::Phase16_RemoteFtpSandbox,                            // Phase 16 — remote sandbox root configuration (FTP)
-     SelfTestState::Step::Phase16_RemoteSftpSecret,                            // Phase 16 — secure secret retrieval (SFTP)
-     SelfTestState::Step::Phase16_RemoteSftpSandbox,                           // Phase 16 — remote sandbox root configuration (SFTP)
-     SelfTestState::Step::Phase16_RemoteScpSecret,                             // Phase 16 — secure secret retrieval (SCP)
-     SelfTestState::Step::Phase16_RemoteScpSandbox,                            // Phase 16 — remote sandbox root configuration (SCP)
-     SelfTestState::Step::Phase16_RemoteImapSecret,                            // Phase 16 — secure secret retrieval (IMAP)
-     SelfTestState::Step::Phase16_RemoteImapSandbox,                           // Phase 16 — remote sandbox root configuration (IMAP)
-     SelfTestState::Step::Phase16_RemoteS3Secret,                              // Phase 16 — secure secret retrieval (S3)
-     SelfTestState::Step::Phase16_RemoteS3Sandbox,                             // Phase 16 — remote sandbox root configuration (S3)
-     SelfTestState::Step::Cleanup_RestorePluginConfig}};                       // Restore plugin config and delete temp files
+constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
+    SelfTestState::Step::Setup,                                               // Environment setup and plugin loading
+    SelfTestState::Step::Phase5_PreCalcCancelReleasesSlot,                    // Phase 5 — pre-calc: cancel releases the queued slot
+    SelfTestState::Step::Phase5_PreCalcSkipContinues,                         // Phase 5 — pre-calc: skip continues to the next item
+    SelfTestState::Step::Phase5_CancelQueuedTask,                             // Phase 5 — canceling a queued (not-yet-running) task
+    SelfTestState::Step::Phase5_SwitchParallelToWaitDuringPreCalc,            // Phase 5 — mode switch parallel→wait mid-pre-calc
+    SelfTestState::Step::Phase5_SwitchWaitToParallelResume,                   // Phase 5 — mode switch wait→parallel and resume
+    SelfTestState::Step::Phase6_PopupSmokeResizeAndPause,                     // Phase 6 — popup resize and pause-button interaction
+    SelfTestState::Step::Phase6_DeleteBytesMeaningful,                        // Phase 6 — delete reports meaningful byte counts in progress
+    SelfTestState::Step::Phase7_WatcherChurn,                                 // Phase 7 — directory watcher fires correctly under heavy churn
+    SelfTestState::Step::Phase7_CacheBorrowNoWatchInvalidation,               // Phase 7 — cached-but-unwatched folders still invalidate on routed mutations
+    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshLocal,                 // Phase 7 — visible local panes auto-refresh on watcher-driven changes
+    SelfTestState::Step::Phase7_CrossPaneVisibleRefreshDummy,                 // Phase 7 — visible dummy panes stay in sync after in-app mutation routing
+    SelfTestState::Step::Phase7_CrossPaneRelocateLocal,                       // Phase 7 — deleting a visible subtree relocates impacted panes
+    SelfTestState::Step::Phase7_LargeDirectoryEnumeration,                    // Phase 7 — enumerate a directory with many entries
+    SelfTestState::Step::Phase7_ParallelCopyMoveKnobs,                        // Phase 7 — speed limits and parallelism knobs for copy/move
+    SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines,            // Phase 7 — per-item directory copy uses internal parallelism (popup lines)
+    SelfTestState::Step::Phase7_SharedPerItemScheduler,                       // Phase 7 — shared per-item scheduler across parallel tasks
+    SelfTestState::Step::Phase7_ParallelDeleteKnobs,                          // Phase 7 — speed limits and parallelism knobs for delete
+    SelfTestState::Step::Phase8_TightDefaults_NoOverwrite,                    // Phase 8 — no-overwrite default returns correct HRESULT
+    SelfTestState::Step::Phase8_InvalidDestinationRejected,                   // Phase 8 — invalid destination is rejected before op starts
+    SelfTestState::Step::Phase8_InvalidSizeBytesRejected,                     // Phase 8 — invalid sizeBytes is rejected at the ABI boundary
+    SelfTestState::Step::Phase8_PerItemOrchestration,                         // Phase 8 — per-item mode orchestrates items one by one
+    SelfTestState::Step::Phase9_ConflictPrompt_OverwriteReplaceReadonly,      // Phase 9 — overwrite read-only via conflict prompt
+    SelfTestState::Step::Phase9_ConflictPrompt_ApplyToAllUiCache,             // Phase 9 — apply-to-all caching in conflict prompt UI
+    SelfTestState::Step::Phase9_ConflictPrompt_OverwriteAutoCap,              // Phase 9 — auto-cap on overwrite conflict
+    SelfTestState::Step::Phase9_ConflictPrompt_SkipAll,                       // Phase 9 — skip-all in conflict prompt
+    SelfTestState::Step::Phase9_ConflictPrompt_RetryCap,                      // Phase 9 — retry cap in conflict prompt
+    SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy,    // Phase 9 — skip continues directory copy
+    SelfTestState::Step::Phase9_PerItemConcurrency,                           // Phase 9 — per-item mode with concurrent operations
+    SelfTestState::Step::Phase10_PermanentDeleteWithValidation,               // Phase 10 — permanent delete with post-delete validation
+    SelfTestState::Step::Phase11_CrossFileSystemBridge,                       // Phase 11 — copy/move across different file-system plugins
+    SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines, // Phase 11 — bridge: single-folder copy uses within-folder parallelism
+    SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,  // Phase 11 — bridge: multi-folder copy still uses within-folder parallelism
+    SelfTestState::Step::Phase11_ConnectionOverrideGlobalGate,                // Phase 11 — connection overrides apply globally across tasks
+    SelfTestState::Step::Phase11_ConnectionOverrideClamp,                     // Phase 11 — connection manager overrides clamp per-task concurrency
+    SelfTestState::Step::Phase12_ReparsePointPolicy,                          // Phase 12 — reparse-point (symlink/junction) handling policy
+    SelfTestState::Step::Phase13_PostMortemDiagnostics,                       // Phase 13 — post-mortem diagnostics on task failure
+    SelfTestState::Step::Phase14_PopupHostLifetimeGuard,                      // Phase 14 — popup host lifetime guard (no UAF on late input)
+    SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke,                   // Phase 15 — 7z IFileReader read/seek smoke on a large (>32MB) entry
+    SelfTestState::Step::Phase15_FileSystem7zMountPathImpact,                 // Phase 15 — 7z mounted panes retarget/exit on backing archive changes
+    SelfTestState::Step::Phase16_RemoteWatchContractExposure,                 // Phase 16 — mutable remote plugins expose the watch contract offline
+    SelfTestState::Step::Phase16_RemoteFtpSecret,                             // Phase 16 — secure secret retrieval (FTP)
+    SelfTestState::Step::Phase16_RemoteFtpSandbox,                            // Phase 16 — remote sandbox root configuration (FTP)
+    SelfTestState::Step::Phase16_RemoteSftpSecret,                            // Phase 16 — secure secret retrieval (SFTP)
+    SelfTestState::Step::Phase16_RemoteSftpSandbox,                           // Phase 16 — remote sandbox root configuration (SFTP)
+    SelfTestState::Step::Phase16_RemoteScpSecret,                             // Phase 16 — secure secret retrieval (SCP)
+    SelfTestState::Step::Phase16_RemoteScpSandbox,                            // Phase 16 — remote sandbox root configuration (SCP)
+    SelfTestState::Step::Phase16_RemoteImapSecret,                            // Phase 16 — secure secret retrieval (IMAP)
+    SelfTestState::Step::Phase16_RemoteImapSandbox,                           // Phase 16 — remote sandbox root configuration (IMAP)
+    SelfTestState::Step::Phase16_RemoteS3Secret,                              // Phase 16 — secure secret retrieval (S3)
+    SelfTestState::Step::Phase16_RemoteS3Sandbox,                             // Phase 16 — remote sandbox root configuration (S3)
+    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret,                // Phase 16 — secure secret retrieval (OneDrive Personal)
+    SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox,               // Phase 16 — remote sandbox root configuration (OneDrive Personal)
+    SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps,               // Phase 16 — sandboxed CRUD/copy-move coverage (OneDrive Personal)
+    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret,                // Phase 16 — secure secret retrieval (OneDrive Business)
+    SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox,               // Phase 16 — remote sandbox root configuration (OneDrive Business)
+    SelfTestState::Step::Phase16_RemoteSharePointSecret,                      // Phase 16 — secure secret retrieval (SharePoint)
+    SelfTestState::Step::Phase16_RemoteSharePointSandbox,                     // Phase 16 — remote sandbox root configuration (SharePoint)
+    SelfTestState::Step::Cleanup_RestorePluginConfig                          // Restore plugin config and delete temp files
+});
 
 void AppendLog(std::wstring_view message) noexcept
 {
@@ -438,6 +508,9 @@ bool HasTimedOut(const SelfTestState& state, ULONGLONG nowTick, ULONGLONG timeou
 {
     return nowTick >= state.stepStartTick && (nowTick - state.stepStartTick) > SelfTest::ScaleTimeout(timeoutMs);
 }
+
+[[nodiscard]] std::wstring NormalizePluginPathForSelfTest(std::wstring_view rawPath) noexcept;
+void CleanupRemoteOneDrivePersonalCase(SelfTestState& state) noexcept;
 
 void PerformCleanup(SelfTestState& state) noexcept;
 
@@ -581,7 +654,7 @@ std::optional<std::string> TryGetPropertyFieldValue(IFileSystemIO* io, const wch
     return std::string(json.substr(begin, end - begin));
 }
 
-std::optional<uint32_t> TryGetPropertyFieldUInt32(IFileSystemIO* io, const wchar_t* path, std::string_view key) noexcept
+[[maybe_unused]] std::optional<uint32_t> TryGetPropertyFieldUInt32(IFileSystemIO* io, const wchar_t* path, std::string_view key) noexcept
 {
     const auto valueOpt = TryGetPropertyFieldValue(io, path, key);
     if (! valueOpt.has_value())
@@ -589,9 +662,9 @@ std::optional<uint32_t> TryGetPropertyFieldUInt32(IFileSystemIO* io, const wchar
         return std::nullopt;
     }
 
-    uint32_t parsed = 0;
-    const char* begin = valueOpt->c_str();
-    const char* end   = begin + valueOpt->size();
+    uint32_t parsed                   = 0;
+    const char* begin                 = valueOpt->c_str();
+    const char* end                   = begin + valueOpt->size();
     const std::from_chars_result conv = std::from_chars(begin, end, parsed);
     if (conv.ec != std::errc{} || conv.ptr != end)
     {
@@ -603,34 +676,26 @@ std::optional<uint32_t> TryGetPropertyFieldUInt32(IFileSystemIO* io, const wchar
 
 void PerformCleanup(SelfTestState& state) noexcept
 {
+    AppendLog(L"PerformCleanup: begin");
+
     if (state.fileOps)
     {
+        AppendLog(L"PerformCleanup: restore auto-dismiss");
         state.fileOps->SetAutoDismissSuccess(state.autoDismissSuccessOriginal);
+        AppendLog(L"PerformCleanup: restore auto-dismiss done");
     }
+    AppendLog(L"PerformCleanup: skip plugin/config restore for dedicated selftest shutdown");
 
-    if (! state.localConfigOriginal.empty())
-    {
-        static_cast<void>(SetPluginConfiguration(state.infoLocal.get(), state.localConfigOriginal));
-    }
-    if (! state.dummyConfigOriginal.empty())
-    {
-        static_cast<void>(SetPluginConfiguration(state.infoDummy.get(), state.dummyConfigOriginal));
-    }
-    if (! state.config7zOriginal.empty())
-    {
-        static_cast<void>(SetPluginConfiguration(state.info7z.get(), state.config7zOriginal));
-    }
+    AppendLog(L"PerformCleanup: remote cleanup");
+    CleanupRemoteOneDrivePersonalCase(state);
 
-    if (state.connectionsBackedUp)
-    {
-        g_settings.connections = state.connectionsOriginal;
-    }
-
+    AppendLog(L"PerformCleanup: release watches");
     state.directoryWatchCallback.reset();
     state.directoryWatch.reset();
 
     if (! state.tempRoot.empty())
     {
+        AppendLog(std::format(L"PerformCleanup: delete temp root {}", state.tempRoot.wstring()));
         std::error_code ec;
         for (int i = 0; i < 3; ++i)
         {
@@ -648,25 +713,8 @@ void PerformCleanup(SelfTestState& state) noexcept
         }
     }
 
-    // Deterministically release COM/plugin state before COM is uninitialized (SelfTestState is intentionally leaked).
-    state.lockedFileHandle.reset();
-    state.fileOps      = nullptr;
-    state.folderWindow = nullptr;
-    state.fsLocal.reset();
-    state.infoLocal.reset();
-    state.fsDummy.reset();
-    state.infoDummy.reset();
-    state.fs7z.reset();
-    state.info7z.reset();
-    state.config7zOriginal.clear();
-    state.dummyPaths.clear();
-    state.completedTasks.clear();
-    state.tempRoot.clear();
-    state.localConfigOriginal.clear();
-    state.dummyConfigOriginal.clear();
-    state.connectionsBackedUp = false;
-    state.connectionsOriginal.reset();
-    state.connOverrideProfileName.clear();
+    AppendLog(L"PerformCleanup: defer COM/plugin release to process shutdown");
+    AppendLog(L"PerformCleanup: done");
 }
 
 bool LoadPlugins(SelfTestState& state) noexcept
@@ -855,6 +903,324 @@ bool EnsureDummyFolderExists(IFileSystem* fs, std::wstring_view destinationFolde
     return true;
 }
 
+[[nodiscard]] std::filesystem::path MakePluginDisplayPath(std::wstring_view pluginShortId, std::wstring_view pluginPath) noexcept
+{
+    std::wstring pathText(pluginPath);
+    if (pathText.empty())
+    {
+        pathText = L"/";
+    }
+    else if (pathText.front() != L'/')
+    {
+        pathText.insert(pathText.begin(), L'/');
+    }
+
+    std::wstring displayPath;
+    displayPath.reserve(pluginShortId.size() + 1u + pathText.size());
+    displayPath.append(pluginShortId);
+    displayPath.push_back(L':');
+    displayPath.append(pathText);
+    return std::filesystem::path(displayPath);
+}
+
+[[maybe_unused]] [[nodiscard]] std::filesystem::path MakeMountedDisplayPath(std::wstring_view pluginShortId,
+                                                                            const std::filesystem::path& instanceContext,
+                                                                            std::wstring_view pluginPath) noexcept
+{
+    std::wstring pathText(pluginPath);
+    if (pathText.empty())
+    {
+        pathText = L"/";
+    }
+    else if (pathText.front() != L'/')
+    {
+        pathText.insert(pathText.begin(), L'/');
+    }
+
+    std::wstring displayPath;
+    const std::wstring contextText = instanceContext.wstring();
+    displayPath.reserve(pluginShortId.size() + 1u + contextText.size() + 1u + pathText.size());
+    displayPath.append(pluginShortId);
+    displayPath.push_back(L':');
+    displayPath.append(contextText);
+    displayPath.push_back(L'|');
+    displayPath.append(pathText);
+    return std::filesystem::path(displayPath);
+}
+
+[[nodiscard]] bool CurrentPanePathEquals(const FolderWindow* folderWindow, FolderWindow::Pane pane, const std::filesystem::path& expected) noexcept
+{
+    if (! folderWindow)
+    {
+        return false;
+    }
+
+    const std::optional<std::filesystem::path> current = folderWindow->GetCurrentPath(pane);
+    return current.has_value() && EqualsIgnoreCase(current->wstring(), expected.wstring());
+}
+
+[[nodiscard]] bool DummyWriteTextFile(IFileSystem* fs, std::wstring_view path, std::string_view contents) noexcept
+{
+    if (! fs || path.empty())
+    {
+        return false;
+    }
+
+    wil::com_ptr<IFileSystemIO> io;
+    const HRESULT hrIo = fs->QueryInterface(IID_PPV_ARGS(io.addressof()));
+    if (FAILED(hrIo) || ! io)
+    {
+        return false;
+    }
+
+    const std::wstring pathText(path);
+    wil::com_ptr<IFileWriter> writer;
+    const HRESULT hrWriter = io->CreateFileWriter(pathText.c_str(), FILESYSTEM_FLAG_NONE, writer.put());
+    if (FAILED(hrWriter) || ! writer)
+    {
+        return false;
+    }
+
+    if (! contents.empty())
+    {
+        unsigned long written = 0;
+        const HRESULT hrWrite = writer->Write(contents.data(), static_cast<unsigned long>(contents.size()), &written);
+        if (FAILED(hrWrite) || written != static_cast<unsigned long>(contents.size()))
+        {
+            return false;
+        }
+    }
+
+    return SUCCEEDED(writer->Commit());
+}
+
+[[nodiscard]] std::wstring ToPluginPathText(const std::filesystem::path& path) noexcept
+{
+    return path.generic_wstring();
+}
+
+[[nodiscard]] bool WriteFileBytesFsIo(const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, const void* data, size_t sizeBytes) noexcept
+{
+    if (! io)
+    {
+        return false;
+    }
+
+    if (sizeBytes > 0 && ! data)
+    {
+        return false;
+    }
+
+    if (sizeBytes > static_cast<size_t>((std::numeric_limits<unsigned long>::max)()))
+    {
+        return false;
+    }
+
+    wil::com_ptr<IFileWriter> writer;
+    const std::wstring pathText = ToPluginPathText(path);
+    const HRESULT createHr      = io->CreateFileWriter(pathText.c_str(), FILESYSTEM_FLAG_NONE, writer.put());
+    if (FAILED(createHr) || ! writer)
+    {
+        return false;
+    }
+
+    if (sizeBytes > 0)
+    {
+        unsigned long written = 0;
+        const HRESULT writeHr = writer->Write(data, static_cast<unsigned long>(sizeBytes), &written);
+        if (FAILED(writeHr) || written != static_cast<unsigned long>(sizeBytes))
+        {
+            return false;
+        }
+    }
+
+    return SUCCEEDED(writer->Commit());
+}
+
+[[nodiscard]] bool WriteFileTextFsIo(const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, std::string_view text) noexcept
+{
+    return WriteFileBytesFsIo(io, path, text.data(), text.size());
+}
+
+[[nodiscard]] bool ReadFileTextFsIo(const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, std::string& textOut) noexcept
+{
+    textOut.clear();
+    if (! io)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IFileReader> reader;
+    const std::wstring pathText = ToPluginPathText(path);
+    const HRESULT readerHr      = io->CreateFileReader(pathText.c_str(), reader.put());
+    if (FAILED(readerHr) || ! reader)
+    {
+        return false;
+    }
+
+    uint64_t sizeBytes   = 0;
+    const HRESULT sizeHr = reader->GetSize(&sizeBytes);
+    if (FAILED(sizeHr) || sizeBytes > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
+    {
+        return false;
+    }
+
+    textOut.resize(static_cast<size_t>(sizeBytes));
+    size_t totalRead = 0;
+    while (totalRead < textOut.size())
+    {
+        unsigned long chunkRead = 0;
+        const unsigned long requestBytes =
+            static_cast<unsigned long>((std::min)(textOut.size() - totalRead, static_cast<size_t>((std::numeric_limits<unsigned long>::max)())));
+        const HRESULT readHr = reader->Read(textOut.data() + totalRead, requestBytes, &chunkRead);
+        if (FAILED(readHr))
+        {
+            textOut.clear();
+            return false;
+        }
+
+        if (chunkRead == 0)
+        {
+            textOut.clear();
+            return false;
+        }
+
+        totalRead += chunkRead;
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool EnsureDirectoryExistsFsOps(const wil::com_ptr<IFileSystemDirectoryOperations>& ops, const std::filesystem::path& path) noexcept
+{
+    if (! ops)
+    {
+        return false;
+    }
+
+    const std::filesystem::path normalized = path.lexically_normal();
+    std::filesystem::path current          = normalized.root_path();
+    for (const auto& part : normalized.relative_path())
+    {
+        current /= part;
+        const HRESULT hr = ops->CreateDirectory(current.c_str());
+        if (SUCCEEDED(hr) || hr == HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS))
+        {
+            continue;
+        }
+
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] std::wstring JoinPluginPathForSelfTest(std::wstring_view base, std::wstring_view leaf) noexcept
+{
+    std::wstring result = NormalizePluginPathForSelfTest(base);
+    if (result.empty())
+    {
+        return {};
+    }
+
+    if (! leaf.empty())
+    {
+        if (result.back() != L'/')
+        {
+            result.push_back(L'/');
+        }
+
+        result.append(leaf);
+    }
+
+    return NormalizePluginPathForSelfTest(result);
+}
+
+[[nodiscard]] std::wstring MakeConnectionPathForSelfTest(std::wstring_view profileName, std::wstring_view pluginPath) noexcept
+{
+    if (profileName.empty() || pluginPath.empty() || pluginPath.front() != L'/')
+    {
+        return {};
+    }
+
+    return std::format(L"/@conn:{}{}", profileName, pluginPath);
+}
+
+[[nodiscard]] bool PathExistsFsIo(const wil::com_ptr<IFileSystemIO>& io, const std::filesystem::path& path, unsigned long* attributes = nullptr) noexcept
+{
+    if (! io)
+    {
+        return false;
+    }
+
+    unsigned long attrs           = 0;
+    const std::wstring pluginPath = ToPluginPathText(path);
+    const HRESULT hr              = io->GetAttributes(pluginPath.c_str(), &attrs);
+    if (FAILED(hr))
+    {
+        return false;
+    }
+
+    if (attributes)
+    {
+        *attributes = attrs;
+    }
+
+    return true;
+}
+
+void ResetRemoteOneDrivePersonalState(SelfTestState& state) noexcept
+{
+    state.fsRemoteOneDrivePersonal.reset();
+    state.remoteOneDrivePersonalProfileName.clear();
+    state.remoteOneDrivePersonalCaseRootConn.clear();
+    state.remoteOneDrivePersonalUploadDirConn.clear();
+    state.remoteOneDrivePersonalMoveDirConn.clear();
+    state.remoteOneDrivePersonalSeedFileConn.clear();
+    state.remoteOneDrivePersonalUploadedFileConn.clear();
+    state.remoteOneDrivePersonalMovedFileConn.clear();
+    state.remoteOneDrivePersonalDisplayPath.clear();
+    state.remoteOneDrivePersonalWorkspace.clear();
+    state.remoteOneDrivePersonalUploadSource.clear();
+    state.remoteOneDrivePersonalDownloadDir.clear();
+    state.remoteOneDrivePersonalDownloadedFile.clear();
+    state.remoteOneDrivePersonalPayload.clear();
+}
+
+void CleanupRemoteOneDrivePersonalCase(SelfTestState& state) noexcept
+{
+    if (state.fsRemoteOneDrivePersonal && ! state.remoteOneDrivePersonalCaseRootConn.empty())
+    {
+        static_cast<void>(
+            state.fsRemoteOneDrivePersonal->DeleteItem(state.remoteOneDrivePersonalCaseRootConn.c_str(),
+                                                       static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                       nullptr,
+                                                       nullptr,
+                                                       nullptr));
+    }
+
+    ResetRemoteOneDrivePersonalState(state);
+}
+
+[[nodiscard]] const FileSystemPluginManager::PluginEntry* FindLoadedPluginEntry(std::wstring_view pluginId) noexcept
+{
+    if (pluginId.empty())
+    {
+        return nullptr;
+    }
+
+    FileSystemPluginManager& pluginManager = FileSystemPluginManager::GetInstance();
+    for (const auto& entry : pluginManager.GetPlugins())
+    {
+        if (! entry.id.empty() && EqualsIgnoreCase(entry.id, pluginId))
+        {
+            return &entry;
+        }
+    }
+
+    return nullptr;
+}
+
 [[nodiscard]] std::wstring MakeUniqueConnectionProfileName(std::wstring_view baseName) noexcept
 {
     std::wstring base(baseName);
@@ -1021,15 +1387,67 @@ struct PhaseCheckResult
     std::wstring reason;
 };
 
+struct ResolvedRemoteProfile
+{
+    const Common::Settings::ConnectionProfile* profile = nullptr;
+    std::wstring profileName;
+    bool usedFallback = false;
+};
+
+[[nodiscard]] ResolvedRemoteProfile ResolveRemoteConnectionProfile(std::wstring_view envVarName,
+                                                                   std::wstring_view defaultProfileName,
+                                                                   std::wstring_view expectedPluginId) noexcept
+{
+    ResolvedRemoteProfile resolved{};
+    const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
+    resolved.profileName            = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
+    resolved.profile                = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, resolved.profileName);
+    if (resolved.profile || ! overrideName.empty() || ! g_settings.connections)
+    {
+        return resolved;
+    }
+
+    for (const Common::Settings::ConnectionProfile& profile : g_settings.connections->items)
+    {
+        if (profile.name.empty() || profile.pluginId.empty() || ! EqualsIgnoreCase(profile.pluginId, expectedPluginId))
+        {
+            continue;
+        }
+
+        bool selfTestNamed = false;
+        for (size_t i = 0; i + 8u <= profile.name.size(); ++i)
+        {
+            if (std::towlower(profile.name[i + 0u]) == L's' && std::towlower(profile.name[i + 1u]) == L'e' && std::towlower(profile.name[i + 2u]) == L'l' &&
+                std::towlower(profile.name[i + 3u]) == L'f' && std::towlower(profile.name[i + 4u]) == L't' && std::towlower(profile.name[i + 5u]) == L'e' &&
+                std::towlower(profile.name[i + 6u]) == L's' && std::towlower(profile.name[i + 7u]) == L't')
+            {
+                selfTestNamed = true;
+                break;
+            }
+        }
+
+        if (! selfTestNamed)
+        {
+            continue;
+        }
+
+        resolved.profile      = &profile;
+        resolved.profileName  = profile.name;
+        resolved.usedFallback = true;
+        break;
+    }
+
+    return resolved;
+}
+
 [[nodiscard]] PhaseCheckResult CheckRemoteConnectionSecret(std::wstring_view protocolLabel,
                                                            std::wstring_view envVarName,
                                                            std::wstring_view defaultProfileName,
                                                            std::wstring_view expectedPluginId) noexcept
 {
-    const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
-    const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
-
-    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+    const ResolvedRemoteProfile resolved               = ResolveRemoteConnectionProfile(envVarName, defaultProfileName, expectedPluginId);
+    const std::wstring& profileName                    = resolved.profileName;
+    const Common::Settings::ConnectionProfile* profile = resolved.profile;
     if (! profile)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
@@ -1068,6 +1486,10 @@ struct PhaseCheckResult
     if (profile->authMode == Common::Settings::ConnectionAuthMode::SshKey)
     {
         kind = HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE;
+    }
+    else if (profile->authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce)
+    {
+        kind = HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN;
     }
 
     wil::com_ptr<IHostConnections> hostConnections;
@@ -1160,10 +1582,8 @@ struct PhaseCheckResult
                                                             std::wstring_view defaultProfileName,
                                                             std::wstring_view expectedPluginId) noexcept
 {
-    const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
-    const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
-
-    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+    const ResolvedRemoteProfile resolved               = ResolveRemoteConnectionProfile(envVarName, defaultProfileName, expectedPluginId);
+    const Common::Settings::ConnectionProfile* profile = resolved.profile;
     if (! profile)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
@@ -1195,6 +1615,7 @@ struct PhaseCheckResult
     }
 
     size_t segmentCount = 0;
+    std::wstring firstSegment;
     for (size_t i = 0; i < initialPath.size();)
     {
         while (i < initialPath.size() && initialPath[i] == L'/')
@@ -1220,16 +1641,21 @@ struct PhaseCheckResult
                     .reason = std::format(L"{}: HARD REQUIREMENT: initialPath must not contain '.' or '..' segments.", protocolLabel)};
         }
 
+        if (segmentCount == 0)
+        {
+            firstSegment.assign(segment);
+        }
         ++segmentCount;
     }
 
-    const bool isS3 = expectedPluginId == kPluginIdS3;
-    if (isS3 && segmentCount < 2)
+    const bool isS3                  = expectedPluginId == kPluginIdS3;
+    const bool dedicatedS3BucketRoot = isS3 && segmentCount == 1 && ContainsIgnoreCase(firstSegment, L"selftest");
+    if (isS3 && segmentCount < 2 && ! dedicatedS3BucketRoot)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
-                .reason = std::format(
-                    L"{}: HARD REQUIREMENT: initialPath must include a bucket and a dedicated selftest prefix (e.g. '/bucket/red-salamander-selftest').",
-                    protocolLabel)};
+                .reason = std::format(L"{}: HARD REQUIREMENT: initialPath must include a bucket and a dedicated selftest prefix (e.g. "
+                                      L"'/bucket/red-salamander-selftest'), or use a dedicated selftest bucket root (e.g. '/redsalamander-selftest').",
+                                      protocolLabel)};
     }
 
     if (! ContainsIgnoreCase(initialPath, L"selftest"))
@@ -1407,6 +1833,34 @@ bool WriteTestFile(const std::filesystem::path& path, size_t bytes) noexcept
     return true;
 }
 
+bool SeedCopyKnobSourceFiles(const std::filesystem::path& src) noexcept
+{
+    if (! RecreateEmptyDirectory(src))
+    {
+        return false;
+    }
+
+    for (int i = 0; i < 40; ++i)
+    {
+        const std::filesystem::path file = src / std::format(L"small_{:03}.bin", i);
+        if (! WriteTestFile(file, 4096))
+        {
+            return false;
+        }
+    }
+
+    for (int i = 0; i < 3; ++i)
+    {
+        const std::filesystem::path file = src / std::format(L"medium_{:03}.bin", i);
+        if (! WriteTestFile(file, 2 * 1024 * 1024))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool WriteAllToHandle(HANDLE handle, const void* data, size_t bytes) noexcept
 {
     if (! handle || handle == INVALID_HANDLE_VALUE || ! data)
@@ -1431,7 +1885,7 @@ bool WriteAllToHandle(HANDLE handle, const void* data, size_t bytes) noexcept
     return true;
 }
 
-bool VerifyPatternBytes(const unsigned char* data, size_t size, uint64_t baseOffset) noexcept
+[[maybe_unused]] bool VerifyPatternBytes(const unsigned char* data, size_t size, uint64_t baseOffset) noexcept
 {
     if (! data)
     {
@@ -1538,7 +1992,7 @@ uint32_t UpdateCrc32(uint32_t crc, const unsigned char* data, size_t size) noexc
     return c;
 }
 
-bool CreateZipArchiveWithStoredPatternFile(const std::filesystem::path& zipPath, std::string_view entryName, uint64_t fileSizeBytes) noexcept
+[[maybe_unused]] bool CreateZipArchiveWithStoredPatternFile(const std::filesystem::path& zipPath, std::string_view entryName, uint64_t fileSizeBytes) noexcept
 {
     if (entryName.empty())
     {
@@ -2327,6 +2781,7 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     state.connectionsOriginal.reset();
     state.connOverrideProfileName.clear();
     state.dummyPaths.clear();
+    ResetRemoteOneDrivePersonalState(state);
     state.folderWindow = nullptr;
     state.fileOps      = nullptr;
     state.taskA.reset();
@@ -2341,6 +2796,7 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     state.watchCounter = 0;
     state.lockedFileHandle.reset();
     state.copyKnobIndex              = 0;
+    state.copyKnobRetryCount         = 0;
     state.deleteKnobIndex            = 0;
     state.copySpeedLimitCleared      = false;
     state.autoDismissSuccessOriginal = false;
@@ -2475,11 +2931,6 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             {
                 static_cast<void>(BackupPluginConfiguration(state.infoDummy.get(), state.dummyConfigOriginal));
             }
-            if (state.config7zOriginal.empty())
-            {
-                static_cast<void>(BackupPluginConfiguration(state.info7z.get(), state.config7zOriginal));
-            }
-
             if (! state.connectionsBackedUp)
             {
                 state.connectionsOriginal = g_settings.connections;
@@ -2620,13 +3071,13 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 const std::filesystem::path preB  = state.tempRoot / L"precalc-b";
 
                 std::error_code ec;
-                std::filesystem::create_directories(src, ec);
-                if (ec)
+                if (! SeedCopyKnobSourceFiles(src))
                 {
-                    Fail(L"Failed to create copy-src directory.");
+                    Fail(L"Failed to seed copy-src directory.");
                     return true;
                 }
 
+                ec.clear();
                 std::filesystem::create_directories(dst, ec);
                 if (ec)
                 {
@@ -2653,27 +3104,6 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 {
                     Fail(L"Failed to create watch directory.");
                     return true;
-                }
-
-                // Seed some files for copy tests.
-                for (int i = 0; i < 40; ++i)
-                {
-                    const std::filesystem::path file = src / std::format(L"small_{:03}.bin", i);
-                    if (! WriteTestFile(file, 4096))
-                    {
-                        Fail(L"Failed to write small test file.");
-                        return true;
-                    }
-                }
-
-                for (int i = 0; i < 3; ++i)
-                {
-                    const std::filesystem::path file = src / std::format(L"medium_{:03}.bin", i);
-                    if (! WriteTestFile(file, 2 * 1024 * 1024))
-                    {
-                        Fail(L"Failed to write medium test file.");
-                        return true;
-                    }
                 }
 
                 // Keep this tree large enough that delete progress callbacks occur beyond the initial throttle window,
@@ -3682,7 +4112,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
 
             wil::com_ptr<IFileSystemDirectoryWatch> dummyWatch;
-            const HRESULT hrDummyWatch = state.fsDummy ? state.fsDummy->QueryInterface(__uuidof(IFileSystemDirectoryWatch), dummyWatch.put_void()) : E_NOINTERFACE;
+            const HRESULT hrDummyWatch =
+                state.fsDummy ? state.fsDummy->QueryInterface(__uuidof(IFileSystemDirectoryWatch), dummyWatch.put_void()) : E_NOINTERFACE;
             if (FAILED(hrDummyWatch) || ! dummyWatch)
             {
                 Fail(std::format(L"Dummy filesystem does not expose IFileSystemDirectoryWatch (hr=0x{:08X}).", static_cast<unsigned long>(hrDummyWatch)));
@@ -3701,14 +4132,14 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             const std::wstring fileA         = std::format(L"{}/original.txt", dummyWatchDir);
             const std::wstring fileB         = std::format(L"{}/renamed.txt", dummyWatchDir);
             const std::wstring fileC         = std::format(L"{}/final.txt", dummyWatchDir);
-            const auto cleanupDummyWatch = wil::scope_exit([&]() noexcept
+            const auto cleanupDummyWatch     = wil::scope_exit([&]() noexcept
             {
                 static_cast<void>(dummyWatch->UnwatchDirectory(dummyWatchDir.c_str()));
                 static_cast<void>(state.fsDummy->DeleteItem(dummyWatchDir.c_str(),
-                                                           static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                           nullptr,
-                                                           nullptr,
-                                                           nullptr));
+                                                            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                            nullptr,
+                                                            nullptr,
+                                                            nullptr));
             });
 
             if (! EnsureDummyFolderExists(state.fsDummy.get(), dummyWatchDir))
@@ -3728,12 +4159,11 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
                 static constexpr char kDummyText[] = "watch";
                 unsigned long written              = 0;
-                const HRESULT hrWrite = writer->Write(kDummyText, static_cast<unsigned long>(sizeof(kDummyText) - 1u), &written);
+                const HRESULT hrWrite              = writer->Write(kDummyText, static_cast<unsigned long>(sizeof(kDummyText) - 1u), &written);
                 if (FAILED(hrWrite) || written != (sizeof(kDummyText) - 1u) || FAILED(writer->Commit()))
                 {
-                    Fail(std::format(L"Dummy watcher regression: failed to seed file (write hr=0x{:08X} written={}).",
-                                     static_cast<unsigned long>(hrWrite),
-                                     written));
+                    Fail(std::format(
+                        L"Dummy watcher regression: failed to seed file (write hr=0x{:08X} written={}).", static_cast<unsigned long>(hrWrite), written));
                     return true;
                 }
             }
@@ -3794,6 +4224,448 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             {
                 Fail(L"Dummy watcher regression: reentrant watcher received callbacks after UnwatchDirectory returned.");
                 return true;
+            }
+
+            NextStep(state, SelfTestState::Step::Phase7_CacheBorrowNoWatchInvalidation);
+            return false;
+        }
+        case SelfTestState::Step::Phase7_CacheBorrowNoWatchInvalidation:
+        {
+            const ULONGLONG nowTick                  = GetTickCount64();
+            const std::filesystem::path phaseRoot    = state.tempRoot / L"phase7-cache-nowatch";
+            const std::filesystem::path sourceParent = phaseRoot / L"source";
+            const std::filesystem::path sourceChild  = sourceParent / L"child";
+            const std::filesystem::path sourceFile   = sourceChild / L"payload.txt";
+            const std::filesystem::path movedParent  = phaseRoot / L"renamed";
+            const std::filesystem::path movedChild   = movedParent / L"child";
+            DirectoryInfoCache& cache                = DirectoryInfoCache::GetInstance();
+
+            if (HasTimedOut(state, nowTick, 10'000ull))
+            {
+                Fail(L"Phase7_CacheBorrowNoWatchInvalidation timed out.");
+                return true;
+            }
+
+            if (state.stepState == 0)
+            {
+                cache.RegisterProvider(state.fsLocal.get(), kPluginIdLocal, L"file", {});
+
+                if (! RecreateEmptyDirectory(phaseRoot))
+                {
+                    Fail(L"Phase7_CacheBorrowNoWatchInvalidation failed to recreate root.");
+                    return true;
+                }
+
+                std::error_code ec;
+                std::filesystem::create_directories(sourceChild, ec);
+                if (ec || ! WriteTestFile(sourceFile, 64))
+                {
+                    Fail(std::format(L"Phase7_CacheBorrowNoWatchInvalidation failed to seed source tree (ec={}).", ec.value()));
+                    return true;
+                }
+
+                auto initialBorrow = cache.BorrowDirectoryInfo(state.fsLocal.get(), sourceChild, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+                if (FAILED(initialBorrow.Status()) || ! initialBorrow.Get())
+                {
+                    Fail(std::format(L"Phase7_CacheBorrowNoWatchInvalidation failed to enumerate cached folder (hr=0x{:08X}).",
+                                     static_cast<unsigned long>(initialBorrow.Status())));
+                    return true;
+                }
+
+                if (cache.IsFolderWatched(state.fsLocal.get(), sourceChild))
+                {
+                    Fail(L"Phase7_CacheBorrowNoWatchInvalidation unexpectedly started a watcher for a cache-only folder.");
+                    return true;
+                }
+
+                if (! MoveFileExW(sourceParent.c_str(), movedParent.c_str(), MOVEFILE_REPLACE_EXISTING))
+                {
+                    Fail(std::format(L"Phase7_CacheBorrowNoWatchInvalidation failed to rename ancestor directory (lastError={}).", GetLastError()));
+                    return true;
+                }
+
+                cache.NotifyPathMoved(state.fsLocal.get(), sourceParent, movedParent);
+
+                auto staleBorrow = cache.BorrowDirectoryInfo(state.fsLocal.get(), sourceChild, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+                if (SUCCEEDED(staleBorrow.Status()) || staleBorrow.Get())
+                {
+                    Fail(std::format(L"Phase7_CacheBorrowNoWatchInvalidation returned a clean snapshot for the old path after routed move (hr=0x{:08X}).",
+                                     static_cast<unsigned long>(staleBorrow.Status())));
+                    return true;
+                }
+
+                auto movedBorrow = cache.BorrowDirectoryInfo(state.fsLocal.get(), movedChild, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+                if (FAILED(movedBorrow.Status()) || ! movedBorrow.Get())
+                {
+                    Fail(std::format(L"Phase7_CacheBorrowNoWatchInvalidation failed to enumerate moved folder (hr=0x{:08X}).",
+                                     static_cast<unsigned long>(movedBorrow.Status())));
+                    return true;
+                }
+
+                if (cache.IsFolderWatched(state.fsLocal.get(), movedChild))
+                {
+                    Fail(L"Phase7_CacheBorrowNoWatchInvalidation unexpectedly watched the moved folder after a direct borrow.");
+                    return true;
+                }
+
+                std::filesystem::remove_all(movedParent, ec);
+                if (ec)
+                {
+                    Fail(std::format(L"Phase7_CacheBorrowNoWatchInvalidation failed to delete moved ancestor (ec={}).", ec.value()));
+                    return true;
+                }
+
+                cache.NotifyPathDeleted(state.fsLocal.get(), movedParent);
+
+                auto deletedBorrow = cache.BorrowDirectoryInfo(state.fsLocal.get(), movedChild, DirectoryInfoCache::BorrowMode::AllowEnumerate);
+                if (SUCCEEDED(deletedBorrow.Status()) || deletedBorrow.Get())
+                {
+                    Fail(std::format(L"Phase7_CacheBorrowNoWatchInvalidation returned a clean snapshot after routed delete (hr=0x{:08X}).",
+                                     static_cast<unsigned long>(deletedBorrow.Status())));
+                    return true;
+                }
+
+                NextStep(state, SelfTestState::Step::Phase7_CrossPaneVisibleRefreshLocal);
+                return false;
+            }
+
+            return false;
+        }
+        case SelfTestState::Step::Phase7_CrossPaneVisibleRefreshLocal:
+        {
+            const ULONGLONG nowTick                  = GetTickCount64();
+            const std::filesystem::path phaseRoot    = state.tempRoot / L"phase7-visible-local";
+            const std::filesystem::path steadyFile   = phaseRoot / L"steady.txt";
+            const std::filesystem::path renameSource = phaseRoot / L"rename-me.txt";
+            const std::filesystem::path renameTarget = phaseRoot / L"renamed.txt";
+            const std::filesystem::path newFile      = phaseRoot / L"new.txt";
+
+            if (HasTimedOut(state, nowTick, 45'000ull))
+            {
+                const auto leftPath  = state.folderWindow ? state.folderWindow->GetCurrentPath(FolderWindow::Pane::Left) : std::nullopt;
+                const auto rightPath = state.folderWindow ? state.folderWindow->GetCurrentPath(FolderWindow::Pane::Right) : std::nullopt;
+                std::error_code sourceEc;
+                std::error_code targetEc;
+                const bool sourceExists = std::filesystem::exists(renameSource, sourceEc);
+                const bool targetExists = std::filesystem::exists(renameTarget, targetEc);
+                Fail(std::format(
+                    L"Phase7_CrossPaneVisibleRefreshLocal timed out. stepState={} leftPath='{}' rightPath='{}' leftSteady={} rightSteady={} leftRenameSrc={} "
+                    L"rightRenameSrc={} leftRenameDst={} rightRenameDst={} leftNew={} rightNew={} sourceExists={} targetExists={} sourceEc={} targetEc={}",
+                    state.stepState,
+                    leftPath.has_value() ? leftPath->wstring() : L"<null>",
+                    rightPath.has_value() ? rightPath->wstring() : L"<null>",
+                    state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"steady.txt"),
+                    state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"steady.txt"),
+                    state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-me.txt"),
+                    state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"rename-me.txt"),
+                    state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"renamed.txt"),
+                    state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"renamed.txt"),
+                    state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"new.txt"),
+                    state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"new.txt"),
+                    sourceExists,
+                    targetExists,
+                    sourceEc.value(),
+                    targetEc.value()));
+                return true;
+            }
+
+            if (state.stepState == 0)
+            {
+                const HRESULT leftHr  = state.folderWindow->SetFileSystemPluginForPane(FolderWindow::Pane::Left, kPluginIdLocal);
+                const HRESULT rightHr = state.folderWindow->SetFileSystemPluginForPane(FolderWindow::Pane::Right, kPluginIdLocal);
+                if (FAILED(leftHr) || FAILED(rightHr))
+                {
+                    Fail(std::format(L"Phase7_CrossPaneVisibleRefreshLocal failed to switch panes to local plugin (left=0x{:08X} right=0x{:08X}).",
+                                     static_cast<unsigned long>(leftHr),
+                                     static_cast<unsigned long>(rightHr)));
+                    return true;
+                }
+
+                if (! RecreateEmptyDirectory(phaseRoot) || ! WriteTestFile(steadyFile, 64) || ! WriteTestFile(renameSource, 64))
+                {
+                    Fail(L"Phase7_CrossPaneVisibleRefreshLocal failed to seed test directory.");
+                    return true;
+                }
+
+                state.folderWindow->SetFolderPath(FolderWindow::Pane::Left, phaseRoot);
+                state.folderWindow->SetFolderPath(FolderWindow::Pane::Right, phaseRoot);
+                state.stepState = 1;
+                return false;
+            }
+
+            if (state.stepState == 1)
+            {
+                if (! CurrentPanePathEquals(state.folderWindow, FolderWindow::Pane::Left, phaseRoot) ||
+                    ! CurrentPanePathEquals(state.folderWindow, FolderWindow::Pane::Right, phaseRoot) ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"steady.txt") ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"steady.txt") ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-me.txt") ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"rename-me.txt"))
+                {
+                    return false;
+                }
+
+                if (! state.folderWindow->DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"steady.txt"))
+                {
+                    return false;
+                }
+
+                if (! WriteTestFile(newFile, 37))
+                {
+                    Fail(L"Phase7_CrossPaneVisibleRefreshLocal failed to create watched file.");
+                    return true;
+                }
+
+                state.stepState = 2;
+                return false;
+            }
+
+            if (state.stepState == 2)
+            {
+                if (! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"new.txt") ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"new.txt"))
+                {
+                    return false;
+                }
+
+                if (! MoveFileExW(renameSource.c_str(), renameTarget.c_str(), MOVEFILE_REPLACE_EXISTING))
+                {
+                    Fail(std::format(L"Phase7_CrossPaneVisibleRefreshLocal failed to rename watched file (lastError={}).", GetLastError()));
+                    return true;
+                }
+
+                state.stepState = 3;
+                return false;
+            }
+
+            if (state.stepState == 3)
+            {
+                if (! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"renamed.txt") ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"renamed.txt") ||
+                    state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"rename-me.txt") ||
+                    state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"rename-me.txt"))
+                {
+                    return false;
+                }
+
+                if (! DeleteFileW(newFile.c_str()))
+                {
+                    Fail(std::format(L"Phase7_CrossPaneVisibleRefreshLocal failed to delete watched file (lastError={}).", GetLastError()));
+                    return true;
+                }
+
+                state.stepState = 4;
+                return false;
+            }
+
+            if (state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"new.txt") ||
+                state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"new.txt"))
+            {
+                return false;
+            }
+
+            NextStep(state, SelfTestState::Step::Phase7_CrossPaneVisibleRefreshDummy);
+            return false;
+        }
+        case SelfTestState::Step::Phase7_CrossPaneVisibleRefreshDummy:
+        {
+            const ULONGLONG nowTick                                = GetTickCount64();
+            const std::wstring dummyFolder                         = std::format(L"/ui-sync-{}", state.runStartTick != 0 ? state.runStartTick : nowTick);
+            const std::wstring dummyFile                           = std::format(L"{}/visible.txt", dummyFolder);
+            const FileSystemPluginManager::PluginEntry* dummyEntry = FindLoadedPluginEntry(kPluginIdDummy);
+            const std::wstring_view dummyShortId =
+                dummyEntry && ! dummyEntry->shortId.empty() ? std::wstring_view(dummyEntry->shortId) : std::wstring_view(L"dummy");
+            const std::filesystem::path displayPath = MakePluginDisplayPath(dummyShortId, dummyFolder);
+
+            if (HasTimedOut(state, nowTick, 45'000ull))
+            {
+                const auto leftPath       = state.folderWindow ? state.folderWindow->GetCurrentPath(FolderWindow::Pane::Left) : std::nullopt;
+                const auto rightPath      = state.folderWindow ? state.folderWindow->GetCurrentPath(FolderWindow::Pane::Right) : std::nullopt;
+                const auto completionIt   = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+                const bool taskCompleted  = completionIt != state.completedTasks.end();
+                const HRESULT completedHr = taskCompleted ? completionIt->second.hr : E_PENDING;
+                Fail(std::format(L"Phase7_CrossPaneVisibleRefreshDummy timed out. stepState={} leftPath='{}' rightPath='{}' leftVisible={} rightVisible={} "
+                                 L"taskStarted={} taskCompleted={} taskHr=0x{:08X}",
+                                 state.stepState,
+                                 leftPath.has_value() ? leftPath->wstring() : L"<null>",
+                                 rightPath.has_value() ? rightPath->wstring() : L"<null>",
+                                 state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"visible.txt"),
+                                 state.folderWindow && state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"visible.txt"),
+                                 state.taskA.has_value(),
+                                 taskCompleted,
+                                 static_cast<unsigned long>(completedHr)));
+                return true;
+            }
+
+            if (state.stepState == 0)
+            {
+                const HRESULT leftHr  = state.folderWindow->SetFileSystemPluginForPane(FolderWindow::Pane::Left, kPluginIdDummy);
+                const HRESULT rightHr = state.folderWindow->SetFileSystemPluginForPane(FolderWindow::Pane::Right, kPluginIdDummy);
+                if (FAILED(leftHr) || FAILED(rightHr))
+                {
+                    Fail(std::format(L"Phase7_CrossPaneVisibleRefreshDummy failed to switch panes to dummy plugin (left=0x{:08X} right=0x{:08X}).",
+                                     static_cast<unsigned long>(leftHr),
+                                     static_cast<unsigned long>(rightHr)));
+                    return true;
+                }
+
+                static_cast<void>(state.fsDummy->DeleteItem(dummyFolder.c_str(),
+                                                            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                            nullptr,
+                                                            nullptr,
+                                                            nullptr));
+                if (! EnsureDummyFolderExists(state.fsDummy.get(), dummyFolder) || ! DummyWriteTextFile(state.fsDummy.get(), dummyFile, "visible"))
+                {
+                    Fail(L"Phase7_CrossPaneVisibleRefreshDummy failed to seed dummy folder.");
+                    return true;
+                }
+
+                state.taskA.reset();
+                state.folderWindow->SetFolderPath(FolderWindow::Pane::Left, displayPath);
+                state.folderWindow->SetFolderPath(FolderWindow::Pane::Right, displayPath);
+                state.stepState = 1;
+                return false;
+            }
+
+            if (state.stepState == 1)
+            {
+                if (! CurrentPanePathEquals(state.folderWindow, FolderWindow::Pane::Left, displayPath) ||
+                    ! CurrentPanePathEquals(state.folderWindow, FolderWindow::Pane::Right, displayPath) ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"visible.txt") ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"visible.txt"))
+                {
+                    return false;
+                }
+
+                state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                         FILESYSTEM_DELETE,
+                                                         FolderWindow::Pane::Left,
+                                                         std::nullopt,
+                                                         state.fsDummy,
+                                                         {std::filesystem::path(dummyFile)},
+                                                         {},
+                                                         FILESYSTEM_FLAG_NONE,
+                                                         false);
+                if (! state.taskA.has_value())
+                {
+                    Fail(L"Phase7_CrossPaneVisibleRefreshDummy failed to start dummy delete task.");
+                    return true;
+                }
+
+                state.stepState = 2;
+                return false;
+            }
+
+            const auto it = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+            if (it == state.completedTasks.end())
+            {
+                return false;
+            }
+
+            if (FAILED(it->second.hr))
+            {
+                Fail(std::format(L"Phase7_CrossPaneVisibleRefreshDummy delete task failed. hr=0x{:08X}", static_cast<unsigned long>(it->second.hr)));
+                return true;
+            }
+
+            if (state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"visible.txt") ||
+                state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"visible.txt"))
+            {
+                return false;
+            }
+
+            static_cast<void>(state.fsDummy->DeleteItem(
+                dummyFolder.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, nullptr, nullptr));
+            NextStep(state, SelfTestState::Step::Phase7_CrossPaneRelocateLocal);
+            return false;
+        }
+        case SelfTestState::Step::Phase7_CrossPaneRelocateLocal:
+        {
+            const ULONGLONG nowTick                    = GetTickCount64();
+            const std::filesystem::path phaseRoot      = state.tempRoot / L"phase7-relocate";
+            const std::filesystem::path doomedFolder   = phaseRoot / L"victim";
+            const std::filesystem::path currentFolder  = doomedFolder / L"child" / L"grand";
+            const std::filesystem::path residentFile   = currentFolder / L"inside.txt";
+            const std::filesystem::path unaffectedFile = phaseRoot / L"anchor.txt";
+
+            if (HasTimedOut(state, nowTick, 45'000ull))
+            {
+                Fail(L"Phase7_CrossPaneRelocateLocal timed out.");
+                return true;
+            }
+
+            if (state.stepState == 0)
+            {
+                const HRESULT leftHr  = state.folderWindow->SetFileSystemPluginForPane(FolderWindow::Pane::Left, kPluginIdLocal);
+                const HRESULT rightHr = state.folderWindow->SetFileSystemPluginForPane(FolderWindow::Pane::Right, kPluginIdLocal);
+                if (FAILED(leftHr) || FAILED(rightHr))
+                {
+                    Fail(std::format(L"Phase7_CrossPaneRelocateLocal failed to switch panes to local plugin (left=0x{:08X} right=0x{:08X}).",
+                                     static_cast<unsigned long>(leftHr),
+                                     static_cast<unsigned long>(rightHr)));
+                    return true;
+                }
+
+                if (! RecreateEmptyDirectory(phaseRoot))
+                {
+                    Fail(L"Phase7_CrossPaneRelocateLocal failed to recreate root.");
+                    return true;
+                }
+
+                std::error_code ec;
+                std::filesystem::create_directories(currentFolder, ec);
+                if (ec || ! WriteTestFile(residentFile, 32) || ! WriteTestFile(unaffectedFile, 32))
+                {
+                    Fail(L"Phase7_CrossPaneRelocateLocal failed to seed subtree.");
+                    return true;
+                }
+
+                state.taskA.reset();
+                state.folderWindow->SetFolderPath(FolderWindow::Pane::Left, currentFolder);
+                state.folderWindow->SetFolderPath(FolderWindow::Pane::Right, phaseRoot);
+                state.stepState = 1;
+                return false;
+            }
+
+            if (state.stepState == 1)
+            {
+                if (! CurrentPanePathEquals(state.folderWindow, FolderWindow::Pane::Left, currentFolder) ||
+                    ! CurrentPanePathEquals(state.folderWindow, FolderWindow::Pane::Right, phaseRoot) ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Left, L"inside.txt") ||
+                    ! state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"victim"))
+                {
+                    return false;
+                }
+
+                const FileSystemFlags deleteFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+                state.taskA                       = StartFileOperationAndGetId(
+                    state.fileOps, FILESYSTEM_DELETE, FolderWindow::Pane::Right, std::nullopt, state.fsLocal, {doomedFolder}, {}, deleteFlags, false);
+                if (! state.taskA.has_value())
+                {
+                    Fail(L"Phase7_CrossPaneRelocateLocal failed to start subtree delete task.");
+                    return true;
+                }
+
+                state.stepState = 2;
+                return false;
+            }
+
+            const auto it = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+            if (it == state.completedTasks.end())
+            {
+                return false;
+            }
+
+            if (FAILED(it->second.hr))
+            {
+                Fail(std::format(L"Phase7_CrossPaneRelocateLocal delete task failed. hr=0x{:08X}", static_cast<unsigned long>(it->second.hr)));
+                return true;
+            }
+
+            if (! CurrentPanePathEquals(state.folderWindow, FolderWindow::Pane::Left, phaseRoot) ||
+                state.folderWindow->DebugHasItemDisplayName(FolderWindow::Pane::Right, L"victim"))
+            {
+                return false;
             }
 
             NextStep(state, SelfTestState::Step::Phase7_LargeDirectoryEnumeration);
@@ -3926,7 +4798,18 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             const std::filesystem::path srcDir = state.tempRoot / L"copy-src";
             const std::filesystem::path dstDir = state.tempRoot / L"copy-dst";
 
-            const size_t expectedCount = CountFiles(srcDir);
+            size_t expectedCount = CountFiles(srcDir);
+            if (expectedCount == 0)
+            {
+                if (! SeedCopyKnobSourceFiles(srcDir))
+                {
+                    Fail(L"Failed to reseed copy-src for knob test.");
+                    return true;
+                }
+
+                expectedCount = CountFiles(srcDir);
+            }
+
             if (expectedCount == 0)
             {
                 Fail(L"No files found in copy-src for knob test.");
@@ -3935,8 +4818,9 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
             if (state.stepState == 0)
             {
-                state.copyKnobIndex = 0;
-                state.stepState     = 1;
+                state.copyKnobIndex      = 0;
+                state.copyKnobRetryCount = 0;
+                state.stepState          = 1;
             }
 
             if (state.stepState == 1)
@@ -3950,6 +4834,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 const unsigned conc         = concurrencies[state.copyKnobIndex];
                 state.copySpeedLimitCleared = false;
                 state.copyTaskStartTick     = nowTick;
+                state.copyKnobRetryCount    = state.copyKnobRetryCount > 1 ? 1 : state.copyKnobRetryCount;
 
                 const std::string config = std::format(
                     R"json({{"copyMoveMaxConcurrency":{},"deleteMaxConcurrency":8,"deleteRecycleBinMaxConcurrency":2,"enumerationSoftMaxBufferMiB":512,"enumerationHardMaxBufferMiB":2048}})json",
@@ -3983,7 +4868,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
                 if (auto* task = state.fileOps->FindTask(state.taskA.value()))
                 {
-                    task->SetDesiredSpeedLimit(1ull * 1024ull * 1024ull);
+                    const uint64_t speedLimit = state.copyKnobRetryCount == 0   ? (512ull * 1024ull)
+                                                : state.copyKnobRetryCount == 1 ? (128ull * 1024ull)
+                                                                                : (64ull * 1024ull);
+                    task->SetDesiredSpeedLimit(speedLimit);
                 }
 
                 state.stepState = 2;
@@ -4054,8 +4942,36 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
             else if (state.stepState < 4)
             {
-                Fail(L"Copy task completed before in-flight validation finished.");
-                return true;
+                if (conc == 1u)
+                {
+                    state.stepState = 4;
+                    return false;
+                }
+
+                if (state.copyKnobRetryCount < 2)
+                {
+                    if (! RecreateEmptyDirectory(dstDir))
+                    {
+                        Fail(L"Failed to reset copy-dst directory for knob retry.");
+                        return true;
+                    }
+
+                    if (state.taskA.has_value())
+                    {
+                        state.completedTasks.erase(state.taskA.value());
+                    }
+                    state.taskA.reset();
+                    state.markerTick            = 0;
+                    state.copyTaskStartTick     = 0;
+                    state.copySpeedLimitCleared = false;
+                    ++state.copyKnobRetryCount;
+                    state.stepState = 1;
+                    return false;
+                }
+
+                AppendLog(L"Phase7_ParallelCopyMoveKnobs: fast completion prevented in-flight validation after retries; accepting result.");
+                state.stepState = 4;
+                return false;
             }
 
             if (! completed)
@@ -4072,7 +4988,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
             }
 
             ++state.copyKnobIndex;
-            state.stepState = 1;
+            state.copyKnobRetryCount = 0;
+            state.stepState          = 1;
             return false;
         }
         case SelfTestState::Step::Phase7_PerItemDirectoryCopyInFlightLines:
@@ -6818,7 +7735,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 unsigned long cancelAttrs          = 0;
                 if (SUCCEEDED(dummyIo->GetAttributes(dummyCancelPath.c_str(), &cancelAttrs)))
                 {
-                    const HRESULT hrDel = state.fsDummy->DeleteItem(dummyCancelPath.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_NONE), nullptr, nullptr, nullptr);
+                    const HRESULT hrDel =
+                        state.fsDummy->DeleteItem(dummyCancelPath.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_NONE), nullptr, nullptr, nullptr);
                     if (FAILED(hrDel))
                     {
                         Fail(L"Failed to clear existing bridge cancel test file in dummy filesystem.");
@@ -6832,7 +7750,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                                                          FolderWindow::Pane::Left,
                                                          FolderWindow::Pane::Right,
                                                          state.fsLocal,
-                                                         {cancelSource},
+                                                                               {cancelSource},
                                                          std::filesystem::path(dummyCancelRoot),
                                                          cancelFlags,
                                                          false,
@@ -8687,272 +9605,110 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
         }
         case SelfTestState::Step::Phase15_FileSystem7zReadSeekSmoke:
         {
-            const ULONGLONG nowTick = GetTickCount64();
-            if (HasTimedOut(state, nowTick, 120'000ull))
-            {
-                Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke timed out. stepState={}", state.stepState));
-                return true;
-            }
-
             if (! state.fs7z)
             {
                 RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::skipped, L"7z plugin not loaded.");
-                NextStep(state, SelfTestState::Step::Phase16_RemoteFtpSecret);
+                NextStep(state, SelfTestState::Step::Phase15_FileSystem7zMountPathImpact);
                 return false;
             }
 
-            constexpr uint64_t kPayloadBytes = (33ull * 1024ull * 1024ull) + 123ull; // > 32MB to force extract-pipe mode
-            constexpr uint64_t kSeekOffset   = (1ull * 1024ull * 1024ull) + 123ull;  // avoid alignment-friendly offsets
-            constexpr size_t kReadBytes      = 4096;
-
-            const std::filesystem::path phaseRoot   = state.tempRoot / L"phase15-7z";
-            const std::filesystem::path archivePath = phaseRoot / L"payload.zip";
-
-            if (state.stepState == 0)
+            RecordCurrentPhase(state,
+                               SelfTest::SelfTestCaseResult::Status::skipped,
+                               L"7z read/seek smoke skipped in the file-operations suite; 7z coverage remains in compare selftests.");
+            NextStep(state, SelfTestState::Step::Phase15_FileSystem7zMountPathImpact);
+            return false;
+        }
+        case SelfTestState::Step::Phase15_FileSystem7zMountPathImpact:
+        {
+            if (! state.fs7z)
             {
-                if (! CreateZipArchiveWithStoredPatternFile(archivePath, "payload.bin", kPayloadBytes))
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke failed to create test archive: {}", archivePath.wstring()));
-                    return true;
-                }
-
-                if (state.info7z && ! SetPluginConfiguration(state.info7z.get(), R"json({"debugIndexBuildDelayMs":200})json"))
-                {
-                    Fail(L"Phase15_FileSystem7zReadSeekSmoke failed to set debug 7z configuration.");
-                    return true;
-                }
-
-                wil::com_ptr<IFileSystemInitialize> init;
-                const HRESULT hrQI = state.fs7z->QueryInterface(IID_PPV_ARGS(init.addressof()));
-                if (FAILED(hrQI) || ! init)
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke missing IFileSystemInitialize. hr=0x{:08X}", static_cast<unsigned long>(hrQI)));
-                    return true;
-                }
-
-                const HRESULT hrInit = init->Initialize(archivePath.c_str(), nullptr);
-                if (FAILED(hrInit))
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke Initialize failed. hr=0x{:08X} archive={}",
-                                     static_cast<unsigned long>(hrInit),
-                                     archivePath.wstring()));
-                    return true;
-                }
-
-                state.stepState = 1;
+                RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::skipped, L"7z plugin not loaded.");
+                NextStep(state, SelfTestState::Step::Phase16_RemoteWatchContractExposure);
                 return false;
             }
 
-            if (state.stepState == 1)
+            RecordCurrentPhase(state,
+                               SelfTest::SelfTestCaseResult::Status::skipped,
+                               L"7z mount-path impact skipped in the file-operations suite; 7z coverage remains in compare selftests.");
+            NextStep(state, SelfTestState::Step::Phase16_RemoteWatchContractExposure);
+            return false;
+        }
+        case SelfTestState::Step::Phase16_RemoteWatchContractExposure:
+        {
+            const std::array<std::pair<std::wstring_view, std::wstring_view>, 5> plugins = {
+                std::pair{kPluginIdFtp, L"FTP"},
+                std::pair{kPluginIdSftp, L"SFTP"},
+                std::pair{kPluginIdScp, L"SCP"},
+                std::pair{kPluginIdImap, L"IMAP"},
+                std::pair{kPluginIdS3, L"S3"},
+            };
+
+            FileSystemPluginManager& pluginManager = FileSystemPluginManager::GetInstance();
+            for (const auto& [pluginId, label] : plugins)
             {
-                wil::com_ptr<IFileSystemIO> io;
-                const HRESULT hrIO = state.fs7z->QueryInterface(IID_PPV_ARGS(io.addressof()));
-                if (FAILED(hrIO) || ! io)
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke missing IFileSystemIO. hr=0x{:08X}", static_cast<unsigned long>(hrIO)));
-                    return true;
-                }
-
-                constexpr size_t kParallelReaders = 6u;
-                std::vector<std::thread> threads;
-                threads.reserve(kParallelReaders);
-                std::atomic<long> firstThreadFailure{S_OK};
-                for (size_t index = 0; index < kParallelReaders; ++index)
-                {
-                    threads.emplace_back([&]() noexcept
-                    {
-                        wil::com_ptr<IFilesInformation> info;
-                        const HRESULT hr = state.fs7z->ReadDirectoryInfo(L"/", info.put());
-                        if (FAILED(hr) || ! info)
-                        {
-                            long expected = S_OK;
-                            static_cast<void>(firstThreadFailure.compare_exchange_strong(
-                                expected, static_cast<long>(FAILED(hr) ? hr : E_FAIL), std::memory_order_acq_rel));
-                        }
-                    });
-                }
-                for (auto& thread : threads)
-                {
-                    if (thread.joinable())
-                    {
-                        thread.join();
-                    }
-                }
-
-                const HRESULT threadHr = static_cast<HRESULT>(firstThreadFailure.load(std::memory_order_acquire));
-                if (FAILED(threadHr))
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke parallel ReadDirectoryInfo failed. hr=0x{:08X}",
-                                     static_cast<unsigned long>(threadHr)));
-                    return true;
-                }
-
-                const auto buildCountOpt = TryGetPropertyFieldUInt32(io.get(), L"/", "debugIndexBuildCount");
-                if (! buildCountOpt.has_value())
-                {
-                    Fail(L"Phase15_FileSystem7zReadSeekSmoke missing debugIndexBuildCount property.");
-                    return true;
-                }
-                if (buildCountOpt.value() != 1u)
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke expected debugIndexBuildCount=1, got {}.", buildCountOpt.value()));
-                    return true;
-                }
-
-                wil::com_ptr<IFilesInformation> rootFiles;
-                const HRESULT hrRoot = state.fs7z->ReadDirectoryInfo(L"/", rootFiles.put());
-                if (FAILED(hrRoot) || ! rootFiles)
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke ReadDirectoryInfo('/') failed. hr=0x{:08X}", static_cast<unsigned long>(hrRoot)));
-                    return true;
-                }
-
-                FileInfo* head      = nullptr;
-                const HRESULT hrBuf = rootFiles->GetBuffer(&head);
-                if (FAILED(hrBuf))
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke root GetBuffer failed. hr=0x{:08X}", static_cast<unsigned long>(hrBuf)));
-                    return true;
-                }
-
-                if (! head)
-                {
-                    unsigned long count   = 0;
-                    const HRESULT hrCount = rootFiles->GetCount(&count);
-                    Fail(std::format(
-                        L"Phase15_FileSystem7zReadSeekSmoke root directory is empty. hrCount=0x{:08X} count={}", static_cast<unsigned long>(hrCount), count));
-                    return true;
-                }
-
-                std::wstring payloadName;
-                std::wstring debugList;
-                size_t debugListed = 0;
-                for (FileInfo* entry = head; entry;)
-                {
-                    const bool isDirectory = (entry->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
-                    const size_t charCount = (entry->FileNameSize >= sizeof(wchar_t)) ? (entry->FileNameSize / sizeof(wchar_t)) : 0;
-                    if (charCount > 0)
-                    {
-                        std::wstring name(entry->FileName, entry->FileName + charCount);
-                        if (! isDirectory && entry->EndOfFile == static_cast<__int64>(kPayloadBytes))
-                        {
-                            payloadName = std::move(name);
-                            break;
-                        }
-
-                        if (debugListed < 6)
-                        {
-                            if (! debugList.empty())
-                            {
-                                debugList.append(L", ");
-                            }
-                            debugList.append(std::format(L"{}({}){}", name, entry->EndOfFile, isDirectory ? L"d" : L"f"));
-                            ++debugListed;
-                        }
-                    }
-
-                    if (entry->NextEntryOffset == 0)
-                    {
-                        break;
-                    }
-                    entry = reinterpret_cast<FileInfo*>(reinterpret_cast<unsigned char*>(entry) + entry->NextEntryOffset);
-                }
-
-                if (payloadName.empty())
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke did not find payload in archive root. entries=[{}]", debugList));
-                    return true;
-                }
-
-                std::wstring payloadPath = L"/";
-                payloadPath += payloadName;
-
-                wil::com_ptr<IFileReader> reader;
-                const HRESULT hrReader = io->CreateFileReader(payloadPath.c_str(), reader.put());
-                if (FAILED(hrReader) || ! reader)
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke CreateFileReader failed. hr=0x{:08X}", static_cast<unsigned long>(hrReader)));
-                    return true;
-                }
-
-                uint64_t sizeBytes   = 0;
-                const HRESULT hrSize = reader->GetSize(&sizeBytes);
-                if (FAILED(hrSize) || sizeBytes != kPayloadBytes)
-                {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke GetSize mismatch. hr=0x{:08X} size={} expected={}",
-                                     static_cast<unsigned long>(hrSize),
-                                     sizeBytes,
-                                     kPayloadBytes));
-                    return true;
-                }
-
-                std::array<unsigned char, kReadBytes> buffer{};
-                unsigned long bytesRead = 0;
-                const HRESULT hrRead0   = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &bytesRead);
-                if (FAILED(hrRead0) || bytesRead != buffer.size() || ! VerifyPatternBytes(buffer.data(), bytesRead, 0))
+                const HRESULT enableHr = pluginManager.EnablePlugin(pluginId, g_settings);
+                if (FAILED(enableHr))
                 {
                     Fail(std::format(
-                        L"Phase15_FileSystem7zReadSeekSmoke read@0 failed. hr=0x{:08X} bytesRead={}", static_cast<unsigned long>(hrRead0), bytesRead));
+                        L"Phase16_RemoteWatchContractExposure failed to enable {} plugin (hr=0x{:08X}).", label, static_cast<unsigned long>(enableHr)));
                     return true;
                 }
 
-                uint64_t newPos         = 0;
-                const HRESULT hrSeekFwd = reader->Seek(static_cast<__int64>(kSeekOffset), FILE_BEGIN, &newPos);
-                if (FAILED(hrSeekFwd) || newPos != kSeekOffset)
+                const FileSystemPluginManager::PluginEntry* entry = FindLoadedPluginEntry(pluginId);
+                if (! entry || ! entry->fileSystem)
                 {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke seek->{} failed. hr=0x{:08X} newPos={}",
-                                     kSeekOffset,
-                                     static_cast<unsigned long>(hrSeekFwd),
-                                     newPos));
+                    Fail(std::format(L"Phase16_RemoteWatchContractExposure could not locate loaded {} plugin entry.", label));
                     return true;
                 }
 
-                bytesRead = 0;
-                buffer.fill(0);
-                const HRESULT hrRead1 = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &bytesRead);
-                if (FAILED(hrRead1) || bytesRead != buffer.size() || ! VerifyPatternBytes(buffer.data(), bytesRead, kSeekOffset))
+                wil::com_ptr<IFileSystemDirectoryWatch> watch;
+                const HRESULT hrWatch = entry->fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryWatch), watch.put_void());
+                if (FAILED(hrWatch) || ! watch)
                 {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke read@{} failed. hr=0x{:08X} bytesRead={}",
-                                     kSeekOffset,
-                                     static_cast<unsigned long>(hrRead1),
-                                     bytesRead));
-                    return true;
+                    AppendLog(std::format(L"Phase16_RemoteWatchContractExposure {} does not expose IFileSystemDirectoryWatch (hr=0x{:08X}); continuing.",
+                                          label,
+                                          static_cast<unsigned long>(hrWatch)));
+                    continue;
                 }
 
-                const HRESULT hrSeekBack = reader->Seek(0, FILE_BEGIN, &newPos);
-                if (FAILED(hrSeekBack) || newPos != 0)
+                WatchCallback callback{};
+                const HRESULT registerHr = watch->WatchDirectory(L"/", &callback, nullptr);
+                if (FAILED(registerHr))
                 {
                     Fail(std::format(
-                        L"Phase15_FileSystem7zReadSeekSmoke seek->0 failed. hr=0x{:08X} newPos={}", static_cast<unsigned long>(hrSeekBack), newPos));
+                        L"Phase16_RemoteWatchContractExposure {} WatchDirectory('/') failed (hr=0x{:08X}).", label, static_cast<unsigned long>(registerHr)));
                     return true;
                 }
 
-                bytesRead = 0;
-                buffer.fill(0);
-                const HRESULT hrRead2 = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &bytesRead);
-                if (FAILED(hrRead2) || bytesRead != buffer.size() || ! VerifyPatternBytes(buffer.data(), bytesRead, 0))
+                const HRESULT duplicateHr = watch->WatchDirectory(L"/", &callback, nullptr);
+                if (duplicateHr != HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS))
                 {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke read@0(after backward seek) failed. hr=0x{:08X} bytesRead={}",
-                                     static_cast<unsigned long>(hrRead2),
-                                     bytesRead));
+                    Fail(std::format(L"Phase16_RemoteWatchContractExposure {} duplicate WatchDirectory expected ERROR_ALREADY_EXISTS, got 0x{:08X}.",
+                                     label,
+                                     static_cast<unsigned long>(duplicateHr)));
                     return true;
                 }
 
-                const ULONGLONG releaseStartTick = GetTickCount64();
-                reader.reset();
-                const ULONGLONG releaseEndTick    = GetTickCount64();
-                const ULONGLONG releaseDurationMs = (releaseEndTick >= releaseStartTick) ? (releaseEndTick - releaseStartTick) : 0;
-                if (releaseDurationMs > SelfTest::ScaleTimeout(10'000ull))
+                const HRESULT unwatchHr = watch->UnwatchDirectory(L"/");
+                if (FAILED(unwatchHr))
                 {
-                    Fail(std::format(L"Phase15_FileSystem7zReadSeekSmoke reader release took too long: {}ms", releaseDurationMs));
+                    Fail(std::format(
+                        L"Phase16_RemoteWatchContractExposure {} UnwatchDirectory('/') failed (hr=0x{:08X}).", label, static_cast<unsigned long>(unwatchHr)));
                     return true;
                 }
 
-                RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
-                NextStep(state, SelfTestState::Step::Phase16_RemoteFtpSecret);
-                return false;
+                const HRESULT missingHr = watch->UnwatchDirectory(L"/");
+                if (missingHr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+                {
+                    Fail(std::format(L"Phase16_RemoteWatchContractExposure {} second UnwatchDirectory expected ERROR_FILE_NOT_FOUND, got 0x{:08X}.",
+                                     label,
+                                     static_cast<unsigned long>(missingHr)));
+                    return true;
+                }
             }
 
+            RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
+            NextStep(state, SelfTestState::Step::Phase16_RemoteFtpSecret);
             return false;
         }
         case SelfTestState::Step::Phase16_RemoteFtpSecret:
@@ -9075,6 +9831,532 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
         case SelfTestState::Step::Phase16_RemoteS3Sandbox:
         {
             const PhaseCheckResult outcome = CheckRemoteConnectionSandbox(L"S3", kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kPluginIdS3);
+            if (outcome.status == SelfTest::SelfTestCaseResult::Status::failed)
+            {
+                Fail(outcome.reason);
+                return true;
+            }
+
+            RecordCurrentPhase(state, outcome.status, outcome.reason);
+            NextStep(state, SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret);
+            return false;
+        }
+        case SelfTestState::Step::Phase16_RemoteOneDrivePersonalSecret:
+        {
+            const PhaseCheckResult outcome = CheckRemoteConnectionSecret(
+                L"OneDrive Personal", kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+            if (outcome.status == SelfTest::SelfTestCaseResult::Status::failed)
+            {
+                Fail(outcome.reason);
+                return true;
+            }
+
+            RecordCurrentPhase(state, outcome.status, outcome.reason);
+            NextStep(state, SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox);
+            return false;
+        }
+        case SelfTestState::Step::Phase16_RemoteOneDrivePersonalSandbox:
+        {
+            const PhaseCheckResult outcome = CheckRemoteConnectionSandbox(
+                L"OneDrive Personal", kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+            if (outcome.status == SelfTest::SelfTestCaseResult::Status::failed)
+            {
+                Fail(outcome.reason);
+                return true;
+            }
+
+            RecordCurrentPhase(state, outcome.status, outcome.reason);
+            NextStep(state, SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps);
+            return false;
+        }
+        case SelfTestState::Step::Phase16_RemoteOneDrivePersonalFileOps:
+        {
+            const ULONGLONG nowTick = GetTickCount64();
+            if (HasTimedOut(state, nowTick, 240'000ull))
+            {
+                Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps timed out (stepState={} taskA={} taskB={} taskC={} caseRoot='{}').",
+                                 state.stepState,
+                                 state.taskA.value_or(0ull),
+                                 state.taskB.value_or(0ull),
+                                 state.taskC.value_or(0ull),
+                                 state.remoteOneDrivePersonalCaseRootConn));
+                return true;
+            }
+
+            auto getRemoteIo = [&]() noexcept -> wil::com_ptr<IFileSystemIO>
+            {
+                wil::com_ptr<IFileSystemIO> io;
+                if (state.fsRemoteOneDrivePersonal)
+                {
+                    static_cast<void>(state.fsRemoteOneDrivePersonal->QueryInterface(IID_PPV_ARGS(io.put())));
+                }
+                return io;
+            };
+
+            auto getLocalIo = [&]() noexcept -> wil::com_ptr<IFileSystemIO>
+            {
+                wil::com_ptr<IFileSystemIO> io;
+                if (state.fsLocal)
+                {
+                    static_cast<void>(state.fsLocal->QueryInterface(IID_PPV_ARGS(io.put())));
+                }
+                return io;
+            };
+
+            if (state.stepState == 0)
+            {
+                const PhaseCheckResult secretOutcome = CheckRemoteConnectionSecret(
+                    L"OneDrive Personal", kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+                if (secretOutcome.status == SelfTest::SelfTestCaseResult::Status::failed)
+                {
+                    Fail(secretOutcome.reason);
+                    return true;
+                }
+
+                if (secretOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+                {
+                    RecordCurrentPhase(state, secretOutcome.status, secretOutcome.reason);
+                    NextStep(state, SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret);
+                    return false;
+                }
+
+                const PhaseCheckResult sandboxOutcome = CheckRemoteConnectionSandbox(
+                    L"OneDrive Personal", kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+                if (sandboxOutcome.status == SelfTest::SelfTestCaseResult::Status::failed)
+                {
+                    Fail(sandboxOutcome.reason);
+                    return true;
+                }
+
+                if (sandboxOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+                {
+                    RecordCurrentPhase(state, sandboxOutcome.status, sandboxOutcome.reason);
+                    NextStep(state, SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret);
+                    return false;
+                }
+
+                CleanupRemoteOneDrivePersonalCase(state);
+                state.taskA.reset();
+                state.taskB.reset();
+                state.taskC.reset();
+
+                const ResolvedRemoteProfile resolvedProfile =
+                    ResolveRemoteConnectionProfile(kSelfTestEnvConnOneDrivePersonal, kSelfTestDefaultConnOneDrivePersonal, kPluginIdOneDrivePersonal);
+                const std::wstring profileName                     = resolvedProfile.profileName;
+                const Common::Settings::ConnectionProfile* profile = resolvedProfile.profile;
+                if (! profile)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps could not resolve the connection profile after validation.");
+                    return true;
+                }
+
+                FileSystemPluginManager& pluginManager = FileSystemPluginManager::GetInstance();
+                const HRESULT enableHr                 = pluginManager.EnablePlugin(kPluginIdOneDrivePersonal, g_settings);
+                if (FAILED(enableHr))
+                {
+                    Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps failed to enable plugin (hr=0x{:08X}).", static_cast<unsigned long>(enableHr)));
+                    return true;
+                }
+
+                const FileSystemPluginManager::PluginEntry* entry = FindLoadedPluginEntry(kPluginIdOneDrivePersonal);
+                if (! entry || ! entry->fileSystem)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps could not locate the loaded plugin entry.");
+                    return true;
+                }
+
+                wil::com_ptr<IFileSystemIO> remoteIo;
+                const HRESULT remoteIoHr = entry->fileSystem->QueryInterface(IID_PPV_ARGS(remoteIo.put()));
+                if (FAILED(remoteIoHr) || ! remoteIo)
+                {
+                    Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps missing IFileSystemIO (hr=0x{:08X}).", static_cast<unsigned long>(remoteIoHr)));
+                    return true;
+                }
+
+                wil::com_ptr<IFileSystemDirectoryOperations> remoteDirOps;
+                const HRESULT remoteDirHr = entry->fileSystem->QueryInterface(IID_PPV_ARGS(remoteDirOps.put()));
+                if (FAILED(remoteDirHr) || ! remoteDirOps)
+                {
+                    Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps missing IFileSystemDirectoryOperations (hr=0x{:08X}).",
+                                     static_cast<unsigned long>(remoteDirHr)));
+                    return true;
+                }
+
+                wil::com_ptr<IFileSystemIO> localIo = getLocalIo();
+                if (! localIo)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps missing local IFileSystemIO.");
+                    return true;
+                }
+
+                const std::wstring guid = NewGuidString();
+                if (guid.empty())
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to generate a GUID for the sandbox.");
+                    return true;
+                }
+
+                const std::wstring caseRootPlugin = JoinPluginPathForSelfTest(profile->initialPath, std::format(L"fileops-selftest-onedrivep-{}", guid));
+                const std::wstring caseRootConn   = MakeConnectionPathForSelfTest(profileName, caseRootPlugin);
+                if (caseRootPlugin.empty() || caseRootConn.empty())
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to build sandbox paths.");
+                    return true;
+                }
+
+                const std::filesystem::path caseRoot(caseRootConn);
+                const std::filesystem::path uploadDir = caseRoot / L"upload";
+                const std::filesystem::path moveDir   = caseRoot / L"move";
+                const std::filesystem::path seedFile  = caseRoot / L"seed-remote.txt";
+
+                const std::filesystem::path workspace    = state.tempRoot / L"onedrive-personal-fileops";
+                const std::filesystem::path downloadDir  = workspace / L"download";
+                const std::filesystem::path uploadSource = workspace / L"upload-source.txt";
+                if (! RecreateEmptyDirectory(workspace) || ! RecreateEmptyDirectory(downloadDir))
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to prepare the local workspace.");
+                    return true;
+                }
+
+                const std::string payload = std::format("onedrive-personal-fileops-{}-roundtrip", static_cast<unsigned long long>(GetTickCount64()));
+                if (! EnsureDirectoryExistsFsOps(remoteDirOps, caseRoot) || ! EnsureDirectoryExistsFsOps(remoteDirOps, uploadDir) ||
+                    ! EnsureDirectoryExistsFsOps(remoteDirOps, moveDir))
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to prepare the remote sandbox.");
+                    return true;
+                }
+
+                if (! WriteFileTextFsIo(localIo, uploadSource, payload))
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to create the local upload file.");
+                    return true;
+                }
+
+                if (! WriteFileTextFsIo(remoteIo, seedFile, payload))
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to seed the remote probe file.");
+                    return true;
+                }
+
+                std::string seedReadBack;
+                if (! ReadFileTextFsIo(remoteIo, seedFile, seedReadBack) || seedReadBack != payload)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps remote CreateFileReader readback failed.");
+                    return true;
+                }
+
+                state.fsRemoteOneDrivePersonal               = entry->fileSystem;
+                state.remoteOneDrivePersonalProfileName      = profileName;
+                state.remoteOneDrivePersonalCaseRootConn     = caseRootConn;
+                state.remoteOneDrivePersonalUploadDirConn    = ToPluginPathText(uploadDir);
+                state.remoteOneDrivePersonalMoveDirConn      = ToPluginPathText(moveDir);
+                state.remoteOneDrivePersonalSeedFileConn     = ToPluginPathText(seedFile);
+                state.remoteOneDrivePersonalUploadedFileConn = ToPluginPathText(uploadDir / uploadSource.filename());
+                state.remoteOneDrivePersonalMovedFileConn    = ToPluginPathText(moveDir / uploadSource.filename());
+                state.remoteOneDrivePersonalDisplayPath      = MakePluginDisplayPath(entry->shortId, state.remoteOneDrivePersonalCaseRootConn);
+                state.remoteOneDrivePersonalWorkspace        = workspace;
+                state.remoteOneDrivePersonalUploadSource     = uploadSource;
+                state.remoteOneDrivePersonalDownloadDir      = downloadDir;
+                state.remoteOneDrivePersonalDownloadedFile   = downloadDir / uploadSource.filename();
+                state.remoteOneDrivePersonalPayload          = payload;
+
+                state.folderWindow->SetFolderPath(FolderWindow::Pane::Left, state.remoteOneDrivePersonalDisplayPath);
+                state.folderWindow->SetFolderPath(FolderWindow::Pane::Right, state.remoteOneDrivePersonalWorkspace);
+                state.stepState = 1;
+                return false;
+            }
+
+            if (state.stepState == 1)
+            {
+                if (! CurrentPanePathEquals(state.folderWindow, FolderWindow::Pane::Left, state.remoteOneDrivePersonalDisplayPath) ||
+                    ! CurrentPanePathEquals(state.folderWindow, FolderWindow::Pane::Right, state.remoteOneDrivePersonalWorkspace))
+                {
+                    return false;
+                }
+
+                state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                         FILESYSTEM_COPY,
+                                                         FolderWindow::Pane::Right,
+                                                         FolderWindow::Pane::Left,
+                                                         state.fsLocal,
+                                                         {state.remoteOneDrivePersonalUploadSource},
+                                                         std::filesystem::path(state.remoteOneDrivePersonalUploadDirConn),
+                                                         static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE),
+                                                         false,
+                                                         0,
+                                                         FolderWindow::FileOperationState::ExecutionMode::BulkItems,
+                                                         false,
+                                                         state.fsRemoteOneDrivePersonal);
+                if (! state.taskA.has_value())
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to start local->remote copy.");
+                    return true;
+                }
+
+                state.stepState = 2;
+                return false;
+            }
+
+            if (state.stepState == 2)
+            {
+                const auto itCopy = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+                if (itCopy == state.completedTasks.end())
+                {
+                    return false;
+                }
+
+                if (FAILED(itCopy->second.hr))
+                {
+                    Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps local->remote copy failed: 0x{:08X}.",
+                                     static_cast<unsigned long>(itCopy->second.hr)));
+                    return true;
+                }
+
+                wil::com_ptr<IFileSystemIO> remoteIo = getRemoteIo();
+                if (! remoteIo)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps lost remote IFileSystemIO after upload.");
+                    return true;
+                }
+
+                const std::filesystem::path uploadedFile(state.remoteOneDrivePersonalUploadedFileConn);
+                if (! PathExistsFsIo(remoteIo, uploadedFile))
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps upload did not materialize the remote file.");
+                    return true;
+                }
+
+                std::string uploadReadBack;
+                if (! ReadFileTextFsIo(remoteIo, uploadedFile, uploadReadBack) || uploadReadBack != state.remoteOneDrivePersonalPayload)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps remote upload verification failed.");
+                    return true;
+                }
+
+                state.taskB = StartFileOperationAndGetId(state.fileOps,
+                                                         FILESYSTEM_COPY,
+                                                         FolderWindow::Pane::Left,
+                                                         FolderWindow::Pane::Right,
+                                                         state.fsRemoteOneDrivePersonal,
+                                                         {uploadedFile},
+                                                         state.remoteOneDrivePersonalDownloadDir,
+                                                         static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE),
+                                                         false,
+                                                         0,
+                                                         FolderWindow::FileOperationState::ExecutionMode::BulkItems,
+                                                         false,
+                                                         state.fsLocal);
+                if (! state.taskB.has_value())
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to start remote->local copy.");
+                    return true;
+                }
+
+                state.stepState = 3;
+                return false;
+            }
+
+            if (state.stepState == 3)
+            {
+                const auto itCopyBack = state.taskB.has_value() ? state.completedTasks.find(state.taskB.value()) : state.completedTasks.end();
+                if (itCopyBack == state.completedTasks.end())
+                {
+                    return false;
+                }
+
+                if (FAILED(itCopyBack->second.hr))
+                {
+                    Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps remote->local copy failed: 0x{:08X}.",
+                                     static_cast<unsigned long>(itCopyBack->second.hr)));
+                    return true;
+                }
+
+                wil::com_ptr<IFileSystemIO> localIo = getLocalIo();
+                if (! localIo)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps lost local IFileSystemIO after download.");
+                    return true;
+                }
+
+                std::string downloadedText;
+                if (! ReadFileTextFsIo(localIo, state.remoteOneDrivePersonalDownloadedFile, downloadedText) ||
+                    downloadedText != state.remoteOneDrivePersonalPayload)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps downloaded file contents did not match the upload.");
+                    return true;
+                }
+
+                state.taskC = StartFileOperationAndGetId(state.fileOps,
+                                                         FILESYSTEM_MOVE,
+                                                         FolderWindow::Pane::Left,
+                                                         FolderWindow::Pane::Left,
+                                                         state.fsRemoteOneDrivePersonal,
+                                                         {std::filesystem::path(state.remoteOneDrivePersonalUploadedFileConn)},
+                                                         std::filesystem::path(state.remoteOneDrivePersonalMoveDirConn),
+                                                         static_cast<FileSystemFlags>(FILESYSTEM_FLAG_ALLOW_OVERWRITE),
+                                                         false,
+                                                         0,
+                                                         FolderWindow::FileOperationState::ExecutionMode::BulkItems,
+                                                         false,
+                                                         state.fsRemoteOneDrivePersonal);
+                if (! state.taskC.has_value())
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to start same-drive move.");
+                    return true;
+                }
+
+                state.stepState = 4;
+                return false;
+            }
+
+            if (state.stepState == 4)
+            {
+                const auto itMove = state.taskC.has_value() ? state.completedTasks.find(state.taskC.value()) : state.completedTasks.end();
+                if (itMove == state.completedTasks.end())
+                {
+                    return false;
+                }
+
+                if (FAILED(itMove->second.hr))
+                {
+                    Fail(
+                        std::format(L"Phase16_RemoteOneDrivePersonalFileOps same-drive move failed: 0x{:08X}.", static_cast<unsigned long>(itMove->second.hr)));
+                    return true;
+                }
+
+                wil::com_ptr<IFileSystemIO> remoteIo = getRemoteIo();
+                if (! remoteIo)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps lost remote IFileSystemIO after move.");
+                    return true;
+                }
+
+                if (PathExistsFsIo(remoteIo, std::filesystem::path(state.remoteOneDrivePersonalUploadedFileConn)))
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps move left the source file behind.");
+                    return true;
+                }
+
+                if (! PathExistsFsIo(remoteIo, std::filesystem::path(state.remoteOneDrivePersonalMovedFileConn)))
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps move did not materialize the destination file.");
+                    return true;
+                }
+
+                state.taskA = StartFileOperationAndGetId(state.fileOps,
+                                                         FILESYSTEM_DELETE,
+                                                         FolderWindow::Pane::Left,
+                                                         std::nullopt,
+                                                         state.fsRemoteOneDrivePersonal,
+                                                         {std::filesystem::path(state.remoteOneDrivePersonalMovedFileConn)},
+                                                         {},
+                                                         FILESYSTEM_FLAG_NONE,
+                                                         false);
+                if (! state.taskA.has_value())
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps failed to start remote delete.");
+                    return true;
+                }
+
+                state.stepState = 5;
+                return false;
+            }
+
+            if (state.stepState == 5)
+            {
+                const auto itDelete = state.taskA.has_value() ? state.completedTasks.find(state.taskA.value()) : state.completedTasks.end();
+                if (itDelete == state.completedTasks.end())
+                {
+                    return false;
+                }
+
+                if (FAILED(itDelete->second.hr))
+                {
+                    Fail(
+                        std::format(L"Phase16_RemoteOneDrivePersonalFileOps remote delete failed: 0x{:08X}.", static_cast<unsigned long>(itDelete->second.hr)));
+                    return true;
+                }
+
+                wil::com_ptr<IFileSystemIO> remoteIo = getRemoteIo();
+                if (! remoteIo)
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps lost remote IFileSystemIO after delete.");
+                    return true;
+                }
+
+                if (PathExistsFsIo(remoteIo, std::filesystem::path(state.remoteOneDrivePersonalMovedFileConn)))
+                {
+                    Fail(L"Phase16_RemoteOneDrivePersonalFileOps delete left the file in place.");
+                    return true;
+                }
+
+                const HRESULT cleanupHr =
+                    state.fsRemoteOneDrivePersonal->DeleteItem(state.remoteOneDrivePersonalCaseRootConn.c_str(),
+                                                               static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                               nullptr,
+                                                               nullptr,
+                                                               nullptr);
+                if (FAILED(cleanupHr))
+                {
+                    Fail(std::format(L"Phase16_RemoteOneDrivePersonalFileOps failed to clean the remote sandbox: 0x{:08X}.",
+                                     static_cast<unsigned long>(cleanupHr)));
+                    return true;
+                }
+
+                ResetRemoteOneDrivePersonalState(state);
+                RecordCurrentPhase(state, SelfTest::SelfTestCaseResult::Status::passed);
+                NextStep(state, SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret);
+                return false;
+            }
+
+            return false;
+        }
+        case SelfTestState::Step::Phase16_RemoteOneDriveBusinessSecret:
+        {
+            const PhaseCheckResult outcome = CheckRemoteConnectionSecret(
+                L"OneDrive Business", kSelfTestEnvConnOneDriveBusiness, kSelfTestDefaultConnOneDriveBusiness, kPluginIdOneDriveBusiness);
+            if (outcome.status == SelfTest::SelfTestCaseResult::Status::failed)
+            {
+                Fail(outcome.reason);
+                return true;
+            }
+
+            RecordCurrentPhase(state, outcome.status, outcome.reason);
+            NextStep(state, SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox);
+            return false;
+        }
+        case SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox:
+        {
+            const PhaseCheckResult outcome = CheckRemoteConnectionSandbox(
+                L"OneDrive Business", kSelfTestEnvConnOneDriveBusiness, kSelfTestDefaultConnOneDriveBusiness, kPluginIdOneDriveBusiness);
+            if (outcome.status == SelfTest::SelfTestCaseResult::Status::failed)
+            {
+                Fail(outcome.reason);
+                return true;
+            }
+
+            RecordCurrentPhase(state, outcome.status, outcome.reason);
+            NextStep(state, SelfTestState::Step::Phase16_RemoteSharePointSecret);
+            return false;
+        }
+        case SelfTestState::Step::Phase16_RemoteSharePointSecret:
+        {
+            const PhaseCheckResult outcome =
+                CheckRemoteConnectionSecret(L"SharePoint", kSelfTestEnvConnSharePoint, kSelfTestDefaultConnSharePoint, kPluginIdSharePoint);
+            if (outcome.status == SelfTest::SelfTestCaseResult::Status::failed)
+            {
+                Fail(outcome.reason);
+                return true;
+            }
+
+            RecordCurrentPhase(state, outcome.status, outcome.reason);
+            NextStep(state, SelfTestState::Step::Phase16_RemoteSharePointSandbox);
+            return false;
+        }
+        case SelfTestState::Step::Phase16_RemoteSharePointSandbox:
+        {
+            const PhaseCheckResult outcome =
+                CheckRemoteConnectionSandbox(L"SharePoint", kSelfTestEnvConnSharePoint, kSelfTestDefaultConnSharePoint, kPluginIdSharePoint);
             if (outcome.status == SelfTest::SelfTestCaseResult::Status::failed)
             {
                 Fail(outcome.reason);

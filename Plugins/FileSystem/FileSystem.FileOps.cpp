@@ -513,6 +513,7 @@ struct CopyProgressContext
     OperationContext* context         = nullptr;
     uint64_t itemBaseBytes            = 0; // Used only for sequential operations.
     uint64_t lastItemBytesTransferred = 0; // Used only for parallel operations.
+    uint64_t lastItemTotalBytes       = 0; // Tracks the latest item total reported by the OS progress callback.
     ULONGLONG startTick               = 0; // Used only for sequential operations.
 };
 
@@ -1858,9 +1859,10 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
         return PROGRESS_CONTINUE;
     }
 
-    OperationContext& opContext  = *progressContext->context;
-    const uint64_t itemTotal     = static_cast<uint64_t>(totalFileSize.QuadPart);
-    const uint64_t itemCompleted = static_cast<uint64_t>(totalBytesTransferred.QuadPart);
+    OperationContext& opContext         = *progressContext->context;
+    const uint64_t itemTotal            = static_cast<uint64_t>(totalFileSize.QuadPart);
+    const uint64_t itemCompleted        = static_cast<uint64_t>(totalBytesTransferred.QuadPart);
+    progressContext->lastItemTotalBytes = itemTotal;
 
     if (opContext.parallel)
     {
@@ -1884,12 +1886,6 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
         {
             // Defensive: restart delta tracking if the API reports a smaller value.
             progressContext->lastItemBytesTransferred = itemCompleted;
-        }
-
-        HRESULT hr = ReportProgress(opContext, itemTotal, itemCompleted);
-        if (FAILED(hr))
-        {
-            return PROGRESS_CANCEL;
         }
 
         const uint64_t bandwidthLimit = opContext.parallel->bandwidthLimitBytesPerSecond.load(std::memory_order_acquire);
@@ -1933,16 +1929,16 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
                 }
             }
         }
-    }
-    else
-    {
-        opContext.completedBytes = progressContext->itemBaseBytes + itemCompleted;
 
         HRESULT hr = ReportProgress(opContext, itemTotal, itemCompleted);
         if (FAILED(hr))
         {
             return PROGRESS_CANCEL;
         }
+    }
+    else
+    {
+        opContext.completedBytes = progressContext->itemBaseBytes + itemCompleted;
 
         const uint64_t bandwidthLimit = GetBandwidthLimit(opContext.options);
         if (bandwidthLimit > 0)
@@ -1987,6 +1983,12 @@ DWORD CALLBACK CopyProgressRoutine(LARGE_INTEGER totalFileSize,
                     }
                 }
             }
+        }
+
+        HRESULT hr = ReportProgress(opContext, itemTotal, itemCompleted);
+        if (FAILED(hr))
+        {
+            return PROGRESS_CANCEL;
         }
     }
 
@@ -2086,6 +2088,16 @@ HRESULT CopyFileInternal(OperationContext& context, const PathInfo& source, cons
     {
         context.completedBytes = progress.itemBaseBytes + fileBytes;
     }
+
+    const HRESULT progressHr = ReportProgressForced(context, fileBytes, fileBytes);
+    if (progressHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || progressHr == E_ABORT)
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+    if (FAILED(progressHr))
+    {
+        return progressHr;
+    }
     return S_OK;
 }
 
@@ -2168,6 +2180,16 @@ CopyReparsePointInternal(OperationContext& context, const PathInfo& source, cons
         else
         {
             context.completedBytes = progress.itemBaseBytes + fileBytes;
+        }
+
+        const HRESULT progressHr = ReportProgressForced(context, fileBytes, fileBytes);
+        if (progressHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || progressHr == E_ABORT)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        if (FAILED(progressHr))
+        {
+            return progressHr;
         }
 
         return S_OK;
@@ -3197,6 +3219,31 @@ HRESULT MovePathInternal(OperationContext& context, const PathInfo& source, cons
 
     if (MoveFileWithProgressW(source.extended.c_str(), destination.extended.c_str(), CopyProgressRoutine, &progress, renameFlags))
     {
+        const uint64_t finalTotalBytes     = (std::max)(progress.lastItemTotalBytes, progress.lastItemBytesTransferred);
+        const uint64_t finalCompletedBytes = finalTotalBytes;
+
+        if (context.parallel)
+        {
+            if (finalCompletedBytes > progress.lastItemBytesTransferred)
+            {
+                context.parallel->completedBytes.fetch_add(finalCompletedBytes - progress.lastItemBytesTransferred, std::memory_order_acq_rel);
+                progress.lastItemBytesTransferred = finalCompletedBytes;
+            }
+        }
+        else
+        {
+            context.completedBytes = progress.itemBaseBytes + finalCompletedBytes;
+        }
+
+        const HRESULT progressHr = ReportProgressForced(context, finalTotalBytes, finalCompletedBytes);
+        if (progressHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || progressHr == E_ABORT)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        if (FAILED(progressHr))
+        {
+            return progressHr;
+        }
         return S_OK;
     }
 

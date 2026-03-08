@@ -30,6 +30,13 @@ Items are matched by **name** under the same **relative folder** (directory-orie
 - **Ignore patterns**: file and directory ignore pattern lists
 - **Display**: **Show Identical Items** (when off, only differences are shown)
 
+If the main settings file changes while the **Options…** panel is open:
+
+- A clean options panel reloads from disk automatically.
+- A dirty options panel prompts **Reload from disk** or **Keep editing**.
+- If you keep editing, pressing **OK** later asks whether to **Overwrite disk**, **Reload from disk**, or **Cancel**.
+- **Options → OK** saves the updated compare defaults to the main settings file immediately before starting the new scan.
+
 ## Sync operations (copy/move)
 
 When Compare mode is active, copying/moving a **directory** to the other pane acts like a sync:

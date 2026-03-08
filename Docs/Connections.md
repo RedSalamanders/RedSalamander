@@ -3,6 +3,7 @@
 Connection Manager is the recommended way to store and use remote connection profiles for:
 
 - FTP / SFTP / SCP / IMAP
+- Google Drive / OneDrive / SharePoint
 - S3 / S3 Table
 
 It keeps non-secret fields in settings and stores secrets using Windows facilities (Credential Manager, with optional Windows Hello gating).
@@ -13,7 +14,7 @@ It keeps non-secret fields in settings and stores secrets using Windows faciliti
 
 - **Commands → Connections Manager…**
 - Type `nav:`, `nav://`, or `@conn:` in the address bar (empty name opens the dialog)
-- Type a protocol with no host (examples: `sftp:`, `s3:`, `s3table:`) to open the dialog filtered to that protocol
+- Type a protocol with no host (examples: `sftp:`, `gdrive:`, `onedrivep:`, `sharepoint:`, `s3:`, `s3table:`) to open the dialog filtered to that protocol
 
 ## Create and use a profile
 
@@ -30,6 +31,9 @@ Then you can navigate to it later by name:
 - `@conn:MyServer`
 - `s3://@conn/MyAwsS3/logs/`
 - `s3table://@conn/MyDataCatalog/default/`
+- `gdrive:/@conn:MyGoogleDrive/`
+- `onedrivep:/@conn:MyOneDrive/`
+- `sharepoint:/@conn:MySharePointSite/Shared Documents/`
 
 ### Advanced path forms
 
@@ -38,6 +42,12 @@ The same saved profile can also be addressed through a protocol-local path:
 - `sftp:/@conn:MyServer/var/log/`
 - `s3:/@conn:MyAwsS3/logs/`
 - `s3://@conn/MyAwsS3/logs/`
+- `gdrive:/@conn:MyGoogleDrive/`
+- `onedrivep:/@conn:MyOneDrive/`
+- `onedriveb:/@conn:MyWorkDrive/Documents/`
+- `sharepoint://@conn/MySharePointSite/Shared Documents/`
+
+For cloud-drive setup details and current limitations, see: [Cloud Drives](CloudDrives.md)
 
 ### Quick Connect
 
@@ -50,6 +60,13 @@ During the current app run, that temporary profile can also be reopened by name 
 - Saving a secret stores it via Windows Credential Manager.
 - When **Require Windows Hello** is enabled, Windows Hello verification is performed before secrets are released.
 - Some file-system plugins still have “defaults” in Preferences; those values may be stored as plain text. Prefer Connection Manager when possible.
+
+## External settings changes
+
+- If the main settings file changes on disk while Connection Manager is open and you have no unsaved edits, the dialog reloads its non-secret profile data automatically.
+- If you have unsaved edits, the dialog prompts **Reload from disk** or **Keep editing**.
+- If you keep editing, the next save-producing action asks whether to **Overwrite disk**, **Reload from disk**, or **Cancel**.
+- Secrets stored in Credential Manager are not rewritten by this reload path.
 
 ## Not implemented yet
 

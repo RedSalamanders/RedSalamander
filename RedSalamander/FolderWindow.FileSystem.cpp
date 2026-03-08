@@ -3947,7 +3947,7 @@ HRESULT FolderWindow::EnsurePaneFileSystem(Pane pane, std::wstring_view pluginId
 
         if (previous && (! other.fileSystem || other.fileSystem.get() != previous.get()))
         {
-            DirectoryInfoCache::GetInstance().ClearForFileSystem(previous.get());
+            DirectoryInfoCache::GetInstance().UnregisterProvider(previous.get());
         }
 
         previous.reset(); // release before module unload
@@ -3963,6 +3963,7 @@ HRESULT FolderWindow::EnsurePaneFileSystem(Pane pane, std::wstring_view pluginId
     if (state.fileSystem && EqualsNoCase(state.pluginId, pluginId))
     {
         state.pluginShortId = entry->shortId;
+        DirectoryInfoCache::GetInstance().RegisterProvider(state.fileSystem.get(), state.pluginId, state.pluginShortId, state.instanceContext);
 
         wil::com_ptr<IInformations> informationsInstance;
         const HRESULT qiInfos = state.fileSystem->QueryInterface(__uuidof(IInformations), informationsInstance.put_void());
@@ -4059,10 +4060,11 @@ HRESULT FolderWindow::EnsurePaneFileSystem(Pane pane, std::wstring_view pluginId
     state.folderView.SetFileSystem(state.fileSystem);
     state.folderView.SetFileSystemContext(state.pluginId, state.instanceContext);
     state.navigationView.SetFileSystem(state.fileSystem);
+    DirectoryInfoCache::GetInstance().RegisterProvider(state.fileSystem.get(), state.pluginId, state.pluginShortId, state.instanceContext);
 
     if (previous && previous.get() != state.fileSystem.get() && (! other.fileSystem || other.fileSystem.get() != previous.get()))
     {
-        DirectoryInfoCache::GetInstance().ClearForFileSystem(previous.get());
+        DirectoryInfoCache::GetInstance().UnregisterProvider(previous.get());
     }
 
     previous.reset(); // release before module unload
@@ -4158,10 +4160,11 @@ HRESULT FolderWindow::SetFileSystemInstanceForPane(
     state.folderView.SetFileSystem(state.fileSystem);
     state.folderView.SetFileSystemContext(state.pluginId, state.instanceContext);
     state.navigationView.SetFileSystem(state.fileSystem);
+    DirectoryInfoCache::GetInstance().RegisterProvider(state.fileSystem.get(), state.pluginId, state.pluginShortId, state.instanceContext);
 
     if (previous && previous.get() != state.fileSystem.get() && (! other.fileSystem || other.fileSystem.get() != previous.get()))
     {
-        DirectoryInfoCache::GetInstance().ClearForFileSystem(previous.get());
+        DirectoryInfoCache::GetInstance().UnregisterProvider(previous.get());
     }
 
     previous.reset(); // release before module unload
@@ -4464,7 +4467,9 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
         {
             const bool supportsConnections =
                 (EqualsNoCase(pluginShortId, L"ftp") || EqualsNoCase(pluginShortId, L"sftp") || EqualsNoCase(pluginShortId, L"scp") ||
-                 EqualsNoCase(pluginShortId, L"imap") || EqualsNoCase(pluginShortId, L"s3") || EqualsNoCase(pluginShortId, L"s3table"));
+                 EqualsNoCase(pluginShortId, L"imap") || EqualsNoCase(pluginShortId, L"gdrive") || EqualsNoCase(pluginShortId, L"onedrivep") ||
+                 EqualsNoCase(pluginShortId, L"onedriveb") || EqualsNoCase(pluginShortId, L"sharepoint") || EqualsNoCase(pluginShortId, L"s3") ||
+                 EqualsNoCase(pluginShortId, L"s3table"));
 
             const auto openProtocolFilteredConnectionManager = [&]
             {
@@ -4477,7 +4482,8 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
 
             if (supportsConnections)
             {
-                // Treat `ftp:` and `ftp://@conn` as explicit Connection Manager entry points.
+                // Treat protocol roots like `ftp:` / `gdrive:` and `ftp://@conn` / `gdrive://@conn`
+                // as explicit Connection Manager entry points.
                 std::wstring_view check = remainder;
                 if (check.empty())
                 {
@@ -4697,6 +4703,13 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
         }
     }
 
+    Debug::Info(L"FolderWindow::SetFolderPath resolved input='{}' pluginId='{}' pluginShortId='{}' instanceContext='{}' pluginPath='{}'",
+                text,
+                pluginId,
+                pluginShortId,
+                instanceContext.empty() ? std::wstring_view(L"<none>") : std::wstring_view(instanceContext),
+                pluginPath.native());
+
     {
         Debug::Perf::Scope ensurePerf(pane == Pane::Left ? L"FolderWindow.SetFolderPath.Left.EnsurePaneFileSystem"
                                                          : L"FolderWindow.SetFolderPath.Right.EnsurePaneFileSystem");
@@ -4753,14 +4766,14 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
                 const bool contextSame = EqualsNoCase(state.instanceContext, instanceContext);
                 if (! instanceContext.empty() && ! contextSame)
                 {
-                    DirectoryInfoCache::GetInstance().ClearForFileSystem(state.fileSystem.get());
                     state.instanceContext = instanceContext;
+                    DirectoryInfoCache::GetInstance().RegisterProvider(state.fileSystem.get(), state.pluginId, state.pluginShortId, state.instanceContext);
                     static_cast<void>(initializer->Initialize(state.instanceContext.c_str(), nullptr));
                 }
                 else if (instanceContextSpecified && instanceContext.empty() && ! state.instanceContext.empty())
                 {
-                    DirectoryInfoCache::GetInstance().ClearForFileSystem(state.fileSystem.get());
                     state.instanceContext.clear();
+                    DirectoryInfoCache::GetInstance().RegisterProvider(state.fileSystem.get(), state.pluginId, state.pluginShortId, std::wstring_view{});
                 }
             }
             else
@@ -4772,6 +4785,10 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
 
     // Keep FolderView informed so it can include mount context in internal drag/drop formats.
     state.folderView.SetFileSystemContext(state.pluginId, state.instanceContext);
+    if (state.fileSystem)
+    {
+        DirectoryInfoCache::GetInstance().RegisterProvider(state.fileSystem.get(), state.pluginId, state.pluginShortId, state.instanceContext);
+    }
 
     const std::filesystem::path displayPath = NavigationLocation::FormatHistoryPath(state.pluginShortId, state.instanceContext, pluginPath);
 
@@ -5248,6 +5265,7 @@ void FolderWindow::CommandCreateDirectory(Pane pane)
             }
 
             DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
+            cache.NotifyPathCreated(state.fileSystem.get(), newFolderPath);
             state.folderView.ForceRefresh();
 
             const Pane otherPane   = pane == Pane::Left ? Pane::Right : Pane::Left;
@@ -5321,6 +5339,12 @@ bool FolderWindow::DebugHasItemDisplayName(Pane pane, std::wstring_view displayN
     return state.folderView.DebugHasItemDisplayName(displayName);
 }
 
+size_t FolderWindow::DebugGetItemCount(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.folderView.DebugGetItemCount();
+}
+
 bool FolderWindow::DebugIsItemSelected(Pane pane, std::wstring_view displayName) const noexcept
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -5361,6 +5385,13 @@ bool FolderWindow::DebugIsNameFilterActive(Pane pane) const noexcept
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.folderView.IsNameFilterActive();
+}
+
+void FolderWindow::DebugResetPaneVisibilityState(Pane pane) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.ShowHiddenNames();
+    state.folderView.SetNameFilterState(FolderView::NameFilterState{});
 }
 
 FolderView::FilterWatermarkVisualMode FolderWindow::DebugGetFilterWatermarkVisualMode(Pane pane) const noexcept
@@ -6569,4 +6600,80 @@ void FolderWindow::OnFolderViewNavigateUpFromRoot(Pane pane) noexcept
     }
 
     SetFolderPath(pane, mountParent);
+}
+
+void FolderWindow::OnFolderViewDirectoryImpact(Pane pane, const DirectoryInfoCache::DirectoryImpact& impact) noexcept
+{
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.updatingPath)
+    {
+        return;
+    }
+
+    switch (impact.kind)
+    {
+        case DirectoryInfoCache::DirectoryImpact::Kind::RefreshCurrentFolder: return;
+        case DirectoryInfoCache::DirectoryImpact::Kind::RelocateCurrentFolder:
+            if (! impact.targetFolder.empty())
+            {
+                if (! impact.focusDisplayName.empty())
+                {
+                    state.folderView.RememberFocusedItemForFolder(impact.targetFolder, impact.focusDisplayName);
+                }
+
+                const std::filesystem::path displayPath =
+                    NavigationLocation::FormatHistoryPath(state.pluginShortId, state.instanceContext, impact.targetFolder);
+                SetFolderPath(pane, displayPath);
+            }
+            return;
+        case DirectoryInfoCache::DirectoryImpact::Kind::RetargetInstanceContext:
+        {
+            if (impact.newInstanceContext.empty())
+            {
+                return;
+            }
+
+            std::filesystem::path pluginPath        = state.folderView.GetFolderPath().value_or(std::filesystem::path(L"/"));
+            const std::filesystem::path displayPath = NavigationLocation::FormatHistoryPath(state.pluginShortId, impact.newInstanceContext, pluginPath);
+            SetFolderPath(pane, displayPath);
+            return;
+        }
+        case DirectoryInfoCache::DirectoryImpact::Kind::ExitInstanceContext:
+        {
+            const std::optional<std::filesystem::path> mountPointOpt = TryResolveInstanceContextToWindowsPath(state.instanceContext);
+            if (! mountPointOpt.has_value())
+            {
+                return;
+            }
+
+            std::filesystem::path mountPoint = mountPointOpt.value().lexically_normal();
+            std::filesystem::path fallback   = mountPoint.parent_path();
+            std::error_code ec;
+            while (! fallback.empty() && ! std::filesystem::exists(fallback, ec))
+            {
+                ec.clear();
+                const std::filesystem::path parent = fallback.parent_path();
+                if (parent.empty() || parent == fallback)
+                {
+                    fallback.clear();
+                    break;
+                }
+                fallback = parent;
+            }
+
+            if (fallback.empty())
+            {
+                fallback = GetDefaultFileSystemRoot();
+            }
+
+            const std::wstring focusName = impact.focusDisplayName.empty() ? mountPoint.filename().wstring() : impact.focusDisplayName;
+            if (! focusName.empty())
+            {
+                state.folderView.RememberFocusedItemForFolder(fallback, focusName);
+            }
+
+            SetFolderPath(pane, fallback);
+            return;
+        }
+    }
 }

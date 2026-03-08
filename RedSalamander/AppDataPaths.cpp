@@ -40,4 +40,3 @@ std::filesystem::path GetLocalAppDataPath() noexcept
     return std::filesystem::path(buffer);
 }
 } // namespace AppDataPaths
-

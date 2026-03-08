@@ -55,6 +55,23 @@ public:
         AllowEnumerate,
     };
 
+    struct DirectoryImpact
+    {
+        enum class Kind : uint8_t
+        {
+            RefreshCurrentFolder,
+            RelocateCurrentFolder,
+            RetargetInstanceContext,
+            ExitInstanceContext,
+        };
+
+        Kind kind = Kind::RefreshCurrentFolder;
+        std::filesystem::path currentFolder;
+        std::filesystem::path targetFolder;
+        std::wstring focusDisplayName;
+        std::wstring newInstanceContext;
+    };
+
     class Borrowed final
     {
     public:
@@ -109,9 +126,37 @@ public:
     // (static destruction order safety).
     void Shutdown() noexcept;
 
+    void RegisterProvider(IFileSystem* fileSystem, std::wstring_view pluginId, std::wstring_view pluginShortId, std::wstring_view instanceContext) noexcept;
+    void UnregisterProvider(IFileSystem* fileSystem) noexcept;
+
     void ClearForFileSystem(IFileSystem* fileSystem) noexcept;
     void InvalidateFolder(IFileSystem* fileSystem, const std::filesystem::path& folder) noexcept;
     bool IsFolderWatched(IFileSystem* fileSystem, const std::filesystem::path& folder) const noexcept;
+
+    void NotifyFolderContentsChanged(IFileSystem* fileSystem, const std::filesystem::path& folder) noexcept;
+    void NotifyPathCreated(IFileSystem* fileSystem, const std::filesystem::path& path) noexcept;
+    void NotifyPathDeleted(IFileSystem* fileSystem, const std::filesystem::path& path) noexcept;
+    void NotifyPathMoved(IFileSystem* fileSystem, const std::filesystem::path& sourcePath, const std::filesystem::path& destinationPath) noexcept;
+
+    struct ContextKey
+    {
+        std::wstring pluginId;
+        std::wstring pluginIdKey;
+        std::wstring pluginShortId;
+        std::wstring instanceContext;
+        std::wstring instanceContextKey;
+        bool isFilePlugin = false;
+    };
+
+    struct ContextKeyHash
+    {
+        size_t operator()(const ContextKey& key) const noexcept;
+    };
+
+    struct ContextKeyEq
+    {
+        bool operator()(const ContextKey& a, const ContextKey& b) const noexcept;
+    };
 
     Borrowed BorrowDirectoryInfo(IFileSystem* fileSystem, const std::filesystem::path& folder, BorrowMode mode) noexcept;
     Borrowed BorrowDirectoryInfo(IFileSystem* fileSystem, const std::filesystem::path& folder, BorrowMode mode, std::stop_token stopToken) noexcept;
@@ -127,7 +172,7 @@ private:
 
     struct Key
     {
-        wil::com_ptr<IFileSystem> fileSystem;
+        ContextKey context;
         std::wstring path;
         std::wstring pathKey;
     };
@@ -148,6 +193,12 @@ private:
         UINT message = 0;
     };
 
+    struct ContextState
+    {
+        ContextKey key{};
+        std::unordered_map<IFileSystem*, wil::com_ptr<IFileSystem>> providers;
+    };
+
     struct Entry
     {
         Entry()                        = default;
@@ -158,12 +209,13 @@ private:
 
         Key key{};
         wil::com_ptr<IFilesInformation> info;
-        uint64_t bytes       = 0;
-        bool dirty           = true;
-        bool notifyPosted    = false;
-        bool loading         = false;
-        uint32_t pinCount    = 0;
-        uint32_t borrowCount = 0;
+        uint64_t bytes           = 0;
+        bool dirty               = true;
+        bool refreshPosted       = false;
+        bool loading             = false;
+        uint32_t pinCount        = 0;
+        uint32_t borrowCount     = 0;
+        bool allowOffscreenWatch = false;
         std::condition_variable cv;
         std::vector<Subscriber> subscribers;
         std::unique_ptr<class FolderWatcher> watcher;
@@ -173,6 +225,7 @@ private:
 
     static uint64_t ComputeDefaultMaxBytes() noexcept;
 
+    std::optional<ContextKey> ResolveContextForFileSystem(IFileSystem* fileSystem) const noexcept;
     std::optional<Key> MakeKey(IFileSystem* fileSystem, const std::filesystem::path& folder) const noexcept;
     HRESULT EnsureLoaded(const std::shared_ptr<Entry>& entry, BorrowMode mode) noexcept;
     HRESULT EnsureLoaded(const std::shared_ptr<Entry>& entry, BorrowMode mode, std::stop_token stopToken) noexcept;
@@ -181,8 +234,11 @@ private:
     void UpdateWatchersLocked(std::vector<std::unique_ptr<FolderWatcher>>& watchersToStop) noexcept;
     void StartWatcherLocked(const std::shared_ptr<Entry>& entry, std::vector<std::unique_ptr<FolderWatcher>>& watchersToStop) noexcept;
     void StopWatcherLocked(const std::shared_ptr<Entry>& entry, std::vector<std::unique_ptr<FolderWatcher>>& watchersToStop) noexcept;
+    void RestartContextWatchersLocked(const ContextKey& context, std::vector<std::unique_ptr<FolderWatcher>>& watchersToStop) noexcept;
     void MarkDirtyLocked(const Key& key) noexcept;
-    void PostDirtyNotificationsLocked(const std::shared_ptr<Entry>& entry) noexcept;
+    void MarkDirtyLocked(const std::shared_ptr<Entry>& entry) noexcept;
+    void PostImpactLocked(const std::shared_ptr<Entry>& entry, const DirectoryImpact& impact) noexcept;
+    void PostRefreshLocked(const std::shared_ptr<Entry>& entry) noexcept;
 
     void AddSubscriberLocked(const std::shared_ptr<Entry>& entry, HWND hwnd, UINT message) noexcept;
     void RemoveSubscriberLocked(const std::shared_ptr<Entry>& entry, HWND hwnd, UINT message) noexcept;
@@ -192,7 +248,16 @@ private:
     void AddPinLocked(const std::shared_ptr<Entry>& entry) noexcept;
     void ReleasePinLocked(const std::shared_ptr<Entry>& entry) noexcept;
 
+    void ClearContextLocked(const ContextKey& context, std::vector<std::unique_ptr<FolderWatcher>>& watchersToStop) noexcept;
     std::shared_ptr<Entry> GetOrCreateEntryLocked(const Key& key) noexcept;
+    wil::com_ptr<IFileSystem> ResolveProviderLocked(const ContextKey& context, IFileSystem* preferredFileSystem = nullptr) const noexcept;
+    void OnWatcherNotification(const ContextKey& context, std::wstring watchedFolder, const struct FolderWatcherNotification& notification) noexcept;
+    void NotifyFolderContentsChangedLocked(const ContextKey& context, const std::wstring& normalizedFolder) noexcept;
+    void MarkSubtreeDirtyLocked(const ContextKey& context, const std::wstring& normalizedRootPath) noexcept;
+    void NotifyPathDeletedLocked(const ContextKey& context, const std::wstring& normalizedPath) noexcept;
+    void NotifyPathMovedLocked(const ContextKey& context, const std::wstring& normalizedSourcePath, const std::wstring& normalizedDestinationPath) noexcept;
+    void NotifyBackedContextPathDeletedLocked(const std::wstring& normalizedPath) noexcept;
+    void NotifyBackedContextPathMovedLocked(const std::wstring& normalizedSourcePath, const std::wstring& normalizedDestinationPath) noexcept;
 
     mutable std::mutex _mutex;
     std::atomic<bool> _shuttingDown{false};
@@ -209,5 +274,7 @@ private:
     uint64_t _dirtyMarks   = 0;
 
     std::list<std::shared_ptr<Entry>> _lru;
+    std::unordered_map<ContextKey, ContextState, ContextKeyHash, ContextKeyEq> _contexts;
+    std::unordered_map<IFileSystem*, ContextKey> _providerContexts;
     std::unordered_map<Key, std::shared_ptr<Entry>, KeyHash, KeyEq> _entries;
 };

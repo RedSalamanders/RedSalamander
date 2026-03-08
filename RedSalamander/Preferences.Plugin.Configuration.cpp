@@ -17,7 +17,11 @@
 #include <commctrl.h>
 #include <commdlg.h>
 #include <shobjidl.h>
+
+#pragma warning(push)
+#pragma warning(disable : 6297 28182) // yyjson warnings
 #include <yyjson.h>
+#pragma warning(pop)
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)

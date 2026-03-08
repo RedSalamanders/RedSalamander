@@ -7,7 +7,7 @@
 #include "WindowPlacementPersistence.h"
 
 #include "Helpers.h"
-#include "SettingsSave.h"
+#include "SettingsHotReload.h"
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182) // WIL headers: deleted copy/move and unused inline Helpers
@@ -17,7 +17,11 @@
 #include <CommCtrl.h>
 #include <ShlObj.h>
 #include <Uxtheme.h>
+
+#pragma warning(push)
+#pragma warning(disable : 6297 28182) // yyjson warnings
 #include <yyjson.h>
+#pragma warning(pop)
 
 #include <algorithm>
 #include <limits>
@@ -491,8 +495,7 @@ LRESULT CALLBACK ItemPropertiesWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
             {
                 WindowPlacementPersistence::Save(*toDelete->settings, kItemPropertiesWindowId, hwnd);
 
-                const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(*toDelete->settings);
-                const HRESULT saveHr                            = Common::Settings::SaveSettings(kSettingsAppId, settingsToSave);
+                const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kSettingsAppId, *toDelete->settings);
                 if (FAILED(saveHr))
                 {
                     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kSettingsAppId);

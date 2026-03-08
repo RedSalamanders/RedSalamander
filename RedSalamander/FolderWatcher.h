@@ -3,6 +3,7 @@
 #include <functional>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -17,10 +18,22 @@
 
 #include "PlugInterfaces/FileSystem.h"
 
+struct FolderWatcherNotification
+{
+    struct Change
+    {
+        FileSystemDirectoryChangeAction action = FILESYSTEM_DIR_CHANGE_MODIFIED;
+        std::wstring relativePath;
+    };
+
+    bool overflow = false;
+    std::vector<Change> changes;
+};
+
 class FolderWatcher
 {
 public:
-    using Callback = std::function<void()>;
+    using Callback = std::function<void(const FolderWatcherNotification&)>;
 
     FolderWatcher(wil::com_ptr<IFileSystemDirectoryWatch> directoryWatch, std::wstring folderPath, Callback callback);
     ~FolderWatcher();
@@ -49,7 +62,7 @@ private:
         FolderWatcher* _owner = nullptr;
     };
 
-    void OnPluginDirectoryChanged(bool overflow) noexcept;
+    void OnPluginDirectoryChanged(FolderWatcherNotification notification) noexcept;
 
     std::wstring _folderPath;
     Callback _callback;

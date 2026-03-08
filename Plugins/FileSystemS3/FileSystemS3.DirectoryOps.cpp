@@ -39,6 +39,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateDirectory(const wchar_t* path) noe
     if (IsNotFoundStatus(hrAttr))
     {
         // S3 has no intrinsic directories; creating is a no-op.
+        NotifySyntheticPathCreated(path);
         return S_OK;
     }
 
@@ -160,15 +161,14 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
 
             if (callback != nullptr)
             {
-                const HRESULT progressHr =
-                    callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, path, cookie);
+                const HRESULT progressHr = callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, path, cookie);
                 if (FAILED(progressHr))
                 {
                     result->status = progressHr;
                     return result->status;
                 }
 
-                BOOL cancel = FALSE;
+                BOOL cancel            = FALSE;
                 const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
                 if (FAILED(cancelHr))
                 {
@@ -228,7 +228,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetDirectorySize(
                 return false;
             }
 
-            BOOL cancel = FALSE;
+            BOOL cancel            = FALSE;
             const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
             if (FAILED(cancelHr))
             {

@@ -18,7 +18,11 @@
 #include <commctrl.h>
 #include <commdlg.h>
 #include <shobjidl.h>
+
+#pragma warning(push)
+#pragma warning(disable : 6297 28182) // yyjson warnings
 #include <yyjson.h>
+#pragma warning(pop)
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -31,6 +35,7 @@
 #include "Helpers.h"
 #include "HostServices.h"
 #include "ManagePluginsDialog.h"
+#include "SettingsHotReload.h"
 #include "ThemedControls.h"
 #include "ViewerPluginManager.h"
 #include "WindowMessages.h"
@@ -467,7 +472,9 @@ bool PluginsPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT c
         const std::wstring_view pluginName = GetPluginDisplayName(selected.value());
         const PluginType pluginType        = (selected.value().type == PrefsPluginType::FileSystem) ? PluginType::FileSystem : PluginType::Viewer;
 
+        SettingsHotReload::UnregisterParticipant(dlg);
         const HRESULT hr = EditPluginConfigurationDialog(dlg, pluginType, pluginId, pluginName, *state.settings, state.workingSettings, state.theme);
+        SettingsHotReload::RegisterParticipant(dlg);
         if (hr == S_FALSE)
         {
             return true;

@@ -146,13 +146,15 @@ private:
 class TempFileWriter final : public IFileWriter
 {
 public:
-    TempFileWriter(wil::unique_hfile file,
+    TempFileWriter(FileSystemCurl* owner,
+                   wil::unique_hfile file,
                    FileSystemCurlProtocol protocol,
                    FileSystemCurl::Settings settings,
                    wil::com_ptr<IHostConnections> hostConnections,
                    std::wstring pluginPath,
                    FileSystemFlags flags) noexcept
-        : _file(std::move(file)),
+        : _owner(owner),
+          _file(std::move(file)),
           _protocol(protocol),
           _settings(std::move(settings)),
           _hostConnections(std::move(hostConnections)),
@@ -311,12 +313,17 @@ public:
         }
 
         _committed = true;
+        if (_owner)
+        {
+            _owner->NotifySyntheticPathCreated(_pluginPath);
+        }
         return S_OK;
     }
 
 private:
     ~TempFileWriter() = default;
 
+    FileSystemCurl* _owner = nullptr;
     std::atomic_ulong _refCount{1};
     wil::unique_hfile _file;
     FileSystemCurlProtocol _protocol = FileSystemCurlProtocol::Ftp;
@@ -800,7 +807,10 @@ private:
 class CurlStreamingWriter final : public IFileWriter
 {
 public:
-    CurlStreamingWriter(ConnectionInfo conn, std::wstring remotePath) noexcept : _conn(std::move(conn)), _remotePath(std::move(remotePath))
+    CurlStreamingWriter(FileSystemCurl* owner, ConnectionInfo conn, std::wstring remotePath) noexcept
+        : _owner(owner),
+          _conn(std::move(conn)),
+          _remotePath(std::move(remotePath))
     {
     }
 
@@ -995,6 +1005,10 @@ public:
         if (SUCCEEDED(hr))
         {
             _committed = true;
+            if (_owner)
+            {
+                _owner->NotifySyntheticPathCreated(_remotePath);
+            }
         }
         return hr;
     }
@@ -1141,6 +1155,7 @@ private:
         _cvWritable.notify_all();
     }
 
+    FileSystemCurl* _owner = nullptr;
     std::atomic_ulong _refCount{1};
 
     ConnectionInfo _conn;
@@ -1401,7 +1416,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateFileWriter([[maybe_unused]] cons
 
         if (resolved.connection.protocol != Protocol::Imap)
         {
-            auto* impl = new (std::nothrow) CurlStreamingWriter(resolved.connection, resolved.remotePath);
+            auto* impl = new (std::nothrow) CurlStreamingWriter(this, resolved.connection, resolved.remotePath);
             if (! impl)
             {
                 return E_OUTOFMEMORY;
@@ -1424,7 +1439,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateFileWriter([[maybe_unused]] cons
             return HRESULT_FROM_WIN32(GetLastError());
         }
 
-        auto* impl = new (std::nothrow) TempFileWriter(std::move(file), _protocol, settings, _hostConnections, path, flags);
+        auto* impl = new (std::nothrow) TempFileWriter(this, std::move(file), _protocol, settings, _hostConnections, path, flags);
         if (! impl)
         {
             return E_OUTOFMEMORY;
@@ -1521,12 +1536,12 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateDirectory(const wchar_t* path) n
         settings = _settings;
     }
 
-    return ResolveLocationWithAuthRetry(_protocol,
-                                        settings,
-                                        path,
-                                        _hostConnections.get(),
-                                        true,
-                                        [&](const ResolvedLocation& resolved) noexcept
+    const HRESULT hr = ResolveLocationWithAuthRetry(_protocol,
+                                                    settings,
+                                                    path,
+                                                    _hostConnections.get(),
+                                                    true,
+                                                    [&](const ResolvedLocation& resolved) noexcept
     {
         if (resolved.remotePath == L"/")
         {
@@ -1548,6 +1563,12 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CreateDirectory(const wchar_t* path) n
 
         return hr;
     });
+
+    if (SUCCEEDED(hr))
+    {
+        NotifySyntheticPathCreated(path);
+    }
+    return hr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
@@ -1610,7 +1631,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetDirectorySize(
             return S_OK;
         }
 
-        BOOL cancel = FALSE;
+        BOOL cancel            = FALSE;
         const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
         if (FAILED(cancelHr))
         {

@@ -773,6 +773,7 @@ BEGIN
     IDS_CONNECTIONS_LABEL_PASSPHRASE "Passphrase"
     IDS_CONNECTIONS_LABEL_SECRET_ACCESS_KEY "Secret access key"
     IDS_CONNECTIONS_LABEL_SAVE_PASSWORD "Save password"
+    IDS_CONNECTIONS_LABEL_REMEMBER_SIGN_IN "Remember sign-in"
     IDS_CONNECTIONS_LABEL_REQUIRE_HELLO "Require Windows Hello"
     IDS_CONNECTIONS_LABEL_IGNORE_SSL_TRUST "Ignore trust for SSL"
     IDS_CONNECTIONS_LABEL_ENDPOINT_OVERRIDE "Endpoint override"
@@ -1113,6 +1114,21 @@ BEGIN
                             "Unable to authenticate because no saved password is available for '{}'.\r\n\r\n{}\r\n\r\nOpen Connection Manager and re-enter the password (ensure 'Save password' is enabled)."
     IDS_OVERLAY_MSG_TLS_CERTIFICATE_FAILED_FMT
                             "Unable to establish a secure connection when accessing '{}'.\r\n\r\nThe server's certificate could not be validated. Ensure the certificate chain is trusted on this PC, or fix the server certificate.\r\n\r\n{}"
+    IDS_MICROSOFTDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED "Sign-in can't start"
+    IDS_MICROSOFTDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT
+                            "{0} needs a Microsoft Graph Client ID before it can open the browser sign-in flow.\r\n\r\nOpen Plugins -> Plugin Manager, select '{0}', and set Client ID."
+    IDS_MICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE
+                            "Red Salamander"
+    IDS_MICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS
+                            "You're connected"
+    IDS_MICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS
+                            "Microsoft sign-in is done. Head back to Red Salamander and keep exploring."
+    IDS_MICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE
+                            "We hit a snag"
+    IDS_MICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE
+                            "Microsoft sign-in did not finish cleanly. Return to Red Salamander to review the problem and try again."
+    IDS_MICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT
+                            "This tab can be closed."
     IDS_OVERLAY_MSG_ACCESSING_FOLDER_FMT 
                             "Accessing '{}'.\r\n\r\nThis may take a moment."
     IDS_OVERLAY_MSG_ENUMERATION_CANCELED
@@ -1163,6 +1179,11 @@ BEGIN
     IDS_FMT_PLUGIN_ABOUT             "{}\r\n\r\nId: {}\r\nVersion: {}\r\nPath: {}"
     IDS_MSG_PLUGIN_CONFIG_APPLY_FAILED "Failed to apply plugin configuration."
     IDS_FMT_SETTINGS_SAVE_FAILED     "Failed to save settings to:\r\n\r\n{}\r\n\r\nError: 0x{:08X}\r\n\r\nIf the file is open in another program, close it and try again."
+    IDS_CAPTION_SETTINGS_RELOADED_FROM_DISK "Settings Reloaded"
+    IDS_FMT_SETTINGS_RELOAD_CONFLICT_KEEP_EDITING "Settings changed on disk while '{0}' has unsaved changes.\r\n\r\nYes reloads from disk and discards the current unsaved changes.\r\nNo keeps editing the current unsaved changes."
+    IDS_FMT_SETTINGS_RELOAD_CONFLICT_STALE_SAVE "Settings changed on disk after '{0}' started editing.\r\n\r\nYes overwrites the file with the current unsaved changes.\r\nNo reloads from disk and discards the current unsaved changes.\r\nCancel keeps editing without saving."
+    IDS_CAPTION_SETTINGS_RELOAD_FAILED "Settings Reload Failed"
+    IDS_FMT_SETTINGS_RELOAD_FAILED_KEEP_CURRENT "Failed to reload settings from:\r\n\r\n{0}\r\n\r\nThe application kept the current in-memory settings."
     IDS_MSG_PLUGIN_ADD_INVALID       "The selected DLL does not contain a compatible plugin."
     IDS_MSG_PLUGIN_ADD_DUPLICATE_ID  "A plugin with the same id is already available."
     IDS_MSG_PLUGIN_ADD_FAILED        "Unable to add plugin."

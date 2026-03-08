@@ -182,6 +182,7 @@ public:
 
     [[nodiscard]] std::wstring_view DebugGetFocusedDisplayName() const noexcept;
     [[nodiscard]] bool DebugHasItemDisplayName(std::wstring_view displayName) const noexcept;
+    [[nodiscard]] size_t DebugGetItemCount() const noexcept;
     [[nodiscard]] bool DebugIsItemSelectedByDisplayName(std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetSelectedItemCount() const noexcept;
     [[nodiscard]] bool DebugIsEmptyFolderStateActive() const noexcept;
@@ -306,6 +307,12 @@ public:
         _navigateUpFromRootRequestCallback = std::move(callback);
     }
 #pragma warning(pop)
+
+    using DirectoryImpactCallback = std::function<void(const DirectoryInfoCache::DirectoryImpact&)>;
+    void SetDirectoryImpactCallback(DirectoryImpactCallback callback)
+    {
+        _directoryImpactCallback = std::move(callback);
+    }
 
     using OpenFileRequestCallback = std::function<bool(const std::filesystem::path& path)>;
     void SetOpenFileRequestCallback(OpenFileRequestCallback callback)
@@ -597,11 +604,13 @@ private:
     int8_t _scrollDirectionX    = 0; // -1 = left, 0 = none, 1 = right
 
     // Idle-time layout pre-creation for off-screen items
-    size_t _idleLayoutNextIndex                  = 0; // Next item to process during idle
-    UINT_PTR _idleLayoutTimer                    = 0; // Timer for idle processing
-    static constexpr UINT_PTR kIdleLayoutTimerId = 2;
-    static constexpr UINT kIdleLayoutIntervalMs  = 16; // ~60fps idle processing
-    static constexpr size_t kIdleLayoutBatchSize = 20; // Items per idle batch
+    size_t _idleLayoutNextIndex                             = 0; // Next item to process during idle
+    UINT_PTR _idleLayoutTimer                               = 0; // Timer for idle processing
+    static constexpr UINT_PTR kIdleLayoutTimerId            = 2;
+    UINT_PTR _directoryCacheRefreshTimer                    = 0;
+    static constexpr UINT_PTR kDirectoryCacheRefreshTimerId = 3;
+    static constexpr UINT kIdleLayoutIntervalMs             = 16; // ~60fps idle processing
+    static constexpr size_t kIdleLayoutBatchSize            = 20; // Items per idle batch
     DragContext _drag{};
     bool _swapChainResizePending = false;
     UINT _pendingSwapChainWidth  = 0;
@@ -699,9 +708,9 @@ private:
 
     mutable std::mutex _errorOverlayMutex;
     mutable std::optional<ErrorOverlayState> _errorOverlay;
-    mutable uint64_t _overlayAnimationSubscriptionId = 0;
-    mutable UINT_PTR _overlayTimer                   = 0;
-    mutable UINT _overlayTimerIntervalMs             = 0;
+    mutable uint64_t _overlayAnimationSubscriptionId         = 0;
+    mutable UINT_PTR _overlayTimer                           = 0;
+    mutable UINT _overlayTimerIntervalMs                     = 0;
     mutable uint64_t _operationInfoOverlayAutoDismissDueTick = 0;
 
     struct PendingBusyOverlay
@@ -836,6 +845,7 @@ private:
     // Callback for path changes
     std::function<void(const std::optional<std::filesystem::path>&)> _pathChangedCallback;
     NavigateUpFromRootRequestCallback _navigateUpFromRootRequestCallback;
+    DirectoryImpactCallback _directoryImpactCallback;
     OpenFileRequestCallback _openFileRequestCallback;
     ViewFileRequestCallback _viewFileRequestCallback;
     FileOperationRequestCallback _fileOperationRequestCallback;
@@ -965,6 +975,7 @@ private:
     void OnIconLoaded(size_t itemIndex);
     void OnBatchIconUpdate();
     void OnDirectoryCacheDirty();
+    void OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::DirectoryImpact> impact);
     void RequestRefreshFromCache();
     D2D1_RECT_F OffsetRect(const D2D1_RECT_F& rect, float dx, float dy) const;
     static RECT ToPixelRect(const D2D1_RECT_F& rect, float dpi);

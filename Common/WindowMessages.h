@@ -21,6 +21,7 @@ inline constexpr UINT kFolderViewDirectoryCacheDirty = WM_APP + 0x304;
 inline constexpr UINT kFolderViewBatchIconUpdate     = WM_APP + 0x306;
 inline constexpr UINT kNetworkConnectivityChanged    = WM_APP + 0x305;
 inline constexpr UINT kFolderViewDeferredInit        = WM_APP + 0x307;
+inline constexpr UINT kFolderViewDirectoryImpact     = WM_APP + 0x308;
 
 inline constexpr UINT kEditSuggestResults = WM_APP + 0x350;
 
@@ -54,6 +55,10 @@ inline constexpr UINT kHostUpgradeFtpAnonymousToPassword  = WM_APP + 0x50A;
 inline constexpr UINT kHostGetConnectionJsonUtf8          = WM_APP + 0x50B;
 inline constexpr UINT kConnectionManagerConnect           = WM_APP + 0x50C;
 inline constexpr UINT kHostExecuteInPane                  = WM_APP + 0x50D;
+inline constexpr UINT kHostSetConnectionSecret            = WM_APP + 0x50E;
+inline constexpr UINT kHostDeleteConnectionSecret         = WM_APP + 0x50F;
+inline constexpr UINT kSettingsFileChanged                = WM_APP + 0x511;
+inline constexpr UINT kSettingsReloadedFromDisk           = WM_APP + 0x512;
 
 // Startup milestones (UI thread).
 inline constexpr UINT kAppStartupInputReady = WM_APP + 0x510;

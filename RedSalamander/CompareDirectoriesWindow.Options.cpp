@@ -1,11 +1,46 @@
 #include "Framework.h"
 
 #include "CompareDirectoriesWindow.Internal.h"
+#include "SettingsHotReload.h"
 
 namespace CompareDirectoriesWindowInternal
 {
 namespace
 {
+constexpr wchar_t kSettingsAppId[] = L"RedSalamander";
+
+void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& title, const std::wstring& message) noexcept
+{
+    if (! dlg || message.empty())
+    {
+        return;
+    }
+
+    HostAlertRequest request{};
+    request.version      = 1;
+    request.sizeBytes    = sizeof(request);
+    request.scope        = HOST_ALERT_SCOPE_WINDOW;
+    request.modality     = HOST_ALERT_MODELESS;
+    request.severity     = severity;
+    request.targetWindow = dlg;
+    request.title        = title.empty() ? nullptr : title.c_str();
+    request.message      = message.c_str();
+    request.closable     = TRUE;
+
+    static_cast<void>(HostShowAlert(request));
+}
+
+[[nodiscard]] bool AreEquivalentCompareDirectoriesSettings(const Common::Settings::CompareDirectoriesSettings& a,
+                                                           const Common::Settings::CompareDirectoriesSettings& b) noexcept
+{
+    return a.compareSize == b.compareSize && a.compareDateTime == b.compareDateTime && a.compareAttributes == b.compareAttributes &&
+           a.compareContent == b.compareContent && a.compareSubdirectories == b.compareSubdirectories &&
+           a.compareSubdirectoryAttributes == b.compareSubdirectoryAttributes && a.selectSubdirsOnlyInOnePane == b.selectSubdirsOnlyInOnePane &&
+           a.ignoreFiles == b.ignoreFiles && a.ignoreFilesPatterns == b.ignoreFilesPatterns && a.ignoreDirectories == b.ignoreDirectories &&
+           a.ignoreDirectoriesPatterns == b.ignoreDirectoriesPatterns && a.keepIdenticalItems == b.keepIdenticalItems &&
+           a.showIdenticalItems == b.showIdenticalItems && a.contentCompareWorkerCount == b.contentCompareWorkerCount;
+}
+
 int MeasureStaticTextHeight(HWND referenceWindow, HFONT font, int width, std::wstring_view text) noexcept
 {
     if (! referenceWindow || ! font || width <= 0 || text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
@@ -228,11 +263,13 @@ INT_PTR CALLBACK CompareDirectoriesWindow::OptionsDlgProc(HWND dlg, UINT msg, WP
     {
         case WM_ERASEBKGND: return self->OnOptionsEraseBkgnd(dlg, reinterpret_cast<HDC>(wParam));
         case WM_COMMAND: return self->OnOptionsCommand(dlg, wParam, lParam);
+        case WndMsg::kSettingsReloadedFromDisk: return self->OnOptionsSettingsReloadedFromDisk(dlg);
         case WM_DRAWITEM: return self->OnOptionsDrawItem(reinterpret_cast<const DRAWITEMSTRUCT*>(lParam));
         case WM_CTLCOLOREDIT: return self->OnOptionsCtlColorEdit(reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
         case WM_CTLCOLORDLG: return self->OnOptionsCtlColorDlg(reinterpret_cast<HDC>(wParam));
         case WM_CTLCOLORSTATIC: return self->OnOptionsCtlColorStatic(reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
         case WM_CTLCOLORBTN: return self->OnOptionsCtlColorBtn(reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
+        case WM_NCDESTROY: SettingsHotReload::UnregisterParticipant(dlg); return FALSE;
         default: break;
     }
 
@@ -253,6 +290,7 @@ INT_PTR CompareDirectoriesWindow::OnOptionsInitDialog(HWND dlg) noexcept
         ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
     }
 
+    SettingsHotReload::RegisterParticipant(dlg);
     EnsureOptionsControlsCreated(dlg);
     return TRUE;
 }
@@ -267,6 +305,29 @@ INT_PTR CompareDirectoriesWindow::OnOptionsEraseBkgnd(HWND dlg, HDC hdc) noexcep
     RECT rc{};
     GetClientRect(dlg, &rc);
     FillRect(hdc, &rc, _optionsBackgroundBrush.get());
+    return TRUE;
+}
+
+INT_PTR CompareDirectoriesWindow::OnOptionsSettingsReloadedFromDisk(HWND dlg) noexcept
+{
+    if (IsOptionsDialogDirty())
+    {
+        SettingsHotReload::ExternalReloadChoice choice = SettingsHotReload::ExternalReloadChoice::KeepEditing;
+        const HRESULT promptHr = SettingsHotReload::PromptExternalReloadConflict(dlg, LoadStringResource(nullptr, IDS_COMPARE_DIRECTORIES_TITLE), choice);
+        if (FAILED(promptHr))
+        {
+            Debug::Warning(L"CompareDirectories: failed to prompt for external reload conflict (hr=0x{:08X})", static_cast<unsigned long>(promptHr));
+            return TRUE;
+        }
+
+        if (choice == SettingsHotReload::ExternalReloadChoice::KeepEditing)
+        {
+            _optionsStaleFromExternalReload = true;
+            return TRUE;
+        }
+    }
+
+    ReloadOptionsDialogFromDisk();
     return TRUE;
 }
 
@@ -306,7 +367,25 @@ INT_PTR CompareDirectoriesWindow::OnOptionsCommand([[maybe_unused]] HWND dlg, WP
     switch (controlId)
     {
         case IDOK:
+            if (! ResolveOptionsStaleSaveConflict(dlg))
+            {
+                return TRUE;
+            }
+
             SaveOptionsControlsToSettings();
+            if (_settings)
+            {
+                const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kSettingsAppId, *_settings);
+                if (FAILED(saveHr))
+                {
+                    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kSettingsAppId);
+                    const std::wstring title                 = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+                    const std::wstring message =
+                        FormatStringResource(nullptr, IDS_FMT_SETTINGS_SAVE_FAILED, settingsPath.wstring(), static_cast<unsigned long>(saveHr));
+                    ShowDialogAlert(dlg, HOST_ALERT_ERROR, title, message);
+                    return TRUE;
+                }
+            }
             UpdateViewMenuChecks();
             ShowOptionsPanel(false);
             ScheduleBeginOrRescanCompare();
@@ -1520,6 +1599,41 @@ Common::Settings::CompareDirectoriesSettings CompareDirectoriesWindow::GetEffect
 
     return s;
 }
+Common::Settings::CompareDirectoriesSettings CompareDirectoriesWindow::ReadOptionsControlsToSettings() const noexcept
+{
+    Common::Settings::CompareDirectoriesSettings s = GetEffectiveCompareSettings();
+    if (! _optionsDlg || ! _optionsUi.host)
+    {
+        return s;
+    }
+
+    s.compareSize                   = GetTwoStateToggleState(_optionsUi.compareSize.toggle, _theme.highContrast);
+    s.compareDateTime               = GetTwoStateToggleState(_optionsUi.compareDateTime.toggle, _theme.highContrast);
+    s.compareAttributes             = GetTwoStateToggleState(_optionsUi.compareAttributes.toggle, _theme.highContrast);
+    s.compareContent                = GetTwoStateToggleState(_optionsUi.compareContent.toggle, _theme.highContrast);
+    s.compareSubdirectories         = GetTwoStateToggleState(_optionsUi.compareSubdirectories.toggle, _theme.highContrast);
+    s.compareSubdirectoryAttributes = GetTwoStateToggleState(_optionsUi.compareSubdirAttributes.toggle, _theme.highContrast);
+    s.selectSubdirsOnlyInOnePane    = GetTwoStateToggleState(_optionsUi.selectSubdirsOnlyInOnePane.toggle, _theme.highContrast);
+    s.keepIdenticalItems            = GetTwoStateToggleState(_optionsUi.keepIdenticalItems.toggle, _theme.highContrast);
+    s.ignoreFiles                   = GetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast);
+    s.ignoreDirectories             = GetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast);
+    s.ignoreFilesPatterns = _optionsUi.ignoreFiles.edit ? Win32Text::GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_FILES_PATTERNS) : std::wstring{};
+    s.ignoreDirectoriesPatterns =
+        _optionsUi.ignoreDirectories.edit ? Win32Text::GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_DIRECTORIES_PATTERNS) : std::wstring{};
+
+    if (! s.keepIdenticalItems)
+    {
+        s.showIdenticalItems = false;
+    }
+
+    return s;
+}
+
+bool CompareDirectoriesWindow::IsOptionsDialogDirty() const noexcept
+{
+    return ! AreEquivalentCompareDirectoriesSettings(ReadOptionsControlsToSettings(), GetEffectiveCompareSettings());
+}
+
 void CompareDirectoriesWindow::LoadOptionsControlsFromSettings() noexcept
 {
     if (! _optionsDlg || ! _optionsUi.host)
@@ -1560,30 +1674,45 @@ void CompareDirectoriesWindow::SaveOptionsControlsToSettings() noexcept
         return;
     }
 
-    Common::Settings::CompareDirectoriesSettings s = GetEffectiveCompareSettings();
+    _settings->compareDirectories   = ReadOptionsControlsToSettings();
+    _optionsStaleFromExternalReload = false;
+}
 
-    s.compareSize       = GetTwoStateToggleState(_optionsUi.compareSize.toggle, _theme.highContrast);
-    s.compareDateTime   = GetTwoStateToggleState(_optionsUi.compareDateTime.toggle, _theme.highContrast);
-    s.compareAttributes = GetTwoStateToggleState(_optionsUi.compareAttributes.toggle, _theme.highContrast);
-    s.compareContent    = GetTwoStateToggleState(_optionsUi.compareContent.toggle, _theme.highContrast);
-
-    s.compareSubdirectories         = GetTwoStateToggleState(_optionsUi.compareSubdirectories.toggle, _theme.highContrast);
-    s.compareSubdirectoryAttributes = GetTwoStateToggleState(_optionsUi.compareSubdirAttributes.toggle, _theme.highContrast);
-    s.selectSubdirsOnlyInOnePane    = GetTwoStateToggleState(_optionsUi.selectSubdirsOnlyInOnePane.toggle, _theme.highContrast);
-    s.keepIdenticalItems            = GetTwoStateToggleState(_optionsUi.keepIdenticalItems.toggle, _theme.highContrast);
-
-    s.ignoreFiles         = GetTwoStateToggleState(_optionsUi.ignoreFiles.toggle, _theme.highContrast);
-    s.ignoreDirectories   = GetTwoStateToggleState(_optionsUi.ignoreDirectories.toggle, _theme.highContrast);
-    s.ignoreFilesPatterns = _optionsUi.ignoreFiles.edit ? Win32Text::GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_FILES_PATTERNS) : std::wstring{};
-    s.ignoreDirectoriesPatterns =
-        _optionsUi.ignoreDirectories.edit ? Win32Text::GetDlgItemTextString(_optionsUi.host, IDC_CMP_IGNORE_DIRECTORIES_PATTERNS) : std::wstring{};
-
-    if (! s.keepIdenticalItems)
+bool CompareDirectoriesWindow::ResolveOptionsStaleSaveConflict(HWND dlg) noexcept
+{
+    if (! _optionsStaleFromExternalReload)
     {
-        s.showIdenticalItems = false;
+        return true;
     }
 
-    _settings->compareDirectories = std::move(s);
+    SettingsHotReload::StaleSaveChoice choice = SettingsHotReload::StaleSaveChoice::Cancel;
+    const HRESULT promptHr = SettingsHotReload::PromptStaleSaveConflict(dlg, LoadStringResource(nullptr, IDS_COMPARE_DIRECTORIES_TITLE), choice);
+    if (FAILED(promptHr))
+    {
+        Debug::Warning(L"CompareDirectories: failed to prompt for stale save conflict (hr=0x{:08X})", static_cast<unsigned long>(promptHr));
+        return false;
+    }
+
+    if (choice == SettingsHotReload::StaleSaveChoice::ReloadFromDisk)
+    {
+        ReloadOptionsDialogFromDisk();
+        return false;
+    }
+
+    if (choice == SettingsHotReload::StaleSaveChoice::Cancel)
+    {
+        return false;
+    }
+
+    _optionsStaleFromExternalReload = false;
+    return true;
+}
+
+void CompareDirectoriesWindow::ReloadOptionsDialogFromDisk() noexcept
+{
+    _optionsStaleFromExternalReload = false;
+    LoadOptionsControlsFromSettings();
+    UpdateViewMenuChecks();
 }
 void CompareDirectoriesWindow::UpdateOptionsVisibility() noexcept
 {

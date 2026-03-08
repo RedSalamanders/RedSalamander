@@ -119,10 +119,11 @@ struct TaskSnapshot
     unsigned long errorCount   = 0;
     std::wstring lastDiagnosticMessage;
 
-    bool started                 = false;
-    bool paused                  = false;
-    bool hasProgressCallbacks    = false;
-    ULONGLONG operationStartTick = 0;
+    bool started                       = false;
+    bool paused                        = false;
+    bool hasProgressCallbacks          = false;
+    ULONGLONG lastProgressCallbackTick = 0;
+    ULONGLONG operationStartTick       = 0;
 
     bool waitingForOthers = false;
     bool waitingInQueue   = false;
@@ -150,11 +151,13 @@ struct RateSnapshot
     unsigned long completedItems = 0;
     uint64_t completedBytes      = 0;
     std::wstring currentSourcePath;
-    bool started          = false;
-    bool paused           = false;
-    bool waitingForOthers = false;
-    bool waitingInQueue   = false;
-    bool queuePaused      = false;
+    ULONGLONG lastProgressCallbackTick = 0;
+    ULONGLONG progressStateChangeTick  = 0;
+    bool started                       = false;
+    bool paused                        = false;
+    bool waitingForOthers              = false;
+    bool waitingInQueue                = false;
+    bool queuePaused                   = false;
 };
 
 struct RateHistory
@@ -165,10 +168,17 @@ struct RateHistory
     std::array<float, kMaxSamples> hues{}; // Per-sample hue (0-360) for rainbow mode
     size_t count      = 0;
     size_t writeIndex = 0;
+    bool initialized  = false;
 
-    ULONGLONG lastTick      = 0;
-    uint64_t lastBytes      = 0;
-    unsigned long lastItems = 0;
+    ULONGLONG lastStateChangeTick      = 0;
+    ULONGLONG resumeTick               = 0;
+    ULONGLONG lastProgressCallbackTick = 0;
+    uint64_t lastBytes                 = 0;
+    unsigned long lastItems            = 0;
+
+    ULONGLONG pendingBucketMs      = 0;
+    double pendingWeightedSampleMs = 0.0;
+    float pendingHue               = -1.0f;
 
     float smoothedBytesPerSec = 0.0f;
     float smoothedItemsPerSec = 0.0f;

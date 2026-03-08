@@ -29,6 +29,7 @@ RedSalamander is a Windows dual-pane file manager with:
 ## Specific topics
 
 - [Remote File Systems (FTP/SFTP/SCP/IMAP)](RemoteFileSystems.md)
+- [Cloud Drives (Google Drive / OneDrive / SharePoint)](CloudDrives.md)
 - [S3 / S3 Table](S3AndS3Table.md)
 - [RedSalamanderMonitor (ETW/log viewer)](Monitor.md)
 - [Troubleshooting / Reset](Troubleshooting.md)

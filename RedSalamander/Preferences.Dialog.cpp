@@ -50,8 +50,8 @@
 #include "CommandRegistry.h"
 #include "Helpers.h"
 #include "HostServices.h"
+#include "SettingsHotReload.h"
 #include "SettingsSave.h"
-#include "SettingsSchemaExport.h"
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutText.h"
@@ -696,12 +696,11 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
     return a.value == b.value;
 }
 
-[[nodiscard]] bool AreEquivalentConnectionProfile(const Common::Settings::ConnectionProfile& a,
-                                                  const Common::Settings::ConnectionProfile& b) noexcept
+[[nodiscard]] bool AreEquivalentConnectionProfile(const Common::Settings::ConnectionProfile& a, const Common::Settings::ConnectionProfile& b) noexcept
 {
-    return a.id == b.id && a.name == b.name && a.pluginId == b.pluginId && a.host == b.host && a.port == b.port &&
-           a.initialPath == b.initialPath && a.userName == b.userName && a.authMode == b.authMode && a.savePassword == b.savePassword &&
-           a.requireWindowsHello == b.requireWindowsHello && AreEquivalentJsonValue(a.extra, b.extra);
+    return a.id == b.id && a.name == b.name && a.pluginId == b.pluginId && a.host == b.host && a.port == b.port && a.initialPath == b.initialPath &&
+           a.userName == b.userName && a.authMode == b.authMode && a.savePassword == b.savePassword && a.requireWindowsHello == b.requireWindowsHello &&
+           AreEquivalentJsonValue(a.extra, b.extra);
 }
 
 [[nodiscard]] bool AreEquivalentConnectionsSettings(const std::optional<Common::Settings::ConnectionsSettings>& a,
@@ -716,8 +715,7 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
     const Common::Settings::ConnectionsSettings& left  = a.has_value() ? a.value() : defaults;
     const Common::Settings::ConnectionsSettings& right = b.has_value() ? b.value() : defaults;
 
-    return left.bypassWindowsHello == right.bypassWindowsHello &&
-           left.allowInsecureTlsInAutomation == right.allowInsecureTlsInAutomation &&
+    return left.bypassWindowsHello == right.bypassWindowsHello && left.allowInsecureTlsInAutomation == right.allowInsecureTlsInAutomation &&
            left.windowsHelloReauthTimeoutMinute == right.windowsHelloReauthTimeoutMinute && left.items.size() == right.items.size() &&
            std::ranges::equal(left.items, right.items, [](const auto& lhs, const auto& rhs) noexcept { return AreEquivalentConnectionProfile(lhs, rhs); });
 }
@@ -1100,10 +1098,9 @@ namespace
         merged.plugins = state.workingSettings.plugins;
     }
 
-    Common::Settings::Settings settingsToSave;
-    settingsToSave = SettingsSave::PrepareForSave(merged);
+    Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(merged);
 
-    const HRESULT hr = Common::Settings::SaveSettings(state.appId, settingsToSave);
+    const HRESULT hr = SettingsHotReload::SaveSettingsAndSchema(state.appId, merged);
     if (FAILED(hr))
     {
         const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(state.appId);
@@ -1113,22 +1110,97 @@ namespace
         return hr;
     }
 
-    const HRESULT schemaHr = SaveAggregatedSettingsSchema(state.appId, settingsToSave);
-    if (FAILED(schemaHr))
-    {
-        Debug::Error(L"SaveAggregatedSettingsSchema failed (hr=0x{:08X})", static_cast<unsigned long>(schemaHr));
-    }
-
     state.workingSettings = std::move(settingsToSave);
 
     return S_OK;
 }
 
 void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noexcept;
+void PopulateCategoryTree(HWND dlg, PreferencesDialogState& state) noexcept;
+void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory category) noexcept;
+
+void ReloadPreferencesDialogFromDisk(HWND dlg, PreferencesDialogState& state) noexcept
+{
+    if (! state.settings)
+    {
+        return;
+    }
+
+    state.previewApplied          = false;
+    state.staleFromExternalReload = false;
+    state.baselineSettings        = *state.settings;
+    state.workingSettings         = *state.settings;
+
+    PopulateCategoryTree(dlg, state);
+    RefreshPreferencesDialogTheme(dlg, state);
+    UpdatePageText(dlg, state, state.currentCategory);
+    SetDirty(dlg, state);
+}
+
+[[nodiscard]] bool ResolvePreferencesStaleSaveConflict(HWND dlg, PreferencesDialogState& state) noexcept
+{
+    if (! state.staleFromExternalReload)
+    {
+        return true;
+    }
+
+    SettingsHotReload::StaleSaveChoice choice = SettingsHotReload::StaleSaveChoice::Cancel;
+    const HRESULT promptHr                    = SettingsHotReload::PromptStaleSaveConflict(dlg, LoadStringResource(nullptr, IDS_PREFS_CAPTION), choice);
+    if (FAILED(promptHr))
+    {
+        Debug::Warning(L"Preferences: failed to prompt for stale save conflict (hr=0x{:08X})", static_cast<unsigned long>(promptHr));
+        return false;
+    }
+
+    if (choice == SettingsHotReload::StaleSaveChoice::ReloadFromDisk)
+    {
+        ReloadPreferencesDialogFromDisk(dlg, state);
+        return false;
+    }
+
+    if (choice == SettingsHotReload::StaleSaveChoice::Cancel)
+    {
+        return false;
+    }
+
+    state.staleFromExternalReload = false;
+    return true;
+}
+
+INT_PTR OnSettingsReloadedFromDisk(HWND dlg, PreferencesDialogState& state) noexcept
+{
+    state.previewApplied = false;
+    RefreshPreferencesDialogTheme(dlg, state);
+
+    if (state.dirty)
+    {
+        SettingsHotReload::ExternalReloadChoice choice = SettingsHotReload::ExternalReloadChoice::KeepEditing;
+        const HRESULT promptHr = SettingsHotReload::PromptExternalReloadConflict(dlg, LoadStringResource(nullptr, IDS_PREFS_CAPTION), choice);
+        if (FAILED(promptHr))
+        {
+            Debug::Warning(L"Preferences: failed to prompt for external reload conflict (hr=0x{:08X})", static_cast<unsigned long>(promptHr));
+            return TRUE;
+        }
+
+        if (choice == SettingsHotReload::ExternalReloadChoice::KeepEditing)
+        {
+            state.staleFromExternalReload = true;
+            return TRUE;
+        }
+    }
+
+    ReloadPreferencesDialogFromDisk(dlg, state);
+    return TRUE;
+}
 
 void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
 {
     if (! dlg || ! state.settings)
+    {
+        return;
+    }
+
+    if (! ResolvePreferencesStaleSaveConflict(dlg, state))
     {
         return;
     }
@@ -1141,9 +1213,10 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
 
     const bool pluginsChanged = ! AreEquivalentPluginsSettings(state.baselineSettings.plugins, state.workingSettings.plugins);
 
-    *state.settings        = state.workingSettings;
-    state.baselineSettings = state.workingSettings;
-    state.previewApplied   = false;
+    *state.settings               = state.workingSettings;
+    state.baselineSettings        = state.workingSettings;
+    state.previewApplied          = false;
+    state.staleFromExternalReload = false;
 
     state.appliedOnce = true;
     SetDirty(dlg, state);
@@ -3119,6 +3192,7 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
     }
 
     SetState(dlg, state);
+    SettingsHotReload::RegisterParticipant(dlg);
 
     SetWindowTextW(dlg, LoadStringResource(nullptr, IDS_PREFS_CAPTION).c_str());
     if (HWND ok = GetDlgItem(dlg, IDOK))
@@ -3651,6 +3725,12 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 InvalidateRect(dlg, nullptr, TRUE);
             }
             return TRUE;
+        case WndMsg::kSettingsReloadedFromDisk:
+            if (state)
+            {
+                return OnSettingsReloadedFromDisk(dlg, *state);
+            }
+            return TRUE;
         case WM_SETTINGCHANGE:
         case WM_THEMECHANGED:
         case WM_DWMCOLORIZATIONCOLORCHANGED:
@@ -3695,13 +3775,13 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             {
                 std::unique_ptr<PreferencesDialogHost> stateOwner;
                 stateOwner.reset(static_cast<PreferencesDialogHost*>(state));
+                SettingsHotReload::UnregisterParticipant(dlg);
 
                 if (state->settings)
                 {
                     WindowPlacementPersistence::Save(*state->settings, kPreferencesWindowId, dlg);
 
-                    const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(*state->settings);
-                    const HRESULT saveHr                            = Common::Settings::SaveSettings(state->appId, settingsToSave);
+                    const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(state->appId, *state->settings);
                     if (FAILED(saveHr))
                     {
                         const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(state->appId);

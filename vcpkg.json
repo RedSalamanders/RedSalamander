@@ -42,7 +42,8 @@
       "features": [
         "ssl",
         "ssh",
-        "brotli"
+        "brotli",
+        "http2"
       ]
     },
     {

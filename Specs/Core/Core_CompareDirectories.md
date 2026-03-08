@@ -245,6 +245,17 @@ All options persist under:
 
 Settings are loaded when the compare window opens and saved on Options → OK.
 
+### External settings reload while Options is open
+
+The Compare Directories **Options** panel participates in the shared settings-editor registry used by live settings reload.
+
+Behavior:
+- Clean options panel: controls reload from the newly applied `compareDirectories` defaults immediately.
+- Dirty options panel: prompt `Reload from disk` / `Keep editing`.
+- `Keep editing` marks the panel stale.
+- A stale panel must prompt on the next `OK` with `Overwrite disk` / `Reload from disk` / `Cancel`.
+- `Options → OK` persists the updated `compareDirectories` defaults to the main settings file immediately before restarting the compare run.
+
 ## Differences Model
 
 For each relative folder, the engine computes an item decision per (normalized) name:

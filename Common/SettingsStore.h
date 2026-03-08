@@ -234,6 +234,8 @@ enum class ConnectionAuthMode : uint8_t
     Anonymous,
     Password,
     SshKey,
+    OAuth2Pkce,
+    OAuth2Interactive = OAuth2Pkce,
 };
 
 struct ConnectionProfile
@@ -525,6 +527,17 @@ struct Settings
     std::optional<SelectionMasksSettings> selectionMasks;
 };
 
+struct SettingsFileStamp
+{
+    uint32_t volumeSerialNumber = 0;
+    uint64_t fileIndexHigh      = 0;
+    uint64_t fileIndexLow       = 0;
+    uint64_t lastWriteTime      = 0;
+    uint64_t fileSize           = 0;
+
+    bool operator==(const SettingsFileStamp&) const noexcept = default;
+};
+
 COMMON_API std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept;
 COMMON_API std::filesystem::path GetSettingsSchemaPath(std::wstring_view appId) noexcept;
 
@@ -535,6 +548,21 @@ COMMON_API std::string_view GetSettingsStoreSchemaJsonUtf8() noexcept;
 // - S_OK: loaded successfully
 // - S_FALSE: defaults used (missing/invalid/unreadable)
 COMMON_API HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept;
+
+// Returns:
+// - S_OK: loaded successfully
+// - S_FALSE: file missing
+// - failure HRESULT: file unreadable / invalid JSON / unsupported schema version
+//
+// Unlike LoadSettings(...), this does not back up bad files and does not silently
+// fall back to defaults when the on-disk file is invalid.
+COMMON_API HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexcept;
+
+// Returns:
+// - S_OK: stamp retrieved successfully
+// - S_FALSE: file missing
+// - failure HRESULT: unexpected I/O error while querying the file
+COMMON_API HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept;
 
 COMMON_API HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept;
 

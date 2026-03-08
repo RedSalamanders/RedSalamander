@@ -987,11 +987,55 @@ void FolderView::OnDirectoryCacheDirty()
     constexpr ULONGLONG kDebounceMs = 200;
     if (_lastDirectoryCacheRefreshTick != 0 && now - _lastDirectoryCacheRefreshTick < kDebounceMs)
     {
-        return;
+        const ULONGLONG remaining = kDebounceMs - (now - _lastDirectoryCacheRefreshTick);
+        const UINT intervalMs     = static_cast<UINT>(std::clamp<ULONGLONG>(remaining, 1u, kDebounceMs));
+        const UINT_PTR timer      = SetTimer(_hWnd.get(), kDirectoryCacheRefreshTimerId, intervalMs, nullptr);
+        if (timer != 0)
+        {
+            _directoryCacheRefreshTimer = timer;
+            return;
+        }
+    }
+
+    if (_directoryCacheRefreshTimer != 0)
+    {
+        KillTimer(_hWnd.get(), kDirectoryCacheRefreshTimerId);
+        _directoryCacheRefreshTimer = 0;
     }
 
     _lastDirectoryCacheRefreshTick = now;
     RequestRefreshFromCache();
+}
+
+void FolderView::OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::DirectoryImpact> impact)
+{
+    if (! impact)
+    {
+        return;
+    }
+
+    switch (impact->kind)
+    {
+        case DirectoryInfoCache::DirectoryImpact::Kind::RefreshCurrentFolder: OnDirectoryCacheDirty(); return;
+        case DirectoryInfoCache::DirectoryImpact::Kind::RelocateCurrentFolder:
+        case DirectoryInfoCache::DirectoryImpact::Kind::RetargetInstanceContext:
+        case DirectoryInfoCache::DirectoryImpact::Kind::ExitInstanceContext:
+            if (_directoryImpactCallback)
+            {
+                _directoryImpactCallback(*impact);
+                return;
+            }
+
+            if (impact->kind == DirectoryInfoCache::DirectoryImpact::Kind::RelocateCurrentFolder && ! impact->targetFolder.empty())
+            {
+                if (! impact->focusDisplayName.empty())
+                {
+                    RememberFocusedItemForFolder(impact->targetFolder, impact->focusDisplayName);
+                }
+                SetFolderPath(impact->targetFolder);
+            }
+            return;
+    }
 }
 
 void FolderView::RequestRefreshFromCache()

@@ -670,15 +670,13 @@ void AdvancedPane::LayoutControls(HWND host, PreferencesDialogState& state, int 
         y += cardHeight + cardSpacingY;
     };
 
-    const std::wstring labelBypassHelloText  = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_BYPASS_HELLO);
-    const std::wstring labelAllowInsecureTlsAutomationText =
-        LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION);
-    const std::wstring labelHelloTimeoutText = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_HELLO_TIMEOUT);
+    const std::wstring labelBypassHelloText                = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_BYPASS_HELLO);
+    const std::wstring labelAllowInsecureTlsAutomationText = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION);
+    const std::wstring labelHelloTimeoutText               = LoadStringResource(nullptr, IDS_PREFS_ADV_LABEL_CONNECTIONS_HELLO_TIMEOUT);
 
-    const std::wstring descBypassHelloText  = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_CONNECTIONS_BYPASS_HELLO);
-    const std::wstring descAllowInsecureTlsAutomationText =
-        LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION);
-    const std::wstring descHelloTimeoutText = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_CONNECTIONS_HELLO_TIMEOUT);
+    const std::wstring descBypassHelloText                = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_CONNECTIONS_BYPASS_HELLO);
+    const std::wstring descAllowInsecureTlsAutomationText = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION);
+    const std::wstring descHelloTimeoutText               = LoadStringResource(nullptr, IDS_PREFS_ADV_DESC_CONNECTIONS_HELLO_TIMEOUT);
 
     layoutToggleCard(state.advancedConnectionsBypassHelloLabel.get(),
                      labelBypassHelloText,
@@ -1409,15 +1407,14 @@ bool AdvancedPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT 
 
     if (notifyCode == BN_CLICKED)
     {
-        const bool isToggle = (commandId == IDC_PREFS_ADV_CONNECTIONS_BYPASS_HELLO_TOGGLE ||
-                               commandId == IDC_PREFS_ADV_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION_TOGGLE ||
-                               commandId == IDC_PREFS_ADV_MONITOR_TOOLBAR_TOGGLE ||
-                               commandId == IDC_PREFS_ADV_MONITOR_LINE_NUMBERS_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_ALWAYS_ON_TOP_TOGGLE ||
-                               commandId == IDC_PREFS_ADV_MONITOR_SHOW_IDS_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_AUTO_SCROLL_TOGGLE ||
-                               commandId == IDC_PREFS_ADV_MONITOR_FILTER_TEXT_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_FILTER_ERROR_TOGGLE ||
-                               commandId == IDC_PREFS_ADV_MONITOR_FILTER_WARNING_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_FILTER_INFO_TOGGLE ||
-                               commandId == IDC_PREFS_ADV_MONITOR_FILTER_DEBUG_TOGGLE || commandId == IDC_PREFS_ADV_FILEOPS_DIAG_INFO_TOGGLE ||
-                               commandId == IDC_PREFS_ADV_FILEOPS_DIAG_DEBUG_TOGGLE);
+        const bool isToggle =
+            (commandId == IDC_PREFS_ADV_CONNECTIONS_BYPASS_HELLO_TOGGLE || commandId == IDC_PREFS_ADV_CONNECTIONS_ALLOW_INSECURE_TLS_AUTOMATION_TOGGLE ||
+             commandId == IDC_PREFS_ADV_MONITOR_TOOLBAR_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_LINE_NUMBERS_TOGGLE ||
+             commandId == IDC_PREFS_ADV_MONITOR_ALWAYS_ON_TOP_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_SHOW_IDS_TOGGLE ||
+             commandId == IDC_PREFS_ADV_MONITOR_AUTO_SCROLL_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_FILTER_TEXT_TOGGLE ||
+             commandId == IDC_PREFS_ADV_MONITOR_FILTER_ERROR_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_FILTER_WARNING_TOGGLE ||
+             commandId == IDC_PREFS_ADV_MONITOR_FILTER_INFO_TOGGLE || commandId == IDC_PREFS_ADV_MONITOR_FILTER_DEBUG_TOGGLE ||
+             commandId == IDC_PREFS_ADV_FILEOPS_DIAG_INFO_TOGGLE || commandId == IDC_PREFS_ADV_FILEOPS_DIAG_DEBUG_TOGGLE);
         if (! isToggle)
         {
             return false;

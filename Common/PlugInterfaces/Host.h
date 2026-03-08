@@ -117,8 +117,9 @@ interface __declspec(uuid("afb5a715-1110-41f3-b7bb-133d6ca735fd")) __declspec(no
 
 enum HostConnectionSecretKind : uint32_t
 {
-    HOST_CONNECTION_SECRET_PASSWORD           = 1,
-    HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE = 2
+    HOST_CONNECTION_SECRET_PASSWORD            = 1,
+    HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE  = 2,
+    HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN = 3,
 };
 
 struct HostConnectionManagerRequest
@@ -166,7 +167,7 @@ interface __declspec(uuid("018b09cf-dd4e-47ac-b013-baef06220cff")) __declspec(no
     // Callers must free it with CoTaskMemFree().
     virtual HRESULT STDMETHODCALLTYPE GetConnectionJsonUtf8(const wchar_t* connectionName, char** jsonUtf8) noexcept = 0;
 
-    // Returns the requested secret (password/passphrase), optionally protected by Windows Hello (host policy).
+    // Returns the requested secret (password/passphrase/refresh-token), optionally protected by Windows Hello (host policy).
     // On success, the host allocates a NUL-terminated UTF-16 string with CoTaskMemAlloc and stores it in *secretOut.
     // Callers must free it with CoTaskMemFree().
     //
@@ -177,10 +178,13 @@ interface __declspec(uuid("018b09cf-dd4e-47ac-b013-baef06220cff")) __declspec(no
 
     // Prompts the user (themed) for a secret (password/passphrase) and stores it in a per-session in-memory cache keyed
     // by (connectionId, secretKind). The secret is NOT persisted to WinCred.
+    // HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN is not promptable.
     //
     // Returns:
     // - S_OK: secretOut is non-null (may be empty for SSH key passphrase to indicate "no passphrase")
     // - S_FALSE: user cancelled (secretOut is null)
+    //
+    // Only password/passphrase secret kinds are promptable.
     virtual HRESULT STDMETHODCALLTYPE PromptForConnectionSecret(
         const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut) noexcept = 0;
 
@@ -196,6 +200,18 @@ interface __declspec(uuid("018b09cf-dd4e-47ac-b013-baef06220cff")) __declspec(no
     // - S_OK: profile updated and a session password is available
     // - S_FALSE: user cancelled
     virtual HRESULT STDMETHODCALLTYPE UpgradeFtpAnonymousToPassword(const wchar_t* connectionName, HWND ownerWindow) noexcept = 0;
+
+    // Stores a secret for a saved connection.
+    //
+    // - persist == TRUE: persist to WinCred when supported by the host/profile.
+    // - persist == FALSE: keep it in the host's per-session in-memory cache only.
+    //
+    // secret must be non-null. An empty string clears the session value and, when persist == TRUE, deletes persisted storage.
+    virtual HRESULT STDMETHODCALLTYPE SetConnectionSecret(
+        const wchar_t* connectionName, HostConnectionSecretKind kind, const wchar_t* secret, BOOL persist) noexcept = 0;
+
+    // Deletes any cached and/or persisted secret for a saved connection.
+    virtual HRESULT STDMETHODCALLTYPE DeleteConnectionSecret(const wchar_t* connectionName, HostConnectionSecretKind kind, BOOL deletePersisted) noexcept = 0;
 };
 
 enum HostPaneExecuteFlags : uint32_t

@@ -271,6 +271,7 @@
     <ClInclude Include="ConnectionCredentialPromptDialog.h" />
     <ClInclude Include="NavigationLocation.h" />
     <ClInclude Include="SettingsSave.h" />
+    <ClInclude Include="SettingsHotReload.h" />
     <ClInclude Include="WindowMaximizeBehavior.h" />
     <ClInclude Include="WindowPlacementPersistence.h" />
     <ClInclude Include="WindowsHello.h" />
@@ -413,6 +414,7 @@
     <ClCompile Include="Preferences.Viewers.cpp" />
     <ClCompile Include="StartupMetrics.cpp" />
     <ClCompile Include="SettingsSchemaParser.cpp" />
+    <ClCompile Include="SettingsHotReload.cpp" />
     <ClCompile Include="ShortcutsWindow.cpp" />
     <ClCompile Include="RedSalamander.cpp" />
     <ClCompile Include="SettingsSchemaExport.cpp" />

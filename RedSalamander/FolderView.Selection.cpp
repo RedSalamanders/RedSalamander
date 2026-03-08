@@ -957,6 +957,11 @@ bool FolderView::DebugHasItemDisplayName(std::wstring_view displayName) const no
     return false;
 }
 
+size_t FolderView::DebugGetItemCount() const noexcept
+{
+    return _items.size();
+}
+
 bool FolderView::DebugIsItemSelectedByDisplayName(std::wstring_view displayName) const noexcept
 {
     if (displayName.empty())

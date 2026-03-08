@@ -43,12 +43,13 @@ FolderWindow uses `IFileSystem` plugins selected per-pane:
 - Plugins that need a per-instance “mount context” (archives, FTP, S3, etc.) use: `<shortId>:<instanceContext>|<pluginPath>`.
   - Example: `7z:C:\\Downloads\\archive.zip|/` mounts `archive.zip` as the root and passes `/` to the plugin.
   - `|` is chosen as the delimiter because it is not valid in Windows paths.
-  - When the mount context changes and the plugin supports `IFileSystemInitialize`, FolderWindow calls `Initialize()` and clears cached enumerations for that instance.
+  - When the mount context changes and the plugin supports `IFileSystemInitialize`, FolderWindow calls `Initialize()` and re-registers the provider in `DirectoryInfoCache`.
+  - Cache and watch state are keyed by logical context (`pluginId + normalized instanceContext`), so panes sharing the same mount context also share cache/watch state even if they use different live COM instances.
 - If no prefix is present:
   - Windows absolute paths (`C:\...`, `\\server\share\...`, `\\server\`, `\\?\...`) are routed to `file`.
   - Otherwise the pane keeps its current plugin and interprets the path as that plugin’s path.
 - If the prefix is unknown or the plugin is unavailable, FolderWindow falls back to the default plugin (`plugins.currentFileSystemPluginId`, typically `builtin/file-system`).
-- When a pane switches plugins, FolderWindow cancels enumeration for that pane and (if the previous plugin is no longer used by any pane) purges `DirectoryInfoCache` entries for the old plugin to allow safe DLL unload.
+- When a pane switches plugins, FolderWindow cancels enumeration for that pane and unregisters the previous provider from `DirectoryInfoCache`. Logical-context state drains only when the last provider for that context goes away.
 - When switching to the `file` plugin, non-absolute paths are replaced with the default Windows drive root.
 - FolderWindow maintains both:
   - A **canonical location** string for persistence/history (`file`: Windows path; non-`file`: `<shortId>:<pluginPath>` or `<shortId>:<instanceContext>|<pluginPath>`).
@@ -68,6 +69,20 @@ FolderWindow also recognizes host-reserved, non-plugin prefixes for Connection M
 
 Navigation notes:
 - `/@conn:<connectionName>/` is treated as a terminal root; navigate-up does not climb above it.
+
+## Cross-Pane Mutation Propagation
+
+Visible pane correctness is mandatory across all built-in file system plugins.
+
+- Watchers are an invalidation source, not the source of truth.
+- Successful host-side mutations and watch callbacks are routed through `DirectoryInfoCache`, which posts a directory-impact payload to visible panes.
+- If a visible folder's direct child list changes, `FolderView` refreshes automatically with local debounce.
+- If the current folder or one of its ancestors is deleted or moved away, `FolderWindow` relocates the pane to the nearest surviving ancestor in the same logical context.
+- If no ancestor survives, the pane falls back to the plugin root.
+- When a mounted context resolves to a Windows backing path, local file-system rename or move retargets the mount and keeps the internal plugin path when possible.
+- When that backing item is deleted, the pane exits the mount and navigates to the nearest surviving local ancestor or the default local root.
+- Focus memory is preserved where possible so cross-pane updates feel stable instead of jumping to an unrelated item.
+- Off-screen folders may be marked dirty without eager re-enumeration.
 
 ## Error UI
 

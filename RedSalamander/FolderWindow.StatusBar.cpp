@@ -1,12 +1,12 @@
 #include "FolderWindowInternal.h"
 
-#include "FluentIcons.h"
 #include "ConnectionProfileUtils.h"
+#include "FluentIcons.h"
 #include "SettingsStore.h"
 
 namespace
 {
-constexpr int kStatusBarFocusLineHeightDip = 2;
+constexpr int kStatusBarFocusLineHeightDip      = 2;
 constexpr int kStatusBarSecurityMinPartWidthDip = 90;
 constexpr int kStatusBarSecurityMaxPartWidthDip = 240;
 
@@ -87,7 +87,7 @@ void UpdateStatusBarParts(HWND hwnd) noexcept
     const int minSortPartWidth = MulDiv(kStatusBarSortMinPartWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
     const int sortWidth        = std::clamp(minSortPartWidth, 0, width);
 
-    int securityWidth = 0;
+    int securityWidth        = 0;
     const auto* securityText = reinterpret_cast<const std::wstring*>(GetPropW(hwnd, kStatusBarSecurityTextProp));
     if (securityText && ! securityText->empty() && width > sortWidth)
     {

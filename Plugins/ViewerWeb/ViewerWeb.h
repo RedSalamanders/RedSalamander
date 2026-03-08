@@ -132,8 +132,10 @@ private:
     void PrepareMenuTheme(HMENU menu, bool topLevel, std::vector<MenuItemData>& outItems) noexcept;
 
     HRESULT EnsureWebView2(HWND hwnd) noexcept;
+    HRESULT CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment) noexcept;
     void DiscardWebView2() noexcept;
-    void UpdateWebViewTheme() noexcept;
+    void ConfigureWebViewSettings() noexcept;
+    void ApplyWebViewThemeScript() noexcept;
 
     HRESULT OpenPath(HWND hwnd, const std::wstring& path, bool updateOtherFiles) noexcept;
     void RefreshFileCombo(HWND hwnd) noexcept;
@@ -209,7 +211,6 @@ private:
     bool _markdownShowSource    = false;
     bool _webViewInitInProgress = false;
 
-    wil::com_ptr<ICoreWebView2Environment> _webViewEnvironment;
     wil::com_ptr<ICoreWebView2Controller> _webViewController;
     wil::com_ptr<ICoreWebView2> _webView;
 
