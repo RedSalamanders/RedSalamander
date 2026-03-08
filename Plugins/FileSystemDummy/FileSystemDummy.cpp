@@ -5258,15 +5258,15 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
         if (entryThreshold || timeThreshold)
         {
             lastProgressTime = now;
-            const HRESULT progressHr = callback->DirectorySizeProgress(
-                scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
+            const HRESULT progressHr =
+                callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
             if (FAILED(progressHr))
             {
                 result->status = progressHr;
                 return false;
             }
 
-            BOOL cancel = FALSE;
+            BOOL cancel            = FALSE;
             const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
             if (FAILED(cancelHr))
             {
@@ -5458,7 +5458,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDirectorySize(
             {
                 if (callback != nullptr)
                 {
-                    BOOL cancel = FALSE;
+                    BOOL cancel            = FALSE;
                     const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
                     if (FAILED(cancelHr))
                     {

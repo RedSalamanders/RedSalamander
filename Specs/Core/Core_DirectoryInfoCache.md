@@ -2,158 +2,217 @@
 
 ## Overview
 
-`DirectoryInfoCache` is an **app-global** (process-wide) cache that stores directory enumeration snapshots (`IFilesInformation`) returned by the `IFileSystem` plugin.
+`DirectoryInfoCache` is an app-global cache for folder enumeration snapshots (`IFilesInformation`) returned by `IFileSystem`.
 
-Goals:
-- Share `IFilesInformation` results across **all views** (FolderView / NavigationView, and all windows).
-- Avoid redundant `IFileSystem::ReadDirectoryInfo()` calls when the same folder is requested multiple times.
-- Bound memory usage via **LRU eviction by bytes**, using `IFilesInformation::GetAllocatedSize()` as the per-entry weight.
-- Integrate change notifications via `FolderWatcher` to mark cached entries as **dirty** and notify visible views.
+Its job is no longer just cache reuse. It is also the host-side mutation router that keeps visible panes coherent across:
 
-Non-goals (v1):
-- No incremental patching/diffing of directory snapshots (refresh is full re-enumeration).
-- No persistent cache across process restarts.
+- multiple panes
+- multiple windows
+- multiple live `IFileSystem` COM instances for the same plugin context
+- mounted file systems whose backing path changes in the local file system
 
-## Key Concepts
+## Goals
 
-### Cache Key
+- Share directory snapshots across views and windows.
+- Key cache state by logical plugin context instead of raw COM identity.
+- Bound memory by LRU-by-bytes eviction.
+- Keep visible folders correct after direct and indirect mutations.
+- Use watchers for invalidation, not as the only correctness mechanism.
 
-Each cache entry is identified by:
-- `IFileSystem*` pointer identity (so different plugins do not share entries)
-- a **normalized absolute folder path** (Windows-style `\` separators, no trailing `\` except drive roots)
+## Cache Identity
 
-Path comparisons are case-insensitive (Windows semantics).
+### Logical context key
 
-### Snapshot Weight (bytes)
+Each entry is keyed by:
 
-Each cached entry has a byte weight:
+- `pluginId`
+- normalized `instanceContext`
+- normalized folder path
+
+`IFileSystem*` is only a provider handle. `RegisterProvider(...)` and `UnregisterProvider(...)` maintain the mapping from one or more live COM objects to a logical context.
+
+This means:
+
+- two panes using different COM instances for the same plugin and mount context still share cache and watch state
+- a context is cleared only when its last registered provider disappears
+
+### Path normalization
+
+- Paths are normalized before lookup.
+- Key comparisons are case-insensitive.
+- For mounted plugins, the folder path is the plugin path. The mount identity lives in `instanceContext`.
+
+## Snapshot Weight And Eviction
+
 - `entryBytes = IFilesInformation::GetAllocatedSize()`
+- eviction order is MRU to LRU by bytes
+- pinned or borrowed entries are not evicted
 
-This intentionally tracks the buffer capacity owned by the plugin result object (not `GetBufferSize()`), because it is the value that directly impacts memory pressure.
+If the cache cannot get under budget because visible folders are pinned, it remains over budget until pressure drops.
 
-### LRU-by-bytes eviction
+## Public Host API Shape
 
-The cache maintains an MRU→LRU list.
-
-When inserting or refreshing an entry causes `currentBytes > maxBytes`, the cache evicts from the LRU end until under the limit.
-
-**Pinned** or **borrowed** entries are not evicted:
-- **Pinned**: folder currently displayed in any FolderView (`pinCount > 0`)
-- **Borrowed**: temporary read access (`borrowCount > 0`)
-
-If the cache is over budget but cannot evict enough due to pinned/borrowed entries, it stays over budget (and logs telemetry).
-
-## API Shape (host-side)
-
-### Borrowed access (short-lived)
-
-- Used for background enumeration (FolderView worker thread)
-- Used for synchronous consumers that do not want to hold a long-lived reference
+### Borrowed access
 
 `BorrowDirectoryInfo(fileSystem, folder, mode)`:
-- `BorrowMode::AllowEnumerate`: cache miss/dirty triggers `ReadDirectoryInfo()`
-- `BorrowMode::CacheOnly`: never enumerates; returns `S_OK` only if a snapshot exists
 
-The returned `Borrowed` handle:
-- holds `borrowCount` while alive
-- guarantees the underlying snapshot cannot be evicted during that time
+- `BorrowMode::AllowEnumerate`
+- `BorrowMode::CacheOnly`
 
-### Pinned folders (on-screen)
+Borrowed handles keep the snapshot alive and non-evictable for the duration of use.
 
-FolderView pins the currently displayed folder:
-- `PinFolder(fileSystem, folder, hwnd, message)`
+Pure cache borrows do not automatically attach a watcher. In the reference implementation, watcher attachment is a visible-pane decision by default.
 
-Pinning:
+### Visible pinning
+
+`PinFolder(fileSystem, folder, hwnd, message)`:
+
 - increments `pinCount`
-- registers `(hwnd, message)` as a subscriber for “folder dirty” notifications
-- enables watchers for pinned folders (subject to watcher limits)
+- subscribes the visible pane to directory impacts
+- makes the folder eligible for mandatory watch coverage
 
-Unpinning:
-- decrements `pinCount`
-- removes the subscriber
+Pinned panes now receive `WndMsg::kFolderViewDirectoryImpact` payloads, not a raw dirty ping.
 
-### Clearing entries for a plugin (v2)
+### Provider lifecycle
 
-When switching/unloading file system plugins, the host may purge cached snapshots for a specific `IFileSystem*`:
-- `ClearForFileSystem(fileSystem)`
+`RegisterProvider(...)`:
 
-This drops cached `IFilesInformation` instances (and stops any watchers) for the specified plugin, so the DLL can be safely unloaded.
+- associates a live `IFileSystem*` with a logical context
+- allows cache/watch sharing across instances
 
-## Change Notifications (FolderWatcher + plugin watch)
+`UnregisterProvider(...)`:
 
-### Watch selection policy
+- removes the live provider
+- clears the logical context only if no providers remain
 
-Watchers are created for:
-- all pinned entries first (most important: visible folders)
-- plus up to `mruWatched` additional MRU entries (best-effort),
-  while respecting `maxWatchers`
+`ClearForFileSystem(...)` remains available for explicit host purges, but the normal lifetime is driven by provider registration.
 
-### Preferred mechanism
+## Mutation Routing
 
-`DirectoryInfoCache` uses `IFileSystemDirectoryWatch` (queried from the active `IFileSystem` instance) to watch folders, including virtual file systems like `FileSystemDummy`.
+All mutation sources now flow through the same router:
 
-This includes the built-in local file system plugin (`builtin/file-system`), which implements `IFileSystemDirectoryWatch` internally using Win32 directory change notifications.
+- watcher callbacks
+- host-side create/copy/move/delete/rename completions
+- cross-file-system bridge operations
+- backing-path dependency hits from local `file:` changes
 
-If the interface is not present (or `WatchDirectory` fails), the folder is treated as **not watched** and the UI uses explicit `ForceRefresh()` fallbacks after mutations.
+The router exposes:
 
-### Dirty marking
+- `NotifyFolderContentsChanged(...)`
+- `NotifyPathCreated(...)`
+- `NotifyPathDeleted(...)`
+- `NotifyPathMoved(...)`
 
-When a watcher receives any change notification:
-- mark the corresponding cache entry as `dirty`
-- post `message` to all subscribers via `PostMessageW(hwnd, message, 0, 0)`
-- coalesce notifications: only one “dirty” message is posted per dirty state (`notifyPosted`)
+## Directory Impacts
 
-Consumers decide when to refresh (FolderView schedules a background refresh with debouncing).
+The router emits one of four payloads:
 
-## FolderView Integration
+- `RefreshCurrentFolder`
+- `RelocateCurrentFolder`
+- `RetargetInstanceContext`
+- `ExitInstanceContext`
 
-- FolderView pins the currently displayed folder via `DirectoryInfoCache::PinFolder(...)`.
-- FolderView enumerations use `BorrowMode::AllowEnumerate` to fetch the snapshot:
-  - cache hit: reuse existing snapshot
-  - cache miss/dirty: perform `ReadDirectoryInfo()` once and share the result with other views
-- FolderView receives `WndMsg::kFolderViewDirectoryCacheDirty` (`WM_APP + 0x304`) and schedules a refresh without clearing current items (debounced).
-- When a folder is actively watched (`DirectoryInfoCache::IsFolderWatched(...) == true`), the UI relies on watch notifications to refresh after mutations; otherwise it uses explicit `ForceRefresh()` as a fallback.
+Rules:
 
-## NavigationView Integration (siblings dropdown)
+- if the visible folder's direct children changed, refresh that folder
+- if the current folder was deleted or moved away, relocate to the nearest surviving ancestor
+- if a mounted backing path was renamed or moved, retarget the instance context
+- if a mounted backing path was deleted, exit the mount to local file space
 
-NavigationView uses the same cache to collect sibling folders:
-- Tries `BorrowMode::CacheOnly` on the parent folder snapshot.
-- If unavailable, it schedules a background prefetch (plugin enumeration) to warm the cache and avoids blocking the UI thread.
+## Watch Policy
 
-## Plugin Buffer Trimming (memory feasibility)
+### Mandatory watches
 
-Caching directory listings across many folders is only viable if the plugin result buffers are not excessively over-allocated.
+All pinned visible folders are watched first.
 
-The reference plugin (`FileSystem.dll`) applies a **trim heuristic** after enumeration:
-- It may reduce its backing buffer to the used byte count when waste is meaningful.
-- It skips trimming when the expected reallocation/copy cost is not worth the memory saved.
+### Best-effort extra watches
 
-This directly improves cache effectiveness because `GetAllocatedSize()` becomes a closer approximation of real per-folder memory usage.
+Up to `mruWatched` additional MRU entries may be watched while staying under `maxWatchers`, but only when the host explicitly opts an entry into off-screen watch coverage.
+
+The current reference host does not opt plain cache borrows into that path, so the effective default policy is:
+
+- cache borrows: yes
+- visible automatic watches: yes
+- off-screen automatic watches: no
+
+Off-screen cached folders are still invalidated by routed mutations and may remain dirty without triggering eager UI work.
+
+### Watch sources
+
+`DirectoryInfoCache` uses `IFileSystemDirectoryWatch` when the plugin exposes it.
+
+That watch source may be:
+
+- real OS-backed notifications
+- native plugin notifications
+- synthetic plugin-generated notifications after successful in-app mutations
+
+The host consumes each `IFileSystemDirectoryWatch` notification batch in callback order. It intentionally does not add a second host-side async reorder stage after watch delivery, because rename routing depends on preserving `RENAMED_OLD_NAME` and `RENAMED_NEW_NAME` adjacency inside a batch.
+
+If a plugin does not expose a watch interface, the cache still stays correct through explicit mutation routing from host-side operations and, for mounted contexts, backing-path dependency tracking.
+
+### Overflow handling
+
+`overflow = TRUE` means incremental events are not trustworthy. The cache marks the watched folder dirty and posts a refresh impact so the visible pane performs a full re-enumeration.
+
+Malformed rename batches are handled conservatively: an unmatched trailing `RENAMED_OLD_NAME` is treated as delete, while unmatched `RENAMED_NEW_NAME` falls back to parent-folder refresh.
+
+## Mounted Backing-Path Dependencies
+
+When a plugin `instanceContext` resolves to a Windows path, `DirectoryInfoCache` tracks a reverse dependency from that local path to the mounted logical context.
+
+Current use:
+
+- `7z:` mounts
+
+Behavior:
+
+- local rename or move retargets the mounted instance context
+- local delete exits the mount
+
+## FolderView And FolderWindow Integration
+
+`FolderView`:
+
+- pins the current folder
+- receives `WndMsg::kFolderViewDirectoryImpact`
+- debounces refresh impacts locally
+- forwards relocate/retarget/exit impacts to `FolderWindow`
+
+`FolderWindow`:
+
+- owns navigation changes caused by impacts
+- preserves focus where possible during refresh and relocation
+- exits or retargets mounts when backing paths change
+
+All posted impacts use the standard payload helpers:
+
+- `PostMessagePayload(...)`
+- `TakeMessagePayload<T>(lParam)`
+- `DrainPostedPayloadsForWindow(hwnd)`
 
 ## Settings
 
-Settings are stored in the main settings file (`RedSalamander-<Major>.<Minor>.settings.json` in Release, `RedSalamander-debug.settings.json` in Debug) under:
-- `cache.directoryInfo`
+Settings live under `cache.directoryInfo`:
 
-Keys:
-- `maxBytes` (optional, integer|string): maximum total bytes in cache (integer is KiB; string supports `"512MB"`, `"7GB"`; units are base 1024, case-insensitive).
-- `maxWatchers` (optional, integer): maximum active watchers.
-- `mruWatched` (optional, integer): additional MRU watched folders (best-effort).
+- `maxBytes`
+- `maxWatchers`
+- `mruWatched`
 
-Defaults (when missing):
-- `maxBytes`: ~6.25% of physical RAM, clamped to `[256 MiB, 4 GiB]`
+Defaults:
+
+- `maxBytes`: about 6.25% of physical RAM, clamped to `[256 MiB, 4 GiB]`
 - `maxWatchers`: `64`
 - `mruWatched`: `16`
 
-Hard caps (implementation safety limits):
-- `maxWatchers ≤ 1024`
-- `mruWatched ≤ 256`
-
 ## Telemetry
 
-The cache logs (Debug channel):
-- configured limits at startup
-- evictions (path + bytes freed)
-- enumeration failures
+`DirectoryInfoCache::GetStats()` reports:
 
-`DirectoryInfoCache::GetStats()` provides programmatic access to current counters and sizes.
+- cache size and limits
+- hits, misses, enumerations, evictions
+- dirty marks
+- watcher counts
+- pinned entry count
+
+Debug logging covers evictions, enumeration failures, and related cache events.

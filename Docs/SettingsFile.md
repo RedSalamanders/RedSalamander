@@ -23,16 +23,20 @@ The user-side schema file is the easiest one to use when validating manual edits
 
 ## Safe manual-edit workflow
 
-1. Close RedSalamander.
-2. Back up the current settings file.
-3. Edit the JSON5 file.
-4. Start RedSalamander and confirm the change.
+1. Back up the current settings file.
+2. Edit the JSON5 file.
+3. Save the file.
+4. RedSalamander detects the change and applies it without restart.
 
 Notes:
 
 - JSON5 is accepted, so comments and trailing commas are allowed.
-- If the settings file is invalid or uses an unsupported schema version, RedSalamander falls back to defaults and backs up the bad file.
+- If the edited file is valid, the running app updates immediately.
+- If a settings-related dialog is open with unsaved edits, that dialog prompts to reload from disk or keep editing.
+- If the edited file is invalid or uses an unsupported schema version during live reload, the running app keeps its current settings and shows a warning; the file is not renamed or backed up in that live path.
+- On a later cold startup / recovery load, an invalid settings file still falls back to defaults and is backed up to `.bad.*`.
 - Connection Manager secrets are not stored in this JSON file; only non-secret profile data is kept there.
+- Only the main settings JSON is watched in this iteration; `Themes\\*.theme.json5` files are not live-watched.
 
 ## Common advanced edits
 

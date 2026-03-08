@@ -808,7 +808,7 @@
       "type": "string",
       "title": "Authentication Mode",
       "default": "password",
-      "enum": ["anonymous", "password", "sshKey"]
+      "enum": ["anonymous", "password", "sshKey", "oauth2Pkce"]
     },
     "connectionProfile": {
       "type": "object",

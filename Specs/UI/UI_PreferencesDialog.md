@@ -205,6 +205,22 @@ Additional modeless semantics:
 Dynamic apply requirement:
 - `Apply` (and transient applies) must not only mutate settings on disk; they must cause the running application and loaded plugins to update behavior and visuals immediately (not only at startup).
 
+## External Reload Conflicts
+
+Preferences participates in the in-process settings-editor registry and receives `WndMsg::kSettingsReloadedFromDisk` whenever the app successfully applies externally modified settings.
+
+Behavior:
+- Clean dialog: reload controls immediately from the newly applied live settings.
+- Dirty dialog: show a localized prompt with `Reload from disk` / `Keep editing`.
+- `Keep editing` marks the dialog as stale relative to disk.
+- A stale dialog must prompt on the next `OK` / `Apply` with `Overwrite disk` / `Reload from disk` / `Cancel`.
+- Transient theme preview is cancelled before the external-reload prompt is shown.
+- After an external reload, the Preferences window chrome and themed controls follow the newly applied theme even if the user keeps editing.
+
+Plugin configuration editor integration:
+- The modal plugin configuration dialog also participates in the same conflict flow.
+- While that modal editor is open from Preferences, the parent Preferences window is temporarily unregistered so only the focused editor receives the reload prompt.
+
 ## Shared Themed Controls (code reuse)
 
 Create a shared, reusable set of themed Win32 controls/utilities used by:

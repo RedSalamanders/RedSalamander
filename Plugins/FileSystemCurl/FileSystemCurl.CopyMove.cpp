@@ -895,6 +895,15 @@ private:
         return hr;
     }
 
+    // Same-connection copies acquire download then upload permits sequentially.
+    // Release the download permit once the temp file is materialized so a
+    // single-slot limiter does not deadlock when source and destination share
+    // the same remote connection.
+    if (! sourceConn.limiterKey.empty() && sourceConn.limiterKey == destinationConn.limiterKey)
+    {
+        downloadPermit = {};
+    }
+
     uint64_t fileSize = 0;
     hr                = GetFileSizeBytes(tempFile.get(), fileSize);
     if (FAILED(hr))
@@ -1816,17 +1825,16 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
             hr = EnsureDirectoryExists(destinationResolved.connection, destinationResolved.remotePath);
             if (SUCCEEDED(hr))
             {
-                hr = CopyDirectoryRecursive(
-                    sourceResolved.connection,
-                    EnsureTrailingSlash(sourceResolved.remotePath),
-                    EnsureTrailingSlashDisplay(sourceDisplay),
-                    destinationResolved.connection,
-                    EnsureTrailingSlash(destinationResolved.remotePath),
-                    EnsureTrailingSlashDisplay(destinationDisplay),
-                    flags,
-                    requestedConcurrency,
-                    progress,
-                    nullptr);
+                hr = CopyDirectoryRecursive(sourceResolved.connection,
+                                            EnsureTrailingSlash(sourceResolved.remotePath),
+                                            EnsureTrailingSlashDisplay(sourceDisplay),
+                                            destinationResolved.connection,
+                                            EnsureTrailingSlash(destinationResolved.remotePath),
+                                            EnsureTrailingSlashDisplay(destinationDisplay),
+                                            flags,
+                                            requestedConcurrency,
+                                            progress,
+                                            nullptr);
             }
         }
     }
@@ -1846,7 +1854,12 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
 
     progress.completedItems = 1;
     const HRESULT cbHr      = progress.ReportItemCompleted(0, sourceDisplay, destinationDisplay, hr);
-    return FAILED(cbHr) ? cbHr : hr;
+    const HRESULT resultHr  = FAILED(cbHr) ? cbHr : hr;
+    if (SUCCEEDED(resultHr))
+    {
+        NotifySyntheticPathCreated(destinationPath);
+    }
+    return resultHr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
@@ -1912,7 +1925,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
     if (CanServerSideRename(sourceResolved.connection, destinationResolved.connection))
     {
         FilesInformationCurl::Entry sourceInfo{};
-        hr = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
+        hr                      = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
         const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
         if (SUCCEEDED(hr) && ! isSelfRename)
         {
@@ -1937,17 +1950,16 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                 }
                 else
                 {
-                    hr = CopyDirectoryRecursive(
-                        sourceResolved.connection,
-                        EnsureTrailingSlash(sourceResolved.remotePath),
-                        EnsureTrailingSlashDisplay(sourceDisplay),
-                        destinationResolved.connection,
-                        EnsureTrailingSlash(destinationResolved.remotePath),
-                        EnsureTrailingSlashDisplay(destinationDisplay),
-                        flags,
-                        requestedConcurrency,
-                        progress,
-                        nullptr);
+                    hr = CopyDirectoryRecursive(sourceResolved.connection,
+                                                EnsureTrailingSlash(sourceResolved.remotePath),
+                                                EnsureTrailingSlashDisplay(sourceDisplay),
+                                                destinationResolved.connection,
+                                                EnsureTrailingSlash(destinationResolved.remotePath),
+                                                EnsureTrailingSlashDisplay(destinationDisplay),
+                                                flags,
+                                                requestedConcurrency,
+                                                progress,
+                                                nullptr);
                     if (SUCCEEDED(hr))
                     {
                         hr = DeleteDirectoryRecursive(sourceResolved.connection,
@@ -1982,7 +1994,12 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
 
     progress.completedItems = 1;
     const HRESULT cbHr      = progress.ReportItemCompleted(0, sourceDisplay, destinationDisplay, hr);
-    return FAILED(cbHr) ? cbHr : hr;
+    const HRESULT resultHr  = FAILED(cbHr) ? cbHr : hr;
+    if (SUCCEEDED(resultHr))
+    {
+        NotifySyntheticPathMoved(sourcePath, destinationPath);
+    }
+    return resultHr;
 }
 
 HRESULT STDMETHODCALLTYPE
@@ -2055,7 +2072,12 @@ FileSystemCurl::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fil
 
     progress.completedItems = 1;
     const HRESULT cbHr      = progress.ReportItemCompleted(0, displayPath, {}, hr);
-    return FAILED(cbHr) ? cbHr : hr;
+    const HRESULT resultHr  = FAILED(cbHr) ? cbHr : hr;
+    if (SUCCEEDED(resultHr))
+    {
+        NotifySyntheticPathDeleted(path);
+    }
+    return resultHr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
@@ -2123,7 +2145,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
     else
     {
         FilesInformationCurl::Entry sourceInfo{};
-        hr = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
+        hr                      = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
         const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
         if (SUCCEEDED(hr) && ! isSelfRename)
         {
@@ -2137,7 +2159,12 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
 
     progress.completedItems = 1;
     const HRESULT cbHr      = progress.ReportItemCompleted(0, sourceDisplay, destinationDisplay, hr);
-    return FAILED(cbHr) ? cbHr : hr;
+    const HRESULT resultHr  = FAILED(cbHr) ? cbHr : hr;
+    if (SUCCEEDED(resultHr))
+    {
+        NotifySyntheticPathMoved(sourcePath, destinationPath);
+    }
+    return resultHr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* sourcePaths,
@@ -2418,7 +2445,21 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
         return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
     }
 
-    return FAILED(failureHr) ? failureHr : S_OK;
+    const HRESULT resultHr = FAILED(failureHr) ? failureHr : S_OK;
+    if (SUCCEEDED(resultHr))
+    {
+        for (unsigned long index = 0; index < count; ++index)
+        {
+            if (! sourcePaths[index] || sourcePaths[index][0] == L'\0')
+            {
+                continue;
+            }
+
+            const std::wstring source = NormalizePluginPath(sourcePaths[index]);
+            NotifySyntheticPathCreated(JoinPluginPath(destinationFolder, LeafName(source)));
+        }
+    }
+    return resultHr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* sourcePaths,
@@ -2540,7 +2581,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
         if (SUCCEEDED(itemHr))
         {
             canServerSideRename = CanServerSideRename(sourceResolved.connection, destinationResolved.connection);
-            itemHr               = entryCache.GetEntryInfoCached(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
+            itemHr              = entryCache.GetEntryInfoCached(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
         }
 
         if (FAILED(itemHr))
@@ -2730,7 +2771,21 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
         return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
     }
 
-    return FAILED(failureHr) ? failureHr : S_OK;
+    const HRESULT resultHr = FAILED(failureHr) ? failureHr : S_OK;
+    if (SUCCEEDED(resultHr))
+    {
+        for (unsigned long index = 0; index < count; ++index)
+        {
+            if (! sourcePaths[index] || sourcePaths[index][0] == L'\0')
+            {
+                continue;
+            }
+
+            const std::wstring source = NormalizePluginPath(sourcePaths[index]);
+            NotifySyntheticPathMoved(source, JoinPluginPath(destinationFolder, LeafName(source)));
+        }
+    }
+    return resultHr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* paths,
@@ -2982,7 +3037,18 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
     }
 
     const HRESULT failureHr = static_cast<HRESULT>(firstFailure.load(std::memory_order_acquire));
-    return FAILED(failureHr) ? failureHr : S_OK;
+    const HRESULT resultHr  = FAILED(failureHr) ? failureHr : S_OK;
+    if (SUCCEEDED(resultHr))
+    {
+        for (unsigned long index = 0; index < count; ++index)
+        {
+            if (paths[index] && paths[index][0] != L'\0')
+            {
+                NotifySyntheticPathDeleted(paths[index]);
+            }
+        }
+    }
+    return resultHr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair* items,
@@ -3169,5 +3235,20 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
         return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
     }
 
-    return FAILED(failureHr) ? failureHr : S_OK;
+    const HRESULT resultHr = FAILED(failureHr) ? failureHr : S_OK;
+    if (SUCCEEDED(resultHr))
+    {
+        for (unsigned long index = 0; index < count; ++index)
+        {
+            if (! items[index].sourcePath || ! items[index].newName)
+            {
+                continue;
+            }
+
+            const std::wstring sourcePath      = NormalizePluginPath(items[index].sourcePath);
+            const std::wstring destinationPath = JoinPluginPath(ParentPath(sourcePath), items[index].newName);
+            NotifySyntheticPathMoved(sourcePath, destinationPath);
+        }
+    }
+    return resultHr;
 }

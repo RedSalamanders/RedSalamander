@@ -32,6 +32,8 @@ File systems are selected by a **short prefix** in the address bar:
 - `7z:` — archive browser (`builtin/file-system-7z`)
   - Typically opened automatically when you press Enter on an archive in `file:`.
 - `ftp:` / `sftp:` / `scp:` / `imap:` — remote file systems (`Plugins/FileSystemCurl`)
+- `gdrive:` — Google Drive (`Plugins/FileSystemGoogleDrive`)
+- `onedrivep:` / `onedriveb:` / `sharepoint:` — Microsoft-backed cloud drives (`Plugins/FileSystemMicrosoftDrive`)
 - `s3:` / `s3table:` — S3 and S3 Table (`Plugins/FileSystemS3`)
   - `s3:` supports browsing, reading, uploading/overwriting objects, and deleting objects.
   - `s3table:` is browse/read only and exposes tables as `*.table.json` documents.
@@ -41,6 +43,7 @@ See also:
 
 - [Navigation & Path Syntax](NavigationAndPaths.md)
 - [Remote File Systems](RemoteFileSystems.md)
+- [Cloud Drives](CloudDrives.md)
 - [S3 / S3 Table](S3AndS3Table.md)
 - [Connections](Connections.md)
 

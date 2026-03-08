@@ -21,6 +21,13 @@ constexpr uint64_t kMaxDefaultCacheSize = 4ull * kGiB;
 constexpr uint32_t kMaxWatchersHardCap = 1024u;
 constexpr uint32_t kMruWatchedHardCap  = 256u;
 
+std::wstring NormalizePath(std::wstring_view path, bool isFilePlugin) noexcept;
+
+[[nodiscard]] bool EqualsNoCase(std::wstring_view left, std::wstring_view right) noexcept
+{
+    return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) == CSTR_EQUAL;
+}
+
 std::wstring MakeCaseInsensitivePathKey(std::wstring_view text) noexcept
 {
     if (text.empty())
@@ -79,65 +86,33 @@ std::wstring MakeCaseInsensitivePathKey(std::wstring_view text) noexcept
     return mapped;
 }
 
-#pragma warning(push)
-// C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
-#pragma warning(disable : 4625 4626 5026 5027)
-struct FileSystemPathSemanticsCache
+[[nodiscard]] bool IsFilePlugin(std::wstring_view pluginId, std::wstring_view pluginShortId) noexcept
 {
-    std::mutex mutex;
-    std::unordered_map<IFileSystem*, bool> isFilePluginByPtr;
-};
-#pragma warning(pop)
-
-FileSystemPathSemanticsCache& GetPathSemanticsCache() noexcept
-{
-    static FileSystemPathSemanticsCache cache;
-    return cache;
+    return EqualsNoCase(pluginShortId, L"file") || EqualsNoCase(pluginId, L"builtin/file-system");
 }
 
-bool IsFilePlugin(IFileSystem* fileSystem) noexcept
+[[nodiscard]] std::wstring NormalizeInstanceContext(std::wstring_view instanceContext) noexcept
 {
-    if (! fileSystem)
+    std::wstring trimmed = StringUtils::TrimWhitespaceCopy(instanceContext);
+    if (trimmed.empty())
     {
-        return false;
+        return {};
     }
 
-    FileSystemPathSemanticsCache& cache = GetPathSemanticsCache();
+    if (NavigationLocation::LooksLikeWindowsAbsolutePath(trimmed))
     {
-        std::lock_guard lock(cache.mutex);
-        const auto it = cache.isFilePluginByPtr.find(fileSystem);
-        if (it != cache.isFilePluginByPtr.end())
-        {
-            return it->second;
-        }
+        return NormalizePath(trimmed, true);
     }
 
-    wil::com_ptr<IFileSystem> fs = fileSystem;
-
-    wil::com_ptr<IInformations> infos;
-    const HRESULT qiHr = fs->QueryInterface(__uuidof(IInformations), infos.put_void());
-
-    bool isFile = false;
-    if (SUCCEEDED(qiHr) && infos)
+    if (trimmed.find_first_of(L"\\/") != std::wstring::npos)
     {
-        const PluginMetaData* meta = nullptr;
-        const HRESULT metaHr       = infos->GetMetaData(&meta);
-        if (SUCCEEDED(metaHr) && meta)
-        {
-            const wchar_t* idToCheck = meta->shortId ? meta->shortId : meta->id;
-            if (idToCheck)
-            {
-                isFile = CompareStringOrdinal(idToCheck, -1, L"file", -1, TRUE) == CSTR_EQUAL;
-            }
-        }
+        return NavigationLocation::NormalizePluginPathText(trimmed,
+                                                           NavigationLocation::EmptyPathPolicy::ReturnEmpty,
+                                                           NavigationLocation::LeadingSlashPolicy::Preserve,
+                                                           NavigationLocation::TrailingSlashPolicy::Trim);
     }
 
-    {
-        std::lock_guard lock(cache.mutex);
-        cache.isFilePluginByPtr.emplace(fileSystem, isFile);
-    }
-
-    return isFile;
+    return trimmed;
 }
 
 std::wstring NormalizePath(std::wstring_view path, bool isFilePlugin) noexcept
@@ -200,6 +175,118 @@ uint32_t ClampMruWatched(uint32_t value) noexcept
 {
     return std::min(value, kMruWatchedHardCap);
 }
+
+[[nodiscard]] wchar_t GetPathSeparator(bool isFilePlugin) noexcept
+{
+    return isFilePlugin ? L'\\' : L'/';
+}
+
+[[nodiscard]] bool IsSameOrDescendantPath(std::wstring_view candidatePathKey, std::wstring_view rootPathKey, bool isFilePlugin) noexcept
+{
+    if (candidatePathKey == rootPathKey)
+    {
+        return true;
+    }
+
+    if (candidatePathKey.size() <= rootPathKey.size())
+    {
+        return false;
+    }
+
+    const wchar_t separator = GetPathSeparator(isFilePlugin);
+    return candidatePathKey.rfind(rootPathKey, 0) == 0 && candidatePathKey[rootPathKey.size()] == separator;
+}
+
+[[nodiscard]] std::wstring GetRelativeSubPath(std::wstring_view fullPath, std::wstring_view rootPath, bool isFilePlugin) noexcept
+{
+    if (fullPath.size() <= rootPath.size())
+    {
+        return {};
+    }
+
+    size_t offset           = rootPath.size();
+    const wchar_t separator = GetPathSeparator(isFilePlugin);
+    if (offset < fullPath.size() && fullPath[offset] == separator)
+    {
+        ++offset;
+    }
+
+    return std::wstring(fullPath.substr(offset));
+}
+
+[[nodiscard]] std::wstring JoinNormalizedPath(std::wstring_view base, std::wstring_view relative, bool isFilePlugin) noexcept
+{
+    if (base.empty())
+    {
+        return NormalizePath(relative, isFilePlugin);
+    }
+
+    if (relative.empty())
+    {
+        return std::wstring(base);
+    }
+
+    std::wstring combined(base);
+    const wchar_t separator = GetPathSeparator(isFilePlugin);
+    if (combined.back() != separator)
+    {
+        combined.push_back(separator);
+    }
+    combined.append(relative);
+    return NormalizePath(combined, isFilePlugin);
+}
+
+[[nodiscard]] std::wstring ParentNormalizedPath(std::wstring_view path, bool isFilePlugin) noexcept
+{
+    if (path.empty())
+    {
+        return {};
+    }
+
+    std::filesystem::path parent = std::filesystem::path(path).parent_path();
+    if (parent.empty())
+    {
+        return std::wstring(path);
+    }
+
+    return NormalizePath(parent.native(), isFilePlugin);
+}
+
+[[nodiscard]] std::wstring LeafNameNormalizedPath(std::wstring_view path) noexcept
+{
+    return std::filesystem::path(path).filename().wstring();
+}
+
+[[nodiscard]] std::optional<DirectoryInfoCache::ContextKey> MakeFallbackContext(IFileSystem* fileSystem) noexcept
+{
+    if (! fileSystem)
+    {
+        return std::nullopt;
+    }
+
+    wil::com_ptr<IInformations> infos;
+    const HRESULT qiHr = fileSystem->QueryInterface(__uuidof(IInformations), infos.put_void());
+    if (FAILED(qiHr) || ! infos)
+    {
+        return std::nullopt;
+    }
+
+    const PluginMetaData* meta = nullptr;
+    const HRESULT metaHr       = infos->GetMetaData(&meta);
+    if (FAILED(metaHr) || ! meta)
+    {
+        return std::nullopt;
+    }
+
+    DirectoryInfoCache::ContextKey context{};
+    context.pluginId        = meta->id ? meta->id : (meta->shortId ? meta->shortId : L"");
+    context.pluginShortId   = meta->shortId ? meta->shortId : L"";
+    context.instanceContext = {};
+    context.pluginIdKey     = MakeCaseInsensitivePathKey(context.pluginId);
+    context.instanceContextKey.clear();
+    context.isFilePlugin = IsFilePlugin(context.pluginId, context.pluginShortId);
+    return context;
+}
 } // namespace
 
 DirectoryInfoCache& DirectoryInfoCache::GetInstance()
@@ -225,6 +312,8 @@ void DirectoryInfoCache::Shutdown() noexcept
 
         _entries.clear();
         _lru.clear();
+        _contexts.clear();
+        _providerContexts.clear();
 
         _currentBytes = 0;
         _cacheHits    = 0;
@@ -242,20 +331,28 @@ void DirectoryInfoCache::Shutdown() noexcept
     Debug::Info(L"DirectoryInfoCache: Shutdown (stopped {} watcher(s))", watchersToStop.size());
 }
 
+size_t DirectoryInfoCache::ContextKeyHash::operator()(const ContextKey& key) const noexcept
+{
+    const size_t pluginHash  = std::hash<std::wstring_view>{}(key.pluginIdKey);
+    const size_t contextHash = std::hash<std::wstring_view>{}(key.instanceContextKey);
+    return pluginHash ^ (contextHash + 0x9e3779b97f4a7c15ull + (pluginHash << 6) + (pluginHash >> 2));
+}
+
+bool DirectoryInfoCache::ContextKeyEq::operator()(const ContextKey& a, const ContextKey& b) const noexcept
+{
+    return a.pluginIdKey == b.pluginIdKey && a.instanceContextKey == b.instanceContextKey;
+}
+
 size_t DirectoryInfoCache::KeyHash::operator()(const Key& key) const noexcept
 {
-    const size_t ptrHash  = std::hash<void*>{}(key.fileSystem.get());
-    const size_t pathHash = std::hash<std::wstring_view>{}(key.pathKey);
-    return ptrHash ^ (pathHash + 0x9e3779b97f4a7c15ull + (ptrHash << 6) + (ptrHash >> 2));
+    const size_t contextHash = ContextKeyHash{}(key.context);
+    const size_t pathHash    = std::hash<std::wstring_view>{}(key.pathKey);
+    return contextHash ^ (pathHash + 0x9e3779b97f4a7c15ull + (contextHash << 6) + (contextHash >> 2));
 }
 
 bool DirectoryInfoCache::KeyEq::operator()(const Key& a, const Key& b) const noexcept
 {
-    if (a.fileSystem.get() != b.fileSystem.get())
-    {
-        return false;
-    }
-    return a.pathKey == b.pathKey;
+    return ContextKeyEq{}(a.context, b.context) && a.pathKey == b.pathKey;
 }
 
 DirectoryInfoCache::Borrowed::Borrowed(Borrowed&& other) noexcept
@@ -277,7 +374,6 @@ DirectoryInfoCache::Borrowed& DirectoryInfoCache::Borrowed::operator=(Borrowed&&
             std::lock_guard lock(_owner->_mutex);
             _owner->ReleaseBorrowLocked(_entry);
             _owner->MaybeEvictLocked(watchersToStop);
-            _owner->UpdateWatchersLocked(watchersToStop);
         }
     }
 
@@ -302,7 +398,6 @@ DirectoryInfoCache::Borrowed::~Borrowed()
         std::lock_guard lock(_owner->_mutex);
         _owner->ReleaseBorrowLocked(_entry);
         _owner->MaybeEvictLocked(watchersToStop);
-        _owner->UpdateWatchersLocked(watchersToStop);
     }
 }
 
@@ -502,7 +597,108 @@ DirectoryInfoCache::Stats DirectoryInfoCache::GetStats() const noexcept
     return stats;
 }
 
-void DirectoryInfoCache::ClearForFileSystem(IFileSystem* fileSystem) noexcept
+std::optional<DirectoryInfoCache::ContextKey> DirectoryInfoCache::ResolveContextForFileSystem(IFileSystem* fileSystem) const noexcept
+{
+    if (! fileSystem)
+    {
+        return std::nullopt;
+    }
+
+    {
+        std::lock_guard lock(_mutex);
+        const auto it = _providerContexts.find(fileSystem);
+        if (it != _providerContexts.end())
+        {
+            return it->second;
+        }
+    }
+
+    return MakeFallbackContext(fileSystem);
+}
+
+void DirectoryInfoCache::RegisterProvider(IFileSystem* fileSystem,
+                                          std::wstring_view pluginId,
+                                          std::wstring_view pluginShortId,
+                                          std::wstring_view instanceContext) noexcept
+{
+    if (! fileSystem)
+    {
+        return;
+    }
+
+    ContextKey context{};
+    context.pluginId           = pluginId.empty() ? std::wstring(pluginShortId) : std::wstring(pluginId);
+    context.pluginShortId      = std::wstring(pluginShortId);
+    context.instanceContext    = NormalizeInstanceContext(instanceContext);
+    context.pluginIdKey        = MakeCaseInsensitivePathKey(context.pluginId);
+    context.instanceContextKey = MakeCaseInsensitivePathKey(context.instanceContext);
+    context.isFilePlugin       = IsFilePlugin(context.pluginId, context.pluginShortId);
+
+    Debug::Info(L"DirectoryInfoCache: RegisterProvider fs={} pluginId='{}' pluginShortId='{}' instanceContext='{}' isFilePlugin={}",
+                static_cast<const void*>(fileSystem),
+                context.pluginId,
+                context.pluginShortId,
+                context.instanceContext.empty() ? std::wstring_view(L"<none>") : std::wstring_view(context.instanceContext),
+                context.isFilePlugin ? L"true" : L"false");
+
+    std::vector<std::unique_ptr<FolderWatcher>> watchersToStop;
+    {
+        std::lock_guard lock(_mutex);
+
+        const auto current = _providerContexts.find(fileSystem);
+        if (current != _providerContexts.end() && ContextKeyEq{}(current->second, context))
+        {
+            auto ctxIt = _contexts.find(context);
+            if (ctxIt != _contexts.end())
+            {
+                ctxIt->second.providers[fileSystem] = fileSystem;
+            }
+            else
+            {
+                ContextState state{};
+                state.key                   = context;
+                state.providers[fileSystem] = fileSystem;
+                _contexts.emplace(state.key, std::move(state));
+            }
+            return;
+        }
+
+        if (current != _providerContexts.end())
+        {
+            auto ctxIt = _contexts.find(current->second);
+            if (ctxIt != _contexts.end())
+            {
+                ctxIt->second.providers.erase(fileSystem);
+                if (ctxIt->second.providers.empty())
+                {
+                    ClearContextLocked(ctxIt->first, watchersToStop);
+                }
+                else
+                {
+                    RestartContextWatchersLocked(ctxIt->first, watchersToStop);
+                }
+            }
+            _providerContexts.erase(current);
+        }
+
+        ContextState& state           = _contexts.try_emplace(context).first->second;
+        state.key                     = context;
+        state.providers[fileSystem]   = fileSystem;
+        _providerContexts[fileSystem] = context;
+
+        UpdateWatchersLocked(watchersToStop);
+    }
+
+    for (auto& watcher : watchersToStop)
+    {
+        if (watcher)
+        {
+            watcher->Stop();
+        }
+    }
+}
+
+void DirectoryInfoCache::UnregisterProvider(IFileSystem* fileSystem) noexcept
 {
     if (! fileSystem)
     {
@@ -512,46 +708,58 @@ void DirectoryInfoCache::ClearForFileSystem(IFileSystem* fileSystem) noexcept
     std::vector<std::unique_ptr<FolderWatcher>> watchersToStop;
     {
         std::lock_guard lock(_mutex);
-
-        for (auto it = _entries.begin(); it != _entries.end();)
+        const auto providerIt = _providerContexts.find(fileSystem);
+        if (providerIt == _providerContexts.end())
         {
-            const Key& key = it->first;
-            if (key.fileSystem.get() != fileSystem)
-            {
-                ++it;
-                continue;
-            }
-
-            const std::shared_ptr<Entry>& entry = it->second;
-            if (entry)
-            {
-                StopWatcherLocked(entry, watchersToStop);
-
-                const uint64_t bytesFreed = entry->bytes;
-                if (_currentBytes >= bytesFreed)
-                {
-                    _currentBytes -= bytesFreed;
-                }
-                else
-                {
-                    _currentBytes = 0;
-                }
-
-                entry->info         = nullptr;
-                entry->bytes        = 0;
-                entry->dirty        = true;
-                entry->notifyPosted = false;
-
-                if (entry->lruItValid)
-                {
-                    _lru.erase(entry->lruIt);
-                    entry->lruItValid = false;
-                }
-            }
-
-            it = _entries.erase(it);
+            return;
         }
 
+        const ContextKey context = providerIt->second;
+        _providerContexts.erase(providerIt);
+
+        auto ctxIt = _contexts.find(context);
+        if (ctxIt != _contexts.end())
+        {
+            ctxIt->second.providers.erase(fileSystem);
+            if (ctxIt->second.providers.empty())
+            {
+                ClearContextLocked(context, watchersToStop);
+            }
+            else
+            {
+                RestartContextWatchersLocked(context, watchersToStop);
+            }
+        }
+
+        UpdateWatchersLocked(watchersToStop);
+    }
+
+    for (auto& watcher : watchersToStop)
+    {
+        if (watcher)
+        {
+            watcher->Stop();
+        }
+    }
+}
+
+void DirectoryInfoCache::ClearForFileSystem(IFileSystem* fileSystem) noexcept
+{
+    if (! fileSystem)
+    {
+        return;
+    }
+
+    const std::optional<ContextKey> contextOpt = ResolveContextForFileSystem(fileSystem);
+    if (! contextOpt)
+    {
+        return;
+    }
+
+    std::vector<std::unique_ptr<FolderWatcher>> watchersToStop;
+    {
+        std::lock_guard lock(_mutex);
+        ClearContextLocked(*contextOpt, watchersToStop);
         UpdateWatchersLocked(watchersToStop);
     }
 
@@ -574,6 +782,62 @@ void DirectoryInfoCache::InvalidateFolder(IFileSystem* fileSystem, const std::fi
 
     std::lock_guard lock(_mutex);
     MarkDirtyLocked(*keyOpt);
+}
+
+void DirectoryInfoCache::NotifyFolderContentsChanged(IFileSystem* fileSystem, const std::filesystem::path& folder) noexcept
+{
+    const auto keyOpt = MakeKey(fileSystem, folder);
+    if (! keyOpt)
+    {
+        return;
+    }
+
+    std::lock_guard lock(_mutex);
+    NotifyFolderContentsChangedLocked(keyOpt->context, keyOpt->path);
+}
+
+void DirectoryInfoCache::NotifyPathCreated(IFileSystem* fileSystem, const std::filesystem::path& path) noexcept
+{
+    const auto keyOpt = MakeKey(fileSystem, path);
+    if (! keyOpt)
+    {
+        return;
+    }
+
+    std::lock_guard lock(_mutex);
+    NotifyFolderContentsChangedLocked(keyOpt->context, ParentNormalizedPath(keyOpt->path, keyOpt->context.isFilePlugin));
+}
+
+void DirectoryInfoCache::NotifyPathDeleted(IFileSystem* fileSystem, const std::filesystem::path& path) noexcept
+{
+    const auto keyOpt = MakeKey(fileSystem, path);
+    if (! keyOpt)
+    {
+        return;
+    }
+
+    std::lock_guard lock(_mutex);
+    NotifyPathDeletedLocked(keyOpt->context, keyOpt->path);
+}
+
+void DirectoryInfoCache::NotifyPathMoved(IFileSystem* fileSystem,
+                                         const std::filesystem::path& sourcePath,
+                                         const std::filesystem::path& destinationPath) noexcept
+{
+    const auto sourceKeyOpt = MakeKey(fileSystem, sourcePath);
+    if (! sourceKeyOpt)
+    {
+        return;
+    }
+
+    std::wstring normalizedDestination = NormalizePath(destinationPath.native(), sourceKeyOpt->context.isFilePlugin);
+    if (normalizedDestination.empty())
+    {
+        return;
+    }
+
+    std::lock_guard lock(_mutex);
+    NotifyPathMovedLocked(sourceKeyOpt->context, sourceKeyOpt->path, normalizedDestination);
 }
 
 bool DirectoryInfoCache::IsFolderWatched(IFileSystem* fileSystem, const std::filesystem::path& folder) const noexcept
@@ -602,17 +866,31 @@ std::optional<DirectoryInfoCache::Key> DirectoryInfoCache::MakeKey(IFileSystem* 
         return std::nullopt;
     }
 
-    const bool isFilePlugin = IsFilePlugin(fileSystem);
-    std::wstring normalized = NormalizePath(folder.native(), isFilePlugin);
+    const auto contextOpt = ResolveContextForFileSystem(fileSystem);
+    if (! contextOpt)
+    {
+        return std::nullopt;
+    }
+
+    std::wstring normalized = NormalizePath(folder.native(), contextOpt->isFilePlugin);
     if (normalized.empty())
     {
         return std::nullopt;
     }
 
+    Debug::Info(L"DirectoryInfoCache: MakeKey fs={} folder='{}' normalized='{}' pluginId='{}' pluginShortId='{}' instanceContext='{}' isFilePlugin={}",
+                static_cast<const void*>(fileSystem),
+                folder.native(),
+                normalized,
+                contextOpt->pluginId,
+                contextOpt->pluginShortId,
+                contextOpt->instanceContext.empty() ? std::wstring_view(L"<none>") : std::wstring_view(contextOpt->instanceContext),
+                contextOpt->isFilePlugin ? L"true" : L"false");
+
     Key key{};
-    key.fileSystem = fileSystem;
-    key.path       = std::move(normalized);
-    key.pathKey    = MakeCaseInsensitivePathKey(key.path);
+    key.context = *contextOpt;
+    key.path    = std::move(normalized);
+    key.pathKey = MakeCaseInsensitivePathKey(key.path);
     return key;
 }
 
@@ -725,45 +1003,71 @@ void DirectoryInfoCache::ReleasePinLocked(const std::shared_ptr<Entry>& entry) n
     }
 }
 
-void DirectoryInfoCache::PostDirtyNotificationsLocked(const std::shared_ptr<Entry>& entry) noexcept
+void DirectoryInfoCache::PostImpactLocked(const std::shared_ptr<Entry>& entry, const DirectoryImpact& impact) noexcept
 {
     if (! entry || entry->subscribers.empty())
     {
         return;
     }
 
-    if (entry->notifyPosted)
+    if (impact.kind == DirectoryImpact::Kind::RefreshCurrentFolder && entry->refreshPosted)
     {
         return;
     }
 
-    entry->notifyPosted = true;
+    if (impact.kind == DirectoryImpact::Kind::RefreshCurrentFolder)
+    {
+        entry->refreshPosted = true;
+    }
+
     for (const auto& s : entry->subscribers)
     {
         if (s.hwnd && s.message)
         {
-            PostMessageW(s.hwnd, s.message, 0, 0);
+            auto payload           = std::make_unique<DirectoryImpact>(impact);
+            payload->currentFolder = entry->key.path;
+            const bool posted      = PostMessagePayload(s.hwnd, s.message, 0, std::move(payload));
+            if (! posted && impact.kind == DirectoryImpact::Kind::RefreshCurrentFolder)
+            {
+                entry->refreshPosted = false;
+            }
         }
     }
 }
 
-void DirectoryInfoCache::MarkDirtyLocked(const Key& key) noexcept
+void DirectoryInfoCache::PostRefreshLocked(const std::shared_ptr<Entry>& entry) noexcept
 {
-    auto it = _entries.find(key);
-    if (it == _entries.end())
+    if (! entry)
     {
         return;
     }
 
-    const auto& entry = it->second;
-    if (! entry)
+    DirectoryImpact impact{};
+    impact.kind = DirectoryImpact::Kind::RefreshCurrentFolder;
+    PostImpactLocked(entry, impact);
+}
+
+void DirectoryInfoCache::MarkDirtyLocked(const std::shared_ptr<Entry>& entry) noexcept
+{
+    if (! entry || entry->dirty)
     {
         return;
     }
 
     entry->dirty = true;
     ++_dirtyMarks;
-    PostDirtyNotificationsLocked(entry);
+}
+
+void DirectoryInfoCache::MarkDirtyLocked(const Key& key) noexcept
+{
+    const auto it = _entries.find(key);
+    if (it == _entries.end() || ! it->second)
+    {
+        return;
+    }
+
+    MarkDirtyLocked(it->second);
+    PostRefreshLocked(it->second);
 }
 
 void DirectoryInfoCache::StartWatcherLocked(const std::shared_ptr<Entry>& entry, std::vector<std::unique_ptr<FolderWatcher>>& watchersToStop) noexcept
@@ -773,24 +1077,40 @@ void DirectoryInfoCache::StartWatcherLocked(const std::shared_ptr<Entry>& entry,
         return;
     }
 
-    const Key key           = entry->key;
-    const std::wstring path = entry->key.path;
+    const ContextKey context = entry->key.context;
+    const std::wstring path  = entry->key.path;
 
-    auto markDirty = [key]
+    auto onNotification = [context, path](const FolderWatcherNotification& notification)
     {
         DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
-        std::lock_guard lock(cache._mutex);
-        cache.MarkDirtyLocked(key);
+        cache.OnWatcherNotification(context, path, notification);
     };
 
-    wil::com_ptr<IFileSystemDirectoryWatch> dirWatch;
-    const HRESULT qiHr = entry->key.fileSystem ? entry->key.fileSystem->QueryInterface(__uuidof(IFileSystemDirectoryWatch), dirWatch.put_void()) : E_POINTER;
-    if (FAILED(qiHr) || ! dirWatch)
+    wil::com_ptr<IFileSystem> provider = ResolveProviderLocked(entry->key.context);
+    if (! provider)
     {
         return;
     }
 
-    entry->watcher = std::make_unique<FolderWatcher>(std::move(dirWatch), path, std::move(markDirty));
+    wil::com_ptr<IFileSystemDirectoryWatch> dirWatch;
+    const HRESULT qiHr = provider->QueryInterface(__uuidof(IFileSystemDirectoryWatch), dirWatch.put_void());
+    if (FAILED(qiHr) || ! dirWatch)
+    {
+        Debug::Info(L"DirectoryInfoCache: watcher unsupported for path='{}' pluginId='{}' pluginShortId='{}' provider={} qiHr=0x{:08X}",
+                    path,
+                    context.pluginId,
+                    context.pluginShortId,
+                    static_cast<const void*>(provider.get()),
+                    static_cast<unsigned long>(qiHr));
+        return;
+    }
+
+    Debug::Info(L"DirectoryInfoCache: starting watcher for path='{}' pluginId='{}' pluginShortId='{}' provider={}",
+                path,
+                context.pluginId,
+                context.pluginShortId,
+                static_cast<const void*>(provider.get()));
+    entry->watcher = std::make_unique<FolderWatcher>(std::move(dirWatch), path, std::move(onNotification));
 
     const HRESULT hr = entry->watcher->Start();
     if (FAILED(hr))
@@ -808,6 +1128,318 @@ void DirectoryInfoCache::StopWatcherLocked(const std::shared_ptr<Entry>& entry, 
     }
 
     watchersToStop.emplace_back(std::move(entry->watcher));
+}
+
+void DirectoryInfoCache::RestartContextWatchersLocked(const ContextKey& context, std::vector<std::unique_ptr<FolderWatcher>>& watchersToStop) noexcept
+{
+    for (const auto& [key, entry] : _entries)
+    {
+        if (! entry || ! ContextKeyEq{}(key.context, context))
+        {
+            continue;
+        }
+
+        StopWatcherLocked(entry, watchersToStop);
+    }
+}
+
+void DirectoryInfoCache::ClearContextLocked(const ContextKey& context, std::vector<std::unique_ptr<FolderWatcher>>& watchersToStop) noexcept
+{
+    auto ctxIt = _contexts.find(context);
+    if (ctxIt != _contexts.end())
+    {
+        for (const auto& [providerPtr, _provider] : ctxIt->second.providers)
+        {
+            _providerContexts.erase(providerPtr);
+        }
+    }
+
+    for (auto it = _entries.begin(); it != _entries.end();)
+    {
+        if (! ContextKeyEq{}(it->first.context, context))
+        {
+            ++it;
+            continue;
+        }
+
+        const std::shared_ptr<Entry>& entry = it->second;
+        if (entry)
+        {
+            StopWatcherLocked(entry, watchersToStop);
+            const uint64_t bytesFreed = entry->bytes;
+            _currentBytes             = (_currentBytes >= bytesFreed) ? (_currentBytes - bytesFreed) : 0;
+            if (entry->lruItValid)
+            {
+                _lru.erase(entry->lruIt);
+                entry->lruItValid = false;
+            }
+        }
+
+        it = _entries.erase(it);
+    }
+
+    if (ctxIt != _contexts.end())
+    {
+        _contexts.erase(ctxIt);
+    }
+}
+
+wil::com_ptr<IFileSystem> DirectoryInfoCache::ResolveProviderLocked(const ContextKey& context, IFileSystem* preferredFileSystem) const noexcept
+{
+    if (preferredFileSystem)
+    {
+        const auto providerIt = _providerContexts.find(preferredFileSystem);
+        if (providerIt != _providerContexts.end() && ContextKeyEq{}(providerIt->second, context))
+        {
+            return preferredFileSystem;
+        }
+    }
+
+    const auto ctxIt = _contexts.find(context);
+    if (ctxIt == _contexts.end() || ctxIt->second.providers.empty())
+    {
+        return nullptr;
+    }
+
+    return ctxIt->second.providers.begin()->second;
+}
+
+void DirectoryInfoCache::NotifyFolderContentsChangedLocked(const ContextKey& context, const std::wstring& normalizedFolder) noexcept
+{
+    if (normalizedFolder.empty())
+    {
+        return;
+    }
+
+    Key key{};
+    key.context = context;
+    key.path    = normalizedFolder;
+    key.pathKey = MakeCaseInsensitivePathKey(normalizedFolder);
+
+    const auto it = _entries.find(key);
+    if (it == _entries.end() || ! it->second)
+    {
+        return;
+    }
+
+    MarkDirtyLocked(it->second);
+    PostRefreshLocked(it->second);
+}
+
+void DirectoryInfoCache::MarkSubtreeDirtyLocked(const ContextKey& context, const std::wstring& normalizedRootPath) noexcept
+{
+    if (normalizedRootPath.empty())
+    {
+        return;
+    }
+
+    const std::wstring rootKey = MakeCaseInsensitivePathKey(normalizedRootPath);
+    for (const auto& [key, entry] : _entries)
+    {
+        if (! entry || ! ContextKeyEq{}(key.context, context))
+        {
+            continue;
+        }
+
+        if (! IsSameOrDescendantPath(key.pathKey, rootKey, context.isFilePlugin))
+        {
+            continue;
+        }
+
+        MarkDirtyLocked(entry);
+    }
+}
+
+void DirectoryInfoCache::NotifyBackedContextPathDeletedLocked(const std::wstring& normalizedPath) noexcept
+{
+    const std::wstring normalizedPathKey = MakeCaseInsensitivePathKey(normalizedPath);
+
+    for (const auto& [key, entry] : _entries)
+    {
+        if (! entry || entry->pinCount == 0 || key.context.isFilePlugin || key.context.instanceContext.empty())
+        {
+            continue;
+        }
+
+        if (! NavigationLocation::LooksLikeWindowsAbsolutePath(key.context.instanceContext))
+        {
+            continue;
+        }
+
+        const std::wstring instanceKey = MakeCaseInsensitivePathKey(key.context.instanceContext);
+        if (! IsSameOrDescendantPath(instanceKey, normalizedPathKey, true))
+        {
+            continue;
+        }
+
+        DirectoryImpact impact{};
+        impact.kind             = DirectoryImpact::Kind::ExitInstanceContext;
+        impact.focusDisplayName = LeafNameNormalizedPath(key.context.instanceContext);
+        PostImpactLocked(entry, impact);
+    }
+}
+
+void DirectoryInfoCache::NotifyBackedContextPathMovedLocked(const std::wstring& normalizedSourcePath, const std::wstring& normalizedDestinationPath) noexcept
+{
+    const std::wstring sourceKey = MakeCaseInsensitivePathKey(normalizedSourcePath);
+
+    for (const auto& [key, entry] : _entries)
+    {
+        if (! entry || entry->pinCount == 0 || key.context.isFilePlugin || key.context.instanceContext.empty())
+        {
+            continue;
+        }
+
+        if (! NavigationLocation::LooksLikeWindowsAbsolutePath(key.context.instanceContext))
+        {
+            continue;
+        }
+
+        const std::wstring instanceKey = MakeCaseInsensitivePathKey(key.context.instanceContext);
+        if (! IsSameOrDescendantPath(instanceKey, sourceKey, true))
+        {
+            continue;
+        }
+
+        DirectoryImpact impact{};
+        impact.kind = DirectoryImpact::Kind::RetargetInstanceContext;
+        impact.newInstanceContext =
+            JoinNormalizedPath(normalizedDestinationPath, GetRelativeSubPath(key.context.instanceContext, normalizedSourcePath, true), true);
+        PostImpactLocked(entry, impact);
+    }
+}
+
+void DirectoryInfoCache::NotifyPathDeletedLocked(const ContextKey& context, const std::wstring& normalizedPath) noexcept
+{
+    const std::wstring parentPath = ParentNormalizedPath(normalizedPath, context.isFilePlugin);
+    NotifyFolderContentsChangedLocked(context, parentPath);
+    MarkSubtreeDirtyLocked(context, normalizedPath);
+
+    const std::wstring deletedKey = MakeCaseInsensitivePathKey(normalizedPath);
+    for (const auto& [key, entry] : _entries)
+    {
+        if (! entry || entry->pinCount == 0 || ! ContextKeyEq{}(key.context, context))
+        {
+            continue;
+        }
+
+        if (! IsSameOrDescendantPath(key.pathKey, deletedKey, context.isFilePlugin))
+        {
+            continue;
+        }
+
+        DirectoryImpact impact{};
+        impact.kind             = DirectoryImpact::Kind::RelocateCurrentFolder;
+        impact.targetFolder     = parentPath.empty() ? normalizedPath : parentPath;
+        impact.focusDisplayName = LeafNameNormalizedPath(normalizedPath);
+        PostImpactLocked(entry, impact);
+    }
+
+    if (context.isFilePlugin)
+    {
+        NotifyBackedContextPathDeletedLocked(normalizedPath);
+    }
+}
+
+void DirectoryInfoCache::NotifyPathMovedLocked(const ContextKey& context,
+                                               const std::wstring& normalizedSourcePath,
+                                               const std::wstring& normalizedDestinationPath) noexcept
+{
+    NotifyFolderContentsChangedLocked(context, ParentNormalizedPath(normalizedSourcePath, context.isFilePlugin));
+    NotifyFolderContentsChangedLocked(context, ParentNormalizedPath(normalizedDestinationPath, context.isFilePlugin));
+    MarkSubtreeDirtyLocked(context, normalizedSourcePath);
+
+    const std::wstring sourceKey = MakeCaseInsensitivePathKey(normalizedSourcePath);
+    for (const auto& [key, entry] : _entries)
+    {
+        if (! entry || entry->pinCount == 0 || ! ContextKeyEq{}(key.context, context))
+        {
+            continue;
+        }
+
+        if (! IsSameOrDescendantPath(key.pathKey, sourceKey, context.isFilePlugin))
+        {
+            continue;
+        }
+
+        DirectoryImpact impact{};
+        impact.kind = DirectoryImpact::Kind::RelocateCurrentFolder;
+        impact.targetFolder =
+            JoinNormalizedPath(normalizedDestinationPath, GetRelativeSubPath(key.path, normalizedSourcePath, context.isFilePlugin), context.isFilePlugin);
+        PostImpactLocked(entry, impact);
+    }
+
+    if (context.isFilePlugin)
+    {
+        NotifyBackedContextPathMovedLocked(normalizedSourcePath, normalizedDestinationPath);
+    }
+}
+
+void DirectoryInfoCache::OnWatcherNotification(const ContextKey& context, std::wstring watchedFolder, const FolderWatcherNotification& notification) noexcept
+{
+    std::lock_guard lock(_mutex);
+
+    if (notification.overflow)
+    {
+        NotifyFolderContentsChangedLocked(context, watchedFolder);
+        return;
+    }
+
+    // Track a single in-order rename pair per notification batch. A trailing orphan OLD_NAME degrades to delete below.
+    std::optional<std::wstring> pendingRenameOld;
+    for (const auto& change : notification.changes)
+    {
+        const std::wstring fullPath =
+            change.relativePath.empty() ? watchedFolder : JoinNormalizedPath(watchedFolder, change.relativePath, context.isFilePlugin);
+
+        switch (change.action)
+        {
+            case FILESYSTEM_DIR_CHANGE_ADDED:
+            case FILESYSTEM_DIR_CHANGE_MODIFIED:
+                if (change.relativePath.empty())
+                {
+                    NotifyFolderContentsChangedLocked(context, watchedFolder);
+                }
+                else
+                {
+                    NotifyFolderContentsChangedLocked(context, ParentNormalizedPath(fullPath, context.isFilePlugin));
+                }
+                pendingRenameOld.reset();
+                break;
+            case FILESYSTEM_DIR_CHANGE_REMOVED:
+                NotifyPathDeletedLocked(context, fullPath);
+                pendingRenameOld.reset();
+                break;
+            case FILESYSTEM_DIR_CHANGE_RENAMED_OLD_NAME: pendingRenameOld = fullPath; break;
+            case FILESYSTEM_DIR_CHANGE_RENAMED_NEW_NAME:
+                if (pendingRenameOld)
+                {
+                    NotifyPathMovedLocked(context, *pendingRenameOld, fullPath);
+                    pendingRenameOld.reset();
+                }
+                else
+                {
+                    if (change.relativePath.empty())
+                    {
+                        NotifyFolderContentsChangedLocked(context, watchedFolder);
+                    }
+                    else
+                    {
+                        NotifyFolderContentsChangedLocked(context, ParentNormalizedPath(fullPath, context.isFilePlugin));
+                    }
+                }
+                break;
+            case FILESYSTEM_DIR_CHANGE_UNKNOWN:
+                NotifyFolderContentsChangedLocked(context, watchedFolder);
+                pendingRenameOld.reset();
+                break;
+        }
+    }
+
+    if (pendingRenameOld)
+    {
+        NotifyPathDeletedLocked(context, *pendingRenameOld);
+    }
 }
 
 void DirectoryInfoCache::UpdateWatchersLocked(std::vector<std::unique_ptr<FolderWatcher>>& watchersToStop) noexcept
@@ -842,7 +1474,7 @@ void DirectoryInfoCache::UpdateWatchersLocked(std::vector<std::unique_ptr<Folder
         --watcherBudget;
     }
 
-    // 2) Then MRU non-pinned entries (best-effort).
+    // 2) Then explicitly opted-in MRU non-pinned entries (best-effort).
     uint32_t watchedMru = 0;
     for (const auto& entry : _lru)
     {
@@ -854,7 +1486,7 @@ void DirectoryInfoCache::UpdateWatchersLocked(std::vector<std::unique_ptr<Folder
         {
             continue;
         }
-        if (! entry->info || entry->loading)
+        if (! entry->allowOffscreenWatch || ! entry->info || entry->loading)
         {
             continue;
         }
@@ -954,11 +1586,9 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
 
     for (;;)
     {
-        std::vector<std::unique_ptr<FolderWatcher>> watchersToStop;
         std::unique_lock lock(_mutex);
 
         TouchLocked(entry);
-        UpdateWatchersLocked(watchersToStop);
 
         if (entry->info && ! entry->dirty)
         {
@@ -1006,14 +1636,17 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
             entry->loading = false;
             TouchLocked(entry);
             MaybeEvictLocked(watchersToStop);
-            UpdateWatchersLocked(watchersToStop);
             entry->cv.notify_all();
         }
         return HRESULT_FROM_WIN32(ERROR_CANCELLED);
     }
 
     // Perform enumeration outside the cache lock.
-    wil::com_ptr<IFileSystem> fileSystem = entry->key.fileSystem;
+    wil::com_ptr<IFileSystem> fileSystem;
+    {
+        std::lock_guard lock(_mutex);
+        fileSystem = ResolveProviderLocked(entry->key.context);
+    }
 
     wil::com_ptr<IFilesInformation> info;
     Debug::Perf::Scope perf(L"DirectoryInfoCache.ReadDirectoryInfo");
@@ -1042,6 +1675,7 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
         {
             // Keep old snapshot if it exists, but mark it dirty so callers can try again later.
             Debug::Warning(L"DirectoryInfoCache: enumeration failed for '{}' (hr=0x{:08X})", entry->key.path, static_cast<unsigned long>(hr));
+            entry->refreshPosted = false;
         }
         else
         {
@@ -1049,7 +1683,7 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
             entry->info             = std::move(info);
             entry->bytes            = entryBytes;
             entry->dirty            = false;
-            entry->notifyPosted     = false;
+            entry->refreshPosted    = false;
             ++_enumerations;
 
             if (_currentBytes >= oldBytes)
@@ -1065,7 +1699,6 @@ HRESULT DirectoryInfoCache::EnsureLoaded(const std::shared_ptr<Entry>& entry, Bo
 
         TouchLocked(entry);
         MaybeEvictLocked(watchersToStop);
-        UpdateWatchersLocked(watchersToStop);
         entry->cv.notify_all();
     }
 
@@ -1105,12 +1738,10 @@ DirectoryInfoCache::Borrowed DirectoryInfoCache::BorrowDirectoryInfo(IFileSystem
 
     std::shared_ptr<Entry> entry;
     {
-        std::vector<std::unique_ptr<FolderWatcher>> watchersToStop;
         std::lock_guard lock(_mutex);
         entry = GetOrCreateEntryLocked(*keyOpt);
         TouchLocked(entry);
         AddBorrowLocked(entry);
-        UpdateWatchersLocked(watchersToStop);
     }
 
     result._entry  = entry;

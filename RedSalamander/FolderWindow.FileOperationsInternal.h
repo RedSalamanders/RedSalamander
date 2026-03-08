@@ -69,7 +69,8 @@ struct FolderWindow::FileOperationState
         std::wstring lastDiagnosticMessage;
         std::vector<TaskDiagnosticEntry> issueDiagnostics;
 
-        ULONGLONG completedTick = 0;
+        ULONGLONG lastProgressCallbackTick = 0;
+        ULONGLONG completedTick            = 0;
     };
 
     struct Task final : public IFileSystemCallback, public IFileSystemDirectorySizeCallback
@@ -195,6 +196,7 @@ struct FolderWindow::FileOperationState
         void TogglePause() noexcept;
         void SetDesiredSpeedLimit(uint64_t bytesPerSecond) noexcept;
         void SetWaitForOthers(bool wait) noexcept;
+        void SetWaitingInQueue(bool waiting) noexcept;
         void SetQueuePaused(bool paused) noexcept;
         void ToggleConflictApplyToAllChecked() noexcept;
         void SubmitConflictDecision(ConflictAction action, bool applyToAllChecked) noexcept;
@@ -221,6 +223,7 @@ struct FolderWindow::FileOperationState
 
         void WaitWhilePaused() noexcept;
         void WaitWhilePreCalcPaused() noexcept;
+        void MarkRateSamplingStateChanged() noexcept;
 
         HRESULT ExecuteOperation() noexcept;
         void LogDiagnostic(DiagnosticSeverity severity,
@@ -292,6 +295,7 @@ struct FolderWindow::FileOperationState
         std::atomic<ULONGLONG> _cancelRequestedTick{0};
         std::atomic<bool> _paused{false};
         std::atomic<bool> _queuePaused{false};
+        std::atomic<ULONGLONG> _rateSamplingStateChangeTick{0};
         std::atomic<bool> _started{false};
         std::atomic<ULONGLONG> _operationStartTick{0};
         std::atomic<uint64_t> _desiredSpeedLimitBytesPerSecond{0};
@@ -333,6 +337,7 @@ struct FolderWindow::FileOperationState
         std::wstring _progressDestinationPath;
         std::wstring _lastProgressCallbackSourcePath;
         std::wstring _lastProgressCallbackDestinationPath;
+        ULONGLONG _lastProgressCallbackTick  = 0;
         unsigned long _lastItemIndex         = 0;
         HRESULT _lastItemHr                  = S_OK;
         uint64_t _progressCallbackCount      = 0;

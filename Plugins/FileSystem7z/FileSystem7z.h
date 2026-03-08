@@ -267,9 +267,9 @@ private:
     std::wstring _archivePath;
     std::wstring _password;
 
-    bool _indexReady     = false;
+    bool _indexReady           = false;
     bool _indexBuildInProgress = false;
-    HRESULT _indexStatus = S_OK;
+    HRESULT _indexStatus       = S_OK;
     std::wstring _indexedArchivePath;
     std::wstring _indexedPassword;
 

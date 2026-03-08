@@ -699,7 +699,9 @@ void NavigationView::UpdateEditSuggest()
         if (TryParsePluginPrefix(normalizedInput, typedPrefix, typedRemainder))
         {
             const bool supportsConnections = EqualsNoCase(typedPrefix, L"ftp") || EqualsNoCase(typedPrefix, L"sftp") || EqualsNoCase(typedPrefix, L"scp") ||
-                                             EqualsNoCase(typedPrefix, L"imap");
+                                             EqualsNoCase(typedPrefix, L"imap") || EqualsNoCase(typedPrefix, L"gdrive") ||
+                                             EqualsNoCase(typedPrefix, L"onedrivep") || EqualsNoCase(typedPrefix, L"onedriveb") ||
+                                             EqualsNoCase(typedPrefix, L"sharepoint");
 
             if (supportsConnections && ! typedRemainder.empty() && typedRemainder.find(L'|') == std::wstring_view::npos)
             {

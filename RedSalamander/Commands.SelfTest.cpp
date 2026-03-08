@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <format>
+#include <initializer_list>
 #include <string>
 #include <system_error>
 #include <thread>
@@ -30,6 +31,7 @@
 #include "Helpers.h"
 #include "HostServices.h"
 #include "Preferences.h"
+#include "SettingsHotReload.h"
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutsWindow.h"
@@ -57,6 +59,495 @@ void PumpPendingMessages() noexcept
 }
 
 using CaseState = SelfTest::CaseState;
+
+struct SettingsHotReloadTestWindowState
+{
+    std::atomic<uint32_t> changeCount{0};
+    std::atomic<ULONGLONG> lastTickCount{0};
+
+    SettingsHotReloadTestWindowState()                                                   = default;
+    SettingsHotReloadTestWindowState(const SettingsHotReloadTestWindowState&)            = delete;
+    SettingsHotReloadTestWindowState& operator=(const SettingsHotReloadTestWindowState&) = delete;
+    SettingsHotReloadTestWindowState(SettingsHotReloadTestWindowState&&)                 = delete;
+    SettingsHotReloadTestWindowState& operator=(SettingsHotReloadTestWindowState&&)      = delete;
+};
+
+[[nodiscard]] bool WaitForAtomicAtLeast(const std::atomic<uint32_t>& value, uint32_t expected, std::chrono::milliseconds timeout) noexcept;
+[[nodiscard]] std::wstring NewGuidText() noexcept;
+
+LRESULT CALLBACK SettingsHotReloadTestWindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+{
+    auto* state = reinterpret_cast<SettingsHotReloadTestWindowState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+
+    switch (message)
+    {
+        case WM_CREATE:
+        {
+            auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(create ? create->lpCreateParams : nullptr));
+            InitPostedPayloadWindow(hwnd);
+            return 0;
+        }
+
+        case WndMsg::kSettingsFileChanged:
+        {
+            auto payload = TakeMessagePayload<SettingsHotReload::SettingsFileChangedPayload>(lParam);
+            if (state && payload)
+            {
+                state->lastTickCount.store(payload->tickCount, std::memory_order_release);
+                state->changeCount.fetch_add(1u, std::memory_order_acq_rel);
+            }
+            return 0;
+        }
+
+        case WM_NCDESTROY:
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+            static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
+            break;
+    }
+
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
+[[nodiscard]] HWND CreateSettingsHotReloadTestWindow(SettingsHotReloadTestWindowState& state) noexcept
+{
+    constexpr wchar_t kClassName[] = L"RedSalamander.SettingsHotReloadSelfTestWindow";
+
+    HINSTANCE instance = GetModuleHandleW(nullptr);
+    WNDCLASSW existing{};
+    if (GetClassInfoW(instance, kClassName, &existing) == FALSE)
+    {
+        WNDCLASSW wc{};
+        wc.lpfnWndProc   = SettingsHotReloadTestWindowProc;
+        wc.hInstance     = instance;
+        wc.lpszClassName = kClassName;
+        if (RegisterClassW(&wc) == 0 && GetLastError() != ERROR_CLASS_ALREADY_EXISTS)
+        {
+            return nullptr;
+        }
+    }
+
+    return CreateWindowExW(0, kClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, instance, &state);
+}
+
+void CleanupSettingsArtifacts(std::wstring_view appId) noexcept
+{
+    if (appId.empty())
+    {
+        return;
+    }
+
+    std::error_code ec;
+
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    const std::filesystem::path schemaPath   = Common::Settings::GetSettingsSchemaPath(appId);
+
+    if (! schemaPath.empty())
+    {
+        std::filesystem::remove(schemaPath, ec);
+        ec.clear();
+    }
+
+    if (! settingsPath.empty())
+    {
+        std::filesystem::remove(settingsPath, ec);
+        ec.clear();
+
+        const std::filesystem::path directory = settingsPath.parent_path();
+        const std::wstring backupPrefix       = settingsPath.filename().wstring() + L".bad.";
+        if (! directory.empty())
+        {
+            for (std::filesystem::directory_iterator it(directory, ec), end; ! ec && it != end; it.increment(ec))
+            {
+                if (! it->is_regular_file(ec))
+                {
+                    ec.clear();
+                    continue;
+                }
+
+                const std::wstring candidate = it->path().filename().wstring();
+                if (OrdinalString::StartsWithNoCase(candidate, backupPrefix))
+                {
+                    std::filesystem::remove(it->path(), ec);
+                    ec.clear();
+                }
+            }
+        }
+    }
+}
+
+[[nodiscard]] std::filesystem::path FindSettingsBackupArtifact(std::wstring_view appId) noexcept
+{
+    if (appId.empty())
+    {
+        return {};
+    }
+
+    std::error_code ec;
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+    if (settingsPath.empty())
+    {
+        return {};
+    }
+
+    const std::filesystem::path directory = settingsPath.parent_path();
+    const std::wstring backupPrefix       = settingsPath.filename().wstring() + L".bad.";
+    if (directory.empty())
+    {
+        return {};
+    }
+
+    for (std::filesystem::directory_iterator it(directory, ec), end; ! ec && it != end; it.increment(ec))
+    {
+        if (! it->is_regular_file(ec))
+        {
+            ec.clear();
+            continue;
+        }
+
+        const std::wstring candidate = it->path().filename().wstring();
+        if (OrdinalString::StartsWithNoCase(candidate, backupPrefix))
+        {
+            return it->path();
+        }
+    }
+
+    return {};
+}
+
+void RestoreMainSettingsHotReload(HWND mainWindow, CaseState& state) noexcept
+{
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        return;
+    }
+
+    const HRESULT hr = SettingsHotReload::Start(mainWindow, L"RedSalamander");
+    state.Require(SUCCEEDED(hr), L"Failed to restore main settings hot-reload watcher.");
+}
+
+[[nodiscard]] bool TestSettingsHotReloadMergePreservesRuntimeSession(CaseState& state) noexcept
+{
+    Common::Settings::Settings diskSettings;
+    diskSettings.windows.emplace(L"MainWindow",
+                                 Common::Settings::WindowPlacement{
+                                     .state = Common::Settings::WindowState::Normal, .bounds = {.x = 10, .y = 20, .width = 800, .height = 600}, .dpi = 96u});
+    diskSettings.windows.emplace(L"PreferencesWindow",
+                                 Common::Settings::WindowPlacement{
+                                     .state = Common::Settings::WindowState::Normal, .bounds = {.x = 50, .y = 60, .width = 640, .height = 480}, .dpi = 96u});
+    diskSettings.windows.emplace(
+        L"DiskOnlyWindow",
+        Common::Settings::WindowPlacement{.state = Common::Settings::WindowState::Maximized, .bounds = {.x = 1, .y = 2, .width = 3, .height = 4}, .dpi = 144u});
+
+    Common::Settings::FoldersSettings diskFolders;
+    diskFolders.active            = L"left";
+    diskFolders.layout.splitRatio = 0.75f;
+    diskFolders.showHiddenFiles   = false;
+    diskFolders.showSystemFiles   = false;
+    diskFolders.historyMax        = 42;
+    diskFolders.history           = {std::filesystem::path(L"C:\\disk-history")};
+    diskFolders.historyFilters.push_back({std::filesystem::path(L"C:\\disk-filter"), true, L"*.disk"});
+    diskFolders.items.push_back(Common::Settings::FolderPane{
+        .slot = L"left", .current = std::filesystem::path(L"C:\\disk-left"), .view = {.display = Common::Settings::FolderDisplayMode::Detailed}});
+    diskFolders.items.push_back(Common::Settings::FolderPane{
+        .slot = L"right", .current = std::filesystem::path(L"C:\\disk-right"), .view = {.display = Common::Settings::FolderDisplayMode::Brief}});
+    diskSettings.folders = diskFolders;
+
+    Common::Settings::Settings runtimeSettings             = diskSettings;
+    runtimeSettings.windows[L"MainWindow"].bounds.x        = 101;
+    runtimeSettings.windows[L"PreferencesWindow"].bounds.x = 202;
+    runtimeSettings.windows.emplace(L"ConnectionManagerWindow",
+                                    Common::Settings::WindowPlacement{.state  = Common::Settings::WindowState::Normal,
+                                                                      .bounds = {.x = 303, .y = 404, .width = 505, .height = 606},
+                                                                      .dpi    = 120u});
+
+    Common::Settings::FoldersSettings runtimeFolders = diskFolders;
+    runtimeFolders.active                            = L"right";
+    runtimeFolders.layout.splitRatio                 = 0.25f;
+    runtimeFolders.history                           = {std::filesystem::path(L"C:\\runtime-history-1"), std::filesystem::path(L"C:\\runtime-history-2")};
+    runtimeFolders.historyFilters                    = {{std::filesystem::path(L"C:\\runtime-filter"), true, L"*.runtime"}};
+    runtimeFolders.items[0].current                  = std::filesystem::path(L"C:\\runtime-left");
+    runtimeFolders.items[1].current                  = std::filesystem::path(L"C:\\runtime-right");
+    runtimeSettings.folders                          = runtimeFolders;
+
+    const std::array<std::wstring_view, 2> runtimeWindowIds = {L"MainWindow", L"PreferencesWindow"};
+    const Common::Settings::Settings merged = SettingsHotReload::MergeDiskSettingsWithRuntimeSession(diskSettings, runtimeSettings, runtimeWindowIds);
+
+    state.Require(merged.windows.contains(L"DiskOnlyWindow"), L"Expected disk-only window placement to be preserved.");
+    state.Require(merged.windows.at(L"MainWindow").bounds.x == 101, L"Expected runtime main window placement to win.");
+    state.Require(merged.windows.at(L"PreferencesWindow").bounds.x == 202, L"Expected runtime preferences placement to win.");
+    state.Require(! merged.windows.contains(L"ConnectionManagerWindow"), L"Unexpected runtime-only window placement merge.");
+
+    state.Require(merged.folders.has_value(), L"Expected merged folders settings.");
+    if (! merged.folders.has_value())
+    {
+        return false;
+    }
+
+    const auto& folders = merged.folders.value();
+    state.Require(folders.active == L"right", L"Expected runtime active pane to be preserved.");
+    state.Require(std::abs(folders.layout.splitRatio - 0.25f) < 0.001f, L"Expected runtime folder layout split ratio to be preserved.");
+    state.Require(folders.history.size() == 2, L"Expected runtime folder history to be preserved.");
+    state.Require(folders.historyFilters.size() == 1 && folders.historyFilters.front().text == L"*.runtime",
+                  L"Expected runtime folder history filters to be preserved.");
+    state.Require(folders.showHiddenFiles == false && folders.showSystemFiles == false, L"Expected disk folder preference flags to remain authoritative.");
+    state.Require(folders.historyMax == 42, L"Expected disk folder historyMax to remain authoritative.");
+    state.Require(folders.items.size() == 2, L"Expected both folder pane entries after merge.");
+    state.Require(folders.items[0].current == std::filesystem::path(L"C:\\runtime-left"), L"Expected runtime left pane current path.");
+    state.Require(folders.items[1].current == std::filesystem::path(L"C:\\runtime-right"), L"Expected runtime right pane current path.");
+    state.Require(folders.items[0].view.display == Common::Settings::FolderDisplayMode::Detailed,
+                  L"Expected disk folder view preferences to remain authoritative.");
+    return true;
+}
+
+[[nodiscard]] bool TestSettingsHotReloadMergeKeepsDiskPreferences(CaseState& state) noexcept
+{
+    Common::Settings::Settings diskSettings;
+    diskSettings.theme.currentThemeId = L"builtin/dark";
+    diskSettings.compareDirectories =
+        Common::Settings::CompareDirectoriesSettings{.compareContent = true, .ignoreFiles = true, .ignoreFilesPatterns = L"*.bak"};
+    diskSettings.windows[L"MainWindow"].bounds.width = 700;
+
+    Common::Settings::FoldersSettings diskFolders;
+    diskFolders.items.push_back(Common::Settings::FolderPane{.slot = L"left", .current = std::filesystem::path(L"C:\\disk-left")});
+    diskSettings.folders = diskFolders;
+
+    Common::Settings::Settings runtimeSettings          = diskSettings;
+    runtimeSettings.theme.currentThemeId                = L"builtin/light";
+    runtimeSettings.compareDirectories                  = Common::Settings::CompareDirectoriesSettings{.compareContent = false, .ignoreFiles = false};
+    runtimeSettings.windows[L"MainWindow"].bounds.width = 900;
+
+    Common::Settings::FoldersSettings runtimeFolders = diskFolders;
+    runtimeFolders.items[0].current                  = std::filesystem::path(L"C:\\runtime-left");
+    runtimeSettings.folders                          = runtimeFolders;
+
+    const std::array<std::wstring_view, 1> runtimeWindowIds = {L"MainWindow"};
+    const Common::Settings::Settings merged = SettingsHotReload::MergeDiskSettingsWithRuntimeSession(diskSettings, runtimeSettings, runtimeWindowIds);
+
+    state.Require(merged.theme.currentThemeId == L"builtin/dark", L"Expected disk theme to remain authoritative.");
+    state.Require(merged.compareDirectories.has_value() && merged.compareDirectories->compareContent,
+                  L"Expected disk compare-directories settings to remain authoritative.");
+    state.Require(merged.compareDirectories->ignoreFilesPatterns == L"*.bak", L"Expected disk compare ignore patterns to remain authoritative.");
+    state.Require(merged.windows.at(L"MainWindow").bounds.width == 900, L"Expected runtime window placement to still be merged.");
+    state.Require(merged.folders.has_value() && merged.folders->items.front().current == std::filesystem::path(L"C:\\runtime-left"),
+                  L"Expected runtime folder current path to still be merged.");
+    return true;
+}
+
+[[nodiscard]] bool TestSettingsStoreNoRecoveryAndFileStamp(CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestSettingsStore";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
+
+    Common::Settings::SettingsFileStamp missingStamp{};
+    const HRESULT missingHr = Common::Settings::TryGetSettingsFileStamp(kTestAppId, missingStamp);
+    state.Require(missingHr == S_FALSE, L"Expected missing settings stamp query to return S_FALSE.");
+
+    Common::Settings::Settings settings{};
+    settings.theme.currentThemeId = L"builtin/light";
+    const HRESULT saveHr          = Common::Settings::SaveSettings(kTestAppId, settings);
+    state.Require(SUCCEEDED(saveHr), L"Failed to save baseline test settings.");
+    if (FAILED(saveHr))
+    {
+        return false;
+    }
+
+    Common::Settings::SettingsFileStamp stampBefore{};
+    const HRESULT stampBeforeHr = Common::Settings::TryGetSettingsFileStamp(kTestAppId, stampBefore);
+    state.Require(stampBeforeHr == S_OK, L"Failed to query baseline settings file stamp.");
+
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded);
+    state.Require(loadHr == S_OK, L"TryLoadSettingsNoRecovery should succeed for valid settings.");
+    state.Require(loaded.theme.currentThemeId == L"builtin/light", L"TryLoadSettingsNoRecovery loaded unexpected theme id.");
+
+    std::this_thread::sleep_for(SelfTest::Scale(std::chrono::milliseconds{50}));
+
+    settings.theme.currentThemeId = L"builtin/dark";
+    const HRESULT saveUpdatedHr   = Common::Settings::SaveSettings(kTestAppId, settings);
+    state.Require(SUCCEEDED(saveUpdatedHr), L"Failed to save updated test settings.");
+    if (FAILED(saveUpdatedHr))
+    {
+        return false;
+    }
+
+    Common::Settings::SettingsFileStamp stampAfter{};
+    const HRESULT stampAfterHr = Common::Settings::TryGetSettingsFileStamp(kTestAppId, stampAfter);
+    state.Require(stampAfterHr == S_OK, L"Failed to query updated settings file stamp.");
+    state.Require(! (stampAfter == stampBefore), L"Expected settings file stamp to change after save.");
+
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kTestAppId);
+    state.Require(! settingsPath.empty(), L"Test settings path unavailable.");
+    state.Require(SelfTest::WriteTextFile(settingsPath, "{ invalid json"), L"Failed to write invalid settings file for no-recovery test.");
+
+    Common::Settings::Settings invalidLoaded{};
+    const HRESULT invalidHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, invalidLoaded);
+    state.Require(FAILED(invalidHr), L"TryLoadSettingsNoRecovery should fail for invalid JSON.");
+    state.Require(SelfTest::PathExists(settingsPath), L"Invalid no-recovery load should keep the original settings file in place.");
+    state.Require(FindSettingsBackupArtifact(kTestAppId).empty(), L"No-recovery load should not create a .bad backup file.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsHotReloadSelfSaveSuppression(HWND mainWindow, CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestHotReloadSelfSave";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&]
+    {
+        SettingsHotReload::Stop();
+        RestoreMainSettingsHotReload(mainWindow, state);
+        CleanupSettingsArtifacts(kTestAppId);
+    });
+
+    Common::Settings::Settings baseline{};
+    baseline.theme.currentThemeId = L"builtin/light";
+    const HRESULT seedHr          = Common::Settings::SaveSettings(kTestAppId, baseline);
+    state.Require(SUCCEEDED(seedHr), L"Failed to seed hot-reload self-save test settings.");
+    if (FAILED(seedHr))
+    {
+        return false;
+    }
+
+    SettingsHotReloadTestWindowState windowState{};
+    HWND hwnd = CreateSettingsHotReloadTestWindow(windowState);
+    state.Require(hwnd != nullptr && IsWindow(hwnd) != FALSE, L"Failed to create hot-reload self-test window.");
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+    const auto destroyWindow = wil::scope_exit([&]
+    {
+        if (hwnd && IsWindow(hwnd))
+        {
+            DestroyWindow(hwnd);
+        }
+    });
+
+    const HRESULT startHr = SettingsHotReload::Start(hwnd, kTestAppId);
+    state.Require(SUCCEEDED(startHr), L"Failed to start settings hot-reload watcher for self-save suppression test.");
+    if (FAILED(startHr))
+    {
+        return false;
+    }
+
+    Common::Settings::Settings selfSaved = baseline;
+    selfSaved.theme.currentThemeId       = L"builtin/dark";
+
+    const uint32_t beforeSelfSave = windowState.changeCount.load(std::memory_order_acquire);
+    const HRESULT selfSaveHr      = SettingsHotReload::SaveSettingsAndSchema(kTestAppId, selfSaved);
+    state.Require(SUCCEEDED(selfSaveHr), L"Failed to save settings through SettingsHotReload::SaveSettingsAndSchema.");
+    state.Require(WaitForAtomicAtLeast(windowState.changeCount, beforeSelfSave + 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Watcher did not observe the self-save settings write.");
+
+    const SettingsHotReload::ChangedSettingsLoadResult suppressed = SettingsHotReload::TryLoadChangedSettings();
+    state.Require(suppressed.status == SettingsHotReload::ChangedSettingsStatus::NoChange,
+                  L"Self-save should be suppressed by the applied-stamp de-duplication path.");
+    state.Require(suppressed.stamp.has_value(), L"Suppressed self-save result should still return the observed stamp.");
+
+    Common::Settings::Settings external = selfSaved;
+    external.theme.currentThemeId       = L"builtin/rainbow";
+    std::this_thread::sleep_for(SelfTest::Scale(std::chrono::milliseconds{50}));
+
+    const uint32_t beforeExternalSave = windowState.changeCount.load(std::memory_order_acquire);
+    const HRESULT externalSaveHr      = Common::Settings::SaveSettings(kTestAppId, external);
+    state.Require(SUCCEEDED(externalSaveHr), L"Failed to save external settings change for hot-reload test.");
+    state.Require(WaitForAtomicAtLeast(windowState.changeCount, beforeExternalSave + 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Watcher did not observe the external settings write.");
+
+    const SettingsHotReload::ChangedSettingsLoadResult loaded = SettingsHotReload::TryLoadChangedSettings();
+    state.Require(loaded.status == SettingsHotReload::ChangedSettingsStatus::Loaded, L"External settings write should load through hot-reload.");
+    state.Require(loaded.hr == S_OK, L"External settings write should load successfully.");
+    state.Require(loaded.settings.theme.currentThemeId == L"builtin/rainbow", L"Loaded settings did not reflect the external update.");
+    state.Require(loaded.stamp.has_value(), L"Loaded external settings should include the file stamp.");
+    if (loaded.stamp.has_value())
+    {
+        SettingsHotReload::MarkAppliedStamp(loaded.stamp.value());
+    }
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsHotReloadInvalidExternalFile(HWND mainWindow, CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestHotReloadInvalid";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&]
+    {
+        SettingsHotReload::Stop();
+        RestoreMainSettingsHotReload(mainWindow, state);
+        CleanupSettingsArtifacts(kTestAppId);
+    });
+
+    Common::Settings::Settings baseline{};
+    baseline.theme.currentThemeId = L"builtin/system";
+    const HRESULT seedHr          = Common::Settings::SaveSettings(kTestAppId, baseline);
+    state.Require(SUCCEEDED(seedHr), L"Failed to seed invalid external-file hot-reload test settings.");
+    if (FAILED(seedHr))
+    {
+        return false;
+    }
+
+    SettingsHotReloadTestWindowState windowState{};
+    HWND hwnd = CreateSettingsHotReloadTestWindow(windowState);
+    state.Require(hwnd != nullptr && IsWindow(hwnd) != FALSE, L"Failed to create hot-reload invalid-file self-test window.");
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+    const auto destroyWindow = wil::scope_exit([&]
+    {
+        if (hwnd && IsWindow(hwnd))
+        {
+            DestroyWindow(hwnd);
+        }
+    });
+
+    const HRESULT startHr = SettingsHotReload::Start(hwnd, kTestAppId);
+    state.Require(SUCCEEDED(startHr), L"Failed to start settings hot-reload watcher for invalid-file test.");
+    if (FAILED(startHr))
+    {
+        return false;
+    }
+
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kTestAppId);
+    state.Require(! settingsPath.empty(), L"Invalid-file hot-reload test settings path unavailable.");
+
+    std::this_thread::sleep_for(SelfTest::Scale(std::chrono::milliseconds{50}));
+    const uint32_t beforeInvalidWrite = windowState.changeCount.load(std::memory_order_acquire);
+    state.Require(SelfTest::WriteTextFile(settingsPath, R"({"schemaVersion":9999})"), L"Failed to write unsupported-schema settings file.");
+    state.Require(WaitForAtomicAtLeast(windowState.changeCount, beforeInvalidWrite + 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Watcher did not observe the invalid external settings write.");
+
+    SettingsHotReload::ChangedSettingsLoadResult invalid{};
+    const auto invalidDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
+    for (;;)
+    {
+        invalid = SettingsHotReload::TryLoadChangedSettings();
+        if (invalid.status == SettingsHotReload::ChangedSettingsStatus::Invalid || std::chrono::steady_clock::now() >= invalidDeadline)
+        {
+            break;
+        }
+
+        std::this_thread::sleep_for(SelfTest::Scale(std::chrono::milliseconds{25}));
+    }
+    state.Require(invalid.status != SettingsHotReload::ChangedSettingsStatus::Loaded,
+                  L"Unsupported schema version should not be applied through external settings hot-reload.");
+    state.Require(invalid.status == SettingsHotReload::ChangedSettingsStatus::Invalid || invalid.status == SettingsHotReload::ChangedSettingsStatus::NoChange ||
+                      invalid.status == SettingsHotReload::ChangedSettingsStatus::Missing || invalid.status == SettingsHotReload::ChangedSettingsStatus::Error,
+                  L"Unsupported schema version produced an unexpected external settings hot-reload status.");
+    state.Require(invalid.status == SettingsHotReload::ChangedSettingsStatus::NoChange || FAILED(invalid.hr),
+                  L"Invalid external settings load should either stay suppressed as no-change or return a failure HRESULT.");
+    if (invalid.stamp.has_value())
+    {
+        SettingsHotReload::MarkRejectedStamp(invalid.stamp.value());
+        const SettingsHotReload::ChangedSettingsLoadResult deduped = SettingsHotReload::TryLoadChangedSettings();
+        state.Require(deduped.status == SettingsHotReload::ChangedSettingsStatus::NoChange,
+                      L"Rejected invalid settings stamp should be de-duplicated on subsequent checks.");
+    }
+
+    return state.failure.empty();
+}
 
 [[nodiscard]] bool IsOwnedBy(HWND window, HWND expectedOwner) noexcept
 {
@@ -295,12 +786,82 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
         PumpPendingMessages();
 
         const std::optional<std::filesystem::path> current = g_folderWindow.GetCurrentPath(pane);
-        if (current.has_value() && current.value() == expected)
+        if (current.has_value() && OrdinalString::EqualsNoCasePath(current.value(), expected))
         {
             return true;
         }
         std::this_thread::sleep_for(20ms);
     }
+
+    return false;
+}
+
+[[nodiscard]] bool WaitForPaneItems(
+    FolderWindow::Pane pane, std::initializer_list<std::wstring_view> expectedDisplayNames, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+
+        bool allFound = true;
+        for (const std::wstring_view displayName : expectedDisplayNames)
+        {
+            if (! g_folderWindow.DebugHasItemDisplayName(pane, displayName))
+            {
+                allFound = false;
+                break;
+            }
+        }
+
+        if (allFound)
+        {
+            return true;
+        }
+
+        std::this_thread::sleep_for(20ms);
+    }
+
+    std::wstring missing;
+    for (const std::wstring_view displayName : expectedDisplayNames)
+    {
+        if (g_folderWindow.DebugHasItemDisplayName(pane, displayName))
+        {
+            continue;
+        }
+
+        if (! missing.empty())
+        {
+            missing.append(L", ");
+        }
+        missing.append(displayName);
+    }
+
+    const std::optional<std::filesystem::path> current = g_folderWindow.GetCurrentPath(pane);
+    const FolderView::NameFilterState filterState      = g_folderWindow.DebugGetNameFilterState(pane);
+    const wchar_t* paneText                            = pane == FolderWindow::Pane::Left ? L"Left" : L"Right";
+    size_t diskEntryCount                              = 0;
+    std::error_code ec;
+    if (current.has_value())
+    {
+        for (std::filesystem::directory_iterator it(current.value(), ec), end; ! ec && it != end; it.increment(ec))
+        {
+            ++diskEntryCount;
+        }
+    }
+
+    Trace(std::format(
+        L"WaitForPaneItems timeout pane={} path='{}' itemCount={} diskEntryCount={} filterEnabled={} filterText='{}' hiddenNames={} missing='{}'",
+                      paneText,
+                      current.has_value() ? current->native() : std::wstring(L"<none>"),
+                      g_folderWindow.DebugGetItemCount(pane),
+                      diskEntryCount,
+                      filterState.enabled ? 1 : 0,
+                      filterState.text,
+                      g_folderWindow.CanShowHiddenNames(pane) ? 1 : 0,
+                      missing));
 
     return false;
 }
@@ -993,11 +1554,57 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
 
 [[nodiscard]] bool TestCalculateDirectorySizes(HWND mainWindow, CaseState& state) noexcept
 {
+    using namespace std::chrono_literals;
+
     if (! mainWindow || ! IsWindow(mainWindow))
     {
         state.Require(false, L"Main window handle invalid.");
         return false;
     }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"calculate_directory_sizes_{}", GetTickCount64());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create calculate-directory-sizes test root.");
+    state.Require(SelfTest::EnsureDirectory(root / L"nested"), L"Failed to create nested folder for calculate-directory-sizes test.");
+    state.Require(SelfTest::WriteTextFile(root / L"root.txt", "root"), L"Failed to create root file for calculate-directory-sizes test.");
+    state.Require(SelfTest::WriteTextFile(root / L"nested" / L"child.txt", "child"), L"Failed to create nested file for calculate-directory-sizes test.");
+
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePath                                = wil::scope_exit([&]
+    {
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
+    std::atomic<uint32_t> enumCount{0};
+    g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
+                                                       [&](const std::filesystem::path& folder) noexcept
+    {
+        if (OrdinalString::EqualsNoCasePath(folder, root))
+        {
+            enumCount.fetch_add(1u, std::memory_order_release);
+        }
+    });
+    const auto clearEnumCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                  L"Failed to set left pane path for calculate-directory-sizes test.");
+    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(3000ms)), L"Enumeration did not complete for calculate-directory-sizes test.");
+
+    FocusFolderViewPane(FolderWindow::Pane::Left);
 
     const size_t before = g_folderWindow.DebugGetViewerInstanceCount();
     SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_CALCULATE_DIRECTORY_SIZES, 0), 0);
@@ -1159,7 +1766,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
         return false;
     }
 
-    const std::filesystem::path root = suiteRoot / L"work" / L"change_case_dialog";
+    const std::filesystem::path root = suiteRoot / L"work" / (L"change_case_dialog_" + NewGuidText());
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create change_case_dialog root.");
@@ -1178,28 +1785,28 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
         }
     });
 
-    std::atomic<bool> enumerated{false};
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for change-case dialog test.");
+
+    std::atomic<uint32_t> enumCount{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
-            enumerated.store(true, std::memory_order_release);
+            enumCount.fetch_add(1u, std::memory_order_release);
         }
     });
+    const auto clearEnumCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Failed to set left pane path for change-case dialog test.");
-
-    const auto enumDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{3000});
-    while (std::chrono::steady_clock::now() < enumDeadline && ! enumerated.load(std::memory_order_acquire))
-    {
-        PumpPendingMessages();
-        std::this_thread::sleep_for(20ms);
-    }
-    g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {});
-    state.Require(enumerated.load(std::memory_order_acquire), L"Folder enumeration did not complete for change-case dialog test.");
+    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Enumeration did not complete for change-case dialog test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"foo.txt", L"bar.baz"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Folder contents not ready for change-case dialog test.");
 
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
         FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"foo.txt" || name == L"bar.baz"; }, true);
@@ -1552,16 +2159,18 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
     std::atomic<uint32_t> enumEmpty{0};
     std::atomic<uint32_t> enumParent{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == emptyChild)
+        if (OrdinalString::EqualsNoCasePath(folder, emptyChild))
         {
             enumEmpty.fetch_add(1u, std::memory_order_release);
         }
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumParent.fetch_add(1u, std::memory_order_release);
         }
@@ -1755,16 +2364,18 @@ void AutomatePaneFilterDialog(HWND mainWindow, PaneFilterDialogAutomationState& 
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
     std::atomic<uint32_t> enumEmpty{0};
     std::atomic<uint32_t> enumNonEmpty{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == emptyChild)
+        if (OrdinalString::EqualsNoCasePath(folder, emptyChild))
         {
             enumEmpty.fetch_add(1u, std::memory_order_release);
         }
-        else if (folder == nonEmptyChild)
+        else if (OrdinalString::EqualsNoCasePath(folder, nonEmptyChild))
         {
             enumNonEmpty.fetch_add(1u, std::memory_order_release);
         }
@@ -1952,6 +2563,8 @@ void AutomateSelectionMaskDialog(
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
     const bool showHiddenBefore = g_folderWindow.GetShowHiddenFiles();
     const bool showSystemBefore = g_folderWindow.GetShowSystemFiles();
     const auto restoreViewFlags = wil::scope_exit([&]
@@ -1967,7 +2580,7 @@ void AutomateSelectionMaskDialog(
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumerationCount.fetch_add(1u, std::memory_order_release);
         }
@@ -2061,16 +2674,18 @@ void AutomateSelectionMaskDialog(
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
     std::atomic<uint32_t> enumA{0};
     std::atomic<uint32_t> enumB{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == a)
+        if (OrdinalString::EqualsNoCasePath(folder, a))
         {
             enumA.fetch_add(1u, std::memory_order_release);
         }
-        else if (folder == b)
+        else if (OrdinalString::EqualsNoCasePath(folder, b))
         {
             enumB.fetch_add(1u, std::memory_order_release);
         }
@@ -2079,7 +2694,8 @@ void AutomateSelectionMaskDialog(
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, a);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, a, SelfTest::Scale(std::chrono::milliseconds{3000})), L"Failed to set pane path to A.");
-    state.Require(WaitForAtomicAtLeast(enumA, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})), L"Enumeration did not complete for A.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"keep.txt", L"drop.log"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Pane contents not ready for A.");
 
     {
         PaneFilterDialogAutomationState dlg{};
@@ -2098,7 +2714,8 @@ void AutomateSelectionMaskDialog(
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, b);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, b, SelfTest::Scale(std::chrono::milliseconds{3000})), L"Failed to set pane path to B.");
-    state.Require(WaitForAtomicAtLeast(enumB, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})), L"Enumeration did not complete for B.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"other.txt"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Pane contents not ready for B.");
 
     state.Require(! g_folderWindow.DebugIsNameFilterActive(FolderWindow::Pane::Left), L"Filter expected inactive on B (no saved filter state).");
 
@@ -2162,6 +2779,8 @@ void AutomateSelectionMaskDialog(
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
     const bool showHiddenBefore = g_folderWindow.GetShowHiddenFiles();
     const bool showSystemBefore = g_folderWindow.GetShowSystemFiles();
     const auto restoreFlags     = wil::scope_exit([&]
@@ -2177,7 +2796,7 @@ void AutomateSelectionMaskDialog(
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumCount.fetch_add(1u, std::memory_order_release);
         }
@@ -2187,8 +2806,8 @@ void AutomateSelectionMaskDialog(
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Failed to set pane path for hidden/system test.");
-    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
-                  L"Enumeration did not complete for hidden/system test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"normal.txt", L"hidden.txt", L"system.txt"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Pane contents not ready for hidden/system test.");
 
     state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"normal.txt"), L"Expected normal.txt visible.");
     state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"hidden.txt"), L"Expected hidden.txt visible when enabled.");
@@ -2255,11 +2874,13 @@ void AutomateSelectionMaskDialog(
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
     std::atomic<uint32_t> enumCount{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumCount.fetch_add(1u, std::memory_order_release);
         }
@@ -2269,8 +2890,8 @@ void AutomateSelectionMaskDialog(
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Failed to set pane path for same-extension test.");
-    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
-                  L"Enumeration did not complete for same-extension test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.txt", L"c.log"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Pane contents not ready for same-extension test.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Failed to focus a.txt.");
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"c.log"; }, true);
@@ -2329,11 +2950,13 @@ void AutomateSelectionMaskDialog(
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
     std::atomic<uint32_t> enumCount{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumCount.fetch_add(1u, std::memory_order_release);
         }
@@ -2343,8 +2966,8 @@ void AutomateSelectionMaskDialog(
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Failed to set pane path for invert-selection test.");
-    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
-                  L"Enumeration did not complete for invert-selection test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.txt", L"c.log"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Pane contents not ready for invert-selection test.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Failed to focus a.txt.");
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"c.log"; }, true);
@@ -2407,6 +3030,8 @@ void AutomateSelectionMaskDialog(
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+
     const bool showHiddenBefore = g_folderWindow.GetShowHiddenFiles();
     const bool showSystemBefore = g_folderWindow.GetShowSystemFiles();
     const auto restoreViewFlags = wil::scope_exit([&]
@@ -2422,7 +3047,7 @@ void AutomateSelectionMaskDialog(
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumCount.fetch_add(1u, std::memory_order_release);
         }
@@ -2432,7 +3057,8 @@ void AutomateSelectionMaskDialog(
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Failed to set pane path for hide-names test.");
-    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})), L"Enumeration did not complete for hide-names test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Pane contents not ready for hide-names test.");
 
     state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Expected a.txt visible before hiding names.");
     state.Require(g_folderWindow.DebugHasItemDisplayName(FolderWindow::Pane::Left, L"b.log"), L"Expected b.log visible before hiding names.");
@@ -2609,12 +3235,19 @@ void AutomateSelectionMaskDialog(
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Right);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for left pane in selection-save/restore test.");
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Right, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for right pane in selection-save/restore test.");
+
     std::atomic<uint32_t> enumLeft{0};
     std::atomic<uint32_t> enumRight{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumLeft.fetch_add(1u, std::memory_order_release);
         }
@@ -2622,7 +3255,7 @@ void AutomateSelectionMaskDialog(
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Right,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumRight.fetch_add(1u, std::memory_order_release);
         }
@@ -2634,15 +3267,20 @@ void AutomateSelectionMaskDialog(
     });
 
     g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
-    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Failed to set left pane path for selection-save/restore test.");
+    state.Require(WaitForAtomicAtLeast(enumLeft, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Left pane enumeration did not complete for selection-save/restore test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Left pane contents not ready for selection-save/restore test.");
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, root);
     state.Require(WaitForPanePath(FolderWindow::Pane::Right, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Failed to set right pane path for selection-save/restore test.");
-    state.Require(WaitForAtomicAtLeast(enumLeft, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
-                  L"Enumeration did not complete for left pane in selection-save/restore test.");
     state.Require(WaitForAtomicAtLeast(enumRight, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
-                  L"Enumeration did not complete for right pane in selection-save/restore test.");
+                  L"Right pane enumeration did not complete for selection-save/restore test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Right, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Right pane contents not ready for selection-save/restore test.");
 
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
         FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"a.txt" || name == L"c.txt"; }, true);
@@ -2787,11 +3425,15 @@ void AutomateSelectionMaskDialog(
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for selection-mask test.");
+
     std::atomic<uint32_t> enumCount{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumCount.fetch_add(1u, std::memory_order_release);
         }
@@ -2803,6 +3445,8 @@ void AutomateSelectionMaskDialog(
                   L"Failed to set pane path for selection-mask test.");
     state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Enumeration did not complete for selection-mask test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Pane contents not ready for selection-mask test.");
 
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"b.log"; }, true);
     state.Require(g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"b.log"), L"Expected b.log selected before Select dialog.");
@@ -2880,11 +3524,15 @@ void AutomateSelectionMaskDialog(
         }
     });
 
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for goto-selected test.");
+
     std::atomic<uint32_t> enumCount{0};
     g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
                                                        [&](const std::filesystem::path& folder) noexcept
     {
-        if (folder == root)
+        if (OrdinalString::EqualsNoCasePath(folder, root))
         {
             enumCount.fetch_add(1u, std::memory_order_release);
         }
@@ -2896,6 +3544,8 @@ void AutomateSelectionMaskDialog(
                   L"Failed to set pane path for goto-selected test.");
     state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
                   L"Enumeration did not complete for goto-selected test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.txt", L"c.txt"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Pane contents not ready for goto-selected test.");
 
     state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"a.txt"), L"Failed to focus a.txt.");
     g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
@@ -2931,6 +3581,20 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
     const auto restoreAutoPrompts = wil::scope_exit([&] { HostSetAutoAcceptPrompts(autoPromptsBefore); });
 
     SelfTest::RunCase(options, suite, L"registry_integrity", [](CaseState& state) noexcept { return TestRegistryIntegrity(state); });
+    SelfTest::RunCase(options, suite, L"settings_hot_reload_merge_runtime_session", [](CaseState& state) noexcept {
+        return TestSettingsHotReloadMergePreservesRuntimeSession(state);
+    });
+    SelfTest::RunCase(options, suite, L"settings_hot_reload_merge_disk_preferences", [](CaseState& state) noexcept {
+        return TestSettingsHotReloadMergeKeepsDiskPreferences(state);
+    });
+    SelfTest::RunCase(
+        options, suite, L"settings_store_no_recovery_and_file_stamp", [](CaseState& state) noexcept { return TestSettingsStoreNoRecoveryAndFileStamp(state); });
+    SelfTest::RunCase(options, suite, L"settings_hot_reload_self_save_suppression", [=](CaseState& state) noexcept {
+        return TestSettingsHotReloadSelfSaveSuppression(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"settings_hot_reload_invalid_external_file", [=](CaseState& state) noexcept {
+        return TestSettingsHotReloadInvalidExternalFile(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"menu_load_selection_links_restore", [=](CaseState& state) noexcept {
         return TestLoadSelectionMenuLinksToRestoreSelection(mainWindow, state);
     });

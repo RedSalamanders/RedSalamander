@@ -57,9 +57,10 @@
 #include "ManagePluginsDialog.h"
 #include "Preferences.h"
 #include "RedSalamander.h"
+#include "SessionState.h"
+#include "SettingsHotReload.h"
 #include "SettingsSave.h"
 #include "SettingsSchemaExport.h"
-#include "SessionState.h"
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutsWindow.h"
@@ -687,8 +688,14 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
                 SelfTest::AppendSelfTestTrace(L"FileOpsSelfTest: PASS");
             }
             TraceSelfTestExitCode(L"FileOpsSelfTest: end", g_selfTestExitCode);
-            FinalizeSelfTestRun();
-            PostQuitMessage(g_selfTestExitCode);
+            // Route file-operations self-test shutdown through WM_CLOSE/WM_DESTROY as well so
+            // plugin managers, hot-reload, and window-owned resources tear down before process exit.
+            SplashScreen::CloseIfExist();
+            if (PostMessageW(hWnd, WM_CLOSE, 0, 0) == 0)
+            {
+                FinalizeSelfTestRun();
+                PostQuitMessage(g_selfTestExitCode);
+            }
         }
         return 0;
     }
@@ -835,6 +842,22 @@ std::wstring ThemeIdFromThemeMode(ThemeMode mode)
         case ThemeMode::System:
         default: return L"builtin/system";
     }
+}
+
+const Common::Settings::ThemeDefinition* FindThemeById(std::wstring_view id) noexcept;
+
+void UpdateThemeModeFromCurrentSettings() noexcept
+{
+    std::wstring_view themeId = g_settings.theme.currentThemeId;
+    if (themeId.rfind(L"user/", 0) == 0)
+    {
+        if (const auto* def = FindThemeById(themeId))
+        {
+            themeId = def->baseThemeId;
+        }
+    }
+
+    g_themeMode = ThemeModeFromThemeId(themeId);
 }
 
 const Common::Settings::ThemeDefinition* FindThemeById(std::wstring_view id) noexcept
@@ -1059,7 +1082,7 @@ std::optional<std::filesystem::path> GetDefaultFolder() noexcept
     return std::nullopt;
 }
 
-void CaptureRuntimeSettings(HWND hWnd) noexcept
+void CaptureRuntimeSettings(Common::Settings::Settings& settings, HWND hWnd) noexcept
 {
     if (hWnd)
     {
@@ -1079,23 +1102,23 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
             wp.bounds.height      = std::max(1, savedHeight);
             wp.dpi                = GetDpiForWindow(hWnd);
 
-            g_settings.windows[kMainWindowId] = std::move(wp);
+            settings.windows[kMainWindowId] = std::move(wp);
         }
     }
 
     if (const HWND prefs = GetPreferencesDialogHandle())
     {
-        WindowPlacementPersistence::Save(g_settings, kPreferencesWindowId, prefs);
+        WindowPlacementPersistence::Save(settings, kPreferencesWindowId, prefs);
     }
 
     if (const HWND connections = GetConnectionManagerDialogHandle())
     {
-        WindowPlacementPersistence::Save(g_settings, kConnectionManagerWindowId, connections);
+        WindowPlacementPersistence::Save(settings, kConnectionManagerWindowId, connections);
     }
 
     if (const HWND shortcuts = GetShortcutsWindowHandle())
     {
-        WindowPlacementPersistence::Save(g_settings, kShortcutsWindowId, shortcuts);
+        WindowPlacementPersistence::Save(settings, kShortcutsWindowId, shortcuts);
     }
 
     const auto captureItemPropertiesIfMatch = [&](HWND hwnd) noexcept
@@ -1117,7 +1140,7 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
             return false;
         }
 
-        WindowPlacementPersistence::Save(g_settings, kItemPropertiesWindowId, hwnd);
+        WindowPlacementPersistence::Save(settings, kItemPropertiesWindowId, hwnd);
         return true;
     };
 
@@ -1125,16 +1148,16 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
     {
         if (const HWND props = FindWindowW(kItemPropertiesWindowClassName, nullptr))
         {
-            WindowPlacementPersistence::Save(g_settings, kItemPropertiesWindowId, props);
+            WindowPlacementPersistence::Save(settings, kItemPropertiesWindowId, props);
         }
     }
 
     if (g_hFolderWindow.load(std::memory_order_acquire))
     {
         std::vector<Common::Settings::FolderHistoryFilterState> historyFilters;
-        if (g_settings.folders.has_value())
+        if (settings.folders.has_value())
         {
-            historyFilters = g_settings.folders->historyFilters;
+            historyFilters = settings.folders->historyFilters;
         }
 
         Common::Settings::FoldersSettings folders;
@@ -1210,13 +1233,18 @@ void CaptureRuntimeSettings(HWND hWnd) noexcept
             }
         }
 
-        g_settings.folders = std::move(folders);
+        settings.folders = std::move(folders);
     }
 
     Common::Settings::MainMenuState menuState;
     menuState.menuBarVisible     = g_menuBarVisible;
     menuState.functionBarVisible = g_functionBarVisible;
-    g_settings.mainMenu          = menuState;
+    settings.mainMenu            = menuState;
+}
+
+void CaptureRuntimeSettings(HWND hWnd) noexcept
+{
+    CaptureRuntimeSettings(g_settings, hWnd);
 }
 
 void SaveAppSettings(HWND hWnd) noexcept
@@ -1232,20 +1260,14 @@ void SaveAppSettings(HWND hWnd) noexcept
     FileSystemPluginManager::GetInstance().Shutdown(g_settings);
     ViewerPluginManager::GetInstance().Shutdown(g_settings);
 
-    const HRESULT saveHr = Common::Settings::SaveSettings(kAppId, SettingsSave::PrepareForSave(g_settings));
+    const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kAppId, g_settings, pluginSchemas);
     if (SUCCEEDED(saveHr))
     {
-        const HRESULT schemaHr = SaveAggregatedSettingsSchema(kAppId, pluginSchemas);
-        if (FAILED(schemaHr))
-        {
-            Debug::Error(L"SaveAggregatedSettingsSchema failed (hr=0x{:08X})\n", static_cast<unsigned long>(schemaHr));
-        }
+        return;
     }
-    else
-    {
-        const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kAppId);
-        DBGOUT_ERROR(L"SaveSettings failed (hr=0x{:08X}) path={}\n", static_cast<unsigned long>(saveHr), settingsPath.wstring());
-    }
+
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kAppId);
+    DBGOUT_ERROR(L"SaveSettings failed (hr=0x{:08X}) path={}\n", static_cast<unsigned long>(saveHr), settingsPath.wstring());
 }
 
 void EnsureMainMenuFont(HWND hWnd) noexcept
@@ -3881,7 +3903,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         slot.path                                                       = newPath;
         g_settings.hotPaths.value().slots[static_cast<size_t>(slotIdx)] = std::move(slot);
 
-        static_cast<void>(Common::Settings::SaveSettings(kAppId, SettingsSave::PrepareForSave(g_settings)));
+        static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(kAppId, g_settings));
 
         // Optionally open the prefs page.
         if (g_settings.hotPaths.value().openPrefsOnAssign)
@@ -4475,6 +4497,11 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     const auto shutdownProcessSingletons = wil::scope_exit([]
     {
+        if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+        {
+            return;
+        }
+
         // Process-lifetime singletons are intentionally leaked to avoid static destruction order hazards.
         // Explicitly release their resources before COM/CRT teardown to keep shutdown smooth and memory-bounded.
         RedSalamander::Ui::AnimationDispatcher::GetInstance().Shutdown();
@@ -5113,6 +5140,201 @@ static void ApplyAppTheme(HWND hWnd)
     }
 }
 
+[[nodiscard]] bool HasOpenItemPropertiesWindow() noexcept
+{
+    const HWND props = FindWindowW(kItemPropertiesWindowClassName, nullptr);
+    return props && IsWindow(props);
+}
+
+void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
+{
+    if (! hWnd)
+    {
+        return;
+    }
+
+    UpdateThemeModeFromCurrentSettings();
+    EnsureMenuHandles(hWnd);
+    RebuildThemeMenuDynamicItems(hWnd);
+    ApplyAppTheme(hWnd);
+
+    const Common::Settings::MainMenuState menu = g_settings.mainMenu.value_or(Common::Settings::MainMenuState{});
+
+    if (menu.menuBarVisible != g_menuBarVisible)
+    {
+        g_menuBarVisible          = menu.menuBarVisible;
+        g_menuBarTemporarilyShown = false;
+
+        if (g_menuBarVisible)
+        {
+            if (g_mainMenuHandle)
+            {
+                SetMenu(hWnd, g_mainMenuHandle);
+                ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
+                DrawMenuBar(hWnd);
+            }
+        }
+        else
+        {
+            SetMenu(hWnd, nullptr);
+            DrawMenuBar(hWnd);
+        }
+    }
+
+    if (menu.functionBarVisible != g_functionBarVisible)
+    {
+        g_functionBarVisible = menu.functionBarVisible;
+        g_folderWindow.SetFunctionBarVisible(g_functionBarVisible);
+    }
+
+    UpdatePaneMenuChecks();
+    AdjustLayout(hWnd);
+
+    DirectoryInfoCache::GetInstance().ApplySettings(g_settings);
+
+    if (g_hFolderWindow.load(std::memory_order_acquire))
+    {
+        const Common::Settings::FolderPane* leftSettings  = nullptr;
+        const Common::Settings::FolderPane* rightSettings = nullptr;
+        uint32_t folderHistoryMax                         = 20u;
+        bool showHiddenFiles                              = true;
+        bool showSystemFiles                              = true;
+
+        if (g_settings.folders)
+        {
+            const auto& folders = *g_settings.folders;
+            folderHistoryMax    = folders.historyMax;
+            showHiddenFiles     = folders.showHiddenFiles;
+            showSystemFiles     = folders.showSystemFiles;
+
+            for (const auto& item : folders.items)
+            {
+                if (item.slot == kLeftPaneSlot)
+                {
+                    leftSettings = &item;
+                }
+                else if (item.slot == kRightPaneSlot)
+                {
+                    rightSettings = &item;
+                }
+            }
+        }
+
+        folderHistoryMax = std::clamp(folderHistoryMax, 1u, 50u);
+        g_folderWindow.SetFolderHistoryMax(folderHistoryMax);
+        g_folderWindow.SetShowHiddenFiles(showHiddenFiles);
+        g_folderWindow.SetShowSystemFiles(showSystemFiles);
+
+        auto applyPane = [&](FolderWindow::Pane pane, const Common::Settings::FolderPane* settingsPane)
+        {
+            FolderView::DisplayMode displayMode     = FolderView::DisplayMode::Brief;
+            FolderView::SortBy sortBy               = FolderView::SortBy::Name;
+            FolderView::SortDirection sortDirection = FolderView::SortDirection::Ascending;
+            bool statusBarVisible                   = true;
+
+            if (settingsPane)
+            {
+                displayMode      = DisplayModeFromSettings(settingsPane->view.display);
+                sortBy           = SortByFromSettings(settingsPane->view.sortBy);
+                sortDirection    = SortDirectionFromSettings(settingsPane->view.sortDirection);
+                statusBarVisible = settingsPane->view.statusBarVisible;
+            }
+
+            g_folderWindow.SetStatusBarVisible(pane, statusBarVisible);
+            g_folderWindow.SetSort(pane, sortBy, sortDirection);
+            g_folderWindow.SetDisplayMode(pane, displayMode);
+        };
+
+        applyPane(FolderWindow::Pane::Left, leftSettings);
+        applyPane(FolderWindow::Pane::Right, rightSettings);
+
+        UpdatePaneMenuChecks();
+    }
+
+    ReloadShortcutsFromSettings();
+    if (g_settings.shortcuts.has_value())
+    {
+        UpdateShortcutsWindowData(g_settings.shortcuts.value(), g_shortcutManager);
+    }
+}
+
+void RefreshRunningPluginsFromSettings(HWND hWnd) noexcept
+{
+    if (! hWnd)
+    {
+        return;
+    }
+
+    static_cast<void>(FileSystemPluginManager::GetInstance().Refresh(g_settings));
+    static_cast<void>(ViewerPluginManager::GetInstance().Refresh(g_settings));
+    static_cast<void>(g_folderWindow.ReloadFileSystemPlugins());
+    RebuildPluginsMenuDynamicItems(hWnd);
+}
+
+LRESULT OnMainWindowSettingsFileChanged(HWND hWnd, LPARAM lParam) noexcept
+{
+    auto payload = TakeMessagePayload<SettingsHotReload::SettingsFileChangedPayload>(lParam);
+    if (! payload || ! hWnd)
+    {
+        return 0;
+    }
+
+    const SettingsHotReload::ChangedSettingsLoadResult loadResult = SettingsHotReload::TryLoadChangedSettings();
+    switch (loadResult.status)
+    {
+        case SettingsHotReload::ChangedSettingsStatus::NoChange:
+        case SettingsHotReload::ChangedSettingsStatus::Missing: return 0;
+        case SettingsHotReload::ChangedSettingsStatus::Invalid:
+            if (loadResult.stamp.has_value())
+            {
+                SettingsHotReload::MarkRejectedStamp(loadResult.stamp.value());
+            }
+            SettingsHotReload::ShowInvalidReloadAlert(Common::Settings::GetSettingsPath(kAppId));
+            return 0;
+        case SettingsHotReload::ChangedSettingsStatus::Error:
+            Debug::Warning(L"SettingsHotReload: TryLoadChangedSettings failed (hr=0x{:08X})", static_cast<unsigned long>(loadResult.hr));
+            return 0;
+        case SettingsHotReload::ChangedSettingsStatus::Loaded: break;
+    }
+
+    Common::Settings::Settings runtimeSettings = g_settings;
+    CaptureRuntimeSettings(runtimeSettings, hWnd);
+
+    std::vector<std::wstring_view> runtimeWindowIds;
+    runtimeWindowIds.reserve(5);
+    runtimeWindowIds.push_back(kMainWindowId);
+    if (const HWND prefs = GetPreferencesDialogHandle(); prefs && IsWindow(prefs))
+    {
+        runtimeWindowIds.push_back(kPreferencesWindowId);
+    }
+    if (const HWND connections = GetConnectionManagerDialogHandle(); connections && IsWindow(connections))
+    {
+        runtimeWindowIds.push_back(kConnectionManagerWindowId);
+    }
+    if (const HWND shortcuts = GetShortcutsWindowHandle(); shortcuts && IsWindow(shortcuts))
+    {
+        runtimeWindowIds.push_back(kShortcutsWindowId);
+    }
+    if (HasOpenItemPropertiesWindow())
+    {
+        runtimeWindowIds.push_back(kItemPropertiesWindowId);
+    }
+
+    g_settings = SettingsHotReload::MergeDiskSettingsWithRuntimeSession(loadResult.settings, runtimeSettings, runtimeWindowIds);
+
+    SettingsHotReload::ClearInvalidReloadAlert();
+    ApplyCurrentSettingsToRunningApp(hWnd);
+    RefreshRunningPluginsFromSettings(hWnd);
+
+    if (loadResult.stamp.has_value())
+    {
+        SettingsHotReload::MarkAppliedStamp(loadResult.stamp.value());
+    }
+
+    SettingsHotReload::NotifyParticipants();
+    return 0;
+}
+
 namespace
 {
 LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* createStruct)
@@ -5302,6 +5524,12 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         perf.SetDetail(kMainWindowId);
         perf.SetValue0(folderHistory.size());
         g_folderWindow.SetFolderHistory(folderHistory);
+    }
+
+    const HRESULT hotReloadHr = SettingsHotReload::Start(hWnd, kAppId);
+    if (FAILED(hotReloadHr))
+    {
+        Debug::Warning(L"SettingsHotReload::Start failed (hr=0x{:08X})", static_cast<unsigned long>(hotReloadHr));
     }
 
 #ifdef _DEBUG
@@ -6588,16 +6816,8 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
                     static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(pane, pluginIt->second));
                     UpdatePluginsMenuChecks();
 
-                    const HRESULT saveHr = Common::Settings::SaveSettings(kAppId, SettingsSave::PrepareForSave(g_settings));
-                    if (SUCCEEDED(saveHr))
-                    {
-                        const HRESULT schemaHr = SaveAggregatedSettingsSchema(kAppId, g_settings);
-                        if (FAILED(schemaHr))
-                        {
-                            Debug::Error(L"SaveAggregatedSettingsSchema failed (hr=0x{:08X})\n", static_cast<unsigned long>(schemaHr));
-                        }
-                    }
-                    else
+                    const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kAppId, g_settings);
+                    if (FAILED(saveHr))
                     {
                         const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kAppId);
                         std::wstring title                       = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
@@ -6709,128 +6929,13 @@ LRESULT OnMainWindowThemeChanged(HWND hWnd)
 
 LRESULT OnMainWindowSettingsApplied(HWND hWnd)
 {
-    if (! hWnd)
-    {
-        return 0;
-    }
-
-    ApplyAppTheme(hWnd);
-
-    const Common::Settings::MainMenuState menu = g_settings.mainMenu.value_or(Common::Settings::MainMenuState{});
-
-    EnsureMenuHandles(hWnd);
-
-    if (menu.menuBarVisible != g_menuBarVisible)
-    {
-        g_menuBarVisible          = menu.menuBarVisible;
-        g_menuBarTemporarilyShown = false;
-
-        if (g_menuBarVisible)
-        {
-            if (g_mainMenuHandle)
-            {
-                SetMenu(hWnd, g_mainMenuHandle);
-                ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
-                DrawMenuBar(hWnd);
-            }
-        }
-        else
-        {
-            SetMenu(hWnd, nullptr);
-            DrawMenuBar(hWnd);
-        }
-    }
-
-    if (menu.functionBarVisible != g_functionBarVisible)
-    {
-        g_functionBarVisible = menu.functionBarVisible;
-        g_folderWindow.SetFunctionBarVisible(g_functionBarVisible);
-    }
-
-    UpdatePaneMenuChecks();
-    AdjustLayout(hWnd);
-
-    DirectoryInfoCache::GetInstance().ApplySettings(g_settings);
-
-    if (g_hFolderWindow.load(std::memory_order_acquire))
-    {
-        const Common::Settings::FolderPane* leftSettings  = nullptr;
-        const Common::Settings::FolderPane* rightSettings = nullptr;
-        uint32_t folderHistoryMax                         = 20u;
-        bool showHiddenFiles                              = true;
-        bool showSystemFiles                              = true;
-
-        if (g_settings.folders)
-        {
-            const auto& folders = *g_settings.folders;
-            folderHistoryMax    = folders.historyMax;
-            showHiddenFiles     = folders.showHiddenFiles;
-            showSystemFiles     = folders.showSystemFiles;
-
-            for (const auto& item : folders.items)
-            {
-                if (item.slot == kLeftPaneSlot)
-                {
-                    leftSettings = &item;
-                }
-                else if (item.slot == kRightPaneSlot)
-                {
-                    rightSettings = &item;
-                }
-            }
-        }
-
-        folderHistoryMax = std::clamp(folderHistoryMax, 1u, 50u);
-        g_folderWindow.SetFolderHistoryMax(folderHistoryMax);
-        g_folderWindow.SetShowHiddenFiles(showHiddenFiles);
-        g_folderWindow.SetShowSystemFiles(showSystemFiles);
-
-        auto applyPane = [&](FolderWindow::Pane pane, const Common::Settings::FolderPane* settingsPane)
-        {
-            FolderView::DisplayMode displayMode     = FolderView::DisplayMode::Brief;
-            FolderView::SortBy sortBy               = FolderView::SortBy::Name;
-            FolderView::SortDirection sortDirection = FolderView::SortDirection::Ascending;
-            bool statusBarVisible                   = true;
-
-            if (settingsPane)
-            {
-                displayMode      = DisplayModeFromSettings(settingsPane->view.display);
-                sortBy           = SortByFromSettings(settingsPane->view.sortBy);
-                sortDirection    = SortDirectionFromSettings(settingsPane->view.sortDirection);
-                statusBarVisible = settingsPane->view.statusBarVisible;
-            }
-
-            g_folderWindow.SetStatusBarVisible(pane, statusBarVisible);
-            g_folderWindow.SetSort(pane, sortBy, sortDirection);
-            g_folderWindow.SetDisplayMode(pane, displayMode);
-        };
-
-        applyPane(FolderWindow::Pane::Left, leftSettings);
-        applyPane(FolderWindow::Pane::Right, rightSettings);
-
-        UpdatePaneMenuChecks();
-    }
-
-    ReloadShortcutsFromSettings();
-    if (g_settings.shortcuts.has_value())
-    {
-        UpdateShortcutsWindowData(g_settings.shortcuts.value(), g_shortcutManager);
-    }
-
+    ApplyCurrentSettingsToRunningApp(hWnd);
     return 0;
 }
 
 LRESULT OnMainWindowPluginsChanged(HWND hWnd)
 {
-    if (! hWnd)
-    {
-        return 0;
-    }
-
-    static_cast<void>(FileSystemPluginManager::GetInstance().Refresh(g_settings));
-    static_cast<void>(ViewerPluginManager::GetInstance().Refresh(g_settings));
-    static_cast<void>(g_folderWindow.ReloadFileSystemPlugins());
-    RebuildPluginsMenuDynamicItems(hWnd);
+    RefreshRunningPluginsFromSettings(hWnd);
     return 0;
 }
 
@@ -6972,9 +7077,20 @@ LRESULT OnMainWindowClose(HWND hWnd)
 
 LRESULT OnMainWindowDestroy(HWND hWnd)
 {
+    SettingsHotReload::Stop();
+
 #ifdef _DEBUG
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
+        g_folderWindow.CloseAllViewers();
+        g_folderWindow.SetSettings(nullptr);
+        if (g_hFolderWindow.exchange(nullptr, std::memory_order_acq_rel))
+        {
+            g_folderWindow.Destroy();
+        }
+        FileSystemPluginManager::GetInstance().Shutdown(g_settings);
+        ViewerPluginManager::GetInstance().Shutdown(g_settings);
+        SessionState::Clear();
         ShutdownSelfTestMonitor();
         TraceSelfTestExitCode(L"OnMainWindowDestroy: PostQuitMessage",
                               (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
@@ -7020,6 +7136,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WndMsg::kSettingsApplied: return OnMainWindowSettingsApplied(hWnd);
         case WndMsg::kPluginsChanged: return OnMainWindowPluginsChanged(hWnd);
         case WndMsg::kConnectionManagerConnect: return OnMainWindowConnectionManagerConnect(hWnd, wParam, lParam);
+        case WndMsg::kSettingsFileChanged: return OnMainWindowSettingsFileChanged(hWnd, lParam);
         case WndMsg::kPreferencesRequestSettingsSnapshot: CaptureRuntimeSettings(hWnd); return 0;
         case WM_TIMER: return OnMainWindowTimer(hWnd, static_cast<UINT_PTR>(wParam));
         case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hWnd)); return DefWindowProcW(hWnd, message, wParam, lParam);

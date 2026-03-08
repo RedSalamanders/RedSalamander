@@ -2,7 +2,7 @@
 
 ## Overview
 
-Some virtual file system plugins (FTP / FTPS / SFTP / SCP / IMAP / S3 / S3 Table and future protocols) need to ask the user for:
+Some virtual file system plugins (FTP / FTPS / SFTP / SCP / IMAP / Google Drive / S3 / S3 Table / OneDrive Personal / OneDrive Business / SharePoint and future protocols) need to ask the user for:
 
 - a **connection target** (host/port/path),
 - optional **authentication material** (user/password, SSH key + passphrase, known_hosts),
@@ -26,7 +26,7 @@ This spec defines a **host-owned Connection Manager** that:
   - optional Windows Hello verification before secrets are returned to plugins.
 - Host-controlled navigation:
   - typing `nav:<connectionName>`, `nav://<connectionName>`, or `@conn:<connectionName>` navigates to the resolved endpoint,
-  - navigating to `ftp:` / `sftp:` / `scp:` / `imap:` / `s3:` / `s3table:` with no host opens Connection Manager (filtered to that protocol),
+  - navigating to `ftp:` / `sftp:` / `scp:` / `imap:` / `gdrive:` / `s3:` / `s3table:` / `onedrivep:` / `onedriveb:` / `sharepoint:` with no host opens Connection Manager (filtered to that protocol),
   - main menu / command palette entry `Connections...` opens the dialog,
   - optional shorthand: `<scheme>://@conn/<connectionName>/...` routes to the named profile (authority `@conn`, e.g. `ftp://@conn/...`, `s3://@conn/...`).
 - Extensible plugin integration (future protocols can participate without UI rewrite).
@@ -47,29 +47,45 @@ Stored in Settings Store (non-secret fields only):
 - `name` (string): user-visible name, unique (case-insensitive), trimmed, and safe for `/@conn:<name>` (no `/` or `\\`).
 - `pluginId` (string): target filesystem plugin long id (e.g. `builtin/file-system-sftp`).
 - `host` (string): trimmed (no leading/trailing whitespace).
-  - Semantics are plugin-defined. For S3 / S3 Table it stores the AWS region and may be empty to indicate “auto region”.
+  - Semantics are plugin-defined.
+  - S3 / S3 Table: stores the AWS region and may be empty to indicate `auto region`.
+  - Google Drive: unused by the built-in plugin and normally empty.
+  - OneDrive Personal / OneDrive Business: unused by the built-in plugin and normally empty.
+  - SharePoint: stores the tenant host name with an optional site path suffix (for example `contoso.sharepoint.com/sites/Team`).
 - `port` (uint32, `0` = protocol default)
 - `initialPath` (string): remote initial folder (plugin path, typically `/`).
 - `userName` (string)
 - `authMode` (enum):
   - `anonymous` (FTP only),
   - `password`,
-  - `sshKey` (SFTP/SCP).
+  - `sshKey` (SFTP/SCP),
+  - `oauth2Pkce` (Google Drive / OneDrive Personal / OneDrive Business / SharePoint).
   - FTP: when `authMode = password`, `userName` must be non-empty (anonymous is opt-in).
 - `savePassword` (bool): whether a password/passphrase is stored in WinCred.
   - When `false`, the host may still prompt for a secret at connect time and cache it for the current app run (session-only; not persisted).
+  - For `authMode = oauth2Pkce`, this means `remember sign-in`: the host persists the OAuth refresh token when checked and keeps it session-only when unchecked.
 - `requireWindowsHello` (bool, default `true`): hidden expert setting; when `true`, Windows Hello verification is required before releasing secrets.
 - `extra` (JSON object): plugin-specific non-secret fields (UTF-8 JSON object; schema is plugin-defined).
   - Example keys:
     - SFTP/SCP: `sshPrivateKey`, `sshKnownHosts`.
     - IMAP: `ignoreSslTrust` (bool): skip TLS certificate validation (allows self-signed certificates; not recommended).
+    - Google Drive:
+      - `rootKind` (string): `myDrive` or `sharedDrive`.
+      - `sharedDriveId` (string): required when `rootKind = sharedDrive`.
+      - `googleDocsMode` (string): export strategy for native Google Docs items.
+      - `readOnly` (bool): disables writes once write support exists.
+      - `useDefaultClientId` (bool): uses the plugin-level default OAuth client id when `true`.
+      - `clientId` (string): optional per-connection OAuth client id override when `useDefaultClientId = false`.
     - S3/S3 Table: `endpointOverride`, `useHttps`, `verifyTls` (and `useVirtualAddressing` for S3 only).
+    - OneDrive Personal / OneDrive Business / SharePoint:
+      - `tenantAuthority` (string): optional Microsoft Entra authority override such as `consumers`, `organizations`, or a tenant id.
+      - `driveId` (string): optional Graph drive id. The built-in SharePoint plugin uses it to pin a specific document library instead of the site's default drive.
     - Global file operations (all file-op capable protocols):
       - `copyMoveMaxConcurrency` (uint32): `0 = inherit plugin setting`, else clamp to `1..8`.
       - `deleteMaxConcurrency` (uint32): `0 = inherit plugin setting`, else clamp to `1..64`.
       - These overrides apply **globally per connection profile across the whole app** (concurrent tasks share the cap).
 
-When serialized to JSON, default-valued fields may be omitted (e.g. `authMode=password`, `savePassword=false`, `requireWindowsHello=true`, `initialPath=/`; for S3/S3 Table, `host` may be omitted when empty to represent “auto region”).
+When serialized to JSON, default-valued fields may be omitted (e.g. `authMode=password`, `savePassword=false`, `requireWindowsHello=true`, `initialPath=/`; for S3/S3 Table and Google Drive, `host` may be omitted when empty to represent a hostless profile).
 
 For built-in protocols, known default-valued `extra` keys may also be omitted (e.g. S3 `useHttps=true`, `verifyTls=true`, empty `endpointOverride`; SFTP/SCP empty `sshPrivateKey`).
 
@@ -111,9 +127,11 @@ Secrets are stored in Windows Credential Manager as **generic credentials**.
 Secret kinds (v1):
 - `password`
 - `sshKeyPassphrase`
+- `refreshToken`
 
 Notes:
 - `password` is also used for protocols that need a single secret value (e.g. S3 secret access key).
+- `refreshToken` is used by OAuth 2.0 PKCE connections to persist the long-lived refresh token; access tokens stay in memory only.
 
 ## Navigation Contract
 
@@ -160,6 +178,8 @@ The Connection Manager is exposed to plugins via a host service queried from `IH
   - Includes an `extra` object containing the full `ConnectionProfile.extra` payload (plugin-specific non-secret fields).
 - `GetConnectionSecret(...)`: returns a secret if available (WinCred when `savePassword == true`, or session cache); does **not** prompt for secret entry.
 - `PromptForConnectionSecret(...)`: prompts and stores a session-only cached secret; does not persist to WinCred.
+- `SetConnectionSecret(...)`: writes a secret into the session cache and optionally persists it to WinCred.
+- `DeleteConnectionSecret(...)`: deletes a secret from the session cache and optionally from WinCred.
 - `ClearCachedConnectionSecret(...)`: clears a session-cached secret (does not modify WinCred).
 - `UpgradeFtpAnonymousToPassword(...)`: FTP-only: prompts for credentials, persistently flips `authMode` to `password`, and stages a session-only password.
 
@@ -173,6 +193,7 @@ The Connection Manager is exposed to plugins via a host service queried from `IH
   - if `savePassword == false`, the host never loads secrets from WinCred; instead it may:
     - return a **per-session cached** secret (from a prior prompt), or
     - prompt the user to enter a secret via `PromptForConnectionSecret(...)` and cache it **in memory only** for the current app run,
+  - OAuth 2.0 PKCE refresh tokens follow the same persistence rule, but they are written through `SetConnectionSecret(...)` after token acquisition or refresh,
   - if `requireWindowsHello == true` (and `bypassWindowsHello == false`), the host may perform Windows Hello verification prior to returning a secret from WinCred (host policy),
     - The host MUST reuse successful interactive authentication for the remainder of the app run for background secret access (so long-running compare/copy does not re-prompt Windows Hello mid-operation).
   - session-cached secrets are cleared on exit (and may expire after a host-defined TTL).
@@ -191,6 +212,7 @@ Plugins may request secrets in two phases:
   - stores the entered secret in an in-memory per-session cache keyed by `(connectionId, secretKind)`,
   - returns `S_FALSE` if the user cancels the prompt.
   - SSH key passphrase may be empty to indicate “no passphrase”.
+- OAuth refresh tokens are not manually prompted; Microsoft Drive plugins acquire them via browser sign-in, while Google Drive currently receives them from host-owned OAuth plumbing or tests and persists them with `SetConnectionSecret(...)`.
 
 Prompt UX notes:
 
@@ -215,12 +237,25 @@ Layout (using RedSalamander theming):
     - If a secret is already stored, the field shows a random-length masked placeholder to indicate “a password is saved” without leaking the real length.
   - `Save password`
     - When unchecked, the connection is still usable: the host prompts for the password/passphrase at connect time and keeps it in memory only for the current app run.
+    - For OAuth 2.0 PKCE profiles, the label means `Remember sign-in` and controls whether the refresh token is persisted.
   - IMAP: `Ignore trust for SSL` (optional)
   - S3 / S3 Table:
     - `Region` uses an editable dropdown populated with known AWS region names/codes; selecting an entry inserts the region code into the field.
     - `Endpoint override` (optional; for S3-compatible endpoints)
     - `Use HTTPS`, `Verify TLS certificate`
     - S3 only: `Use virtual-hosted style addressing`
+  - Google Drive:
+    - `authMode` is fixed to `oauth2Pkce`.
+    - `Host` and `Port` are hidden.
+    - The password editor is hidden.
+    - The `Save password` label changes to `Remember sign-in` and controls whether the refresh token is persisted.
+    - New profiles default `extra.rootKind = myDrive`, `extra.useDefaultClientId = true`, and `extra.googleDocsMode = export`.
+  - OneDrive Personal / OneDrive Business / SharePoint:
+    - `authMode` is fixed to `oauth2Pkce`.
+    - The password editor is hidden; sign-in happens in the system browser when the plugin needs a token.
+    - OneDrive Personal / OneDrive Business hide host and port.
+    - SharePoint uses `host` for the tenant host with optional site path, and may expose a `driveId` field in advanced settings to pin a specific document library.
+    - `userName` is a login hint only; it is not a secret.
   - Hidden expert setting: `requireWindowsHello` is not exposed in UI, but can be set in Settings Store JSON per profile.
   - Protocol-specific fields (SFTP/SCP): SSH key paths, known_hosts path
 - New connection defaults:
@@ -234,8 +269,41 @@ Layout (using RedSalamander theming):
 Connect-time secret behavior:
 
 - If `authMode = password` and `savePassword = true` but no stored password exists yet, the host prompts for the password and saves it to WinCred before closing.
+- If `authMode = oauth2Pkce`, Connection Manager does not prompt for a secret. Microsoft Drive launches browser sign-in on demand; Google Drive currently expects a refresh token supplied by host-owned OAuth plumbing or test infrastructure, then stores it according to `savePassword`.
+
+## External Settings Reload Handling
+
+The Connection Manager dialog participates in the settings-editor registry used by `RedSalamander.exe` live settings reload.
+
+Rules:
+- The persisted `connections` section on disk is authoritative for non-secret profile data.
+- Secrets remain outside the settings JSON (WinCred / session cache) and are not replaced by this reload path.
+- Clean dialog/editor state reloads immediately from the newly applied live settings and refreshes its theme.
+- Dirty dialog/editor state prompts `Reload from disk` / `Keep editing`.
+- Choosing `Keep editing` marks the dialog stale.
+- Any later save-producing action (`Connect`, `Close`, explicit save path) on a stale dialog must prompt `Overwrite disk` / `Reload from disk` / `Cancel`.
 
 ## FTP / SFTP / SCP / IMAP plugin behavior (initial)
 
 - Navigating to `ftp:` / `sftp:` / `scp:` / `imap:` with no host opens Connection Manager (host-side behavior).
 - The FileSystemCurl plugin supports the `/@conn:<connectionName>/...` prefix and uses host services to resolve connection + credentials.
+
+## Google Drive plugin behavior
+
+- Navigating to `gdrive:` with no host opens Connection Manager filtered to Google Drive.
+- The built-in Google Drive plugin requires `authMode = oauth2Pkce` and resolves host-owned connection profiles through `/@conn:<connectionName>/...`.
+- Google Drive profiles are hostless (`host` empty) and default `extra.rootKind = myDrive`, `extra.useDefaultClientId = true`, and `extra.googleDocsMode = export`.
+- Refresh tokens are stored through `IHostConnections::SetConnectionSecret(HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, ...)`, which maps to the `refreshToken` credential suffix in WinCred/session cache.
+- The current Google Drive milestone does not own an interactive browser sign-in UI yet; it consumes refresh tokens supplied by host-side OAuth plumbing or tests.
+
+## Microsoft Drive plugin behavior
+
+- Navigating to `onedrivep:` / `onedriveb:` / `sharepoint:` with no host opens Connection Manager filtered to the matching Microsoft plugin.
+- The built-in Microsoft Drive plugin requires `authMode = oauth2Pkce` and uses delegated Microsoft Graph OAuth 2.0 authorization-code flow with PKCE.
+- The built-in Microsoft Drive plugin ships with a default plugin-level `clientId` (`90cdea53-7c21-48b0-959e-b4024209027b`). Plugin configuration may override or clear it.
+- Refresh tokens are stored through `IHostConnections::SetConnectionSecret(HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, ...)`.
+- Connection mapping:
+  - OneDrive Personal: `pluginId = builtin/file-system-onedrive-personal`, default `tenantAuthority = consumers`.
+  - OneDrive Business: `pluginId = builtin/file-system-onedrive-business`, default `tenantAuthority = organizations`.
+  - SharePoint: `pluginId = builtin/file-system-sharepoint`, `host = <tenantHost>[/sitePath]`, default `tenantAuthority = organizations`, optional `extra.driveId` pins a document library.
+- All three plugins resolve the selected profile from `/@conn:<connectionName>/...` and use `initialPath` as the starting path inside the resolved drive or library.

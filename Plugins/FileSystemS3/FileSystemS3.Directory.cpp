@@ -285,11 +285,11 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(
         return hr;
     }
 
-    HRESULT itemHr                    = S_OK;
+    HRESULT itemHr                         = S_OK;
     [[maybe_unused]] uint64_t sizeBytes    = 0;
     [[maybe_unused]] __int64 lastWriteTime = 0;
-    bool found                        = false;
-    hr = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
+    bool found                             = false;
+    hr                                     = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
     if (FAILED(hr))
     {
         itemHr = hr;
@@ -337,6 +337,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(
         return hr;
     }
 
+    if (SUCCEEDED(itemHr))
+    {
+        NotifySyntheticPathDeleted(path);
+    }
     return itemHr;
 }
 
@@ -740,7 +744,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
         [[maybe_unused]] uint64_t sizeBytes    = 0;
         [[maybe_unused]] __int64 lastWriteTime = 0;
         bool found                             = false;
-        hr = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
+        hr                                     = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
         if (FAILED(hr))
         {
             hadFailure = true;
@@ -956,6 +960,14 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
     if (hadFailure)
     {
         return continueOnError ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure;
+    }
+
+    for (unsigned long index = 0; index < count; ++index)
+    {
+        if (paths[index] && paths[index][0] != L'\0')
+        {
+            NotifySyntheticPathDeleted(paths[index]);
+        }
     }
 
     return S_OK;

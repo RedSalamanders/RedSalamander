@@ -28,7 +28,7 @@
 #include "ConnectionSecrets.h"
 #include "FolderWindow.h"
 #include "Helpers.h"
-#include "SettingsSave.h"
+#include "SettingsHotReload.h"
 #include "SettingsStore.h"
 #include "Ui/AlertOverlayWindow.h"
 #include "WindowMessages.h"
@@ -84,6 +84,21 @@ struct PendingConnectionSecret
     HostConnectionSecretKind kind = HOST_CONNECTION_SECRET_PASSWORD;
     HWND ownerWindow              = nullptr;
     wil::unique_cotaskmem_string secret;
+};
+
+struct PendingSetConnectionSecret
+{
+    std::wstring connectionName;
+    HostConnectionSecretKind kind = HOST_CONNECTION_SECRET_PASSWORD;
+    std::wstring secret;
+    BOOL persist = FALSE;
+};
+
+struct PendingDeleteConnectionSecret
+{
+    std::wstring connectionName;
+    HostConnectionSecretKind kind = HOST_CONNECTION_SECRET_PASSWORD;
+    BOOL deletePersisted          = FALSE;
 };
 
 struct PendingConnectionJson
@@ -643,6 +658,54 @@ public:
         return GetConnectionSecretOnUiThread(connectionName, kind, ownerWindow, secretOut);
     }
 
+    HRESULT STDMETHODCALLTYPE SetConnectionSecret(const wchar_t* connectionName,
+                                                  HostConnectionSecretKind kind,
+                                                  const wchar_t* secret,
+                                                  BOOL persist) noexcept override
+    {
+        if (! connectionName || connectionName[0] == L'\0' || ! secret)
+        {
+            return E_INVALIDARG;
+        }
+
+        const HWND hostWindow = GetInitializedHostWindow();
+        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+        {
+            auto data            = std::make_unique<PendingSetConnectionSecret>();
+            data->connectionName = connectionName;
+            data->kind           = kind;
+            data->secret         = secret;
+            data->persist        = persist;
+
+            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostSetConnectionSecret, 0, reinterpret_cast<LPARAM>(data.get()));
+            return static_cast<HRESULT>(msgResult);
+        }
+
+        return SetConnectionSecretOnUiThread(connectionName, kind, secret, persist);
+    }
+
+    HRESULT STDMETHODCALLTYPE DeleteConnectionSecret(const wchar_t* connectionName, HostConnectionSecretKind kind, BOOL deletePersisted) noexcept override
+    {
+        if (! connectionName || connectionName[0] == L'\0')
+        {
+            return E_INVALIDARG;
+        }
+
+        const HWND hostWindow = GetInitializedHostWindow();
+        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+        {
+            auto data             = std::make_unique<PendingDeleteConnectionSecret>();
+            data->connectionName  = connectionName;
+            data->kind            = kind;
+            data->deletePersisted = deletePersisted;
+
+            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostDeleteConnectionSecret, 0, reinterpret_cast<LPARAM>(data.get()));
+            return static_cast<HRESULT>(msgResult);
+        }
+
+        return DeleteConnectionSecretOnUiThread(connectionName, kind, deletePersisted);
+    }
+
     HRESULT STDMETHODCALLTYPE PromptForConnectionSecret(const wchar_t* connectionName,
                                                         HostConnectionSecretKind kind,
                                                         HWND ownerWindow,
@@ -699,12 +762,7 @@ public:
         }
 
         const HWND hostWindow = GetInitializedHostWindow();
-        if (! hostWindow)
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
-        }
-
-        if (! IsCurrentThreadWindowThread(hostWindow))
+        if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
         {
             auto data            = std::make_unique<PendingClearConnectionSecretCache>();
             data->connectionName = connectionName;
@@ -906,6 +964,34 @@ public:
             return true;
         }
 
+        if (message == WndMsg::kHostSetConnectionSecret)
+        {
+            auto* data = reinterpret_cast<PendingSetConnectionSecret*>(lParam);
+            if (! data)
+            {
+                result = static_cast<LRESULT>(E_POINTER);
+                return true;
+            }
+
+            const HRESULT hr = SetConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->secret.c_str(), data->persist);
+            result           = static_cast<LRESULT>(hr);
+            return true;
+        }
+
+        if (message == WndMsg::kHostDeleteConnectionSecret)
+        {
+            auto* data = reinterpret_cast<PendingDeleteConnectionSecret*>(lParam);
+            if (! data)
+            {
+                result = static_cast<LRESULT>(E_POINTER);
+                return true;
+            }
+
+            const HRESULT hr = DeleteConnectionSecretOnUiThread(data->connectionName.c_str(), data->kind, data->deletePersisted);
+            result           = static_cast<LRESULT>(hr);
+            return true;
+        }
+
         if (message == WndMsg::kHostPromptConnectionSecret)
         {
             auto* data = reinterpret_cast<PendingConnectionSecret*>(lParam);
@@ -1063,64 +1149,32 @@ private:
         {
             case Common::Settings::ConnectionAuthMode::Anonymous: return L"anonymous";
             case Common::Settings::ConnectionAuthMode::SshKey: return L"sshKey";
+            case Common::Settings::ConnectionAuthMode::OAuth2Pkce: return L"oauth2Pkce";
             case Common::Settings::ConnectionAuthMode::Password:
             default: return L"password";
         }
     }
 
-    [[nodiscard]] static const wchar_t* PluginIdToScheme(std::wstring_view pluginId) noexcept
+    [[nodiscard]] static const wchar_t* ConnectionSecretKindToString(HostConnectionSecretKind kind) noexcept
     {
-        if (pluginId == L"builtin/file-system-ftp")
+        switch (kind)
         {
-            return L"ftp";
+            case HOST_CONNECTION_SECRET_PASSWORD: return L"password";
+            case HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE: return L"sshKeyPassphrase";
+            case HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN: return L"refreshToken";
         }
-        if (pluginId == L"builtin/file-system-sftp")
-        {
-            return L"sftp";
-        }
-        if (pluginId == L"builtin/file-system-scp")
-        {
-            return L"scp";
-        }
-        if (pluginId == L"builtin/file-system-imap")
-        {
-            return L"imap";
-        }
-
-        return nullptr;
+        return L"password";
     }
 
-    [[nodiscard]] static std::wstring BuildConnectionDisplayUrl(const Common::Settings::ConnectionProfile& profile) noexcept
+    [[nodiscard]] static RedSalamander::Connections::SecretKind ToLocalSecretKind(HostConnectionSecretKind kind) noexcept
     {
-        const wchar_t* scheme = PluginIdToScheme(profile.pluginId);
-        if (! scheme || profile.host.empty())
+        switch (kind)
         {
-            return {};
+            case HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE: return RedSalamander::Connections::SecretKind::SshKeyPassphrase;
+            case HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN: return RedSalamander::Connections::SecretKind::RefreshToken;
+            case HOST_CONNECTION_SECRET_PASSWORD:
+            default: return RedSalamander::Connections::SecretKind::Password;
         }
-
-        std::wstring authority = profile.host;
-        if (profile.port != 0)
-        {
-            authority = std::format(L"{}:{}", profile.host, profile.port);
-        }
-
-        std::wstring user;
-        if (profile.authMode == Common::Settings::ConnectionAuthMode::Anonymous)
-        {
-            user = L"anonymous";
-        }
-        else if (! profile.userName.empty())
-        {
-            user = profile.userName;
-        }
-
-        const bool hideAnonymous = (profile.pluginId == L"builtin/file-system-ftp") && (user == L"anonymous");
-        const bool showUser      = ! user.empty() && ! hideAnonymous;
-        if (showUser)
-        {
-            return std::format(L"{}://{}@{}", scheme, user, authority);
-        }
-        return std::format(L"{}://{}", scheme, authority);
     }
 
     static void SecureClear(std::wstring& text) noexcept
@@ -1145,6 +1199,12 @@ private:
             SecureClear(entry.secret);
         }
         _sessionPassphraseByConnectionId.clear();
+
+        for (auto& [id, entry] : _sessionRefreshTokenByConnectionId)
+        {
+            SecureClear(entry.secret);
+        }
+        _sessionRefreshTokenByConnectionId.clear();
     }
 
     [[nodiscard]] static std::optional<std::wstring> ExtraGetString(const Common::Settings::JsonValue& extra, std::string_view key) noexcept
@@ -1431,13 +1491,21 @@ private:
             return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
         }
 
-        const wchar_t* kindText = kind == HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE ? L"sshKeyPassphrase" : L"password";
-        const bool passphrase   = (kind == HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE);
+        const wchar_t* kindText = ConnectionSecretKindToString(kind);
+        auto* sessionMap        = &_sessionPasswordByConnectionId;
+        if (kind == HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE)
+        {
+            sessionMap = &_sessionPassphraseByConnectionId;
+        }
+        else if (kind == HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN)
+        {
+            sessionMap = &_sessionRefreshTokenByConnectionId;
+        }
 
         // Session cache takes priority (allows ephemeral secrets even when not persisted).
         if (! profile->id.empty())
         {
-            auto& map = passphrase ? _sessionPassphraseByConnectionId : _sessionPasswordByConnectionId;
+            auto& map = *sessionMap;
             if (const auto it = map.find(profile->id); it != map.end() && it->second.present)
             {
                 const std::wstring_view cached = it->second.secret;
@@ -1469,11 +1537,7 @@ private:
             windowsHelloReauthTimeoutMinute = g_settings.connections->windowsHelloReauthTimeoutMinute;
         }
 
-        RedSalamander::Connections::SecretKind secretKind = RedSalamander::Connections::SecretKind::Password;
-        if (passphrase)
-        {
-            secretKind = RedSalamander::Connections::SecretKind::SshKeyPassphrase;
-        }
+        const RedSalamander::Connections::SecretKind secretKind = ToLocalSecretKind(kind);
 
         const bool isQuickConnect = RedSalamander::Connections::IsQuickConnectConnectionId(profile->id);
 
@@ -1597,6 +1661,10 @@ private:
     }
 
     HRESULT PromptForConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, HWND ownerWindow, wchar_t** secretOut) noexcept;
+
+    HRESULT SetConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, const wchar_t* secret, BOOL persist) noexcept;
+
+    HRESULT DeleteConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, BOOL deletePersisted) noexcept;
 
     HRESULT ClearCachedConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind) noexcept;
 
@@ -1888,6 +1956,7 @@ private:
     std::unordered_map<HWND, std::unique_ptr<RedSalamander::Ui::AlertOverlayWindow>> _windowOverlays;
     std::unordered_map<std::wstring, SessionSecretEntry> _sessionPasswordByConnectionId;
     std::unordered_map<std::wstring, SessionSecretEntry> _sessionPassphraseByConnectionId;
+    std::unordered_map<std::wstring, SessionSecretEntry> _sessionRefreshTokenByConnectionId;
 };
 
 HRESULT
@@ -1921,6 +1990,11 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
 
     const AppTheme& theme = g_folderWindow.GetTheme();
 
+    if (kind == HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
     const bool passphrase = (kind == HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE);
     const UINT captionId  = passphrase ? IDS_CONNECTIONS_PROMPT_PASSPHRASE_CAPTION : IDS_CONNECTIONS_PROMPT_PASSWORD_CAPTION;
     const UINT messageId  = passphrase ? IDS_CONNECTIONS_PROMPT_PASSPHRASE_MESSAGE_FMT : IDS_CONNECTIONS_PROMPT_PASSWORD_MESSAGE_FMT;
@@ -1942,7 +2016,7 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
     std::wstring message           = FormatStringResource(nullptr, messageId, displayName);
     const std::wstring secretLabel = LoadStringResource(nullptr, labelId);
 
-    if (const std::wstring url = BuildConnectionDisplayUrl(*profile); ! url.empty())
+    if (const std::wstring url = ConnectionProfileUtils::BuildConnectionDisplayUrl(*profile); ! url.empty())
     {
         message = std::format(L"{}\n{}", message, url);
     }
@@ -1969,7 +2043,7 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
         }
         else
         {
-            const HRESULT saveHr = Common::Settings::SaveSettings(L"RedSalamander", SettingsSave::PrepareForSave(g_settings));
+            const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings);
             if (FAILED(saveHr))
             {
                 const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(L"RedSalamander");
@@ -2008,13 +2082,144 @@ HostServices::PromptForConnectionSecretOnUiThread(const wchar_t* connectionName,
     return S_OK;
 }
 
+HRESULT HostServices::SetConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, const wchar_t* secret, BOOL persist) noexcept
+{
+    const HWND hostWindow = GetInitializedHostWindow();
+    if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
+    }
+
+    if (! secret)
+    {
+        return E_INVALIDARG;
+    }
+
+    const Common::Settings::ConnectionProfile* profile = FindConnectionProfile(connectionName);
+    if (! profile)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
+    if (profile->id.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    auto* sessionMap = &_sessionPasswordByConnectionId;
+    if (kind == HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE)
+    {
+        sessionMap = &_sessionPassphraseByConnectionId;
+    }
+    else if (kind == HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN)
+    {
+        sessionMap = &_sessionRefreshTokenByConnectionId;
+    }
+
+    SessionSecretEntry& entry = (*sessionMap)[profile->id];
+    if (entry.present)
+    {
+        SecureClear(entry.secret);
+    }
+    entry.present = false;
+
+    const std::wstring_view secretView(secret);
+    if (! secretView.empty())
+    {
+        entry.present = true;
+        entry.secret.assign(secretView);
+        RedSalamander::Connections::NoteSecretAccessAuthorized(profile->id);
+    }
+
+    const RedSalamander::Connections::SecretKind secretKind = ToLocalSecretKind(kind);
+    if (RedSalamander::Connections::IsQuickConnectConnectionId(profile->id))
+    {
+        if (persist != FALSE || ! secretView.empty())
+        {
+            RedSalamander::Connections::SetQuickConnectSecret(secretKind, secretView);
+        }
+        else
+        {
+            RedSalamander::Connections::ClearQuickConnectSecret(secretKind);
+        }
+        return S_OK;
+    }
+
+    if (persist == FALSE)
+    {
+        return S_OK;
+    }
+
+    const std::wstring targetName = RedSalamander::Connections::BuildCredentialTargetName(profile->id, secretKind);
+    if (targetName.empty())
+    {
+        return E_FAIL;
+    }
+
+    if (secretView.empty())
+    {
+        const HRESULT deleteHr = RedSalamander::Connections::DeleteGenericCredential(targetName);
+        if (deleteHr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
+        {
+            return S_OK;
+        }
+        return deleteHr;
+    }
+
+    return RedSalamander::Connections::SaveGenericCredential(targetName, profile->userName, secretView);
+}
+
+HRESULT HostServices::DeleteConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind, BOOL deletePersisted) noexcept
+{
+    const HRESULT clearHr = ClearCachedConnectionSecretOnUiThread(connectionName, kind);
+    if (FAILED(clearHr) && clearHr != HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
+    {
+        return clearHr;
+    }
+
+    if (deletePersisted == FALSE)
+    {
+        return clearHr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND) ? S_OK : clearHr;
+    }
+
+    const Common::Settings::ConnectionProfile* profile = FindConnectionProfile(connectionName);
+    if (! profile)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
+    if (profile->id.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    const RedSalamander::Connections::SecretKind secretKind = ToLocalSecretKind(kind);
+    if (RedSalamander::Connections::IsQuickConnectConnectionId(profile->id))
+    {
+        RedSalamander::Connections::ClearQuickConnectSecret(secretKind);
+        return S_OK;
+    }
+
+    const std::wstring targetName = RedSalamander::Connections::BuildCredentialTargetName(profile->id, secretKind);
+    if (targetName.empty())
+    {
+        return E_FAIL;
+    }
+
+    const HRESULT deleteHr = RedSalamander::Connections::DeleteGenericCredential(targetName);
+    if (deleteHr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND))
+    {
+        return S_OK;
+    }
+    return deleteHr;
+}
+
 HRESULT HostServices::ClearCachedConnectionSecretOnUiThread(const wchar_t* connectionName, HostConnectionSecretKind kind) noexcept
 {
-    HWND hostWindow           = nullptr;
-    const HRESULT hrHostReady = EnsureHostUiThreadReady(hostWindow);
-    if (FAILED(hrHostReady))
+    const HWND hostWindow = GetInitializedHostWindow();
+    if (hostWindow && ! IsCurrentThreadWindowThread(hostWindow))
     {
-        return hrHostReady;
+        return HRESULT_FROM_WIN32(ERROR_INVALID_THREAD_ID);
     }
 
     const Common::Settings::ConnectionProfile* profile = FindConnectionProfile(connectionName);
@@ -2028,8 +2233,16 @@ HRESULT HostServices::ClearCachedConnectionSecretOnUiThread(const wchar_t* conne
         return S_OK;
     }
 
-    const bool passphrase = (kind == HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE);
-    auto& map             = passphrase ? _sessionPassphraseByConnectionId : _sessionPasswordByConnectionId;
+    auto* sessionMap = &_sessionPasswordByConnectionId;
+    if (kind == HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE)
+    {
+        sessionMap = &_sessionPassphraseByConnectionId;
+    }
+    else if (kind == HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN)
+    {
+        sessionMap = &_sessionRefreshTokenByConnectionId;
+    }
+    auto& map = *sessionMap;
 
     const auto it = map.find(profile->id);
     if (it != map.end())
@@ -2042,12 +2255,7 @@ HRESULT HostServices::ClearCachedConnectionSecretOnUiThread(const wchar_t* conne
 
     if (RedSalamander::Connections::IsQuickConnectConnectionId(profile->id))
     {
-        RedSalamander::Connections::SecretKind secretKind = RedSalamander::Connections::SecretKind::Password;
-        if (passphrase)
-        {
-            secretKind = RedSalamander::Connections::SecretKind::SshKeyPassphrase;
-        }
-        RedSalamander::Connections::ClearQuickConnectSecret(secretKind);
+        RedSalamander::Connections::ClearQuickConnectSecret(ToLocalSecretKind(kind));
     }
 
     return S_OK;
@@ -2091,7 +2299,7 @@ HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* con
     std::wstring message =
         FormatStringResource(nullptr, IDS_CONNECTIONS_PROMPT_FTP_ANON_REJECTED_MESSAGE_FMT, profile->name.empty() ? L"(unnamed)" : profile->name);
 
-    if (const std::wstring url = BuildConnectionDisplayUrl(*profile); ! url.empty())
+    if (const std::wstring url = ConnectionProfileUtils::BuildConnectionDisplayUrl(*profile); ! url.empty())
     {
         message = std::format(L"{}\n{}", message, url);
     }
@@ -2110,7 +2318,7 @@ HRESULT HostServices::UpgradeFtpAnonymousToPasswordOnUiThread(const wchar_t* con
     profile->authMode = Common::Settings::ConnectionAuthMode::Password;
     profile->userName = userName;
 
-    const HRESULT saveHr = Common::Settings::SaveSettings(L"RedSalamander", SettingsSave::PrepareForSave(g_settings));
+    const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings);
     if (FAILED(saveHr))
     {
         const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(L"RedSalamander");

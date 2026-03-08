@@ -438,8 +438,8 @@ void CompareDirectoriesSession::SetSettings(Common::Settings::CompareDirectories
             _settings.ignoreFiles != settings.ignoreFiles || _settings.ignoreFilesPatterns != settings.ignoreFilesPatterns ||
             _settings.ignoreDirectories != settings.ignoreDirectories || _settings.ignoreDirectoriesPatterns != settings.ignoreDirectoriesPatterns;
 
-        _settings = std::move(settings);
-        _ignoreFilePatterns = ignoreFilePatterns;
+        _settings                = std::move(settings);
+        _ignoreFilePatterns      = ignoreFilePatterns;
         _ignoreDirectoryPatterns = ignoreDirectoryPatterns;
         if (comparisonChanged)
         {
@@ -1501,8 +1501,8 @@ void CompareDirectoriesSession::EvictContentCompareCacheForRelativePathLocked(co
     {
         const std::wstring_view cachedKey = it->first.relativeFileKey;
         const bool exactMatch             = wil::compare_string_ordinal(cachedKey, relativeKey, true) == wistd::weak_ordering::equivalent;
-        const bool subtreeMatch           = includeSubtree && cachedKey.size() > relativeKey.size() &&
-                                  OrdinalString::StartsWithNoCase(cachedKey, relativeKey) && cachedKey[relativeKey.size()] == L'/';
+        const bool subtreeMatch = includeSubtree && cachedKey.size() > relativeKey.size() && OrdinalString::StartsWithNoCase(cachedKey, relativeKey) &&
+                                  cachedKey[relativeKey.size()] == L'/';
         if (exactMatch || subtreeMatch)
         {
             it = _contentCompareCache.erase(it);
@@ -2019,7 +2019,7 @@ namespace
             return false;
         }
 
-        const size_t availableBytes = static_cast<size_t>(end - entryBytes);
+        const size_t availableBytes  = static_cast<size_t>(end - entryBytes);
         constexpr size_t kNameOffset = offsetof(FileInfo, FileName);
         if (entry->FileNameSize > (availableBytes - kNameOffset) || (entry->FileNameSize % sizeof(wchar_t)) != 0u)
         {
@@ -2761,8 +2761,7 @@ std::shared_ptr<CompareDirectoriesFolderDecision> CompareDirectoriesSession::Com
                                 else if (allowBackgroundWork)
                                 {
                                     const auto inflightIt    = _contentCompareInFlight.find(compareKey);
-                                    const bool alreadyQueued = (inflightIt != _contentCompareInFlight.end() &&
-                                                                inflightIt->second.version == version &&
+                                    const bool alreadyQueued = (inflightIt != _contentCompareInFlight.end() && inflightIt->second.version == version &&
                                                                 inflightIt->second.cancelToken == cancelToken);
                                     if (! alreadyQueued)
                                     {
@@ -2783,8 +2782,8 @@ std::shared_ptr<CompareDirectoriesFolderDecision> CompareDirectoriesSession::Com
                                         if (! isCancelled() && targetQueue.size() < maxJobs)
                                         {
                                             InFlightContentStamp inFlight{};
-                                            inFlight.version     = version;
-                                            inFlight.cancelToken = cancelToken;
+                                            inFlight.version                    = version;
+                                            inFlight.cancelToken                = cancelToken;
                                             _contentCompareInFlight[compareKey] = inFlight;
                                             _contentInFlightHighWater           = std::max(_contentInFlightHighWater, _contentCompareInFlight.size());
 
@@ -3033,10 +3032,10 @@ std::shared_ptr<const CompareDirectoriesFolderDecision> CompareDirectoriesSessio
     uint64_t version = 0;
     {
         std::lock_guard guard(_mutex);
-        settings               = _settings;
-        ignoreFilePatterns     = _ignoreFilePatterns;
+        settings                = _settings;
+        ignoreFilePatterns      = _ignoreFilePatterns;
         ignoreDirectoryPatterns = _ignoreDirectoryPatterns;
-        version = _version.load(std::memory_order_relaxed);
+        version                 = _version.load(std::memory_order_relaxed);
 
         ApplyPendingContentCompareUpdatesLocked(rootKey);
 
@@ -3147,9 +3146,9 @@ void CompareDirectoriesSession::ScanWorker(std::stop_token stopToken, uint32_t w
             bool notifyIdle = false;
             {
                 std::lock_guard guard(_mutex);
-                bool erased       = false;
-                if (const auto it = _scanInFlightKeys.find(job.key); it != _scanInFlightKeys.end() && it->second.version == job.version &&
-                                                           it->second.cancelToken == job.cancelToken)
+                bool erased = false;
+                if (const auto it = _scanInFlightKeys.find(job.key);
+                    it != _scanInFlightKeys.end() && it->second.version == job.version && it->second.cancelToken == job.cancelToken)
                 {
                     _scanInFlightKeys.erase(it);
                     erased = true;
@@ -3187,8 +3186,8 @@ void CompareDirectoriesSession::ScanWorker(std::stop_token stopToken, uint32_t w
         std::shared_ptr<const std::vector<std::wstring>> ignoreDirectoryPatterns;
         {
             std::lock_guard guard(_mutex);
-            settings               = _settings;
-            ignoreFilePatterns     = _ignoreFilePatterns;
+            settings                = _settings;
+            ignoreFilePatterns      = _ignoreFilePatterns;
             ignoreDirectoryPatterns = _ignoreDirectoryPatterns;
         }
 
@@ -3367,9 +3366,9 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
             bool notifyIdle = false;
             {
                 std::lock_guard guard(_mutex);
-                bool erased       = false;
-                if (const auto it = _contentCompareInFlight.find(job.key); it != _contentCompareInFlight.end() && it->second.version == job.version &&
-                                                                   it->second.cancelToken == job.cancelToken)
+                bool erased = false;
+                if (const auto it = _contentCompareInFlight.find(job.key);
+                    it != _contentCompareInFlight.end() && it->second.version == job.version && it->second.cancelToken == job.cancelToken)
                 {
                     _contentCompareInFlight.erase(it);
                     erased = true;
@@ -3393,9 +3392,9 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
             bool notifyIdle = false;
             {
                 std::lock_guard guard(_mutex);
-                bool erased       = false;
-                if (const auto it = _contentCompareInFlight.find(job.key); it != _contentCompareInFlight.end() && it->second.version == job.version &&
-                                                                   it->second.cancelToken == job.cancelToken)
+                bool erased = false;
+                if (const auto it = _contentCompareInFlight.find(job.key);
+                    it != _contentCompareInFlight.end() && it->second.version == job.version && it->second.cancelToken == job.cancelToken)
                 {
                     _contentCompareInFlight.erase(it);
                     erased = true;
@@ -3446,9 +3445,9 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
             bool notifyIdle = false;
             {
                 std::lock_guard guard(_mutex);
-                bool erased       = false;
-                if (const auto it = _contentCompareInFlight.find(job.key); it != _contentCompareInFlight.end() && it->second.version == job.version &&
-                                                                   it->second.cancelToken == job.cancelToken)
+                bool erased = false;
+                if (const auto it = _contentCompareInFlight.find(job.key);
+                    it != _contentCompareInFlight.end() && it->second.version == job.version && it->second.cancelToken == job.cancelToken)
                 {
                     _contentCompareInFlight.erase(it);
                     erased = true;
@@ -3476,8 +3475,8 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
         {
             std::lock_guard guard(_mutex);
 
-            if (const auto it = _contentCompareInFlight.find(job.key); it != _contentCompareInFlight.end() && it->second.version == job.version &&
-                                                               it->second.cancelToken == job.cancelToken)
+            if (const auto it = _contentCompareInFlight.find(job.key);
+                it != _contentCompareInFlight.end() && it->second.version == job.version && it->second.cancelToken == job.cancelToken)
             {
                 _contentCompareInFlight.erase(it);
                 erased = true;
@@ -3515,8 +3514,7 @@ void CompareDirectoriesSession::ContentCompareWorker(std::stop_token stopToken, 
                 _pendingContentCompareUpdates[folderKey][job.entryName] = update;
                 _pendingContentHighWater                                = std::max(_pendingContentHighWater, _pendingContentCompareUpdates.size());
                 shouldNotify                                            = true;
-                forceNotifyFinal                                        = _contentCompareQueueHigh.empty() && _contentCompareQueueLow.empty() &&
-                                   _contentCompareInFlight.empty();
+                forceNotifyFinal     = _contentCompareQueueHigh.empty() && _contentCompareQueueLow.empty() && _contentCompareInFlight.empty();
                 pendingAfter         = _contentComparePendingCompares.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
                 pendingAfterComputed = true;
             }

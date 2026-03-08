@@ -786,7 +786,7 @@ public:
             uint64_t existingSize     = 0;
             __int64 existingLastWrite = 0;
             bool found                = false;
-        const HRESULT existsHr    = FsS3::TryGetS3ObjectSummary(*_owner.get(), bucketCtx, bucket, key, existingSize, existingLastWrite, found);
+            const HRESULT existsHr    = FsS3::TryGetS3ObjectSummary(*_owner.get(), bucketCtx, bucket, key, existingSize, existingLastWrite, found);
             if (FAILED(existsHr))
             {
                 return existsHr;
@@ -831,6 +831,7 @@ public:
         }
 
         _committed = true;
+        _owner->NotifySyntheticPathCreated(_pluginPath);
         return S_OK;
     }
 
@@ -932,7 +933,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetAttributes(const wchar_t* path, unsig
         uint64_t sizeBytes    = 0;
         __int64 lastWriteTime = 0;
         bool foundFile        = false;
-    const HRESULT objHr   = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, foundFile);
+        const HRESULT objHr   = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, foundFile);
         if (FAILED(objHr))
         {
             return objHr;
@@ -1463,7 +1464,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetItemProperties([[maybe_unused]] const
             uint64_t sizeBytes    = 0;
             __int64 lastWriteTime = 0;
             bool found            = false;
-    hr                    = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucketUtf8, keyUtf8, sizeBytes, lastWriteTime, found);
+            hr                    = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucketUtf8, keyUtf8, sizeBytes, lastWriteTime, found);
             if (FAILED(hr))
             {
                 return hr;

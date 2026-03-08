@@ -1,6 +1,7 @@
 #include "FolderViewInternal.h"
 
 #include "FluentIcons.h"
+#include "NavigationLocation.h"
 
 void FolderView::SetPaneFocused(bool focused) noexcept
 {
@@ -157,7 +158,7 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
     if (_fileSystem && _hWnd)
     {
         _directoryCachePin =
-            DirectoryInfoCache::GetInstance().PinFolder(_fileSystem.get(), _currentFolder.value(), _hWnd.get(), WndMsg::kFolderViewDirectoryCacheDirty);
+            DirectoryInfoCache::GetInstance().PinFolder(_fileSystem.get(), _currentFolder.value(), _hWnd.get(), WndMsg::kFolderViewDirectoryImpact);
     }
     else
     {
@@ -390,10 +391,12 @@ void FolderView::OnDpiChanged(float newDpi)
 
 void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
 {
-    _fileSystem = fileSystem;
+    _directoryCachePin = DirectoryInfoCache::Pin{};
+    _fileSystem        = fileSystem;
     _displayedFolder.reset();
     _focusMemory.clear();
     _focusMemoryRootKey.clear();
+    _fileSystemMetadata = nullptr;
     if (_fileSystem)
     {
         wil::com_ptr<IInformations> infos;
@@ -412,8 +415,29 @@ void FolderView::SetFileSystem(const wil::com_ptr<IFileSystem>& fileSystem)
 
     if (_currentFolder && _fileSystem && _hWnd)
     {
-        _directoryCachePin =
-            DirectoryInfoCache::GetInstance().PinFolder(_fileSystem.get(), *_currentFolder, _hWnd.get(), WndMsg::kFolderViewDirectoryCacheDirty);
+        const std::wstring currentFolderText = _currentFolder->wstring();
+        const bool currentLooksWindows       = NavigationLocation::LooksLikeWindowsAbsolutePath(currentFolderText);
+        const bool currentLooksPluginPath    = ! currentFolderText.empty() && (currentFolderText.front() == L'/' || currentFolderText.front() == L'\\');
+        const std::wstring_view pluginShortId =
+            (_fileSystemMetadata && _fileSystemMetadata->shortId) ? std::wstring_view(_fileSystemMetadata->shortId) : std::wstring_view{};
+        const bool isFilePlugin = NavigationLocation::IsFilePluginShortId(pluginShortId);
+
+        if ((isFilePlugin && currentLooksPluginPath && ! currentLooksWindows) || (! isFilePlugin && currentLooksWindows))
+        {
+            Debug::Info(L"FolderView::SetFileSystem: skipping repin for currentFolder='{}' pluginShortId='{}' isFilePlugin={}",
+                        currentFolderText,
+                        pluginShortId.empty() ? std::wstring_view(L"<unknown>") : pluginShortId,
+                        isFilePlugin ? L"true" : L"false");
+        }
+        else
+        {
+            Debug::Info(L"FolderView::SetFileSystem: pinning currentFolder='{}' pluginShortId='{}' isFilePlugin={}",
+                        currentFolderText,
+                        pluginShortId.empty() ? std::wstring_view(L"<unknown>") : pluginShortId,
+                        isFilePlugin ? L"true" : L"false");
+            _directoryCachePin =
+                DirectoryInfoCache::GetInstance().PinFolder(_fileSystem.get(), _currentFolder.value(), _hWnd.get(), WndMsg::kFolderViewDirectoryImpact);
+        }
     }
     else
     {
@@ -468,6 +492,12 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         {
             auto request = TakeMessagePayload<IconBitmapRequest>(lParam);
             OnCreateIconBitmap(std::move(request));
+            return 0;
+        }
+        case WndMsg::kFolderViewDirectoryImpact:
+        {
+            auto impact = TakeMessagePayload<DirectoryInfoCache::DirectoryImpact>(lParam);
+            OnDirectoryImpact(std::move(impact));
             return 0;
         }
         case WndMsg::kFolderViewDirectoryCacheDirty: OnDirectoryCacheDirty(); return 0;
@@ -646,6 +676,11 @@ void FolderView::OnDestroy()
     {
         KillTimer(_hWnd.get(), kIdleLayoutTimerId);
         _idleLayoutTimer = 0;
+    }
+    if (_directoryCacheRefreshTimer != 0 && _hWnd)
+    {
+        KillTimer(_hWnd.get(), kDirectoryCacheRefreshTimerId);
+        _directoryCacheRefreshTimer = 0;
     }
 
     StopOverlayAnimation();

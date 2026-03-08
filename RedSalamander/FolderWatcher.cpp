@@ -22,18 +22,39 @@ FolderWatcher::~FolderWatcher()
 HRESULT STDMETHODCALLTYPE FolderWatcher::PluginCallback::FileSystemDirectoryChanged(const FileSystemDirectoryChangeNotification* notification,
                                                                                     void* /*cookie*/) noexcept
 {
+    FolderWatcherNotification owned{};
     if (! notification || notification->sizeBytes != sizeof(FileSystemDirectoryChangeNotification))
     {
         if (_owner)
         {
-            _owner->OnPluginDirectoryChanged(true);
+            owned.overflow = true;
+            _owner->OnPluginDirectoryChanged(std::move(owned));
         }
         return notification ? E_INVALIDARG : E_POINTER;
     }
 
+    owned.overflow = notification->overflow != FALSE;
+    if (notification->changes && notification->changeCount > 0)
+    {
+        owned.changes.reserve(notification->changeCount);
+        for (unsigned long index = 0; index < notification->changeCount; ++index)
+        {
+            const FileSystemDirectoryChange& change = notification->changes[index];
+
+            FolderWatcherNotification::Change ownedChange{};
+            ownedChange.action = change.action;
+            if (change.relativePath && change.relativePathSize > 0 && change.relativePathSize % sizeof(wchar_t) == 0)
+            {
+                const size_t charCount = static_cast<size_t>(change.relativePathSize) / sizeof(wchar_t);
+                ownedChange.relativePath.assign(change.relativePath, change.relativePath + charCount);
+            }
+            owned.changes.push_back(std::move(ownedChange));
+        }
+    }
+
     if (_owner)
     {
-        _owner->OnPluginDirectoryChanged(notification->overflow);
+        _owner->OnPluginDirectoryChanged(std::move(owned));
     }
 
     return S_OK;
@@ -94,14 +115,14 @@ void FolderWatcher::Stop() noexcept
     }
 }
 
-void FolderWatcher::OnPluginDirectoryChanged(bool overflow) noexcept
+void FolderWatcher::OnPluginDirectoryChanged(FolderWatcherNotification notification) noexcept
 {
     if (_stopping.load(std::memory_order_acquire))
     {
         return;
     }
 
-    if (overflow)
+    if (notification.overflow)
     {
         _overflowCount.fetch_add(1ull, std::memory_order_relaxed);
         const ULONGLONG nowTick               = GetTickCount64();
@@ -116,26 +137,8 @@ void FolderWatcher::OnPluginDirectoryChanged(bool overflow) noexcept
 
     if (_callback)
     {
-        auto deferred = std::make_unique<Callback>(_callback);
-
-        Callback* raw = deferred.release();
-        const BOOL ok = TrySubmitThreadpoolCallback(
-            [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept
-        {
-            std::unique_ptr<Callback> callback(static_cast<Callback*>(context));
-            if (callback && *callback)
-            {
-                (*callback)();
-            }
-        },
-            raw,
-            nullptr);
-
-        if (! ok)
-        {
-            // Reclaim ownership via unique_ptr destructor
-            std::unique_ptr<Callback> reclaimed(raw);
-            _callback();
-        }
+        // Preserve plugin callback ordering here so rename old/new pairs stay adjacent when the cache routes the batch.
+        // The host intentionally avoids adding a second async hop after IFileSystemDirectoryWatch delivery.
+        _callback(notification);
     }
 }

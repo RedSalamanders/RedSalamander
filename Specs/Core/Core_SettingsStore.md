@@ -91,10 +91,16 @@ Saving must be atomic to prevent partial/corrupt writes:
 
 ### Recovery behavior
 
-If loading fails (missing file, unreadable file, invalid JSON, or invalid types):
-- Start with defaults.
+For the normal startup / explicit recovery path (`LoadSettings(...)`):
+- If loading fails (missing file, unreadable file, invalid JSON, or invalid types), start with defaults.
 - If a file existed but was invalid, rename it to a backup for diagnostics:
   - `<SettingsFileName>.bad.<UTC timestamp>`
+
+For the non-destructive hot-reload path (`TryLoadSettingsNoRecovery(...)`):
+- Missing file returns `S_FALSE`.
+- Invalid JSON / invalid types / unsupported schema version returns a failure `HRESULT`.
+- The file is left in place; it is **not** renamed to `.bad.*`.
+- The caller decides whether to keep current runtime settings, warn the user, or recover in some other way.
 
 ### Tolerant reads, canonical writes
 
@@ -103,7 +109,7 @@ If loading fails (missing file, unreadable file, invalid JSON, or invalid types)
 - Writer emits strict JSON with stable formatting and ordering for present keys, but **omits default values** (and whole sections) when there is nothing meaningful to persist.
 - Reader accepts JSON5 features (comments, trailing commas) and UTF-8 BOM; writer outputs strict JSON and does not preserve comments/trailing commas.
 
-## Common.dll API Surface (v1)
+## Common.dll API Surface (v2)
 
 The settings store is implemented in `Common.dll` and consumed by executables.
 
@@ -124,6 +130,7 @@ namespace Common::Settings
     struct WindowPlacement;
     struct ThemeDefinition;
     struct Settings;
+    struct SettingsFileStamp;
 
     std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept;
     std::filesystem::path GetSettingsSchemaPath(std::wstring_view appId) noexcept;
@@ -132,12 +139,64 @@ namespace Common::Settings
     std::string_view GetSettingsStoreSchemaJsonUtf8() noexcept;
 
     HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept;
+    HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexcept;
+    HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept;
     HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept;
 
     // Writes `<AppId>.settings.schema.json` next to the settings file.
     HRESULT SaveSettingsSchema(std::wstring_view appId, std::string_view schemaJsonUtf8) noexcept;
 }
 ```
+
+### File-stamp helper
+
+`SettingsFileStamp` is a stable identity/value snapshot of the current settings file used by live-reload callers to de-duplicate notifications and suppress self-saves.
+
+Fields:
+- `volumeSerialNumber`
+- `fileIndexHigh`
+- `fileIndexLow`
+- `lastWriteTime`
+- `fileSize`
+
+Return contract:
+- `TryGetSettingsFileStamp(...)`
+  - `S_OK`: stamp retrieved
+  - `S_FALSE`: file missing
+  - failure `HRESULT`: unexpected I/O/query failure
+- `TryLoadSettingsNoRecovery(...)`
+  - `S_OK`: settings loaded and validated
+  - `S_FALSE`: file missing
+  - failure `HRESULT`: invalid/unreadable/unsupported file without fallback or backup
+
+## Live Reload Semantics (RedSalamander.exe)
+
+`RedSalamander.exe` live-watches only the main settings file returned by `GetSettingsPath(L"RedSalamander")`.
+
+Watcher rules:
+- Detection is event-driven (directory change notification), but only the main settings file stamp is authoritative.
+- `RedSalamander.exe` writes its own settings through a shared save helper that refreshes the applied stamp immediately after save.
+- A changed stamp already recorded as `lastAppliedStamp` or `lastRejectedStamp` is ignored on the next reload check.
+- `Themes\\*.theme.json5` files are **not** watched in this iteration.
+- `RedSalamanderMonitor.exe` does not participate in this hot-reload flow.
+
+Merge policy after a valid external reload:
+- Disk is authoritative for persisted user-editable sections such as `theme`, `plugins`, `connections`, `extensions`, `shortcuts`, `cache`, `fileOperations`, `compareDirectories`, `hotPaths`, `monitor`, `mainMenu`, `startup`, and folder preference fields.
+- Runtime session state is preserved for already-open windows and current pane navigation.
+- Preserved runtime window placements are the placements of currently open modeless/top-level windows already running in the process.
+- Preserved folder session fields are:
+  - `folders.active`
+  - `folders.layout`
+  - `folders.history`
+  - `folders.historyFilters`
+  - `folders.items[*].current`
+- External reload must not live-move existing windows or navigate panes to the paths stored on disk.
+
+Invalid external file behavior:
+- Keep the current runtime settings unchanged.
+- Return an error from `TryLoadSettingsNoRecovery(...)` to the app-level hot-reload handler.
+- Show a single modeless localized warning in the app.
+- Do **not** rename/back up the file during the live reload failure path.
 
 ## Settings Data Model (v6)
 
@@ -168,7 +227,7 @@ Keys:
 
 Notes:
 - Plugin IDs are long, stable identifiers (`builtin/<name>` for embedded/optional, `user/<name>` for custom).
-- Each plugin also exposes a unique **short ID** used for navigation prefixes (e.g., `file`, `fk`, `ftp`, `s3`), but settings use the long ID.
+- Each plugin also exposes a unique **short ID** used for navigation prefixes (e.g., `file`, `fk`, `ftp`, `gdrive`, `s3`), but settings use the long ID.
 - When migrating older settings, legacy IDs such as `"file"`, `"builtin/filesystem"`, or `"fk"` are normalized to `"builtin/file-system"` and `"builtin/file-system-dummy"`.
 - Custom plugins are referenced **in place** (paths in `customPluginPaths`); the host never copies DLLs into the `Plugins` folder.
 - Changes made via the **Manage Plugins** UI (add/remove/enable/disable/configure) are saved immediately to reduce the risk of losing configuration on crashes.
@@ -182,6 +241,7 @@ Notes:
 
 Built-in plugin configuration keys are documented in their respective plugin specs (or in the plugin-type spec when appropriate):
 - `builtin/file-system-dummy`: `Specs/Plugins/Plugins_VirtualFileSystem.md`
+- `builtin/file-system-gdrive`: `Specs/FileSystem/FileSystem_GoogleDrive.md`
 - `builtin/viewer-imgraw`: `Specs/Plugins/Plugins_ViewerImgRaw.md`
 - `builtin/viewer-space`: `Specs/Plugins/Plugins_ViewerSpace.md`
 - `builtin/viewer-web`, `builtin/viewer-json`, `builtin/viewer-markdown`: `Specs/Plugins/Plugins_ViewerWeb.md`
@@ -518,6 +578,7 @@ Keys map to `Common::Settings::ConnectionsSettings`:
 
 Notes:
 - Secrets are not written to the Settings Store JSON; they are stored in Windows Credential Manager (WinCred) or cached in memory for the current app run.
+- Some connection profiles are intentionally hostless. Today that includes S3 / S3 Table (`host = auto region`) and Google Drive (`host` omitted entirely).
 
 ## Hot Paths
 

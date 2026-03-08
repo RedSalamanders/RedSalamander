@@ -74,6 +74,13 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::QueryInterface(REFIID riid, void** ppvOb
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemDirectoryWatch))
+    {
+        *ppvObject = static_cast<IFileSystemDirectoryWatch*>(this);
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IInformations))
     {
         *ppvObject = static_cast<IInformations*>(this);
@@ -112,6 +119,270 @@ ULONG STDMETHODCALLTYPE FileSystemS3::Release() noexcept
         delete this;
     }
     return result;
+}
+
+std::wstring FileSystemS3::MakeWatchPathKey(std::wstring_view path) noexcept
+{
+    std::wstring key(path);
+    for (wchar_t& ch : key)
+    {
+        ch = static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
+    }
+    return key;
+}
+
+std::wstring FileSystemS3::RelativeWatchPath(std::wstring_view watchedPath, std::wstring_view fullPath) noexcept
+{
+    if (fullPath == watchedPath)
+    {
+        return {};
+    }
+
+    size_t offset = watchedPath.size();
+    if (offset < fullPath.size() && fullPath[offset] == L'/')
+    {
+        ++offset;
+    }
+    return std::wstring(fullPath.substr(offset));
+}
+
+void FileSystemS3::EmitSyntheticWatchNotification(std::wstring_view watchedPath, const std::vector<SyntheticWatchChange>& changes, bool overflow) noexcept
+{
+    std::shared_ptr<SyntheticWatchRegistration> registration;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring watchedKey = MakeWatchPathKey(watchedPath);
+        for (const auto& candidate : _syntheticWatches)
+        {
+            if (! candidate || ! candidate->active.load(std::memory_order_acquire))
+            {
+                continue;
+            }
+            if (candidate->watchedPathKey == watchedKey)
+            {
+                registration = candidate;
+                break;
+            }
+        }
+    }
+
+    if (! registration || changes.empty())
+    {
+        return;
+    }
+
+    std::vector<FileSystemDirectoryChange> rawChanges;
+    rawChanges.reserve(changes.size());
+    for (const SyntheticWatchChange& change : changes)
+    {
+        rawChanges.push_back(FileSystemDirectoryChange{
+            .action           = change.action,
+            .relativePath     = change.relativePath.empty() ? nullptr : change.relativePath.c_str(),
+            .relativePathSize = static_cast<unsigned long>(change.relativePath.size() * sizeof(wchar_t)),
+        });
+    }
+
+    registration->inFlight.fetch_add(1u, std::memory_order_acq_rel);
+    if (! registration->active.load(std::memory_order_acquire))
+    {
+        if (registration->inFlight.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
+        {
+            std::lock_guard lock(registration->drainMutex);
+            registration->drainCv.notify_all();
+        }
+        return;
+    }
+
+    FileSystemDirectoryChangeNotification notification{};
+    notification.sizeBytes       = sizeof(notification);
+    notification.watchedPath     = registration->watchedPath.c_str();
+    notification.watchedPathSize = static_cast<unsigned long>(registration->watchedPath.size() * sizeof(wchar_t));
+    notification.changes         = rawChanges.data();
+    notification.changeCount     = static_cast<unsigned long>(rawChanges.size());
+    notification.overflow        = overflow ? TRUE : FALSE;
+
+    registration->callbackThreadId.store(GetCurrentThreadId(), std::memory_order_release);
+    if (registration->callback)
+    {
+        static_cast<void>(registration->callback->FileSystemDirectoryChanged(&notification, registration->cookie));
+    }
+    registration->callbackThreadId.store(0u, std::memory_order_release);
+
+    if (registration->inFlight.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
+    {
+        std::lock_guard lock(registration->drainMutex);
+        registration->drainCv.notify_all();
+    }
+}
+
+void FileSystemS3::NotifySyntheticPathCreated(std::wstring_view fullPath) noexcept
+{
+    const std::wstring normalized          = FsS3::NormalizePluginPath(fullPath);
+    const std::filesystem::path parentPath = std::filesystem::path(normalized).parent_path();
+    const std::wstring parent              = parentPath.empty() ? L"/" : FsS3::NormalizePluginPath(parentPath.native());
+
+    std::vector<std::pair<std::wstring, std::vector<SyntheticWatchChange>>> notifications;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring parentKey = MakeWatchPathKey(parent);
+        for (const auto& registration : _syntheticWatches)
+        {
+            if (! registration || ! registration->active.load(std::memory_order_acquire) || registration->watchedPathKey != parentKey)
+            {
+                continue;
+            }
+
+            std::wstring relative = RelativeWatchPath(registration->watchedPath, normalized);
+            std::vector<SyntheticWatchChange> changes(1);
+            changes[0].action       = FILESYSTEM_DIR_CHANGE_ADDED;
+            changes[0].relativePath = std::move(relative);
+            notifications.emplace_back(registration->watchedPath, std::move(changes));
+        }
+    }
+
+    for (const auto& [watchedPath, changes] : notifications)
+    {
+        EmitSyntheticWatchNotification(watchedPath, changes, false);
+    }
+}
+
+void FileSystemS3::NotifySyntheticPathDeleted(std::wstring_view fullPath) noexcept
+{
+    const std::wstring normalized          = FsS3::NormalizePluginPath(fullPath);
+    const std::filesystem::path parentPath = std::filesystem::path(normalized).parent_path();
+    const std::wstring parent              = parentPath.empty() ? L"/" : FsS3::NormalizePluginPath(parentPath.native());
+
+    std::vector<std::pair<std::wstring, std::vector<SyntheticWatchChange>>> notifications;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring parentKey = MakeWatchPathKey(parent);
+        for (const auto& registration : _syntheticWatches)
+        {
+            if (! registration || ! registration->active.load(std::memory_order_acquire) || registration->watchedPathKey != parentKey)
+            {
+                continue;
+            }
+
+            std::wstring relative = RelativeWatchPath(registration->watchedPath, normalized);
+            std::vector<SyntheticWatchChange> changes(1);
+            changes[0].action       = FILESYSTEM_DIR_CHANGE_REMOVED;
+            changes[0].relativePath = std::move(relative);
+            notifications.emplace_back(registration->watchedPath, std::move(changes));
+        }
+    }
+
+    for (const auto& [watchedPath, changes] : notifications)
+    {
+        EmitSyntheticWatchNotification(watchedPath, changes, false);
+    }
+}
+
+void FileSystemS3::NotifySyntheticFolderChanged(std::wstring_view folderPath) noexcept
+{
+    const std::wstring normalized = FsS3::NormalizePluginPath(folderPath);
+
+    std::vector<std::pair<std::wstring, std::vector<SyntheticWatchChange>>> notifications;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring folderKey = MakeWatchPathKey(normalized);
+        for (const auto& registration : _syntheticWatches)
+        {
+            if (! registration || ! registration->active.load(std::memory_order_acquire) || registration->watchedPathKey != folderKey)
+            {
+                continue;
+            }
+
+            std::vector<SyntheticWatchChange> changes(1);
+            changes[0].action = FILESYSTEM_DIR_CHANGE_MODIFIED;
+            notifications.emplace_back(registration->watchedPath, std::move(changes));
+        }
+    }
+
+    for (const auto& [watchedPath, changes] : notifications)
+    {
+        EmitSyntheticWatchNotification(watchedPath, changes, false);
+    }
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemS3::WatchDirectory(const wchar_t* path, IFileSystemDirectoryWatchCallback* callback, void* cookie) noexcept
+{
+    if (! path || ! callback)
+    {
+        return E_POINTER;
+    }
+
+    if (path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    const std::wstring normalized = FsS3::NormalizePluginPath(path);
+    if (normalized.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    auto registration            = std::make_shared<SyntheticWatchRegistration>();
+    registration->watchedPath    = normalized;
+    registration->watchedPathKey = MakeWatchPathKey(normalized);
+    registration->callback       = callback;
+    registration->cookie         = cookie;
+
+    std::lock_guard lock(_watchMutex);
+    for (const auto& existing : _syntheticWatches)
+    {
+        if (existing && existing->active.load(std::memory_order_acquire) && existing->watchedPathKey == registration->watchedPathKey)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+    }
+
+    _syntheticWatches.push_back(std::move(registration));
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemS3::UnwatchDirectory(const wchar_t* path) noexcept
+{
+    if (! path)
+    {
+        return E_POINTER;
+    }
+
+    if (path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    const std::wstring normalized = FsS3::NormalizePluginPath(path);
+    if (normalized.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    std::shared_ptr<SyntheticWatchRegistration> registration;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring watchKey = MakeWatchPathKey(normalized);
+        auto it = std::find_if(_syntheticWatches.begin(), _syntheticWatches.end(), [&](const std::shared_ptr<SyntheticWatchRegistration>& candidate) noexcept {
+            return candidate && candidate->active.load(std::memory_order_acquire) && candidate->watchedPathKey == watchKey;
+        });
+        if (it == _syntheticWatches.end())
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+
+        registration = *it;
+        _syntheticWatches.erase(it);
+        registration->active.store(false, std::memory_order_release);
+    }
+
+    const DWORD currentThreadId = GetCurrentThreadId();
+    const unsigned int targetInFlight =
+        registration->callbackThreadId.load(std::memory_order_acquire) == currentThreadId ? 1u : 0u;
+    std::unique_lock drainLock(registration->drainMutex);
+    registration->drainCv.wait(
+        drainLock, [&]() noexcept { return registration->inFlight.load(std::memory_order_acquire) <= targetInFlight; });
+    return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::GetMetaData(const PluginMetaData** metaData) noexcept

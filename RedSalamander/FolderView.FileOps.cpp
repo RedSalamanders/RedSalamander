@@ -259,7 +259,12 @@ void FolderView::DeleteSelectedItems()
         return;
     }
 
-    if (! _currentFolder || ! DirectoryInfoCache::GetInstance().IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
+    DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
+    for (const auto& path : paths)
+    {
+        cache.NotifyPathDeleted(_fileSystem.get(), path);
+    }
+    if (! _currentFolder || ! cache.IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
     {
         ForceRefresh();
     }
@@ -371,7 +376,9 @@ void FolderView::PasteItemsFromClipboard()
         return;
     }
 
-    if (! _currentFolder || ! DirectoryInfoCache::GetInstance().IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
+    DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
+    cache.NotifyFolderContentsChanged(_fileSystem.get(), _currentFolder.value());
+    if (! _currentFolder || ! cache.IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
     {
         ForceRefresh();
     }
@@ -400,7 +407,9 @@ void FolderView::RenameFocusedItem()
         return;
     }
 
-    if (! _currentFolder || ! DirectoryInfoCache::GetInstance().IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
+    DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
+    cache.NotifyPathMoved(_fileSystem.get(), fullPath, target);
+    if (! _currentFolder || ! cache.IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
     {
         ForceRefresh();
     }
@@ -497,7 +506,12 @@ void FolderView::MoveSelectedItems()
         return;
     }
 
-    if (! _currentFolder || ! DirectoryInfoCache::GetInstance().IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
+    DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
+    for (const auto& path : paths)
+    {
+        cache.NotifyPathMoved(_fileSystem.get(), path, destination / path.filename());
+    }
+    if (! _currentFolder || ! cache.IsFolderWatched(_fileSystem.get(), _currentFolder.value()))
     {
         ForceRefresh();
     }

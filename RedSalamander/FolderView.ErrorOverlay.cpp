@@ -307,6 +307,19 @@ void FolderView::OnTimerMessage(UINT_PTR timerId)
         return;
     }
 
+    if (timerId == kDirectoryCacheRefreshTimerId)
+    {
+        if (_directoryCacheRefreshTimer != 0 && _hWnd)
+        {
+            KillTimer(_hWnd.get(), kDirectoryCacheRefreshTimerId);
+            _directoryCacheRefreshTimer = 0;
+        }
+
+        _lastDirectoryCacheRefreshTick = GetTickCount64();
+        RequestRefreshFromCache();
+        return;
+    }
+
     if (timerId != kOverlayTimerId)
     {
         return;
@@ -319,8 +332,8 @@ void FolderView::OnTimerMessage(UINT_PTR timerId)
         bool shouldDismiss = false;
         {
             std::lock_guard lock(_errorOverlayMutex);
-            if (_errorOverlay && _errorOverlay->kind == ErrorOverlayKind::Operation && _errorOverlay->severity == OverlaySeverity::Information && ! _errorOverlay->closable &&
-                ! _errorOverlay->blocksInput)
+            if (_errorOverlay && _errorOverlay->kind == ErrorOverlayKind::Operation && _errorOverlay->severity == OverlaySeverity::Information &&
+                ! _errorOverlay->closable && ! _errorOverlay->blocksInput)
             {
                 shouldDismiss = true;
             }
@@ -598,8 +611,7 @@ void FolderView::ClearErrorOverlay(ErrorOverlayKind kind) const
 void FolderView::ShowAlertOverlay(
     ErrorOverlayKind kind, OverlaySeverity severity, std::wstring title, std::wstring message, HRESULT hr, bool closable, bool blocksInput)
 {
-    const bool wantsAutoDismiss =
-        kind == ErrorOverlayKind::Operation && severity == OverlaySeverity::Information && ! closable && ! blocksInput;
+    const bool wantsAutoDismiss = kind == ErrorOverlayKind::Operation && severity == OverlaySeverity::Information && ! closable && ! blocksInput;
 
     ErrorOverlayState overlay{};
     overlay.kind        = kind;
@@ -611,7 +623,7 @@ void FolderView::ShowAlertOverlay(
     overlay.closable    = closable;
     overlay.blocksInput = blocksInput;
 
-    bool changed = false;
+    bool changed    = false;
     bool suppressed = false;
     {
         std::lock_guard lock(_errorOverlayMutex);
@@ -620,10 +632,9 @@ void FolderView::ShowAlertOverlay(
             suppressed = true;
         }
 
-        const bool samePresentation =
-            _errorOverlay && _errorOverlay->kind == overlay.kind && _errorOverlay->severity == overlay.severity && _errorOverlay->hr == overlay.hr &&
-            _errorOverlay->title == overlay.title && _errorOverlay->message == overlay.message && _errorOverlay->closable == overlay.closable &&
-            _errorOverlay->blocksInput == overlay.blocksInput;
+        const bool samePresentation = _errorOverlay && _errorOverlay->kind == overlay.kind && _errorOverlay->severity == overlay.severity &&
+                                      _errorOverlay->hr == overlay.hr && _errorOverlay->title == overlay.title && _errorOverlay->message == overlay.message &&
+                                      _errorOverlay->closable == overlay.closable && _errorOverlay->blocksInput == overlay.blocksInput;
         if (! suppressed && (! samePresentation || wantsAutoDismiss))
         {
             _errorOverlay = overlay;

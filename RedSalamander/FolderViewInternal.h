@@ -93,22 +93,22 @@ using wil::unique_hbitmap;
 
 namespace
 {
-constexpr wchar_t kFolderViewClassName[]          = L"RedSalamanderFolderView";
-constexpr float kLabelHorizontalPaddingDip        = 12.0f;
-constexpr float kLabelVerticalPaddingDip          = 4.0f;
-constexpr float kFocusStrokeThicknessDip          = 2.0f;
-constexpr float kFocusStrokeThicknessUnfocusedDip = 1.0f;
-constexpr float kFocusBorderOpacityUnfocused      = 0.60f;
-constexpr float kSelectionCornerRadiusDip         = 2.0f;
-constexpr float kIconTextGapDip                   = 12.0f;
-constexpr float kColumnSpacingDip                 = 18.0f;
-constexpr float kRowSpacingDip                    = 4.0f;
-constexpr float kDetailsGapDip                    = 2.0f;
-constexpr float kDetailsTextAlpha                 = 0.75f;
-constexpr float kMetadataTextAlpha                = 0.55f;
-constexpr UINT kSwapChainBufferCount              = 2;
-constexpr UINT_PTR kOverlayTimerId                = 1;
-constexpr uint64_t kBusyOverlayDelayMs            = 300;
+constexpr wchar_t kFolderViewClassName[]              = L"RedSalamanderFolderView";
+constexpr float kLabelHorizontalPaddingDip            = 12.0f;
+constexpr float kLabelVerticalPaddingDip              = 4.0f;
+constexpr float kFocusStrokeThicknessDip              = 2.0f;
+constexpr float kFocusStrokeThicknessUnfocusedDip     = 1.0f;
+constexpr float kFocusBorderOpacityUnfocused          = 0.60f;
+constexpr float kSelectionCornerRadiusDip             = 2.0f;
+constexpr float kIconTextGapDip                       = 12.0f;
+constexpr float kColumnSpacingDip                     = 18.0f;
+constexpr float kRowSpacingDip                        = 4.0f;
+constexpr float kDetailsGapDip                        = 2.0f;
+constexpr float kDetailsTextAlpha                     = 0.75f;
+constexpr float kMetadataTextAlpha                    = 0.55f;
+constexpr UINT kSwapChainBufferCount                  = 2;
+constexpr UINT_PTR kOverlayTimerId                    = 1;
+constexpr uint64_t kBusyOverlayDelayMs                = 300;
 constexpr uint64_t kOperationInfoOverlayAutoDismissMs = 1800;
 constexpr uint64_t kOverlayTimerRetryMs               = 120;
 

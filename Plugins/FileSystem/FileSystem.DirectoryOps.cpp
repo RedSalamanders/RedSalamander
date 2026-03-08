@@ -585,15 +585,14 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
 
         if (callback != nullptr)
         {
-            const HRESULT progressHr =
-                callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, path, cookie);
+            const HRESULT progressHr = callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, path, cookie);
             if (FAILED(progressHr))
             {
                 result->status = progressHr;
                 return result->status;
             }
 
-            BOOL cancel = FALSE;
+            BOOL cancel            = FALSE;
             const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
             if (FAILED(cancelHr))
             {
@@ -606,8 +605,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
                 return result->status;
             }
 
-            const HRESULT finalProgressHr =
-                callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
+            const HRESULT finalProgressHr = callback->DirectorySizeProgress(1, result->totalBytes, result->fileCount, result->directoryCount, nullptr, cookie);
             if (FAILED(finalProgressHr))
             {
                 result->status = finalProgressHr;
@@ -653,15 +651,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         if (entryThreshold || timeThreshold)
         {
             lastProgressTime = now;
-            const HRESULT progressHr = callback->DirectorySizeProgress(
-                scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
+            const HRESULT progressHr =
+                callback->DirectorySizeProgress(scannedEntries, result->totalBytes, result->fileCount, result->directoryCount, currentPath, cookie);
             if (FAILED(progressHr))
             {
                 result->status = progressHr;
                 return false;
             }
 
-            BOOL cancel = FALSE;
+            BOOL cancel            = FALSE;
             const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
             if (FAILED(cancelHr))
             {

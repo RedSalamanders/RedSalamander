@@ -119,7 +119,7 @@ void OfferPluginDisableIfPreviousCrashDetected(Common::Settings::Settings& setti
         pluginList.append(toDisable[i]);
     }
 
-    const UINT messageId = (toDisable.size() > 1u) ? IDS_CRASH_QUARANTINE_MESSAGE_PLURAL_FMT : IDS_CRASH_QUARANTINE_MESSAGE_FMT;
+    const UINT messageId       = (toDisable.size() > 1u) ? IDS_CRASH_QUARANTINE_MESSAGE_PLURAL_FMT : IDS_CRASH_QUARANTINE_MESSAGE_FMT;
     const std::wstring message = FormatStringResource(nullptr, messageId, pluginList);
 
     HostPromptRequest prompt{};

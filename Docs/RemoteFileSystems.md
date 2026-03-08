@@ -11,6 +11,8 @@ They are implemented by a single plugin DLL: `Plugins/FileSystemCurl/FileSystemC
 
 For S3 and S3 Table, see: [S3 / S3 Table](S3AndS3Table.md)
 
+For Google Drive, OneDrive Personal, OneDrive Business, and SharePoint, see: [Cloud Drives](CloudDrives.md)
+
 ## Recommended: use Connection Manager (secure secrets)
 
 Instead of embedding passwords in URIs or storing defaults in plain text plugin settings, prefer the host-owned **Connection Manager**:

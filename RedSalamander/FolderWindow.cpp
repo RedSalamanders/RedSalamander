@@ -339,11 +339,11 @@ void FolderWindow::Destroy()
 
     if (_leftPane.fileSystem)
     {
-        DirectoryInfoCache::GetInstance().ClearForFileSystem(_leftPane.fileSystem.get());
+        DirectoryInfoCache::GetInstance().UnregisterProvider(_leftPane.fileSystem.get());
     }
     if (_rightPane.fileSystem)
     {
-        DirectoryInfoCache::GetInstance().ClearForFileSystem(_rightPane.fileSystem.get());
+        DirectoryInfoCache::GetInstance().UnregisterProvider(_rightPane.fileSystem.get());
     }
 
     _leftPane.fileSystem = nullptr;
@@ -359,6 +359,7 @@ void FolderWindow::Destroy()
     _rightPane.updatingPath = false;
 
     _hWnd.reset();
+    _settings = nullptr;
 }
 
 LRESULT CALLBACK FolderWindow::WndProcThunk(HWND hWindow, UINT msg, WPARAM wp, LPARAM lp)
@@ -694,6 +695,8 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             });
 
             state.folderView.SetPathChangedCallback([this, pane](const std::optional<std::filesystem::path>& path) { OnFolderViewPathChanged(pane, path); });
+            state.folderView.SetDirectoryImpactCallback([this, pane](const DirectoryInfoCache::DirectoryImpact& impact) noexcept
+            { OnFolderViewDirectoryImpact(pane, impact); });
             state.folderView.SetNavigateUpFromRootRequestCallback([this, pane] { OnFolderViewNavigateUpFromRoot(pane); });
             state.folderView.SetOpenFileRequestCallback([this, pane](const std::filesystem::path& path) { return TryOpenFileAsVirtualFileSystem(pane, path); });
             state.folderView.SetViewFileRequestCallback([this, pane](const FolderView::ViewFileRequest& request)

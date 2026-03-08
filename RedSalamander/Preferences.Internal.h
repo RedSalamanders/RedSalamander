@@ -255,8 +255,9 @@ struct PreferencesDialogState
     // Schema-driven UI support
     std::vector<SettingsSchemaParser::SettingField> schemaFields;
 
-    bool dirty       = false;
-    bool appliedOnce = false;
+    bool dirty                   = false;
+    bool appliedOnce             = false;
+    bool staleFromExternalReload = false;
 
     // Navigation State
     PrefCategory currentCategory = PrefCategory::General;

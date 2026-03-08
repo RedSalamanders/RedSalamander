@@ -34,7 +34,10 @@ struct ForceWilTemplateInstantiations_SelfTestCommon
 } // namespace
 #pragma warning(pop)
 
+#pragma warning(push)
+#pragma warning(disable : 6297 28182) // yyjson warnings
 #include <yyjson.h>
+#pragma warning(pop)
 
 namespace SelfTest
 {
@@ -346,22 +349,6 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
     return buffer;
 }
 
-void CloseBcryptAlgorithmProvider(BCRYPT_ALG_HANDLE h) noexcept
-{
-    if (h)
-    {
-        static_cast<void>(BCryptCloseAlgorithmProvider(h, 0));
-    }
-}
-
-void DestroyBcryptHash(BCRYPT_HASH_HANDLE h) noexcept
-{
-    if (h)
-    {
-        static_cast<void>(BCryptDestroyHash(h));
-    }
-}
-
 [[nodiscard]] bool TryComputeSha256(std::span<const std::byte> data, std::array<std::byte, 32>& outHash) noexcept
 {
     outHash.fill(std::byte{0});
@@ -378,7 +365,7 @@ void DestroyBcryptHash(BCRYPT_HASH_HANDLE h) noexcept
         return false;
     }
 
-    auto closeAlg = wil::unique_any<BCRYPT_ALG_HANDLE, decltype(&CloseBcryptAlgorithmProvider), CloseBcryptAlgorithmProvider>(algHandleRaw);
+    wil::unique_bcrypt_algorithm closeAlg(algHandleRaw);
 
     DWORD objLen  = 0;
     DWORD cbData  = 0;
@@ -404,7 +391,7 @@ void DestroyBcryptHash(BCRYPT_HASH_HANDLE h) noexcept
         return false;
     }
 
-    auto destroyHash = wil::unique_any<BCRYPT_HASH_HANDLE, decltype(&DestroyBcryptHash), DestroyBcryptHash>(hashHandleRaw);
+    wil::unique_bcrypt_hash destroyHash(hashHandleRaw);
 
     const NTSTATUS hashStatus =
         BCryptHashData(destroyHash.get(), reinterpret_cast<PUCHAR>(const_cast<std::byte*>(data.data())), static_cast<ULONG>(data.size()), 0);
@@ -844,7 +831,7 @@ const std::filesystem::path& SelfTestRoot() noexcept
 {
     static const std::filesystem::path root = []
     {
-    const std::filesystem::path base = AppDataPaths::GetLocalAppDataPath();
+        const std::filesystem::path base = AppDataPaths::GetLocalAppDataPath();
         if (base.empty())
         {
             return std::filesystem::path{};

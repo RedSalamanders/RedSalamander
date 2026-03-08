@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -105,6 +106,7 @@ private:
 class FileSystemS3 final : public IFileSystem,
                            public IFileSystemIO,
                            public IFileSystemDirectoryOperations,
+                           public IFileSystemDirectoryWatch,
                            public IInformations,
                            public INavigationMenu,
                            public IDriveInfo
@@ -216,6 +218,9 @@ public:
                                                void* cookie,
                                                FileSystemDirectorySizeResult* result) noexcept override;
 
+    HRESULT STDMETHODCALLTYPE WatchDirectory(const wchar_t* path, IFileSystemDirectoryWatchCallback* callback, void* cookie) noexcept override;
+    HRESULT STDMETHODCALLTYPE UnwatchDirectory(const wchar_t* path) noexcept override;
+
     struct Settings
     {
         std::wstring defaultRegion = L"us-east-1";
@@ -232,6 +237,41 @@ public:
 private:
     ~FileSystemS3();
 
+    struct SyntheticWatchRegistration
+    {
+        SyntheticWatchRegistration()                                             = default;
+        SyntheticWatchRegistration(const SyntheticWatchRegistration&)            = delete;
+        SyntheticWatchRegistration& operator=(const SyntheticWatchRegistration&) = delete;
+        SyntheticWatchRegistration(SyntheticWatchRegistration&&)                 = delete;
+        SyntheticWatchRegistration& operator=(SyntheticWatchRegistration&&)      = delete;
+
+        std::wstring watchedPath;
+        std::wstring watchedPathKey;
+        IFileSystemDirectoryWatchCallback* callback = nullptr;
+        void* cookie                                = nullptr;
+        std::atomic<bool> active{true};
+        std::atomic<uint32_t> inFlight{0};
+        std::atomic<DWORD> callbackThreadId{0};
+        std::mutex drainMutex;
+        std::condition_variable drainCv;
+    };
+
+    struct SyntheticWatchChange
+    {
+        FileSystemDirectoryChangeAction action = FILESYSTEM_DIR_CHANGE_MODIFIED;
+        std::wstring relativePath;
+    };
+
+    static std::wstring MakeWatchPathKey(std::wstring_view path) noexcept;
+    static std::wstring RelativeWatchPath(std::wstring_view watchedPath, std::wstring_view fullPath) noexcept;
+    void EmitSyntheticWatchNotification(std::wstring_view watchedPath, const std::vector<SyntheticWatchChange>& changes, bool overflow = false) noexcept;
+
+public:
+    void NotifySyntheticPathCreated(std::wstring_view fullPath) noexcept;
+    void NotifySyntheticPathDeleted(std::wstring_view fullPath) noexcept;
+    void NotifySyntheticFolderChanged(std::wstring_view folderPath) noexcept;
+
+private:
     struct MenuEntry
     {
         NavigationMenuItemFlags flags = NAV_MENU_ITEM_FLAG_NONE;
@@ -450,6 +490,9 @@ private:
     void* _navigationMenuCallbackCookie              = nullptr;
     std::vector<MenuEntry> _menuEntries;
     std::vector<NavigationMenuItem> _menuEntryView;
+
+    std::mutex _watchMutex;
+    std::vector<std::shared_ptr<SyntheticWatchRegistration>> _syntheticWatches;
 
     // Drive info
     std::wstring _driveDisplayName;

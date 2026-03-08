@@ -2,6 +2,7 @@
 
 #include "Framework.h"
 
+#include <format>
 #include <limits>
 
 #include "Helpers.h"
@@ -9,6 +10,55 @@
 
 namespace ConnectionProfileUtils
 {
+namespace
+{
+[[nodiscard]] const wchar_t* PluginIdToScheme(std::wstring_view pluginId) noexcept
+{
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-ftp"))
+    {
+        return L"ftp";
+    }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-sftp"))
+    {
+        return L"sftp";
+    }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-scp"))
+    {
+        return L"scp";
+    }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-imap"))
+    {
+        return L"imap";
+    }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-gdrive"))
+    {
+        return L"gdrive";
+    }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-onedrive-personal"))
+    {
+        return L"onedrivep";
+    }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-onedrive-business"))
+    {
+        return L"onedriveb";
+    }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-sharepoint"))
+    {
+        return L"sharepoint";
+    }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-s3"))
+    {
+        return L"s3";
+    }
+    if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-s3table"))
+    {
+        return L"s3table";
+    }
+
+    return nullptr;
+}
+} // namespace
+
 std::optional<bool> ExtraGetBool(const Common::Settings::JsonValue& extra, std::string_view key) noexcept
 {
     const auto* objPtr = std::get_if<Common::Settings::JsonValue::ObjectPtr>(&extra.value);
@@ -161,7 +211,8 @@ bool ConnectionProfileUsesInsecureTls(const Common::Settings::ConnectionProfile&
     }
 
     // S3/S3 Tables: allow disabling HTTPS or TLS verification.
-    if (OrdinalString::EqualsNoCase(profile.pluginId, L"builtin/file-system-s3") || OrdinalString::EqualsNoCase(profile.pluginId, L"builtin/file-system-s3table"))
+    if (OrdinalString::EqualsNoCase(profile.pluginId, L"builtin/file-system-s3") ||
+        OrdinalString::EqualsNoCase(profile.pluginId, L"builtin/file-system-s3table"))
     {
         const bool useHttps  = ExtraGetBool(profile.extra, "useHttps").value_or(true);
         const bool verifyTls = ExtraGetBool(profile.extra, "verifyTls").value_or(true);
@@ -173,5 +224,46 @@ bool ConnectionProfileUsesInsecureTls(const Common::Settings::ConnectionProfile&
 
     return false;
 }
-} // namespace ConnectionProfileUtils
 
+std::wstring BuildConnectionDisplayUrl(const Common::Settings::ConnectionProfile& profile) noexcept
+{
+    const wchar_t* scheme = PluginIdToScheme(profile.pluginId);
+    if (! scheme)
+    {
+        return {};
+    }
+
+    std::wstring authority = profile.host;
+    if (! authority.empty() && profile.port != 0)
+    {
+        authority.push_back(L':');
+        authority.append(std::to_wstring(profile.port));
+    }
+
+    std::wstring user;
+    if (profile.authMode == Common::Settings::ConnectionAuthMode::Anonymous)
+    {
+        user = L"anonymous";
+    }
+    else if (! profile.userName.empty())
+    {
+        user = profile.userName;
+    }
+
+    const bool hideAnonymous = OrdinalString::EqualsNoCase(profile.pluginId, L"builtin/file-system-ftp") && (user == L"anonymous");
+    const bool showUser      = ! user.empty() && ! hideAnonymous;
+    std::wstring result(scheme);
+    result.append(L"://");
+    if (authority.empty())
+    {
+        return result;
+    }
+    if (showUser)
+    {
+        result.append(user);
+        result.push_back(L'@');
+    }
+    result.append(authority);
+    return result;
+}
+} // namespace ConnectionProfileUtils

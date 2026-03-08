@@ -18,11 +18,11 @@
 #include "FileSystemPluginManager.h"
 #include "Helpers.h"
 #include "HostServices.h"
-#include "SettingsSave.h"
-#include "SettingsSchemaExport.h"
+#include "SettingsHotReload.h"
 #include "ThemedControls.h"
 #include "ThemedInputFrames.h"
 #include "ViewerPluginManager.h"
+#include "WindowMessages.h"
 #include "resource.h"
 
 #pragma warning(push)
@@ -189,7 +189,8 @@ struct PluginConfigDialogState
     PluginConfigDialogState(const PluginConfigDialogState&)            = delete;
     PluginConfigDialogState& operator=(const PluginConfigDialogState&) = delete;
 
-    Common::Settings::Settings* settings = nullptr;
+    Common::Settings::Settings* settings             = nullptr;
+    Common::Settings::Settings* reloadSourceSettings = nullptr;
     std::wstring appId;
     AppTheme theme{};
     PluginType pluginType = PluginType::FileSystem;
@@ -197,7 +198,9 @@ struct PluginConfigDialogState
     std::wstring pluginName;
     std::string schemaJsonUtf8;
     std::string configurationJsonUtf8;
+    std::string baselineConfigurationJsonUtf8;
     PluginConfigCommitMode commitMode = PluginConfigCommitMode::ApplyToPluginsAndPersist;
+    bool staleFromExternalReload      = false;
 
     wil::unique_hbrush backgroundBrush;
     wil::unique_hbrush inputBrush;
@@ -216,23 +219,17 @@ INT_PTR OnPluginConfigDialogCtlColorButton(PluginConfigDialogState* state, HDC h
 INT_PTR OnPluginConfigDialogCtlColorEdit(PluginConfigDialogState* state, HDC hdc);
 INT_PTR OnPluginConfigDialogCtlColorListBox(PluginConfigDialogState* state, HDC hdc);
 
-void PersistSettings(HWND owner, Common::Settings::Settings& settings, std::wstring_view appId) noexcept
+[[nodiscard]] HRESULT PersistSettings(HWND owner, Common::Settings::Settings& settings, std::wstring_view appId) noexcept
 {
     if (appId.empty())
     {
-        return;
+        return E_INVALIDARG;
     }
 
-    const Common::Settings::Settings settingsToSave = SettingsSave::PrepareForSave(settings);
-    const HRESULT hr                                = Common::Settings::SaveSettings(appId, settingsToSave);
+    const HRESULT hr = SettingsHotReload::SaveSettingsAndSchema(appId, settings);
     if (SUCCEEDED(hr))
     {
-        const HRESULT schemaHr = SaveAggregatedSettingsSchema(appId, settings);
-        if (FAILED(schemaHr))
-        {
-            Debug::Error(L"Failed to write aggregated settings schema (hr=0x{:08X})", static_cast<unsigned long>(schemaHr));
-        }
-        return;
+        return S_OK;
     }
 
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
@@ -240,12 +237,26 @@ void PersistSettings(HWND owner, Common::Settings::Settings& settings, std::wstr
 
     if (! owner)
     {
-        return;
+        return hr;
     }
 
     const std::wstring message = FormatStringResource(nullptr, IDS_FMT_SETTINGS_SAVE_FAILED, settingsPath.wstring(), static_cast<unsigned long>(hr));
     const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
     ShowDialogAlert(owner, HOST_ALERT_ERROR, title, message);
+    return hr;
+}
+
+[[nodiscard]] std::wstring GetPluginConfigEditorName(const PluginConfigDialogState& state) noexcept
+{
+    if (! state.pluginName.empty())
+    {
+        return state.pluginName;
+    }
+    if (! state.pluginId.empty())
+    {
+        return state.pluginId;
+    }
+    return LoadStringResource(nullptr, IDS_CAPTION_PLUGINS_MANAGER);
 }
 
 PluginConfigFieldType ParseFieldType(std::string_view type) noexcept
@@ -1595,6 +1606,7 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
     }
 
     SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
+    SettingsHotReload::RegisterParticipant(dlg);
 
     ApplyTitleBarTheme(dlg, state->theme, GetActiveWindow() == dlg);
 
@@ -2221,7 +2233,12 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
         yyjson_doc_free(configDoc);
     }
 
-    state->contentHeight = y + margin;
+    state->contentHeight         = y + margin;
+    state->configurationJsonUtf8 = BuildConfigurationJson(state->controls);
+    if (state->baselineConfigurationJsonUtf8.empty())
+    {
+        state->baselineConfigurationJsonUtf8 = state->configurationJsonUtf8;
+    }
     UpdatePanelScrollInfo(panel, *state);
     return TRUE;
 }
@@ -2321,6 +2338,191 @@ INT_PTR OnPluginConfigDialogCtlColorListBox(PluginConfigDialogState* state, HDC 
     return reinterpret_cast<INT_PTR>(state->inputBrush ? state->inputBrush.get() : state->backgroundBrush.get());
 }
 
+void DestroyPluginConfigChildWindows(PluginConfigDialogState& state) noexcept
+{
+    if (! state.panel)
+    {
+        state.controls.clear();
+        return;
+    }
+
+    while (const HWND child = GetWindow(state.panel, GW_CHILD))
+    {
+        DestroyWindow(child);
+    }
+
+    state.controls.clear();
+}
+
+[[nodiscard]] HRESULT LoadPluginConfigSourceData(const PluginConfigDialogState& state,
+                                                 std::string& outSchemaJsonUtf8,
+                                                 std::string& outConfigJsonUtf8,
+                                                 AppTheme& outTheme) noexcept
+{
+    Common::Settings::Settings* sourceSettings = state.reloadSourceSettings ? state.reloadSourceSettings : state.settings;
+    if (! sourceSettings || state.pluginId.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    outTheme = SettingsHotReload::ResolveDialogThemeFromSettings(*sourceSettings);
+
+    HRESULT schemaHr = E_FAIL;
+    if (state.pluginType == PluginType::FileSystem)
+    {
+        auto& manager = FileSystemPluginManager::GetInstance();
+        schemaHr      = manager.GetConfigurationSchema(state.pluginId, *sourceSettings, outSchemaJsonUtf8);
+    }
+    else
+    {
+        auto& manager = ViewerPluginManager::GetInstance();
+        schemaHr      = manager.GetConfigurationSchema(state.pluginId, *sourceSettings, outSchemaJsonUtf8);
+    }
+    if (FAILED(schemaHr))
+    {
+        return schemaHr;
+    }
+
+    outConfigJsonUtf8.clear();
+    const auto it = sourceSettings->plugins.configurationByPluginId.find(state.pluginId);
+    if (it != sourceSettings->plugins.configurationByPluginId.end() && ! std::holds_alternative<std::monostate>(it->second.value))
+    {
+        const HRESULT serializeHr = Common::Settings::SerializeJsonValue(it->second, outConfigJsonUtf8);
+        if (FAILED(serializeHr))
+        {
+            return serializeHr;
+        }
+    }
+
+    if (! outConfigJsonUtf8.empty())
+    {
+        return S_OK;
+    }
+
+    if (state.pluginType == PluginType::FileSystem)
+    {
+        auto& manager = FileSystemPluginManager::GetInstance();
+        return manager.GetConfiguration(state.pluginId, *sourceSettings, outConfigJsonUtf8);
+    }
+
+    auto& manager = ViewerPluginManager::GetInstance();
+    return manager.GetConfiguration(state.pluginId, *sourceSettings, outConfigJsonUtf8);
+}
+
+[[nodiscard]] HRESULT RebuildPluginConfigDialog(HWND dlg,
+                                                PluginConfigDialogState& state,
+                                                std::string schemaJsonUtf8,
+                                                std::string displayedConfigJsonUtf8,
+                                                std::string baselineConfigJsonUtf8,
+                                                const AppTheme& theme) noexcept
+{
+    DestroyPluginConfigChildWindows(state);
+
+    state.theme                         = theme;
+    state.schemaJsonUtf8                = std::move(schemaJsonUtf8);
+    state.configurationJsonUtf8         = std::move(displayedConfigJsonUtf8);
+    state.baselineConfigurationJsonUtf8 = std::move(baselineConfigJsonUtf8);
+
+    if (OnPluginConfigDialogInit(dlg, &state) == FALSE)
+    {
+        return E_FAIL;
+    }
+
+    if (state.baselineConfigurationJsonUtf8.empty())
+    {
+        state.baselineConfigurationJsonUtf8 = BuildConfigurationJson(state.controls);
+    }
+    return S_OK;
+}
+
+[[nodiscard]] bool IsPluginConfigDialogDirty(const PluginConfigDialogState& state) noexcept
+{
+    return BuildConfigurationJson(state.controls) != state.baselineConfigurationJsonUtf8;
+}
+
+[[nodiscard]] bool ResolvePluginConfigStaleSaveConflict(HWND dlg, PluginConfigDialogState& state) noexcept
+{
+    if (! state.staleFromExternalReload)
+    {
+        return true;
+    }
+
+    SettingsHotReload::StaleSaveChoice choice = SettingsHotReload::StaleSaveChoice::Cancel;
+    const HRESULT promptHr                    = SettingsHotReload::PromptStaleSaveConflict(dlg, GetPluginConfigEditorName(state), choice);
+    if (FAILED(promptHr))
+    {
+        Debug::Warning(L"PluginConfig: failed to prompt for stale save conflict (hr=0x{:08X})", static_cast<unsigned long>(promptHr));
+        return false;
+    }
+
+    if (choice == SettingsHotReload::StaleSaveChoice::ReloadFromDisk)
+    {
+        std::string sourceSchema;
+        std::string sourceConfig;
+        AppTheme sourceTheme{};
+        const HRESULT loadHr = LoadPluginConfigSourceData(state, sourceSchema, sourceConfig, sourceTheme);
+        if (FAILED(loadHr))
+        {
+            Debug::Warning(L"PluginConfig: failed to reload configuration source (hr=0x{:08X})", static_cast<unsigned long>(loadHr));
+            return false;
+        }
+
+        state.staleFromExternalReload = false;
+        static_cast<void>(RebuildPluginConfigDialog(dlg, state, std::move(sourceSchema), sourceConfig, std::move(sourceConfig), sourceTheme));
+        return false;
+    }
+
+    if (choice == SettingsHotReload::StaleSaveChoice::Cancel)
+    {
+        return false;
+    }
+
+    state.staleFromExternalReload = false;
+    return true;
+}
+
+INT_PTR OnPluginConfigDialogSettingsReloadedFromDisk(HWND dlg, PluginConfigDialogState& state) noexcept
+{
+    std::string sourceSchema;
+    std::string sourceConfig;
+    AppTheme sourceTheme{};
+    const HRESULT loadHr = LoadPluginConfigSourceData(state, sourceSchema, sourceConfig, sourceTheme);
+    if (FAILED(loadHr))
+    {
+        Debug::Warning(L"PluginConfig: failed to load updated configuration source (hr=0x{:08X})", static_cast<unsigned long>(loadHr));
+        return TRUE;
+    }
+
+    if (IsPluginConfigDialogDirty(state))
+    {
+        const std::string currentConfig = BuildConfigurationJson(state.controls);
+
+        SettingsHotReload::ExternalReloadChoice choice = SettingsHotReload::ExternalReloadChoice::KeepEditing;
+        const HRESULT promptHr                         = SettingsHotReload::PromptExternalReloadConflict(dlg, GetPluginConfigEditorName(state), choice);
+        if (FAILED(promptHr))
+        {
+            Debug::Warning(L"PluginConfig: failed to prompt for external reload conflict (hr=0x{:08X})", static_cast<unsigned long>(promptHr));
+            return TRUE;
+        }
+
+        if (choice == SettingsHotReload::ExternalReloadChoice::KeepEditing)
+        {
+            state.staleFromExternalReload = true;
+            static_cast<void>(RebuildPluginConfigDialog(dlg,
+                                                        state,
+                                                        std::move(sourceSchema),
+                                                        currentConfig.empty() ? state.configurationJsonUtf8 : currentConfig,
+                                                        std::move(sourceConfig),
+                                                        sourceTheme));
+            return TRUE;
+        }
+    }
+
+    state.staleFromExternalReload = false;
+    static_cast<void>(RebuildPluginConfigDialog(dlg, state, std::move(sourceSchema), sourceConfig, std::move(sourceConfig), sourceTheme));
+    return TRUE;
+}
+
 INT_PTR OnPluginConfigDialogCommand(HWND dlg, PluginConfigDialogState* state, UINT commandId, UINT /*codeNotify*/, HWND /*hwndCtl*/)
 {
     if (! state)
@@ -2330,6 +2532,11 @@ INT_PTR OnPluginConfigDialogCommand(HWND dlg, PluginConfigDialogState* state, UI
 
     if (commandId == IDOK)
     {
+        if (! ResolvePluginConfigStaleSaveConflict(dlg, *state))
+        {
+            return TRUE;
+        }
+
         const std::string configJson = BuildConfigurationJson(state->controls);
         if (configJson.empty())
         {
@@ -2371,6 +2578,9 @@ INT_PTR OnPluginConfigDialogCommand(HWND dlg, PluginConfigDialogState* state, UI
                 state->settings->plugins.configurationByPluginId[state->pluginId] = std::move(parsedValue);
             }
 
+            state->configurationJsonUtf8         = configJson;
+            state->baselineConfigurationJsonUtf8 = configJson;
+            state->staleFromExternalReload       = false;
             EndDialog(dlg, IDOK);
             return TRUE;
         }
@@ -2396,9 +2606,16 @@ INT_PTR OnPluginConfigDialogCommand(HWND dlg, PluginConfigDialogState* state, UI
 
         if (state->settings)
         {
-            PersistSettings(dlg, *state->settings, state->appId);
+            const HRESULT persistHr = PersistSettings(dlg, *state->settings, state->appId);
+            if (FAILED(persistHr))
+            {
+                return TRUE;
+            }
         }
 
+        state->configurationJsonUtf8         = configJson;
+        state->baselineConfigurationJsonUtf8 = configJson;
+        state->staleFromExternalReload       = false;
         EndDialog(dlg, IDOK);
         return TRUE;
     }
@@ -2419,11 +2636,18 @@ INT_PTR CALLBACK PluginConfigDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
     switch (msg)
     {
         case WM_INITDIALOG: return OnPluginConfigDialogInit(dlg, reinterpret_cast<PluginConfigDialogState*>(lp));
+        case WndMsg::kSettingsReloadedFromDisk:
+            if (state)
+            {
+                return OnPluginConfigDialogSettingsReloadedFromDisk(dlg, *state);
+            }
+            return TRUE;
         case WM_CTLCOLORDLG: return OnPluginConfigDialogCtlColorDialog(state);
         case WM_CTLCOLORSTATIC: return OnPluginConfigDialogCtlColorStatic(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
         case WM_CTLCOLORBTN: return OnPluginConfigDialogCtlColorButton(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
         case WM_CTLCOLOREDIT: return OnPluginConfigDialogCtlColorEdit(state, reinterpret_cast<HDC>(wp));
         case WM_CTLCOLORLISTBOX: return OnPluginConfigDialogCtlColorListBox(state, reinterpret_cast<HDC>(wp));
+        case WM_NCDESTROY: SettingsHotReload::UnregisterParticipant(dlg); return FALSE;
         case WM_NCACTIVATE:
             if (state)
             {
@@ -2559,6 +2783,7 @@ ShowPluginConfigurationDialogInternal(HWND owner,
 
     PluginConfigDialogState state;
     state.settings              = &settings;
+    state.reloadSourceSettings  = &settings;
     state.appId                 = std::wstring(appId);
     state.theme                 = theme;
     state.pluginType            = pluginType;
@@ -2654,6 +2879,7 @@ HRESULT EditPluginConfigurationDialog(HWND owner,
 
     PluginConfigDialogState state;
     state.settings              = &inOutWorkingSettings;
+    state.reloadSourceSettings  = &baselineSettings;
     state.theme                 = theme;
     state.pluginType            = pluginType;
     state.pluginId              = std::wstring(pluginId);

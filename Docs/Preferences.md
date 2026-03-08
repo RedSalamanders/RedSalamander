@@ -14,6 +14,14 @@ Open Preferences from:
 - **Apply**: apply changes without closing.
 - **Cancel**: discard pending changes and close.
 
+## External settings changes
+
+- If the main settings file changes on disk and Preferences has no unsaved edits, the dialog reloads from the live app settings automatically.
+- If Preferences has unsaved edits, it warns you and lets you choose **Reload from disk** or **Keep editing**.
+- If you keep editing, the dialog becomes stale; the next **OK** or **Apply** asks whether to **Overwrite disk**, **Reload from disk**, or **Cancel**.
+- Theme previews are cancelled when an external reload is applied, and the dialog itself switches to the newly applied theme.
+- The modal plugin configuration editor follows the same reload/conflict rules.
+
 ## Pages
 
 The left tree contains:

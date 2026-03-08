@@ -2805,15 +2805,8 @@ namespace
 {
 [[nodiscard]] bool IsCurlTransientTransferError(CURLcode code) noexcept
 {
-    switch (code)
-    {
-        case CURLE_OPERATION_TIMEDOUT:
-        case CURLE_RECV_ERROR:
-        case CURLE_SEND_ERROR:
-        case CURLE_GOT_NOTHING:
-        case CURLE_COULDNT_CONNECT: return true;
-        default: return false;
-    }
+    return code == CURLE_OPERATION_TIMEDOUT || code == CURLE_RECV_ERROR || code == CURLE_SEND_ERROR || code == CURLE_GOT_NOTHING ||
+           code == CURLE_COULDNT_CONNECT;
 }
 
 [[nodiscard]] unsigned long CurlRetryDelayMs(unsigned int retryIndex) noexcept
@@ -3157,6 +3150,13 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::QueryInterface(REFIID riid, void** ppv
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemDirectoryWatch))
+    {
+        *ppvObject = static_cast<IFileSystemDirectoryWatch*>(this);
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IInformations))
     {
         *ppvObject = static_cast<IInformations*>(this);
@@ -3201,6 +3201,356 @@ ULONG STDMETHODCALLTYPE FileSystemCurl::Release() noexcept
         delete this;
     }
     return result;
+}
+
+std::wstring FileSystemCurl::MakeWatchPathKey(std::wstring_view path) noexcept
+{
+    std::wstring key(path);
+    for (wchar_t& ch : key)
+    {
+        ch = static_cast<wchar_t>(std::towlower(static_cast<wint_t>(ch)));
+    }
+    return key;
+}
+
+namespace
+{
+[[nodiscard]] std::wstring NormalizeSyntheticParentPath(std::wstring_view path) noexcept
+{
+    const std::filesystem::path parent = std::filesystem::path(path).parent_path();
+    if (parent.empty())
+    {
+        return L"/";
+    }
+
+    return FileSystemCurlInternal::NormalizePluginPath(parent.native());
+}
+} // namespace
+
+bool FileSystemCurl::IsSameOrDescendantPath(std::wstring_view candidateKey, std::wstring_view rootKey) noexcept
+{
+    if (candidateKey == rootKey)
+    {
+        return true;
+    }
+
+    return candidateKey.size() > rootKey.size() && candidateKey.rfind(rootKey, 0) == 0 && candidateKey[rootKey.size()] == L'/';
+}
+
+std::wstring FileSystemCurl::RelativeWatchPath(std::wstring_view watchedPath, std::wstring_view fullPath) noexcept
+{
+    if (fullPath == watchedPath)
+    {
+        return {};
+    }
+
+    size_t offset = watchedPath.size();
+    if (offset < fullPath.size() && fullPath[offset] == L'/')
+    {
+        ++offset;
+    }
+
+    return std::wstring(fullPath.substr(offset));
+}
+
+void FileSystemCurl::EmitSyntheticWatchNotification(std::wstring_view watchedPath, const std::vector<SyntheticWatchChange>& changes, bool overflow) noexcept
+{
+    std::shared_ptr<SyntheticWatchRegistration> registration;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring watchedKey = MakeWatchPathKey(watchedPath);
+        for (const auto& candidate : _syntheticWatches)
+        {
+            if (! candidate || ! candidate->active.load(std::memory_order_acquire))
+            {
+                continue;
+            }
+
+            if (candidate->watchedPathKey == watchedKey)
+            {
+                registration = candidate;
+                break;
+            }
+        }
+    }
+
+    if (! registration || changes.empty())
+    {
+        return;
+    }
+
+    std::vector<FileSystemDirectoryChange> rawChanges;
+    rawChanges.reserve(changes.size());
+    for (const SyntheticWatchChange& change : changes)
+    {
+        rawChanges.push_back(FileSystemDirectoryChange{
+            .action           = change.action,
+            .relativePath     = change.relativePath.empty() ? nullptr : change.relativePath.c_str(),
+            .relativePathSize = static_cast<unsigned long>(change.relativePath.size() * sizeof(wchar_t)),
+        });
+    }
+
+    registration->inFlight.fetch_add(1u, std::memory_order_acq_rel);
+    if (! registration->active.load(std::memory_order_acquire))
+    {
+        if (registration->inFlight.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
+        {
+            std::lock_guard lock(registration->drainMutex);
+            registration->drainCv.notify_all();
+        }
+        return;
+    }
+
+    FileSystemDirectoryChangeNotification notification{};
+    notification.sizeBytes       = sizeof(notification);
+    notification.watchedPath     = registration->watchedPath.c_str();
+    notification.watchedPathSize = static_cast<unsigned long>(registration->watchedPath.size() * sizeof(wchar_t));
+    notification.changes         = rawChanges.data();
+    notification.changeCount     = static_cast<unsigned long>(rawChanges.size());
+    notification.overflow        = overflow ? TRUE : FALSE;
+
+    registration->callbackThreadId.store(GetCurrentThreadId(), std::memory_order_release);
+    if (registration->callback)
+    {
+        static_cast<void>(registration->callback->FileSystemDirectoryChanged(&notification, registration->cookie));
+    }
+    registration->callbackThreadId.store(0u, std::memory_order_release);
+
+    if (registration->inFlight.fetch_sub(1u, std::memory_order_acq_rel) == 1u)
+    {
+        std::lock_guard lock(registration->drainMutex);
+        registration->drainCv.notify_all();
+    }
+}
+
+void FileSystemCurl::NotifySyntheticPathCreated(std::wstring_view fullPath) noexcept
+{
+    const std::wstring normalized = NormalizePluginPath(fullPath);
+    const std::wstring parent     = NormalizeSyntheticParentPath(normalized);
+
+    std::vector<std::pair<std::wstring, std::vector<SyntheticWatchChange>>> notifications;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring parentKey = MakeWatchPathKey(parent);
+        for (const auto& registration : _syntheticWatches)
+        {
+            if (! registration || ! registration->active.load(std::memory_order_acquire) || registration->watchedPathKey != parentKey)
+            {
+                continue;
+            }
+
+            std::wstring relative = RelativeWatchPath(registration->watchedPath, normalized);
+            std::vector<SyntheticWatchChange> changes(1);
+            changes[0].action       = FILESYSTEM_DIR_CHANGE_ADDED;
+            changes[0].relativePath = std::move(relative);
+            notifications.emplace_back(registration->watchedPath, std::move(changes));
+        }
+    }
+
+    for (const auto& [watchedPath, changes] : notifications)
+    {
+        EmitSyntheticWatchNotification(watchedPath, changes, false);
+    }
+}
+
+void FileSystemCurl::NotifySyntheticPathDeleted(std::wstring_view fullPath) noexcept
+{
+    const std::wstring normalized = NormalizePluginPath(fullPath);
+    const std::wstring parent     = NormalizeSyntheticParentPath(normalized);
+
+    std::vector<std::pair<std::wstring, std::vector<SyntheticWatchChange>>> notifications;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring parentKey = MakeWatchPathKey(parent);
+        for (const auto& registration : _syntheticWatches)
+        {
+            if (! registration || ! registration->active.load(std::memory_order_acquire) || registration->watchedPathKey != parentKey)
+            {
+                continue;
+            }
+
+            std::wstring relative = RelativeWatchPath(registration->watchedPath, normalized);
+            std::vector<SyntheticWatchChange> changes(1);
+            changes[0].action       = FILESYSTEM_DIR_CHANGE_REMOVED;
+            changes[0].relativePath = std::move(relative);
+            notifications.emplace_back(registration->watchedPath, std::move(changes));
+        }
+    }
+
+    for (const auto& [watchedPath, changes] : notifications)
+    {
+        EmitSyntheticWatchNotification(watchedPath, changes, false);
+    }
+}
+
+void FileSystemCurl::NotifySyntheticPathMoved(std::wstring_view sourcePath, std::wstring_view destinationPath) noexcept
+{
+    const std::wstring normalizedSource      = NormalizePluginPath(sourcePath);
+    const std::wstring normalizedDestination = NormalizePluginPath(destinationPath);
+    const std::wstring sourceParent          = NormalizeSyntheticParentPath(normalizedSource);
+    const std::wstring destinationParent     = NormalizeSyntheticParentPath(normalizedDestination);
+
+    std::vector<std::pair<std::wstring, std::vector<SyntheticWatchChange>>> notifications;
+    {
+        std::lock_guard lock(_watchMutex);
+        for (const auto& registration : _syntheticWatches)
+        {
+            if (! registration || ! registration->active.load(std::memory_order_acquire))
+            {
+                continue;
+            }
+
+            std::vector<SyntheticWatchChange> changes;
+            std::wstring oldRelative;
+            std::wstring newRelative;
+
+            if (registration->watchedPathKey == MakeWatchPathKey(sourceParent) && registration->watchedPathKey == MakeWatchPathKey(destinationParent))
+            {
+                oldRelative = RelativeWatchPath(registration->watchedPath, normalizedSource);
+                newRelative = RelativeWatchPath(registration->watchedPath, normalizedDestination);
+                changes.resize(2);
+                changes[0].action       = FILESYSTEM_DIR_CHANGE_RENAMED_OLD_NAME;
+                changes[0].relativePath = std::move(oldRelative);
+                changes[1].action       = FILESYSTEM_DIR_CHANGE_RENAMED_NEW_NAME;
+                changes[1].relativePath = std::move(newRelative);
+            }
+            else
+            {
+                if (registration->watchedPathKey == MakeWatchPathKey(sourceParent))
+                {
+                    oldRelative = RelativeWatchPath(registration->watchedPath, normalizedSource);
+                    changes.push_back(SyntheticWatchChange{.action = FILESYSTEM_DIR_CHANGE_REMOVED, .relativePath = std::move(oldRelative)});
+                }
+                if (registration->watchedPathKey == MakeWatchPathKey(destinationParent))
+                {
+                    newRelative = RelativeWatchPath(registration->watchedPath, normalizedDestination);
+                    changes.push_back(SyntheticWatchChange{.action = FILESYSTEM_DIR_CHANGE_ADDED, .relativePath = std::move(newRelative)});
+                }
+            }
+
+            if (! changes.empty())
+            {
+                notifications.emplace_back(registration->watchedPath, std::move(changes));
+            }
+        }
+    }
+
+    for (const auto& [watchedPath, changes] : notifications)
+    {
+        EmitSyntheticWatchNotification(watchedPath, changes, false);
+    }
+}
+
+void FileSystemCurl::NotifySyntheticFolderChanged(std::wstring_view folderPath) noexcept
+{
+    const std::wstring normalized = NormalizePluginPath(folderPath);
+    std::vector<std::pair<std::wstring, std::vector<SyntheticWatchChange>>> notifications;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring folderKey = MakeWatchPathKey(normalized);
+        for (const auto& registration : _syntheticWatches)
+        {
+            if (! registration || ! registration->active.load(std::memory_order_acquire) || registration->watchedPathKey != folderKey)
+            {
+                continue;
+            }
+
+            std::vector<SyntheticWatchChange> changes(1);
+            changes[0].action = FILESYSTEM_DIR_CHANGE_MODIFIED;
+            notifications.emplace_back(registration->watchedPath, std::move(changes));
+        }
+    }
+
+    for (const auto& [watchedPath, changes] : notifications)
+    {
+        EmitSyntheticWatchNotification(watchedPath, changes, false);
+    }
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemCurl::WatchDirectory(const wchar_t* path, IFileSystemDirectoryWatchCallback* callback, void* cookie) noexcept
+{
+    if (! path || ! callback)
+    {
+        return E_POINTER;
+    }
+
+    if (path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    const std::wstring normalized = NormalizePluginPath(path);
+    if (normalized.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    auto registration            = std::make_shared<SyntheticWatchRegistration>();
+    registration->watchedPath    = normalized;
+    registration->watchedPathKey = MakeWatchPathKey(normalized);
+    registration->callback       = callback;
+    registration->cookie         = cookie;
+
+    std::lock_guard lock(_watchMutex);
+    for (const auto& existing : _syntheticWatches)
+    {
+        if (existing && existing->active.load(std::memory_order_acquire) && existing->watchedPathKey == registration->watchedPathKey)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+    }
+
+    _syntheticWatches.push_back(std::move(registration));
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemCurl::UnwatchDirectory(const wchar_t* path) noexcept
+{
+    if (! path)
+    {
+        return E_POINTER;
+    }
+
+    if (path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    const std::wstring normalized = NormalizePluginPath(path);
+    if (normalized.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    std::shared_ptr<SyntheticWatchRegistration> registration;
+    {
+        std::lock_guard lock(_watchMutex);
+        const std::wstring watchKey = MakeWatchPathKey(normalized);
+        auto it = std::find_if(_syntheticWatches.begin(), _syntheticWatches.end(), [&](const std::shared_ptr<SyntheticWatchRegistration>& candidate) noexcept {
+            return candidate && candidate->active.load(std::memory_order_acquire) && candidate->watchedPathKey == watchKey;
+        });
+        if (it == _syntheticWatches.end())
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+        }
+
+        registration = *it;
+        _syntheticWatches.erase(it);
+        registration->active.store(false, std::memory_order_release);
+    }
+
+    if (! registration)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    }
+
+    const DWORD currentThreadId = GetCurrentThreadId();
+    const unsigned int targetInFlight =
+        registration->callbackThreadId.load(std::memory_order_acquire) == currentThreadId ? 1u : 0u;
+    std::unique_lock drainLock(registration->drainMutex);
+    registration->drainCv.wait(
+        drainLock, [&]() noexcept { return registration->inFlight.load(std::memory_order_acquire) <= targetInFlight; });
+    return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::GetMetaData(const PluginMetaData** metaData) noexcept

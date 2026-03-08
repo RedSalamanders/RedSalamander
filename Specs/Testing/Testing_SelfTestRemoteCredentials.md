@@ -1,12 +1,15 @@
 # SelfTest Remote Credentials (Optional)
 
-`RedSalamander.exe --fileops-selftest` includes **Phase 16** checks that validate the host can retrieve **saved secrets** (passwords / SSH key passphrases) for remote filesystem plugins:
+`RedSalamander.exe --fileops-selftest` includes **Phase 16** checks that validate the host can retrieve **saved secrets** (passwords / SSH key passphrases / OAuth refresh tokens) for remote filesystem plugins:
 
 - FTP (`builtin/file-system-ftp`)
 - SFTP (`builtin/file-system-sftp`)
 - SCP (`builtin/file-system-scp`)
 - IMAP (`builtin/file-system-imap`)
 - S3 (`builtin/file-system-s3`)
+- OneDrive Personal (`builtin/file-system-onedrive-personal`)
+- OneDrive Business (`builtin/file-system-onedrive-business`)
+- SharePoint (`builtin/file-system-sharepoint`)
 
 These phases are **conditional**:
 
@@ -19,7 +22,13 @@ These phases are **conditional**:
 
 - `remote_file_s3` (file ↔ S3)
 - `remote_file_ftp` (file ↔ FTP)
+- `remote_file_onedrive_personal` (file ↔ OneDrive Personal)
+- `remote_file_onedrive_business` (file ↔ OneDrive Business)
+- `remote_file_sharepoint` (file ↔ SharePoint)
 - `remote_s3_pagination` (S3 folder listing pagination: compares non-recursive `GetDirectorySize` vs `ReadDirectoryInfo` count)
+- `remote_onedrive_personal_directory_size_callback_contract`
+- `remote_onedrive_business_directory_size_callback_contract`
+- `remote_sharepoint_directory_size_callback_contract`
 - `remote_ftp_continue_on_error_partial` (FTP batch copy/move/rename must return `ERROR_PARTIAL_COPY` when one item succeeds and one item is missing)
 - `remote_s3_metadata_smoke` (S3 object metadata + reader path smoke via `GetFileBasicInformation` and `CreateFileReader`)
 - `remote_s3_delete_missing` (S3 delete contract: repeated delete returns `ERROR_FILE_NOT_FOUND`; mixed batch delete returns `ERROR_PARTIAL_COPY`)
@@ -41,6 +50,7 @@ Note: `remote_s3_pagination` can only *prove* multi-page behavior when the chose
 - Secrets are **not** stored in the repo.
 - Secrets are stored in **Windows Credential Manager** (WinCred) by Connection Manager when `savePassword == true`.
 - Connection profiles (non-secret fields only) live in the app’s Settings Store under `%LOCALAPPDATA%` (outside the source tree).
+- OAuth 2.0 PKCE profiles use the host secret kind `refreshToken`; access tokens remain memory-only.
 
 Phase 16 uses `IHostConnections::GetConnectionSecret(...)` and clears the returned memory before freeing it (never writes secrets to logs/artifacts).
 
@@ -65,6 +75,7 @@ Selftest enforces this requirement via `ConnectionProfile.initialPath` (configur
 3. Use a stable name (defaults below) or set the env var override.
 4. For automated runs:
    - Enable **Save password** (so the secret exists without prompting).
+     - For OneDrive/SharePoint this means **remember sign-in** so the refresh token is persisted.
    - Disable **Require Windows Hello** for that profile, *or* enable global `bypassWindowsHello` in settings.
 
 ### Default profile names
@@ -74,6 +85,9 @@ Selftest enforces this requirement via `ConnectionProfile.initialPath` (configur
 - SCP: `FileOpsSelfTest SCP`
 - IMAP: `FileOpsSelfTest IMAP`
 - S3: `FileOpsSelfTest S3`
+- OneDrive Personal: `FileOpsSelfTest OneDrive Personal`
+- OneDrive Business: `FileOpsSelfTest OneDrive Business`
+- SharePoint: `FileOpsSelfTest SharePoint`
 
 ### Environment variable overrides (names only; not secrets)
 
@@ -82,3 +96,6 @@ Selftest enforces this requirement via `ConnectionProfile.initialPath` (configur
 - `REDSALAMANDER_SELFTEST_CONN_SCP`
 - `REDSALAMANDER_SELFTEST_CONN_IMAP`
 - `REDSALAMANDER_SELFTEST_CONN_S3`
+- `REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL`
+- `REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS`
+- `REDSALAMANDER_SELFTEST_CONN_SHAREPOINT`

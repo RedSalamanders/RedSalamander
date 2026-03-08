@@ -40,11 +40,13 @@
 #include "FileSystemPluginManager.h"
 #include "Helpers.h"
 #include "HostServices.h"
+#include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/Factory.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
-#include "SessionState.h"
+#include "PlugInterfaces/NavigationMenu.h"
 #include "SelfTestCommon.h"
+#include "SessionState.h"
 #include "SettingsStore.h"
 #include "WindowsHello.h"
 
@@ -52,17 +54,27 @@ extern Common::Settings::Settings g_settings;
 
 namespace
 {
-constexpr std::wstring_view kBuiltinLocalFileSystemId = L"builtin/file-system";
-constexpr std::wstring_view kBuiltinDummyFileSystemId = L"builtin/file-system-dummy";
-constexpr std::wstring_view kBuiltin7zFileSystemId    = L"builtin/file-system-7z";
-constexpr std::wstring_view kBuiltinFtpFileSystemId   = L"builtin/file-system-ftp";
-constexpr std::wstring_view kBuiltinS3FileSystemId    = L"builtin/file-system-s3";
+constexpr std::wstring_view kBuiltinLocalFileSystemId            = L"builtin/file-system";
+constexpr std::wstring_view kBuiltinDummyFileSystemId            = L"builtin/file-system-dummy";
+constexpr std::wstring_view kBuiltin7zFileSystemId               = L"builtin/file-system-7z";
+constexpr std::wstring_view kBuiltinFtpFileSystemId              = L"builtin/file-system-ftp";
+constexpr std::wstring_view kBuiltinGoogleDriveFileSystemId      = L"builtin/file-system-gdrive";
+constexpr std::wstring_view kBuiltinS3FileSystemId               = L"builtin/file-system-s3";
+constexpr std::wstring_view kBuiltinOneDrivePersonalFileSystemId = L"builtin/file-system-onedrive-personal";
+constexpr std::wstring_view kBuiltinOneDriveBusinessFileSystemId = L"builtin/file-system-onedrive-business";
+constexpr std::wstring_view kBuiltinSharePointFileSystemId       = L"builtin/file-system-sharepoint";
 
-constexpr std::wstring_view kSelfTestEnvConnFtp = L"REDSALAMANDER_SELFTEST_CONN_FTP";
-constexpr std::wstring_view kSelfTestEnvConnS3  = L"REDSALAMANDER_SELFTEST_CONN_S3";
+constexpr std::wstring_view kSelfTestEnvConnFtp              = L"REDSALAMANDER_SELFTEST_CONN_FTP";
+constexpr std::wstring_view kSelfTestEnvConnS3               = L"REDSALAMANDER_SELFTEST_CONN_S3";
+constexpr std::wstring_view kSelfTestEnvConnOneDrivePersonal = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL";
+constexpr std::wstring_view kSelfTestEnvConnOneDriveBusiness = L"REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS";
+constexpr std::wstring_view kSelfTestEnvConnSharePoint       = L"REDSALAMANDER_SELFTEST_CONN_SHAREPOINT";
 
-constexpr std::wstring_view kSelfTestDefaultConnFtp = L"FileOpsSelfTest FTP";
-constexpr std::wstring_view kSelfTestDefaultConnS3  = L"FileOpsSelfTest S3";
+constexpr std::wstring_view kSelfTestDefaultConnFtp              = L"FileOpsSelfTest FTP";
+constexpr std::wstring_view kSelfTestDefaultConnS3               = L"FileOpsSelfTest S3";
+constexpr std::wstring_view kSelfTestDefaultConnOneDrivePersonal = L"FileOpsSelfTest OneDrive Personal";
+constexpr std::wstring_view kSelfTestDefaultConnOneDriveBusiness = L"FileOpsSelfTest OneDrive Business";
+constexpr std::wstring_view kSelfTestDefaultConnSharePoint       = L"FileOpsSelfTest SharePoint";
 
 std::atomic<uint32_t> g_windowsHelloVerifierCalls{0};
 
@@ -237,15 +249,67 @@ struct PhaseCheckResult
     std::wstring reason;
 };
 
+struct ResolvedRemoteProfile
+{
+    const Common::Settings::ConnectionProfile* profile = nullptr;
+    std::wstring profileName;
+    bool usedFallback = false;
+};
+
+[[nodiscard]] ResolvedRemoteProfile ResolveRemoteConnectionProfile(std::wstring_view envVarName,
+                                                                   std::wstring_view defaultProfileName,
+                                                                   std::wstring_view expectedPluginId) noexcept
+{
+    ResolvedRemoteProfile resolved{};
+    const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
+    resolved.profileName            = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
+    resolved.profile                = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, resolved.profileName);
+    if (resolved.profile || ! overrideName.empty() || ! g_settings.connections)
+    {
+        return resolved;
+    }
+
+    for (const Common::Settings::ConnectionProfile& profile : g_settings.connections->items)
+    {
+        if (profile.name.empty() || profile.pluginId.empty() || ! EqualsIgnoreCase(profile.pluginId, expectedPluginId))
+        {
+            continue;
+        }
+
+        bool selfTestNamed = false;
+        for (size_t i = 0; i + 8u <= profile.name.size(); ++i)
+        {
+            if (std::towlower(profile.name[i + 0u]) == L's' && std::towlower(profile.name[i + 1u]) == L'e' && std::towlower(profile.name[i + 2u]) == L'l' &&
+                std::towlower(profile.name[i + 3u]) == L'f' && std::towlower(profile.name[i + 4u]) == L't' && std::towlower(profile.name[i + 5u]) == L'e' &&
+                std::towlower(profile.name[i + 6u]) == L's' && std::towlower(profile.name[i + 7u]) == L't')
+            {
+                selfTestNamed = true;
+                break;
+            }
+        }
+
+        if (! selfTestNamed)
+        {
+            continue;
+        }
+
+        resolved.profile      = &profile;
+        resolved.profileName  = profile.name;
+        resolved.usedFallback = true;
+        break;
+    }
+
+    return resolved;
+}
+
 [[nodiscard]] PhaseCheckResult CheckRemoteConnectionSecret(std::wstring_view protocolLabel,
                                                            std::wstring_view envVarName,
                                                            std::wstring_view defaultProfileName,
                                                            std::wstring_view expectedPluginId) noexcept
 {
-    const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
-    const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
-
-    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+    const ResolvedRemoteProfile resolved               = ResolveRemoteConnectionProfile(envVarName, defaultProfileName, expectedPluginId);
+    const std::wstring& profileName                    = resolved.profileName;
+    const Common::Settings::ConnectionProfile* profile = resolved.profile;
     if (! profile)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
@@ -284,6 +348,10 @@ struct PhaseCheckResult
     if (profile->authMode == Common::Settings::ConnectionAuthMode::SshKey)
     {
         kind = HOST_CONNECTION_SECRET_SSH_KEY_PASSPHRASE;
+    }
+    else if (profile->authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce)
+    {
+        kind = HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN;
     }
 
     wil::com_ptr<IHostConnections> hostConnections;
@@ -337,10 +405,8 @@ struct PhaseCheckResult
                                                             std::wstring_view defaultProfileName,
                                                             std::wstring_view expectedPluginId) noexcept
 {
-    const std::wstring overrideName = GetEnvVarTrimmed(envVarName);
-    const std::wstring profileName  = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
-
-    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+    const ResolvedRemoteProfile resolved               = ResolveRemoteConnectionProfile(envVarName, defaultProfileName, expectedPluginId);
+    const Common::Settings::ConnectionProfile* profile = resolved.profile;
     if (! profile)
     {
         return {.status = SelfTest::SelfTestCaseResult::Status::skipped,
@@ -589,9 +655,26 @@ struct CreatedFileSystemInstance
     return ::SetFileTime(file.get(), nullptr, nullptr, &lastWriteTime) != 0;
 }
 
+[[nodiscard]] wil::com_ptr<IFileSystem> GetSelfTestFileSystem(std::wstring_view pluginId) noexcept
+{
+    wil::com_ptr<IFileSystem> fileSystem = SelfTest::GetFileSystem(pluginId);
+    if (fileSystem)
+    {
+        return fileSystem;
+    }
+
+    FileSystemPluginManager& pluginManager = FileSystemPluginManager::GetInstance();
+    if (FAILED(pluginManager.EnablePlugin(pluginId, g_settings)))
+    {
+        return {};
+    }
+
+    return SelfTest::GetFileSystem(pluginId);
+}
+
 [[nodiscard]] wil::com_ptr<IFileSystem> GetLocalFileSystem() noexcept
 {
-    return SelfTest::GetFileSystem(kBuiltinLocalFileSystemId);
+    return GetSelfTestFileSystem(kBuiltinLocalFileSystemId);
 }
 
 class ShortReadFileReader final : public IFileReader
@@ -1048,9 +1131,7 @@ struct ReadDirectoryTestBehavior
 class RawFilesInformation final : public IFilesInformation
 {
 public:
-    RawFilesInformation(std::vector<unsigned char> buffer, unsigned long count) noexcept
-        : _buffer(std::move(buffer)),
-          _count(count)
+    RawFilesInformation(std::vector<unsigned char> buffer, unsigned long count) noexcept : _buffer(std::move(buffer)), _count(count)
     {
     }
 
@@ -1178,7 +1259,7 @@ private:
         return buffer;
     }
 
-    auto* entry = reinterpret_cast<FileInfo*>(buffer.data());
+    auto* entry            = reinterpret_cast<FileInfo*>(buffer.data());
     entry->NextEntryOffset = static_cast<unsigned long>(sizeof(FileInfo) + 16u); // Intentionally larger than the backing buffer.
     entry->FileIndex       = 1;
     entry->CreationTime    = 0;
@@ -1386,7 +1467,7 @@ private:
 };
 
 [[nodiscard]] wil::com_ptr<IFileSystem> CreateReadDirectoryBehaviorFileSystem(const wil::com_ptr<IFileSystem>& base,
-                                                                               ReadDirectoryTestBehavior behavior) noexcept
+                                                                              ReadDirectoryTestBehavior behavior) noexcept
 {
     wil::com_ptr<IFileSystem> wrapped;
     auto* wrapper = new (std::nothrow) ReadDirectoryBehaviorFileSystem(base, std::move(behavior));
@@ -2191,7 +2272,7 @@ private:
 
 [[nodiscard]] wil::com_ptr<IFileSystem> GetDummyFileSystem() noexcept
 {
-    return SelfTest::GetFileSystem(kBuiltinDummyFileSystemId);
+    return GetSelfTestFileSystem(kBuiltinDummyFileSystemId);
 }
 
 [[nodiscard]] bool CreateFileSystemIo(const wil::com_ptr<IFileSystem>& fs, wil::com_ptr<IFileSystemIO>& outIo) noexcept
@@ -2329,9 +2410,9 @@ private:
         return false;
     }
 
-    unsigned long attrs            = 0;
-    const std::wstring pluginPath  = ToPluginPathText(path);
-    const HRESULT hr               = io->GetAttributes(pluginPath.c_str(), &attrs);
+    unsigned long attrs           = 0;
+    const std::wstring pluginPath = ToPluginPathText(path);
+    const HRESULT hr              = io->GetAttributes(pluginPath.c_str(), &attrs);
     if (FAILED(hr))
     {
         return false;
@@ -2431,8 +2512,12 @@ public:
     RecordingDirectorySizeCallback& operator=(const RecordingDirectorySizeCallback&) = delete;
     RecordingDirectorySizeCallback& operator=(RecordingDirectorySizeCallback&&)      = delete;
 
-    HRESULT STDMETHODCALLTYPE DirectorySizeProgress(
-        uint64_t scannedEntries, uint64_t totalBytes, uint64_t fileCount, uint64_t directoryCount, const wchar_t* currentPath, [[maybe_unused]] void* cookie) noexcept override
+    HRESULT STDMETHODCALLTYPE DirectorySizeProgress(uint64_t scannedEntries,
+                                                    uint64_t totalBytes,
+                                                    uint64_t fileCount,
+                                                    uint64_t directoryCount,
+                                                    const wchar_t* currentPath,
+                                                    [[maybe_unused]] void* cookie) noexcept override
     {
         _progressCalls.fetch_add(1u, std::memory_order_relaxed);
         _lastScannedEntries.store(scannedEntries, std::memory_order_release);
@@ -2524,7 +2609,7 @@ private:
     }
 
     FileSystemDirectorySizeResult baseline{};
-    baseline.sizeBytes = sizeof(FileSystemDirectorySizeResult);
+    baseline.sizeBytes       = sizeof(FileSystemDirectorySizeResult);
     const HRESULT baselineHr = dirOps->GetDirectorySize(path.c_str(), flags, nullptr, nullptr, &baseline);
     state.Require(SUCCEEDED(baselineHr) && SUCCEEDED(baseline.status),
                   std::format(L"Directory size callback contract: baseline GetDirectorySize failed. hr=0x{:08X} status=0x{:08X}",
@@ -2548,12 +2633,10 @@ private:
                                   static_cast<unsigned long>(expectedHr),
                                   static_cast<unsigned long>(hr),
                                   static_cast<unsigned long>(result.status)));
-        state.Require(callback.ProgressCalls() >= 1u,
-                      std::format(L"Directory size callback contract ({}): expected at least one progress callback.", label));
+        state.Require(callback.ProgressCalls() >= 1u, std::format(L"Directory size callback contract ({}): expected at least one progress callback.", label));
         if (mode != DirectorySizeCallbackMode::FailProgress)
         {
-            state.Require(callback.CancelCalls() >= 1u,
-                          std::format(L"Directory size callback contract ({}): expected at least one cancel callback.", label));
+            state.Require(callback.CancelCalls() >= 1u, std::format(L"Directory size callback contract ({}): expected at least one cancel callback.", label));
         }
     };
 
@@ -2577,20 +2660,17 @@ private:
 
     RecordingDirectorySizeCallback successCallback(DirectorySizeCallbackMode::Success);
     FileSystemDirectorySizeResult success{};
-    success.sizeBytes = sizeof(FileSystemDirectorySizeResult);
+    success.sizeBytes       = sizeof(FileSystemDirectorySizeResult);
     const HRESULT successHr = dirOps->GetDirectorySize(path.c_str(), flags, &successCallback, nullptr, &success);
     state.Require(SUCCEEDED(successHr) && SUCCEEDED(success.status),
                   std::format(L"Directory size callback contract (success): hr=0x{:08X} status=0x{:08X}.",
                               static_cast<unsigned long>(successHr),
                               static_cast<unsigned long>(success.status)));
-    state.Require(success.totalBytes == baseline.totalBytes,
-                  std::format(L"Directory size callback contract (success): totalBytes mismatch. expected={} got={}.",
-                              baseline.totalBytes,
-                              success.totalBytes));
+    state.Require(
+        success.totalBytes == baseline.totalBytes,
+        std::format(L"Directory size callback contract (success): totalBytes mismatch. expected={} got={}.", baseline.totalBytes, success.totalBytes));
     state.Require(success.fileCount == baseline.fileCount,
-                  std::format(L"Directory size callback contract (success): fileCount mismatch. expected={} got={}.",
-                              baseline.fileCount,
-                              success.fileCount));
+                  std::format(L"Directory size callback contract (success): fileCount mismatch. expected={} got={}.", baseline.fileCount, success.fileCount));
     state.Require(success.directoryCount == baseline.directoryCount,
                   std::format(L"Directory size callback contract (success): directoryCount mismatch. expected={} got={}.",
                               baseline.directoryCount,
@@ -2603,7 +2683,7 @@ private:
 
 struct RecordedFileSystemItem final
 {
-    bool seen = false;
+    bool seen      = false;
     HRESULT status = S_OK;
     std::wstring sourcePath;
     std::wstring destinationPath;
@@ -3219,6 +3299,520 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret (manual auth) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
             SecureClearAndFreeSecret(secret3);
             state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 0u, L"Manual secret entry should suppress Windows Hello prompts.");
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"oauth_refresh_token_storage",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            const auto restoreVerifier = wil::scope_exit([&] noexcept { static_cast<void>(RedSalamander::Security::SetWindowsHelloTestVerifier(nullptr)); });
+            g_windowsHelloVerifierCalls.store(0u, std::memory_order_relaxed);
+            RedSalamander::Security::SetWindowsHelloTestVerifier(&TestWindowsHelloVerifier);
+
+            std::wstring id = MakeGuidText();
+            state.Require(! id.empty(), L"Failed to generate a connection profile id.");
+
+            Common::Settings::ConnectionProfile profile;
+            profile.id                  = id;
+            profile.name                = std::format(L"SelfTest GoogleDrive {}", id);
+            profile.pluginId            = L"builtin/file-system-gdrive";
+            profile.host                = L"";
+            profile.initialPath         = L"/";
+            profile.userName            = L"user@example.invalid";
+            profile.authMode            = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+            profile.savePassword        = true;
+            profile.requireWindowsHello = true;
+
+            const bool hadConnectionsSettings = g_settings.connections.has_value();
+            if (! hadConnectionsSettings)
+            {
+                g_settings.connections.emplace();
+            }
+
+            const bool previousBypassHello     = g_settings.connections->bypassWindowsHello;
+            const uint32_t previousTimeoutMins = g_settings.connections->windowsHelloReauthTimeoutMinute;
+
+            g_settings.connections->bypassWindowsHello              = false;
+            g_settings.connections->windowsHelloReauthTimeoutMinute = 10;
+            g_settings.connections->items.push_back(profile);
+
+            const auto restoreSettings = wil::scope_exit([&] noexcept
+            {
+                RedSalamander::Connections::ClearSecretAccessAuthorization(id);
+
+                wil::com_ptr<IHostConnections> cleanupHostConnections;
+                if (SUCCEEDED(GetHostServices()->QueryInterface(IID_PPV_ARGS(cleanupHostConnections.put()))) && cleanupHostConnections)
+                {
+                    static_cast<void>(cleanupHostConnections->DeleteConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, TRUE));
+                    static_cast<void>(cleanupHostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN));
+                }
+
+                if (! g_settings.connections)
+                {
+                    return;
+                }
+
+                auto& items = g_settings.connections->items;
+                items.erase(std::remove_if(items.begin(), items.end(), [&](const Common::Settings::ConnectionProfile& item) noexcept { return item.id == id; }),
+                            items.end());
+
+                g_settings.connections->bypassWindowsHello              = previousBypassHello;
+                g_settings.connections->windowsHelloReauthTimeoutMinute = previousTimeoutMins;
+
+                if (! hadConnectionsSettings)
+                {
+                    g_settings.connections.reset();
+                }
+            });
+
+            wil::com_ptr<IHostConnections> hostConnections;
+            const HRESULT qiHr = GetHostServices()->QueryInterface(IID_PPV_ARGS(hostConnections.put()));
+            state.Require(SUCCEEDED(qiHr) && hostConnections, std::format(L"Missing IHostConnections. hr=0x{:08X}", static_cast<unsigned long>(qiHr)));
+
+            const std::wstring refreshToken = L"refresh-token-selftest";
+            HRESULT hr = hostConnections->SetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, refreshToken.c_str(), TRUE);
+            state.Require(SUCCEEDED(hr), std::format(L"SetConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            hr = hostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN);
+            state.Require(SUCCEEDED(hr), std::format(L"ClearCachedConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            wil::unique_cotaskmem_string secret;
+            hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, secret.put());
+            state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            state.Require(secret && std::wstring_view(secret.get()) == refreshToken, L"Unexpected OAuth refresh token value.");
+            SecureClearAndFreeSecret(secret);
+            state.Require(g_windowsHelloVerifierCalls.load(std::memory_order_relaxed) == 1u, L"Expected Windows Hello to guard persisted refresh tokens.");
+
+            hr = hostConnections->DeleteConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, TRUE);
+            state.Require(SUCCEEDED(hr), std::format(L"DeleteConnectionSecret failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            hr = hostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN);
+            state.Require(SUCCEEDED(hr), std::format(L"ClearCachedConnectionSecret (post-delete) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            wil::unique_cotaskmem_string missingSecret;
+            hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, missingSecret.put());
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND),
+                          std::format(L"Expected ERROR_NOT_FOUND after deleting saved refresh token. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            const std::wstring sessionRefreshToken = L"session-refresh-token";
+            hr = hostConnections->SetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, sessionRefreshToken.c_str(), FALSE);
+            state.Require(SUCCEEDED(hr), std::format(L"SetConnectionSecret (session only) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            wil::unique_cotaskmem_string sessionSecret;
+            hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, sessionSecret.put());
+            state.Require(SUCCEEDED(hr), std::format(L"GetConnectionSecret (session only) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            state.Require(sessionSecret && std::wstring_view(sessionSecret.get()) == sessionRefreshToken, L"Unexpected session OAuth refresh token value.");
+            SecureClearAndFreeSecret(sessionSecret);
+
+            hr = hostConnections->ClearCachedConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN);
+            state.Require(SUCCEEDED(hr), std::format(L"ClearCachedConnectionSecret (session only) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            wil::unique_cotaskmem_string sessionMissing;
+            hr = hostConnections->GetConnectionSecret(profile.name.c_str(), HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, nullptr, sessionMissing.put());
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND),
+                          std::format(L"Expected ERROR_NOT_FOUND after clearing session-only refresh token. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"oauth_authmode_roundtrip",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            const std::wstring id = MakeGuidText();
+            state.Require(! id.empty(), L"Failed to generate a connection profile id.");
+
+            Common::Settings::Settings settings;
+            settings.connections.emplace();
+
+            Common::Settings::ConnectionProfile profile;
+            profile.id                  = id;
+            profile.name                = std::format(L"Settings OAuth {}", id);
+            profile.pluginId            = L"builtin/file-system-gdrive";
+            profile.host                = L"";
+            profile.initialPath         = L"/";
+            profile.userName            = L"user@example.invalid";
+            profile.authMode            = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+            profile.savePassword        = true;
+            profile.requireWindowsHello = true;
+            settings.connections->items.push_back(profile);
+
+            const std::wstring appId                 = std::format(L"RedSalamanderSelfTestOAuth{}", id);
+            const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(appId);
+            const auto cleanupSettings               = wil::scope_exit([&] noexcept
+            {
+                std::error_code ec;
+                std::filesystem::remove(settingsPath, ec);
+            });
+
+            const HRESULT saveHr = Common::Settings::SaveSettings(appId, settings);
+            state.Require(SUCCEEDED(saveHr), std::format(L"SaveSettings failed. hr=0x{:08X}", static_cast<unsigned long>(saveHr)));
+
+            Common::Settings::Settings loaded;
+            const HRESULT loadHr = Common::Settings::LoadSettings(appId, loaded);
+            state.Require(SUCCEEDED(loadHr), std::format(L"LoadSettings failed. hr=0x{:08X}", static_cast<unsigned long>(loadHr)));
+            state.Require(loaded.connections.has_value(), L"Expected connections settings after reload.");
+            state.Require(! loaded.connections->items.empty(), L"Expected one connection profile after reload.");
+            state.Require(loaded.connections->items.front().authMode == Common::Settings::ConnectionAuthMode::OAuth2Pkce,
+                          L"Expected OAuth2 PKCE auth mode after settings round-trip.");
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"google_drive_plugin_contract",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinGoogleDriveFileSystemId, {}, created);
+            state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                          std::format(L"Google Drive plugin: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"Google Drive plugin: missing IInformations.");
+            if (! info)
+            {
+                return false;
+            }
+
+            const PluginMetaData* meta = nullptr;
+            HRESULT hr                 = info->GetMetaData(&meta);
+            state.Require(SUCCEEDED(hr) && meta, std::format(L"Google Drive plugin: GetMetaData failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr) || ! meta)
+            {
+                return false;
+            }
+
+            state.Require(meta->id && std::wstring_view(meta->id) == kBuiltinGoogleDriveFileSystemId, L"Google Drive plugin: unexpected metadata id.");
+            state.Require(meta->shortId && std::wstring_view(meta->shortId) == L"gdrive", L"Google Drive plugin: unexpected shortId.");
+            state.Require(meta->name && std::wstring_view(meta->name) == L"Google Drive", L"Google Drive plugin: unexpected display name.");
+
+            const char* schema = nullptr;
+            hr                 = info->GetConfigurationSchema(&schema);
+            state.Require(SUCCEEDED(hr) && schema,
+                          std::format(L"Google Drive plugin: GetConfigurationSchema failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr) || ! schema)
+            {
+                return false;
+            }
+
+            const std::string_view schemaView(schema);
+            state.Require(schemaView.find("\"defaultClientId\"") != std::string_view::npos, L"Google Drive plugin: schema missing defaultClientId.");
+            state.Require(schemaView.find("\"pageSize\"") != std::string_view::npos, L"Google Drive plugin: schema missing pageSize.");
+
+            BOOL somethingToSave = TRUE;
+            hr                   = info->SomethingToSave(&somethingToSave);
+            state.Require(SUCCEEDED(hr) && somethingToSave == FALSE,
+                          std::format(L"Google Drive plugin: SomethingToSave before configuration failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            hr = info->SetConfiguration(
+                "{\"defaultClientId\":\"selftest-client-id.apps.googleusercontent.com\",\"connectTimeoutMs\":1234,\"requestTimeoutMs\":5678,\"pageSize\":321}");
+            state.Require(SUCCEEDED(hr), std::format(L"Google Drive plugin: SetConfiguration failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr))
+            {
+                return false;
+            }
+
+            hr = info->SomethingToSave(&somethingToSave);
+            state.Require(SUCCEEDED(hr) && somethingToSave == TRUE,
+                          std::format(L"Google Drive plugin: SomethingToSave after configuration failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            const char* configuration = nullptr;
+            hr                        = info->GetConfiguration(&configuration);
+            state.Require(SUCCEEDED(hr) && configuration,
+                          std::format(L"Google Drive plugin: GetConfiguration failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr) || ! configuration)
+            {
+                return false;
+            }
+
+            const std::string_view configurationView(configuration);
+            state.Require(configurationView.find("selftest-client-id.apps.googleusercontent.com") != std::string_view::npos,
+                          L"Google Drive plugin: configuration missing defaultClientId.");
+            state.Require(configurationView.find("\"pageSize\":321") != std::string_view::npos, L"Google Drive plugin: configuration missing pageSize.");
+
+            const char* capabilities = nullptr;
+            hr                       = created.fileSystem->GetCapabilities(&capabilities);
+            state.Require(SUCCEEDED(hr) && capabilities,
+                          std::format(L"Google Drive plugin: GetCapabilities failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr) || ! capabilities)
+            {
+                return false;
+            }
+
+            const std::string_view capabilitiesView(capabilities);
+            state.Require(capabilitiesView.find("\"copy\": false") != std::string_view::npos, L"Google Drive plugin: capabilities should report copy=false.");
+            state.Require(capabilitiesView.find("\"delete\": false") != std::string_view::npos,
+                          L"Google Drive plugin: capabilities should report delete=false.");
+
+            wil::com_ptr<INavigationMenu> navigationMenu;
+            hr = created.fileSystem->QueryInterface(IID_PPV_ARGS(navigationMenu.put()));
+            state.Require(SUCCEEDED(hr) && navigationMenu,
+                          std::format(L"Google Drive plugin: missing INavigationMenu. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr) || ! navigationMenu)
+            {
+                return false;
+            }
+
+            const NavigationMenuItem* menuItems = nullptr;
+            unsigned int menuCount              = 0;
+            hr                                  = navigationMenu->GetMenuItems(&menuItems, &menuCount);
+            state.Require(SUCCEEDED(hr) && menuItems && menuCount >= 4u,
+                          std::format(L"Google Drive plugin: GetMenuItems failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr) || ! menuItems || menuCount < 4u)
+            {
+                return false;
+            }
+
+            state.Require((menuItems[0].flags & NAV_MENU_ITEM_FLAG_HEADER) != 0, L"Google Drive plugin: first menu item should be a header.");
+            state.Require((menuItems[1].flags & NAV_MENU_ITEM_FLAG_SEPARATOR) != 0, L"Google Drive plugin: second menu item should be a separator.");
+            state.Require(menuItems[2].commandId == 1u && menuItems[2].path == nullptr,
+                          L"Google Drive plugin: third menu item should be the connection-manager command.");
+            state.Require(menuItems[3].label && std::wstring_view(menuItems[3].label) == L"/", L"Google Drive plugin: root menu item label mismatch.");
+            state.Require(menuItems[3].path && std::wstring_view(menuItems[3].path) == L"/", L"Google Drive plugin: root menu item path mismatch.");
+
+            wil::com_ptr<IDriveInfo> driveInfoService;
+            hr = created.fileSystem->QueryInterface(IID_PPV_ARGS(driveInfoService.put()));
+            state.Require(SUCCEEDED(hr) && driveInfoService,
+                          std::format(L"Google Drive plugin: missing IDriveInfo. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr) || ! driveInfoService)
+            {
+                return false;
+            }
+
+            DriveInfo drive{};
+            hr = driveInfoService->GetDriveInfo(L"/", &drive);
+            state.Require(SUCCEEDED(hr), std::format(L"Google Drive plugin: GetDriveInfo('/') failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr))
+            {
+                return false;
+            }
+
+            state.Require((drive.flags & DRIVE_INFO_FLAG_HAS_DISPLAY_NAME) != 0, L"Google Drive plugin: root drive info should expose a display name.");
+            state.Require(drive.displayName && std::wstring_view(drive.displayName) == L"gdrive:/", L"Google Drive plugin: root drive display name mismatch.");
+            state.Require((drive.flags & DRIVE_INFO_FLAG_HAS_VOLUME_LABEL) != 0, L"Google Drive plugin: root drive info should expose a volume label.");
+            state.Require(drive.volumeLabel && std::wstring_view(drive.volumeLabel) == L"Google Drive",
+                          L"Google Drive plugin: root drive volume label mismatch.");
+
+            const NavigationMenuItem* driveMenuItems = reinterpret_cast<const NavigationMenuItem*>(static_cast<uintptr_t>(1));
+            unsigned int driveMenuCount              = 99;
+            hr                                       = driveInfoService->GetDriveMenuItems(L"/", &driveMenuItems, &driveMenuCount);
+            state.Require(SUCCEEDED(hr) && driveMenuItems == nullptr && driveMenuCount == 0u,
+                          std::format(L"Google Drive plugin: GetDriveMenuItems failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            wil::com_ptr<IFileSystemIO> io;
+            const HRESULT ioHr = created.fileSystem->QueryInterface(IID_PPV_ARGS(io.put()));
+            state.Require(ioHr == E_NOINTERFACE && ! io, L"Google Drive plugin: IFileSystemIO should be absent in the current read-only milestone.");
+
+            wil::com_ptr<IFilesInformation> filesInformation;
+            hr = created.fileSystem->ReadDirectoryInfo(L"/", filesInformation.put());
+            state.Require(SUCCEEDED(hr) && filesInformation,
+                          std::format(L"Google Drive plugin: ReadDirectoryInfo('/') failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr) || ! filesInformation)
+            {
+                return false;
+            }
+
+            unsigned long entryCount = 99;
+            hr                       = filesInformation->GetCount(&entryCount);
+            state.Require(SUCCEEDED(hr) && entryCount == 0u,
+                          std::format(L"Google Drive plugin: GetCount on root listing failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"google_drive_connection_requires_refresh_token",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinGoogleDriveFileSystemId, {}, created);
+            state.Require(
+                SUCCEEDED(createHr) && created.fileSystem,
+                std::format(L"Google Drive refresh-token gate: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"Google Drive refresh-token gate: missing IInformations.");
+            if (! info)
+            {
+                return false;
+            }
+
+            HRESULT hr = info->SetConfiguration("{\"defaultClientId\":\"selftest-client-id.apps.googleusercontent.com\"}");
+            state.Require(SUCCEEDED(hr), std::format(L"Google Drive refresh-token gate: SetConfiguration failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr))
+            {
+                return false;
+            }
+
+            const std::wstring id = MakeGuidText();
+            state.Require(! id.empty(), L"Google Drive refresh-token gate: failed to generate a connection profile id.");
+            if (id.empty())
+            {
+                return false;
+            }
+
+            Common::Settings::ConnectionProfile profile;
+            profile.id                  = id;
+            profile.name                = std::format(L"GDriveSelfTest{}", id);
+            profile.pluginId            = std::wstring(kBuiltinGoogleDriveFileSystemId);
+            profile.host                = L"";
+            profile.initialPath         = L"/";
+            profile.userName            = L"user@example.invalid";
+            profile.authMode            = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+            profile.savePassword        = false;
+            profile.requireWindowsHello = false;
+
+            const bool hadConnectionsSettings = g_settings.connections.has_value();
+            if (! hadConnectionsSettings)
+            {
+                g_settings.connections.emplace();
+            }
+
+            g_settings.connections->items.push_back(profile);
+            const auto restoreSettings = wil::scope_exit([&] noexcept
+            {
+                if (! g_settings.connections)
+                {
+                    return;
+                }
+
+                auto& items = g_settings.connections->items;
+                items.erase(std::remove_if(items.begin(), items.end(), [&](const Common::Settings::ConnectionProfile& item) noexcept { return item.id == id; }),
+                            items.end());
+
+                if (! hadConnectionsSettings)
+                {
+                    g_settings.connections.reset();
+                }
+            });
+
+            const std::wstring connectionRoot = std::format(L"/@conn:{}/", profile.name);
+            wil::com_ptr<IFilesInformation> filesInformation;
+            hr = created.fileSystem->ReadDirectoryInfo(connectionRoot.c_str(), filesInformation.put());
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_NOT_FOUND),
+                          std::format(L"Google Drive refresh-token gate: expected ERROR_NOT_FOUND when no refresh token is saved. hr=0x{:08X}",
+                                      static_cast<unsigned long>(hr)));
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"onedrive_personal_cleared_client_id_requires_configuration",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinOneDrivePersonalFileSystemId, {}, created);
+            state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                          std::format(L"OneDrive Personal plugin: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"OneDrive Personal plugin: missing IInformations.");
+            if (! info)
+            {
+                return false;
+            }
+
+            const char* schema = nullptr;
+            HRESULT hr         = info->GetConfigurationSchema(&schema);
+            state.Require(SUCCEEDED(hr) && schema,
+                          std::format(L"OneDrive Personal plugin: GetConfigurationSchema failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr) || ! schema)
+            {
+                return false;
+            }
+
+            const std::string_view schemaView(schema);
+            state.Require(schemaView.find("\"clientId\"") != std::string_view::npos, L"OneDrive Personal plugin: schema missing clientId.");
+            state.Require(schemaView.find("90cdea53-7c21-48b0-959e-b4024209027b") != std::string_view::npos,
+                          L"OneDrive Personal plugin: schema missing built-in default clientId.");
+
+            hr = info->SetConfiguration("{\"clientId\":\"\"}");
+            state.Require(
+                SUCCEEDED(hr),
+                std::format(L"OneDrive Personal plugin: SetConfiguration with explicit empty clientId failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr))
+            {
+                return false;
+            }
+
+            const std::wstring id = MakeGuidText();
+            state.Require(! id.empty(), L"OneDrive Personal clientId gate: failed to generate a connection profile id.");
+            if (id.empty())
+            {
+                return false;
+            }
+
+            Common::Settings::ConnectionProfile profile;
+            profile.id                  = id;
+            profile.name                = std::format(L"OneDriveMissingClientId{}", id);
+            profile.pluginId            = std::wstring(kBuiltinOneDrivePersonalFileSystemId);
+            profile.host                = L"";
+            profile.initialPath         = L"/";
+            profile.userName            = L"user@example.invalid";
+            profile.authMode            = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+            profile.savePassword        = false;
+            profile.requireWindowsHello = false;
+
+            const bool hadConnectionsSettings = g_settings.connections.has_value();
+            if (! hadConnectionsSettings)
+            {
+                g_settings.connections.emplace();
+            }
+
+            g_settings.connections->items.push_back(profile);
+            const auto restoreSettings = wil::scope_exit([&] noexcept
+            {
+                if (! g_settings.connections)
+                {
+                    return;
+                }
+
+                auto& items = g_settings.connections->items;
+                items.erase(std::remove_if(items.begin(), items.end(), [&](const Common::Settings::ConnectionProfile& item) noexcept { return item.id == id; }),
+                            items.end());
+
+                if (! hadConnectionsSettings)
+                {
+                    g_settings.connections.reset();
+                }
+            });
+
+            wil::com_ptr<IHostAlerts> hostAlerts;
+            static_cast<void>(GetHostServices()->QueryInterface(IID_PPV_ARGS(hostAlerts.put())));
+            const auto clearAlert = wil::scope_exit([&] noexcept
+            {
+                if (hostAlerts)
+                {
+                    static_cast<void>(hostAlerts->ClearAlert(HOST_ALERT_SCOPE_APPLICATION, nullptr));
+                }
+            });
+
+            const std::wstring connectionRoot = std::format(L"/@conn:{}/", profile.name);
+            wil::com_ptr<IFilesInformation> filesInformation;
+            hr = created.fileSystem->ReadDirectoryInfo(connectionRoot.c_str(), filesInformation.put());
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_BAD_CONFIGURATION),
+                          std::format(L"OneDrive Personal clientId gate: expected ERROR_BAD_CONFIGURATION. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            state.Require(! filesInformation, L"OneDrive Personal clientId gate: files information should not be produced on configuration failure.");
 
             return state.failure.empty();
         });
@@ -4634,8 +5228,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     if (item)
                     {
                         state.Require(item->isDifferent, L"file0000.txt should remain surfaced as a differing item.");
-                        state.Require(item->existsLeft && ! item->existsRight,
-                                      L"file0000.txt should be present only on the left side.");
+                        state.Require(item->existsLeft && ! item->existsRight, L"file0000.txt should be present only on the left side.");
                     }
                 }
             }
@@ -4752,11 +5345,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     if (! backup.bytes.empty())
                     {
                         DWORD written = 0;
-                        static_cast<void>(WriteFile(file.get(),
-                                                    backup.bytes.data(),
-                                                    static_cast<DWORD>(backup.bytes.size()),
-                                                    &written,
-                                                    nullptr));
+                        static_cast<void>(WriteFile(file.get(), backup.bytes.data(), static_cast<DWORD>(backup.bytes.size()), &written, nullptr));
                     }
 
                     static_cast<void>(FlushFileBuffers(file.get()));
@@ -5297,6 +5886,50 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
         SelfTest::RunCase(options,
                           suite,
+                          L"connection_display_url",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            Common::Settings::ConnectionProfile ftpAnonymous{};
+            ftpAnonymous.pluginId     = L"builtin/file-system-ftp";
+            ftpAnonymous.authMode     = Common::Settings::ConnectionAuthMode::Anonymous;
+            ftpAnonymous.host         = L"ftp.example.test";
+            ftpAnonymous.port         = 21;
+            const std::wstring ftpUrl = ConnectionProfileUtils::BuildConnectionDisplayUrl(ftpAnonymous);
+            state.Require(ftpUrl == L"ftp://ftp.example.test:21", L"FTP anonymous display URL should hide the anonymous user name.");
+
+            Common::Settings::ConnectionProfile sftp{};
+            sftp.pluginId              = L"builtin/file-system-sftp";
+            sftp.authMode              = Common::Settings::ConnectionAuthMode::Password;
+            sftp.userName              = L"alice";
+            sftp.host                  = L"files.example.test";
+            sftp.port                  = 2222;
+            const std::wstring sftpUrl = ConnectionProfileUtils::BuildConnectionDisplayUrl(sftp);
+            state.Require(sftpUrl == L"sftp://alice@files.example.test:2222", L"SFTP display URL should include user and port.");
+
+            Common::Settings::ConnectionProfile oneDrivePersonal{};
+            oneDrivePersonal.pluginId      = L"builtin/file-system-onedrive-personal";
+            oneDrivePersonal.authMode      = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+            const std::wstring oneDriveUrl = ConnectionProfileUtils::BuildConnectionDisplayUrl(oneDrivePersonal);
+            state.Require(oneDriveUrl == L"onedrivep://", L"OneDrive Personal display URL should still render a hostless scheme.");
+
+            Common::Settings::ConnectionProfile googleDrive{};
+            googleDrive.pluginId              = L"builtin/file-system-gdrive";
+            googleDrive.authMode              = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+            const std::wstring googleDriveUrl = ConnectionProfileUtils::BuildConnectionDisplayUrl(googleDrive);
+            state.Require(googleDriveUrl == L"gdrive://", L"Google Drive display URL should still render a hostless scheme.");
+
+            Common::Settings::ConnectionProfile s3{};
+            s3.pluginId              = L"builtin/file-system-s3";
+            s3.authMode              = Common::Settings::ConnectionAuthMode::Password;
+            s3.host                  = L"us-east-1";
+            const std::wstring s3Url = ConnectionProfileUtils::BuildConnectionDisplayUrl(s3);
+            state.Require(s3Url == L"s3://us-east-1", L"S3 display URL should use the shared formatter.");
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
                           L"try_make_relative_outside_root",
                           [&](SelfTest::CaseState& state) noexcept
         {
@@ -5588,10 +6221,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 }
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                settings.compareContent    = true;
-                settings.compareSize       = false;
-                settings.compareDateTime   = false;
-                settings.compareAttributes = false;
+                settings.compareContent     = true;
+                settings.compareSize        = false;
+                settings.compareDateTime    = false;
+                settings.compareAttributes  = false;
                 settings.keepIdenticalItems = true;
 
                 auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
@@ -5852,9 +6485,9 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 if (decision)
                 {
                     state.Require(FAILED(decision->hr), L"invalid_directory_entry_buffer: expected failure HRESULT.");
-                    state.Require(decision->hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
-                                  std::format(L"invalid_directory_entry_buffer: expected ERROR_INVALID_DATA, got 0x{:08X}.",
-                                              static_cast<unsigned int>(decision->hr)));
+                    state.Require(
+                        decision->hr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                        std::format(L"invalid_directory_entry_buffer: expected ERROR_INVALID_DATA, got 0x{:08X}.", static_cast<unsigned int>(decision->hr)));
                 }
             }
             else
@@ -5913,8 +6546,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 // This point is after stale run completion should have happened, but before the restarted run can finish.
                 std::this_thread::sleep_for(std::chrono::milliseconds(SelfTest::ScaleTimeout(1000)));
                 const CompareDirectoriesPerfStats midStats = session->GetPerfStats();
-                state.Require(midStats.scanActiveScans != 0u,
-                              L"scan_inflight_stamp_guards_restart: restarted scan lost active tracking before completion.");
+                state.Require(midStats.scanActiveScans != 0u, L"scan_inflight_stamp_guards_restart: restarted scan lost active tracking before completion.");
 
                 const auto doneDeadline =
                     std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(15'000))};
@@ -5947,16 +6579,16 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Stale content worker completion must not consume a restarted run's in-flight slot.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_inflight_stamp_guards_restart"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders     = *foldersOpt;
                 constexpr size_t kBytes = 8u * 1024u * 1024u;
                 state.Require(WriteFileFill(folders.left / L"a.bin", 'A', kBytes), L"Failed to create a.bin (left).");
                 state.Require(WriteFileFill(folders.right / L"a.bin", 'B', kBytes), L"Failed to create a.bin (right).");
 
                 Common::Settings::CompareDirectoriesSettings settings{};
-                settings.compareContent    = true;
-                settings.compareSize       = false;
-                settings.compareDateTime   = false;
-                settings.compareAttributes = false;
+                settings.compareContent     = true;
+                settings.compareSize        = false;
+                settings.compareDateTime    = false;
+                settings.compareAttributes  = false;
                 settings.keepIdenticalItems = true;
 
                 wil::com_ptr<IFileSystem> wrapped = CreateShortReadFileSystem(baseFs, folders.left, 4096u, static_cast<DWORD>(SelfTest::ScaleTimeout(2)));
@@ -5988,13 +6620,11 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 session->StartScan();
 
                 const auto restartedDecision = session->GetOrComputeDecision(std::filesystem::path{});
-                state.Require(static_cast<bool>(restartedDecision),
-                              L"content_inflight_stamp_guards_restart: restarted decision is null.");
+                state.Require(static_cast<bool>(restartedDecision), L"content_inflight_stamp_guards_restart: restarted decision is null.");
                 if (restartedDecision)
                 {
                     const auto* restartedItem = FindItem(*restartedDecision, L"a.bin");
-                    state.Require(restartedItem != nullptr,
-                                  L"content_inflight_stamp_guards_restart: a.bin missing from restarted decision.");
+                    state.Require(restartedItem != nullptr, L"content_inflight_stamp_guards_restart: a.bin missing from restarted decision.");
                     if (restartedItem)
                     {
                         state.Require(HasFlag(restartedItem->differenceMask, CompareDirectoriesDiffBit::ContentPending),
@@ -6015,8 +6645,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     }
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
-                state.Require(restartedObserved,
-                              L"content_inflight_stamp_guards_restart: restarted content compare did not become pending or in-flight.");
+                state.Require(restartedObserved, L"content_inflight_stamp_guards_restart: restarted content compare did not become pending or in-flight.");
 
                 const auto doneDeadline =
                     std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(30'000))};
@@ -6065,7 +6694,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
         {
             if (const auto foldersOpt = CreateCaseFolders(root, L"directory_size_local_callback_contract"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders                  = *foldersOpt;
                 const std::filesystem::path filePath = folders.left / L"probe.bin";
                 state.Require(WriteFileFill(filePath, 'L', 13u), L"Directory size local callback: failed to create probe file.");
 
@@ -6084,9 +6713,6 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             return state.failure.empty();
         });
 
-        AppendCaseResult(
-            suite, L"directory_size_local_overflow", SelfTest::SelfTestCaseResult::Status::skipped, L"no deterministic overflow harness for the local filesystem");
-
         SelfTest::RunCase(options,
                           suite,
                           L"directory_size_dummy_callback_contract",
@@ -6101,10 +6727,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             const std::filesystem::path dirPath(std::format(L"/directory-size-dummy-{}", guid));
             const std::filesystem::path filePath = dirPath / L"probe.txt";
             const std::wstring fileText          = ToPluginPathText(filePath);
-            const auto cleanup = wil::scope_exit([&]() noexcept
+            const auto cleanup                   = wil::scope_exit([&]() noexcept
             {
-                static_cast<void>(
-                    dummyFs->DeleteItem(dirPath.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, nullptr, nullptr));
+                static_cast<void>(dummyFs->DeleteItem(
+                    dirPath.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, nullptr, nullptr));
             });
 
             state.Require(EnsureDirectoryExistsFsOps(dummyOps, dirPath), L"Directory size dummy callback: failed to create dummy sandbox directory.");
@@ -6156,8 +6782,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             }
 
             const HRESULT initHr = init->Initialize(archivePath.c_str(), nullptr);
-            state.Require(SUCCEEDED(initHr),
-                          std::format(L"Directory size 7z callback: Initialize failed. hr=0x{:08X}", static_cast<unsigned long>(initHr)));
+            state.Require(SUCCEEDED(initHr), std::format(L"Directory size 7z callback: Initialize failed. hr=0x{:08X}", static_cast<unsigned long>(initHr)));
             if (FAILED(initHr))
             {
                 return false;
@@ -6205,9 +6830,9 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                               caseName,
                               [&](SelfTest::CaseState& state) noexcept
             {
-                const std::wstring overrideName                    = GetEnvVarTrimmed(envVarName);
-                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
-    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                const ResolvedRemoteProfile resolvedProfile        = ResolveRemoteConnectionProfile(envVarName, defaultProfileName, pluginId);
+                const std::wstring& profileName                    = resolvedProfile.profileName;
+                const Common::Settings::ConnectionProfile* profile = resolvedProfile.profile;
                 state.Require(profile != nullptr, L"Remote compare: profile missing after preconditions passed.");
                 if (! profile)
                 {
@@ -6308,9 +6933,9 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                               caseName,
                               [&](SelfTest::CaseState& state) noexcept
             {
-                const std::wstring overrideName                    = GetEnvVarTrimmed(envVarName);
-                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(defaultProfileName);
-                const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                const ResolvedRemoteProfile resolvedProfile        = ResolveRemoteConnectionProfile(envVarName, defaultProfileName, pluginId);
+                const std::wstring& profileName                    = resolvedProfile.profileName;
+                const Common::Settings::ConnectionProfile* profile = resolvedProfile.profile;
                 state.Require(profile != nullptr, std::format(L"Remote {} directory size: profile missing after preconditions passed.", protocolLabel));
                 if (! profile)
                 {
@@ -6353,8 +6978,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                const std::wstring caseRootPlugin =
-                    JoinPluginPathForSelfTest(initialPath, std::format(L"compare-selftest-dirsize-{}-{}", protocolLabel, guid));
+                const std::wstring caseRootPlugin = JoinPluginPathForSelfTest(initialPath, std::format(L"compare-selftest-dirsize-{}-{}", protocolLabel, guid));
                 state.Require(! caseRootPlugin.empty(), std::format(L"Remote {} directory size: failed to build sandbox path.", protocolLabel));
                 if (caseRootPlugin.empty())
                 {
@@ -6369,14 +6993,6 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 }
 
                 const std::filesystem::path caseRoot(caseRootText);
-                const auto cleanup = wil::scope_exit([&]() noexcept
-                {
-                    static_cast<void>(remoteCreated.fileSystem->DeleteItem(caseRootText.c_str(),
-                                                                          static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                                          nullptr,
-                                                                          nullptr,
-                                                                          nullptr));
-                });
 
                 state.Require(EnsureDirectoryExistsFsOps(dirOps, caseRoot),
                               std::format(L"Remote {} directory size: failed to prepare sandbox prefix.", protocolLabel));
@@ -6387,6 +7003,23 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 const std::filesystem::path objectPath = caseRoot / L"probe.txt";
                 const std::wstring objectText          = ToPluginPathText(objectPath);
+                const auto cleanup                     = wil::scope_exit([&]() noexcept
+                {
+                    if (pluginId == kBuiltinS3FileSystemId)
+                    {
+                        static_cast<void>(
+                            remoteCreated.fileSystem->DeleteItem(objectText.c_str(), FILESYSTEM_FLAG_CONTINUE_ON_ERROR, nullptr, nullptr, nullptr));
+                        return;
+                    }
+
+                    static_cast<void>(
+                        remoteCreated.fileSystem->DeleteItem(caseRootText.c_str(),
+                                                             static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                             nullptr,
+                                                             nullptr,
+                                                             nullptr));
+                });
+
                 state.Require(WriteFileTextFsIo(io, objectPath, "directory-size-remote"),
                               std::format(L"Remote {} directory size: failed to write probe object.", protocolLabel));
                 if (! state.failure.empty())
@@ -6426,9 +7059,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                               caseName,
                               [&](SelfTest::CaseState& state) noexcept
             {
-                const std::wstring overrideName                    = GetEnvVarTrimmed(kSelfTestEnvConnS3);
-                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnS3);
-    const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                const ResolvedRemoteProfile resolvedProfile =
+                    ResolveRemoteConnectionProfile(kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
+                const std::wstring& profileName                    = resolvedProfile.profileName;
+                const Common::Settings::ConnectionProfile* profile = resolvedProfile.profile;
                 state.Require(profile != nullptr, L"Remote S3 pagination: profile missing after preconditions passed.");
                 if (! profile)
                 {
@@ -6482,14 +7116,6 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 }
 
                 const std::filesystem::path caseRoot(caseRootText);
-                const auto cleanup = wil::scope_exit([&]() noexcept
-                {
-                    static_cast<void>(remoteCreated.fileSystem->DeleteItem(caseRootText.c_str(),
-                                                                          static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                                          nullptr,
-                                                                          nullptr,
-                                                                          nullptr));
-                });
 
                 state.Require(EnsureDirectoryExistsFsOps(dirOps, caseRoot), L"Remote S3 pagination: failed to prepare sandbox prefix.");
                 if (! state.failure.empty())
@@ -6499,9 +7125,30 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 constexpr unsigned long kObjectCount = 1005u;
                 constexpr std::string_view kPayload  = "p";
+                std::vector<std::wstring> cleanupPaths;
+                cleanupPaths.reserve(kObjectCount);
+                std::vector<const wchar_t*> cleanupPathPointers;
+                cleanupPathPointers.reserve(kObjectCount);
+                const auto cleanup = wil::scope_exit([&]() noexcept
+                {
+                    if (cleanupPathPointers.empty())
+                    {
+                        return;
+                    }
+
+                    static_cast<void>(remoteCreated.fileSystem->DeleteItems(cleanupPathPointers.data(),
+                                                                            static_cast<unsigned long>(cleanupPathPointers.size()),
+                                                                            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
+                                                                            nullptr,
+                                                                            nullptr,
+                                                                            nullptr));
+                });
+
                 for (unsigned long index = 0; index < kObjectCount; ++index)
                 {
                     const std::filesystem::path objectPath = caseRoot / std::format(L"object_{:04}.txt", index);
+                    cleanupPaths.push_back(ToPluginPathText(objectPath));
+                    cleanupPathPointers.push_back(cleanupPaths.back().c_str());
                     state.Require(WriteFileTextFsIo(io, objectPath, kPayload),
                                   std::format(L"Remote S3 pagination: failed to write object {}", objectPath.wstring()));
                     if (! state.failure.empty())
@@ -6552,8 +7199,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                state.Require(got == kObjectCount,
-                              std::format(L"Remote S3 pagination: listing count mismatch. expected={} got={}", kObjectCount, got));
+                state.Require(got == kObjectCount, std::format(L"Remote S3 pagination: listing count mismatch. expected={} got={}", kObjectCount, got));
                 return state.failure.empty();
             });
         };
@@ -6585,9 +7231,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                               caseName,
                               [&](SelfTest::CaseState& state) noexcept
             {
-                const std::wstring overrideName                    = GetEnvVarTrimmed(kSelfTestEnvConnFtp);
-                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnFtp);
-                const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                const ResolvedRemoteProfile resolvedProfile =
+                    ResolveRemoteConnectionProfile(kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);
+                const std::wstring& profileName                    = resolvedProfile.profileName;
+                const Common::Settings::ConnectionProfile* profile = resolvedProfile.profile;
                 state.Require(profile != nullptr, L"Remote FTP partial: profile missing after preconditions passed.");
                 if (! profile)
                 {
@@ -6674,13 +7321,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 const std::wstring copyDstText  = ToPluginPathText(copyDst);
                 const wchar_t* copySources[]    = {copyGoodText.c_str(), copyMissText.c_str()};
                 RecordingFileSystemCallback copyCallback(2);
-                const HRESULT copyHr = remoteCreated.fileSystem->CopyItems(copySources,
-                                                                           2,
-                                                                           copyDstText.c_str(),
-                                                                           static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                                           nullptr,
-                                                                           &copyCallback,
-                                                                           nullptr);
+                const HRESULT copyHr = remoteCreated.fileSystem->CopyItems(
+                    copySources, 2, copyDstText.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, &copyCallback, nullptr);
                 const HRESULT partialHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
                 state.Require(copyHr == partialHr,
                               std::format(L"Remote FTP partial: CopyItems expected 0x{:08X}, got 0x{:08X}.",
@@ -6698,14 +7340,15 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                state.Require(SUCCEEDED(copyItem0.status),
-                              std::format(L"Remote FTP partial: CopyItems item 0 expected success, got 0x{:08X}.",
-                                          static_cast<unsigned long>(copyItem0.status)));
+                state.Require(
+                    SUCCEEDED(copyItem0.status),
+                    std::format(L"Remote FTP partial: CopyItems item 0 expected success, got 0x{:08X}.", static_cast<unsigned long>(copyItem0.status)));
                 state.Require(copyItem1.status == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
                               std::format(L"Remote FTP partial: CopyItems item 1 expected ERROR_FILE_NOT_FOUND, got 0x{:08X}.",
                                           static_cast<unsigned long>(copyItem1.status)));
                 state.Require(PathExistsFsIo(io, copyGood), L"Remote FTP partial: CopyItems removed the successful source unexpectedly.");
-                state.Require(PathExistsFsIo(io, copyDst / L"copy-good.txt"), L"Remote FTP partial: CopyItems did not materialize the successful destination file.");
+                state.Require(PathExistsFsIo(io, copyDst / L"copy-good.txt"),
+                              L"Remote FTP partial: CopyItems did not materialize the successful destination file.");
                 if (! state.failure.empty())
                 {
                     return false;
@@ -6716,13 +7359,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 const std::wstring moveDstText  = ToPluginPathText(moveDst);
                 const wchar_t* moveSources[]    = {moveGoodText.c_str(), moveMissText.c_str()};
                 RecordingFileSystemCallback moveCallback(2);
-                const HRESULT moveHr = remoteCreated.fileSystem->MoveItems(moveSources,
-                                                                           2,
-                                                                           moveDstText.c_str(),
-                                                                           static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                                           nullptr,
-                                                                           &moveCallback,
-                                                                           nullptr);
+                const HRESULT moveHr = remoteCreated.fileSystem->MoveItems(
+                    moveSources, 2, moveDstText.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, &moveCallback, nullptr);
                 state.Require(moveHr == partialHr,
                               std::format(L"Remote FTP partial: MoveItems expected 0x{:08X}, got 0x{:08X}.",
                                           static_cast<unsigned long>(partialHr),
@@ -6739,9 +7377,9 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                state.Require(SUCCEEDED(moveItem0.status),
-                              std::format(L"Remote FTP partial: MoveItems item 0 expected success, got 0x{:08X}.",
-                                          static_cast<unsigned long>(moveItem0.status)));
+                state.Require(
+                    SUCCEEDED(moveItem0.status),
+                    std::format(L"Remote FTP partial: MoveItems item 0 expected success, got 0x{:08X}.", static_cast<unsigned long>(moveItem0.status)));
                 state.Require(moveItem1.status == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
                               std::format(L"Remote FTP partial: MoveItems item 1 expected ERROR_FILE_NOT_FOUND, got 0x{:08X}.",
                                           static_cast<unsigned long>(moveItem1.status)));
@@ -6763,12 +7401,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 renamePairs[1].newName    = L"rename-missing-dst.txt";
 
                 RecordingFileSystemCallback renameCallback(2);
-                const HRESULT renameHr = remoteCreated.fileSystem->RenameItems(renamePairs,
-                                                                               2,
-                                                                               static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                                               nullptr,
-                                                                               &renameCallback,
-                                                                               nullptr);
+                const HRESULT renameHr = remoteCreated.fileSystem->RenameItems(
+                    renamePairs, 2, static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, &renameCallback, nullptr);
                 state.Require(renameHr == partialHr,
                               std::format(L"Remote FTP partial: RenameItems expected 0x{:08X}, got 0x{:08X}.",
                                           static_cast<unsigned long>(partialHr),
@@ -6785,9 +7419,9 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                state.Require(SUCCEEDED(renameItem0.status),
-                              std::format(L"Remote FTP partial: RenameItems item 0 expected success, got 0x{:08X}.",
-                                          static_cast<unsigned long>(renameItem0.status)));
+                state.Require(
+                    SUCCEEDED(renameItem0.status),
+                    std::format(L"Remote FTP partial: RenameItems item 0 expected success, got 0x{:08X}.", static_cast<unsigned long>(renameItem0.status)));
                 state.Require(renameItem1.status == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND),
                               std::format(L"Remote FTP partial: RenameItems item 1 expected ERROR_FILE_NOT_FOUND, got 0x{:08X}.",
                                           static_cast<unsigned long>(renameItem1.status)));
@@ -6825,9 +7459,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                               caseName,
                               [&](SelfTest::CaseState& state) noexcept
             {
-                const std::wstring overrideName                    = GetEnvVarTrimmed(kSelfTestEnvConnS3);
-                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnS3);
-                const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                const ResolvedRemoteProfile resolvedProfile =
+                    ResolveRemoteConnectionProfile(kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
+                const std::wstring& profileName                    = resolvedProfile.profileName;
+                const Common::Settings::ConnectionProfile* profile = resolvedProfile.profile;
                 state.Require(profile != nullptr, L"Remote S3 metadata: profile missing after preconditions passed.");
                 if (! profile)
                 {
@@ -6889,13 +7524,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 const std::filesystem::path objectPath = caseRoot / L"metadata.txt";
                 const std::wstring objectText          = ToPluginPathText(objectPath);
-                const auto cleanup = wil::scope_exit([&]() noexcept
+                const auto cleanup                     = wil::scope_exit([&]() noexcept
                 {
-                    static_cast<void>(remoteCreated.fileSystem->DeleteItem(objectText.c_str(),
-                                                                          static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                                          nullptr,
-                                                                          nullptr,
-                                                                          nullptr));
+                    static_cast<void>(remoteCreated.fileSystem->DeleteItem(
+                        objectText.c_str(), static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, nullptr, nullptr));
                 });
 
                 constexpr std::string_view kPayload = "s3-metadata-smoke";
@@ -6906,7 +7538,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 }
 
                 FileSystemBasicInformation info{};
-                info.sizeBytes = sizeof(FileSystemBasicInformation);
+                info.sizeBytes       = sizeof(FileSystemBasicInformation);
                 const HRESULT infoHr = io->GetFileBasicInformation(objectText.c_str(), &info);
                 state.Require(SUCCEEDED(infoHr),
                               std::format(L"Remote S3 metadata: GetFileBasicInformation failed. hr=0x{:08X}", static_cast<unsigned long>(infoHr)));
@@ -6931,10 +7563,9 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                uint64_t sizeBytes = 0;
+                uint64_t sizeBytes   = 0;
                 const HRESULT sizeHr = reader->GetSize(&sizeBytes);
-                state.Require(SUCCEEDED(sizeHr),
-                              std::format(L"Remote S3 metadata: reader->GetSize failed. hr=0x{:08X}", static_cast<unsigned long>(sizeHr)));
+                state.Require(SUCCEEDED(sizeHr), std::format(L"Remote S3 metadata: reader->GetSize failed. hr=0x{:08X}", static_cast<unsigned long>(sizeHr)));
                 state.Require(sizeBytes == static_cast<uint64_t>(kPayload.size()),
                               std::format(L"Remote S3 metadata: expected size {} but got {}.", kPayload.size(), sizeBytes));
                 if (! state.failure.empty())
@@ -6948,13 +7579,12 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 while (totalRead < readBack.size())
                 {
                     unsigned long chunkRead = 0;
-                    const unsigned long requestBytes = static_cast<unsigned long>((std::min)(readBack.size() - totalRead,
-                                                                                               static_cast<size_t>((std::numeric_limits<unsigned long>::max)())));
+                    const unsigned long requestBytes =
+                        static_cast<unsigned long>((std::min)(readBack.size() - totalRead, static_cast<size_t>((std::numeric_limits<unsigned long>::max)())));
                     const HRESULT readHr = reader->Read(readBack.data() + totalRead, requestBytes, &chunkRead);
-                    state.Require(SUCCEEDED(readHr),
-                                  std::format(L"Remote S3 metadata: reader->Read failed after {} bytes. hr=0x{:08X}",
-                                              totalRead,
-                                              static_cast<unsigned long>(readHr)));
+                    state.Require(
+                        SUCCEEDED(readHr),
+                        std::format(L"Remote S3 metadata: reader->Read failed after {} bytes. hr=0x{:08X}", totalRead, static_cast<unsigned long>(readHr)));
                     if (FAILED(readHr))
                     {
                         return false;
@@ -7001,9 +7631,10 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                               caseName,
                               [&](SelfTest::CaseState& state) noexcept
             {
-                const std::wstring overrideName                    = GetEnvVarTrimmed(kSelfTestEnvConnS3);
-                const std::wstring profileName                     = ! overrideName.empty() ? overrideName : std::wstring(kSelfTestDefaultConnS3);
-                const Common::Settings::ConnectionProfile* profile = ConnectionProfileUtils::FindConnectionProfileByName(&g_settings, profileName);
+                const ResolvedRemoteProfile resolvedProfile =
+                    ResolveRemoteConnectionProfile(kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
+                const std::wstring& profileName                    = resolvedProfile.profileName;
+                const Common::Settings::ConnectionProfile* profile = resolvedProfile.profile;
                 state.Require(profile != nullptr, L"Remote S3 delete: profile missing after preconditions passed.");
                 if (! profile)
                 {
@@ -7069,15 +7700,11 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                 const std::wstring singleText             = ToPluginPathText(singlePath);
                 const std::wstring batchGoodText          = ToPluginPathText(batchGoodPath);
                 const std::wstring batchMissText          = ToPluginPathText(batchMissPath);
-                const auto cleanup = wil::scope_exit([&]() noexcept
+                const auto cleanup                        = wil::scope_exit([&]() noexcept
                 {
                     const wchar_t* cleanupPaths[] = {singleText.c_str(), batchGoodText.c_str()};
-                    static_cast<void>(remoteCreated.fileSystem->DeleteItems(cleanupPaths,
-                                                                            2,
-                                                                            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                                            nullptr,
-                                                                            nullptr,
-                                                                            nullptr));
+                    static_cast<void>(remoteCreated.fileSystem->DeleteItems(
+                        cleanupPaths, 2, static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, nullptr, nullptr));
                 });
 
                 state.Require(WriteFileTextFsIo(io, singlePath, "single-delete"), L"Remote S3 delete: failed to write single-delete.txt.");
@@ -7109,12 +7736,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
                 RecordingFileSystemCallback deleteCallback(2);
                 const wchar_t* deletePaths[] = {batchGoodText.c_str(), batchMissText.c_str()};
-                const HRESULT batchDeleteHr  = remoteCreated.fileSystem->DeleteItems(deletePaths,
-                                                                                    2,
-                                                                                    static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR),
-                                                                                    nullptr,
-                                                                                    &deleteCallback,
-                                                                                    nullptr);
+                const HRESULT batchDeleteHr  = remoteCreated.fileSystem->DeleteItems(
+                    deletePaths, 2, static_cast<FileSystemFlags>(FILESYSTEM_FLAG_CONTINUE_ON_ERROR), nullptr, &deleteCallback, nullptr);
                 const HRESULT partialHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
                 state.Require(batchDeleteHr == partialHr,
                               std::format(L"Remote S3 delete: DeleteItems expected 0x{:08X}, got 0x{:08X}.",
@@ -7132,9 +7755,9 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
                     return false;
                 }
 
-                state.Require(SUCCEEDED(deleteItem0.status),
-                              std::format(L"Remote S3 delete: DeleteItems item 0 expected success, got 0x{:08X}.",
-                                          static_cast<unsigned long>(deleteItem0.status)));
+                state.Require(
+                    SUCCEEDED(deleteItem0.status),
+                    std::format(L"Remote S3 delete: DeleteItems item 0 expected success, got 0x{:08X}.", static_cast<unsigned long>(deleteItem0.status)));
                 state.Require(deleteItem1.status == notFoundHr,
                               std::format(L"Remote S3 delete: DeleteItems item 1 expected 0x{:08X}, got 0x{:08X}.",
                                           static_cast<unsigned long>(notFoundHr),
@@ -7149,6 +7772,33 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
         runRemoteDirectorySizeCallbackContract(
             L"remote_s3_directory_size_callback_contract", L"S3", kSelfTestEnvConnS3, kSelfTestDefaultConnS3, kBuiltinS3FileSystemId);
         runRemoteS3Pagination(L"remote_s3_pagination");
+        runRemoteFileCompare(L"remote_file_onedrive_personal",
+                             L"OneDrive Personal",
+                             kSelfTestEnvConnOneDrivePersonal,
+                             kSelfTestDefaultConnOneDrivePersonal,
+                             kBuiltinOneDrivePersonalFileSystemId);
+        runRemoteDirectorySizeCallbackContract(L"remote_onedrive_personal_directory_size_callback_contract",
+                                               L"OneDrive Personal",
+                                               kSelfTestEnvConnOneDrivePersonal,
+                                               kSelfTestDefaultConnOneDrivePersonal,
+                                               kBuiltinOneDrivePersonalFileSystemId);
+        runRemoteFileCompare(L"remote_file_onedrive_business",
+                             L"OneDrive Business",
+                             kSelfTestEnvConnOneDriveBusiness,
+                             kSelfTestDefaultConnOneDriveBusiness,
+                             kBuiltinOneDriveBusinessFileSystemId);
+        runRemoteDirectorySizeCallbackContract(L"remote_onedrive_business_directory_size_callback_contract",
+                                               L"OneDrive Business",
+                                               kSelfTestEnvConnOneDriveBusiness,
+                                               kSelfTestDefaultConnOneDriveBusiness,
+                                               kBuiltinOneDriveBusinessFileSystemId);
+        runRemoteFileCompare(
+            L"remote_file_sharepoint", L"SharePoint", kSelfTestEnvConnSharePoint, kSelfTestDefaultConnSharePoint, kBuiltinSharePointFileSystemId);
+        runRemoteDirectorySizeCallbackContract(L"remote_sharepoint_directory_size_callback_contract",
+                                               L"SharePoint",
+                                               kSelfTestEnvConnSharePoint,
+                                               kSelfTestDefaultConnSharePoint,
+                                               kBuiltinSharePointFileSystemId);
         runRemoteFileCompare(L"remote_file_ftp", L"FTP", kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);
         runRemoteDirectorySizeCallbackContract(
             L"remote_ftp_directory_size_callback_contract", L"FTP", kSelfTestEnvConnFtp, kSelfTestDefaultConnFtp, kBuiltinFtpFileSystemId);

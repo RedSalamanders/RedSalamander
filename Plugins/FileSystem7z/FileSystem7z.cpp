@@ -878,7 +878,7 @@ HRESULT FileSystem7z::EnsureIndex() noexcept
 
         const HRESULT buildHr = BuildIndex(archivePath, password, entries, children);
 
-        bool restart = false;
+        bool restart     = false;
         HRESULT resultHr = buildHr;
         {
             std::lock_guard lock(_stateMutex);

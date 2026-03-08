@@ -316,6 +316,7 @@ public:
 
     [[nodiscard]] std::wstring_view DebugGetFocusedItemDisplayName(Pane pane) const noexcept;
     [[nodiscard]] bool DebugHasItemDisplayName(Pane pane, std::wstring_view displayName) const noexcept;
+    [[nodiscard]] size_t DebugGetItemCount(Pane pane) const noexcept;
     [[nodiscard]] bool DebugIsItemSelected(Pane pane, std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetSelectedCount(Pane pane) const noexcept;
     [[nodiscard]] bool DebugIsEmptyFolderStateActive(Pane pane) const noexcept;
@@ -323,6 +324,7 @@ public:
     [[nodiscard]] bool DebugFocusItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept;
     [[nodiscard]] FolderView::NameFilterState DebugGetNameFilterState(Pane pane) const;
     [[nodiscard]] bool DebugIsNameFilterActive(Pane pane) const noexcept;
+    void DebugResetPaneVisibilityState(Pane pane) noexcept;
     [[nodiscard]] FolderView::FilterWatermarkVisualMode DebugGetFilterWatermarkVisualMode(Pane pane) const noexcept;
 #endif
 
@@ -399,6 +401,7 @@ private:
     void OnFolderViewPathChanged(Pane pane, const std::optional<std::filesystem::path>& path);
     void RecordNavigationHistory(PaneState& state, const std::filesystem::path& displayPath);
     void TrimNavigationHistory(PaneState& state);
+    void OnFolderViewDirectoryImpact(Pane pane, const DirectoryInfoCache::DirectoryImpact& impact) noexcept;
     void OnFolderViewNavigateUpFromRoot(Pane pane) noexcept;
     HRESULT EnsurePaneFileSystem(Pane pane, std::wstring_view pluginId) noexcept;
     Pane GetPaneFromChild(HWND child) const noexcept;

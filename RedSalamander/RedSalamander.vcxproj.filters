@@ -71,6 +71,7 @@
     <ClInclude Include="CommandDispatch.Debug.h" />
     <ClInclude Include="NavigationLocation.h" />
     <ClInclude Include="SettingsSave.h" />
+    <ClInclude Include="SettingsHotReload.h" />
     <ClInclude Include="WindowPlacementPersistence.h" />
   </ItemGroup>
   <ItemGroup>
@@ -155,6 +156,7 @@
     <ClCompile Include="FolderWindow.ItemProperties.cpp" />
     <ClCompile Include="Preferences.Plugin.Configuration.cpp" />
     <ClCompile Include="SettingsSchemaParser.cpp" />
+    <ClCompile Include="SettingsHotReload.cpp" />
     <ClCompile Include="ThemedInputFrames.cpp" />
   </ItemGroup>
   <ItemGroup>
