@@ -869,6 +869,29 @@ wil::unique_hwnd g_connectionManagerDialog;
     return nullptr;
 }
 
+[[nodiscard]] int CompareTextNoCase(std::wstring_view left, std::wstring_view right) noexcept
+{
+    if (left.empty() && right.empty())
+    {
+        return 0;
+    }
+
+    const int compare = CompareStringOrdinal(left.data(),
+                                             static_cast<int>(left.size()),
+                                             right.data(),
+                                             static_cast<int>(right.size()),
+                                             TRUE);
+    if (compare == CSTR_LESS_THAN)
+    {
+        return -1;
+    }
+    if (compare == CSTR_GREATER_THAN)
+    {
+        return 1;
+    }
+    return 0;
+}
+
 void PopulateStateFromSettings(DialogState& state, const Common::Settings::Settings& settings, std::wstring_view filterPluginId) noexcept
 {
     state.connections.clear();
@@ -1506,10 +1529,19 @@ void RebuildList(HWND dlg, DialogState& state)
     }
 
     const int prevSel = state.selectedListIndex;
+    std::optional<size_t> prevModelIndex;
+    if (prevSel >= 0 && prevSel < static_cast<int>(state.viewToModel.size()))
+    {
+        prevModelIndex = state.viewToModel[static_cast<size_t>(prevSel)];
+    }
 
     state.viewToModel.clear();
     ListView_DeleteAllItems(state.list);
 
+    std::vector<size_t> orderedModelIndices;
+    orderedModelIndices.reserve(state.connections.size());
+
+    std::optional<size_t> quickConnectModelIndex;
     for (size_t modelIndex = 0; modelIndex < state.connections.size(); ++modelIndex)
     {
         const auto& profile = state.connections[modelIndex];
@@ -1518,14 +1550,52 @@ void RebuildList(HWND dlg, DialogState& state)
             continue;
         }
 
+        if (IsQuickConnectProfile(profile))
+        {
+            quickConnectModelIndex = modelIndex;
+            continue;
+        }
+
+        orderedModelIndices.push_back(modelIndex);
+    }
+
+    std::sort(orderedModelIndices.begin(), orderedModelIndices.end(), [&](size_t leftModelIndex, size_t rightModelIndex)
+    {
+        const auto& leftProfile  = state.connections[leftModelIndex];
+        const auto& rightProfile = state.connections[rightModelIndex];
+
+        const int nameCompare = CompareTextNoCase(leftProfile.name, rightProfile.name);
+        if (nameCompare != 0)
+        {
+            return nameCompare < 0;
+        }
+
+        const int idCompare = CompareTextNoCase(leftProfile.id, rightProfile.id);
+        if (idCompare != 0)
+        {
+            return idCompare < 0;
+        }
+
+        return leftModelIndex < rightModelIndex;
+    });
+
+    if (quickConnectModelIndex.has_value())
+    {
+        orderedModelIndices.insert(orderedModelIndices.begin(), quickConnectModelIndex.value());
+    }
+
+    for (size_t viewIndex = 0; viewIndex < orderedModelIndices.size(); ++viewIndex)
+    {
+        const size_t modelIndex = orderedModelIndices[viewIndex];
+        const auto& profile     = state.connections[modelIndex];
+
         LVITEMW item{};
         item.mask          = LVIF_TEXT | LVIF_PARAM;
-        item.iItem         = static_cast<int>(state.viewToModel.size());
+        item.iItem         = static_cast<int>(viewIndex);
         item.pszText       = const_cast<wchar_t*>((IsQuickConnectProfile(profile) && ! state.quickConnectLabel.empty()) ? state.quickConnectLabel.c_str()
                                                                                                                   : profile.name.c_str());
         item.lParam        = static_cast<LPARAM>(modelIndex);
-        const int inserted = ListView_InsertItem(state.list, &item);
-        if (inserted >= 0)
+        if (ListView_InsertItem(state.list, &item) >= 0)
         {
             state.viewToModel.push_back(modelIndex);
         }
@@ -1533,11 +1603,21 @@ void RebuildList(HWND dlg, DialogState& state)
 
     state.selectedListIndex = -1;
 
-    if (prevSel >= 0 && prevSel < ListView_GetItemCount(state.list))
+    if (prevModelIndex.has_value())
     {
-        ListView_SetItemState(state.list, prevSel, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-        state.selectedListIndex = prevSel;
-        return;
+        for (int viewIndex = 0; viewIndex < static_cast<int>(state.viewToModel.size()); ++viewIndex)
+        {
+            if (state.viewToModel[static_cast<size_t>(viewIndex)] != prevModelIndex.value())
+            {
+                continue;
+            }
+
+            ListView_SetItemState(state.list, viewIndex, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+            ListView_SetSelectionMark(state.list, viewIndex);
+            state.selectedListIndex = viewIndex;
+            ListView_EnsureVisible(state.list, viewIndex, FALSE);
+            return;
+        }
     }
 
     if (ListView_GetItemCount(state.list) > 0)
@@ -1546,6 +1626,30 @@ void RebuildList(HWND dlg, DialogState& state)
         ListView_SetSelectionMark(state.list, 0);
         state.selectedListIndex = 0;
     }
+}
+
+[[nodiscard]] bool SelectModelIndexInList(DialogState& state, size_t modelIndex) noexcept
+{
+    if (! state.list)
+    {
+        return false;
+    }
+
+    for (int viewIndex = 0; viewIndex < static_cast<int>(state.viewToModel.size()); ++viewIndex)
+    {
+        if (state.viewToModel[static_cast<size_t>(viewIndex)] != modelIndex)
+        {
+            continue;
+        }
+
+        ListView_SetItemState(state.list, viewIndex, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
+        ListView_SetSelectionMark(state.list, viewIndex);
+        ListView_EnsureVisible(state.list, viewIndex, FALSE);
+        state.selectedListIndex = viewIndex;
+        return true;
+    }
+
+    return false;
 }
 
 void EnsureListSelection(DialogState& state) noexcept
@@ -1955,6 +2059,7 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
 {
     if (! IsQuickConnectProfile(profile))
     {
+        const std::wstring previousName = profile.name;
         const std::wstring rawName        = Win32Text::GetWindowTextString(state.nameEdit);
         const std::wstring normalizedName = TrimWhitespace(rawName);
         const std::wstring uniqueName     = MakeUniqueConnectionName(state.connections, normalizedName, profile.id);
@@ -1965,7 +2070,11 @@ void CommitEditorToProfile(DialogState& state, Common::Settings::ConnectionProfi
             SetWindowTextW(state.nameEdit, uniqueName.c_str());
         }
 
-        if (state.list && state.selectedListIndex >= 0 && state.selectedListIndex < ListView_GetItemCount(state.list))
+        if (state.list && previousName != profile.name)
+        {
+            RebuildList(GetAncestor(state.list, GA_ROOT), state);
+        }
+        else if (state.list && state.selectedListIndex >= 0 && state.selectedListIndex < ListView_GetItemCount(state.list))
         {
             ListView_SetItemText(state.list, state.selectedListIndex, 0, const_cast<wchar_t*>(profile.name.c_str()));
         }
@@ -4342,12 +4451,11 @@ INT_PTR OnCommand(HWND dlg, DialogState& state, int controlId) noexcept
         ApplyPluginDefaultsToNewProfile(state, profile);
 
         state.connections.push_back(std::move(profile));
+        const size_t newModelIndex = state.connections.size() - 1u;
         RebuildList(dlg, state);
 
-        const int count = ListView_GetItemCount(state.list);
-        if (count > 0)
+        if (SelectModelIndexInList(state, newModelIndex))
         {
-            ListView_SetItemState(state.list, count - 1, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
             SetFocus(state.nameEdit);
             SendMessageW(state.nameEdit, EM_SETSEL, 0, -1);
         }

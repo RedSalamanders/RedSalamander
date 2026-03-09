@@ -2394,7 +2394,7 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
         if (! fileSystem)
         {
             result->hr            = E_FAIL;
-            result->statusMessage = L"ViewerImgRaw: Active filesystem is missing.";
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_STATUS_FILESYSTEM_MISSING);
             return;
         }
 
@@ -2640,7 +2640,7 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
             if (! isRawInput)
             {
                 result->hr            = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-                result->statusMessage = L"ViewerImgRaw: Unsupported file format.";
+                result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_STATUS_UNSUPPORTED_FORMAT);
                 return;
             }
 
@@ -2856,7 +2856,7 @@ void ViewerImgRaw::OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result) 
         if (! image)
         {
             result->hr            = E_OUTOFMEMORY;
-            result->statusMessage = L"ViewerImgRaw: Out of memory while storing decoded image.";
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERRAW_STATUS_STORE_OOM);
         }
         else
         {

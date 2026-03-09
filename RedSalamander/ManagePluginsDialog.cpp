@@ -159,6 +159,7 @@ struct PluginConfigField
     std::wstring uiSection; // x-ui-section: group fields under section headers
     int uiOrder = 0;        // x-ui-order: display order within plugin config dialog
     std::wstring uiControl; // x-ui-control: override control type (e.g., "custom" for future extensibility)
+    bool uiHidden = false;  // x-ui-hidden: keep the field in JSON but do not render it in the editor
 };
 
 struct PluginConfigFieldControls
@@ -1071,6 +1072,12 @@ std::vector<PluginConfigField> ParseConfigurationSchema(std::string_view schemaJ
             field.uiControl = Utf16FromUtf8(uiControlUtf8.value());
         }
 
+        bool uiHidden = false;
+        if (TryGetBoolValue(item, "x-ui-hidden", uiHidden))
+        {
+            field.uiHidden = uiHidden;
+        }
+
         int64_t minValue = 0;
         if (TryGetInt64(item, "min", minValue))
         {
@@ -1291,7 +1298,7 @@ std::string BuildConfigurationJson(const std::vector<PluginConfigFieldControls>&
 
         if (c.field.type == PluginConfigFieldType::Text)
         {
-            std::wstring value;
+            std::wstring value = c.field.defaultText;
             if (c.hEdit)
             {
                 const int len = GetWindowTextLengthW(c.hEdit);
@@ -1383,7 +1390,7 @@ std::string BuildConfigurationJson(const std::vector<PluginConfigFieldControls>&
         }
         else if (c.field.type == PluginConfigFieldType::Option)
         {
-            std::wstring selected;
+            std::wstring selected = c.field.defaultOption;
             if (c.hToggle)
             {
                 const bool isOn    = GetWindowLongPtrW(c.hToggle, GWLP_USERDATA) != 0;
@@ -1430,6 +1437,21 @@ std::string BuildConfigurationJson(const std::vector<PluginConfigFieldControls>&
         }
         else if (c.field.type == PluginConfigFieldType::Selection)
         {
+            std::vector<std::wstring> selectedValues = c.field.defaultSelection;
+            if (! c.choiceButtons.empty())
+            {
+                selectedValues.clear();
+                for (size_t i = 0; i < c.choiceButtons.size() && i < c.field.choices.size(); ++i)
+                {
+                    if (SendMessageW(c.choiceButtons[i], BM_GETCHECK, 0, 0) != BST_CHECKED)
+                    {
+                        continue;
+                    }
+
+                    selectedValues.push_back(c.field.choices[i].value);
+                }
+            }
+
             yyjson_mut_val* arr = yyjson_mut_arr(doc);
             if (! arr)
             {
@@ -1440,14 +1462,9 @@ std::string BuildConfigurationJson(const std::vector<PluginConfigFieldControls>&
                 return {};
             }
 
-            for (size_t i = 0; i < c.choiceButtons.size() && i < c.field.choices.size(); ++i)
+            for (const auto& selectedValue : selectedValues)
             {
-                if (SendMessageW(c.choiceButtons[i], BM_GETCHECK, 0, 0) != BST_CHECKED)
-                {
-                    continue;
-                }
-
-                const std::string utf8 = Utf8FromUtf16(c.field.choices[i].value);
+                const std::string utf8 = Utf8FromUtf16(selectedValue);
                 yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
                 if (! val)
                 {
@@ -1749,6 +1766,12 @@ INT_PTR OnPluginConfigDialogInit(HWND dlg, PluginConfigDialogState* state)
     {
         PluginConfigFieldControls controls;
         ApplyFieldDefaultToControls(field, controls, configRoot);
+
+        if (controls.field.uiHidden)
+        {
+            state->controls.push_back(std::move(controls));
+            continue;
+        }
 
         controls.hLabel = CreateWindowExW(0,
                                           L"Static",

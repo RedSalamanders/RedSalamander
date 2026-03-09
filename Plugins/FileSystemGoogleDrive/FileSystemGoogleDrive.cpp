@@ -19,17 +19,30 @@
 #include <curl/curl.h>
 
 #include "Helpers.h"
+#include "resource.h"
+#include "FileSystemGoogleDriveResources.h"
+
+extern HINSTANCE g_hInstance;
 
 namespace
 {
 constexpr wchar_t kPluginId[]          = L"builtin/file-system-gdrive";
 constexpr wchar_t kPluginShortId[]     = L"gdrive";
-constexpr wchar_t kPluginName[]        = L"Google Drive";
-constexpr wchar_t kPluginDescription[] = L"Google Drive virtual file system.";
 constexpr wchar_t kPluginAuthor[]      = L"RedSalamander";
 constexpr wchar_t kPluginVersion[]     = L"0.1";
 
-constexpr wchar_t kCommandLabelOpenConnection[] = L"Open Connection...";
+[[nodiscard]] const wchar_t* LocalizedPluginName() noexcept
+{
+    static const std::wstring name = LoadStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_NAME);
+    return name.c_str();
+}
+
+[[nodiscard]] const wchar_t* LocalizedPluginDescription() noexcept
+{
+    static const std::wstring description = LoadStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_DESCRIPTION);
+    return description.c_str();
+}
+
 constexpr unsigned int kCommandIdOpenConnection = 1u;
 
 constexpr char kTokenEndpoint[]  = "https://oauth2.googleapis.com/token";
@@ -869,18 +882,59 @@ FileSystemGoogleDrive::FileSystemGoogleDrive(IHost* host)
 {
     _metaData.id          = kPluginId;
     _metaData.shortId     = kPluginShortId;
-    _metaData.name        = kPluginName;
-    _metaData.description = kPluginDescription;
+    _metaData.name        = LocalizedPluginName();
+    _metaData.description = LocalizedPluginDescription();
     _metaData.author      = kPluginAuthor;
     _metaData.version     = kPluginVersion;
 
     if (host)
     {
+        static_cast<void>(host->QueryInterface(__uuidof(IHostAlerts), _hostAlerts.put_void()));
         static_cast<void>(host->QueryInterface(__uuidof(IHostConnections), _hostConnections.put_void()));
     }
 }
 
 FileSystemGoogleDrive::~FileSystemGoogleDrive() = default;
+
+IHostAlerts* FileSystemGoogleDrive::GetHostAlerts() const noexcept
+{
+    return _hostAlerts.get();
+}
+
+void FileSystemGoogleDrive::ShowMissingClientIdAlert() const noexcept
+{
+    IHostAlerts* const hostAlerts = GetHostAlerts();
+    if (! hostAlerts)
+    {
+        return;
+    }
+
+    std::wstring pluginName = _metaData.name ? _metaData.name : LocalizedPluginName();
+    if (pluginName.empty())
+    {
+        pluginName = L"Google Drive";
+    }
+
+    const std::wstring title   = LoadStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED);
+    const std::wstring message = FormatStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT, pluginName);
+    if (message.empty())
+    {
+        return;
+    }
+
+    HostAlertRequest request{};
+    request.version      = 1;
+    request.sizeBytes    = sizeof(request);
+    request.scope        = HOST_ALERT_SCOPE_APPLICATION;
+    request.modality     = HOST_ALERT_MODAL;
+    request.severity     = HOST_ALERT_ERROR;
+    request.targetWindow = nullptr;
+    request.title        = title.empty() ? nullptr : title.c_str();
+    request.message      = message.c_str();
+    request.closable     = TRUE;
+
+    static_cast<void>(hostAlerts->ShowAlert(&request, nullptr));
+}
 
 HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::QueryInterface(REFIID riid, void** ppvObject) noexcept
 {
@@ -1012,7 +1066,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetMenuItems(const NavigationMe
         _menuEntries.push_back(std::move(separator));
 
         MenuEntry openConnection;
-        openConnection.label     = kCommandLabelOpenConnection;
+        openConnection.label     = LoadStringResource(nullptr, IDS_MENU_CONNECTIONS_ELLIPSIS);
         openConnection.commandId = kCommandIdOpenConnection;
         _menuEntries.push_back(std::move(openConnection));
 
@@ -1430,7 +1484,10 @@ HRESULT FileSystemGoogleDrive::ResolveConnection(const wchar_t* path, bool acqui
 
     if (outConnection.clientId.empty())
     {
-        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        Debug::Warning(L"GDrive: missing OAuth client id for connection '{}'. Configure plugin defaultClientId or connection extra.clientId.",
+                       outConnection.connectionName);
+        ShowMissingClientIdAlert();
+        return HRESULT_FROM_WIN32(ERROR_BAD_CONFIGURATION);
     }
 
     if (! OrdinalString::EqualsNoCase(outConnection.rootKind, L"myDrive") && ! OrdinalString::EqualsNoCase(outConnection.rootKind, L"sharedDrive"))

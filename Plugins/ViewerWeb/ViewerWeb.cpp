@@ -337,6 +337,89 @@ COLORREF ColorFromHSV(float hDegrees, float s, float v) noexcept
     return RGB(r, g, b);
 }
 
+struct HsvColor
+{
+    float hue = 0.0f;
+    float sat = 0.0f;
+    float val = 0.0f;
+};
+
+[[nodiscard]] HsvColor ColorToHSV(COLORREF color) noexcept
+{
+    const float r = static_cast<float>(GetRValue(color)) / 255.0f;
+    const float g = static_cast<float>(GetGValue(color)) / 255.0f;
+    const float b = static_cast<float>(GetBValue(color)) / 255.0f;
+
+    const float maxValue = std::max({r, g, b});
+    const float minValue = std::min({r, g, b});
+    const float delta    = maxValue - minValue;
+
+    HsvColor out{};
+    out.val = maxValue;
+    out.sat = maxValue <= 0.0f ? 0.0f : delta / maxValue;
+
+    if (delta <= 0.0001f)
+    {
+        out.hue = 0.0f;
+        return out;
+    }
+
+    if (maxValue == r)
+    {
+        out.hue = 60.0f * std::fmod(((g - b) / delta), 6.0f);
+    }
+    else if (maxValue == g)
+    {
+        out.hue = 60.0f * (((b - r) / delta) + 2.0f);
+    }
+    else
+    {
+        out.hue = 60.0f * (((r - g) / delta) + 4.0f);
+    }
+
+    if (out.hue < 0.0f)
+    {
+        out.hue += 360.0f;
+    }
+
+    return out;
+}
+
+struct JsonTokenColors
+{
+    COLORREF key         = RGB(0, 0, 0);
+    COLORREF stringValue = RGB(0, 0, 0);
+    COLORREF numberValue = RGB(0, 0, 0);
+    COLORREF literalValue = RGB(0, 0, 0);
+};
+
+[[nodiscard]] COLORREF ThemeAwareSemanticColor(
+    float hue, float saturation, float value, COLORREF accent, COLORREF fg, uint8_t accentAlpha, uint8_t fgAlpha) noexcept
+{
+    const COLORREF semantic  = ColorFromHSV(hue, saturation, value);
+    const COLORREF harmonized = BlendColor(semantic, accent, accentAlpha);
+    return BlendColor(harmonized, fg, fgAlpha);
+}
+
+[[nodiscard]] JsonTokenColors BuildJsonTokenColors(COLORREF accent, COLORREF fg, bool darkMode) noexcept
+{
+    const HsvColor accentHsv = ColorToHSV(accent);
+    const float keyHue       = accentHsv.sat > 0.05f ? accentHsv.hue : 195.0f;
+    const float keySat       = std::clamp(std::max(accentHsv.sat, darkMode ? 0.60f : 0.72f), 0.0f, 1.0f);
+    const float keyVal       = darkMode ? std::max(accentHsv.val, 0.95f) : std::clamp(std::max(accentHsv.val * 0.62f, 0.46f), 0.46f, 0.70f);
+    const COLORREF keyBase   = ColorFromHSV(keyHue, keySat, keyVal);
+
+    return {
+        .key = BlendColor(keyBase, fg, darkMode ? 12u : 18u),
+        .stringValue =
+            ThemeAwareSemanticColor(145.0f, darkMode ? 0.58f : 0.76f, darkMode ? 0.94f : 0.44f, accent, fg, darkMode ? 24u : 18u, darkMode ? 16u : 18u),
+        .numberValue =
+            ThemeAwareSemanticColor(32.0f, darkMode ? 0.78f : 0.82f, darkMode ? 0.98f : 0.42f, accent, fg, darkMode ? 20u : 14u, darkMode ? 12u : 14u),
+        .literalValue =
+            ThemeAwareSemanticColor(282.0f, darkMode ? 0.64f : 0.74f, darkMode ? 0.96f : 0.46f, accent, fg, darkMode ? 18u : 12u, darkMode ? 12u : 16u),
+    };
+}
+
 uint32_t StableHash32(std::wstring_view text) noexcept
 {
     // FNV-1a
@@ -377,29 +460,6 @@ std::wstring LeafNameFromPath(std::wstring_view path)
     }
 
     return std::wstring(path.substr(slash + 1));
-}
-
-std::wstring Utf16FromUtf8(std::string_view text) noexcept
-{
-    if (text.empty())
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
 }
 
 std::string Utf8FromUtf16(std::wstring_view text) noexcept
@@ -613,6 +673,434 @@ std::wstring UrlFromFilePath(std::wstring_view path)
     return {};
 }
 
+constexpr std::wstring_view kInternalDocumentOrigin = L"https://viewer.redsalamander.invalid";
+constexpr std::wstring_view kInternalDocumentFilter = L"https://viewer.redsalamander.invalid/*";
+
+[[nodiscard]] std::wstring_view InternalDocumentKindSegment(ViewerWebKind kind) noexcept
+{
+    switch (kind)
+    {
+        case ViewerWebKind::Json: return L"json";
+        case ViewerWebKind::Markdown: return L"markdown";
+        case ViewerWebKind::Web:
+        default: return L"web";
+    }
+}
+
+[[nodiscard]] std::wstring BuildInternalDocumentUrl(ViewerWebKind kind, uint64_t requestId)
+{
+    return std::format(L"{}/{}/{}.html", kInternalDocumentOrigin, InternalDocumentKindSegment(kind), requestId);
+}
+
+[[nodiscard]] bool IsInternalDocumentUrl(std::wstring_view url) noexcept
+{
+    return OrdinalString::StartsWithNoCase(url, kInternalDocumentOrigin);
+}
+
+[[nodiscard]] std::string_view TrimAsciiWhitespace(std::string_view text) noexcept
+{
+    while (! text.empty() && std::isspace(static_cast<unsigned char>(text.front())) != 0)
+    {
+        text.remove_prefix(1);
+    }
+
+    while (! text.empty() && std::isspace(static_cast<unsigned char>(text.back())) != 0)
+    {
+        text.remove_suffix(1);
+    }
+
+    return text;
+}
+
+[[nodiscard]] bool IsJsonLinesPath(std::wstring_view path) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    const std::wstring extension = std::filesystem::path(path).extension().wstring();
+    return OrdinalString::EqualsNoCase(extension, L".jsonl") || OrdinalString::EqualsNoCase(extension, L".ndjson");
+}
+
+[[nodiscard]] std::string CssRgb(COLORREF c)
+{
+    return std::format("rgb({},{},{})", GetRValue(c), GetGValue(c), GetBValue(c));
+}
+
+struct ScrollbarColors
+{
+    COLORREF track = RGB(0, 0, 0);
+    COLORREF thumb = RGB(0, 0, 0);
+    COLORREF thumbHover = RGB(0, 0, 0);
+    COLORREF corner = RGB(0, 0, 0);
+};
+
+[[nodiscard]] ScrollbarColors BuildScrollbarColors(COLORREF bg, COLORREF fg, COLORREF accent, bool darkMode) noexcept
+{
+    const COLORREF thumbBase = BlendColor(bg, accent, darkMode ? 52u : 36u);
+    return {
+        .track      = BlendColor(bg, fg, darkMode ? 20u : 12u),
+        .thumb      = BlendColor(thumbBase, fg, darkMode ? 92u : 120u),
+        .thumbHover = BlendColor(thumbBase, fg, darkMode ? 128u : 152u),
+        .corner     = BlendColor(bg, fg, darkMode ? 16u : 8u),
+    };
+}
+
+struct JsonLinesEntry
+{
+    size_t lineNumber = 0;
+    std::string timestampText;
+    std::string levelText;
+    std::string categoryText;
+    std::string messageText;
+    std::string summaryText;
+    std::string prettyJson;
+};
+
+[[nodiscard]] std::string JsonStringFromScalar(yyjson_val* value)
+{
+    if (! value)
+    {
+        return {};
+    }
+    if (yyjson_is_str(value))
+    {
+        const char* s = yyjson_get_str(value);
+        return s ? std::string(s) : std::string{};
+    }
+    if (yyjson_is_int(value))
+    {
+        return std::to_string(yyjson_get_int(value));
+    }
+    if (yyjson_is_uint(value))
+    {
+        return std::to_string(yyjson_get_uint(value));
+    }
+    if (yyjson_is_real(value))
+    {
+        return std::format("{}", yyjson_get_real(value));
+    }
+    if (yyjson_is_bool(value))
+    {
+        return yyjson_get_bool(value) ? "true" : "false";
+    }
+    if (yyjson_is_null(value))
+    {
+        return "null";
+    }
+    return {};
+}
+
+[[nodiscard]] std::string DescribeJsonValue(yyjson_val* value)
+{
+    if (! value)
+    {
+        return "JSON value";
+    }
+    if (yyjson_is_obj(value))
+    {
+        const size_t fieldCount = yyjson_obj_size(value);
+        return std::format("Object with {} field{}", fieldCount, fieldCount == 1 ? "" : "s");
+    }
+    if (yyjson_is_arr(value))
+    {
+        const size_t itemCount = yyjson_arr_size(value);
+        return std::format("Array with {} item{}", itemCount, itemCount == 1 ? "" : "s");
+    }
+    if (yyjson_is_str(value))
+    {
+        return "String value";
+    }
+    if (yyjson_is_bool(value))
+    {
+        return std::format("Boolean {}", yyjson_get_bool(value) ? "true" : "false");
+    }
+    if (yyjson_is_null(value))
+    {
+        return "Null value";
+    }
+    if (yyjson_is_num(value))
+    {
+        return std::format("Numeric {}", JsonStringFromScalar(value));
+    }
+    return "JSON value";
+}
+
+[[nodiscard]] std::string ReadJsonObjectSummaryValue(yyjson_val* value, std::initializer_list<const char*> keys)
+{
+    if (! yyjson_is_obj(value))
+    {
+        return {};
+    }
+
+    for (const char* key : keys)
+    {
+        const std::string text = JsonStringFromScalar(yyjson_obj_get(value, key));
+        if (! text.empty())
+        {
+            return text;
+        }
+    }
+
+    return {};
+}
+
+[[nodiscard]] bool TryParseJsonLinesEntries(std::string_view textUtf8, bool allowSingleEntry, std::vector<JsonLinesEntry>& outEntries)
+{
+    outEntries.clear();
+
+    size_t lineNumber = 1;
+    size_t offset     = 0;
+    while (offset < textUtf8.size())
+    {
+        size_t lineEnd = textUtf8.find('\n', offset);
+        if (lineEnd == std::string::npos)
+        {
+            lineEnd = textUtf8.size();
+        }
+
+        std::string_view line(textUtf8.data() + offset, lineEnd - offset);
+        if (! line.empty() && line.back() == '\r')
+        {
+            line.remove_suffix(1);
+        }
+        line = TrimAsciiWhitespace(line);
+
+        if (! line.empty())
+        {
+            std::string mutableLine(line);
+            yyjson_read_err lineErr{};
+            unique_yyjson_doc lineDoc(
+                yyjson_read_opts(mutableLine.data(), mutableLine.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &lineErr));
+            if (! lineDoc)
+            {
+                outEntries.clear();
+                return false;
+            }
+
+            yyjson_val* root = yyjson_doc_get_root(lineDoc.get());
+            if (! root)
+            {
+                outEntries.clear();
+                return false;
+            }
+
+            size_t prettyLen = 0;
+            unique_malloc_string pretty(yyjson_write_opts(lineDoc.get(), YYJSON_WRITE_PRETTY | YYJSON_WRITE_ESCAPE_UNICODE, nullptr, &prettyLen, nullptr));
+            if (! pretty)
+            {
+                outEntries.clear();
+                return false;
+            }
+
+            JsonLinesEntry entry{};
+            entry.lineNumber    = lineNumber;
+            entry.prettyJson.assign(pretty.get(), prettyLen);
+            entry.timestampText = ReadJsonObjectSummaryValue(root, {"ts", "timestamp", "@timestamp", "time"});
+            entry.levelText     = ReadJsonObjectSummaryValue(root, {"level", "severity", "lvl", "type"});
+            entry.categoryText  = ReadJsonObjectSummaryValue(root, {"category", "op", "operation", "event", "logger"});
+            entry.messageText   = ReadJsonObjectSummaryValue(root, {"message", "msg", "text", "summary", "description"});
+            entry.summaryText   = DescribeJsonValue(root);
+            if (entry.messageText.empty())
+            {
+                const std::string nameText = ReadJsonObjectSummaryValue(root, {"name", "srcLeaf", "dstLeaf", "path"});
+                if (! nameText.empty())
+                {
+                    entry.messageText = nameText;
+                }
+            }
+
+            outEntries.push_back(std::move(entry));
+        }
+
+        offset = lineEnd < textUtf8.size() ? lineEnd + 1 : lineEnd;
+        ++lineNumber;
+    }
+
+    const size_t minimumEntries = allowSingleEntry ? 1u : 2u;
+    if (outEntries.size() < minimumEntries)
+    {
+        outEntries.clear();
+        return false;
+    }
+
+    return true;
+}
+
+// Common theme helper JS shared by all internal HTML templates.
+constexpr char kCommonThemeJs[] =
+    "function parseRgb(s){const m=/rgb\\((\\d+),(\\d+),(\\d+)\\)/.exec(s.replace(/\\s+/g,''));return m?{r:+m[1],g:+m[2],b:+m[3]}:{r:0,g:0,b:0};}"
+    "function rgb(c){return `rgb(${c.r},${c.g},${c.b})`;}"
+    "function clamp(v,min,max){return Math.min(max,Math.max(min,v));}"
+    "function blend(u,o,a){const inv=255-a;return {r:Math.round((u.r*inv+o.r*a)/255),g:Math.round((u.g*inv+o.g*a)/255),b:Math.round((u.b*inv+o.b*a)/255)};}"
+    "function luma(c){return (c.r*299+c.g*587+c.b*114)/1000;}"
+    "function hsv(h,s,v){const hue=((h%360)+360)%360;const c=v*s;const x=c*(1-Math.abs((hue/60)%2-1));const m=v-c;let rf=0,gf=0,bf=0;"
+    "if(hue<60){rf=c;gf=x;}else if(hue<120){rf=x;gf=c;}else if(hue<180){gf=c;bf=x;}else if(hue<240){gf=x;bf=c;}else if(hue<300){rf=x;bf=c;}else{rf=c;bf=x;}"
+    "return {r:Math.round((rf+m)*255),g:Math.round((gf+m)*255),b:Math.round((bf+m)*255)};}"
+    "function rgbToHsv(c){const r=c.r/255,g=c.g/255,b=c.b/255;const max=Math.max(r,g,b),min=Math.min(r,g,b),delta=max-min;let h=0;"
+    "if(delta>0){if(max===r){h=60*(((g-b)/delta)%6);}else if(max===g){h=60*(((b-r)/delta)+2);}else{h=60*(((r-g)/delta)+4);}if(h<0){h+=360;}}"
+    "return {h,s:max<=0?0:delta/max,v:max};}"
+    "function setScrollbarVars(r,bg,fg,acc){const dark=luma(bg)<128;const thumbBase=blend(bg,acc,dark?52:36);"
+    "r.setProperty('--rs-scroll-track',rgb(blend(bg,fg,dark?20:12)));r.setProperty('--rs-scroll-thumb',rgb(blend(thumbBase,fg,dark?92:120)));"
+    "r.setProperty('--rs-scroll-thumb-hover',rgb(blend(thumbBase,fg,dark?128:152)));r.setProperty('--rs-scroll-corner',rgb(blend(bg,fg,dark?16:8)));}"
+    "function setJsonTokenVars(r,bg,fg,acc){const dark=luma(bg)<128;"
+    "const accentHsv=rgbToHsv(acc);const keyHue=accentHsv.s>0.05?accentHsv.h:195;const keySat=clamp(Math.max(accentHsv.s,dark?0.60:0.72),0,1);"
+    "const keyVal=dark?Math.max(accentHsv.v,0.95):clamp(Math.max(accentHsv.v*0.62,0.46),0.46,0.70);const key=blend(hsv(keyHue,keySat,keyVal),fg,dark?12:18);"
+    "const str=blend(blend(hsv(145,dark?0.58:0.76,dark?0.94:0.44),acc,dark?24:18),fg,dark?16:18);"
+    "const num=blend(blend(hsv(32,dark?0.78:0.82,dark?0.98:0.42),acc,dark?20:14),fg,dark?12:14);"
+    "const lit=blend(blend(hsv(282,dark?0.64:0.74,dark?0.96:0.46),acc,dark?18:12),fg,dark?12:16);"
+    "r.setProperty('--rs-key',rgb(key));r.setProperty('--rs-string',rgb(str));r.setProperty('--rs-number',rgb(num));r.setProperty('--rs-literal',rgb(lit));}";
+
+constexpr char kCommonScrollbarCss[] =
+    "html{scrollbar-color:var(--rs-scroll-thumb) var(--rs-scroll-track);}"
+    "*{scrollbar-color:var(--rs-scroll-thumb) var(--rs-scroll-track);scrollbar-width:thin;}"
+    "*::-webkit-scrollbar{width:12px;height:12px;background:var(--rs-scroll-track);}"
+    "*::-webkit-scrollbar-track{background:var(--rs-scroll-track);}"
+    "*::-webkit-scrollbar-thumb{background:var(--rs-scroll-thumb);border-radius:999px;border:3px solid var(--rs-scroll-track);}"
+    "*::-webkit-scrollbar-thumb:hover{background:var(--rs-scroll-thumb-hover);}"
+    "*::-webkit-scrollbar-button{display:none;width:0;height:0;}"
+    "*::-webkit-scrollbar-corner{background:var(--rs-scroll-corner);}";
+
+[[nodiscard]] std::string BuildJsonLinesHtml(const std::vector<JsonLinesEntry>& entries,
+                                             std::string_view highlightJs,
+                                             std::string_view themeObj,
+                                             COLORREF bg,
+                                             COLORREF fg,
+                                             COLORREF selBg,
+                                             COLORREF selFg,
+                                             COLORREF accent,
+                                             bool darkMode)
+{
+    const COLORREF codeBg     = BlendColor(bg, fg, darkMode ? 18u : 8u);
+    const COLORREF cardBg     = BlendColor(bg, fg, darkMode ? 12u : 5u);
+    const COLORREF cardBgOpen = BlendColor(bg, fg, darkMode ? 18u : 10u);
+    const COLORREF border     = BlendColor(bg, fg, darkMode ? 36u : 58u);
+    const COLORREF mutedFg    = BlendColor(bg, fg, 140u);
+    const JsonTokenColors tokenColors = BuildJsonTokenColors(accent, fg, darkMode);
+    const ScrollbarColors scrollbar = BuildScrollbarColors(bg, fg, accent, darkMode);
+
+    std::string entriesJs;
+    entriesJs.reserve(entries.size() * 256u);
+    entriesJs.push_back('[');
+    for (size_t i = 0; i < entries.size(); ++i)
+    {
+        const JsonLinesEntry& entry = entries[i];
+        if (i != 0)
+        {
+            entriesJs.push_back(',');
+        }
+
+        entriesJs += "{line:";
+        entriesJs += std::to_string(entry.lineNumber);
+        entriesJs += ",ts:'";
+        entriesJs += EscapeJavaScriptStringUtf8(entry.timestampText);
+        entriesJs += "',level:'";
+        entriesJs += EscapeJavaScriptStringUtf8(entry.levelText);
+        entriesJs += "',category:'";
+        entriesJs += EscapeJavaScriptStringUtf8(entry.categoryText);
+        entriesJs += "',message:'";
+        entriesJs += EscapeJavaScriptStringUtf8(entry.messageText);
+        entriesJs += "',summary:'";
+        entriesJs += EscapeJavaScriptStringUtf8(entry.summaryText);
+        entriesJs += "',json:'";
+        entriesJs += EscapeJavaScriptStringUtf8(entry.prettyJson);
+        entriesJs += "'}";
+    }
+    entriesJs.push_back(']');
+
+    std::string html;
+    html.reserve(highlightJs.size() + entriesJs.size() + 16384);
+    html += "<!doctype html><html><head><meta charset=\"utf-8\">";
+    html += "<style>";
+    html += ":root{--rs-bg:" + CssRgb(bg) + ";--rs-fg:" + CssRgb(fg) + ";--rs-sel-bg:" + CssRgb(selBg) + ";--rs-sel-fg:" + CssRgb(selFg) +
+            ";--rs-accent:" + CssRgb(accent) + ";--rs-code-bg:" + CssRgb(codeBg) + ";--rs-card-bg:" + CssRgb(cardBg) + ";--rs-card-bg-open:" +
+            CssRgb(cardBgOpen) + ";--rs-border:" + CssRgb(border) + ";--rs-muted-fg:" + CssRgb(mutedFg) + ";--rs-key:" + CssRgb(tokenColors.key) +
+            ";--rs-string:" + CssRgb(tokenColors.stringValue) + ";--rs-number:" + CssRgb(tokenColors.numberValue) + ";--rs-literal:" +
+            CssRgb(tokenColors.literalValue) + ";--rs-scroll-track:" + CssRgb(scrollbar.track) +
+            ";--rs-scroll-thumb:" + CssRgb(scrollbar.thumb) + ";--rs-scroll-thumb-hover:" + CssRgb(scrollbar.thumbHover) +
+            ";--rs-scroll-corner:" + CssRgb(scrollbar.corner) + ";}";
+    html += "html,body{height:100%;margin:0;}*,*::before,*::after{box-sizing:border-box;}body{background:var(--rs-bg);color:var(--rs-fg);"
+            "font-family:Segoe UI,sans-serif;overflow:hidden;}";
+    html += kCommonScrollbarCss;
+    html += "::selection{background:var(--rs-sel-bg);color:var(--rs-sel-fg);}.rs-shell{height:100%;min-height:0;display:flex;flex-direction:column;}";
+    html += ".rs-toolbar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;"
+            "background:linear-gradient(180deg,var(--rs-bg),var(--rs-card-bg));border-bottom:1px solid var(--rs-border);}";
+    html += ".rs-toolbar-left{display:flex;align-items:center;gap:10px;min-width:0;}.rs-toolbar-title{font-size:13px;font-weight:600;letter-spacing:0.02em;}"
+            ".rs-toolbar-meta{font-size:12px;color:var(--rs-muted-fg);white-space:nowrap;}.rs-toolbar-actions{display:flex;align-items:center;gap:8px;}";
+    html += ".rs-btn,.rs-pill{border:1px solid var(--rs-border);background:var(--rs-card-bg);color:var(--rs-fg);border-radius:999px;}"
+            ".rs-btn{padding:6px 10px;font:inherit;cursor:pointer;}.rs-btn:hover{background:var(--rs-card-bg-open);}."
+            "rs-pill{padding:4px 9px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.05em;}";
+    html += ".rs-list{flex:1 1 auto;min-height:0;padding:14px;display:flex;flex-direction:column;gap:10px;overflow:auto;"
+            "overscroll-behavior:contain;scrollbar-gutter:stable both-edges;}.rs-entry{flex:none;border:1px solid var(--rs-border);"
+            "border-radius:10px;background:var(--rs-card-bg);overflow:hidden;}.rs-entry.is-open{background:var(--rs-card-bg-open);}";
+    html += ".rs-entry-summary{width:100%;display:flex;align-items:center;gap:8px;padding:10px 12px;border:0;background:transparent;color:inherit;"
+            "cursor:pointer;text-align:left;font:inherit;line-height:1.25;appearance:none;}.rs-entry-summary:hover{background:rgba(255,255,255,0.02);}"
+            ".rs-entry-summary:focus-visible{outline:2px solid var(--rs-accent);outline-offset:-2px;}.rs-entry-summary>*{min-width:0;}"
+            ".rs-entry-summary::before{content:'+';display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;"
+            "border-radius:999px;background:var(--rs-code-bg);color:var(--rs-muted-fg);font-size:12px;font-weight:700;flex:none;}";
+    html += ".rs-entry.is-open .rs-entry-summary::before{content:'-';color:var(--rs-accent);}.rs-line-pill{min-width:56px;text-align:center;}";
+    html += ".rs-badge{padding:4px 8px;border-radius:999px;font-size:11px;font-weight:700;border:1px solid var(--rs-border);background:var(--rs-code-bg);"
+            "color:var(--rs-muted-fg);text-transform:uppercase;letter-spacing:0.04em;}";
+    html += ".rs-badge[data-kind='level'][data-level='error']{background:rgba(190,64,64,0.22);color:rgb(255,210,210);}."
+            "rs-badge[data-kind='level'][data-level='warning']{background:rgba(190,140,40,0.24);color:rgb(255,230,170);}."
+            "rs-badge[data-kind='level'][data-level='info']{background:rgba(64,116,190,0.22);color:rgb(210,225,255);}."
+            "rs-badge[data-kind='level'][data-level='debug']{background:rgba(120,120,140,0.22);color:rgb(220,220,230);}";
+    html += ".rs-summary-text{min-width:0;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px;}"
+            ".rs-entry-body{padding:0 12px 12px 42px;}.rs-entry-body[hidden]{display:none;}.rs-entry-body pre{margin:0;max-width:100%;"
+            "background:var(--rs-code-bg);border:1px solid var(--rs-border);padding:12px;"
+            "overflow:auto;border-radius:8px;}.rs-entry-body code{font-family:Consolas,ui-monospace,monospace;font-size:13px;line-height:1.45;}";
+    html += ".hljs{background:transparent;}.hljs-attr{color:var(--rs-key);} .hljs-string{color:var(--rs-string);} .hljs-number{color:var(--rs-number);} "
+            ".hljs-literal{color:var(--rs-literal);} .hljs-punctuation,.hljs-brace{color:var(--rs-muted-fg);} .hljs-comment{opacity:0.8;}";
+    html += "@media (max-width:720px){.rs-toolbar{flex-direction:column;align-items:stretch;}.rs-toolbar-actions{justify-content:flex-end;}.rs-entry-summary"
+            "{flex-wrap:wrap;}.rs-entry-body{padding-left:12px;}}";
+    html += "</style></head><body><div class=\"rs-shell\"><div class=\"rs-toolbar\">";
+    html += "<div class=\"rs-toolbar-left\"><span class=\"rs-pill\">JSONL</span><span class=\"rs-toolbar-title\">Structured log view</span>"
+            "<span id=\"summary\" class=\"rs-toolbar-meta\"></span></div>";
+    html += "<div class=\"rs-toolbar-actions\"><button id=\"expandAll\" type=\"button\" class=\"rs-btn\">Expand all</button>"
+            "<button id=\"collapseAll\" type=\"button\" class=\"rs-btn\">Collapse all</button></div>";
+    html += "</div><div id=\"list\" class=\"rs-list\"></div></div>";
+    html += "<script>";
+    html.append(highlightJs);
+    html += "</script><script>";
+    html += "(() => {const initialTheme=" + std::string(themeObj) + ";";
+    html += kCommonThemeJs;
+    html += "function applyTheme(t){const r=document.documentElement.style;r.setProperty('--rs-bg',t.bg);r.setProperty('--rs-fg',t.fg);"
+            "r.setProperty('--rs-sel-bg',t.selBg);r.setProperty('--rs-sel-fg',t.selFg);r.setProperty('--rs-accent',t.accent);"
+            "const bg=parseRgb(t.bg),fg=parseRgb(t.fg),acc=parseRgb(t.accent);const dark=luma(bg)<128;"
+            "r.setProperty('--rs-code-bg',rgb(blend(bg,fg,dark?18:8)));r.setProperty('--rs-card-bg',rgb(blend(bg,fg,dark?12:5)));"
+            "r.setProperty('--rs-card-bg-open',rgb(blend(bg,fg,dark?18:10)));r.setProperty('--rs-border',rgb(blend(bg,fg,dark?36:58)));"
+            "r.setProperty('--rs-muted-fg',rgb(blend(bg,fg,140)));setJsonTokenVars(r,bg,fg,acc);setScrollbarVars(r,bg,fg,acc);}";
+    html += "const entries=" + entriesJs + ";const list=document.getElementById('list');"
+            "document.getElementById('summary').textContent=`${entries.length} record${entries.length===1?'':'s'}`;";
+    html += "function makeBadge(text,kind,level){if(!text){return null;}const el=document.createElement('span');el.className='rs-badge';"
+            "el.textContent=text;el.dataset.kind=kind;if(level){el.dataset.level=String(level).toLowerCase();}return el;}";
+    html += "function renderCode(code,text){code.textContent=text;try{hljs.highlightElement(code);}catch(e){}}";
+    html += "function setEntryOpen(entryEl,open,scrollIntoView){if(!entryEl){return;}entryEl.classList.toggle('is-open',open);"
+            "const header=entryEl.querySelector('.rs-entry-summary');const body=entryEl.querySelector('.rs-entry-body');"
+            "if(header){header.setAttribute('aria-expanded',open?'true':'false');}if(body){body.hidden=!open;}"
+            "if(open&&typeof entryEl._ensureRendered==='function'){entryEl._ensureRendered();if(scrollIntoView){entryEl.scrollIntoView({block:'nearest'});}}}";
+    html += "function makeEntry(entry,index){const entryEl=document.createElement('article');entryEl.className='rs-entry';"
+            "const summary=document.createElement('button');summary.type='button';summary.className='rs-entry-summary';summary.setAttribute('aria-expanded','false');"
+            "const linePill=document.createElement('span');linePill.className='rs-pill rs-line-pill';linePill.textContent=`#${entry.line}`;summary.appendChild(linePill);"
+            "if(entry.ts){const ts=document.createElement('span');ts.className='rs-toolbar-meta';ts.textContent=entry.ts;summary.appendChild(ts);}"
+            "const levelBadge=makeBadge(entry.level,'level',entry.level);if(levelBadge){summary.appendChild(levelBadge);}const categoryBadge=makeBadge(entry.category,'category','');"
+            "if(categoryBadge){summary.appendChild(categoryBadge);}const text=document.createElement('span');text.className='rs-summary-text';"
+            "text.textContent=entry.message||entry.summary||'JSON value';summary.appendChild(text);entryEl.appendChild(summary);"
+            "const body=document.createElement('div');body.className='rs-entry-body';body.hidden=true;const pre=document.createElement('pre');const code=document.createElement('code');"
+            "code.className='language-json';pre.appendChild(code);body.appendChild(pre);entryEl.appendChild(body);let rendered=false;"
+            "entryEl._ensureRendered=()=>{if(rendered){return;}renderCode(code,entry.json);rendered=true;};"
+            "summary.addEventListener('click',()=>setEntryOpen(entryEl,!entryEl.classList.contains('is-open'),true));"
+            "if(index<2){setEntryOpen(entryEl,true,false);}return entryEl;}";
+    html += "function renderList(){const frag=document.createDocumentFragment();entries.forEach((entry,index)=>frag.appendChild(makeEntry(entry,index)));"
+            "list.replaceChildren(frag);}function expandAll(){document.querySelectorAll('.rs-entry').forEach((entryEl)=>setEntryOpen(entryEl,true,false));}"
+            "function collapseAll(){document.querySelectorAll('.rs-entry').forEach((entryEl)=>setEntryOpen(entryEl,false,false));}";
+    html += "document.getElementById('expandAll').addEventListener('click',expandAll);document.getElementById('collapseAll').addEventListener('click',collapseAll);"
+            "window.RS={applyTheme:applyTheme,expandAll:expandAll,collapseAll:collapseAll};applyTheme(initialTheme);renderList();})();";
+    html += "</script></body></html>";
+    return html;
+}
+
 constexpr char kViewerWebSchemaJson[] = R"json({
     "version": 1,
     "title": "Web Viewer",
@@ -659,11 +1147,12 @@ constexpr char kViewerJsonSchemaJson[] = R"json({
             "key": "viewMode",
             "type": "option",
             "label": "View mode",
-            "description": "Pretty highlighted text or interactive tree view.",
+            "description": "Pretty highlighted text, interactive tree view, or JSONL log cards.",
             "default": "pretty",
             "options": [
                 { "value": "pretty", "label": "Pretty" },
-                { "value": "tree", "label": "Tree" }
+                { "value": "tree", "label": "Tree" },
+                { "value": "jsonl", "label": "JSONL" }
             ]
         },
         {
@@ -807,12 +1296,6 @@ const std::string& GetJsonEditorCssWithIcons() noexcept
     return s;
 }
 
-// Common theme helper JS shared by all three HTML templates.
-constexpr char kCommonThemeJs[] =
-    "function parseRgb(s){const m=/rgb\\((\\d+),(\\d+),(\\d+)\\)/.exec(s.replace(/\\s+/g,''));return m?{r:+m[1],g:+m[2],b:+m[3]}:{r:0,g:0,b:0};}"
-    "function rgb(c){return `rgb(${c.r},${c.g},${c.b})`;}"
-    "function blend(u,o,a){const inv=255-a;return {r:Math.round((u.r*inv+o.r*a)/255),g:Math.round((u.g*inv+o.g*a)/255),b:Math.round((u.b*inv+o.b*a)/255)};}"
-    "function luma(c){return (c.r*299+c.g*587+c.b*114)/1000;}";
 } // namespace
 
 void ViewerWeb::OnCreate(HWND hwnd)
@@ -906,6 +1389,11 @@ void ViewerWeb::OnDestroy() noexcept
         static_cast<void>(std::filesystem::remove(*_tempExtractedPath, ec));
         _tempExtractedPath.reset();
     }
+
+    _pendingPath.reset();
+    _pendingWebContent.reset();
+    _pendingDocumentUtf8.reset();
+    _internalDocumentUrl.reset();
 
     IViewerCallback* callback = _callback;
     void* cookie              = _callbackCookie;
@@ -1732,6 +2220,10 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SetConfiguration(const char* configurationJ
                         {
                             jsonViewMode = JsonViewMode::Tree;
                         }
+                        else if (s && (strcmp(s, "jsonl") == 0 || strcmp(s, "json-lines") == 0 || strcmp(s, "2") == 0))
+                        {
+                            jsonViewMode = JsonViewMode::JsonLines;
+                        }
                         else if (s && (strcmp(s, "pretty") == 0 || strcmp(s, "0") == 0))
                         {
                             jsonViewMode = JsonViewMode::Pretty;
@@ -1739,11 +2231,13 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SetConfiguration(const char* configurationJ
                     }
                     else if (yyjson_is_int(modeVal))
                     {
-                        jsonViewMode = (yyjson_get_int(modeVal) != 0) ? JsonViewMode::Tree : JsonViewMode::Pretty;
+                        const int64_t value = yyjson_get_int(modeVal);
+                        jsonViewMode        = value <= 0 ? JsonViewMode::Pretty : value == 1 ? JsonViewMode::Tree : JsonViewMode::JsonLines;
                     }
                     else if (yyjson_is_uint(modeVal))
                     {
-                        jsonViewMode = (yyjson_get_uint(modeVal) != 0u) ? JsonViewMode::Tree : JsonViewMode::Pretty;
+                        const uint64_t value = yyjson_get_uint(modeVal);
+                        jsonViewMode         = value == 0u ? JsonViewMode::Pretty : value == 1u ? JsonViewMode::Tree : JsonViewMode::JsonLines;
                     }
                 }
             }
@@ -1765,7 +2259,8 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SetConfiguration(const char* configurationJ
     "devToolsEnabled": {}
 }})json",
                 _config.maxDocumentMiB,
-                _config.jsonViewMode == JsonViewMode::Tree ? "tree" : "pretty",
+                _config.jsonViewMode == JsonViewMode::Tree ? "tree" :
+                _config.jsonViewMode == JsonViewMode::JsonLines ? "jsonl" : "pretty",
                 _config.devToolsEnabled ? "true" : "false");
             break;
         case ViewerWebKind::Markdown:
@@ -2084,12 +2579,19 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
     }
 
     _statusMessage = result->statusMessage;
+    _jsonExpandCollapseAvailable = SUCCEEDED(result->hr) && result->jsonExpandCollapseAvailable;
+    UpdateMenuState(_hWnd.get());
 
     if (FAILED(result->hr))
     {
         if (_hWnd)
         {
             InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
+        }
+
+        if (result->offerTextViewerFallback && OfferTextViewerFallbackPrompt())
+        {
+            return;
         }
 
         if (! _statusMessage.empty())
@@ -2107,6 +2609,7 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
     _pendingPath.reset();
     _pendingWebContent.reset();
     _pendingDocumentUtf8.reset();
+    _internalDocumentUrl.reset();
 
     if (_kind == ViewerWebKind::Web)
     {
@@ -2145,7 +2648,7 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
             const std::wstring url = UrlFromFilePath(navPath->wstring());
             if (url.empty())
             {
-                _statusMessage = L"Failed to build file URL.";
+                _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_BUILD_FILE_URL);
                 ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
                 if (_hWnd)
                 {
@@ -2159,11 +2662,9 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
     }
     else
     {
-        // Store as UTF-8 to avoid doubling memory with a UTF-16 copy.
-        // Conversion to UTF-16 happens lazily at NavigateToString time.
         if (result->utf8.empty())
         {
-            _statusMessage = L"Failed to build HTML document.";
+            _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_BUILD_HTML_DOCUMENT);
             ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, _statusMessage);
             if (_hWnd)
             {
@@ -2173,6 +2674,8 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
         }
 
         _pendingDocumentUtf8 = std::move(result->utf8);
+        _internalDocumentUrl = BuildInternalDocumentUrl(_kind, result->requestId);
+        _pendingPath         = _internalDocumentUrl;
     }
 
     if (_hWnd)
@@ -2182,38 +2685,13 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
 
     if (SUCCEEDED(EnsureWebView2(_hWnd.get())) && _webView)
     {
-        if (_pendingDocumentUtf8.has_value())
+        const HRESULT navHr = NavigatePendingContent(_hWnd.get());
+        if (FAILED(navHr))
         {
-            const std::wstring html = Utf16FromUtf8(_pendingDocumentUtf8.value());
-            _pendingDocumentUtf8.reset();
-            if (! html.empty())
-            {
-                const HRESULT navHr = _webView->NavigateToString(html.c_str());
-                if (FAILED(navHr))
-                {
-                    ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-                }
-            }
-        }
-        else if (_pendingWebContent.has_value())
-        {
-            const std::wstring html = std::move(_pendingWebContent.value());
-            _pendingWebContent.reset();
-            const HRESULT navHr = _webView->NavigateToString(html.c_str());
-            if (FAILED(navHr))
-            {
-                ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-            }
-        }
-        else if (_pendingPath.has_value())
-        {
-            const std::wstring url = std::move(_pendingPath.value());
-            _pendingPath.reset();
-            const HRESULT navHr = _webView->Navigate(url.c_str());
-            if (FAILED(navHr))
-            {
-                ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, std::format(L"Navigate failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-            }
+            const std::wstring message = _statusMessage.empty()
+                                             ? FormatStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_NAVIGATE_FAILED_FMT, static_cast<unsigned long>(navHr))
+                                             : _statusMessage;
+            ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, message);
         }
     }
 }
@@ -2452,27 +2930,32 @@ void ViewerWeb::ApplyTheme(HWND hwnd) noexcept
     }
 
     ApplyMenuTheme(hwnd);
+    UpdateMenuState(hwnd);
+    ApplyWebViewThemeScript();
+}
 
+void ViewerWeb::UpdateMenuState(HWND hwnd) noexcept
+{
     HMENU menu = hwnd ? GetMenu(hwnd) : nullptr;
-    if (menu)
+    if (! menu)
     {
-        const bool jsonTreeMode = _kind == ViewerWebKind::Json && _config.jsonViewMode == JsonViewMode::Tree;
-
-        EnableMenuItem(menu, IDM_VIEWERWEB_VIEW_DEVTOOLS, static_cast<UINT>(MF_BYCOMMAND | (_config.devToolsEnabled ? MF_ENABLED : MF_GRAYED)));
-
-        EnableMenuItem(menu, IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL, static_cast<UINT>(MF_BYCOMMAND | (jsonTreeMode ? MF_ENABLED : MF_GRAYED)));
-        EnableMenuItem(menu, IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL, static_cast<UINT>(MF_BYCOMMAND | (jsonTreeMode ? MF_ENABLED : MF_GRAYED)));
-        EnableMenuItem(
-            menu, IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE, static_cast<UINT>(MF_BYCOMMAND | (_kind == ViewerWebKind::Markdown ? MF_ENABLED : MF_GRAYED)));
-
-        CheckMenuItem(menu,
-                      IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE,
-                      static_cast<UINT>(MF_BYCOMMAND | ((_kind == ViewerWebKind::Markdown && _markdownShowSource) ? MF_CHECKED : MF_UNCHECKED)));
-
-        DrawMenuBar(hwnd);
+        return;
     }
 
-    ApplyWebViewThemeScript();
+    const bool jsonInteractiveMode = _kind == ViewerWebKind::Json && _jsonExpandCollapseAvailable;
+
+    EnableMenuItem(menu, IDM_VIEWERWEB_VIEW_DEVTOOLS, static_cast<UINT>(MF_BYCOMMAND | (_config.devToolsEnabled ? MF_ENABLED : MF_GRAYED)));
+
+    EnableMenuItem(menu, IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL, static_cast<UINT>(MF_BYCOMMAND | (jsonInteractiveMode ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu, IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL, static_cast<UINT>(MF_BYCOMMAND | (jsonInteractiveMode ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(
+        menu, IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE, static_cast<UINT>(MF_BYCOMMAND | (_kind == ViewerWebKind::Markdown ? MF_ENABLED : MF_GRAYED)));
+
+    CheckMenuItem(menu,
+                  IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE,
+                  static_cast<UINT>(MF_BYCOMMAND | ((_kind == ViewerWebKind::Markdown && _markdownShowSource) ? MF_CHECKED : MF_UNCHECKED)));
+
+    DrawMenuBar(hwnd);
 }
 
 void ViewerWeb::ApplyTitleBarTheme(bool windowActive) noexcept
@@ -2677,6 +3160,111 @@ void ViewerWeb::ShowHostAlert(HWND targetWindow, HostAlertSeverity severity, con
     static_cast<void>(_hostAlerts->ShowAlert(&request, targetWindow));
 }
 
+bool ViewerWeb::OfferTextViewerFallbackPrompt() noexcept
+{
+    if (! _host || _statusMessage.empty())
+    {
+        return false;
+    }
+
+    wil::com_ptr<IHostPrompts> prompts;
+    const HRESULT promptsHr = _host->QueryInterface(__uuidof(IHostPrompts), prompts.put_void());
+    if (FAILED(promptsHr) || ! prompts)
+    {
+        return false;
+    }
+
+    const std::wstring title = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_TITLE);
+    std::wstring promptMessage = FormatStringResource(g_hInstance, IDS_VIEWERWEB_PROMPT_OPEN_TEXT_VIEWER_FMT, _statusMessage);
+    if (promptMessage.empty())
+    {
+        promptMessage = _statusMessage;
+    }
+
+    HostPromptRequest request{};
+    request.version       = 1;
+    request.sizeBytes     = sizeof(request);
+    request.scope         = (_hWnd && IsWindow(_hWnd.get())) ? HOST_ALERT_SCOPE_WINDOW : HOST_ALERT_SCOPE_APPLICATION;
+    request.severity      = HOST_ALERT_WARNING;
+    request.buttons       = HOST_PROMPT_BUTTONS_YES_NO;
+    request.targetWindow  = request.scope == HOST_ALERT_SCOPE_WINDOW ? _hWnd.get() : nullptr;
+    request.title         = title.empty() ? nullptr : title.c_str();
+    request.message       = promptMessage.c_str();
+    request.defaultResult = HOST_PROMPT_RESULT_YES;
+
+    HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
+    const HRESULT promptHr        = prompts->ShowPrompt(&request, _hWnd.get(), &promptResult);
+    if (FAILED(promptHr))
+    {
+        return false;
+    }
+
+    if (promptResult != HOST_PROMPT_RESULT_YES)
+    {
+        return true;
+    }
+
+    const HRESULT openHr = OpenCurrentDocumentInTextViewer();
+    if (FAILED(openHr))
+    {
+        ShowHostAlert(_hWnd.get(), HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_OPEN_TEXT_VIEWER_FAILED));
+        return true;
+    }
+
+    if (_hWnd)
+    {
+        PostMessageW(_hWnd.get(), WM_CLOSE, 0, 0);
+    }
+
+    return true;
+}
+
+HRESULT ViewerWeb::OpenCurrentDocumentInTextViewer() noexcept
+{
+    if (! _host || ! _fileSystem || _currentPath.empty())
+    {
+        return E_UNEXPECTED;
+    }
+
+    wil::com_ptr<IHostViewers> hostViewers;
+    const HRESULT viewersHr = _host->QueryInterface(__uuidof(IHostViewers), hostViewers.put_void());
+    if (FAILED(viewersHr) || ! hostViewers)
+    {
+        return FAILED(viewersHr) ? viewersHr : E_NOINTERFACE;
+    }
+
+    std::vector<const wchar_t*> otherFilePointers;
+    otherFilePointers.reserve(std::max<size_t>(_otherFiles.size(), 1u));
+    for (const auto& otherPath : _otherFiles)
+    {
+        if (! otherPath.empty())
+        {
+            otherFilePointers.push_back(otherPath.c_str());
+        }
+    }
+    if (otherFilePointers.empty())
+    {
+        otherFilePointers.push_back(_currentPath.c_str());
+    }
+
+    HostViewerOpenRequest request{};
+    request.version              = 1;
+    request.sizeBytes            = sizeof(request);
+    request.pluginId             = L"builtin/viewer-text";
+    request.ownerWindow          = _hWnd.get();
+    request.fileSystem           = _fileSystem.get();
+    request.fileSystemName       = _fileSystemName.empty() ? nullptr : _fileSystemName.c_str();
+    request.focusedPath          = _currentPath.c_str();
+    request.selectionPaths       = nullptr;
+    request.selectionCount       = 0;
+    request.otherFiles           = otherFilePointers.data();
+    request.otherFileCount       = static_cast<unsigned long>(otherFilePointers.size());
+    request.focusedOtherFileIndex = _otherIndex < otherFilePointers.size() ? static_cast<unsigned long>(_otherIndex) : 0;
+    request.viewerFlags          = VIEWER_OPEN_FLAG_NONE;
+
+    return hostViewers->OpenViewer(&request);
+}
+
 HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment) noexcept
 {
     const HRESULT hr =
@@ -2735,6 +3323,7 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
             const bool isHttp  = OrdinalString::StartsWithNoCase(url, L"http://") || OrdinalString::StartsWithNoCase(url, L"https://");
             const bool isAbout = OrdinalString::StartsWithNoCase(url, L"about:");
             const bool isData  = OrdinalString::StartsWithNoCase(url, L"data:");
+            const bool isInternalDocument = _internalDocumentUrl.has_value() && OrdinalString::EqualsNoCase(url, _internalDocumentUrl.value());
 
             if (_kind == ViewerWebKind::Web)
             {
@@ -2746,6 +3335,11 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
             }
 
             // JSON/Markdown: keep viewer content stable and open external links in the system browser.
+            if (isInternalDocument)
+            {
+                return S_OK;
+            }
+
             if (isHttp)
             {
                 static_cast<void>(args->put_Cancel(TRUE));
@@ -2761,6 +3355,78 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
             return S_OK;
         }).get(),
             &_navStartingToken));
+
+        static_cast<void>(_webView->AddWebResourceRequestedFilter(kInternalDocumentFilter.data(), COREWEBVIEW2_WEB_RESOURCE_CONTEXT_DOCUMENT));
+        static_cast<void>(_webView->add_WebResourceRequested(
+            MakeComCallback<ICoreWebView2WebResourceRequestedEventHandler, ICoreWebView2*, ICoreWebView2WebResourceRequestedEventArgs*>(
+                [this](ICoreWebView2* /*sender*/, ICoreWebView2WebResourceRequestedEventArgs* args) -> HRESULT
+        {
+            if (! args || ! g_sharedEnvironment.environment)
+            {
+                return S_OK;
+            }
+
+            wil::com_ptr<ICoreWebView2WebResourceRequest> request;
+            if (FAILED(args->get_Request(request.put())) || ! request)
+            {
+                return S_OK;
+            }
+
+            wil::unique_cotaskmem_string uri;
+            static_cast<void>(request->get_Uri(uri.put()));
+            if (! uri)
+            {
+                return S_OK;
+            }
+
+            const std::wstring_view requestUrl(uri.get());
+            if (! IsInternalDocumentUrl(requestUrl))
+            {
+                return S_OK;
+            }
+
+            wil::com_ptr<ICoreWebView2WebResourceResponse> response;
+            if (_internalDocumentUrl.has_value() &&
+                OrdinalString::EqualsNoCase(requestUrl, _internalDocumentUrl.value()) &&
+                _pendingDocumentUtf8.has_value())
+            {
+                const auto* data = reinterpret_cast<const BYTE*>(_pendingDocumentUtf8->data());
+                const UINT size  = static_cast<UINT>(std::min<size_t>(_pendingDocumentUtf8->size(), static_cast<size_t>(std::numeric_limits<UINT>::max())));
+                wil::com_ptr<IStream> stream;
+                stream.attach(SHCreateMemStream(data, size));
+                if (! stream)
+                {
+                    return E_OUTOFMEMORY;
+                }
+
+                const HRESULT responseHr = g_sharedEnvironment.environment->CreateWebResourceResponse(
+                    stream.get(),
+                    200,
+                    L"OK",
+                    L"Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n",
+                    response.put());
+                if (FAILED(responseHr) || ! response)
+                {
+                    return responseHr;
+                }
+            }
+            else
+            {
+                const HRESULT responseHr = g_sharedEnvironment.environment->CreateWebResourceResponse(
+                    nullptr,
+                    404,
+                    L"Not Found",
+                    L"Content-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\n",
+                    response.put());
+                if (FAILED(responseHr) || ! response)
+                {
+                    return responseHr;
+                }
+            }
+
+            return args->put_Response(response.get());
+        }).get(),
+            &_webResourceRequestedToken));
 
         static_cast<void>(_webView->add_NavigationCompleted(
             MakeComCallback<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*>(
@@ -2779,6 +3445,9 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
             {
                 return S_OK;
             }
+
+            AddRef();
+            auto releaseSelf = wil::scope_exit([&] { Release(); });
 
             COREWEBVIEW2_KEY_EVENT_KIND kind{};
             if (FAILED(args->get_KeyEventKind(&kind)))
@@ -2810,7 +3479,11 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
 
             if (vk == VK_ESCAPE)
             {
-                _hWnd.reset();
+                const HWND hwndToClose = _hWnd.get();
+                if (hwndToClose)
+                {
+                    PostMessageW(hwndToClose, WM_CLOSE, 0, 0);
+                }
                 handle(true);
                 return S_OK;
             }
@@ -2941,38 +3614,13 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
         Layout(hwnd);
         ApplyWebViewThemeScript();
 
-        if (_pendingDocumentUtf8.has_value())
+        const HRESULT navHr = NavigatePendingContent(hwnd);
+        if (FAILED(navHr))
         {
-            const std::wstring html = Utf16FromUtf8(_pendingDocumentUtf8.value());
-            _pendingDocumentUtf8.reset();
-            if (! html.empty())
-            {
-                const HRESULT navHr = _webView->NavigateToString(html.c_str());
-                if (FAILED(navHr))
-                {
-                    ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-                }
-            }
-        }
-        else if (_pendingWebContent.has_value())
-        {
-            const std::wstring html = std::move(_pendingWebContent.value());
-            _pendingWebContent.reset();
-            const HRESULT navHr = _webView->NavigateToString(html.c_str());
-            if (FAILED(navHr))
-            {
-                ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"NavigateToString failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-            }
-        }
-        else if (_pendingPath.has_value())
-        {
-            const std::wstring url = std::move(_pendingPath.value());
-            _pendingPath.reset();
-            const HRESULT navHr = _webView->Navigate(url.c_str());
-            if (FAILED(navHr))
-            {
-                ShowHostAlert(hwnd, HOST_ALERT_ERROR, std::format(L"Navigate failed (hr=0x{:08X}).", static_cast<unsigned long>(navHr)));
-            }
+            const std::wstring message = _statusMessage.empty()
+                                             ? FormatStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_NAVIGATE_FAILED_FMT, static_cast<unsigned long>(navHr))
+                                             : _statusMessage;
+            ShowHostAlert(hwnd, HOST_ALERT_ERROR, message);
         }
 
         return S_OK;
@@ -2986,6 +3634,46 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
     }
 
     return hr;
+}
+
+HRESULT ViewerWeb::NavigatePendingContent(HWND /*hwnd*/) noexcept
+{
+    if (! _webView)
+    {
+        return E_UNEXPECTED;
+    }
+
+    if (_pendingPath.has_value())
+    {
+        const std::wstring url = std::move(_pendingPath.value());
+        _pendingPath.reset();
+        return _webView->Navigate(url.c_str());
+    }
+
+    if (_pendingWebContent.has_value())
+    {
+        const std::wstring html = std::move(_pendingWebContent.value());
+        _pendingWebContent.reset();
+        if (html.empty())
+        {
+            _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_BUILD_HTML_DOCUMENT);
+            return E_INVALIDARG;
+        }
+
+        const HRESULT navHr = _webView->NavigateToString(html.c_str());
+        if (FAILED(navHr))
+        {
+            _statusMessage = FormatStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_NAVIGATE_TO_STRING_FAILED_FMT, static_cast<unsigned long>(navHr));
+        }
+        return navHr;
+    }
+
+    if (_pendingDocumentUtf8.has_value() && _internalDocumentUrl.has_value())
+    {
+        return _webView->Navigate(_internalDocumentUrl->c_str());
+    }
+
+    return S_FALSE;
 }
 
 HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
@@ -3103,11 +3791,13 @@ void ViewerWeb::DiscardWebView2() noexcept
     {
         static_cast<void>(_webView->remove_NavigationStarting(_navStartingToken));
         static_cast<void>(_webView->remove_NavigationCompleted(_navCompletedToken));
+        static_cast<void>(_webView->remove_WebResourceRequested(_webResourceRequestedToken));
     }
 
-    _navStartingToken  = {};
-    _navCompletedToken = {};
-    _accelToken        = {};
+    _navStartingToken         = {};
+    _navCompletedToken        = {};
+    _accelToken               = {};
+    _webResourceRequestedToken = {};
 
     // Close the WebView2 controller. Note: Close() is asynchronous and may have
     // pending I/O operations that complete on thread pool threads. This is why
@@ -3249,12 +3939,14 @@ HRESULT ViewerWeb::OpenPath(HWND hwnd, const std::wstring& path, bool updateOthe
     }
 
     _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_STATUS_LOADING);
+    _jsonExpandCollapseAvailable = false;
     _pendingPath.reset();
     _pendingWebContent.reset();
 
     if (_hWnd)
     {
         InvalidateRect(_hWnd.get(), &_headerRect, FALSE);
+        UpdateMenuState(_hWnd.get());
     }
 
     return StartAsyncLoad(hwnd, path);
@@ -3462,7 +4154,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     if (! fileSystem)
     {
         result->hr            = E_FAIL;
-        result->statusMessage = L"File system unavailable.";
+        result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_FILE_SYSTEM_UNAVAILABLE);
         postBack(false);
         return;
     }
@@ -3472,7 +4164,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     if (FAILED(fileIoHr) || ! fileIo)
     {
         result->hr            = FAILED(fileIoHr) ? fileIoHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
-        result->statusMessage = L"Active file system does not support file I/O.";
+        result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_NO_FILE_IO);
         postBack(false);
         return;
     }
@@ -3491,7 +4183,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         if (FAILED(openHr) || ! reader)
         {
             result->hr            = FAILED(openHr) ? openHr : E_FAIL;
-            result->statusMessage = L"Failed to open file for viewing.";
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_OPEN_FOR_VIEWING_FAILED);
             postBack(false);
             return;
         }
@@ -3501,7 +4193,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         if (tempDirLen == 0 || tempDirLen >= std::size(tempDir))
         {
             result->hr            = HRESULT_FROM_WIN32(GetLastError());
-            result->statusMessage = L"Failed to get temp folder.";
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_GET_TEMP_FOLDER_FAILED);
             postBack(false);
             return;
         }
@@ -3510,7 +4202,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         if (GetTempFileNameW(tempDir, L"rsw", 0, tempName) == 0)
         {
             result->hr            = HRESULT_FROM_WIN32(GetLastError());
-            result->statusMessage = L"Failed to create temp file.";
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_CREATE_TEMP_FILE_FAILED);
             postBack(false);
             return;
         }
@@ -3531,7 +4223,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         if (! outFile)
         {
             result->hr            = HRESULT_FROM_WIN32(GetLastError());
-            result->statusMessage = L"Failed to write temp file.";
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED);
             std::error_code ec;
             static_cast<void>(std::filesystem::remove(tempPath, ec));
             postBack(false);
@@ -3546,7 +4238,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             if (FAILED(readHr))
             {
                 result->hr            = readHr;
-                result->statusMessage = L"Failed to read file.";
+                result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
                 std::error_code ec;
                 static_cast<void>(std::filesystem::remove(tempPath, ec));
                 postBack(false);
@@ -3562,7 +4254,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             if (WriteFile(outFile.get(), buffer.data(), read, &written, nullptr) == 0 || written != read)
             {
                 result->hr            = HRESULT_FROM_WIN32(GetLastError());
-                result->statusMessage = L"Failed to write temp file.";
+                result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED);
                 std::error_code ec;
                 static_cast<void>(std::filesystem::remove(tempPath, ec));
                 postBack(false);
@@ -3582,7 +4274,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     if (FAILED(openHr) || ! reader)
     {
         result->hr            = FAILED(openHr) ? openHr : E_FAIL;
-        result->statusMessage = L"Failed to open file for viewing.";
+        result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_OPEN_FOR_VIEWING_FAILED);
         postBack(false);
         return;
     }
@@ -3592,7 +4284,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     if (FAILED(sizeHr))
     {
         result->hr            = sizeHr;
-        result->statusMessage = L"Failed to read file size.";
+        result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_SIZE_FAILED);
         postBack(false);
         return;
     }
@@ -3600,8 +4292,10 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     const uint64_t maxBytes = static_cast<uint64_t>(config.maxDocumentMiB) * 1024ull * 1024ull;
     if (sizeBytes > maxBytes)
     {
-        result->hr            = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
-        result->statusMessage = std::format(L"File is too large ({}), limit is {}.", FormatBytesCompact(sizeBytes), FormatBytesCompact(maxBytes));
+        result->hr                      = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        result->offerTextViewerFallback = true;
+        result->statusMessage =
+            FormatStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT, FormatBytesCompact(sizeBytes), FormatBytesCompact(maxBytes));
         postBack(false);
         return;
     }
@@ -3616,7 +4310,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         if (FAILED(readHr))
         {
             result->hr            = readHr;
-            result->statusMessage = L"Failed to read file.";
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_READ_FILE_FAILED);
             postBack(false);
             return;
         }
@@ -3629,9 +4323,13 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         bytes.append(reinterpret_cast<const char*>(buffer.data()), reinterpret_cast<const char*>(buffer.data() + read));
         if (bytes.size() > maxBytes)
         {
-            result->hr = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            result->hr                      = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+            result->offerTextViewerFallback = true;
             result->statusMessage =
-                std::format(L"File is too large ({}), limit is {}.", FormatBytesCompact(static_cast<uint64_t>(bytes.size())), FormatBytesCompact(maxBytes));
+                FormatStringResource(g_hInstance,
+                                     IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT,
+                                     FormatBytesCompact(static_cast<uint64_t>(bytes.size())),
+                                     FormatBytesCompact(maxBytes));
             postBack(false);
             return;
         }
@@ -3641,13 +4339,55 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
 
     if (kind == ViewerWebKind::Json)
     {
+        std::vector<JsonLinesEntry> jsonLinesEntries;
+        const bool forceJsonLines     = config.jsonViewMode == JsonViewMode::JsonLines;
+        const bool pathLooksJsonLines = IsJsonLinesPath(result->path);
+
+        if (forceJsonLines)
+        {
+            if (! TryParseJsonLinesEntries(textUtf8, true, jsonLinesEntries))
+            {
+                result->hr            = E_FAIL;
+                result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_PARSE_JSON_FAILED);
+                postBack(false);
+                return;
+            }
+
+            result->utf8 = BuildJsonLinesHtml(
+                jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
+            result->jsonExpandCollapseAvailable = true;
+            result->hr                          = S_OK;
+            postBack(false);
+            return;
+        }
+
+        if (pathLooksJsonLines && TryParseJsonLinesEntries(textUtf8, true, jsonLinesEntries))
+        {
+            result->utf8 = BuildJsonLinesHtml(
+                jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
+            result->jsonExpandCollapseAvailable = true;
+            result->hr                          = S_OK;
+            postBack(false);
+            return;
+        }
+
         std::string jsonMutable(textUtf8);
         yyjson_read_err err{};
         unique_yyjson_doc doc(yyjson_read_opts(jsonMutable.data(), jsonMutable.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err));
         if (! doc)
         {
+            if (TryParseJsonLinesEntries(textUtf8, false, jsonLinesEntries))
+            {
+                result->utf8 = BuildJsonLinesHtml(
+                    jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
+                result->jsonExpandCollapseAvailable = true;
+                result->hr                          = S_OK;
+                postBack(false);
+                return;
+            }
+
             result->hr            = E_FAIL;
-            result->statusMessage = L"Failed to parse JSON/JSON5 document.";
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_PARSE_JSON_FAILED);
             postBack(false);
             return;
         }
@@ -3657,7 +4397,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         if (! pretty)
         {
             result->hr            = E_OUTOFMEMORY;
-            result->statusMessage = L"Failed to format JSON document.";
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_FORMAT_JSON_FAILED);
             postBack(false);
             return;
         }
@@ -3672,9 +4412,8 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             const COLORREF codeBg   = BlendColor(bg, fg, theme.darkMode ? 20u : 10u);
             const COLORREF border   = BlendColor(bg, fg, theme.darkMode ? 35u : 45u);
             const COLORREF mutedFg  = BlendColor(bg, fg, 140u);
-            const COLORREF strColor = BlendColor(accent, fg, 60u);
-            const COLORREF numColor = BlendColor(accent, fg, 90u);
-            const COLORREF litColor = BlendColor(accent, fg, 120u);
+            const JsonTokenColors tokenColors = BuildJsonTokenColors(accent, fg, theme.darkMode != FALSE);
+            const ScrollbarColors scrollbar = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
 
             std::string html;
             html.reserve(highlightJs.size() + escapedJson.size() + 8192);
@@ -3682,14 +4421,18 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             html += "<style>";
             html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
                     ";--rs-accent:" + cssRgb(accent) + ";--rs-code-bg:" + cssRgb(codeBg) + ";--rs-border:" + cssRgb(border) +
-                    ";--rs-muted-fg:" + cssRgb(mutedFg) + ";--rs-string:" + cssRgb(strColor) + ";--rs-number:" + cssRgb(numColor) +
-                    ";--rs-literal:" + cssRgb(litColor) + ";}";
+                    ";--rs-muted-fg:" + cssRgb(mutedFg) + ";--rs-key:" + cssRgb(tokenColors.key) + ";--rs-string:" + cssRgb(tokenColors.stringValue) +
+                    ";--rs-number:" + cssRgb(tokenColors.numberValue) + ";--rs-literal:" + cssRgb(tokenColors.literalValue) +
+                    ";--rs-scroll-track:" + cssRgb(scrollbar.track) + ";--rs-scroll-thumb:" +
+                    cssRgb(scrollbar.thumb) + ";--rs-scroll-thumb-hover:" + cssRgb(scrollbar.thumbHover) + ";--rs-scroll-corner:" +
+                    cssRgb(scrollbar.corner) + ";}";
             html += "html,body{height:100%;margin:0;}body{background:var(--rs-bg);color:var(--rs-fg);font-family:Segoe UI,sans-serif;}";
+            html += kCommonScrollbarCss;
             html += "::selection{background:var(--rs-sel-bg);color:var(--rs-sel-fg);}#app{height:100%;box-sizing:border-box;padding:12px;display:flex;}";
             html += "pre{flex:1;margin:0;background:var(--rs-code-bg);border:1px solid var(--rs-border);padding:12px;overflow:auto;border-radius:6px;}";
             html += "code{font-family:Consolas,ui-monospace,monospace;font-size:13px;line-height:1.45;}";
             html += ".hljs{background:transparent;}";
-            html += ".hljs-attr{color:var(--rs-accent);} .hljs-string{color:var(--rs-string);} .hljs-number{color:var(--rs-number);} "
+            html += ".hljs-attr{color:var(--rs-key);} .hljs-string{color:var(--rs-string);} .hljs-number{color:var(--rs-number);} "
                     ".hljs-literal{color:var(--rs-literal);}";
             html += ".hljs-punctuation,.hljs-brace{color:var(--rs-muted-fg);} .hljs-comment{opacity:0.8;}";
             html += "</style></head><body><div id=\"app\"><pre><code id=\"code\" class=\"language-json\"></code></pre></div>";
@@ -3704,8 +4447,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
                     "setProperty('--rs-sel-fg',t.selFg);r.setProperty('--rs-accent',t.accent);const "
                     "bg=parseRgb(t.bg),fg=parseRgb(t.fg),acc=parseRgb(t.accent);const "
                     "dark=luma(bg)<128;r.setProperty('--rs-code-bg',rgb(blend(bg,fg,dark?20:10)));r.setProperty('--rs-border',rgb(blend(bg,fg,dark?35:45)));r."
-                    "setProperty('--rs-muted-fg',rgb(blend(bg,fg,140)));r.setProperty('--rs-string',rgb(blend(acc,fg,60)));r.setProperty('--rs-number',rgb("
-                    "blend(acc,fg,90)));r.setProperty('--rs-literal',rgb(blend(acc,fg,120)));}";
+                    "setProperty('--rs-muted-fg',rgb(blend(bg,fg,140)));setJsonTokenVars(r,bg,fg,acc);setScrollbarVars(r,bg,fg,acc);}";
             html += "const code=document.getElementById('code');";
             html += "code.textContent='" + escapedJson + "';";
             html += "window.RS={applyTheme:applyTheme};";
@@ -3714,8 +4456,9 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             html += "})();";
             html += "</script></body></html>";
 
-            result->utf8 = std::move(html);
-            result->hr   = S_OK;
+            result->utf8                       = std::move(html);
+            result->jsonExpandCollapseAvailable = false;
+            result->hr                         = S_OK;
             postBack(false);
             return;
         }
@@ -3725,22 +4468,32 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
 
         const COLORREF border  = BlendColor(bg, fg, theme.darkMode ? 45u : 80u);
         const COLORREF mutedFg = BlendColor(bg, fg, 140u);
+        const JsonTokenColors tokenColors = BuildJsonTokenColors(accent, fg, theme.darkMode != FALSE);
+        const ScrollbarColors scrollbar = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
 
         std::string html;
         html.reserve(jsonEditorJs.size() + jsonEditorCss.size() + escapedJson.size() + 8192);
         html += "<!doctype html><html><head><meta charset=\"utf-8\">";
         html += "<style>";
         html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
-                ";--rs-accent:" + cssRgb(accent) + ";--rs-border:" + cssRgb(border) + ";--rs-muted-fg:" + cssRgb(mutedFg) + ";}";
+                ";--rs-accent:" + cssRgb(accent) + ";--rs-border:" + cssRgb(border) + ";--rs-muted-fg:" + cssRgb(mutedFg) + ";--rs-scroll-track:" +
+                cssRgb(scrollbar.track) + ";--rs-scroll-thumb:" + cssRgb(scrollbar.thumb) + ";--rs-scroll-thumb-hover:" +
+                cssRgb(scrollbar.thumbHover) + ";--rs-scroll-corner:" + cssRgb(scrollbar.corner) + ";--rs-key:" + cssRgb(tokenColors.key) +
+                ";--rs-string:" + cssRgb(tokenColors.stringValue) + ";--rs-number:" + cssRgb(tokenColors.numberValue) + ";--rs-literal:" +
+                cssRgb(tokenColors.literalValue) + ";}";
         html += "html,body{height:100%;margin:0;}body{background:var(--rs-bg);color:var(--rs-fg);font-family:Segoe UI,sans-serif;}#app{height:100%;}";
+        html += kCommonScrollbarCss;
         html += jsonEditorCss;
         html += "html,body{background:var(--rs-bg)!important;color:var(--rs-fg)!important;}#app{height:100%!important;}";
         html += ".jsoneditor{border:none!important;height:100%!important;background:var(--rs-bg)!important;color:var(--rs-fg)!important;}";
         html += ".jsoneditor-frame{background:var(--rs-bg)!important;border:1px solid var(--rs-border)!important;}";
         html += ".jsoneditor-outer,.jsoneditor-inner,.jsoneditor-tree,.jsoneditor-tree-inner,.jsoneditor-text,.jsoneditor-text "
                 "textarea{background:var(--rs-bg)!important;color:var(--rs-fg)!important;}";
-        html += ".jsoneditor-field{color:var(--rs-fg)!important;}";
-        html += ".jsoneditor-value.jsoneditor-object,.jsoneditor-value.jsoneditor-array,.jsoneditor-value.jsoneditor-null{color:var(--rs-muted-fg)!important;}";
+        html += ".jsoneditor-field{color:var(--rs-key)!important;}";
+        html += ".jsoneditor-value.jsoneditor-string{color:var(--rs-string)!important;}";
+        html += ".jsoneditor-value.jsoneditor-number{color:var(--rs-number)!important;}";
+        html += ".jsoneditor-value.jsoneditor-boolean,.jsoneditor-value.jsoneditor-null{color:var(--rs-literal)!important;}";
+        html += ".jsoneditor-value.jsoneditor-object,.jsoneditor-value.jsoneditor-array{color:var(--rs-muted-fg)!important;}";
         html += ".jsoneditor-selected,.jsoneditor-highlight-active{background-color:var(--rs-sel-bg)!important;color:var(--rs-sel-fg)!important;}";
         html += ".jsoneditor-highlight{background-color:var(--rs-sel-bg)!important;}";
         html += ".jsoneditor .autocomplete.dropdown{background:var(--rs-bg)!important;border:1px solid var(--rs-border)!important;}";
@@ -3762,8 +4515,8 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             "function applyTheme(t){const "
             "r=document.documentElement.style;r.setProperty('--rs-bg',t.bg);r.setProperty('--rs-fg',t.fg);r.setProperty('--rs-sel-bg',t.selBg);r.setProperty('-"
             "-rs-sel-fg',t.selFg);r.setProperty('--rs-accent',t.accent);const bg=parseRgb(t.bg),fg=parseRgb(t.fg),acc=parseRgb(t.accent);const "
-            "dark=luma(bg)<128;r.setProperty('--rs-border',rgb(blend(bg,fg,dark?45:80)));r.setProperty('--rs-muted-fg',rgb(blend(bg,fg,140)));r.setProperty('--"
-            "rs-string',rgb(blend(acc,fg,60)));r.setProperty('--rs-number',rgb(blend(acc,fg,90)));r.setProperty('--rs-literal',rgb(blend(acc,fg,120)));}";
+            "dark=luma(bg)<128;r.setProperty('--rs-border',rgb(blend(bg,fg,dark?45:80)));r.setProperty('--rs-muted-fg',rgb(blend(bg,fg,140)));"
+            "setJsonTokenVars(r,bg,fg,acc);setScrollbarVars(r,bg,fg,acc);}";
         html += "const jsonText='" + escapedJson + "';";
         html += "const container=document.getElementById('app');";
         html += "const options={mode:'tree',modes:['tree','view'],onEditable:()=>false,mainMenuBar:false,navigationBar:false,statusBar:false};";
@@ -3774,8 +4527,9 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         html += "})();";
         html += "</script></body></html>";
 
-        result->utf8 = std::move(html);
-        result->hr   = S_OK;
+        result->utf8                       = std::move(html);
+        result->jsonExpandCollapseAvailable = true;
+        result->hr                         = S_OK;
         postBack(false);
         return;
     }
@@ -3790,6 +4544,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     const COLORREF mutedFg     = BlendColor(bg, fg, 140u);
     const COLORREF stringColor = BlendColor(accent, fg, 60u);
     const COLORREF numberColor = BlendColor(accent, fg, 90u);
+    const ScrollbarColors scrollbar = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
 
     std::string html;
     html.reserve(markdownItJs.size() + highlightJs.size() + escapedMarkdown.size() + 8192);
@@ -3797,8 +4552,11 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     html += "<style>";
     html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
             ";--rs-accent:" + cssRgb(accent) + ";--rs-code-bg:" + cssRgb(codeBg) + ";--rs-border:" + cssRgb(border) + ";--rs-muted-fg:" + cssRgb(mutedFg) +
-            ";--rs-string:" + cssRgb(stringColor) + ";--rs-number:" + cssRgb(numberColor) + ";}";
+            ";--rs-string:" + cssRgb(stringColor) + ";--rs-number:" + cssRgb(numberColor) + ";--rs-scroll-track:" + cssRgb(scrollbar.track) +
+            ";--rs-scroll-thumb:" + cssRgb(scrollbar.thumb) + ";--rs-scroll-thumb-hover:" + cssRgb(scrollbar.thumbHover) +
+            ";--rs-scroll-corner:" + cssRgb(scrollbar.corner) + ";}";
     html += "html,body{height:100%;margin:0;}body{background:var(--rs-bg);color:var(--rs-fg);font-family:Segoe UI,sans-serif;}";
+    html += kCommonScrollbarCss;
     html += "#app{max-width:100%;padding:16px;box-sizing:border-box;}a{color:var(--rs-accent);}";
     html += "pre{background:var(--rs-code-bg);border:1px solid var(--rs-border);padding:12px;overflow:auto;border-radius:6px;}";
     html += "code{font-family:Consolas,ui-monospace,monospace;}";
@@ -3820,7 +4578,8 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         "r=document.documentElement.style;r.setProperty('--rs-bg',t.bg);r.setProperty('--rs-fg',t.fg);r.setProperty('--rs-sel-bg',t.selBg);r.setProperty('--rs-"
         "sel-fg',t.selFg);r.setProperty('--rs-accent',t.accent);const bg=parseRgb(t.bg),fg=parseRgb(t.fg),acc=parseRgb(t.accent);const "
         "dark=luma(bg)<128;r.setProperty('--rs-code-bg',rgb(blend(bg,fg,dark?20:10)));r.setProperty('--rs-border',rgb(blend(bg,fg,dark?35:45)));r.setProperty('"
-        "--rs-muted-fg',rgb(blend(bg,fg,140)));r.setProperty('--rs-string',rgb(blend(acc,fg,60)));r.setProperty('--rs-number',rgb(blend(acc,fg,90)));}";
+        "--rs-muted-fg',rgb(blend(bg,fg,140)));r.setProperty('--rs-string',rgb(blend(acc,fg,60)));r.setProperty('--rs-number',rgb(blend(acc,fg,90)));"
+        "setScrollbarVars(r,bg,fg,acc);}";
     html += "const src='" + escapedMarkdown + "';";
     html += "const container=document.getElementById('app');";
     html += "let showSource=" + std::string(markdownShowSource ? "true" : "false") + ";";
@@ -3856,7 +4615,7 @@ HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
     if (! outFile)
     {
         const DWORD lastError = GetLastError();
-        ShowHostAlert(hwnd, HOST_ALERT_ERROR, L"Save As failed.");
+        ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_FAILED));
         return HRESULT_FROM_WIN32(lastError);
     }
 
@@ -3864,7 +4623,7 @@ HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
     const HRESULT ioHr = _fileSystem->QueryInterface(__uuidof(IFileSystemIO), fileIo.put_void());
     if (FAILED(ioHr) || ! fileIo)
     {
-        ShowHostAlert(hwnd, HOST_ALERT_ERROR, L"Save As failed (file system I/O not supported).");
+        ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_NO_FILE_IO));
         return FAILED(ioHr) ? ioHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
@@ -3872,7 +4631,7 @@ HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
     const HRESULT openHr = fileIo->CreateFileReader(_currentPath.c_str(), reader.put());
     if (FAILED(openHr) || ! reader)
     {
-        ShowHostAlert(hwnd, HOST_ALERT_ERROR, L"Save As failed (unable to open file).");
+        ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_OPEN_FAILED));
         return FAILED(openHr) ? openHr : E_FAIL;
     }
 
@@ -3880,7 +4639,7 @@ HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
     const HRESULT seekHr = reader->Seek(0, FILE_BEGIN, &pos);
     if (FAILED(seekHr))
     {
-        ShowHostAlert(hwnd, HOST_ALERT_ERROR, L"Save As failed (seek failed).");
+        ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_SEEK_FAILED));
         return seekHr;
     }
 
@@ -3891,7 +4650,7 @@ HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
         const HRESULT readHr = reader->Read(buffer.data(), static_cast<unsigned long>(buffer.size()), &read);
         if (FAILED(readHr))
         {
-            ShowHostAlert(hwnd, HOST_ALERT_ERROR, L"Save As failed (read failed).");
+            ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_READ_FAILED));
             return readHr;
         }
 
@@ -3904,7 +4663,7 @@ HRESULT ViewerWeb::CommandSaveAs(HWND hwnd) noexcept
         if (WriteFile(outFile.get(), buffer.data(), read, &written, nullptr) == 0 || written != read)
         {
             const DWORD lastError = GetLastError();
-            ShowHostAlert(hwnd, HOST_ALERT_ERROR, L"Save As failed (write failed).");
+            ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED));
             return HRESULT_FROM_WIN32(lastError);
         }
     }
@@ -3994,7 +4753,7 @@ void ViewerWeb::CommandCopyUrl(HWND hwnd) noexcept
         if (SUCCEEDED(_webView->get_Source(source.put())) && source && source.get()[0] != L'\0')
         {
             const std::wstring_view src(source.get());
-            if (! OrdinalString::StartsWithNoCase(src, L"about:"))
+            if (! OrdinalString::StartsWithNoCase(src, L"about:") && ! IsInternalDocumentUrl(src))
             {
                 toCopy.assign(src);
             }
@@ -4034,7 +4793,7 @@ void ViewerWeb::CommandOpenExternal(HWND hwnd) noexcept
         if (SUCCEEDED(_webView->get_Source(source.put())) && source && source.get()[0] != L'\0')
         {
             const std::wstring_view src(source.get());
-            if (! OrdinalString::StartsWithNoCase(src, L"about:"))
+            if (! OrdinalString::StartsWithNoCase(src, L"about:") && ! IsInternalDocumentUrl(src))
             {
                 url.assign(src);
             }
@@ -4064,7 +4823,7 @@ void ViewerWeb::CommandOpenExternal(HWND hwnd) noexcept
     const HINSTANCE res = ShellExecuteW(hwnd, L"open", url.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
     if (reinterpret_cast<INT_PTR>(res) <= 32)
     {
-        ShowHostAlert(hwnd, HOST_ALERT_ERROR, L"Failed to open in browser.");
+        ShowHostAlert(hwnd, HOST_ALERT_ERROR, LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_OPEN_BROWSER_FAILED));
     }
 }
 
@@ -4104,7 +4863,7 @@ void ViewerWeb::CommandToggleDevTools() noexcept
 {
     if (! _config.devToolsEnabled)
     {
-        ShowHostAlert(_hWnd.get(), HOST_ALERT_WARNING, L"DevTools is disabled in plugin settings.");
+        ShowHostAlert(_hWnd.get(), HOST_ALERT_WARNING, LoadStringResource(g_hInstance, IDS_VIEWERWEB_WARNING_DEVTOOLS_DISABLED));
         return;
     }
 
@@ -4116,7 +4875,7 @@ void ViewerWeb::CommandToggleDevTools() noexcept
 
 void ViewerWeb::CommandJsonExpandAll() noexcept
 {
-    if (_kind != ViewerWebKind::Json || _config.jsonViewMode != JsonViewMode::Tree || ! _webView)
+    if (_kind != ViewerWebKind::Json || ! _jsonExpandCollapseAvailable || ! _webView)
     {
         return;
     }
@@ -4126,7 +4885,7 @@ void ViewerWeb::CommandJsonExpandAll() noexcept
 
 void ViewerWeb::CommandJsonCollapseAll() noexcept
 {
-    if (_kind != ViewerWebKind::Json || _config.jsonViewMode != JsonViewMode::Tree || ! _webView)
+    if (_kind != ViewerWebKind::Json || ! _jsonExpandCollapseAvailable || ! _webView)
     {
         return;
     }

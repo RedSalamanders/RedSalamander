@@ -216,15 +216,6 @@ private:
     static constexpr wchar_t kPluginShortIdScp[]  = L"scp";
     static constexpr wchar_t kPluginShortIdImap[] = L"imap";
 
-    static constexpr wchar_t kPluginNameFtp[]  = L"FTP";
-    static constexpr wchar_t kPluginNameSftp[] = L"SFTP";
-    static constexpr wchar_t kPluginNameScp[]  = L"SCP";
-    static constexpr wchar_t kPluginNameImap[] = L"IMAP";
-
-    static constexpr wchar_t kPluginDescriptionFtp[]  = L"FTP virtual file system.";
-    static constexpr wchar_t kPluginDescriptionSftp[] = L"SFTP virtual file system (SSH File Transfer Protocol).";
-    static constexpr wchar_t kPluginDescriptionScp[]  = L"SCP virtual file system (secure copy over SSH).";
-    static constexpr wchar_t kPluginDescriptionImap[] = L"IMAP virtual mail file system.";
     static constexpr wchar_t kPluginAuthor[]          = L"RedSalamander";
     static constexpr wchar_t kPluginVersion[]         = L"0.3";
 

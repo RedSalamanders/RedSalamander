@@ -51,12 +51,27 @@
 #include "FileSystem7z.h"
 
 #include "Helpers.h"
+#include "FileSystem7zResources.h"
 
 #pragma comment(lib, "Ole32.lib")
 #pragma comment(lib, "OleAut32.lib")
 
+extern HINSTANCE g_hInstance;
+
 namespace
 {
+[[nodiscard]] const wchar_t* LocalizedPluginName() noexcept
+{
+    static const std::wstring name = LoadStringResource(g_hInstance, IDS_FILESYSTEM7Z_NAME);
+    return name.c_str();
+}
+
+[[nodiscard]] const wchar_t* LocalizedPluginDescription() noexcept
+{
+    static const std::wstring description = LoadStringResource(g_hInstance, IDS_FILESYSTEM7Z_DESCRIPTION);
+    return description.c_str();
+}
+
 std::wstring Utf16FromMultiByte(std::string_view text, UINT codePage, DWORD flags) noexcept
 {
     if (text.empty())
@@ -370,8 +385,8 @@ FileSystem7z::FileSystem7z()
 {
     _metaData.id          = kPluginId;
     _metaData.shortId     = kPluginShortId;
-    _metaData.name        = kPluginName;
-    _metaData.description = kPluginDescription;
+    _metaData.name        = LocalizedPluginName();
+    _metaData.description = LocalizedPluginDescription();
     _metaData.author      = kPluginAuthor;
     _metaData.version     = kPluginVersion;
 
@@ -564,7 +579,7 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetMenuItems(const NavigationMenuItem** 
     _menuEntries.clear();
     _menuEntryView.clear();
 
-    const std::wstring pluginName = _metaData.name ? _metaData.name : L"7-Zip";
+    const std::wstring pluginName = _metaData.name ? _metaData.name : LocalizedPluginName();
 
     MenuEntry header;
     header.flags = NAV_MENU_ITEM_FLAG_HEADER;

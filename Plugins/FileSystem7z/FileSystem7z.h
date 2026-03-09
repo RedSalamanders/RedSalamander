@@ -179,8 +179,6 @@ private:
 
     static constexpr wchar_t kPluginId[]          = L"builtin/file-system-7z";
     static constexpr wchar_t kPluginShortId[]     = L"7z";
-    static constexpr wchar_t kPluginName[]        = L"7-Zip";
-    static constexpr wchar_t kPluginDescription[] = L"Browse archive files as a virtual file system.";
     static constexpr wchar_t kPluginAuthor[]      = L"RedSalamander";
     static constexpr wchar_t kPluginVersion[]     = L"0.1";
 

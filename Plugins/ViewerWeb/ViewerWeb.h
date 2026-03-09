@@ -70,6 +70,7 @@ private:
     {
         Pretty,
         Tree,
+        JsonLines,
     };
 
     struct ViewerWebConfig
@@ -101,6 +102,8 @@ private:
         std::string utf8;
         std::wstring statusMessage;
         std::optional<std::filesystem::path> extractedWin32Path;
+        bool jsonExpandCollapseAvailable = false;
+        bool offerTextViewerFallback     = false;
     };
 
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
@@ -129,6 +132,7 @@ private:
     void ApplyTheme(HWND hwnd) noexcept;
     void ApplyTitleBarTheme(bool windowActive) noexcept;
     void ApplyMenuTheme(HWND hwnd) noexcept;
+    void UpdateMenuState(HWND hwnd) noexcept;
     void PrepareMenuTheme(HMENU menu, bool topLevel, std::vector<MenuItemData>& outItems) noexcept;
 
     HRESULT EnsureWebView2(HWND hwnd) noexcept;
@@ -136,6 +140,7 @@ private:
     void DiscardWebView2() noexcept;
     void ConfigureWebViewSettings() noexcept;
     void ApplyWebViewThemeScript() noexcept;
+    HRESULT NavigatePendingContent(HWND hwnd) noexcept;
 
     HRESULT OpenPath(HWND hwnd, const std::wstring& path, bool updateOtherFiles) noexcept;
     void RefreshFileCombo(HWND hwnd) noexcept;
@@ -157,6 +162,8 @@ private:
     void CommandJsonExpandAll() noexcept;
     void CommandJsonCollapseAll() noexcept;
     void CommandMarkdownToggleSource() noexcept;
+    bool OfferTextViewerFallbackPrompt() noexcept;
+    HRESULT OpenCurrentDocumentInTextViewer() noexcept;
 
     void ShowHostAlert(HWND targetWindow, HostAlertSeverity severity, const std::wstring& message) noexcept;
 
@@ -207,8 +214,10 @@ private:
     std::optional<std::wstring> _pendingPath;
     std::optional<std::wstring> _pendingWebContent;
     std::optional<std::string> _pendingDocumentUtf8;
+    std::optional<std::wstring> _internalDocumentUrl;
     std::optional<std::filesystem::path> _tempExtractedPath;
     bool _markdownShowSource    = false;
+    bool _jsonExpandCollapseAvailable = false;
     bool _webViewInitInProgress = false;
 
     wil::com_ptr<ICoreWebView2Controller> _webViewController;
@@ -217,6 +226,7 @@ private:
     EventRegistrationToken _navStartingToken{};
     EventRegistrationToken _navCompletedToken{};
     EventRegistrationToken _accelToken{};
+    EventRegistrationToken _webResourceRequestedToken{};
 
     wil::unique_hwnd _hFindDialog;
     std::array<wchar_t, 256> _findBuffer{};

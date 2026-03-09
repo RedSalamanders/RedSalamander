@@ -1,0 +1,8 @@
+#include <windows.h>
+#include "FileSystem7zResources.h"
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEM7Z_NAME "7-Zip"
+    IDS_FILESYSTEM7Z_DESCRIPTION "Browse archive files as a virtual file system."
+END

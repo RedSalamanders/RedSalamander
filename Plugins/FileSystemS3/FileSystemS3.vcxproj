@@ -373,6 +373,8 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
     <ClCompile Include="FileSystemS3.Shared.cpp" />
     <ClInclude Include="FileSystemS3.Internal.h" />
     <ClInclude Include="FileSystemS3.h" />
+    <ClInclude Include="FileSystemS3Resources.h" />
+    <ResourceCompile Include="FileSystemS3Resources.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

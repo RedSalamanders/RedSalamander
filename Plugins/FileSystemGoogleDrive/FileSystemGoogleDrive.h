@@ -169,6 +169,8 @@ public:
 
 private:
     ~FileSystemGoogleDrive();
+    [[nodiscard]] IHostAlerts* GetHostAlerts() const noexcept;
+    void ShowMissingClientIdAlert() const noexcept;
 
     struct ResolvedConnection;
     struct GoogleItem;
@@ -196,6 +198,7 @@ private:
     PluginMetaData _metaData{};
     std::atomic_ulong _refCount{1};
 
+    wil::com_ptr<IHostAlerts> _hostAlerts;
     wil::com_ptr<IHostConnections> _hostConnections;
 
     std::mutex _stateMutex;

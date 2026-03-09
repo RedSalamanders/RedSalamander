@@ -4,7 +4,9 @@
 
 #include <iterator>
 #include <new>
+#include <array>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #pragma warning(push)
@@ -19,36 +21,65 @@
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "Helpers.h"
 
+#include "resource.h"
 #include "ViewerWeb.h"
+
+extern HINSTANCE g_hInstance;
 
 namespace
 {
-static constexpr PluginMetaData kViewerWebPlugins[] = {
-    {
-        .id          = L"builtin/viewer-web",
-        .shortId     = L"web",
-        .name        = L"Web Viewer",
-        .description = L"WebView2-based viewer for HTML and PDF files.",
-        .author      = L"RedSalamander",
-        .version     = L"0.1",
-    },
-    {
-        .id          = L"builtin/viewer-json",
-        .shortId     = L"json",
-        .name        = L"JSON Viewer",
-        .description = L"WebView2-based JSON/JSON5 viewer with folding and syntax highlighting.",
-        .author      = L"RedSalamander",
-        .version     = L"0.1",
-    },
-    {
-        .id          = L"builtin/viewer-markdown",
-        .shortId     = L"md",
-        .name        = L"Markdown Viewer",
-        .description = L"WebView2-based Markdown viewer with syntax highlighting.",
-        .author      = L"RedSalamander",
-        .version     = L"0.1",
-    },
+struct LocalizedPluginMetaDataSet
+{
+    std::wstring webName;
+    std::wstring webDescription;
+    std::wstring jsonName;
+    std::wstring jsonDescription;
+    std::wstring markdownName;
+    std::wstring markdownDescription;
+    std::array<PluginMetaData, 3> plugins{};
 };
+
+[[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
+{
+    static const LocalizedPluginMetaDataSet data = [] {
+        LocalizedPluginMetaDataSet value{};
+        value.webName             = LoadStringResource(g_hInstance, IDS_VIEWERWEB_NAME);
+        value.webDescription      = LoadStringResource(g_hInstance, IDS_VIEWERWEB_DESCRIPTION);
+        value.jsonName            = LoadStringResource(g_hInstance, IDS_VIEWERJSON_NAME);
+        value.jsonDescription     = LoadStringResource(g_hInstance, IDS_VIEWERJSON_DESCRIPTION);
+        value.markdownName        = LoadStringResource(g_hInstance, IDS_VIEWERMARKDOWN_NAME);
+        value.markdownDescription = LoadStringResource(g_hInstance, IDS_VIEWERMARKDOWN_DESCRIPTION);
+        value.plugins             = {{
+            {
+                .id          = L"builtin/viewer-web",
+                .shortId     = L"web",
+                .name        = value.webName.c_str(),
+                .description = value.webDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.1",
+            },
+            {
+                .id          = L"builtin/viewer-json",
+                .shortId     = L"json",
+                .name        = value.jsonName.c_str(),
+                .description = value.jsonDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.1",
+            },
+            {
+                .id          = L"builtin/viewer-markdown",
+                .shortId     = L"md",
+                .name        = value.markdownName.c_str(),
+                .description = value.markdownDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.1",
+            },
+        }};
+        return value;
+    }();
+
+    return data;
+}
 
 static std::optional<ViewerWebKind> KindFromPluginId(std::wstring_view pluginId) noexcept
 {
@@ -111,8 +142,9 @@ extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const Pl
         return E_NOINTERFACE;
     }
 
-    *metaData = kViewerWebPlugins;
-    *count    = static_cast<unsigned int>(std::size(kViewerWebPlugins));
+    const auto& plugins = GetPluginMetaDataSet().plugins;
+    *metaData           = plugins.data();
+    *count              = static_cast<unsigned int>(plugins.size());
     return S_OK;
 }
 

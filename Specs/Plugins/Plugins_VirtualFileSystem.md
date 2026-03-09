@@ -212,6 +212,7 @@ Field types:
 - `option`: radio group (stored as string, must match one of `options[].value`)
 - `selection`: checkbox list (stored as string array of selected `options[].value`)
 - `description` (optional): explanatory text rendered under the control along with defaults/min/max.
+- `x-ui-hidden` (optional, boolean): keeps the field in the plugin JSON configuration but hides it from host-rendered editors; hosts MUST preserve the current/default value when saving visible fields so hidden settings are not dropped.
 
 `GetConfiguration()` / `SetConfiguration()` exchange a JSON/JSON5 object (UTF-8 string) keyed by `fields[].key` with values matching the declared types.
 

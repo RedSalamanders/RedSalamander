@@ -541,7 +541,7 @@ LRESULT ViewerText::OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept
     const UINT dpi        = GetDpiForWindow(hwnd);
     const float xDip      = DipsFromPixels(pt.x, dpi);
     const float yDip      = DipsFromPixels(pt.y, dpi);
-    const float marginDip = 6.0f;
+    const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
     const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
     const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
     float textStartX      = marginDip;
@@ -622,7 +622,7 @@ LRESULT ViewerText::OnTextViewMouseMove(HWND hwnd, POINT pt) noexcept
     const UINT dpi        = GetDpiForWindow(hwnd);
     const float xDip      = DipsFromPixels(pt.x, dpi);
     const float yDip      = DipsFromPixels(pt.y, dpi);
-    const float marginDip = 6.0f;
+    const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
     const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
     const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
     float textStartX      = marginDip;
@@ -732,7 +732,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
 
             const float widthDip  = DipsFromPixels(static_cast<int>(rc.right - rc.left), dpi);
             const float heightDip = DipsFromPixels(static_cast<int>(rc.bottom - rc.top), dpi);
-            const float marginDip = 6.0f;
+            const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
             const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
             const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
 
@@ -833,10 +833,10 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                                            ? std::numeric_limits<UINT32>::max()
                                            : static_cast<UINT32>(endIndex - startIndex);
 
-                    const float x = textStartX;
-                    const float y = marginDip + static_cast<float>(row) * lineH;
-
-                    const D2D1_RECT_F lineRc = D2D1::RectF(x, y, std::max(x, widthDip - marginDip), y + lineH);
+                    const float x           = textStartX;
+                    const float y           = RoundDipToDevicePixels(marginDip + static_cast<float>(row) * lineH, dpi);
+                    const float lineBottom  = RoundDipToDevicePixels(y + lineH, dpi);
+                    const D2D1_RECT_F lineRc = D2D1::RectF(x, y, std::max(x, widthDip - marginDip), lineBottom);
 
                     if (showLineNumbers)
                     {
@@ -845,7 +845,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                         {
                             const std::wstring lineNumber  = std::to_wstring(static_cast<uint64_t>(logical) + 1u);
                             const float lineNumberRight    = std::max(marginDip, textStartX - charW);
-                            const D2D1_RECT_F lineNumberRc = D2D1::RectF(marginDip, y, std::max(marginDip, lineNumberRight), y + lineH);
+                            const D2D1_RECT_F lineNumberRc = D2D1::RectF(marginDip, y, std::max(marginDip, lineNumberRight), lineBottom);
 
                             _textViewBrush->SetColor(ColorFFromColorRef(lineNumberFg));
                             _textViewTarget->DrawTextW(lineNumber.c_str(),
@@ -890,7 +890,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                             const size_t colLen    = hlEnd - hlStart;
                             const float hlX        = x + static_cast<float>(colStart) * charW;
                             const float hlW        = static_cast<float>(colLen) * charW;
-                            const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, y + lineH);
+                            const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
 
                             _textViewBrush->SetColor(ColorFFromColorRef(searchBg));
                             _textViewTarget->FillRectangle(hlRc, _textViewBrush.get());
@@ -910,7 +910,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                             const size_t colLength = hlEnd - hlStart;
                             const float hlX        = x + static_cast<float>(colStart) * charW;
                             const float hlW        = static_cast<float>(colLength) * charW;
-                            const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, y + lineH);
+                            const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
 
                             _textViewBrush->SetColor(ColorFFromColorRef(selectionIsSearchMatch ? selectionFocusedBg : selectionBg));
                             _textViewTarget->FillRectangle(hlRc, _textViewBrush.get());
@@ -928,7 +928,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                     {
                         const size_t caretCol     = _textCaretIndex - startIndex;
                         const float caretX        = x + static_cast<float>(caretCol) * charW;
-                        const D2D1_RECT_F caretRc = D2D1::RectF(caretX, y, caretX + 1.0f, y + lineH);
+                        const D2D1_RECT_F caretRc = D2D1::RectF(caretX, y, caretX + 1.0f, lineBottom);
                         _textViewTarget->FillRectangle(caretRc, _textViewBrush.get());
                     }
                 }
@@ -1373,7 +1373,7 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
         GetClientRect(hwnd, &client);
         const UINT dpi        = GetDpiForWindow(hwnd);
         const float widthDip  = std::max(0.0f, DipsFromPixels(static_cast<int>(client.right - client.left), dpi));
-        const float marginDip = 6.0f;
+        const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
         float availDip        = std::max(0.0f, widthDip - 2.0f * marginDip);
         if (_config.showLineNumbers && charW > 0.0f)
         {
@@ -1503,7 +1503,9 @@ bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
         return false;
     }
 
-    const float dpiF = static_cast<float>(GetDpiForWindow(hwnd));
+    const UINT dpi   = GetDpiForWindow(hwnd);
+    const float dpiF = static_cast<float>(dpi);
+    const MonoTextRenderMetrics monoMetrics = ComputeMonoTextRenderMetrics(kMonoFontSizeDip, dpi);
 
     if (! _d2dFactory)
     {
@@ -1583,6 +1585,8 @@ bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
         static_cast<void>(_textViewFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
         static_cast<void>(_textViewFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
         static_cast<void>(_textViewFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+        static_cast<void>(_textViewFormat->SetLineSpacing(
+            DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
     }
 
     if (! _textViewFormatRight)
@@ -1604,6 +1608,8 @@ bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
         static_cast<void>(_textViewFormatRight->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING));
         static_cast<void>(_textViewFormatRight->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
         static_cast<void>(_textViewFormatRight->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+        static_cast<void>(_textViewFormatRight->SetLineSpacing(
+            DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
     }
 
     if (_textCharWidthDip <= 0.0f || _textLineHeightDip <= 0.0f)
@@ -1616,9 +1622,10 @@ bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
             if (SUCCEEDED(layout->GetMetrics(&metrics)))
             {
                 _textCharWidthDip  = std::max(1.0f, metrics.widthIncludingTrailingWhitespace);
-                _textLineHeightDip = std::max(1.0f, metrics.height);
             }
         }
+
+        _textLineHeightDip = monoMetrics.lineSpacingDip;
     }
 
     return true;

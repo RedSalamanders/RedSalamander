@@ -155,6 +155,7 @@ struct PrefsPluginConfigField
     std::wstring label;
     std::wstring description;
     bool browseFolder = false;
+    bool uiHidden     = false;
 
     bool hasMin = false;
     bool hasMax = false;

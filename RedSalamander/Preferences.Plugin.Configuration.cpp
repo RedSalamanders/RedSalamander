@@ -349,6 +349,12 @@ std::vector<PrefsPluginConfigField> ParsePluginConfigSchema(std::string_view sch
             field.description = Utf16FromUtf8(descriptionUtf8.value());
         }
 
+        bool uiHidden = false;
+        if (TryGetBoolValue(item, "x-ui-hidden", uiHidden))
+        {
+            field.uiHidden = uiHidden;
+        }
+
         if (field.type == PrefsPluginConfigFieldType::Text)
         {
             const auto browseUtf8 = TryGetUtf8String(item, "browse");
@@ -808,6 +814,12 @@ void Clear(PreferencesDialogState& state) noexcept
         PrefsPluginConfigFieldControls controls{};
         ApplyFieldDefaultToControls(field, controls, configRoot);
 
+        if (controls.field.uiHidden)
+        {
+            state.pluginsDetailsConfigFields.push_back(std::move(controls));
+            continue;
+        }
+
         controls.label.reset(
             CreateWindowExW(0, L"Static", controls.field.label.c_str(), baseStaticStyle, 0, 0, 10, 10, panel, nullptr, GetModuleHandleW(nullptr), nullptr));
 
@@ -953,7 +965,16 @@ void Clear(PreferencesDialogState& state) noexcept
         state.pluginsDetailsConfigFields.push_back(std::move(controls));
     }
 
-    return ! state.pluginsDetailsConfigFields.empty();
+    const bool hasVisibleField = std::any_of(state.pluginsDetailsConfigFields.begin(),
+                                             state.pluginsDetailsConfigFields.end(),
+                                             [](const PrefsPluginConfigFieldControls& controls) noexcept { return ! controls.field.uiHidden; });
+    if (! hasVisibleField && state.pluginsDetailsConfigError)
+    {
+        const std::wstring message = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS);
+        SetWindowTextW(state.pluginsDetailsConfigError.get(), message.c_str());
+    }
+
+    return hasVisibleField;
 }
 
 void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int width, HFONT dialogFont) noexcept
@@ -1007,6 +1028,11 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
 
     for (PrefsPluginConfigFieldControls& controls : state.pluginsDetailsConfigFields)
     {
+        if (controls.field.uiHidden)
+        {
+            continue;
+        }
+
         const bool isSelection = controls.field.type == PrefsPluginConfigFieldType::Selection;
 
         const std::wstring descText = controls.description ? PrefsUi::GetWindowTextString(controls.description.get()) : std::wstring{};
@@ -1347,7 +1373,7 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
 
         if (c.field.type == PrefsPluginConfigFieldType::Text)
         {
-            std::wstring value;
+            std::wstring value = c.field.defaultText;
             if (c.edit)
             {
                 const int len = GetWindowTextLengthW(c.edit.get());
@@ -1439,7 +1465,7 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         }
         else if (c.field.type == PrefsPluginConfigFieldType::Option)
         {
-            std::wstring selected;
+            std::wstring selected = c.field.defaultOption;
             if (c.toggle)
             {
                 const bool isOn    = GetWindowLongPtrW(c.toggle.get(), GWLP_USERDATA) != 0;
@@ -1486,6 +1512,21 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         }
         else if (c.field.type == PrefsPluginConfigFieldType::Selection)
         {
+            std::vector<std::wstring> selectedValues = c.field.defaultSelection;
+            if (! c.choiceButtons.empty())
+            {
+                selectedValues.clear();
+                for (size_t i = 0; i < c.choiceButtons.size() && i < c.field.choices.size(); ++i)
+                {
+                    if (SendMessageW(c.choiceButtons[i].get(), BM_GETCHECK, 0, 0) != BST_CHECKED)
+                    {
+                        continue;
+                    }
+
+                    selectedValues.push_back(c.field.choices[i].value);
+                }
+            }
+
             yyjson_mut_val* arr = yyjson_mut_arr(doc);
             if (! arr)
             {
@@ -1496,14 +1537,9 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
                 return {};
             }
 
-            for (size_t i = 0; i < c.choiceButtons.size() && i < c.field.choices.size(); ++i)
+            for (const auto& selectedValue : selectedValues)
             {
-                if (SendMessageW(c.choiceButtons[i].get(), BM_GETCHECK, 0, 0) != BST_CHECKED)
-                {
-                    continue;
-                }
-
-                const std::string utf8 = Utf8FromUtf16(c.field.choices[i].value);
+                const std::string utf8 = Utf8FromUtf16(selectedValue);
                 yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
                 if (! val)
                 {

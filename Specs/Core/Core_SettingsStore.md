@@ -263,7 +263,7 @@ Notes:
 - The host uses `openWithViewerByExtension` when pressing `F3` (View): a matching entry opens the file in the associated viewer plugin window.
 - If no association is found (or the mapped plugin is missing/disabled), the host falls back to `builtin/viewer-text` (Text/Hex auto-detection).
 - Default mappings include `.txt`, `.log`, `.xml`, `.ini`, `.cfg`, `.csv` → `builtin/viewer-text`.
-- Default mappings include `.md` → `builtin/viewer-markdown`, `.json`/`.json5` → `builtin/viewer-json`, `.html`/`.htm`/`.pdf` → `builtin/viewer-web` (with fallback to `builtin/viewer-text` when the plugin is missing/disabled).
+- Default mappings include `.md` → `builtin/viewer-markdown`, `.json`/`.json5`/`.jsonl`/`.ndjson` → `builtin/viewer-json`, `.html`/`.htm`/`.pdf` → `builtin/viewer-web` (with fallback to `builtin/viewer-text` when the plugin is missing/disabled).
 - Default mappings include common image formats supported by baseline WIC codecs (e.g. `.png`, `.jpg`, `.gif`, `.tif`, `.bmp`, `.jxr`) → `builtin/viewer-imgraw`.
 - Default mappings include common RAW photo extensions (e.g. `.cr2`, `.cr3`, `.nef`, `.arw`, `.dng`, `.raf`, `.rw2`, `.orf`, `.pef`, `.sr2`, `.srw`, `.x3f`) → `builtin/viewer-imgraw`.
 - To remove a custom viewer association, remove it from the map (or set the whole map to `{}`) and the host will fall back to `builtin/viewer-text`.

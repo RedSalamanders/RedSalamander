@@ -4,7 +4,9 @@
 
 #include <iterator>
 #include <new>
+#include <array>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #pragma warning(push)
@@ -18,8 +20,11 @@
 
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "Helpers.h"
+#include "FileSystemCurlResources.h"
 
 #include "FileSystemCurl.h"
+
+extern HINSTANCE g_hInstance;
 
 extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, void** result)
 {
@@ -50,40 +55,70 @@ extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptio
 
 namespace
 {
-static constexpr PluginMetaData kFileSystemCurlPlugins[] = {
-    {
-        .id          = L"builtin/file-system-ftp",
-        .shortId     = L"ftp",
-        .name        = L"FTP",
-        .description = L"FTP virtual file system.",
-        .author      = L"RedSalamander",
-        .version     = L"0.3",
-    },
-    {
-        .id          = L"builtin/file-system-sftp",
-        .shortId     = L"sftp",
-        .name        = L"SFTP",
-        .description = L"SFTP virtual file system (SSH File Transfer Protocol).",
-        .author      = L"RedSalamander",
-        .version     = L"0.3",
-    },
-    {
-        .id          = L"builtin/file-system-scp",
-        .shortId     = L"scp",
-        .name        = L"SCP",
-        .description = L"SCP virtual file system (secure copy over SSH).",
-        .author      = L"RedSalamander",
-        .version     = L"0.3",
-    },
-    {
-        .id          = L"builtin/file-system-imap",
-        .shortId     = L"imap",
-        .name        = L"IMAP",
-        .description = L"IMAP virtual mail file system.",
-        .author      = L"RedSalamander",
-        .version     = L"0.3",
-    },
+struct LocalizedPluginMetaDataSet
+{
+    std::wstring ftpName;
+    std::wstring ftpDescription;
+    std::wstring sftpName;
+    std::wstring sftpDescription;
+    std::wstring scpName;
+    std::wstring scpDescription;
+    std::wstring imapName;
+    std::wstring imapDescription;
+    std::array<PluginMetaData, 4> plugins{};
 };
+
+[[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
+{
+    static const LocalizedPluginMetaDataSet data = [] {
+        LocalizedPluginMetaDataSet value{};
+        value.ftpName         = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_FTP_NAME);
+        value.ftpDescription  = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_FTP_DESCRIPTION);
+        value.sftpName        = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_NAME);
+        value.sftpDescription = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_DESCRIPTION);
+        value.scpName         = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SCP_NAME);
+        value.scpDescription  = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SCP_DESCRIPTION);
+        value.imapName        = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_IMAP_NAME);
+        value.imapDescription = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_IMAP_DESCRIPTION);
+        value.plugins         = {{
+            {
+                .id          = L"builtin/file-system-ftp",
+                .shortId     = L"ftp",
+                .name        = value.ftpName.c_str(),
+                .description = value.ftpDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.3",
+            },
+            {
+                .id          = L"builtin/file-system-sftp",
+                .shortId     = L"sftp",
+                .name        = value.sftpName.c_str(),
+                .description = value.sftpDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.3",
+            },
+            {
+                .id          = L"builtin/file-system-scp",
+                .shortId     = L"scp",
+                .name        = value.scpName.c_str(),
+                .description = value.scpDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.3",
+            },
+            {
+                .id          = L"builtin/file-system-imap",
+                .shortId     = L"imap",
+                .name        = value.imapName.c_str(),
+                .description = value.imapDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.3",
+            },
+        }};
+        return value;
+    }();
+
+    return data;
+}
 
 static std::optional<FileSystemCurlProtocol> ProtocolFromPluginId(std::wstring_view pluginId) noexcept
 {
@@ -122,8 +157,9 @@ extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const Pl
         return E_NOINTERFACE;
     }
 
-    *metaData = kFileSystemCurlPlugins;
-    *count    = static_cast<unsigned int>(std::size(kFileSystemCurlPlugins));
+    const auto& plugins = GetPluginMetaDataSet().plugins;
+    *metaData           = plugins.data();
+    *count              = static_cast<unsigned int>(plugins.size());
     return S_OK;
 }
 

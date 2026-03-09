@@ -1,0 +1,8 @@
+#include <windows.h>
+#include "FileSystemResources.h"
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEM_NAME "File System"
+    IDS_FILESYSTEM_DESCRIPTION "Local Windows file system implementation."
+END

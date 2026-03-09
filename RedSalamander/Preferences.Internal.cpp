@@ -591,6 +591,29 @@ void EnableMouseWheelForwarding(const wil::unique_hwnd& control) noexcept
 
 namespace PrefsPlugins
 {
+[[nodiscard]] int CompareTextNoCase(std::wstring_view left, std::wstring_view right) noexcept
+{
+    if (left.empty() && right.empty())
+    {
+        return 0;
+    }
+
+    const int compare = CompareStringOrdinal(left.data(),
+                                             static_cast<int>(left.size()),
+                                             right.data(),
+                                             static_cast<int>(right.size()),
+                                             TRUE);
+    if (compare == CSTR_LESS_THAN)
+    {
+        return -1;
+    }
+    if (compare == CSTR_GREATER_THAN)
+    {
+        return 1;
+    }
+    return 0;
+}
+
 void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
 {
     out.clear();
@@ -619,6 +642,22 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
               out.end(),
               [](const PrefsPluginListItem& a, const PrefsPluginListItem& b) noexcept
     {
+        const std::wstring_view aName = GetDisplayName(a);
+        const std::wstring_view bName = GetDisplayName(b);
+        const int nameCompare         = CompareTextNoCase(aName, bName);
+        if (nameCompare != 0)
+        {
+            return nameCompare < 0;
+        }
+
+        const std::wstring_view aId = GetId(a);
+        const std::wstring_view bId = GetId(b);
+        const int idCompare         = CompareTextNoCase(aId, bId);
+        if (idCompare != 0)
+        {
+            return idCompare < 0;
+        }
+
         if (a.type != b.type)
         {
             return a.type < b.type;
@@ -631,13 +670,7 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
             return aOrigin < bOrigin;
         }
 
-        const std::wstring_view aName = GetDisplayName(a);
-        const std::wstring_view bName = GetDisplayName(b);
-        if (aName.empty() || bName.empty())
-        {
-            return aName < bName;
-        }
-        return _wcsicmp(aName.data(), bName.data()) < 0;
+        return a.index < b.index;
     });
 }
 

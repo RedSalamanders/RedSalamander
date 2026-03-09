@@ -218,10 +218,10 @@ BEGIN
         MENUITEM "&Paste",         IDM_PANE_CLIPBOARD_PASTE,MFT_STRING,MFS_ENABLED
         MENUITEM "Paste Shortcut [todo]",               IDM_PANE_CLIPBOARD_PASTE_SHORTCUT,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
-        MENUITEM "Copy Path + Name as Text [todo]", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Copy Name as Text [todo]",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Copy Path as Text [todo]",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
-        MENUITEM "Copy Path + File Name as Text", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
+        MENUITEM "Copy Path + Name as Text", IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Copy Name as Text",  IDM_PANE_COPY_NAME_AS_TEXT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Copy Path as Text",   IDM_PANE_COPY_PATH_AS_TEXT,MFT_STRING,MFS_ENABLED
+        MENUITEM "Copy UNC Path + Name as Text", IDM_PANE_COPY_PATH_AND_FILE_NAME,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
         MENUITEM "&Select...",                           IDM_PANE_SELECTION_SELECT_DIALOG,MFT_STRING,MFS_ENABLED
         MENUITEM "&Unselect...",                         IDM_PANE_SELECTION_UNSELECT_DIALOG,MFT_STRING,MFS_ENABLED
@@ -1114,21 +1114,6 @@ BEGIN
                             "Unable to authenticate because no saved password is available for '{}'.\r\n\r\n{}\r\n\r\nOpen Connection Manager and re-enter the password (ensure 'Save password' is enabled)."
     IDS_OVERLAY_MSG_TLS_CERTIFICATE_FAILED_FMT
                             "Unable to establish a secure connection when accessing '{}'.\r\n\r\nThe server's certificate could not be validated. Ensure the certificate chain is trusted on this PC, or fix the server certificate.\r\n\r\n{}"
-    IDS_MICROSOFTDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED "Sign-in can't start"
-    IDS_MICROSOFTDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT
-                            "{0} needs a Microsoft Graph Client ID before it can open the browser sign-in flow.\r\n\r\nOpen Plugins -> Plugin Manager, select '{0}', and set Client ID."
-    IDS_MICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE
-                            "Red Salamander"
-    IDS_MICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS
-                            "You're connected"
-    IDS_MICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS
-                            "Microsoft sign-in is done. Head back to Red Salamander and keep exploring."
-    IDS_MICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE
-                            "We hit a snag"
-    IDS_MICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE
-                            "Microsoft sign-in did not finish cleanly. Return to Red Salamander to review the problem and try again."
-    IDS_MICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT
-                            "This tab can be closed."
     IDS_OVERLAY_MSG_ACCESSING_FOLDER_FMT 
                             "Accessing '{}'.\r\n\r\nThis may take a moment."
     IDS_OVERLAY_MSG_ENUMERATION_CANCELED
@@ -1233,7 +1218,7 @@ BEGIN
     IDS_MSG_SELECTION_RESTORE_NO_SAVED                   "No saved selection."
     IDS_FMT_SELECTION_RESTORE_INCOMPLETE                 "Could not restore selection for some items:\r\n{0}{1}"
     IDS_MSG_SELECTION_RESTORE_FILTER_NOTE                "Some items may be hidden by the current filter."
-    IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED               "Copied {0:L} path{1} to clipboard."
+    IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED               "Copied {0:L} item{1} to clipboard."
     IDS_EMPTY_FOLDER_TITLE                               "Empty folder"
     IDS_EMPTY_FOLDER_FUN_1                               "😌\r\nNothing to see here. Yet."
     IDS_EMPTY_FOLDER_FUN_2                               "🧹\r\nAll clean. This folder is spotless."
@@ -1424,7 +1409,7 @@ BEGIN
 	    IDS_CMD_CLIPBOARD_COPY                                "Clipboard Copy"
 	    IDS_CMD_COPY_PATH_AND_NAME_AS_TEXT                    "Copy Path + Name as Text"
 	    IDS_CMD_CLIPBOARD_PASTE                               "Clipboard Paste"
-	    IDS_CMD_COPY_PATH_AND_FILE_NAME                       "Copy Path + File Name"
+	    IDS_CMD_COPY_PATH_AND_FILE_NAME                       "Copy UNC Path + Name as Text"
 	    IDS_CMD_COPY_PATH_AS_TEXT                             "Copy Path as Text"
 	    IDS_CMD_COPY_NAME_AS_TEXT                             "Copy Name as Text"
 		    IDS_CMD_MOVE_TO_RECYCLE_BIN                           "Move to Recycle Bin"
@@ -1519,10 +1504,10 @@ BEGIN
 		    IDS_CMD_DESC_CONNECTIONS                              "Open the connections manager."
 		    IDS_CMD_DESC_CONTEXT_MENU                             "Open the context menu for the selection."
 		    IDS_CMD_DESC_CONTEXT_MENU_CURRENT_DIRECTORY           "Open the context menu for the current directory."
-		    IDS_CMD_DESC_COPY_NAME_AS_TEXT                        "Copy the file name as text."
-		    IDS_CMD_DESC_COPY_PATH_AND_FILE_NAME                  "Copy the full path and file name as text."
-		    IDS_CMD_DESC_COPY_PATH_AND_NAME_AS_TEXT               "Copy the path and name as text."
-		    IDS_CMD_DESC_COPY_PATH_AS_TEXT                        "Copy the path as text."
+		    IDS_CMD_DESC_COPY_NAME_AS_TEXT                        "Copy the file name and extension as text."
+		    IDS_CMD_DESC_COPY_PATH_AND_FILE_NAME                  "Copy the provider UNC path, or the local machine UNC path (for example \\\\HOST\\C$\\...), as text."
+		    IDS_CMD_DESC_COPY_PATH_AND_NAME_AS_TEXT               "Copy the full path and name as text."
+		    IDS_CMD_DESC_COPY_PATH_AS_TEXT                        "Copy the containing folder path as text."
 		    IDS_CMD_DESC_COPY                                     "Copy to the other pane."
 		    IDS_CMD_DESC_MAKE_DIRECTORY                           "Create a new directory."
 		    IDS_CMD_DESC_DELETE                                   "Delete the selection."

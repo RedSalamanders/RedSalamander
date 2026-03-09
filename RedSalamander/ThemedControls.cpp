@@ -28,6 +28,34 @@ namespace
 {
 constexpr UINT_PTR kThemedButtonHoverSubclassId = 1u;
 constexpr wchar_t kThemedButtonHotProp[]        = L"ThemedControlsHot";
+constexpr wchar_t kCtrlBackspaceCharProp[]      = L"ThemedControlsCtrlBackspaceChar";
+
+[[nodiscard]] bool IsEditWindow(HWND hwnd) noexcept
+{
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    std::array<wchar_t, 16> className{};
+    const int length = GetClassNameW(hwnd, className.data(), static_cast<int>(className.size()));
+    if (length <= 0)
+    {
+        return false;
+    }
+
+    return _wcsicmp(className.data(), L"Edit") == 0;
+}
+
+[[nodiscard]] bool IsWordCharacter(wchar_t ch) noexcept
+{
+    return std::iswalnum(static_cast<wint_t>(ch)) != 0 || ch == L'_';
+}
+
+[[nodiscard]] bool IsPathSeparator(wchar_t ch) noexcept
+{
+    return ch == L'\\' || ch == L'/';
+}
 
 LRESULT CALLBACK ThemedButtonHoverSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept
 {
@@ -226,6 +254,121 @@ void CenterEditTextVertically(HWND edit) noexcept
     formatRect.bottom    = desiredTop + lineHeight;
     SendMessageW(edit, EM_SETRECTNP, 0, reinterpret_cast<LPARAM>(&formatRect));
     InvalidateRect(edit, nullptr, FALSE);
+}
+
+bool HandleEditCtrlBackspaceKeyDown(HWND edit, WPARAM key) noexcept
+{
+    if (! edit)
+    {
+        return false;
+    }
+
+    RemovePropW(edit, kCtrlBackspaceCharProp);
+
+    if (! IsEditWindow(edit) || key != VK_BACK)
+    {
+        return false;
+    }
+
+    const LONG_PTR style = GetWindowLongPtrW(edit, GWL_STYLE);
+    if ((style & ES_READONLY) != 0)
+    {
+        return false;
+    }
+
+    const bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    const bool altDown  = (GetKeyState(VK_MENU) & 0x8000) != 0;
+    if (! ctrlDown || altDown)
+    {
+        return false;
+    }
+
+    DWORD selectionStart = 0;
+    DWORD selectionEnd   = 0;
+    SendMessageW(edit, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd));
+
+    if (selectionStart != selectionEnd)
+    {
+        SendMessageW(edit, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(L""));
+        SetPropW(edit, kCtrlBackspaceCharProp, reinterpret_cast<HANDLE>(1));
+        return true;
+    }
+
+    const int length = GetWindowTextLengthW(edit);
+    std::wstring text;
+    text.resize(static_cast<size_t>(std::max(0, length)) + 1u);
+    GetWindowTextW(edit, text.data(), static_cast<int>(text.size()));
+    text.resize(wcsnlen(text.c_str(), text.size()));
+
+    const size_t caret = std::min(static_cast<size_t>(selectionEnd), text.size());
+    if (caret == 0u)
+    {
+        SetPropW(edit, kCtrlBackspaceCharProp, reinterpret_cast<HANDLE>(1));
+        return true;
+    }
+
+    size_t eraseFrom = caret;
+    while (eraseFrom > 0u && std::iswspace(static_cast<wint_t>(text[eraseFrom - 1u])) != 0)
+    {
+        --eraseFrom;
+    }
+
+    if (eraseFrom > 0u)
+    {
+        const wchar_t previous = text[eraseFrom - 1u];
+        if (IsPathSeparator(previous))
+        {
+            while (eraseFrom > 0u && IsPathSeparator(text[eraseFrom - 1u]))
+            {
+                --eraseFrom;
+            }
+        }
+        else if (IsWordCharacter(previous))
+        {
+            while (eraseFrom > 0u && IsWordCharacter(text[eraseFrom - 1u]))
+            {
+                --eraseFrom;
+            }
+        }
+        else
+        {
+            while (eraseFrom > 0u)
+            {
+                const wchar_t current = text[eraseFrom - 1u];
+                if (std::iswspace(static_cast<wint_t>(current)) != 0 || IsPathSeparator(current) || IsWordCharacter(current))
+                {
+                    break;
+                }
+                --eraseFrom;
+            }
+        }
+    }
+
+    if (eraseFrom == caret)
+    {
+        eraseFrom = caret > 0u ? (caret - 1u) : 0u;
+    }
+
+    SendMessageW(edit, EM_SETSEL, static_cast<WPARAM>(eraseFrom), static_cast<LPARAM>(caret));
+    SendMessageW(edit, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(L""));
+    SetPropW(edit, kCtrlBackspaceCharProp, reinterpret_cast<HANDLE>(1));
+    return true;
+}
+
+bool HandleEditCtrlBackspaceChar(HWND edit, WPARAM key) noexcept
+{
+    if (! IsEditWindow(edit) || key != 0x7Fu)
+    {
+        return false;
+    }
+
+    if (! GetPropW(edit, kCtrlBackspaceCharProp))
+    {
+        return false;
+    }
+
+    RemovePropW(edit, kCtrlBackspaceCharProp);
+    return true;
 }
 
 // ModernCombo item data tag for optional leading glyphs.

@@ -208,8 +208,6 @@ private:
 
     static constexpr wchar_t kPluginId[]          = L"builtin/file-system";
     static constexpr wchar_t kPluginShortId[]     = L"file";
-    static constexpr wchar_t kPluginName[]        = L"File System";
-    static constexpr wchar_t kPluginDescription[] = L"Local Windows file system implementation.";
     static constexpr wchar_t kPluginAuthor[]      = L"RedSalamander";
     static constexpr wchar_t kPluginVersion[]     = L"1.0";
 

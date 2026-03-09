@@ -304,6 +304,15 @@ void QueueRedSalamanderMonitorLaunch() noexcept
 }
 #endif // _DEBUG
 
+[[nodiscard]] bool IsRunningAnySelfTest() noexcept
+{
+#ifdef _DEBUG
+    return g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest;
+#else
+    return false;
+#endif
+}
+
 // Known folder GUID for OneDrive root (aka "SkyDrive").
 constexpr GUID kKnownFolderIdOneDrive = {
     0xA52BBA46,
@@ -1525,6 +1534,30 @@ static bool MenuContainsCommandIdRecursive(HMENU menu, UINT commandId) noexcept
     }
 
     return false;
+}
+
+[[nodiscard]] static wchar_t GetMainMenuCommandIconGlyph(UINT menuCommandId) noexcept
+{
+    switch (menuCommandId)
+    {
+        case IDM_FILE_PREFERENCES: return FluentIcons::kSettings;
+        case IDM_APP_COMPARE: return FluentIcons::kSyncFolder;
+        case IDM_VIEW_PLUGINS_MANAGE: return FluentIcons::kPuzzle;
+        case IDM_PANE_EXECUTE_OPEN: return FluentIcons::kOpenFile;
+        case IDM_PANE_CONNECTION_MANAGER: return FluentIcons::kConnections;
+        case IDM_PANE_CLIPBOARD_CUT: return FluentIcons::kCut;
+        case IDM_PANE_CLIPBOARD_COPY: return FluentIcons::kCopy;
+        case IDM_PANE_CLIPBOARD_PASTE: return FluentIcons::kPaste;
+        case IDM_PANE_RENAME: return FluentIcons::kRename;
+        case IDM_PANE_DELETE: return FluentIcons::kDelete;
+        case IDM_PANE_OPEN_PROPERTIES: return FluentIcons::kInfo;
+        case IDM_PANE_CONNECT: return FluentIcons::kMapDrive;
+        case IDM_PANE_SHOW_FOLDERS_HISTORY: return FluentIcons::kHistory;
+        case IDM_PANE_FIND: return FluentIcons::kFind;
+        case IDM_PANE_OPEN_COMMAND_SHELL: return FluentIcons::kCommandPrompt;
+    }
+
+    return 0;
 }
 
 static void RemoveOverlaySampleSubmenu(HMENU paneMenu, UINT sampleErrorCommandId) noexcept
@@ -3058,29 +3091,7 @@ void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
         }
         else if (! checked && ! isSortItem && g_mainMenuIconFontValid && g_mainMenuIconFont)
         {
-            const wchar_t glyph = [&]() noexcept -> wchar_t
-            {
-                switch (dis->itemID)
-                {
-                    case IDM_FILE_PREFERENCES: return FluentIcons::kSettings;
-                    case IDM_APP_COMPARE: return FluentIcons::kSyncFolder;
-                    case IDM_VIEW_PLUGINS_MANAGE: return FluentIcons::kPuzzle;
-                    case IDM_PANE_EXECUTE_OPEN: return FluentIcons::kOpenFile;
-                    case IDM_PANE_CONNECTION_MANAGER: return FluentIcons::kConnections;
-                    case IDM_PANE_CLIPBOARD_CUT: return FluentIcons::kCut;
-                    case IDM_PANE_CLIPBOARD_COPY: return FluentIcons::kCopy;
-                    case IDM_PANE_COPY_PATH_AND_FILE_NAME: return FluentIcons::kCopy;
-                    case IDM_PANE_CLIPBOARD_PASTE: return FluentIcons::kPaste;
-                    case IDM_PANE_RENAME: return FluentIcons::kRename;
-                    case IDM_PANE_DELETE: return FluentIcons::kDelete;
-                    case IDM_PANE_OPEN_PROPERTIES: return FluentIcons::kInfo;
-                    case IDM_PANE_CONNECT: return FluentIcons::kMapDrive;
-                    case IDM_PANE_SHOW_FOLDERS_HISTORY: return FluentIcons::kHistory;
-                    case IDM_PANE_FIND: return FluentIcons::kFind;
-                    case IDM_PANE_OPEN_COMMAND_SHELL: return FluentIcons::kCommandPrompt;
-                }
-                return 0;
-            }();
+            const wchar_t glyph = GetMainMenuCommandIconGlyph(dis->itemID);
 
             if (glyph != 0)
             {
@@ -3279,6 +3290,13 @@ LRESULT OnDrawItem(HWND hWnd, WPARAM wParam, LPARAM lParam)
 }
 
 } // namespace
+
+#ifdef _DEBUG
+[[nodiscard]] wchar_t DebugGetMainMenuIconGlyph(UINT menuCommandId) noexcept
+{
+    return GetMainMenuCommandIconGlyph(menuCommandId);
+}
+#endif
 
 // Forward declarations of functions included in this code module:
 std::optional<HWND> InitInstance(HINSTANCE, int);
@@ -4497,7 +4515,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     const auto shutdownProcessSingletons = wil::scope_exit([]
     {
-        if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+        if (IsRunningAnySelfTest())
         {
             return;
         }
@@ -6076,7 +6094,25 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         case IDM_PANE_COPY_PATH_AND_FILE_NAME:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
-            g_folderWindow.CommandCopyPathAndFileNameAsText(pane);
+            g_folderWindow.CommandCopyUncPathAndNameAsText(pane);
+            break;
+        }
+        case IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandCopyPathAndNameAsText(pane);
+            break;
+        }
+        case IDM_PANE_COPY_NAME_AS_TEXT:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandCopyNameAsText(pane);
+            break;
+        }
+        case IDM_PANE_COPY_PATH_AS_TEXT:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandCopyPathAsText(pane);
             break;
         }
         case IDM_PANE_SELECTION_SELECT_ALL:
@@ -6858,6 +6894,34 @@ LRESULT OnMainWindowSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
     return DefWindowProcW(hWnd, WM_SYSCOMMAND, wParam, lParam);
 }
 
+void RestoreMainWindowFolderFocus(HWND hWnd)
+{
+    if (! IsWindowEnabled(hWnd))
+    {
+        return;
+    }
+
+    const HWND activeWindow = GetActiveWindow();
+    if (activeWindow && activeWindow != hWnd)
+    {
+        return;
+    }
+
+    const HWND folderWindow = g_hFolderWindow.load(std::memory_order_acquire);
+    if (! folderWindow)
+    {
+        return;
+    }
+
+    const HWND focused = GetFocus();
+    if (focused && (focused == folderWindow || IsChild(folderWindow, focused)))
+    {
+        return;
+    }
+
+    SetFocus(folderWindow);
+}
+
 LRESULT OnMainWindowExitMenuLoop(HWND hWnd, [[maybe_unused]] BOOL isTrackPopupMenu)
 {
     if (g_menuBarTemporarilyShown && ! g_menuBarVisible)
@@ -6868,21 +6932,25 @@ LRESULT OnMainWindowExitMenuLoop(HWND hWnd, [[maybe_unused]] BOOL isTrackPopupMe
         AdjustLayout(hWnd);
     }
 
-    const HWND folderWindow = g_hFolderWindow.load(std::memory_order_acquire);
-    if (GetActiveWindow() == hWnd && folderWindow)
+    if (GetActiveWindow() == hWnd)
     {
-        SetFocus(folderWindow);
+        RestoreMainWindowFolderFocus(hWnd);
     }
     return 0;
 }
 
-LRESULT OnMainWindowSetFocus([[maybe_unused]] HWND hWnd)
+LRESULT OnMainWindowActivate(HWND hWnd, WORD state)
 {
-    const HWND folderWindow = g_hFolderWindow.load(std::memory_order_acquire);
-    if (folderWindow)
+    if (state != WA_INACTIVE)
     {
-        SetFocus(folderWindow);
+        RestoreMainWindowFolderFocus(hWnd);
     }
+    return 0;
+}
+
+LRESULT OnMainWindowSetFocus(HWND hWnd)
+{
+    RestoreMainWindowFolderFocus(hWnd);
     return 0;
 }
 
@@ -7150,6 +7218,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_INITMENUPOPUP: OnInitMenuPopup(hWnd, reinterpret_cast<HMENU>(wParam)); return 0;
         case WM_MEASUREITEM: return OnMeasureItem(hWnd, wParam, lParam);
         case WM_DRAWITEM: return OnDrawItem(hWnd, wParam, lParam);
+        case WM_ACTIVATE: return OnMainWindowActivate(hWnd, LOWORD(wParam));
         case WM_EXITMENULOOP: return OnMainWindowExitMenuLoop(hWnd, static_cast<BOOL>(wParam));
         case WM_SETFOCUS: return OnMainWindowSetFocus(hWnd);
         case WM_PAINT: return OnMainWindowPaint(hWnd);

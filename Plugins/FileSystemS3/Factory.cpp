@@ -3,7 +3,9 @@
 #include <windows.h>
 
 #include <new>
+#include <array>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #pragma warning(push)
@@ -17,8 +19,11 @@
 
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "Helpers.h"
+#include "FileSystemS3Resources.h"
 
 #include "FileSystemS3.h"
+
+extern HINSTANCE g_hInstance;
 
 extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, void** result)
 {
@@ -49,24 +54,46 @@ extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptio
 
 namespace
 {
-static constexpr PluginMetaData kFileSystemS3Plugins[] = {
-    {
-        .id          = L"builtin/file-system-s3",
-        .shortId     = L"s3",
-        .name        = L"S3",
-        .description = L"Amazon S3 virtual file system.",
-        .author      = L"RedSalamander",
-        .version     = L"0.1",
-    },
-    {
-        .id          = L"builtin/file-system-s3table",
-        .shortId     = L"s3table",
-        .name        = L"S3 Table",
-        .description = L"Amazon S3 Tables virtual file system.",
-        .author      = L"RedSalamander",
-        .version     = L"0.1",
-    },
+struct LocalizedPluginMetaDataSet
+{
+    std::wstring s3Name;
+    std::wstring s3Description;
+    std::wstring s3TableName;
+    std::wstring s3TableDescription;
+    std::array<PluginMetaData, 2> plugins{};
 };
+
+[[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
+{
+    static const LocalizedPluginMetaDataSet data = [] {
+        LocalizedPluginMetaDataSet value{};
+        value.s3Name             = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_NAME);
+        value.s3Description      = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_DESCRIPTION);
+        value.s3TableName        = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3TABLE_NAME);
+        value.s3TableDescription = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3TABLE_DESCRIPTION);
+        value.plugins            = {{
+            {
+                .id          = L"builtin/file-system-s3",
+                .shortId     = L"s3",
+                .name        = value.s3Name.c_str(),
+                .description = value.s3Description.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.1",
+            },
+            {
+                .id          = L"builtin/file-system-s3table",
+                .shortId     = L"s3table",
+                .name        = value.s3TableName.c_str(),
+                .description = value.s3TableDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.1",
+            },
+        }};
+        return value;
+    }();
+
+    return data;
+}
 
 static std::optional<FileSystemS3Mode> ModeFromPluginId(std::wstring_view pluginId) noexcept
 {
@@ -97,8 +124,9 @@ extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const Pl
         return E_NOINTERFACE;
     }
 
-    *metaData = kFileSystemS3Plugins;
-    *count    = static_cast<unsigned int>(std::size(kFileSystemS3Plugins));
+    const auto& plugins = GetPluginMetaDataSet().plugins;
+    *metaData           = plugins.data();
+    *count              = static_cast<unsigned int>(plugins.size());
     return S_OK;
 }
 

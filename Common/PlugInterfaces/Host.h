@@ -7,6 +7,11 @@
 #define NOMINMAX
 #include <windows.h>
 
+#ifndef __IFileSystem_FWD_DEFINED__
+#define __IFileSystem_FWD_DEFINED__
+interface IFileSystem;
+#endif
+
 #pragma warning(push)
 #pragma warning(disable : 4820) // padding in data structure
 
@@ -245,6 +250,49 @@ interface __declspec(uuid("2f1a61a6-6e8c-4c1e-ae33-0f2cfb42e3b9")) __declspec(no
 {
     // Executes a request in the active pane. The host may activate its main window and navigate/focus as needed.
     virtual HRESULT STDMETHODCALLTYPE ExecuteInActivePane(const HostPaneExecuteRequest* request) noexcept = 0;
+};
+
+struct HostViewerOpenRequest
+{
+    uint32_t version;   // 1
+    uint32_t sizeBytes; // sizeof(HostViewerOpenRequest)
+
+    // Stable viewer plugin identifier (for example: "builtin/viewer-text").
+    const wchar_t* pluginId;
+
+    // Optional owner window for initial placement/activation.
+    HWND ownerWindow;
+
+    // Active filesystem instance for all provided paths.
+    // The pointer remains caller-owned and valid only for the duration of the call.
+    IFileSystem* fileSystem;
+
+    // Optional localized display name for the active filesystem plugin.
+    const wchar_t* fileSystemName;
+
+    // Focused item path (UTF-16, NUL-terminated).
+    const wchar_t* focusedPath;
+
+    // Optional current selection (UTF-16, NUL-terminated paths).
+    const wchar_t* const* selectionPaths;
+    unsigned long selectionCount;
+
+    // Optional ordered list of “other files” for next/previous navigation in the viewer.
+    const wchar_t* const* otherFiles;
+    unsigned long otherFileCount;
+    unsigned long focusedOtherFileIndex;
+
+    // ViewerOpenFlags bitmask from PlugInterfaces/Viewer.h.
+    uint32_t viewerFlags;
+
+    uint32_t reserved[8];
+};
+
+// UUID: {f15c66ea-fec2-46b1-a643-e06bf0db15c7}
+interface __declspec(uuid("f15c66ea-fec2-46b1-a643-e06bf0db15c7")) __declspec(novtable) IHostViewers : public IUnknown
+{
+    // Opens a viewer window using the provided plugin id and viewer-open context.
+    virtual HRESULT STDMETHODCALLTYPE OpenViewer(const HostViewerOpenRequest* request) noexcept = 0;
 };
 
 #pragma warning(pop)

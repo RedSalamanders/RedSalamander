@@ -349,6 +349,8 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
     return buffer;
 }
 
+#pragma warning(push)
+#pragma warning(disable : 4625 4626) // WIL unique_bcrypt_* are intentionally non-copyable.
 [[nodiscard]] bool TryComputeSha256(std::span<const std::byte> data, std::array<std::byte, 32>& outHash) noexcept
 {
     outHash.fill(std::byte{0});
@@ -408,6 +410,7 @@ bool WriteJsonBlob(const std::filesystem::path& path, yyjson_mut_doc* doc) noexc
 
     return true;
 }
+#pragma warning(pop)
 
 [[nodiscard]] std::wstring GetComputerHashName() noexcept
 {

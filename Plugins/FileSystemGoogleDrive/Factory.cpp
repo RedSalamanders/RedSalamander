@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <new>
+#include <string>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182)
@@ -15,19 +16,28 @@
 
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "Helpers.h"
+#include "FileSystemGoogleDriveResources.h"
 
 #include "FileSystemGoogleDrive.h"
 
+extern HINSTANCE g_hInstance;
+
 namespace
 {
-constexpr PluginMetaData kPluginMetaData = {
-    .id          = L"builtin/file-system-gdrive",
-    .shortId     = L"gdrive",
-    .name        = L"Google Drive",
-    .description = L"Google Drive virtual file system.",
-    .author      = L"RedSalamander",
-    .version     = L"0.1",
-};
+[[nodiscard]] const PluginMetaData& GetPluginMetaData() noexcept
+{
+    static const std::wstring name        = LoadStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_NAME);
+    static const std::wstring description = LoadStringResource(g_hInstance, IDS_FILESYSTEMGOOGLEDRIVE_DESCRIPTION);
+    static const PluginMetaData metaData  = {
+        .id          = L"builtin/file-system-gdrive",
+        .shortId     = L"gdrive",
+        .name        = name.c_str(),
+        .description = description.c_str(),
+        .author      = L"RedSalamander",
+        .version     = L"0.1",
+    };
+    return metaData;
+}
 }
 
 extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, void** result)
@@ -68,7 +78,7 @@ extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const Pl
         return E_NOINTERFACE;
     }
 
-    *metaData = &kPluginMetaData;
+    *metaData = &GetPluginMetaData();
     *count    = 1;
     return S_OK;
 }
@@ -89,7 +99,7 @@ extern "C" HRESULT __stdcall RedSalamanderCreateEx(REFIID riid, const FactoryOpt
     {
         return E_INVALIDARG;
     }
-    if (! OrdinalString::EqualsNoCase(pluginId, kPluginMetaData.id))
+    if (! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }

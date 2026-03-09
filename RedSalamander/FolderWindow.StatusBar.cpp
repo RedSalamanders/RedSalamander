@@ -10,10 +10,6 @@ constexpr int kStatusBarFocusLineHeightDip      = 2;
 constexpr int kStatusBarSecurityMinPartWidthDip = 90;
 constexpr int kStatusBarSecurityMaxPartWidthDip = 240;
 
-constexpr int kStatusBarPartSelection = 0;
-constexpr int kStatusBarPartSecurity  = 1;
-constexpr int kStatusBarPartSort      = 2;
-
 wil::unique_hfont g_statusBarIconFont;
 UINT g_statusBarIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
 bool g_statusBarIconFontValid = false;

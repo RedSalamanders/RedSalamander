@@ -25,11 +25,6 @@ void NavigationView::OnLButtonDown(POINT pt)
         return;
     }
 
-    if (_hWnd)
-    {
-        SetFocus(_hWnd.get());
-    }
-
     // Check Section 1 (menu button) click
     if (_showMenuSection && PtInRect(&_sectionDriveRect, pt))
     {
@@ -119,11 +114,6 @@ void NavigationView::OnLButtonDblClk(POINT pt)
 {
     if (_editMode)
         return;
-
-    if (_hWnd)
-    {
-        SetFocus(_hWnd.get());
-    }
 
     // Check if click is in Section 2
     if (! PtInRect(&_sectionPathRect, pt))

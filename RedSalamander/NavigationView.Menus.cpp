@@ -91,6 +91,29 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     return text;
 }
 
+[[nodiscard]] int CompareTextNoCase(std::wstring_view left, std::wstring_view right) noexcept
+{
+    if (left.empty() && right.empty())
+    {
+        return 0;
+    }
+
+    const int compare = CompareStringOrdinal(left.data(),
+                                             static_cast<int>(left.size()),
+                                             right.data(),
+                                             static_cast<int>(right.size()),
+                                             TRUE);
+    if (compare == CSTR_LESS_THAN)
+    {
+        return -1;
+    }
+    if (compare == CSTR_GREATER_THAN)
+    {
+        return 1;
+    }
+    return 0;
+}
+
 [[nodiscard]] std::optional<std::wstring> TryGetShortcutTextForCommandId(const Common::Settings::Settings& settings, std::wstring_view commandId) noexcept
 {
     if (commandId.empty())
@@ -1251,7 +1274,13 @@ void NavigationView::ShowMenuDropdown()
         if (connectionItems.size() > 1u)
         {
             std::sort(connectionItems.begin() + 1u, connectionItems.end(), [](const ConnectionMenuItem& a, const ConnectionMenuItem& b) {
-                return _wcsicmp(a.label.c_str(), b.label.c_str()) < 0;
+                const int labelCompare = CompareTextNoCase(a.label, b.label);
+                if (labelCompare != 0)
+                {
+                    return labelCompare < 0;
+                }
+
+                return CompareTextNoCase(a.navName, b.navName) < 0;
             });
         }
 
@@ -1660,7 +1689,13 @@ void NavigationView::ShowFileSystemDriveMenuDropdown()
         if (connectionItems.size() > 1u)
         {
             std::sort(connectionItems.begin() + 1u, connectionItems.end(), [](const ConnectionMenuItem& a, const ConnectionMenuItem& b) {
-                return _wcsicmp(a.label.c_str(), b.label.c_str()) < 0;
+                const int labelCompare = CompareTextNoCase(a.label, b.label);
+                if (labelCompare != 0)
+                {
+                    return labelCompare < 0;
+                }
+
+                return CompareTextNoCase(a.navName, b.navName) < 0;
             });
         }
 

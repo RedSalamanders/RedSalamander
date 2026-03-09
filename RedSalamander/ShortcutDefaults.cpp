@@ -206,7 +206,7 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModCtrl, L"cmd/pane/clipboardCopy");
     AddBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModAlt, L"cmd/pane/copyPathAndNameAsText");
     AddBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModShift, L"cmd/pane/clipboardPaste");
-    AddBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/copyPathAndFileName");
+    AddBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/copyUncPathAndNameAsText");
     AddBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModCtrl | ShortcutManager::kModAlt, L"cmd/pane/copyPathAsText");
     AddBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/pane/copyNameAsText");
 

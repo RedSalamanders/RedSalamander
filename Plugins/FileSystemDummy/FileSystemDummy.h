@@ -202,8 +202,6 @@ private:
 
     static constexpr wchar_t kPluginId[]          = L"builtin/file-system-dummy";
     static constexpr wchar_t kPluginShortId[]     = L"fk";
-    static constexpr wchar_t kPluginName[]        = L"File System Dummy";
-    static constexpr wchar_t kPluginDescription[] = L"Deterministic in-memory dummy file system for testing.";
     static constexpr wchar_t kPluginAuthor[]      = L"RedSalamander";
     static constexpr wchar_t kPluginVersion[]     = L"1.0";
 

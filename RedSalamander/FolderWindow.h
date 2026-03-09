@@ -75,6 +75,7 @@ public:
                                 std::wstring_view focusItemDisplayName,
                                 unsigned int folderViewCommandId,
                                 bool activateWindow) noexcept;
+    HRESULT OpenViewerWithPlugin(std::wstring_view pluginId, const ViewerOpenContext& context) noexcept;
 
     void SetFolderPath(Pane pane, const std::filesystem::path& path);
     std::optional<std::filesystem::path> GetCurrentPath(Pane pane) const;
@@ -137,7 +138,10 @@ public:
     void CommandSelectionGoToNextSelectedName(Pane pane);
     void CommandChangeCase(Pane pane);
     void CommandOpenCommandShell(Pane pane);
-    void CommandCopyPathAndFileNameAsText(Pane pane);
+    void CommandCopyPathAndNameAsText(Pane pane);
+    void CommandCopyNameAsText(Pane pane);
+    void CommandCopyPathAsText(Pane pane);
+    void CommandCopyUncPathAndNameAsText(Pane pane);
     void PrepareForNetworkDriveDisconnect(Pane pane);
     void SwapPanes();
 
@@ -345,6 +349,14 @@ public:
     };
 
 private:
+    enum class CopySelectionTextMode : uint8_t
+    {
+        PathAndName,
+        Name,
+        Path,
+        UncPathAndName,
+    };
+
     struct PaneState;
 
     // Class registration
@@ -373,6 +385,7 @@ private:
     void OnParentNotify(UINT eventMsg, UINT childId);
     LRESULT OnDeviceChange(UINT event, LPARAM data) noexcept;
     void OnNetworkConnectivityChanged() noexcept;
+    void CopySelectionText(Pane pane, CopySelectionTextMode mode, UINT titleStringId);
     LRESULT OnPaneSelectionSizeComputed(LPARAM lp) noexcept;
     LRESULT OnPaneSelectionSizeProgress(LPARAM lp) noexcept;
     LRESULT OnFileOperationCompleted(LPARAM lp) noexcept;
@@ -391,6 +404,9 @@ private:
     void AdjustChildWindows();
     void UpdatePaneStatusBar(Pane pane);
     void UpdatePaneFocusStates() noexcept;
+    void FocusPaneFolderView(Pane pane) noexcept;
+    void FocusPanePreferredTarget(Pane pane) noexcept;
+    [[nodiscard]] HWND GetPanePreferredFocusTarget(Pane pane) const noexcept;
     void StartSelectionSizeWorker(Pane pane) noexcept;
     void CancelSelectionSizeComputation(Pane pane) noexcept;
     void RequestSelectionSizeComputation(Pane pane);
@@ -408,7 +424,6 @@ private:
     bool TryOpenFileAsVirtualFileSystem(Pane pane, const std::filesystem::path& path) noexcept;
     bool TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRequest& request) noexcept;
     bool TryViewSpaceWithViewer(Pane pane, const std::filesystem::path& folderPath) noexcept;
-
     struct ViewerInstance final
     {
         std::wstring viewerPluginId;
@@ -496,6 +511,7 @@ private:
     PaneState _leftPane;
     PaneState _rightPane;
     Pane _activePane = Pane::Left;
+    HWND _lastFocusedPaneChild = nullptr;
     FunctionBar _functionBar;
     bool _functionBarVisible                = true;
     const ShortcutManager* _shortcutManager = nullptr;

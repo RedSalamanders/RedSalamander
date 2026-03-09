@@ -3632,6 +3632,98 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
         SelfTest::RunCase(options,
                           suite,
+                          L"google_drive_cleared_client_id_requires_configuration",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinGoogleDriveFileSystemId, {}, created);
+            state.Require(
+                SUCCEEDED(createHr) && created.fileSystem,
+                std::format(L"Google Drive clientId gate: failed to create filesystem instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"Google Drive clientId gate: missing IInformations.");
+            if (! info)
+            {
+                return false;
+            }
+
+            HRESULT hr = info->SetConfiguration("{\"defaultClientId\":\"\"}");
+            state.Require(SUCCEEDED(hr), std::format(L"Google Drive clientId gate: SetConfiguration failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr))
+            {
+                return false;
+            }
+
+            const std::wstring id = MakeGuidText();
+            state.Require(! id.empty(), L"Google Drive clientId gate: failed to generate a connection profile id.");
+            if (id.empty())
+            {
+                return false;
+            }
+
+            Common::Settings::ConnectionProfile profile;
+            profile.id                  = id;
+            profile.name                = std::format(L"GDriveMissingClientId{}", id);
+            profile.pluginId            = std::wstring(kBuiltinGoogleDriveFileSystemId);
+            profile.host                = L"";
+            profile.initialPath         = L"/";
+            profile.userName            = L"user@example.invalid";
+            profile.authMode            = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
+            profile.savePassword        = false;
+            profile.requireWindowsHello = false;
+
+            const bool hadConnectionsSettings = g_settings.connections.has_value();
+            if (! hadConnectionsSettings)
+            {
+                g_settings.connections.emplace();
+            }
+
+            g_settings.connections->items.push_back(profile);
+            const auto restoreSettings = wil::scope_exit([&] noexcept
+            {
+                if (! g_settings.connections)
+                {
+                    return;
+                }
+
+                auto& items = g_settings.connections->items;
+                items.erase(std::remove_if(items.begin(), items.end(), [&](const Common::Settings::ConnectionProfile& item) noexcept { return item.id == id; }),
+                            items.end());
+
+                if (! hadConnectionsSettings)
+                {
+                    g_settings.connections.reset();
+                }
+            });
+
+            wil::com_ptr<IHostAlerts> hostAlerts;
+            static_cast<void>(GetHostServices()->QueryInterface(IID_PPV_ARGS(hostAlerts.put())));
+            const auto clearAlert = wil::scope_exit([&] noexcept
+            {
+                if (hostAlerts)
+                {
+                    static_cast<void>(hostAlerts->ClearAlert(HOST_ALERT_SCOPE_APPLICATION, nullptr));
+                }
+            });
+
+            const std::wstring connectionRoot = std::format(L"/@conn:{}/", profile.name);
+            wil::com_ptr<IFilesInformation> filesInformation;
+            hr = created.fileSystem->ReadDirectoryInfo(connectionRoot.c_str(), filesInformation.put());
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_BAD_CONFIGURATION),
+                          std::format(L"Google Drive clientId gate: expected ERROR_BAD_CONFIGURATION. hr=0x{:08X}",
+                                      static_cast<unsigned long>(hr)));
+            state.Require(! filesInformation, L"Google Drive clientId gate: files information should not be produced on configuration failure.");
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
                           L"google_drive_connection_requires_refresh_token",
                           [&](SelfTest::CaseState& state) noexcept
         {
@@ -3745,6 +3837,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             state.Require(schemaView.find("\"clientId\"") != std::string_view::npos, L"OneDrive Personal plugin: schema missing clientId.");
             state.Require(schemaView.find("90cdea53-7c21-48b0-959e-b4024209027b") != std::string_view::npos,
                           L"OneDrive Personal plugin: schema missing built-in default clientId.");
+            state.Require(schemaView.find("\"x-ui-hidden\"") != std::string_view::npos,
+                          L"OneDrive Personal plugin: schema missing x-ui-hidden metadata for clientId.");
 
             hr = info->SetConfiguration("{\"clientId\":\"\"}");
             state.Require(
@@ -5910,7 +6004,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             oneDrivePersonal.pluginId      = L"builtin/file-system-onedrive-personal";
             oneDrivePersonal.authMode      = Common::Settings::ConnectionAuthMode::OAuth2Pkce;
             const std::wstring oneDriveUrl = ConnectionProfileUtils::BuildConnectionDisplayUrl(oneDrivePersonal);
-            state.Require(oneDriveUrl == L"onedrivep://", L"OneDrive Personal display URL should still render a hostless scheme.");
+            state.Require(oneDriveUrl == L"onedrive://", L"OneDrive Personal display URL should still render a hostless scheme.");
 
             Common::Settings::ConnectionProfile googleDrive{};
             googleDrive.pluginId              = L"builtin/file-system-gdrive";

@@ -3,7 +3,9 @@
 #include <windows.h>
 
 #include <new>
+#include <array>
 #include <optional>
+#include <string>
 #include <string_view>
 
 #pragma warning(push)
@@ -17,52 +19,74 @@
 
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "Helpers.h"
+#include "FileSystemMicrosoftDriveResources.h"
 
 #include "FileSystemMicrosoftDrive.h"
+
+extern HINSTANCE g_hInstance;
 
 namespace
 {
 constexpr wchar_t kPluginIdOneDrivePersonal[]      = L"builtin/file-system-onedrive-personal";
-constexpr wchar_t kPluginShortIdOneDrivePersonal[] = L"onedrivep";
-constexpr wchar_t kPluginNameOneDrivePersonal[]    = L"OneDrive Personal";
-constexpr wchar_t kPluginDescOneDrivePersonal[]    = L"Microsoft OneDrive Personal storage over Microsoft Graph.";
+constexpr wchar_t kPluginShortIdOneDrivePersonal[] = L"onedrive";
 
 constexpr wchar_t kPluginIdOneDriveBusiness[]      = L"builtin/file-system-onedrive-business";
-constexpr wchar_t kPluginShortIdOneDriveBusiness[] = L"onedriveb";
-constexpr wchar_t kPluginNameOneDriveBusiness[]    = L"OneDrive Business";
-constexpr wchar_t kPluginDescOneDriveBusiness[]    = L"Microsoft OneDrive for Business storage over Microsoft Graph.";
+constexpr wchar_t kPluginShortIdOneDriveBusiness[] = L"onedrive-pro";
 
 constexpr wchar_t kPluginIdSharePoint[]      = L"builtin/file-system-sharepoint";
 constexpr wchar_t kPluginShortIdSharePoint[] = L"sharepoint";
-constexpr wchar_t kPluginNameSharePoint[]    = L"SharePoint";
-constexpr wchar_t kPluginDescSharePoint[]    = L"Microsoft SharePoint document libraries over Microsoft Graph.";
-
-constexpr PluginMetaData kPlugins[] = {
-    {
-        .id          = kPluginIdOneDrivePersonal,
-        .shortId     = kPluginShortIdOneDrivePersonal,
-        .name        = kPluginNameOneDrivePersonal,
-        .description = kPluginDescOneDrivePersonal,
-        .author      = L"RedSalamander",
-        .version     = L"0.1",
-    },
-    {
-        .id          = kPluginIdOneDriveBusiness,
-        .shortId     = kPluginShortIdOneDriveBusiness,
-        .name        = kPluginNameOneDriveBusiness,
-        .description = kPluginDescOneDriveBusiness,
-        .author      = L"RedSalamander",
-        .version     = L"0.1",
-    },
-    {
-        .id          = kPluginIdSharePoint,
-        .shortId     = kPluginShortIdSharePoint,
-        .name        = kPluginNameSharePoint,
-        .description = kPluginDescSharePoint,
-        .author      = L"RedSalamander",
-        .version     = L"0.1",
-    },
+struct LocalizedPluginMetaDataSet
+{
+    std::wstring oneDrivePersonalName;
+    std::wstring oneDrivePersonalDescription;
+    std::wstring oneDriveBusinessName;
+    std::wstring oneDriveBusinessDescription;
+    std::wstring sharePointName;
+    std::wstring sharePointDescription;
+    std::array<PluginMetaData, 3> plugins{};
 };
+
+[[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
+{
+    static const LocalizedPluginMetaDataSet data = [] {
+        LocalizedPluginMetaDataSet value{};
+        value.oneDrivePersonalName        = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_NAME);
+        value.oneDrivePersonalDescription = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_DESCRIPTION);
+        value.oneDriveBusinessName        = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_NAME);
+        value.oneDriveBusinessDescription = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_DESCRIPTION);
+        value.sharePointName              = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME);
+        value.sharePointDescription       = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_DESCRIPTION);
+        value.plugins                     = {{
+            {
+                .id          = kPluginIdOneDrivePersonal,
+                .shortId     = kPluginShortIdOneDrivePersonal,
+                .name        = value.oneDrivePersonalName.c_str(),
+                .description = value.oneDrivePersonalDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.1",
+            },
+            {
+                .id          = kPluginIdOneDriveBusiness,
+                .shortId     = kPluginShortIdOneDriveBusiness,
+                .name        = value.oneDriveBusinessName.c_str(),
+                .description = value.oneDriveBusinessDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.1",
+            },
+            {
+                .id          = kPluginIdSharePoint,
+                .shortId     = kPluginShortIdSharePoint,
+                .name        = value.sharePointName.c_str(),
+                .description = value.sharePointDescription.c_str(),
+                .author      = L"RedSalamander",
+                .version     = L"0.1",
+            },
+        }};
+        return value;
+    }();
+
+    return data;
+}
 
 [[nodiscard]] std::optional<FileSystemMicrosoftDriveMode> ModeFromPluginId(std::wstring_view pluginId) noexcept
 {
@@ -122,8 +146,9 @@ extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const Pl
         return E_NOINTERFACE;
     }
 
-    *metaData = kPlugins;
-    *count    = static_cast<unsigned int>(std::size(kPlugins));
+    const auto& plugins = GetPluginMetaDataSet().plugins;
+    *metaData           = plugins.data();
+    *count              = static_cast<unsigned int>(plugins.size());
     return S_OK;
 }
 

@@ -296,10 +296,13 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="FilesInformationGoogleDrive.cpp" />
     <ClCompile Include="FileSystemGoogleDrive.cpp" />
     <ClInclude Include="FileSystemGoogleDrive.h" />
+    <ClInclude Include="FileSystemGoogleDriveResources.h" />
+    <ResourceCompile Include="FileSystemGoogleDriveResources.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
