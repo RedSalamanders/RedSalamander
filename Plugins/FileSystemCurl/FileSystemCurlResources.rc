@@ -1,0 +1,14 @@
+#include <windows.h>
+#include "FileSystemCurlResources.h"
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMCURL_FTP_NAME "FTP"
+    IDS_FILESYSTEMCURL_FTP_DESCRIPTION "FTP virtual file system."
+    IDS_FILESYSTEMCURL_SFTP_NAME "SFTP"
+    IDS_FILESYSTEMCURL_SFTP_DESCRIPTION "SFTP virtual file system (SSH File Transfer Protocol)."
+    IDS_FILESYSTEMCURL_SCP_NAME "SCP"
+    IDS_FILESYSTEMCURL_SCP_DESCRIPTION "SCP virtual file system (secure copy over SSH)."
+    IDS_FILESYSTEMCURL_IMAP_NAME "IMAP"
+    IDS_FILESYSTEMCURL_IMAP_DESCRIPTION "IMAP virtual mail file system."
+END

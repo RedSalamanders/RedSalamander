@@ -1,0 +1,21 @@
+#include <windows.h>
+#include "FileSystemMicrosoftDriveResources.h"
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_NAME "OneDrive Personal"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_DESCRIPTION "Microsoft OneDrive Personal storage over Microsoft Graph."
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_NAME "OneDrive Business"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_DESCRIPTION "Microsoft OneDrive for Business storage over Microsoft Graph."
+    IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME "SharePoint"
+    IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_DESCRIPTION "Microsoft SharePoint document libraries over Microsoft Graph."
+    IDS_FILESYSTEMMICROSOFTDRIVE_NAME "Microsoft Drive"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED "Sign-in can't start"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT "{0} needs a Microsoft Graph Client ID before it can open the browser sign-in flow.\r\n\r\nEdit the settings JSON and restore the advanced 'clientId' value for '{0}'."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE "Red Salamander"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS "You're connected"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS "Microsoft sign-in is done. Head back to Red Salamander and keep exploring."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE "We hit a snag"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE "Microsoft sign-in did not finish cleanly. Return to Red Salamander to review the problem and try again."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT "This tab can be closed."
+END
