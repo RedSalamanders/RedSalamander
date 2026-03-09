@@ -238,19 +238,13 @@ private:
     };
 
     static constexpr wchar_t kPluginIdOneDrivePersonal[]      = L"builtin/file-system-onedrive-personal";
-    static constexpr wchar_t kPluginShortIdOneDrivePersonal[] = L"onedrivep";
-    static constexpr wchar_t kPluginNameOneDrivePersonal[]    = L"OneDrive Personal";
-    static constexpr wchar_t kPluginDescOneDrivePersonal[]    = L"Microsoft OneDrive Personal storage over Microsoft Graph.";
+    static constexpr wchar_t kPluginShortIdOneDrivePersonal[] = L"onedrive";
 
     static constexpr wchar_t kPluginIdOneDriveBusiness[]      = L"builtin/file-system-onedrive-business";
-    static constexpr wchar_t kPluginShortIdOneDriveBusiness[] = L"onedriveb";
-    static constexpr wchar_t kPluginNameOneDriveBusiness[]    = L"OneDrive Business";
-    static constexpr wchar_t kPluginDescOneDriveBusiness[]    = L"Microsoft OneDrive for Business storage over Microsoft Graph.";
+    static constexpr wchar_t kPluginShortIdOneDriveBusiness[] = L"onedrive-pro";
 
     static constexpr wchar_t kPluginIdSharePoint[]      = L"builtin/file-system-sharepoint";
     static constexpr wchar_t kPluginShortIdSharePoint[] = L"sharepoint";
-    static constexpr wchar_t kPluginNameSharePoint[]    = L"SharePoint";
-    static constexpr wchar_t kPluginDescSharePoint[]    = L"Microsoft SharePoint document libraries over Microsoft Graph.";
 
     static constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
     static constexpr wchar_t kPluginVersion[] = L"0.1";
@@ -264,8 +258,9 @@ private:
       "key": "clientId",
       "type": "text",
       "label": "Client ID",
-      "description": "Microsoft Entra application (client) ID used for delegated Graph sign-in.",
-      "default": "90cdea53-7c21-48b0-959e-b4024209027b"
+      "description": "Advanced JSON-only override for the Microsoft Entra application (client) ID used for delegated Graph sign-in.",
+      "default": "90cdea53-7c21-48b0-959e-b4024209027b",
+      "x-ui-hidden": true
     },
     {
       "key": "connectTimeoutMs",

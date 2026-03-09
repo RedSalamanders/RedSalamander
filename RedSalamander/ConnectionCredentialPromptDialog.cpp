@@ -352,14 +352,27 @@ LRESULT CALLBACK SecretEditSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         return DefSubclassProc(hwnd, msg, wp, lp);
     }
 
-    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
+    if (msg == WM_KEYDOWN)
     {
-        HWND dlg = GetParent(hwnd);
-        if (dlg)
+        if (ThemedControls::HandleEditCtrlBackspaceKeyDown(hwnd, wp))
         {
-            SendMessageW(dlg, WM_COMMAND, MAKEWPARAM(IDCANCEL, BN_CLICKED), 0);
             return 0;
         }
+
+        if (wp == VK_ESCAPE)
+        {
+            HWND dlg = GetParent(hwnd);
+            if (dlg)
+            {
+                SendMessageW(dlg, WM_COMMAND, MAKEWPARAM(IDCANCEL, BN_CLICKED), 0);
+                return 0;
+            }
+        }
+    }
+
+    if (msg == WM_CHAR && ThemedControls::HandleEditCtrlBackspaceChar(hwnd, wp))
+    {
+        return 0;
     }
 
     if (msg == WM_NCDESTROY)

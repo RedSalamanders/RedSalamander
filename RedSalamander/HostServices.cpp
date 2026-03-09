@@ -133,6 +133,21 @@ struct PendingExecuteInPane
     unsigned int folderViewCommandId = 0;
 };
 
+struct PendingOpenViewer
+{
+    std::wstring pluginId;
+    HWND ownerWindow = nullptr;
+    wil::com_ptr<IFileSystem> fileSystem;
+    std::wstring fileSystemName;
+    std::wstring focusedPath;
+    std::vector<std::wstring> selectionStorage;
+    std::vector<const wchar_t*> selectionPointers;
+    std::vector<std::wstring> otherFilesStorage;
+    std::vector<const wchar_t*> otherFilePointers;
+    unsigned long focusedOtherFileIndex = 0;
+    uint32_t viewerFlags                = 0;
+};
+
 [[nodiscard]] bool IsAutomationModeFromCommandLine() noexcept
 {
     static std::once_flag initOnce;
@@ -333,7 +348,7 @@ RedSalamander::Ui::AlertTheme BuildHostAlertTheme() noexcept
 
 } // namespace
 
-class HostServices final : public IHost, public IHostAlerts, public IHostPrompts, public IHostConnections, public IHostPaneExecute
+class HostServices final : public IHost, public IHostAlerts, public IHostPrompts, public IHostConnections, public IHostPaneExecute, public IHostViewers
 {
 public:
     HostServices() noexcept : _refCount(1)
@@ -388,6 +403,13 @@ public:
         if (riid == __uuidof(IHostPaneExecute))
         {
             *ppvObject = static_cast<IHostPaneExecute*>(this);
+            AddRef();
+            return S_OK;
+        }
+
+        if (riid == __uuidof(IHostViewers))
+        {
+            *ppvObject = static_cast<IHostViewers*>(this);
             AddRef();
             return S_OK;
         }
@@ -867,6 +889,101 @@ public:
         return g_folderWindow.ExecuteInActivePane(std::filesystem::path(request->folderPath), focusName, request->folderViewCommandId, activateWindow);
     }
 
+    HRESULT STDMETHODCALLTYPE OpenViewer(const HostViewerOpenRequest* request) noexcept override
+    {
+        if (! request)
+        {
+            return E_POINTER;
+        }
+
+        if (request->version != 1 || request->sizeBytes < sizeof(HostViewerOpenRequest))
+        {
+            return E_INVALIDARG;
+        }
+
+        if (! request->pluginId || request->pluginId[0] == L'\0' || ! request->fileSystem || ! request->focusedPath || request->focusedPath[0] == L'\0')
+        {
+            return E_INVALIDARG;
+        }
+
+        if ((request->selectionCount > 0 && ! request->selectionPaths) || (request->otherFileCount > 0 && ! request->otherFiles))
+        {
+            return E_INVALIDARG;
+        }
+
+        const HWND hostWindow = GetInitializedHostWindow();
+        if (! hostWindow)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+        }
+
+        if (! IsCurrentThreadWindowThread(hostWindow))
+        {
+            auto data                  = std::make_unique<PendingOpenViewer>();
+            data->pluginId             = request->pluginId;
+            data->ownerWindow          = request->ownerWindow;
+            data->fileSystem           = request->fileSystem;
+            data->fileSystemName       = request->fileSystemName ? request->fileSystemName : L"";
+            data->focusedPath          = request->focusedPath;
+            data->focusedOtherFileIndex = request->focusedOtherFileIndex;
+            data->viewerFlags          = request->viewerFlags;
+
+            if (request->selectionPaths && request->selectionCount > 0)
+            {
+                data->selectionStorage.reserve(request->selectionCount);
+                for (unsigned long i = 0; i < request->selectionCount; ++i)
+                {
+                    const wchar_t* path = request->selectionPaths[i];
+                    if (path && path[0] != L'\0')
+                    {
+                        data->selectionStorage.emplace_back(path);
+                    }
+                }
+
+                data->selectionPointers.reserve(data->selectionStorage.size());
+                for (const auto& path : data->selectionStorage)
+                {
+                    data->selectionPointers.push_back(path.c_str());
+                }
+            }
+
+            if (request->otherFiles && request->otherFileCount > 0)
+            {
+                data->otherFilesStorage.reserve(request->otherFileCount);
+                for (unsigned long i = 0; i < request->otherFileCount; ++i)
+                {
+                    const wchar_t* path = request->otherFiles[i];
+                    if (path && path[0] != L'\0')
+                    {
+                        data->otherFilesStorage.emplace_back(path);
+                    }
+                }
+
+                data->otherFilePointers.reserve(data->otherFilesStorage.size());
+                for (const auto& path : data->otherFilesStorage)
+                {
+                    data->otherFilePointers.push_back(path.c_str());
+                }
+            }
+
+            const LRESULT msgResult = SendMessageW(hostWindow, WndMsg::kHostOpenViewer, 0, reinterpret_cast<LPARAM>(data.get()));
+            return static_cast<HRESULT>(msgResult);
+        }
+
+        ViewerOpenContext context{};
+        context.ownerWindow           = request->ownerWindow;
+        context.fileSystem            = request->fileSystem;
+        context.fileSystemName        = request->fileSystemName;
+        context.focusedPath           = request->focusedPath;
+        context.selectionPaths        = request->selectionPaths;
+        context.selectionCount        = request->selectionCount;
+        context.otherFiles            = request->otherFiles;
+        context.otherFileCount        = request->otherFileCount;
+        context.focusedOtherFileIndex = request->focusedOtherFileIndex;
+        context.flags                 = static_cast<ViewerOpenFlags>(request->viewerFlags);
+        return g_folderWindow.OpenViewerWithPlugin(request->pluginId, context);
+    }
+
     bool TryHandleMessage(UINT message, WPARAM /*wParam*/, LPARAM lParam, LRESULT& result) noexcept
     {
         if (message == WndMsg::kHostShowAlert)
@@ -1048,6 +1165,32 @@ public:
                 std::filesystem::path(data->folderPath), std::wstring_view(data->focusItemDisplayName), data->folderViewCommandId, activateWindow);
 
             result = static_cast<LRESULT>(hr);
+            return true;
+        }
+
+        if (message == WndMsg::kHostOpenViewer)
+        {
+            auto* data = reinterpret_cast<PendingOpenViewer*>(lParam);
+            if (! data || ! data->fileSystem || data->pluginId.empty() || data->focusedPath.empty())
+            {
+                result = static_cast<LRESULT>(E_INVALIDARG);
+                return true;
+            }
+
+            ViewerOpenContext context{};
+            context.ownerWindow           = data->ownerWindow;
+            context.fileSystem            = data->fileSystem.get();
+            context.fileSystemName        = data->fileSystemName.empty() ? nullptr : data->fileSystemName.c_str();
+            context.focusedPath           = data->focusedPath.c_str();
+            context.selectionPaths        = data->selectionPointers.empty() ? nullptr : data->selectionPointers.data();
+            context.selectionCount        = static_cast<unsigned long>(data->selectionPointers.size());
+            context.otherFiles            = data->otherFilePointers.empty() ? nullptr : data->otherFilePointers.data();
+            context.otherFileCount        = static_cast<unsigned long>(data->otherFilePointers.size());
+            context.focusedOtherFileIndex = data->focusedOtherFileIndex;
+            context.flags                 = static_cast<ViewerOpenFlags>(data->viewerFlags);
+
+            const HRESULT hr = g_folderWindow.OpenViewerWithPlugin(data->pluginId, context);
+            result           = static_cast<LRESULT>(hr);
             return true;
         }
 

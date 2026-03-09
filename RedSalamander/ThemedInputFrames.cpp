@@ -175,6 +175,12 @@ LRESULT CALLBACK InputControlSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
             SendMessageW(target, msg, wp, lp);
             return 0;
         }
+        case WM_CHAR:
+            if (ThemedControls::HandleEditCtrlBackspaceChar(hwnd, wp))
+            {
+                return 0;
+            }
+            break;
         case WM_SETFOCUS:
             if (GetPropW(hwnd, L"FocusViaMouse"))
             {
@@ -210,6 +216,10 @@ LRESULT CALLBACK InputControlSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
             if (frame)
             {
                 InvalidateRect(frame, nullptr, TRUE);
+            }
+            if (ThemedControls::HandleEditCtrlBackspaceKeyDown(hwnd, wp))
+            {
+                return 0;
             }
             break;
     }

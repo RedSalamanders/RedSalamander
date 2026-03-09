@@ -35,9 +35,13 @@ When an **edit control** is focused, the host MUST bypass (2) and (3) and MUST N
 
 ### Scope and focus
 
+- Outside explicit child-window focus (edit controls, open dropdowns, or the Win32 menu loop), the active pane’s `FolderView` is the default keyboard owner.
+- When the application or `FolderWindow` regains focus and no child window already has an intentional keyboard claim, the host MUST restore keyboard focus to the active pane’s most recent pane child; if none, restore the active pane’s `FolderView`.
 - Shortcuts that target “the active pane” MUST resolve to the **focused pane** when focus is inside a pane; otherwise use the **active pane**.
 - Shortcuts that act on file selection MUST prefer `Selected items`; if none are selected, they act on the `Current item` (and MAY implicitly select it for the operation).
 - While an **edit control** is active (NavigationView address edit, rename edit, dialogs), the edit control owns the keyboard: application-level accelerators and configurable shortcut bindings MUST NOT execute (text-edit safety).
+- Standard text-edit commands remain local to the control, including `Ctrl+Backspace` deleting the previous word/segment instead of invoking any pane/app shortcut.
+- Mouse interaction with passive pane chrome MUST NOT permanently move keyboard focus away from the pane’s `FolderView`; only explicit keyboard entry into `NavigationView`, entering an edit control, or opening a keyboard-owned popup may take focus.
 
 ### Command resolution (normative)
 
@@ -91,7 +95,7 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/clipboardPaste`
 - `cmd/pane/clipboardPasteShortcut` *(planned)*
 - `cmd/pane/copyNameAsText`
-- `cmd/pane/copyPathAndFileName`
+- `cmd/pane/copyUncPathAndNameAsText`
 - `cmd/pane/copyPathAndNameAsText`
 - `cmd/pane/copyPathAsText`
 - `cmd/pane/executeOpen`
@@ -191,6 +195,15 @@ This section is the single source of truth for the command ID catalog.
 - Top-level menu order MUST be:
   - `Left`, `Files`, `Edit`, `Commands`, `Plugins`, `View`, `Right`, `Help`
 - `Help` MUST be right-justified (appear at the right edge of the menu bar).
+
+### Debug Self-Test Contract
+
+- The default Commands self-test suite MUST prefer deterministic, local-only scenarios over environment-dependent integration.
+- Command registry coverage MUST validate canonical command IDs only; removed command IDs are not preserved as aliases.
+- Shortcut-default coverage MUST assert fixed high-value bindings directly, including the full `Insert` row for copy/paste/copy-as-text commands and the `Ctrl+F2..F6` sort bindings.
+- Menu-contract coverage MUST assert the `Edit` menu copy-text group order, labels, separator boundaries, and text-only icon policy.
+- Command behavior coverage for copy-text commands MUST run in a temp local folder with clipboard assertions and MUST stay separate from selection save/restore scenarios.
+- The global dispatch smoke test remains a smoke test: it verifies that commands do not wedge the UI or leak transient windows, but it is not a substitute for behavior assertions.
 
 ### Placement rationale (Non-normative)
 
@@ -293,10 +306,12 @@ Notation:
 - Paste (`Ctrl+V` target; also `Shift+Insert` default binding) `[cmd/pane/clipboardPaste]`
 - Paste Shortcut [td] (`⊘`) `[cmd/pane/clipboardPasteShortcut]`
 - ---
-- Copy Path + Name as Text [td] (`Alt+Insert`) `[cmd/pane/copyPathAndNameAsText]`
-- Copy Name as Text [td] (`Alt+Shift+Insert`) `[cmd/pane/copyNameAsText]`
-- Copy Path as Text [td] (`Ctrl+Alt+Insert`) `[cmd/pane/copyPathAsText]`
-- Copy Path + File Name as Text [td] (`Ctrl+Shift+Insert`) `[cmd/pane/copyPathAndFileName]`
+- Copy Path + Name as Text (`Alt+Insert`) `[cmd/pane/copyPathAndNameAsText]`
+- Copy Name as Text (`Alt+Shift+Insert`) `[cmd/pane/copyNameAsText]`
+- Copy Path as Text (`Ctrl+Alt+Insert`) `[cmd/pane/copyPathAsText]`
+- Copy UNC Path + Name as Text (`Ctrl+Shift+Insert`) `[cmd/pane/copyUncPathAndNameAsText]`
+- Note: this resolves mapped drives to their provider UNC path and local file-system paths to `\\<machine>\<drive>$\...` when available.
+- Note: `Name` means filename plus extension.
 - ---
 - Select… (`Ctrl+<key left of Backspace>`) `[cmd/pane/selection/selectDialog]`
 - Unselect… (`Ctrl+<key right of 0>`) `[cmd/pane/selection/unselectDialog]`
@@ -650,7 +665,7 @@ This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` 
 | A..Z      | ⊘                                  | ⊘                                | ⊘                        | Go to Drive Root (`<drive>:\\`)    | ⊘                                 | ⊘                 | ⊘                     |
 | Enter     | Execute / Open                     | Bring Filename to Command Line   | Open Properties          | ⊘                                  | Bring Filename to Command Line    | ⊘                 | ⊘                     |
 | Space     | Select + Calc Dir Size + Next      | Bring Current Dir to Command Line | Window Menu              | Quick Search / Command Line Input  | Bring Current Dir to Command Line | ⊘                 | ⊘                     |
-| Insert    | Select + Next                      | Clipboard Copy                   | Copy Path + Name as Text | Clipboard Paste                    | Copy Path + File Name as Text     | Copy Path as Text | Copy Name as Text     |
+| Insert    | Select + Next                      | Clipboard Copy                   | Copy Path + Name as Text | Clipboard Paste                    | Copy UNC Path + Name as Text      | Copy Path as Text | Copy Name as Text     |
 | Delete    | Move to Recycle Bin                | ⊘                                | ⊘                        | Permanent Delete (With Validation) | Permanent Delete (With Validation) | ⊘                 | ⊘                     |
 
 Notes:

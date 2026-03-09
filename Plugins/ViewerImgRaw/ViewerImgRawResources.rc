@@ -88,4 +88,7 @@ BEGIN
     IDS_VIEWERRAW_DIALOG_FILTER_JXR "JPEG XR image (*.jxr;*.wdp;*.hdp)"
     IDS_VIEWERRAW_EXPORT_NO_IMAGE "No image to export."
     IDS_VIEWERRAW_EXPORT_UNSUPPORTED_EXTENSION "Unsupported export extension. Use .png, .jpg/.jpeg, .tif/.tiff, .bmp/.dib, .gif, or .jxr/.wdp/.hdp."
+    IDS_VIEWERRAW_STATUS_FILESYSTEM_MISSING "Active filesystem is missing."
+    IDS_VIEWERRAW_STATUS_UNSUPPORTED_FORMAT "Unsupported file format."
+    IDS_VIEWERRAW_STATUS_STORE_OOM "Out of memory while storing decoded image."
 END

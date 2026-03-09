@@ -59,6 +59,36 @@ constexpr std::wstring_view kWslDollarPrefix       = L"\\\\wsl$\\";
     return key;
 }
 
+[[nodiscard]] bool IsDirectoryExtensionKey(std::wstring_view extension) noexcept
+{
+    return wil::compare_string_ordinal(extension, kDirectoryExtensionKey, true) == wistd::weak_ordering::equivalent;
+}
+
+[[nodiscard]] std::wstring BuildAssociationQueryPath(std::wstring_view normalizedExtension)
+{
+    if (IsDirectoryExtensionKey(normalizedExtension))
+    {
+        return L"C:\\DummyFolder\\";
+    }
+
+    std::wstring queryPath = L"C:\\Dummy";
+    queryPath.append(normalizedExtension);
+    return queryPath;
+}
+
+[[nodiscard]] std::optional<int> QueryAssociationIconIndex(std::wstring_view normalizedExtension, DWORD fileAttributes) noexcept
+{
+    SHFILEINFOW sfi{};
+    const std::wstring queryPath = BuildAssociationQueryPath(normalizedExtension);
+    const DWORD_PTR result = SHGetFileInfoW(queryPath.c_str(), fileAttributes, &sfi, sizeof(sfi), SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES);
+    if (result == 0 || sfi.iIcon < 0)
+    {
+        return std::nullopt;
+    }
+
+    return sfi.iIcon;
+}
+
 [[nodiscard]] bool StartsWithIgnoreCase(std::wstring_view value, std::wstring_view prefix) noexcept
 {
     if (value.size() < prefix.size())
@@ -838,8 +868,9 @@ void IconCache::WarmCommonExtensions()
 
     // Common file extensions to pre-cache (most frequently encountered)
     static constexpr std::pair<std::wstring_view, DWORD> commonExtensions[] = {
-        {L".txt", FILE_ATTRIBUTE_NORMAL},  {L".log", FILE_ATTRIBUTE_NORMAL},
-        {L".xml", FILE_ATTRIBUTE_NORMAL},  {L".json", FILE_ATTRIBUTE_NORMAL},
+        {L".txt", FILE_ATTRIBUTE_NORMAL},   {L".log", FILE_ATTRIBUTE_NORMAL},
+        {L".xml", FILE_ATTRIBUTE_NORMAL},   {L".json", FILE_ATTRIBUTE_NORMAL},
+        {L".jsonl", FILE_ATTRIBUTE_NORMAL}, {L".ndjson", FILE_ATTRIBUTE_NORMAL},
         {L".ini", FILE_ATTRIBUTE_NORMAL},  {L".cfg", FILE_ATTRIBUTE_NORMAL},
         {L".md", FILE_ATTRIBUTE_NORMAL},   {L".cpp", FILE_ATTRIBUTE_NORMAL},
         {L".h", FILE_ATTRIBUTE_NORMAL},    {L".hpp", FILE_ATTRIBUTE_NORMAL},
@@ -875,29 +906,13 @@ void IconCache::WarmCommonExtensions()
             }
         }
 
-        // Query icon index
-        // For folders: Use SHGFI_USEFILEATTRIBUTES with FILE_ATTRIBUTE_DIRECTORY
-        // Note: Icon indices are size-agnostic; we extract from size-specific image lists later
-        const bool isFolder = (ext == L"<directory>");
-        std::wstring queryPath;
-        if (isFolder)
-        {
-            queryPath = L"C:\\DummyFolder\\";
-        }
-        else
-        {
-            queryPath = L"C:\\Dummy";
-            queryPath.append(ext);
-        }
-
-        SHFILEINFOW sfi{};
-        const DWORD_PTR result = SHGetFileInfoW(queryPath.c_str(), attrib, &sfi, sizeof(sfi), SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES);
-        if (result != 0 && sfi.iIcon >= 0)
+        const auto iconIndex = QueryAssociationIconIndex(extKey, attrib);
+        if (iconIndex.has_value())
         {
             std::lock_guard lock(_mutex);
             if (_extensionToIconIndex.find(extKey) == _extensionToIconIndex.end())
             {
-                _extensionToIconIndex[std::move(extKey)] = sfi.iIcon;
+                _extensionToIconIndex[std::move(extKey)] = *iconIndex;
                 ++warmed;
             }
         }
@@ -1030,19 +1045,12 @@ std::optional<int> IconCache::GetOrQueryIconIndexByExtension(std::wstring_view e
 
     const std::wstring key = NormalizeExtensionKey(extension);
     const std::wstring_view keyView{key};
-    const bool isFolder = (keyView == kDirectoryExtensionKey);
-    std::wstring queryPath;
-    if (isFolder)
+    const bool isFolder = IsDirectoryExtensionKey(keyView);
+    auto iconIndex      = QueryAssociationIconIndex(keyView, fileAttributes);
+    if (! iconIndex.has_value() && ! isFolder && ! keyView.empty())
     {
-        queryPath = L"C:\\DummyFolder\\";
+        iconIndex = QueryAssociationIconIndex(std::wstring_view{}, FILE_ATTRIBUTE_NORMAL);
     }
-    else
-    {
-        queryPath = L"C:\\Dummy";
-        queryPath.append(keyView);
-    }
-
-    const auto iconIndex = QuerySysIconIndexForPath(queryPath.c_str(), fileAttributes, true);
     if (iconIndex.has_value())
     {
         RegisterExtension(keyView, *iconIndex);

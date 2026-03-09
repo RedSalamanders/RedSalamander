@@ -29,7 +29,7 @@ Don't need to display Windows hello right after connection manager connect butto
 
 ------------------------------------------------------------------------------------------------------
 ## Connection manager 
-in navigation bar display emji in color
+in navigation bar display emoji in color
 
 
 ------------------------------------------------------------------------------------------------------

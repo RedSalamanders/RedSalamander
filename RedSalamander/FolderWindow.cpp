@@ -544,14 +544,14 @@ LRESULT FolderWindow::OnNotify(const NMHDR* header)
     {
         const auto* mouse = reinterpret_cast<const NMMOUSE*>(header);
         const int part    = static_cast<int>(mouse->dwItemSpec);
-        if (part == 1 && _showSortMenuCallback)
+        if (part == kStatusBarPartSort && _showSortMenuCallback)
         {
             const Pane pane = header->idFrom == kLeftStatusBarId ? Pane::Left : Pane::Right;
             SetActivePane(pane);
 
             RECT partRect{};
             POINT screenPoint{};
-            if (SendMessageW(header->hwndFrom, SB_GETRECT, 1, reinterpret_cast<LPARAM>(&partRect)) != 0)
+            if (SendMessageW(header->hwndFrom, SB_GETRECT, kStatusBarPartSort, reinterpret_cast<LPARAM>(&partRect)) != 0)
             {
                 const int dpi      = static_cast<int>(GetDpiForWindow(header->hwndFrom));
                 const int paddingX = MulDiv(kStatusBarSortPaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI);
@@ -687,11 +687,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             { OnNavigationPathChanged(pane, path); });
             state.navigationView.SetRequestFolderViewFocusCallback([this, pane]
             {
-                PaneState& s = pane == Pane::Left ? _leftPane : _rightPane;
-                if (s.hFolderView)
-                {
-                    SetFocus(s.hFolderView.get());
-                }
+                FocusPaneFolderView(pane);
             });
 
             state.folderView.SetPathChangedCallback([this, pane](const std::optional<std::filesystem::path>& path) { OnFolderViewPathChanged(pane, path); });

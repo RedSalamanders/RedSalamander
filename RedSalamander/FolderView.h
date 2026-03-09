@@ -1027,6 +1027,7 @@ private:
         int iconIndex                = -1;
         bool hasVisibleItems         = false;
         size_t firstVisibleItemIndex = static_cast<size_t>(-1);
+        unsigned int retryCount      = 0;
         std::vector<size_t> itemIndices;
     };
     std::deque<IconLoadRequest> _iconLoadQueue;

@@ -22,23 +22,62 @@ LRESULT FolderWindow::OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mouseMsg
 
 void FolderWindow::OnSetFocus()
 {
-    PaneState& state = _activePane == Pane::Left ? _leftPane : _rightPane;
+    FocusPanePreferredTarget(_activePane);
+}
+
+void FolderWindow::UpdatePaneFocusStates() noexcept
+{
+    const HWND focusedHwnd = GetFocus();
+    const bool inLeftPane = (_leftPane.hFolderView && (focusedHwnd == _leftPane.hFolderView.get() || IsChild(_leftPane.hFolderView.get(), focusedHwnd))) ||
+                            (_leftPane.hNavigationView && (focusedHwnd == _leftPane.hNavigationView.get() || IsChild(_leftPane.hNavigationView.get(), focusedHwnd)));
+    const bool inRightPane =
+        (_rightPane.hFolderView && (focusedHwnd == _rightPane.hFolderView.get() || IsChild(_rightPane.hFolderView.get(), focusedHwnd))) ||
+        (_rightPane.hNavigationView && (focusedHwnd == _rightPane.hNavigationView.get() || IsChild(_rightPane.hNavigationView.get(), focusedHwnd)));
+    if (focusedHwnd && (inLeftPane || inRightPane))
+    {
+        _lastFocusedPaneChild = focusedHwnd;
+    }
+
+    const Pane focusedPane = GetFocusedPane();
+    SetActivePane(focusedPane);
+
+    _leftPane.folderView.SetPaneFocused(focusedPane == Pane::Left);
+    _rightPane.folderView.SetPaneFocused(focusedPane == Pane::Right);
+
+    _leftPane.navigationView.SetPaneFocused(focusedPane == Pane::Left);
+    _rightPane.navigationView.SetPaneFocused(focusedPane == Pane::Right);
+}
+
+HWND FolderWindow::GetPanePreferredFocusTarget(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    const bool inPane = (state.hFolderView && (_lastFocusedPaneChild == state.hFolderView.get() || IsChild(state.hFolderView.get(), _lastFocusedPaneChild))) ||
+                        (state.hNavigationView &&
+                         (_lastFocusedPaneChild == state.hNavigationView.get() || IsChild(state.hNavigationView.get(), _lastFocusedPaneChild)));
+    if (_lastFocusedPaneChild && IsWindow(_lastFocusedPaneChild) && inPane)
+    {
+        return _lastFocusedPaneChild;
+    }
+
+    return state.hFolderView.get();
+}
+
+void FolderWindow::FocusPaneFolderView(Pane pane) noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     if (state.hFolderView)
     {
         SetFocus(state.hFolderView.get());
     }
 }
 
-void FolderWindow::UpdatePaneFocusStates() noexcept
+void FolderWindow::FocusPanePreferredTarget(Pane pane) noexcept
 {
-    const Pane focused = GetFocusedPane();
-    SetActivePane(focused);
-
-    _leftPane.folderView.SetPaneFocused(focused == Pane::Left);
-    _rightPane.folderView.SetPaneFocused(focused == Pane::Right);
-
-    _leftPane.navigationView.SetPaneFocused(focused == Pane::Left);
-    _rightPane.navigationView.SetPaneFocused(focused == Pane::Right);
+    const HWND target = GetPanePreferredFocusTarget(pane);
+    if (target)
+    {
+        SetFocus(target);
+    }
 }
 
 void FolderWindow::SetActivePane(Pane pane) noexcept
@@ -142,10 +181,18 @@ void FolderWindow::OnLButtonDown(POINT pt)
     if (pt.x < _splitterRect.left)
     {
         SetActivePane(Pane::Left);
+        if (GetFocusedPane() != Pane::Left)
+        {
+            FocusPaneFolderView(Pane::Left);
+        }
     }
     else if (pt.x > _splitterRect.right)
     {
         SetActivePane(Pane::Right);
+        if (GetFocusedPane() != Pane::Right)
+        {
+            FocusPaneFolderView(Pane::Right);
+        }
     }
 }
 
@@ -221,9 +268,17 @@ void FolderWindow::OnParentNotify(UINT eventMsg, UINT childId)
     if (childId == kLeftNavigationId || childId == kLeftFolderViewId)
     {
         SetActivePane(Pane::Left);
+        if (GetFocusedPane() != Pane::Left)
+        {
+            FocusPaneFolderView(Pane::Left);
+        }
     }
     else if (childId == kRightNavigationId || childId == kRightFolderViewId)
     {
         SetActivePane(Pane::Right);
+        if (GetFocusedPane() != Pane::Right)
+        {
+            FocusPaneFolderView(Pane::Right);
+        }
     }
 }

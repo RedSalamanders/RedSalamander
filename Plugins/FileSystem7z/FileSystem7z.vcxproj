@@ -250,9 +250,12 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="FileSystem7z.cpp" />
     <ClInclude Include="FileSystem7z.h" />
+    <ClInclude Include="FileSystem7zResources.h" />
+    <ResourceCompile Include="FileSystem7zResources.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

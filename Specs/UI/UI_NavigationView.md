@@ -575,6 +575,7 @@ When the active plugin is **not** `file`, NavigationView appends a bottom:
 **Rendering rules**:
 - Order and separators are provided by the plugin.
 - The host may inject additional items (e.g. `Connections...`) while preserving plugin ordering.
+- When the host injects the Connections submenu, `<Quick Connect>` stays first and the remaining saved connections are sorted alphabetically by label (case-insensitive).
 - `label` is used verbatim for display.
 - If `path` is supplied, selecting the item navigates to that path.
 - If `commandId` is supplied (and no `path`), the host calls `ExecuteMenuCommand`.
@@ -1923,6 +1924,7 @@ NavigationView must implement internal focus navigation because most interactive
 - Maintain a focused region state: **Menu**, **Path**, **History**, **Disk Info** (skip hidden sections)
 - Draw a visible focus indicator for the focused region when NavigationView has focus and is not in edit mode
 - **Tab / Shift+Tab** moves focus between regions (see shortcut list above)
+- Mouse clicks on breadcrumb chrome may activate menus, history, disk info, or path navigation, but MUST NOT by themselves permanently steal keyboard focus from the pane’s `FolderView`
 - **Cross-control focus handoff**:
   - When focused region is **Disk Info** and user presses **Tab**, move focus to **FolderView**
   - When focused region is **Menu** and user presses **Shift+Tab**, move focus to **FolderView**
@@ -1932,6 +1934,7 @@ NavigationView must implement internal focus navigation because most interactive
   - **History** → open history dropdown
   - **Disk Info** → open disk info dropdown
 - When the edit control has focus, **Tab / Shift+Tab** must first exit edit mode, then move focus to the next/previous region
+- Explicit child HWNDs spawned by NavigationView (address edit, dropdown combo) take keyboard priority while active; once they close, focus returns to the pane `FolderView` unless another pane child is intentionally focused
 
 ## Theme System
 

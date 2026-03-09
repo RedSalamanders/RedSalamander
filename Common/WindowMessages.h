@@ -59,6 +59,7 @@ inline constexpr UINT kHostSetConnectionSecret            = WM_APP + 0x50E;
 inline constexpr UINT kHostDeleteConnectionSecret         = WM_APP + 0x50F;
 inline constexpr UINT kSettingsFileChanged                = WM_APP + 0x511;
 inline constexpr UINT kSettingsReloadedFromDisk           = WM_APP + 0x512;
+inline constexpr UINT kHostOpenViewer                     = WM_APP + 0x513;
 
 // Startup milestones (UI thread).
 inline constexpr UINT kAppStartupInputReady = WM_APP + 0x510;

@@ -1,10 +1,73 @@
 #include "FileSystemCurl.Internal.h"
+#include "FileSystemCurlResources.h"
 
 using namespace FileSystemCurlInternal;
+
+extern HINSTANCE g_hInstance;
 
 namespace
 {
 std::atomic<unsigned long> g_fileSystemCurlInstanceCount{0};
+
+[[nodiscard]] const wchar_t* LocalizedPluginName(FileSystemCurlProtocol protocol) noexcept
+{
+    switch (protocol)
+    {
+        case FileSystemCurlProtocol::Ftp:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_FTP_NAME);
+            return text.c_str();
+        }
+        case FileSystemCurlProtocol::Sftp:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_NAME);
+            return text.c_str();
+        }
+        case FileSystemCurlProtocol::Scp:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SCP_NAME);
+            return text.c_str();
+        }
+        case FileSystemCurlProtocol::Imap:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_IMAP_NAME);
+            return text.c_str();
+        }
+    }
+
+    static const std::wstring fallback = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_NAME);
+    return fallback.c_str();
+}
+
+[[nodiscard]] const wchar_t* LocalizedPluginDescription(FileSystemCurlProtocol protocol) noexcept
+{
+    switch (protocol)
+    {
+        case FileSystemCurlProtocol::Ftp:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_FTP_DESCRIPTION);
+            return text.c_str();
+        }
+        case FileSystemCurlProtocol::Sftp:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_DESCRIPTION);
+            return text.c_str();
+        }
+        case FileSystemCurlProtocol::Scp:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SCP_DESCRIPTION);
+            return text.c_str();
+        }
+        case FileSystemCurlProtocol::Imap:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_IMAP_DESCRIPTION);
+            return text.c_str();
+        }
+    }
+
+    static const std::wstring fallback = LoadStringResource(g_hInstance, IDS_FILESYSTEMCURL_SFTP_DESCRIPTION);
+    return fallback.c_str();
+}
 } // namespace
 
 namespace FileSystemCurlInternal
@@ -3087,26 +3150,26 @@ FileSystemCurl::FileSystemCurl(FileSystemCurlProtocol protocol, IHost* host) : _
         case FileSystemCurlProtocol::Ftp:
             _metaData.id          = kPluginIdFtp;
             _metaData.shortId     = kPluginShortIdFtp;
-            _metaData.name        = kPluginNameFtp;
-            _metaData.description = kPluginDescriptionFtp;
+            _metaData.name        = LocalizedPluginName(FileSystemCurlProtocol::Ftp);
+            _metaData.description = LocalizedPluginDescription(FileSystemCurlProtocol::Ftp);
             break;
         case FileSystemCurlProtocol::Sftp:
             _metaData.id          = kPluginIdSftp;
             _metaData.shortId     = kPluginShortIdSftp;
-            _metaData.name        = kPluginNameSftp;
-            _metaData.description = kPluginDescriptionSftp;
+            _metaData.name        = LocalizedPluginName(FileSystemCurlProtocol::Sftp);
+            _metaData.description = LocalizedPluginDescription(FileSystemCurlProtocol::Sftp);
             break;
         case FileSystemCurlProtocol::Scp:
             _metaData.id          = kPluginIdScp;
             _metaData.shortId     = kPluginShortIdScp;
-            _metaData.name        = kPluginNameScp;
-            _metaData.description = kPluginDescriptionScp;
+            _metaData.name        = LocalizedPluginName(FileSystemCurlProtocol::Scp);
+            _metaData.description = LocalizedPluginDescription(FileSystemCurlProtocol::Scp);
             break;
         case FileSystemCurlProtocol::Imap:
             _metaData.id          = kPluginIdImap;
             _metaData.shortId     = kPluginShortIdImap;
-            _metaData.name        = kPluginNameImap;
-            _metaData.description = kPluginDescriptionImap;
+            _metaData.name        = LocalizedPluginName(FileSystemCurlProtocol::Imap);
+            _metaData.description = LocalizedPluginDescription(FileSystemCurlProtocol::Imap);
             break;
     }
     _metaData.author  = kPluginAuthor;

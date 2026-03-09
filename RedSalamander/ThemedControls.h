@@ -18,6 +18,8 @@ void EnableOwnerDrawButton(HWND dlg, int controlId) noexcept;
 // Centers the first line of a multiline edit control within its current formatting rectangle (EM_GETRECT/EM_SETRECTNP).
 // Intended for "single-line" edits implemented using ES_MULTILINE for vertical centering.
 void CenterEditTextVertically(HWND edit) noexcept;
+[[nodiscard]] bool HandleEditCtrlBackspaceKeyDown(HWND edit, WPARAM key) noexcept;
+[[nodiscard]] bool HandleEditCtrlBackspaceChar(HWND edit, WPARAM key) noexcept;
 
 void ApplyThemeToComboBox(HWND combo, const AppTheme& theme) noexcept;
 void ApplyThemeToComboBoxDropDown(HWND combo, const AppTheme& theme) noexcept;

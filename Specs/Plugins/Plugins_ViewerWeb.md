@@ -6,7 +6,7 @@
 It exposes three logical viewer plugins (one DLL, three plugin IDs):
 
 - `builtin/viewer-web`: HTML/PDF viewer (navigates to file:// URLs or a temp extract for non-Win32 paths).
-- `builtin/viewer-json`: JSON/JSON5 viewer (pretty highlighted text by default; optional tree view).
+- `builtin/viewer-json`: JSON/JSON5/JSONL viewer (pretty highlighted text by default; optional tree view; structured JSONL log cards).
 - `builtin/viewer-markdown`: Markdown viewer with syntax highlighting (renders an internal HTML page).
 
 ## Invocation (Host Integration)
@@ -29,7 +29,7 @@ Runtime requirements:
 
 Intended associations:
 - `builtin/viewer-web`: `.html`, `.htm`, `.pdf`
-- `builtin/viewer-json`: `.json`, `.json5`
+- `builtin/viewer-json`: `.json`, `.json5`, `.jsonl`, `.ndjson`
 - `builtin/viewer-markdown`: `.md`
 
 ## Configuration
@@ -38,25 +38,41 @@ ViewerWeb exposes a per-plugin configuration schema (`GetConfigurationSchema`) a
 
 Keys (defaults):
 - `maxDocumentMiB` (`32`, `1..512`): maximum size for in-memory loads (JSON/Markdown).
-- `viewMode` (`"pretty"`): JSON rendering mode (`"pretty"` or `"tree"`).
+- `viewMode` (`"pretty"`): JSON rendering mode (`"pretty"`, `"tree"`, or `"jsonl"`).
 - `allowExternalNavigation` (`true`): allow navigating to `http://` / `https://` links (Web/Markdown).
 - `devToolsEnabled` (`false`): allow opening WebView2 DevTools.
 
 Notes:
 - If ViewerWeb is missing/disabled, the host falls back to `builtin/viewer-text`.
 - Settings are per-plugin-ID (`builtin/viewer-web` vs `builtin/viewer-json` vs `builtin/viewer-markdown`).
+- `.jsonl` / `.ndjson` files auto-prefer the JSONL card view even when `viewMode` is left at the default `"pretty"`.
+- If a `.json` / `.json5` document fails as a single JSON value but parses as multiple JSON values separated by newlines, the viewer falls back to the JSONL card view.
+- If a JSON/Markdown document exceeds `maxDocumentMiB`, ViewerWeb keeps the error message visible and offers to reopen the same file in `builtin/viewer-text`.
 
 ## UI / UX
 
 Layout:
 - **Header**: filename dropdown (combo box) listing `otherFiles` when `otherFileCount > 1` (ViewerText-style).
 - **Content**: WebView2 surface.
+- Internal HTML pages (`json`, `jsonl`, `markdown`) theme their own scrollbars from the current viewer colors, including nested code-block scrollers.
+- Generated `json`, `jsonl`, and `markdown` pages are delivered to WebView2 through an in-memory `WebResourceRequested` response on a private viewer URL, so large rendered documents do not rely on `NavigateToString()` or a temp `.html` file.
 
 Menu (themed/owner-drawn):
 - File: Save As, Refresh, Exit, Other Files navigation (Next/Previous/First/Last)
 - Search: Find, Find Next, Find Previous
 - View: Zoom In/Out/Reset, Toggle DevTools
 - Tools: Copy URL, Open in Browser, JSON Expand/Collapse, Toggle Markdown Source
+
+JSON viewer modes:
+- `pretty`: syntax-highlighted formatted JSON text.
+- `tree`: read-only `jsoneditor` tree view with `Expand All` / `Collapse All`.
+- `jsonl`: structured log cards for one JSON object per line, with per-entry badges (`level`, `category`, timestamp when present) and lazy syntax-highlighted payload expansion.
+- JSON syntax colors are theme-aware but intentionally separated by token kind: keys, string values, numeric values, and boolean/null literals each use a distinct palette.
+
+Oversized document fallback:
+- Trigger: JSON/Markdown file exceeds the in-memory size limit (`maxDocumentMiB`).
+- UX: ViewerWeb prompts with the size-limit error text plus a Yes/No offer to open the document in Text Viewer.
+- On Yes: the host opens `builtin/viewer-text` for the same file-system path and ViewerWeb closes its own window after the handoff succeeds.
 
 ## Theme / Rainbow
 
@@ -67,6 +83,27 @@ Menu (themed/owner-drawn):
 ## Third-Party Components (Non-GPL)
 
 ViewerWeb embeds the following JavaScript libraries as resources:
-- **jsoneditor** (Apache-2.0) for optional JSON tree view.
-- **markdown-it** (MIT) for Markdown rendering.
-- **highlight.js** (BSD-3-Clause) for code highlighting (Markdown) and JSON pretty view.
+- **jsoneditor 10.4.2** (Apache-2.0) for read-only JSON tree view.
+- **markdown-it 14.1.0** (MIT) for Markdown rendering.
+- **highlight.js 11.11.1** (BSD-3-Clause) for syntax highlighting in Markdown, JSON pretty view, and expanded JSONL payloads.
+
+License material shipped in-tree:
+- `Plugins/ViewerWeb/ThirdParty/jsoneditor.LICENSE.txt`
+- `Plugins/ViewerWeb/ThirdParty/jsoneditor.NOTICE.txt`
+- `Plugins/ViewerWeb/ThirdParty/markdown-it.LICENSE.txt`
+- `Plugins/ViewerWeb/ThirdParty/highlightjs.LICENSE.txt`
+
+JSONL implementation note:
+- No new third-party viewer library was added for JSONL. The JSONL view is built in the plugin and reuses the existing permissively licensed `highlight.js` dependency for payload coloration.
+
+## Dependency Maintenance
+
+Vendored web assets:
+- Minified assets live under `Plugins/ViewerWeb/Assets/`.
+- When updating a vendored asset, replace the minified file, verify the embedded version banner/header, and refresh the matching license/notice text under `Plugins/ViewerWeb/ThirdParty/` if upstream changed it.
+- Keep this spec in sync with the vendored asset versions after each update.
+
+vcpkg-managed dependencies:
+- Native dependencies (including `webview2`, `yyjson`, `wil`, `curl`, `libraw`, and AWS SDK components) are versioned in `vcpkg.json`.
+- To review available updates, refresh the vcpkg baseline (`vcpkg x-update-baseline`) and inspect the resulting version changes before committing.
+- After bumping `vcpkg.json`, rebuild with `build.ps1` and verify the viewer plugins still load and the `WebView2Loader.dll` deployment step still succeeds.

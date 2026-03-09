@@ -562,6 +562,10 @@ LRESULT CALLBACK RenameEditSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
     switch (msg)
     {
         case WM_KEYDOWN:
+            if (ThemedControls::HandleEditCtrlBackspaceKeyDown(hwnd, wParam))
+            {
+                return 0;
+            }
             if (wParam == VK_RETURN)
             {
                 SendMessageW(GetParent(hwnd), WM_COMMAND, IDOK, 0);
@@ -569,6 +573,10 @@ LRESULT CALLBACK RenameEditSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPAR
             }
             break;
         case WM_CHAR:
+            if (ThemedControls::HandleEditCtrlBackspaceChar(hwnd, wParam))
+            {
+                return 0;
+            }
             if (wParam == L'\r' || wParam == L'\n')
             {
                 return 0;

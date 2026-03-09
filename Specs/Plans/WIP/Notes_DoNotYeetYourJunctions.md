@@ -212,7 +212,7 @@ Self-test additions in `RedSalamander/FolderWindow.FileOperations.SelfTest.cpp`:
     - records per-task warning/error diagnostics with bounded in-memory retention,
     - captures bounded per-task structured issue entries (`warning`/`error`) for completed summaries,
     - supports `info` + `debug` diagnostics levels for non-problem events (verbosity controlled by settings),
-    - flushes diagnostics every ~5s (or on completion) as **JSONL** (one JSON object per line) to `Logs/FileOperations-YYYYMMDD.log` (sibling of `Settings` / `Crashes`),
+    - flushes diagnostics every ~5s (or on completion) as **JSONL** (one JSON object per line) to `Logs/FileOperations-YYYYMMDD.jsonl` (sibling of `Settings` / `Crashes`),
       - fields include: `ts`, `level`, `task`, `op`, `category`, `hr`, `hrName`, `hrText`, `memWorkingSetBytes`, `memPrivateBytes`, `message`, `src`/`dst`, `srcLeaf`/`dstLeaf`,
       - `src`/`dst` are best-effort and prefer the most specific in-flight item paths (so conflict/error diagnostics identify the exact file/folder when possible),
     - cleans up old diagnostics log files (retains newest 14),

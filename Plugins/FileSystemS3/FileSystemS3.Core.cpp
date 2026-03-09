@@ -1,6 +1,52 @@
 #include "FileSystemS3.Internal.h"
+#include "FileSystemS3Resources.h"
 
 namespace FsS3 = FileSystemS3Internal;
+
+extern HINSTANCE g_hInstance;
+
+namespace
+{
+[[nodiscard]] const wchar_t* LocalizedPluginName(FileSystemS3Mode mode) noexcept
+{
+    switch (mode)
+    {
+        case FileSystemS3Mode::S3:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_NAME);
+            return text.c_str();
+        }
+        case FileSystemS3Mode::S3Table:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3TABLE_NAME);
+            return text.c_str();
+        }
+    }
+
+    static const std::wstring fallback = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_NAME);
+    return fallback.c_str();
+}
+
+[[nodiscard]] const wchar_t* LocalizedPluginDescription(FileSystemS3Mode mode) noexcept
+{
+    switch (mode)
+    {
+        case FileSystemS3Mode::S3:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_DESCRIPTION);
+            return text.c_str();
+        }
+        case FileSystemS3Mode::S3Table:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3TABLE_DESCRIPTION);
+            return text.c_str();
+        }
+    }
+
+    static const std::wstring fallback = LoadStringResource(g_hInstance, IDS_FILESYSTEMS3_DESCRIPTION);
+    return fallback.c_str();
+}
+} // namespace
 
 // FileSystemS3
 
@@ -13,14 +59,14 @@ FileSystemS3::FileSystemS3(FileSystemS3Mode mode, IHost* host) : _mode(mode)
         case FileSystemS3Mode::S3:
             _metaData.id          = kPluginIdS3;
             _metaData.shortId     = kPluginShortIdS3;
-            _metaData.name        = kPluginNameS3;
-            _metaData.description = kPluginDescS3;
+            _metaData.name        = LocalizedPluginName(FileSystemS3Mode::S3);
+            _metaData.description = LocalizedPluginDescription(FileSystemS3Mode::S3);
             break;
         case FileSystemS3Mode::S3Table:
             _metaData.id          = kPluginIdS3Table;
             _metaData.shortId     = kPluginShortIdS3Table;
-            _metaData.name        = kPluginNameS3Table;
-            _metaData.description = kPluginDescS3Table;
+            _metaData.name        = LocalizedPluginName(FileSystemS3Mode::S3Table);
+            _metaData.description = LocalizedPluginDescription(FileSystemS3Mode::S3Table);
             break;
     }
 

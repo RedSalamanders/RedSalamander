@@ -386,6 +386,8 @@ struct ExtensionsSettings
         {L".md", L"builtin/viewer-markdown"},
         {L".json", L"builtin/viewer-json"},
         {L".json5", L"builtin/viewer-json"},
+        {L".jsonl", L"builtin/viewer-json"},
+        {L".ndjson", L"builtin/viewer-json"},
         {L".html", L"builtin/viewer-web"},
         {L".htm", L"builtin/viewer-web"},
         {L".pdf", L"builtin/viewer-web"},

@@ -232,6 +232,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="FileSystem.cpp" />
     <ClCompile Include="FileSystem.DirectoryOps.cpp" />
@@ -241,6 +242,8 @@
     <ClCompile Include="FileSystem.Watch.cpp" />
     <ClInclude Include="FileSystem.h" />
     <ClInclude Include="FileSystem.Internal.h" />
+    <ClInclude Include="FileSystemResources.h" />
+    <ResourceCompile Include="FileSystemResources.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

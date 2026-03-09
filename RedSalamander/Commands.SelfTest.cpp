@@ -8,12 +8,14 @@
 #include <chrono>
 #include <cmath>
 #include <cstdint>
+#include <cwctype>
 #include <filesystem>
 #include <format>
 #include <initializer_list>
 #include <string>
 #include <system_error>
 #include <thread>
+#include <tuple>
 #include <unordered_set>
 
 #pragma warning(push)
@@ -877,6 +879,7 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     for (const CommandInfo& cmd : commands)
     {
         state.Require(! cmd.id.empty(), L"Command id must not be empty.");
+        state.Require(CanonicalizeCommandId(cmd.id) == cmd.id, std::format(L"Registered command {} must already be canonical.", cmd.id));
         state.Require(cmd.displayNameStringId != 0, std::format(L"Command {} missing displayNameStringId.", cmd.id));
         state.Require(cmd.descriptionStringId != 0, std::format(L"Command {} missing descriptionStringId.", cmd.id));
 
@@ -906,6 +909,11 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
             state.Require(byWm == found, std::format(L"FindCommandInfoByWmCommandId mismatch for wmCommandId {}.", cmd.wmCommandId));
         }
     }
+
+    state.Require(FindCommandInfo(L"cmd/pane/copyPathAndFileName") == nullptr,
+                  L"Legacy cmd/pane/copyPathAndFileName should not resolve after canonical-id cleanup.");
+    state.Require(! TryGetWmCommandId(L"cmd/pane/copyPathAndFileName").has_value(),
+                  L"Legacy cmd/pane/copyPathAndFileName should not expose a WM_COMMAND binding.");
 
     return state.failure.empty();
 }
@@ -967,6 +975,167 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     return false;
 }
 
+[[nodiscard]] int FindMenuItemPosById(HMENU menu, UINT commandId) noexcept
+{
+    if (! menu)
+    {
+        return -1;
+    }
+
+    const int itemCount = GetMenuItemCount(menu);
+    if (itemCount <= 0)
+    {
+        return -1;
+    }
+
+    for (int pos = 0; pos < itemCount; ++pos)
+    {
+        if (GetMenuItemID(menu, pos) == commandId)
+        {
+            return pos;
+        }
+    }
+
+    return -1;
+}
+
+[[nodiscard]] bool IsMenuSeparatorAt(HMENU menu, int pos) noexcept
+{
+    if (! menu || pos < 0)
+    {
+        return false;
+    }
+
+    MENUITEMINFOW itemInfo{};
+    itemInfo.cbSize = sizeof(itemInfo);
+    itemInfo.fMask  = MIIM_FTYPE;
+    if (! GetMenuItemInfoW(menu, static_cast<UINT>(pos), TRUE, &itemInfo))
+    {
+        return false;
+    }
+
+    return (itemInfo.fType & MFT_SEPARATOR) != 0;
+}
+
+[[nodiscard]] std::wstring GetMenuItemTextByPosition(HMENU menu, int pos) noexcept
+{
+    if (! menu || pos < 0)
+    {
+        return {};
+    }
+
+    std::array<wchar_t, 256> buffer{};
+    const int length = GetMenuStringW(menu, static_cast<UINT>(pos), buffer.data(), static_cast<int>(buffer.size()), MF_BYPOSITION);
+    if (length <= 0)
+    {
+        return {};
+    }
+
+    return std::wstring(buffer.data(), static_cast<size_t>(length));
+}
+
+void RequireFunctionBarBinding(CaseState& state,
+                               const ShortcutManager& manager,
+                               uint32_t vk,
+                               uint32_t modifiers,
+                               std::wstring_view expectedCommandId,
+                               std::wstring_view label) noexcept
+{
+    if (const auto cmd = manager.FindFunctionBarCommand(vk, modifiers))
+    {
+        state.Require(cmd.value() == expectedCommandId, std::format(L"{} expected {}.", label, expectedCommandId));
+    }
+    else
+    {
+        state.Require(false, std::format(L"{} missing.", label));
+    }
+}
+
+void RequireFolderViewBinding(CaseState& state,
+                              const ShortcutManager& manager,
+                              uint32_t vk,
+                              uint32_t modifiers,
+                              std::wstring_view expectedCommandId,
+                              std::wstring_view label) noexcept
+{
+    if (const auto cmd = manager.FindFolderViewCommand(vk, modifiers))
+    {
+        state.Require(cmd.value() == expectedCommandId, std::format(L"{} expected {}.", label, expectedCommandId));
+    }
+    else
+    {
+        state.Require(false, std::format(L"{} missing.", label));
+    }
+
+    const auto chordOpt = manager.TryGetShortcutForCommand(expectedCommandId);
+    state.Require(chordOpt.has_value(), std::format(L"{} reverse lookup missing for {}.", label, expectedCommandId));
+    if (chordOpt.has_value())
+    {
+        state.Require(chordOpt->vk == vk, std::format(L"{} reverse lookup expected vk {}.", label, vk));
+        state.Require(chordOpt->modifiers == modifiers, std::format(L"{} reverse lookup expected modifiers {}.", label, modifiers));
+    }
+}
+
+[[nodiscard]] std::wstring ReadClipboardUnicodeText(HWND ownerWindow) noexcept
+{
+    std::wstring clipText;
+    if (OpenClipboard(ownerWindow) == 0)
+    {
+        return clipText;
+    }
+
+    const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
+    HANDLE hText              = GetClipboardData(CF_UNICODETEXT);
+    if (! hText)
+    {
+        return clipText;
+    }
+
+    const auto* text = static_cast<const wchar_t*>(GlobalLock(hText));
+    if (! text)
+    {
+        return clipText;
+    }
+
+    clipText.assign(text);
+    GlobalUnlock(hText);
+    return clipText;
+}
+
+void ClearClipboardContents(HWND ownerWindow) noexcept
+{
+    if (OpenClipboard(ownerWindow) == 0)
+    {
+        return;
+    }
+
+    const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
+    EmptyClipboard();
+}
+
+[[nodiscard]] std::wstring BuildLocalAdministrativeUncPath(std::wstring_view path) noexcept
+{
+    if (path.size() < 3u || std::iswalpha(static_cast<wint_t>(path[0])) == 0 || path[1] != L':' || (path[2] != L'\\' && path[2] != L'/'))
+    {
+        return {};
+    }
+
+    wchar_t computerName[MAX_COMPUTERNAME_LENGTH + 1]{};
+    DWORD computerNameLength = static_cast<DWORD>(std::size(computerName));
+    if (GetComputerNameW(computerName, &computerNameLength) == FALSE || computerNameLength == 0u)
+    {
+        return {};
+    }
+
+    std::wstring uncPath = LR"(\\)";
+    uncPath.append(computerName, computerNameLength);
+    uncPath.push_back(L'\\');
+    uncPath.push_back(static_cast<wchar_t>(std::towupper(static_cast<wint_t>(path[0]))));
+    uncPath.push_back(L'$');
+    uncPath.append(path.substr(2));
+    return uncPath;
+}
+
 [[nodiscard]] bool TestLoadSelectionMenuLinksToRestoreSelection(HWND mainWindow, CaseState& state) noexcept
 {
     if (! mainWindow || ! IsWindow(mainWindow))
@@ -998,6 +1167,72 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestCopyTextCommandsMenuContract(HWND mainWindow, CaseState& state) noexcept
+{
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const HMENU mainMenu = GetMenu(mainWindow);
+    state.Require(mainMenu != nullptr, L"Main menu handle not available.");
+    if (! mainMenu)
+    {
+        return false;
+    }
+
+    const HMENU editMenu = FindMenuContainingCommandId(mainMenu, IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT);
+    state.Require(editMenu != nullptr, L"Failed to find Edit menu for copy-text command contract.");
+    if (! editMenu)
+    {
+        return false;
+    }
+
+    const int firstCopyTextPos = FindMenuItemPosById(editMenu, IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT);
+    state.Require(firstCopyTextPos >= 0, L"Copy Path + Name as Text menu entry not found.");
+    if (firstCopyTextPos < 0)
+    {
+        return false;
+    }
+
+    state.Require(firstCopyTextPos > 0 && IsMenuSeparatorAt(editMenu, firstCopyTextPos - 1),
+                  L"Copy-text menu group should be preceded by a separator.");
+
+    using MenuContractExpectation = std::pair<UINT, std::wstring_view>;
+    constexpr std::array<MenuContractExpectation, 4> kExpectedItems = {
+        MenuContractExpectation{IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT, std::wstring_view{L"Copy Path + Name as Text"}},
+        MenuContractExpectation{IDM_PANE_COPY_NAME_AS_TEXT, std::wstring_view{L"Copy Name as Text"}},
+        MenuContractExpectation{IDM_PANE_COPY_PATH_AS_TEXT, std::wstring_view{L"Copy Path as Text"}},
+        MenuContractExpectation{IDM_PANE_COPY_PATH_AND_FILE_NAME, std::wstring_view{L"Copy UNC Path + Name as Text"}},
+    };
+
+    const int itemCount = GetMenuItemCount(editMenu);
+    state.Require(itemCount >= (firstCopyTextPos + static_cast<int>(kExpectedItems.size())), L"Copy-text menu group truncated.");
+    if (itemCount < (firstCopyTextPos + static_cast<int>(kExpectedItems.size())))
+    {
+        return false;
+    }
+
+    for (int index = 0; index < static_cast<int>(kExpectedItems.size()); ++index)
+    {
+        const auto& [expectedId, expectedText] = kExpectedItems[static_cast<size_t>(index)];
+        const int pos                          = firstCopyTextPos + index;
+        const UINT actualId                    = GetMenuItemID(editMenu, pos);
+        const std::wstring actualText          = GetMenuItemTextByPosition(editMenu, pos);
+
+        state.Require(actualId == expectedId, std::format(L"Copy-text menu item {} expected command id {}.", index, expectedId));
+        state.Require(actualText == expectedText, std::format(L"Copy-text menu item {} expected label '{}'.", index, expectedText));
+        state.Require(DebugGetMainMenuIconGlyph(expectedId) == 0, std::format(L"{} should remain a text-only menu entry.", expectedText));
+    }
+
+    state.Require((firstCopyTextPos + static_cast<int>(kExpectedItems.size())) < itemCount &&
+                      IsMenuSeparatorAt(editMenu, firstCopyTextPos + static_cast<int>(kExpectedItems.size())),
+                  L"Copy-text menu group should be followed by a separator.");
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestShortcutDefaultsMapping(CaseState& state) noexcept
 {
     ShortcutManager manager;
@@ -1006,117 +1241,68 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
     state.Require(manager.GetFunctionBarConflicts().empty(), L"Default function bar shortcuts have conflicts.");
     state.Require(manager.GetFolderViewConflicts().empty(), L"Default folder view shortcuts have conflicts.");
 
-    if (const auto cmd = manager.FindFunctionBarCommand(VK_F3, 0))
+    using ShortcutBindingExpectation = std::tuple<uint32_t, uint32_t, std::wstring_view, std::wstring_view>;
+    constexpr std::array<ShortcutBindingExpectation, 9> kFunctionBarBindings = {
+        ShortcutBindingExpectation{VK_F3, 0u, std::wstring_view{L"cmd/pane/view"}, std::wstring_view{L"F3 default shortcut"}},
+        ShortcutBindingExpectation{VK_F2, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/none"}, std::wstring_view{L"Ctrl+F2 default shortcut"}},
+        ShortcutBindingExpectation{VK_F3, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/name"}, std::wstring_view{L"Ctrl+F3 default shortcut"}},
+        ShortcutBindingExpectation{VK_F4, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/extension"}, std::wstring_view{L"Ctrl+F4 default shortcut"}},
+        ShortcutBindingExpectation{VK_F5, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/time"}, std::wstring_view{L"Ctrl+F5 default shortcut"}},
+        ShortcutBindingExpectation{VK_F6, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/sort/size"}, std::wstring_view{L"Ctrl+F6 default shortcut"}},
+        ShortcutBindingExpectation{VK_F12, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/filter"}, std::wstring_view{L"Ctrl+F12 default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_F5, ShortcutManager::kModCtrl | ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/selection/save"},
+            std::wstring_view{L"Ctrl+Shift+F5 default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_F6, ShortcutManager::kModCtrl | ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/selection/restore"},
+            std::wstring_view{L"Ctrl+Shift+F6 default shortcut"}},
+    };
+    for (const auto& [vk, modifiers, commandId, label] : kFunctionBarBindings)
     {
-        state.Require(cmd.value() == L"cmd/pane/view", L"F3 default shortcut expected cmd/pane/view.");
-    }
-    else
-    {
-        state.Require(false, L"F3 default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFunctionBarCommand(VK_F12, ShortcutManager::kModCtrl))
-    {
-        state.Require(cmd.value() == L"cmd/pane/filter", L"Ctrl+F12 default shortcut expected cmd/pane/filter.");
-    }
-    else
-    {
-        state.Require(false, L"Ctrl+F12 default shortcut missing.");
+        RequireFunctionBarBinding(state, manager, vk, modifiers, commandId, label);
     }
 
     state.Require(! manager.FindFunctionBarCommand(VK_F2, ShortcutManager::kModCtrl | ShortcutManager::kModShift).has_value(),
                   L"Ctrl+Shift+F2 should not have a default shortcut binding.");
 
-    if (const auto cmd = manager.FindFunctionBarCommand(VK_F5, ShortcutManager::kModCtrl | ShortcutManager::kModShift))
+    constexpr std::array<ShortcutBindingExpectation, 16> kFolderViewBindings = {
+        ShortcutBindingExpectation{
+            static_cast<uint32_t>('U'), ShortcutManager::kModCtrl, std::wstring_view{L"cmd/app/swapPanes"}, std::wstring_view{L"Ctrl+U default shortcut"}},
+        ShortcutBindingExpectation{VK_ESCAPE, 0u, std::wstring_view{L"cmd/pane/selection/unselectAll"}, std::wstring_view{L"Esc default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_BACK, ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/goRootDirectory"}, std::wstring_view{L"Shift+Backspace default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_OEM_PERIOD, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/setPathFromOtherPane"}, std::wstring_view{L"Ctrl+. default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_UP, ShortcutManager::kModAlt, std::wstring_view{L"cmd/pane/selection/goToPreviousSelectedName"}, std::wstring_view{L"Alt+Up default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_DOWN, ShortcutManager::kModAlt, std::wstring_view{L"cmd/pane/selection/goToNextSelectedName"}, std::wstring_view{L"Alt+Down default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_LEFT, ShortcutManager::kModAlt, std::wstring_view{L"cmd/pane/historyBack"}, std::wstring_view{L"Alt+Left default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_RIGHT, ShortcutManager::kModAlt, std::wstring_view{L"cmd/pane/historyForward"}, std::wstring_view{L"Alt+Right default shortcut"}},
+        ShortcutBindingExpectation{VK_INSERT, 0u, std::wstring_view{L"cmd/pane/selectNext"}, std::wstring_view{L"Insert default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_INSERT, ShortcutManager::kModCtrl, std::wstring_view{L"cmd/pane/clipboardCopy"}, std::wstring_view{L"Ctrl+Insert default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_INSERT, ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/clipboardPaste"}, std::wstring_view{L"Shift+Insert default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_INSERT, ShortcutManager::kModAlt, std::wstring_view{L"cmd/pane/copyPathAndNameAsText"}, std::wstring_view{L"Alt+Insert default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_INSERT, ShortcutManager::kModAlt | ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/copyNameAsText"},
+            std::wstring_view{L"Alt+Shift+Insert default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_INSERT, ShortcutManager::kModCtrl | ShortcutManager::kModAlt, std::wstring_view{L"cmd/pane/copyPathAsText"},
+            std::wstring_view{L"Ctrl+Alt+Insert default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_INSERT, ShortcutManager::kModCtrl | ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/copyUncPathAndNameAsText"},
+            std::wstring_view{L"Ctrl+Shift+Insert default shortcut"}},
+        ShortcutBindingExpectation{
+            VK_DELETE, ShortcutManager::kModShift, std::wstring_view{L"cmd/pane/permanentDeleteWithValidation"}, std::wstring_view{L"Shift+Del default shortcut"}},
+    };
+    for (const auto& [vk, modifiers, commandId, label] : kFolderViewBindings)
     {
-        state.Require(cmd.value() == L"cmd/pane/selection/save", L"Ctrl+Shift+F5 default shortcut expected cmd/pane/selection/save.");
-    }
-    else
-    {
-        state.Require(false, L"Ctrl+Shift+F5 default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFunctionBarCommand(VK_F6, ShortcutManager::kModCtrl | ShortcutManager::kModShift))
-    {
-        state.Require(cmd.value() == L"cmd/pane/selection/restore", L"Ctrl+Shift+F6 default shortcut expected cmd/pane/selection/restore.");
-    }
-    else
-    {
-        state.Require(false, L"Ctrl+Shift+F6 default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFolderViewCommand(static_cast<uint32_t>('U'), ShortcutManager::kModCtrl))
-    {
-        state.Require(cmd.value() == L"cmd/app/swapPanes", L"Ctrl+U default shortcut expected cmd/app/swapPanes.");
-    }
-    else
-    {
-        state.Require(false, L"Ctrl+U default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFolderViewCommand(VK_ESCAPE, 0))
-    {
-        state.Require(cmd.value() == L"cmd/pane/selection/unselectAll", L"Esc default shortcut expected cmd/pane/selection/unselectAll.");
-    }
-    else
-    {
-        state.Require(false, L"Esc default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFolderViewCommand(VK_BACK, ShortcutManager::kModShift))
-    {
-        state.Require(cmd.value() == L"cmd/pane/goRootDirectory", L"Shift+Backspace default shortcut expected cmd/pane/goRootDirectory.");
-    }
-    else
-    {
-        state.Require(false, L"Shift+Backspace default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFolderViewCommand(VK_OEM_PERIOD, ShortcutManager::kModCtrl))
-    {
-        state.Require(cmd.value() == L"cmd/pane/setPathFromOtherPane", L"Ctrl+. default shortcut expected cmd/pane/setPathFromOtherPane.");
-    }
-    else
-    {
-        state.Require(false, L"Ctrl+. default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFolderViewCommand(VK_UP, ShortcutManager::kModAlt))
-    {
-        state.Require(cmd.value() == L"cmd/pane/selection/goToPreviousSelectedName",
-                      L"Alt+Up default shortcut expected cmd/pane/selection/goToPreviousSelectedName.");
-    }
-    else
-    {
-        state.Require(false, L"Alt+Up default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFolderViewCommand(VK_DOWN, ShortcutManager::kModAlt))
-    {
-        state.Require(cmd.value() == L"cmd/pane/selection/goToNextSelectedName",
-                      L"Alt+Down default shortcut expected cmd/pane/selection/goToNextSelectedName.");
-    }
-    else
-    {
-        state.Require(false, L"Alt+Down default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFolderViewCommand(VK_LEFT, ShortcutManager::kModAlt))
-    {
-        state.Require(cmd.value() == L"cmd/pane/historyBack", L"Alt+Left default shortcut expected cmd/pane/historyBack.");
-    }
-    else
-    {
-        state.Require(false, L"Alt+Left default shortcut missing.");
-    }
-
-    if (const auto cmd = manager.FindFolderViewCommand(VK_RIGHT, ShortcutManager::kModAlt))
-    {
-        state.Require(cmd.value() == L"cmd/pane/historyForward", L"Alt+Right default shortcut expected cmd/pane/historyForward.");
-    }
-    else
-    {
-        state.Require(false, L"Alt+Right default shortcut missing.");
+        RequireFolderViewBinding(state, manager, vk, modifiers, commandId, label);
     }
 
     const auto selectDialogChordOpt = manager.TryGetShortcutForCommand(L"cmd/pane/selection/selectDialog");
@@ -1156,15 +1342,6 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
         state.Require(unselectSameExtChordOpt->vk == unselectDialogChordOpt->vk, L"Unselect same extension expected same vk as Unselect dialog.");
         state.Require(unselectSameExtChordOpt->modifiers == (ShortcutManager::kModCtrl | ShortcutManager::kModShift),
                       L"Unselect same extension default shortcut expected Ctrl+Shift+<key>.");
-    }
-
-    if (const auto cmd = manager.FindFolderViewCommand(VK_DELETE, ShortcutManager::kModShift))
-    {
-        state.Require(cmd.value() == L"cmd/pane/permanentDeleteWithValidation", L"Shift+Del default shortcut expected cmd/pane/permanentDeleteWithValidation.");
-    }
-    else
-    {
-        state.Require(false, L"Shift+Del default shortcut missing.");
     }
 
     return state.failure.empty();
@@ -3293,52 +3470,11 @@ void AutomateSelectionMaskDialog(
     state.Require(g_folderWindow.HasSavedSelection(), L"Expected a saved selection after Save Selection command.");
 
     {
-        std::wstring clipText;
-        if (OpenClipboard(mainWindow) != 0)
-        {
-            const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
-            HANDLE hText              = GetClipboardData(CF_UNICODETEXT);
-            if (hText)
-            {
-                const auto* text = static_cast<const wchar_t*>(GlobalLock(hText));
-                if (text)
-                {
-                    clipText.assign(text);
-                    GlobalUnlock(hText);
-                }
-            }
-        }
+        const std::wstring clipText = ReadClipboardUnicodeText(mainWindow);
 
         state.Require(! clipText.empty(), L"Expected Save Selection to place Unicode text in the clipboard.");
         state.Require(clipText.find(L"a.txt") != std::wstring::npos, L"Expected clipboard text to contain a.txt.");
         state.Require(clipText.find(L"c.txt") != std::wstring::npos, L"Expected clipboard text to contain c.txt.");
-    }
-
-    {
-        FocusFolderViewPane(FolderWindow::Pane::Left);
-        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_COPY_PATH_AND_FILE_NAME, 0), 0);
-
-        std::wstring clipText;
-        if (OpenClipboard(mainWindow) != 0)
-        {
-            const auto closeClipboard = wil::scope_exit([&] { CloseClipboard(); });
-            HANDLE hText              = GetClipboardData(CF_UNICODETEXT);
-            if (hText)
-            {
-                const auto* text = static_cast<const wchar_t*>(GlobalLock(hText));
-                if (text)
-                {
-                    clipText.assign(text);
-                    GlobalUnlock(hText);
-                }
-            }
-        }
-
-        const std::wstring aFull = (root / L"a.txt").native();
-        const std::wstring cFull = (root / L"c.txt").native();
-        state.Require(! clipText.empty(), L"Expected Copy Path + File Name to place Unicode text in the clipboard.");
-        state.Require(clipText.find(aFull) != std::wstring::npos, L"Expected clipboard text to contain full path for a.txt.");
-        state.Require(clipText.find(cFull) != std::wstring::npos, L"Expected clipboard text to contain full path for c.txt.");
     }
 
     // Rename c.txt to change casing before restore-selection, so restore must fall back to case-insensitive match.
@@ -3386,6 +3522,128 @@ void AutomateSelectionMaskDialog(
                   L"Expected C.TXT selected after restore-selection when a.txt is missing.");
     state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Right) == 1u,
                   L"Expected 1 selected item after restore-selection when a.txt is missing.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestCopyTextCommands(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / (L"copy_text_" + NewGuidText());
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create copy-text test root.");
+
+    state.Require(SelfTest::WriteTextFile(root / L"a.txt", "a"), L"Failed to create a.txt.");
+    state.Require(SelfTest::WriteTextFile(root / L"b.log", "b"), L"Failed to create b.log.");
+    state.Require(SelfTest::WriteTextFile(root / L"c.txt", "c"), L"Failed to create c.txt.");
+
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePath                                = wil::scope_exit([&]
+    {
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for copy-text test.");
+
+    std::atomic<uint32_t> enumLeft{0};
+    g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
+                                                       [&](const std::filesystem::path& folder) noexcept
+    {
+        if (OrdinalString::EqualsNoCasePath(folder, root))
+        {
+            enumLeft.fetch_add(1u, std::memory_order_release);
+        }
+    });
+    const auto clearEnumCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Failed to set left pane path for copy-text test.");
+    state.Require(WaitForAtomicAtLeast(enumLeft, 1u, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Left pane enumeration did not complete for copy-text test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.txt", L"b.log", L"c.txt"}, SelfTest::Scale(std::chrono::milliseconds{3000})),
+                  L"Left pane contents not ready for copy-text test.");
+
+    g_folderWindow.SetPaneSelectionByDisplayNamePredicate(
+        FolderWindow::Pane::Left, [](std::wstring_view name) noexcept { return name == L"a.txt" || name == L"c.txt"; }, true);
+    state.Require(g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"a.txt"), L"Expected a.txt selected in copy-text test.");
+    state.Require(g_folderWindow.DebugIsItemSelected(FolderWindow::Pane::Left, L"c.txt"), L"Expected c.txt selected in copy-text test.");
+    state.Require(g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == 2u, L"Expected 2 selected items in copy-text test.");
+
+    const std::wstring rootText = root.native();
+    const std::wstring aFull    = (root / L"a.txt").native();
+    const std::wstring cFull    = (root / L"c.txt").native();
+    const std::wstring aUnc     = BuildLocalAdministrativeUncPath(aFull);
+    const std::wstring cUnc     = BuildLocalAdministrativeUncPath(cFull);
+
+    {
+        ClearClipboardContents(mainWindow);
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_COPY_PATH_AND_NAME_AS_TEXT, 0), 0);
+
+        const std::wstring clipText = ReadClipboardUnicodeText(mainWindow);
+        state.Require(! clipText.empty(), L"Expected Copy Path + Name as Text to place Unicode text in the clipboard.");
+        state.Require(clipText.find(aFull) != std::wstring::npos, L"Expected clipboard text to contain full path for a.txt.");
+        state.Require(clipText.find(cFull) != std::wstring::npos, L"Expected clipboard text to contain full path for c.txt.");
+    }
+
+    {
+        ClearClipboardContents(mainWindow);
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_COPY_NAME_AS_TEXT, 0), 0);
+
+        const std::wstring clipText = ReadClipboardUnicodeText(mainWindow);
+        state.Require(! clipText.empty(), L"Expected Copy Name as Text to place Unicode text in the clipboard.");
+        state.Require(clipText.find(L"a.txt") != std::wstring::npos, L"Expected clipboard text to contain a.txt.");
+        state.Require(clipText.find(L"c.txt") != std::wstring::npos, L"Expected clipboard text to contain c.txt.");
+        state.Require(clipText.find(aFull) == std::wstring::npos, L"Expected name-only clipboard text to exclude the full path for a.txt.");
+        state.Require(clipText.find(cFull) == std::wstring::npos, L"Expected name-only clipboard text to exclude the full path for c.txt.");
+    }
+
+    {
+        ClearClipboardContents(mainWindow);
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_COPY_PATH_AS_TEXT, 0), 0);
+
+        const std::wstring clipText = ReadClipboardUnicodeText(mainWindow);
+        state.Require(! clipText.empty(), L"Expected Copy Path as Text to place Unicode text in the clipboard.");
+        state.Require(clipText.find(rootText) != std::wstring::npos, L"Expected clipboard text to contain the containing folder path.");
+        state.Require(clipText.find(aFull) == std::wstring::npos, L"Expected path-only clipboard text to exclude the full path for a.txt.");
+        state.Require(clipText.find(cFull) == std::wstring::npos, L"Expected path-only clipboard text to exclude the full path for c.txt.");
+    }
+
+    {
+        ClearClipboardContents(mainWindow);
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_COPY_PATH_AND_FILE_NAME, 0), 0);
+
+        const std::wstring clipText = ReadClipboardUnicodeText(mainWindow);
+        state.Require(! clipText.empty(), L"Expected Copy UNC Path + Name as Text to place Unicode text in the clipboard.");
+        state.Require(! aUnc.empty(), L"Expected a local-machine UNC path for a.txt in the UNC clipboard test.");
+        state.Require(! cUnc.empty(), L"Expected a local-machine UNC path for c.txt in the UNC clipboard test.");
+        state.Require(clipText.find(aUnc) != std::wstring::npos, L"Expected clipboard text to contain the UNC full path for a.txt.");
+        state.Require(clipText.find(cUnc) != std::wstring::npos, L"Expected clipboard text to contain the UNC full path for c.txt.");
+    }
 
     return state.failure.empty();
 }
@@ -3598,6 +3856,9 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
     SelfTest::RunCase(options, suite, L"menu_load_selection_links_restore", [=](CaseState& state) noexcept {
         return TestLoadSelectionMenuLinksToRestoreSelection(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"menu_copy_text_group_contract", [=](CaseState& state) noexcept {
+        return TestCopyTextCommandsMenuContract(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"shortcut_defaults_mapping", [](CaseState& state) noexcept { return TestShortcutDefaultsMapping(state); });
     SelfTest::RunCase(options, suite, L"mask_syntax_wildcards", [](CaseState& state) noexcept { return TestMaskSyntaxWildcardMatching(state); });
     SelfTest::RunCase(options, suite, L"modeless_window_ownership", [=](CaseState& state) noexcept { return TestModelessWindowOwnership(mainWindow, state); });
@@ -3628,6 +3889,7 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
         options, suite, L"cmd_pane_selection_same_extension", [=](CaseState& state) noexcept { return TestSelectSameExtensionCommands(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_selection_invert", [=](CaseState& state) noexcept { return TestInvertSelectionCommand(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_selection_hide_names", [=](CaseState& state) noexcept { return TestHideNamesCommands(mainWindow, state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_copy_text", [=](CaseState& state) noexcept { return TestCopyTextCommands(mainWindow, state); });
     SelfTest::RunCase(
         options, suite, L"cmd_pane_selection_save_restore", [=](CaseState& state) noexcept { return TestSelectionSaveRestoreCommands(mainWindow, state); });
     SelfTest::RunCase(

@@ -26,7 +26,7 @@ This spec defines a **host-owned Connection Manager** that:
   - optional Windows Hello verification before secrets are returned to plugins.
 - Host-controlled navigation:
   - typing `nav:<connectionName>`, `nav://<connectionName>`, or `@conn:<connectionName>` navigates to the resolved endpoint,
-  - navigating to `ftp:` / `sftp:` / `scp:` / `imap:` / `gdrive:` / `s3:` / `s3table:` / `onedrivep:` / `onedriveb:` / `sharepoint:` with no host opens Connection Manager (filtered to that protocol),
+- navigating to `ftp:` / `sftp:` / `scp:` / `imap:` / `gdrive:` / `s3:` / `s3table:` / `onedrive:` / `onedrive-pro:` / `sharepoint:` with no host opens Connection Manager (filtered to that protocol),
   - main menu / command palette entry `Connections...` opens the dialog,
   - optional shorthand: `<scheme>://@conn/<connectionName>/...` routes to the named profile (authority `@conn`, e.g. `ftp://@conn/...`, `s3://@conn/...`).
 - Extensible plugin integration (future protocols can participate without UI rewrite).
@@ -228,6 +228,8 @@ If an FTP server rejects anonymous login, the plugin may ask the host to prompt 
 Layout (using RedSalamander theming):
 
 - Left pane: connection list
+  - `<Quick Connect>` is always the first row.
+  - All other visible connections are sorted alphabetically by display name (case-insensitive).
   - `New…`, `Rename…`, `Remove…`
 - Right pane: connection editor
   - Scrollable when the editor content exceeds the available height (bottom buttons remain pinned and content does not overlap them).
@@ -298,7 +300,7 @@ Rules:
 
 ## Microsoft Drive plugin behavior
 
-- Navigating to `onedrivep:` / `onedriveb:` / `sharepoint:` with no host opens Connection Manager filtered to the matching Microsoft plugin.
+- Navigating to `onedrive:` / `onedrive-pro:` / `sharepoint:` with no host opens Connection Manager filtered to the matching Microsoft plugin.
 - The built-in Microsoft Drive plugin requires `authMode = oauth2Pkce` and uses delegated Microsoft Graph OAuth 2.0 authorization-code flow with PKCE.
 - The built-in Microsoft Drive plugin ships with a default plugin-level `clientId` (`90cdea53-7c21-48b0-959e-b4024209027b`). Plugin configuration may override or clear it.
 - Refresh tokens are stored through `IHostConnections::SetConnectionSecret(HOST_CONNECTION_SECRET_OAUTH_REFRESH_TOKEN, ...)`.

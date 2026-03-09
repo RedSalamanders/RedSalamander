@@ -10,7 +10,9 @@
 #include <utility>
 
 #include "FileSystemDummy.h"
+#include "Helpers.h"
 #include "PlugInterfaces/Host.h"
+#include "FileSystemDummyResources.h"
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -25,8 +27,22 @@
 #include <yyjson.h>
 #pragma warning(pop)
 
+extern HINSTANCE g_hInstance;
+
 namespace
 {
+[[nodiscard]] const wchar_t* LocalizedPluginName() noexcept
+{
+    static const std::wstring name = LoadStringResource(g_hInstance, IDS_FILESYSTEMDUMMY_NAME);
+    return name.c_str();
+}
+
+[[nodiscard]] const wchar_t* LocalizedPluginDescription() noexcept
+{
+    static const std::wstring description = LoadStringResource(g_hInstance, IDS_FILESYSTEMDUMMY_DESCRIPTION);
+    return description.c_str();
+}
+
 constexpr size_t kEntryAlignment = sizeof(unsigned long);
 constexpr size_t kMaxNameLength  = 96;
 
@@ -2772,8 +2788,8 @@ FileSystemDummy::FileSystemDummy(IHost* host) noexcept
 {
     _metaData.id          = kPluginId;
     _metaData.shortId     = kPluginShortId;
-    _metaData.name        = kPluginName;
-    _metaData.description = kPluginDescription;
+    _metaData.name        = LocalizedPluginName();
+    _metaData.description = LocalizedPluginDescription();
     _metaData.author      = kPluginAuthor;
     _metaData.version     = kPluginVersion;
 
@@ -3078,7 +3094,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetMenuItems(const NavigationMenuItem
     _menuEntries.clear();
     _menuEntryView.clear();
 
-    const std::wstring label = _metaData.name ? _metaData.name : L"Dummy";
+    const std::wstring label = _metaData.name ? _metaData.name : LocalizedPluginName();
     MenuEntry header;
     header.flags = NAV_MENU_ITEM_FLAG_HEADER;
     header.label = label;
@@ -3140,7 +3156,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetDriveInfo([[maybe_unused]] const w
     info->freeBytes   = 0;
     info->usedBytes   = 0;
 
-    _driveDisplayName = _metaData.name ? _metaData.name : L"Dummy";
+    _driveDisplayName = _metaData.name ? _metaData.name : LocalizedPluginName();
     _driveVolumeLabel = _driveDisplayName;
     _driveFileSystem  = L"DummyFS";
 

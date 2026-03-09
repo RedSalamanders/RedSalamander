@@ -283,13 +283,9 @@ private:
 
     static constexpr wchar_t kPluginIdS3[]      = L"builtin/file-system-s3";
     static constexpr wchar_t kPluginShortIdS3[] = L"s3";
-    static constexpr wchar_t kPluginNameS3[]    = L"S3";
-    static constexpr wchar_t kPluginDescS3[]    = L"Amazon S3 virtual file system.";
 
     static constexpr wchar_t kPluginIdS3Table[]      = L"builtin/file-system-s3table";
     static constexpr wchar_t kPluginShortIdS3Table[] = L"s3table";
-    static constexpr wchar_t kPluginNameS3Table[]    = L"S3 Table";
-    static constexpr wchar_t kPluginDescS3Table[]    = L"Amazon S3 Tables virtual file system.";
 
     static constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
     static constexpr wchar_t kPluginVersion[] = L"0.1";

@@ -3930,7 +3930,7 @@ bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualiz
         }
         else
         {
-            outError = std::format(L"Configured VLC path is not a VLC installation folder: {}", configured.wstring());
+            outError = FormatStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_CONFIGURED_PATH_INVALID_FMT, configured.wstring());
         }
     }
 
@@ -3947,7 +3947,7 @@ bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualiz
     {
         if (outError.empty())
         {
-            outError = L"VLC installation not found.";
+            outError = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_INSTALL_NOT_FOUND);
         }
         return false;
     }
@@ -4077,7 +4077,7 @@ bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualiz
 
     if (! ok)
     {
-        outError = L"Failed to resolve libVLC exports from libvlc.dll.";
+        outError = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_EXPORTS_MISSING);
         return false;
     }
 
@@ -4094,7 +4094,7 @@ bool ViewerVLC::EnsureVlcLoaded(std::wstring& outError, bool enableAudioVisualiz
     libvlc_instance_t* inst = state->libvlc_new(static_cast<int>(argv.size()), argv.data());
     if (! inst)
     {
-        outError = L"libvlc_new failed.";
+        outError = LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_LIBVLC_NEW_FAILED);
         return false;
     }
 
@@ -4110,14 +4110,14 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
 
     if (path.empty())
     {
-        SetMissingUiVisible(true, L"File path is empty.");
+        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PATH_EMPTY));
         return false;
     }
 
     std::error_code ec;
     if (! std::filesystem::exists(path, ec) || ! std::filesystem::is_regular_file(path, ec))
     {
-        SetMissingUiVisible(true, L"This file is not available as a local file path.");
+        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PATH_NOT_LOCAL_FILE));
         return false;
     }
 
@@ -4136,14 +4136,14 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
     if (! _vlc || ! _vlc->instance || ! _vlc->libvlc_media_new_path || ! _vlc->libvlc_media_player_new_from_media || ! _vlc->libvlc_media_release ||
         ! _vlc->libvlc_media_player_release)
     {
-        SetMissingUiVisible(true, L"libVLC is not available.");
+        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_LIBVLC_UNAVAILABLE));
         return false;
     }
 
     const std::string pathUtf8 = Utf8FromUtf16(path.wstring());
     if (pathUtf8.empty())
     {
-        SetMissingUiVisible(true, L"Failed to convert the file path to UTF-8.");
+        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_UTF8_PATH_FAILED));
         return false;
     }
 
@@ -4151,7 +4151,7 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
     media.reset(_vlc->libvlc_media_new_path(_vlc->instance.get(), pathUtf8.c_str()));
     if (! media)
     {
-        SetMissingUiVisible(true, L"libvlc_media_new_path failed.");
+        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_MEDIA_NEW_PATH_FAILED));
         return false;
     }
 
@@ -4159,7 +4159,7 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
     player.reset(_vlc->libvlc_media_player_new_from_media(media.get()));
     if (! player)
     {
-        SetMissingUiVisible(true, L"libvlc_media_player_new_from_media failed.");
+        SetMissingUiVisible(true, LoadStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED));
         return false;
     }
 
@@ -4187,7 +4187,7 @@ bool ViewerVLC::StartPlayback(const std::filesystem::path& path) noexcept
         const int rc = _vlc->libvlc_media_player_play(_vlc->player.get());
         if (rc != 0)
         {
-            SetMissingUiVisible(true, std::format(L"libvlc_media_player_play failed (code {}).", rc));
+            SetMissingUiVisible(true, FormatStringResource(g_hInstance, IDS_VIEWERVLC_DETAILS_PLAYER_PLAY_FAILED_FMT, rc));
             _vlc->player.reset();
             return false;
         }
@@ -4280,7 +4280,7 @@ void ViewerVLC::TakeSnapshot() noexcept
         return;
     }
 
-    const std::wstring message = std::format(L"Snapshot failed (code {}).", rc);
+    const std::wstring message = FormatStringResource(g_hInstance, IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT, rc);
 
     HostAlertRequest request{};
     request.version      = 1;

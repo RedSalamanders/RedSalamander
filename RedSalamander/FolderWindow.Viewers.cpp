@@ -185,6 +185,155 @@ void FolderWindow::CloseAllViewers() noexcept
     ShutdownViewers();
 }
 
+HRESULT FolderWindow::OpenViewerWithPlugin(std::wstring_view pluginId, const ViewerOpenContext& context) noexcept
+{
+    if (! _settings)
+    {
+        return E_UNEXPECTED;
+    }
+
+    if (pluginId.empty() || ! context.fileSystem || ! context.focusedPath || context.focusedPath[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    ViewerPluginManager& pluginManager = ViewerPluginManager::GetInstance();
+
+    wil::com_ptr<IViewer> viewer;
+    const HRESULT createHr = pluginManager.CreateViewerInstance(pluginId, *_settings, viewer);
+    if (FAILED(createHr) || ! viewer)
+    {
+        return FAILED(createHr) ? createHr : E_FAIL;
+    }
+
+    auto instance            = std::make_unique<ViewerInstance>();
+    instance->viewerPluginId = std::wstring(pluginId);
+    instance->viewer         = viewer;
+    instance->fileSystem     = context.fileSystem;
+    instance->fileSystemName.assign(context.fileSystemName ? context.fileSystemName : L"");
+    instance->focusedPath.assign(context.focusedPath);
+
+    if (context.selectionPaths && context.selectionCount > 0)
+    {
+        instance->selectionStorage.reserve(context.selectionCount);
+        for (unsigned long i = 0; i < context.selectionCount; ++i)
+        {
+            const wchar_t* path = context.selectionPaths[i];
+            if (path && path[0] != L'\0')
+            {
+                instance->selectionStorage.emplace_back(path);
+            }
+        }
+    }
+
+    instance->selectionPointers.reserve(instance->selectionStorage.size());
+    for (const auto& selectionPath : instance->selectionStorage)
+    {
+        instance->selectionPointers.push_back(selectionPath.c_str());
+    }
+
+    if (context.otherFiles && context.otherFileCount > 0)
+    {
+        instance->otherFilesStorage.reserve(context.otherFileCount);
+        for (unsigned long i = 0; i < context.otherFileCount; ++i)
+        {
+            const wchar_t* path = context.otherFiles[i];
+            if (path && path[0] != L'\0')
+            {
+                instance->otherFilesStorage.emplace_back(path);
+            }
+        }
+    }
+
+    if (instance->otherFilesStorage.empty())
+    {
+        instance->otherFilesStorage.push_back(instance->focusedPath);
+    }
+
+    size_t focusedOtherIndex = static_cast<size_t>(context.focusedOtherFileIndex);
+    if (focusedOtherIndex >= instance->otherFilesStorage.size())
+    {
+        focusedOtherIndex = 0;
+        for (size_t i = 0; i < instance->otherFilesStorage.size(); ++i)
+        {
+            if (EqualsNoCase(instance->otherFilesStorage[i], instance->focusedPath))
+            {
+                focusedOtherIndex = i;
+                break;
+            }
+        }
+    }
+
+    bool focusedPathPresent = false;
+    for (const auto& otherPath : instance->otherFilesStorage)
+    {
+        if (EqualsNoCase(otherPath, instance->focusedPath))
+        {
+            focusedPathPresent = true;
+            break;
+        }
+    }
+
+    if (! focusedPathPresent)
+    {
+        instance->otherFilesStorage.insert(instance->otherFilesStorage.begin(), instance->focusedPath);
+        focusedOtherIndex = 0;
+    }
+
+    instance->otherFilePointers.reserve(instance->otherFilesStorage.size());
+    for (const auto& otherPath : instance->otherFilesStorage)
+    {
+        instance->otherFilePointers.push_back(otherPath.c_str());
+    }
+
+    ViewerInstance* cookie = instance.get();
+    _viewerInstances.push_back(std::move(instance));
+
+    const ViewerTheme theme = BuildViewerTheme();
+    static_cast<void>(viewer->SetTheme(&theme));
+    static_cast<void>(viewer->SetCallback(&_viewerCallback, cookie));
+
+    HWND ownerWindow = context.ownerWindow;
+    if (! ownerWindow)
+    {
+        ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    }
+    if (! ownerWindow)
+    {
+        ownerWindow = _hWnd.get();
+    }
+
+    cookie->openContext                       = {};
+    cookie->openContext.ownerWindow           = ownerWindow;
+    cookie->openContext.fileSystem            = cookie->fileSystem.get();
+    cookie->openContext.fileSystemName        = cookie->fileSystemName.empty() ? nullptr : cookie->fileSystemName.c_str();
+    cookie->openContext.focusedPath           = cookie->focusedPath.c_str();
+    cookie->openContext.selectionPaths        = cookie->selectionPointers.empty() ? nullptr : cookie->selectionPointers.data();
+    cookie->openContext.selectionCount        = static_cast<unsigned long>(cookie->selectionPointers.size());
+    cookie->openContext.otherFiles            = cookie->otherFilePointers.empty() ? nullptr : cookie->otherFilePointers.data();
+    cookie->openContext.otherFileCount        = static_cast<unsigned long>(cookie->otherFilePointers.size());
+    cookie->openContext.focusedOtherFileIndex = static_cast<unsigned long>(focusedOtherIndex);
+    cookie->openContext.flags                 = context.flags;
+
+    const HRESULT openHr = viewer->Open(&cookie->openContext);
+    if (FAILED(openHr))
+    {
+        static_cast<void>(viewer->SetCallback(nullptr, nullptr));
+        static_cast<void>(viewer->Close());
+
+        for (auto instanceIt = _viewerInstances.begin(); instanceIt != _viewerInstances.end(); ++instanceIt)
+        {
+            if (instanceIt->get() == cookie)
+            {
+                _viewerInstances.erase(instanceIt);
+                break;
+            }
+        }
+    }
+
+    return openHr;
+}
+
 bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRequest& request) noexcept
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -228,23 +377,6 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
 
             pluginIdStorage = it->second;
         }
-    }
-
-    ViewerPluginManager& pluginManager = ViewerPluginManager::GetInstance();
-
-    wil::com_ptr<IViewer> viewer;
-    HRESULT createHr = pluginManager.CreateViewerInstance(pluginIdStorage, *_settings, viewer);
-    if (FAILED(createHr) || ! viewer)
-    {
-        if (! EqualsNoCase(pluginIdStorage, kFallbackViewerId))
-        {
-            pluginIdStorage.assign(kFallbackViewerId);
-            createHr = pluginManager.CreateViewerInstance(pluginIdStorage, *_settings, viewer);
-        }
-    }
-    if (FAILED(createHr) || ! viewer)
-    {
-        return false;
     }
 
     const std::wstring_view pluginId = pluginIdStorage;
@@ -338,47 +470,33 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
         }
     }
 
-    auto instance            = std::make_unique<ViewerInstance>();
-    instance->viewerPluginId = std::wstring(pluginId);
-    instance->viewer         = viewer;
-    instance->fileSystem     = state.fileSystem;
-    instance->fileSystemName = std::move(fileSystemName);
-    instance->focusedPath    = request.focusedPath.wstring();
-
-    instance->selectionStorage.clear();
-    instance->selectionStorage.reserve(request.selectionPaths.size());
+    std::vector<std::wstring> selectionStorage;
+    selectionStorage.reserve(request.selectionPaths.size());
     for (const auto& path : request.selectionPaths)
     {
-        instance->selectionStorage.push_back(path.wstring());
+        selectionStorage.push_back(path.wstring());
     }
 
-    instance->selectionPointers.clear();
-    instance->selectionPointers.reserve(instance->selectionStorage.size());
-    for (const auto& s : instance->selectionStorage)
+    std::vector<const wchar_t*> selectionPointers;
+    selectionPointers.reserve(selectionStorage.size());
+    for (const auto& s : selectionStorage)
     {
-        instance->selectionPointers.push_back(s.c_str());
+        selectionPointers.push_back(s.c_str());
     }
 
-    instance->otherFilesStorage.clear();
-    instance->otherFilesStorage.reserve(otherFiles.size());
+    std::vector<std::wstring> otherFileStorage;
+    otherFileStorage.reserve(otherFiles.size());
     for (const auto& path : otherFiles)
     {
-        instance->otherFilesStorage.push_back(path.wstring());
+        otherFileStorage.push_back(path.wstring());
     }
 
-    instance->otherFilePointers.clear();
-    instance->otherFilePointers.reserve(instance->otherFilesStorage.size());
-    for (const auto& s : instance->otherFilesStorage)
+    std::vector<const wchar_t*> otherFilePointers;
+    otherFilePointers.reserve(otherFileStorage.size());
+    for (const auto& s : otherFileStorage)
     {
-        instance->otherFilePointers.push_back(s.c_str());
+        otherFilePointers.push_back(s.c_str());
     }
-
-    ViewerInstance* cookie = instance.get();
-    _viewerInstances.push_back(std::move(instance));
-
-    const ViewerTheme theme = BuildViewerTheme();
-    static_cast<void>(viewer->SetTheme(&theme));
-    static_cast<void>(viewer->SetCallback(&_viewerCallback, cookie));
 
     HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
     if (! ownerWindow)
@@ -386,37 +504,27 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
         ownerWindow = _hWnd.get();
     }
 
-    cookie->openContext                       = {};
-    cookie->openContext.ownerWindow           = ownerWindow;
-    cookie->openContext.fileSystem            = cookie->fileSystem.get();
-    cookie->openContext.fileSystemName        = cookie->fileSystemName.empty() ? nullptr : cookie->fileSystemName.c_str();
-    cookie->openContext.focusedPath           = cookie->focusedPath.c_str();
-    cookie->openContext.selectionPaths        = cookie->selectionPointers.empty() ? nullptr : cookie->selectionPointers.data();
-    cookie->openContext.selectionCount        = static_cast<unsigned long>(cookie->selectionPointers.size());
-    cookie->openContext.otherFiles            = cookie->otherFilePointers.empty() ? nullptr : cookie->otherFilePointers.data();
-    cookie->openContext.otherFileCount        = static_cast<unsigned long>(cookie->otherFilePointers.size());
-    cookie->openContext.focusedOtherFileIndex = static_cast<unsigned long>(focusedOtherIndex);
-    cookie->openContext.flags                 = VIEWER_OPEN_FLAG_NONE;
+    ViewerOpenContext context{};
+    context.ownerWindow           = ownerWindow;
+    context.fileSystem            = state.fileSystem.get();
+    context.fileSystemName        = fileSystemName.empty() ? nullptr : fileSystemName.c_str();
+    const std::wstring focusedPath = request.focusedPath.wstring();
+    context.focusedPath           = focusedPath.c_str();
+    context.selectionPaths        = selectionPointers.empty() ? nullptr : selectionPointers.data();
+    context.selectionCount        = static_cast<unsigned long>(selectionPointers.size());
+    context.otherFiles            = otherFilePointers.empty() ? nullptr : otherFilePointers.data();
+    context.otherFileCount        = static_cast<unsigned long>(otherFilePointers.size());
+    context.focusedOtherFileIndex = static_cast<unsigned long>(focusedOtherIndex);
+    context.flags                 = VIEWER_OPEN_FLAG_NONE;
 
-    const HRESULT openHr = viewer->Open(&cookie->openContext);
-    if (FAILED(openHr))
+    HRESULT openHr = OpenViewerWithPlugin(pluginIdStorage, context);
+    if (FAILED(openHr) && ! EqualsNoCase(pluginIdStorage, kFallbackViewerId))
     {
-        static_cast<void>(viewer->SetCallback(nullptr, nullptr));
-        static_cast<void>(viewer->Close());
-
-        for (auto instanceIt = _viewerInstances.begin(); instanceIt != _viewerInstances.end(); ++instanceIt)
-        {
-            if (instanceIt->get() == cookie)
-            {
-                _viewerInstances.erase(instanceIt);
-                break;
-            }
-        }
-
-        return false;
+        pluginIdStorage.assign(kFallbackViewerId);
+        openHr = OpenViewerWithPlugin(pluginIdStorage, context);
     }
 
-    return true;
+    return SUCCEEDED(openHr);
 }
 
 bool FolderWindow::TryViewSpaceWithViewer(Pane pane, const std::filesystem::path& folderPath) noexcept
@@ -432,16 +540,6 @@ bool FolderWindow::TryViewSpaceWithViewer(Pane pane, const std::filesystem::path
     if (folderPath.empty())
     {
         Debug::Error(L"FolderWindow::TryViewSpaceWithViewer: empty folder path");
-        return false;
-    }
-
-    ViewerPluginManager& pluginManager = ViewerPluginManager::GetInstance();
-
-    wil::com_ptr<IViewer> viewer;
-    const HRESULT createHr = pluginManager.CreateViewerInstance(L"builtin/viewer-space", *_settings, viewer);
-    if (FAILED(createHr) || ! viewer)
-    {
-        Debug::Error(L"FolderWindow::TryViewSpaceWithViewer: failed to create viewer instance");
         return false;
     }
 
@@ -470,53 +568,29 @@ bool FolderWindow::TryViewSpaceWithViewer(Pane pane, const std::filesystem::path
         }
     }
 
-    auto instance            = std::make_unique<ViewerInstance>();
-    instance->viewerPluginId = L"builtin/viewer-space";
-    instance->viewer         = viewer;
-    instance->fileSystem     = state.fileSystem;
-    instance->fileSystemName = std::move(fileSystemName);
-    instance->focusedPath    = folderPath.wstring();
-
-    ViewerInstance* cookie = instance.get();
-    _viewerInstances.push_back(std::move(instance));
-
-    const ViewerTheme theme = BuildViewerTheme();
-    static_cast<void>(viewer->SetTheme(&theme));
-    static_cast<void>(viewer->SetCallback(&_viewerCallback, cookie));
-
     HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
     if (! ownerWindow)
     {
         ownerWindow = _hWnd.get();
     }
 
-    cookie->openContext                       = {};
-    cookie->openContext.ownerWindow           = ownerWindow;
-    cookie->openContext.fileSystem            = cookie->fileSystem.get();
-    cookie->openContext.fileSystemName        = cookie->fileSystemName.empty() ? nullptr : cookie->fileSystemName.c_str();
-    cookie->openContext.focusedPath           = cookie->focusedPath.c_str();
-    cookie->openContext.selectionPaths        = nullptr;
-    cookie->openContext.selectionCount        = 0;
-    cookie->openContext.otherFiles            = nullptr;
-    cookie->openContext.otherFileCount        = 0;
-    cookie->openContext.focusedOtherFileIndex = 0;
-    cookie->openContext.flags                 = VIEWER_OPEN_FLAG_NONE;
+    const std::wstring focusedPath = folderPath.wstring();
+    ViewerOpenContext context{};
+    context.ownerWindow           = ownerWindow;
+    context.fileSystem            = state.fileSystem.get();
+    context.fileSystemName        = fileSystemName.empty() ? nullptr : fileSystemName.c_str();
+    context.focusedPath           = focusedPath.c_str();
+    context.selectionPaths        = nullptr;
+    context.selectionCount        = 0;
+    context.otherFiles            = nullptr;
+    context.otherFileCount        = 0;
+    context.focusedOtherFileIndex = 0;
+    context.flags                 = VIEWER_OPEN_FLAG_NONE;
 
-    const HRESULT openHr = viewer->Open(&cookie->openContext);
+    const HRESULT openHr = OpenViewerWithPlugin(L"builtin/viewer-space", context);
     if (FAILED(openHr))
     {
-        static_cast<void>(viewer->SetCallback(nullptr, nullptr));
-        static_cast<void>(viewer->Close());
-
-        for (auto instanceIt = _viewerInstances.begin(); instanceIt != _viewerInstances.end(); ++instanceIt)
-        {
-            if (instanceIt->get() == cookie)
-            {
-                _viewerInstances.erase(instanceIt);
-                break;
-            }
-        }
-
+        Debug::Error(L"FolderWindow::TryViewSpaceWithViewer: failed to open viewer instance (hr=0x{:08X}).", static_cast<unsigned long>(openHr));
         return false;
     }
 

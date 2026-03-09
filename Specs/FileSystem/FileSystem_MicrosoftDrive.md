@@ -14,16 +14,16 @@ The plugin uses WinHTTP for HTTPS transport, `yyjson` for JSON parsing, and dele
 
 | Display name | `PluginMetaData.id` | `PluginMetaData.shortId` |
 |-------------|----------------------|--------------------------|
-| OneDrive Personal | `builtin/file-system-onedrive-personal` | `onedrivep` |
-| OneDrive Business | `builtin/file-system-onedrive-business` | `onedriveb` |
+| OneDrive Personal | `builtin/file-system-onedrive-personal` | `onedrive` |
+| OneDrive Business | `builtin/file-system-onedrive-business` | `onedrive-pro` |
 | SharePoint | `builtin/file-system-sharepoint` | `sharepoint` |
 
 ## Navigation
 
 Host-side behavior:
 
-- `onedrivep:`
-- `onedriveb:`
+- `onedrive:`
+- `onedrive-pro:`
 - `sharepoint:`
 
 with no host opens Connection Manager filtered to the matching plugin.
@@ -34,8 +34,8 @@ Runtime navigation uses the host-reserved connection prefix:
 
 Examples:
 
-- `onedrivep:/@conn:Personal Account/`
-- `onedriveb:/@conn:Work Account/Documents/Reports`
+- `onedrive:/@conn:Personal Account/`
+- `onedrive-pro:/@conn:Work Account/Documents/Reports`
 - `sharepoint:/@conn:Team Site/Shared Documents/Q1`
 
 The plugin treats `initialPath` from the selected connection as the starting path inside the resolved drive or document library.
@@ -63,7 +63,7 @@ Each logical plugin exposes the same configuration schema through `IInformations
 
 Keys:
 
-- `clientId` (string, default `90cdea53-7c21-48b0-959e-b4024209027b`): Microsoft Entra application client id used for PKCE sign-in. Override it only when you want to use a different app registration.
+- `clientId` (string, default `90cdea53-7c21-48b0-959e-b4024209027b`): advanced JSON-only Microsoft Entra application client id override used for PKCE sign-in. It is intentionally hidden from Preferences / Plugin Manager UI and should only be changed in settings JSON when a different app registration is required.
 - `connectTimeoutMs` (integer, `1..600000`, default `10000`)
 - `requestTimeoutMs` (integer, `1..600000`, default `60000`)
 - `pageSize` (integer, `1..999`, default `200`): Graph page size used for `children` listings.

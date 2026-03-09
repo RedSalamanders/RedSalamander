@@ -36,11 +36,11 @@ namespace
     }
     if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-onedrive-personal"))
     {
-        return L"onedrivep";
+        return L"onedrive";
     }
     if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-onedrive-business"))
     {
-        return L"onedriveb";
+        return L"onedrive-pro";
     }
     if (OrdinalString::EqualsNoCase(pluginId, L"builtin/file-system-sharepoint"))
     {

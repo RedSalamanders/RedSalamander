@@ -23,7 +23,7 @@ Embedded:
 
 Optional (loaded from `<exeDir>\\Plugins` when present):
 - `builtin/viewer-web`: WebView2-based HTML/PDF viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
-- `builtin/viewer-json`: WebView2-based JSON/JSON5 viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
+- `builtin/viewer-json`: WebView2-based JSON/JSON5/JSONL viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
 - `builtin/viewer-markdown`: WebView2-based Markdown viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
 
 ## Settings (host responsibility)
@@ -60,6 +60,7 @@ The built-in `builtin/viewer-text` is used as a reference for viewer UX. Other v
 - If `otherFileCount > 1`, the viewer SHOULD expose a **filename dropdown** (combo box) listing the `otherFiles` list and selecting `focusedOtherFileIndex`.
 - The header SHOULD expose a clearly clickable **mode toggle button** (`TEXT` / `HEX`) so users can switch view mode without hunting in menus.
 - The viewer SHOULD also provide “Other Files” navigation commands (Next/Previous/First/Last) using the same shortcuts described in the menu spec.
+- Text/hex rows in `builtin/viewer-text` SHOULD use explicit uniform DirectWrite line spacing with pixel-snapped row origins so long monospace files do not show alternating vertical gaps while scrolling.
 - In Hex view, selection SHOULD be **byte-accurate**: selecting a byte in the Hex column highlights the corresponding character in the Text column and vice-versa.
 - In Hex view, the Text column header SHOULD be clickable to toggle an alternate Unicode byte rendering mode (for inspecting non-ASCII bytes).
 - The status bar SHOULD display encoding + size and MUST include a visible-range indicator:

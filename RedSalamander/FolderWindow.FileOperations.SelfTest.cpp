@@ -9224,7 +9224,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                     }
 
                     const std::wstring fileName = de.path().filename().wstring();
-                    if (fileName.rfind(L"FileOperations-", 0) != 0 || de.path().extension().wstring() != L".log")
+                    if (fileName.rfind(L"FileOperations-", 0) != 0 || de.path().extension().wstring() != L".jsonl")
                     {
                         continue;
                     }

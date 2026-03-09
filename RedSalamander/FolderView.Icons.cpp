@@ -1,5 +1,10 @@
 #include "FolderViewInternal.h"
 
+namespace
+{
+constexpr unsigned int kMaxIconLoadRetries = 2u;
+}
+
 void FolderView::QueueIconLoading()
 {
     if (_items.empty() || ! _hWnd)
@@ -364,6 +369,26 @@ void FolderView::ProcessIconLoadQueue()
             wil::unique_hicon hIcon = IconCache::GetInstance().ExtractSystemIcon(request.iconIndex, _iconSizeDip);
             if (! hIcon)
             {
+                if (request.retryCount < kMaxIconLoadRetries)
+                {
+                    ++request.retryCount;
+                    {
+                        std::lock_guard lock(_enumerationMutex);
+                        if (request.hasVisibleItems)
+                        {
+                            _iconLoadQueue.push_front(std::move(request));
+                        }
+                        else
+                        {
+                            _iconLoadQueue.push_back(std::move(request));
+                        }
+                    }
+                    _enumerationCv.notify_one();
+                }
+                else
+                {
+                    Debug::Warning(L"FolderView: Failed to extract icon index {} after {} attempts", request.iconIndex, request.retryCount + 1u);
+                }
                 continue;
             }
             _iconLoadStats.extracted.fetch_add(1u, std::memory_order_relaxed);

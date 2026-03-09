@@ -861,51 +861,7 @@ void PluginsPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
 
     state.pluginsListItems.clear();
     ListView_DeleteAllItems(state.pluginsList.get());
-
-    const auto& fsPlugins = FileSystemPluginManager::GetInstance().GetPlugins();
-    state.pluginsListItems.reserve(fsPlugins.size());
-    for (size_t i = 0; i < fsPlugins.size(); ++i)
-    {
-        if (! fsPlugins[i].id.empty())
-        {
-            state.pluginsListItems.push_back(PrefsPluginListItem{PrefsPluginType::FileSystem, i});
-        }
-    }
-
-    const auto& viewerPlugins = ViewerPluginManager::GetInstance().GetPlugins();
-    state.pluginsListItems.reserve(state.pluginsListItems.size() + viewerPlugins.size());
-    for (size_t i = 0; i < viewerPlugins.size(); ++i)
-    {
-        if (! viewerPlugins[i].id.empty())
-        {
-            state.pluginsListItems.push_back(PrefsPluginListItem{PrefsPluginType::Viewer, i});
-        }
-    }
-
-    std::sort(state.pluginsListItems.begin(),
-              state.pluginsListItems.end(),
-              [](const PrefsPluginListItem& a, const PrefsPluginListItem& b) noexcept
-    {
-        if (a.type != b.type)
-        {
-            return a.type < b.type;
-        }
-
-        const int aOrigin = GetPluginOriginOrder(a);
-        const int bOrigin = GetPluginOriginOrder(b);
-        if (aOrigin != bOrigin)
-        {
-            return aOrigin < bOrigin;
-        }
-
-        const std::wstring_view aName = GetPluginDisplayName(a);
-        const std::wstring_view bName = GetPluginDisplayName(b);
-        if (aName.empty() || bName.empty())
-        {
-            return aName < bName;
-        }
-        return _wcsicmp(aName.data(), bName.data()) < 0;
-    });
+    PrefsPlugins::BuildListItems(state.pluginsListItems);
 
     const std::wstring typeFileSystem = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM);
     const std::wstring typeViewer     = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);

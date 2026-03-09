@@ -53,6 +53,10 @@ constexpr wchar_t kStatusBarSortTextProp[]      = L"RedSalamander.StatusBar.Sort
 constexpr wchar_t kStatusBarFocusHueProp[]      = L"RedSalamander.StatusBar.FocusHue";
 constexpr wchar_t kStatusBarSortHotProp[]       = L"RedSalamander.StatusBar.SortHot";
 
+constexpr int kStatusBarPartSelection = 0;
+constexpr int kStatusBarPartSecurity  = 1;
+constexpr int kStatusBarPartSort      = 2;
+
 using CreateFactoryFunc   = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, void**);
 using CreateFactoryExFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
 

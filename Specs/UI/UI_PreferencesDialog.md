@@ -31,9 +31,11 @@ This document is both a UX spec and an implementation plan (phased) to refactor 
   - The active pane window is resized to the full content height (>= view height) so child controls are never clipped while scrolling.
   - Scrolling is applied by shifting the pane window(s) (`PrefsPaneHost::ApplyScrollDelta`) and forcing an immediate redraw to avoid “blank until hover” and stale owner-draw artifacts.
 - Plugins: list management + custom paths + per-plugin subpage (embedded configuration editor) + `Test` / `Test All`.
+  - Plugin list and plugin child nodes are sorted alphabetically by plugin display name (case-insensitive).
   - Plugins list: `Configure...` navigates to the selected plugin child node in the tree.
   - Plugin subpage: displays schema-driven controls for the plugin configuration (falls back to read-only JSON preview + error message if the schema is unavailable or has no `fields`).
   - `Configure...` (on the plugin subpage) opens the existing configuration editor dialog for advanced editing.
+  - Plugin configuration fields marked `x-ui-hidden: true` remain JSON-only advanced settings and are not rendered in the embedded editor or advanced configuration dialog.
 - Disabled options: when an option is disabled, its title/description text is dimmed (but readable) to match the disabled-state UX.
 - Input polish:
   - Framed edits/comboboxes use sibling `STATIC` “input frames” (rounded fill + neutral border).
@@ -239,6 +241,7 @@ Target capabilities:
   - Both the selection field (main part) and the drop-down list must use themed background/text colors, including disabled state.
   - Width: don’t stretch to full row if the option labels are short; compute a compact width from the widest option text and keep dropdown width large enough to show the full labels (`CB_SETDROPPEDWIDTH`).
 - Themed edit boxes (rounded border; width varies by value type) using the same “input frame” approach (no classic border in themed mode).
+  - Standard edit behavior is preserved inside those controls, including `Ctrl+Backspace` deleting the previous word/segment.
 - Scrollable panel helper (vertical scrolling, correct range/position, keyboard navigation support):
   - Mouse wheel works reliably with both “notched” wheels and high-resolution wheels/touchpads (accumulate partial deltas; no lost scroll).
   - Wheel is routed by pointer location inside the dialog (e.g., if the pointer is over a list, that list scrolls; otherwise the page host scrolls), independent of which control currently has focus.

@@ -12,12 +12,14 @@
 #include "ThemedInputFrames.h"
 
 #include <cstring>
+#include <cwctype>
 #include <limits>
 #include <map>
 #include <unordered_set>
 
 #include <commctrl.h>
 #include <shellapi.h>
+#include <winnetwk.h>
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -85,6 +87,130 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
 
     static_cast<void>(memory.release());
     return true;
+}
+
+[[nodiscard]] HWND GetClipboardOwnerWindow(HWND window) noexcept
+{
+    HWND ownerWindow = window ? GetAncestor(window, GA_ROOT) : nullptr;
+    return ownerWindow ? ownerWindow : window;
+}
+
+[[nodiscard]] std::wstring NormalizeUncCandidatePath(std::wstring_view nativePath) noexcept
+{
+    static constexpr std::wstring_view kExtendedUncPrefix  = LR"(\\?\UNC\)";
+    static constexpr std::wstring_view kExtendedPathPrefix = LR"(\\?\)";
+
+    std::wstring normalized(nativePath);
+    for (wchar_t& ch : normalized)
+    {
+        if (ch == L'/')
+        {
+            ch = L'\\';
+        }
+    }
+
+    if (StartsWithNoCase(normalized, kExtendedUncPrefix))
+    {
+        std::wstring uncPath = LR"(\\)";
+        uncPath.append(normalized.substr(kExtendedUncPrefix.size()));
+        return uncPath;
+    }
+
+    if (StartsWithNoCase(normalized, kExtendedPathPrefix) && normalized.size() >= 6u && std::iswalpha(static_cast<wint_t>(normalized[4])) != 0 &&
+        normalized[5] == L':')
+    {
+        return normalized.substr(kExtendedPathPrefix.size());
+    }
+
+    return normalized;
+}
+
+[[nodiscard]] std::wstring TryGetProviderUniversalPath(std::wstring_view normalizedPath) noexcept
+{
+    if (normalizedPath.empty())
+    {
+        return {};
+    }
+
+    const std::wstring path(normalizedPath);
+    DWORD bufferBytes = 0;
+    DWORD result      = WNetGetUniversalNameW(path.c_str(), UNIVERSAL_NAME_INFO_LEVEL, nullptr, &bufferBytes);
+    if (result != ERROR_MORE_DATA || bufferBytes < sizeof(UNIVERSAL_NAME_INFOW))
+    {
+        return {};
+    }
+
+    std::vector<char> buffer(bufferBytes);
+    auto* info = reinterpret_cast<UNIVERSAL_NAME_INFOW*>(buffer.data());
+    result     = WNetGetUniversalNameW(path.c_str(), UNIVERSAL_NAME_INFO_LEVEL, info, &bufferBytes);
+    if (result != NO_ERROR || info->lpUniversalName == nullptr || info->lpUniversalName[0] == L'\0')
+    {
+        return {};
+    }
+
+    return info->lpUniversalName;
+}
+
+[[nodiscard]] bool IsAbsoluteDrivePath(std::wstring_view path) noexcept
+{
+    return path.size() >= 3u && std::iswalpha(static_cast<wint_t>(path[0])) != 0 && path[1] == L':' && path[2] == L'\\';
+}
+
+[[nodiscard]] std::wstring TryGetLocalMachineAdministrativeSharePath(std::wstring_view normalizedPath) noexcept
+{
+    if (! IsAbsoluteDrivePath(normalizedPath))
+    {
+        return {};
+    }
+
+    const std::wstring driveRoot(normalizedPath.substr(0, 3));
+    const UINT driveType = GetDriveTypeW(driveRoot.c_str());
+    if (driveType == DRIVE_REMOTE || driveType == DRIVE_NO_ROOT_DIR || driveType == DRIVE_UNKNOWN)
+    {
+        return {};
+    }
+
+    wchar_t computerName[MAX_COMPUTERNAME_LENGTH + 1]{};
+    DWORD computerNameLength = static_cast<DWORD>(std::size(computerName));
+    if (GetComputerNameW(computerName, &computerNameLength) == FALSE || computerNameLength == 0u)
+    {
+        return {};
+    }
+
+    std::wstring uncPath = LR"(\\)";
+    uncPath.append(computerName, computerNameLength);
+    uncPath.push_back(L'\\');
+    uncPath.push_back(static_cast<wchar_t>(std::towupper(static_cast<wint_t>(normalizedPath[0]))));
+    uncPath.push_back(L'$');
+    uncPath.append(normalizedPath.substr(2));
+    return uncPath;
+}
+
+[[nodiscard]] std::wstring GetUniversalPathOrOriginal(std::wstring_view nativePath) noexcept
+{
+    if (nativePath.empty())
+    {
+        return {};
+    }
+
+    const std::wstring normalizedPath = NormalizeUncCandidatePath(nativePath);
+
+    if (StartsWithNoCase(normalizedPath, LR"(\\)"))
+    {
+        return normalizedPath;
+    }
+
+    if (std::wstring providerUncPath = TryGetProviderUniversalPath(normalizedPath); ! providerUncPath.empty())
+    {
+        return providerUncPath;
+    }
+
+    if (std::wstring administrativeSharePath = TryGetLocalMachineAdministrativeSharePath(normalizedPath); ! administrativeSharePath.empty())
+    {
+        return administrativeSharePath;
+    }
+
+    return normalizedPath;
 }
 
 struct ChangeCaseDialogState
@@ -2156,6 +2282,10 @@ LRESULT CALLBACK CreateDirectoryNameEditSubclassProc(HWND hwnd, UINT msg, WPARAM
     switch (msg)
     {
         case WM_KEYDOWN:
+            if (ThemedControls::HandleEditCtrlBackspaceKeyDown(hwnd, wParam))
+            {
+                return 0;
+            }
             if (wParam == VK_RETURN)
             {
                 SendMessageW(GetParent(hwnd), WM_COMMAND, IDOK, 0);
@@ -2163,6 +2293,10 @@ LRESULT CALLBACK CreateDirectoryNameEditSubclassProc(HWND hwnd, UINT msg, WPARAM
             }
             break;
         case WM_CHAR:
+            if (ThemedControls::HandleEditCtrlBackspaceChar(hwnd, wParam))
+            {
+                return 0;
+            }
             if (wParam == L'\r' || wParam == L'\n')
             {
                 return 0;
@@ -4467,8 +4601,8 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
         {
             const bool supportsConnections =
                 (EqualsNoCase(pluginShortId, L"ftp") || EqualsNoCase(pluginShortId, L"sftp") || EqualsNoCase(pluginShortId, L"scp") ||
-                 EqualsNoCase(pluginShortId, L"imap") || EqualsNoCase(pluginShortId, L"gdrive") || EqualsNoCase(pluginShortId, L"onedrivep") ||
-                 EqualsNoCase(pluginShortId, L"onedriveb") || EqualsNoCase(pluginShortId, L"sharepoint") || EqualsNoCase(pluginShortId, L"s3") ||
+                 EqualsNoCase(pluginShortId, L"imap") || EqualsNoCase(pluginShortId, L"gdrive") || EqualsNoCase(pluginShortId, L"onedrive") ||
+                 EqualsNoCase(pluginShortId, L"onedrive-pro") || EqualsNoCase(pluginShortId, L"sharepoint") || EqualsNoCase(pluginShortId, L"s3") ||
                  EqualsNoCase(pluginShortId, L"s3table"));
 
             const auto openProtocolFilteredConnectionManager = [&]
@@ -5576,7 +5710,7 @@ void FolderWindow::CommandSelectionSave(Pane pane)
     }
 }
 
-void FolderWindow::CommandCopyPathAndFileNameAsText(Pane pane)
+void FolderWindow::CopySelectionText(Pane pane, CopySelectionTextMode mode, UINT titleStringId)
 {
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -5588,42 +5722,75 @@ void FolderWindow::CommandCopyPathAndFileNameAsText(Pane pane)
         return;
     }
 
-    Debug::Info(L"event=share_copy_path_and_file_name_clicked count={}", static_cast<uint64_t>(paths.size()));
+    const bool preferUncPath = mode == CopySelectionTextMode::UncPathAndName && IsFilePluginShortId(state.folderView.GetFileSystemPluginId());
+    const auto renderClipboardLine = [mode, preferUncPath](const std::filesystem::path& path) -> std::wstring
+    {
+        const std::wstring nativePath = path.native();
+        switch (mode)
+        {
+        case CopySelectionTextMode::PathAndName:
+            return nativePath;
+
+        case CopySelectionTextMode::Name:
+        {
+            std::wstring fileName = path.filename().native();
+            return fileName.empty() ? nativePath : fileName;
+        }
+
+        case CopySelectionTextMode::Path:
+        {
+            std::filesystem::path parentPath = path.parent_path();
+            if (parentPath.empty() && path.has_root_path())
+            {
+                parentPath = path.root_path();
+            }
+
+            std::wstring containingPath = parentPath.native();
+            return containingPath.empty() ? nativePath : containingPath;
+        }
+
+        case CopySelectionTextMode::UncPathAndName:
+            return preferUncPath ? GetUniversalPathOrOriginal(nativePath) : nativePath;
+        }
+
+        return nativePath;
+    };
+
+    std::vector<std::wstring> lines;
+    lines.reserve(paths.size());
+
+    size_t reserveChars = 2u;
+    for (const auto& path : paths)
+    {
+        std::wstring line = renderClipboardLine(path);
+        if (line.empty())
+        {
+            continue;
+        }
+
+        reserveChars += line.size() + 2u;
+        lines.push_back(std::move(line));
+    }
+
+    if (lines.empty())
+    {
+        MessageBeep(MB_ICONWARNING);
+        return;
+    }
 
     std::wstring clipboardText;
+    clipboardText.reserve(reserveChars);
+    for (size_t i = 0; i < lines.size(); ++i)
     {
-        size_t reserveChars = 2u;
-        for (const auto& path : paths)
+        if (i != 0u)
         {
-            reserveChars += path.native().size() + 2u;
+            clipboardText.append(L"\r\n");
         }
-        clipboardText.reserve(reserveChars);
-
-        bool first = true;
-        for (const auto& path : paths)
-        {
-            const std::wstring_view native = path.native();
-            if (native.empty())
-            {
-                continue;
-            }
-
-            if (! first)
-            {
-                clipboardText.append(L"\r\n");
-            }
-            clipboardText.append(native);
-            first = false;
-        }
-        clipboardText.append(L"\r\n");
+        clipboardText.append(lines[i]);
     }
+    clipboardText.append(L"\r\n");
 
-    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
-    if (! ownerWindow)
-    {
-        ownerWindow = _hWnd.get();
-    }
-
+    const HWND ownerWindow = GetClipboardOwnerWindow(_hWnd.get());
     if (! SetClipboardUnicodeText(ownerWindow, clipboardText))
     {
         std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
@@ -5633,24 +5800,42 @@ void FolderWindow::CommandCopyPathAndFileNameAsText(Pane pane)
         return;
     }
 
-    Debug::Info(L"event=share_copy_path_and_file_name_succeeded count={}", static_cast<uint64_t>(paths.size()));
-
-    std::wstring title = LoadStringResource(nullptr, IDS_CMD_COPY_PATH_AND_FILE_NAME);
+    std::wstring title = LoadStringResource(nullptr, titleStringId);
     if (title.empty())
     {
         title = LoadStringResource(nullptr, IDS_OVERLAY_TITLE_INFORMATION);
     }
 
-    const unsigned long long count = static_cast<unsigned long long>(paths.size());
+    const unsigned long long count = static_cast<unsigned long long>(lines.size());
     const std::wstring_view suffix = count == 1ull ? std::wstring_view(L"") : std::wstring_view(L"s");
     std::wstring message           = FormatStringResource(nullptr, IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED, count, suffix);
     if (message.empty())
     {
-        message = std::format(L"Copied {} path{} to clipboard.", count, suffix);
+        message = std::format(L"Copied {} item{} to clipboard.", count, suffix);
     }
 
     ShowPaneAlertOverlay(
         pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Information, std::move(title), std::move(message), S_OK, false, false);
+}
+
+void FolderWindow::CommandCopyPathAndNameAsText(Pane pane)
+{
+    CopySelectionText(pane, CopySelectionTextMode::PathAndName, IDS_CMD_COPY_PATH_AND_NAME_AS_TEXT);
+}
+
+void FolderWindow::CommandCopyNameAsText(Pane pane)
+{
+    CopySelectionText(pane, CopySelectionTextMode::Name, IDS_CMD_COPY_NAME_AS_TEXT);
+}
+
+void FolderWindow::CommandCopyPathAsText(Pane pane)
+{
+    CopySelectionText(pane, CopySelectionTextMode::Path, IDS_CMD_COPY_PATH_AS_TEXT);
+}
+
+void FolderWindow::CommandCopyUncPathAndNameAsText(Pane pane)
+{
+    CopySelectionText(pane, CopySelectionTextMode::UncPathAndName, IDS_CMD_COPY_PATH_AND_FILE_NAME);
 }
 
 void FolderWindow::CommandSelectionRestore(Pane pane)

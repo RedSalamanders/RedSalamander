@@ -1,4 +1,5 @@
 #include "FileSystem.Internal.h"
+#include "FileSystemResources.h"
 
 #include <array>
 #include <atomic>
@@ -7,6 +8,8 @@
 #include <limits>
 
 using namespace FileSystemInternal;
+
+extern HINSTANCE g_hInstance;
 
 namespace
 {
@@ -17,6 +20,18 @@ constexpr DWORD kDefaultWatchFilter = FILE_NOTIFY_CHANGE_FILE_NAME | FILE_NOTIFY
                                       FILE_NOTIFY_CHANGE_LAST_WRITE | FILE_NOTIFY_CHANGE_CREATION | FILE_NOTIFY_CHANGE_SECURITY;
 
 std::atomic<unsigned long> g_fileSystemInstanceCount{0};
+
+[[nodiscard]] const wchar_t* LocalizedPluginName() noexcept
+{
+    static const std::wstring name = LoadStringResource(g_hInstance, IDS_FILESYSTEM_NAME);
+    return name.c_str();
+}
+
+[[nodiscard]] const wchar_t* LocalizedPluginDescription() noexcept
+{
+    static const std::wstring description = LoadStringResource(g_hInstance, IDS_FILESYSTEM_DESCRIPTION);
+    return description.c_str();
+}
 
 FileSystemDirectoryChangeAction MapDirectoryWatchAction(DWORD action) noexcept
 {
@@ -682,8 +697,8 @@ FileSystem::FileSystem()
 
     _metaData.id          = kPluginId;
     _metaData.shortId     = kPluginShortId;
-    _metaData.name        = kPluginName;
-    _metaData.description = kPluginDescription;
+    _metaData.name        = LocalizedPluginName();
+    _metaData.description = LocalizedPluginDescription();
     _metaData.author      = kPluginAuthor;
     _metaData.version     = kPluginVersion;
 

@@ -31,6 +31,9 @@
 
 #include "Helpers.h"
 #include "resource.h"
+#include "FileSystemMicrosoftDriveResources.h"
+
+extern HINSTANCE g_hInstance;
 
 namespace FsMs
 {
@@ -183,13 +186,63 @@ struct TokenResponse
 
 [[nodiscard]] std::wstring LoadStringResourceOrFallback(unsigned int id, std::wstring_view fallback) noexcept
 {
-    std::wstring text = LoadStringResource(nullptr, id);
+    std::wstring text = LoadStringResource(g_hInstance, id);
     if (! text.empty())
     {
         return text;
     }
 
     return std::wstring(fallback);
+}
+
+[[nodiscard]] const wchar_t* LocalizedPluginName(FileSystemMicrosoftDriveMode mode) noexcept
+{
+    switch (mode)
+    {
+        case FileSystemMicrosoftDriveMode::OneDrivePersonal:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_NAME);
+            return text.c_str();
+        }
+        case FileSystemMicrosoftDriveMode::OneDriveBusiness:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_NAME);
+            return text.c_str();
+        }
+        case FileSystemMicrosoftDriveMode::SharePoint:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME);
+            return text.c_str();
+        }
+    }
+
+    static const std::wstring fallback = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_NAME);
+    return fallback.c_str();
+}
+
+[[nodiscard]] const wchar_t* LocalizedPluginDescription(FileSystemMicrosoftDriveMode mode) noexcept
+{
+    switch (mode)
+    {
+        case FileSystemMicrosoftDriveMode::OneDrivePersonal:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_DESCRIPTION);
+            return text.c_str();
+        }
+        case FileSystemMicrosoftDriveMode::OneDriveBusiness:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_DESCRIPTION);
+            return text.c_str();
+        }
+        case FileSystemMicrosoftDriveMode::SharePoint:
+        {
+            static const std::wstring text = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_DESCRIPTION);
+            return text.c_str();
+        }
+    }
+
+    static const std::wstring fallback;
+    return fallback.c_str();
 }
 
 [[nodiscard]] std::string HtmlEscapeUtf8(std::wstring_view text) noexcept
@@ -221,14 +274,14 @@ struct TokenResponse
 
 [[nodiscard]] std::string BuildAuthResultHttpResponse(bool success) noexcept
 {
-    const std::string appTitle = HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_MICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE, L"Red Salamander"));
+    const std::string appTitle = HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE, L"Red Salamander"));
     const std::string title    = HtmlEscapeUtf8(LoadStringResourceOrFallback(
-        success ? IDS_MICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS : IDS_MICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE, success ? L"You're connected" : L"We hit a snag"));
+        success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE, success ? L"You're connected" : L"We hit a snag"));
     const std::string body     = HtmlEscapeUtf8(
-        LoadStringResourceOrFallback(success ? IDS_MICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS : IDS_MICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE,
-                                     success ? L"Microsoft sign-in is done. Head back to Red Salamander and keep exploring."
-                                                 : L"Microsoft sign-in did not finish cleanly. Return to Red Salamander to review the problem and try again."));
-    const std::string footer = HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_MICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT, L"This tab can be closed."));
+        LoadStringResourceOrFallback(success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE,
+            success ? L"Microsoft sign-in is done. Head back to Red Salamander and keep exploring."
+                    : L"Microsoft sign-in did not finish cleanly. Return to Red Salamander to review the problem and try again."));
+    const std::string footer = HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT, L"This tab can be closed."));
 
     std::string html;
     html.reserve(2048);
@@ -1169,6 +1222,7 @@ void SecureClear(std::wstring& text) noexcept
                        static_cast<unsigned long>(ipv6Hr));
     }
 
+    // Desktop app registrations use the localhost exception and vary only the loopback port at runtime.
     redirectUriOut = std::format(L"http://localhost:{}{}", port, expectedPath);
 
     fd_set readSet{};
@@ -3419,20 +3473,20 @@ FileSystemMicrosoftDrive::FileSystemMicrosoftDrive(FileSystemMicrosoftDriveMode 
         case FileSystemMicrosoftDriveMode::OneDrivePersonal:
             _metaData.id          = kPluginIdOneDrivePersonal;
             _metaData.shortId     = kPluginShortIdOneDrivePersonal;
-            _metaData.name        = kPluginNameOneDrivePersonal;
-            _metaData.description = kPluginDescOneDrivePersonal;
+            _metaData.name        = LocalizedPluginName(FileSystemMicrosoftDriveMode::OneDrivePersonal);
+            _metaData.description = LocalizedPluginDescription(FileSystemMicrosoftDriveMode::OneDrivePersonal);
             break;
         case FileSystemMicrosoftDriveMode::OneDriveBusiness:
             _metaData.id          = kPluginIdOneDriveBusiness;
             _metaData.shortId     = kPluginShortIdOneDriveBusiness;
-            _metaData.name        = kPluginNameOneDriveBusiness;
-            _metaData.description = kPluginDescOneDriveBusiness;
+            _metaData.name        = LocalizedPluginName(FileSystemMicrosoftDriveMode::OneDriveBusiness);
+            _metaData.description = LocalizedPluginDescription(FileSystemMicrosoftDriveMode::OneDriveBusiness);
             break;
         case FileSystemMicrosoftDriveMode::SharePoint:
             _metaData.id          = kPluginIdSharePoint;
             _metaData.shortId     = kPluginShortIdSharePoint;
-            _metaData.name        = kPluginNameSharePoint;
-            _metaData.description = kPluginDescSharePoint;
+            _metaData.name        = LocalizedPluginName(FileSystemMicrosoftDriveMode::SharePoint);
+            _metaData.description = LocalizedPluginDescription(FileSystemMicrosoftDriveMode::SharePoint);
             break;
     }
 
@@ -4761,14 +4815,14 @@ void FileSystemMicrosoftDrive::ShowMissingClientIdAlert() const noexcept
         return;
     }
 
-    std::wstring pluginName = _metaData.name ? _metaData.name : L"Microsoft Drive";
+    std::wstring pluginName = _metaData.name ? _metaData.name : LocalizedPluginName(_mode);
     if (pluginName.empty())
     {
         pluginName = L"Microsoft Drive";
     }
 
-    const std::wstring title   = LoadStringResource(nullptr, IDS_MICROSOFTDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED);
-    const std::wstring message = FormatStringResource(nullptr, IDS_MICROSOFTDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT, pluginName);
+    const std::wstring title   = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED);
+    const std::wstring message = FormatStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT, pluginName);
     if (message.empty())
     {
         return;

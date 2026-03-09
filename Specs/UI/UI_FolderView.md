@@ -247,6 +247,7 @@ while (entry != nullptr)
 - Async loading with viewport prioritization: visible items first, offscreen queued
 - Per-file icon extraction for .exe, .dll, .ico, .lnk, .url (embedded icons)
 - Extension-based caching for common file types (bypasses Shell API on cache hit)
+- Common startup warming includes the usual text/code types plus structured-log extensions such as `.jsonl` and `.ndjson`
 - Fluent Design placeholder icons (folder: blue gradient, file: white document with fold)
 - Shortcut overlay rendering for .lnk files (system SIID_LINK arrow)
 - Performance telemetry: tracks cache hits, extraction count, load duration
@@ -336,6 +337,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 
 **Pane Switching (FolderWindow Integration):**
 - **Tab / Shift+Tab**: Switch focus to the **other pane**’s FolderView.
+- Outside explicit child-window editing or popup flows, the active pane’s `FolderView` remains the default keyboard target for pane activation and application reactivation.
 
 **NavigationView Access (FolderWindow Integration):**
 - **F4 / Alt+D / Ctrl+L**: Focus the active pane’s NavigationView address bar and enter edit mode (select all). *(Default chord bindings are settings-backed.)*
@@ -825,6 +827,8 @@ case WndMsg::kFolderViewEnumerateComplete: {
 - **Extension-to-iconIndex mapping** for instant lookups (bypasses Shell API)
 - **Per-file whitelist** for unique icons (.exe, .dll, .ico, .lnk, .url, .cpl, .scr, .msc, .ocx)
 - **3-level fallback** chain: selected optimal size → other sizes (from `SHIL_SMALL`/`SHIL_LARGE`/`SHIL_EXTRALARGE`)
+- Extension-association misses fall back to the generic shell file/folder icon index instead of leaving `iconIndex = -1`.
+- Transient `ExtractSystemIcon(...)` failures are retried before FolderView gives up and leaves the placeholder visible.
 
 **Icon Extraction Flow:**
 ```cpp

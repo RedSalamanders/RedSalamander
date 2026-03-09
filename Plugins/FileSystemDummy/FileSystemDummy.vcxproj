@@ -232,9 +232,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="FileSystemDummy.cpp" />
     <ClInclude Include="FileSystemDummy.h" />
+    <ClInclude Include="FileSystemDummyResources.h" />
+    <ResourceCompile Include="FileSystemDummyResources.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

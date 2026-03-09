@@ -41,8 +41,8 @@ BEGIN
         MENUITEM "Copy &URL\tCtrl+L", IDM_VIEWERWEB_TOOLS_COPY_URL
         MENUITEM "Open in &Browser\tCtrl+Enter", IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL
         MENUITEM SEPARATOR
-        MENUITEM "&Expand All (JSON)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
-        MENUITEM "&Collapse All (JSON)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL
+        MENUITEM "&Expand All (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
+        MENUITEM "&Collapse All (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL
         MENUITEM SEPARATOR
         MENUITEM "Toggle Markdown &Source\tCtrl+`", IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE
     END
@@ -59,7 +59,7 @@ BEGIN
     IDS_VIEWERWEB_DESCRIPTION "WebView2-based viewer for HTML and PDF files."
 
     IDS_VIEWERJSON_NAME "JSON Viewer"
-    IDS_VIEWERJSON_DESCRIPTION "WebView2-based JSON/JSON5 viewer with folding and syntax highlighting."
+    IDS_VIEWERJSON_DESCRIPTION "WebView2-based JSON/JSON5/JSONL viewer with folding and syntax highlighting."
 
     IDS_VIEWERMARKDOWN_NAME "Markdown Viewer"
     IDS_VIEWERMARKDOWN_DESCRIPTION "WebView2-based Markdown viewer with syntax highlighting."
@@ -67,7 +67,32 @@ BEGIN
     IDS_VIEWERWEB_ERROR_TITLE "ViewerWeb"
     IDS_VIEWERWEB_ERROR_WEBVIEW2_RUNTIME_MISSING "Microsoft Edge WebView2 Runtime is not installed."
     IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED "WebView2 initialization failed."
+    IDS_VIEWERWEB_ERROR_BUILD_FILE_URL "Failed to build file URL."
+    IDS_VIEWERWEB_ERROR_BUILD_HTML_DOCUMENT "Failed to build HTML document."
+    IDS_VIEWERWEB_ERROR_NAVIGATE_TO_STRING_FAILED_FMT "NavigateToString failed (hr=0x{0:08X})."
+    IDS_VIEWERWEB_ERROR_NAVIGATE_FAILED_FMT "Navigate failed (hr=0x{0:08X})."
+    IDS_VIEWERWEB_ERROR_FILE_SYSTEM_UNAVAILABLE "File system unavailable."
+    IDS_VIEWERWEB_ERROR_NO_FILE_IO "Active file system does not support file I/O."
+    IDS_VIEWERWEB_ERROR_OPEN_FOR_VIEWING_FAILED "Failed to open file for viewing."
     IDS_VIEWERWEB_STATUS_LOADING "Loading..."
+    IDS_VIEWERWEB_ERROR_GET_TEMP_FOLDER_FAILED "Failed to get temp folder."
+    IDS_VIEWERWEB_ERROR_CREATE_TEMP_FILE_FAILED "Failed to create temp file."
+    IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED "Failed to write temp file."
+    IDS_VIEWERWEB_ERROR_READ_FILE_FAILED "Failed to read file."
+    IDS_VIEWERWEB_ERROR_READ_FILE_SIZE_FAILED "Failed to read file size."
+    IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT "File is too large ({0}), limit is {1}."
+    IDS_VIEWERWEB_ERROR_PARSE_JSON_FAILED "Failed to parse JSON/JSON5/JSONL document."
+    IDS_VIEWERWEB_ERROR_FORMAT_JSON_FAILED "Failed to format JSON/JSONL document."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_FAILED "Save As failed."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_NO_FILE_IO "Save As failed (file system I/O not supported)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_OPEN_FAILED "Save As failed (unable to open file)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_SEEK_FAILED "Save As failed (seek failed)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_READ_FAILED "Save As failed (read failed)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED "Save As failed (write failed)."
+    IDS_VIEWERWEB_ERROR_OPEN_BROWSER_FAILED "Failed to open in browser."
+    IDS_VIEWERWEB_WARNING_DEVTOOLS_DISABLED "DevTools is disabled in plugin settings."
+    IDS_VIEWERWEB_PROMPT_OPEN_TEXT_VIEWER_FMT "{0} Open it in Text Viewer instead?"
+    IDS_VIEWERWEB_ERROR_OPEN_TEXT_VIEWER_FAILED "Failed to open in Text Viewer."
 END
 
 /////////////////////////////////////////////////////////////////////////////

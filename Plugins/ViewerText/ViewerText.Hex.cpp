@@ -152,11 +152,12 @@ struct HexViewLayout
     float xText           = 0.0f;
 };
 
-HexViewLayout ComputeHexViewLayout(float lineH, float charW, uint64_t fileSize, size_t hexGroupSize) noexcept
+HexViewLayout ComputeHexViewLayout(float lineH, float charW, uint64_t fileSize, size_t hexGroupSize, UINT dpi) noexcept
 {
     HexViewLayout layout{};
+    layout.marginDip = RoundDipToDevicePixels(6.0f, dpi);
 
-    const float padY     = std::clamp(std::floor(lineH * 0.15f), 2.0f, 6.0f);
+    const float padY     = RoundDipToDevicePixels(std::clamp(std::floor(lineH * 0.15f), 2.0f, 6.0f), dpi);
     layout.headerPadYDip = padY;
     layout.headerY       = layout.marginDip;
     layout.headerH       = lineH + padY * 2.0f;
@@ -536,7 +537,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
             const float charW     = (_hexCharWidthDip > 0.0f) ? _hexCharWidthDip : 8.0f;
             const float lineH     = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
 
-            const HexViewLayout layout  = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize());
+            const HexViewLayout layout  = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize(), dpi);
             const float marginDip       = layout.marginDip;
             const float xOffset         = layout.xOffset;
             const float xHex            = layout.xHex;
@@ -830,8 +831,9 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
 
                     FormatHexLine(lineOffset, offsetText, hexText, asciiText, hexSpans, textSpans, validBytes);
 
-                    const float y           = dataStartY + static_cast<float>(row) * lineH;
-                    const D2D1_RECT_F rowRc = D2D1::RectF(0.0f, y, widthDip, y + lineH);
+                    const float y            = RoundDipToDevicePixels(dataStartY + static_cast<float>(row) * lineH, dpi);
+                    const float lineBottom   = RoundDipToDevicePixels(y + lineH, dpi);
+                    const D2D1_RECT_F rowRc  = D2D1::RectF(0.0f, y, widthDip, lineBottom);
 
                     bool highlightRow            = false;
                     uint64_t overlapStart        = 0;
@@ -856,9 +858,9 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                         _hexViewTarget->FillRectangle(rowRc, _hexViewBrush.get());
                     }
 
-                    const D2D1_RECT_F offsetRc = D2D1::RectF(xOffset, y, std::max(xOffset, offsetTextRight), y + lineH);
-                    const D2D1_RECT_F hexRc    = D2D1::RectF(xHex, y, std::max(xHex, hexTextRight), y + lineH);
-                    const D2D1_RECT_F textRc   = D2D1::RectF(xText, y, std::max(xText, widthDip - marginDip), y + lineH);
+                    const D2D1_RECT_F offsetRc = D2D1::RectF(xOffset, y, std::max(xOffset, offsetTextRight), lineBottom);
+                    const D2D1_RECT_F hexRc    = D2D1::RectF(xHex, y, std::max(xHex, hexTextRight), lineBottom);
+                    const D2D1_RECT_F textRc   = D2D1::RectF(xText, y, std::max(xText, widthDip - marginDip), lineBottom);
 
                     if (! searchMask.empty() && validBytes > 0 && lineOffset >= searchMaskStartOffset)
                     {
@@ -885,7 +887,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                                 {
                                     const float hlX        = xHex + static_cast<float>(hexSpan.start) * charW;
                                     const float hlW        = static_cast<float>(hexSpan.length) * charW;
-                                    const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, y + lineH);
+                                    const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
                                     _hexViewTarget->FillRectangle(hlRc, _hexViewBrush.get());
                                 }
 
@@ -894,7 +896,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                                 {
                                     const float hlX        = xText + static_cast<float>(textSpan.start) * charW;
                                     const float hlW        = static_cast<float>(textSpan.length) * charW;
-                                    const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, y + lineH);
+                                    const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
                                     _hexViewTarget->FillRectangle(hlRc, _hexViewBrush.get());
                                 }
                             }
@@ -920,7 +922,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                             {
                                 const float hlX        = xHex + static_cast<float>(hexSpan.start) * charW;
                                 const float hlW        = static_cast<float>(hexSpan.length) * charW;
-                                const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, y + lineH);
+                                const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
                                 _hexViewTarget->FillRectangle(hlRc, _hexViewBrush.get());
                             }
 
@@ -929,7 +931,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                             {
                                 const float hlX        = xText + static_cast<float>(textSpan.start) * charW;
                                 const float hlW        = static_cast<float>(textSpan.length) * charW;
-                                const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, y + lineH);
+                                const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
                                 _hexViewTarget->FillRectangle(hlRc, _hexViewBrush.get());
                             }
                         }
@@ -1383,7 +1385,7 @@ void ViewerText::UpdateHexViewScrollBars(HWND hwnd) noexcept
     const float heightDip      = std::max(1.0f, DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi));
     const float lineH          = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
     const float charW          = (_hexCharWidthDip > 0.0f) ? _hexCharWidthDip : 8.0f;
-    const HexViewLayout layout = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize());
+    const HexViewLayout layout = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize(), dpi);
     const float marginDip      = layout.marginDip;
     const float headerH        = layout.headerH;
     const float usableDip      = std::max(0.0f, heightDip - headerH - 2.0f * marginDip);
@@ -1421,7 +1423,9 @@ bool ViewerText::EnsureHexViewDirect2D(HWND hwnd) noexcept
         return false;
     }
 
-    const float dpiF = static_cast<float>(GetDpiForWindow(hwnd));
+    const UINT dpi   = GetDpiForWindow(hwnd);
+    const float dpiF = static_cast<float>(dpi);
+    const MonoTextRenderMetrics monoMetrics = ComputeMonoTextRenderMetrics(kMonoFontSizeDip, dpi);
 
     if (! _d2dFactory)
     {
@@ -1495,6 +1499,8 @@ bool ViewerText::EnsureHexViewDirect2D(HWND hwnd) noexcept
         static_cast<void>(_hexViewFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
         static_cast<void>(_hexViewFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
         static_cast<void>(_hexViewFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+        static_cast<void>(_hexViewFormat->SetLineSpacing(
+            DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
     }
 
     if (! _hexViewFormatRight)
@@ -1516,6 +1522,8 @@ bool ViewerText::EnsureHexViewDirect2D(HWND hwnd) noexcept
         static_cast<void>(_hexViewFormatRight->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING));
         static_cast<void>(_hexViewFormatRight->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
         static_cast<void>(_hexViewFormatRight->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+        static_cast<void>(_hexViewFormatRight->SetLineSpacing(
+            DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
     }
 
     if (_hexCharWidthDip <= 0.0f || _hexLineHeightDip <= 0.0f)
@@ -1528,9 +1536,10 @@ bool ViewerText::EnsureHexViewDirect2D(HWND hwnd) noexcept
             if (SUCCEEDED(layout->GetMetrics(&metrics)))
             {
                 _hexCharWidthDip  = std::max(1.0f, metrics.widthIncludingTrailingWhitespace);
-                _hexLineHeightDip = std::max(1.0f, metrics.height);
             }
         }
+
+        _hexLineHeightDip = monoMetrics.lineSpacingDip;
     }
 
     return true;
@@ -2380,7 +2389,7 @@ void ViewerText::OnHexMouseDown(HWND hwnd, int x, int y) noexcept
     const float marginDip      = 6.0f;
     const float charW          = (_hexCharWidthDip > 0.0f) ? _hexCharWidthDip : 8.0f;
     const float lineH          = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
-    const HexViewLayout layout = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize());
+    const HexViewLayout layout = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize(), dpi);
     const float headerH        = layout.headerH;
     if (charW <= 0.0f || lineH <= 0.0f)
     {
@@ -2494,7 +2503,7 @@ void ViewerText::OnHexMouseMove(HWND hwnd, int x, int y) noexcept
 
     const float charW          = (_hexCharWidthDip > 0.0f) ? _hexCharWidthDip : 8.0f;
     const float lineH          = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
-    const HexViewLayout layout = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize());
+    const HexViewLayout layout = ComputeHexViewLayout(lineH, charW, _fileSize, HexGroupSize(), dpi);
     if (charW <= 0.0f || lineH <= 0.0f)
     {
         return;
@@ -2664,7 +2673,7 @@ void ViewerText::CopyHexCsvToClipboard(HWND hwnd) noexcept
 
         const UINT dpi        = GetDpiForWindow(hwnd);
         const float heightDip = std::max(1.0f, DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi));
-        const float marginDip = 6.0f;
+        const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
         const float lineH     = (_hexLineHeightDip > 0.0f) ? _hexLineHeightDip : 14.0f;
         const float headerH   = lineH;
         const float usableDip = std::max(0.0f, heightDip - headerH - 2.0f * marginDip);

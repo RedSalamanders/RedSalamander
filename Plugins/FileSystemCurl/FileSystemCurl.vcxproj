@@ -292,6 +292,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="FileSystemCurl.CopyMove.cpp" />
     <ClCompile Include="FileSystemCurl.DirectoryOps.cpp" />
@@ -299,6 +300,8 @@
     <ClCompile Include="FileSystemCurl.Shared.cpp" />
     <ClInclude Include="FileSystemCurl.h" />
     <ClInclude Include="FileSystemCurl.Internal.h" />
+    <ClInclude Include="FileSystemCurlResources.h" />
+    <ResourceCompile Include="FileSystemCurlResources.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
