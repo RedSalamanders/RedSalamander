@@ -75,6 +75,11 @@ inline constexpr UINT kCompareDirectoriesContentProgress = WM_APP + 0x524;
 inline constexpr UINT kChangeCaseTaskUpdate = WM_APP + 0x525;
 inline constexpr UINT kChangeCaseCompleted  = WM_APP + 0x526;
 
+// Find Files
+inline constexpr UINT kFindSearchResults  = WM_APP + 0x527;
+inline constexpr UINT kFindSearchProgress = WM_APP + 0x528;
+inline constexpr UINT kFindSearchComplete = WM_APP + 0x529;
+
 // Preferences
 inline constexpr UINT kPreferencesApplyComboThemeDeferred = WM_APP + 0x530;
 

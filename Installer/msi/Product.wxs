@@ -22,6 +22,7 @@
 
     <Feature Id="MainFeature" Title="[ProductName]" Level="1">
       <ComponentGroupRef Id="CG_RedSalamanderFiles" />
+      <ComponentRef Id="SearchServiceComponent" />
       <ComponentRef Id="StartMenuShortcuts" />
     </Feature>
   </Package>
@@ -37,8 +38,37 @@
 
   <Fragment>
     <ComponentGroup Id="CG_RedSalamanderFiles" Directory="INSTALLFOLDER">
-      <Files Include="$(var.StageDir)\**\*" />
+      <Files Include="$(var.StageDir)\**\*">
+        <Exclude Files="$(var.StageDir)\RedSalamanderSearchService.exe" />
+      </Files>
     </ComponentGroup>
+  </Fragment>
+
+  <Fragment>
+    <DirectoryRef Id="INSTALLFOLDER">
+      <Component Id="SearchServiceComponent"
+                 Guid="{8EF3B1F8-5B43-4E0A-8B3D-1E4B8C7F9D0A}"
+                 Bitness="always64"
+                 Condition="INSTALLSEARCHSERVICE&lt;&gt;&quot;0&quot;">
+        <File Id="SearchServiceExe" Source="$(var.StageDir)\RedSalamanderSearchService.exe" KeyPath="yes" />
+        <ServiceInstall
+          Id="SearchServiceInstall"
+          Name="RedSalamanderSearchService"
+          DisplayName="Red Salamander Search Service"
+          Description="Indexes local file metadata for Red Salamander instant search."
+          Type="ownProcess"
+          Start="auto"
+          Account="LocalSystem"
+          ErrorControl="normal" />
+        <ServiceControl
+          Id="SearchServiceControl"
+          Name="RedSalamanderSearchService"
+          Start="install"
+          Stop="both"
+          Remove="uninstall"
+          Wait="yes" />
+      </Component>
+    </DirectoryRef>
   </Fragment>
 
   <Fragment>

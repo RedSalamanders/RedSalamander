@@ -1,12 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:redsalamander:settings-store:10",
-  "title": "RedSalamander Settings Store (v10)",
+  "$id": "urn:redsalamander:settings-store:11",
+  "title": "RedSalamander Settings Store (v11)",
   "type": "object",
   "required": ["schemaVersion"],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "type": "integer", "const": 10 },
+    "schemaVersion": { "type": "integer", "const": 11 },
     "windows": {
       "type": "object",
       "title": "Windows",
@@ -30,7 +30,8 @@
     "fileOperations": { "$ref": "#/$defs/fileOperationsSettings" },
     "compareDirectories": { "$ref": "#/$defs/compareDirectoriesSettings" },
     "hotPaths": { "$ref": "#/$defs/hotPathsSettings" },
-    "selectionMasks": { "$ref": "#/$defs/selectionMasksSettings" }
+    "selectionMasks": { "$ref": "#/$defs/selectionMasksSettings" },
+    "search": { "$ref": "#/$defs/searchSettings" }
   },
   "additionalProperties": false,
   "$defs": {
@@ -81,6 +82,68 @@
         "alt": { "type": "boolean", "title": "Alt", "description": "Whether Alt is required." },
         "shift": { "type": "boolean", "title": "Shift", "description": "Whether Shift is required." },
         "commandId": { "$ref": "#/$defs/commandId", "title": "Command", "description": "The command identifier (cmd/...)."}
+      },
+      "additionalProperties": false
+    },
+    "searchNameMode": {
+      "type": "string",
+      "enum": ["wildcard", "literal", "regex"],
+      "title": "Name Mode",
+      "description": "How the name pattern should be matched."
+    },
+    "searchContentMode": {
+      "type": "string",
+      "enum": ["disabled", "literal", "regex"],
+      "title": "Content Mode",
+      "description": "How file content should be matched."
+    },
+    "searchSettings": {
+      "type": "object",
+      "default": {},
+      "title": "Find Dialog",
+      "description": "Persisted Find Files and Directories dialog state.",
+      "properties": {
+        "recentRoots": {
+          "type": "array",
+          "default": [],
+          "title": "Recent Roots",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 10
+        },
+        "recentNamePatterns": {
+          "type": "array",
+          "default": [],
+          "title": "Recent Name Patterns",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 10
+        },
+        "recentContentPatterns": {
+          "type": "array",
+          "default": [],
+          "title": "Recent Content Patterns",
+          "items": { "type": "string", "minLength": 1 },
+          "maxItems": 10
+        },
+        "lastRoot": { "type": "string", "default": "", "title": "Last Root" },
+        "lastNamePattern": { "type": "string", "default": "", "title": "Last Name Pattern" },
+        "lastContentPattern": { "type": "string", "default": "", "title": "Last Content Pattern" },
+        "recursive": { "type": "boolean", "default": true, "title": "Recursive" },
+        "includeFiles": { "type": "boolean", "default": true, "title": "Include Files" },
+        "includeDirectories": { "type": "boolean", "default": false, "title": "Include Directories" },
+        "followSymlinks": { "type": "boolean", "default": false, "title": "Follow Symlinks" },
+        "matchCaseName": { "type": "boolean", "default": false, "title": "Match Case (Name)" },
+        "matchCaseContent": { "type": "boolean", "default": false, "title": "Match Case (Content)" },
+        "preferIndex": { "type": "boolean", "default": true, "title": "Prefer Index" },
+        "wantSnippets": { "type": "boolean", "default": false, "title": "Want Snippets" },
+        "nameMode": { "$ref": "#/$defs/searchNameMode" },
+        "contentMode": { "$ref": "#/$defs/searchContentMode" },
+        "maxResults": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "title": "Max Results",
+          "description": "0 means unlimited."
+        }
       },
       "additionalProperties": false
     },

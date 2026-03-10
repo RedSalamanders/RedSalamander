@@ -102,7 +102,7 @@ if ($LASTEXITCODE -ge 8) {
 }
 
 # Copy shipping executables explicitly (we excluded *.exe above).
-$shippingExes = @("RedSalamander.exe", "RedSalamanderMonitor.exe")
+$shippingExes = @("RedSalamander.exe", "RedSalamanderMonitor.exe", "RedSalamanderSearchService.exe")
 foreach ($exe in $shippingExes) {
     $src = Join-Path $releaseDir $exe
     if (-not (Test-Path $src)) {

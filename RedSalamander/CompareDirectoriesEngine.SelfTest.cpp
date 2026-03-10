@@ -5,6 +5,10 @@
 #include "Framework.h"
 
 #include "ConnectionProfileUtils.h"
+#include "LocalSearchIndexCore.h"
+#include "SearchServiceBroker.h"
+#include "SearchFallbackEngine.h"
+#include "SearchTextHelpers.h"
 
 #include <algorithm>
 #include <array>
@@ -76,6 +80,111 @@ constexpr std::wstring_view kSelfTestDefaultConnOneDrivePersonal = L"FileOpsSelf
 constexpr std::wstring_view kSelfTestDefaultConnOneDriveBusiness = L"FileOpsSelfTest OneDrive Business";
 constexpr std::wstring_view kSelfTestDefaultConnSharePoint       = L"FileOpsSelfTest SharePoint";
 
+constexpr std::wstring_view kCompareCaseNames[] = {
+    L"local_search_qi_and_capabilities",
+    L"local_search_callback_contract",
+    L"local_search_backend_preferences_roundtrip",
+    L"local_search_name_wildcard_recursive",
+    L"local_search_content_literal",
+    L"local_search_name_and_content_and_semantics",
+    L"local_search_invalid_query_rejected",
+    L"local_index_core_snapshot_reload",
+    L"local_index_core_refs_probe_and_query_if_available",
+    L"local_index_core_journal_replay_rename_delete_create",
+    L"local_index_core_snapshot_corruption_rebuild",
+    L"local_search_native_matches_host_fallback",
+    L"local_search_native_unicode_long_path_matches_host_fallback",
+    L"search_service_status_and_query_roundtrip",
+    L"local_search_service_matches_host_fallback",
+    L"local_search_service_protocol_mismatch_falls_back_local_index",
+    L"local_search_service_disconnect_falls_back_local_index",
+    L"search_service_multi_client_and_rebuild_control",
+    L"search_text_helpers_decoding_and_binary",
+    L"search_text_helpers_chunk_overlap_literal_and_regex",
+    L"host_fallback_search_local_plugin_path_root",
+    L"host_fallback_search_content_degraded_without_io",
+    L"host_fallback_search_access_denied_warning",
+    L"host_fallback_search_short_read_and_cancel",
+    L"host_fallback_search_dummy_name_only",
+    L"host_fallback_search_7z_name_only",
+    L"host_fallback_search_remote_ftp_name_only",
+    L"windows_hello_cache",
+    L"oauth_refresh_token_storage",
+    L"oauth_authmode_roundtrip",
+    L"google_drive_plugin_contract",
+    L"google_drive_cleared_client_id_requires_configuration",
+    L"google_drive_connection_requires_refresh_token",
+    L"onedrive_personal_cleared_client_id_requires_configuration",
+    L"unique",
+    L"typemismatch",
+    L"size",
+    L"time",
+    L"attributes",
+    L"content",
+    L"content_dual_io",
+    L"content_no_io_disables_compareContent",
+    L"content_size_mismatch_no_pending",
+    L"zero_vs_nonzero_content",
+    L"unicode_filenames",
+    L"content short reads",
+    L"subdir pending",
+    L"subdirs",
+    L"no_sync_deep_scan",
+    L"subdirattrs",
+    L"missing folder",
+    L"reparse",
+    L"dummy_content",
+    L"deep_tree",
+    L"invalidate",
+    L"concurrent_get_or_compute_decision",
+    L"empty_directories",
+    L"ignore",
+    L"ignore_multiple_patterns",
+    L"ignore_pattern_length_cap",
+    L"ignore_pattern_count_cap",
+    L"ignore_wildcard_pathology_runtime_bound",
+    L"crash_quarantine_synthetic_marker",
+    L"showIdentical",
+    L"content_pending_elided",
+    L"setCompareEnabled",
+    L"invalidateForPath",
+    L"decisionUpdatedCallback",
+    L"uiVersion",
+    L"accessors",
+    L"plugin_path_math",
+    L"connection_display_url",
+    L"try_make_relative_outside_root",
+    L"baseInterfaces",
+    L"contentCacheHit",
+    L"empty_directories",
+    L"zeroByteContent",
+    L"setSettingsInvalidates",
+    L"dircache_not_polluted_by_compare_scan",
+    L"content_queue_bounded_hi_lo",
+    L"decision_cache_eviction_budget_pins_visible",
+    L"cancel_completes_bounded",
+    L"invalid_directory_entry_buffer",
+    L"scan_inflight_stamp_guards_restart",
+    L"content_inflight_stamp_guards_restart",
+    L"directory_size_local_callback_contract",
+    L"directory_size_dummy_callback_contract",
+    L"directory_size_7z_callback_contract",
+    L"remote_file_s3",
+    L"remote_s3_directory_size_callback_contract",
+    L"remote_s3_pagination",
+    L"remote_file_onedrive_personal",
+    L"remote_onedrive_personal_directory_size_callback_contract",
+    L"remote_file_onedrive_business",
+    L"remote_onedrive_business_directory_size_callback_contract",
+    L"remote_file_sharepoint",
+    L"remote_sharepoint_directory_size_callback_contract",
+    L"remote_file_ftp",
+    L"remote_ftp_directory_size_callback_contract",
+    L"remote_ftp_continue_on_error_partial",
+    L"remote_s3_metadata_smoke",
+    L"remote_s3_delete_missing",
+};
+
 std::atomic<uint32_t> g_windowsHelloVerifierCalls{0};
 
 HRESULT TestWindowsHelloVerifier(HWND /*ownerWindow*/, std::wstring_view /*message*/) noexcept
@@ -142,6 +251,21 @@ void AppendCaseResult(SelfTest::SelfTestSuiteResult& suite,
     }
 
     return true;
+}
+
+void AppendSkippedCompareCasesForSetupFailure(const SelfTest::SelfTestOptions& options,
+                                              SelfTest::SelfTestSuiteResult& suite,
+                                              std::wstring_view reason) noexcept
+{
+    for (const std::wstring_view name : kCompareCaseNames)
+    {
+        if (! options.caseFilter.empty() && ! EqualsIgnoreCase(options.caseFilter, name))
+        {
+            continue;
+        }
+
+        AppendCaseResult(suite, name, SelfTest::SelfTestCaseResult::Status::skipped, reason);
+    }
 }
 
 [[nodiscard]] bool ContainsIgnoreCase(std::wstring_view text, std::wstring_view needle) noexcept
@@ -1097,6 +1221,7 @@ struct ReadDirectoryTestBehavior
     DWORD delayMs           = 0;
     bool returnMalformed    = false;
     unsigned long fakeCount = 1;
+    HRESULT forcedHr        = S_OK;
 };
 
 [[nodiscard]] std::wstring NormalizePathForNoCaseCompare(std::filesystem::path value) noexcept
@@ -1357,6 +1482,11 @@ public:
         if (_behavior.delayMs != 0u)
         {
             ::Sleep(_behavior.delayMs);
+        }
+
+        if (FAILED(_behavior.forcedHr))
+        {
+            return _behavior.forcedHr;
         }
 
         if (! _behavior.returnMalformed)
@@ -2287,6 +2417,419 @@ private:
     return SUCCEEDED(hr) && static_cast<bool>(outIo);
 }
 
+[[nodiscard]] bool CreateFileSystemSearch(const wil::com_ptr<IFileSystem>& fs, wil::com_ptr<IFileSystemSearch>& outSearch) noexcept
+{
+    outSearch.reset();
+    if (! fs)
+    {
+        return false;
+    }
+
+    const HRESULT hr = fs->QueryInterface(__uuidof(IFileSystemSearch), outSearch.put_void());
+    return SUCCEEDED(hr) && static_cast<bool>(outSearch);
+}
+
+[[nodiscard]] std::wstring CopySearchString(const wchar_t* text, unsigned long sizeBytes) noexcept
+{
+    if (text == nullptr)
+    {
+        return {};
+    }
+
+    if (sizeBytes != 0)
+    {
+        return std::wstring(text, sizeBytes / sizeof(wchar_t));
+    }
+
+    return std::wstring(text);
+}
+
+struct RecordedSearchMatch final
+{
+    std::wstring fullPath;
+    std::wstring relativePath;
+    std::wstring displayName;
+    std::wstring previewText;
+    uint32_t matchedBy       = 0;
+    unsigned long attributes = 0;
+};
+
+struct RecordedSearchProgress final
+{
+    FileSystemSearchPhase phase        = FILESYSTEM_SEARCH_PHASE_INITIALIZING;
+    FileSystemSearchBackend backend    = FILESYSTEM_SEARCH_BACKEND_UNKNOWN;
+    uint32_t warningFlags              = FILESYSTEM_SEARCH_WARNING_NONE;
+    HRESULT statusHint                 = S_OK;
+    uint64_t scannedDirectories        = 0u;
+    uint64_t scannedFiles              = 0u;
+    uint64_t candidateFiles            = 0u;
+    uint64_t matchedEntries            = 0u;
+    std::wstring currentPath;
+};
+
+class RecordingSearchCallback final : public IFileSystemSearchCallback
+{
+public:
+    enum class Mode : uint8_t
+    {
+        Success,
+        Cancel,
+        FailProgress,
+        FailCancel,
+        AbortProgress,
+        AbortMatch,
+    };
+
+    explicit RecordingSearchCallback(Mode mode = Mode::Success, uint32_t cancelAfterChecks = 0u) noexcept
+        : _mode(mode),
+          _cancelAfterChecks(cancelAfterChecks)
+    {
+    }
+
+    RecordingSearchCallback(const RecordingSearchCallback&)            = delete;
+    RecordingSearchCallback(RecordingSearchCallback&&)                 = delete;
+    RecordingSearchCallback& operator=(const RecordingSearchCallback&) = delete;
+    RecordingSearchCallback& operator=(RecordingSearchCallback&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE FileSystemSearchMatch(const ::FileSystemSearchMatch* searchMatch, [[maybe_unused]] void* cookie) noexcept override
+    {
+        if (searchMatch == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        if (searchMatch->sizeBytes != sizeof(::FileSystemSearchMatch))
+        {
+            return E_INVALIDARG;
+        }
+
+        if (_mode == Mode::AbortMatch)
+        {
+            return E_ABORT;
+        }
+
+        RecordedSearchMatch copy{};
+        copy.fullPath     = CopySearchString(searchMatch->fullPath, searchMatch->fullPathSize);
+        copy.relativePath = CopySearchString(searchMatch->relativePath, searchMatch->relativePathSize);
+        copy.displayName  = CopySearchString(searchMatch->displayName, searchMatch->displayNameSize);
+        copy.previewText  = CopySearchString(searchMatch->previewText, searchMatch->previewTextSize);
+        copy.matchedBy    = searchMatch->matchedBy;
+        copy.attributes   = searchMatch->fileAttributes;
+
+        std::lock_guard lock(_mutex);
+        _matches.push_back(std::move(copy));
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemSearchProgress(const ::FileSystemSearchProgress* searchProgress, [[maybe_unused]] void* cookie) noexcept override
+    {
+        if (searchProgress == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        if (searchProgress->sizeBytes != sizeof(::FileSystemSearchProgress))
+        {
+            return E_INVALIDARG;
+        }
+
+        _progressCalls.fetch_add(1u, std::memory_order_relaxed);
+        if (searchProgress->currentPath == nullptr)
+        {
+            _nullPathProgressCalls.fetch_add(1u, std::memory_order_relaxed);
+        }
+
+        RecordedSearchProgress copy{};
+        copy.phase              = searchProgress->phase;
+        copy.backend            = searchProgress->backend;
+        copy.warningFlags       = searchProgress->warningFlags;
+        copy.statusHint         = searchProgress->statusHint;
+        copy.scannedDirectories = searchProgress->scannedDirectories;
+        copy.scannedFiles       = searchProgress->scannedFiles;
+        copy.candidateFiles     = searchProgress->candidateFiles;
+        copy.matchedEntries     = searchProgress->matchedEntries;
+        copy.currentPath        = CopySearchString(searchProgress->currentPath, searchProgress->currentPathSize);
+        {
+            std::lock_guard lock(_mutex);
+            _progress.push_back(std::move(copy));
+        }
+
+        if (_mode == Mode::FailProgress)
+        {
+            return HRESULT_FROM_WIN32(ERROR_RETRY);
+        }
+
+        if (_mode == Mode::AbortProgress)
+        {
+            return E_ABORT;
+        }
+
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemSearchShouldCancel(BOOL* pCancel, [[maybe_unused]] void* cookie) noexcept override
+    {
+        if (pCancel == nullptr)
+        {
+            return E_POINTER;
+        }
+
+        _cancelCalls.fetch_add(1u, std::memory_order_relaxed);
+
+        if (_mode == Mode::FailCancel)
+        {
+            return E_ACCESSDENIED;
+        }
+
+        const uint32_t cancelCalls = _cancelCalls.load(std::memory_order_acquire);
+        *pCancel                   = (_mode == Mode::Cancel || (_cancelAfterChecks != 0u && cancelCalls >= _cancelAfterChecks)) ? TRUE : FALSE;
+        return S_OK;
+    }
+
+    [[nodiscard]] std::vector<RecordedSearchMatch> Matches() const noexcept
+    {
+        std::lock_guard lock(_mutex);
+        return _matches;
+    }
+
+    [[nodiscard]] uint32_t ProgressCalls() const noexcept
+    {
+        return _progressCalls.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] uint32_t CancelCalls() const noexcept
+    {
+        return _cancelCalls.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] uint32_t NullPathProgressCalls() const noexcept
+    {
+        return _nullPathProgressCalls.load(std::memory_order_acquire);
+    }
+
+    [[nodiscard]] std::vector<RecordedSearchProgress> ProgressSnapshots() const noexcept
+    {
+        std::lock_guard lock(_mutex);
+        return _progress;
+    }
+
+private:
+    Mode _mode = Mode::Success;
+    uint32_t _cancelAfterChecks = 0u;
+    mutable std::mutex _mutex;
+    std::vector<RecordedSearchMatch> _matches;
+    std::vector<RecordedSearchProgress> _progress;
+    std::atomic<uint32_t> _progressCalls{0};
+    std::atomic<uint32_t> _cancelCalls{0};
+    std::atomic<uint32_t> _nullPathProgressCalls{0};
+};
+
+[[nodiscard]] const RecordedSearchMatch* FindRecordedSearchMatch(const std::vector<RecordedSearchMatch>& matches, std::wstring_view displayName) noexcept
+{
+    const auto it =
+        std::find_if(matches.begin(), matches.end(), [&](const RecordedSearchMatch& match) noexcept { return std::wstring_view(match.displayName) == displayName; });
+    return it != matches.end() ? &*it : nullptr;
+}
+
+[[nodiscard]] const RecordedSearchProgress* FindRecordedSearchProgress(const std::vector<RecordedSearchProgress>& progress,
+                                                                       FileSystemSearchPhase phase) noexcept
+{
+    const auto it = std::find_if(progress.begin(), progress.end(), [&](const RecordedSearchProgress& snapshot) noexcept { return snapshot.phase == phase; });
+    return it != progress.end() ? &*it : nullptr;
+}
+
+[[nodiscard]] bool PrepareSearchCaseRoot(const std::filesystem::path& root, std::wstring_view name, std::filesystem::path& outPath) noexcept
+{
+    outPath = root / std::filesystem::path(name);
+    std::error_code removeError;
+    std::filesystem::remove_all(outPath, removeError);
+    return SelfTest::EnsureDirectory(outPath);
+}
+
+[[nodiscard]] std::optional<std::filesystem::path> FindFirstFixedVolumeByFileSystem(std::wstring_view fileSystemType) noexcept
+{
+    wchar_t drives[512] = {};
+    const DWORD written = ::GetLogicalDriveStringsW(static_cast<DWORD>(std::size(drives)), drives);
+    if (written == 0u || written >= std::size(drives))
+    {
+        return std::nullopt;
+    }
+
+    for (const wchar_t* cursor = drives; *cursor != L'\0'; cursor += std::char_traits<wchar_t>::length(cursor) + 1u)
+    {
+        if (::GetDriveTypeW(cursor) != DRIVE_FIXED)
+        {
+            continue;
+        }
+
+        wchar_t volumeFileSystem[MAX_PATH] = {};
+        if (::GetVolumeInformationW(cursor, nullptr, 0u, nullptr, nullptr, nullptr, volumeFileSystem, static_cast<DWORD>(std::size(volumeFileSystem))) == 0)
+        {
+            continue;
+        }
+
+        if (EqualsIgnoreCase(volumeFileSystem, fileSystemType))
+        {
+            return std::filesystem::path(cursor);
+        }
+    }
+
+    return std::nullopt;
+}
+
+[[nodiscard]] std::filesystem::path GetSiblingExecutablePath(std::wstring_view fileName) noexcept
+{
+    std::filesystem::path path;
+    wchar_t buffer[MAX_PATH] = {};
+    const DWORD written = ::GetModuleFileNameW(nullptr, buffer, static_cast<DWORD>(std::size(buffer)));
+    if (written == 0u || written >= std::size(buffer))
+    {
+        return path;
+    }
+
+    path = std::filesystem::path(buffer).parent_path() / std::filesystem::path(fileName);
+    return path;
+}
+
+[[nodiscard]] std::wstring MakeUniquePipeName() noexcept
+{
+    return std::format(LR"(\\.\pipe\RedSalamander.SearchService.Test.{})", MakeGuidText());
+}
+
+class ForegroundSearchServiceProcess final
+{
+public:
+    ForegroundSearchServiceProcess() = default;
+    ForegroundSearchServiceProcess(const ForegroundSearchServiceProcess&) = delete;
+    ForegroundSearchServiceProcess& operator=(const ForegroundSearchServiceProcess&) = delete;
+    ~ForegroundSearchServiceProcess()
+    {
+        Stop();
+    }
+
+    [[nodiscard]] bool Start(std::wstring_view pipeName,
+                             uint32_t maxRequestsBeforeExit,
+                             uint32_t disconnectAfterBatches,
+                             uint32_t protocolVersion,
+                             bool waitForReady,
+                             std::wstring& outError) noexcept
+    {
+        outError.clear();
+
+        const std::filesystem::path servicePath = GetSiblingExecutablePath(L"RedSalamanderSearchService.exe");
+        std::error_code existsEc;
+        const bool serviceExists = ! servicePath.empty() && std::filesystem::exists(servicePath, existsEc);
+        if (! serviceExists)
+        {
+            outError = std::format(L"Service executable not found: {}", servicePath.wstring());
+            return false;
+        }
+
+        _pipeName = std::wstring(pipeName);
+
+        std::wstring commandLine = std::format(L"\"{}\" --run-foreground --pipe-name=\"{}\" --max-requests={} --protocol-version={}",
+                                               servicePath.wstring(),
+                                               _pipeName,
+                                               maxRequestsBeforeExit,
+                                               protocolVersion);
+        if (disconnectAfterBatches != 0u)
+        {
+            commandLine.append(std::format(L" --disconnect-after-batches={}", disconnectAfterBatches));
+        }
+
+        STARTUPINFOW startupInfo{};
+        startupInfo.cb = sizeof(startupInfo);
+        PROCESS_INFORMATION processInfo{};
+        if (::CreateProcessW(nullptr, commandLine.data(), nullptr, nullptr, FALSE, 0u, nullptr, nullptr, &startupInfo, &processInfo) == 0)
+        {
+            outError = std::format(L"CreateProcessW failed. error={}", GetLastError());
+            return false;
+        }
+
+        _process.reset(processInfo.hProcess);
+        _thread.reset(processInfo.hThread);
+        if (! waitForReady)
+        {
+            return true;
+        }
+
+        return WaitUntilReady(outError);
+    }
+
+    void Stop() noexcept
+    {
+        if (_process)
+        {
+            static_cast<void>(::TerminateProcess(_process.get(), 0u));
+            static_cast<void>(::WaitForSingleObject(_process.get(), 2000u));
+        }
+        _thread.reset();
+        _process.reset();
+        _pipeName.clear();
+    }
+
+private:
+    [[nodiscard]] bool WaitUntilReady(std::wstring& outError) noexcept
+    {
+        for (int attempt = 0; attempt < 50; ++attempt)
+        {
+            SearchServiceBroker::ServiceStatus status{};
+            if (SUCCEEDED(SearchServiceBroker::GetStatus(status)))
+            {
+                return true;
+            }
+
+            if (_process && ::WaitForSingleObject(_process.get(), 0u) == WAIT_OBJECT_0)
+            {
+                DWORD exitCode = 0u;
+                static_cast<void>(::GetExitCodeProcess(_process.get(), &exitCode));
+                outError = std::format(L"Service process exited before readiness. exitCode={}", exitCode);
+                return false;
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+
+        outError = L"Timed out waiting for the search service foreground process.";
+        return false;
+    }
+
+    wil::unique_handle _process;
+    wil::unique_handle _thread;
+    std::wstring _pipeName;
+};
+
+[[nodiscard]] std::vector<std::wstring> CollectIndexedCandidateNames(const std::vector<LocalSearchIndexCore::Candidate>& candidates) noexcept
+{
+    std::vector<std::wstring> names;
+    names.reserve(candidates.size());
+    for (const auto& candidate : candidates)
+    {
+        names.push_back(candidate.displayName);
+    }
+    std::sort(names.begin(), names.end());
+    return names;
+}
+
+[[nodiscard]] HRESULT RunIndexedNameQuery(LocalSearchIndexCore::Repository& repository,
+                                          std::wstring_view rootPath,
+                                          std::wstring_view namePattern,
+                                          LocalSearchIndexCore::QueryStats& outStats,
+                                          std::vector<LocalSearchIndexCore::Candidate>& outCandidates) noexcept
+{
+    LocalSearchIndexCore::QueryPlan plan{};
+    plan.rootPath           = std::wstring(rootPath);
+    plan.namePattern        = std::wstring(namePattern);
+    plan.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+    plan.matchCaseName      = false;
+    plan.recursive          = true;
+    plan.includeFiles       = true;
+    plan.includeDirectories = false;
+    plan.maxResults         = 0u;
+
+    return repository.Query(plan, nullptr, nullptr, outCandidates, &outStats);
+}
+
 [[nodiscard]] bool CreateInformations(const wil::com_ptr<IFileSystem>& fs, wil::com_ptr<IInformations>& outInfo) noexcept
 {
     outInfo.reset();
@@ -3118,6 +3661,8 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
         suite.cases.push_back(std::move(setup));
         ++suite.failed;
         suite.failureMessage = fatalSetupFailure;
+        AppendSkippedCompareCasesForSetupFailure(
+            options, suite, std::format(L"not executed due to suite setup failure: {}", fatalSetupFailure));
     }
     else
     {
@@ -3187,6 +3732,2046 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
 
     if (fatalSetupFailure.empty())
     {
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_qi_and_capabilities",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(baseFs, search), L"Local file system plugin missing IFileSystemSearch.");
+
+            const char* capabilities = nullptr;
+            const HRESULT hr         = baseFs->GetCapabilities(&capabilities);
+            state.Require(SUCCEEDED(hr) && capabilities != nullptr,
+                          std::format(L"Local file system GetCapabilities failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (capabilities != nullptr)
+            {
+                const std::string_view capabilitiesView(capabilities);
+                state.Require(capabilitiesView.find("\"search\"") != std::string_view::npos, L"Capabilities JSON missing search section.");
+                state.Require(capabilitiesView.find("\"preferredBackend\":\"service\"") != std::string_view::npos,
+                              L"Capabilities JSON missing preferredBackend=service.");
+                state.Require(capabilitiesView.find("\"indexed\":true") != std::string_view::npos,
+                              L"Capabilities JSON missing indexed=true.");
+                state.Require(capabilitiesView.find("\"serviceBacked\":true") != std::string_view::npos,
+                              L"Capabilities JSON missing serviceBacked=true.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_callback_contract",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_callback_contract", caseRoot), L"Failed to prepare search_callback_contract root.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"match.txt", "contract"), L"Failed to create match.txt.");
+
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(baseFs, search), L"Local file system plugin missing IFileSystemSearch.");
+
+            std::wstring rootText    = caseRoot.wstring();
+            std::wstring namePattern = L"*.txt";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes   = sizeof(FileSystemSearchQuery);
+            query.rootPath    = rootText.c_str();
+            query.namePattern = namePattern.c_str();
+            query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+            RecordingSearchCallback successCallback;
+            HRESULT hr = search->Search(&query, &successCallback, nullptr);
+            state.Require(SUCCEEDED(hr), std::format(L"Search success case failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            state.Require(successCallback.ProgressCalls() >= 1u, L"Search success case expected at least one progress callback.");
+            state.Require(successCallback.CancelCalls() >= 1u, L"Search success case expected at least one cancel callback.");
+            state.Require(successCallback.NullPathProgressCalls() >= 1u, L"Search success case expected a final null-path progress callback.");
+
+            RecordingSearchCallback failProgressCallback(RecordingSearchCallback::Mode::FailProgress);
+            hr = search->Search(&query, &failProgressCallback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_RETRY),
+                          std::format(L"Search fail-progress case expected ERROR_RETRY. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            RecordingSearchCallback failCancelCallback(RecordingSearchCallback::Mode::FailCancel);
+            hr = search->Search(&query, &failCancelCallback, nullptr);
+            state.Require(hr == E_ACCESSDENIED, std::format(L"Search fail-cancel case expected E_ACCESSDENIED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            RecordingSearchCallback cancelCallback(RecordingSearchCallback::Mode::Cancel);
+            hr = search->Search(&query, &cancelCallback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                          std::format(L"Search cancel case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            RecordingSearchCallback abortProgressCallback(RecordingSearchCallback::Mode::AbortProgress);
+            hr = search->Search(&query, &abortProgressCallback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                          std::format(L"Search abort-progress case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            RecordingSearchCallback abortMatchCallback(RecordingSearchCallback::Mode::AbortMatch);
+            hr = search->Search(&query, &abortMatchCallback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                          std::format(L"Search abort-match case expected ERROR_CANCELLED. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_backend_preferences_roundtrip",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+            state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                          std::format(L"Failed to create isolated local file system instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"Isolated local file system instance missing IInformations.");
+            if (! info)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+            if (! search)
+            {
+                return false;
+            }
+
+            const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+            const std::wstring unavailablePipe      = MakeUniquePipeName();
+            state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, unavailablePipe.c_str()) != 0,
+                          L"Failed to override the search service pipe for the unavailable-service preference test.");
+            const auto restorePipeOverride = wil::scope_exit([&] noexcept
+            {
+                const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+                static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+            });
+
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_backend_preferences_roundtrip", caseRoot),
+                          L"Failed to prepare search_backend_preferences_roundtrip root.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"pref.txt", "preference"), L"Failed to create pref.txt.");
+
+            const char* schema = nullptr;
+            HRESULT hr         = info->GetConfigurationSchema(&schema);
+            state.Require(SUCCEEDED(hr) && schema != nullptr,
+                          std::format(L"Local file system GetConfigurationSchema failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (schema != nullptr)
+            {
+                const std::string_view schemaView(schema);
+                state.Require(schemaView.find("\"searchBackendPreference\"") != std::string_view::npos,
+                              L"Configuration schema missing searchBackendPreference.");
+                state.Require(schemaView.find("\"auto\"") != std::string_view::npos, L"Configuration schema missing auto search backend value.");
+                state.Require(schemaView.find("\"service\"") != std::string_view::npos, L"Configuration schema missing service search backend value.");
+                state.Require(schemaView.find("\"local-index\"") != std::string_view::npos,
+                              L"Configuration schema missing local-index search backend value.");
+                state.Require(schemaView.find("\"scan\"") != std::string_view::npos, L"Configuration schema missing scan search backend value.");
+            }
+
+            const auto verifyCapabilities = [&](std::string_view configuredPreference) noexcept
+            {
+                const char* capabilities = nullptr;
+                const HRESULT capabilitiesHr = created.fileSystem->GetCapabilities(&capabilities);
+                state.Require(SUCCEEDED(capabilitiesHr) && capabilities != nullptr,
+                              std::format(L"Local file system GetCapabilities failed for {}. hr=0x{:08X}",
+                                          std::wstring(configuredPreference.begin(), configuredPreference.end()),
+                                          static_cast<unsigned long>(capabilitiesHr)));
+                if (capabilities == nullptr)
+                {
+                    return;
+                }
+
+                const std::string_view capabilitiesView(capabilities);
+                state.Require(capabilitiesView.find("\"preferredBackend\":\"service\"") != std::string_view::npos,
+                              L"Capabilities JSON should advertise preferredBackend=service once the Windows service backend exists.");
+                state.Require(capabilitiesView.find("\"indexed\":true") != std::string_view::npos,
+                              L"Capabilities JSON should advertise indexed=true once the local index backend exists.");
+                state.Require(capabilitiesView.find("\"serviceBacked\":true") != std::string_view::npos,
+                              L"Capabilities JSON should advertise serviceBacked=true once the broker exists.");
+            };
+
+            const auto runPreferenceCase = [&](std::string_view configuredPreference,
+                                               BOOL expectedDirty,
+                                               FileSystemSearchBackend expectedBackend,
+                                               bool expectDegraded,
+                                               bool preferIndexHint) noexcept
+            {
+                const std::string configurationJson = std::format("{{\"searchBackendPreference\":\"{}\"}}", configuredPreference);
+                const HRESULT setHr = info->SetConfiguration(configurationJson.c_str());
+                state.Require(SUCCEEDED(setHr),
+                              std::format(L"SetConfiguration failed for {}. hr=0x{:08X}",
+                                          std::wstring(configuredPreference.begin(), configuredPreference.end()),
+                                          static_cast<unsigned long>(setHr)));
+                if (FAILED(setHr))
+                {
+                    return;
+                }
+
+                BOOL somethingToSave = FALSE;
+                const HRESULT saveHr = info->SomethingToSave(&somethingToSave);
+                state.Require(SUCCEEDED(saveHr),
+                              std::format(L"SomethingToSave failed for {}. hr=0x{:08X}",
+                                          std::wstring(configuredPreference.begin(), configuredPreference.end()),
+                                          static_cast<unsigned long>(saveHr)));
+                if (SUCCEEDED(saveHr))
+                {
+                    state.Require(somethingToSave == expectedDirty,
+                                  std::format(L"Unexpected SomethingToSave result for {}.", std::wstring(configuredPreference.begin(), configuredPreference.end())));
+                }
+
+                const char* configuration = nullptr;
+                const HRESULT getHr       = info->GetConfiguration(&configuration);
+                state.Require(SUCCEEDED(getHr) && configuration != nullptr,
+                              std::format(L"GetConfiguration failed for {}. hr=0x{:08X}",
+                                          std::wstring(configuredPreference.begin(), configuredPreference.end()),
+                                          static_cast<unsigned long>(getHr)));
+                if (configuration != nullptr)
+                {
+                    const std::string expectedField = std::format("\"searchBackendPreference\":\"{}\"", configuredPreference);
+                    state.Require(std::string_view(configuration).find(expectedField) != std::string_view::npos,
+                                  std::format(L"Configuration JSON missing searchBackendPreference={} field.",
+                                              std::wstring(configuredPreference.begin(), configuredPreference.end())));
+                }
+
+                verifyCapabilities(configuredPreference);
+
+                std::wstring rootText    = caseRoot.wstring();
+                std::wstring namePattern = L"*.txt";
+
+                FileSystemSearchQuery query{};
+                query.sizeBytes   = sizeof(FileSystemSearchQuery);
+                query.rootPath    = rootText.c_str();
+                query.namePattern = namePattern.c_str();
+                query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES |
+                                                                      (preferIndexHint ? FILESYSTEM_SEARCH_PREFER_INDEX : 0u));
+                query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+                query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+                RecordingSearchCallback callback;
+                const HRESULT searchHr = search->Search(&query, &callback, nullptr);
+                state.Require(SUCCEEDED(searchHr),
+                              std::format(L"Search failed for preference {}. hr=0x{:08X}",
+                                          std::wstring(configuredPreference.begin(), configuredPreference.end()),
+                                          static_cast<unsigned long>(searchHr)));
+                if (FAILED(searchHr))
+                {
+                    return;
+                }
+
+                const auto matches = callback.Matches();
+                state.Require(matches.size() == 1u,
+                              std::format(L"Search for preference {} expected 1 match, got {}.",
+                                          std::wstring(configuredPreference.begin(), configuredPreference.end()),
+                                          matches.size()));
+                state.Require(FindRecordedSearchMatch(matches, L"pref.txt") != nullptr,
+                              std::format(L"Search for preference {} should match pref.txt.", std::wstring(configuredPreference.begin(), configuredPreference.end())));
+
+                const auto progressSnapshots = callback.ProgressSnapshots();
+                const RecordedSearchProgress* completed = FindRecordedSearchProgress(progressSnapshots, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+                state.Require(completed != nullptr,
+                              std::format(L"Search for preference {} missing completed progress.", std::wstring(configuredPreference.begin(), configuredPreference.end())));
+                if (completed != nullptr)
+                {
+                    state.Require(completed->backend == expectedBackend,
+                                  std::format(L"Search for preference {} reported an unexpected backend.", std::wstring(configuredPreference.begin(), configuredPreference.end())));
+                    const bool degradedNoIndex = (completed->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) != 0u;
+                    state.Require(degradedNoIndex == expectDegraded,
+                                  std::format(L"Search for preference {} returned an unexpected degraded-no-index warning state.",
+                                              std::wstring(configuredPreference.begin(), configuredPreference.end())));
+                }
+            };
+
+            runPreferenceCase("auto", FALSE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, false);
+            runPreferenceCase("service", TRUE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, false);
+            runPreferenceCase("local-index", TRUE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, false);
+            runPreferenceCase("scan", TRUE, FILESYSTEM_SEARCH_BACKEND_SCAN, false, false);
+            runPreferenceCase("auto", FALSE, FILESYSTEM_SEARCH_BACKEND_INDEX, false, true);
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_name_wildcard_recursive",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_name_wildcard_recursive", caseRoot),
+                          L"Failed to prepare search_name_wildcard_recursive root.");
+            state.Require(SelfTest::EnsureDirectory(caseRoot / L"sub"), L"Failed to create sub directory.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"a.txt", "A"), L"Failed to create a.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"b.log", "B"), L"Failed to create b.log.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"c.txt", "C"), L"Failed to create sub\\c.txt.");
+
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(baseFs, search), L"Local file system plugin missing IFileSystemSearch.");
+
+            std::wstring rootText    = caseRoot.wstring();
+            std::wstring namePattern = L"*.txt";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes   = sizeof(FileSystemSearchQuery);
+            query.rootPath    = rootText.c_str();
+            query.namePattern = namePattern.c_str();
+            query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+            RecordingSearchCallback callback;
+            const HRESULT hr = search->Search(&query, &callback, nullptr);
+            state.Require(SUCCEEDED(hr), std::format(L"Wildcard search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            const auto matches = callback.Matches();
+            state.Require(matches.size() == 2u, std::format(L"Wildcard search expected 2 matches, got {}.", matches.size()));
+
+            const RecordedSearchMatch* aMatch = FindRecordedSearchMatch(matches, L"a.txt");
+            state.Require(aMatch != nullptr, L"Wildcard search missing a.txt.");
+            if (aMatch != nullptr)
+            {
+                state.Require((aMatch->matchedBy & FILESYSTEM_SEARCH_MATCH_SOURCE_NAME) != 0u, L"a.txt should be reported as a name match.");
+            }
+
+            const RecordedSearchMatch* cMatch = FindRecordedSearchMatch(matches, L"c.txt");
+            state.Require(cMatch != nullptr, L"Wildcard search missing c.txt.");
+            if (cMatch != nullptr)
+            {
+                state.Require(cMatch->relativePath == L"sub\\c.txt", L"c.txt should preserve its relative path.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_content_literal",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_content_literal", caseRoot), L"Failed to prepare search_content_literal root.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"plain.txt", "alpha beta gamma"), L"Failed to create plain.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"other.txt", "delta"), L"Failed to create other.txt.");
+
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(baseFs, search), L"Local file system plugin missing IFileSystemSearch.");
+
+            std::wstring rootText       = caseRoot.wstring();
+            std::wstring contentPattern = L"beta";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes           = sizeof(FileSystemSearchQuery);
+            query.rootPath            = rootText.c_str();
+            query.contentPattern      = contentPattern.c_str();
+            query.flags               = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES |
+                                                         FILESYSTEM_SEARCH_WANT_SNIPPETS);
+            query.nameMode            = FILESYSTEM_SEARCH_NAME_DISABLED;
+            query.contentMode         = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+            query.maxSnippetCharacters = 32u;
+
+            RecordingSearchCallback callback;
+            const HRESULT hr = search->Search(&query, &callback, nullptr);
+            state.Require(SUCCEEDED(hr), std::format(L"Content search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            const auto matches = callback.Matches();
+            state.Require(matches.size() == 1u, std::format(L"Content search expected 1 match, got {}.", matches.size()));
+            const RecordedSearchMatch* plainMatch = FindRecordedSearchMatch(matches, L"plain.txt");
+            state.Require(plainMatch != nullptr, L"Content search missing plain.txt.");
+            if (plainMatch != nullptr)
+            {
+                state.Require((plainMatch->matchedBy & FILESYSTEM_SEARCH_MATCH_SOURCE_CONTENT) != 0u, L"plain.txt should be reported as a content match.");
+                state.Require(plainMatch->previewText.find(L"beta") != std::wstring::npos, L"plain.txt snippet should include the matched token.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_name_and_content_and_semantics",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_name_and_content", caseRoot), L"Failed to prepare search_name_and_content root.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"foo.txt", "hello"), L"Failed to create foo.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"foo.log", "hello"), L"Failed to create foo.log.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"bar.txt", "nope"), L"Failed to create bar.txt.");
+
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(baseFs, search), L"Local file system plugin missing IFileSystemSearch.");
+
+            std::wstring rootText       = caseRoot.wstring();
+            std::wstring namePattern    = L"*.txt";
+            std::wstring contentPattern = L"hello";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes      = sizeof(FileSystemSearchQuery);
+            query.rootPath       = rootText.c_str();
+            query.namePattern    = namePattern.c_str();
+            query.contentPattern = contentPattern.c_str();
+            query.flags          = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode       = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            query.contentMode    = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+
+            RecordingSearchCallback callback;
+            const HRESULT hr = search->Search(&query, &callback, nullptr);
+            state.Require(SUCCEEDED(hr), std::format(L"Name+content search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            const auto matches = callback.Matches();
+            state.Require(matches.size() == 1u, std::format(L"Name+content search expected 1 match, got {}.", matches.size()));
+            const RecordedSearchMatch* fooMatch = FindRecordedSearchMatch(matches, L"foo.txt");
+            state.Require(fooMatch != nullptr, L"Name+content search should only match foo.txt.");
+            if (fooMatch != nullptr)
+            {
+                state.Require((fooMatch->matchedBy & FILESYSTEM_SEARCH_MATCH_SOURCE_NAME) != 0u, L"foo.txt should include the name match source bit.");
+                state.Require((fooMatch->matchedBy & FILESYSTEM_SEARCH_MATCH_SOURCE_CONTENT) != 0u, L"foo.txt should include the content match source bit.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_invalid_query_rejected",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(baseFs, search), L"Local file system plugin missing IFileSystemSearch.");
+
+            std::wstring rootText       = root.wstring();
+            std::wstring contentPattern = L"anything";
+            RecordingSearchCallback callback;
+
+            FileSystemSearchQuery disabledQuery{};
+            disabledQuery.sizeBytes   = sizeof(FileSystemSearchQuery);
+            disabledQuery.rootPath    = rootText.c_str();
+            disabledQuery.flags       = FILESYSTEM_SEARCH_INCLUDE_FILES;
+            disabledQuery.nameMode    = FILESYSTEM_SEARCH_NAME_DISABLED;
+            disabledQuery.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+            HRESULT hr = search->Search(&disabledQuery, &callback, nullptr);
+            state.Require(hr == E_INVALIDARG,
+                          std::format(L"Disabled search query should be rejected with E_INVALIDARG. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            FileSystemSearchQuery invalidSizeQuery{};
+            invalidSizeQuery.sizeBytes   = sizeof(FileSystemSearchQuery) - sizeof(uint32_t);
+            invalidSizeQuery.rootPath    = rootText.c_str();
+            invalidSizeQuery.namePattern = L"*";
+            invalidSizeQuery.flags       = FILESYSTEM_SEARCH_INCLUDE_FILES;
+            invalidSizeQuery.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            invalidSizeQuery.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+            hr = search->Search(&invalidSizeQuery, &callback, nullptr);
+            state.Require(hr == E_INVALIDARG,
+                          std::format(L"Invalid sizeBytes search query should be rejected with E_INVALIDARG. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            FileSystemSearchQuery invalidContentQuery{};
+            invalidContentQuery.sizeBytes      = sizeof(FileSystemSearchQuery);
+            invalidContentQuery.rootPath       = rootText.c_str();
+            invalidContentQuery.contentPattern = contentPattern.c_str();
+            invalidContentQuery.flags          = FILESYSTEM_SEARCH_INCLUDE_DIRECTORIES;
+            invalidContentQuery.nameMode       = FILESYSTEM_SEARCH_NAME_DISABLED;
+            invalidContentQuery.contentMode    = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+
+            hr = search->Search(&invalidContentQuery, &callback, nullptr);
+            state.Require(hr == E_INVALIDARG,
+                          std::format(L"Content-only directory query should be rejected with E_INVALIDARG. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_index_core_snapshot_reload",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"index_core_snapshot_reload", caseRoot),
+                          L"Failed to prepare index_core_snapshot_reload root.");
+            state.Require(SelfTest::EnsureDirectory(caseRoot / L"sub"), L"Failed to create sub directory.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"beta.txt", "beta"), L"Failed to create sub\\beta.txt.");
+
+            LocalSearchIndexCore::Repository repository;
+            LocalSearchIndexCore::SupportInfo support{};
+            const HRESULT probeHr = repository.ProbePath(caseRoot.wstring(), support);
+            state.Require(SUCCEEDED(probeHr), std::format(L"ProbePath failed. hr=0x{:08X}", static_cast<unsigned long>(probeHr)));
+            if (FAILED(probeHr))
+            {
+                return false;
+            }
+
+            state.Require(support.indexable, L"Test root should be indexable on the local development volume.");
+            state.Require(support.fileSystemKind == LocalSearchIndexCore::FileSystemKind::Ntfs,
+                          L"Test root should resolve to NTFS for the indexed Phase 4 validations.");
+
+            LocalSearchIndexCore::SupportInfo fakeUnc{};
+            const HRESULT fakeUncHr = repository.ProbePath(L"\\\\server\\share\\folder", fakeUnc);
+            state.Require(SUCCEEDED(fakeUncHr), std::format(L"ProbePath(UNC) failed. hr=0x{:08X}", static_cast<unsigned long>(fakeUncHr)));
+            if (SUCCEEDED(fakeUncHr))
+            {
+                state.Require(! fakeUnc.indexable, L"UNC paths should not be treated as indexable local roots.");
+            }
+
+            LocalSearchIndexCore::QueryStats coldStats{};
+            std::vector<LocalSearchIndexCore::Candidate> coldCandidates;
+            HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", coldStats, coldCandidates);
+            state.Require(SUCCEEDED(hr), std::format(L"Cold indexed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            const auto coldNames = CollectIndexedCandidateNames(coldCandidates);
+            state.Require(coldNames == std::vector<std::wstring>{L"alpha.txt", L"beta.txt"}, L"Cold indexed query returned unexpected names.");
+            state.Require(coldStats.usedNtfsEnumeration || coldStats.usedTraversalSeed,
+                          L"Cold indexed query should seed from either NTFS USN/MFT enumeration or the user-mode traversal fallback.");
+            state.Require(coldStats.snapshotSaved, L"Cold indexed query should persist a snapshot.");
+            state.Require(coldStats.snapshotFileBytes != 0u, L"Cold indexed query should report a non-zero snapshot size.");
+            state.Require(coldStats.estimatedMemoryBytes != 0u, L"Cold indexed query should report a non-zero memory estimate.");
+            state.Require(! coldStats.snapshotPath.empty(), L"Cold indexed query should report the snapshot path.");
+
+            const HRESULT dropHr = repository.DropCachedVolumeForTests(caseRoot.wstring());
+            state.Require(SUCCEEDED(dropHr), std::format(L"DropCachedVolumeForTests failed. hr=0x{:08X}", static_cast<unsigned long>(dropHr)));
+
+            LocalSearchIndexCore::QueryStats warmStats{};
+            std::vector<LocalSearchIndexCore::Candidate> warmCandidates;
+            const auto warmStart = std::chrono::steady_clock::now();
+            hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", warmStats, warmCandidates);
+            state.Require(SUCCEEDED(hr), std::format(L"Warm indexed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            const auto warmElapsedMs =
+                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - warmStart).count());
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            state.Require(warmStats.snapshotLoaded, L"Warm indexed query should reload from snapshot.");
+            if (warmStats.journalAvailable)
+            {
+                state.Require(! warmStats.usedNtfsEnumeration && ! warmStats.usedTraversalSeed,
+                              L"Warm indexed query should not rebuild the cold seed when journal access is available.");
+            }
+            state.Require(warmStats.snapshotFileBytes != 0u, L"Warm indexed query should report a non-zero snapshot size.");
+            state.Require(warmStats.estimatedMemoryBytes != 0u, L"Warm indexed query should report a non-zero memory estimate.");
+            state.Require(! warmStats.snapshotPath.empty(), L"Warm indexed query should report the snapshot path.");
+            state.Require(CollectIndexedCandidateNames(warmCandidates) == coldNames, L"Warm indexed query should match the cold candidate set.");
+            state.Require(warmElapsedMs < 1000u, std::format(L"Warm indexed query took too long: {} ms.", warmElapsedMs));
+
+            return state.failure.empty();
+        });
+
+        constexpr std::wstring_view kRefsCaseName = L"local_index_core_refs_probe_and_query_if_available";
+        SelfTest::RunCase(options,
+                          suite,
+                          kRefsCaseName,
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+                    const auto refsRoot = FindFirstFixedVolumeByFileSystem(L"ReFS");
+                    if (! refsRoot.has_value())
+                    {
+                        return state.Skip(L"No fixed ReFS volume detected on this machine.");
+                    }
+
+                    const std::filesystem::path refsVolumeRoot = refsRoot.value();
+                    const std::filesystem::path refsSuiteRoot = refsVolumeRoot / L"RedSalamanderSelfTest";
+                    state.Require(SelfTest::EnsureDirectory(refsSuiteRoot),
+                                  std::format(L"Failed to create ReFS self-test root under {}.", refsSuiteRoot.wstring()));
+                    if (! state.failure.empty())
+                    {
+                        return false;
+                    }
+
+                    std::filesystem::path caseRoot;
+                    state.Require(PrepareSearchCaseRoot(refsSuiteRoot, L"index_core_refs_probe_and_query", caseRoot),
+                                  L"Failed to prepare index_core_refs_probe_and_query root.");
+                    state.Require(SelfTest::EnsureDirectory(caseRoot / L"sub"), L"Failed to create ReFS sub directory.");
+                    state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create ReFS alpha.txt.");
+                    state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"beta.txt", "beta"),
+                                  L"Failed to create ReFS sub\\beta.txt.");
+                    if (! state.failure.empty())
+                    {
+                        return false;
+                    }
+
+                    LocalSearchIndexCore::Repository repository;
+                    LocalSearchIndexCore::SupportInfo support{};
+                    const HRESULT probeHr = repository.ProbePath(caseRoot.wstring(), support);
+                    state.Require(SUCCEEDED(probeHr),
+                                  std::format(L"ReFS ProbePath failed. hr=0x{:08X}", static_cast<unsigned long>(probeHr)));
+                    if (FAILED(probeHr))
+                    {
+                        return false;
+                    }
+
+                    state.Require(support.indexable, L"ReFS test root should be indexable.");
+                    state.Require(support.fileSystemKind == LocalSearchIndexCore::FileSystemKind::Refs,
+                                  L"ReFS test root should resolve to ReFS.");
+
+                    LocalSearchIndexCore::QueryStats stats{};
+                    std::vector<LocalSearchIndexCore::Candidate> candidates;
+                    const HRESULT queryHr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", stats, candidates);
+                    state.Require(SUCCEEDED(queryHr),
+                                  std::format(L"ReFS indexed query failed. hr=0x{:08X}", static_cast<unsigned long>(queryHr)));
+                    if (FAILED(queryHr))
+                    {
+                        return false;
+                    }
+
+                    state.Require(CollectIndexedCandidateNames(candidates) == std::vector<std::wstring>{L"alpha.txt", L"beta.txt"},
+                                  L"ReFS indexed query returned an unexpected candidate set.");
+                    state.Require(stats.fileSystemKind == LocalSearchIndexCore::FileSystemKind::Refs,
+                                  L"ReFS indexed query should report FileSystemKind::Refs.");
+                    state.Require(! stats.usedNtfsEnumeration, L"ReFS indexed query should not report NTFS enumeration.");
+                    state.Require(stats.snapshotSaved || stats.snapshotLoaded, L"ReFS indexed query should persist or reload a snapshot.");
+                    state.Require(stats.snapshotFileBytes != 0u, L"ReFS indexed query should report a non-zero snapshot size.");
+                    state.Require(stats.estimatedMemoryBytes != 0u, L"ReFS indexed query should report a non-zero memory estimate.");
+
+                    std::error_code cleanupEc;
+                    std::filesystem::remove_all(caseRoot, cleanupEc);
+                    return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_index_core_journal_replay_rename_delete_create",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"index_core_journal_replay", caseRoot),
+                          L"Failed to prepare index_core_journal_replay root.");
+            state.Require(SelfTest::EnsureDirectory(caseRoot / L"sub"), L"Failed to create sub directory.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"gamma.txt", "gamma"), L"Failed to create sub\\gamma.txt.");
+
+            LocalSearchIndexCore::Repository repository;
+            LocalSearchIndexCore::QueryStats initialStats{};
+            std::vector<LocalSearchIndexCore::Candidate> initialCandidates;
+            HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", initialStats, initialCandidates);
+            state.Require(SUCCEEDED(hr), std::format(L"Initial indexed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            std::error_code ec;
+            std::filesystem::rename(caseRoot / L"alpha.txt", caseRoot / L"renamed.txt", ec);
+            state.Require(! ec, L"Failed to rename alpha.txt.");
+            std::filesystem::remove(caseRoot / L"sub" / L"gamma.txt", ec);
+            state.Require(! ec, L"Failed to delete sub\\gamma.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"delta.txt", "delta"), L"Failed to create delta.txt.");
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+
+            LocalSearchIndexCore::QueryStats replayStats{};
+            std::vector<LocalSearchIndexCore::Candidate> replayCandidates;
+            hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", replayStats, replayCandidates);
+            state.Require(SUCCEEDED(hr), std::format(L"Replay indexed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            state.Require(replayStats.journalReplayApplied || replayStats.usedTraversalSeed,
+                          L"Replay indexed query should apply journal changes or rebuild from traversal when journal access is unavailable.");
+            state.Require(CollectIndexedCandidateNames(replayCandidates) == std::vector<std::wstring>{L"delta.txt", L"renamed.txt"},
+                          L"Replay indexed query returned an unexpected candidate set.");
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_index_core_snapshot_corruption_rebuild",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"index_core_snapshot_corruption", caseRoot),
+                          L"Failed to prepare index_core_snapshot_corruption root.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+
+            LocalSearchIndexCore::Repository repository;
+            LocalSearchIndexCore::QueryStats seedStats{};
+            std::vector<LocalSearchIndexCore::Candidate> seedCandidates;
+            HRESULT hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", seedStats, seedCandidates);
+            state.Require(SUCCEEDED(hr), std::format(L"Seed indexed query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            hr = repository.CorruptSnapshotForTests(caseRoot.wstring(), LocalSearchIndexCore::SnapshotCorruptionMode::InvalidMagic);
+            state.Require(SUCCEEDED(hr), std::format(L"CorruptSnapshotForTests(InvalidMagic) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            hr = repository.DropCachedVolumeForTests(caseRoot.wstring());
+            state.Require(SUCCEEDED(hr), std::format(L"DropCachedVolumeForTests failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            LocalSearchIndexCore::QueryStats invalidMagicStats{};
+            std::vector<LocalSearchIndexCore::Candidate> invalidMagicCandidates;
+            hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", invalidMagicStats, invalidMagicCandidates);
+            state.Require(SUCCEEDED(hr),
+                          std::format(L"Indexed query after invalid-magic corruption failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            state.Require(invalidMagicStats.rebuiltSnapshotCorruption,
+                          L"Indexed query should report a rebuild after invalid snapshot magic corruption.");
+
+            hr = repository.CorruptSnapshotForTests(caseRoot.wstring(), LocalSearchIndexCore::SnapshotCorruptionMode::NextUsnPastEnd);
+            state.Require(SUCCEEDED(hr), std::format(L"CorruptSnapshotForTests(NextUsnPastEnd) failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            hr = repository.DropCachedVolumeForTests(caseRoot.wstring());
+            state.Require(SUCCEEDED(hr), std::format(L"DropCachedVolumeForTests failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            LocalSearchIndexCore::QueryStats rangeStats{};
+            std::vector<LocalSearchIndexCore::Candidate> rangeCandidates;
+            hr = RunIndexedNameQuery(repository, caseRoot.wstring(), L"*.txt", rangeStats, rangeCandidates);
+            state.Require(SUCCEEDED(hr),
+                          std::format(L"Indexed query after NextUsn corruption failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            if (rangeStats.journalAvailable)
+            {
+                state.Require(rangeStats.rebuiltJournalRangeInvalid,
+                              L"Indexed query should rebuild when the snapshot NextUsn is beyond the live journal range.");
+            }
+            state.Require(CollectIndexedCandidateNames(rangeCandidates) == CollectIndexedCandidateNames(seedCandidates),
+                          L"Indexed query after corruption rebuild should preserve the candidate set.");
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_native_matches_host_fallback",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+            state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                          std::format(L"Failed to create isolated local file system instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"Isolated local file system instance missing IInformations.");
+            if (! info)
+            {
+                return false;
+            }
+
+            const HRESULT setHr = info->SetConfiguration("{\"searchBackendPreference\":\"auto\"}");
+            state.Require(SUCCEEDED(setHr), std::format(L"Failed to reset isolated local file system configuration. hr=0x{:08X}", static_cast<unsigned long>(setHr)));
+            if (FAILED(setHr))
+            {
+                return false;
+            }
+
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+            if (! search)
+            {
+                return false;
+            }
+
+            const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+            const std::wstring unavailablePipe      = MakeUniquePipeName();
+            state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, unavailablePipe.c_str()) != 0,
+                          L"Failed to override the search service pipe for local-index parity.");
+            const auto restorePipeOverride = wil::scope_exit([&] noexcept
+            {
+                const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+                static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+            });
+
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_native_matches_host_fallback", caseRoot),
+                          L"Failed to prepare search_native_matches_host_fallback root.");
+            state.Require(SelfTest::EnsureDirectory(caseRoot / L"sub"), L"Failed to create sub directory.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"report-one.txt", "alpha needle omega"),
+                          L"Failed to create report-one.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"report-two.txt", "prefix needle suffix"),
+                          L"Failed to create sub\\report-two.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"other.txt", "needle"),
+                          L"Failed to create other.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"report-three.log", "needle"),
+                          L"Failed to create sub\\report-three.log.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"report-empty.txt", "no match here"),
+                          L"Failed to create sub\\report-empty.txt.");
+
+            std::wstring rootText       = caseRoot.wstring();
+            std::wstring namePattern    = L"report*.txt";
+            std::wstring contentPattern = L"needle";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes            = sizeof(FileSystemSearchQuery);
+            query.rootPath             = rootText.c_str();
+            query.namePattern          = namePattern.c_str();
+            query.contentPattern       = contentPattern.c_str();
+            query.flags                = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES |
+                                                          FILESYSTEM_SEARCH_WANT_SNIPPETS | FILESYSTEM_SEARCH_PREFER_INDEX);
+            query.nameMode             = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            query.contentMode          = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+            query.maxSnippetCharacters = 48u;
+
+            RecordingSearchCallback nativeCallback;
+            const HRESULT nativeHr = search->Search(&query, &nativeCallback, nullptr);
+            state.Require(SUCCEEDED(nativeHr), std::format(L"Native plugin search failed. hr=0x{:08X}", static_cast<unsigned long>(nativeHr)));
+            if (FAILED(nativeHr))
+            {
+                return false;
+            }
+
+            RecordingSearchCallback fallbackCallback;
+            const HRESULT fallbackHr = SearchFallbackEngine::Execute(created.fileSystem.get(), &query, &fallbackCallback, nullptr);
+            state.Require(SUCCEEDED(fallbackHr), std::format(L"Host fallback search failed. hr=0x{:08X}", static_cast<unsigned long>(fallbackHr)));
+            if (FAILED(fallbackHr))
+            {
+                return false;
+            }
+
+            auto nativeMatches   = nativeCallback.Matches();
+            auto fallbackMatches = fallbackCallback.Matches();
+            const auto compareMatch = [](const RecordedSearchMatch& left, const RecordedSearchMatch& right) noexcept
+            {
+                return std::tie(left.fullPath, left.relativePath, left.displayName, left.previewText, left.matchedBy, left.attributes) <
+                       std::tie(right.fullPath, right.relativePath, right.displayName, right.previewText, right.matchedBy, right.attributes);
+            };
+            std::sort(nativeMatches.begin(), nativeMatches.end(), compareMatch);
+            std::sort(fallbackMatches.begin(), fallbackMatches.end(), compareMatch);
+
+            state.Require(nativeMatches.size() == fallbackMatches.size(),
+                          std::format(L"Native and fallback match counts differ. native={}, fallback={}.", nativeMatches.size(), fallbackMatches.size()));
+            for (size_t index = 0; index < nativeMatches.size() && index < fallbackMatches.size(); ++index)
+            {
+                const RecordedSearchMatch& nativeMatch   = nativeMatches[index];
+                const RecordedSearchMatch& fallbackMatch = fallbackMatches[index];
+                state.Require(nativeMatch.fullPath == fallbackMatch.fullPath,
+                              std::format(L"Match {} fullPath mismatch.", index));
+                state.Require(nativeMatch.relativePath == fallbackMatch.relativePath,
+                              std::format(L"Match {} relativePath mismatch.", index));
+                state.Require(nativeMatch.displayName == fallbackMatch.displayName,
+                              std::format(L"Match {} displayName mismatch.", index));
+                state.Require(nativeMatch.previewText == fallbackMatch.previewText,
+                              std::format(L"Match {} previewText mismatch.", index));
+                state.Require(nativeMatch.matchedBy == fallbackMatch.matchedBy,
+                              std::format(L"Match {} matchedBy mismatch.", index));
+                state.Require(nativeMatch.attributes == fallbackMatch.attributes,
+                              std::format(L"Match {} attributes mismatch.", index));
+            }
+
+            const auto nativeProgress   = nativeCallback.ProgressSnapshots();
+            const auto fallbackProgress = fallbackCallback.ProgressSnapshots();
+            const RecordedSearchProgress* nativeCompleted = FindRecordedSearchProgress(nativeProgress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            const RecordedSearchProgress* fallbackCompleted = FindRecordedSearchProgress(fallbackProgress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(nativeCompleted != nullptr, L"Native plugin search missing completed progress.");
+            state.Require(fallbackCompleted != nullptr, L"Host fallback search missing completed progress.");
+            if (nativeCompleted != nullptr && fallbackCompleted != nullptr)
+            {
+                state.Require(nativeCompleted->backend == FILESYSTEM_SEARCH_BACKEND_INDEX, L"Native plugin search should report index backend.");
+                state.Require(fallbackCompleted->backend == FILESYSTEM_SEARCH_BACKEND_SCAN, L"Host fallback search should report scan backend.");
+                state.Require((nativeCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) == 0u,
+                              L"Native indexed search should not report degraded-no-index on supported local roots.");
+                state.Require((fallbackCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) != 0u,
+                              L"Host fallback search should still report degraded-no-index when PREFER_INDEX is requested.");
+                state.Require(nativeCompleted->matchedEntries == fallbackCompleted->matchedEntries,
+                              L"Native and fallback matched entry counts should match.");
+                state.Require(nativeCompleted->candidateFiles == fallbackCompleted->candidateFiles,
+                              L"Native and fallback candidate file counts should match.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_native_unicode_long_path_matches_host_fallback",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+            state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                          std::format(L"Failed to create isolated local file system instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"Isolated local file system instance missing IInformations.");
+            if (! info)
+            {
+                return false;
+            }
+
+            const HRESULT setHr = info->SetConfiguration("{\"searchBackendPreference\":\"local-index\"}");
+            state.Require(SUCCEEDED(setHr),
+                          std::format(L"Failed to configure isolated local file system for local-index parity. hr=0x{:08X}",
+                                      static_cast<unsigned long>(setHr)));
+            if (FAILED(setHr))
+            {
+                return false;
+            }
+
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+            if (! search)
+            {
+                return false;
+            }
+
+            const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+            const std::wstring unavailablePipe      = MakeUniquePipeName();
+            state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, unavailablePipe.c_str()) != 0,
+                          L"Failed to override the search service pipe for Unicode/long-path parity.");
+            const auto restorePipeOverride = wil::scope_exit([&] noexcept
+            {
+                const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+                static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+            });
+
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_native_unicode_long_path_matches_host_fallback", caseRoot),
+                          L"Failed to prepare search_native_unicode_long_path_matches_host_fallback root.");
+
+            const std::filesystem::path unicodeFile = caseRoot / L"rapport-équipe.txt";
+            state.Require(SelfTest::WriteTextFile(unicodeFile, "alpha needle unicode"),
+                          L"Failed to create rapport-équipe.txt.");
+
+            std::filesystem::path deepDir = caseRoot / L"chemin-long";
+            state.Require(SelfTest::EnsureDirectory(deepDir), L"Failed to create chemin-long.");
+
+            bool deepPathCreated = true;
+            const std::wstring_view longSegments[] = {
+                L"segment-00-abcdefghijklmnopqrstuvwxyz",
+                L"segment-01-abcdefghijklmnopqrstuvwxyz",
+                L"segment-02-abcdefghijklmnopqrstuvwxyz",
+                L"segment-03-abcdefghijklmnopqrstuvwxyz",
+                L"segment-04-abcdefghijklmnopqrstuvwxyz",
+                L"segment-05-abcdefghijklmnopqrstuvwxyz",
+            };
+            for (const std::wstring_view segment : longSegments)
+            {
+                deepDir /= std::filesystem::path(segment);
+                if (! SelfTest::EnsureDirectory(deepDir))
+                {
+                    deepPathCreated = false;
+                    break;
+                }
+            }
+
+            bool longPathCreated = deepPathCreated && deepDir.wstring().size() > 260u;
+            if (! deepPathCreated)
+            {
+                deepDir          = caseRoot / L"chemin-profond";
+                deepPathCreated  = SelfTest::EnsureDirectory(deepDir);
+                const std::wstring_view fallbackSegments[] = {
+                    L"segment-a-abcdefghijklmnop",
+                    L"segment-b-abcdefghijklmnop",
+                    L"segment-c-abcdefghijklmnop",
+                };
+                for (const std::wstring_view segment : fallbackSegments)
+                {
+                    if (! deepPathCreated)
+                    {
+                        break;
+                    }
+
+                    deepDir /= std::filesystem::path(segment);
+                    deepPathCreated = SelfTest::EnsureDirectory(deepDir);
+                }
+                longPathCreated = false;
+            }
+
+            state.Require(deepPathCreated, L"Failed to create a deep Unicode search path.");
+            if (! deepPathCreated)
+            {
+                return false;
+            }
+
+            const std::filesystem::path deepUnicodeFile = deepDir / L"résultat-final.txt";
+            state.Require(SelfTest::WriteTextFile(deepUnicodeFile, "prefix needle suffix"),
+                          L"Failed to create résultat-final.txt.");
+
+            std::wstring rootText       = caseRoot.wstring();
+            std::wstring namePattern    = L"*.txt";
+            std::wstring contentPattern = L"needle";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes            = sizeof(FileSystemSearchQuery);
+            query.rootPath             = rootText.c_str();
+            query.namePattern          = namePattern.c_str();
+            query.contentPattern       = contentPattern.c_str();
+            query.flags                = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES |
+                                                          FILESYSTEM_SEARCH_WANT_SNIPPETS | FILESYSTEM_SEARCH_PREFER_INDEX);
+            query.nameMode             = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            query.contentMode          = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+            query.maxSnippetCharacters = 48u;
+
+            RecordingSearchCallback nativeCallback;
+            const HRESULT nativeHr = search->Search(&query, &nativeCallback, nullptr);
+            state.Require(SUCCEEDED(nativeHr),
+                          std::format(L"Native Unicode/long-path search failed. hr=0x{:08X}", static_cast<unsigned long>(nativeHr)));
+            if (FAILED(nativeHr))
+            {
+                return false;
+            }
+
+            RecordingSearchCallback fallbackCallback;
+            const HRESULT fallbackHr = SearchFallbackEngine::Execute(created.fileSystem.get(), &query, &fallbackCallback, nullptr);
+            state.Require(SUCCEEDED(fallbackHr),
+                          std::format(L"Host fallback Unicode/long-path search failed. hr=0x{:08X}", static_cast<unsigned long>(fallbackHr)));
+            if (FAILED(fallbackHr))
+            {
+                return false;
+            }
+
+            auto nativeMatches   = nativeCallback.Matches();
+            auto fallbackMatches = fallbackCallback.Matches();
+            const auto compareMatch = [](const RecordedSearchMatch& left, const RecordedSearchMatch& right) noexcept
+            {
+                return std::tie(left.fullPath, left.relativePath, left.displayName, left.previewText, left.matchedBy, left.attributes) <
+                       std::tie(right.fullPath, right.relativePath, right.displayName, right.previewText, right.matchedBy, right.attributes);
+            };
+            std::sort(nativeMatches.begin(), nativeMatches.end(), compareMatch);
+            std::sort(fallbackMatches.begin(), fallbackMatches.end(), compareMatch);
+
+            state.Require(nativeMatches.size() == fallbackMatches.size(),
+                          std::format(L"Unicode/long-path native and fallback match counts differ. native={}, fallback={}.",
+                                      nativeMatches.size(),
+                                      fallbackMatches.size()));
+            for (size_t index = 0; index < nativeMatches.size() && index < fallbackMatches.size(); ++index)
+            {
+                const RecordedSearchMatch& nativeMatch   = nativeMatches[index];
+                const RecordedSearchMatch& fallbackMatch = fallbackMatches[index];
+                state.Require(nativeMatch.fullPath == fallbackMatch.fullPath,
+                              std::format(L"Unicode/long-path match {} fullPath mismatch.", index));
+                state.Require(nativeMatch.relativePath == fallbackMatch.relativePath,
+                              std::format(L"Unicode/long-path match {} relativePath mismatch.", index));
+                state.Require(nativeMatch.displayName == fallbackMatch.displayName,
+                              std::format(L"Unicode/long-path match {} displayName mismatch.", index));
+                state.Require(nativeMatch.previewText == fallbackMatch.previewText,
+                              std::format(L"Unicode/long-path match {} previewText mismatch.", index));
+                state.Require(nativeMatch.matchedBy == fallbackMatch.matchedBy,
+                              std::format(L"Unicode/long-path match {} matchedBy mismatch.", index));
+                state.Require(nativeMatch.attributes == fallbackMatch.attributes,
+                              std::format(L"Unicode/long-path match {} attributes mismatch.", index));
+            }
+
+            const RecordedSearchMatch* unicodeMatch = FindRecordedSearchMatch(nativeMatches, L"rapport-équipe.txt");
+            state.Require(unicodeMatch != nullptr, L"Native Unicode/long-path search missing rapport-équipe.txt.");
+
+            const RecordedSearchMatch* deepUnicodeMatch = FindRecordedSearchMatch(nativeMatches, L"résultat-final.txt");
+            state.Require(deepUnicodeMatch != nullptr, L"Native Unicode/long-path search missing résultat-final.txt.");
+            if (deepUnicodeMatch != nullptr)
+            {
+                state.Require(deepUnicodeMatch->relativePath.find(L"résultat-final.txt") != std::wstring::npos,
+                              L"Unicode/long-path deep match should preserve the nested relative path.");
+                if (longPathCreated)
+                {
+                    state.Require(deepUnicodeMatch->fullPath.size() > 260u,
+                                  std::format(L"Expected a long-path match longer than MAX_PATH, got {} characters.", deepUnicodeMatch->fullPath.size()));
+                }
+            }
+
+            const auto nativeProgress   = nativeCallback.ProgressSnapshots();
+            const auto fallbackProgress = fallbackCallback.ProgressSnapshots();
+            const RecordedSearchProgress* nativeCompleted = FindRecordedSearchProgress(nativeProgress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            const RecordedSearchProgress* fallbackCompleted = FindRecordedSearchProgress(fallbackProgress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(nativeCompleted != nullptr, L"Native Unicode/long-path search missing completed progress.");
+            state.Require(fallbackCompleted != nullptr, L"Host fallback Unicode/long-path search missing completed progress.");
+            if (nativeCompleted != nullptr && fallbackCompleted != nullptr)
+            {
+                state.Require(nativeCompleted->backend == FILESYSTEM_SEARCH_BACKEND_INDEX,
+                              L"Native Unicode/long-path search should report index backend.");
+                state.Require(fallbackCompleted->backend == FILESYSTEM_SEARCH_BACKEND_SCAN,
+                              L"Host fallback Unicode/long-path search should report scan backend.");
+                state.Require((nativeCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) == 0u,
+                              L"Native Unicode/long-path search should not degrade on supported local roots.");
+                state.Require((fallbackCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) != 0u,
+                              L"Host fallback Unicode/long-path search should report degraded-no-index when PREFER_INDEX is requested.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"search_service_status_and_query_roundtrip",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_service_status_and_query", caseRoot),
+                          L"Failed to prepare search_service_status_and_query root.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+
+            const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+            const std::wstring pipeName             = MakeUniquePipeName();
+            state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                          L"Failed to override the search service pipe.");
+            const auto restorePipeOverride = wil::scope_exit([&] noexcept
+            {
+                const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+                static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+            });
+
+            ForegroundSearchServiceProcess service;
+            std::wstring serviceError;
+            state.Require(service.Start(pipeName, 8u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            SearchServiceBroker::ServiceStatus status{};
+            HRESULT hr = SearchServiceBroker::GetStatus(status);
+            state.Require(SUCCEEDED(hr), std::format(L"SearchServiceBroker::GetStatus failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr))
+            {
+                return false;
+            }
+
+            state.Require(status.protocolVersion == SearchServiceBroker::kProtocolVersion, L"Search service status reported an unexpected protocol version.");
+            state.Require(status.pipeName == pipeName, L"Search service status reported an unexpected pipe name.");
+            state.Require(! status.storageRootDirectory.empty(), L"Search service status should report a storage root.");
+            state.Require(EqualsIgnoreCase(status.storageRootDirectory, SearchServiceBroker::GetProgramDataSearchIndexRoot()),
+                          L"Search service should store index data under ProgramData.");
+
+            SearchServiceBroker::QueryRequest request{};
+            request.rootPath           = caseRoot.wstring();
+            request.namePattern        = L"*.txt";
+            request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            request.recursive          = true;
+            request.includeFiles       = true;
+            request.includeDirectories = false;
+
+            LocalSearchIndexCore::QueryStats stats{};
+            std::vector<LocalSearchIndexCore::Candidate> candidates;
+            hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, candidates, &stats);
+            state.Require(SUCCEEDED(hr), std::format(L"SearchServiceBroker::Query failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr))
+            {
+                return false;
+            }
+
+            state.Require(CollectIndexedCandidateNames(candidates) == std::vector<std::wstring>{L"alpha.txt"},
+                          L"Search service query returned an unexpected candidate set.");
+            state.Require(stats.candidateCount == 1u, L"Search service query should report one candidate.");
+            state.Require(stats.snapshotFileBytes != 0u, L"Search service query should report a non-zero snapshot size.");
+            state.Require(stats.estimatedMemoryBytes != 0u, L"Search service query should report a non-zero memory estimate.");
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_service_matches_host_fallback",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+            const std::wstring pipeName             = MakeUniquePipeName();
+            state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                          L"Failed to override the search service pipe.");
+            const auto restorePipeOverride = wil::scope_exit([&] noexcept
+            {
+                const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+                static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+            });
+
+            ForegroundSearchServiceProcess service;
+            std::wstring serviceError;
+            state.Require(service.Start(pipeName, 8u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+            state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                          std::format(L"Failed to create isolated local file system instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"Isolated local file system instance missing IInformations.");
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+            if (! info || ! search)
+            {
+                return false;
+            }
+
+            const HRESULT setHr = info->SetConfiguration("{\"searchBackendPreference\":\"auto\"}");
+            state.Require(SUCCEEDED(setHr), std::format(L"Failed to configure service-backed auto search. hr=0x{:08X}", static_cast<unsigned long>(setHr)));
+            if (FAILED(setHr))
+            {
+                return false;
+            }
+
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_service_matches_fallback", caseRoot),
+                          L"Failed to prepare search_service_matches_fallback root.");
+            state.Require(SelfTest::EnsureDirectory(caseRoot / L"sub"), L"Failed to create sub directory.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"report-one.txt", "alpha needle omega"), L"Failed to create report-one.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"report-two.txt", "prefix needle suffix"),
+                          L"Failed to create sub\\report-two.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"other.txt", "needle"), L"Failed to create other.txt.");
+
+            std::wstring rootText       = caseRoot.wstring();
+            std::wstring namePattern    = L"report*.txt";
+            std::wstring contentPattern = L"needle";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes            = sizeof(FileSystemSearchQuery);
+            query.rootPath             = rootText.c_str();
+            query.namePattern          = namePattern.c_str();
+            query.contentPattern       = contentPattern.c_str();
+            query.flags                = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES |
+                                                          FILESYSTEM_SEARCH_WANT_SNIPPETS);
+            query.nameMode             = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            query.contentMode          = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+            query.maxSnippetCharacters = 48u;
+
+            RecordingSearchCallback nativeCallback;
+            const HRESULT nativeHr = search->Search(&query, &nativeCallback, nullptr);
+            state.Require(SUCCEEDED(nativeHr), std::format(L"Service-backed plugin search failed. hr=0x{:08X}", static_cast<unsigned long>(nativeHr)));
+            if (FAILED(nativeHr))
+            {
+                return false;
+            }
+
+            RecordingSearchCallback fallbackCallback;
+            const HRESULT fallbackHr = SearchFallbackEngine::Execute(created.fileSystem.get(), &query, &fallbackCallback, nullptr);
+            state.Require(SUCCEEDED(fallbackHr), std::format(L"Host fallback search failed. hr=0x{:08X}", static_cast<unsigned long>(fallbackHr)));
+            if (FAILED(fallbackHr))
+            {
+                return false;
+            }
+
+            auto nativeMatches   = nativeCallback.Matches();
+            auto fallbackMatches = fallbackCallback.Matches();
+            const auto compareMatch = [](const RecordedSearchMatch& left, const RecordedSearchMatch& right) noexcept
+            {
+                return std::tie(left.fullPath, left.relativePath, left.displayName, left.previewText, left.matchedBy, left.attributes) <
+                       std::tie(right.fullPath, right.relativePath, right.displayName, right.previewText, right.matchedBy, right.attributes);
+            };
+            std::sort(nativeMatches.begin(), nativeMatches.end(), compareMatch);
+            std::sort(fallbackMatches.begin(), fallbackMatches.end(), compareMatch);
+            state.Require(nativeMatches.size() == fallbackMatches.size(), L"Service-backed native search should match host fallback result count.");
+            for (size_t index = 0; index < nativeMatches.size() && index < fallbackMatches.size(); ++index)
+            {
+                state.Require(nativeMatches[index].fullPath == fallbackMatches[index].fullPath, std::format(L"Service-backed match {} fullPath mismatch.", index));
+                state.Require(nativeMatches[index].relativePath == fallbackMatches[index].relativePath,
+                              std::format(L"Service-backed match {} relativePath mismatch.", index));
+                state.Require(nativeMatches[index].displayName == fallbackMatches[index].displayName,
+                              std::format(L"Service-backed match {} displayName mismatch.", index));
+                state.Require(nativeMatches[index].previewText == fallbackMatches[index].previewText,
+                              std::format(L"Service-backed match {} previewText mismatch.", index));
+                state.Require(nativeMatches[index].matchedBy == fallbackMatches[index].matchedBy,
+                              std::format(L"Service-backed match {} matchedBy mismatch.", index));
+                state.Require(nativeMatches[index].attributes == fallbackMatches[index].attributes,
+                              std::format(L"Service-backed match {} attributes mismatch.", index));
+            }
+
+            const auto nativeProgress = nativeCallback.ProgressSnapshots();
+            const RecordedSearchProgress* nativeCompleted = FindRecordedSearchProgress(nativeProgress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(nativeCompleted != nullptr, L"Service-backed native search missing completed progress.");
+            if (nativeCompleted != nullptr)
+            {
+                state.Require(nativeCompleted->backend == FILESYSTEM_SEARCH_BACKEND_SERVICE,
+                              L"Service-backed native search should report the service backend.");
+                state.Require((nativeCompleted->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) == 0u,
+                              L"Service-backed native search should not degrade on a healthy service.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_service_protocol_mismatch_falls_back_local_index",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+            const std::wstring pipeName             = MakeUniquePipeName();
+            state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                          L"Failed to override the search service pipe.");
+            const auto restorePipeOverride = wil::scope_exit([&] noexcept
+            {
+                const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+                static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+            });
+
+            ForegroundSearchServiceProcess service;
+            std::wstring serviceError;
+            state.Require(service.Start(pipeName, 6u, 0u, SearchServiceBroker::kProtocolVersion + 1u, false, serviceError), serviceError);
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+            state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                          std::format(L"Failed to create isolated local file system instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"Isolated local file system instance missing IInformations.");
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+            if (! info || ! search)
+            {
+                return false;
+            }
+
+            const HRESULT setHr = info->SetConfiguration("{\"searchBackendPreference\":\"auto\"}");
+            state.Require(SUCCEEDED(setHr), std::format(L"Failed to configure auto search. hr=0x{:08X}", static_cast<unsigned long>(setHr)));
+
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_service_protocol_mismatch", caseRoot),
+                          L"Failed to prepare search_service_protocol_mismatch root.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"pref.txt", "preference"), L"Failed to create pref.txt.");
+
+            std::wstring rootText    = caseRoot.wstring();
+            std::wstring namePattern = L"*.txt";
+            FileSystemSearchQuery query{};
+            query.sizeBytes   = sizeof(FileSystemSearchQuery);
+            query.rootPath    = rootText.c_str();
+            query.namePattern = namePattern.c_str();
+            query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+
+            RecordingSearchCallback callback;
+            const HRESULT searchHr = search->Search(&query, &callback, nullptr);
+            state.Require(SUCCEEDED(searchHr), std::format(L"Search with protocol-mismatched service failed. hr=0x{:08X}", static_cast<unsigned long>(searchHr)));
+
+            const RecordedSearchProgress* completed = FindRecordedSearchProgress(callback.ProgressSnapshots(), FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(completed != nullptr, L"Search with protocol-mismatched service missing completed progress.");
+            if (completed != nullptr)
+            {
+                state.Require(completed->backend != FILESYSTEM_SEARCH_BACKEND_SERVICE,
+                              L"Protocol mismatch should not leave the search on the service backend.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"local_search_service_disconnect_falls_back_local_index",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+            const std::wstring pipeName             = MakeUniquePipeName();
+            state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                          L"Failed to override the search service pipe.");
+            const auto restorePipeOverride = wil::scope_exit([&] noexcept
+            {
+                const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+                static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+            });
+
+            ForegroundSearchServiceProcess service;
+            std::wstring serviceError;
+            state.Require(service.Start(pipeName, 8u, 1u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            CreatedFileSystemInstance created{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltinLocalFileSystemId, {}, created);
+            state.Require(SUCCEEDED(createHr) && created.fileSystem,
+                          std::format(L"Failed to create isolated local file system instance. hr=0x{:08X}", static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! created.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IInformations> info;
+            state.Require(CreateInformations(created.fileSystem, info), L"Isolated local file system instance missing IInformations.");
+            wil::com_ptr<IFileSystemSearch> search;
+            state.Require(CreateFileSystemSearch(created.fileSystem, search), L"Isolated local file system instance missing IFileSystemSearch.");
+            if (! info || ! search)
+            {
+                return false;
+            }
+
+            const HRESULT setHr = info->SetConfiguration("{\"searchBackendPreference\":\"auto\"}");
+            state.Require(SUCCEEDED(setHr), std::format(L"Failed to configure auto search. hr=0x{:08X}", static_cast<unsigned long>(setHr)));
+
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_service_disconnect", caseRoot),
+                          L"Failed to prepare search_service_disconnect root.");
+            for (int index = 0; index < 400; ++index)
+            {
+                state.Require(SelfTest::WriteTextFile(caseRoot / std::format(L"file-{:03}.txt", index), "value"),
+                              L"Failed to create a disconnect-fallback test file.");
+            }
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            std::wstring rootText    = caseRoot.wstring();
+            std::wstring namePattern = L"*.txt";
+            FileSystemSearchQuery query{};
+            query.sizeBytes   = sizeof(FileSystemSearchQuery);
+            query.rootPath    = rootText.c_str();
+            query.namePattern = namePattern.c_str();
+            query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+
+            RecordingSearchCallback callback;
+            const HRESULT searchHr = search->Search(&query, &callback, nullptr);
+            state.Require(SUCCEEDED(searchHr), std::format(L"Search with disconnecting service failed. hr=0x{:08X}", static_cast<unsigned long>(searchHr)));
+            if (FAILED(searchHr))
+            {
+                return false;
+            }
+
+            const auto matches = callback.Matches();
+            state.Require(matches.size() == 400u, std::format(L"Disconnect fallback search expected 400 matches, got {}.", matches.size()));
+
+            const RecordedSearchProgress* completed = FindRecordedSearchProgress(callback.ProgressSnapshots(), FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(completed != nullptr, L"Disconnect fallback search missing completed progress.");
+            if (completed != nullptr)
+            {
+                state.Require(completed->backend != FILESYSTEM_SEARCH_BACKEND_SERVICE,
+                              L"Disconnecting service should not leave the search on the service backend.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"search_service_multi_client_and_rebuild_control",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"search_service_multi_client", caseRoot),
+                          L"Failed to prepare search_service_multi_client root.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "alpha"), L"Failed to create alpha.txt.");
+
+            const std::wstring previousPipeOverride = GetEnvVarTrimmed(SearchServiceBroker::kPipeNameEnvVar);
+            const std::wstring pipeName             = MakeUniquePipeName();
+            state.Require(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, pipeName.c_str()) != 0,
+                          L"Failed to override the search service pipe.");
+            const auto restorePipeOverride = wil::scope_exit([&] noexcept
+            {
+                const wchar_t* restoreValue = previousPipeOverride.empty() ? nullptr : previousPipeOverride.c_str();
+                static_cast<void>(::SetEnvironmentVariableW(SearchServiceBroker::kPipeNameEnvVar, restoreValue));
+            });
+
+            ForegroundSearchServiceProcess service;
+            std::wstring serviceError;
+            state.Require(service.Start(pipeName, 12u, 0u, SearchServiceBroker::kProtocolVersion, true, serviceError), serviceError);
+            if (! state.failure.empty())
+            {
+                return false;
+            }
+
+            SearchServiceBroker::QueryRequest request{};
+            request.rootPath           = caseRoot.wstring();
+            request.namePattern        = L"*.txt";
+            request.nameMode           = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            request.flags              = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            request.recursive          = true;
+            request.includeFiles       = true;
+            request.includeDirectories = false;
+
+            struct QueryOutcome final
+            {
+                HRESULT hr = E_FAIL;
+                std::vector<LocalSearchIndexCore::Candidate> candidates;
+            };
+
+            std::array<QueryOutcome, 2> outcomes{};
+            std::jthread clientA([&]() noexcept
+            {
+                LocalSearchIndexCore::QueryStats stats{};
+                outcomes[0].hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, outcomes[0].candidates, &stats);
+            });
+            std::jthread clientB([&]() noexcept
+            {
+                LocalSearchIndexCore::QueryStats stats{};
+                outcomes[1].hr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, outcomes[1].candidates, &stats);
+            });
+
+            clientA.join();
+            clientB.join();
+
+            for (size_t index = 0; index < outcomes.size(); ++index)
+            {
+                state.Require(SUCCEEDED(outcomes[index].hr),
+                              std::format(L"Service query {} failed. hr=0x{:08X}", index, static_cast<unsigned long>(outcomes[index].hr)));
+                state.Require(CollectIndexedCandidateNames(outcomes[index].candidates) == std::vector<std::wstring>{L"alpha.txt"},
+                              std::format(L"Service query {} returned an unexpected candidate set.", index));
+            }
+
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"beta.txt", "beta"), L"Failed to create beta.txt.");
+            const HRESULT rebuildHr = SearchServiceBroker::RequestRebuild(caseRoot.wstring());
+            state.Require(SUCCEEDED(rebuildHr), std::format(L"SearchServiceBroker::RequestRebuild failed. hr=0x{:08X}", static_cast<unsigned long>(rebuildHr)));
+            if (FAILED(rebuildHr))
+            {
+                return false;
+            }
+
+            LocalSearchIndexCore::QueryStats rebuiltStats{};
+            std::vector<LocalSearchIndexCore::Candidate> rebuiltCandidates;
+            const HRESULT queryHr = SearchServiceBroker::Query(request, nullptr, nullptr, nullptr, nullptr, rebuiltCandidates, &rebuiltStats);
+            state.Require(SUCCEEDED(queryHr), std::format(L"Search service query after rebuild failed. hr=0x{:08X}", static_cast<unsigned long>(queryHr)));
+            state.Require(CollectIndexedCandidateNames(rebuiltCandidates) == std::vector<std::wstring>{L"alpha.txt", L"beta.txt"},
+                          L"Search service rebuild control should refresh the indexed candidate set.");
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"search_text_helpers_decoding_and_binary",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            const auto makeBytes = [](std::initializer_list<uint8_t> values) noexcept
+            {
+                std::vector<std::byte> bytes;
+                bytes.reserve(values.size());
+                for (const uint8_t value : values)
+                {
+                    bytes.push_back(static_cast<std::byte>(value));
+                }
+                return bytes;
+            };
+
+            SearchTextHelpers::DecodedTextResult decoded{};
+
+            const auto utf8Bom = makeBytes({0xEFu, 0xBBu, 0xBFu, static_cast<uint8_t>('h'), static_cast<uint8_t>('i')});
+            state.Require(SearchTextHelpers::TryDecodeSearchableText(utf8Bom, 0u, decoded), L"UTF-8 BOM text should decode.");
+            state.Require(decoded.encoding == SearchTextHelpers::DecodedTextEncoding::Utf8, L"UTF-8 BOM should report UTF-8 encoding.");
+            state.Require(decoded.text == L"hi", L"UTF-8 BOM decoded text mismatch.");
+
+            const auto utf16Le = makeBytes({0xFFu, 0xFEu, static_cast<uint8_t>('o'), 0x00u, static_cast<uint8_t>('k'), 0x00u});
+            state.Require(SearchTextHelpers::TryDecodeSearchableText(utf16Le, 0u, decoded), L"UTF-16 LE text should decode.");
+            state.Require(decoded.encoding == SearchTextHelpers::DecodedTextEncoding::Utf16Le, L"UTF-16 LE should report UTF-16 LE encoding.");
+            state.Require(decoded.text == L"ok", L"UTF-16 LE decoded text mismatch.");
+
+            const auto utf32Le = makeBytes(
+                {0xFFu, 0xFEu, 0x00u, 0x00u, static_cast<uint8_t>('A'), 0x00u, 0x00u, 0x00u, static_cast<uint8_t>('B'), 0x00u, 0x00u, 0x00u});
+            state.Require(SearchTextHelpers::TryDecodeSearchableText(utf32Le, 0u, decoded), L"UTF-32 LE text should decode.");
+            state.Require(decoded.encoding == SearchTextHelpers::DecodedTextEncoding::Utf32Le, L"UTF-32 LE should report UTF-32 LE encoding.");
+            state.Require(decoded.text == L"AB", L"UTF-32 LE decoded text mismatch.");
+
+            const auto binary = makeBytes({static_cast<uint8_t>('A'), 0x00u, static_cast<uint8_t>('B'), static_cast<uint8_t>('C')});
+            state.Require(! SearchTextHelpers::TryDecodeSearchableText(binary, 0u, decoded), L"Binary data should not decode as searchable text.");
+            state.Require(decoded.binary, L"Binary data should set the binary flag.");
+
+            const auto ansi = makeBytes({0xE9u});
+            state.Require(SearchTextHelpers::TryDecodeSearchableText(ansi, 1252u, decoded), L"ANSI fallback should decode CP-1252 text.");
+            state.Require(decoded.encoding == SearchTextHelpers::DecodedTextEncoding::Ansi, L"ANSI fallback should report ANSI encoding.");
+            state.Require(decoded.usedFallbackCodePage, L"ANSI fallback should record fallback code page usage.");
+            state.Require(decoded.text == L"\u00E9", L"ANSI fallback decoded text mismatch.");
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"search_text_helpers_chunk_overlap_literal_and_regex",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            size_t literalPos = std::wstring_view::npos;
+            const bool literalFound =
+                SearchTextHelpers::FindLiteralWithChunkOverlap(L"aaaaXYZneedlez", L"XYZneedle", true, 4u, literalPos);
+            state.Require(literalFound, L"Chunk-overlap literal search should find cross-chunk matches.");
+            state.Require(literalPos == 4u, std::format(L"Chunk-overlap literal match position mismatch. got={}", literalPos));
+
+            SearchTextHelpers::DecodedTextResult decoded{};
+            decoded.text     = L"prefix abc123 suffix";
+            decoded.encoding = SearchTextHelpers::DecodedTextEncoding::Utf8;
+
+            const std::wregex regex(L"abc\\d+");
+            SearchTextHelpers::TextSearchPattern pattern{};
+            pattern.mode          = FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX;
+            pattern.pattern       = L"abc\\d+";
+            pattern.compiledRegex = &regex;
+            pattern.caseSensitive = true;
+
+            SearchTextHelpers::TextSearchResult result{};
+            state.Require(SearchTextHelpers::MatchDecodedText(decoded, pattern, 32u, true, result), L"Regex helper should match decoded text.");
+            state.Require(result.matched, L"Regex helper should report a match.");
+            state.Require(result.matchOffset == 7u, std::format(L"Regex helper offset mismatch. got={}", result.matchOffset));
+            state.Require(result.matchLength == 6u, std::format(L"Regex helper length mismatch. got={}", result.matchLength));
+            state.Require(result.previewText.find(L"abc123") != std::wstring::npos, L"Regex helper snippet should include the match.");
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"host_fallback_search_local_plugin_path_root",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"host_fallback_local_path_root", caseRoot),
+                          L"Failed to prepare host_fallback_local_path_root root.");
+            state.Require(SelfTest::EnsureDirectory(caseRoot / L"sub"), L"Failed to create sub directory.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"alpha.txt", "needle alpha"), L"Failed to create alpha.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"beta.log", "needle beta"), L"Failed to create beta.log.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"sub" / L"gamma.txt", "needle gamma"), L"Failed to create sub\\gamma.txt.");
+
+            const wil::com_ptr<IFileSystem> wrappedFs = CreatePluginPathMappedRootFileSystem(baseFs, caseRoot);
+            state.Require(static_cast<bool>(wrappedFs), L"Failed to create plugin-path mapped filesystem wrapper.");
+            if (! wrappedFs)
+            {
+                return false;
+            }
+
+            const std::wstring namePattern    = L"*.txt";
+            const std::wstring contentPattern = L"needle";
+            const std::wstring rootText       = L"/";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes           = sizeof(FileSystemSearchQuery);
+            query.rootPath            = rootText.c_str();
+            query.namePattern         = namePattern.c_str();
+            query.contentPattern      = contentPattern.c_str();
+            query.flags               = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES |
+                                                        FILESYSTEM_SEARCH_WANT_SNIPPETS | FILESYSTEM_SEARCH_PREFER_INDEX);
+            query.nameMode            = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            query.contentMode         = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+            query.maxSnippetCharacters = 48u;
+
+            RecordingSearchCallback callback;
+            const HRESULT hr = SearchFallbackEngine::Execute(wrappedFs.get(), &query, &callback, nullptr);
+            state.Require(SUCCEEDED(hr), std::format(L"Host fallback local path-root search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            const auto matches = callback.Matches();
+            state.Require(matches.size() == 2u, std::format(L"Host fallback local path-root search expected 2 matches, got {}.", matches.size()));
+
+            const RecordedSearchMatch* alphaMatch = FindRecordedSearchMatch(matches, L"alpha.txt");
+            state.Require(alphaMatch != nullptr, L"Host fallback local path-root search missing alpha.txt.");
+            if (alphaMatch != nullptr)
+            {
+                state.Require(alphaMatch->previewText.find(L"needle") != std::wstring::npos, L"alpha.txt snippet should include the matched token.");
+            }
+
+            const RecordedSearchMatch* gammaMatch = FindRecordedSearchMatch(matches, L"gamma.txt");
+            state.Require(gammaMatch != nullptr, L"Host fallback local path-root search missing gamma.txt.");
+            if (gammaMatch != nullptr)
+            {
+                state.Require(gammaMatch->relativePath == L"sub/gamma.txt", L"gamma.txt relative path should preserve plugin separators.");
+                state.Require((gammaMatch->matchedBy & FILESYSTEM_SEARCH_MATCH_SOURCE_NAME) != 0u, L"gamma.txt should include the name match source.");
+                state.Require((gammaMatch->matchedBy & FILESYSTEM_SEARCH_MATCH_SOURCE_CONTENT) != 0u, L"gamma.txt should include the content match source.");
+            }
+
+            const auto progress = callback.ProgressSnapshots();
+            const RecordedSearchProgress* completed = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(completed != nullptr, L"Host fallback local path-root search missing completed progress.");
+            if (completed != nullptr)
+            {
+                state.Require(completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN, L"Host fallback local path-root search should report scan backend.");
+                state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX) != 0u,
+                              L"Host fallback local path-root search should report degraded-no-index when PREFER_INDEX is requested.");
+                state.Require(completed->matchedEntries == 2u, std::format(L"Completed progress matchedEntries mismatch. got={}", completed->matchedEntries));
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"host_fallback_search_content_degraded_without_io",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"host_fallback_no_io", caseRoot), L"Failed to prepare host_fallback_no_io root.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"plain.txt", "needle"), L"Failed to create plain.txt.");
+
+            const wil::com_ptr<IFileSystem> wrappedFs = CreatePluginPathMappedRootFileSystemNoIO(baseFs, caseRoot);
+            state.Require(static_cast<bool>(wrappedFs), L"Failed to create no-IO plugin-path mapped filesystem wrapper.");
+            if (! wrappedFs)
+            {
+                return false;
+            }
+
+            const std::wstring rootText       = L"/";
+            const std::wstring contentPattern = L"needle";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes      = sizeof(FileSystemSearchQuery);
+            query.rootPath       = rootText.c_str();
+            query.contentPattern = contentPattern.c_str();
+            query.flags          = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode       = FILESYSTEM_SEARCH_NAME_DISABLED;
+            query.contentMode    = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+
+            RecordingSearchCallback callback;
+            const HRESULT hr = SearchFallbackEngine::Execute(wrappedFs.get(), &query, &callback, nullptr);
+            state.Require(SUCCEEDED(hr), std::format(L"Host fallback no-IO content search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            state.Require(callback.Matches().empty(), L"Host fallback no-IO content search should not report matches.");
+
+            const auto progress = callback.ProgressSnapshots();
+            const RecordedSearchProgress* completed = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(completed != nullptr, L"Host fallback no-IO content search missing completed progress.");
+            if (completed != nullptr)
+            {
+                state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_CONTENT) != 0u,
+                              L"Host fallback no-IO content search should report degraded-no-content.");
+                state.Require(completed->statusHint == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED),
+                              std::format(L"Host fallback no-IO content search statusHint mismatch. hr=0x{:08X}",
+                                          static_cast<unsigned long>(completed->statusHint)));
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"host_fallback_search_access_denied_warning",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"host_fallback_access_denied", caseRoot),
+                          L"Failed to prepare host_fallback_access_denied root.");
+            state.Require(SelfTest::EnsureDirectory(caseRoot / L"blocked"), L"Failed to create blocked directory.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"allowed.txt", "allowed"), L"Failed to create allowed.txt.");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"blocked" / L"hidden.txt", "hidden"), L"Failed to create blocked\\hidden.txt.");
+
+            ReadDirectoryTestBehavior behavior{};
+            behavior.targetPath = caseRoot / L"blocked";
+            behavior.forcedHr   = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+
+            const wil::com_ptr<IFileSystem> wrappedFs = CreateReadDirectoryBehaviorFileSystem(baseFs, behavior);
+            state.Require(static_cast<bool>(wrappedFs), L"Failed to create access-denied ReadDirectoryInfo wrapper.");
+            if (! wrappedFs)
+            {
+                return false;
+            }
+
+            const std::wstring rootText    = caseRoot.wstring();
+            const std::wstring namePattern = L"*.txt";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes   = sizeof(FileSystemSearchQuery);
+            query.rootPath    = rootText.c_str();
+            query.namePattern = namePattern.c_str();
+            query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+            query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+
+            RecordingSearchCallback callback;
+            const HRESULT hr = SearchFallbackEngine::Execute(wrappedFs.get(), &query, &callback, nullptr);
+            state.Require(SUCCEEDED(hr),
+                          std::format(L"Host fallback access-denied search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+            if (FAILED(hr))
+            {
+                return false;
+            }
+
+            const auto matches = callback.Matches();
+            state.Require(matches.size() == 1u, std::format(L"Host fallback access-denied search expected 1 match, got {}.", matches.size()));
+            state.Require(FindRecordedSearchMatch(matches, L"allowed.txt") != nullptr,
+                          L"Host fallback access-denied search missing allowed.txt.");
+            state.Require(FindRecordedSearchMatch(matches, L"hidden.txt") == nullptr,
+                          L"Host fallback access-denied search should skip blocked\\hidden.txt.");
+
+            const auto progress = callback.ProgressSnapshots();
+            const RecordedSearchProgress* completed = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(completed != nullptr, L"Host fallback access-denied search missing completed progress.");
+            if (completed != nullptr)
+            {
+                state.Require(completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN,
+                              L"Host fallback access-denied search should report scan backend.");
+                state.Require((completed->warningFlags & FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED) != 0u,
+                              L"Host fallback access-denied search should report access-denied-skipped.");
+                state.Require(completed->matchedEntries == 1u,
+                              std::format(L"Host fallback access-denied search matchedEntries mismatch. got={}", completed->matchedEntries));
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"host_fallback_search_short_read_and_cancel",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            std::filesystem::path caseRoot;
+            state.Require(PrepareSearchCaseRoot(root, L"host_fallback_short_read_cancel", caseRoot),
+                          L"Failed to prepare host_fallback_short_read_cancel root.");
+
+            std::string payload(512u * 1024u, 'a');
+            payload.replace(260u * 1024u, 6u, "needle");
+            state.Require(SelfTest::WriteTextFile(caseRoot / L"big.txt", payload), L"Failed to create big.txt.");
+
+            const wil::com_ptr<IFileSystem> wrappedFs =
+                CreateShortReadFileSystem(baseFs, caseRoot, 1024u, static_cast<DWORD>(SelfTest::ScaleTimeout(1)));
+            state.Require(static_cast<bool>(wrappedFs), L"Failed to create short-read filesystem wrapper.");
+            if (! wrappedFs)
+            {
+                return false;
+            }
+
+            const std::wstring rootText       = caseRoot.wstring();
+            const std::wstring contentPattern = L"needle";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes           = sizeof(FileSystemSearchQuery);
+            query.rootPath            = rootText.c_str();
+            query.contentPattern      = contentPattern.c_str();
+            query.flags               = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode            = FILESYSTEM_SEARCH_NAME_DISABLED;
+            query.contentMode         = FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL;
+            query.maxContentBytesPerFile = SearchTextHelpers::kDefaultContentBytesPerFile;
+
+            RecordingSearchCallback callback(RecordingSearchCallback::Mode::Success, 4u);
+            const HRESULT hr = SearchFallbackEngine::Execute(wrappedFs.get(), &query, &callback, nullptr);
+            state.Require(hr == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                          std::format(L"Host fallback short-read cancel search expected ERROR_CANCELLED. hr=0x{:08X}",
+                                      static_cast<unsigned long>(hr)));
+            state.Require(callback.CancelCalls() >= 4u,
+                          std::format(L"Host fallback short-read cancel search expected repeated cancel polling. calls={}", callback.CancelCalls()));
+
+            const auto progress = callback.ProgressSnapshots();
+            const RecordedSearchProgress* contentScan = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_CONTENT_SCAN);
+            state.Require(contentScan != nullptr, L"Host fallback short-read cancel search should enter content-scan phase.");
+            const RecordedSearchProgress* completed = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(completed != nullptr, L"Host fallback short-read cancel search missing completed progress.");
+            if (completed != nullptr)
+            {
+                state.Require(completed->statusHint == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                              std::format(L"Host fallback short-read cancel search statusHint mismatch. hr=0x{:08X}",
+                                          static_cast<unsigned long>(completed->statusHint)));
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"host_fallback_search_dummy_name_only",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            state.Require(dummyFs && dummyIo && dummyOps, L"Dummy filesystem setup is incomplete.");
+            if (! dummyFs || ! dummyIo || ! dummyOps)
+            {
+                return false;
+            }
+
+            const std::filesystem::path rootPath = std::filesystem::path(L"/") / L"search_dummy_name_only";
+            const std::filesystem::path filePath = rootPath / L"probe.txt";
+            state.Require(EnsureDirectoryExistsFsOps(dummyOps, rootPath), L"Failed to create dummy search root.");
+            state.Require(WriteFileTextFsIo(dummyIo, filePath, "dummy-search"), L"Failed to create dummy probe.txt.");
+
+            const std::wstring rootText    = ToPluginPathText(rootPath);
+            const std::wstring namePattern = L"probe.txt";
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes   = sizeof(FileSystemSearchQuery);
+            query.rootPath    = rootText.c_str();
+            query.namePattern = namePattern.c_str();
+            query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode    = FILESYSTEM_SEARCH_NAME_LITERAL;
+            query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+            query.maxResults  = 1u;
+
+            RecordingSearchCallback callback;
+            const HRESULT hr = SearchFallbackEngine::Execute(dummyFs.get(), &query, &callback, nullptr);
+            state.Require(SUCCEEDED(hr), std::format(L"Host fallback dummy name-only search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            const auto matches = callback.Matches();
+            state.Require(matches.size() == 1u, std::format(L"Host fallback dummy name-only search expected 1 match, got {}.", matches.size()));
+            const RecordedSearchMatch* probeMatch = FindRecordedSearchMatch(matches, L"probe.txt");
+            state.Require(probeMatch != nullptr, L"Host fallback dummy name-only search missing probe.txt.");
+
+            const auto progress = callback.ProgressSnapshots();
+            const RecordedSearchProgress* completed = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+            state.Require(completed != nullptr, L"Host fallback dummy name-only search missing completed progress.");
+            if (completed != nullptr)
+            {
+                state.Require(completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN, L"Host fallback dummy name-only search should report scan backend.");
+            }
+
+            return state.failure.empty();
+        });
+
+        SelfTest::RunCase(options,
+                          suite,
+                          L"host_fallback_search_7z_name_only",
+                          [&](SelfTest::CaseState& state) noexcept
+        {
+            CreatedFileSystemInstance archiveCreated{};
+            const HRESULT createHr = TryCreateFileSystemInstance(kBuiltin7zFileSystemId, {}, archiveCreated);
+            state.Require(SUCCEEDED(createHr) && archiveCreated.fileSystem,
+                          std::format(L"Host fallback 7z name-only search: failed to create filesystem instance. hr=0x{:08X}",
+                                      static_cast<unsigned long>(createHr)));
+            if (FAILED(createHr) || ! archiveCreated.fileSystem)
+            {
+                return false;
+            }
+
+            wil::com_ptr<IFileSystemInitialize> init;
+            const HRESULT initQiHr = archiveCreated.fileSystem->QueryInterface(IID_PPV_ARGS(init.put()));
+            state.Require(SUCCEEDED(initQiHr) && init, L"Host fallback 7z name-only search: missing IFileSystemInitialize.");
+            if (FAILED(initQiHr) || ! init)
+            {
+                return false;
+            }
+
+            const std::filesystem::path archivePath = GetWorkspaceRootFromSourcePath() / L"Plugins" / L"FileSystem7z" / L"Tests" / L"Tests.zip";
+            state.Require(SelfTest::PathExists(archivePath), std::format(L"Host fallback 7z name-only search: fixture archive missing: {}", archivePath.wstring()));
+            if (! SelfTest::PathExists(archivePath))
+            {
+                return false;
+            }
+
+            const HRESULT initHr = init->Initialize(archivePath.c_str(), nullptr);
+            state.Require(SUCCEEDED(initHr), std::format(L"Host fallback 7z name-only search: Initialize failed. hr=0x{:08X}",
+                                                         static_cast<unsigned long>(initHr)));
+            if (FAILED(initHr))
+            {
+                return false;
+            }
+
+            const auto filePathOpt = FindFirstRegularEntryPath(archiveCreated.fileSystem, L"/");
+            state.Require(filePathOpt.has_value(), L"Host fallback 7z name-only search: no regular file found in fixture archive.");
+            if (! filePathOpt.has_value())
+            {
+                return false;
+            }
+
+            const std::filesystem::path regularPath(filePathOpt.value());
+            const std::wstring leafName = regularPath.filename().wstring();
+            state.Require(! leafName.empty(), L"Host fallback 7z name-only search: failed to derive a leaf name from the fixture path.");
+            if (leafName.empty())
+            {
+                return false;
+            }
+
+            FileSystemSearchQuery query{};
+            query.sizeBytes   = sizeof(FileSystemSearchQuery);
+            query.rootPath    = L"/";
+            query.namePattern = leafName.c_str();
+            query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_RECURSIVE | FILESYSTEM_SEARCH_INCLUDE_FILES);
+            query.nameMode    = FILESYSTEM_SEARCH_NAME_LITERAL;
+            query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+            query.maxResults  = 1u;
+
+            RecordingSearchCallback callback;
+            const HRESULT hr = SearchFallbackEngine::Execute(archiveCreated.fileSystem.get(), &query, &callback, nullptr);
+            state.Require(SUCCEEDED(hr), std::format(L"Host fallback 7z name-only search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+
+            const auto matches = callback.Matches();
+            state.Require(! matches.empty(), L"Host fallback 7z name-only search expected at least one match.");
+            if (! matches.empty())
+            {
+                state.Require(std::wstring_view(matches.front().displayName) == leafName, L"Host fallback 7z name-only search matched the wrong leaf.");
+            }
+
+            return state.failure.empty();
+        });
+
+        const auto runRemoteFallbackNameOnlySmoke = [&](std::wstring_view caseName,
+                                                        std::wstring_view protocolLabel,
+                                                        std::wstring_view envVarName,
+                                                        std::wstring_view defaultProfileName,
+                                                        std::wstring_view pluginId) noexcept
+        {
+            if (options.failFast && suite.failed != 0)
+            {
+                AppendCaseResult(suite, caseName, SelfTest::SelfTestCaseResult::Status::skipped, L"not executed (fail-fast)");
+                return;
+            }
+
+            const PhaseCheckResult secretOutcome = CheckRemoteConnectionSecret(protocolLabel, envVarName, defaultProfileName, pluginId);
+            if (secretOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, secretOutcome.status, secretOutcome.reason);
+                return;
+            }
+
+            const PhaseCheckResult sandboxOutcome = CheckRemoteConnectionSandbox(protocolLabel, envVarName, defaultProfileName, pluginId);
+            if (sandboxOutcome.status != SelfTest::SelfTestCaseResult::Status::passed)
+            {
+                AppendCaseResult(suite, caseName, sandboxOutcome.status, sandboxOutcome.reason);
+                return;
+            }
+
+            SelfTest::RunCase(options,
+                              suite,
+                              caseName,
+                              [&](SelfTest::CaseState& state) noexcept
+            {
+                const ResolvedRemoteProfile resolved = ResolveRemoteConnectionProfile(envVarName, defaultProfileName, pluginId);
+                state.Require(resolved.profile != nullptr, L"Remote fallback smoke: connection profile not found after gates passed.");
+                if (! resolved.profile)
+                {
+                    return false;
+                }
+
+                CreatedFileSystemInstance remoteCreated{};
+                const HRESULT createHr = TryCreateFileSystemInstance(pluginId, {}, remoteCreated);
+                state.Require(SUCCEEDED(createHr) && remoteCreated.fileSystem,
+                              std::format(L"Remote fallback smoke: failed to create filesystem instance. hr=0x{:08X}",
+                                          static_cast<unsigned long>(createHr)));
+                if (FAILED(createHr) || ! remoteCreated.fileSystem)
+                {
+                    return false;
+                }
+
+                const std::wstring initialPath = NormalizePluginPathForSelfTest(resolved.profile->initialPath);
+                const std::wstring rootText    = MakeConnectionPathForSelfTest(resolved.profileName, initialPath);
+                state.Require(! rootText.empty(), L"Remote fallback smoke: failed to build connection-scoped search root.");
+                if (rootText.empty())
+                {
+                    return false;
+                }
+
+                FileSystemSearchQuery query{};
+                query.sizeBytes   = sizeof(FileSystemSearchQuery);
+                query.rootPath    = rootText.c_str();
+                query.namePattern = L"*";
+                query.flags       = static_cast<FileSystemSearchFlags>(FILESYSTEM_SEARCH_INCLUDE_FILES | FILESYSTEM_SEARCH_INCLUDE_DIRECTORIES);
+                query.nameMode    = FILESYSTEM_SEARCH_NAME_WILDCARD;
+                query.contentMode = FILESYSTEM_SEARCH_CONTENT_DISABLED;
+                query.maxResults  = 1u;
+
+                RecordingSearchCallback callback;
+                const HRESULT hr = SearchFallbackEngine::Execute(remoteCreated.fileSystem.get(), &query, &callback, nullptr);
+                state.Require(SUCCEEDED(hr), std::format(L"Remote fallback smoke search failed. hr=0x{:08X}", static_cast<unsigned long>(hr)));
+                state.Require(callback.ProgressCalls() >= 1u, L"Remote fallback smoke search expected progress callbacks.");
+
+                const auto progress = callback.ProgressSnapshots();
+                const RecordedSearchProgress* completed = FindRecordedSearchProgress(progress, FILESYSTEM_SEARCH_PHASE_COMPLETED);
+                state.Require(completed != nullptr, L"Remote fallback smoke search missing completed progress.");
+                if (completed != nullptr)
+                {
+                    state.Require(completed->backend == FILESYSTEM_SEARCH_BACKEND_SCAN, L"Remote fallback smoke search should report scan backend.");
+                }
+
+                return state.failure.empty();
+            });
+        };
+
+        runRemoteFallbackNameOnlySmoke(L"host_fallback_search_remote_ftp_name_only",
+                                       L"FTP",
+                                       kSelfTestEnvConnFtp,
+                                       kSelfTestDefaultConnFtp,
+                                       kBuiltinFtpFileSystemId);
+
         SelfTest::RunCase(options,
                           suite,
                           L"windows_hello_cache",
@@ -3919,7 +6504,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Unique files/dirs selected; identical excluded by default.
             if (const auto foldersOpt = CreateCaseFolders(root, L"unique"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"only_left.txt", "L"), L"Failed to create only_left.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"only_right.txt", "R"), L"Failed to create only_right.txt (right).");
                 state.Require(SelfTest::EnsureDirectory(folders.left / L"only_left_dir"), L"Failed to create only_left_dir (left).");
@@ -4010,7 +6595,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: File vs directory mismatch selects both sides.
             if (const auto foldersOpt = CreateCaseFolders(root, L"typemismatch"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"mix", "F"), L"Failed to create mix file (left).");
                 state.Require(SelfTest::EnsureDirectory(folders.right / L"mix"), L"Failed to create mix directory (right).");
 
@@ -4043,7 +6628,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Size compare selects bigger file.
             if (const auto foldersOpt = CreateCaseFolders(root, L"size"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(WriteFileFill(folders.left / L"a.bin", 'A', 200), L"Failed to create a.bin (left).");
                 state.Require(WriteFileFill(folders.right / L"a.bin", 'B', 100), L"Failed to create a.bin (right).");
 
@@ -4079,7 +6664,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Date/time compare selects newer file.
             if (const auto foldersOpt = CreateCaseFolders(root, L"time"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "T"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "T"), L"Failed to create a.txt (right).");
 
@@ -4129,7 +6714,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Attribute compare selects both sides.
             if (const auto foldersOpt = CreateCaseFolders(root, L"attributes"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "A"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "A"), L"Failed to create a.txt (right).");
 
@@ -4174,7 +6759,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Content compare selects both sides.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(WriteFileFill(folders.left / L"a.bin", 'X', 64), L"Failed to create a.bin (left).");
                 state.Require(WriteFileFill(folders.right / L"a.bin", 'Y', 64), L"Failed to create a.bin (right).");
 
@@ -4213,7 +6798,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Content compare uses the correct per-pane IFileSystemIO (dual-IO regression guard).
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_dual_io"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "AAAA"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "BBBB"), L"Failed to create a.txt (right).");
 
@@ -4260,7 +6845,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: compareContent is treated as disabled when either side lacks IFileSystemIO.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_no_io_disables_compareContent"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "AAAA"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "BBBB"), L"Failed to create a.txt (right).");
 
@@ -4310,7 +6895,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Content compare with different sizes does not mark ContentPending.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_size_mismatch_no_pending"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(WriteFileFill(folders.left / L"a.bin", 'X', 64), L"Failed to create a.bin (left).");
                 state.Require(WriteFileFill(folders.right / L"a.bin", 'X', 32), L"Failed to create a.bin (right).");
 
@@ -4348,7 +6933,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Content compare with zero vs non-zero size does not mark ContentPending.
             if (const auto foldersOpt = CreateCaseFolders(root, L"zero_vs_nonzero_content"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteBinaryFile(folders.left / L"a.bin", {}), L"Failed to create a.bin (left).");
                 state.Require(WriteFileFill(folders.right / L"a.bin", 'Z', 1), L"Failed to create a.bin (right).");
 
@@ -4386,7 +6971,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Unicode filenames (CJK + emoji) appear in decisions and content compare works.
             if (const auto foldersOpt = CreateCaseFolders(root, L"unicode_filenames"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"\u3053\u3093\u306B\u3061\u306F.txt", "JP"), L"Failed to create こんにちは.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"\u3053\u3093\u306B\u3061\u306F.txt", "JP"),
                               L"Failed to create こんにちは.txt (right).");
@@ -4440,7 +7025,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Content compare tolerates short reads for equal files.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_shortreads"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(WriteFileFill(folders.left / L"a.bin", 'Z', 4096), L"Failed to create a.bin (left).");
                 state.Require(WriteFileFill(folders.right / L"a.bin", 'Z', 4096), L"Failed to create a.bin (right).");
 
@@ -4485,7 +7070,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Subdirectory pending state + flush updates ancestors without navigation.
             if (const auto foldersOpt = CreateCaseFolders(root, L"subdir_pending"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::EnsureDirectory(folders.left / L"sub"), L"Failed to create sub (left).");
                 state.Require(SelfTest::EnsureDirectory(folders.right / L"sub"), L"Failed to create sub (right).");
                 state.Require(WriteFileFill(folders.left / L"sub" / L"a.bin", 'A', 512 * 1024), L"Failed to create sub\\a.bin (left).");
@@ -4627,7 +7212,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Subdirectory content compare selects both directories.
             if (const auto foldersOpt = CreateCaseFolders(root, L"subdirs"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::EnsureDirectory(folders.left / L"sub"), L"Failed to create sub (left).");
                 state.Require(SelfTest::EnsureDirectory(folders.right / L"sub"), L"Failed to create sub (right).");
                 state.Require(SelfTest::WriteTextFile(folders.left / L"sub" / L"child.txt", "C"), L"Failed to create sub\\child.txt (left).");
@@ -4671,7 +7256,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: GetOrComputeDecision() must not perform a synchronous deep subtree traversal.
             if (const auto foldersOpt = CreateCaseFolders(root, L"no_sync_deep_scan"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
 
                 const std::filesystem::path leftRoot  = folders.left;
                 const std::filesystem::path rightRoot = folders.right;
@@ -4715,7 +7300,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Compare attributes of subdirectories selects both.
             if (const auto foldersOpt = CreateCaseFolders(root, L"subdirattrs"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::EnsureDirectory(folders.left / L"sub"), L"Failed to create sub (left).");
                 state.Require(SelfTest::EnsureDirectory(folders.right / L"sub"), L"Failed to create sub (right).");
 
@@ -4761,7 +7346,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Missing folder is reported without failing the decision.
             if (const auto foldersOpt = CreateCaseFolders(root, L"missing_folder"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::EnsureDirectory(folders.left / L"sub"), L"Failed to create sub (left).");
                 state.Require(SelfTest::WriteTextFile(folders.left / L"sub" / L"a.txt", "A"), L"Failed to create sub\\a.txt (left).");
 
@@ -4792,7 +7377,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Reparse points are not traversed for subdirectory comparison.
             if (const auto foldersOpt = CreateCaseFolders(root, L"reparse"))
             {
-                const auto& folders                = *foldersOpt;
+                const auto& folders                = foldersOpt.value();
                 const std::filesystem::path target = folders.left / L"target";
                 state.Require(SelfTest::EnsureDirectory(target), L"Failed to create reparse target (left).");
                 state.Require(SelfTest::WriteTextFile(target / L"child.txt", "C"), L"Failed to create target\\child.txt (left).");
@@ -5045,7 +7630,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Concurrent GetOrComputeDecision and Invalidate does not crash and never returns null.
             if (const auto foldersOpt = CreateCaseFolders(root, L"concurrent_get_or_compute_decision"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "A"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "A"), L"Failed to create a.txt (right).");
                 state.Require(SelfTest::WriteTextFile(folders.left / L"b.txt", "L"), L"Failed to create b.txt (left).");
@@ -5108,7 +7693,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Empty trees produce an empty decision and scan reaches idle.
             if (const auto foldersOpt = CreateCaseFolders(root, L"empty_directories"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
 
                 Common::Settings::CompareDirectoriesSettings settings{};
                 const auto session = std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, settings);
@@ -5141,7 +7726,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Ignore patterns exclude files/directories.
             if (const auto foldersOpt = CreateCaseFolders(root, L"ignore"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"ignore.log", "I"), L"Failed to create ignore.log (left).");
                 state.Require(SelfTest::WriteTextFile(folders.left / L"keep.txt", "K"), L"Failed to create keep.txt (left).");
                 state.Require(SelfTest::EnsureDirectory(folders.left / L"ignore_dir"), L"Failed to create ignore_dir (left).");
@@ -5178,7 +7763,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Multiple ignore patterns exclude all matching files.
             if (const auto foldersOpt = CreateCaseFolders(root, L"ignore_multiple_patterns"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"ignore.log", "I"), L"Failed to create ignore.log (left).");
                 state.Require(SelfTest::WriteTextFile(folders.left / L"foo.tmp", "T"), L"Failed to create foo.tmp (left).");
                 state.Require(SelfTest::WriteTextFile(folders.left / L"keep.txt", "K"), L"Failed to create keep.txt (left).");
@@ -5211,7 +7796,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Overly long ignore patterns are dropped (harden against pathological inputs).
             if (const auto foldersOpt = CreateCaseFolders(root, L"ignore_pattern_length_cap"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"cap.txt", "C"), L"Failed to create cap.txt (left).");
 
                 Common::Settings::CompareDirectoriesSettings settings{};
@@ -5240,7 +7825,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Ignore patterns are capped to a bounded count to keep matching work bounded.
             if (const auto foldersOpt = CreateCaseFolders(root, L"ignore_pattern_count_cap"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"cap.log", "C"), L"Failed to create cap.log (left).");
 
                 std::wstring patterns;
@@ -5276,7 +7861,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: A pathological wildcard pattern list must not hang the scan (work is bounded by pattern caps + matcher budgets).
             if (const auto foldersOpt = CreateCaseFolders(root, L"ignore_wildcard_pathology_runtime_bound"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
 
                 constexpr int kFileCount = 256;
                 for (int i = 0; i < kFileCount; ++i)
@@ -5534,7 +8119,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: keepIdenticalItems retains identical files; showIdenticalItems toggles view without invalidating decisions.
             if (const auto foldersOpt = CreateCaseFolders(root, L"identical"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"same.txt", "SAME"), L"Failed to create same.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"same.txt", "SAME"), L"Failed to create same.txt (right).");
 
@@ -5605,7 +8190,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // so content compare does not explode memory on very large folders.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_pending_elided"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
 
                 constexpr int kFileCount = 200;
 
@@ -5712,7 +8297,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: SetCompareEnabled(false) stops producing decisions; re-enabling resumes.
             if (const auto foldersOpt = CreateCaseFolders(root, L"setCompareEnabled"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "A"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"b.txt", "B"), L"Failed to create b.txt (right).");
 
@@ -5780,7 +8365,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: InvalidateForAbsolutePath invalidates only the targeted subtree.
             if (const auto foldersOpt = CreateCaseFolders(root, L"invalidateForPath"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::EnsureDirectory(folders.left / L"sub1"), L"Failed to create sub1 (left).");
                 state.Require(SelfTest::EnsureDirectory(folders.right / L"sub1"), L"Failed to create sub1 (right).");
                 state.Require(SelfTest::WriteTextFile(folders.left / L"sub1" / L"f.txt", "X"), L"Failed to create sub1/f.txt (left).");
@@ -5829,7 +8414,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: SetDecisionUpdatedCallback fires after Invalidate().
             if (const auto foldersOpt = CreateCaseFolders(root, L"decisionUpdatedCallback"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 // Use compareContent=true with same-size but byte-different files so a content-compare
                 // job is enqueued and dispatched to a worker thread.  The callback fires on that worker
                 // thread when the compare job completes (size-different files are short-circuited without
@@ -5879,7 +8464,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: GetUiVersion increments on Invalidate() and after FlushPendingContentCompareUpdates().
             if (const auto foldersOpt = CreateCaseFolders(root, L"uiVersion"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "A"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "A"), L"Failed to create a.txt (right).");
 
@@ -5912,7 +8497,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Accessor getters return correct values after construction.
             if (const auto foldersOpt = CreateCaseFolders(root, L"accessors"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 Common::Settings::CompareDirectoriesSettings settings{};
                 settings.compareSize = true;
 
@@ -6030,7 +8615,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: TryMakeRelative returns nullopt for an absolute path not under the root.
             if (const auto foldersOpt = CreateCaseFolders(root, L"try_make_relative_outside_root"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 auto session =
                     std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
 
@@ -6058,7 +8643,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Base interface accessors return non-null objects after construction.
             if (const auto foldersOpt = CreateCaseFolders(root, L"baseInterfaces"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 auto session =
                     std::make_shared<CompareDirectoriesSession>(baseFs, baseFs, folders.left, folders.right, Common::Settings::CompareDirectoriesSettings{});
 
@@ -6086,7 +8671,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Repeated GetOrComputeDecision without invalidation returns the same cached object.
             if (const auto foldersOpt = CreateCaseFolders(root, L"contentCacheHit"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "CacheA"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "CacheA"), L"Failed to create a.txt (right).");
 
@@ -6117,7 +8702,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Empty directory roots produce an empty decision.
             if (const auto foldersOpt = CreateCaseFolders(root, L"empty_directories"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
 
                 auto decision = ComputeRootDecision(baseFs, folders, Common::Settings::CompareDirectoriesSettings{}, state);
                 if (decision)
@@ -6142,7 +8727,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: compareContent=true on two zero-byte files reports them as identical.
             if (const auto foldersOpt = CreateCaseFolders(root, L"zeroByteContent"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 // Create empty files on both sides.
                 state.Require(SelfTest::WriteBinaryFile(folders.left / L"empty.txt", {}), L"Failed to create empty.txt (left).");
                 state.Require(SelfTest::WriteBinaryFile(folders.right / L"empty.txt", {}), L"Failed to create empty.txt (right).");
@@ -6180,7 +8765,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: SetSettings with a comparison-changing setting increments GetVersion(); a view-only toggle does not.
             if (const auto foldersOpt = CreateCaseFolders(root, L"setSettingsInvalidates"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "V"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "V"), L"Failed to create a.txt (right).");
 
@@ -6235,7 +8820,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Compare scans must not populate DirectoryInfoCache (memory blow-up regression guard).
             if (const auto foldersOpt = CreateCaseFolders(root, L"dircache_not_polluted_by_compare_scan"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
 
                 constexpr size_t kDirCount  = 64;
                 constexpr size_t kFileCount = 10;
@@ -6292,7 +8877,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Content compare job queues are bounded (hi/lo) under load; scan workers backpressure instead of OOM.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_queue_bounded_hi_lo"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
 
                 constexpr size_t kRootFiles = 1000;
                 constexpr size_t kHotFiles  = 200;
@@ -6383,7 +8968,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Decision cache eviction respects pinned visible folders (prevents UI thrash).
             if (const auto foldersOpt = CreateCaseFolders(root, L"decision_cache_eviction_budget_pins_visible"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
 
                 state.Require(SelfTest::EnsureDirectory(folders.left / L"keep"), L"Failed to create keep (left).");
                 state.Require(SelfTest::EnsureDirectory(folders.right / L"keep"), L"Failed to create keep (right).");
@@ -6490,7 +9075,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Disabling background work cancels scan/content work promptly (exit/cancel regression guard).
             if (const auto foldersOpt = CreateCaseFolders(root, L"cancel_completes_bounded"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
 
                 constexpr size_t kBytes = 16u * 1024u * 1024u;
                 state.Require(WriteFileFill(folders.left / L"big.bin", 'A', kBytes), L"Failed to create big.bin (left).");
@@ -6560,7 +9145,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Corrupt FileInfo buffers are rejected with ERROR_INVALID_DATA (no crash / OOB walk).
             if (const auto foldersOpt = CreateCaseFolders(root, L"invalid_directory_entry_buffer"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "L"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "R"), L"Failed to create a.txt (right).");
 
@@ -6600,7 +9185,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Stale scan worker completion must not clear active tracking for a restarted run.
             if (const auto foldersOpt = CreateCaseFolders(root, L"scan_inflight_stamp_guards_restart"))
             {
-                const auto& folders = *foldersOpt;
+                const auto& folders = foldersOpt.value();
                 state.Require(SelfTest::WriteTextFile(folders.left / L"a.txt", "L"), L"Failed to create a.txt (left).");
                 state.Require(SelfTest::WriteTextFile(folders.right / L"a.txt", "R"), L"Failed to create a.txt (right).");
 
@@ -6673,7 +9258,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
             // Case: Stale content worker completion must not consume a restarted run's in-flight slot.
             if (const auto foldersOpt = CreateCaseFolders(root, L"content_inflight_stamp_guards_restart"))
             {
-                const auto& folders     = *foldersOpt;
+                const auto& folders     = foldersOpt.value();
                 constexpr size_t kBytes = 8u * 1024u * 1024u;
                 state.Require(WriteFileFill(folders.left / L"a.bin", 'A', kBytes), L"Failed to create a.bin (left).");
                 state.Require(WriteFileFill(folders.right / L"a.bin", 'B', kBytes), L"Failed to create a.bin (right).");
@@ -6788,7 +9373,7 @@ bool CompareDirectoriesSelfTest::Run(const SelfTest::SelfTestOptions& options, S
         {
             if (const auto foldersOpt = CreateCaseFolders(root, L"directory_size_local_callback_contract"))
             {
-                const auto& folders                  = *foldersOpt;
+                const auto& folders                  = foldersOpt.value();
                 const std::filesystem::path filePath = folders.left / L"probe.bin";
                 state.Require(WriteFileFill(filePath, 'L', 13u), L"Directory size local callback: failed to create probe file.");
 

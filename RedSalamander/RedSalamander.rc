@@ -257,7 +257,7 @@ BEGIN
 	        MENUITEM "Compare &Directories...", IDM_APP_COMPARE,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Calculate &Occupied Space", IDM_PANE_VIEW_SPACE,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Calculate Directory &Sizes", IDM_PANE_CALCULATE_DIRECTORY_SIZES,MFT_STRING,MFS_ENABLED
-	        MENUITEM "&Find Files and Directories... [todo]", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
+	        MENUITEM "&Find Files and Directories...", IDM_PANE_FIND,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Make &File List... [todo]", IDM_PANE_MAKE_FILE_LIST,MFT_STRING,MFS_ENABLED
 	        MENUITEM "Go to Shortcut or &Link Target [todo]", IDM_PANE_GO_TO_SHORTCUT_OR_LINK_TARGET,MFT_STRING,MFS_ENABLED
         MENUITEM MFT_SEPARATOR
@@ -1520,7 +1520,7 @@ BEGIN
 		    IDS_CMD_DESC_EDIT_WIDTH                               "Adjust the edit width."
 		    IDS_CMD_DESC_EXECUTE_OPEN                             "Execute or open the selection."
 		    IDS_CMD_DESC_FILTER                                   "Filter the current pane."
-		    IDS_CMD_DESC_FIND                                     "Find files."
+		    IDS_CMD_DESC_FIND                                     "Open the Find Files and Directories dialog."
 		    IDS_CMD_DESC_HOT_PATHS                                "Open hot paths."
 		    IDS_CMD_DESC_LIST_OPENED_FILES                        "Show the list of opened files."
 		    IDS_CMD_DESC_SHOW_FOLDERS_HISTORY                      "Show the folder history menu."
@@ -1626,6 +1626,59 @@ BEGIN
     IDS_PREFS_HOT_PATHS_BROWSE_ELLIPSIS               "Browse..."
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN          "Open preferences page when assigning"
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN_DESC     "Open the Hot Paths preferences page after assigning a slot from the panel."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_FIND_TITLE                                    "Find Files and Directories"
+    IDS_FIND_LABEL_ROOT                               "Look in:"
+    IDS_FIND_LABEL_NAME                               "Named:"
+    IDS_FIND_LABEL_CONTENT                            "Containing:"
+    IDS_FIND_OPTION_RECURSIVE                         "Search subdirectories"
+    IDS_FIND_OPTION_INCLUDE_FILES                     "Include files"
+    IDS_FIND_OPTION_INCLUDE_DIRECTORIES               "Include directories"
+    IDS_FIND_OPTION_FOLLOW_SYMLINKS                   "Follow symlinks"
+    IDS_FIND_OPTION_MATCH_CASE_NAME                   "Match case (name)"
+    IDS_FIND_OPTION_MATCH_CASE_CONTENT                "Match case (content)"
+    IDS_FIND_OPTION_PREFER_INDEX                      "Prefer indexed backend"
+    IDS_FIND_OPTION_WANT_SNIPPETS                     "Include snippets"
+    IDS_FIND_ACTION_FIND                              "Find"
+    IDS_FIND_ACTION_APPEND                            "Append"
+    IDS_FIND_ACTION_INTERSECT                         "Intersect"
+    IDS_FIND_ACTION_SUBTRACT                          "Subtract"
+    IDS_FIND_ACTION_OPEN                              "Open"
+    IDS_FIND_ACTION_PARENT                            "Open Parent"
+    IDS_FIND_NAME_MODE_WILDCARD                       "Wildcard"
+    IDS_FIND_NAME_MODE_LITERAL                        "Literal"
+    IDS_FIND_NAME_MODE_REGEX                          "Regex"
+    IDS_FIND_CONTENT_MODE_DISABLED                    "Disabled"
+    IDS_FIND_CONTENT_MODE_LITERAL                     "Text Literal"
+    IDS_FIND_CONTENT_MODE_REGEX                       "Text Regex"
+    IDS_FIND_COLUMN_NAME                              "Name"
+    IDS_FIND_COLUMN_PATH                              "Path"
+    IDS_FIND_COLUMN_SIZE                              "Size"
+    IDS_FIND_COLUMN_MODIFIED                          "Modified"
+    IDS_FIND_COLUMN_ATTR                              "Attr"
+    IDS_FIND_COLUMN_SNIPPET                           "Snippet"
+    IDS_FIND_STATUS_READY                             "Ready"
+    IDS_FIND_STATUS_CANCELLING                        "Cancelling..."
+    IDS_FIND_STATUS_RUNNING_FMT                       "Searching with {0}: {1} folders, {2} files, {3} matches"
+    IDS_FIND_STATUS_COMPLETE_FMT                      "Completed with {0}: {1} matches, {2} files scanned"
+    IDS_FIND_STATUS_CANCELLED_FMT                     "Cancelled ({0}): {1} matches, {2} files scanned"
+    IDS_FIND_STATUS_FAILED_FMT                        "Search failed (0x{0:08X})"
+    IDS_FIND_BACKEND_UNKNOWN                          "unknown backend"
+    IDS_FIND_BACKEND_SCAN                             "scan"
+    IDS_FIND_BACKEND_INDEX                            "index"
+    IDS_FIND_BACKEND_SERVICE                          "service"
+    IDS_FIND_WARNING_NO_INDEX                         "index unavailable"
+    IDS_FIND_WARNING_NO_CONTENT                       "content unavailable"
+    IDS_FIND_WARNING_ACCESS_DENIED                    "access denied skipped"
+    IDS_FIND_WARNING_OVERFLOW                         "result cap reached"
+    IDS_FIND_ERROR_ROOT_REQUIRED                      "A search root is required."
+    IDS_FIND_ERROR_TARGETS_REQUIRED                   "Enable files, directories, or both before searching."
+    IDS_FIND_ERROR_CRITERIA_REQUIRED                  "Enter a name pattern or enable content search."
+    IDS_FIND_ERROR_CONTENT_REQUIRED                   "Enter content text or disable content search."
+    IDS_FIND_ERROR_NO_FILESYSTEM                      "The active pane does not expose a searchable file system."
 END
 
 #endif    // English (United States) resources

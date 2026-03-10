@@ -135,6 +135,19 @@ FolderWindow responsibilities:
 - Support Commander-style pane switching (`Tab`) and function-key operations (F2/F3/F5/F6/F7/F8).
 - Keep existing sort/view accelerators (`Ctrl+F3..F6`, `Alt+2/3`) targeting the focused pane.
 
+## Find Files and Directories
+
+`cmd/pane/find` is implemented as a host-owned modeless `Find Files and Directories` window.
+
+FolderWindow responsibilities:
+- resolve the target pane for `cmd/pane/find`,
+- provide the current plugin, instance context, and root path as the default search scope,
+- reuse the existing Find window when it is already open and refresh its pane context,
+- route result actions back into the pane navigation/open flow,
+- keep search execution off the UI thread.
+
+The Find window is part of the existing themed host UI stack and must follow runtime theme changes and normal keyboard/focus behavior. See `Specs/Core/Core_Search.md`.
+
 ## Status Bar (per pane)
 
 Each pane optionally shows a status bar at the bottom. It is a distinct control per pane (not shared across panes).

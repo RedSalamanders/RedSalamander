@@ -232,6 +232,9 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\Common\LocalSearchIndexCore.cpp" />
+    <ClCompile Include="..\..\Common\SearchServiceBroker.cpp" />
+    <ClCompile Include="..\..\Common\SearchTextHelpers.cpp" />
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="FileSystem.cpp" />
@@ -239,7 +242,11 @@
     <ClCompile Include="FileSystem.FileOps.cpp" />
     <ClCompile Include="FileSystem.Menu.cpp" />
     <ClCompile Include="FileSystem.Path.cpp" />
+    <ClCompile Include="FileSystem.Search.cpp" />
     <ClCompile Include="FileSystem.Watch.cpp" />
+    <ClInclude Include="..\..\Common\LocalSearchIndexCore.h" />
+    <ClInclude Include="..\..\Common\SearchServiceBroker.h" />
+    <ClInclude Include="..\..\Common\SearchTextHelpers.h" />
     <ClInclude Include="FileSystem.h" />
     <ClInclude Include="FileSystem.Internal.h" />
     <ClInclude Include="FileSystemResources.h" />

@@ -63,6 +63,37 @@ namespace
     return "copyReparse";
 }
 
+[[nodiscard]] FileSystemSearchBackendPreference ParseSearchBackendPreference(std::string_view preference) noexcept
+{
+    if (preference == "service")
+    {
+        return FileSystemSearchBackendPreference::Service;
+    }
+    if (preference == "local-index")
+    {
+        return FileSystemSearchBackendPreference::LocalIndex;
+    }
+    if (preference == "scan")
+    {
+        return FileSystemSearchBackendPreference::Scan;
+    }
+
+    return FileSystemSearchBackendPreference::Auto;
+}
+
+[[nodiscard]] const char* SearchBackendPreferenceToString(FileSystemSearchBackendPreference preference) noexcept
+{
+    switch (preference)
+    {
+        case FileSystemSearchBackendPreference::Auto: return "auto";
+        case FileSystemSearchBackendPreference::Service: return "service";
+        case FileSystemSearchBackendPreference::LocalIndex: return "local-index";
+        case FileSystemSearchBackendPreference::Scan: return "scan";
+    }
+
+    return "auto";
+}
+
 class Win32FileReader final : public IFileReader
 {
 public:
@@ -355,6 +386,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObje
     if (riid == __uuidof(IUnknown) || riid == __uuidof(IFileSystem))
     {
         *ppvObject = static_cast<IFileSystem*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemSearch))
+    {
+        *ppvObject = static_cast<IFileSystemSearch*>(this);
         AddRef();
         return S_OK;
     }
@@ -743,6 +781,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
     unsigned long enumerationSoftMaxBufferMiB       = kDefaultEnumerationSoftMaxBufferMiB;
     unsigned long enumerationHardMaxBufferMiB       = kDefaultEnumerationHardMaxBufferMiB;
     FileSystemReparsePointPolicy reparsePointPolicy = kDefaultReparsePointPolicy;
+    FileSystemSearchBackendPreference searchBackendPreference = kDefaultSearchBackendPreference;
 #ifdef _DEBUG
     unsigned int directorySizeDelayMs = 0u;
 #endif
@@ -823,6 +862,16 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
                     }
                 }
 
+                yyjson_val* searchBackendVal = yyjson_obj_get(root, "searchBackendPreference");
+                if (searchBackendVal && yyjson_is_str(searchBackendVal))
+                {
+                    const char* valueText = yyjson_get_str(searchBackendVal);
+                    if (valueText && valueText[0] != '\0')
+                    {
+                        searchBackendPreference = ParseSearchBackendPreference(valueText);
+                    }
+                }
+
 #ifdef _DEBUG
                 yyjson_val* delayVal = yyjson_obj_get(root, "directorySizeDelayMs");
                 if (delayVal && yyjson_is_int(delayVal))
@@ -847,13 +896,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
 
     std::string newConfigurationJson;
     newConfigurationJson = std::format("{{\"copyMoveMaxConcurrency\":{},\"deleteMaxConcurrency\":{},\"deleteRecycleBinMaxConcurrency\":{},"
-                                       "\"enumerationSoftMaxBufferMiB\":{},\"enumerationHardMaxBufferMiB\":{},\"reparsePointPolicy\":\"{}\"}}",
+                                       "\"enumerationSoftMaxBufferMiB\":{},\"enumerationHardMaxBufferMiB\":{},\"reparsePointPolicy\":\"{}\","
+                                       "\"searchBackendPreference\":\"{}\"}}",
                                        copyMoveMaxConcurrency,
                                        deleteMaxConcurrency,
                                        deleteRecycleBinMaxConcurrency,
                                        enumerationSoftMaxBufferMiB,
                                        enumerationHardMaxBufferMiB,
-                                       ReparsePointPolicyToString(reparsePointPolicy));
+                                       ReparsePointPolicyToString(reparsePointPolicy),
+                                       SearchBackendPreferenceToString(searchBackendPreference));
 
     std::lock_guard lock(_stateMutex);
 
@@ -863,6 +914,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
     _enumerationSoftMaxBufferMiB    = enumerationSoftMaxBufferMiB;
     _enumerationHardMaxBufferMiB    = enumerationHardMaxBufferMiB;
     _reparsePointPolicy             = reparsePointPolicy;
+    _searchBackendPreference        = searchBackendPreference;
 #ifdef _DEBUG
     _directorySizeDelayMs = directorySizeDelayMs;
 #endif
@@ -896,7 +948,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::SomethingToSave(BOOL* pSomethingToSave) no
     const bool isDefault = _copyMoveMaxConcurrency == kDefaultCopyMoveMaxConcurrency && _deleteMaxConcurrency == kDefaultDeleteMaxConcurrency &&
                            _deleteRecycleBinMaxConcurrency == kDefaultDeleteRecycleBinMaxConcurrency &&
                            _enumerationSoftMaxBufferMiB == kDefaultEnumerationSoftMaxBufferMiB &&
-                           _enumerationHardMaxBufferMiB == kDefaultEnumerationHardMaxBufferMiB && _reparsePointPolicy == kDefaultReparsePointPolicy;
+                           _enumerationHardMaxBufferMiB == kDefaultEnumerationHardMaxBufferMiB &&
+                           _reparsePointPolicy == kDefaultReparsePointPolicy &&
+                           _searchBackendPreference == kDefaultSearchBackendPreference;
     *pSomethingToSave = isDefault ? FALSE : TRUE;
     return S_OK;
 }
@@ -905,7 +959,7 @@ void FileSystem::UpdateCapabilitiesJson() noexcept
 {
     // NOTE: Caller must hold _stateMutex.
     _capabilitiesJson = std::format(
-        R"json({{"version":1,"operations":{{"copy":true,"move":true,"delete":true,"rename":true,"properties":true,"read":true,"write":true}},"concurrency":{{"copyMoveMax":{},"deleteMax":{},"deleteRecycleBinMax":{}}},"crossFileSystem":{{"export":{{"copy":["*"],"move":["*"]}},"import":{{"copy":["*"],"move":["*"]}}}}}})json",
+        R"json({{"version":1,"operations":{{"copy":true,"move":true,"delete":true,"rename":true,"properties":true,"read":true,"write":true}},"search":{{"version":1,"name":true,"content":true,"indexed":true,"serviceBacked":true,"supportsRegex":true,"supportsSnippets":true,"preferredBackend":"service"}},"concurrency":{{"copyMoveMax":{},"deleteMax":{},"deleteRecycleBinMax":{}}},"crossFileSystem":{{"export":{{"copy":["*"],"move":["*"]}},"import":{{"copy":["*"],"move":["*"]}}}}}})json",
         std::clamp(_copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency),
         std::clamp(_deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency),
         std::clamp(_deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency));

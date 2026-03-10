@@ -1133,11 +1133,14 @@ typedef struct FileSystemArena
 - If `FILESYSTEM_FLAG_RECURSIVE` is not set and a directory requires recursion, plugins SHOULD return `HRESULT_FROM_WIN32(ERROR_DIR_NOT_EMPTY)`.
 
 **Arena Pattern (Required):**
-- All pointer fields in `FileSystemRenamePair`, `FileSystemSearchQuery`, and `FileSystemSearchMatch`, plus all string pointer parameters passed via `IFileSystemCallback`, MUST reference memory inside a `FileSystemArena`.
+- All pointer fields in `FileSystemRenamePair`, plus all string pointer parameters passed via `IFileSystemCallback`, MUST reference memory inside a `FileSystemArena`.
 - Arena strings are UTF-16 and NUL-terminated.
 - Arrays of `FileSystemRenamePair` and arrays passed to `CopyItems`/`MoveItems`/`DeleteItems` MUST be allocated from the same arena as their referenced strings to allow a single free/reset.
 - Input arenas are owned by the caller and must remain valid for the full duration of the operation.
 - Callback arenas are owned by the plugin and must remain valid until the callback returns (callers must copy if they need to persist values).
+- Search query strings are caller-owned UTF-16 strings and only need to remain valid for the duration of `Search(...)`.
+- Search match and progress strings are plugin-owned UTF-16 strings and only need to remain valid until the corresponding callback returns.
+- Search payload strings are not required to come from `FileSystemArena`.
 
 #### IFileSystemCallback Interface
 
@@ -1264,36 +1267,107 @@ public:
 
 Search is exposed via an optional `IFileSystemSearch` interface, obtained via `QueryInterface` on `IFileSystem`.
 
+If a plugin does not expose `IFileSystemSearch`:
+- the host treats native search as unavailable,
+- the host may still provide a scan fallback using `IFileSystem::ReadDirectoryInfo`,
+- content fallback additionally requires `IFileSystemIO::CreateFileReader`.
+
+If a plugin exposes `IFileSystemSearch` but cannot satisfy an indexed or content request with its preferred backend:
+- it should fall back to a slower path when possible,
+- it should report that degradation through `FileSystemSearchProgress::warningFlags`.
+
 #### Supporting Types
 
 ```cpp
 enum FileSystemSearchFlags : uint32_t
 {
-    FILESYSTEM_SEARCH_NONE = 0,
-    FILESYSTEM_SEARCH_RECURSIVE = 0x1,
-    FILESYSTEM_SEARCH_INCLUDE_FILES = 0x2,
+    FILESYSTEM_SEARCH_NONE                = 0,
+    FILESYSTEM_SEARCH_RECURSIVE           = 0x1,
+    FILESYSTEM_SEARCH_INCLUDE_FILES       = 0x2,
     FILESYSTEM_SEARCH_INCLUDE_DIRECTORIES = 0x4,
-    FILESYSTEM_SEARCH_MATCH_CASE = 0x8,
-    FILESYSTEM_SEARCH_FOLLOW_SYMLINKS = 0x10,
-    FILESYSTEM_SEARCH_USE_REGEX = 0x20,
+    FILESYSTEM_SEARCH_FOLLOW_SYMLINKS     = 0x8,
+    FILESYSTEM_SEARCH_MATCH_CASE_NAME     = 0x10,
+    FILESYSTEM_SEARCH_MATCH_CASE_CONTENT  = 0x20,
+    FILESYSTEM_SEARCH_WANT_SNIPPETS       = 0x40,
+    FILESYSTEM_SEARCH_PREFER_INDEX        = 0x80,
+};
+
+enum FileSystemSearchNameMode : uint32_t
+{
+    FILESYSTEM_SEARCH_NAME_DISABLED = 0,
+    FILESYSTEM_SEARCH_NAME_WILDCARD = 1,
+    FILESYSTEM_SEARCH_NAME_LITERAL  = 2,
+    FILESYSTEM_SEARCH_NAME_REGEX    = 3,
+};
+
+enum FileSystemSearchContentMode : uint32_t
+{
+    FILESYSTEM_SEARCH_CONTENT_DISABLED     = 0,
+    FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL = 1,
+    FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX   = 2,
+};
+
+enum FileSystemSearchBackend : uint32_t
+{
+    FILESYSTEM_SEARCH_BACKEND_UNKNOWN = 0,
+    FILESYSTEM_SEARCH_BACKEND_SCAN    = 1,
+    FILESYSTEM_SEARCH_BACKEND_INDEX   = 2,
+    FILESYSTEM_SEARCH_BACKEND_SERVICE = 3,
+};
+
+enum FileSystemSearchMatchSource : uint32_t
+{
+    FILESYSTEM_SEARCH_MATCH_SOURCE_NONE    = 0,
+    FILESYSTEM_SEARCH_MATCH_SOURCE_NAME    = 0x1,
+    FILESYSTEM_SEARCH_MATCH_SOURCE_CONTENT = 0x2,
+};
+
+enum FileSystemSearchWarningFlags : uint32_t
+{
+    FILESYSTEM_SEARCH_WARNING_NONE                   = 0,
+    FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX     = 0x1,
+    FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_CONTENT   = 0x2,
+    FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED = 0x4,
+    FILESYSTEM_SEARCH_WARNING_OVERFLOW              = 0x8,
+};
+
+enum FileSystemSearchPhase : uint32_t
+{
+    FILESYSTEM_SEARCH_PHASE_INITIALIZING = 0,
+    FILESYSTEM_SEARCH_PHASE_ENUMERATING  = 1,
+    FILESYSTEM_SEARCH_PHASE_INDEX_LOOKUP = 2,
+    FILESYSTEM_SEARCH_PHASE_CONTENT_SCAN = 3,
+    FILESYSTEM_SEARCH_PHASE_COMPLETED    = 4,
 };
 
 struct FileSystemSearchQuery
 {
-    uint32_t sizeBytes; // sizeof(FileSystemSearchQuery)
+    uint32_t sizeBytes; // Must equal sizeof(FileSystemSearchQuery)
 
     const wchar_t* rootPath;
-    const wchar_t* pattern; // nullptr/empty = L"*"
+    const wchar_t* namePattern;
+    const wchar_t* contentPattern;
     FileSystemSearchFlags flags;
-    unsigned long maxResults; // 0 = unlimited
+    FileSystemSearchNameMode nameMode;
+    FileSystemSearchContentMode contentMode;
+    uint64_t maxResults;             // 0 = unlimited
+    uint64_t maxContentBytesPerFile; // 0 = plugin default
+    uint32_t maxSnippetCharacters;   // 0 = plugin default
+    uint32_t reserved;
 };
 
 struct FileSystemSearchMatch
 {
-    uint32_t sizeBytes; // sizeof(FileSystemSearchMatch)
+    uint32_t sizeBytes; // Must equal sizeof(FileSystemSearchMatch)
 
     const wchar_t* fullPath;
     unsigned long fullPathSize;
+    const wchar_t* relativePath;
+    unsigned long relativePathSize;
+    const wchar_t* displayName;
+    unsigned long displayNameSize;
+    const wchar_t* previewText;
+    unsigned long previewTextSize;
     unsigned long fileAttributes;
     __int64 creationTime;
     __int64 lastAccessTime;
@@ -1301,23 +1375,41 @@ struct FileSystemSearchMatch
     __int64 changeTime;
     __int64 endOfFile;
     __int64 allocationSize;
+    uint32_t matchedBy;
+    uint64_t contentMatchByteOffset;
+    uint32_t contentMatchByteLength;
+    uint32_t reserved;
 };
 
 struct FileSystemSearchProgress
 {
-    uint32_t sizeBytes; // sizeof(FileSystemSearchProgress)
+    uint32_t sizeBytes; // Must equal sizeof(FileSystemSearchProgress)
 
-    uint64_t scannedEntries;
+    FileSystemSearchPhase phase;
+    FileSystemSearchBackend backend;
+    uint32_t warningFlags;
+    HRESULT statusHint;
+    uint64_t scannedDirectories;
+    uint64_t scannedFiles;
+    uint64_t candidateFiles;
     uint64_t matchedEntries;
     const wchar_t* currentPath;
+    unsigned long currentPathSize;
 };
 ```
 
 **Search Notes:**
-- `pattern` uses wildcard matching by default (`*` and `?`). If `FILESYSTEM_SEARCH_USE_REGEX` is set, `pattern` is treated as a regex.
-- `pattern` may be `nullptr` or empty to match all items (default: `L"*"`).
-- `fullPathSize` is in bytes (not characters).
-- `maxResults` of `0` means unlimited (default).
+- `sizeBytes` is frozen with exact-match validation in the current ABI: callers must pass `sizeof(...)` and implementations must reject mismatches with `E_INVALIDARG`.
+- At least one of `nameMode` or `contentMode` must be enabled.
+- If both `nameMode` and `contentMode` are enabled, a result must satisfy both.
+- `namePattern` is required unless `nameMode == FILESYSTEM_SEARCH_NAME_DISABLED`.
+- `contentPattern` is required unless `contentMode == FILESYSTEM_SEARCH_CONTENT_DISABLED`.
+- `maxResults` of `0` means unlimited.
+- `maxContentBytesPerFile` of `0` means the plugin default. The current built-in `file` plugin default is `64 MiB`.
+- `maxSnippetCharacters` of `0` means the plugin default. The current built-in `file` plugin default is `160` UTF-16 code units.
+- `FILESYSTEM_SEARCH_WANT_SNIPPETS` is a hint, not a guarantee.
+- `FILESYSTEM_SEARCH_PREFER_INDEX` is a hint. Implementations may fall back to scan and should report `FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX` when they do.
+- `fullPathSize`, `relativePathSize`, `displayNameSize`, `previewTextSize`, and `currentPathSize` are in bytes (not characters).
 
 #### IFileSystemSearchCallback Interface
 
@@ -1328,13 +1420,14 @@ struct FileSystemSearchProgress
 // - The cookie is provided by the host at call time and must be passed back verbatim by the plugin.
 interface __declspec(novtable) IFileSystemSearchCallback
 {
-    // Called for every match. Return E_ABORT or HRESULT_FROM_WIN32(ERROR_CANCELLED) to cancel.
+    // Called for every match. Returning E_ABORT or HRESULT_FROM_WIN32(ERROR_CANCELLED)
+    // requests cancellation; Search must then return HRESULT_FROM_WIN32(ERROR_CANCELLED).
     virtual HRESULT STDMETHODCALLTYPE FileSystemSearchMatch(
         const FileSystemSearchMatch* match,
         void* cookie
     ) noexcept = 0;
 
-    // Periodic progress updates (optional but recommended for long searches).
+    // Periodic progress updates. currentPath may be nullptr on final completion updates.
     virtual HRESULT STDMETHODCALLTYPE FileSystemSearchProgress(
         const FileSystemSearchProgress* progress,
         void* cookie
@@ -1365,10 +1458,40 @@ interface __declspec(uuid("00417f3e-f0f5-4add-8dea-4407d5169ef6"))
 
 **Search Contract:**
 - `Search` is synchronous; the host should invoke it on a worker thread.
-- The host MUST set `query->sizeBytes` before calling `Search`; plugins MUST validate it before reading fields.
-- Plugins MUST set `match->sizeBytes` / `progress->sizeBytes` before invoking callbacks.
+- The host MUST set `query->sizeBytes == sizeof(FileSystemSearchQuery)` before calling `Search`; plugins MUST reject mismatches with `E_INVALIDARG`.
+- Plugins MUST set `match->sizeBytes == sizeof(FileSystemSearchMatch)` and `progress->sizeBytes == sizeof(FileSystemSearchProgress)` before invoking callbacks.
 - All callback pointers are only valid for the duration of the call; the host must copy strings if needed.
 - If `FileSystemSearchShouldCancel` sets `*pCancel = TRUE`, or a callback returns `E_ABORT`/`HRESULT_FROM_WIN32(ERROR_CANCELLED)`, the plugin MUST stop and return `HRESULT_FROM_WIN32(ERROR_CANCELLED)`.
+
+#### Search capabilities JSON
+
+`IFileSystem::GetCapabilities()` may expose:
+
+```json
+{
+  "search": {
+    "version": 1,
+    "name": true,
+    "content": true,
+    "indexed": true,
+    "serviceBacked": true,
+    "supportsRegex": true,
+    "supportsSnippets": true,
+    "preferredBackend": "service"
+  }
+}
+```
+
+Semantics:
+- `name`: native name/path search exists.
+- `content`: native content search exists.
+- `indexed`: the plugin can answer name/path queries from an index.
+- `serviceBacked`: the plugin can use an out-of-process service backend.
+- `supportsRegex`: regex is accepted in enabled query modes.
+- `supportsSnippets`: `previewText` may be populated.
+- `preferredBackend`: one of `scan`, `index`, or `service`.
+
+If `search` is absent, the host assumes native search is unavailable and falls back only when the required base interfaces exist.
 
 
 ## Implementation Details
@@ -1447,7 +1570,13 @@ The `Plugins/FileSystem/` project provides a local file system implementation us
 - `Factory.cpp`: Exports `RedSalamanderCreate` factory function
 - Memory management: Buffer capacity grows progressively for large directories; host never frees the buffer pointer (owned by the COM object)
 
-**Status:** The built-in local filesystem plugin (`Plugins/FileSystem/`) implements directory enumeration, directory watch, and file operations (Copy/Move/Delete/Rename). Search is not implemented.
+**Status:** The built-in local filesystem plugin (`Plugins/FileSystem/`) implements directory enumeration, directory watch, file operations (Copy/Move/Delete/Rename), and native `IFileSystemSearch` for name and text-content search. Local search prefers the Windows search service backend when available, then the shared local index core, then the scan backend.
+
+**Local search notes:**
+- Indexed local search supports NTFS and ReFS roots.
+- FAT, exFAT, UNC, WSL, and unsupported roots degrade to scan.
+- Service and index backends return candidate paths and metadata; v1 file-content matching remains client-side.
+- Backend degradation is surfaced through `FileSystemSearchProgress::warningFlags`.
 
 **Key Implementation Details:**
 ```cpp

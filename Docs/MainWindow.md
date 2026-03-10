@@ -99,5 +99,6 @@ Toggle:
 ## Useful commands
 
 - **Commands → Connect Network Drive…** (`F11`) / **Disconnect…** (`F12`) *(Win32 `file:` pane only)*
+- **Commands → Find Files and Directories…** (`Alt+F7`) opens the modeless search window for the focused pane. See: [Find Files and Directories](FindFiles.md)
 - **Commands → Command Shell**: opens a shell in the current location when possible
 - **Commands → Open File Explorer → Current Folder** (`Shift+F3`)

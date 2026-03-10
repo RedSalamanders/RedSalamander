@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClInclude Include="..\Common\SearchTextHelpers.h" />
     <ClInclude Include="AppTheme.h" />
     <ClInclude Include="Framework.h" />
     <ClInclude Include="ConnectionSecrets.h" />
@@ -55,6 +56,8 @@
     <ClInclude Include="CommandRegistry.h" />
     <ClInclude Include="CompareDirectoriesEngine.SelfTest.h" />
     <ClInclude Include="CompareDirectoriesEngine.h" />
+    <ClInclude Include="FindFilesWindow.h" />
+    <ClInclude Include="SearchFallbackEngine.h" />
     <ClInclude Include="CompareDirectoriesWindow.h" />
     <ClInclude Include="ShortcutDefaults.h" />
     <ClInclude Include="ShortcutManager.h" />
@@ -75,6 +78,7 @@
     <ClInclude Include="WindowPlacementPersistence.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\Common\SearchTextHelpers.cpp" />
     <ClCompile Include="AppTheme.cpp" />
     <ClCompile Include="CrashHandler.cpp" />
     <ClCompile Include="ChangeCase.cpp" />
@@ -145,6 +149,8 @@
     <ClCompile Include="CommandRegistry.cpp" />
     <ClCompile Include="CompareDirectoriesEngine.SelfTest.cpp" />
     <ClCompile Include="CompareDirectoriesEngine.cpp" />
+    <ClCompile Include="FindFilesWindow.cpp" />
+    <ClCompile Include="SearchFallbackEngine.cpp" />
     <ClCompile Include="CompareDirectoriesWindow.cpp" />
     <ClCompile Include="ShortcutDefaults.cpp" />
     <ClCompile Include="ShortcutManager.cpp" />

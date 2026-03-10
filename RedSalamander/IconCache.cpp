@@ -912,7 +912,7 @@ void IconCache::WarmCommonExtensions()
             std::lock_guard lock(_mutex);
             if (_extensionToIconIndex.find(extKey) == _extensionToIconIndex.end())
             {
-                _extensionToIconIndex[std::move(extKey)] = *iconIndex;
+                _extensionToIconIndex[std::move(extKey)] = iconIndex.value();
                 ++warmed;
             }
         }
@@ -1053,7 +1053,7 @@ std::optional<int> IconCache::GetOrQueryIconIndexByExtension(std::wstring_view e
     }
     if (iconIndex.has_value())
     {
-        RegisterExtension(keyView, *iconIndex);
+        RegisterExtension(keyView, iconIndex.value());
     }
     return iconIndex;
 }
@@ -1270,7 +1270,7 @@ void IconCache::InitializeSpecialFolders()
             // Cache icon index for this known folder using PIDL for best fidelity.
             if (const auto iconIndex = IconCache::GetInstance().QuerySysIconIndexForKnownFolder(folderId); iconIndex.has_value())
             {
-                _specialFolderIconCache.emplace(std::move(path), *iconIndex);
+                _specialFolderIconCache.emplace(std::move(path), iconIndex.value());
             }
         }
     }

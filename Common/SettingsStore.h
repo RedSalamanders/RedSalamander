@@ -328,6 +328,45 @@ struct SelectionMasksSettings
     std::vector<std::wstring> filterHistory;
 };
 
+enum class SearchNameMode : uint8_t
+{
+    Wildcard,
+    Literal,
+    Regex,
+};
+
+enum class SearchContentMode : uint8_t
+{
+    Disabled,
+    TextLiteral,
+    TextRegex,
+};
+
+struct SearchDialogSettings
+{
+    std::vector<std::wstring> recentRoots;
+    std::vector<std::wstring> recentNamePatterns;
+    std::vector<std::wstring> recentContentPatterns;
+
+    std::wstring lastRoot;
+    std::wstring lastNamePattern;
+    std::wstring lastContentPattern;
+
+    bool recursive          = true;
+    bool includeFiles       = true;
+    bool includeDirectories = false;
+    bool followSymlinks     = false;
+    bool matchCaseName      = false;
+    bool matchCaseContent   = false;
+    bool preferIndex        = true;
+    bool wantSnippets       = false;
+
+    SearchNameMode nameMode       = SearchNameMode::Wildcard;
+    SearchContentMode contentMode = SearchContentMode::Disabled;
+
+    uint64_t maxResults = 0;
+};
+
 struct ExtensionsSettings
 {
     // Map a file extension (lowercase, with leading dot like ".7z") to a file system plugin ID.
@@ -511,7 +550,7 @@ struct ShortcutsSettings
 
 struct Settings
 {
-    uint32_t schemaVersion = 10;
+    uint32_t schemaVersion = 11;
     std::unordered_map<std::wstring, WindowPlacement> windows;
     ThemeSettings theme;
     PluginsSettings plugins;
@@ -527,6 +566,7 @@ struct Settings
     std::optional<CompareDirectoriesSettings> compareDirectories;
     std::optional<HotPathsSettings> hotPaths;
     std::optional<SelectionMasksSettings> selectionMasks;
+    std::optional<SearchDialogSettings> search;
 };
 
 struct SettingsFileStamp

@@ -41,6 +41,9 @@ public:
 private:
     std::unordered_map<uint32_t, std::wstring> _functionBar;
     std::unordered_map<uint32_t, std::wstring> _folderView;
+    std::unordered_map<std::wstring, uint32_t> _functionBarReverse;
+    std::unordered_map<std::wstring, uint32_t> _folderViewReverse;
     std::vector<uint32_t> _functionBarConflicts;
     std::vector<uint32_t> _folderViewConflicts;
 };
+

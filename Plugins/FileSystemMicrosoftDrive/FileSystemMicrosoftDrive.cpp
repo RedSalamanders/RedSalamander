@@ -46,6 +46,10 @@ constexpr std::wstring_view kGraphBaseUrl         = L"https://graph.microsoft.co
 constexpr std::wstring_view kAuthHost             = L"login.microsoftonline.com";
 constexpr std::wstring_view kLoopbackPath         = L"/redsalamander/oauth2";
 constexpr std::wstring_view kDefaultAuthUserAgent = L"RedSalamander Microsoft Drive/0.1";
+constexpr std::wstring_view kDefaultOAuthPageSummarySuccess = L"Your Microsoft account is linked. Return to RedSalamander to keep browsing.";
+constexpr std::wstring_view kDefaultOAuthPageSummaryFailure = L"Microsoft sign-in did not finish in this browser tab. Return to RedSalamander and try again.";
+constexpr std::wstring_view kDefaultOAuthPageFunSuccess     = L"sparkles|Cloud handshake complete. Your files are ready to roam.";
+constexpr std::wstring_view kDefaultOAuthPageFunFailure     = L"warning|The sign-in lost its footing. Head back for another try.";
 
 constexpr std::wstring_view kScopeOneDrivePersonal = L"offline_access Files.ReadWrite User.Read openid profile";
 constexpr std::wstring_view kScopeOneDriveBusiness = L"offline_access Files.ReadWrite User.Read openid profile";
@@ -272,46 +276,353 @@ struct TokenResponse
     return escaped;
 }
 
+struct AuthPageMessageVariant
+{
+    std::string emojiHtml;
+    std::string message;
+};
+
+[[nodiscard]] std::wstring_view TrimAuthPageTextPart(std::wstring_view text) noexcept
+{
+    while (! text.empty())
+    {
+        const wchar_t ch = text.front();
+        if (ch != L' ' && ch != L'\t' && ch != L'\r' && ch != L'\n')
+        {
+            break;
+        }
+
+        text.remove_prefix(1);
+    }
+
+    while (! text.empty())
+    {
+        const wchar_t ch = text.back();
+        if (ch != L' ' && ch != L'\t' && ch != L'\r' && ch != L'\n')
+        {
+            break;
+        }
+
+        text.remove_suffix(1);
+    }
+
+    return text;
+}
+
+[[nodiscard]] std::string LookupAuthPageEmojiHtml(const std::wstring_view token, const bool success) noexcept
+{
+    if (token == L"sparkles")
+    {
+        return "&#x2728;";
+    }
+    if (token == L"party")
+    {
+        return "&#x1F389;";
+    }
+    if (token == L"rocket")
+    {
+        return "&#x1F680;";
+    }
+    if (token == L"compass")
+    {
+        return "&#x1F9ED;";
+    }
+    if (token == L"cloud")
+    {
+        return "&#x2601;&#xFE0F;";
+    }
+    if (token == L"glowstar")
+    {
+        return "&#x1F31F;";
+    }
+    if (token == L"check")
+    {
+        return "&#x2705;";
+    }
+    if (token == L"fire")
+    {
+        return "&#x1F525;";
+    }
+    if (token == L"rainbow")
+    {
+        return "&#x1F308;";
+    }
+    if (token == L"wave")
+    {
+        return "&#x1F44B;";
+    }
+    if (token == L"warning")
+    {
+        return "&#x26A0;&#xFE0F;";
+    }
+    if (token == L"rain")
+    {
+        return "&#x1F327;&#xFE0F;";
+    }
+    if (token == L"repair")
+    {
+        return "&#x1F6E0;&#xFE0F;";
+    }
+    if (token == L"detour")
+    {
+        return "&#x1F9ED;";
+    }
+    if (token == L"anchor")
+    {
+        return "&#x2693;";
+    }
+    if (token == L"flash")
+    {
+        return "&#x26A1;";
+    }
+    if (token == L"umbrella")
+    {
+        return "&#x2602;&#xFE0F;";
+    }
+    if (token == L"map")
+    {
+        return "&#x1F5FA;&#xFE0F;";
+    }
+    if (token == L"tools")
+    {
+        return "&#x1F527;";
+    }
+    if (token == L"retry")
+    {
+        return "&#x1F501;";
+    }
+
+    return success ? "&#x2728;" : "&#x26A0;&#xFE0F;";
+}
+
+[[nodiscard]] AuthPageMessageVariant LoadAuthPageMessageVariant(bool success) noexcept
+{
+    constexpr std::array<unsigned int, 10> kSuccessMessageIds = {{
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_2,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_3,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_4,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_5,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_6,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_7,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_8,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_9,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_10,
+    }};
+    constexpr std::array<unsigned int, 10> kFailureMessageIds = {{
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_2,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_3,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_4,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_5,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_6,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_7,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_8,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_9,
+        IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_10,
+    }};
+
+    const auto& messageIds = success ? kSuccessMessageIds : kFailureMessageIds;
+    const ULONGLONG tick   = GetTickCount64();
+    const uint32_t seed    = static_cast<uint32_t>(tick ^ (tick >> 32) ^ GetCurrentProcessId() ^ GetCurrentThreadId());
+    const unsigned int id  = messageIds[static_cast<size_t>(seed % static_cast<uint32_t>(messageIds.size()))];
+
+    const std::wstring value = LoadStringResourceOrFallback(id, success ? kDefaultOAuthPageFunSuccess : kDefaultOAuthPageFunFailure);
+    const std::wstring_view view(value);
+    const size_t delimiter = view.find(L'|');
+    if (delimiter == std::wstring_view::npos)
+    {
+        return {LookupAuthPageEmojiHtml({}, success), HtmlEscapeUtf8(TrimAuthPageTextPart(view))};
+    }
+
+    const std::wstring_view emojiToken = TrimAuthPageTextPart(view.substr(0, delimiter));
+    const std::wstring_view message    = TrimAuthPageTextPart(view.substr(delimiter + 1));
+    return {LookupAuthPageEmojiHtml(emojiToken, success), HtmlEscapeUtf8(message)};
+}
+
+[[nodiscard]] std::string LoadAuthPageSummaryHtml(bool success) noexcept
+{
+    const std::wstring value = LoadStringResourceOrFallback(
+        success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_SUCCESS : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_FAILURE,
+        success ? kDefaultOAuthPageSummarySuccess : kDefaultOAuthPageSummaryFailure);
+
+    const std::wstring_view summary = TrimAuthPageTextPart(value);
+    const size_t delimiter          = summary.find(L". ");
+    if (delimiter == std::wstring_view::npos)
+    {
+        return HtmlEscapeUtf8(summary);
+    }
+
+    const std::wstring_view firstLine  = TrimAuthPageTextPart(summary.substr(0, delimiter + 1));
+    const std::wstring_view secondLine = TrimAuthPageTextPart(summary.substr(delimiter + 2));
+    if (secondLine.empty())
+    {
+        return HtmlEscapeUtf8(firstLine);
+    }
+
+    std::string html = HtmlEscapeUtf8(firstLine);
+    html.append("<br>");
+    html.append(HtmlEscapeUtf8(secondLine));
+    return html;
+}
+
+[[nodiscard]] std::string BuildAuthPageIllustration(bool success) noexcept
+{
+    if (success)
+    {
+        return R"svg(<svg viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<defs>
+<radialGradient id="rsSuccessCoinFace" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(76 54) rotate(44.5) scale(156.77)">
+<stop stop-color="#FFE8B5"/>
+<stop offset="0.56" stop-color="#FFB04D"/>
+<stop offset="1" stop-color="#ED6A2A"/>
+</radialGradient>
+<linearGradient id="rsSuccessCoinRim" x1="34" y1="28" x2="180" y2="192" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FFD38B"/>
+<stop offset="0.54" stop-color="#F28734"/>
+<stop offset="1" stop-color="#C84B22"/>
+</linearGradient>
+</defs>
+<circle cx="112" cy="112" r="86" fill="#7A2F19" fill-opacity="0.16"/>
+<circle cx="110" cy="108" r="84" fill="url(#rsSuccessCoinRim)"/>
+<circle cx="110" cy="106" r="75" fill="url(#rsSuccessCoinFace)"/>
+<circle cx="110" cy="106" r="75" stroke="#FFD99B" stroke-opacity="0.55" stroke-width="3"/>
+<ellipse cx="82" cy="70" rx="44" ry="29" fill="white" fill-opacity="0.22"/>
+<path d="M73 148C89 160 110 167 136 164" stroke="#B74220" stroke-opacity="0.16" stroke-width="13" stroke-linecap="round"/>
+</svg>)svg";
+    }
+
+    return R"svg(<svg viewBox="0 0 220 220" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+<defs>
+<radialGradient id="rsFailureCoinFace" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(76 54) rotate(44.5) scale(156.77)">
+<stop stop-color="#FFE0B0"/>
+<stop offset="0.52" stop-color="#FF9850"/>
+<stop offset="1" stop-color="#D95332"/>
+</radialGradient>
+<linearGradient id="rsFailureCoinRim" x1="34" y1="28" x2="180" y2="192" gradientUnits="userSpaceOnUse">
+<stop stop-color="#FFC98A"/>
+<stop offset="0.52" stop-color="#E26B3B"/>
+<stop offset="1" stop-color="#9E331F"/>
+</linearGradient>
+</defs>
+<circle cx="112" cy="112" r="86" fill="#661E17" fill-opacity="0.18"/>
+<circle cx="110" cy="108" r="84" fill="url(#rsFailureCoinRim)"/>
+<circle cx="110" cy="106" r="75" fill="url(#rsFailureCoinFace)"/>
+<circle cx="110" cy="106" r="75" stroke="#FFCB96" stroke-opacity="0.42" stroke-width="3"/>
+<ellipse cx="82" cy="70" rx="44" ry="29" fill="white" fill-opacity="0.18"/>
+<path d="M72 149C88 160 110 165 137 161" stroke="#992C1B" stroke-opacity="0.20" stroke-width="13" stroke-linecap="round"/>
+</svg>)svg";
+}
 [[nodiscard]] std::string BuildAuthResultHttpResponse(bool success) noexcept
 {
-    const std::string appTitle = HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE, L"Red Salamander"));
-    const std::string title    = HtmlEscapeUtf8(LoadStringResourceOrFallback(
-        success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE, success ? L"You're connected" : L"We hit a snag"));
-    const std::string body     = HtmlEscapeUtf8(
-        LoadStringResourceOrFallback(success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE,
-            success ? L"Microsoft sign-in is done. Head back to Red Salamander and keep exploring."
-                    : L"Microsoft sign-in did not finish cleanly. Return to Red Salamander to review the problem and try again."));
-    const std::string footer = HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT, L"This tab can be closed."));
+    const std::string appTitle = HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE, L"RedSalamander"));
+    const std::string brandKicker = HtmlEscapeUtf8(
+        LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BRAND_KICKER, L"Microsoft Drive connection"));
+    const std::string title = HtmlEscapeUtf8(LoadStringResourceOrFallback(
+        success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE,
+        success ? L"Connection complete" : L"Connection interrupted"));
+    const std::string summaryHtml = LoadAuthPageSummaryHtml(success);
+    const AuthPageMessageVariant funMessage = LoadAuthPageMessageVariant(success);
+    const std::string illustration = BuildAuthPageIllustration(success);
+    const std::string footer = HtmlEscapeUtf8(
+        LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT, L"You can close this tab and go back to RedSalamander."));
 
     std::string html;
-    html.reserve(2048);
+    html.reserve(8192);
     html.append("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">");
     html.append("<title>");
     html.append(appTitle);
     html.append("</title><style>"
-                "html,body{height:100%;margin:0;}"
-                "body{display:grid;place-items:center;padding:24px;background:linear-gradient(180deg,#f7f1e6 0%,#efe5d6 100%);"
-                "color:#241f1a;font-family:\"Segoe UI Variable Text\",\"Segoe UI\",Aptos,\"Noto Sans\",system-ui,sans-serif;}"
-                ".card{width:min(100%,540px);background:#fffdf9;border:1px solid rgba(36,31,26,.10);border-radius:24px;"
-                "box-shadow:0 22px 56px rgba(76,52,23,.12);padding:28px 28px 22px;}"
-                ".icon{width:70px;height:70px;border-radius:20px;display:grid;place-items:center;font-size:34px;margin-bottom:18px;");
-    html.append(success ? "background:linear-gradient(135deg,#d9f5e7,#fff7d9);" : "background:linear-gradient(135deg,#ffe0d8,#fff0d8);");
+                ":root{color-scheme:light;}"
+                "*{box-sizing:border-box;}"
+                "html,body{min-height:100%;margin:0;}"
+                "body{display:grid;place-items:center;padding:clamp(18px,4vw,34px);overflow:auto;color:#201913;"
+                "font-family:\"Segoe UI Variable Display\",\"Segoe UI Variable Text\",\"Aptos\",\"Segoe UI\",system-ui,sans-serif;");
+    html.append(success
+                    ? "background:radial-gradient(circle at 11% 16%,rgba(255,205,132,.60) 0,rgba(255,205,132,.22) 28%,transparent 52%),"
+                      "radial-gradient(circle at 88% 80%,rgba(231,90,57,.16) 0,rgba(231,90,57,0) 32%,transparent 48%),"
+                      "linear-gradient(155deg,#fffaf4 0%,#f6eee2 52%,#f7f5ef 100%);"
+                    : "background:radial-gradient(circle at 11% 16%,rgba(255,180,146,.60) 0,rgba(255,180,146,.24) 28%,transparent 52%),"
+                      "radial-gradient(circle at 88% 80%,rgba(188,47,44,.18) 0,rgba(188,47,44,0) 30%,transparent 48%),"
+                      "linear-gradient(155deg,#fff8f4 0%,#f7ece4 52%,#f7f3ef 100%);");
     html.append("}"
-                ".title{margin:0 0 10px;font-size:28px;line-height:1.1;font-weight:700;letter-spacing:-.02em;}"
-                ".body{margin:0;font-size:16px;line-height:1.55;color:#5c534b;}"
-                ".footer{margin-top:18px;font-size:13px;color:#786f67;}"
-                "</style></head><body><main class=\"card\"><div class=\"icon\" aria-hidden=\"true\">");
-    html.append(success ? "&#x1F4C2;" : "&#x26A0;&#xFE0F;");
-    html.append("</div><h1 class=\"title\">");
+                "body::before,body::after{content:\"\";position:fixed;pointer-events:none;border-radius:999px;filter:blur(12px);opacity:.72;}"
+                "body::before{width:34vmax;height:34vmax;top:-11vmax;right:-9vmax;background:rgba(255,214,164,.24);}"
+                "body::after{width:24vmax;height:24vmax;left:-8vmax;bottom:-8vmax;background:rgba(228,92,57,.12);}"
+                ".card{position:relative;width:min(100%,940px);overflow:hidden;border-radius:36px;padding:28px 32px 24px;"
+                "background:linear-gradient(180deg,rgba(255,255,255,.92) 0%,rgba(255,249,241,.84) 100%);"
+                "border:1px solid rgba(108,73,43,.12);box-shadow:0 30px 90px rgba(91,60,31,.18),inset 0 1px 0 rgba(255,255,255,.68);"
+                "backdrop-filter:blur(14px);}"
+                ".hero{display:grid;grid-template-columns:220px minmax(0,1fr);column-gap:4px;align-items:start;}"
+                ".art{position:relative;min-height:220px;display:grid;place-items:start end;overflow:visible;}"
+                ".art::before{content:\"\";position:absolute;inset:36px 0 auto auto;width:190px;height:190px;border-radius:999px;"
+                "background:radial-gradient(circle at 34% 28%,rgba(255,226,165,.34) 0,rgba(255,226,165,.16) 30%,rgba(235,110,44,.10) 58%,transparent 76%);filter:blur(16px);}"
+                ".art svg{position:relative;display:block;width:min(100%,212px);height:auto;filter:drop-shadow(0 18px 34px rgba(125,68,28,.18));}"
+                ".copy{min-width:0;padding-top:6px;display:flex;flex-direction:column;margin-left:-34px;}"
+                ".masthead{margin-bottom:18px;}"
+                ".masthead-kicker{font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#86614a;}"
+                ".masthead-title{margin-top:2px;font-size:clamp(36px,5.2vw,60px);line-height:.90;font-weight:900;letter-spacing:-.06em;color:#23180f;}"
+                ".flow{display:flex;flex-direction:column;width:min(100%,42rem);margin-left:auto;}");
+    html.append(success
+                    ? ".note{background:linear-gradient(135deg,rgba(255,248,238,.94) 0%,rgba(255,243,225,.92) 54%,rgba(255,229,185,.90) 100%);border:1px solid rgba(232,143,72,.22);}"
+                      ".note::before{background:radial-gradient(circle at 100% 0%,rgba(255,208,117,.42) 0,rgba(255,208,117,0) 42%),radial-gradient(circle at 0% 100%,rgba(231,90,57,.14) 0,rgba(231,90,57,0) 38%);}"
+                      ".footer-mark{color:#bf5623;background:rgba(255,247,238,.86);}"
+                    : ".note{background:linear-gradient(135deg,rgba(255,244,239,.94) 0%,rgba(255,234,225,.92) 54%,rgba(255,221,193,.88) 100%);border:1px solid rgba(220,95,78,.22);}"
+                      ".note::before{background:radial-gradient(circle at 100% 0%,rgba(255,196,113,.38) 0,rgba(255,196,113,0) 42%),radial-gradient(circle at 0% 100%,rgba(220,95,78,.16) 0,rgba(220,95,78,0) 38%);}"
+                      ".footer-mark{color:#bf4d35;background:rgba(255,244,239,.88);}");
+    html.append(".title{margin:6px 0 10px;font-size:clamp(30px,4vw,46px);line-height:1.02;font-weight:850;letter-spacing:-.05em;color:#23180f;max-width:none;white-space:nowrap;}"
+                ".summary{margin:0;width:100%;max-width:34rem;font-size:18px;line-height:1.75;color:#5d4c3f;}"
+                ".summary br{display:block;content:\"\";margin-top:.15em;}"
+                ".note{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center;width:100%;margin-top:22px;padding:20px 26px;border-radius:30px;"
+                "overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 18px 36px rgba(88,62,38,.08);}"
+                ".note::before{content:\"\";position:absolute;inset:0;pointer-events:none;}"
+                ".note>*{position:relative;z-index:1;}"
+                ".note-emoji{display:grid;place-items:center;width:72px;height:72px;border-radius:22px;font-size:40px;line-height:1;"
+                "font-family:\"Segoe UI Emoji\",\"Apple Color Emoji\",\"Noto Color Emoji\",\"Segoe UI Symbol\",sans-serif;"
+                "background:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,245,232,.86) 100%);border:1px solid rgba(126,85,45,.10);box-shadow:0 12px 24px rgba(110,71,34,.10);}"
+                ".note-text{margin:0;font-size:18px;line-height:1.5;font-weight:800;color:#35261b;}"
+                ".footer{display:flex;align-items:center;gap:10px;margin-top:24px;padding-top:18px;border-top:1px solid rgba(82,64,43,.10);"
+                "font-size:13px;font-weight:600;color:#7c6b5e;}"
+                ".footer-mark{width:28px;height:28px;border-radius:999px;display:grid;place-items:center;background:rgba(255,255,255,.72);"
+                "border:1px solid rgba(82,64,43,.08);font-size:14px;}"
+                "@media (max-width:700px){"
+                "body{place-items:start center;}"
+                ".card{padding:22px 18px 18px;border-radius:30px;}"
+                ".hero{grid-template-columns:1fr;gap:12px;}"
+                ".art{place-items:start center;min-height:180px;}"
+                ".art::before{inset:22px auto auto 50%;width:170px;height:170px;transform:translateX(-50%);}"
+                ".copy{padding-top:0;margin-left:0;}"
+                ".masthead{margin-bottom:16px;}"
+                ".flow{width:100%;margin-left:0;}"
+                ".art svg{width:min(78%,204px);}"
+                ".title{margin-top:12px;font-size:32px;}"
+                ".summary{font-size:16px;}"
+                ".note{gap:14px;padding:16px 18px;}"
+                ".note-emoji{width:60px;height:60px;font-size:34px;}"
+                ".note-text{font-size:16px;}"
+                "}"
+                "</style></head><body><main class=\"card\"><section class=\"hero\"><div class=\"art\" aria-hidden=\"true\">");
+    html.append(illustration);
+    html.append("</div><div class=\"copy\"><header class=\"masthead\"><div class=\"masthead-kicker\">");
+    html.append(brandKicker);
+    html.append("</div><div class=\"masthead-title\">");
+    html.append(appTitle);
+    html.append("</div></header><div class=\"flow\"><h1 class=\"title\">");
     html.append(title);
-    html.append("</h1><p class=\"body\">");
-    html.append(body);
-    html.append("</p><p class=\"footer\">");
+    html.append("</h1><p class=\"summary\">");
+    html.append(summaryHtml);
+    html.append("</p></div></div></section><section class=\"note\"><div class=\"note-emoji\" aria-hidden=\"true\">");
+    html.append(funMessage.emojiHtml);
+    html.append("</div><div><p class=\"note-text\">");
+    html.append(funMessage.message);
+    html.append("</p></div></section><div class=\"footer\"><div class=\"footer-mark\" aria-hidden=\"true\">");
+    html.append(success ? "↩" : "↺");
+    html.append("</div><div>");
     html.append(footer);
-    html.append("</p></main></body></html>");
+    html.append("</div></div></main></body></html>");
 
     std::string response;
-    response.reserve(html.size() + 256);
+    response.reserve(html.size() + 320);
     response.append(success ? "HTTP/1.1 200 OK\r\n" : "HTTP/1.1 400 Bad Request\r\n");
     response.append("Content-Type: text/html; charset=utf-8\r\n");
     response.append("Cache-Control: no-store\r\n");

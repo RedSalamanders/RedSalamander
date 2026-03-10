@@ -16,6 +16,8 @@ These phases are **conditional**:
 - If the connection profile and secret are present, the phase **passes**.
 - Otherwise the phase is **skipped** (selftests stay green by default).
 
+All such cases remain declared members of the suite and must still emit an explicit `passed`, `failed`, or `skipped` result. See `Specs/Testing/Testing_SelfTests.md`.
+
 ## CompareDirectories remote smoke (optional)
 
 `RedSalamander.exe --compare-selftest` includes optional remote smoke cases that exercise **cross‑plugin Compare Directories** with Connection Manager profiles:

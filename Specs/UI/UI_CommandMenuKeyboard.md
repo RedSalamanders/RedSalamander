@@ -345,7 +345,7 @@ Notation:
 - Compare Directories… (`Ctrl+F10`) `[cmd/app/compare]`
 - Calculate Occupied Space (`Alt+F10`) `[cmd/pane/viewSpace]`
 - Calculate Directory Sizes (`Ctrl+Shift+F10`) `[cmd/pane/calculateDirectorySizes]`
-- Find Files and Directories… [td] (`Alt+F7`) `[cmd/pane/find]`
+- Find Files and Directories… (`Alt+F7`) `[cmd/pane/find]`
 - Make File List… [td] (`⊘`) `[cmd/pane/makeFileList]`
 - Go to Shortcut or Link Target [td] (`⊘`) `[cmd/pane/goToShortcutOrLinkTarget]`
 - ---
@@ -480,6 +480,15 @@ Right menu is identical to Left menu, except:
 - Invoking the command MUST open Space Viewer for the target pane’s **current folder**.
 - The selected/current item MUST NOT change the target; the current folder is always used.
 - If Space Viewer cannot be opened, the command MUST show a localized error and MUST do nothing else.
+
+#### Find Files and Directories (`cmd/pane/find`)
+
+- Invoking the command MUST open or activate the modeless host-owned `Find Files and Directories` window.
+- The command MUST target the focused pane when focus is inside a pane; otherwise it MUST target the active pane.
+- The initial search scope MUST come from the target pane's current plugin, instance context, and current path.
+- If the Find window is already open, invoking the command again MUST reuse that window and refresh its context instead of opening a duplicate.
+- Search execution MUST remain off the UI thread, and the dialog MUST support `Find`, `Append`, `Intersect`, `Subtract`, and `Cancel`.
+- See `Specs/Core/Core_Search.md` for backend selection, result-set behavior, and persistence rules.
 
 #### Rename (`cmd/pane/rename`)
 

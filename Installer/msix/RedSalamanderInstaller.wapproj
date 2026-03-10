@@ -47,6 +47,9 @@
     <Content Include="..\..\.build\$(Platform)\$(Configuration)\RedSalamanderMonitor.exe">
       <PackagePath>RedSalamanderMonitor.exe</PackagePath>
     </Content>
+    <Content Include="..\..\.build\$(Platform)\$(Configuration)\RedSalamanderSearchService.exe">
+      <PackagePath>RedSalamanderSearchService.exe</PackagePath>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\RedSalamander\RedSalamander.vcxproj">
@@ -57,9 +60,13 @@
       <Project>{4AF38B46-6204-420D-A7FD-8C83DCB4DAFE}</Project>
       <Name>RedSalamanderMonitor</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\RedSalamanderSearchService\RedSalamanderSearchService.vcxproj">
+      <Project>{4C8F3E60-2F3B-4A4E-A9D7-69C3FE8C6D41}</Project>
+      <Name>RedSalamanderSearchService</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="..\..\.build\$(Platform)\$(Configuration)\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\**\*.ipdb;..\..\.build\$(Platform)\$(Configuration)\**\*.exe;..\..\.build\$(Platform)\$(Configuration)\**\asan.supp;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-dynamodb.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-kinesis.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-s3.dll;..\..\.build\$(Platform)\$(Configuration)\**\brotlienc.dll">
+    <Content Include="..\..\.build\$(Platform)\$(Configuration)\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\**\*.ipdb;..\..\.build\$(Platform)\$(Configuration)\**\*.exe;..\..\.build\$(Platform)\$(Configuration)\**\asan.supp;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-dynamodb.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-kinesis.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-s3.dll;..\..\.build\$(Platform)\$(Configuration)\**\brotlienc.dll;..\..\.build\$(Platform)\$(Configuration)\**\*.WebView2\**\*">
       <PackagePath>%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
     </Content>
   </ItemGroup>

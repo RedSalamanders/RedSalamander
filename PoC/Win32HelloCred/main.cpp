@@ -87,7 +87,25 @@ static void ShowLastError(HWND hwnd, const wchar_t* prefix)
 {
     DWORD err = GetLastError();
     wchar_t buf[512]{};
-    FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, err, 0, buf, (DWORD)std::size(buf), nullptr);
+    const DWORD written = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, nullptr, err, 0, buf, (DWORD)std::size(buf), nullptr);
+    if (written == 0)
+    {
+        StringCchCopyW(buf, std::size(buf), L"(no system message available)");
+    }
+    else
+    {
+        size_t length = written;
+        while (length > 0)
+        {
+            const wchar_t ch = buf[length - 1];
+            if (ch != L'\r' && ch != L'\n' && ch != L' ' && ch != L'\t')
+            {
+                break;
+            }
+            --length;
+        }
+        buf[length] = L'\0';
+    }
 
     wchar_t msg[1024]{};
     StringCchPrintfW(msg, std::size(msg), L"%s\n\nGetLastError=%lu\n%s", prefix, err, buf);

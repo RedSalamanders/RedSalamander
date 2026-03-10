@@ -83,11 +83,12 @@ struct FileSystemRenamePair
     const wchar_t* newName; // Leaf name only (no path separators).
 };
 
-// All pointer fields in FileSystemRenamePair, FileSystemSearchQuery, FileSystemSearchMatch, and callback string
-// parameters must be arena-backed UTF-16 strings.
 // Arrays passed to CopyItems/MoveItems/DeleteItems and arrays of FileSystemRenamePair must be allocated from the same
-// arena as their strings.
+// arena as their referenced UTF-16 strings.
 // Arena strings are NUL-terminated.
+// Search query strings are caller-owned and only need to remain valid for the duration of Search().
+// Search match/progress strings are plugin-owned and only need to remain valid until the callback returns.
+// Search payload strings are not required to come from FileSystemArena.
 struct FileSystemArena
 {
     unsigned char* buffer;
@@ -95,49 +96,129 @@ struct FileSystemArena
     unsigned long usedBytes;
 };
 
+// Per-call search options and backend hints.
 enum FileSystemSearchFlags : uint32_t
 {
     FILESYSTEM_SEARCH_NONE                = 0,
     FILESYSTEM_SEARCH_RECURSIVE           = 0x1,
     FILESYSTEM_SEARCH_INCLUDE_FILES       = 0x2,
     FILESYSTEM_SEARCH_INCLUDE_DIRECTORIES = 0x4,
-    FILESYSTEM_SEARCH_MATCH_CASE          = 0x8,
-    FILESYSTEM_SEARCH_FOLLOW_SYMLINKS     = 0x10,
-    FILESYSTEM_SEARCH_USE_REGEX           = 0x20,
+    FILESYSTEM_SEARCH_FOLLOW_SYMLINKS     = 0x8,
+    FILESYSTEM_SEARCH_MATCH_CASE_NAME     = 0x10,
+    FILESYSTEM_SEARCH_MATCH_CASE_CONTENT  = 0x20,
+    FILESYSTEM_SEARCH_WANT_SNIPPETS       = 0x40,
+    FILESYSTEM_SEARCH_PREFER_INDEX        = 0x80,
 };
 
+enum FileSystemSearchNameMode : uint32_t
+{
+    FILESYSTEM_SEARCH_NAME_DISABLED = 0,
+    FILESYSTEM_SEARCH_NAME_WILDCARD = 1,
+    FILESYSTEM_SEARCH_NAME_LITERAL  = 2,
+    FILESYSTEM_SEARCH_NAME_REGEX    = 3,
+};
+
+enum FileSystemSearchContentMode : uint32_t
+{
+    FILESYSTEM_SEARCH_CONTENT_DISABLED     = 0,
+    FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL = 1,
+    FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX   = 2,
+};
+
+enum FileSystemSearchBackend : uint32_t
+{
+    FILESYSTEM_SEARCH_BACKEND_UNKNOWN = 0,
+    FILESYSTEM_SEARCH_BACKEND_SCAN    = 1,
+    FILESYSTEM_SEARCH_BACKEND_INDEX   = 2,
+    FILESYSTEM_SEARCH_BACKEND_SERVICE = 3,
+};
+
+enum FileSystemSearchMatchSource : uint32_t
+{
+    FILESYSTEM_SEARCH_MATCH_SOURCE_NONE    = 0,
+    FILESYSTEM_SEARCH_MATCH_SOURCE_NAME    = 0x1,
+    FILESYSTEM_SEARCH_MATCH_SOURCE_CONTENT = 0x2,
+};
+
+enum FileSystemSearchWarningFlags : uint32_t
+{
+    FILESYSTEM_SEARCH_WARNING_NONE                   = 0,
+    FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX     = 0x1,
+    FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_CONTENT   = 0x2,
+    FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED = 0x4,
+    FILESYSTEM_SEARCH_WARNING_OVERFLOW              = 0x8,
+};
+
+enum FileSystemSearchPhase : uint32_t
+{
+    FILESYSTEM_SEARCH_PHASE_INITIALIZING = 0,
+    FILESYSTEM_SEARCH_PHASE_ENUMERATING  = 1,
+    FILESYSTEM_SEARCH_PHASE_INDEX_LOOKUP = 2,
+    FILESYSTEM_SEARCH_PHASE_CONTENT_SCAN = 3,
+    FILESYSTEM_SEARCH_PHASE_COMPLETED    = 4,
+};
+
+// Search query payload passed to IFileSystemSearch::Search.
+// sizeBytes must equal sizeof(FileSystemSearchQuery).
 struct FileSystemSearchQuery
 {
-    uint32_t sizeBytes; // sizeof(FileSystemSearchQuery)
+    uint32_t sizeBytes; // Must equal sizeof(FileSystemSearchQuery)
 
-    const wchar_t* rootPath;
-    const wchar_t* pattern; // nullptr/empty = L"*"
-    FileSystemSearchFlags flags;
-    unsigned long maxResults; // 0 = unlimited
+    const wchar_t* rootPath;         // Required, NUL-terminated plugin path used as the search root.
+    const wchar_t* namePattern;      // Required unless nameMode == FILESYSTEM_SEARCH_NAME_DISABLED.
+    const wchar_t* contentPattern;   // Required unless contentMode == FILESYSTEM_SEARCH_CONTENT_DISABLED.
+    FileSystemSearchFlags flags;     // Include/recurse/matching options and backend hints.
+    FileSystemSearchNameMode nameMode;        // Wildcard, literal substring, regex, or disabled.
+    FileSystemSearchContentMode contentMode;  // Text literal, text regex, or disabled.
+    uint64_t maxResults;             // 0 = unlimited.
+    uint64_t maxContentBytesPerFile; // 0 = plugin default (64 MiB in the current built-in file plugin).
+    uint32_t maxSnippetCharacters;   // 0 = plugin default (160 UTF-16 code units in the current built-in file plugin).
+    uint32_t reserved;               // Must be 0 for v1 callers.
 };
 
+// Match payload delivered through IFileSystemSearchCallback::FileSystemSearchMatch.
+// sizeBytes must equal sizeof(FileSystemSearchMatch).
 struct FileSystemSearchMatch
 {
-    uint32_t sizeBytes; // sizeof(FileSystemSearchMatch)
+    uint32_t sizeBytes; // Must equal sizeof(FileSystemSearchMatch)
 
-    const wchar_t* fullPath;
-    unsigned long fullPathSize;
-    unsigned long fileAttributes;
-    __int64 creationTime;
-    __int64 lastAccessTime;
-    __int64 lastWriteTime;
-    __int64 changeTime;
-    __int64 endOfFile;
-    __int64 allocationSize;
+    const wchar_t* fullPath;         // Canonical full path for the current plugin instance.
+    unsigned long fullPathSize;      // Size in bytes, excluding the trailing NUL.
+    const wchar_t* relativePath;     // Root-relative path, useful for result grouping and display.
+    unsigned long relativePathSize;  // Size in bytes, excluding the trailing NUL.
+    const wchar_t* displayName;      // Leaf display name.
+    unsigned long displayNameSize;   // Size in bytes, excluding the trailing NUL.
+    const wchar_t* previewText;      // Optional UTF-16 snippet around the first content hit.
+    unsigned long previewTextSize;   // Size in bytes, excluding the trailing NUL.
+    unsigned long fileAttributes;    // FILE_ATTRIBUTE_* bits.
+    __int64 creationTime;            // FILETIME ticks.
+    __int64 lastAccessTime;          // FILETIME ticks.
+    __int64 lastWriteTime;           // FILETIME ticks.
+    __int64 changeTime;              // FILETIME ticks.
+    __int64 endOfFile;               // Logical file size in bytes, or 0 for directories/unknown.
+    __int64 allocationSize;          // Allocated size in bytes, or 0 when unknown.
+    uint32_t matchedBy;              // FileSystemSearchMatchSource bits.
+    uint64_t contentMatchByteOffset; // Best-effort byte/character offset of the first content hit, or 0 when unavailable.
+    uint32_t contentMatchByteLength; // Best-effort byte/character length of the first content hit, or 0 when unavailable.
+    uint32_t reserved;               // Must be 0 for v1 implementations.
 };
 
+// Progress payload delivered through IFileSystemSearchCallback::FileSystemSearchProgress.
+// sizeBytes must equal sizeof(FileSystemSearchProgress).
 struct FileSystemSearchProgress
 {
-    uint32_t sizeBytes; // sizeof(FileSystemSearchProgress)
+    uint32_t sizeBytes; // Must equal sizeof(FileSystemSearchProgress)
 
-    uint64_t scannedEntries;
-    uint64_t matchedEntries;
-    const wchar_t* currentPath;
+    FileSystemSearchPhase phase;     // Current logical stage of execution.
+    FileSystemSearchBackend backend; // Backend currently producing results/progress.
+    uint32_t warningFlags;           // FileSystemSearchWarningFlags bits.
+    HRESULT statusHint;              // S_OK, S_FALSE, HRESULT_FROM_WIN32(ERROR_CANCELLED), etc.
+    uint64_t scannedDirectories;     // Number of directories enumerated so far.
+    uint64_t scannedFiles;           // Number of files examined so far.
+    uint64_t candidateFiles;         // Number of files selected for content scanning.
+    uint64_t matchedEntries;         // Number of matches emitted so far.
+    const wchar_t* currentPath;      // Optional current path; may be nullptr for final completion updates.
+    unsigned long currentPathSize;   // Size in bytes, excluding the trailing NUL.
 };
 #pragma warning(pop)
 
@@ -501,6 +582,8 @@ interface __declspec(uuid("a4bdbb56-4f3f-4c1b-9b28-2f4c4a08d7af")) __declspec(no
 // - Implementations MUST NOT invoke these callbacks after Search returns.
 // - Plugins MUST NOT invoke these callbacks concurrently for a single Search call (the host is not required to be thread-safe).
 // - Callbacks may be invoked on background threads.
+// - Returning E_ABORT or HRESULT_FROM_WIN32(ERROR_CANCELLED) from FileSystemSearchMatch/FileSystemSearchProgress
+//   requests cancellation; Search must then return HRESULT_FROM_WIN32(ERROR_CANCELLED).
 // Host obligations:
 // - The host MUST keep the callback object and its backing state alive until Search returns.
 // - To tear down early, the host MUST signal cancellation via FileSystemSearchShouldCancel and wait for Search

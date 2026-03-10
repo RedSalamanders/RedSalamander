@@ -300,6 +300,9 @@ public:
     HRESULT SetFileSystemInstanceForPane(
         Pane pane, wil::com_ptr<IFileSystem> fileSystem, std::wstring pluginId, std::wstring pluginShortId, std::wstring instanceContext) noexcept;
     [[maybe_unused]] std::wstring_view GetFileSystemPluginId(Pane pane) const noexcept;
+    [[maybe_unused]] std::wstring_view GetFileSystemPluginShortId(Pane pane) const noexcept;
+    [[maybe_unused]] std::wstring_view GetFileSystemInstanceContext(Pane pane) const noexcept;
+    [[nodiscard]] wil::com_ptr<IFileSystem> GetFileSystem(Pane pane) const noexcept;
 
     void DebugShowOverlaySample(Pane pane, FolderView::OverlaySeverity severity);
     void DebugShowOverlaySampleNonModal(Pane pane, FolderView::OverlaySeverity severity);
