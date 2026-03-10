@@ -34,6 +34,7 @@ These locations are referenced by the build/runtime:
 ### Core
 
 - `Specs/Core/Core_SettingsStore.md`
+- `Specs/Core/Core_Search.md`
 - `Specs/Core/Core_ConnectionManager.md`
 - `Specs/Core/Core_StartupBootstrap.md`
 
@@ -62,5 +63,6 @@ These locations are referenced by the build/runtime:
 
 ### Testing
 
+- `Specs/Testing/Testing_SelfTests.md`
 - `Specs/Testing/Testing_SelfTestRemoteCredentials.md`
 - `Specs/TestRuns/README.md`

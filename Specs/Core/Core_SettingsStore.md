@@ -181,7 +181,7 @@ Watcher rules:
 - `RedSalamanderMonitor.exe` does not participate in this hot-reload flow.
 
 Merge policy after a valid external reload:
-- Disk is authoritative for persisted user-editable sections such as `theme`, `plugins`, `connections`, `extensions`, `shortcuts`, `cache`, `fileOperations`, `compareDirectories`, `hotPaths`, `monitor`, `mainMenu`, `startup`, and folder preference fields.
+- Disk is authoritative for persisted user-editable sections such as `theme`, `plugins`, `connections`, `extensions`, `shortcuts`, `cache`, `fileOperations`, `compareDirectories`, `hotPaths`, `monitor`, `mainMenu`, `startup`, `search`, and folder preference fields.
 - Runtime session state is preserved for already-open windows and current pane navigation.
 - Preserved runtime window placements are the placements of currently open modeless/top-level windows already running in the process.
 - Preserved folder session fields are:
@@ -198,23 +198,24 @@ Invalid external file behavior:
 - Show a single modeless localized warning in the app.
 - Do **not** rename/back up the file during the live reload failure path.
 
-## Settings Data Model (v6)
+## Settings Data Model (v11)
 
 ### Root object
 
 The root JSON object may contain (depending on the application):
-- `schemaVersion` (integer): format version (current: v10 = `10`); unsupported versions are treated as invalid (file is backed up and defaults are used, no migration).
+- `schemaVersion` (integer): format version (current: v11 = `11`); unsupported versions are treated as invalid (file is backed up and defaults are used, no migration).
 - `windows` (object): per-window placement records
 - `theme` (object): current theme + custom themes
 - `plugins` (object): plugin discovery + per-plugin configuration
 - `mainMenu` (object): RedSalamander main window menu bar state
 - `cache` (object): cache configuration (directory enumeration cache, etc.)
 - `folders` (object): multi-pane folder state (current folder + global folder history)
+- `search` (object): persisted Find Files and Directories dialog state
 - `monitor` (object): RedSalamanderMonitor UI state (menu toggles, filter state)
 - `shortcuts` (object): shortcut key bindings
 - `extensions` (object, optional): extension-based behaviors (e.g., open archives as virtual file systems)
 
-## Plugins (v6)
+## Plugins (v11)
 
 Plugin settings live under:
 - `plugins`
@@ -247,7 +248,7 @@ Built-in plugin configuration keys are documented in their respective plugin spe
 - `builtin/viewer-web`, `builtin/viewer-json`, `builtin/viewer-markdown`: `Specs/Plugins/Plugins_ViewerWeb.md`
 
 
-## Extensions (v6)
+## Extensions (v11)
 
 Extension settings live under:
 - `extensions`
@@ -268,7 +269,7 @@ Notes:
 - Default mappings include common RAW photo extensions (e.g. `.cr2`, `.cr3`, `.nef`, `.arw`, `.dng`, `.raf`, `.rw2`, `.orf`, `.pef`, `.sr2`, `.srw`, `.x3f`) → `builtin/viewer-imgraw`.
 - To remove a custom viewer association, remove it from the map (or set the whole map to `{}`) and the host will fall back to `builtin/viewer-text`.
 
-## Shortcuts (v6)
+## Shortcuts (v11)
 
 Shortcut bindings live under:
 - `shortcuts`
@@ -300,6 +301,7 @@ For each top-level window we store:
 Window IDs are strings (examples):
 - `MainWindow`
 - `MonitorWindow`
+- `FindFilesWindow`
 
 ### Save policy
 
@@ -528,6 +530,35 @@ Folder state is stored as an array to support multiple panes (e.g., Left/Right) 
 - `folders.historyMax` defaults to `20` and is clamped to `1..50`.
 - Deduplicate paths (if a path already exists, move it to the front).
 - `folders.history[0]` is the most recently visited location (from either pane).
+
+## Search Dialog State
+
+Find dialog settings live under:
+- `search`
+
+Keys map to `Common::Settings::SearchDialogSettings`:
+- `recentRoots` (array, max 10): most-recent-first root history
+- `recentNamePatterns` (array, max 10): most-recent-first name-pattern history
+- `recentContentPatterns` (array, max 10): most-recent-first content-pattern history
+- `lastRoot` (string): last root value shown in the dialog
+- `lastNamePattern` (string): last name-pattern value
+- `lastContentPattern` (string): last content-pattern value
+- `recursive` (bool, default: `true`)
+- `includeFiles` (bool, default: `true`)
+- `includeDirectories` (bool, default: `false`)
+- `followSymlinks` (bool, default: `false`)
+- `matchCaseName` (bool, default: `false`)
+- `matchCaseContent` (bool, default: `false`)
+- `preferIndex` (bool, default: `true`)
+- `wantSnippets` (bool, default: `false`)
+- `nameMode` (`"wildcard" | "literal" | "regex"`, default: `"wildcard"`)
+- `contentMode` (`"disabled" | "textLiteral" | "textRegex"`, default: `"disabled"`)
+- `maxResults` (integer, default: `0` meaning unlimited)
+
+Behavior:
+- History lists are deduplicated and capped at 10 items per field.
+- The host persists the last-used options when the Find window closes or starts a new search.
+- Window placement for the Find dialog is stored separately under `windows.FindFilesWindow`.
 
 ### Restore behavior
 

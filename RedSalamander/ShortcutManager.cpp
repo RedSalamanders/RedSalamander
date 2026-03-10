@@ -9,26 +9,28 @@ namespace
 {
 void LoadBindings(const std::vector<Common::Settings::ShortcutBinding>& bindings,
                   std::unordered_map<uint32_t, std::wstring>& outMap,
+                  std::unordered_map<std::wstring, uint32_t>& outReverseMap,
                   std::vector<uint32_t>& outConflicts)
 {
     outMap.clear();
+    outReverseMap.clear();
     outConflicts.clear();
-
     for (const auto& binding : bindings)
     {
         if (binding.commandId.empty())
         {
             continue;
         }
-
         const uint32_t key        = ShortcutManager::MakeChordKey(binding.vk, binding.modifiers);
         const auto [it, inserted] = outMap.try_emplace(key, binding.commandId);
         if (! inserted)
         {
             outConflicts.push_back(key);
+            continue;
         }
+        const std::wstring_view canonicalCommandId = CanonicalizeCommandId(binding.commandId);
+        outReverseMap[std::wstring(canonicalCommandId)] = key;
     }
-
     std::sort(outConflicts.begin(), outConflicts.end());
     outConflicts.erase(std::unique(outConflicts.begin(), outConflicts.end()), outConflicts.end());
 }
@@ -38,14 +40,16 @@ void ShortcutManager::Clear() noexcept
 {
     _functionBar.clear();
     _folderView.clear();
+    _functionBarReverse.clear();
+    _folderViewReverse.clear();
     _functionBarConflicts.clear();
     _folderViewConflicts.clear();
 }
 
 void ShortcutManager::Load(const Common::Settings::ShortcutsSettings& shortcuts)
 {
-    LoadBindings(shortcuts.functionBar, _functionBar, _functionBarConflicts);
-    LoadBindings(shortcuts.folderView, _folderView, _folderViewConflicts);
+    LoadBindings(shortcuts.functionBar, _functionBar, _functionBarReverse, _functionBarConflicts);
+    LoadBindings(shortcuts.folderView, _folderView, _folderViewReverse, _folderViewConflicts);
 }
 
 std::optional<std::wstring_view> ShortcutManager::FindFunctionBarCommand(uint32_t vk, uint32_t modifiers) const noexcept
@@ -96,33 +100,28 @@ std::optional<ShortcutManager::ShortcutChord> ShortcutManager::TryGetShortcutFor
 
     commandId = CanonicalizeCommandId(commandId);
 
-    const auto findIn = [&](const std::unordered_map<uint32_t, std::wstring>& bindings) -> std::optional<ShortcutChord>
+    const auto findIn = [&](const std::unordered_map<std::wstring, uint32_t>& bindings) -> std::optional<ShortcutChord>
     {
-        for (const auto& [key, mappedCommandId] : bindings)
+        const auto it = bindings.find(std::wstring(commandId));
+        if (it == bindings.end())
         {
-            if (CanonicalizeCommandId(mappedCommandId) != commandId)
-            {
-                continue;
-            }
-
-            ShortcutChord chord;
-            chord.vk        = key & 0xFFu;
-            chord.modifiers = (key >> 8) & 0x7u;
-            return chord;
+            return std::nullopt;
         }
-
-        return std::nullopt;
+        const uint32_t key = it->second;
+        ShortcutChord chord;
+        chord.vk        = key & 0xFFu;
+        chord.modifiers = (key >> 8) & 0x7u;
+        return chord;
     };
-
-    if (std::optional<ShortcutChord> found = findIn(_functionBar))
+    if (std::optional<ShortcutChord> found = findIn(_functionBarReverse))
     {
         return found;
     }
-
-    if (std::optional<ShortcutChord> found = findIn(_folderView))
+    if (std::optional<ShortcutChord> found = findIn(_folderViewReverse))
     {
         return found;
     }
 
     return std::nullopt;
 }
+

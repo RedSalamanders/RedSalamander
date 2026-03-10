@@ -3,6 +3,7 @@
 RedSalamander is a Windows dual-pane file manager with:
 
 - A fast DirectX-based folder view
+- A modeless Find Files and Directories workflow with native, indexed, and fallback search backends
 - Virtual file systems (archives, FTP/SFTP/SCP/IMAP, S3, …)
 - Viewer plugins (Text/Hex, Images/RAW, WebView2-based viewers, …)
 - A themed Preferences experience (themes, plugins, shortcuts, associations)
@@ -39,6 +40,13 @@ Enjoy!
 ## For Developers
 
 RedSalamander is a Windows-native C++23 application featuring advanced text visualization, real-time debugging (ETW), and high-performance graphics rendering (DirectX / Direct2D / DirectWrite).
+
+Key engineering specs for the current search stack and self-test contract:
+
+- `Specs/Core/Core_Search.md`
+- `Specs/Plugins/Plugins_VirtualFileSystem.md`
+- `Specs/UI/UI_CommandMenuKeyboard.md`
+- `Specs/Testing/Testing_SelfTests.md`
 
 ## Building the Project
 
@@ -151,6 +159,8 @@ Build a Debug binary and run the suites (recommended: run all suites in one proc
 ```
 
 The process exit code is `0` on success and non-zero on failure.
+
+Every declared self-test case must report `passed`, `failed`, or `skipped`. Conditional coverage stays part of the suite and uses `skipped` with a reason when prerequisites are absent. See `Specs/Testing/Testing_SelfTests.md`.
 
 Note: the Commands self-test is UI-driven and may take longer to run.
 

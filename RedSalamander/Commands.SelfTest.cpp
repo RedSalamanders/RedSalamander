@@ -24,16 +24,19 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "AppTheme.h"
 #include "ChangeCase.h"
 #include "CommandDispatch.Debug.h"
 #include "CommandRegistry.h"
 #include "CompareDirectoriesWindow.h"
 #include "ConnectionManagerDialog.h"
 #include "FolderWindow.h"
+#include "FindFilesWindow.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "Preferences.h"
 #include "SettingsHotReload.h"
+#include "SettingsSave.h"
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutsWindow.h"
@@ -388,6 +391,155 @@ void RestoreMainSettingsHotReload(HWND mainWindow, CaseState& state) noexcept
     state.Require(FAILED(invalidHr), L"TryLoadSettingsNoRecovery should fail for invalid JSON.");
     state.Require(SelfTest::PathExists(settingsPath), L"Invalid no-recovery load should keep the original settings file in place.");
     state.Require(FindSettingsBackupArtifact(kTestAppId).empty(), L"No-recovery load should not create a .bad backup file.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsStoreSearchRoundTrip(CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestSearchRoundTrip";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
+
+    Common::Settings::Settings settings{};
+    Common::Settings::SearchDialogSettings search{};
+    search.recentRoots           = {L"C:\\search-root", L"D:\\archive"};
+    search.recentNamePatterns    = {L"*.jsonl", L"*.txt"};
+    search.recentContentPatterns = {L"needle", L"todo"};
+    search.lastRoot              = L"C:\\search-root";
+    search.lastNamePattern       = L"*.jsonl";
+    search.lastContentPattern    = L"needle";
+    search.recursive             = false;
+    search.includeFiles          = true;
+    search.includeDirectories    = true;
+    search.followSymlinks        = true;
+    search.matchCaseName         = true;
+    search.matchCaseContent      = true;
+    search.preferIndex           = false;
+    search.wantSnippets          = true;
+    search.nameMode              = Common::Settings::SearchNameMode::Regex;
+    search.contentMode           = Common::Settings::SearchContentMode::TextRegex;
+    search.maxResults            = 77u;
+    settings.search              = search;
+
+    const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
+    state.Require(prepared.search.has_value(), L"Search settings should survive canonical save preparation when non-default.");
+
+    const HRESULT saveHr = Common::Settings::SaveSettings(kTestAppId, prepared);
+    state.Require(SUCCEEDED(saveHr), L"Failed to save search round-trip settings.");
+    if (FAILED(saveHr))
+    {
+        return false;
+    }
+
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded);
+    state.Require(loadHr == S_OK, L"Failed to load search round-trip settings.");
+    state.Require(loaded.search.has_value(), L"Search settings block missing after round-trip.");
+    if (FAILED(loadHr) || ! loaded.search.has_value())
+    {
+        return false;
+    }
+
+    const Common::Settings::SearchDialogSettings& actual = loaded.search.value();
+    state.Require(actual.recentRoots == search.recentRoots, L"Search recent roots did not round-trip.");
+    state.Require(actual.recentNamePatterns == search.recentNamePatterns, L"Search recent name patterns did not round-trip.");
+    state.Require(actual.recentContentPatterns == search.recentContentPatterns, L"Search recent content patterns did not round-trip.");
+    state.Require(actual.lastRoot == search.lastRoot, L"Search last root did not round-trip.");
+    state.Require(actual.lastNamePattern == search.lastNamePattern, L"Search last name pattern did not round-trip.");
+    state.Require(actual.lastContentPattern == search.lastContentPattern, L"Search last content pattern did not round-trip.");
+    state.Require(actual.recursive == search.recursive, L"Search recursive flag did not round-trip.");
+    state.Require(actual.includeFiles == search.includeFiles, L"Search includeFiles flag did not round-trip.");
+    state.Require(actual.includeDirectories == search.includeDirectories, L"Search includeDirectories flag did not round-trip.");
+    state.Require(actual.followSymlinks == search.followSymlinks, L"Search followSymlinks flag did not round-trip.");
+    state.Require(actual.matchCaseName == search.matchCaseName, L"Search matchCaseName flag did not round-trip.");
+    state.Require(actual.matchCaseContent == search.matchCaseContent, L"Search matchCaseContent flag did not round-trip.");
+    state.Require(actual.preferIndex == search.preferIndex, L"Search preferIndex flag did not round-trip.");
+    state.Require(actual.wantSnippets == search.wantSnippets, L"Search wantSnippets flag did not round-trip.");
+    state.Require(actual.nameMode == search.nameMode, L"Search nameMode did not round-trip.");
+    state.Require(actual.contentMode == search.contentMode, L"Search contentMode did not round-trip.");
+    state.Require(actual.maxResults == search.maxResults, L"Search maxResults did not round-trip.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsStoreShortcutDefaultsRoundTrip(CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestShortcutDefaultsRoundTrip";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
+
+    Common::Settings::Settings settings{};
+    ShortcutDefaults::EnsureShortcutsInitialized(settings);
+
+    const Common::Settings::Settings prepared = SettingsSave::PrepareForSave(settings);
+    state.Require(! prepared.shortcuts.has_value(), L"Canonical save path should omit default shortcuts.");
+
+    const HRESULT saveHr = Common::Settings::SaveSettings(kTestAppId, prepared);
+    state.Require(SUCCEEDED(saveHr), L"Failed to save shortcut-default round-trip test settings.");
+    if (FAILED(saveHr))
+    {
+        return false;
+    }
+
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded);
+    state.Require(loadHr == S_OK, L"TryLoadSettingsNoRecovery should succeed for shortcut-default round-trip settings.");
+    state.Require(! loaded.shortcuts.has_value(), L"Loading canonical settings without a shortcuts block should keep shortcuts absent until initialization.");
+    if (FAILED(loadHr))
+    {
+        return false;
+    }
+
+    ShortcutDefaults::EnsureShortcutsInitialized(loaded);
+    state.Require(loaded.shortcuts.has_value(), L"Shortcut initialization should restore default shortcuts after loading canonical settings.");
+    if (! loaded.shortcuts.has_value())
+    {
+        return false;
+    }
+
+    ShortcutManager manager;
+    manager.Load(loaded.shortcuts.value());
+
+    const auto folderCommand = manager.FindFolderViewCommand(VK_INSERT, ShortcutManager::kModCtrl);
+    state.Require(folderCommand.has_value() && folderCommand.value() == std::wstring_view{L"cmd/pane/clipboardCopy"},
+                  L"Ctrl+Insert should be restored after initializing missing shortcuts.");
+
+    const auto functionCommand = manager.FindFunctionBarCommand(VK_F3, 0u);
+    state.Require(functionCommand.has_value() && functionCommand.value() == std::wstring_view{L"cmd/pane/view"},
+                  L"F3 should be restored after initializing missing shortcuts.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestSettingsStoreRejectsMalformedShortcutSection(CaseState& state) noexcept
+{
+    constexpr std::wstring_view kTestAppId = L"RedSalamanderSelfTestShortcutInvalid";
+    CleanupSettingsArtifacts(kTestAppId);
+    const auto cleanup = wil::scope_exit([&] { CleanupSettingsArtifacts(kTestAppId); });
+
+    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kTestAppId);
+    state.Require(! settingsPath.empty(), L"Malformed-shortcuts test settings path unavailable.");
+    if (settingsPath.empty())
+    {
+        return false;
+    }
+
+    constexpr std::string_view kMalformedSettings = R"json({
+  "schemaVersion": 10,
+  "shortcuts": {
+    "functionBar": [
+      { "vk": "F3", "ctrl": "true", "commandId": "cmd/pane/view" }
+    ],
+    "folderView": []
+  }
+})json";
+
+    state.Require(SelfTest::WriteTextFile(settingsPath, kMalformedSettings), L"Failed to write malformed shortcut settings file.");
+
+    Common::Settings::Settings loaded{};
+    const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(kTestAppId, loaded);
+    state.Require(FAILED(loadHr), L"Malformed shortcut settings should be rejected by TryLoadSettingsNoRecovery.");
+    state.Require(loadHr == HRESULT_FROM_WIN32(ERROR_INVALID_DATA), L"Malformed shortcut settings should surface ERROR_INVALID_DATA.");
+    state.Require(SelfTest::PathExists(settingsPath), L"Malformed no-recovery load should keep the original settings file in place.");
+    state.Require(FindSettingsBackupArtifact(kTestAppId).empty(), L"Malformed no-recovery load should not create a .bad backup file.");
     return state.failure.empty();
 }
 
@@ -865,6 +1017,35 @@ void FocusFolderViewPane(FolderWindow::Pane pane) noexcept
                       g_folderWindow.CanShowHiddenNames(pane) ? 1 : 0,
                       missing));
 
+    return false;
+}
+
+template <typename Predicate>
+[[nodiscard]] bool WaitForFindSnapshot(Predicate&& predicate, std::chrono::milliseconds timeout, FindFilesDebugSnapshot* outSnapshot = nullptr) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    FindFilesDebugSnapshot snapshot{};
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (DebugGetFindFilesWindowSnapshot(snapshot) && predicate(snapshot))
+        {
+            if (outSnapshot)
+            {
+                *outSnapshot = snapshot;
+            }
+            return true;
+        }
+
+        std::this_thread::sleep_for(20ms);
+    }
+
+    if (outSnapshot && DebugGetFindFilesWindowSnapshot(snapshot))
+    {
+        *outSnapshot = snapshot;
+    }
     return false;
 }
 
@@ -1534,6 +1715,239 @@ void ClearClipboardContents(HWND ownerWindow) noexcept
         state.Require(WaitForWindowClosed(compare, SelfTest::Scale(std::chrono::milliseconds{2000})), L"Compare window did not close.");
     }
 
+    SendMessageW(mainWindow, WM_COMMAND, MAKEWPARAM(IDM_PANE_FIND, 0), 0);
+    const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(std::chrono::milliseconds{2000}));
+    state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open.");
+    if (findWindow)
+    {
+        state.Require(IsOwnedBy(findWindow, mainWindow), L"Find window is not owned by main window.");
+        const AppTheme darkTheme = ResolveAppTheme(ThemeMode::Dark, L"find-selftest-dark");
+        UpdateFindFilesWindowsTheme(darkTheme);
+        PumpPendingMessages();
+        state.Require(IsWindow(findWindow) != FALSE, L"Find window did not survive runtime theme update to dark mode.");
+
+        const AppTheme lightTheme = ResolveAppTheme(ThemeMode::Light, L"find-selftest-light");
+        UpdateFindFilesWindowsTheme(lightTheme);
+        PumpPendingMessages();
+        state.Require(IsWindow(findWindow) != FALSE, L"Find window did not survive runtime theme update to light mode.");
+
+        PostMessageW(findWindow, WM_CLOSE, 0, 0);
+        state.Require(WaitForWindowClosed(findWindow, SelfTest::Scale(std::chrono::milliseconds{2000})), L"Find window did not close.");
+    }
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestFindDialogSearchOps(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    ShortcutManager shortcuts;
+    shortcuts.Load(ShortcutDefaults::CreateDefaultShortcuts());
+    const auto findChordOpt = shortcuts.TryGetShortcutForCommand(L"cmd/pane/find");
+    state.Require(findChordOpt.has_value(), L"Find default shortcut missing.");
+    if (findChordOpt.has_value())
+    {
+        state.Require(findChordOpt->vk == VK_F7, L"Find default shortcut expected F7.");
+        state.Require(findChordOpt->modifiers == ShortcutManager::kModAlt, L"Find default shortcut expected Alt+F7.");
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::optional<std::filesystem::path> leftBefore  = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const std::optional<std::filesystem::path> rightBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Right);
+    const auto restorePaths                                = wil::scope_exit([&]
+    {
+        if (const HWND findWindow = GetFindFilesWindowHandle(); findWindow && IsWindow(findWindow))
+        {
+            PostMessageW(findWindow, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(findWindow, SelfTest::Scale(3000ms)));
+        }
+
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+        if (rightBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Right, rightBefore.value());
+        }
+    });
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root = suiteRoot / L"work" / L"find_dialog";
+    const std::filesystem::path sub  = root / L"sub";
+    const std::filesystem::path bulk = root / L"bulk";
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    ec.clear();
+
+    state.Require(SelfTest::EnsureDirectory(sub), L"Failed to create find dialog subdirectory.");
+    state.Require(SelfTest::EnsureDirectory(bulk), L"Failed to create find dialog bulk directory.");
+    state.Require(SelfTest::WriteTextFile(root / L"a.jsonl", "{\"message\":\"needle alpha\"}"), L"Failed to create a.jsonl.");
+    state.Require(SelfTest::WriteTextFile(root / L"b.txt", "plain text"), L"Failed to create b.txt.");
+    state.Require(SelfTest::WriteTextFile(sub / L"c.jsonl", "{\"message\":\"other\"}"), L"Failed to create c.jsonl.");
+    state.Require(SelfTest::WriteTextFile(sub / L"d.txt", "content needle beta"), L"Failed to create d.txt.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for find dialog test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    std::atomic<uint32_t> enumCount{0};
+    g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left,
+                                                       [&](const std::filesystem::path& folder) noexcept
+    {
+        if (OrdinalString::EqualsNoCasePath(folder, root))
+        {
+            enumCount.fetch_add(1u, std::memory_order_release);
+        }
+    });
+    const auto clearEnumCallback = wil::scope_exit([&] { g_folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {}); });
+
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for find dialog test.");
+    state.Require(WaitForAtomicAtLeast(enumCount, 1u, SelfTest::Scale(3000ms)), L"Enumeration did not complete for find dialog test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"a.jsonl", L"b.txt", L"sub", L"bulk"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for find dialog test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    if (const HWND existing = GetFindFilesWindowHandle(); existing && IsWindow(existing))
+    {
+        PostMessageW(existing, WM_CLOSE, 0, 0);
+        state.Require(WaitForWindowClosed(existing, SelfTest::Scale(2000ms)), L"Existing Find window did not close before find dialog test.");
+    }
+
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/find"), L"Shortcut dispatch failed for cmd/pane/find.");
+
+    const HWND findWindow = WaitForWindow([] noexcept { return GetFindFilesWindowHandle(); }, SelfTest::Scale(5000ms));
+    state.Require(findWindow != nullptr && IsWindow(findWindow) != FALSE, L"Find window did not open from cmd/pane/find.");
+    if (! findWindow || IsWindow(findWindow) == FALSE)
+    {
+        return false;
+    }
+
+    state.Require(IsOwnedBy(findWindow, mainWindow), L"Find window is not owned by the main window.");
+    state.Require(DebugSetFindFilesWindowOptions(true, true, false, true, true), L"Failed to configure Find window options.");
+
+    const auto waitMs = [](std::chrono::milliseconds value) noexcept -> uint32_t
+    {
+        return static_cast<uint32_t>(value.count());
+    };
+
+    auto requireIdle = [&](std::wstring_view label) noexcept
+    {
+        state.Require(DebugWaitForFindFilesWindowIdle(waitMs(SelfTest::Scale(10000ms))), std::format(L"Find window did not become idle after {}.", label));
+    };
+
+    auto requireSnapshotCount = [&](size_t expectedCount, std::wstring_view label, std::initializer_list<std::filesystem::path> expectedPaths) noexcept
+    {
+        FindFilesDebugSnapshot snapshot{};
+        state.Require(DebugGetFindFilesWindowSnapshot(snapshot), std::format(L"Failed to capture Find snapshot after {}.", label));
+        if (! state.failure.empty())
+        {
+            return;
+        }
+
+        state.Require(snapshot.resultCount == expectedCount,
+                      std::format(L"Unexpected Find result count after {}. Expected {}, got {}.", label, expectedCount, snapshot.resultCount));
+        for (const auto& path : expectedPaths)
+        {
+            const std::wstring expected = path.native();
+            const bool found            = std::find(snapshot.fullPaths.begin(), snapshot.fullPaths.end(), expected) != snapshot.fullPaths.end();
+            state.Require(found, std::format(L"Expected Find results after {} to contain '{}'.", label, expected));
+        }
+    };
+
+    state.Require(DebugConfigureFindFilesWindow(root.native(), L"*.jsonl", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
+                  L"Failed to configure Find window for wildcard search.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Find), L"Failed to start Find operation.");
+    requireIdle(L"Find");
+    requireSnapshotCount(2u, L"Find", {root / L"a.jsonl", sub / L"c.jsonl"});
+
+    state.Require(DebugConfigureFindFilesWindow(root.native(), L"*.txt", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
+                  L"Failed to configure Find window for append search.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Append), L"Failed to start Append operation.");
+    requireIdle(L"Append");
+    requireSnapshotCount(4u, L"Append", {root / L"a.jsonl", root / L"b.txt", sub / L"c.jsonl", sub / L"d.txt"});
+
+    state.Require(DebugConfigureFindFilesWindow(root.native(), L"a*", L"", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::Disabled),
+                  L"Failed to configure Find window for intersect search.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Intersect), L"Failed to start Intersect operation.");
+    requireIdle(L"Intersect");
+    requireSnapshotCount(1u, L"Intersect", {root / L"a.jsonl"});
+
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Subtract), L"Failed to start Subtract operation.");
+    requireIdle(L"Subtract");
+    requireSnapshotCount(0u, L"Subtract", {});
+
+    state.Require(DebugConfigureFindFilesWindow(root.native(), L"", L"needle", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::TextLiteral),
+                  L"Failed to configure Find window for content search.");
+    state.Require(DebugSetFindFilesWindowOptions(true, true, false, true, true), L"Failed to restore Find options for content search.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Find), L"Failed to start content Find operation.");
+    requireIdle(L"content Find");
+    requireSnapshotCount(2u, L"content Find", {root / L"a.jsonl", sub / L"d.txt"});
+
+    std::string largeBody(2u * 1024u * 1024u, 'x');
+    largeBody.back() = '\n';
+    for (int i = 0; i < 48; ++i)
+    {
+        const std::filesystem::path bulkFile = bulk / std::format(L"bulk_{:03}.txt", i);
+        state.Require(SelfTest::WriteTextFile(bulkFile, largeBody), std::format(L"Failed to create {}.", bulkFile.filename().native()));
+    }
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(DebugConfigureFindFilesWindow(root.native(), L"*.txt", L"ZZZ_NOT_PRESENT_123456789", Common::Settings::SearchNameMode::Wildcard, Common::Settings::SearchContentMode::TextRegex),
+                  L"Failed to configure Find window for cancellation search.");
+    state.Require(DebugSetFindFilesWindowOptions(true, true, false, true, false), L"Failed to configure Find options for cancellation search.");
+    state.Require(DebugStartFindFilesWindowSearch(FindFilesDebugOperation::Find), L"Failed to start cancellation search.");
+    state.Require(DebugCancelFindFilesWindowSearch(), L"Failed to cancel Find search.");
+    requireIdle(L"cancelled Find");
+
+    FindFilesDebugSnapshot cancelled{};
+    state.Require(DebugGetFindFilesWindowSnapshot(cancelled), L"Failed to capture cancelled Find snapshot.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(cancelled.searchActive == false, L"Find window remained active after cancellation.");
+    state.Require(cancelled.lastStatusHint == HRESULT_FROM_WIN32(ERROR_CANCELLED),
+                  std::format(L"Expected cancelled Find HRESULT 0x{:08X}, got 0x{:08X}.",
+                              static_cast<unsigned long>(HRESULT_FROM_WIN32(ERROR_CANCELLED)),
+                              static_cast<unsigned long>(cancelled.lastStatusHint)));
+
+    PostMessageW(findWindow, WM_CLOSE, 0, 0);
+    state.Require(WaitForWindowClosed(findWindow, SelfTest::Scale(3000ms)), L"Find window did not close after operations test.");
     return state.failure.empty();
 }
 
@@ -3847,6 +4261,15 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
     });
     SelfTest::RunCase(
         options, suite, L"settings_store_no_recovery_and_file_stamp", [](CaseState& state) noexcept { return TestSettingsStoreNoRecoveryAndFileStamp(state); });
+    SelfTest::RunCase(options, suite, L"settings_store_search_roundtrip", [](CaseState& state) noexcept {
+        return TestSettingsStoreSearchRoundTrip(state);
+    });
+    SelfTest::RunCase(options, suite, L"settings_shortcuts_default_roundtrip", [](CaseState& state) noexcept {
+        return TestSettingsStoreShortcutDefaultsRoundTrip(state);
+    });
+    SelfTest::RunCase(options, suite, L"settings_shortcuts_invalid_section_rejected", [](CaseState& state) noexcept {
+        return TestSettingsStoreRejectsMalformedShortcutSection(state);
+    });
     SelfTest::RunCase(options, suite, L"settings_hot_reload_self_save_suppression", [=](CaseState& state) noexcept {
         return TestSettingsHotReloadSelfSaveSuppression(mainWindow, state);
     });
@@ -3900,6 +4323,9 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
     SelfTest::RunCase(
         options, suite, L"cmd_pane_changeCase_dialog", [=](CaseState& state) noexcept { return TestChangeCaseDialogAndMultiSelection(mainWindow, state); });
     SelfTest::RunCase(options, suite, L"cmd_pane_changeCase", [](CaseState& state) noexcept { return TestChangeCaseCore(state); });
+    SelfTest::RunCase(options, suite, L"cmd_pane_find_dialog_search_ops", [=](CaseState& state) noexcept {
+        return TestFindDialogSearchOps(mainWindow, state);
+    });
     SelfTest::RunCase(
         options, suite, L"dispatch_smoke_all_commands", [=](CaseState& state) noexcept { return TestDispatchAllCommandsSmoke(mainWindow, state); });
 

@@ -1300,22 +1300,40 @@ void UpdateSecretVisibility(DialogState& state) noexcept
 
 [[nodiscard]] std::wstring FormatHresultForUi(HRESULT hr) noexcept
 {
-    wil::unique_hlocal_string message;
-    if (SUCCEEDED(::FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS,
-                                   nullptr,
-                                   static_cast<DWORD>(hr),
-                                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                   reinterpret_cast<LPWSTR>(message.addressof()),
-                                   0,
-                                   nullptr)) &&
-        message.get())
+    DWORD messageId = static_cast<DWORD>(hr);
+    if (HRESULT_FACILITY(hr) == FACILITY_WIN32)
     {
-        std::wstring text(message.get());
-        while (! text.empty() && (text.back() == L'\r' || text.back() == L'\n'))
+        const DWORD code = HRESULT_CODE(messageId);
+        if (code != 0)
         {
+            messageId = code;
+        }
+    }
+
+    wil::unique_hlocal_string message;
+    const DWORD written = ::FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                           nullptr,
+                                           messageId,
+                                           MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                                           reinterpret_cast<LPWSTR>(message.addressof()),
+                                           0,
+                                           nullptr);
+    if (written != 0 && message.get() != nullptr)
+    {
+        std::wstring text(message.get(), written);
+        while (! text.empty())
+        {
+            const wchar_t ch = text.back();
+            if (ch != L'\r' && ch != L'\n' && ch != L' ' && ch != L'\t')
+            {
+                break;
+            }
             text.pop_back();
         }
-        return std::format(L"0x{:08X}: {}", static_cast<unsigned long>(hr), text);
+        if (! text.empty())
+        {
+            return std::format(L"0x{:08X}: {}", static_cast<unsigned long>(hr), text);
+        }
     }
 
     return std::format(L"0x{:08X}", static_cast<unsigned long>(hr));

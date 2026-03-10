@@ -2376,23 +2376,180 @@ void ParseSelectionMasks(yyjson_val* root, Common::Settings::Settings& out)
     }
 }
 
-void ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out)
+Common::Settings::SearchNameMode ParseSearchNameMode(std::string_view mode) noexcept
 {
-    yyjson_val* shortcuts = yyjson_obj_get(root, "shortcuts");
-    if (! shortcuts || ! yyjson_is_obj(shortcuts))
+    if (mode == "literal")
+    {
+        return Common::Settings::SearchNameMode::Literal;
+    }
+    if (mode == "regex")
+    {
+        return Common::Settings::SearchNameMode::Regex;
+    }
+    return Common::Settings::SearchNameMode::Wildcard;
+}
+
+const char* SearchNameModeToString(Common::Settings::SearchNameMode mode) noexcept
+{
+    switch (mode)
+    {
+        case Common::Settings::SearchNameMode::Wildcard: return "wildcard";
+        case Common::Settings::SearchNameMode::Literal: return "literal";
+        case Common::Settings::SearchNameMode::Regex: return "regex";
+    }
+    return "wildcard";
+}
+
+Common::Settings::SearchContentMode ParseSearchContentMode(std::string_view mode) noexcept
+{
+    if (mode == "literal")
+    {
+        return Common::Settings::SearchContentMode::TextLiteral;
+    }
+    if (mode == "regex")
+    {
+        return Common::Settings::SearchContentMode::TextRegex;
+    }
+    return Common::Settings::SearchContentMode::Disabled;
+}
+
+const char* SearchContentModeToString(Common::Settings::SearchContentMode mode) noexcept
+{
+    switch (mode)
+    {
+        case Common::Settings::SearchContentMode::Disabled: return "disabled";
+        case Common::Settings::SearchContentMode::TextLiteral: return "literal";
+        case Common::Settings::SearchContentMode::TextRegex: return "regex";
+    }
+    return "disabled";
+}
+
+void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
+{
+    yyjson_val* search = yyjson_obj_get(root, "search");
+    if (! search || ! yyjson_is_obj(search))
     {
         return;
+    }
+
+    Common::Settings::SearchDialogSettings settings;
+
+    constexpr size_t kMaxHistoryItems = 10u;
+    auto parseHistory                 = [&](const char* key, std::vector<std::wstring>& dest)
+    {
+        yyjson_val* arr = yyjson_obj_get(search, key);
+        if (! arr || ! yyjson_is_arr(arr))
+        {
+            return;
+        }
+
+        const size_t count = yyjson_arr_size(arr);
+        dest.reserve(std::min(count, kMaxHistoryItems));
+        for (size_t i = 0; i < count && dest.size() < kMaxHistoryItems; ++i)
+        {
+            yyjson_val* value = yyjson_arr_get(arr, i);
+            if (! value || ! yyjson_is_str(value))
+            {
+                continue;
+            }
+
+            const char* utf8 = yyjson_get_str(value);
+            if (! utf8)
+            {
+                continue;
+            }
+
+            std::wstring text = Utf16FromUtf8(utf8);
+            if (! text.empty())
+            {
+                dest.push_back(std::move(text));
+            }
+        }
+    };
+
+    parseHistory("recentRoots", settings.recentRoots);
+    parseHistory("recentNamePatterns", settings.recentNamePatterns);
+    parseHistory("recentContentPatterns", settings.recentContentPatterns);
+
+    if (const auto lastRoot = GetString(search, "lastRoot"))
+    {
+        settings.lastRoot = Utf16FromUtf8(lastRoot.value());
+    }
+    if (const auto lastNamePattern = GetString(search, "lastNamePattern"))
+    {
+        settings.lastNamePattern = Utf16FromUtf8(lastNamePattern.value());
+    }
+    if (const auto lastContentPattern = GetString(search, "lastContentPattern"))
+    {
+        settings.lastContentPattern = Utf16FromUtf8(lastContentPattern.value());
+    }
+
+    GetBool(search, "recursive", settings.recursive);
+    GetBool(search, "includeFiles", settings.includeFiles);
+    GetBool(search, "includeDirectories", settings.includeDirectories);
+    GetBool(search, "followSymlinks", settings.followSymlinks);
+    GetBool(search, "matchCaseName", settings.matchCaseName);
+    GetBool(search, "matchCaseContent", settings.matchCaseContent);
+    GetBool(search, "preferIndex", settings.preferIndex);
+    GetBool(search, "wantSnippets", settings.wantSnippets);
+
+    if (const auto nameMode = GetString(search, "nameMode"))
+    {
+        settings.nameMode = ParseSearchNameMode(nameMode.value());
+    }
+    if (const auto contentMode = GetString(search, "contentMode"))
+    {
+        settings.contentMode = ParseSearchContentMode(contentMode.value());
+    }
+
+    if (yyjson_val* maxResults = yyjson_obj_get(search, "maxResults"); maxResults && yyjson_is_uint(maxResults))
+    {
+        settings.maxResults = static_cast<uint64_t>(yyjson_get_uint(maxResults));
+    }
+
+    const Common::Settings::SearchDialogSettings defaults{};
+    const bool hasNonDefault = ! settings.recentRoots.empty() || ! settings.recentNamePatterns.empty() || ! settings.recentContentPatterns.empty() ||
+                               ! settings.lastRoot.empty() || ! settings.lastNamePattern.empty() || ! settings.lastContentPattern.empty() ||
+                               settings.recursive != defaults.recursive || settings.includeFiles != defaults.includeFiles ||
+                               settings.includeDirectories != defaults.includeDirectories || settings.followSymlinks != defaults.followSymlinks ||
+                               settings.matchCaseName != defaults.matchCaseName || settings.matchCaseContent != defaults.matchCaseContent ||
+                               settings.preferIndex != defaults.preferIndex || settings.wantSnippets != defaults.wantSnippets ||
+                               settings.nameMode != defaults.nameMode || settings.contentMode != defaults.contentMode ||
+                               settings.maxResults != defaults.maxResults;
+    if (hasNonDefault)
+    {
+        out.search = std::move(settings);
+    }
+}
+
+HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexcept
+{
+    yyjson_val* shortcuts = yyjson_obj_get(root, "shortcuts");
+    if (! shortcuts)
+    {
+        return S_OK;
+    }
+    if (! yyjson_is_obj(shortcuts))
+    {
+        Debug::Error(L"Expected object value for key 'shortcuts'");
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
     }
 
     Common::Settings::ShortcutsSettings settings;
     const bool isSchemaV5OrLater = out.schemaVersion >= 5;
 
-    auto parseBindings = [&](const char* name, std::vector<Common::Settings::ShortcutBinding>& dest)
+    auto parseBindings = [&](const char* name, std::vector<Common::Settings::ShortcutBinding>& dest) noexcept -> HRESULT
     {
-        yyjson_val* arr = GetArr(shortcuts, name);
+        const std::wstring scopeName = Utf16FromUtf8(name);
+        yyjson_val* arr = yyjson_obj_get(shortcuts, name);
         if (! arr)
         {
-            return;
+            return S_OK;
+        }
+        if (! yyjson_is_arr(arr))
+        {
+            Debug::Error(L"Expected array value for shortcuts key '{}'", scopeName.c_str());
+            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
         const size_t count = yyjson_arr_size(arr);
@@ -2403,7 +2560,8 @@ void ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out)
             yyjson_val* binding = yyjson_arr_get(arr, i);
             if (! binding || ! yyjson_is_obj(binding))
             {
-                continue;
+                Debug::Error(L"Invalid shortcuts binding at '{}[{}]': expected object", scopeName.c_str(), i);
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
 
             uint32_t vk              = 0;
@@ -2413,32 +2571,37 @@ void ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out)
             yyjson_val* vkVal = yyjson_obj_get(binding, "vk");
             if (! vkVal || ! commandIdText.has_value())
             {
-                continue;
+                Debug::Error(L"Invalid shortcuts binding at '{}[{}]': missing required 'vk' or 'commandId'", scopeName.c_str(), i);
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
 
             if (isSchemaV5OrLater)
             {
                 if (! yyjson_is_str(vkVal))
                 {
-                    continue;
+                    Debug::Error(L"Invalid shortcuts binding at '{}[{}]': expected string 'vk'", scopeName.c_str(), i);
+                    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                 }
 
                 if (yyjson_obj_get(binding, "modifiers"))
                 {
-                    continue;
+                    Debug::Error(L"Invalid shortcuts binding at '{}[{}]': unexpected legacy 'modifiers' field", scopeName.c_str(), i);
+                    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                 }
 
                 const char* vkText = yyjson_get_str(vkVal);
                 if (! vkText || ! TryParseVkFromText(std::string_view(vkText), vk))
                 {
-                    continue;
+                    Debug::Error(L"Invalid shortcuts binding at '{}[{}]': unsupported 'vk' value", scopeName.c_str(), i);
+                    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                 }
 
                 if (yyjson_val* ctrlVal = yyjson_obj_get(binding, "ctrl"))
                 {
                     if (! yyjson_is_bool(ctrlVal))
                     {
-                        continue;
+                        Debug::Error(L"Invalid shortcuts binding at '{}[{}]': expected boolean 'ctrl'", scopeName.c_str(), i);
+                        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                     }
                     if (yyjson_get_bool(ctrlVal))
                     {
@@ -2450,7 +2613,8 @@ void ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out)
                 {
                     if (! yyjson_is_bool(altVal))
                     {
-                        continue;
+                        Debug::Error(L"Invalid shortcuts binding at '{}[{}]': expected boolean 'alt'", scopeName.c_str(), i);
+                        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                     }
                     if (yyjson_get_bool(altVal))
                     {
@@ -2462,7 +2626,8 @@ void ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out)
                 {
                     if (! yyjson_is_bool(shiftVal))
                     {
-                        continue;
+                        Debug::Error(L"Invalid shortcuts binding at '{}[{}]': expected boolean 'shift'", scopeName.c_str(), i);
+                        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                     }
                     if (yyjson_get_bool(shiftVal))
                     {
@@ -2474,26 +2639,30 @@ void ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out)
             {
                 if (! yyjson_is_uint(vkVal))
                 {
-                    continue;
+                    Debug::Error(L"Invalid shortcuts binding at '{}[{}]': expected integer 'vk'", scopeName.c_str(), i);
+                    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                 }
 
                 vk = static_cast<uint32_t>(yyjson_get_uint(vkVal));
 
                 if (! GetUInt32(binding, "modifiers", modifiers))
                 {
-                    continue;
+                    Debug::Error(L"Invalid shortcuts binding at '{}[{}]': expected integer 'modifiers'", scopeName.c_str(), i);
+                    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
                 }
             }
 
             if (vk > 0xFFu || modifiers > 7u)
             {
-                continue;
+                Debug::Error(L"Invalid shortcuts binding at '{}[{}]': out-of-range 'vk' or 'modifiers'", scopeName.c_str(), i);
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
 
             const std::wstring commandId = Utf16FromUtf8(commandIdText.value());
             if (commandId.empty() || commandId.rfind(L"cmd/", 0) != 0)
             {
-                continue;
+                Debug::Error(L"Invalid shortcuts binding at '{}[{}]': unsupported 'commandId'", scopeName.c_str(), i);
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
 
             Common::Settings::ShortcutBinding entry;
@@ -2502,12 +2671,24 @@ void ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out)
             entry.commandId = commandId;
             dest.push_back(std::move(entry));
         }
+
+        return S_OK;
     };
 
-    parseBindings("functionBar", settings.functionBar);
-    parseBindings("folderView", settings.folderView);
+    HRESULT hr = parseBindings("functionBar", settings.functionBar);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = parseBindings("folderView", settings.folderView);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
 
     out.shortcuts = std::move(settings);
+    return S_OK;
 }
 
 void ParseCache(yyjson_val* root, Common::Settings::Settings& out)
@@ -2826,7 +3007,7 @@ namespace
     }
 
     const int64_t schemaVersion = yyjson_get_int(schema);
-    if (schemaVersion != 6 && schemaVersion != 7 && schemaVersion != 8 && schemaVersion != 9 && schemaVersion != 10)
+    if (schemaVersion != 6 && schemaVersion != 7 && schemaVersion != 8 && schemaVersion != 9 && schemaVersion != 10 && schemaVersion != 11)
     {
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
         if (backupBadFile)
@@ -2846,7 +3027,16 @@ namespace
         ParsePlugins(root, out);
     }
     ParseExtensions(root, out);
-    ParseShortcuts(root, out);
+    const HRESULT shortcutsHr = ParseShortcuts(root, out);
+    if (FAILED(shortcutsHr))
+    {
+        if (backupBadFile)
+        {
+            BackupBadSettingsFile(path);
+            return S_FALSE;
+        }
+        return shortcutsHr;
+    }
     ParseCache(root, out);
     ParseFolders(root, out);
     ParseMonitor(root, out);
@@ -2857,8 +3047,9 @@ namespace
     ParseCompareDirectories(root, out);
     ParseHotPaths(root, out);
     ParseSelectionMasks(root, out);
+    ParseSearchSettings(root, out);
 
-    out.schemaVersion = 10;
+    out.schemaVersion = 11;
     return S_OK;
 }
 
@@ -3008,7 +3199,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
     schemaRef.append(L".settings.schema.json");
     yyjson_mut_obj_add_val(doc, root, "$schema", NewString(doc, schemaRef));
 
-    yyjson_mut_obj_add_int(doc, root, "schemaVersion", 10);
+    yyjson_mut_obj_add_int(doc, root, "schemaVersion", 11);
 
     yyjson_mut_val* windows = nullptr;
     {
@@ -4440,6 +4631,98 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             {
                 return hr;
             }
+        }
+    }
+
+    if (settings.search)
+    {
+        const auto& search = settings.search.value();
+
+        const bool wroteSearch = ! search.recentRoots.empty() || ! search.recentNamePatterns.empty() || ! search.recentContentPatterns.empty() ||
+                                 ! search.lastRoot.empty() || ! search.lastNamePattern.empty() || ! search.lastContentPattern.empty() || ! search.recursive ||
+                                 ! search.includeFiles || search.includeDirectories || search.followSymlinks || search.matchCaseName || search.matchCaseContent ||
+                                 ! search.preferIndex || search.wantSnippets || search.nameMode != Common::Settings::SearchNameMode::Wildcard ||
+                                 search.contentMode != Common::Settings::SearchContentMode::Disabled || search.maxResults != 0u;
+        if (wroteSearch)
+        {
+            yyjson_mut_val* searchObj = yyjson_mut_obj(doc);
+            if (! searchObj)
+            {
+                return E_OUTOFMEMORY;
+            }
+            yyjson_mut_obj_add_val(doc, root, "search", searchObj);
+
+            constexpr size_t kMaxHistoryItems = 10u;
+            auto writeHistory                 = [&](const char* key, const std::vector<std::wstring>& history) -> HRESULT
+            {
+                if (history.empty())
+                {
+                    return S_OK;
+                }
+
+                yyjson_mut_val* arr = yyjson_mut_arr(doc);
+                if (! arr)
+                {
+                    return E_OUTOFMEMORY;
+                }
+                yyjson_mut_obj_add_val(doc, searchObj, key, arr);
+
+                size_t added = 0;
+                for (const auto& entry : history)
+                {
+                    if (entry.empty())
+                    {
+                        continue;
+                    }
+
+                    yyjson_mut_arr_add_val(arr, NewString(doc, entry));
+                    ++added;
+                    if (added >= kMaxHistoryItems)
+                    {
+                        break;
+                    }
+                }
+
+                return S_OK;
+            };
+
+            if (const HRESULT hr = writeHistory("recentRoots", search.recentRoots); FAILED(hr))
+            {
+                return hr;
+            }
+            if (const HRESULT hr = writeHistory("recentNamePatterns", search.recentNamePatterns); FAILED(hr))
+            {
+                return hr;
+            }
+            if (const HRESULT hr = writeHistory("recentContentPatterns", search.recentContentPatterns); FAILED(hr))
+            {
+                return hr;
+            }
+
+            if (! search.lastRoot.empty())
+            {
+                yyjson_mut_obj_add_val(doc, searchObj, "lastRoot", NewString(doc, search.lastRoot));
+            }
+            if (! search.lastNamePattern.empty())
+            {
+                yyjson_mut_obj_add_val(doc, searchObj, "lastNamePattern", NewString(doc, search.lastNamePattern));
+            }
+            if (! search.lastContentPattern.empty())
+            {
+                yyjson_mut_obj_add_val(doc, searchObj, "lastContentPattern", NewString(doc, search.lastContentPattern));
+            }
+
+            yyjson_mut_obj_add_bool(doc, searchObj, "recursive", search.recursive ? 1 : 0);
+            yyjson_mut_obj_add_bool(doc, searchObj, "includeFiles", search.includeFiles ? 1 : 0);
+            yyjson_mut_obj_add_bool(doc, searchObj, "includeDirectories", search.includeDirectories ? 1 : 0);
+            yyjson_mut_obj_add_bool(doc, searchObj, "followSymlinks", search.followSymlinks ? 1 : 0);
+            yyjson_mut_obj_add_bool(doc, searchObj, "matchCaseName", search.matchCaseName ? 1 : 0);
+            yyjson_mut_obj_add_bool(doc, searchObj, "matchCaseContent", search.matchCaseContent ? 1 : 0);
+            yyjson_mut_obj_add_bool(doc, searchObj, "preferIndex", search.preferIndex ? 1 : 0);
+            yyjson_mut_obj_add_bool(doc, searchObj, "wantSnippets", search.wantSnippets ? 1 : 0);
+            yyjson_mut_obj_add_str(doc, searchObj, "nameMode", SearchNameModeToString(search.nameMode));
+            yyjson_mut_obj_add_str(doc, searchObj, "contentMode", SearchContentModeToString(search.contentMode));
+            yyjson_mut_obj_add_uint(doc, searchObj, "maxResults", search.maxResults);
         }
     }
 

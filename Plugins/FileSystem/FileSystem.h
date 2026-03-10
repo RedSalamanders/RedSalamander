@@ -37,6 +37,19 @@ enum class FileSystemReparsePointPolicy : uint8_t
     Skip,
 };
 
+enum class FileSystemSearchBackendPreference : uint8_t
+{
+    Auto,
+    Service,
+    LocalIndex,
+    Scan,
+};
+
+namespace LocalSearchIndexCore
+{
+class Repository;
+}
+
 class FilesInformation final : public IFilesInformation
 {
 public:
@@ -96,6 +109,7 @@ private:
 };
 
 class FileSystem final : public IFileSystem,
+                         public IFileSystemSearch,
                          public IFileSystemIO,
                          public IFileSystemDirectoryOperations,
                          public IFileSystemDirectoryWatch,
@@ -189,6 +203,8 @@ public:
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
 
+    HRESULT STDMETHODCALLTYPE Search(const FileSystemSearchQuery* query, IFileSystemSearchCallback* callback, void* cookie) noexcept override;
+
     HRESULT STDMETHODCALLTYPE GetAttributes(const wchar_t* path, unsigned long* fileAttributes) noexcept override;
 
     HRESULT STDMETHODCALLTYPE CreateFileReader(const wchar_t* path, IFileReader** reader) noexcept override;
@@ -272,6 +288,19 @@ private:
         { "value": "followTargets", "label": "Follow targets (can loop / escape tree)" },
         { "value": "skip", "label": "Skip reparse points" }
       ]
+    },
+    {
+      "key": "searchBackendPreference",
+      "type": "option",
+      "label": "Search backend preference",
+      "description": "Preferred local search backend. Auto chooses the best available backend; unavailable indexed backends fall back to scan.",
+      "default": "auto",
+      "options": [
+        { "value": "auto", "label": "Auto (best available)" },
+        { "value": "service", "label": "Prefer Windows service" },
+        { "value": "local-index", "label": "Prefer local index" },
+        { "value": "scan", "label": "Force scan" }
+      ]
     }
   ]
 }
@@ -283,6 +312,7 @@ private:
     static constexpr unsigned long kDefaultEnumerationSoftMaxBufferMiB       = 512ul;
     static constexpr unsigned long kDefaultEnumerationHardMaxBufferMiB       = 2048ul;
     static constexpr FileSystemReparsePointPolicy kDefaultReparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
+    static constexpr FileSystemSearchBackendPreference kDefaultSearchBackendPreference = FileSystemSearchBackendPreference::Auto;
 
     static constexpr unsigned int kMaxCopyMoveMaxConcurrency         = 8u;
     static constexpr unsigned int kMaxDeleteMaxConcurrency           = 64u;
@@ -306,6 +336,8 @@ private:
     unsigned long _enumerationSoftMaxBufferMiB       = kDefaultEnumerationSoftMaxBufferMiB;
     unsigned long _enumerationHardMaxBufferMiB       = kDefaultEnumerationHardMaxBufferMiB;
     FileSystemReparsePointPolicy _reparsePointPolicy = kDefaultReparsePointPolicy;
+    FileSystemSearchBackendPreference _searchBackendPreference = kDefaultSearchBackendPreference;
+    std::shared_ptr<LocalSearchIndexCore::Repository> _searchIndexRepository;
 #ifdef _DEBUG
     unsigned int _directorySizeDelayMs = 0u;
 #endif

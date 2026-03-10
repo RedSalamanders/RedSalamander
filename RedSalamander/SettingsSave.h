@@ -102,6 +102,24 @@ namespace SettingsSave
         }
     }
 
+    if (result.search.has_value())
+    {
+        const Common::Settings::SearchDialogSettings defaults{};
+        const auto& search       = result.search.value();
+        const bool hasNonDefault = ! search.recentRoots.empty() || ! search.recentNamePatterns.empty() || ! search.recentContentPatterns.empty() ||
+                                   ! search.lastRoot.empty() || ! search.lastNamePattern.empty() || ! search.lastContentPattern.empty() ||
+                                   search.recursive != defaults.recursive || search.includeFiles != defaults.includeFiles ||
+                                   search.includeDirectories != defaults.includeDirectories || search.followSymlinks != defaults.followSymlinks ||
+                                   search.matchCaseName != defaults.matchCaseName || search.matchCaseContent != defaults.matchCaseContent ||
+                                   search.preferIndex != defaults.preferIndex || search.wantSnippets != defaults.wantSnippets ||
+                                   search.nameMode != defaults.nameMode || search.contentMode != defaults.contentMode ||
+                                   search.maxResults != defaults.maxResults;
+        if (! hasNonDefault)
+        {
+            result.search.reset();
+        }
+    }
+
     return result;
 }
 } // namespace SettingsSave

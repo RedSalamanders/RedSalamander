@@ -798,6 +798,14 @@ void AddSuiteJson(yyjson_mut_doc* doc, yyjson_mut_val* suitesArray, const SelfTe
     yyjson_mut_obj_add_int(doc, suiteObj, "skipped", result.skipped);
     yyjson_mut_obj_add_bool(doc, suiteObj, "fail_fast", g_options.failFast);
     yyjson_mut_obj_add_real(doc, suiteObj, "timeout_scale", g_options.timeoutScale);
+    if (! g_options.caseFilter.empty())
+    {
+        std::string caseFilterUtf8;
+        if (ConvertUtf8(g_options.caseFilter, caseFilterUtf8))
+        {
+            yyjson_mut_obj_add_strncpy(doc, suiteObj, "case_filter", caseFilterUtf8.c_str(), caseFilterUtf8.size());
+        }
+    }
 
     if (! result.failureMessage.empty())
     {
@@ -1201,6 +1209,14 @@ void WriteRunJson(const SelfTestRunResult& result, const std::filesystem::path& 
     yyjson_mut_obj_add_uint(doc, root, "duration_ms", result.durationMs);
     yyjson_mut_obj_add_bool(doc, root, "fail_fast", result.failFast);
     yyjson_mut_obj_add_real(doc, root, "timeout_scale", result.timeoutScale);
+    if (! result.caseFilter.empty())
+    {
+        std::string caseFilterUtf8;
+        if (ConvertUtf8(result.caseFilter, caseFilterUtf8))
+        {
+            yyjson_mut_obj_add_strncpy(doc, root, "case_filter", caseFilterUtf8.c_str(), caseFilterUtf8.size());
+        }
+    }
 
     int passed  = 0;
     int failed  = 0;

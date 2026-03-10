@@ -93,6 +93,20 @@ Some file-operations defaults are stored in the settings file:
 }
 ```
 
+### Reset Find dialog history and defaults
+
+The Find Files and Directories window stores its recent values and last-used options under `search`.
+
+Removing that section resets the dialog to defaults. If you prefer to keep the section present explicitly, an empty object has the same effect:
+
+```json
+{
+  "search": {}
+}
+```
+
+If you also want to reset the dialog window position, remove `windows.FindFilesWindow`.
+
 ## When manual editing is useful
 
 - Disabling archive auto-mount globally

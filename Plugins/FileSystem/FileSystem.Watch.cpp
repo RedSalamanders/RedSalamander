@@ -1,5 +1,6 @@
 #include "FileSystem.Internal.h"
 #include "FileSystemResources.h"
+#include "LocalSearchIndexCore.h"
 
 #include <array>
 #include <atomic>
@@ -707,6 +708,8 @@ FileSystem::FileSystem()
         _configurationJson = "{}";
         UpdateCapabilitiesJson();
     }
+
+    _searchIndexRepository = std::make_shared<LocalSearchIndexCore::Repository>();
 }
 
 FileSystem::~FileSystem()

@@ -50,6 +50,7 @@
 #include "CrashQuarantine.h"
 #include "DirectoryInfoCache.h"
 #include "FileSystemPluginManager.h"
+#include "FindFilesWindow.h"
 #include "FolderWindow.h"
 #include "Framework.h"
 #include "HostServices.h"
@@ -96,6 +97,7 @@ constexpr wchar_t kMainWindowId[]                  = L"MainWindow";
 constexpr wchar_t kPreferencesWindowId[]           = L"PreferencesWindow";
 constexpr wchar_t kConnectionManagerWindowId[]     = L"ConnectionManagerWindow";
 constexpr wchar_t kShortcutsWindowId[]             = L"ShortcutsWindow";
+constexpr wchar_t kFindFilesWindowId[]             = L"FindFilesWindow";
 constexpr wchar_t kItemPropertiesWindowId[]        = L"ItemPropertiesWindow";
 constexpr wchar_t kItemPropertiesWindowClassName[] = L"RedSalamander.ItemPropertiesWindow";
 constexpr wchar_t kLeftPaneSlot[]                  = L"left";
@@ -497,6 +499,7 @@ void FinalizeSelfTestRun() noexcept
     g_selfTestRunResult.durationMs   = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - g_selfTestRunStart.value()).count());
     g_selfTestRunResult.failFast     = g_selfTestOptions.failFast;
     g_selfTestRunResult.timeoutScale = g_selfTestOptions.timeoutScale;
+    g_selfTestRunResult.caseFilter   = g_selfTestOptions.caseFilter;
 
     const std::filesystem::path runJsonPath = SelfTest::SelfTestRoot() / L"last_run" / L"results.json";
     SelfTest::WriteRunJson(g_selfTestRunResult, runJsonPath);
@@ -519,6 +522,7 @@ void ResetSelfTestRunState() noexcept
     SelfTest::SetRunStartedUtcIso(g_selfTestRunResult.startedUtcIso);
     g_selfTestRunResult.failFast     = g_selfTestOptions.failFast;
     g_selfTestRunResult.timeoutScale = g_selfTestOptions.timeoutScale;
+    g_selfTestRunResult.caseFilter   = g_selfTestOptions.caseFilter;
 }
 
 void RecordSelfTestSuite(SelfTest::SelfTestSuiteResult result) noexcept
@@ -1128,6 +1132,11 @@ void CaptureRuntimeSettings(Common::Settings::Settings& settings, HWND hWnd) noe
     if (const HWND shortcuts = GetShortcutsWindowHandle())
     {
         WindowPlacementPersistence::Save(settings, kShortcutsWindowId, shortcuts);
+    }
+
+    if (const HWND findFiles = GetFindFilesWindowHandle())
+    {
+        WindowPlacementPersistence::Save(settings, kFindFilesWindowId, findFiles);
     }
 
     const auto captureItemPropertiesIfMatch = [&](HWND hwnd) noexcept
@@ -4373,6 +4382,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
                                         L"  --commands-selftest             Run Commands self-test suite.\r\n"
                                         L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
                                         L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
+                                        L"  --selftest-case=NAME            Run only the exact matching self-test case.\r\n"
                                         L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by N (default 1.0).\r\n"
 #endif
                                         L"\r\n";
@@ -4435,6 +4445,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     g_selfTestOptions.failFast         = hasArg(L"--selftest-fail-fast");
     g_selfTestOptions.timeoutScale     = 1.0;
     g_selfTestOptions.writeJsonSummary = true;
+    g_selfTestOptions.caseFilter.clear();
 
     std::wstring multiplierArg;
     if (getArgValue(L"--selftest-timeout-multiplier=", multiplierArg))
@@ -4446,6 +4457,12 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         {
             g_selfTestOptions.timeoutScale = parsed;
         }
+    }
+
+    std::wstring caseFilterArg;
+    if (getArgValue(L"--selftest-case=", caseFilterArg))
+    {
+        g_selfTestOptions.caseFilter = std::move(caseFilterArg);
     }
 
     SelfTest::GetSelfTestOptions() = g_selfTestOptions;
@@ -5147,6 +5164,7 @@ static void ApplyAppTheme(HWND hWnd)
 
     UpdateShortcutsWindowTheme(theme);
     UpdateCompareDirectoriesWindowsTheme(theme);
+    UpdateFindFilesWindowsTheme(theme);
 
     UpdateThemeMenuChecks();
     ApplyMainMenuTheme(hWnd, theme.menu);
@@ -5319,7 +5337,7 @@ LRESULT OnMainWindowSettingsFileChanged(HWND hWnd, LPARAM lParam) noexcept
     CaptureRuntimeSettings(runtimeSettings, hWnd);
 
     std::vector<std::wstring_view> runtimeWindowIds;
-    runtimeWindowIds.reserve(5);
+    runtimeWindowIds.reserve(6);
     runtimeWindowIds.push_back(kMainWindowId);
     if (const HWND prefs = GetPreferencesDialogHandle(); prefs && IsWindow(prefs))
     {
@@ -5333,12 +5351,17 @@ LRESULT OnMainWindowSettingsFileChanged(HWND hWnd, LPARAM lParam) noexcept
     {
         runtimeWindowIds.push_back(kShortcutsWindowId);
     }
+    if (const HWND findFiles = GetFindFilesWindowHandle(); findFiles && IsWindow(findFiles))
+    {
+        runtimeWindowIds.push_back(kFindFilesWindowId);
+    }
     if (HasOpenItemPropertiesWindow())
     {
         runtimeWindowIds.push_back(kItemPropertiesWindowId);
     }
 
     g_settings = SettingsHotReload::MergeDiskSettingsWithRuntimeSession(loadResult.settings, runtimeSettings, runtimeWindowIds);
+    ShortcutDefaults::EnsureShortcutsInitialized(g_settings);
 
     SettingsHotReload::ClearInvalidReloadAlert();
     ApplyCurrentSettingsToRunningApp(hWnd);
@@ -5959,6 +5982,21 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
 
             const AppTheme theme = ResolveConfiguredTheme();
             static_cast<void>(ShowCompareDirectoriesWindow(hWnd, g_settings, theme, &g_shortcutManager, std::move(left), std::move(right)));
+            break;
+        }
+        case IDM_PANE_FIND:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+
+            FindFilesPaneContext context{};
+            context.fileSystem      = g_folderWindow.GetFileSystem(pane);
+            context.pluginId        = std::wstring(g_folderWindow.GetFileSystemPluginId(pane));
+            context.pluginShortId   = std::wstring(g_folderWindow.GetFileSystemPluginShortId(pane));
+            context.instanceContext = std::wstring(g_folderWindow.GetFileSystemInstanceContext(pane));
+            context.rootPluginPath  = g_folderWindow.GetCurrentPluginPath(pane).value_or(std::filesystem::path{});
+
+            const AppTheme theme = ResolveConfiguredTheme();
+            static_cast<void>(ShowFindFilesWindow(hWnd, g_settings, theme, std::move(context)));
             break;
         }
         case IDM_APP_SWAP_PANES: g_folderWindow.SwapPanes(); break;

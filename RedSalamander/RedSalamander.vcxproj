@@ -295,6 +295,8 @@
     <ClInclude Include="CommandRegistry.h" />
     <ClInclude Include="CompareDirectoriesEngine.SelfTest.h" />
     <ClInclude Include="CompareDirectoriesEngine.h" />
+    <ClInclude Include="FindFilesWindow.h" />
+    <ClInclude Include="SearchFallbackEngine.h" />
     <ClInclude Include="CompareDirectoriesWindow.Internal.h" />
     <ClInclude Include="CompareDirectoriesWindow.h" />
     <ClInclude Include="ManagePluginsDialog.h" />
@@ -335,8 +337,14 @@
     <ClInclude Include="AppDataPaths.h" />
     <ClInclude Include="CrashQuarantine.h" />
     <ClInclude Include="ConnectionProfileUtils.h" />
+    <ClInclude Include="..\Common\LocalSearchIndexCore.h" />
+    <ClInclude Include="..\Common\SearchServiceBroker.h" />
+    <ClInclude Include="..\Common\SearchTextHelpers.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\Common\LocalSearchIndexCore.cpp" />
+    <ClCompile Include="..\Common\SearchServiceBroker.cpp" />
+    <ClCompile Include="..\Common\SearchTextHelpers.cpp" />
     <ClCompile Include="AppDataPaths.cpp" />
     <ClCompile Include="AppTheme.cpp" />
     <ClCompile Include="CrashQuarantine.cpp" />
@@ -383,6 +391,8 @@
     <ClCompile Include="CommandRegistry.cpp" />
     <ClCompile Include="CompareDirectoriesEngine.SelfTest.cpp" />
     <ClCompile Include="CompareDirectoriesEngine.cpp" />
+    <ClCompile Include="FindFilesWindow.cpp" />
+    <ClCompile Include="SearchFallbackEngine.cpp" />
     <ClCompile Include="CompareDirectoriesWindow.cpp" />
     <ClCompile Include="CompareDirectoriesWindow.Menu.cpp" />
     <ClCompile Include="CompareDirectoriesWindow.Options.cpp" />

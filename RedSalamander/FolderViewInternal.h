@@ -321,18 +321,43 @@ struct RenameDialogState
 
 std::wstring FormatHResult(HRESULT hr)
 {
-    wil::unique_hlocal_string message;
-    if (SUCCEEDED(::FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS,
-                                   nullptr,
-                                   static_cast<DWORD>(hr),
-                                   MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                   reinterpret_cast<LPWSTR>(message.addressof()),
-                                   0,
-                                   nullptr)))
+    DWORD messageId = static_cast<DWORD>(hr);
+    if (HRESULT_FACILITY(hr) == FACILITY_WIN32)
     {
-        return std::wstring(message.get());
+        const DWORD code = HRESULT_CODE(messageId);
+        if (code != 0)
+        {
+            messageId = code;
+        }
     }
-    return std::format(L"HRESULT 0x{:08X}", hr);
+
+    wil::unique_hlocal_string message;
+    const DWORD written = ::FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                           nullptr,
+                                           messageId,
+                                           MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                                           reinterpret_cast<LPWSTR>(message.addressof()),
+                                           0,
+                                           nullptr);
+    if (written != 0 && message.get() != nullptr)
+    {
+        std::wstring text(message.get(), written);
+        while (! text.empty())
+        {
+            const wchar_t ch = text.back();
+            if (ch != L'\r' && ch != L'\n' && ch != L' ' && ch != L'\t')
+            {
+                break;
+            }
+            text.pop_back();
+        }
+        if (! text.empty())
+        {
+            return text;
+        }
+    }
+
+    return std::format(L"HRESULT 0x{:08X}", static_cast<unsigned long>(hr));
 }
 
 HRESULT HrFromErrorCode(const std::error_code& ec)

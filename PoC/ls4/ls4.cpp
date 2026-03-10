@@ -118,11 +118,21 @@ std::wstring FormatSize(unsigned long long bytes)
 
 void ReportError(std::wstring_view context, HRESULT hr)
 {
+    DWORD messageId = static_cast<DWORD>(hr);
+    if (HRESULT_FACILITY(hr) == FACILITY_WIN32)
+    {
+        const DWORD code = HRESULT_CODE(messageId);
+        if (code != 0)
+        {
+            messageId = code;
+        }
+    }
+
     LPWSTR message     = nullptr;
     const DWORD flags  = FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS;
     const DWORD langId = MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT);
 
-    const DWORD length = FormatMessageW(flags, nullptr, static_cast<DWORD>(hr), langId, reinterpret_cast<LPWSTR>(&message), 0, nullptr);
+    const DWORD length = FormatMessageW(flags, nullptr, messageId, langId, reinterpret_cast<LPWSTR>(&message), 0, nullptr);
     wil::unique_hlocal localMessage(message);
 
     std::wstring description;
@@ -133,9 +143,18 @@ void ReportError(std::wstring_view context, HRESULT hr)
     else
     {
         description.assign(message, length);
-        while (! description.empty() && (description.back() == L'\r' || description.back() == L'\n'))
+        while (! description.empty())
         {
+            const wchar_t ch = description.back();
+            if (ch != L'\r' && ch != L'\n' && ch != L' ' && ch != L'\t')
+            {
+                break;
+            }
             description.pop_back();
+        }
+        if (description.empty())
+        {
+            description = std::format(L"0x{:08X}", static_cast<unsigned int>(hr));
         }
     }
 

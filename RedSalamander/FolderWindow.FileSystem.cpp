@@ -4272,6 +4272,24 @@ std::wstring_view FolderWindow::GetFileSystemPluginId(Pane pane) const noexcept
     return state.pluginId;
 }
 
+std::wstring_view FolderWindow::GetFileSystemPluginShortId(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.pluginShortId;
+}
+
+std::wstring_view FolderWindow::GetFileSystemInstanceContext(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.instanceContext;
+}
+
+wil::com_ptr<IFileSystem> FolderWindow::GetFileSystem(Pane pane) const noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    return state.fileSystem;
+}
+
 HRESULT FolderWindow::SetFileSystemInstanceForPane(
     Pane pane, wil::com_ptr<IFileSystem> fileSystem, std::wstring pluginId, std::wstring pluginShortId, std::wstring instanceContext) noexcept
 {
@@ -5722,7 +5740,7 @@ void FolderWindow::CopySelectionText(Pane pane, CopySelectionTextMode mode, UINT
         return;
     }
 
-    const bool preferUncPath = mode == CopySelectionTextMode::UncPathAndName && IsFilePluginShortId(state.folderView.GetFileSystemPluginId());
+    const bool preferUncPath = mode == CopySelectionTextMode::UncPathAndName && IsFilePluginShortId(state.pluginShortId);
     const auto renderClipboardLine = [mode, preferUncPath](const std::filesystem::path& path) -> std::wstring
     {
         const std::wstring nativePath = path.native();
@@ -6862,3 +6880,4 @@ void FolderWindow::OnFolderViewDirectoryImpact(Pane pane, const DirectoryInfoCac
         }
     }
 }
+

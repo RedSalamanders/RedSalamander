@@ -23,6 +23,7 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <cwctype>
 #include <filesystem>
 #include <span>
 #include <string>
@@ -52,6 +53,8 @@ struct SelfTestOptions
     double timeoutScale = 1.0;
     // Write a results.json file to the suite artifact directory on completion.
     bool writeJsonSummary = true;
+    // When set, only the exact matching case name (case-insensitive) is executed.
+    std::wstring caseFilter;
 };
 
 struct SelfTestCaseResult
@@ -85,6 +88,7 @@ void AppendSuiteTrace(SelfTestSuite suite, std::wstring_view msg) noexcept;
 struct CaseState
 {
     std::wstring failure;
+    std::wstring skipped;
 
     bool Require(bool condition, std::wstring_view message) noexcept
     {
@@ -99,10 +103,45 @@ struct CaseState
         }
         return false;
     }
+
+    bool Skip(std::wstring_view reason) noexcept
+    {
+        if (failure.empty() && skipped.empty())
+        {
+            skipped.assign(reason.empty() ? std::wstring_view(L"skipped") : reason);
+        }
+        return true;
+    }
 };
 
 template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSuiteResult& suite, std::wstring_view name, Func&& func) noexcept
 {
+    if (! options.caseFilter.empty())
+    {
+        const auto equalNoCase = [](std::wstring_view lhs, std::wstring_view rhs) noexcept
+        {
+            if (lhs.size() != rhs.size())
+            {
+                return false;
+            }
+
+            for (size_t i = 0; i < lhs.size(); ++i)
+            {
+                if (std::towlower(lhs[i]) != std::towlower(rhs[i]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        };
+
+        if (! equalNoCase(options.caseFilter, name))
+        {
+            return;
+        }
+    }
+
     SelfTestCaseResult result{};
     result.name = std::wstring(name);
 
@@ -143,6 +182,15 @@ template <typename Func> void RunCase(const SelfTestOptions& options, SelfTestSu
         return;
     }
 
+    if (! state.skipped.empty())
+    {
+        result.status = SelfTestCaseResult::Status::skipped;
+        result.reason = state.skipped;
+        suite.cases.push_back(std::move(result));
+        ++suite.skipped;
+        return;
+    }
+
     result.status = SelfTestCaseResult::Status::passed;
     suite.cases.push_back(std::move(result));
     ++suite.passed;
@@ -154,6 +202,7 @@ struct SelfTestRunResult
     uint64_t durationMs = 0;
     bool failFast       = false;
     double timeoutScale = 1.0;
+    std::wstring caseFilter;
     std::vector<SelfTestSuiteResult> suites;
 };
 
