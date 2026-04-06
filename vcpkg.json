@@ -10,7 +10,7 @@
     },
     {
       "name": "unrar",
-      "version>=": "7.0.7"
+      "version>=": "7.2.5"
     },
     {
       "name": "wil",
