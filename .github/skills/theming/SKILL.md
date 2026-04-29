@@ -1,8 +1,8 @@
 ---
 name: theming
-description: Theme system and color key management for Red Salamander. Use when adding theme colors, modifying AppTheme, working with theme.json5 files, or updating theme-related specifications.
+description: Theme system and color key management for RedSalamander. Use when adding theme colors, modifying AppTheme, working with theme.json5 files, or updating theme-related specifications.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 

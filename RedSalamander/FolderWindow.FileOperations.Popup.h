@@ -38,13 +38,14 @@ struct PopupHitTest
     uint32_t data   = 0;
 };
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 struct PopupSelfTestInvoke
 {
     PopupHitTest::Kind kind = PopupHitTest::Kind::None;
     uint64_t taskId         = 0;
     uint32_t data           = 0;
 };
+
 #endif
 
 struct PopupButton
@@ -55,7 +56,7 @@ struct PopupButton
 
 struct TaskSnapshot
 {
-    static constexpr size_t kMaxInFlightFiles   = 8u;
+    static constexpr size_t kMaxInFlightFiles   = 16u;
     static constexpr size_t kMaxConflictActions = 8u;
 
     enum class Kind : uint8_t
@@ -110,8 +111,13 @@ struct TaskSnapshot
 
     ConflictPromptSnapshot conflict{};
 
-    uint64_t desiredSpeedLimitBytesPerSecond   = 0;
-    uint64_t effectiveSpeedLimitBytesPerSecond = 0;
+    uint64_t desiredSpeedLimitBytesPerSecond       = 0;
+    uint64_t effectiveSpeedLimitBytesPerSecond     = 0;
+    bool autoConcurrencyUsed                       = false;
+    uint32_t autoConcurrencyStorageKind            = FILESYSTEM_STORAGE_UNKNOWN;
+    uint32_t autoConcurrencyDestinationStorageKind = FILESYSTEM_STORAGE_UNKNOWN;
+    unsigned int autoTunedConcurrency              = 0;
+    unsigned int effectiveConcurrencyBudget        = 0;
 
     bool finished              = false;
     HRESULT resultHr           = S_OK;
@@ -143,12 +149,30 @@ struct TaskSnapshot
     std::optional<FolderWindow::Pane> destinationPane;
 };
 
+#ifdef ENABLE_TESTS
+struct PopupTaskSnapshotRequest
+{
+    uint64_t taskId = 0;
+    bool found      = false;
+    TaskSnapshot snapshot{};
+};
+
+struct CaptionGlyphDebugSnapshot
+{
+    bool statusVisible                 = false;
+    bool usesDirectWriteGlyphRendering = false;
+    bool usesGdiTextFallback           = true;
+    bool highContrastSuppressed        = false;
+};
+#endif
+
 struct RateSnapshot
 {
     uint64_t taskId               = 0;
     FileSystemOperation operation = FILESYSTEM_COPY;
 
     unsigned long completedItems = 0;
+    uint64_t totalBytes          = 0;
     uint64_t completedBytes      = 0;
     std::wstring currentSourcePath;
     ULONGLONG lastProgressCallbackTick = 0;
@@ -158,6 +182,7 @@ struct RateSnapshot
     bool waitingForOthers              = false;
     bool waitingInQueue                = false;
     bool queuePaused                   = false;
+    bool finished                      = false;
 };
 
 struct RateHistory
@@ -173,6 +198,7 @@ struct RateHistory
     ULONGLONG lastStateChangeTick      = 0;
     ULONGLONG resumeTick               = 0;
     ULONGLONG lastProgressCallbackTick = 0;
+    ULONGLONG lastDisplaySampleTick    = 0;
     uint64_t lastBytes                 = 0;
     unsigned long lastItems            = 0;
 
@@ -180,8 +206,12 @@ struct RateHistory
     double pendingWeightedSampleMs = 0.0;
     float pendingHue               = -1.0f;
 
-    float smoothedBytesPerSec = 0.0f;
-    float smoothedItemsPerSec = 0.0f;
+    double smoothedBytesPerSec  = 0.0;
+    double smoothedItemsPerSec  = 0.0;
+    double displayedBytesPerSec = 0.0;
+    double displayedItemsPerSec = 0.0;
+    double smoothedEtaSeconds   = 0.0;
+    bool hasSmoothedEta         = false;
 };
 
 class FileOperationsPopupState final
@@ -212,7 +242,9 @@ private:
     void DiscardDeviceResources() noexcept;
     void EnsureFactories() noexcept;
     void EnsureTextFormats() noexcept;
+    void EnsureCaptionGlyphTextFormats(UINT dpi) noexcept;
     void EnsureTarget(HWND hwnd) noexcept;
+    bool EnsureCaptionGlyphTarget(UINT dpi) noexcept;
     void EnsureBrushes() noexcept;
 
     std::vector<TaskSnapshot> BuildSnapshot() const;
@@ -237,7 +269,7 @@ private:
     void Render(HWND hwnd) noexcept;
     void UpdateLastPopupRect(HWND hwnd) noexcept;
     void UpdateCaptionStatus(HWND hwnd, const std::vector<TaskSnapshot>& snapshot) noexcept;
-    void PaintCaptionStatusGlyph(HWND hwnd) const noexcept;
+    void PaintCaptionStatusGlyph(HWND hwnd) noexcept;
 
     PopupHitTest HitTest(float x, float y) const noexcept;
     void Invalidate(HWND hwnd) const noexcept;
@@ -246,6 +278,7 @@ private:
 
     bool ConfirmCancelAll(HWND hwnd) noexcept;
     void ShowSpeedLimitMenu(HWND hwnd, uint64_t taskId) noexcept;
+    bool ShowCustomSpeedLimitPromptForTask(HWND hwnd, uint64_t requestedTaskId) noexcept;
     void ShowDestinationMenu(HWND hwnd, uint64_t taskId) noexcept;
 
     LRESULT OnCreate(HWND hwnd) noexcept;
@@ -267,12 +300,16 @@ private:
     LRESULT OnClose(HWND hwnd) noexcept;
     LRESULT OnNcPaint(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept;
     LRESULT OnNcActivate(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept;
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     LRESULT OnSelfTestInvoke(HWND hwnd, const PopupSelfTestInvoke* payload) noexcept;
+    LRESULT OnTaskSnapshotRequest(const PopupTaskSnapshotRequest* request) const noexcept;
+    LRESULT OnCaptionGlyphSnapshotRequest(CaptionGlyphDebugSnapshot* snapshot) const noexcept;
 #endif
 
     UINT _dpi = USER_DEFAULT_SCREEN_DPI;
     SIZE _clientSize{};
+    size_t _dispatchDepth = 0u;
+    bool _deletePending   = false;
 
     bool _trackingMouse = false;
     bool _inSizeMove    = false;
@@ -302,6 +339,7 @@ private:
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
     wil::com_ptr<ID2D1HwndRenderTarget> _target;
+    wil::com_ptr<ID2D1DCRenderTarget> _captionGlyphTarget;
 
     wil::com_ptr<IDWriteTextFormat> _headerFormat;
     wil::com_ptr<IDWriteTextFormat> _bodyFormat;
@@ -311,6 +349,8 @@ private:
     wil::com_ptr<IDWriteTextFormat> _graphOverlayFormat;
     wil::com_ptr<IDWriteTextFormat> _statusIconFormat;
     wil::com_ptr<IDWriteTextFormat> _statusIconFallbackFormat;
+    wil::com_ptr<IDWriteTextFormat> _captionGlyphFormat;
+    wil::com_ptr<IDWriteTextFormat> _captionGlyphFallbackFormat;
 
     wil::com_ptr<ID2D1SolidColorBrush> _bgBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _textBrush;
@@ -335,7 +375,9 @@ private:
     wil::com_ptr<ID2D1SolidColorBrush> _buttonBgBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _buttonHoverBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _buttonPressedBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _captionGlyphBrush;
     D2D1::ColorF _graphFillBaseColor = D2D1::ColorF(D2D1::ColorF::Black);
+    UINT _captionGlyphDpi            = 0;
 
     int _mouseWheelRemainder = 0;
 };
@@ -349,3 +391,27 @@ public:
 private:
     FileOperationsPopup() = delete;
 };
+
+#ifdef ENABLE_TESTS
+struct FileOperationsSpeedLimitPromptDebugSnapshot
+{
+    bool usesDxUiHost                   = false;
+    size_t visibleChildWindowCount      = 0u;
+    uint64_t initialLimitBytesPerSecond = 0;
+    std::wstring text;
+    std::wstring hintText;
+    std::wstring validationText;
+};
+
+[[nodiscard]] bool DebugInvokeFileOperationsPopup(HWND popup, const FileOperationsPopupInternal::PopupSelfTestInvoke& invoke) noexcept;
+[[nodiscard]] bool DebugGetFileOperationsPopupTaskSnapshot(HWND popup, uint64_t taskId, FileOperationsPopupInternal::TaskSnapshot& out) noexcept;
+[[nodiscard]] bool DebugGetFileOperationsPopupCaptionGlyphSnapshot(HWND popup, FileOperationsPopupInternal::CaptionGlyphDebugSnapshot& out) noexcept;
+[[nodiscard]] double DebugSmoothRateForDisplay(double previousRate, double sampleRate, ULONGLONG elapsedMs) noexcept;
+[[nodiscard]] double DebugDecayRateForCallbackSilence(double smoothedRate, ULONGLONG silenceMs) noexcept;
+[[nodiscard]] double DebugSmoothEtaSecondsForDisplay(double previousEtaSeconds, double sampleEtaSeconds, ULONGLONG elapsedMs) noexcept;
+[[nodiscard]] HWND GetFileOperationsSpeedLimitPromptHandle() noexcept;
+[[nodiscard]] bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept;
+[[nodiscard]] bool DebugCancelFileOperationsSpeedLimitPrompt() noexcept;
+#endif

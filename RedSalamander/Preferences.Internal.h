@@ -5,21 +5,24 @@
 
 #include "framework.h"
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include <commctrl.h>
-
 #include "AppTheme.h"
+#include "DxUi/DxUi.Typography.h"
+#include "DxUi/DxUi.h"
+#include "DxUiThemePalette.h"
 #include "Helpers.h"
-#include "SettingsSchemaParser.h"
 #include "SettingsStore.h"
+#include "UiMetrics.h"
 
 // Window props used by Preferences UI controls.
 inline constexpr wchar_t kPrefsVisuallyDisabledProp[] = L"RedSalamander.Preferences.VisuallyDisabled";
@@ -37,7 +40,30 @@ enum class PrefCategory : int
     Advanced,
     CompareDirectories,
     HotPaths,
+    FileOperations,
 };
+
+inline constexpr size_t kPrefCategoryCount = static_cast<size_t>(PrefCategory::FileOperations) + 1u;
+
+[[nodiscard]] constexpr size_t PrefCategoryIndex(const PrefCategory category) noexcept
+{
+    return static_cast<size_t>(category);
+}
+
+class KeyboardPane;
+struct PreferencesDialogState;
+
+struct PreferencesTypographyContext
+{
+    UINT dpi = USER_DEFAULT_SCREEN_DPI;
+    RedSalamander::DxUi::Typography::TypographySpec body;
+    RedSalamander::DxUi::Typography::TypographySpec caption;
+    RedSalamander::DxUi::Typography::TypographySpec title;
+    RedSalamander::DxUi::Typography::TypographySpec strong;
+};
+
+[[nodiscard]] bool PrefsKeyboardCaptureWantsAllKeys(const PreferencesDialogState* state) noexcept;
+[[nodiscard]] bool PrefsHandleKeyboardCaptureMessage(HWND hostHwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
 enum class ShortcutScope : uint8_t
 {
@@ -51,6 +77,33 @@ enum class ThemeSchemaSource : uint8_t
     Settings,
     File,
     New,
+};
+
+enum class PreferencesDeferredActionKind : uint8_t
+{
+    ViewersSearchChanged,
+    KeyboardSearchChanged,
+    KeyboardScopeChanged,
+    KeyboardAssign,
+    KeyboardRemove,
+    KeyboardReset,
+    KeyboardImport,
+    KeyboardExport,
+    ThemesThemeChanged,
+    ThemesBaseChanged,
+    ThemesNameBlur,
+    ThemesSearchChanged,
+    PluginsSearchChanged,
+    PluginsConfigure,
+    PluginsTest,
+    PluginsTestAll,
+    FileOperationsBandwidthPresetChanged,
+    CompareDirectoriesIgnoreToggleChanged,
+};
+
+struct PreferencesDeferredActionPayload
+{
+    PreferencesDeferredActionKind kind = PreferencesDeferredActionKind::ViewersSearchChanged;
 };
 
 // Layout constants (DPI-independent values in logical units)
@@ -90,7 +143,8 @@ enum class MonitorFilterBit : uint32_t
     Error   = 0x02u,
     Warning = 0x04u,
     Info    = 0x08u,
-    Debug   = 0x10u,
+    Perf    = 0x10u,
+    Debug   = 0x20u,
 };
 
 [[nodiscard]] inline constexpr uint32_t operator|(MonitorFilterBit a, MonitorFilterBit b) noexcept
@@ -121,6 +175,23 @@ struct ViewerPluginOption
     std::wstring displayName;
 };
 
+struct PreferencesEmptyStateSpec
+{
+    wchar_t iconGlyph         = L'\0';
+    wchar_t fallbackIconGlyph = L'\0';
+    enum class Tone : uint8_t
+    {
+        Neutral,
+        Accent,
+        Warning,
+        Error,
+        Info,
+    } tone = Tone::Neutral;
+    std::wstring title;
+    std::wstring body;
+    std::wstring caption;
+};
+
 enum class PrefsPluginType : uint8_t
 {
     FileSystem,
@@ -131,6 +202,20 @@ struct PrefsPluginListItem
 {
     PrefsPluginType type = PrefsPluginType::FileSystem;
     size_t index         = 0;
+};
+
+enum class PrefsPluginDetailsMessageKind : uint8_t
+{
+    None,
+    Error,
+    EmptyState,
+};
+
+enum class PrefsInlineMessageSeverity : uint8_t
+{
+    Info,
+    Warning,
+    Error,
 };
 
 enum class PrefsPluginConfigFieldType : uint8_t
@@ -170,6 +255,19 @@ struct PrefsPluginConfigField
     std::vector<PrefsPluginConfigChoice> choices;
 };
 
+struct PrefsPluginConfigChoiceDxControl
+{
+    PrefsPluginConfigChoiceDxControl() = default;
+
+    PrefsPluginConfigChoiceDxControl(const PrefsPluginConfigChoiceDxControl&)            = delete;
+    PrefsPluginConfigChoiceDxControl& operator=(const PrefsPluginConfigChoiceDxControl&) = delete;
+
+    PrefsPluginConfigChoiceDxControl(PrefsPluginConfigChoiceDxControl&&)            = default;
+    PrefsPluginConfigChoiceDxControl& operator=(PrefsPluginConfigChoiceDxControl&&) = default;
+
+    RedSalamander::DxUi::Checkbox* checkbox = nullptr;
+};
+
 struct PrefsPluginConfigFieldControls
 {
     PrefsPluginConfigFieldControls() = default;
@@ -182,47 +280,20 @@ struct PrefsPluginConfigFieldControls
 
     PrefsPluginConfigField field;
     std::wstring schemaDefaultOption;
-    wil::unique_hwnd label;
-    wil::unique_hwnd description;
-    wil::unique_hwnd editFrame;
-    wil::unique_hwnd edit;
-    wil::unique_hwnd browseButton;
-    wil::unique_hwnd comboFrame;
-    wil::unique_hwnd combo;
-    wil::unique_hwnd toggle;
-    size_t toggleOnChoiceIndex  = 0;
-    size_t toggleOffChoiceIndex = 0;
-    std::vector<wil::unique_hwnd> choiceButtons;
+    std::wstring retainedText;
+    bool retainedToggleValue = false;
+    std::wstring retainedOptionValue;
+    std::vector<std::wstring> retainedSelectionValues;
+    RedSalamander::DxUi::Label* dxLabelControl         = nullptr;
+    RedSalamander::DxUi::Label* dxDescriptionControl   = nullptr;
+    RedSalamander::DxUi::TextField* dxEditControl      = nullptr;
+    RedSalamander::DxUi::Button* dxBrowseButtonControl = nullptr;
+    RedSalamander::DxUi::ComboBox* dxComboControl      = nullptr;
+    RedSalamander::DxUi::Toggle* dxToggleControl       = nullptr;
+    size_t toggleOnChoiceIndex                         = 0;
+    size_t toggleOffChoiceIndex                        = 0;
+    std::vector<PrefsPluginConfigChoiceDxControl> dxChoiceControls;
 };
-
-namespace PrefsNavTree
-{
-inline constexpr uintptr_t kPluginTag      = uintptr_t(1) << ((sizeof(uintptr_t) * 8u) - 1u);
-inline constexpr uintptr_t kPluginTypeMask = 0xFFu;
-inline constexpr int kPluginIndexShift     = 8;
-
-[[nodiscard]] constexpr LPARAM EncodePluginData(PrefsPluginType type, size_t index) noexcept
-{
-    uintptr_t value = kPluginTag;
-    value |= (static_cast<uintptr_t>(type) & kPluginTypeMask);
-    value |= (static_cast<uintptr_t>(index) << kPluginIndexShift);
-    return static_cast<LPARAM>(value);
-}
-
-[[nodiscard]] inline bool TryDecodePluginData(LPARAM data, PrefsPluginListItem& out) noexcept
-{
-    const uintptr_t value = static_cast<uintptr_t>(data);
-    if ((value & kPluginTag) == 0)
-    {
-        return false;
-    }
-
-    const uintptr_t payload = (value & ~kPluginTag);
-    out.type                = static_cast<PrefsPluginType>(payload & kPluginTypeMask);
-    out.index               = static_cast<size_t>(payload >> kPluginIndexShift);
-    return true;
-}
-} // namespace PrefsNavTree
 
 struct KeyboardShortcutRow
 {
@@ -253,9 +324,6 @@ struct PreferencesDialogState
     Common::Settings::Settings baselineSettings;
     Common::Settings::Settings workingSettings;
 
-    // Schema-driven UI support
-    std::vector<SettingsSchemaParser::SettingField> schemaFields;
-
     bool dirty                   = false;
     bool appliedOnce             = false;
     bool staleFromExternalReload = false;
@@ -264,6 +332,17 @@ struct PreferencesDialogState
     PrefCategory currentCategory = PrefCategory::General;
     PrefCategory initialCategory = PrefCategory::General;
     std::optional<PrefsPluginListItem> pluginsSelectedPlugin;
+    std::wstring pluginsSelectedPluginId;
+    std::wstring pluginsRetainedSelectedPluginId;
+    bool pluginsDetailsActive = false;
+    std::wstring viewersSearchText;
+    std::wstring viewersSelectedExtensionText;
+    RedSalamander::DxUi::GridSortSpec viewersListSortSpec{};
+    std::wstring keyboardSearchText;
+    std::wstring pluginsSearchText;
+    std::wstring pluginsSelectedCustomPathText;
+    std::wstring themesSearchText;
+    std::wstring themesSelectedColorKey;
 
     // Layout and Sizing
     int categoryListWidthPx = 0;
@@ -272,9 +351,14 @@ struct PreferencesDialogState
     int pageScrollY             = 0;
     int pageScrollMaxY          = 0;
     int pageWheelDeltaRemainder = 0;
+    std::array<int, kPrefCategoryCount> retainedPageScrollYByCategory{};
+    int pageHostDirectContentBottomPx = 0;
     std::vector<RECT> pageSettingCards;
     bool pageHostRelayoutInProgress = false;
     bool pageHostIgnoreSize         = false;
+    bool updatingPageText           = false;
+    std::array<bool, kPrefCategoryCount> paneFirstCreateDone{};
+    std::array<RedSalamander::DxUi::Panel*, kPrefCategoryCount> paneWrapperPanels{};
 
     // Theme Resources (RAII-managed)
     wil::unique_hbrush backgroundBrush;
@@ -286,112 +370,22 @@ struct PreferencesDialogState
     COLORREF inputFocusedBackgroundColor = RGB(255, 255, 255);
     wil::unique_hbrush inputDisabledBrush;
     COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
-    wil::unique_hfont italicFont;
-    wil::unique_hfont boldFont;
-    wil::unique_hfont titleFont;
-    wil::unique_hfont uiFont;
-
     // Dialog Structure Controls
-    HWND categoryTree = nullptr;
-    std::array<HTREEITEM, 11> categoryTreeItems{};
-    HTREEITEM pluginsTreeRoot = nullptr;
-    HWND pageHost             = nullptr;
-    HWND pageTitle            = nullptr;
-    HWND pageDescription      = nullptr;
-
-    // General Page Controls (RAII-managed)
-    wil::unique_hwnd menuBarLabel;
-    wil::unique_hwnd menuBarToggle;
-    wil::unique_hwnd menuBarDescription;
-    wil::unique_hwnd functionBarLabel;
-    wil::unique_hwnd functionBarToggle;
-    wil::unique_hwnd functionBarDescription;
-    wil::unique_hwnd splashScreenLabel;
-    wil::unique_hwnd splashScreenToggle;
-    wil::unique_hwnd splashScreenDescription;
-
-    // Panes Page Controls (RAII-managed)
-    wil::unique_hwnd panesLeftHeader;
-    wil::unique_hwnd panesLeftDisplayLabel;
-    wil::unique_hwnd panesLeftDisplayFrame;
-    wil::unique_hwnd panesLeftDisplayCombo;
-    wil::unique_hwnd panesLeftDisplayToggle;
-    wil::unique_hwnd panesLeftSortByLabel;
-    wil::unique_hwnd panesLeftSortByFrame;
-    wil::unique_hwnd panesLeftSortByCombo;
-    wil::unique_hwnd panesLeftSortDirLabel;
-    wil::unique_hwnd panesLeftSortDirFrame;
-    wil::unique_hwnd panesLeftSortDirCombo;
-    wil::unique_hwnd panesLeftSortDirToggle;
-    wil::unique_hwnd panesLeftStatusBarLabel;
-    wil::unique_hwnd panesLeftStatusBarToggle;
-    wil::unique_hwnd panesLeftStatusBarDescription;
-
-    wil::unique_hwnd panesRightHeader;
-    wil::unique_hwnd panesRightDisplayLabel;
-    wil::unique_hwnd panesRightDisplayFrame;
-    wil::unique_hwnd panesRightDisplayCombo;
-    wil::unique_hwnd panesRightDisplayToggle;
-    wil::unique_hwnd panesRightSortByLabel;
-    wil::unique_hwnd panesRightSortByFrame;
-    wil::unique_hwnd panesRightSortByCombo;
-    wil::unique_hwnd panesRightSortDirLabel;
-    wil::unique_hwnd panesRightSortDirFrame;
-    wil::unique_hwnd panesRightSortDirCombo;
-    wil::unique_hwnd panesRightSortDirToggle;
-    wil::unique_hwnd panesRightStatusBarLabel;
-    wil::unique_hwnd panesRightStatusBarToggle;
-    wil::unique_hwnd panesRightStatusBarDescription;
-
-    wil::unique_hwnd panesGeneralHeader;
-    wil::unique_hwnd panesShowHiddenFilesLabel;
-    wil::unique_hwnd panesShowHiddenFilesToggle;
-    wil::unique_hwnd panesShowSystemFilesLabel;
-    wil::unique_hwnd panesShowSystemFilesToggle;
-
-    wil::unique_hwnd panesHistoryLabel;
-    wil::unique_hwnd panesHistoryFrame;
-    wil::unique_hwnd panesHistoryEdit;
-    wil::unique_hwnd panesHistoryDescription;
-
-    // Viewers Page Controls (RAII-managed)
-    wil::unique_hwnd viewersSearchLabel;
-    wil::unique_hwnd viewersSearchFrame;
-    wil::unique_hwnd viewersSearchEdit;
-    wil::unique_hwnd viewersList;
-    wil::unique_hwnd viewersExtensionLabel;
-    wil::unique_hwnd viewersExtensionFrame;
-    wil::unique_hwnd viewersExtensionEdit;
-    wil::unique_hwnd viewersViewerLabel;
-    wil::unique_hwnd viewersViewerFrame;
-    wil::unique_hwnd viewersViewerCombo;
-    wil::unique_hwnd viewersSaveButton;
-    wil::unique_hwnd viewersRemoveButton;
-    wil::unique_hwnd viewersResetButton;
-    wil::unique_hwnd viewersHint;
+    HWND categoryTreeWindow                                  = nullptr;
+    bool categoryTreeUsesDxUi                                = false;
+    bool pageHostUsesDxUi                                    = false;
+    RedSalamander::DxUi::WindowHost* pageHostDxHost          = nullptr;
+    RedSalamander::DxUi::Panel* pageHostDxRootControl        = nullptr;
+    RedSalamander::DxUi::Panel* pageHostDxContentRootControl = nullptr;
+    RedSalamander::DxUi::Control* pageHostDxNoteControl      = nullptr;
+    HWND pageHostWindow                                      = nullptr;
 
     std::vector<std::wstring> viewersExtensionKeys;
     std::vector<ViewerPluginOption> viewersPluginOptions;
 
-    // Editors Page Controls (RAII-managed)
-    wil::unique_hwnd editorsNote;
-
-    // Keyboard Page Controls (RAII-managed)
-    wil::unique_hwnd keyboardSearchLabel;
-    wil::unique_hwnd keyboardSearchFrame;
-    wil::unique_hwnd keyboardSearchEdit;
-    wil::unique_hwnd keyboardScopeLabel;
-    wil::unique_hwnd keyboardScopeFrame;
-    wil::unique_hwnd keyboardScopeCombo;
-    wil::unique_hwnd keyboardList;
-    wil::unique_hwnd keyboardHint;
-    wil::unique_hwnd keyboardAssign;
-    wil::unique_hwnd keyboardRemove;
-    wil::unique_hwnd keyboardReset;
-    wil::unique_hwnd keyboardImport;
-    wil::unique_hwnd keyboardExport;
-
-    wil::unique_any<HIMAGELIST, decltype(&::ImageList_Destroy), ::ImageList_Destroy> keyboardImageList;
+    // Keyboard Page Controls
+    KeyboardPane* keyboardPaneOwner = nullptr;
+    std::wstring keyboardHintText;
 
     bool keyboardCaptureActive         = false;
     ShortcutScope keyboardCaptureScope = ShortcutScope::FunctionBar;
@@ -404,229 +398,34 @@ struct PreferencesDialogState
     bool keyboardCaptureConflictMultiple = false;
 
     std::vector<KeyboardShortcutRow> keyboardRows;
-
-    // Mouse Page Controls (RAII-managed)
-    wil::unique_hwnd mouseNote;
+    ShortcutScope keyboardSelectedScope = ShortcutScope::FunctionBar;
+    std::wstring keyboardSelectedCommandId;
+    std::optional<size_t> keyboardSelectedBindingIndex;
 
     // Themes Page Controls (RAII-managed)
-    wil::unique_hwnd themesThemeLabel;
-    wil::unique_hwnd themesThemeFrame;
-    wil::unique_hwnd themesThemeCombo;
-    wil::unique_hwnd themesNameLabel;
-    wil::unique_hwnd themesNameFrame;
-    wil::unique_hwnd themesNameEdit;
-    wil::unique_hwnd themesBaseLabel;
-    wil::unique_hwnd themesBaseFrame;
-    wil::unique_hwnd themesBaseCombo;
-    wil::unique_hwnd themesSearchLabel;
-    wil::unique_hwnd themesSearchFrame;
-    wil::unique_hwnd themesSearchEdit;
-    wil::unique_hwnd themesColorsList;
-    wil::unique_hwnd themesKeyLabel;
-    wil::unique_hwnd themesKeyFrame;
-    wil::unique_hwnd themesKeyEdit;
-    wil::unique_hwnd themesColorLabel;
-    wil::unique_hwnd themesColorSwatch;
-    wil::unique_hwnd themesColorFrame;
-    wil::unique_hwnd themesColorEdit;
-    wil::unique_hwnd themesPickColor;
-    wil::unique_hwnd themesSetOverride;
-    wil::unique_hwnd themesRemoveOverride;
-    wil::unique_hwnd themesLoadFromFile;
-    wil::unique_hwnd themesDuplicateTheme;
-    wil::unique_hwnd themesSaveTheme;
-    wil::unique_hwnd themesApplyTemporarily;
-    wil::unique_hwnd themesNote;
+    std::wstring themesNoteText;
+    std::wstring themesNameText;
+    std::wstring themesKeyText;
+    std::wstring themesColorText;
 
     std::vector<ThemeComboItem> themeComboItems;
     std::vector<Common::Settings::ThemeDefinition> themeFileThemes;
 
-    // Plugins Page Controls (RAII-managed)
-    wil::unique_hwnd pluginsConfigureButton;
-    wil::unique_hwnd pluginsTestButton;
-    wil::unique_hwnd pluginsTestAllButton;
-    wil::unique_hwnd pluginsNote;
-    wil::unique_hwnd pluginsSearchLabel;
-    wil::unique_hwnd pluginsSearchFrame;
-    wil::unique_hwnd pluginsSearchEdit;
-    wil::unique_hwnd pluginsList;
-    wil::unique_hwnd pluginsCustomPathsHeader;
-    wil::unique_hwnd pluginsCustomPathsNote;
-    wil::unique_hwnd pluginsCustomPathsList;
-    wil::unique_hwnd pluginsCustomPathsAddButton;
-    wil::unique_hwnd pluginsCustomPathsRemoveButton;
-
     // Plugins details subpage (when a plugin tree child is selected). (RAII-managed)
-    wil::unique_hwnd pluginsDetailsHint;
-    wil::unique_hwnd pluginsDetailsIdLabel;
-    wil::unique_hwnd pluginsDetailsConfigLabel;
-    wil::unique_hwnd pluginsDetailsConfigFrame;
-    wil::unique_hwnd pluginsDetailsConfigEdit;
-    wil::unique_hwnd pluginsDetailsConfigError;
+    std::wstring pluginsDetailsIdText;
+    std::wstring pluginsDetailsConfigErrorText;
+    std::wstring pluginsDetailsConfigEmptyStateText;
+    PrefsPluginDetailsMessageKind pluginsDetailsMessageKind = PrefsPluginDetailsMessageKind::None;
+    std::wstring pluginsStatusTitleText;
+    std::wstring pluginsStatusBodyText;
+    PrefsInlineMessageSeverity pluginsStatusSeverity = PrefsInlineMessageSeverity::Info;
     std::wstring pluginsDetailsConfigPluginId;
     std::vector<PrefsPluginConfigFieldControls> pluginsDetailsConfigFields;
+    RedSalamander::DxUi::Panel* pluginsDetailsConfigDxPanel = nullptr;
 
     std::vector<PrefsPluginListItem> pluginsListItems;
 
-    // Advanced Page Controls (RAII-managed)
-    wil::unique_hwnd advancedConnectionsHelloHeader;
-    wil::unique_hwnd advancedConnectionsBypassHelloLabel;
-    wil::unique_hwnd advancedConnectionsBypassHelloToggle;
-    wil::unique_hwnd advancedConnectionsBypassHelloDescription;
-    wil::unique_hwnd advancedConnectionsAllowInsecureTlsAutomationLabel;
-    wil::unique_hwnd advancedConnectionsAllowInsecureTlsAutomationToggle;
-    wil::unique_hwnd advancedConnectionsAllowInsecureTlsAutomationDescription;
-    wil::unique_hwnd advancedConnectionsHelloTimeoutLabel;
-    wil::unique_hwnd advancedConnectionsHelloTimeoutFrame;
-    wil::unique_hwnd advancedConnectionsHelloTimeoutEdit;
-    wil::unique_hwnd advancedConnectionsHelloTimeoutDescription;
-
-    wil::unique_hwnd advancedMonitorHeader;
-    wil::unique_hwnd advancedMonitorToolbarLabel;
-    wil::unique_hwnd advancedMonitorToolbarToggle;
-    wil::unique_hwnd advancedMonitorToolbarDescription;
-    wil::unique_hwnd advancedMonitorLineNumbersLabel;
-    wil::unique_hwnd advancedMonitorLineNumbersToggle;
-    wil::unique_hwnd advancedMonitorLineNumbersDescription;
-    wil::unique_hwnd advancedMonitorAlwaysOnTopLabel;
-    wil::unique_hwnd advancedMonitorAlwaysOnTopToggle;
-    wil::unique_hwnd advancedMonitorAlwaysOnTopDescription;
-    wil::unique_hwnd advancedMonitorShowIdsLabel;
-    wil::unique_hwnd advancedMonitorShowIdsToggle;
-    wil::unique_hwnd advancedMonitorShowIdsDescription;
-    wil::unique_hwnd advancedMonitorAutoScrollLabel;
-    wil::unique_hwnd advancedMonitorAutoScrollToggle;
-    wil::unique_hwnd advancedMonitorAutoScrollDescription;
-    wil::unique_hwnd advancedMonitorFilterPresetLabel;
-    wil::unique_hwnd advancedMonitorFilterPresetFrame;
-    wil::unique_hwnd advancedMonitorFilterPresetCombo;
-    wil::unique_hwnd advancedMonitorFilterPresetDescription;
-    wil::unique_hwnd advancedMonitorFilterMaskLabel;
-    wil::unique_hwnd advancedMonitorFilterMaskFrame;
-    wil::unique_hwnd advancedMonitorFilterMaskEdit;
-    wil::unique_hwnd advancedMonitorFilterMaskDescription;
-
-    wil::unique_hwnd advancedMonitorFilterTextLabel;
-    wil::unique_hwnd advancedMonitorFilterTextToggle;
-    wil::unique_hwnd advancedMonitorFilterTextDescription;
-    wil::unique_hwnd advancedMonitorFilterErrorLabel;
-    wil::unique_hwnd advancedMonitorFilterErrorToggle;
-    wil::unique_hwnd advancedMonitorFilterErrorDescription;
-    wil::unique_hwnd advancedMonitorFilterWarningLabel;
-    wil::unique_hwnd advancedMonitorFilterWarningToggle;
-    wil::unique_hwnd advancedMonitorFilterWarningDescription;
-    wil::unique_hwnd advancedMonitorFilterInfoLabel;
-    wil::unique_hwnd advancedMonitorFilterInfoToggle;
-    wil::unique_hwnd advancedMonitorFilterInfoDescription;
-    wil::unique_hwnd advancedMonitorFilterDebugLabel;
-    wil::unique_hwnd advancedMonitorFilterDebugToggle;
-    wil::unique_hwnd advancedMonitorFilterDebugDescription;
-
-    wil::unique_hwnd advancedCacheHeader;
-    wil::unique_hwnd advancedCacheDirectoryInfoMaxBytesLabel;
-    wil::unique_hwnd advancedCacheDirectoryInfoMaxBytesFrame;
-    wil::unique_hwnd advancedCacheDirectoryInfoMaxBytesEdit;
-    wil::unique_hwnd advancedCacheDirectoryInfoMaxBytesDescription;
-    wil::unique_hwnd advancedCacheDirectoryInfoMaxWatchersLabel;
-    wil::unique_hwnd advancedCacheDirectoryInfoMaxWatchersFrame;
-    wil::unique_hwnd advancedCacheDirectoryInfoMaxWatchersEdit;
-    wil::unique_hwnd advancedCacheDirectoryInfoMaxWatchersDescription;
-    wil::unique_hwnd advancedCacheDirectoryInfoMruWatchedLabel;
-    wil::unique_hwnd advancedCacheDirectoryInfoMruWatchedFrame;
-    wil::unique_hwnd advancedCacheDirectoryInfoMruWatchedEdit;
-    wil::unique_hwnd advancedCacheDirectoryInfoMruWatchedDescription;
-
-    wil::unique_hwnd advancedFileOperationsHeader;
-    wil::unique_hwnd advancedFileOperationsMaxDiagnosticsLogFilesLabel;
-    wil::unique_hwnd advancedFileOperationsMaxDiagnosticsLogFilesFrame;
-    wil::unique_hwnd advancedFileOperationsMaxDiagnosticsLogFilesEdit;
-    wil::unique_hwnd advancedFileOperationsMaxDiagnosticsLogFilesDescription;
-    wil::unique_hwnd advancedFileOperationsDiagnosticsInfoLabel;
-    wil::unique_hwnd advancedFileOperationsDiagnosticsInfoToggle;
-    wil::unique_hwnd advancedFileOperationsDiagnosticsInfoDescription;
-    wil::unique_hwnd advancedFileOperationsDiagnosticsDebugLabel;
-    wil::unique_hwnd advancedFileOperationsDiagnosticsDebugToggle;
-    wil::unique_hwnd advancedFileOperationsDiagnosticsDebugDescription;
-
-    wil::unique_hwnd advancedCompareDirectoriesHeader;
-    wil::unique_hwnd advancedCompareSectionSubdirsHeader;
-    wil::unique_hwnd advancedCompareSectionCompareHeader;
-    wil::unique_hwnd advancedCompareSectionAdditionalHeader;
-    wil::unique_hwnd advancedCompareSectionMoreHeader;
-    wil::unique_hwnd advancedCompareSizeLabel;
-    wil::unique_hwnd advancedCompareSizeToggle;
-    wil::unique_hwnd advancedCompareSizeDescription;
-    wil::unique_hwnd advancedCompareDateTimeLabel;
-    wil::unique_hwnd advancedCompareDateTimeToggle;
-    wil::unique_hwnd advancedCompareDateTimeDescription;
-    wil::unique_hwnd advancedCompareAttributesLabel;
-    wil::unique_hwnd advancedCompareAttributesToggle;
-    wil::unique_hwnd advancedCompareAttributesDescription;
-    wil::unique_hwnd advancedCompareContentLabel;
-    wil::unique_hwnd advancedCompareContentToggle;
-    wil::unique_hwnd advancedCompareContentDescription;
-    wil::unique_hwnd advancedCompareContentWorkersLabel;
-    wil::unique_hwnd advancedCompareContentWorkersFrame;
-    wil::unique_hwnd advancedCompareContentWorkersCombo;
-    wil::unique_hwnd advancedCompareContentWorkersDescription;
-
-    wil::unique_hwnd advancedCompareSubdirectoriesLabel;
-    wil::unique_hwnd advancedCompareSubdirectoriesToggle;
-    wil::unique_hwnd advancedCompareSubdirectoriesDescription;
-    wil::unique_hwnd advancedCompareSubdirectoryAttributesLabel;
-    wil::unique_hwnd advancedCompareSubdirectoryAttributesToggle;
-    wil::unique_hwnd advancedCompareSubdirectoryAttributesDescription;
-    wil::unique_hwnd advancedCompareSelectSubdirsOnlyInOnePaneLabel;
-    wil::unique_hwnd advancedCompareSelectSubdirsOnlyInOnePaneToggle;
-    wil::unique_hwnd advancedCompareSelectSubdirsOnlyInOnePaneDescription;
-
-    wil::unique_hwnd advancedCompareKeepIdenticalLabel;
-    wil::unique_hwnd advancedCompareKeepIdenticalToggle;
-    wil::unique_hwnd advancedCompareKeepIdenticalDescription;
-
-    wil::unique_hwnd advancedCompareShowIdenticalLabel;
-    wil::unique_hwnd advancedCompareShowIdenticalToggle;
-    wil::unique_hwnd advancedCompareShowIdenticalDescription;
-
-    wil::unique_hwnd advancedCompareIgnoreFilesLabel;
-    wil::unique_hwnd advancedCompareIgnoreFilesToggle;
-    wil::unique_hwnd advancedCompareIgnoreFilesDescription;
-    wil::unique_hwnd advancedCompareIgnoreFilesPatternsLabel;
-    wil::unique_hwnd advancedCompareIgnoreFilesPatternsFrame;
-    wil::unique_hwnd advancedCompareIgnoreFilesPatternsEdit;
-
-    wil::unique_hwnd advancedCompareIgnoreDirectoriesLabel;
-    wil::unique_hwnd advancedCompareIgnoreDirectoriesToggle;
-    wil::unique_hwnd advancedCompareIgnoreDirectoriesDescription;
-    wil::unique_hwnd advancedCompareIgnoreDirectoriesPatternsLabel;
-    wil::unique_hwnd advancedCompareIgnoreDirectoriesPatternsFrame;
-    wil::unique_hwnd advancedCompareIgnoreDirectoriesPatternsEdit;
-
-    // Hot Paths page controls.
-    struct HotPathSlotControls
-    {
-        HotPathSlotControls()                                      = default;
-        HotPathSlotControls(const HotPathSlotControls&)            = delete;
-        HotPathSlotControls& operator=(const HotPathSlotControls&) = delete;
-        HotPathSlotControls(HotPathSlotControls&&)                 = default;
-        HotPathSlotControls& operator=(HotPathSlotControls&&)      = default;
-
-        wil::unique_hwnd header;
-        wil::unique_hwnd pathLabel;
-        wil::unique_hwnd pathFrame;
-        wil::unique_hwnd pathEdit;
-        wil::unique_hwnd browseButton;
-        wil::unique_hwnd labelLabel;
-        wil::unique_hwnd labelFrame;
-        wil::unique_hwnd labelEdit;
-        wil::unique_hwnd showInMenuLabel;
-        wil::unique_hwnd showInMenuToggle;
-        wil::unique_hwnd showInMenuDescription;
-    };
-    std::vector<HotPathSlotControls> hotPathSlotControls;
-    wil::unique_hwnd hotPathOpenPrefsOnAssignLabel;
-    wil::unique_hwnd hotPathOpenPrefsOnAssignToggle;
-    wil::unique_hwnd hotPathOpenPrefsOnAssignDescription;
+    // Hot Paths page: no Win32 intermediary controls; DxUi writes directly to workingSettings.
 
     // Refresh State Flags
     bool previewApplied        = false;
@@ -637,67 +436,134 @@ struct PreferencesDialogState
 
 void SetDirty(HWND dlg, PreferencesDialogState& state) noexcept;
 
+// Shared debug diagnostics helpers for DxUi host surfaces.
+[[nodiscard]] inline UINT GetDxHostDebugWidthPx(const RedSalamander::DxUi::WindowHost* host) noexcept
+{
+#ifdef ENABLE_TESTS
+    return host ? host->DebugGetWidthPx() : 0u;
+#else
+    static_cast<void>(host);
+    return 0u;
+#endif
+}
+
+[[nodiscard]] inline UINT GetDxHostDebugHeightPx(const RedSalamander::DxUi::WindowHost* host) noexcept
+{
+#ifdef ENABLE_TESTS
+    return host ? host->DebugGetHeightPx() : 0u;
+#else
+    static_cast<void>(host);
+    return 0u;
+#endif
+}
+
+[[nodiscard]] inline uint64_t GetDxHostDebugRenderCount(const RedSalamander::DxUi::WindowHost* host) noexcept
+{
+#ifdef ENABLE_TESTS
+    return host ? host->DebugGetRenderCount() : 0u;
+#else
+    static_cast<void>(host);
+    return 0u;
+#endif
+}
+
+[[nodiscard]] inline uint64_t GetDxHostDebugResizeCount(const RedSalamander::DxUi::WindowHost* host) noexcept
+{
+#ifdef ENABLE_TESTS
+    return host ? host->DebugGetResizeCount() : 0u;
+#else
+    static_cast<void>(host);
+    return 0u;
+#endif
+}
+
+[[nodiscard]] inline uint64_t GetDxHostDebugResizeFailureCount(const RedSalamander::DxUi::WindowHost* host) noexcept
+{
+#ifdef ENABLE_TESTS
+    return host ? host->DebugGetResizeFailureCount() : 0u;
+#else
+    static_cast<void>(host);
+    return 0u;
+#endif
+}
+
+// Reference overloads for non-nullable host references.
+[[nodiscard]] inline UINT GetDxHostDebugWidthPx(const RedSalamander::DxUi::WindowHost& host) noexcept
+{
+    return GetDxHostDebugWidthPx(&host);
+}
+[[nodiscard]] inline UINT GetDxHostDebugHeightPx(const RedSalamander::DxUi::WindowHost& host) noexcept
+{
+    return GetDxHostDebugHeightPx(&host);
+}
+[[nodiscard]] inline uint64_t GetDxHostDebugRenderCount(const RedSalamander::DxUi::WindowHost& host) noexcept
+{
+    return GetDxHostDebugRenderCount(&host);
+}
+[[nodiscard]] inline uint64_t GetDxHostDebugResizeCount(const RedSalamander::DxUi::WindowHost& host) noexcept
+{
+    return GetDxHostDebugResizeCount(&host);
+}
+[[nodiscard]] inline uint64_t GetDxHostDebugResizeFailureCount(const RedSalamander::DxUi::WindowHost& host) noexcept
+{
+    return GetDxHostDebugResizeFailureCount(&host);
+}
+
 namespace PrefsUi
 {
 using Win32Text::GetWindowTextString;
-[[nodiscard]] inline std::wstring GetWindowTextString(const wil::unique_hwnd& hwnd) noexcept
-{
-    return GetWindowTextString(hwnd.get());
-}
-[[nodiscard]] int MeasureStaticTextHeight(HWND referenceWindow, HFONT font, int width, std::wstring_view text) noexcept;
-[[nodiscard]] inline int MeasureStaticTextHeight(const wil::unique_hwnd& referenceWindow, HFONT font, int width, std::wstring_view text) noexcept
-{
-    return MeasureStaticTextHeight(referenceWindow.get(), font, width, text);
-}
+[[nodiscard]] PreferencesTypographyContext MakeTypographyContext(HWND hwnd) noexcept;
+[[nodiscard]] int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography,
+                                               const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                                               std::wstring_view text) noexcept;
+[[nodiscard]] int MeasureWrappedTextHeightPx(const PreferencesTypographyContext& typography,
+                                             const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                                             int width,
+                                             std::wstring_view text) noexcept;
 [[nodiscard]] std::wstring_view TrimWhitespace(std::wstring_view text) noexcept;
 [[nodiscard]] bool ContainsCaseInsensitive(std::wstring_view haystack, std::wstring_view needle) noexcept;
 void InvalidateComboBox(HWND combo) noexcept;
-inline void InvalidateComboBox(const wil::unique_hwnd& combo) noexcept
-{
-    InvalidateComboBox(combo.get());
-}
-void SelectComboItemByData(HWND combo, LPARAM data) noexcept;
-inline void SelectComboItemByData(const wil::unique_hwnd& combo, LPARAM data) noexcept
-{
-    SelectComboItemByData(combo.get(), data);
-}
-[[nodiscard]] std::optional<LPARAM> TryGetSelectedComboItemData(HWND combo) noexcept;
-[[nodiscard]] inline std::optional<LPARAM> TryGetSelectedComboItemData(const wil::unique_hwnd& combo) noexcept
-{
-    return TryGetSelectedComboItemData(combo.get());
-}
-void SetTwoStateToggleState(HWND toggle, bool highContrast, bool toggledOn) noexcept;
-inline void SetTwoStateToggleState(const wil::unique_hwnd& toggle, bool highContrast, bool toggledOn) noexcept
-{
-    SetTwoStateToggleState(toggle.get(), highContrast, toggledOn);
-}
-[[nodiscard]] bool GetTwoStateToggleState(HWND toggle, bool highContrast) noexcept;
-[[nodiscard]] inline bool GetTwoStateToggleState(const wil::unique_hwnd& toggle, bool highContrast) noexcept
-{
-    return GetTwoStateToggleState(toggle.get(), highContrast);
-}
+[[nodiscard]] PreferencesDialogState* GetDialogState(HWND childOrDialog) noexcept;
+[[nodiscard]] bool PostDeferredAction(HWND hwnd, PreferencesDeferredActionKind kind) noexcept;
 [[nodiscard]] std::optional<uint32_t> TryParseUInt32(std::wstring_view text) noexcept;
 [[nodiscard]] std::optional<uint64_t> TryParseUInt64(std::wstring_view text) noexcept;
 [[nodiscard]] bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept;
 
-// Layout helper functions
-void PositionControl(HWND hwnd, int x, int y, int width, int height) noexcept;
-void PositionAndSetFont(HWND hwnd, HFONT font, int x, int y, int width, int height) noexcept;
-void SetControlText(HWND hwnd, std::wstring_view text) noexcept;
-[[nodiscard]] int CalculateCardHeight(int rowHeight, int titleHeight, int cardPaddingY, int cardGapY, int descHeight) noexcept;
-void TryPushCard(std::vector<RECT>& cards, const RECT& card) noexcept;
+[[nodiscard]] inline RedSalamander::DxUi::ThemePalette MakeDxPalette(const AppTheme& theme) noexcept
+{
+    return MakeAppThemeDxPalette(theme);
+}
 
-// Schema-driven UI generation
-[[nodiscard]] HWND CreateSchemaControl(HWND parent,
-                                       const SettingsSchemaParser::SettingField& field,
-                                       PreferencesDialogState& state,
-                                       int x,
-                                       int& y,
-                                       int width,
-                                       int margin,
-                                       int gapY,
-                                       HFONT font) noexcept;
+inline constexpr wchar_t kPrefsTreeRedrawBlockProp[] = L"RedSalamander.Preferences.TreeRedrawBlock";
+
+void TryPushCard(std::vector<RECT>& cards, const RECT& card) noexcept;
+void HideSharedPageEmptyState(PreferencesDialogState& state) noexcept;
+[[nodiscard]] int ShowSharedPageEmptyState(HWND host,
+                                           PreferencesDialogState& state,
+                                           const PreferencesEmptyStateSpec& spec,
+                                           int x,
+                                           int y,
+                                           int width,
+                                           const PreferencesTypographyContext& typography) noexcept;
+
+[[nodiscard]] bool IsActuallyVisibleChildWindow(HWND hwnd) noexcept;
+[[nodiscard]] inline bool HasRetainedDxChildren(const RedSalamander::DxUi::Panel* root) noexcept
+{
+    return root != nullptr && ! root->GetChildren().empty();
+}
 } // namespace PrefsUi
+
+namespace PrefsDxHost
+{
+[[nodiscard]] bool Attach(HWND hwnd, RedSalamander::DxUi::WindowHost& host) noexcept;
+void ResetOwnedHostWindow(wil::unique_hwnd& hwnd) noexcept;
+#ifdef ENABLE_TESTS
+[[nodiscard]] size_t CountVisibleRenderedHosts(HWND parent) noexcept;
+[[nodiscard]] size_t CountVisibleHostsWithResizeFailures(HWND parent) noexcept;
+[[nodiscard]] uint64_t SumVisibleRenderedHostRenderCounts(HWND parent) noexcept;
+[[nodiscard]] bool TryGetDirectHostMetrics(HWND hwnd, size_t& visibleHostCount, size_t& resizeFailureCount, uint64_t& renderCountTotal) noexcept;
+#endif
+} // namespace PrefsDxHost
 
 namespace PrefsFile
 {
@@ -705,37 +571,17 @@ namespace PrefsFile
 [[nodiscard]] bool TryWriteFileFromString(const std::filesystem::path& path, std::string_view text) noexcept;
 } // namespace PrefsFile
 
-namespace PrefsListView
+namespace PrefsPageHost
 {
-[[nodiscard]] int GetSingleLineRowHeightPx(HWND list, HDC hdc) noexcept;
-[[nodiscard]] LRESULT DrawThemedTwoColumnListRow(
-    DRAWITEMSTRUCT* dis, PreferencesDialogState& state, HWND list, UINT expectedCtlId, bool secondColumnRightAlign) noexcept;
-} // namespace PrefsListView
-
-namespace PrefsPaneHost
-{
-[[nodiscard]] bool EnsureCreated(HWND pageHost, wil::unique_hwnd& paneHwnd) noexcept;
-void ResizeToHostClient(HWND pageHost, HWND paneHwnd) noexcept;
-void Show(HWND paneHwnd, bool visible) noexcept;
-void ApplyScrollDelta(HWND pageHost, int dy) noexcept;
-void ScrollTo(HWND pageHost, PreferencesDialogState& state, int newScrollY) noexcept;
-void EnsureControlVisible(HWND pageHost, PreferencesDialogState& state, HWND control) noexcept;
-} // namespace PrefsPaneHost
-
-namespace PrefsInput
-{
-void CreateFramedComboBox(PreferencesDialogState& state, HWND parent, HWND& outFrame, HWND& outCombo, int controlId) noexcept;
-void CreateFramedComboBox(PreferencesDialogState& state, HWND parent, wil::unique_hwnd& outFrame, wil::unique_hwnd& outCombo, int controlId) noexcept;
-void CreateFramedEditBox(PreferencesDialogState& state, HWND parent, HWND& outFrame, HWND& outEdit, int controlId, DWORD style) noexcept;
-void CreateFramedEditBox(
-    PreferencesDialogState& state, HWND parent, wil::unique_hwnd& outFrame, wil::unique_hwnd& outEdit, int controlId, DWORD style) noexcept;
-void EnableMouseWheelForwarding(HWND control) noexcept;
-void EnableMouseWheelForwarding(const wil::unique_hwnd& control) noexcept;
-} // namespace PrefsInput
+void ApplyScrollDelta(HWND pageHostWindow, int dy) noexcept;
+void ScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY) noexcept;
+void EnsureControlVisible(HWND pageHostWindow, PreferencesDialogState& state, HWND control) noexcept;
+} // namespace PrefsPageHost
 
 namespace PrefsPlugins
 {
 void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept;
+[[nodiscard]] std::optional<PrefsPluginListItem> FindItemById(std::wstring_view pluginId) noexcept;
 [[nodiscard]] std::wstring_view GetId(const PrefsPluginListItem& item) noexcept;
 [[nodiscard]] std::wstring_view GetDisplayName(const PrefsPluginListItem& item) noexcept;
 [[nodiscard]] std::wstring_view GetDescription(const PrefsPluginListItem& item) noexcept;

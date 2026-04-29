@@ -20,7 +20,7 @@ namespace SettingsSave
 
         if (monitor.menu.toolbarVisible == defaults.menu.toolbarVisible && monitor.menu.lineNumbersVisible == defaults.menu.lineNumbersVisible &&
             monitor.menu.alwaysOnTop == defaults.menu.alwaysOnTop && monitor.menu.showIds == defaults.menu.showIds &&
-            monitor.menu.autoScroll == defaults.menu.autoScroll && (monitor.filter.mask & 31u) == (defaults.filter.mask & 31u) &&
+            monitor.menu.autoScroll == defaults.menu.autoScroll && (monitor.filter.mask & 63u) == (defaults.filter.mask & 63u) &&
             monitor.filter.preset == defaults.filter.preset)
         {
             result.monitor.reset();
@@ -43,11 +43,16 @@ namespace SettingsSave
         const Common::Settings::FileOperationsSettings defaults{};
         const auto& fileOperations = result.fileOperations.value();
         const bool hasNonDefault =
-            fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
+            fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.preCalcEnabled != defaults.preCalcEnabled ||
+            fileOperations.preCalcMaxWorkers != defaults.preCalcMaxWorkers || fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+            fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
+            fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
             fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
             fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
             fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
-            fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
+            fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value() ||
+            ! fileOperations.issuesPaneSortColumnId.empty() || fileOperations.issuesPaneSortDescending != defaults.issuesPaneSortDescending ||
+            ! fileOperations.issuesPaneGridLayout.empty();
         if (! hasNonDefault)
         {
             result.fileOperations.reset();
@@ -113,10 +118,19 @@ namespace SettingsSave
                                    search.matchCaseName != defaults.matchCaseName || search.matchCaseContent != defaults.matchCaseContent ||
                                    search.preferIndex != defaults.preferIndex || search.wantSnippets != defaults.wantSnippets ||
                                    search.nameMode != defaults.nameMode || search.contentMode != defaults.contentMode ||
-                                   search.maxResults != defaults.maxResults;
+                                   search.maxResults != defaults.maxResults || ! search.resultsGridLayout.empty();
         if (! hasNonDefault)
         {
             result.search.reset();
+        }
+    }
+
+    if (result.ui.has_value())
+    {
+        const Common::Settings::UiSettings defaults{};
+        if (result.ui.value() == defaults)
+        {
+            result.ui.reset();
         }
     }
 

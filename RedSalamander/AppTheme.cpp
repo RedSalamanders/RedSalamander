@@ -17,6 +17,8 @@
 
 #pragma comment(lib, "Dwmapi.lib")
 
+#include "WindowBackdropPolicy.h"
+
 namespace
 {
 constexpr uint32_t kFnvOffsetBasis32 = 2166136261u;
@@ -29,9 +31,53 @@ constexpr DWORD kDwmwaCaptionColor           = 35u;
 constexpr DWORD kDwmwaTextColor              = 36u;
 constexpr DWORD kDwmColorDefault             = 0xFFFFFFFFu;
 
+[[nodiscard]] Common::WindowBackdrop::Kind ToBackdropKind(AppBackdropType backdrop) noexcept
+{
+    switch (backdrop)
+    {
+        case AppBackdropType::Mica: return Common::WindowBackdrop::Kind::Mica;
+        case AppBackdropType::Acrylic: return Common::WindowBackdrop::Kind::Acrylic;
+        case AppBackdropType::MicaAlt: return Common::WindowBackdrop::Kind::MicaAlt;
+        case AppBackdropType::None:
+        default: return Common::WindowBackdrop::Kind::None;
+    }
+}
+
 float Luminance(const D2D1::ColorF& color) noexcept
 {
     return 0.2126f * color.r + 0.7152f * color.g + 0.0722f * color.b;
+}
+
+float HueDegreesFromRgb(const D2D1::ColorF& color) noexcept
+{
+    const float maxChannel = (std::max)((std::max)(color.r, color.g), color.b);
+    const float minChannel = (std::min)((std::min)(color.r, color.g), color.b);
+    const float delta      = maxChannel - minChannel;
+    if (delta <= 0.0001f)
+    {
+        return 0.0f;
+    }
+
+    float hue = 0.0f;
+    if (maxChannel == color.r)
+    {
+        hue = 60.0f * std::fmod(((color.g - color.b) / delta), 6.0f);
+    }
+    else if (maxChannel == color.g)
+    {
+        hue = 60.0f * (((color.b - color.r) / delta) + 2.0f);
+    }
+    else
+    {
+        hue = 60.0f * (((color.r - color.g) / delta) + 4.0f);
+    }
+
+    if (hue < 0.0f)
+    {
+        hue += 360.0f;
+    }
+
+    return hue;
 }
 
 std::wstring ToLower(std::wstring_view value)
@@ -245,27 +291,6 @@ static D2D1::ColorF CompositeOverBackground(const D2D1::ColorF& overlay, const D
                         overlay.g * alpha + background.g * (1.0f - alpha),
                         overlay.b * alpha + background.b * (1.0f - alpha),
                         1.0f);
-}
-
-wil::unique_hfont CreateMenuFontForDpi(UINT dpi) noexcept
-{
-    NONCLIENTMETRICSW metrics{};
-    metrics.cbSize = sizeof(metrics);
-    if (! SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0))
-    {
-        return {};
-    }
-
-    // The returned LOGFONT is already sized for the system DPI. Scale relative to that to avoid double-scaling on high DPI.
-    const UINT systemDpi = GetDpiForSystem();
-    const UINT baseDpi   = systemDpi != 0 ? systemDpi : USER_DEFAULT_SCREEN_DPI;
-    if (dpi != 0 && dpi != baseDpi)
-    {
-        metrics.lfMenuFont.lfHeight = MulDiv(metrics.lfMenuFont.lfHeight, static_cast<int>(dpi), static_cast<int>(baseDpi));
-        metrics.lfMenuFont.lfWidth  = MulDiv(metrics.lfMenuFont.lfWidth, static_cast<int>(dpi), static_cast<int>(baseDpi));
-    }
-
-    return wil::unique_hfont(CreateFontIndirectW(&metrics.lfMenuFont));
 }
 
 static FolderViewTheme MakeFolderViewThemeLight(const D2D1::ColorF& accent) noexcept
@@ -622,6 +647,60 @@ static FileOperationsTheme MakeFileOperationsTheme(const NavigationViewTheme& na
     return theme;
 }
 
+static ViewerDiffTheme MakeViewerDiffThemeLight(const D2D1::ColorF& accent) noexcept
+{
+    ViewerDiffTheme theme;
+    theme.addedBackground       = D2D1::ColorF(0.13f, 0.55f, 0.23f, 0.14f);
+    theme.removedBackground     = D2D1::ColorF(0.78f, 0.18f, 0.18f, 0.14f);
+    theme.contextBackground     = D2D1::ColorF(accent.r, accent.g, accent.b, 0.04f);
+    theme.headerBackground      = D2D1::ColorF(accent.r, accent.g, accent.b, 0.09f);
+    theme.bannerBackground      = D2D1::ColorF(accent.r, accent.g, accent.b, 0.14f);
+    theme.placeholderBackground = D2D1::ColorF(accent.r, accent.g, accent.b, 0.12f);
+    theme.divider               = D2D1::ColorF(0.82f, 0.82f, 0.82f, 0.85f);
+    return theme;
+}
+
+static ViewerDiffTheme MakeViewerDiffThemeDark(const D2D1::ColorF& accent) noexcept
+{
+    ViewerDiffTheme theme;
+    theme.addedBackground       = D2D1::ColorF(0.18f, 0.62f, 0.30f, 0.22f);
+    theme.removedBackground     = D2D1::ColorF(0.85f, 0.28f, 0.28f, 0.22f);
+    theme.contextBackground     = D2D1::ColorF(accent.r, accent.g, accent.b, 0.08f);
+    theme.headerBackground      = D2D1::ColorF(accent.r, accent.g, accent.b, 0.16f);
+    theme.bannerBackground      = D2D1::ColorF(accent.r, accent.g, accent.b, 0.22f);
+    theme.placeholderBackground = D2D1::ColorF(accent.r, accent.g, accent.b, 0.18f);
+    theme.divider               = D2D1::ColorF(0.28f, 0.28f, 0.28f, 0.90f);
+    return theme;
+}
+
+static ViewerDiffTheme MakeViewerDiffThemeHighContrast(const D2D1::ColorF& accent, bool darkBase) noexcept
+{
+    ViewerDiffTheme theme;
+    theme.addedBackground       = D2D1::ColorF(0.22f, 0.78f, 0.32f, darkBase ? 0.34f : 0.28f);
+    theme.removedBackground     = D2D1::ColorF(0.90f, 0.30f, 0.30f, darkBase ? 0.34f : 0.28f);
+    theme.contextBackground     = D2D1::ColorF(accent.r, accent.g, accent.b, darkBase ? 0.18f : 0.12f);
+    theme.headerBackground      = D2D1::ColorF(accent.r, accent.g, accent.b, darkBase ? 0.30f : 0.24f);
+    theme.bannerBackground      = D2D1::ColorF(accent.r, accent.g, accent.b, darkBase ? 0.38f : 0.30f);
+    theme.placeholderBackground = D2D1::ColorF(accent.r, accent.g, accent.b, darkBase ? 0.34f : 0.28f);
+    theme.divider               = darkBase ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.90f) : D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.85f);
+    return theme;
+}
+
+static ViewerDiffTheme MakeViewerDiffThemeRainbow(const D2D1::ColorF& accent, bool darkBase) noexcept
+{
+    const float accentHue = HueDegreesFromRgb(accent);
+
+    ViewerDiffTheme theme;
+    theme.addedBackground   = ColorFromHSV(std::fmod(accentHue + 118.0f, 360.0f), darkBase ? 0.72f : 0.64f, darkBase ? 0.90f : 0.80f, darkBase ? 0.24f : 0.17f);
+    theme.removedBackground = ColorFromHSV(std::fmod(accentHue + 248.0f, 360.0f), darkBase ? 0.78f : 0.68f, darkBase ? 0.96f : 0.86f, darkBase ? 0.24f : 0.17f);
+    theme.contextBackground = D2D1::ColorF(accent.r, accent.g, accent.b, darkBase ? 0.10f : 0.07f);
+    theme.headerBackground  = D2D1::ColorF(accent.r, accent.g, accent.b, darkBase ? 0.18f : 0.12f);
+    theme.bannerBackground  = D2D1::ColorF(accent.r, accent.g, accent.b, darkBase ? 0.25f : 0.18f);
+    theme.placeholderBackground = D2D1::ColorF(accent.r, accent.g, accent.b, darkBase ? 0.20f : 0.15f);
+    theme.divider               = D2D1::ColorF(accent.r, accent.g, accent.b, darkBase ? 0.64f : 0.44f);
+    return theme;
+}
+
 static TitleBarTheme MakeTitleBarTheme(bool dark, bool highContrast, [[maybe_unused]] const D2D1::ColorF& accent) noexcept
 {
     TitleBarTheme theme;
@@ -667,6 +746,7 @@ AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed,
             theme.navigationView   = MakeNavigationViewThemeHighContrast();
             theme.menu             = MakeMenuThemeHighContrast();
             theme.fileOperations   = MakeFileOperationsTheme(theme.navigationView, theme.menu);
+            theme.viewerDiff       = MakeViewerDiffThemeHighContrast(theme.accent, false);
             theme.titleBar         = MakeTitleBarTheme(false, true, theme.accent);
             theme.windowBackground = SysColor(COLOR_WINDOW);
             return theme;
@@ -684,6 +764,7 @@ AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed,
         theme.navigationView   = MakeNavigationViewThemeAppHighContrast(accent);
         theme.menu             = MakeMenuThemeAppHighContrast(ColorToCOLORREF(accent));
         theme.fileOperations   = MakeFileOperationsTheme(theme.navigationView, theme.menu);
+        theme.viewerDiff       = MakeViewerDiffThemeHighContrast(accent, true);
         theme.titleBar         = MakeTitleBarTheme(true, false, accent);
         theme.windowBackground = RGB(0, 0, 0);
         return theme;
@@ -735,12 +816,14 @@ AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed,
     {
         theme.folderView       = MakeFolderViewThemeDark(accent);
         theme.navigationView   = MakeNavigationViewThemeDark(accent);
+        theme.viewerDiff       = (requestedMode == ThemeMode::Rainbow) ? MakeViewerDiffThemeRainbow(accent, true) : MakeViewerDiffThemeDark(accent);
         theme.windowBackground = RGB(18, 18, 18);
     }
     else
     {
         theme.folderView       = MakeFolderViewThemeLight(accent);
         theme.navigationView   = MakeNavigationViewThemeLight(accent);
+        theme.viewerDiff       = (requestedMode == ThemeMode::Rainbow) ? MakeViewerDiffThemeRainbow(accent, false) : MakeViewerDiffThemeLight(accent);
         theme.windowBackground = RGB(255, 255, 255);
     }
 
@@ -793,6 +876,11 @@ void ApplyTitleBarTheme(HWND hwnd, const TitleBarTheme& theme) noexcept
 
 namespace
 {
+[[nodiscard]] bool ThemeUsesWindowBackdrop(const AppTheme& theme) noexcept
+{
+    return ! theme.highContrast && (theme.primaryWindowBackdrop != AppBackdropType::None || theme.toolWindowBackdrop != AppBackdropType::None);
+}
+
 [[nodiscard]] COLORREF BlendColor(COLORREF base, COLORREF overlay, int overlayWeight, int denom) noexcept
 {
     if (denom <= 0)
@@ -810,6 +898,43 @@ namespace
 }
 } // namespace
 
+TitleBarTheme ResolveEffectiveTitleBarTheme(const AppTheme& theme, bool windowActive) noexcept
+{
+    if (ThemeUsesWindowBackdrop(theme))
+    {
+        TitleBarTheme resolved = theme.titleBar;
+        resolved.captionColor.reset();
+        resolved.borderColor.reset();
+        resolved.textColor.reset();
+        return resolved;
+    }
+
+    if (theme.highContrast || windowActive)
+    {
+        return theme.titleBar;
+    }
+
+    TitleBarTheme resolved = theme.titleBar;
+    if (resolved.captionColor.has_value())
+    {
+        constexpr int kTowardWindowWeight = 7;
+        constexpr int kDenom              = 8;
+        static_assert(kTowardWindowWeight > 0 && kTowardWindowWeight < kDenom);
+
+        const COLORREF bg     = theme.windowBackground;
+        resolved.captionColor = BlendColor(resolved.captionColor.value(), bg, kTowardWindowWeight, kDenom);
+
+        if (resolved.borderColor.has_value())
+        {
+            resolved.borderColor = BlendColor(resolved.borderColor.value(), bg, kTowardWindowWeight, kDenom);
+        }
+
+        resolved.textColor = ChooseContrastingTextColor(resolved.captionColor.value());
+    }
+
+    return resolved;
+}
+
 void ApplyTitleBarTheme(HWND hwnd, const AppTheme& theme, bool windowActive) noexcept
 {
     if (! hwnd)
@@ -817,29 +942,32 @@ void ApplyTitleBarTheme(HWND hwnd, const AppTheme& theme, bool windowActive) noe
         return;
     }
 
-    if (theme.highContrast || windowActive)
+    ApplyTitleBarTheme(hwnd, ResolveEffectiveTitleBarTheme(theme, windowActive));
+}
+
+void ApplyWindowBackdropTheme(HWND hwnd, const AppTheme& theme, WindowBackdropTarget target) noexcept
+{
+    if (! hwnd)
     {
-        ApplyTitleBarTheme(hwnd, theme.titleBar);
         return;
     }
 
-    TitleBarTheme inactive = theme.titleBar;
-    if (inactive.captionColor.has_value())
+    const AppBackdropType backdrop =
+        theme.highContrast ? AppBackdropType::None : (target == WindowBackdropTarget::Primary ? theme.primaryWindowBackdrop : theme.toolWindowBackdrop);
+    Common::WindowBackdrop::ApplyWindowBackdropKind(hwnd, ToBackdropKind(backdrop));
+    if (backdrop != AppBackdropType::None)
     {
-        constexpr int kTowardWindowWeight = 7;
-        constexpr int kDenom              = 8;
-        static_assert(kTowardWindowWeight > 0 && kTowardWindowWeight < kDenom);
+        ApplyTitleBarTheme(hwnd, ResolveEffectiveTitleBarTheme(theme, true));
+    }
+}
 
-        const COLORREF bg     = theme.windowBackground;
-        inactive.captionColor = BlendColor(inactive.captionColor.value(), bg, kTowardWindowWeight, kDenom);
-
-        if (inactive.borderColor.has_value())
-        {
-            inactive.borderColor = BlendColor(inactive.borderColor.value(), bg, kTowardWindowWeight, kDenom);
-        }
-
-        inactive.textColor = ChooseContrastingTextColor(inactive.captionColor.value());
+void ApplyWindowChromeTheme(HWND hwnd, const AppTheme& theme, WindowBackdropTarget target, bool windowActive) noexcept
+{
+    if (! hwnd)
+    {
+        return;
     }
 
-    ApplyTitleBarTheme(hwnd, inactive);
+    ApplyWindowBackdropTheme(hwnd, theme, target);
+    ApplyTitleBarTheme(hwnd, theme, windowActive);
 }

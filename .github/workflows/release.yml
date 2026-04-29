@@ -7,7 +7,7 @@ name: Release
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "Tag to release (e.g., v7.0.0). Leave blank to skip release creation."
+        description: "GitHub release tag to publish. CI still controls the binary build number via github.run_number."
         required: false
         type: string
       build_msi:
@@ -39,7 +39,45 @@ permissions:
 # ════════════════════════════════════════════════════════════════════════
 
 jobs:
+  version-info:
+    runs-on: windows-latest
+    outputs:
+      build_number: ${{ steps.version.outputs.build_number }}
+      release_tag: ${{ steps.version.outputs.release_tag }}
+      release_version: ${{ steps.version.outputs.release_version }}
+    steps:
+      - name: Resolve release version
+        id: version
+        shell: pwsh
+        run: |
+          $buildNumber = "${{ github.run_number }}"
+          $tag = if ("${{ github.event_name }}" -eq "workflow_dispatch" -and -not [string]::IsNullOrWhiteSpace("${{ inputs.release_tag }}")) {
+            "${{ inputs.release_tag }}"
+          } elseif ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            ""
+          } else {
+            "${{ github.ref_name }}"
+          }
+
+          if ([string]::IsNullOrWhiteSpace($tag)) {
+            $version = ""
+          } else {
+            $version = $tag.TrimStart('v')
+            if ($version -match '^\d+(?:\.\d+)+$') {
+              $parts = $version.Split('.')
+              $tagBuildNumber = $parts[$parts.Length - 1]
+              if ($tagBuildNumber -ne $buildNumber) {
+                Write-Host "Warning: release tag '$tag' does not match CI build number '$buildNumber'. Official binaries will use build number $buildNumber." -ForegroundColor Yellow
+              }
+            }
+          }
+
+          "release_tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "release_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "build_number=$buildNumber" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
   build:
+    needs: version-info
     strategy:
       fail-fast: false
       matrix:
@@ -48,6 +86,8 @@ jobs:
     with:
       configuration: Release
       platform: ${{ matrix.platform }}
+      build_number: ${{ needs.version-info.outputs.build_number }}
+      official_release: true
       upload_build_output: true
 
   # ══════════════════════════════════════════════════════════════════════
@@ -56,55 +96,35 @@ jobs:
 
   package-portable:
     runs-on: windows-latest
-    needs: build
+    needs: [version-info, build]
     if: ${{ !cancelled() }}
     strategy:
       fail-fast: false
       matrix:
         platform: ${{ fromJson((github.event_name == 'workflow_dispatch' && inputs.build_arm64) && '["x64","ARM64"]' || '["x64"]') }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Download build output
         uses: actions/download-artifact@v4
         with:
           name: build-output-${{ matrix.platform }}
           path: .build/${{ matrix.platform }}/Release/
 
-      - name: Stage portable files and create ZIP
+      - name: Build portable ZIP
         shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $PSNativeCommandUseErrorActionPreference = $false
-
-          $releaseDir = Join-Path $env:GITHUB_WORKSPACE ".build\${{ matrix.platform }}\Release"
-          $stageDir = Join-Path $env:RUNNER_TEMP "RedSalamanderPortable"
-          if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
-          New-Item -ItemType Directory -Path $stageDir -Force | Out-Null
-
-          # Copy everything except build artifacts and non-shipping files
-          $exclude = @("*.pdb","*.lib","*.exp","*.ilk","*.iobj","*.ipdb","*.pch","*.exe","asan.supp","aws-cpp-sdk-dynamodb.dll","aws-cpp-sdk-kinesis.dll","aws-cpp-sdk-s3.dll","brotlienc.dll")
-          & robocopy.exe $releaseDir $stageDir "/E" "/R:1" "/W:1" "/NFL" "/NDL" "/NJH" "/NJS" "/NP" "/XF" @exclude | Out-Null
-          $rc = $LASTEXITCODE
-          $global:LASTEXITCODE = 0
-          if ($rc -ge 8) { throw "robocopy (portable stage) failed with exit code $rc" }
-
-          # Copy shipping executables explicitly
-          & robocopy.exe $releaseDir $stageDir "RedSalamander.exe" "RedSalamanderMonitor.exe" "/R:1" "/W:1" "/NFL" "/NDL" "/NJH" "/NJS" "/NP" | Out-Null
-          $rc = $LASTEXITCODE
-          $global:LASTEXITCODE = 0
-          if ($rc -ge 8) { throw "robocopy (portable exes) failed with exit code $rc" }
-
-          # Create ZIP
-          $outDir = Join-Path $env:GITHUB_WORKSPACE "artifacts"
-          New-Item -ItemType Directory -Path $outDir -Force | Out-Null
-          $zipPath = Join-Path $outDir "RedSalamander-${{ matrix.platform }}-Release.zip"
-          if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-          Compress-Archive -Path (Join-Path $stageDir "*") -DestinationPath $zipPath
+          $zipScript = Join-Path $env:GITHUB_WORKSPACE "Installer\zip\build-zip.ps1"
+          if (-not (Test-Path $zipScript)) { throw "ZIP build script not found at: $zipScript" }
+          & $zipScript -Configuration Release -Platform "${{ matrix.platform }}" -BuildNumber "${{ needs.version-info.outputs.build_number }}"
 
       - name: Upload portable package
         uses: actions/upload-artifact@v4
         with:
           name: portable-package-${{ matrix.platform }}
-          path: artifacts/*.zip
+          path: .build/AppPackages/*.zip
           retention-days: 1
 
   # ══════════════════════════════════════════════════════════════════════
@@ -113,7 +133,7 @@ jobs:
 
   package-msi:
     runs-on: windows-latest
-    needs: build
+    needs: [version-info, build]
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.build_msi }}
     strategy:
       fail-fast: false
@@ -139,14 +159,14 @@ jobs:
         run: |
           $msiScript = Join-Path $env:GITHUB_WORKSPACE "Installer\msi\build-msi.ps1"
           if (-not (Test-Path $msiScript)) { throw "MSI build script not found at: $msiScript" }
-          & $msiScript -Configuration Release -Platform ${{ matrix.platform }}
+          & $msiScript -Configuration Release -Platform ${{ matrix.platform }} -BuildNumber "${{ needs.version-info.outputs.build_number }}"
 
       - name: Build Symbols MSI (PDB)
         shell: pwsh
         run: |
           $msiSymbolsScript = Join-Path $env:GITHUB_WORKSPACE "Installer\msi\build-msi-symbols.ps1"
           if (-not (Test-Path $msiSymbolsScript)) { throw "Symbols MSI build script not found at: $msiSymbolsScript" }
-          & $msiSymbolsScript -Configuration Release -Platform ${{ matrix.platform }}
+          & $msiSymbolsScript -Configuration Release -Platform ${{ matrix.platform }} -BuildNumber "${{ needs.version-info.outputs.build_number }}"
 
       - name: Upload MSI packages
         uses: actions/upload-artifact@v4
@@ -161,7 +181,7 @@ jobs:
 
   package-msix:
     runs-on: windows-latest
-    needs: build
+    needs: [version-info, build]
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.build_msix }}
     strategy:
       fail-fast: false
@@ -323,7 +343,7 @@ jobs:
 
   release:
     runs-on: windows-latest
-    needs: [package-portable, package-msi, package-msix]
+    needs: [version-info, package-portable, package-msi, package-msix]
     if: >-
       always() &&
       !cancelled() &&
@@ -385,7 +405,7 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          tag_name: ${{ needs.version-info.outputs.release_tag }}
           fail_on_unmatched_files: false
           files: |
             artifacts/*.msi
@@ -396,6 +416,6 @@ jobs:
         if: ${{ needs.package-msix.result == 'success' }}
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          tag_name: ${{ needs.version-info.outputs.release_tag }}
           fail_on_unmatched_files: true
           files: artifacts/*.msix

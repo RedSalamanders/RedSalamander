@@ -2,9 +2,9 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <array>
 #include <iterator>
 #include <new>
-#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -21,8 +21,8 @@
 #define REDSAL_DEFINE_TRACE_PROVIDER
 #include "Helpers.h"
 
-#include "resource.h"
 #include "ViewerWeb.h"
+#include "resource.h"
 
 extern HINSTANCE g_hInstance;
 
@@ -37,46 +37,50 @@ struct LocalizedPluginMetaDataSet
     std::wstring markdownName;
     std::wstring markdownDescription;
     std::array<PluginMetaData, 3> plugins{};
-};
 
-[[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
-{
-    static const LocalizedPluginMetaDataSet data = [] {
-        LocalizedPluginMetaDataSet value{};
-        value.webName             = LoadStringResource(g_hInstance, IDS_VIEWERWEB_NAME);
-        value.webDescription      = LoadStringResource(g_hInstance, IDS_VIEWERWEB_DESCRIPTION);
-        value.jsonName            = LoadStringResource(g_hInstance, IDS_VIEWERJSON_NAME);
-        value.jsonDescription     = LoadStringResource(g_hInstance, IDS_VIEWERJSON_DESCRIPTION);
-        value.markdownName        = LoadStringResource(g_hInstance, IDS_VIEWERMARKDOWN_NAME);
-        value.markdownDescription = LoadStringResource(g_hInstance, IDS_VIEWERMARKDOWN_DESCRIPTION);
-        value.plugins             = {{
+    LocalizedPluginMetaDataSet()
+    {
+        LoadStringResource(g_hInstance, IDS_VIEWERWEB_NAME, webName);
+        LoadStringResource(g_hInstance, IDS_VIEWERWEB_DESCRIPTION, webDescription);
+        LoadStringResource(g_hInstance, IDS_VIEWERJSON_NAME, jsonName);
+        LoadStringResource(g_hInstance, IDS_VIEWERJSON_DESCRIPTION, jsonDescription);
+        LoadStringResource(g_hInstance, IDS_VIEWERMARKDOWN_NAME, markdownName);
+        LoadStringResource(g_hInstance, IDS_VIEWERMARKDOWN_DESCRIPTION, markdownDescription);
+
+        // PluginMetaData keeps raw wchar_t* pointers, so bind them only after the
+        // backing strings live in their final static storage.
+        plugins = {{
             {
                 .id          = L"builtin/viewer-web",
                 .shortId     = L"web",
-                .name        = value.webName.c_str(),
-                .description = value.webDescription.c_str(),
+                .name        = webName.c_str(),
+                .description = webDescription.c_str(),
                 .author      = L"RedSalamander",
-                .version     = L"0.1",
+                .version     = VERSINFO_PLUGIN_VERSION,
             },
             {
                 .id          = L"builtin/viewer-json",
                 .shortId     = L"json",
-                .name        = value.jsonName.c_str(),
-                .description = value.jsonDescription.c_str(),
+                .name        = jsonName.c_str(),
+                .description = jsonDescription.c_str(),
                 .author      = L"RedSalamander",
-                .version     = L"0.1",
+                .version     = VERSINFO_PLUGIN_VERSION,
             },
             {
                 .id          = L"builtin/viewer-markdown",
                 .shortId     = L"md",
-                .name        = value.markdownName.c_str(),
-                .description = value.markdownDescription.c_str(),
+                .name        = markdownName.c_str(),
+                .description = markdownDescription.c_str(),
                 .author      = L"RedSalamander",
-                .version     = L"0.1",
+                .version     = VERSINFO_PLUGIN_VERSION,
             },
         }};
-        return value;
-    }();
+    }
+};
+
+[[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
+{
+    static const LocalizedPluginMetaDataSet data;
 
     return data;
 }
@@ -97,9 +101,20 @@ static std::optional<ViewerWebKind> KindFromPluginId(std::wstring_view pluginId)
     }
     return std::nullopt;
 }
+
+[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
+{
+    const auto kind = KindFromPluginId(pluginId);
+    if (! kind.has_value())
+    {
+        return nullptr;
+    }
+
+    return GetViewerWebStaticConfigurationSchema(kind.value());
+}
 } // namespace
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, void** result)
+HRESULT CreatePluginInstance(REFIID riid, IHost* host, ViewerWebKind kind, void** result)
 {
     if (result == nullptr)
     {
@@ -110,8 +125,7 @@ extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptio
 
     if (riid == __uuidof(IViewer))
     {
-        // Backward-compatible single-plugin entry point.
-        auto* instance = new (std::nothrow) ViewerWeb(ViewerWebKind::Web);
+        auto* instance = new (std::nothrow) ViewerWeb(kind);
         if (! instance)
         {
             return E_OUTOFMEMORY;
@@ -148,7 +162,7 @@ extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const Pl
     return S_OK;
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreateEx(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
 {
     if (! result)
     {
@@ -173,15 +187,32 @@ extern "C" HRESULT __stdcall RedSalamanderCreateEx(REFIID riid, const FactoryOpt
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
-    auto* instance = new (std::nothrow) ViewerWeb(kind.value());
-    if (! instance)
+    return CreatePluginInstance(riid, host, kind.value(), result);
+}
+
+extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
+{
+    if (! schemaJsonUtf8)
     {
-        return E_OUTOFMEMORY;
+        return E_POINTER;
     }
 
-    instance->SetHost(host);
+    *schemaJsonUtf8 = nullptr;
+    if (riid != __uuidof(IViewer))
+    {
+        return E_NOINTERFACE;
+    }
+    if (! pluginId || pluginId[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
 
-    const HRESULT hr = instance->QueryInterface(riid, result);
-    instance->Release();
-    return hr;
+    const char* schema = GetPluginSchema(pluginId);
+    if (! schema)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
+    *schemaJsonUtf8 = schema;
+    return S_OK;
 }

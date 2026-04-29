@@ -7,6 +7,7 @@
 - **Left pane**: `NavigationView` + `FolderView` + per-pane **Status Bar**
 - **Right pane**: `NavigationView` + `FolderView` + per-pane **Status Bar**
 - A vertical splitter between panes for horizontal resizing
+- A bottom application **Function Bar** when function-key chrome is enabled
 
 Each pane has its own navigation state (current path) and its own FolderView state (display mode + sort + status bar visibility). Folder history is a **global MRU list** shared across panes.
 
@@ -105,6 +106,7 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
   - `NavigationView` at the top (fixed height in DIPs)
   - `FolderView` filling the remaining height (above the status bar)
   - **Status Bar** at the bottom (optional per pane)
+- When enabled, the application **Function Bar** is a visible child HWND laid out below the pane area; toggling chrome must keep its HWND visibility and layout in sync.
 
 ### Split Ratio
 
@@ -120,11 +122,19 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
 - `cmd/pane/zoomPanel` toggles the focused pane between maximized (splitter at the edge) and restored (using `folders.layout.zoomRestoreSplitRatio`).
   - If the user drags the splitter while maximized, the restore state is cleared; the next toggle maximizes again.
 - The splitter renders a small centered grip handle to indicate it is draggable (see `Specs/UI/UI_VisualStyle.md`).
+- The splitter also exposes two click targets sized to the navigation bar height:
+  - Restored split: the top target maximizes the left pane and moves focus into it; the bottom target maximizes the right pane and moves focus into it.
+  - Arrows point in the direction the splitter will move to create that maximized state: maximizing left shows a right chevron, maximizing right shows a left chevron.
+  - Maximized split: both targets maximize/focus the hidden pane instead of restoring the current pane, and both arrows point in the direction the splitter will move to switch sides.
+  - Arrows use compact chevrons colored exactly like the centered grip dots.
+  - These arrow targets are not drag handles; dragging and double-click reset remain on the non-arrow splitter region.
 
 ## Active/Focused Pane
 
 - The "focused pane" is the pane that contains the current keyboard focus (either its `NavigationView` or its `FolderView`).
 - Keyboard accelerators that target "the active pane" apply to the focused pane.
+- When keyboard focus is outside both pane `FolderView` controls but still belongs to main-window chrome or a transient menu, `FolderWindow`'s active pane is the fallback pane for focus restoration.
+- A first `Escape` from main-window chrome or transient menu focus MUST restore keyboard focus to the active pane's `FolderView` without changing that pane's selection. A subsequent `Escape` delivered while the `FolderView` already has focus uses normal `FolderView` behavior.
 
 ## Keyboard Management
 
@@ -135,9 +145,21 @@ FolderWindow responsibilities:
 - Support Commander-style pane switching (`Tab`) and function-key operations (F2/F3/F5/F6/F7/F8).
 - Keep existing sort/view accelerators (`Ctrl+F3..F6`, `Alt+2/3`) targeting the focused pane.
 
+## Function Bar
+
+- The function bar renders command short display names, not full menu display names, so labels remain useful when space is limited.
+- When function-key chrome is enabled, the function bar must have a visible HWND and non-empty layout rectangle at the bottom of `FolderWindow`.
+- A visible function bar must also paint its themed background, separators/key glyphs, and command labels. Its Direct2D HWND render target is DPI-aware, so Win32 pixel rectangles MUST be converted to DIPs before drawing; scaled-DPI layouts must not produce a blank strip.
+- Function Bar key glyph, modifier, hit-test, and label measurement MUST use DirectWrite text formats / `DxUi.Typography` specs. The Function Bar must not create or select `HFONT` for app-owned visible text measurement.
+- The Function Bar visible paint path MUST NOT bind an `ID2D1DCRenderTarget` to a paint HDC for app-owned text/chrome. It uses the same Direct2D HWND-target model as the pane status bars so toggle/show operations cannot leave an unpainted child strip.
+- Every command must expose a localized short display resource via the `IDS_CMD_SHORT_BASE + IDS_CMD_*` convention. Examples: `Make Directory` -> `MakeDir`, `User Menu` -> `UsrMenu`, `Sort by Time` -> `ByTime`.
+- Resource ids `20000..21999` are reserved for command short labels.
+- Short labels should be concise enough for the function bar target width; the command registry self-test guards that every command has a non-empty short label and that representative labels match the expected compact text.
+- Full command display names remain the source for menus, Preferences, and shortcut lists. The function bar may fall back to the full display name only for unknown/custom command IDs.
+
 ## Find Files and Directories
 
-`cmd/pane/find` is implemented as a host-owned modeless `Find Files and Directories` window.
+`cmd/pane/find` is implemented as an independent modeless `Find Files and Directories` window.
 
 FolderWindow responsibilities:
 - resolve the target pane for `cmd/pane/find`,
@@ -161,9 +183,11 @@ Each pane optionally shows a status bar at the bottom. It is a distinct control 
     - File sizes are summed directly.
     - Folder sizes are computed by traversing the folder subtree (all descendants) and asynchronously when explicitly requested (via the Insert selection workflow). The traversal MUST be implemented iteratively (explicit stack/queue; no call-stack recursion); while pending, the status bar shows a localized “calculating” indicator and the **current bytes computed so far**.
     - Until folder subtree bytes are available (never requested, or canceled), folder bytes show a localized **unknown** placeholder.
-  - When exactly **one** item is selected, show item details instead:
-    - Folder: `DIR • <size?> • YYYY-MM-DD HH:MM • <attrs>` (size may be unknown or pending)
-    - File: `<size> • YYYY-MM-DD HH:MM • <attrs>`
+- When exactly **one** item is selected, show item details instead:
+  - Folder: `DIR • <size?> • YYYY-MM-DD HH:MM • <attrs>` (size may be unknown or pending)
+  - File: `<size> • YYYY-MM-DD HH:MM • <attrs>`
+- When no items are selected, show the current focused item details using the same file/folder format. Use the localized `No selection` text only when the pane has no current focused item.
+- When there is no selection, keyboard or mouse focus changes inside the `FolderView` MUST refresh the status bar immediately so the displayed item details follow the current focused item.
 - **Right part**: current sort indicator for that pane. This region is clickable and opens the pane’s **Sort by** menu.
   - The right part is **always visible** (fixed width) because it is a persistent clickable target.
   - When the pane is **unsorted**, the indicator shows a small placeholder glyph (localized via resources) rather than disappearing.
@@ -174,6 +198,7 @@ Example (wide):
 
 | Left part (selection summary) | Right part (sort) |
 |---|---|
+| `1.24 MB • 2026-04-25 12:19 • A` | `↑◰` |
 | `No selection` | `↑◰` |
 | `3 files: 7.42 MB selected` | `↑◰` |
 
@@ -181,7 +206,7 @@ Example (narrow):
 
 | Left part (selection summary) | Right part (sort) |
 |---|---|
-| `No selection` | `↑◰` |
+| `1.24 MB • 2026-04-25...` | `↑◰` |
 | `3 files: 7.42 M...` | `↑◰` |
 
 ### Visual style
@@ -190,12 +215,16 @@ Example (narrow):
 - The status bar renders a `2 DIP` focus indicator line at its top edge:
   - Focused pane: uses the theme accent color; in Rainbow mode the hue advances each time pane focus changes.
   - Unfocused pane: uses the normal separator color.
+- Status bar text uses `12 DIP` UI text typography. The inactive pane's status text is dimmed while remaining readable; high-contrast mode preserves system contrast instead of applying dimming.
+- Status bar Direct2D paint uses DPI-aware render targets. All Win32 client/part rectangles are physical pixels and MUST be converted to DIPs before drawing text or focus lines, so `12 DIP` status text remains vertically visible and unclipped at scaled DPI.
 - The pane splitter applies to the status bar region as well: each pane owns its own status bar control and the splitter visually and logically separates them (no overlap).
 - Implementation note: status bars are themed via custom paint (subclass `WM_PAINT`) rather than `SBT_OWNERDRAW`/`WM_DRAWITEM`, to avoid message-routing issues and to match menu theming.
+- Status bar text paint and part sizing MUST stay on the shared `DxUi.Typography` / DirectWrite path; do not reintroduce ambient `DEFAULT_GUI_FONT`, `HFONT`-selected GDI paint, or visible GDI text measurement for this surface.
+- The status-bar HWND is a transitional host only: it must not own an `HFONT`, receive `WM_SETFONT`, or use the native font message path. Typography ownership belongs to the DirectWrite render resources used by `FolderWindow.StatusBar.cpp`.
 
 ### Interaction
 
-- Clicking the sort indicator opens the same sort menu as the pane menu bar (`Left → Sort by` or `Right → Sort by`), anchored to the sort indicator region (right-aligned to its edge).
+- Clicking the sort indicator opens the same sort menu as the pane menu bar (`Left → Sort by` or `Right → Sort by`), anchored to the sort indicator region (right-aligned to its edge) and placed above the status bar so the menu grows into the pane area. The popup MUST render through the shared DxUI popup menu path rather than a native `TrackPopupMenu` popup.
 - Hovering the sort indicator shows a tooltip indicating it is clickable.
 - Status bar visibility is persisted per pane.
 
@@ -213,6 +242,15 @@ Each menu controls its corresponding pane.
 FolderWindow also integrates with the top-level **Plugins** menu:
 - The dynamic plugin list applies to the focused pane’s active `IFileSystem` plugin.
 - `Manage Plugins...` opens the plugin manager dialog.
+
+## Pane Prompts
+
+The pane-scoped file-system prompts for change-case and selection-mask actions use owned DxUi prompt windows, not legacy Win32 dialog-template routes.
+
+- `Change Case...` MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`.
+- The selection-mask commands (`Select by Mask...` / `Unselect by Mask...`) MUST route through the owned prompt-window path in `RedSalamander/FolderWindow.FileSystem.cpp`.
+- These prompts MUST expose the shared DxUi host contract and MUST NOT reintroduce legacy `DialogBoxParamW`, owner-draw button/toggle, or extra visible combo/input-frame fallback surfaces for the active product path.
+- Validation anchors for this contract are `cmd_pane_changeCase_prompt_*`, `cmd_pane_changeCase_dialog`, and `cmd_pane_selection_mask_dialogs`.
 
 ### Sort By
 

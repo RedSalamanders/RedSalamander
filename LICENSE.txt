@@ -22,7 +22,7 @@ SOFTWARE.
 
 ## Third-Party Licenses
 
-Red Salamander uses the following third-party libraries. Their license terms
+RedSalamander uses the following third-party libraries. Their license terms
 are reproduced below.
 
 -------------------------------------------------------------------------------
@@ -131,6 +131,16 @@ with or without fee is hereby granted, provided that the above copyright notice
 and this permission notice appear in all copies.
 
 https://curl.se/
+
+-------------------------------------------------------------------------------
+
+### FTXUI
+
+- Version: 6.1.9
+- License: MIT
+- Copyright (c) 2019 Arthur Sonzogni.
+
+https://github.com/ArthurSonzogni/FTXUI
 
 -------------------------------------------------------------------------------
 

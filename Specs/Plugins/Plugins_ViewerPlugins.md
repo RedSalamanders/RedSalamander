@@ -17,7 +17,8 @@ Key points:
 ## Built-in viewer plugins
 
 Embedded:
-- `builtin/viewer-text`: baseline Text/Hex viewer (reference behavior is specified in this document).
+- `builtin/viewer-text`: baseline Text/Hex/Diff viewer (see `Specs/Plugins/Plugins_ViewerText.md`).
+- `builtin/viewer-sqlite`: SQLite table/query viewer (see `Specs/Plugins/Plugins_ViewerSqlite.md`).
 - `builtin/viewer-space`: folder disk-usage treemap (see `Specs/Plugins/Plugins_ViewerSpace.md`).
 - `builtin/viewer-imgraw`: image viewer using WIC + LibRaw (see `Specs/Plugins/Plugins_ViewerImgRaw.md`).
 
@@ -39,6 +40,8 @@ When F3 is pressed on a file:
 2. Host looks up the viewer plugin id in `openWithViewerByExtension`.
 3. If the plugin is available and enabled, host opens the viewer plugin.
 4. If no association is found (or plugin missing/disabled), host falls back to `builtin/viewer-text` (which may auto-select Text vs Hex based on file contents). If that fails, host falls back to default behavior.
+
+Default viewer associations route `.diff`, `.patch`, and `.rej` to `builtin/viewer-text`, which may open them in parsed diff mode or raw text depending on the persisted ViewerText diff defaults.
 
 ## Window behavior (host + plugin contract)
 
@@ -107,6 +110,7 @@ extern "C"
         REFIID riid,
         const FactoryOptions* factoryOptions,
         IHost* host,
+        const wchar_t* pluginId,
         void** result
     );
 }
@@ -114,12 +118,13 @@ extern "C"
 
 For viewer plugins:
 - `RedSalamanderCreate` MUST support creation of `IID_IViewer` and SHOULD return `E_NOINTERFACE` for other IIDs.
+- For single-plugin DLLs, `pluginId` MAY be `nullptr` or empty.
 
 ### Optional: Multi-Plugin DLL Support
 
 A single DLL MAY implement **multiple logical viewer plugins** for the same interface type (`IID_IViewer`).
 
-To do so, the DLL exports two additional (optional) entry points:
+To do so, the DLL exports one additional (optional) discovery entry point:
 
 ```cpp
 extern "C"
@@ -132,25 +137,19 @@ extern "C"
         unsigned int* count
     );
 
-    // Creates a specific plugin instance identified by pluginId (metaData[i].id).
-    PLUGFACTORY_API HRESULT __stdcall RedSalamanderCreateEx(
-        REFIID riid,
-        const FactoryOptions* factoryOptions,
-        IHost* host,
-        const wchar_t* pluginId,
-        void** result
-    );
 }
 ```
 
 **Host behavior:**
 - If `RedSalamanderEnumeratePlugins` is present, the host calls it during discovery and registers one plugin entry per returned `PluginMetaData` record.
-- When instantiating a plugin entry originating from enumeration, the host calls `RedSalamanderCreateEx` with `pluginId == metaData[i].id`.
-- If the optional exports are missing, the host falls back to `RedSalamanderCreate`.
+- When instantiating a plugin entry originating from enumeration, the host calls `RedSalamanderCreate` with `pluginId == metaData[i].id`.
+- If `RedSalamanderEnumeratePlugins` is missing, the host treats the DLL as a single-plugin factory and may call `RedSalamanderCreate` with `pluginId == nullptr`.
 
 **Plugin behavior:**
 - `RedSalamanderEnumeratePlugins` MUST return stable metadata pointers for the lifetime of the loaded DLL.
-- `RedSalamanderCreateEx` MUST return `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` (or `E_INVALIDARG`) for unknown `pluginId` values.
+- Because `PluginMetaData` stores raw `const wchar_t*` fields, a multi-plugin DLL MUST only point those fields at backing storage whose lifetime already matches the DLL lifetime. Do not populate `PluginMetaData.name` / `description` / other string fields from temporary or lambda-local `std::wstring` objects.
+- `RedSalamanderCreate` MUST return `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` (or `E_INVALIDARG`) for unknown `pluginId` values.
+- Viewer startup discovery is a health gate: if the manager finishes with zero **loadable** viewer plugins, it MUST log an error and return `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` instead of silently succeeding with an empty plugin set.
 
 The host obtains `IInformations` via `QueryInterface` on the returned `IViewer` instance.
 
@@ -166,7 +165,7 @@ See `Common/PlugInterfaces/Informations.h`.
 
 ### 1. IViewer (required)
 
-`IViewer` is the viewer entry point. Instances are created by `RedSalamanderCreate(IID_IViewer, ...)`.
+`IViewer` is the viewer entry point. Instances are created by `RedSalamanderCreate(IID_IViewer, ..., pluginId, ...)`.
 
 Key responsibilities:
 - Create/show the viewer window on `Open()`
@@ -180,6 +179,8 @@ Key responsibilities:
 - plugin must treat it as a weak pointer
 - host provides an opaque `cookie` and plugin must pass it back verbatim
 - host must call `IViewer::SetCallback(nullptr, nullptr)` before releasing/unloading the plugin
+- `IViewer::SetCallback(nullptr, nullptr)` is the synchronous drain point for this registration-style callback: after it returns, the plugin must not invoke the previous callback again
+- queued or background work that might still report `ViewerClosed` must either complete before `SetCallback(nullptr, nullptr)` returns or self-drop as stale before invoking the callback
 
 ## Theme contract
 

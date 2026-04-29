@@ -192,6 +192,195 @@ D2D1_COLOR_F ColorFFromColorRef(COLORREF color, float alpha = 1.0f) noexcept
     return D2D1::ColorF(r, g, b, alpha);
 }
 
+constexpr size_t kHexByteColorBucketCount = 18u;
+
+enum class HexByteColorBucket : uint8_t
+{
+    Zero     = 0,
+    FF       = 1,
+    Leading0 = 2,
+    Leading1,
+    Leading2,
+    Leading3,
+    Leading4,
+    Leading5,
+    Leading6,
+    Leading7,
+    Leading8,
+    Leading9,
+    LeadingA,
+    LeadingB,
+    LeadingC,
+    LeadingD,
+    LeadingE,
+    LeadingF,
+};
+
+struct HexByteColorPalette
+{
+    std::array<COLORREF, kHexByteColorBucketCount> colors{};
+};
+
+struct HexColorizedRun
+{
+    size_t start   = 0u;
+    size_t length  = 0u;
+    COLORREF color = RGB(0, 0, 0);
+};
+
+struct HexPaintMetrics
+{
+    size_t visibleRows            = 0u;
+    size_t visibleBytes           = 0u;
+    size_t colorizedBytes         = 0u;
+    size_t uniqueColorBucketCount = 0u;
+    size_t colorRuns              = 0u;
+    bool highContrastFallback     = false;
+};
+
+[[nodiscard]] size_t HexByteColorBucketIndex(HexByteColorBucket bucket) noexcept
+{
+    return static_cast<size_t>(bucket);
+}
+
+[[nodiscard]] HexByteColorBucket ClassifyHexByteColorBucket(uint8_t value) noexcept
+{
+    if (value == 0x00u)
+    {
+        return HexByteColorBucket::Zero;
+    }
+    if (value == 0xFFu)
+    {
+        return HexByteColorBucket::FF;
+    }
+
+    return static_cast<HexByteColorBucket>(static_cast<uint8_t>(HexByteColorBucketIndex(HexByteColorBucket::Leading0) + static_cast<size_t>(value >> 4u)));
+}
+
+double SrgbChannelToLinear(const uint8_t value) noexcept
+{
+    const double channel = static_cast<double>(value) / 255.0;
+    if (channel <= 0.04045)
+    {
+        return channel / 12.92;
+    }
+
+    return std::pow((channel + 0.055) / 1.055, 2.4);
+}
+
+double RelativeLuminance(COLORREF color) noexcept
+{
+    const double r = SrgbChannelToLinear(GetRValue(color));
+    const double g = SrgbChannelToLinear(GetGValue(color));
+    const double b = SrgbChannelToLinear(GetBValue(color));
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+double ContrastRatio(COLORREF first, COLORREF second) noexcept
+{
+    const double firstLuma  = RelativeLuminance(first);
+    const double secondLuma = RelativeLuminance(second);
+    const double lighter    = std::max(firstLuma, secondLuma);
+    const double darker     = std::min(firstLuma, secondLuma);
+    return (lighter + 0.05) / (darker + 0.05);
+}
+
+COLORREF ResolveReadableTextColor(COLORREF preferred, COLORREF background) noexcept
+{
+    constexpr double kMinimumContrastRatio = 3.0;
+    if (ContrastRatio(preferred, background) >= kMinimumContrastRatio)
+    {
+        return preferred;
+    }
+
+    return ContrastingTextColor(background);
+}
+
+HexByteColorPalette BuildHexByteColorPalette(const ViewerTheme* theme, COLORREF background, COLORREF foreground) noexcept
+{
+    HexByteColorPalette palette{};
+
+    const bool darkMode     = theme && theme->darkMode != FALSE;
+    const bool darkBase     = theme && theme->darkBase != FALSE;
+    const bool rainbowMode  = theme && theme->rainbowMode != FALSE;
+    const float saturation  = rainbowMode ? (darkBase ? 0.78f : 0.68f) : (darkMode ? 0.56f : 0.48f);
+    const float value       = rainbowMode ? (darkBase ? 0.98f : 0.76f) : (darkMode ? 0.90f : 0.56f);
+    const float hueStep     = 360.0f / 16.0f;
+    constexpr float hueBias = 12.0f;
+
+    for (size_t nibble = 0; nibble < 16u; ++nibble)
+    {
+        const float hue                                                                = std::fmod(hueBias + static_cast<float>(nibble) * hueStep, 360.0f);
+        palette.colors[HexByteColorBucketIndex(HexByteColorBucket::Leading0) + nibble] = ColorFromHSV(hue, saturation, value);
+    }
+
+    palette.colors[HexByteColorBucketIndex(HexByteColorBucket::Zero)] =
+        darkMode ? BlendColor(background, foreground, 96u) : BlendColor(background, foreground, 132u);
+
+    const COLORREF ffAccent = ColorFromHSV(355.0f, std::clamp(saturation + (rainbowMode ? 0.12f : 0.18f), 0.0f, 1.0f), darkMode ? 1.0f : 0.68f);
+    palette.colors[HexByteColorBucketIndex(HexByteColorBucket::FF)] =
+        BlendColor(palette.colors[HexByteColorBucketIndex(HexByteColorBucket::LeadingF)], ffAccent, darkMode ? 200u : 220u);
+
+    return palette;
+}
+
+void AppendColorizedRun(std::vector<HexColorizedRun>& runs, size_t start, size_t length, COLORREF color)
+{
+    if (length == 0u)
+    {
+        return;
+    }
+
+    if (! runs.empty())
+    {
+        HexColorizedRun& last = runs.back();
+        if (last.color == color && start == (last.start + last.length))
+        {
+            last.length += length;
+            return;
+        }
+    }
+
+    runs.push_back(HexColorizedRun{start, length, color});
+}
+
+void DrawColorizedRuns(ID2D1HwndRenderTarget* target,
+                       ID2D1SolidColorBrush* brush,
+                       IDWriteTextFormat* format,
+                       std::wstring_view source,
+                       float columnStart,
+                       float charWidth,
+                       float top,
+                       float bottom,
+                       const std::vector<HexColorizedRun>& runs) noexcept
+{
+    if (! target || ! brush || ! format || runs.empty() || source.empty())
+    {
+        return;
+    }
+
+    for (const HexColorizedRun& run : runs)
+    {
+        if (run.length == 0u || run.start >= source.size())
+        {
+            continue;
+        }
+
+        const size_t runLength = std::min(run.length, source.size() - run.start);
+        const float left       = columnStart + static_cast<float>(run.start) * charWidth;
+        const float right      = left + static_cast<float>(runLength) * charWidth;
+        const D2D1_RECT_F rect = D2D1::RectF(left, top, std::max(left, right), bottom);
+
+        brush->SetColor(ColorFFromColorRef(run.color));
+        target->DrawTextW(source.data() + run.start,
+                          static_cast<UINT32>(std::min<size_t>(runLength, std::numeric_limits<UINT32>::max())),
+                          format,
+                          rect,
+                          brush,
+                          D2D1_DRAW_TEXT_OPTIONS_CLIP);
+    }
+}
+
 std::wstring CsvEscape(std::wstring_view value)
 {
     if (value.find_first_of(L"\",\r\n") == std::wstring_view::npos)
@@ -515,6 +704,15 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
     _allowEraseBkgndHexView   = false;
     static_cast<void>(hdc);
 
+#ifdef _DEBUG
+    _debugHexRenderCount += 1u;
+    _debugHexVisibleRowCount        = 0u;
+    _debugHexVisibleByteCount       = 0u;
+    _debugHexColorizedByteCount     = 0u;
+    _debugHexUniqueColorBucketCount = 0u;
+    _debugHexHighContrastFallback   = false;
+#endif
+
     if (EnsureHexViewDirect2D(hwnd) && _hexViewTarget && _hexViewBrush)
     {
         const UINT dpi    = GetDpiForWindow(hwnd);
@@ -713,8 +911,16 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                 _hexViewTarget->DrawLine(p0, p1, _hexViewBrush.get(), 1.0f);
             }
 
+            HexPaintMetrics paintMetrics{};
+            const bool byteColorsRequested        = _config.hexByteColorMode == HexByteColorMode::LeadingNibble;
+            paintMetrics.highContrastFallback     = byteColorsRequested && _hasTheme && _theme.highContrast;
+            const bool colorizeVisibleBytes       = byteColorsRequested && ! paintMetrics.highContrastFallback;
+            const HexByteColorPalette bytePalette = BuildHexByteColorPalette(_hasTheme ? &_theme : nullptr, bg, fg);
+
             if (_fileSize > 0 && lineH > 0.0f && _hexViewFormat)
             {
+                Debug::Perf::Scope paintPerf(L"viewer.hex.paint_us");
+
                 const float usableH    = std::max(0.0f, heightDip - headerH - 2.0f * marginDip);
                 const uint32_t maxRows = std::max<uint32_t>(1u, static_cast<uint32_t>(std::ceil(usableH / lineH)) + 1u);
 
@@ -723,7 +929,13 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                 std::wstring asciiText;
                 std::array<ByteSpan, kHexBytesPerLine> hexSpans{};
                 std::array<ByteSpan, kHexBytesPerLine> textSpans{};
+                std::array<uint8_t, kHexBytesPerLine> byteValues{};
+                std::array<bool, kHexByteColorBucketCount> visibleBuckets{};
+                std::vector<HexColorizedRun> hexColorRuns;
+                std::vector<HexColorizedRun> textColorRuns;
                 size_t validBytes = 0;
+                hexColorRuns.reserve(kHexBytesPerLine);
+                textColorRuns.reserve(kHexBytesPerLine);
 
                 const bool hasSelection        = _hexSelectedOffset.has_value();
                 uint64_t selectionStart        = 0;
@@ -829,15 +1041,18 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                         break;
                     }
 
-                    FormatHexLine(lineOffset, offsetText, hexText, asciiText, hexSpans, textSpans, validBytes);
+                    FormatHexLine(lineOffset, offsetText, hexText, asciiText, hexSpans, textSpans, validBytes, &byteValues);
+                    paintMetrics.visibleRows += 1u;
+                    paintMetrics.visibleBytes += validBytes;
 
-                    const float y            = RoundDipToDevicePixels(dataStartY + static_cast<float>(row) * lineH, dpi);
-                    const float lineBottom   = RoundDipToDevicePixels(y + lineH, dpi);
-                    const D2D1_RECT_F rowRc  = D2D1::RectF(0.0f, y, widthDip, lineBottom);
+                    const float y           = RoundDipToDevicePixels(dataStartY + static_cast<float>(row) * lineH, dpi);
+                    const float lineBottom  = RoundDipToDevicePixels(y + lineH, dpi);
+                    const D2D1_RECT_F rowRc = D2D1::RectF(0.0f, y, widthDip, lineBottom);
 
                     bool highlightRow            = false;
                     uint64_t overlapStart        = 0;
                     uint64_t overlapEndExclusive = 0;
+                    COLORREF rowBg               = bg;
                     if (hasSelection && validBytes > 0)
                     {
                         const uint64_t rowStart        = lineOffset;
@@ -852,8 +1067,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
 
                     if (highlightRow)
                     {
-                        const uint8_t alpha  = 40u;
-                        const COLORREF rowBg = BlendColor(bg, accent, alpha);
+                        rowBg = BlendColor(bg, accent, 40u);
                         _hexViewBrush->SetColor(ColorFFromColorRef(rowBg));
                         _hexViewTarget->FillRectangle(rowRc, _hexViewBrush.get());
                     }
@@ -862,12 +1076,15 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                     const D2D1_RECT_F hexRc    = D2D1::RectF(xHex, y, std::max(xHex, hexTextRight), lineBottom);
                     const D2D1_RECT_F textRc   = D2D1::RectF(xText, y, std::max(xText, widthDip - marginDip), lineBottom);
 
+                    size_t maskBase              = 0u;
+                    bool hasSearchHighlightInRow = false;
                     if (! searchMask.empty() && validBytes > 0 && lineOffset >= searchMaskStartOffset)
                     {
                         const uint64_t base64 = lineOffset - searchMaskStartOffset;
                         if (base64 < static_cast<uint64_t>(searchMask.size()))
                         {
-                            const size_t maskBase = static_cast<size_t>(base64);
+                            maskBase                = static_cast<size_t>(base64);
+                            hasSearchHighlightInRow = true;
                             _hexViewBrush->SetColor(ColorFFromColorRef(searchBg));
                             for (size_t byteIndex = 0; byteIndex < validBytes; ++byteIndex)
                             {
@@ -944,20 +1161,95 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                                               offsetRc,
                                               _hexViewBrush.get(),
                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
-                    _hexViewTarget->DrawTextW(hexText.c_str(),
-                                              static_cast<UINT32>(std::min<size_t>(hexText.size(), std::numeric_limits<UINT32>::max())),
-                                              _hexViewFormat.get(),
-                                              hexRc,
-                                              _hexViewBrush.get(),
-                                              D2D1_DRAW_TEXT_OPTIONS_CLIP);
-                    _hexViewTarget->DrawTextW(asciiText.c_str(),
-                                              static_cast<UINT32>(std::min<size_t>(asciiText.size(), std::numeric_limits<UINT32>::max())),
-                                              _hexViewFormat.get(),
-                                              textRc,
-                                              _hexViewBrush.get(),
-                                              D2D1_DRAW_TEXT_OPTIONS_CLIP);
+
+                    if (colorizeVisibleBytes && validBytes > 0)
+                    {
+                        hexColorRuns.clear();
+                        textColorRuns.clear();
+
+                        for (size_t byteIndex = 0; byteIndex < validBytes; ++byteIndex)
+                        {
+                            const HexByteColorBucket bucket = ClassifyHexByteColorBucket(byteValues[byteIndex]);
+                            const size_t bucketIndex        = HexByteColorBucketIndex(bucket);
+                            visibleBuckets[bucketIndex]     = true;
+
+                            COLORREF effectiveBackground = highlightRow ? rowBg : bg;
+                            if (hasSearchHighlightInRow)
+                            {
+                                const size_t maskIndex = maskBase + byteIndex;
+                                if (maskIndex < searchMask.size() && searchMask[maskIndex] != 0u)
+                                {
+                                    effectiveBackground = searchBg;
+                                }
+                            }
+
+                            if (highlightRow)
+                            {
+                                const uint64_t selectedOffset = lineOffset + static_cast<uint64_t>(byteIndex);
+                                if (selectedOffset >= overlapStart && selectedOffset < overlapEndExclusive)
+                                {
+                                    const uint8_t alpha =
+                                        (selectedOffset == activeOffset) ? (focusSearchSelection ? 180u : 120u) : (focusSearchSelection ? 120u : 90u);
+                                    effectiveBackground = BlendColor(bg, accent, alpha);
+                                }
+                            }
+
+                            const COLORREF byteForeground = ResolveReadableTextColor(bytePalette.colors[bucketIndex], effectiveBackground);
+                            const ByteSpan hexSpan        = hexSpans[byteIndex];
+                            const ByteSpan textSpan       = textSpans[byteIndex];
+
+                            if (hexSpan.length > 0)
+                            {
+                                AppendColorizedRun(hexColorRuns, hexSpan.start, hexSpan.length, byteForeground);
+                            }
+                            if (textSpan.length > 0 && ! asciiText.empty())
+                            {
+                                AppendColorizedRun(textColorRuns, textSpan.start, textSpan.length, byteForeground);
+                            }
+
+                            paintMetrics.colorizedBytes += 1u;
+                        }
+
+                        paintMetrics.colorRuns += hexColorRuns.size() + textColorRuns.size();
+                        DrawColorizedRuns(_hexViewTarget.get(), _hexViewBrush.get(), _hexViewFormat.get(), hexText, xHex, charW, y, lineBottom, hexColorRuns);
+                        DrawColorizedRuns(
+                            _hexViewTarget.get(), _hexViewBrush.get(), _hexViewFormat.get(), asciiText, xText, charW, y, lineBottom, textColorRuns);
+                    }
+                    else
+                    {
+                        // Avoid drawing the same glyphs twice: ClearType overdraw softens the hex/ascii text.
+                        _hexViewTarget->DrawTextW(hexText.c_str(),
+                                                  static_cast<UINT32>(std::min<size_t>(hexText.size(), std::numeric_limits<UINT32>::max())),
+                                                  _hexViewFormat.get(),
+                                                  hexRc,
+                                                  _hexViewBrush.get(),
+                                                  D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                        _hexViewTarget->DrawTextW(asciiText.c_str(),
+                                                  static_cast<UINT32>(std::min<size_t>(asciiText.size(), std::numeric_limits<UINT32>::max())),
+                                                  _hexViewFormat.get(),
+                                                  textRc,
+                                                  _hexViewBrush.get(),
+                                                  D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    }
                 }
+
+                paintMetrics.uniqueColorBucketCount = static_cast<size_t>(std::count(visibleBuckets.begin(), visibleBuckets.end(), true));
+                paintPerf.SetValue0(paintMetrics.visibleRows);
+                paintPerf.SetValue1(paintMetrics.visibleBytes);
+                Debug::Perf::EmitValue(L"viewer.hex.visible_rows", paintMetrics.visibleRows);
+                Debug::Perf::EmitValue(L"viewer.hex.visible_bytes", paintMetrics.visibleBytes);
+                Debug::Perf::EmitValue(L"viewer.hex.colorized_bytes", paintMetrics.colorizedBytes);
+                Debug::Perf::EmitValue(L"viewer.hex.color_runs", paintMetrics.colorRuns);
+                Debug::Perf::EmitValue(L"viewer.hex.high_contrast_fallback_count", paintMetrics.highContrastFallback ? 1u : 0u);
             }
+
+#ifdef _DEBUG
+            _debugHexVisibleRowCount        = paintMetrics.visibleRows;
+            _debugHexVisibleByteCount       = paintMetrics.visibleBytes;
+            _debugHexColorizedByteCount     = paintMetrics.colorizedBytes;
+            _debugHexUniqueColorBucketCount = paintMetrics.uniqueColorBucketCount;
+            _debugHexHighContrastFallback   = paintMetrics.highContrastFallback;
+#endif
 
             DrawLoadingOverlay(_hexViewTarget.get(), _hexViewBrush.get(), widthDip, heightDip);
         }
@@ -1423,8 +1715,8 @@ bool ViewerText::EnsureHexViewDirect2D(HWND hwnd) noexcept
         return false;
     }
 
-    const UINT dpi   = GetDpiForWindow(hwnd);
-    const float dpiF = static_cast<float>(dpi);
+    const UINT dpi                          = GetDpiForWindow(hwnd);
+    const float dpiF                        = static_cast<float>(dpi);
     const MonoTextRenderMetrics monoMetrics = ComputeMonoTextRenderMetrics(kMonoFontSizeDip, dpi);
 
     if (! _d2dFactory)
@@ -1499,8 +1791,7 @@ bool ViewerText::EnsureHexViewDirect2D(HWND hwnd) noexcept
         static_cast<void>(_hexViewFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
         static_cast<void>(_hexViewFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
         static_cast<void>(_hexViewFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
-        static_cast<void>(_hexViewFormat->SetLineSpacing(
-            DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
+        static_cast<void>(_hexViewFormat->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
     }
 
     if (! _hexViewFormatRight)
@@ -1522,8 +1813,7 @@ bool ViewerText::EnsureHexViewDirect2D(HWND hwnd) noexcept
         static_cast<void>(_hexViewFormatRight->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING));
         static_cast<void>(_hexViewFormatRight->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
         static_cast<void>(_hexViewFormatRight->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
-        static_cast<void>(_hexViewFormatRight->SetLineSpacing(
-            DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
+        static_cast<void>(_hexViewFormatRight->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
     }
 
     if (_hexCharWidthDip <= 0.0f || _hexLineHeightDip <= 0.0f)
@@ -1535,7 +1825,7 @@ bool ViewerText::EnsureHexViewDirect2D(HWND hwnd) noexcept
             DWRITE_TEXT_METRICS metrics{};
             if (SUCCEEDED(layout->GetMetrics(&metrics)))
             {
-                _hexCharWidthDip  = std::max(1.0f, metrics.widthIncludingTrailingWhitespace);
+                _hexCharWidthDip = std::max(1.0f, metrics.widthIncludingTrailingWhitespace);
             }
         }
 
@@ -2106,7 +2396,8 @@ void ViewerText::FormatHexLine(uint64_t offset,
                                std::wstring& outAscii,
                                std::array<ByteSpan, kHexBytesPerLine>& hexSpans,
                                std::array<ByteSpan, kHexBytesPerLine>& textSpans,
-                               size_t& validBytes) noexcept
+                               size_t& validBytes,
+                               std::array<uint8_t, kHexBytesPerLine>* outByteValues) noexcept
 {
     outOffset.clear();
     outHex.clear();
@@ -2125,6 +2416,10 @@ void ViewerText::FormatHexLine(uint64_t offset,
     std::array<uint8_t, kHexBytesPerLine> bytes{};
     const size_t count = ReadHexBytes(offset, bytes.data(), bytes.size());
     validBytes         = count;
+    if (outByteValues != nullptr)
+    {
+        *outByteValues = bytes;
+    }
 
     if (_hexOffsetMode == HexOffsetMode::Decimal)
     {

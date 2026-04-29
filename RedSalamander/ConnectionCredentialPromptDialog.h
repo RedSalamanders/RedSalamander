@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -34,3 +35,41 @@ HRESULT PromptForConnectionUserAndPassword(HWND ownerWindow,
                                            std::wstring_view initialUserName,
                                            std::wstring& userNameOut,
                                            std::wstring& passwordOut) noexcept;
+
+[[nodiscard]] HWND GetConnectionCredentialPromptDialogHandle() noexcept;
+void UpdateConnectionCredentialPromptWindowsTheme(const AppTheme& theme) noexcept;
+
+#ifdef ENABLE_TESTS
+enum class ConnectionCredentialPromptDebugFocusTarget : uint8_t
+{
+    None,
+    UserField,
+    SecretField,
+    ToggleSecretButton,
+    OkButton,
+    CancelButton,
+};
+
+struct ConnectionCredentialPromptDebugSnapshot
+{
+    bool usesDxUiHost                                      = false;
+    bool showUserName                                      = false;
+    bool allowEmptySecret                                  = false;
+    bool secretVisible                                     = false;
+    bool themeDark                                         = false;
+    bool themeHighContrast                                 = false;
+    bool themeRainbow                                      = false;
+    size_t secretLength                                    = 0u;
+    size_t visibleChildWindowCount                         = 0u;
+    ConnectionCredentialPromptDebugFocusTarget focusTarget = ConnectionCredentialPromptDebugFocusTarget::None;
+    std::wstring userNameText;
+    std::wstring validationText;
+};
+
+[[nodiscard]] bool DebugGetConnectionCredentialPromptSnapshot(ConnectionCredentialPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetConnectionCredentialPromptUserName(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugSetConnectionCredentialPromptSecret(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugGetConnectionCredentialPromptToggleSecretButtonHostAndClientRect(HWND& outHost, RECT& outRect) noexcept;
+[[nodiscard]] bool DebugToggleConnectionCredentialPromptSecretVisibility() noexcept;
+[[nodiscard]] bool DebugConfirmConnectionCredentialPrompt() noexcept;
+#endif

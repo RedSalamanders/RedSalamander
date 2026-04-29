@@ -1,4 +1,5 @@
-﻿// WARNING: cannot be replaced by "#pragma once" because it is included from .rc file and it seems resource compiler does not support "#pragma once"
+// WARNING: cannot be replaced by "#pragma once" because it is included from .rc files and
+// the resource compiler does not reliably support "#pragma once".
 #ifndef __REDSALAMANDER_VERSION_H
 #define __REDSALAMANDER_VERSION_H
 
@@ -6,94 +7,132 @@
 #error this file is not editable by Microsoft Visual C++
 #endif // defined(APSTUDIO_INVOKED) && !defined(APSTUDIO_READONLY_SYMBOLS)
 
-#define VERSINFO_COPYRIGHT L"Copyright © 2025 Red Salamander Authors"
-#define VERSINFO_COMPANY L"Red Salamander"
+#ifdef RC_INVOKED
+#define VERSINFO_TEXT(s) s
+#define VERSINFO_WSTR(s) VERSINFO_STR(s)
+#else
+#define VERSINFO_TEXT(s) L##s
+#endif
 
-#define VERSINFO_DESCRIPTION L"Red Salamander, File Manager"
-#define VERSINFO_COMMENT L"A two-pane file manager with plugin architecture."
+#ifdef RS_VERSION_USE_OVERRIDES
+#include "RSVersionOverrides.h"
+#endif
 
-// conversion macros num->str
-#define VERSINFO_xstr(s) VERSINFO_str(s)
-#define VERSINFO_str(s) #s
+#define VERSINFO_COPYRIGHT VERSINFO_TEXT("Copyright (c) 2026 RedSalamander Authors")
+#define VERSINFO_COMPANY VERSINFO_TEXT("RedSalamander")
+#define VERSINFO_PRODUCTNAME VERSINFO_TEXT("RedSalamander")
 
+#define VERSINFO_DESCRIPTION VERSINFO_TEXT("RedSalamander, File Manager")
+#define VERSINFO_COMMENT VERSINFO_TEXT("A two-pane file manager with plugin architecture.")
+
+// Human-maintained semantic digits.
+//
+// MINORA and MINORB are the packed two-digit minor version:
+// - 7.50 => VERSINFO_MAJOR=7, VERSINFO_MINORA=5, VERSINFO_MINORB=0
+// - 7.53 => VERSINFO_MAJOR=7, VERSINFO_MINORA=5, VERSINFO_MINORB=3
+//
+// The build number is intentionally not edited here anymore.
+// - Local beta builds reuse the saved per-worktree build number under .build\version\ so ordinary
+//   incremental builds keep the same version stamp until the caller supplies a new number.
+// - Official release builds must receive a CI/global build number from the build invocation.
+// This keeps git clean while making CI the source of truth for release numbering.
 #define VERSINFO_MAJOR 7
 #define VERSINFO_MINORA 0
 #define VERSINFO_MINORB 0
 
-// if minorB is 0, we don't display it in version strings (e.g., 7.50 -> 7.5)
+// Conversion macros num->str / num->wide-str.
+#define VERSINFO_STR_IMPL(s) #s
+#define VERSINFO_STR(s) VERSINFO_STR_IMPL(s)
+#ifndef RC_INVOKED
+#define VERSINFO_WSTR_IMPL(s) L##s
+#define VERSINFO_WSTR_EXPAND(s) VERSINFO_WSTR_IMPL(s)
+#define VERSINFO_WSTR(s) VERSINFO_WSTR_EXPAND(VERSINFO_STR(s))
+#endif
+#define VERSINFO_JOIN_DIGITS_IMPL(a, b) a##b
+#define VERSINFO_JOIN_DIGITS(a, b) VERSINFO_JOIN_DIGITS_IMPL(a, b)
+
+// The build system overrides this value through RSVersionOverrides.h.
+// Keep the fallback at 0 so direct single-file compilation still succeeds.
+#ifndef VERSINFO_BUILDNUMBER
+#define VERSINFO_BUILDNUMBER 0
+#endif
+
+// The build system normally injects platform/configuration selectors too. These fallbacks keep
+// ad-hoc compilation usable when the project is not launched through build.ps1/MSBuild.
+#if ! defined(RSV_PLATFORM_X64) && ! defined(RSV_PLATFORM_ARM64)
+#if defined(_M_ARM64)
+#define RSV_PLATFORM_ARM64 1
+#else
+#define RSV_PLATFORM_X64 1
+#endif
+#endif
+
+#if ! defined(RSV_CFG_DEBUG) && ! defined(RSV_CFG_RELEASE) && ! defined(RSV_CFG_ASAN_DEBUG)
+#if defined(_DEBUG)
+#define RSV_CFG_DEBUG 1
+#else
+#define RSV_CFG_RELEASE 1
+#endif
+#endif
+
+#if defined(RSV_PLATFORM_ARM64)
+#define REDSALAMANDER_VER_PLATFORM VERSINFO_TEXT("ARM64")
+#else
+#define REDSALAMANDER_VER_PLATFORM VERSINFO_TEXT("x64")
+#endif
+
+#if defined(RSV_OFFICIAL_RELEASE)
+#define VERSINFO_BUILD_FLAVOR_TXT VERSINFO_TEXT("")
+#define VERSINFO_BUILD_FLAVOR_TXT_NO_PLATFORM VERSINFO_TEXT("")
+#define VERSINFO_BUILD_FLAVOR_SHORT VERSINFO_TEXT("")
+#elif defined(RSV_CFG_ASAN_DEBUG)
+#define VERSINFO_BUILD_FLAVOR_TXT VERSINFO_TEXT(" beta ASan Debug")
+#define VERSINFO_BUILD_FLAVOR_TXT_NO_PLATFORM VERSINFO_TEXT(" beta ASan Debug")
+#define VERSINFO_BUILD_FLAVOR_SHORT VERSINFO_TEXT("BAD")
+#elif defined(RSV_CFG_DEBUG)
+#define VERSINFO_BUILD_FLAVOR_TXT VERSINFO_TEXT(" beta Debug")
+#define VERSINFO_BUILD_FLAVOR_TXT_NO_PLATFORM VERSINFO_TEXT(" beta Debug")
+#define VERSINFO_BUILD_FLAVOR_SHORT VERSINFO_TEXT("BD")
+#else
+#define VERSINFO_BUILD_FLAVOR_TXT VERSINFO_TEXT(" beta Release")
+#define VERSINFO_BUILD_FLAVOR_TXT_NO_PLATFORM VERSINFO_TEXT(" beta Release")
+#define VERSINFO_BUILD_FLAVOR_SHORT VERSINFO_TEXT("BR")
+#endif
+
+// Keep the packed minor version token-based so the resource compiler can consume it in
+// FILEVERSION/PRODUCTVERSION without tripping over arithmetic expressions.
+#define VERSINFO_MINOR_PACKED VERSINFO_JOIN_DIGITS(VERSINFO_MINORA, VERSINFO_MINORB)
+#define VERSINFO_FILEVERSION_VALUES VERSINFO_MAJOR, VERSINFO_MINORA, VERSINFO_MINORB, VERSINFO_BUILDNUMBER
+#define VERSINFO_PRODUCTVERSION_VALUES VERSINFO_MAJOR, VERSINFO_MINORA, VERSINFO_MINORB, VERSINFO_BUILDNUMBER
+
 #if (VERSINFO_MINORB == 0)
-#define VERSINFO_REDSALAMANDER VERSINFO_xstr(VERSINFO_MAJOR) L"." VERSINFO_xstr(VERSINFO_MINORA) VERSINFO_BETAVERSION_TXT
-#define VERSINFO_REDSALAMANDER_SHORT VERSINFO_xstr(VERSINFO_MAJOR) VERSINFO_xstr(VERSINFO_MINORA) VERSINFO_BETAVERSIONSHORT_TXT
+#define VERSINFO_VERSION_BASE VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_TEXT(".") VERSINFO_WSTR(VERSINFO_MINORA)
+#define VERSINFO_REDSALAMANDER_SHORT VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_WSTR(VERSINFO_MINORA) VERSINFO_BUILD_FLAVOR_SHORT REDSALAMANDER_VER_PLATFORM
 #else
-#define VERSINFO_REDSALAMANDER VERSINFO_xstr(VERSION_MAJOR) L"." VERSINFO_xstr(VERSINFO_MINORA) VERSINFO_xstr(VERSINFO_MINORB) VERSINFO_BETAVERSION_TXT
-#define VERSINFO_REDSALAMANDER_SHORT VERSINFO_xstr(VERSION_MAJOR) VERSINFO_xstr(VERSINFO_MINORA) VERSINFO_xstr(VERSINFO_MINORB) VERSINFO_BETAVERSIONSHORT_TXT
+#define VERSINFO_VERSION_BASE VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_TEXT(".") VERSINFO_WSTR(VERSINFO_MINORA) VERSINFO_WSTR(VERSINFO_MINORB)
+#define VERSINFO_REDSALAMANDER_SHORT                                                                                                                           \
+    VERSINFO_WSTR(VERSINFO_MAJOR) VERSINFO_WSTR(VERSINFO_MINORA) VERSINFO_WSTR(VERSINFO_MINORB) VERSINFO_BUILD_FLAVOR_SHORT REDSALAMANDER_VER_PLATFORM
 #endif
 
-#ifdef VERSINFO_MAJOR      // defined only when used from a plugin
-#if (VERSINFO_MINORB == 0) // if the hundredths are zero, we don't show them (e.g., 2.50 -> 2.5)
-#define VERSINFO_VERSION VERSINFO_xstr(VERSINFO_MAJOR) L"." VERSINFO_xstr(VERSINFO_MINORA) VERSINFO_BETAVERSION_TXT
-#define VERSINFO_VERSION_NO_PLATFORM VERSINFO_xstr(VERSINFO_MAJOR) L"." VERSINFO_xstr(VERSINFO_MINORA) VERSINFO_BETAVERSION_TXT_NO_PLATFORM
+#if defined(RSV_OFFICIAL_RELEASE)
+#define VERSINFO_VERSION                                                                                                                                       \
+    VERSINFO_VERSION_BASE VERSINFO_TEXT(" build ") VERSINFO_WSTR(VERSINFO_BUILDNUMBER) VERSINFO_TEXT(" (") REDSALAMANDER_VER_PLATFORM VERSINFO_TEXT(")")
+#define VERSINFO_VERSION_NO_PLATFORM VERSINFO_VERSION_BASE VERSINFO_TEXT(" build ") VERSINFO_WSTR(VERSINFO_BUILDNUMBER)
 #else
-#define VERSINFO_VERSION VERSINFO_xstr(VERSINFO_MAJOR) "." VERSINFO_xstr(VERSINFO_MINORA) VERSINFO_xstr(VERSINFO_MINORB) VERSINFO_BETAVERSION_TXT
-#define VERSINFO_VERSION_NO_PLATFORM                                                                                                                           \
-    VERSINFO_xstr(VERSINFO_MAJOR) "." VERSINFO_xstr(VERSINFO_MINORA) VERSINFO_xstr(VERSINFO_MINORB) VERSINFO_BETAVERSION_TXT_NO_PLATFORM
+#define VERSINFO_VERSION                                                                                                                                       \
+    VERSINFO_VERSION_BASE VERSINFO_TEXT(" build ") VERSINFO_WSTR(VERSINFO_BUILDNUMBER) VERSINFO_BUILD_FLAVOR_TXT VERSINFO_TEXT(" (")                           \
+        REDSALAMANDER_VER_PLATFORM VERSINFO_TEXT(")")
+#define VERSINFO_VERSION_NO_PLATFORM VERSINFO_VERSION_BASE VERSINFO_TEXT(" build ") VERSINFO_WSTR(VERSINFO_BUILDNUMBER) VERSINFO_BUILD_FLAVOR_TXT_NO_PLATFORM
 #endif
-#endif
 
-#define REDSALAMANDER_VER_PLATFORM L"x64"
+#define VERSINFO_REDSALAMANDER VERSINFO_VERSION
+#define VERSINFO_PLUGIN_VERSION VERSINFO_VERSION
+#define VERSINFO_VERSION_LABEL VERSINFO_TEXT("Version ") VERSINFO_VERSION
 
-// VERSINFO_BUILDNUMBER:
-//
-// Used to easily distinguish versions of all modules across releases
-// (this is the last component of the version number for all plugins and RedSalamander itself).
-// Increment with every version (IB, DB, PB, beta, release, or even a test version sent to a single user).
-// An overview of version types is in doc\versions.txt.
-// Always add a comment explaining which RedSalamander version the new build number corresponds to.
-//
-// Overview of used VERSINFO_BUILDNUMBER values:
-//...
-// ! IMPORTANT: new build numbers must be added to the "default" branch first,
-//              and only then to side branches (the complete list exists only in the "default" branch)
-#define VERSINFO_BUILDNUMBER 183
+// Used to check plugin/host SDK compatibility. The SDK contract now follows the human-maintained
+// semantic digits automatically so it cannot drift from the declared product version.
+#define LAST_VERSION_OF_SALAMANDER ((VERSINFO_MAJOR * 100) + VERSINFO_MINOR_PACKED)
+#define REQUIRE_LAST_VERSION_OF_REDSALAMANDER                                                                                                                  \
+    VERSINFO_TEXT("This plugin requires RedSalamander ") VERSINFO_VERSION_BASE VERSINFO_TEXT(" (") REDSALAMANDER_VER_PLATFORM VERSINFO_TEXT(") or later.")
 
-// VERSINFO_BETAVERSION_TXT:
-//
-// Changes with every build; for release versions, VERSINFO_BETAVERSION_TXT = "".
-// If releasing a special fix beta version like "2.5 beta 9a", increment
-// VERSINFO_BUILDNUMBER by one and set VERSINFO_BETAVERSION_TXT == " beta 9a".
-//
-// VERSINFO_BETAVERSIONSHORT_TXT is used for naming bug reports; it should be as short as possible
-
-// examples ("x64" for 64-bit builds; interchangeable in examples below):
-// " beta 2 (x64)", " beta 2 (SDK xArm)",
-// " RC1 (x64)", " beta 2 (IB21 xArm)", " beta 2 (DB21 x64)", " beta 2 (PB21 xArm)"
-#define VERSINFO_BETAVERSION_TXT L" (" REDSALAMANDER_VER_PLATFORM L")"
-#define VERSINFO_BETAVERSION_TXT_NO_PLATFORM                                                                                                                   \
-    L"" // copy the line above + remove REDSALAMANDER_VER_PLATFORM + if parentheses are empty, remove them + remove extra spaces
-
-// examples (see above for x64): "x64" (for release), "B2x64", "B2SDKx64",
-// "RC1x64", "B2IB21x64", "B2DB21x64", "B2PB21x64"
-#define VERSINFO_BETAVERSIONSHORT_TXT REDSALAMANDER_VER_PLATFORM
-
-// LAST_VERSION_OF_REDSALAMANDER:
-//
-// Used to check the compatibility of RedSalamander plugins during their entry point
-// (see PluginEntryAbstract::GetVersion() in plugin_base.h).
-// Mainly serves simplicity: internal plugins can call any method from RedSalamander's interface,
-// because after checking for this version, they are guaranteed it is supported by RedSalamander.
-// (Only a newer RedSalamander version might load them, which must also include these methods.)
-//
-// Also used in reverse: to ensure RedSalamander will call all methods of a plugin (including the newest),
-// the plugin returns this version via the PluginGetRequiredVersion export.
-//
-// If a plugin returns a lower version from PluginGetRequiredVersion (for backward compatibility),
-// it should add the PluginGetSDKVersion export and return LAST_VERSION_OF_SALAMANDER
-// to indicate which SDK version was used for compilation—so that RedSalamander (e.g., newer version)
-// can use methods from the plugin not present in older versions.
-//
-// When changing the interface, follow the procedure described in doc\how_to_change.txt.
-//
-#define LAST_VERSION_OF_SALAMANDER 703
-#define REQUIRE_LAST_VERSION_OF_REDSALAMANDER L"This plugin requires Red Salamander 7.0 (" REDSALAMANDER_VER_PLATFORM L") or later."
-
-#endif // __SPL_VERS_H
+#endif // __REDSALAMANDER_VERSION_H

@@ -8,7 +8,7 @@
     type="win32"
     name="RedSalamanderMonitor.exe"/>
   
-  <description>Red Salamander Monitor - Modern File Manager Monitor</description>
+  <description>RedSalamander Monitor - Modern File Manager Monitor</description>
 
   <!-- Compatibility with Windows versions -->
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">

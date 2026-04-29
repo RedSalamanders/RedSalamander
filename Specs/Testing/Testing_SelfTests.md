@@ -10,8 +10,12 @@ RedSalamander ships three debug self-test suites:
 This document defines the normative result contract shared by those suites.
 
 Related documents:
-- `Specs/TestRuns/README.md`
+- `Specs/Testing/Testing_TestCoverage.md` — comprehensive per-suite test case inventory
 - `Specs/Testing/Testing_SelfTestRemoteCredentials.md`
+- `Specs/Testing/Testing_PerformanceValidation.md`
+- `Specs/TestRuns/README.md`
+- `Tests/README.md` — central test infrastructure index
+- `Tools/Run-AllTests.ps1` — unified test runner with summary reporting
 
 ## Result Contract
 
@@ -57,13 +61,30 @@ Environment variables may select alternate test inputs such as profile names, bu
 - Suite `results.json` files must preserve per-case status and reason.
 - Aggregated self-test results must count `passed`, `failed`, and `skipped` consistently with the suite artifacts.
 - Checked-in archived runs may contain skipped cases; that is valid when the skip reason documents the missing precondition.
+- `Tools/Run-AllTests.ps1` must tolerate both direct suite JSON (`commands_results.json`, `compare_results.json`, `fileops_results.json`) and aggregated run JSON (`selftest_run_results.json`) when summarizing archived results.
+- If a self-test process exits early, crashes, or writes only partial artifacts, `Tools/Run-AllTests.ps1` must report the runner failure from the available JSON/trace data instead of failing its own parser.
 
 ## Artifact Contract
 
 Self-test artifacts must preserve enough detail to explain why a run passed, failed, or skipped:
 - `results.json` records final case status and reason,
 - `trace.txt` records supporting diagnostic context,
+- `perf_metrics.jsonl` must be preserved when the scenario emits performance metrics,
 - archived copies under `Specs/TestRuns/` must keep those files intact.
+
+## DxUi Popup Validation
+
+For command selftests that validate migrated app chrome using DxUi popup menus:
+- owned `DxUi_ContextMenu` popup windows are an authoritative “menu opened” signal,
+- popup dismissal may be validated by observing that owned popup window close, not only by `GUI_INMENUMODE`,
+- tests must not rely on `GUI_INMENUMODE` alone once the validated surface routes through the shared DxUi popup path instead of a native Win32 menu loop.
+
+## NavigationView DxUi Text-Host Validation
+
+For command selftests that validate NavigationView address-bar edit mode or full-path popup edit mode:
+- `NavigationViewDebugSnapshot` is the authoritative contract for edit visibility, focus target, current edit text, selection range, and the active DxUi host/bridge HWNDs,
+- tests must not enumerate descendant native `Edit` / `RICHEDIT50W` windows to prove edit mode, because NavigationView no longer exposes a visible native edit child and the hidden bridge is an implementation detail behind the DxUi host.
+- address-bar edit clipboard coverage must verify the focused DxUi host remains active and pane-level Select All, Copy, and Paste commands mutate/copy the edit text instead of falling through to FolderView command handling.
 
 ## Search-Specific Coverage
 
@@ -71,3 +92,11 @@ Search coverage follows the same contract:
 - local, fallback, indexed, and service search cases stay declared,
 - ReFS validation stays declared even on machines without ReFS,
 - a machine without a fixed ReFS volume records `skipped` with a reason instead of silently omitting the case.
+
+## Source Organization
+
+Project-owned self-test implementation must live in `.cpp` source files, with optional `.h` declarations when cross-translation-unit declarations are needed.
+
+Project code must not introduce `.inl` self-test implementation files.
+
+The `--commands-selftest` suite may continue to include family source files from `RedSalamander/SelfTest/Commands/Commands.SelfTest.cpp`, but those included family files must still be `.cpp` files rather than `.inl` fragments.

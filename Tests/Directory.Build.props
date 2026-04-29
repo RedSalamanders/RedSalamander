@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup>
+    <RSParentDirectoryBuildProps>$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)..\'))</RSParentDirectoryBuildProps>
+  </PropertyGroup>
+  <Import Project="$(RSParentDirectoryBuildProps)" Condition="'$(RSParentDirectoryBuildProps)'!=''" />
+
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
+    <RSTestConsoleDefaultsEnabled Condition="'$(RSTestConsoleDefaultsEnabled)'=='' and '$(MSBuildProjectName)'!='PerformanceTests2'">true</RSTestConsoleDefaultsEnabled>
+    <RSTestConsoleDefaultsEnabled Condition="'$(RSTestConsoleDefaultsEnabled)'==''">false</RSTestConsoleDefaultsEnabled>
+    <RSTestAdditionalIncludeDirectories Condition="'$(RSTestAdditionalIncludeDirectories)'==''">$(SolutionDir)Common</RSTestAdditionalIncludeDirectories>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup Condition="'$(RSTestConsoleDefaultsEnabled)'=='true'">
+    <ClCompile>
+      <DisableSpecificWarnings>4710;4711;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
+      <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(RSTestAdditionalIncludeDirectories);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+</Project>

@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -24,6 +25,12 @@
 #include <wil/com.h>
 #include <wil/resource.h>
 #pragma warning(pop)
+
+#if defined(ENABLE_TESTS)
+[[nodiscard]] bool DebugNormalizeIconBitmapAlphaForD2D(std::span<BYTE> pixels) noexcept;
+[[nodiscard]] bool DebugNormalizeIconBitmapAlphaForD2DWithMask(std::span<BYTE> pixels, HBITMAP maskBitmap, int width, int height, HDC hdc) noexcept;
+[[nodiscard]] int DebugSelectIconCacheImageListSize(float targetDipSize, float dpi) noexcept;
+#endif
 
 // Forward declarations
 struct IImageList;
@@ -89,7 +96,7 @@ public:
     // Must be called on UI thread with valid D2D context.
     wil::com_ptr<ID2D1Bitmap1> ConvertIconToBitmapOnUIThread(HICON icon, int iconIndex, ID2D1DeviceContext* d2dContext);
 
-    // Create GDI HBITMAP from HICON using WIC for menu icons (UI thread only).
+    // Create GDI HBITMAP from HICON for menu icons (UI thread only).
     // Returns 32-bit premultiplied BGRA bitmap suitable for SetMenuItemBitmaps.
     // Uses WIC pipeline with nearest-neighbor scaling and proper alpha channel handling.
     // Fixes black dots/borders by copying from converter output instead of original bitmap.
@@ -105,6 +112,10 @@ public:
     // Applies special-case icon resolution for known special folders and WSL distributions.
     // fileAttributes/useFileAttributes are forwarded to SHGetFileInfo fallback behavior.
     wil::unique_hbitmap CreateMenuBitmapFromPath(const wchar_t* path, int size, DWORD fileAttributes = 0, bool useFileAttributes = false);
+
+    // Create a menu bitmap for a known folder using the shell's direct icon extraction path.
+    // This preserves stock shell artwork for virtual folders and quick-access locations.
+    wil::unique_hbitmap CreateMenuBitmapFromKnownFolder(const GUID& folderId, int size);
 
     // Get icon index by file extension (fast cache lookup, no Shell API calls).
     // Returns nullopt if extension not cached.
@@ -142,7 +153,9 @@ public:
         size_t hitCount           = 0;
         size_t missCount          = 0;
         size_t extensionCacheSize = 0;
+        size_t pathCacheSize      = 0;
         size_t lruEvictions       = 0;
+        size_t pathLruEvictions   = 0;
     };
     Stats GetStats() const;
     // Get approximate bitmap memory usage in bytes (sum of width × height × 4 for cached entries).
@@ -151,9 +164,9 @@ public:
     // Check if path is a special folder (Desktop, Documents, etc.)
     static bool IsSpecialFolder(const std::wstring& path);
 
-    // Query system image list icon index for a path (thread-safe).
+    // Query system image list icon index for a path (thread-safe, cached).
     // fileAttributes is only used when useFileAttributes is true.
-    std::optional<int> QuerySysIconIndexForPath(const wchar_t* path, DWORD fileAttributes, bool useFileAttributes) const;
+    std::optional<int> QuerySysIconIndexForPath(const wchar_t* path, DWORD fileAttributes, bool useFileAttributes);
 
     // Query system icon index for a PIDL (thread-safe).
     std::optional<int> QuerySysIconIndexForPidl(PCIDLIST_ABSOLUTE pidl) const;
@@ -182,8 +195,8 @@ private:
     // Returns: SHIL_JUMBO (256×256), SHIL_EXTRALARGE (48×48), SHIL_LARGE (32×32), or SHIL_SMALL (16×16)
     int SelectOptimalImageListSize(float targetDipSize) const;
 
-    // Convert HICON to ID2D1Bitmap1 using WIC for superior quality. WIC-based conversion provides crisp icons without GDI quality degradation.
-    // Returns nullptr on WIC conversion failures (logged via Debug::Warning).
+    // Convert HICON to ID2D1Bitmap1 by drawing into a top-down 32-bit DIB.
+    // Returns nullptr on conversion failures (logged via Debug::Warning).
     wil::com_ptr<ID2D1Bitmap1> ConvertIconToBitmap(HICON icon, ID2D1DeviceContext* d2dContext);
 
     // LRU cache entry with access time tracking
@@ -201,12 +214,43 @@ private:
         size_t accessCounter = 0;
     };
 
+    struct PathQueryKey
+    {
+        std::wstring path;
+        DWORD fileAttributes   = 0;
+        bool useFileAttributes = false;
+
+        [[nodiscard]] bool operator==(const PathQueryKey& other) const noexcept = default;
+    };
+
+    struct PathQueryKeyHash
+    {
+        [[nodiscard]] size_t operator()(const PathQueryKey& key) const noexcept
+        {
+            size_t hash = std::hash<std::wstring>{}(key.path);
+            hash ^= static_cast<size_t>(key.fileAttributes) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
+            hash ^= static_cast<size_t>(key.useFileAttributes) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
+            return hash;
+        }
+    };
+
+    struct PathIconCacheEntry
+    {
+        int iconIndex         = 0;
+        size_t lastAccessTime = 0;
+    };
+
     // Evict least recently used icon if cache exceeds size limit.
     void EvictLRUIfNeeded(DeviceCache& cache);
+
+    // Evict oldest ~10% of path query cache entries when at capacity.
+    void EvictPathQueryBatch();
 
     mutable std::mutex _mutex;
     std::unordered_map<ID2D1Device*, DeviceCache> _deviceCaches;
     std::unordered_map<std::wstring, int> _extensionToIconIndex;
+    std::unordered_map<PathQueryKey, PathIconCacheEntry, PathQueryKeyHash> _pathToIconIndex;
+    size_t _pathQueryAccessCounter = 0;
 
     std::atomic<float> _dpi{96.0f};
     std::atomic<bool> _initialized{false};
@@ -216,6 +260,7 @@ private:
     mutable size_t _hitCount     = 0;
     mutable size_t _missCount    = 0;
     mutable size_t _lruEvictions = 0;
+    size_t _pathLruEvictions     = 0;
 
     // System image list COM objects (cached) - initialized once and treated as immutable for lock-free reads in hot paths.
     // NOTE: Clear() does not reset these; they remain valid for the lifetime of the process once acquired.

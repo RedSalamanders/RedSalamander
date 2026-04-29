@@ -8,7 +8,7 @@
     type="win32"
     name="RedSalamander.exe"/>
   
-  <description>Red Salamander - Modern File Manager</description>
+  <description>RedSalamander - Modern File Manager</description>
 
   <!-- Compatibility with Windows versions -->
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">

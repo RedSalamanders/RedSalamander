@@ -2,8 +2,8 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include <new>
 #include <array>
+#include <new>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -18,8 +18,8 @@
 #include "PlugInterfaces/Factory.h"
 
 #define REDSAL_DEFINE_TRACE_PROVIDER
-#include "Helpers.h"
 #include "FileSystemMicrosoftDriveResources.h"
+#include "Helpers.h"
 
 #include "FileSystemMicrosoftDrive.h"
 
@@ -35,6 +35,7 @@ constexpr wchar_t kPluginShortIdOneDriveBusiness[] = L"onedrive-pro";
 
 constexpr wchar_t kPluginIdSharePoint[]      = L"builtin/file-system-sharepoint";
 constexpr wchar_t kPluginShortIdSharePoint[] = L"sharepoint";
+
 struct LocalizedPluginMetaDataSet
 {
     std::wstring oneDrivePersonalName;
@@ -44,46 +45,50 @@ struct LocalizedPluginMetaDataSet
     std::wstring sharePointName;
     std::wstring sharePointDescription;
     std::array<PluginMetaData, 3> plugins{};
-};
 
-[[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
-{
-    static const LocalizedPluginMetaDataSet data = [] {
-        LocalizedPluginMetaDataSet value{};
-        value.oneDrivePersonalName        = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_NAME);
-        value.oneDrivePersonalDescription = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_DESCRIPTION);
-        value.oneDriveBusinessName        = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_NAME);
-        value.oneDriveBusinessDescription = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_DESCRIPTION);
-        value.sharePointName              = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME);
-        value.sharePointDescription       = LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_DESCRIPTION);
-        value.plugins                     = {{
+    LocalizedPluginMetaDataSet()
+    {
+        LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_NAME, oneDrivePersonalName);
+        LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_DESCRIPTION, oneDrivePersonalDescription);
+        LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_NAME, oneDriveBusinessName);
+        LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_DESCRIPTION, oneDriveBusinessDescription);
+        LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME, sharePointName);
+        LoadStringResource(g_hInstance, IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_DESCRIPTION, sharePointDescription);
+
+        // PluginMetaData keeps raw wchar_t* pointers, so bind them only after the
+        // backing strings live in their final static storage.
+        plugins = {{
             {
                 .id          = kPluginIdOneDrivePersonal,
                 .shortId     = kPluginShortIdOneDrivePersonal,
-                .name        = value.oneDrivePersonalName.c_str(),
-                .description = value.oneDrivePersonalDescription.c_str(),
+                .name        = oneDrivePersonalName.c_str(),
+                .description = oneDrivePersonalDescription.c_str(),
                 .author      = L"RedSalamander",
-                .version     = L"0.1",
+                .version     = VERSINFO_PLUGIN_VERSION,
             },
             {
                 .id          = kPluginIdOneDriveBusiness,
                 .shortId     = kPluginShortIdOneDriveBusiness,
-                .name        = value.oneDriveBusinessName.c_str(),
-                .description = value.oneDriveBusinessDescription.c_str(),
+                .name        = oneDriveBusinessName.c_str(),
+                .description = oneDriveBusinessDescription.c_str(),
                 .author      = L"RedSalamander",
-                .version     = L"0.1",
+                .version     = VERSINFO_PLUGIN_VERSION,
             },
             {
                 .id          = kPluginIdSharePoint,
                 .shortId     = kPluginShortIdSharePoint,
-                .name        = value.sharePointName.c_str(),
-                .description = value.sharePointDescription.c_str(),
+                .name        = sharePointName.c_str(),
+                .description = sharePointDescription.c_str(),
                 .author      = L"RedSalamander",
-                .version     = L"0.1",
+                .version     = VERSINFO_PLUGIN_VERSION,
             },
         }};
-        return value;
-    }();
+    }
+};
+
+[[nodiscard]] const LocalizedPluginMetaDataSet& GetPluginMetaDataSet() noexcept
+{
+    static const LocalizedPluginMetaDataSet data;
 
     return data;
 }
@@ -104,23 +109,32 @@ struct LocalizedPluginMetaDataSet
     }
     return std::nullopt;
 }
-} // namespace
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, void** result)
+[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
 {
-    if (! result)
+    const auto mode = ModeFromPluginId(pluginId);
+    if (! mode.has_value())
     {
-        return E_POINTER;
+        return nullptr;
     }
 
-    *result = nullptr;
+    return GetFileSystemMicrosoftDriveStaticConfigurationSchema(mode.value());
+}
 
+HRESULT CreatePluginInstance(REFIID riid, IHost* host, std::wstring_view pluginId, void** result)
+{
     if (riid != __uuidof(IFileSystem))
     {
         return E_NOINTERFACE;
     }
 
-    auto* instance = new (std::nothrow) FileSystemMicrosoftDrive(FileSystemMicrosoftDriveMode::OneDriveBusiness, host);
+    const auto mode = ModeFromPluginId(pluginId);
+    if (! mode.has_value())
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
+    auto* instance = new (std::nothrow) FileSystemMicrosoftDrive(mode.value(), host);
     if (! instance)
     {
         return E_OUTOFMEMORY;
@@ -130,6 +144,7 @@ extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptio
     instance->Release();
     return hr;
 }
+} // namespace
 
 extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
 {
@@ -152,7 +167,7 @@ extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const Pl
     return S_OK;
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreateEx(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
 {
     if (! result)
     {
@@ -160,30 +175,41 @@ extern "C" HRESULT __stdcall RedSalamanderCreateEx(REFIID riid, const FactoryOpt
     }
 
     *result = nullptr;
-
     if (riid != __uuidof(IFileSystem))
     {
         return E_NOINTERFACE;
     }
-
     if (! pluginId || pluginId[0] == L'\0')
     {
         return E_INVALIDARG;
     }
 
-    const auto mode = ModeFromPluginId(pluginId);
-    if (! mode.has_value())
+    return CreatePluginInstance(riid, host, pluginId, result);
+}
+
+extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
+{
+    if (! schemaJsonUtf8)
+    {
+        return E_POINTER;
+    }
+
+    *schemaJsonUtf8 = nullptr;
+    if (riid != __uuidof(IFileSystem))
+    {
+        return E_NOINTERFACE;
+    }
+    if (! pluginId || pluginId[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    const char* schema = GetPluginSchema(pluginId);
+    if (! schema)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
-    auto* instance = new (std::nothrow) FileSystemMicrosoftDrive(mode.value(), host);
-    if (! instance)
-    {
-        return E_OUTOFMEMORY;
-    }
-
-    const HRESULT hr = instance->QueryInterface(riid, result);
-    instance->Release();
-    return hr;
+    *schemaJsonUtf8 = schema;
+    return S_OK;
 }

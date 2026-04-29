@@ -16,6 +16,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include "Win32CallbackHelpers.h"
 #include <windows.h>
 
 #pragma warning(push)
@@ -34,6 +35,7 @@ struct ForceWilTemplateInstantiations_Framework
     wil::unique_hwnd hwnd;
     wil::unique_hfont font;
     wil::unique_hpen pen;
+    wil::unique_hrgn region;
     wil::unique_any<char*, decltype(&::free), ::free> mallocString;
 };
 } // namespace WilWarningSilenceDetail

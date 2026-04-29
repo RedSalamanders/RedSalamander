@@ -8,32 +8,46 @@ LET IT ALONE THERE (HUMAN MANAGED)
 
 
 ------------------------------------------------------------------------------------------------------
-## file operation 
-- when preflight is skip display the number of files and folders copied 
-- when we are in parallel mode the thread pool must be more share between all task 
+## Acrylic for all windows
+- Title bar, menu, context menu, dialog box, etc ... all windows should have acrylic/Mica/Mica Alt effect when the setting is activated
+- File Operation window should have acrylic background effect when the setting is activated
+- Preferences Settings window should have acrylic background effect when the setting is activated
+- Connection window should have acrylic background effect when the setting is activated
+
+
+
+------------------------------------------------------------------------------------------------------
+## All windows must be resizable
+- all windows must be resizable by the user to fit their content and be more comfortable to use. for example the file operation window must be resizable to be able to see all the files when there is a lot of them, the space viewer must be resizable to be able to see more details when there is a lot of items, etc ...
+- all windows must have a minimum size to avoid having too small windows that are not usable but other than that the user must be able to resize the window as he want to fit his needs and content displayed in the window. for example the file operation window must be resizable to be able to see all the files when there is a lot of them, the space viewer must be resizable to be able to see more details when there is a lot of items, etc ...
+
+------------------------------------------------------------------------------------------------------
+## file operation
+- when preflight is skip display the number of files and folders copied
+- when we are in parallel mode the thread pool must be more share between all task
    - after a file end in a task the thread could be reassign to another task. the purpose is to have the smal amount of thread (more or less) for all tasks
 
 
 
 
 ------------------------------------------------------------------------------------------------------
-## ftp client 
+## ftp client
 - on empty folder display . and .. file, delete this folder is in error
 - copy file just displayed preparing when doing the copy no callback and progress
 - ftp pcopy is slow with peak of copy and long period without activities
 
 ------------------------------------------------------------------------------------------------------
-## Connection manager 
+## Connection manager
 clicking connect is validating information for the same amout of time than validating Windows Hello
 Don't need to display Windows hello right after connection manager connect button
 
 ------------------------------------------------------------------------------------------------------
-## Connection manager 
+## Connection manager
 in navigation bar display emoji in color
 
 
 ------------------------------------------------------------------------------------------------------
-## preference dialog 
+## preference dialog
 if settings is dirty pressing esc display a message first to ask user if he want to save changes before closing the dialog box
 if no changes done pressing esc close the dialog box directly without message
 
@@ -51,13 +65,13 @@ propose to replace UpdateWindow by InvalidateRect + UpdateWindow when needed to 
 
 -----------------------------------------------------------------------------------------------------
 ## review behavior for connecting / disconnecting  drives
-- when removing an usb key browse by a pane I don't see the dsiconnected message 
+- when removing an usb key browse by a pane I don't see the dsiconnected message
 - when the other pane is browsing the same network drive and the network drive is disconnected I don't see the disconnected message
 
 
 
 -------------------------------------------------------------------------------------------------------
-# for copying a selection of files from one pane to another 
+# for copying a selection of files from one pane to another
 the message must display the folder source when there is multiple items to copy
 example: Copy 23 files, 2 folders  from C:\folder\ to D:\otherfolder\
 
@@ -68,7 +82,7 @@ example: Copy C:\folder\file.txt to D:\otherfolder\
 
 
 -------------------------------------------------------------------------------------------------------
-# FolderView and callback mechanism review 
+# FolderView and callback mechanism review
 FolderWatching is not perfectly managed in FolderView leading to some unexpected behavior in some cases
 
 the watch callback must be enhanced with the type of operation (create, delete, rename, modify, etc ...)
@@ -76,40 +90,40 @@ the watch callback must be enhanced with the type of operation (create, delete, 
 interface __declspec(novtable) IFileSystemDirectoryWatchCallback
 {
     virtual HRESULT STDMETHODCALLTYPE FileSystemDirectoryChanged(const FileSystemDirectoryChangeNotification* notification, void* cookie) noexcept = 0;
-     
+
     // this method are optional and could be called depending on the notification type
-    virtual HRESULT STDMETHODCALLTYPE FileCreated(const wchar_t* fileName, void* cookie) noexcept = 0;     
-    virtual HRESULT STDMETHODCALLTYPE FileDeleted(const wchar_t* fileName, void* cookie) noexcept = 0;     
-    virtual HRESULT STDMETHODCALLTYPE FileRenamed(const wchar_t* oldFileName, const wchar_t* newFileName, void* cookie) noexcept = 0;     
+    virtual HRESULT STDMETHODCALLTYPE FileCreated(const wchar_t* fileName, void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE FileDeleted(const wchar_t* fileName, void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE FileRenamed(const wchar_t* oldFileName, const wchar_t* newFileName, void* cookie) noexcept = 0;
 };
 ```
 
-when focus is on an item and a delete callback notification occur the focus move to the next item if there is any or stay on the last one if there no more next item 
+when focus is on an item and a delete callback notification occur the focus move to the next item if there is any or stay on the last one if there no more next item
 when focus is on an item and a create callback notification occur the focus stay on the current item
 when focus is on an item and a rename callback notification occur the focus stay on the current item and move the view to the new focus link to the sort  (filter, sort, etc ...)
 
-global rule: focus stay on item or move to next 
+global rule: focus stay on item or move to next
 
 review all code and spec to ensure this behavior is implemented everywhere in the code and documented in `Specs/UI/UI_FolderView.md`
 
 -------------------------------------------------------------------------------------------------------
-# review Status window 
+# review Status window
 - when the window appear in dark theme and it's slow its start by a white window background not following the theme we need to do the same on this one than others to be sure to follow the theme always even when there is nothing to display yet
-- the speed limit button must be visible for the calculation phase I could want to set the speed limit when the number of items 
-- the speed will be apply from the begining of the copy 
+- the speed limit button must be visible for the calculation phase I could want to set the speed limit when the number of items
+- the speed will be apply from the begining of the copy
 
 
 
 -------------------------------------------------------------------------------------------------------
 # review the cache mechanism in FolderView
-when navigating to a folder in one pane after navigation finish if I'm navigating to the same folder in the other pane the content must  loaded from cache. Seems this is not working properly now. for example I'm seeing a loadding in the first go to the other pane even if the folder was already loaded in the first pane and I'm seeing another loadding in this second pane 
+when navigating to a folder in one pane after navigation finish if I'm navigating to the same folder in the other pane the content must  loaded from cache. Seems this is not working properly now. for example I'm seeing a loadding in the first go to the other pane even if the folder was already loaded in the first pane and I'm seeing another loadding in this second pane
 
 
 
 -------------------------------------------------------------------------------------------------------
 # IHost modification review
 IHost must implement
-- Navigate to a folder in a pane option are FocusedPane, LeftPane, RightPane and a path 
+- Navigate to a folder in a pane option are FocusedPane, LeftPane, RightPane and a path
 - FocusItem in a pane option are FocusedPane, LeftPane, RightPane and an index to focus in the pane (could be a navigate to the path and focusing the item the display will move accordingly to show the focused item)
 - ChangeSelection in a pane option are FocusedPane, LeftPane, RightPane and a list of indexes to select in the pane with option to add to selection, remove from selection, replace selection
 - GetCurrentFolder in a pane option are FocusedPane, LeftPane, RightPane returning the current folder path in the pane
@@ -167,11 +181,11 @@ review all code using IHost to use these new methods instead of doing the same c
 ## cmd/pane/zoomPanel
 
 -------------------------------------------------------------------------------------------------------
-# PERFORMANCE review FolderView 
-# Red Salamander Performance Optimization Plan
+# PERFORMANCE review FolderView
+# RedSalamander Performance Optimization Plan
 
-**Date:** January 13, 2026  
-**Status:** Pending Implementation  
+**Date:** January 13, 2026
+**Status:** Pending Implementation
 **Overall Assessment:** The codebase demonstrates excellent performance practices. This plan identifies targeted optimizations for further improvement.
 
 ---
@@ -324,7 +338,7 @@ return CompareStringOrdinal(a.name.c_str(), -1, b.name.c_str(), -1, TRUE) == CST
 
 **Current Mitigation:** The codebase has `_layoutValid` flags - ensure they're used consistently.
 
-**Solution:** 
+**Solution:**
 1. Cache layouts more aggressively
 2. Batch layout creation
 3. Reuse layout objects when only text changes
@@ -610,13 +624,20 @@ for (const auto& source : sources)
 
 
 ------------------------------------------------------------------------------------------------------
-# DONE 
+# DONE
+
+
+
+------------------------------------------------------------------------------------------------------
+## DONE Rename dialog
+- When the text is too long the text in dialog go outside the editbox
+- the dialog must be horizontally resizable to be able to resize it and see the full text when the text is too long
 
 ## DONE cmd/pane/hotPaths
-Hot paths are shortcut to saved path 
-Ctrl + virtual key from 1 to 0 navigate to the saved path 
+Hot paths are shortcut to saved path
+Ctrl + virtual key from 1 to 0 navigate to the saved path
 Ctrl + Shift virtual key from 1 to 0: assign the current path to the slot (if something already there displayed it and ask to replace)
-in settings there is a dedicated page for the hot path and shorcut management 
+in settings there is a dedicated page for the hot path and shorcut management
 hot path are editable in this settings page
 you could checked Hot Paths will be displayed in the Change Drive menu in a dedicated sub menu if any are check.
 at the bottom of the setting page there is a toggle to Open this page preference page when Hot Path is assigned from panel (Ctrl + Shift + key)
@@ -626,7 +647,7 @@ at the bottom of the setting page there is a toggle to Open this page preference
     exit fullscreen mode when pressing again the shortcut or pressing ESC key
 
 ## DONE cmd/app/openLeftDriveMenu
-  open left drive menu 
+  open left drive menu
 
 ## DONE cmd/app/openRightDriveMenu
   open right drive menu
@@ -664,7 +685,7 @@ Options
 ```
 
 ------------------------------------------------------------------------------------------------------
-# DONE Command to implement 
+# DONE Command to implement
 
 ** cmd/app **
 
@@ -690,7 +711,7 @@ Subdirectories options --------------------------------------------
 
  [ OK ]   [ Cancel ] [ More ]
 ```
-  
+
   when pressing More button another dialog is wider with more options above the button under ' Compare subdirectories'
 ```text
 Additional Options --------------------------------------------
@@ -707,8 +728,8 @@ More options --------------------------------------------
 ## DONE Space Viewer  display review
 - How could I have Scan  Completed and the progress running on the same folder in the same time ?
 
-- review the path display in the space viewer 
-the path must be middle ellipsis want to see the last folder is possible 
+- review the path display in the space viewer
+the path must be middle ellipsis want to see the last folder is possible
 
 - the difference between scan folder an not scan folder is not clear enough
 propose a better way to display that like text in the diagonal displaying "Scan Incomplete" or nothing when this is completed
@@ -719,9 +740,9 @@ need to be more visible with a clear fiffernce between file and folder display
 - the space to display the name in each square must always have minimum one line visible to be able to read the beginning of the name when the suqare is big enough to display one line of text
 
 ------------------------------------------------------------------------------------------------------
-## DONE in all plugin with selection combobox 
+## DONE in all plugin with selection combobox
 - if combo open esc key close the combo
-- if combo close esc key move the focus to main window 
+- if combo close esc key move the focus to main window
 - after select an item to the combo focus must move to the main window
 
 
@@ -729,11 +750,11 @@ need to be more visible with a clear fiffernce between file and folder display
 # DONE S3 File System
 - I want a 2 new file system plugin for S3 and S3Table in FileSystemS3 dll
 - implement by using S3-crt example: https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/cpp/example_code/s3-crt
-- first root of the s3 is the bucket list 
+- first root of the s3 is the bucket list
 - after list folder and file in the bucket
-- add all needed setting in preferences for this plugin 
+- add all needed setting in preferences for this plugin
 - add all the needed information in the connection manager
-- an option "S3" and "S3 Table" in the list of available option 
+- an option "S3" and "S3 Table" in the list of available option
 - save secret as needed in credential vault
 global documentation and code : https://github.com/aws/aws-sdk-cpp
 exmaples : https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/cpp/example_code/
@@ -741,25 +762,25 @@ exmaples : https://github.com/awsdocs/aws-doc-sdk-examples/tree/main/cpp/example
 implement all that by respecting AGENTS.md and skills in .github/skills
 
 ------------------------------------------------------------------------------------------------------
-# DONE Filesystem copy/move to and from 
+# DONE Filesystem copy/move to and from
 - each plugin must explicitely define from and to plugin for copy / move if they are accepting and understand path
-- each plugin must declare what they are accepting for rename / delete properties 
-- other than filesystem implement a properties interfadce to get the detail of the item 
+- each plugin must declare what they are accepting for rename / delete properties
+- other than filesystem implement a properties interfadce to get the detail of the item
 
 -------------------------------------------------------------------------------------------------------
-# DONE refactor FileSystem 
-need to have better separation .h and .cpp 
+# DONE refactor FileSystem
+need to have better separation .h and .cpp
 one header per external interface implemented in FileSystem module
 for example IFileSystem will be implemented in FileSystem.h & FileSystem.cpp
 IFileSystemDirectoryWatch will be implemented in FileSystemDirectoryWatch.h & FileSystemDirectoryWatch.cpp
 etc ...
-if needed we could have other header/cpp file pair to split big files 
+if needed we could have other header/cpp file pair to split big files
 
 ------------------------------------------------------------------------------------------------------
-# DONE Red Salamander Performance Optimization Plan
+# DONE RedSalamander Performance Optimization Plan
 
-**Date:** January 13, 2026  
-**Status:** Pending Implementation  
+**Date:** January 13, 2026
+**Status:** Pending Implementation
 **Overall Assessment:** The codebase demonstrates excellent performance practices. This plan identifies targeted optimizations for further improvement.
 
 ---
@@ -912,7 +933,7 @@ return CompareStringOrdinal(a.name.c_str(), -1, b.name.c_str(), -1, TRUE) == CST
 
 **Current Mitigation:** The codebase has `_layoutValid` flags - ensure they're used consistently.
 
-**Solution:** 
+**Solution:**
 1. Cache layouts more aggressively
 2. Batch layout creation
 3. Reuse layout objects when only text changes
@@ -1172,14 +1193,14 @@ for (const auto& source : sources)
 
 ------------------------------------------------------------------------------------------------------
 
-## DONE auto suggest combo 
-change the UI of the autosugest for folder to have a modern look like the one in settings dropdown 
+## DONE auto suggest combo
+change the UI of the autosugest for folder to have a modern look like the one in settings dropdown
 ### Navigation polish
 - Autosuggest for `nav:` with connection names (preview: protocol + host + user).
 - Add a first-class entry point (menu/command palette): "Connections..."
 - no back up to @conn the root is @conn/something/
 - review nav to  add is needed a last '/' or '\' for proper navigation
-- autosugest must work cross filesystem if I'm typing 'f' I want to see autosuggest 'ftp:' 'ftps:' and after '@' today sugest '@conn/' after suggest the connection from connection manager or if allready type 
+- autosugest must work cross filesystem if I'm typing 'f' I want to see autosuggest 'ftp:' 'ftps:' and after '@' today sugest '@conn/' after suggest the connection from connection manager or if allready type
 - autosuggest folders based on already type connection if it is working (if not silent failing to let the user continue typing)
 
 
@@ -1397,7 +1418,7 @@ HRESULT StartEnumerationNt(FilesInformation& info, const std::wstring& path) noe
 
 
 ------------------------------------------------------------------------------------------------------
-## DONE icon in menu 
+## DONE icon in menu
 use sehoegoe fluent icon font to display icons in menu instead of using image resources
 documentation here:
 https://learn.microsoft.com/en-us/windows/apps/design/style/segoe-fluent-icons-font
@@ -1458,7 +1479,7 @@ https://github.com/microsoft/fluentui-system-icons/blob/main/icons_filled.md
 - Add a first-class entry point (menu/command palette): "Connections..."
 - no back up to @conn the root is @conn/something/
 - review nav to  add is needed a last '/' or '\' for proper navigation
-- autosugest must work cross filesystem if I'm typing 'f' I want to see autosuggest 'ftp:' 'ftps:' and after '@' today sugest '@conn/' after suggest the connection from connection manager or if allready type 
+- autosugest must work cross filesystem if I'm typing 'f' I want to see autosuggest 'ftp:' 'ftps:' and after '@' today sugest '@conn/' after suggest the connection from connection manager or if allready type
 - autosuggest folders based on already type connection if it is working (if not silent failing to let the user continue typing)
 
 ### Suggested implementation order
@@ -1479,10 +1500,10 @@ https://github.com/microsoft/fluentui-system-icons/blob/main/icons_filled.md
 
 -------------------------------------------------------------------------------------------------------
 # DONE review preference dialog box
-- as plugin manager preferences must theme 
+- as plugin manager preferences must theme
 - this a dialog with a list on the left for each category of preferences
 - a pane on the right to edit the preferences
-- same logic as plugin manager for toggle and option 
+- same logic as plugin manager for toggle and option
 - add in the schema all the display name and description for the settings to be able to display them in the preference dialog box
 - share code with plugin managment dialog box when possible to avoid code duplication
 for RedSalamander the section on the right are:
@@ -1492,17 +1513,17 @@ for RedSalamander the section on the right are:
   - Editors : to edit extension and associated editor plugin
   - Keyboard : edit all keyboard shortcut
   - Mouse : edit all mouse shortcut
-  - Themes : to show / copy and edit custom themes 
+  - Themes : to show / copy and edit custom themes
   - Plugins : list of installed plugins to enable/disable/configure
   - Advanced : advanced preferences for expert user only
 
 - need a new custom control to edit the color with a coor picker or a text box to enter the color in hex format #RRGGBB or #AARRGGBB
 -  for Theme there a combo to display all themes installed in the themes folder plus default system, light, dark, rainbow themes displayed with their name
-  all value are displayed and editable according to their type (bool, int, string, enum, etc ...) 
-  There is a button to load a theme from a file to let edit ie 
+  all value are displayed and editable according to their type (bool, int, string, enum, etc ...)
+  There is a button to load a theme from a file to let edit ie
   There is a button to apply it temporarily to see the result before applying it permanently
-  There is a button specific to Theme pane to save the new theme in a dedicated file 
-  
+  There is a button specific to Theme pane to save the new theme in a dedicated file
+
   when pressing OK all settings are saved and applied
   when pressing Cancel all settings are discarded
   when pressing Apply all settings are saved and applied but the dialog stay open
@@ -1518,9 +1539,9 @@ for RedSalamander the section on the right are:
 
 ------------------------------------------------------------------------------------------------------
 
-## DONE new pluginviewer 
+## DONE new pluginviewer
 a newplugin in the Plugins folder this is a plugin to save in the Plugins folder to the destination folder of the main application
-ViewerPE is a viewer for PE format for tthe file extension     
+ViewerPE is a viewer for PE format for tthe file extension
 - *.cpl
 - *.dll
 - *.drv
@@ -1582,7 +1603,7 @@ if not present display a nice message to the user to install VLC media player wi
 
 
 -------------------------------------------------------------------------------------------------------
-# DONE unfocus pane focused item 
+# DONE unfocus pane focused item
 today the unfocus pane the selection item are dimmed but still selected
 keep that behavior
 the focus item on the unfocus pane dont have background highlight but still have the focus rectangle around the item in a thinner way to show the item with focus in the unfocus pane
@@ -1593,7 +1614,7 @@ when refocusing the pane the focus rectangle must be redrawn in normal way to sh
 
 ------------------------------------------------------------------------------------------------------
 ## DONE Review ViewerImgRaw plugin
-- at the bottom it must be a real status bar 
+- at the bottom it must be a real status bar
 - display if you are displaying the jpg or the raw when there is both
 - display the exif al:so for jpeg
 - use the jpeg information to display the picture with the correct orientation
@@ -1652,12 +1673,12 @@ this plugin:
 make a plan to implement this plugin by respecting AGENTS.md guidelines for application development
 
 ------------------------------------------------------------------------------------------------------
-## DONE Review show folder history 
+## DONE Review show folder history
 menu open is not nice with random position when we are clicking on show folder history button
 propose to have a fixed position for this menu
-if string + gap and check mark are shorter than the pane size  display a fixed position bellow the button from right to left of the pane 
-if string + gap and check mark are bigger than the pane size display a fixed position bellow the button from left to right of the window 
-if string + gap and check mark are bigger than the window size display same fixed position than above plus middle ellipsis for the path with priolrity to first and last segment of the path 
+if string + gap and check mark are shorter than the pane size  display a fixed position bellow the button from right to left of the pane
+if string + gap and check mark are bigger than the pane size display a fixed position bellow the button from left to right of the window
+if string + gap and check mark are bigger than the window size display same fixed position than above plus middle ellipsis for the path with priolrity to first and last segment of the path
 
 -------------------------------------------------------------------------------------------------------
 # DONE When we are in incremental search mode need a graphical indicator
@@ -1677,13 +1698,13 @@ pressing enter in edit mode in the navigation need to add the focus in the pane 
 -------------------------------------------------------------------------------------------------------
 # DONE review FolderView Backspace
 Backspace on a empty folder view to go to the parent directory of the current folder displayed in the pane
-Backspace must always work in folder to go up on directory 
+Backspace must always work in folder to go up on directory
 
 -------------------------------------------------------------------------------------------------------
 # DONE review Alert Info architecture and implementation
 review all alert info architecture and implementation in the application and plugins
 4 types of messages
-- modal in a pane 
+- modal in a pane
 - modal in the application window
 - modeless in a pane
 - modeless in the application window
@@ -1698,34 +1719,34 @@ review all current implementation in the code and propose a plan to implement th
 Ctrl + backspace is not removing the word before the cursor in the navigation bar
 
 -----------------------------------------------------------------------------------------------------
-## DONE Error Message display the same way with 
+## DONE Error Message display the same way with
 review all error message display in the application and plugins
 propose to have a coherent way to display error message in the application and plugins
 example: message in the pane displayed in a red box with an icon on the left and the text on the right
 this code must be shared between the application and plugins to ensure a coherent display
-this display must add an optional  cross top right with highlight to close the message  
-the display could have optionalbutton OK/Cancel Yes/No 
+this display must add an optional  cross top right with highlight to close the message
+the display could have optionalbutton OK/Cancel Yes/No
 
 review all error message display in the application and plugins
 propose a plan to implement this feature
 
 -----------------------------------------------------------------------------------------------------
 ## Review all mount file systems in the application
-When we are at the root of a mount file system Backspace must go to the previous file system in the previous folder 
+When we are at the root of a mount file system Backspace must go to the previous file system in the previous folder
 for example
-- user navigate to 7z:/ we must go back to C:\folder\ where we've mount C:\folder\archive.zip 
+- user navigate to 7z:/ we must go back to C:\folder\ where we've mount C:\folder\archive.zip
 
 ------------------------------------------------------------------------------------------------------
 ## DONE Navigation bar active /inactive state display
 review the navigation bar active / inactive state display
 propose a better way to display the active / inactive state of the navigation bar
-example: all color of the navigation bar change when active / inactive 
+example: all color of the navigation bar change when active / inactive
 
 the color must follow the theme (light / dark / rainbow)
 propose a plan to implement this feature
 
 -------------------------------------------------------------------------------------------------------
-# DONE Global Menu update 
+# DONE Global Menu update
 the applicatiuon global menu must be updated to add new commands and organize them better
 review all menu entries the  new organization of the menu entries
 all menu enties must be link to command and display name in ressources for localization and the current shortcut if any
@@ -1746,7 +1767,7 @@ Top level menu are Left, Files, Edit, Commands, Plugins, View, Right, Help (righ
       - Brief
       - Detailed
       -------------------------
-      - Sort By > 
+      - Sort By >
           - None
           - Name
           - Extension
@@ -1841,13 +1862,13 @@ Top level menu are Left, Files, Edit, Commands, Plugins, View, Right, Help (righ
           ---------------------------------
           - User Menu >
               - (user menu items here)
-          - Open File Explorer > 
+          - Open File Explorer >
               - (all list of common folders from file explorer here)
 - Plugins : plugin operations (list of plugins, plugin manager, etc ...)
       - Plugin Manager...
       ---------------------------------
       - (list of installed plugins here to enable/disable/configure)
-- View : application options (settings, themes, etc ...)      
+- View : application options (settings, themes, etc ...)
       - Theme >
           - High Contrast (System)
           -----------------------------
@@ -1873,11 +1894,11 @@ Top level menu are Left, Files, Edit, Commands, Plugins, View, Right, Help (righ
           ------------------------------
           - [] Show Status Bar (Left)
           - [] Show Status Bar (Right)
-      - [] Show Function Bar 
-      - [] Show Menu 
+      - [] Show Function Bar
+      - [] Show Menu
       ------------------------------
       - Preferences...
- 
+
 - Right : menu for right pane same as left pane
 - Help : help menu (documentation, about, etc ...)
       - Display Shortcuts...
@@ -1885,11 +1906,11 @@ Top level menu are Left, Files, Edit, Commands, Plugins, View, Right, Help (righ
       - About...
 
 review all menu entries to ensure they are in the right menu
-propose new menu entries to add to the menu if something is missing 
+propose new menu entries to add to the menu if something is missing
 add between [] the command in front of each menu entry to link it to the command system
 list all menu entries where the command is missing
 list all command without mernu entry
-review the specs create a new `Specs/UI/UI_CommandMenuKeyboard.md` to document the new menu structure and merge with `Specs/UI/UI_KeyboardManagement.md` in it 
+review the specs create a new `Specs/UI/UI_CommandMenuKeyboard.md` to document the new menu structure and merge with `Specs/UI/UI_KeyboardManagement.md` in it
 you could remove `Specs/UI/UI_KeyboardManagement.md` if all is in `Specs/UI/UI_CommandMenuKeyboard.md`
 propose a plan to implement this Spec by respecting AGENTS.md guidelines for application development
 I want just a new spec no code modification yet
@@ -1899,10 +1920,10 @@ I want just a new spec no code modification yet
 ## DONE File System Dummy plugin review
 Need to have better fake file genration to test the application with large file system
 - Text file must display valid random text,  always the same text for the same file using a hash on the file name and metadata generated
-- csv also 
+- csv also
 - json also
 - xml also
-- jpg must provide a random picture in proper jpg format 
+- jpg must provide a random picture in proper jpg format
 - png must provide a random picture in proper png format
 - etc ...
 same for all file format we could generate in a proper format to test the viewer
@@ -1922,7 +1943,7 @@ who is using GetConfigurationSchema ?
 - plugin manager mainly to get the configuration schema of the plugin
 - today schema is UTF16 encoded
 - proposing to change GetConfigurationSchema to return std::string directly encoded in UTF8
-- review all the std::string utf8 = Utf8FromUtf16(schemaJson); lines in the code 
+- review all the std::string utf8 = Utf8FromUtf16(schemaJson); lines in the code
 - Why returning wide string to after transform it in UTF8 ?
 - proposing to return directly std::string from GetConfigurationSchema to avoid useless conversion
 - other example:
@@ -1944,7 +1965,7 @@ make a review an propose changes to have UTF8 whne this is pertinant like JSON a
 ## DONE Rename Dialog review
 review the rename dialog to improve user experience
 - when renaming a file select only the name part without the extension
-- the text in editbox must be vertical align 
+- the text in editbox must be vertical align
 
 
 ------------------------------------------------------------------------------------------------------
@@ -1954,8 +1975,8 @@ propose to add more information in the status bar
 when you know the max numbers of lines in the file loaded in the text viewer display it in the status bar
 display 'unknown' when the number of lines is not known
 example:
-- FS: File System Detected: UTF-8 (guess) Active: UTF-8 Size: 762 KB Lines: 1-47 of 1234 
-- FS: File System Detected: UTF-8 (guess) Active: UTF-8 Size: 762 KB Lines: 1-47 of unknown 
+- FS: File System Detected: UTF-8 (guess) Active: UTF-8 Size: 762 KB Lines: 1-47 of 1234
+- FS: File System Detected: UTF-8 (guess) Active: UTF-8 Size: 762 KB Lines: 1-47 of unknown
 
 
 ------------------------------------------------------------------------------------------------------
@@ -1971,36 +1992,36 @@ command bar application window
  | [F1] something       [F2] Command         [F3] other Comand    [F4] else             ...                           |
  |                                                                                               [keys modificators]  |
  └────────────────────┴────────────────────┴────────────────────┴────────────────────┴─ ...    ───────────────────────┘
-  - when the user press the key modificator (CTRL, SHIFT, ALT and their compinaisons) the display change to show current shorcut 
+  - when the user press the key modificator (CTRL, SHIFT, ALT and their compinaisons) the display change to show current shorcut
   - the key modifcator (Ctrl | Shift | Ctrl + Shift ... ) zone is bottom right align and optional is there is not enough space we have to hide it
   keys the corresponding zone is highlighted
   - is the windows is too small to display all the indicators the display is truncated
   Default shortcut name for direct and moficators (⊘ is when there is no shortcut)
-  - F1  : NONE: ⊘             | CONTROL: drive information | ALT: open left drive menu         | SHIFT: ⊘                  | CONTROL+SHIFT: ⊘                        | ALT+SHIFT: ⊘ 
-  - F2  : NONE: Rename         | CONTROL: change attributes | ALT: open right drive menu        | SHIFT: ⊘                  | CONTROL+SHIFT: save selection           | ALT+SHIFT: ⊘  
-  - F3  : NONE: View           | CONTROL: sort by name      | ALT: alternate view               | SHIFT: open current folder | CONTROL+SHIFT: view width               | ALT+SHIFT: ⊘ 
+  - F1  : NONE: ⊘             | CONTROL: drive information | ALT: open left drive menu         | SHIFT: ⊘                  | CONTROL+SHIFT: ⊘                        | ALT+SHIFT: ⊘
+  - F2  : NONE: Rename         | CONTROL: change attributes | ALT: open right drive menu        | SHIFT: ⊘                  | CONTROL+SHIFT: save selection           | ALT+SHIFT: ⊘
+  - F3  : NONE: View           | CONTROL: sort by name      | ALT: alternate view               | SHIFT: open current folder | CONTROL+SHIFT: view width               | ALT+SHIFT: ⊘
   - F4  : NONE: Edit           | CONTROL: sort by extension | ALT: exit                         | SHIFT: edit new            | CONTROL+SHIFT: edit width               | ALT+SHIFT: ⊘
   - F5  : NONE: Copy           | CONTROL: sort by time      | ALT: pack                         | SHIFT: ⊘                  | CONTROL+SHIFT: save selection            | ALT+SHIFT: ⊘
-  - F6  : NONE: Move           | CONTROL: sort by size      | ALT: unpack                       | SHIFT: ⊘                  | CONTROL+SHIFT: load selection            | ALT+SHIFT: ⊘ 
+  - F6  : NONE: Move           | CONTROL: sort by size      | ALT: unpack                       | SHIFT: ⊘                  | CONTROL+SHIFT: load selection            | ALT+SHIFT: ⊘
   - F7  : NONE: Make directory | CONTROL: change case       | ALT: find                         | SHIFT: change directory    | CONTROL+SHIFT: ⊘                        | ALT+SHIFT: ⊘
   - F8  : NONE: Delete         | CONTROL: ⊘                | ALT: ⊘                           | SHIFT: permanent delete    | CONTROL+SHIFT: ⊘                        | ALT+SHIFT: ⊘
-  - F9  : NONE: user menu      | CONTROL: refresh           | ALT: unpack                       | SHIFT: hot paths           | CONTROL+SHIFT: shares                    | ALT+SHIFT: ⊘ 
+  - F9  : NONE: user menu      | CONTROL: refresh           | ALT: unpack                       | SHIFT: hot paths           | CONTROL+SHIFT: shares                    | ALT+SHIFT: ⊘
   - F10 : NONE: menu           | CONTROL: compare           | ALT: Space View                   | SHIFT: context menu        | CONTROL+SHIFT: calculate directory sizes | ALT+SHIFT: context menu for current directory
   - F11 : NONE: Connect        | CONTROL: zoom panel        | ALT: list of opened files         | SHIFT: ⊘                  | CONTROL+SHIFT: full screen                | ALT+SHIFT: ⊘
-  - F12 : NONE: Disconnect     | CONTROL: filter            | ALT: list of working directories  | SHIFT: ⊘                  | CONTROL+SHIFT: ⊘                         | ALT+SHIFT: ⊘ 
+  - F12 : NONE: Disconnect     | CONTROL: filter            | ALT: list of working directories  | SHIFT: ⊘                  | CONTROL+SHIFT: ⊘                         | ALT+SHIFT: ⊘
   all function are overidable in the settings
-  
-there is other shortcuts not for function bar but for FolderView must be configurable and use the same logic 
+
+there is other shortcuts not for function bar but for FolderView must be configurable and use the same logic
     - VK_BACK   : NONE: up one directory
-    - VK_TAB    : NONE: swith pane focus 
-    - VK_RETURN : NONE: execute / open                    | CONTROL: brings filename to command line    | ALT: open properties dialog box | SHIFT:                                    | CONTROL+SHIFT: brings filename to command line      | CONTROL+ALT: ⊘ 
+    - VK_TAB    : NONE: swith pane focus
+    - VK_RETURN : NONE: execute / open                    | CONTROL: brings filename to command line    | ALT: open properties dialog box | SHIFT:                                    | CONTROL+SHIFT: brings filename to command line      | CONTROL+ALT: ⊘
     - VK_SPACE  : NONE: select + calculate directory size | CONTROL: brings current dir to command line | ALT: window menu                | SHIFT: quick search                       | CONTROL+SHIFT: brings current dir to command line   | CONTROL+ALT: ⊘
-    - VK_PRIOR  : NONE: page up                           | CONTROL: go up one folder                   | ALT: ⊘                         | SHIFT: select + page up                   | CONTROL+SHIFT: ⊘                                    | CONTROL+ALT: ⊘ 
-    - VK_NEXT   : NONE: page down                         | CONTROL: do down if on a folder             | ALT: ⊘                         | SHIFT: select + page down                 | CONTROL+SHIFT: ⊘                                    | CONTROL+ALT: ⊘ 
+    - VK_PRIOR  : NONE: page up                           | CONTROL: go up one folder                   | ALT: ⊘                         | SHIFT: select + page up                   | CONTROL+SHIFT: ⊘                                    | CONTROL+ALT: ⊘
+    - VK_NEXT   : NONE: page down                         | CONTROL: do down if on a folder             | ALT: ⊘                         | SHIFT: select + page down                 | CONTROL+SHIFT: ⊘                                    | CONTROL+ALT: ⊘
     - VK_END    : NONE: end                               | CONTROL: last file                          | ALT: ⊘                         | SHIFT: select + end                       | CONTROL+SHIFT: select + last file                    | CONTROL+ALT: ⊘
     - VK_HOME   : NONE: home                              | CONTROL: first file                         | ALT: ⊘                         | SHIFT: select + home                      | CONTROL+SHIFT: select + first file                   | CONTROL+ALT: ⊘
     - VK_LEFT   : NONE: left                              | CONTROL: scroll left, keep focus item       | ALT: history: backward          | SHIFT: select + left                      | CONTROL+SHIFT: inverse pane and keep focus item      | CONTROL+ALT: ⊘
-    - VK_UP     : NONE: up                                | CONTROL: scroll up, keep focus item         | ALT: up to selected item        | SHIFT: select + up                        | CONTROL+SHIFT: ⊘                                    | CONTROL+ALT: ⊘ 
+    - VK_UP     : NONE: up                                | CONTROL: scroll up, keep focus item         | ALT: up to selected item        | SHIFT: select + up                        | CONTROL+SHIFT: ⊘                                    | CONTROL+ALT: ⊘
     - VK_RIGHT  : NONE: right                             | CONTROL: scroll right, keep focust item     | ALT: history: forward           | SHIFT: select + right                     | CONTROL+SHIFT: inverse pane and keep focus item      | CONTROL+ALT: ⊘
     - VK_DOWN   : NONE: down                              | CONTROL: scroll down, keep focus item       | ALT: down to selected item      | SHIFT: select + down                      | CONTROL+SHIFT: ⊘                                    | CONTROL+ALT: ⊘
     - VK_INSERT : NONE: select/unselect                   | CONTROL: clipboard copy                     | ALT: copy path + name as text   | SHIFT: clipboard paste                    | CONTROL+SHIFT: copy path + file name                 | CONTROL+ALT: copy path as text | ALT+SHIFT: copy name as text
@@ -2016,7 +2037,7 @@ there is other shortcuts not for function bar but for FolderView must be configu
     - '8'       : NONE: quick search/type in command line | CONTROL: hot paths 8                        | ALT: panel mode                 | SHIFT: hot paths shift 8                  | CONTROL_SHIFT: define hot path 8                     | CONTROL+ALT: ⊘
     - '9'       : NONE: quick search/type in command line | CONTROL: hot paths 9                        | ALT: panel mode                 | SHIFT: hot paths shift 9                  | CONTROL_SHIFT: define hot path 9                     | CONTROL+ALT: ⊘
 
-all command as a text equivalent in the form cmd/something with a display name in ressources for localization each command as an unique id like today 
+all command as a text equivalent in the form cmd/something with a display name in ressources for localization each command as an unique id like today
 
 these shortcuts must be configurable in the settings
 there is a menu entry 'Preferences...' in the main menu 'File' before 'Exit' with a separator to open the settings dialog
@@ -2042,7 +2063,7 @@ there is button restore default to restore default shortcut configuration
 
 the settings are restored at application startup
 
-review all current shortcut review difference and show all differences you could find 
+review all current shortcut review difference and show all differences you could find
 prepare a plan for  this implementation by reviewing settings specs and code to be sure of a working solution with evolution in mind
 prepapre a plan to implement this feature by repecting AGENTS.md guidelines for application development
 show me the plan before starting the implementation
@@ -2050,7 +2071,7 @@ show me the plan before starting the implementation
 
 ------------------------------------------------------------------------------------------------------
 ## DONE loading in viewer text
-not respecting the rainbow theme for the loader 
+not respecting the rainbow theme for the loader
 still a white window when creating the text viewer
 review all window created if the theme is dark all window must be created with a default dark background the same for light theme
 propose a plan to implement this feature
@@ -2058,9 +2079,9 @@ propose a plan to implement this feature
 
 
 ------------------------------------------------------------------------------------------------------
-## DONE Pane Status bar 
-do be better viewing of the current pane the status bar has a line (2dips) on top with a color to show the focus state of the pane 
-in rainbow mode this line change color each time 
+## DONE Pane Status bar
+do be better viewing of the current pane the status bar has a line (2dips) on top with a color to show the focus state of the pane
+in rainbow mode this line change color each time
 
 ------------------------------------------------------------------------------------------------------
 ## DONE Navigation bar
@@ -2073,7 +2094,7 @@ example:
 - user types `fk:/some/path` to navigate to fk plugin
 - user types `7z:/archive/folder/archive.zip` to navigate to 7z plugin
   little bit more complex
-  type 7z: start to suggest folders in filesystem and all possible file in each folder corresponding to possible extension in the settings 
+  type 7z: start to suggest folders in filesystem and all possible file in each folder corresponding to possible extension in the settings
   `7z:/archive/folder/archive.zip|` when typing after the zip it must suggest folders inside the zip file
 
 ------------------------------------------------------------------------------------------------------
@@ -2091,12 +2112,12 @@ display a message in the create folder dialog if the user try to use invalid cha
 
 ## DONE Viewer Space
 - when scanning display the number of files and folder explore and the total size computed in short and in Bytes)
-(right align) procesing: the current folder without path 
+(right align) procesing: the current folder without path
 example:
 
 ```text
-Scaning C\aFolder\anotherFolder  (right align) procesing: thisfolder 
-1234 items (56 folders, 1178 files), 
+Scaning C\aFolder\anotherFolder  (right align) procesing: thisfolder
+1234 items (56 folders, 1178 files),
 1.23 GB (1,234,567,890 bytes)
 ```
 
@@ -2106,16 +2127,16 @@ Scaning C\aFolder\anotherFolder  (right align) procesing: thisfolder
 
 - when scanning display the current folder being scanned
 
-- double click on other space start the explore this part to add the information 
+- double click on other space start the explore this part to add the information
 
 - when drill down if other take too much area launch the scan to display it in detail
- 
-- Other display today is 
+
+- Other display today is
 ```text
 Other(345 items)
 123 GB
 ```
-must be 
+must be
 ```text
 Other item (345 items)
 45 folders, 300 files
@@ -2143,7 +2164,7 @@ Other item (345 items)
 - when scanning a folder having a small animùation near the name to say this part of the tree is not completed yet (like a small rotating icon)
   to show the user we are still working on it
 
-- when there is multiple square in one quare we need to display one line of text to be readable to have the name of the folder/file. Today the text is cut in the middle 
+- when there is multiple square in one quare we need to display one line of text to be readable to have the name of the folder/file. Today the text is cut in the middle
   propose to display only one line of text per square even if there is multiple folder/file in it
   and display the number of items in this square when there is multiple items
   example: `3 items` or `5 folders` or `2 files` or `1 folder, 3 files` etc ...
@@ -2161,18 +2182,18 @@ check current spec propose modifications if needed
 ------------------------------------------------------------------------------------------------------
 ## DONE Review FileSystem Path Display and Navigation Behavior
 
-we are passing path with the short name 
+we are passing path with the short name
 in         const HRESULT enumHr = fileSystem->ReadDirectoryInfo(item.path.c_str(), filesInformation.put());
-this is not expecting 
+this is not expecting
 - fk: start at /
-- same for 7Z start at / as root 
-you don't need to add the shortid in 
-review globally Navigation and plugin 
+- same for 7Z start at / as root
+you don't need to add the shortid in
+review globally Navigation and plugin
 the shortId is in the ViewerOpenContext
 the display in navigation don't need to display the shortID
-today in FileSystemDummy in Navigation we are displaying 'fk:' this is not exepected 
-the filesytemId must be displayed through and Icon in the hamburger drive  menu icon 
-you need to lreview Navigation and plugin and implementation for doing that 
+today in FileSystemDummy in Navigation we are displaying 'fk:' this is not exepected
+the filesytemId must be displayed through and Icon in the hamburger drive  menu icon
+you need to lreview Navigation and plugin and implementation for doing that
 the expected beahavior :
 - on a win32 filesystem, drive menu display the option in the path I see 'c: > afolder > anotherFolder' when I'm editing I see c:\afolder\anotherFolder
 - in fk, drive menu display a icon, the menu display (File System Dummy' in disabled state) the display is '/ > aFolder > anotherFolder' when I'm editing i see 'fk:/aFolder/anotherFolder'
@@ -2180,20 +2201,20 @@ the expected beahavior :
 this way I know the file system used display is homogenous and edit could continue to navigate in the file system with auktosuggestion or navigate to another file system by start typing the shortId and ':' an a path in this context with autosuggest
 
 
-example 
+example
 I'm on a drive c:\aFolder I see a zip double click on it I'm navigating to 7z filesytem and display '/' the navigation bar display 7z scope for the file system
 
 the navivation edit must be smarter is I'm on filesysystem
 
 - I'm on a regular file system I start typing 7z:./a.zip this is to mount 7z with this zip (autosuggest must working to suggest the file in this context)
 - same for :
- - 7z:a.zip  
- - 7z:c:/afolder/a.zip  
+ - 7z:a.zip
+ - 7z:c:/afolder/a.zip
 - 7z:\\acomputer\afolder\a.zip
 - 7z:a.zip
 
-for fk: today there is no mount context so 
-fk:/aFolder navigate in fk file system to aFolder folder 
+for fk: today there is no mount context so
+fk:/aFolder navigate in fk file system to aFolder folder
 
 ## Navigation Menu Cross-Plugin Navigation Support
 review the INavigationMenuCallback interface to support cross-plugin navigation requests
@@ -2212,11 +2233,11 @@ example:
 - user clicks on navigation menu item to navigate to another plugin
 - user clicks on navigation menu item to navigate to the same plugin but another path
 
-on the edit when start typing we must be able to detect the plugin to use based on the path typed by the user and autosuggest it 
+on the edit when start typing we must be able to detect the plugin to use based on the path typed by the user and autosuggest it
 review the current spec propose modifications if needed
 exmaple of path to detect the plugin to use:
 - start by a letter propose all plugin containing this letter display short Id and display name for the plugin in autosuggest list
-- a letter and `:` we are on file plugin 
+- a letter and `:` we are on file plugin
 - a plugin shortid + `:` we are on this plugin
 example:
 - `file:\\aComputer\Users` to navigate to file plugin
@@ -2225,7 +2246,7 @@ example:
 - `7z:/archive/folder/archive.zip` to navigate to 7z plugin
 - `fk:/some/path` to navigate to fk plugin
 
-the autrosuggest of the folder when typing must use plugin interface to list directory 
+the autrosuggest of the folder when typing must use plugin interface to list directory
 No direct call to filesystem from the host application
 review the current spec propose modifications if needed
 
@@ -2299,7 +2320,7 @@ THROW_LAST_ERROR_IF(!createFunc);
 propose to use LoadLibrary instead of LoadLibraryW everywhere in the code
 review erro handling after LoadLibrary calls to ensure proper error handling
 example:
-```cpp  
+```cpp
 const std::filesystem::path pluginPath = exeDir / L"FileSystem.dll";
 wil::unique_hmodule plugin(LoadLibrary(pluginPath.c_str()));
 if (! plugin)
@@ -2316,16 +2337,16 @@ if (! plugin)
 The current IFileSystemFileIO interface is not coherent with the other file system interfaces
 propose the following changes to harmonize the interfaces
 - rename IFileSystemFileIO to IFileSystemIO
-- move GetItemAttributes to the new IFileSystemIO a nd rename it as GetAttributes with the same logic for path 
-review the code using that an adapt 
+- move GetItemAttributes to the new IFileSystemIO a nd rename it as GetAttributes with the same logic for path
+review the code using that an adapt
 
 ---------------------------------------------------------------------------
 ## DONE Text/Hex viewer using DirectX for display
 
 The current text/hex viewer plugins are using GDI+ to display the content of the file loaded in the buffer.
-you miss a big part of the plan 
+you miss a big part of the plan
 
-- all the display is in DirectX to be faster as possible 
+- all the display is in DirectX to be faster as possible
 - the display must manage the caret position and selection in the buffer loaded only
 - Selected text must be copyable to clipboard
 - scrolling must be smooth and fast
@@ -2335,10 +2356,10 @@ you miss a big part of the plan
 - the hex viewer must implemented dpi change on the fly
 - the text viewer must manage large file without loading everything in memory
 - the hex viewer must manage large file without loading everything in memory
-- line numbers must be displayed if enabled in options 
-- beware of the scrolling managment to ensure they are coherent with the file 
+- line numbers must be displayed if enabled in options
+- beware of the scrolling managment to ensure they are coherent with the file
 
-in summary the purpose is to have a reader faster than light to display file of any size 
+in summary the purpose is to have a reader faster than light to display file of any size
 review the specs folder the AGENTS.md file for more details
 propose a plan to implement this in the current text/hex viewer plugins
 ask any question if something is not clear

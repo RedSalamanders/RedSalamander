@@ -1,4 +1,6 @@
 
+#include <algorithm>
+#include <span>
 #include <vector>
 
 #include <cwctype>
@@ -30,6 +32,179 @@ namespace
 constexpr std::wstring_view kDirectoryExtensionKey = L"<directory>";
 constexpr std::wstring_view kWslLocalhostPrefix    = L"\\\\wsl.localhost\\";
 constexpr std::wstring_view kWslDollarPrefix       = L"\\\\wsl$\\";
+
+struct AssociationQueryKey
+{
+    std::wstring extension;
+    DWORD fileAttributes = 0;
+
+    [[nodiscard]] bool operator==(const AssociationQueryKey& other) const noexcept = default;
+};
+
+struct AssociationQueryKeyHash
+{
+    [[nodiscard]] size_t operator()(const AssociationQueryKey& key) const noexcept
+    {
+        size_t hash = std::hash<std::wstring>{}(key.extension);
+        hash ^= static_cast<size_t>(key.fileAttributes) + 0x9e3779b9u + (hash << 6) + (hash >> 2);
+        return hash;
+    }
+};
+
+struct AssociationIconCacheEntry
+{
+    int iconIndex         = 0;
+    size_t lastAccessTime = 0;
+};
+
+std::mutex g_associationCacheMutex;
+std::unordered_map<AssociationQueryKey, AssociationIconCacheEntry, AssociationQueryKeyHash> g_associationToIconIndex;
+size_t g_associationQueryAccessCounter = 0;
+size_t g_associationLruEvictions       = 0;
+constexpr size_t kAssociationCacheSize = 2000;
+
+[[nodiscard]] bool ApplyMaskAlphaToIconPixels(HBITMAP maskBitmap, BYTE* pixels, int width, int height, HDC hdc)
+{
+    if (! maskBitmap || ! pixels || width <= 0 || height <= 0 || ! hdc)
+    {
+        return false;
+    }
+
+    BITMAP maskMetrics{};
+    if (GetObjectW(maskBitmap, sizeof(maskMetrics), &maskMetrics) == 0 || maskMetrics.bmWidth < width || maskMetrics.bmHeight < height)
+    {
+        return false;
+    }
+
+    BITMAPINFO maskBmi{};
+    maskBmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    maskBmi.bmiHeader.biWidth       = width;
+    maskBmi.bmiHeader.biHeight      = -height;
+    maskBmi.bmiHeader.biPlanes      = 1;
+    maskBmi.bmiHeader.biBitCount    = 32;
+    maskBmi.bmiHeader.biCompression = BI_RGB;
+
+    const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
+    std::vector<BYTE> maskPixels(pixelCount * 4u);
+    const int scanLines = GetDIBits(hdc, maskBitmap, 0, static_cast<UINT>(height), maskPixels.data(), &maskBmi, DIB_RGB_COLORS);
+    if (scanLines != height)
+    {
+        return false;
+    }
+
+    for (size_t i = 0; i < pixelCount; ++i)
+    {
+        const size_t offset = i * 4u;
+        // Windows icon AND masks render as black for opaque pixels and non-black for transparent pixels
+        // when expanded through GetDIBits; preserve that contract for icons without real alpha.
+        const bool transparent = maskPixels[offset + 0u] != 0 || maskPixels[offset + 1u] != 0 || maskPixels[offset + 2u] != 0;
+        if (transparent)
+        {
+            pixels[offset + 0u] = 0;
+            pixels[offset + 1u] = 0;
+            pixels[offset + 2u] = 0;
+            pixels[offset + 3u] = 0;
+        }
+        else
+        {
+            pixels[offset + 3u] = 255;
+        }
+    }
+    return true;
+}
+
+void NormalizeIconBitmapAlphaForD2D(BYTE* pixels, size_t pixelCount, HBITMAP maskBitmap, int width, int height, HDC hdc)
+{
+    if (! pixels || pixelCount == 0u)
+    {
+        return;
+    }
+
+    bool sawAlpha = false;
+    bool sawRgb   = false;
+    for (size_t i = 0; i < pixelCount; ++i)
+    {
+        const size_t offset = i * 4u;
+        const BYTE b        = pixels[offset + 0u];
+        const BYTE g        = pixels[offset + 1u];
+        const BYTE r        = pixels[offset + 2u];
+        const BYTE a        = pixels[offset + 3u];
+
+        sawAlpha = sawAlpha || a != 0;
+        sawRgb   = sawRgb || b != 0 || g != 0 || r != 0;
+        if (a > 0 && a < 255)
+        {
+            pixels[offset + 0u] = static_cast<BYTE>((static_cast<unsigned int>(b) * a + 127u) / 255u);
+            pixels[offset + 1u] = static_cast<BYTE>((static_cast<unsigned int>(g) * a + 127u) / 255u);
+            pixels[offset + 2u] = static_cast<BYTE>((static_cast<unsigned int>(r) * a + 127u) / 255u);
+        }
+    }
+
+    if (! sawAlpha && sawRgb && ! ApplyMaskAlphaToIconPixels(maskBitmap, pixels, width, height, hdc))
+    {
+        for (size_t i = 0; i < pixelCount; ++i)
+        {
+            pixels[(i * 4u) + 3u] = 255;
+        }
+    }
+}
+
+[[nodiscard]] uint64_t PerfElapsedUs(const std::chrono::steady_clock::time_point& start) noexcept
+{
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
+}
+
+void PerfEmitCounter(std::wstring_view name, uint64_t value) noexcept
+{
+    Debug::Perf::Emit(name, L"", 0, value, 0, S_OK);
+}
+
+void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
+{
+    Debug::Perf::Emit(name, L"", durationUs, value0, value1, hr);
+}
+
+void EvictAssociationQueryBatch()
+{
+    if (g_associationToIconIndex.size() < kAssociationCacheSize)
+    {
+        return;
+    }
+
+    const auto scanStart    = std::chrono::steady_clock::now();
+    const size_t evictCount = std::max<size_t>(g_associationToIconIndex.size() / 10, 1);
+    std::vector<size_t> times;
+    times.reserve(g_associationToIconIndex.size());
+    for (const auto& [key, entry] : g_associationToIconIndex)
+    {
+        times.push_back(entry.lastAccessTime);
+    }
+
+    std::nth_element(times.begin(), times.begin() + static_cast<ptrdiff_t>(evictCount - 1), times.end());
+    const size_t threshold = times[evictCount - 1];
+
+    size_t removed = 0;
+    for (auto it = g_associationToIconIndex.begin(); it != g_associationToIconIndex.end();)
+    {
+        if (it->second.lastAccessTime <= threshold && removed < evictCount)
+        {
+            it = g_associationToIconIndex.erase(it);
+            ++removed;
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    g_associationLruEvictions += removed;
+    PerfEmitDuration(L"iconcache.association_lru_evict_scan_us",
+                     PerfElapsedUs(scanStart),
+                     static_cast<uint64_t>(g_associationToIconIndex.size()),
+                     static_cast<uint64_t>(removed),
+                     S_OK);
+}
 
 [[nodiscard]] std::wstring NormalizeExtensionKey(std::wstring_view extension)
 {
@@ -78,15 +253,91 @@ constexpr std::wstring_view kWslDollarPrefix       = L"\\\\wsl$\\";
 
 [[nodiscard]] std::optional<int> QueryAssociationIconIndex(std::wstring_view normalizedExtension, DWORD fileAttributes) noexcept
 {
+    const std::wstring extensionKey(normalizedExtension);
+
+    {
+        const auto lockWaitStart = std::chrono::steady_clock::now();
+        std::lock_guard lock(g_associationCacheMutex);
+        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        const auto lockHoldStart = std::chrono::steady_clock::now();
+        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        AssociationQueryKey cacheKey{extensionKey, fileAttributes};
+        const auto cached = g_associationToIconIndex.find(cacheKey);
+        if (cached != g_associationToIconIndex.end())
+        {
+            cached->second.lastAccessTime = ++g_associationQueryAccessCounter;
+            return cached->second.iconIndex;
+        }
+    }
+
     SHFILEINFOW sfi{};
     const std::wstring queryPath = BuildAssociationQueryPath(normalizedExtension);
-    const DWORD_PTR result = SHGetFileInfoW(queryPath.c_str(), fileAttributes, &sfi, sizeof(sfi), SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES);
+    const auto shellStart        = std::chrono::steady_clock::now();
+    const DWORD_PTR result       = SHGetFileInfoW(queryPath.c_str(), fileAttributes, &sfi, sizeof(sfi), SHGFI_SYSICONINDEX | SHGFI_USEFILEATTRIBUTES);
+    PerfEmitDuration(L"iconcache.shgetfileinfo_us", PerfElapsedUs(shellStart), 0, 0, result == 0 || sfi.iIcon < 0 ? S_FALSE : S_OK);
     if (result == 0 || sfi.iIcon < 0)
     {
         return std::nullopt;
     }
 
-    return sfi.iIcon;
+    {
+        const auto lockWaitStart = std::chrono::steady_clock::now();
+        std::lock_guard lock(g_associationCacheMutex);
+        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        const auto lockHoldStart = std::chrono::steady_clock::now();
+        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        AssociationQueryKey cacheKey{extensionKey, fileAttributes};
+        EvictAssociationQueryBatch();
+
+        AssociationIconCacheEntry entry{};
+        entry.iconIndex                               = sfi.iIcon;
+        entry.lastAccessTime                          = ++g_associationQueryAccessCounter;
+        g_associationToIconIndex[std::move(cacheKey)] = entry;
+        return entry.iconIndex;
+    }
+}
+
+[[nodiscard]] std::optional<int> QueryCachedDefaultAssociationIconIndex() noexcept
+{
+    static std::mutex defaultAssociationIconMutex;
+    static std::optional<int> defaultAssociationIconIndex;
+
+    {
+        std::lock_guard lock(defaultAssociationIconMutex);
+        if (defaultAssociationIconIndex.has_value())
+        {
+            return defaultAssociationIconIndex;
+        }
+    }
+
+    const auto iconIndex = QueryAssociationIconIndex(std::wstring_view{}, FILE_ATTRIBUTE_NORMAL);
+    if (iconIndex.has_value())
+    {
+        std::lock_guard lock(defaultAssociationIconMutex);
+        defaultAssociationIconIndex = iconIndex;
+    }
+
+    return iconIndex;
+}
+
+[[nodiscard]] int SelectImageListSizeForTargetPixels(float targetPixels) noexcept
+{
+    if (! (targetPixels > 16.0f))
+    {
+        return SHIL_SMALL;
+    }
+
+    if (targetPixels <= 32.0f)
+    {
+        return SHIL_LARGE;
+    }
+
+    if (targetPixels <= 48.0f)
+    {
+        return SHIL_EXTRALARGE;
+    }
+
+    return SHIL_JUMBO;
 }
 
 [[nodiscard]] bool StartsWithIgnoreCase(std::wstring_view value, std::wstring_view prefix) noexcept
@@ -132,7 +383,83 @@ constexpr std::wstring_view kWslDollarPrefix       = L"\\\\wsl$\\";
 
     return std::wstring(distroView);
 }
+
+[[nodiscard]] wil::unique_hicon ExtractShellSmallIconForPath(const wchar_t* path, DWORD fileAttributes, bool useFileAttributes) noexcept
+{
+    if (! path || path[0] == L'\0')
+    {
+        return {};
+    }
+
+    SHFILEINFOW sfi{};
+    UINT flags = SHGFI_ICON | SHGFI_SMALLICON;
+    if (useFileAttributes)
+    {
+        flags |= SHGFI_USEFILEATTRIBUTES;
+    }
+
+    const DWORD_PTR result = SHGetFileInfoW(path, fileAttributes, &sfi, sizeof(sfi), flags);
+    if (result == 0 || ! sfi.hIcon)
+    {
+        return {};
+    }
+
+    return wil::unique_hicon{sfi.hIcon};
+}
+
+[[nodiscard]] wil::unique_hicon ExtractShellSmallIconForPidl(PCIDLIST_ABSOLUTE pidl) noexcept
+{
+    if (! pidl)
+    {
+        return {};
+    }
+
+    SHFILEINFOW sfi{};
+    const DWORD_PTR result = SHGetFileInfoW(reinterpret_cast<PCWSTR>(pidl), 0, &sfi, sizeof(sfi), SHGFI_PIDL | SHGFI_ICON | SHGFI_SMALLICON);
+    if (result == 0 || ! sfi.hIcon)
+    {
+        return {};
+    }
+
+    return wil::unique_hicon{sfi.hIcon};
+}
 } // namespace
+
+#if defined(ENABLE_TESTS)
+bool DebugNormalizeIconBitmapAlphaForD2D(std::span<BYTE> pixels) noexcept
+{
+    if (pixels.size() % 4u != 0u)
+    {
+        return false;
+    }
+
+    NormalizeIconBitmapAlphaForD2D(pixels.data(), pixels.size() / 4u, nullptr, 0, 0, nullptr);
+    return true;
+}
+
+bool DebugNormalizeIconBitmapAlphaForD2DWithMask(std::span<BYTE> pixels, HBITMAP maskBitmap, int width, int height, HDC hdc) noexcept
+{
+    if (pixels.size() % 4u != 0u || width <= 0 || height <= 0)
+    {
+        return false;
+    }
+
+    const size_t expectedPixels = static_cast<size_t>(width) * static_cast<size_t>(height);
+    if (pixels.size() / 4u != expectedPixels)
+    {
+        return false;
+    }
+
+    NormalizeIconBitmapAlphaForD2D(pixels.data(), expectedPixels, maskBitmap, width, height, hdc);
+    return true;
+}
+
+int DebugSelectIconCacheImageListSize(float targetDipSize, float dpi) noexcept
+{
+    const float targetPixels = targetDipSize * dpi / 96.0f;
+    return SelectImageListSizeForTargetPixels(targetPixels);
+}
+#endif
 
 IconCache& IconCache::GetInstance()
 {
@@ -145,6 +472,7 @@ void IconCache::Shutdown() noexcept
 {
     size_t bitmapCount = 0;
     size_t extCount    = 0;
+    size_t pathCount   = 0;
     {
         std::lock_guard lock(_mutex);
 
@@ -152,10 +480,14 @@ void IconCache::Shutdown() noexcept
         {
             bitmapCount += entry.second.bitmaps.size();
         }
-        extCount = _extensionToIconIndex.size();
+        extCount  = _extensionToIconIndex.size();
+        pathCount = _pathToIconIndex.size();
 
         _deviceCaches.clear();
         _extensionToIconIndex.clear();
+        _pathToIconIndex.clear();
+        _pathQueryAccessCounter = 0;
+        _pathLruEvictions       = 0;
         _extractionFailureCount.clear();
 
         _systemImageListJumbo.reset();
@@ -169,7 +501,7 @@ void IconCache::Shutdown() noexcept
         _warmingInProgress.store(false, std::memory_order_release);
     }
 
-    DBGOUT_INFO(L"IconCache: Shutdown (cleared {} cached icons and {} extension mappings)", bitmapCount, extCount);
+    DBGOUT_INFO(L"IconCache: Shutdown (cleared {} cached icons, {} extension mappings, {} path mappings)", bitmapCount, extCount, pathCount);
 }
 
 void IconCache::Initialize(ID2D1DeviceContext* d2dContext, float dpi)
@@ -179,7 +511,11 @@ void IconCache::Initialize(ID2D1DeviceContext* d2dContext, float dpi)
         return;
     }
 
+    const auto lockWaitStart = std::chrono::steady_clock::now();
     std::lock_guard lock(_mutex);
+    PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+    const auto lockHoldStart = std::chrono::steady_clock::now();
+    auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
     _dpi.store(dpi, std::memory_order_relaxed);
 
     // Initialize WIC factory for high-quality icon conversion
@@ -301,30 +637,40 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
 
     // Check cache first
     {
+        const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        auto deviceIt = _deviceCaches.find(device.get());
+        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        const auto lockHoldStart = std::chrono::steady_clock::now();
+        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        auto deviceIt            = _deviceCaches.find(device.get());
         if (deviceIt != _deviceCaches.end())
         {
             auto it = deviceIt->second.bitmaps.find(iconIndex);
             if (it != deviceIt->second.bitmaps.end())
             {
                 _hitCount++;
+                PerfEmitCounter(L"iconcache.get_bitmap_hit", 1);
                 it->second.lastAccessTime = ++deviceIt->second.accessCounter;
                 return it->second.bitmap;
             }
         }
         _missCount++;
+        PerfEmitCounter(L"iconcache.get_bitmap_miss", 1);
     }
 
     // Cache miss - extract icon from system image list
-    wil::unique_hicon icon = ExtractSystemIcon(iconIndex);
+    const auto extractStart = std::chrono::steady_clock::now();
+    wil::unique_hicon icon  = ExtractSystemIcon(iconIndex);
+    PerfEmitDuration(L"iconcache.miss_extract_us", PerfElapsedUs(extractStart), static_cast<uint64_t>(iconIndex), 0, icon ? S_OK : S_FALSE);
     if (! icon)
     {
         return nullptr;
     }
 
     // Convert to D2D bitmap
-    auto bitmap = ConvertIconToBitmap(icon.get(), d2dContext);
+    const auto convertStart = std::chrono::steady_clock::now();
+    auto bitmap             = ConvertIconToBitmap(icon.get(), d2dContext);
+    PerfEmitDuration(L"iconcache.miss_convert_us", PerfElapsedUs(convertStart), static_cast<uint64_t>(iconIndex), 0, bitmap ? S_OK : S_FALSE);
 
     if (bitmap)
     {
@@ -332,8 +678,12 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
         const size_t bytes          = static_cast<size_t>(pixelSize.width) * static_cast<size_t>(pixelSize.height) * 4u;
 
         // Store in cache with LRU tracking
+        const auto storeStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        auto& cache = _deviceCaches[device.get()];
+        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(storeStart), 0, 0, S_OK);
+        const auto storeHoldStart = std::chrono::steady_clock::now();
+        auto storeHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(storeHoldStart), 0, 0, S_OK); });
+        auto& cache               = _deviceCaches[device.get()];
         if (! cache.device)
         {
             cache.device = device;
@@ -344,6 +694,7 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetIconBitmap(int iconIndex, ID2D1DeviceCo
         entry.lastAccessTime     = ++cache.accessCounter;
         entry.bytes              = bytes;
         cache.bitmaps[iconIndex] = std::move(entry);
+        PerfEmitDuration(L"iconcache.miss_store_us", PerfElapsedUs(storeStart), static_cast<uint64_t>(iconIndex), bytes, S_OK);
     }
 
     return bitmap;
@@ -356,8 +707,12 @@ bool IconCache::HasCachedIcon(int iconIndex, ID2D1Device* device) const
         return false;
     }
 
+    const auto lockWaitStart = std::chrono::steady_clock::now();
     std::lock_guard lock(_mutex);
-    const auto deviceIt = _deviceCaches.find(device);
+    PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+    const auto lockHoldStart = std::chrono::steady_clock::now();
+    auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+    const auto deviceIt      = _deviceCaches.find(device);
     if (deviceIt == _deviceCaches.end())
     {
         return false;
@@ -380,8 +735,12 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::GetCachedBitmap(int iconIndex, ID2D1Device
         return nullptr;
     }
 
+    const auto lockWaitStart = std::chrono::steady_clock::now();
     std::lock_guard lock(_mutex);
-    const auto deviceIt = _deviceCaches.find(device.get());
+    PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+    const auto lockHoldStart = std::chrono::steady_clock::now();
+    auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+    const auto deviceIt      = _deviceCaches.find(device.get());
     if (deviceIt == _deviceCaches.end())
     {
         return nullptr;
@@ -498,91 +857,72 @@ wil::unique_hicon IconCache::ExtractSystemIcon(int iconIndex, float targetDipSiz
 
 wil::unique_hbitmap IconCache::CreateMenuBitmapFromIcon(HICON icon, int size)
 {
-    if (! icon || ! _wicFactory || size <= 0)
+    if (! icon || size <= 0)
     {
         return nullptr;
     }
 
-    // Step 1: HICON → WIC bitmap (preserves alpha)
-    wil::com_ptr<IWICBitmap> wicBitmap;
-    HRESULT hr = _wicFactory->CreateBitmapFromHICON(icon, &wicBitmap);
-    if (FAILED(hr))
+    constexpr int kMaxMenuIconBitmapDimension = 512;
+    if (size > kMaxMenuIconBitmapDimension)
     {
-        Debug::Warning(L"IconCache: Failed to create WIC bitmap from HICON for menu: 0x{:08X}", hr);
+        Debug::Warning(L"IconCache: Refusing oversized menu HICON bitmap {}x{}", size, size);
         return nullptr;
     }
 
-    // Get source bitmap dimensions
-    UINT srcWidth  = 0;
-    UINT srcHeight = 0;
-    wicBitmap->GetSize(&srcWidth, &srcHeight);
-
-    // Step 2: Scale to exact target size if needed (prevents blurry icons)
-    wil::com_ptr<IWICBitmapSource> scaledSource = wicBitmap;
-    wil::com_ptr<IWICBitmapScaler> scaler;
-
-    if (srcWidth != static_cast<UINT>(size) || srcHeight != static_cast<UINT>(size))
+    wil::unique_hdc_window hdcScreen{GetDC(nullptr)};
+    if (! hdcScreen)
     {
-        hr = _wicFactory->CreateBitmapScaler(&scaler);
-        if (SUCCEEDED(hr))
-        {
-            hr = scaler->Initialize(wicBitmap.get(), static_cast<UINT>(size), static_cast<UINT>(size), WICBitmapInterpolationModeNearestNeighbor);
-            if (SUCCEEDED(hr))
-            {
-                scaledSource = scaler;
-            }
-        }
-    }
-
-    // Step 3: Convert to premultiplied BGRA (required for GDI transparency)
-    wil::com_ptr<IWICFormatConverter> converter;
-    hr = _wicFactory->CreateFormatConverter(&converter);
-    if (FAILED(hr))
-    {
-        Debug::Warning(L"IconCache: Failed to create WIC converter for menu: 0x{:08X}", hr);
+        Debug::Warning(L"IconCache: Failed to acquire screen DC for menu icon conversion");
         return nullptr;
     }
 
-    hr = converter->Initialize(scaledSource.get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeCustom);
-    if (FAILED(hr))
+    wil::unique_hdc memoryDc{CreateCompatibleDC(hdcScreen.get())};
+    if (! memoryDc)
     {
-        Debug::Warning(L"IconCache: Failed to initialize WIC converter for menu: 0x{:08X}", hr);
+        Debug::Warning(L"IconCache: Failed to create memory DC for menu icon conversion");
         return nullptr;
     }
 
-    // Step 4: Create DIB section for menu bitmap
     BITMAPINFO bmi{};
     bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
     bmi.bmiHeader.biWidth       = size;
-    bmi.bmiHeader.biHeight      = -size; // Top-down DIB
+    bmi.bmiHeader.biHeight      = -size;
     bmi.bmiHeader.biPlanes      = 1;
-    bmi.bmiHeader.biBitCount    = 32; // 32-bit BGRA
+    bmi.bmiHeader.biBitCount    = 32;
     bmi.bmiHeader.biCompression = BI_RGB;
 
-    void* pBits = nullptr;
-    wil::unique_hdc_window hdcScreen{GetDC(nullptr)};
-    wil::unique_hbitmap hBitmap{CreateDIBSection(hdcScreen.get(), &bmi, DIB_RGB_COLORS, &pBits, nullptr, 0)};
-
-    if (! hBitmap || ! pBits)
+    void* bits = nullptr;
+    wil::unique_hbitmap bitmap{CreateDIBSection(hdcScreen.get(), &bmi, DIB_RGB_COLORS, &bits, nullptr, 0)};
+    if (! bitmap || ! bits)
     {
         Debug::Warning(L"IconCache: Failed to create DIB section for menu icon");
         return nullptr;
     }
 
-    // Step 5: Copy pixels directly from converter (NOT from original bitmap!)
-    // CopyPixels reads from the converter's output, giving us proper PBGRA pixels
-    UINT stride     = static_cast<UINT>(size) * 4u;
-    UINT bufferSize = stride * static_cast<UINT>(size);
+    const size_t pixelCount = static_cast<size_t>(size) * static_cast<size_t>(size);
+    auto* pixels            = static_cast<BYTE*>(bits);
+    std::fill_n(pixels, pixelCount * 4u, BYTE{0});
 
-    WICRect rect = {0, 0, size, size};
-    hr           = converter->CopyPixels(&rect, stride, bufferSize, static_cast<BYTE*>(pBits));
-    if (FAILED(hr))
+    auto oldBitmap        = wil::SelectObject(memoryDc.get(), bitmap.get());
+    const auto drawStart  = std::chrono::steady_clock::now();
+    const BOOL drawResult = DrawIconEx(memoryDc.get(), 0, 0, icon, size, size, 0, nullptr, DI_NORMAL);
+    const DWORD drawError = drawResult ? ERROR_SUCCESS : GetLastError();
+    oldBitmap.reset();
+    PerfEmitDuration(L"iconcache.menu_draw_icon_us",
+                     PerfElapsedUs(drawStart),
+                     static_cast<uint64_t>(size),
+                     static_cast<uint64_t>(size),
+                     drawResult ? S_OK : HRESULT_FROM_WIN32(drawError == ERROR_SUCCESS ? ERROR_INVALID_DATA : drawError));
+    if (! drawResult)
     {
-        Debug::Warning(L"IconCache: Failed to copy pixels from converter for menu: 0x{:08X}", hr);
+        Debug::Warning(L"IconCache: Failed to draw HICON into menu DIB: 0x{:08X}",
+                       HRESULT_FROM_WIN32(drawError == ERROR_SUCCESS ? ERROR_INVALID_DATA : drawError));
         return nullptr;
     }
 
-    return hBitmap;
+    NormalizeIconBitmapAlphaForD2D(pixels, pixelCount, nullptr, 0, 0, nullptr);
+
+    return bitmap;
 }
 
 wil::unique_hbitmap IconCache::CreateMenuBitmapFromIconIndex(int iconIndex, int size)
@@ -637,6 +977,16 @@ wil::unique_hbitmap IconCache::CreateMenuBitmapFromPath(const wchar_t* path, int
         }
     }
 
+    // Prefer the per-path shell icon when available so known folders and shell-customized entries
+    // keep their stock small bitmap instead of collapsing to the shared system-image-list fallback.
+    if (wil::unique_hicon directIcon = ExtractShellSmallIconForPath(path, fileAttributes, useFileAttributes); directIcon)
+    {
+        if (wil::unique_hbitmap bitmap = CreateMenuBitmapFromIcon(directIcon.get(), size))
+        {
+            return bitmap;
+        }
+    }
+
     const auto iconIndex = QuerySysIconIndexForPath(path, fileAttributes, useFileAttributes);
     if (! iconIndex.has_value())
     {
@@ -646,13 +996,68 @@ wil::unique_hbitmap IconCache::CreateMenuBitmapFromPath(const wchar_t* path, int
     return CreateMenuBitmapFromIconIndex(iconIndex.value(), size);
 }
 
-std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWORD fileAttributes, bool useFileAttributes) const
+wil::unique_hbitmap IconCache::CreateMenuBitmapFromKnownFolder(const GUID& folderId, int size)
+{
+    if (size <= 0)
+    {
+        return nullptr;
+    }
+
+    PIDLIST_ABSOLUTE pidl = nullptr;
+    const HRESULT hr      = SHGetKnownFolderIDList(folderId, 0, nullptr, &pidl);
+    if (FAILED(hr) || ! pidl)
+    {
+        return nullptr;
+    }
+
+    const auto pidlCleanup = wil::scope_exit([&] { ILFree(pidl); });
+    // Known folders can expose a richer direct shell icon than their shared image-list index.
+    // Keep that direct small icon when possible, then fall back to the image list if extraction fails.
+    if (wil::unique_hicon icon = ExtractShellSmallIconForPidl(pidl); icon)
+    {
+        if (wil::unique_hbitmap bitmap = CreateMenuBitmapFromIcon(icon.get(), size))
+        {
+            return bitmap;
+        }
+    }
+
+    if (const auto iconIndex = QuerySysIconIndexForPidl(pidl); iconIndex.has_value())
+    {
+        return CreateMenuBitmapFromIconIndex(iconIndex.value(), size);
+    }
+
+    return nullptr;
+}
+
+std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWORD fileAttributes, bool useFileAttributes)
 {
     if (! path || *path == L'\0')
     {
         return std::nullopt;
     }
 
+    PathQueryKey cacheKey{};
+    cacheKey.path              = path;
+    cacheKey.fileAttributes    = fileAttributes;
+    cacheKey.useFileAttributes = useFileAttributes;
+
+    {
+        const auto lockWaitStart = std::chrono::steady_clock::now();
+        std::lock_guard lock(_mutex);
+        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        const auto lockHoldStart = std::chrono::steady_clock::now();
+        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        const auto it            = _pathToIconIndex.find(cacheKey);
+        if (it != _pathToIconIndex.end())
+        {
+            it->second.lastAccessTime = ++_pathQueryAccessCounter;
+            return it->second.iconIndex;
+        }
+    }
+
+    // SHGetFileInfoW is called outside the lock — concurrent threads may query the same path.
+    // This is intentional: duplicate work is harmless (same result), and holding the lock across
+    // a potentially slow shell call would serialize all icon lookups.
     UINT flags = SHGFI_SYSICONINDEX;
     if (useFileAttributes)
     {
@@ -660,12 +1065,33 @@ std::optional<int> IconCache::QuerySysIconIndexForPath(const wchar_t* path, DWOR
     }
 
     SHFILEINFOW sfi{};
+    const auto shellStart  = std::chrono::steady_clock::now();
     const DWORD_PTR result = SHGetFileInfoW(path, fileAttributes, &sfi, sizeof(sfi), flags);
+    PerfEmitDuration(L"iconcache.shgetfileinfo_us", PerfElapsedUs(shellStart), 0, 0, result == 0 || sfi.iIcon < 0 ? S_FALSE : S_OK);
     if (result == 0 || sfi.iIcon < 0)
     {
+        // Don't cache failures — they may be transient (network drives, shell extensions loading).
         return std::nullopt;
     }
 
+    bool duplicateRace       = false;
+    const auto lockWaitStart = std::chrono::steady_clock::now();
+    std::lock_guard lock(_mutex);
+    PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+    const auto lockHoldStart = std::chrono::steady_clock::now();
+    auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+    EvictPathQueryBatch();
+    auto [it, inserted] = _pathToIconIndex.emplace(std::move(cacheKey), PathIconCacheEntry{sfi.iIcon, ++_pathQueryAccessCounter});
+    if (! inserted)
+    {
+        duplicateRace             = true;
+        it->second.iconIndex      = sfi.iIcon;
+        it->second.lastAccessTime = ++_pathQueryAccessCounter;
+    }
+    if (duplicateRace)
+    {
+        PerfEmitCounter(L"iconcache.duplicate_path_query_race", 1);
+    }
     return sfi.iIcon;
 }
 
@@ -772,13 +1198,18 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, 
 
     // Check if already cached (another thread might have added it)
     {
+        const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        const auto deviceIt = _deviceCaches.find(device.get());
+        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        const auto lockHoldStart = std::chrono::steady_clock::now();
+        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        const auto deviceIt      = _deviceCaches.find(device.get());
         if (deviceIt != _deviceCaches.end())
         {
             const auto it = deviceIt->second.bitmaps.find(iconIndex);
             if (it != deviceIt->second.bitmaps.end())
             {
+                PerfEmitCounter(L"iconcache.ui_convert_hit_after_race", 1);
                 return it->second.bitmap;
             }
         }
@@ -793,8 +1224,12 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmapOnUIThread(HICON icon, 
         const size_t bytes          = static_cast<size_t>(pixelSize.width) * static_cast<size_t>(pixelSize.height) * 4u;
 
         // Store in cache with LRU tracking
+        const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
-        auto& cache = _deviceCaches[device.get()];
+        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        const auto lockHoldStart = std::chrono::steady_clock::now();
+        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
+        auto& cache              = _deviceCaches[device.get()];
         if (! cache.device)
         {
             cache.device = device;
@@ -818,12 +1253,15 @@ void IconCache::Clear()
     {
         iconCount += entry.second.bitmaps.size();
     }
-    const size_t extCount = _extensionToIconIndex.size();
-
+    const size_t extCount  = _extensionToIconIndex.size();
+    const size_t pathCount = _pathToIconIndex.size();
     _deviceCaches.clear();
     _extensionToIconIndex.clear();
+    _pathToIconIndex.clear();
+    _pathQueryAccessCounter = 0;
+    _pathLruEvictions       = 0;
 
-    DBGOUT_INFO(L"IconCache: Cleared {} cached icons and {} extension mappings", iconCount, extCount);
+    DBGOUT_INFO(L"IconCache: Cleared {} cached icons, {} extension mappings, and {} path mappings", iconCount, extCount, pathCount);
 }
 
 void IconCache::ClearDeviceCache(ID2D1Device* device)
@@ -868,30 +1306,18 @@ void IconCache::WarmCommonExtensions()
 
     // Common file extensions to pre-cache (most frequently encountered)
     static constexpr std::pair<std::wstring_view, DWORD> commonExtensions[] = {
-        {L".txt", FILE_ATTRIBUTE_NORMAL},   {L".log", FILE_ATTRIBUTE_NORMAL},
-        {L".xml", FILE_ATTRIBUTE_NORMAL},   {L".json", FILE_ATTRIBUTE_NORMAL},
-        {L".jsonl", FILE_ATTRIBUTE_NORMAL}, {L".ndjson", FILE_ATTRIBUTE_NORMAL},
-        {L".ini", FILE_ATTRIBUTE_NORMAL},  {L".cfg", FILE_ATTRIBUTE_NORMAL},
-        {L".md", FILE_ATTRIBUTE_NORMAL},   {L".cpp", FILE_ATTRIBUTE_NORMAL},
-        {L".h", FILE_ATTRIBUTE_NORMAL},    {L".hpp", FILE_ATTRIBUTE_NORMAL},
-        {L".c", FILE_ATTRIBUTE_NORMAL},    {L".cs", FILE_ATTRIBUTE_NORMAL},
-        {L".py", FILE_ATTRIBUTE_NORMAL},   {L".js", FILE_ATTRIBUTE_NORMAL},
-        {L".ts", FILE_ATTRIBUTE_NORMAL},   {L".html", FILE_ATTRIBUTE_NORMAL},
-        {L".htm", FILE_ATTRIBUTE_NORMAL},  {L".css", FILE_ATTRIBUTE_NORMAL},
-        {L".pdf", FILE_ATTRIBUTE_NORMAL},  {L".zip", FILE_ATTRIBUTE_NORMAL},
-        {L".rar", FILE_ATTRIBUTE_NORMAL},  {L".7z", FILE_ATTRIBUTE_NORMAL},
-        {L".png", FILE_ATTRIBUTE_NORMAL},  {L".jpg", FILE_ATTRIBUTE_NORMAL},
-        {L".jpeg", FILE_ATTRIBUTE_NORMAL}, {L".gif", FILE_ATTRIBUTE_NORMAL},
-        {L".bmp", FILE_ATTRIBUTE_NORMAL},  {L".ico", FILE_ATTRIBUTE_NORMAL},
-        {L".svg", FILE_ATTRIBUTE_NORMAL},  {L".mp3", FILE_ATTRIBUTE_NORMAL},
-        {L".wav", FILE_ATTRIBUTE_NORMAL},  {L".mp4", FILE_ATTRIBUTE_NORMAL},
-        {L".avi", FILE_ATTRIBUTE_NORMAL},  {L".mkv", FILE_ATTRIBUTE_NORMAL},
-        {L".doc", FILE_ATTRIBUTE_NORMAL},  {L".docx", FILE_ATTRIBUTE_NORMAL},
-        {L".xls", FILE_ATTRIBUTE_NORMAL},  {L".xlsx", FILE_ATTRIBUTE_NORMAL},
-        {L".ppt", FILE_ATTRIBUTE_NORMAL},  {L".pptx", FILE_ATTRIBUTE_NORMAL},
-        {L".dll", FILE_ATTRIBUTE_NORMAL},  {L".sys", FILE_ATTRIBUTE_NORMAL},
-        {L".bat", FILE_ATTRIBUTE_NORMAL},  {L".cmd", FILE_ATTRIBUTE_NORMAL},
-        {L".ps1", FILE_ATTRIBUTE_NORMAL},  {L"<directory>", FILE_ATTRIBUTE_DIRECTORY},
+        {L".txt", FILE_ATTRIBUTE_NORMAL},   {L".log", FILE_ATTRIBUTE_NORMAL},    {L".xml", FILE_ATTRIBUTE_NORMAL},  {L".json", FILE_ATTRIBUTE_NORMAL},
+        {L".jsonl", FILE_ATTRIBUTE_NORMAL}, {L".ndjson", FILE_ATTRIBUTE_NORMAL}, {L".ini", FILE_ATTRIBUTE_NORMAL},  {L".cfg", FILE_ATTRIBUTE_NORMAL},
+        {L".md", FILE_ATTRIBUTE_NORMAL},    {L".cpp", FILE_ATTRIBUTE_NORMAL},    {L".h", FILE_ATTRIBUTE_NORMAL},    {L".hpp", FILE_ATTRIBUTE_NORMAL},
+        {L".c", FILE_ATTRIBUTE_NORMAL},     {L".cs", FILE_ATTRIBUTE_NORMAL},     {L".py", FILE_ATTRIBUTE_NORMAL},   {L".js", FILE_ATTRIBUTE_NORMAL},
+        {L".ts", FILE_ATTRIBUTE_NORMAL},    {L".html", FILE_ATTRIBUTE_NORMAL},   {L".htm", FILE_ATTRIBUTE_NORMAL},  {L".css", FILE_ATTRIBUTE_NORMAL},
+        {L".pdf", FILE_ATTRIBUTE_NORMAL},   {L".zip", FILE_ATTRIBUTE_NORMAL},    {L".rar", FILE_ATTRIBUTE_NORMAL},  {L".7z", FILE_ATTRIBUTE_NORMAL},
+        {L".png", FILE_ATTRIBUTE_NORMAL},   {L".jpg", FILE_ATTRIBUTE_NORMAL},    {L".jpeg", FILE_ATTRIBUTE_NORMAL}, {L".gif", FILE_ATTRIBUTE_NORMAL},
+        {L".bmp", FILE_ATTRIBUTE_NORMAL},   {L".ico", FILE_ATTRIBUTE_NORMAL},    {L".svg", FILE_ATTRIBUTE_NORMAL},  {L".mp3", FILE_ATTRIBUTE_NORMAL},
+        {L".wav", FILE_ATTRIBUTE_NORMAL},   {L".mp4", FILE_ATTRIBUTE_NORMAL},    {L".avi", FILE_ATTRIBUTE_NORMAL},  {L".mkv", FILE_ATTRIBUTE_NORMAL},
+        {L".doc", FILE_ATTRIBUTE_NORMAL},   {L".docx", FILE_ATTRIBUTE_NORMAL},   {L".xls", FILE_ATTRIBUTE_NORMAL},  {L".xlsx", FILE_ATTRIBUTE_NORMAL},
+        {L".ppt", FILE_ATTRIBUTE_NORMAL},   {L".pptx", FILE_ATTRIBUTE_NORMAL},   {L".dll", FILE_ATTRIBUTE_NORMAL},  {L".sys", FILE_ATTRIBUTE_NORMAL},
+        {L".bat", FILE_ATTRIBUTE_NORMAL},   {L".cmd", FILE_ATTRIBUTE_NORMAL},    {L".ps1", FILE_ATTRIBUTE_NORMAL},  {L"<directory>", FILE_ATTRIBUTE_DIRECTORY},
     };
 
     size_t warmed = 0;
@@ -948,7 +1374,11 @@ size_t IconCache::PrewarmBitmaps(ID2D1DeviceContext* d2dContext)
     // Collect unique icon indices to prewarm
     std::vector<int> iconIndices;
     {
+        const auto lockWaitStart = std::chrono::steady_clock::now();
         std::lock_guard lock(_mutex);
+        PerfEmitDuration(L"iconcache.lock_wait_us", PerfElapsedUs(lockWaitStart), 0, 0, S_OK);
+        const auto lockHoldStart = std::chrono::steady_clock::now();
+        auto lockHold            = wil::scope_exit([&] { PerfEmitDuration(L"iconcache.lock_hold_us", PerfElapsedUs(lockHoldStart), 0, 0, S_OK); });
         std::unordered_set<int> uniqueIndices;
         for (const auto& [ext, iconIndex] : _extensionToIconIndex)
         {
@@ -1003,7 +1433,9 @@ IconCache::Stats IconCache::GetStats() const
     stats.hitCount           = _hitCount;
     stats.missCount          = _missCount;
     stats.extensionCacheSize = _extensionToIconIndex.size();
+    stats.pathCacheSize      = _pathToIconIndex.size();
     stats.lruEvictions       = _lruEvictions;
+    stats.pathLruEvictions   = _pathLruEvictions;
     return stats;
 }
 
@@ -1049,7 +1481,7 @@ std::optional<int> IconCache::GetOrQueryIconIndexByExtension(std::wstring_view e
     auto iconIndex      = QueryAssociationIconIndex(keyView, fileAttributes);
     if (! iconIndex.has_value() && ! isFolder && ! keyView.empty())
     {
-        iconIndex = QueryAssociationIconIndex(std::wstring_view{}, FILE_ATTRIBUTE_NORMAL);
+        iconIndex = QueryCachedDefaultAssociationIconIndex();
     }
     if (iconIndex.has_value())
     {
@@ -1105,6 +1537,7 @@ void IconCache::EvictLRUIfNeeded(IconCache::DeviceCache& cache)
         return;
     }
 
+    const auto scanStart = std::chrono::steady_clock::now();
     // Find oldest entry by access time
     int oldestKey     = -1;
     size_t oldestTime = SIZE_MAX;
@@ -1124,6 +1557,55 @@ void IconCache::EvictLRUIfNeeded(IconCache::DeviceCache& cache)
         _lruEvictions++;
         DBGOUT_INFO(L"IconCache: Evicted icon index {} (LRU), cache size now {}", oldestKey, cache.bitmaps.size());
     }
+
+    PerfEmitDuration(L"iconcache.device_lru_evict_scan_us",
+                     PerfElapsedUs(scanStart),
+                     static_cast<uint64_t>(cache.bitmaps.size()),
+                     static_cast<uint64_t>(oldestKey >= 0 ? oldestKey : 0),
+                     S_OK);
+}
+
+void IconCache::EvictPathQueryBatch()
+{
+    // Must be called with _mutex locked.
+    // Evicts ~10% of entries (the oldest ones) to amortize the O(n) scan cost.
+    if (_pathToIconIndex.size() < _maxCacheSize)
+    {
+        return;
+    }
+
+    const auto scanStart    = std::chrono::steady_clock::now();
+    const size_t evictCount = std::max<size_t>(_pathToIconIndex.size() / 10, 1);
+
+    // Find the evictCount-th smallest lastAccessTime as the threshold.
+    // Collect all access times, partial-sort, then erase entries at or below the threshold.
+    std::vector<size_t> times;
+    times.reserve(_pathToIconIndex.size());
+    for (const auto& [key, entry] : _pathToIconIndex)
+    {
+        times.push_back(entry.lastAccessTime);
+    }
+
+    std::nth_element(times.begin(), times.begin() + static_cast<ptrdiff_t>(evictCount - 1), times.end());
+    const size_t threshold = times[evictCount - 1];
+
+    size_t removed = 0;
+    for (auto it = _pathToIconIndex.begin(); it != _pathToIconIndex.end();)
+    {
+        if (it->second.lastAccessTime <= threshold && removed < evictCount)
+        {
+            it = _pathToIconIndex.erase(it);
+            ++removed;
+        }
+        else
+        {
+            ++it;
+        }
+    }
+
+    _pathLruEvictions += removed;
+    PerfEmitDuration(
+        L"iconcache.path_lru_evict_scan_us", PerfElapsedUs(scanStart), static_cast<uint64_t>(_pathToIconIndex.size()), static_cast<uint64_t>(removed), S_OK);
 }
 
 wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmap(HICON icon, ID2D1DeviceContext* d2dContext)
@@ -1133,56 +1615,106 @@ wil::com_ptr<ID2D1Bitmap1> IconCache::ConvertIconToBitmap(HICON icon, ID2D1Devic
         return nullptr;
     }
 
-    if (! _wicFactory)
+    ICONINFO iconInfo{};
+    if (! GetIconInfo(icon, &iconInfo))
     {
-        Debug::Warning(L"IconCache: WIC factory not initialized, cannot convert icon");
+        Debug::Warning(L"IconCache: Failed to read HICON metadata: 0x{:08X}", HRESULT_FROM_WIN32(GetLastError()));
         return nullptr;
     }
 
-    // Step 1: Create WIC bitmap from HICON (preserves alpha channel)
-    wil::com_ptr<IWICBitmap> wicBitmap;
-    HRESULT hr = _wicFactory->CreateBitmapFromHICON(icon, &wicBitmap);
-    if (FAILED(hr))
+    wil::unique_hbitmap colorBitmap(iconInfo.hbmColor);
+    wil::unique_hbitmap maskBitmap(iconInfo.hbmMask);
+
+    const HBITMAP metricsBitmap = colorBitmap ? colorBitmap.get() : maskBitmap.get();
+    BITMAP metrics{};
+    if (! metricsBitmap || ! GetObjectW(metricsBitmap, sizeof(metrics), &metrics) || metrics.bmWidth <= 0 || metrics.bmHeight <= 0)
     {
-        Debug::Warning(L"IconCache: Failed to create WIC bitmap from HICON: 0x{:08X}", hr);
+        Debug::Warning(L"IconCache: Failed to resolve HICON dimensions");
         return nullptr;
     }
 
-    // Step 2: Convert to premultiplied BGRA (required by Direct2D)
-    wil::com_ptr<IWICFormatConverter> converter;
-    hr = _wicFactory->CreateFormatConverter(&converter);
-    if (FAILED(hr))
+    const int width = metrics.bmWidth;
+    int height      = metrics.bmHeight;
+    if (! colorBitmap)
     {
-        Debug::Warning(L"IconCache: Failed to create WIC format converter: 0x{:08X}", hr);
+        height = std::max(height / 2, 1);
+    }
+
+    constexpr int kMaxIconBitmapDimension = 512;
+    if (width > kMaxIconBitmapDimension || height > kMaxIconBitmapDimension)
+    {
+        Debug::Warning(L"IconCache: Refusing oversized HICON bitmap {}x{}", width, height);
         return nullptr;
     }
 
-    hr = converter->Initialize(wicBitmap.get(),
-                               GUID_WICPixelFormat32bppPBGRA, // Premultiplied BGRA - Direct2D native format
-                               WICBitmapDitherTypeNone,
-                               nullptr,
-                               0.0f,
-                               WICBitmapPaletteTypeCustom);
-    if (FAILED(hr))
+    BITMAPINFO bmi{};
+    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bmi.bmiHeader.biWidth       = width;
+    bmi.bmiHeader.biHeight      = -height;
+    bmi.bmiHeader.biPlanes      = 1;
+    bmi.bmiHeader.biBitCount    = 32;
+    bmi.bmiHeader.biCompression = BI_RGB;
+
+    wil::unique_hdc_window screenDc{GetDC(nullptr)};
+    if (! screenDc)
     {
-        Debug::Warning(L"IconCache: Failed to initialize WIC format converter: 0x{:08X}", hr);
+        Debug::Warning(L"IconCache: Failed to acquire screen DC for icon conversion");
         return nullptr;
     }
 
-    // Step 3: Create Direct2D bitmap from WIC bitmap
+    wil::unique_hdc memoryDc{CreateCompatibleDC(screenDc.get())};
+    if (! memoryDc)
+    {
+        Debug::Warning(L"IconCache: Failed to create memory DC for icon conversion");
+        return nullptr;
+    }
+
+    void* bits = nullptr;
+    wil::unique_hbitmap dib{CreateDIBSection(screenDc.get(), &bmi, DIB_RGB_COLORS, &bits, nullptr, 0)};
+    if (! dib || ! bits)
+    {
+        Debug::Warning(L"IconCache: Failed to create DIB section for icon conversion");
+        return nullptr;
+    }
+
+    const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
+    auto* pixels            = static_cast<BYTE*>(bits);
+    std::fill_n(pixels, pixelCount * 4u, BYTE{0});
+
+    auto oldBitmap        = wil::SelectObject(memoryDc.get(), dib.get());
+    const auto drawStart  = std::chrono::steady_clock::now();
+    const BOOL drawResult = DrawIconEx(memoryDc.get(), 0, 0, icon, width, height, 0, nullptr, DI_NORMAL);
+    const DWORD drawError = drawResult ? ERROR_SUCCESS : GetLastError();
+    oldBitmap.reset();
+    PerfEmitDuration(L"iconcache.convert_draw_icon_us",
+                     PerfElapsedUs(drawStart),
+                     static_cast<uint64_t>(width),
+                     static_cast<uint64_t>(height),
+                     drawResult ? S_OK : HRESULT_FROM_WIN32(drawError == ERROR_SUCCESS ? ERROR_INVALID_DATA : drawError));
+    if (! drawResult)
+    {
+        Debug::Warning(L"IconCache: Failed to draw HICON into DIB: 0x{:08X}", HRESULT_FROM_WIN32(drawError == ERROR_SUCCESS ? ERROR_INVALID_DATA : drawError));
+        return nullptr;
+    }
+
+    NormalizeIconBitmapAlphaForD2D(pixels, pixelCount, maskBitmap.get(), width, height, screenDc.get());
+
     D2D1_BITMAP_PROPERTIES1 bitmapProps{};
     bitmapProps.pixelFormat.format    = DXGI_FORMAT_B8G8R8A8_UNORM;
-    bitmapProps.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED; // Must match PBGRA
+    bitmapProps.pixelFormat.alphaMode = D2D1_ALPHA_MODE_PREMULTIPLIED;
     const float dpi                   = _dpi.load(std::memory_order_relaxed);
     bitmapProps.dpiX                  = dpi;
     bitmapProps.dpiY                  = dpi;
     bitmapProps.bitmapOptions         = D2D1_BITMAP_OPTIONS_NONE;
 
     wil::com_ptr<ID2D1Bitmap1> d2dBitmap;
-    hr = d2dContext->CreateBitmapFromWicBitmap(converter.get(), &bitmapProps, &d2dBitmap);
+    const auto d2dCreateStart = std::chrono::steady_clock::now();
+    const HRESULT hr          = d2dContext->CreateBitmap(
+        D2D1::SizeU(static_cast<UINT32>(width), static_cast<UINT32>(height)), bits, static_cast<UINT32>(width) * 4u, &bitmapProps, d2dBitmap.put());
+    PerfEmitDuration(L"iconcache.convert_create_d2d_bitmap_us", PerfElapsedUs(d2dCreateStart), static_cast<uint64_t>(width), static_cast<uint64_t>(height), hr);
     if (FAILED(hr))
     {
-        Debug::Warning(L"IconCache: Failed to create D2D bitmap from WIC: 0x{:08X}", hr);
+        Debug::Warning(L"IconCache: Failed to create D2D bitmap from HICON DIB: 0x{:08X}", hr);
         return nullptr;
     }
 
@@ -1195,24 +1727,9 @@ int IconCache::SelectOptimalImageListSize(float targetDipSize) const
     const float dpi          = _dpi.load(std::memory_order_relaxed);
     const float targetPixels = targetDipSize * dpi / 96.0f;
 
-    // Select closest matching size to minimize scaling artifacts
-    // Prefer slightly larger source to avoid upscaling (which looks worse than downscaling)
-    if (targetPixels >= 64.0f)
-    {
-        return SHIL_JUMBO; // 256×256 - best for very large icons or extreme DPI scaling
-    }
-
-    if (targetPixels >= 40.0f)
-    {
-        return SHIL_EXTRALARGE; // 48×48 - best for high-DPI or large icons
-    }
-
-    if (targetPixels >= 24.0f)
-    {
-        return SHIL_LARGE; // 32×32 - good for medium sizes
-    }
-
-    return SHIL_SMALL; // 16×16 - optimal for small icons at standard DPI
+    // Prefer the smallest shell source that is at least as large as the physical target.
+    // Downscaling a larger shell icon is cleaner than upscaling a 16px source on high-DPI displays.
+    return SelectImageListSizeForTargetPixels(targetPixels);
 }
 
 // Static member definitions

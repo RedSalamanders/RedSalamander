@@ -8,7 +8,7 @@ param(
 )
 
 Write-Host "================================" -ForegroundColor Cyan
-Write-Host "Red Salamander ETW Complete Test" -ForegroundColor Cyan
+Write-Host "RedSalamander ETW Complete Test" -ForegroundColor Cyan
 Write-Host "================================" -ForegroundColor Cyan
 Write-Host ""
 

@@ -1,6 +1,7 @@
 #include "ViewerText.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -24,7 +25,8 @@ extern HINSTANCE g_hInstance;
 
 namespace
 {
-constexpr float kMonoFontSizeDip = 10.0f * 96.0f / 72.0f;
+constexpr float kMonoFontSizeDip                    = 10.0f * 96.0f / 72.0f;
+constexpr uint32_t kDiffViewportHydrationMarginRows = 32u;
 
 uint32_t StableHash32(std::wstring_view text) noexcept
 {
@@ -148,6 +150,19 @@ D2D1_COLOR_F ColorFFromColorRef(COLORREF color, float alpha = 1.0f) noexcept
     const float g = static_cast<float>(GetGValue(color)) / 255.0f;
     const float b = static_cast<float>(GetBValue(color)) / 255.0f;
     return D2D1::ColorF(r, g, b, alpha);
+}
+
+D2D1_COLOR_F ColorFFromArgb(uint32_t argb) noexcept
+{
+    return ColorFFromColorRef(ColorRefFromArgb(argb), AlphaFromArgb(argb));
+}
+
+[[maybe_unused]] uint32_t ArgbFromColorRef(COLORREF rgb, uint8_t alpha = 0xFFu) noexcept
+{
+    const uint32_t r = static_cast<uint32_t>(GetRValue(rgb));
+    const uint32_t g = static_cast<uint32_t>(GetGValue(rgb));
+    const uint32_t b = static_cast<uint32_t>(GetBValue(rgb));
+    return (static_cast<uint32_t>(alpha) << 24) | (r << 16) | (g << 8) | b;
 }
 
 bool IsValidUtf8(const uint8_t* data, size_t size) noexcept
@@ -304,6 +319,7 @@ LRESULT ViewerText::OnTextViewSize(HWND hwnd, UINT32 width, UINT32 height) noexc
     }
 
     RebuildTextVisualLines(hwnd);
+    static_cast<void>(EnsureVisibleDiffViewportHydrated(hwnd));
     UpdateTextViewScrollBars(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
     return 0;
@@ -380,6 +396,17 @@ LRESULT ViewerText::OnTextViewVScroll(HWND hwnd, UINT scrollCode) noexcept
 
     if (top == _textTopVisualLine)
     {
+        if (EnsureVisibleDiffViewportHydrated(hwnd))
+        {
+            UpdateTextViewScrollBars(hwnd);
+            InvalidateRect(hwnd, nullptr, TRUE);
+            if (_hWnd)
+            {
+                InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
+            }
+            return 0;
+        }
+
         if (_textStreamActive)
         {
             const bool scrollUp   = code == SB_LINEUP || code == SB_PAGEUP || code == SB_TOP;
@@ -399,6 +426,7 @@ LRESULT ViewerText::OnTextViewVScroll(HWND hwnd, UINT scrollCode) noexcept
     }
 
     _textTopVisualLine = static_cast<uint32_t>(top);
+    static_cast<void>(EnsureVisibleDiffViewportHydrated(hwnd));
     UpdateTextViewScrollBars(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
     if (_hWnd)
@@ -462,7 +490,7 @@ LRESULT ViewerText::OnTextViewHScroll(HWND hwnd, UINT scrollCode) noexcept
     }
 
     _textLeftColumn = left;
-    UpdateTextViewScrollBars(hwnd);
+    RefreshTextHorizontalViewport(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
     return 0;
 }
@@ -509,6 +537,16 @@ LRESULT ViewerText::OnTextViewMouseWheel(HWND hwnd, int wheelDelta) noexcept
     if (top != _textTopVisualLine)
     {
         _textTopVisualLine = static_cast<uint32_t>(top);
+        static_cast<void>(EnsureVisibleDiffViewportHydrated(hwnd));
+        UpdateTextViewScrollBars(hwnd);
+        InvalidateRect(hwnd, nullptr, TRUE);
+        if (_hWnd)
+        {
+            InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
+        }
+    }
+    else if (EnsureVisibleDiffViewportHydrated(hwnd))
+    {
         UpdateTextViewScrollBars(hwnd);
         InvalidateRect(hwnd, nullptr, TRUE);
         if (_hWnd)
@@ -531,68 +569,212 @@ LRESULT ViewerText::OnTextViewMouseWheel(HWND hwnd, int wheelDelta) noexcept
     return 0;
 }
 
-LRESULT ViewerText::OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept
+std::optional<ViewerText::TextViewHitTestResult> ViewerText::HitTestTextView(HWND hwnd, POINT pt) const noexcept
 {
-    SetFocus(hwnd);
+    if (! hwnd || _textVisualLineStarts.empty() || _textVisualLineLogical.empty() || _textVisualLineLayouts.empty())
+    {
+        return std::nullopt;
+    }
 
-    SetCapture(hwnd);
-
-    static_cast<void>(EnsureTextViewDirect2D(hwnd));
     const UINT dpi        = GetDpiForWindow(hwnd);
     const float xDip      = DipsFromPixels(pt.x, dpi);
     const float yDip      = DipsFromPixels(pt.y, dpi);
     const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
     const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
     const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
-    float textStartX      = marginDip;
-    if (_config.showLineNumbers && charW > 0.0f)
+    if (lineH <= 0.0f)
+    {
+        return std::nullopt;
+    }
+
+    float textStartX = marginDip;
+    if (ShowTextLineNumbersInCurrentPresentation() && charW > 0.0f)
     {
         const size_t digits      = LineNumberDigits(_textLineStarts.size());
         const size_t gutterChars = digits + 2u;
         textStartX               = marginDip + static_cast<float>(gutterChars) * charW;
     }
 
-    auto hitTestIndex = [&]() noexcept -> size_t
+    const float relY      = std::max(0.0f, yDip - marginDip);
+    const uint64_t row    = static_cast<uint64_t>(std::floor(relY / lineH));
+    const uint64_t visual = std::min<uint64_t>(static_cast<uint64_t>(_textTopVisualLine) + row, static_cast<uint64_t>(_textVisualLineStarts.size() - 1u));
+    const TextVisualLineLayoutEntry& layout = _textVisualLineLayouts[static_cast<size_t>(visual)];
+    if (layout.logicalLine >= _textLineEnds.size())
     {
-        if (_textVisualLineStarts.empty() || _textVisualLineLogical.empty() || lineH <= 0.0f)
+        return std::nullopt;
+    }
+
+    size_t index = 0u;
+    if (layout.splitPanes && charW > 0.0f)
+    {
+        const float leftPaneWidthDip  = static_cast<float>(layout.leftPaneColumns) * charW;
+        const float separatorWidthDip = static_cast<float>(layout.separatorColumns) * charW;
+        const float separatorLeft     = textStartX + leftPaneWidthDip;
+        const float separatorRight    = separatorLeft + separatorWidthDip;
+
+        if (xDip < separatorLeft)
         {
-            return 0;
+            const float relX      = std::max(0.0f, xDip - textStartX);
+            const uint32_t col    = static_cast<uint32_t>(std::floor(relX / charW));
+            const uint32_t segLen = layout.leftEndIndex >= layout.leftStartIndex ? (layout.leftEndIndex - layout.leftStartIndex) : 0u;
+            const uint32_t idx32  = layout.leftStartIndex + std::min<uint32_t>(col, segLen);
+            index                 = std::min<size_t>(static_cast<size_t>(idx32), _textBuffer.size());
         }
-
-        const float relY      = std::max(0.0f, yDip - marginDip);
-        const uint64_t row    = static_cast<uint64_t>(std::floor(relY / lineH));
-        const uint64_t visual = std::min<uint64_t>(static_cast<uint64_t>(_textTopVisualLine) + row, static_cast<uint64_t>(_textVisualLineStarts.size() - 1));
-
-        const uint32_t logical = _textVisualLineLogical[static_cast<size_t>(visual)];
-        if (logical >= _textLineEnds.size())
+        else if (xDip < separatorRight)
         {
-            return 0;
+            index = std::min<size_t>(static_cast<size_t>(layout.separatorStartIndex), _textBuffer.size());
         }
-
-        uint32_t segStart = _textVisualLineStarts[static_cast<size_t>(visual)];
-        uint32_t segEnd   = _textLineEnds[logical];
-        if ((visual + 1) < _textVisualLineStarts.size() && _textVisualLineLogical[static_cast<size_t>(visual + 1)] == logical)
+        else
         {
-            segEnd = _textVisualLineStarts[static_cast<size_t>(visual + 1)];
+            const float relX      = std::max(0.0f, xDip - separatorRight);
+            const uint32_t col    = static_cast<uint32_t>(std::floor(relX / charW));
+            const uint32_t segLen = layout.rightEndIndex >= layout.rightStartIndex ? (layout.rightEndIndex - layout.rightStartIndex) : 0u;
+            const uint32_t idx32  = layout.rightStartIndex + std::min<uint32_t>(col, segLen);
+            index                 = std::min<size_t>(static_cast<size_t>(idx32), _textBuffer.size());
         }
-
-        if (! _wrap && segEnd >= segStart && _textLeftColumn != 0)
-        {
-            const uint32_t skip = std::min<uint32_t>(_textLeftColumn, segEnd - segStart);
-            segStart += skip;
-        }
-
+    }
+    else
+    {
         const float relX   = std::max(0.0f, xDip - textStartX);
         const uint32_t col = charW <= 0.0f ? 0u : static_cast<uint32_t>(std::floor(relX / charW));
 
-        const uint32_t segLen     = segEnd >= segStart ? (segEnd - segStart) : 0u;
+        uint32_t segmentStart = layout.segmentStartIndex;
+        uint32_t segmentEnd   = layout.segmentEndIndex;
+        if (! _wrap && segmentEnd >= segmentStart && _textLeftColumn != 0u)
+        {
+            const uint32_t skip = std::min<uint32_t>(_textLeftColumn, segmentEnd - segmentStart);
+            segmentStart += skip;
+        }
+
+        const uint32_t segLen     = segmentEnd >= segmentStart ? (segmentEnd - segmentStart) : 0u;
         const uint32_t colClamped = std::min<uint32_t>(col, segLen);
-        const uint32_t idx32      = segStart + colClamped;
-        const size_t idx          = std::min<size_t>(static_cast<size_t>(idx32), _textBuffer.size());
-        return idx;
+        const uint32_t idx32      = segmentStart + colClamped;
+        index                     = std::min<size_t>(static_cast<size_t>(idx32), _textBuffer.size());
+    }
+
+    return TextViewHitTestResult{index, layout.logicalLine};
+}
+
+bool ViewerText::IsClickableHiddenDiffBannerLogicalLine(uint32_t logicalLine) const noexcept
+{
+    using DiffSemanticRowKind = ViewerText::DiffTextVariant::SemanticRowKind;
+
+    if (! HasParsedDiffPresentation() || _config.diffContextMode != DiffContextMode::HunksOnly)
+    {
+        return false;
+    }
+
+    const auto* variant = CurrentDiffVariant();
+    if (! variant || logicalLine >= variant->logicalRowStyles.size() || logicalLine >= variant->logicalRowRenderInfo.size())
+    {
+        return false;
+    }
+
+    return variant->logicalRowStyles[logicalLine].fullRow == DiffSemanticRowKind::HiddenContextBanner &&
+           variant->logicalRowRenderInfo[logicalLine].clickableBanner;
+}
+
+bool ViewerText::DebugClickTextLogicalLine(HWND hwnd, uint32_t logicalLine) noexcept
+{
+    if (! hwnd || _viewMode != ViewMode::Text || logicalLine >= _textLineStarts.size() || _textVisualLineLogical.empty())
+    {
+        return false;
+    }
+
+    const auto findVisibleVisualLine = [&](uint32_t targetLogicalLine) noexcept -> std::optional<size_t>
+    {
+        const auto it =
+            std::lower_bound(_textVisualLineLogical.begin(), _textVisualLineLogical.end(), targetLogicalLine, [](uint32_t left, uint32_t right) noexcept {
+            return left < right;
+        });
+        if (it == _textVisualLineLogical.end() || *it != targetLogicalLine)
+        {
+            return std::nullopt;
+        }
+
+        const size_t visualLine = static_cast<size_t>(std::distance(_textVisualLineLogical.begin(), it));
+        if (visualLine < _textTopVisualLine)
+        {
+            return std::nullopt;
+        }
+
+        RECT client{};
+        GetClientRect(hwnd, &client);
+        const UINT dpi          = GetDpiForWindow(hwnd);
+        const float heightDip   = DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi);
+        const float marginDip   = RoundDipToDevicePixels(6.0f, dpi);
+        const float lineH       = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
+        const float rowIndexDip = static_cast<float>(visualLine - static_cast<size_t>(_textTopVisualLine));
+        const float yDip        = marginDip + rowIndexDip * lineH + lineH * 0.5f;
+        if (yDip < 0.0f || yDip >= heightDip)
+        {
+            return std::nullopt;
+        }
+
+        return visualLine;
     };
 
-    const size_t index = hitTestIndex();
+    std::optional<size_t> visualLine = findVisibleVisualLine(logicalLine);
+    if (! visualLine.has_value())
+    {
+        ScrollTextViewportToLogicalLine(hwnd, logicalLine);
+        visualLine = findVisibleVisualLine(logicalLine);
+    }
+
+    if (! visualLine.has_value())
+    {
+        return false;
+    }
+
+    RECT client{};
+    GetClientRect(hwnd, &client);
+    const UINT dpi        = GetDpiForWindow(hwnd);
+    const float widthDip  = DipsFromPixels(static_cast<int>(client.right - client.left), dpi);
+    const float heightDip = DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi);
+    const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
+    const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
+    const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
+
+    float textStartX = marginDip;
+    if (ShowTextLineNumbersInCurrentPresentation() && charW > 0.0f)
+    {
+        const size_t digits      = LineNumberDigits(_textLineStarts.size());
+        const size_t gutterChars = digits + 2u;
+        textStartX += static_cast<float>(gutterChars) * charW;
+    }
+
+    const float rowIndexDip = static_cast<float>(visualLine.value() - static_cast<size_t>(_textTopVisualLine));
+    const float xDip        = std::min(widthDip - marginDip, textStartX + std::max(charW, 12.0f));
+    const float yDip        = marginDip + rowIndexDip * lineH + lineH * 0.5f;
+    if (xDip < 0.0f || yDip < 0.0f || xDip >= widthDip || yDip >= heightDip)
+    {
+        return false;
+    }
+
+    const auto toPixels = [dpi](float dip) noexcept { return static_cast<LONG>(std::lround(dip * static_cast<float>(dpi) / 96.0f)); };
+
+    const POINT pt{toPixels(xDip), toPixels(yDip)};
+    static_cast<void>(OnTextViewLButtonDown(hwnd, pt));
+    static_cast<void>(OnTextViewLButtonUp(hwnd));
+    return true;
+}
+
+LRESULT ViewerText::OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept
+{
+    SetFocus(hwnd);
+
+    const auto hit = HitTestTextView(hwnd, pt);
+    if (hit.has_value() && IsClickableHiddenDiffBannerLogicalLine(hit->logicalLine))
+    {
+        if (const HWND root = GetAncestor(hwnd, GA_ROOT))
+        {
+            SetDiffContextMode(root, DiffContextMode::FullFileWhenAvailable);
+        }
+        return 0;
+    }
+
+    SetCapture(hwnd);
+    const size_t index = hit.has_value() ? hit->bufferIndex : 0u;
 
     const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
     _textCaretIndex  = index;
@@ -618,57 +800,14 @@ LRESULT ViewerText::OnTextViewMouseMove(HWND hwnd, POINT pt) noexcept
         return 0;
     }
 
-    static_cast<void>(EnsureTextViewDirect2D(hwnd));
-    const UINT dpi        = GetDpiForWindow(hwnd);
-    const float xDip      = DipsFromPixels(pt.x, dpi);
-    const float yDip      = DipsFromPixels(pt.y, dpi);
-    const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
-    const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
-    const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
-    float textStartX      = marginDip;
-    if (_config.showLineNumbers && charW > 0.0f)
-    {
-        const size_t digits      = LineNumberDigits(_textLineStarts.size());
-        const size_t gutterChars = digits + 2u;
-        textStartX               = marginDip + static_cast<float>(gutterChars) * charW;
-    }
-
-    if (_textVisualLineStarts.empty() || _textVisualLineLogical.empty() || lineH <= 0.0f)
+    const auto hit = HitTestTextView(hwnd, pt);
+    if (! hit.has_value())
     {
         return 0;
     }
 
-    const float relY      = std::max(0.0f, yDip - marginDip);
-    const uint64_t row    = static_cast<uint64_t>(std::floor(relY / lineH));
-    const uint64_t visual = std::min<uint64_t>(static_cast<uint64_t>(_textTopVisualLine) + row, static_cast<uint64_t>(_textVisualLineStarts.size() - 1));
-
-    const uint32_t logical = _textVisualLineLogical[static_cast<size_t>(visual)];
-    if (logical >= _textLineEnds.size())
-    {
-        return 0;
-    }
-
-    uint32_t segStart = _textVisualLineStarts[static_cast<size_t>(visual)];
-    uint32_t segEnd   = _textLineEnds[logical];
-    if ((visual + 1) < _textVisualLineStarts.size() && _textVisualLineLogical[static_cast<size_t>(visual + 1)] == logical)
-    {
-        segEnd = _textVisualLineStarts[static_cast<size_t>(visual + 1)];
-    }
-
-    if (! _wrap && segEnd >= segStart && _textLeftColumn != 0)
-    {
-        const uint32_t skip = std::min<uint32_t>(_textLeftColumn, segEnd - segStart);
-        segStart += skip;
-    }
-
-    const float relX   = std::max(0.0f, xDip - textStartX);
-    const uint32_t col = charW <= 0.0f ? 0u : static_cast<uint32_t>(std::floor(relX / charW));
-
-    const uint32_t segLen     = segEnd >= segStart ? (segEnd - segStart) : 0u;
-    const uint32_t colClamped = std::min<uint32_t>(col, segLen);
-    const uint32_t idx32      = segStart + colClamped;
-    _textSelActive            = std::min<size_t>(static_cast<size_t>(idx32), _textBuffer.size());
-    _textCaretIndex           = _textSelActive;
+    _textSelActive  = hit->bufferIndex;
+    _textCaretIndex = _textSelActive;
 
     InvalidateRect(hwnd, nullptr, TRUE);
     return 0;
@@ -684,6 +823,29 @@ LRESULT ViewerText::OnTextViewLButtonUp([[maybe_unused]] HWND hwnd) noexcept
     ReleaseCapture();
     _textSelecting = false;
     return 0;
+}
+
+LRESULT ViewerText::OnTextViewSetCursor(HWND hwnd, LPARAM lParam) noexcept
+{
+    if (! hwnd || LOWORD(lParam) != HTCLIENT)
+    {
+        return FALSE;
+    }
+
+    POINT pt{};
+    if (GetCursorPos(&pt) == 0 || ScreenToClient(hwnd, &pt) == 0)
+    {
+        return FALSE;
+    }
+
+    const auto hit = HitTestTextView(hwnd, pt);
+    if (! hit.has_value() || ! IsClickableHiddenDiffBannerLogicalLine(hit->logicalLine))
+    {
+        return FALSE;
+    }
+
+    SetCursor(LoadCursorW(nullptr, IDC_HAND));
+    return TRUE;
 }
 
 LRESULT ViewerText::OnTextViewSetFocus(HWND hwnd) noexcept
@@ -715,9 +877,10 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
 
     if (EnsureTextViewDirect2D(hwnd) && _textViewTarget && _textViewBrush)
     {
-        const UINT dpi    = GetDpiForWindow(hwnd);
-        const COLORREF bg = _hasTheme ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
-        const COLORREF fg = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
+        const auto paintStartedAt = std::chrono::steady_clock::now();
+        const UINT dpi            = GetDpiForWindow(hwnd);
+        const COLORREF bg         = _hasTheme ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
+        const COLORREF fg         = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
 
         HRESULT hr = S_OK;
         {
@@ -735,10 +898,22 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
             const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
             const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
             const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
+#ifdef _DEBUG
+            _debugTextRenderCount += 1u;
+            _debugTextVisibleRowCount        = 0u;
+            _debugTextVisibleStyledRowCount  = 0u;
+            _debugTextVisibleContextRowCount = 0u;
+            _debugTextVisibleAddedRowCount   = 0u;
+            _debugTextVisibleRemovedRowCount = 0u;
+            _debugTextVisibleHeaderRowCount  = 0u;
+            _debugTextVisibleBannerRowCount  = 0u;
+            _debugTextVisibleGapHatchCount   = 0u;
+            _debugTextVisibleSplitRowCount   = 0u;
+#endif
 
             float gutterWidthDip = 0.0f;
             float textStartX     = marginDip;
-            if (_config.showLineNumbers && charW > 0.0f)
+            if (ShowTextLineNumbersInCurrentPresentation() && charW > 0.0f)
             {
                 const size_t digits      = LineNumberDigits(_textLineStarts.size());
                 const size_t gutterChars = digits + 2u;
@@ -772,9 +947,75 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
             const uint8_t selectionFocusAlpha = (_hasTheme && _theme.darkMode) ? 140u : 120u;
             const COLORREF selectionFocusedBg = BlendColor(bg, accent, selectionFocusAlpha);
 
-            const bool showLineNumbers    = _config.showLineNumbers && gutterWidthDip > 0.0f;
-            const uint8_t lineNumberAlpha = (_hasTheme && _theme.darkMode) ? 160u : 140u;
-            const COLORREF lineNumberFg   = BlendColor(bg, fg, lineNumberAlpha);
+            const bool showLineNumbers                           = ShowTextLineNumbersInCurrentPresentation() && gutterWidthDip > 0.0f;
+            const uint8_t lineNumberAlpha                        = (_hasTheme && _theme.darkMode) ? 160u : 140u;
+            const COLORREF lineNumberFg                          = BlendColor(bg, fg, lineNumberAlpha);
+            const ViewerText::DiffTextVariant* activeDiffVariant = HasParsedDiffPresentation() ? CurrentDiffVariant() : nullptr;
+            using DiffSemanticRowKind                            = ViewerText::DiffTextVariant::SemanticRowKind;
+            const auto findPlaceholderBandPlacement = [&](uint32_t logicalLine) noexcept -> std::optional<ViewerText::DiffTextVariant::PlaceholderBandPlacement>
+            {
+                if (! activeDiffVariant || activeDiffVariant->placeholderBands.empty())
+                {
+                    return std::nullopt;
+                }
+
+                const auto it = std::lower_bound(activeDiffVariant->placeholderBands.begin(),
+                                                 activeDiffVariant->placeholderBands.end(),
+                                                 logicalLine,
+                                                 [](const ViewerText::DiffTextVariant::PlaceholderBandEntry& entry, uint32_t value) noexcept
+                { return entry.logicalLine < value; });
+                if (it == activeDiffVariant->placeholderBands.end() || it->logicalLine != logicalLine)
+                {
+                    return std::nullopt;
+                }
+
+                return it->placement;
+            };
+            const D2D1_COLOR_F baseTextBg    = ColorFFromColorRef(bg);
+            const D2D1_COLOR_F diffAddedBg   = _hasTheme ? ColorFFromArgb(_theme.diffAddedBackgroundArgb) : ColorFFromColorRef(RGB(46, 160, 67), 0.16f);
+            const D2D1_COLOR_F diffRemovedBg = _hasTheme ? ColorFFromArgb(_theme.diffRemovedBackgroundArgb) : ColorFFromColorRef(RGB(204, 51, 51), 0.16f);
+            const D2D1_COLOR_F diffHeaderBg =
+                _hasTheme ? ColorFFromArgb(_theme.diffHeaderBackgroundArgb) : ColorFFromColorRef(accent, (_hasTheme && _theme.darkMode) ? 0.16f : 0.10f);
+            const D2D1_COLOR_F diffBannerBg =
+                _hasTheme ? ColorFFromArgb(_theme.diffBannerBackgroundArgb) : ColorFFromColorRef(accent, (_hasTheme && _theme.darkMode) ? 0.22f : 0.16f);
+            const D2D1_COLOR_F diffPlaceholderBg =
+                _hasTheme ? ColorFFromArgb(_theme.diffPlaceholderBackgroundArgb) : ColorFFromColorRef(accent, (_hasTheme && _theme.darkMode) ? 0.18f : 0.12f);
+            const D2D1_COLOR_F diffDividerBg = _hasTheme ? ColorFFromArgb(_theme.diffDividerArgb)
+                                                         : ColorFFromColorRef(BlendColor(bg, accent, (_hasTheme && _theme.darkMode) ? 28u : 18u), 0.80f);
+            const D2D1_COLOR_F diffStructuralBorderBg =
+                ColorFFromColorRef(BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 72u : 48u), (_hasTheme && _theme.darkMode) ? 0.92f : 0.82f);
+            const D2D1_COLOR_F diffActiveHunkBorderBg = ColorFFromColorRef(BlendColor(bg, accent, (_hasTheme && _theme.darkMode) ? 168u : 120u), 0.96f);
+            const COLORREF diffMarkerColorRef         = BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 72u : 52u);
+            const COLORREF diffGapHatchColorRef       = BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 48u : 34u);
+            const D2D1_COLOR_F diffMarkerFg           = ColorFFromColorRef(diffMarkerColorRef, (_hasTheme && _theme.darkMode) ? 0.88f : 0.78f);
+            const D2D1_COLOR_F diffGapHatchFg         = ColorFFromColorRef(diffGapHatchColorRef, (_hasTheme && _theme.darkMode) ? 0.34f : 0.22f);
+#ifdef _DEBUG
+            _debugDiffMarkerArgb                = ArgbFromColorRef(diffMarkerColorRef, (_hasTheme && _theme.darkMode) ? 224u : 200u);
+            _debugDiffGapHatchArgb              = ArgbFromColorRef(diffGapHatchColorRef, (_hasTheme && _theme.darkMode) ? 88u : 56u);
+            _debugDiffContextUsesBaseBackground = activeDiffVariant != nullptr;
+#endif
+            const size_t activeHunkIndex      = activeDiffVariant ? CurrentDiffHunkIndex() : 0u;
+            const auto isActiveHunkHeaderLine = [&](uint32_t logicalLine) noexcept
+            {
+                return activeDiffVariant && activeHunkIndex < activeDiffVariant->hunkNavigation.size() &&
+                       activeDiffVariant->hunkNavigation[activeHunkIndex].startLogicalLine == logicalLine;
+            };
+            const auto semanticColorFor = [&](DiffSemanticRowKind kind) noexcept -> std::optional<D2D1_COLOR_F>
+            {
+                switch (kind)
+                {
+                    case DiffSemanticRowKind::Context: return std::nullopt;
+                    case DiffSemanticRowKind::Added: return diffAddedBg;
+                    case DiffSemanticRowKind::Removed: return diffRemovedBg;
+                    case DiffSemanticRowKind::FileHeader: return diffHeaderBg;
+                    case DiffSemanticRowKind::HunkHeader: return diffBannerBg;
+                    case DiffSemanticRowKind::HiddenContextBanner: return diffBannerBg;
+                    case DiffSemanticRowKind::Placeholder: return diffPlaceholderBg;
+                    case DiffSemanticRowKind::None: break;
+                }
+                return std::nullopt;
+            };
+            size_t visibleRowsDrawn = 0u;
 
             if (showLineNumbers)
             {
@@ -812,15 +1053,17 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                         break;
                     }
 
-                    const uint32_t segStartRaw = _textVisualLineStarts[static_cast<size_t>(visual)];
+                    const TextVisualLineLayoutEntry* visualLayout =
+                        static_cast<size_t>(visual) < _textVisualLineLayouts.size() ? &_textVisualLineLayouts[static_cast<size_t>(visual)] : nullptr;
+                    const uint32_t segStartRaw = visualLayout ? visualLayout->segmentStartIndex : _textVisualLineStarts[static_cast<size_t>(visual)];
                     uint32_t segStart          = segStartRaw;
-                    uint32_t segEnd            = _textLineEnds[logical];
-                    if ((visual + 1) < totalVisual && _textVisualLineLogical[static_cast<size_t>(visual + 1)] == logical)
+                    uint32_t segEnd            = visualLayout ? visualLayout->segmentEndIndex : _textLineEnds[logical];
+                    if (! visualLayout && (visual + 1) < totalVisual && _textVisualLineLogical[static_cast<size_t>(visual + 1)] == logical)
                     {
                         segEnd = _textVisualLineStarts[static_cast<size_t>(visual + 1)];
                     }
 
-                    if (! _wrap && segEnd >= segStart && _textLeftColumn != 0)
+                    if (! _wrap && (! visualLayout || ! visualLayout->splitPanes) && segEnd >= segStart && _textLeftColumn != 0)
                     {
                         const uint32_t skip = std::min<uint32_t>(_textLeftColumn, segEnd - segStart);
                         segStart += skip;
@@ -829,19 +1072,411 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                     const size_t startIndex = std::min<size_t>(static_cast<size_t>(segStart), _textBuffer.size());
                     const size_t endIndex   = std::min<size_t>(static_cast<size_t>(segEnd), _textBuffer.size());
 
-                    const UINT32 len = endIndex - startIndex > static_cast<size_t>(std::numeric_limits<UINT32>::max())
-                                           ? std::numeric_limits<UINT32>::max()
-                                           : static_cast<UINT32>(endIndex - startIndex);
+                    const float x                       = textStartX;
+                    const float y                       = RoundDipToDevicePixels(marginDip + static_cast<float>(row) * lineH, dpi);
+                    const float lineBottom              = RoundDipToDevicePixels(y + lineH, dpi);
+                    const D2D1_RECT_F lineRc            = D2D1::RectF(x, y, std::max(x, widthDip - marginDip), lineBottom);
+                    const bool isFirstSegmentForLogical = (visual == 0u) || (_textVisualLineLogical[static_cast<size_t>(visual - 1u)] != logical);
+                    const size_t logicalStartIndex      = static_cast<size_t>(_textLineStarts[logical]);
+                    const size_t logicalEndIndex        = static_cast<size_t>(_textLineEnds[logical]);
+                    const std::wstring_view logicalLine = logicalEndIndex >= logicalStartIndex && logicalEndIndex <= _textBuffer.size()
+                                                              ? std::wstring_view(_textBuffer.data() + logicalStartIndex, logicalEndIndex - logicalStartIndex)
+                                                              : std::wstring_view{};
+                    const bool splitPaneRow             = visualLayout && visualLayout->splitPanes && _documentKind == DocumentKind::Diff &&
+                                                          _diffPresentation == DiffPresentationMode::SideBySide;
+                    const size_t separatorColumn   = splitPaneRow ? static_cast<size_t>(visualLayout->separatorStartIndex >= _textLineStarts[logical]
+                                                                                            ? (visualLayout->separatorStartIndex - _textLineStarts[logical])
+                                                                                            : 0u)
+                                                                  : logicalLine.find(L" | ");
+                    const bool hasSeparator        = splitPaneRow || separatorColumn != std::wstring_view::npos;
+                    const uint32_t lineStartColumn = segStart >= _textLineStarts[logical] ? (segStart - _textLineStarts[logical]) : 0u;
+                    const uint32_t lineEndColumn   = segEnd >= _textLineStarts[logical] ? (segEnd - _textLineStarts[logical]) : lineStartColumn;
+                    const uint32_t separatorStart  = static_cast<uint32_t>(separatorColumn);
+                    const uint32_t separatorEnd = splitPaneRow
+                                                      ? static_cast<uint32_t>(visualLayout->separatorEndIndex >= _textLineStarts[logical]
+                                                                                  ? (visualLayout->separatorEndIndex - _textLineStarts[logical])
+                                                                                  : separatorStart)
+                                                      : static_cast<uint32_t>(hasSeparator ? std::min<size_t>(logicalLine.size(), separatorColumn + 3u) : 0u);
+                    const uint32_t rightStartColumn = separatorEnd;
+                    const size_t leftStartIndex     = splitPaneRow ? std::min<size_t>(visualLayout->leftStartIndex, _textBuffer.size()) : startIndex;
+                    const size_t leftEndIndex       = splitPaneRow ? std::min<size_t>(visualLayout->leftEndIndex, _textBuffer.size()) : endIndex;
+                    const size_t rightStartIndex    = splitPaneRow ? std::min<size_t>(visualLayout->rightStartIndex, _textBuffer.size()) : endIndex;
+                    const size_t rightEndIndex      = splitPaneRow ? std::min<size_t>(visualLayout->rightEndIndex, _textBuffer.size()) : endIndex;
+                    const auto* rowStyle =
+                        (activeDiffVariant && logical < activeDiffVariant->logicalRowStyles.size()) ? &activeDiffVariant->logicalRowStyles[logical] : nullptr;
+                    const auto* rowRender       = (activeDiffVariant && logical < activeDiffVariant->logicalRowRenderInfo.size())
+                                                      ? &activeDiffVariant->logicalRowRenderInfo[logical]
+                                                      : nullptr;
+                    const D2D1_RECT_F fullRowRc = D2D1::RectF(0.0f, y, widthDip, lineBottom);
+                    const float separatorWidthDip =
+                        splitPaneRow ? static_cast<float>(visualLayout->separatorColumns) * charW : static_cast<float>(separatorEnd - separatorStart) * charW;
+                    const float leftPaneWidthDip =
+                        splitPaneRow ? static_cast<float>(visualLayout->leftPaneColumns) * charW : static_cast<float>(separatorStart) * charW;
+                    const float leftPaneRight =
+                        splitPaneRow ? std::min(lineRc.right, x + leftPaneWidthDip) : std::min(lineRc.right, x + static_cast<float>(separatorStart) * charW);
+                    const float separatorLeft    = leftPaneRight;
+                    const float separatorRight   = splitPaneRow
+                                                       ? std::min(lineRc.right, separatorLeft + separatorWidthDip)
+                                                       : std::min(lineRc.right, separatorLeft + static_cast<float>(separatorEnd - separatorStart) * charW);
+                    const float rightPaneLeft    = splitPaneRow ? separatorRight : x + static_cast<float>(rightStartColumn - lineStartColumn) * charW;
+                    const D2D1_RECT_F leftPaneRc = D2D1::RectF(x, y, std::max(x, leftPaneRight), lineBottom);
+                    const D2D1_RECT_F separatorRc =
+                        D2D1::RectF(std::max(x, separatorLeft), y, std::max(std::max(x, separatorLeft), separatorRight), lineBottom);
+                    const D2D1_RECT_F rightPaneRc = D2D1::RectF(std::max(x, rightPaneLeft), y, std::max(std::max(x, rightPaneLeft), lineRc.right), lineBottom);
+                    const auto fillVisibleColumns = [&](uint32_t columnStart, uint32_t columnEndExclusive, const D2D1_COLOR_F& fillColor) noexcept
+                    {
+                        if (columnEndExclusive <= columnStart || charW <= 0.0f)
+                        {
+                            return;
+                        }
 
-                    const float x           = textStartX;
-                    const float y           = RoundDipToDevicePixels(marginDip + static_cast<float>(row) * lineH, dpi);
-                    const float lineBottom  = RoundDipToDevicePixels(y + lineH, dpi);
-                    const D2D1_RECT_F lineRc = D2D1::RectF(x, y, std::max(x, widthDip - marginDip), lineBottom);
+                        const uint32_t visibleStart = std::max(lineStartColumn, columnStart);
+                        const uint32_t visibleEnd   = std::min(lineEndColumn, columnEndExclusive);
+                        if (visibleEnd <= visibleStart)
+                        {
+                            return;
+                        }
+
+                        const float bandX = x + static_cast<float>(visibleStart - lineStartColumn) * charW;
+                        const float bandW = static_cast<float>(visibleEnd - visibleStart) * charW;
+                        _textViewBrush->SetColor(fillColor);
+                        _textViewTarget->FillRectangle(D2D1::RectF(bandX, y, bandX + bandW, lineBottom), _textViewBrush.get());
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+                    const auto fillPaneRect = [&](const D2D1_RECT_F& rc, const D2D1_COLOR_F& fillColor) noexcept
+                    {
+                        if (rc.right <= rc.left)
+                        {
+                            return;
+                        }
+
+                        _textViewBrush->SetColor(fillColor);
+                        _textViewTarget->FillRectangle(rc, _textViewBrush.get());
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+                    const auto fillTextArea = [&](const D2D1_COLOR_F& fillColor) noexcept
+                    {
+                        _textViewBrush->SetColor(fillColor);
+                        _textViewTarget->FillRectangle(lineRc, _textViewBrush.get());
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+                    const auto fillFullRow = [&](const D2D1_COLOR_F& fillColor) noexcept
+                    {
+                        _textViewBrush->SetColor(fillColor);
+                        _textViewTarget->FillRectangle(fullRowRc, _textViewBrush.get());
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+                    const auto drawRowEdges = [&](const D2D1_COLOR_F& edgeColor, float thicknessDip) noexcept
+                    {
+                        _textViewBrush->SetColor(edgeColor);
+                        _textViewTarget->DrawLine(D2D1::Point2F(fullRowRc.left, y), D2D1::Point2F(fullRowRc.right, y), _textViewBrush.get(), thicknessDip);
+                        _textViewTarget->DrawLine(
+                            D2D1::Point2F(fullRowRc.left, lineBottom), D2D1::Point2F(fullRowRc.right, lineBottom), _textViewBrush.get(), thicknessDip);
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+                    const auto drawLeadingStripe = [&](const D2D1_COLOR_F& fillColor, float widthDip) noexcept
+                    {
+                        const float stripeLeft  = showLineNumbers ? std::max(marginDip, textStartX - RoundDipToDevicePixels(4.0f, dpi)) : marginDip;
+                        const float stripeWidth = std::max(DevicePixelDip(dpi), widthDip);
+                        _textViewBrush->SetColor(fillColor);
+                        _textViewTarget->FillRectangle(D2D1::RectF(stripeLeft, y, std::min(widthDip, stripeLeft + stripeWidth), lineBottom),
+                                                       _textViewBrush.get());
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+                    const auto drawBannerChip =
+                        [&](const D2D1_COLOR_F& chipFill, const D2D1_COLOR_F& chipBorder, bool emphasizeBorder, bool centerChip = false) noexcept
+                    {
+                        if (! isFirstSegmentForLogical || logicalLine.empty())
+                        {
+                            return;
+                        }
+
+                        const float chipPadX     = RoundDipToDevicePixels(centerChip ? 10.0f : 8.0f, dpi);
+                        const float chipPadY     = RoundDipToDevicePixels(centerChip ? 3.0f : 2.0f, dpi);
+                        const float chipMinLeft  = std::max(marginDip, textStartX + RoundDipToDevicePixels(centerChip ? 6.0f : -2.0f, dpi));
+                        const float maxChipWidth = std::max(0.0f, widthDip - chipMinLeft - marginDip);
+                        if (maxChipWidth <= 0.0f)
+                        {
+                            return;
+                        }
+
+                        const float chipTextWidth =
+                            std::min(maxChipWidth, static_cast<float>(std::min<size_t>(logicalLine.size(), 160u)) * charW + chipPadX * 2.0f);
+                        const float chipLeft = centerChip ? std::max(chipMinLeft, x + std::max(0.0f, (lineRc.right - x - chipTextWidth) * 0.5f)) : chipMinLeft;
+                        const float chipTop  = y + chipPadY;
+                        const float chipBottom = std::max(chipTop + DevicePixelDip(dpi), lineBottom - chipPadY);
+                        const float chipRadius = RoundDipToDevicePixels(emphasizeBorder ? 6.0f : 5.0f, dpi);
+                        const D2D1_ROUNDED_RECT chipRect =
+                            D2D1::RoundedRect(D2D1::RectF(chipLeft, chipTop, chipLeft + chipTextWidth, chipBottom), chipRadius, chipRadius);
+
+                        _textViewBrush->SetColor(chipFill);
+                        _textViewTarget->FillRoundedRectangle(chipRect, _textViewBrush.get());
+                        _textViewBrush->SetColor(chipBorder);
+                        _textViewTarget->DrawRoundedRectangle(chipRect, _textViewBrush.get(), emphasizeBorder ? 2.0f : 1.0f);
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+                    const auto drawGapHatch = [&](const D2D1_RECT_F& rc) noexcept
+                    {
+                        if (rc.right <= rc.left || rc.bottom <= rc.top)
+                        {
+                            return;
+                        }
+
+                        fillPaneRect(rc, baseTextBg);
+
+                        const float stepDip      = std::max(DevicePixelDip(dpi) * 5.0f, RoundDipToDevicePixels(7.0f, dpi));
+                        const float thicknessDip = std::max(DevicePixelDip(dpi), 1.0f);
+                        const float diagonalDip  = rc.bottom - rc.top;
+                        _textViewBrush->SetColor(diffGapHatchFg);
+                        for (float startX = rc.left - diagonalDip; startX < rc.right + diagonalDip; startX += stepDip)
+                        {
+                            _textViewTarget->DrawLine(
+                                D2D1::Point2F(startX, rc.bottom), D2D1::Point2F(startX + diagonalDip, rc.top), _textViewBrush.get(), thicknessDip);
+                        }
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+#ifdef _DEBUG
+                        _debugTextVisibleGapHatchCount += 1u;
+#endif
+                    };
+                    const auto fillSeparatorBand = [&]() noexcept
+                    {
+                        if (! hasSeparator)
+                        {
+                            return;
+                        }
+
+                        if (splitPaneRow)
+                        {
+                            fillPaneRect(separatorRc, baseTextBg);
+                            return;
+                        }
+
+                        fillVisibleColumns(separatorStart, separatorEnd, diffDividerBg);
+                    };
+                    const auto drawSeparatorEdges = [&]() noexcept
+                    {
+                        if (! hasSeparator || charW <= 0.0f)
+                        {
+                            return;
+                        }
+
+                        if (splitPaneRow)
+                        {
+                            const float centerX              = std::floor((separatorRc.left + separatorRc.right) * 0.5f);
+                            const D2D1_COLOR_F softDividerBg = ColorFFromColorRef(BlendColor(bg, fg, (_hasTheme && _theme.darkMode) ? 24u : 18u),
+                                                                                  (_hasTheme && _theme.darkMode) ? 0.24f : 0.18f);
+                            _textViewBrush->SetColor(softDividerBg);
+                            _textViewTarget->FillRectangle(separatorRc, _textViewBrush.get());
+                            _textViewBrush->SetColor(diffStructuralBorderBg);
+                            _textViewTarget->DrawLine(D2D1::Point2F(centerX, y), D2D1::Point2F(centerX, lineBottom), _textViewBrush.get(), 1.0f);
+                            _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                            return;
+                        }
+
+                        const uint32_t visibleStartColumn = std::max(lineStartColumn, separatorStart);
+                        const uint32_t visibleEndColumn   = std::min(lineEndColumn, separatorEnd);
+                        if (visibleEndColumn <= visibleStartColumn)
+                        {
+                            return;
+                        }
+
+                        const float leftX  = x + static_cast<float>(visibleStartColumn - lineStartColumn) * charW;
+                        const float rightX = x + static_cast<float>(visibleEndColumn - lineStartColumn) * charW;
+                        _textViewBrush->SetColor(diffStructuralBorderBg);
+                        _textViewTarget->DrawLine(D2D1::Point2F(leftX, y), D2D1::Point2F(leftX, lineBottom), _textViewBrush.get(), 1.0f);
+                        _textViewTarget->DrawLine(D2D1::Point2F(rightX, y), D2D1::Point2F(rightX, lineBottom), _textViewBrush.get(), 1.0f);
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+                    const auto drawDimmedMarker =
+                        [&](size_t markerIndex, size_t visibleStart, size_t visibleEnd, float spanLeft, const D2D1_RECT_F& spanRc) noexcept
+                    {
+                        if (! rowRender || markerIndex >= _textBuffer.size() || visibleEnd <= visibleStart || spanRc.right <= spanRc.left ||
+                            markerIndex < visibleStart || markerIndex >= visibleEnd)
+                        {
+                            return;
+                        }
+
+                        const wchar_t marker = _textBuffer[markerIndex];
+                        if (marker != L'+' && marker != L'-')
+                        {
+                            return;
+                        }
+
+                        const float markerX = spanLeft + static_cast<float>(markerIndex - visibleStart) * charW;
+                        if (markerX >= spanRc.right)
+                        {
+                            return;
+                        }
+
+                        const D2D1_RECT_F markerRc = D2D1::RectF(markerX, y, std::min(spanRc.right, markerX + charW), lineBottom);
+                        _textViewBrush->SetColor(diffMarkerFg);
+                        _textViewTarget->DrawTextW(&marker, 1u, _textViewFormat.get(), markerRc, _textViewBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+
+#ifdef _DEBUG
+                    if (isFirstSegmentForLogical && rowStyle)
+                    {
+                        if (splitPaneRow)
+                        {
+                            _debugTextVisibleSplitRowCount += 1u;
+                        }
+
+                        const auto countVisibleKind = [&](DiffSemanticRowKind kind) noexcept
+                        {
+                            switch (kind)
+                            {
+                                case DiffSemanticRowKind::Context: _debugTextVisibleContextRowCount += 1u; break;
+                                case DiffSemanticRowKind::Added: _debugTextVisibleAddedRowCount += 1u; break;
+                                case DiffSemanticRowKind::Removed: _debugTextVisibleRemovedRowCount += 1u; break;
+                                case DiffSemanticRowKind::FileHeader: _debugTextVisibleHeaderRowCount += 1u; break;
+                                case DiffSemanticRowKind::HunkHeader:
+                                case DiffSemanticRowKind::HiddenContextBanner: _debugTextVisibleBannerRowCount += 1u; break;
+                                case DiffSemanticRowKind::Placeholder:
+                                case DiffSemanticRowKind::None: break;
+                            }
+                        };
+
+                        bool styledRow = false;
+                        if (rowStyle->fullRow != DiffSemanticRowKind::None)
+                        {
+                            styledRow = true;
+                            countVisibleKind(rowStyle->fullRow);
+                        }
+                        else
+                        {
+                            if (rowStyle->leftPane != DiffSemanticRowKind::None)
+                            {
+                                styledRow = true;
+                                countVisibleKind(rowStyle->leftPane);
+                            }
+                            if (rowStyle->rightPane != DiffSemanticRowKind::None)
+                            {
+                                styledRow = true;
+                                countVisibleKind(rowStyle->rightPane);
+                            }
+                        }
+
+                        if (styledRow)
+                        {
+                            _debugTextVisibleStyledRowCount += 1u;
+                        }
+                    }
+#endif
+
+                    if (rowStyle)
+                    {
+                        if (rowStyle->fullRow != DiffSemanticRowKind::None)
+                        {
+                            switch (rowStyle->fullRow)
+                            {
+                                case DiffSemanticRowKind::Context: break;
+                                case DiffSemanticRowKind::Added: fillTextArea(diffAddedBg); break;
+                                case DiffSemanticRowKind::Removed: fillTextArea(diffRemovedBg); break;
+                                case DiffSemanticRowKind::FileHeader:
+                                    fillFullRow(diffHeaderBg);
+                                    drawRowEdges(diffStructuralBorderBg, 1.0f);
+                                    drawLeadingStripe(diffDividerBg, RoundDipToDevicePixels(3.0f, dpi));
+                                    break;
+                                case DiffSemanticRowKind::HunkHeader:
+                                {
+                                    const bool activeHunkHeader = isActiveHunkHeaderLine(logical);
+                                    fillFullRow(baseTextBg);
+                                    drawRowEdges(activeHunkHeader ? diffActiveHunkBorderBg : diffStructuralBorderBg, activeHunkHeader ? 2.0f : 1.0f);
+                                    drawLeadingStripe(activeHunkHeader ? diffActiveHunkBorderBg : diffDividerBg,
+                                                      RoundDipToDevicePixels(activeHunkHeader ? 4.0f : 3.0f, dpi));
+                                    drawBannerChip(diffBannerBg, activeHunkHeader ? diffActiveHunkBorderBg : diffDividerBg, activeHunkHeader);
+                                    break;
+                                }
+                                case DiffSemanticRowKind::HiddenContextBanner:
+                                {
+                                    const bool clickableBanner = rowRender && rowRender->clickableBanner;
+                                    fillFullRow(baseTextBg);
+                                    drawRowEdges(diffStructuralBorderBg, 1.0f);
+                                    drawBannerChip(diffBannerBg, clickableBanner ? diffActiveHunkBorderBg : diffStructuralBorderBg, clickableBanner, true);
+                                    break;
+                                }
+                                case DiffSemanticRowKind::Placeholder:
+                                    drawGapHatch(lineRc);
+                                    drawRowEdges(diffStructuralBorderBg, 1.0f);
+                                    break;
+                                case DiffSemanticRowKind::None: break;
+                            }
+                        }
+                        else if (hasSeparator)
+                        {
+                            if (splitPaneRow)
+                            {
+                                fillPaneRect(leftPaneRc, baseTextBg);
+                                fillPaneRect(rightPaneRc, baseTextBg);
+                            }
+                            else
+                            {
+                                fillVisibleColumns(0u, separatorStart, baseTextBg);
+                                fillVisibleColumns(rightStartColumn, static_cast<uint32_t>(logicalLine.size()), baseTextBg);
+                            }
+                            if (const auto leftFill = semanticColorFor(rowStyle->leftPane))
+                            {
+                                if (splitPaneRow)
+                                {
+                                    fillPaneRect(leftPaneRc, *leftFill);
+                                }
+                                else
+                                {
+                                    fillVisibleColumns(0u, separatorStart, *leftFill);
+                                }
+                            }
+                            if (const auto rightFill = semanticColorFor(rowStyle->rightPane))
+                            {
+                                if (splitPaneRow)
+                                {
+                                    fillPaneRect(rightPaneRc, *rightFill);
+                                }
+                                else
+                                {
+                                    fillVisibleColumns(rightStartColumn, static_cast<uint32_t>(logicalLine.size()), *rightFill);
+                                }
+                            }
+                            if (rowRender && rowRender->leftPaneAbsent)
+                            {
+                                drawGapHatch(leftPaneRc);
+                            }
+                            if (rowRender && rowRender->rightPaneAbsent)
+                            {
+                                drawGapHatch(rightPaneRc);
+                            }
+                        }
+                    }
+
+                    if (_documentKind == DocumentKind::Diff && _diffPresentation == DiffPresentationMode::SideBySide && hasSeparator)
+                    {
+                        fillSeparatorBand();
+                        drawSeparatorEdges();
+                    }
+
+                    if (const auto placement = findPlaceholderBandPlacement(logical))
+                    {
+                        if (*placement == ViewerText::DiffTextVariant::PlaceholderBandPlacement::FullRow)
+                        {
+                            drawGapHatch(lineRc);
+                        }
+                        else if (! hasSeparator)
+                        {
+                            drawGapHatch(lineRc);
+                        }
+                        else if (*placement == ViewerText::DiffTextVariant::PlaceholderBandPlacement::LeftPane)
+                        {
+                            drawGapHatch(leftPaneRc);
+                        }
+                        else
+                        {
+                            drawGapHatch(rightPaneRc);
+                        }
+                    }
 
                     if (showLineNumbers)
                     {
-                        const bool isFirstSegment = (visual == 0) || (_textVisualLineLogical[static_cast<size_t>(visual - 1)] != logical);
-                        if (isFirstSegment)
+                        if (isFirstSegmentForLogical)
                         {
                             const std::wstring lineNumber  = std::to_wstring(static_cast<uint64_t>(logical) + 1u);
                             const float lineNumberRight    = std::max(marginDip, textStartX - charW);
@@ -858,13 +1493,15 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                         }
                     }
 
-                    if (hasSearchHighlights && searchLen > 0 && endIndex >= startIndex)
+                    const auto drawSearchHighlightsForSpan = [&](size_t visibleStart, size_t visibleEnd, float spanLeft, const D2D1_RECT_F& spanRc) noexcept
                     {
-                        const size_t visibleStart = startIndex;
-                        const size_t visibleEnd   = endIndex;
-                        const size_t scanStart    = (visibleStart > searchLen) ? (visibleStart - searchLen) : 0u;
+                        if (! hasSearchHighlights || searchLen == 0 || visibleEnd < visibleStart || charW <= 0.0f)
+                        {
+                            return;
+                        }
 
-                        auto it = std::lower_bound(_searchMatchStarts.begin(), _searchMatchStarts.end(), scanStart);
+                        const size_t scanStart = (visibleStart > searchLen) ? (visibleStart - searchLen) : 0u;
+                        auto it                = std::lower_bound(_searchMatchStarts.begin(), _searchMatchStarts.end(), scanStart);
                         for (; it != _searchMatchStarts.end(); ++it)
                         {
                             const size_t matchStart = *it;
@@ -881,58 +1518,114 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
 
                             const size_t hlStart = std::max(matchStart, visibleStart);
                             const size_t hlEnd   = std::min(matchEnd, visibleEnd);
-                            if (hlEnd <= hlStart || charW <= 0.0f)
+                            if (hlEnd <= hlStart)
                             {
                                 continue;
                             }
 
                             const size_t colStart  = hlStart - visibleStart;
                             const size_t colLen    = hlEnd - hlStart;
-                            const float hlX        = x + static_cast<float>(colStart) * charW;
+                            const float hlX        = spanLeft + static_cast<float>(colStart) * charW;
                             const float hlW        = static_cast<float>(colLen) * charW;
-                            const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
+                            const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, std::min(spanRc.right, hlX + hlW), lineBottom);
 
                             _textViewBrush->SetColor(ColorFFromColorRef(searchBg));
                             _textViewTarget->FillRectangle(hlRc, _textViewBrush.get());
                             _textViewBrush->SetColor(ColorFFromColorRef(fg));
                         }
-                    }
-
-                    if (hasSelection && endIndex >= startIndex)
+                    };
+                    const auto drawSelectionForSpan = [&](size_t visibleStart, size_t visibleEnd, float spanLeft, const D2D1_RECT_F& spanRc) noexcept
                     {
-                        const size_t visibleStart = startIndex;
-                        const size_t visibleEnd   = endIndex;
-                        const size_t hlStart      = std::max(selStartIndex, visibleStart);
-                        const size_t hlEnd        = std::min(selEndIndex, visibleEnd);
-                        if (hlEnd > hlStart && charW > 0.0f)
+                        if (! hasSelection || visibleEnd < visibleStart || charW <= 0.0f)
                         {
-                            const size_t colStart  = hlStart - visibleStart;
-                            const size_t colLength = hlEnd - hlStart;
-                            const float hlX        = x + static_cast<float>(colStart) * charW;
-                            const float hlW        = static_cast<float>(colLength) * charW;
-                            const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, hlX + hlW, lineBottom);
-
-                            _textViewBrush->SetColor(ColorFFromColorRef(selectionIsSearchMatch ? selectionFocusedBg : selectionBg));
-                            _textViewTarget->FillRectangle(hlRc, _textViewBrush.get());
-                            _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                            return;
                         }
-                    }
 
-                    if (len > 0)
+                        const size_t hlStart = std::max(selStartIndex, visibleStart);
+                        const size_t hlEnd   = std::min(selEndIndex, visibleEnd);
+                        if (hlEnd <= hlStart)
+                        {
+                            return;
+                        }
+
+                        const size_t colStart  = hlStart - visibleStart;
+                        const size_t colLength = hlEnd - hlStart;
+                        const float hlX        = spanLeft + static_cast<float>(colStart) * charW;
+                        const float hlW        = static_cast<float>(colLength) * charW;
+                        const D2D1_RECT_F hlRc = D2D1::RectF(hlX, y, std::min(spanRc.right, hlX + hlW), lineBottom);
+
+                        _textViewBrush->SetColor(ColorFFromColorRef(selectionIsSearchMatch ? selectionFocusedBg : selectionBg));
+                        _textViewTarget->FillRectangle(hlRc, _textViewBrush.get());
+                        _textViewBrush->SetColor(ColorFFromColorRef(fg));
+                    };
+                    const auto drawTextSpan = [&](size_t visibleStart, size_t visibleEnd, const D2D1_RECT_F& spanRc) noexcept
                     {
+                        if (visibleEnd <= visibleStart || spanRc.right <= spanRc.left)
+                        {
+                            return;
+                        }
+
+                        const size_t visibleLength = visibleEnd - visibleStart;
+                        const UINT32 visibleLen = visibleLength > static_cast<size_t>(std::numeric_limits<UINT32>::max()) ? std::numeric_limits<UINT32>::max()
+                                                                                                                          : static_cast<UINT32>(visibleLength);
+                        if (visibleLen == 0u)
+                        {
+                            return;
+                        }
+
                         _textViewTarget->DrawTextW(
-                            _textBuffer.data() + startIndex, len, _textViewFormat.get(), lineRc, _textViewBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            _textBuffer.data() + visibleStart, visibleLen, _textViewFormat.get(), spanRc, _textViewBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                    };
+                    const auto drawCaretForSpan = [&](size_t visibleStart, size_t visibleEnd, float spanLeft, const D2D1_RECT_F& spanRc) noexcept
+                    {
+                        if (! hasFocus || charW <= 0.0f || _textCaretIndex < visibleStart || _textCaretIndex > visibleEnd || spanRc.right <= spanRc.left)
+                        {
+                            return;
+                        }
+
+                        const size_t caretCol     = _textCaretIndex - visibleStart;
+                        const float caretX        = std::min(spanRc.right, spanLeft + static_cast<float>(caretCol) * charW);
+                        const D2D1_RECT_F caretRc = D2D1::RectF(caretX, y, std::min(spanRc.right, caretX + 1.0f), lineBottom);
+                        _textViewTarget->FillRectangle(caretRc, _textViewBrush.get());
+                    };
+
+                    if (splitPaneRow)
+                    {
+                        drawSearchHighlightsForSpan(leftStartIndex, leftEndIndex, leftPaneRc.left, leftPaneRc);
+                        drawSearchHighlightsForSpan(rightStartIndex, rightEndIndex, rightPaneRc.left, rightPaneRc);
+                        drawSelectionForSpan(leftStartIndex, leftEndIndex, leftPaneRc.left, leftPaneRc);
+                        drawSelectionForSpan(rightStartIndex, rightEndIndex, rightPaneRc.left, rightPaneRc);
+                        drawTextSpan(leftStartIndex, leftEndIndex, leftPaneRc);
+                        drawTextSpan(rightStartIndex, rightEndIndex, rightPaneRc);
+                        if (rowRender)
+                        {
+                            drawDimmedMarker(rowRender->leftMarkerIndex, leftStartIndex, leftEndIndex, leftPaneRc.left, leftPaneRc);
+                            drawDimmedMarker(rowRender->rightMarkerIndex, rightStartIndex, rightEndIndex, rightPaneRc.left, rightPaneRc);
+                        }
+                        drawCaretForSpan(leftStartIndex, leftEndIndex, leftPaneRc.left, leftPaneRc);
+                        drawCaretForSpan(rightStartIndex, rightEndIndex, rightPaneRc.left, rightPaneRc);
+                    }
+                    else
+                    {
+                        drawSearchHighlightsForSpan(startIndex, endIndex, x, lineRc);
+                        drawSelectionForSpan(startIndex, endIndex, x, lineRc);
+                        drawTextSpan(startIndex, endIndex, lineRc);
+                        if (rowRender)
+                        {
+                            drawDimmedMarker(rowRender->fullMarkerIndex, startIndex, endIndex, x, lineRc);
+                        }
+                        drawCaretForSpan(startIndex, endIndex, x, lineRc);
                     }
 
-                    if (hasFocus && charW > 0.0f && _textCaretIndex >= startIndex && _textCaretIndex <= endIndex)
-                    {
-                        const size_t caretCol     = _textCaretIndex - startIndex;
-                        const float caretX        = x + static_cast<float>(caretCol) * charW;
-                        const D2D1_RECT_F caretRc = D2D1::RectF(caretX, y, caretX + 1.0f, lineBottom);
-                        _textViewTarget->FillRectangle(caretRc, _textViewBrush.get());
-                    }
+                    visibleRowsDrawn += 1u;
                 }
             }
+
+#ifdef _DEBUG
+            _debugTextVisibleRowCount = visibleRowsDrawn;
+            _debugTextLastPaintUs =
+                static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - paintStartedAt).count());
+#endif
 
             DrawLoadingOverlay(_textViewTarget.get(), _textViewBrush.get(), widthDip, heightDip);
         }
@@ -996,7 +1689,7 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
         return 0;
     }
 
-    if (_textVisualLineStarts.empty() || _textVisualLineLogical.empty() || _textLineStarts.empty() || _textLineEnds.empty())
+    if (_textVisualLineStarts.empty() || _textVisualLineLogical.empty() || _textVisualLineLayouts.empty() || _textLineStarts.empty() || _textLineEnds.empty())
     {
         return DefWindowProcW(hwnd, WM_KEYDOWN, vk, lParam);
     }
@@ -1005,40 +1698,22 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
 
     auto findVisualForIndex = [&]() noexcept -> uint32_t
     {
-        const uint32_t idx32 = _textCaretIndex > static_cast<size_t>(std::numeric_limits<uint32_t>::max()) ? std::numeric_limits<uint32_t>::max()
-                                                                                                           : static_cast<uint32_t>(_textCaretIndex);
-        auto it              = std::upper_bound(_textVisualLineStarts.begin(), _textVisualLineStarts.end(), idx32);
-        if (it == _textVisualLineStarts.begin())
+        uint32_t visual = 0u;
+        if (! FindTextVisualLineForIndex(_textCaretIndex, visual))
         {
-            return 0;
+            return 0u;
         }
-
-        size_t visual = static_cast<size_t>(std::distance(_textVisualLineStarts.begin(), it) - 1);
-        if (visual >= _textVisualLineStarts.size())
-        {
-            visual = _textVisualLineStarts.size() - 1;
-        }
-        return static_cast<uint32_t>(visual);
+        return visual;
     };
 
-    auto getSegmentBounds = [&](uint32_t visual, uint32_t& outStart, uint32_t& outEnd) noexcept -> uint32_t
+    auto getSegmentBounds = [&](uint32_t visual, uint32_t& outStart, uint32_t& outEnd, bool preferRightPane) noexcept -> uint32_t
     {
-        visual = std::min<uint32_t>(visual, static_cast<uint32_t>(_textVisualLineStarts.size() - 1));
-
-        const uint32_t logical = std::min<uint32_t>(_textVisualLineLogical[visual], static_cast<uint32_t>(_textLineStarts.size() - 1));
-
-        outStart = _textVisualLineStarts[visual];
-        outEnd   = _textLineEnds[logical];
-        if ((visual + 1) < _textVisualLineStarts.size() && _textVisualLineLogical[visual + 1] == logical)
+        uint32_t logical = 0u;
+        if (! GetTextVisualLineSegment(visual, logical, outStart, outEnd, preferRightPane))
         {
-            outEnd = _textVisualLineStarts[visual + 1];
+            outStart = 0u;
+            outEnd   = 0u;
         }
-
-        if (outEnd < outStart)
-        {
-            outEnd = outStart;
-        }
-
         return logical;
     };
 
@@ -1076,11 +1751,16 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
 
         if (! _wrap && ! _textLineStarts.empty())
         {
-            uint32_t segStart        = 0;
-            uint32_t segEnd          = 0;
-            const uint32_t logical   = getSegmentBounds(caretVisual, segStart, segEnd);
-            const uint32_t lineStart = _textLineStarts[logical];
-            const size_t caretIndex  = std::min<size_t>(_textCaretIndex, _textBuffer.size());
+            uint32_t segStart = 0;
+            uint32_t segEnd   = 0;
+            const TextVisualLineLayoutEntry* caretLayout =
+                static_cast<size_t>(caretVisual) < _textVisualLineLayouts.size() ? &_textVisualLineLayouts[static_cast<size_t>(caretVisual)] : nullptr;
+            const bool preferRightPane = caretLayout && caretLayout->splitPanes &&
+                                         (_textCaretIndex >= caretLayout->rightStartIndex ||
+                                          (_textCaretIndex >= caretLayout->separatorStartIndex && caretLayout->rightEndIndex > caretLayout->rightStartIndex));
+            const uint32_t logical     = getSegmentBounds(caretVisual, segStart, segEnd, preferRightPane);
+            const uint32_t lineStart   = caretLayout && caretLayout->splitPanes ? segStart : _textLineStarts[logical];
+            const size_t caretIndex    = std::min<size_t>(_textCaretIndex, _textBuffer.size());
 
             uint32_t caretColumn = 0;
             if (caretIndex >= static_cast<size_t>(lineStart))
@@ -1113,7 +1793,7 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
             _textLeftColumn = std::min<uint32_t>(_textLeftColumn, _textMaxLineLength);
         }
 
-        UpdateTextViewScrollBars(hwnd);
+        RefreshTextHorizontalViewport(hwnd);
     };
 
     auto setCaret = [&](size_t newCaret) noexcept
@@ -1129,9 +1809,14 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
     };
 
     const uint32_t currentVisual = findVisualForIndex();
-    uint32_t segStart            = 0;
-    uint32_t segEnd              = 0;
-    static_cast<void>(getSegmentBounds(currentVisual, segStart, segEnd));
+    const TextVisualLineLayoutEntry* currentLayout =
+        static_cast<size_t>(currentVisual) < _textVisualLineLayouts.size() ? &_textVisualLineLayouts[static_cast<size_t>(currentVisual)] : nullptr;
+    const bool preferRightPane = currentLayout && currentLayout->splitPanes &&
+                                 (_textCaretIndex >= currentLayout->rightStartIndex ||
+                                  (_textCaretIndex >= currentLayout->separatorStartIndex && currentLayout->rightEndIndex > currentLayout->rightStartIndex));
+    uint32_t segStart          = 0;
+    uint32_t segEnd            = 0;
+    static_cast<void>(getSegmentBounds(currentVisual, segStart, segEnd, preferRightPane));
 
     const size_t segStartSize = std::min<size_t>(static_cast<size_t>(segStart), _textBuffer.size());
     // const size_t segEndSize    = std::min<size_t>(static_cast<size_t>(segEnd), _textBuffer.size());
@@ -1240,7 +1925,7 @@ LRESULT ViewerText::OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexc
 
         uint32_t targetStart = 0;
         uint32_t targetEnd   = 0;
-        static_cast<void>(getSegmentBounds(targetVisual, targetStart, targetEnd));
+        static_cast<void>(getSegmentBounds(targetVisual, targetStart, targetEnd, preferRightPane));
 
         const size_t targetStartSize = std::min<size_t>(static_cast<size_t>(targetStart), _textBuffer.size());
         const size_t targetEndSize   = std::min<size_t>(static_cast<size_t>(targetEnd), _textBuffer.size());
@@ -1277,6 +1962,7 @@ LRESULT ViewerText::TextViewProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noex
             return OnTextViewMouseMove(hwnd, {static_cast<int>(static_cast<short>(LOWORD(lp))), static_cast<int>(static_cast<short>(HIWORD(lp)))});
         case WM_LBUTTONUP: return OnTextViewLButtonUp(hwnd);
         case WM_CAPTURECHANGED: _textSelecting = false; return 0;
+        case WM_SETCURSOR: return OnTextViewSetCursor(hwnd, lp);
         case WM_KEYDOWN: return OnTextViewKeyDown(hwnd, wp, lp);
         case WM_SETFOCUS: return OnTextViewSetFocus(hwnd);
         case WM_KILLFOCUS: return OnTextViewKillFocus(hwnd);
@@ -1346,20 +2032,129 @@ void ViewerText::RebuildTextLineIndex() noexcept
     }
 }
 
+bool ViewerText::HasPaneLocalSideBySideVisualLayout() const noexcept
+{
+    return _documentKind == DocumentKind::Diff && _diffParsedAvailable && _diffPresentation == DiffPresentationMode::SideBySide &&
+           _textSideBySideLeftPaneColumns > 0u && _textSideBySideRightPaneColumns > 0u;
+}
+
+bool ViewerText::FindTextVisualLineForIndex(size_t index, uint32_t& visualLineOut) const noexcept
+{
+    if (_textVisualLineLayouts.empty())
+    {
+        visualLineOut = 0u;
+        return false;
+    }
+
+    const uint32_t clampedIndex =
+        index > static_cast<size_t>(std::numeric_limits<uint32_t>::max()) ? std::numeric_limits<uint32_t>::max() : static_cast<uint32_t>(index);
+
+    uint32_t fallbackVisual = 0u;
+    for (size_t visualIndex = 0u; visualIndex < _textVisualLineLayouts.size(); ++visualIndex)
+    {
+        const TextVisualLineLayoutEntry& layout = _textVisualLineLayouts[visualIndex];
+        if (clampedIndex >= layout.segmentStartIndex)
+        {
+            fallbackVisual = static_cast<uint32_t>(visualIndex);
+        }
+
+        if (! layout.splitPanes)
+        {
+            if (clampedIndex >= layout.segmentStartIndex && clampedIndex <= layout.segmentEndIndex)
+            {
+                visualLineOut = static_cast<uint32_t>(visualIndex);
+                return true;
+            }
+            continue;
+        }
+
+        const bool inLeft      = clampedIndex >= layout.leftStartIndex && clampedIndex <= layout.leftEndIndex;
+        const bool inSeparator = clampedIndex >= layout.separatorStartIndex && clampedIndex <= layout.separatorEndIndex;
+        const bool inRight     = clampedIndex >= layout.rightStartIndex && clampedIndex <= layout.rightEndIndex;
+        if (inLeft || inSeparator || inRight)
+        {
+            visualLineOut = static_cast<uint32_t>(visualIndex);
+            return true;
+        }
+    }
+
+    visualLineOut = fallbackVisual;
+    return true;
+}
+
+bool ViewerText::GetTextVisualLineSegment(
+    uint32_t visualLine, uint32_t& logicalLineOut, uint32_t& segmentStartOut, uint32_t& segmentEndOut, bool preferRightPane) const noexcept
+{
+    if (_textVisualLineLayouts.empty() || _textLineStarts.empty())
+    {
+        logicalLineOut  = 0u;
+        segmentStartOut = 0u;
+        segmentEndOut   = 0u;
+        return false;
+    }
+
+    const size_t visualIndex                = std::min<size_t>(visualLine, _textVisualLineLayouts.size() - 1u);
+    const TextVisualLineLayoutEntry& layout = _textVisualLineLayouts[visualIndex];
+    logicalLineOut                          = std::min<uint32_t>(layout.logicalLine, static_cast<uint32_t>(_textLineStarts.size() - 1u));
+
+    if (! layout.splitPanes)
+    {
+        segmentStartOut = layout.segmentStartIndex;
+        segmentEndOut   = layout.segmentEndIndex;
+        if (segmentEndOut < segmentStartOut)
+        {
+            segmentEndOut = segmentStartOut;
+        }
+        return true;
+    }
+
+    const uint32_t leftLength  = layout.leftEndIndex >= layout.leftStartIndex ? (layout.leftEndIndex - layout.leftStartIndex) : 0u;
+    const uint32_t rightLength = layout.rightEndIndex >= layout.rightStartIndex ? (layout.rightEndIndex - layout.rightStartIndex) : 0u;
+    const bool useRightPane    = preferRightPane && rightLength > 0u;
+
+    if (useRightPane)
+    {
+        segmentStartOut = layout.rightStartIndex;
+        segmentEndOut   = layout.rightEndIndex;
+    }
+    else if (leftLength > 0u || rightLength == 0u)
+    {
+        segmentStartOut = layout.leftStartIndex;
+        segmentEndOut   = layout.leftEndIndex;
+    }
+    else
+    {
+        segmentStartOut = layout.rightStartIndex;
+        segmentEndOut   = layout.rightEndIndex;
+    }
+
+    if (segmentEndOut < segmentStartOut)
+    {
+        segmentEndOut = segmentStartOut;
+    }
+    return true;
+}
+
 void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
 {
     _textVisualLineStarts.clear();
     _textVisualLineLogical.clear();
-    _textWrapColumns = 0;
+    _textVisualLineLayouts.clear();
+    _textWrapColumns                = 0;
+    _textSideBySideLeftPaneColumns  = 0u;
+    _textSideBySideRightPaneColumns = 0u;
+    _textSideBySideSeparatorColumns = 0u;
 
     if (_textLineStarts.empty())
     {
         _textVisualLineStarts.push_back(0);
         _textVisualLineLogical.push_back(0);
+        _textVisualLineLayouts.push_back({});
         return;
     }
 
-    uint32_t maxCols = std::numeric_limits<uint32_t>::max();
+    uint32_t maxCols       = std::numeric_limits<uint32_t>::max();
+    uint32_t availableCols = maxCols;
     if (_wrap && hwnd)
     {
         if (_textCharWidthDip <= 0.0f || _textLineHeightDip <= 0.0f)
@@ -1375,7 +2170,7 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
         const float widthDip  = std::max(0.0f, DipsFromPixels(static_cast<int>(client.right - client.left), dpi));
         const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
         float availDip        = std::max(0.0f, widthDip - 2.0f * marginDip);
-        if (_config.showLineNumbers && charW > 0.0f)
+        if (ShowTextLineNumbersInCurrentPresentation() && charW > 0.0f)
         {
             const size_t digits      = LineNumberDigits(_textLineStarts.size());
             const size_t gutterChars = digits + 2u;
@@ -1384,17 +2179,122 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
         }
         const float colsF = availDip / charW;
         maxCols           = std::max<uint32_t>(1u, static_cast<uint32_t>(std::floor(colsF)));
+        availableCols     = maxCols;
         _textWrapColumns  = maxCols;
         _textLeftColumn   = 0;
+    }
+    else if (hwnd)
+    {
+        if (_textCharWidthDip <= 0.0f || _textLineHeightDip <= 0.0f)
+        {
+            static_cast<void>(EnsureTextViewDirect2D(hwnd));
+        }
+
+        const float charW = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
+        RECT client{};
+        GetClientRect(hwnd, &client);
+        const UINT dpi        = GetDpiForWindow(hwnd);
+        const float widthDip  = std::max(0.0f, DipsFromPixels(static_cast<int>(client.right - client.left), dpi));
+        const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
+        float availDip        = std::max(0.0f, widthDip - 2.0f * marginDip);
+        if (ShowTextLineNumbersInCurrentPresentation() && charW > 0.0f)
+        {
+            const size_t digits      = LineNumberDigits(_textLineStarts.size());
+            const size_t gutterChars = digits + 2u;
+            const float gutterDip    = static_cast<float>(gutterChars) * charW;
+            availDip                 = std::max(0.0f, availDip - gutterDip);
+        }
+        const float colsF = availDip / charW;
+        availableCols     = std::max<uint32_t>(1u, static_cast<uint32_t>(std::floor(colsF)));
+    }
+
+    const DiffTextVariant* activeDiffVariant = CurrentDiffVariant();
+    const bool hasPaneLocalLayout = _documentKind == DocumentKind::Diff && _diffParsedAvailable && _diffPresentation == DiffPresentationMode::SideBySide &&
+                                    activeDiffVariant && activeDiffVariant->logicalRowPaneLayouts.size() == _textLineStarts.size();
+    size_t reserveVisualCount     = _textLineStarts.size();
+    if (_wrap && reserveVisualCount > 0u)
+    {
+        reserveVisualCount *= hasPaneLocalLayout ? 3u : 2u;
+    }
+    _textVisualLineStarts.reserve(reserveVisualCount);
+    _textVisualLineLogical.reserve(reserveVisualCount);
+    _textVisualLineLayouts.reserve(reserveVisualCount);
+    if (hasPaneLocalLayout)
+    {
+        const uint32_t separatorColumns = 3u;
+        const uint32_t paneBudget       = availableCols > separatorColumns ? (availableCols - separatorColumns) : 2u;
+        _textSideBySideLeftPaneColumns  = std::max<uint32_t>(1u, paneBudget / 2u);
+        _textSideBySideRightPaneColumns = std::max<uint32_t>(1u, paneBudget - _textSideBySideLeftPaneColumns);
+        _textSideBySideSeparatorColumns = separatorColumns;
+        if (_textSideBySideRightPaneColumns == 0u)
+        {
+            _textSideBySideRightPaneColumns = 1u;
+        }
     }
 
     if (! _wrap)
     {
-        _textVisualLineStarts = _textLineStarts;
-        _textVisualLineLogical.resize(_textLineStarts.size());
-        for (uint32_t i = 0; i < static_cast<uint32_t>(_textLineStarts.size()); ++i)
+        uint32_t paneTextMaxColumns = _textMaxLineLength;
+        for (uint32_t line = 0; line < static_cast<uint32_t>(_textLineStarts.size()); ++line)
         {
-            _textVisualLineLogical[i] = i;
+            const uint32_t start = _textLineStarts[line];
+            const uint32_t end   = _textLineEnds.size() > line ? _textLineEnds[line] : start;
+
+            if (hasPaneLocalLayout)
+            {
+                const auto& paneLayout = activeDiffVariant->logicalRowPaneLayouts[line];
+                if (paneLayout.splitRow)
+                {
+                    const uint32_t leftStart      = start;
+                    const uint32_t leftEnd        = std::min<uint32_t>(end, start + paneLayout.leftTextColumns);
+                    const uint32_t separatorStart = leftEnd;
+                    const uint32_t separatorEnd   = std::min<uint32_t>(end, separatorStart + paneLayout.separatorColumns);
+                    const uint32_t rightStart     = separatorEnd;
+                    const uint32_t rightEnd       = end;
+                    const uint32_t leftOffset     = std::min<uint32_t>(_textLeftColumn, paneLayout.leftTextColumns);
+                    const uint32_t rightOffset    = std::min<uint32_t>(_textLeftColumn, paneLayout.rightTextColumns);
+                    const uint32_t leftVisible    = leftOffset < paneLayout.leftTextColumns
+                                                        ? std::min<uint32_t>(_textSideBySideLeftPaneColumns, paneLayout.leftTextColumns - leftOffset)
+                                                        : 0u;
+                    const uint32_t rightVisible   = rightOffset < paneLayout.rightTextColumns
+                                                        ? std::min<uint32_t>(_textSideBySideRightPaneColumns, paneLayout.rightTextColumns - rightOffset)
+                                                        : 0u;
+
+                    TextVisualLineLayoutEntry layout{};
+                    layout.logicalLine       = line;
+                    layout.segmentStartIndex = leftVisible > 0u ? (leftStart + leftOffset) : (rightVisible > 0u ? (rightStart + rightOffset) : leftEnd);
+                    layout.segmentEndIndex =
+                        rightVisible > 0u ? (rightStart + rightOffset + rightVisible) : (leftVisible > 0u ? (leftStart + leftOffset + leftVisible) : leftEnd);
+                    layout.splitPanes          = true;
+                    layout.leftStartIndex      = leftVisible > 0u ? (leftStart + leftOffset) : leftEnd;
+                    layout.leftEndIndex        = layout.leftStartIndex + leftVisible;
+                    layout.rightStartIndex     = rightVisible > 0u ? (rightStart + rightOffset) : rightEnd;
+                    layout.rightEndIndex       = layout.rightStartIndex + rightVisible;
+                    layout.separatorStartIndex = separatorStart;
+                    layout.separatorEndIndex   = separatorEnd;
+                    layout.leftPaneColumns     = _textSideBySideLeftPaneColumns;
+                    layout.rightPaneColumns    = _textSideBySideRightPaneColumns;
+                    layout.separatorColumns    = _textSideBySideSeparatorColumns;
+                    _textVisualLineStarts.push_back(layout.segmentStartIndex);
+                    _textVisualLineLogical.push_back(line);
+                    _textVisualLineLayouts.push_back(layout);
+                    paneTextMaxColumns = std::max<uint32_t>(paneTextMaxColumns, std::max(paneLayout.leftTextColumns, paneLayout.rightTextColumns));
+                    continue;
+                }
+            }
+
+            _textVisualLineStarts.push_back(start);
+            _textVisualLineLogical.push_back(line);
+            _textVisualLineLayouts.push_back(TextVisualLineLayoutEntry{
+                .logicalLine       = line,
+                .segmentStartIndex = start,
+                .segmentEndIndex   = end,
+            });
+        }
+
+        if (hasPaneLocalLayout)
+        {
+            _textMaxLineLength = paneTextMaxColumns;
         }
         return;
     }
@@ -1405,10 +2305,71 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
         const uint32_t end   = _textLineEnds.size() > line ? _textLineEnds[line] : start;
         const uint32_t len   = (end >= start) ? (end - start) : 0;
 
+        if (hasPaneLocalLayout)
+        {
+            const auto& paneLayout = activeDiffVariant->logicalRowPaneLayouts[line];
+            if (paneLayout.splitRow)
+            {
+                const uint32_t leftStart      = start;
+                const uint32_t leftEnd        = std::min<uint32_t>(end, start + paneLayout.leftTextColumns);
+                const uint32_t separatorStart = leftEnd;
+                const uint32_t separatorEnd   = std::min<uint32_t>(end, separatorStart + paneLayout.separatorColumns);
+                const uint32_t rightStart     = separatorEnd;
+                const uint32_t rightEnd       = end;
+                const auto wrappedRows        = [](uint32_t textColumns, uint32_t paneColumns) noexcept
+                {
+                    if (textColumns == 0u)
+                    {
+                        return 1u;
+                    }
+                    return std::max<uint32_t>(1u, (textColumns + paneColumns - 1u) / paneColumns);
+                };
+
+                const uint32_t rowCount = std::max<uint32_t>(wrappedRows(paneLayout.leftTextColumns, _textSideBySideLeftPaneColumns),
+                                                             wrappedRows(paneLayout.rightTextColumns, _textSideBySideRightPaneColumns));
+                for (uint32_t wrapRow = 0u; wrapRow < rowCount; ++wrapRow)
+                {
+                    const uint32_t leftOffset   = wrapRow * _textSideBySideLeftPaneColumns;
+                    const uint32_t rightOffset  = wrapRow * _textSideBySideRightPaneColumns;
+                    const uint32_t leftVisible  = leftOffset < paneLayout.leftTextColumns
+                                                      ? std::min<uint32_t>(_textSideBySideLeftPaneColumns, paneLayout.leftTextColumns - leftOffset)
+                                                      : 0u;
+                    const uint32_t rightVisible = rightOffset < paneLayout.rightTextColumns
+                                                      ? std::min<uint32_t>(_textSideBySideRightPaneColumns, paneLayout.rightTextColumns - rightOffset)
+                                                      : 0u;
+
+                    TextVisualLineLayoutEntry layout{};
+                    layout.logicalLine       = line;
+                    layout.segmentStartIndex = leftVisible > 0u ? (leftStart + leftOffset) : (rightVisible > 0u ? (rightStart + rightOffset) : leftEnd);
+                    layout.segmentEndIndex =
+                        rightVisible > 0u ? (rightStart + rightOffset + rightVisible) : (leftVisible > 0u ? (leftStart + leftOffset + leftVisible) : leftEnd);
+                    layout.splitPanes          = true;
+                    layout.leftStartIndex      = leftVisible > 0u ? (leftStart + leftOffset) : leftEnd;
+                    layout.leftEndIndex        = layout.leftStartIndex + leftVisible;
+                    layout.rightStartIndex     = rightVisible > 0u ? (rightStart + rightOffset) : rightEnd;
+                    layout.rightEndIndex       = layout.rightStartIndex + rightVisible;
+                    layout.separatorStartIndex = separatorStart;
+                    layout.separatorEndIndex   = separatorEnd;
+                    layout.leftPaneColumns     = _textSideBySideLeftPaneColumns;
+                    layout.rightPaneColumns    = _textSideBySideRightPaneColumns;
+                    layout.separatorColumns    = _textSideBySideSeparatorColumns;
+                    _textVisualLineStarts.push_back(layout.segmentStartIndex);
+                    _textVisualLineLogical.push_back(line);
+                    _textVisualLineLayouts.push_back(layout);
+                }
+                continue;
+            }
+        }
+
         if (len == 0)
         {
             _textVisualLineStarts.push_back(start);
             _textVisualLineLogical.push_back(line);
+            _textVisualLineLayouts.push_back(TextVisualLineLayoutEntry{
+                .logicalLine       = line,
+                .segmentStartIndex = start,
+                .segmentEndIndex   = start,
+            });
             continue;
         }
 
@@ -1417,6 +2378,11 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
             const uint32_t segStart = start + col;
             _textVisualLineStarts.push_back(segStart);
             _textVisualLineLogical.push_back(line);
+            _textVisualLineLayouts.push_back(TextVisualLineLayoutEntry{
+                .logicalLine       = line,
+                .segmentStartIndex = segStart,
+                .segmentEndIndex   = std::min<uint32_t>(end, segStart + maxCols),
+            });
         }
     }
 
@@ -1424,7 +2390,76 @@ void ViewerText::RebuildTextVisualLines(HWND hwnd) noexcept
     {
         _textVisualLineStarts.push_back(0);
         _textVisualLineLogical.push_back(0);
+        _textVisualLineLayouts.push_back({});
     }
+}
+
+std::optional<std::pair<uint32_t, uint32_t>> ViewerText::ComputeVisibleDiffHydrationLogicalRange(HWND hwnd) const noexcept
+{
+    if (_documentKind != DocumentKind::Diff || ! _diffParsedAvailable || _diffPresentation == DiffPresentationMode::RawText ||
+        _config.diffContextMode != DiffContextMode::FullFileWhenAvailable)
+    {
+        return std::nullopt;
+    }
+
+    const HWND textWindow = hwnd ? hwnd : _hEdit.get();
+    uint32_t pageRows     = 1u;
+    if (textWindow)
+    {
+        RECT client{};
+        GetClientRect(textWindow, &client);
+        const UINT dpi        = GetDpiForWindow(textWindow);
+        const float heightDip = std::max(1.0f, DipsFromPixels(static_cast<int>(client.bottom - client.top), dpi));
+        const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
+        pageRows              = std::max<uint32_t>(1u, static_cast<uint32_t>(std::floor(heightDip / lineH)));
+    }
+
+    uint32_t topLogical    = 0u;
+    uint32_t bottomLogical = pageRows > 0u ? (pageRows - 1u) : 0u;
+    if (! _textVisualLineLogical.empty())
+    {
+        const size_t topVisual    = std::min<size_t>(_textTopVisualLine, _textVisualLineLogical.size() - 1u);
+        const size_t bottomVisual = std::min<size_t>(topVisual + std::max<size_t>(1u, static_cast<size_t>(pageRows)) - 1u, _textVisualLineLogical.size() - 1u);
+        topLogical                = _textVisualLineLogical[topVisual];
+        bottomLogical             = _textVisualLineLogical[bottomVisual];
+    }
+
+    const uint32_t hydratedStart = topLogical > kDiffViewportHydrationMarginRows ? (topLogical - kDiffViewportHydrationMarginRows) : 0u;
+    uint32_t hydratedEnd         = bottomLogical + 1u;
+    if (hydratedEnd <= std::numeric_limits<uint32_t>::max() - kDiffViewportHydrationMarginRows)
+    {
+        hydratedEnd += kDiffViewportHydrationMarginRows;
+    }
+    else
+    {
+        hydratedEnd = std::numeric_limits<uint32_t>::max();
+    }
+
+    return std::pair<uint32_t, uint32_t>{hydratedStart, hydratedEnd};
+}
+
+void ViewerText::RefreshTextHorizontalViewport(HWND hwnd) noexcept
+{
+    if (! hwnd)
+    {
+        return;
+    }
+
+    if (! _wrap && HasPaneLocalSideBySideVisualLayout())
+    {
+        const uint32_t savedTopVisualLine = _textTopVisualLine;
+        RebuildTextVisualLines(hwnd);
+        if (! _textVisualLineStarts.empty())
+        {
+            _textTopVisualLine = std::min<uint32_t>(savedTopVisualLine, static_cast<uint32_t>(_textVisualLineStarts.size() - 1u));
+        }
+        else
+        {
+            _textTopVisualLine = 0u;
+        }
+    }
+
+    UpdateTextViewScrollBars(hwnd);
 }
 
 void ViewerText::UpdateTextViewScrollBars(HWND hwnd) noexcept
@@ -1466,6 +2501,7 @@ void ViewerText::UpdateTextViewScrollBars(HWND hwnd) noexcept
     }
 
     SetScrollInfo(hwnd, SB_VERT, &si, TRUE);
+    SyncFileComboSelection();
 
     if (_wrap)
     {
@@ -1475,15 +2511,17 @@ void ViewerText::UpdateTextViewScrollBars(HWND hwnd) noexcept
 
     float widthDip    = std::max(1.0f, DipsFromPixels(static_cast<int>(client.right - client.left), dpi));
     const float charW = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
-    if (_config.showLineNumbers && charW > 0.0f)
+    if (ShowTextLineNumbersInCurrentPresentation() && charW > 0.0f)
     {
         const size_t digits      = LineNumberDigits(_textLineStarts.size());
         const size_t gutterChars = digits + 2u;
         const float gutterDip    = static_cast<float>(gutterChars) * charW;
         widthDip                 = std::max(1.0f, widthDip - gutterDip);
     }
-    const uint32_t pageCols = std::max<uint32_t>(1u, static_cast<uint32_t>(std::floor(widthDip / charW)));
-    const uint32_t maxCol   = _textMaxLineLength;
+    const bool paneLocalHScroll = HasPaneLocalSideBySideVisualLayout() && _textSideBySideLeftPaneColumns > 0u && _textSideBySideRightPaneColumns > 0u;
+    const uint32_t pageCols     = paneLocalHScroll ? std::max<uint32_t>(1u, std::min(_textSideBySideLeftPaneColumns, _textSideBySideRightPaneColumns))
+                                                   : std::max<uint32_t>(1u, static_cast<uint32_t>(std::floor(widthDip / charW)));
+    const uint32_t maxCol       = _textMaxLineLength;
 
     SCROLLINFO siH{};
     siH.cbSize = sizeof(siH);
@@ -1496,6 +2534,202 @@ void ViewerText::UpdateTextViewScrollBars(HWND hwnd) noexcept
     ShowScrollBar(hwnd, SB_HORZ, TRUE);
 }
 
+bool ViewerText::EnsureVisibleDiffViewportHydrated(HWND hwnd) noexcept
+{
+    if (_documentKind != DocumentKind::Diff || ! _diffParsedAvailable || _diffPresentation == DiffPresentationMode::RawText ||
+        _config.diffContextMode != DiffContextMode::FullFileWhenAvailable)
+    {
+        return false;
+    }
+
+    static_cast<void>(EnsureCurrentDiffVariantBuilt());
+    const auto* variant = CurrentDiffVariant();
+    if (! variant)
+    {
+        return false;
+    }
+
+    const auto requestedRange = ComputeVisibleDiffHydrationLogicalRange(hwnd);
+    if (! requestedRange.has_value())
+    {
+        return false;
+    }
+
+    const bool needsDeferredRowHydration = variant->deferredContextRowCount != 0u && (requestedRange->first < variant->hydratedLogicalLineStart ||
+                                                                                      requestedRange->second > variant->hydratedLogicalLineEndExclusive);
+    const bool needsTailGrowth           = variant->hasExpandableTail && requestedRange->second >= variant->builtLogicalLineCount;
+    if (! needsDeferredRowHydration && ! needsTailGrowth)
+    {
+        return false;
+    }
+
+    _diffInlineExpandedBuilt     = false;
+    _diffSideBySideExpandedBuilt = false;
+    ApplyCurrentTextPresentation(hwnd ? hwnd : _hEdit.get(), true);
+    return true;
+}
+
+void ViewerText::ScrollTextViewportToLogicalLine(HWND hwnd, uint32_t targetLogicalLine) noexcept
+{
+    if (_textLineStarts.empty())
+    {
+        return;
+    }
+
+    targetLogicalLine = std::min<uint32_t>(targetLogicalLine, static_cast<uint32_t>(_textLineStarts.size() - 1u));
+
+    uint32_t targetVisualLine = targetLogicalLine;
+    if (! _textVisualLineLogical.empty())
+    {
+        const auto it = std::lower_bound(_textVisualLineLogical.begin(), _textVisualLineLogical.end(), targetLogicalLine);
+        if (it != _textVisualLineLogical.end())
+        {
+            targetVisualLine = static_cast<uint32_t>(std::distance(_textVisualLineLogical.begin(), it));
+        }
+        else
+        {
+            targetVisualLine = static_cast<uint32_t>(_textVisualLineLogical.size() - 1u);
+        }
+    }
+
+    _textTopVisualLine = targetVisualLine;
+    _textLeftColumn    = 0u;
+
+    const size_t caretIndex = std::min<size_t>(_textLineStarts[targetLogicalLine], _textBuffer.size());
+    _textCaretIndex         = caretIndex;
+    _textSelAnchor          = caretIndex;
+    _textSelActive          = caretIndex;
+    _textPreferredColumn    = 0u;
+    _textSelecting          = false;
+
+    const HWND textWindow = _hEdit ? _hEdit.get() : hwnd;
+    static_cast<void>(EnsureVisibleDiffViewportHydrated(textWindow));
+    if (textWindow)
+    {
+        UpdateTextViewScrollBars(textWindow);
+        InvalidateRect(textWindow, nullptr, TRUE);
+    }
+
+    if (_hWnd)
+    {
+        SyncFileComboSelection();
+        InvalidateRect(_hWnd.get(), nullptr, TRUE);
+    }
+}
+
+void ViewerText::ScrollToDiffSection(HWND hwnd, size_t sectionIndex) noexcept
+{
+    const auto* currentVariant = CurrentDiffVariant();
+    if (_documentKind == DocumentKind::Diff && _diffParsedAvailable && _diffPresentation != DiffPresentationMode::RawText &&
+        _config.diffContextMode == DiffContextMode::FullFileWhenAvailable && currentVariant && sectionIndex < currentVariant->sectionNavigation.size())
+    {
+        if (! _diffExpandedSectionIndex.has_value() || _diffExpandedSectionIndex.value() != sectionIndex)
+        {
+            _diffExpandedSectionIndex = sectionIndex;
+            _diffReferenceCache.reset();
+            _diffInlineExpandedBuilt     = false;
+            _diffSideBySideExpandedBuilt = false;
+            ApplyCurrentTextPresentation(hwnd ? hwnd : _hEdit.get());
+        }
+    }
+
+    const auto* variant = CurrentDiffVariant();
+    if (! variant)
+    {
+        if (_documentKind == DocumentKind::Diff && ! _diffParsedAvailable && _textStreamActive && sectionIndex < _diffStreamSections.size())
+        {
+            const uint64_t targetOffset = AlignTextStreamOffset(_diffStreamSections[sectionIndex].startOffset);
+            if (SUCCEEDED(LoadTextToEdit(hwnd, targetOffset, false)))
+            {
+                SyncFileComboSelection();
+            }
+        }
+        return;
+    }
+
+    if (sectionIndex >= variant->sectionNavigation.size() || _textLineStarts.empty())
+    {
+        return;
+    }
+
+    ScrollTextViewportToLogicalLine(hwnd, variant->sectionNavigation[sectionIndex].startLogicalLine);
+}
+
+void ViewerText::ScrollToDiffHunk(HWND hwnd, size_t hunkIndex) noexcept
+{
+    const auto* currentVariant = CurrentDiffVariant();
+    if (_documentKind == DocumentKind::Diff && _diffParsedAvailable && _diffPresentation != DiffPresentationMode::RawText &&
+        _config.diffContextMode == DiffContextMode::FullFileWhenAvailable && currentVariant && hunkIndex < currentVariant->hunkNavigation.size())
+    {
+        const size_t targetSectionIndex = currentVariant->hunkNavigation[hunkIndex].sectionIndex;
+        if (! _diffExpandedSectionIndex.has_value() || _diffExpandedSectionIndex.value() != targetSectionIndex)
+        {
+            _diffExpandedSectionIndex = targetSectionIndex;
+            _diffReferenceCache.reset();
+            _diffInlineExpandedBuilt     = false;
+            _diffSideBySideExpandedBuilt = false;
+            ApplyCurrentTextPresentation(hwnd ? hwnd : _hEdit.get());
+        }
+    }
+
+    const auto* variant = CurrentDiffVariant();
+    if (! variant || hunkIndex >= variant->hunkNavigation.size())
+    {
+        return;
+    }
+
+    ScrollTextViewportToLogicalLine(hwnd, variant->hunkNavigation[hunkIndex].startLogicalLine);
+}
+
+bool ViewerText::NavigateDiffHunk(HWND hwnd, bool previous) noexcept
+{
+    const auto* variant = CurrentDiffVariant();
+    if (! variant || variant->hunkNavigation.empty())
+    {
+        return false;
+    }
+
+    uint32_t topLogicalLine = 0u;
+    if (! _textVisualLineLogical.empty())
+    {
+        const size_t topVisual = std::min<size_t>(_textTopVisualLine, _textVisualLineLogical.size() - 1u);
+        topLogicalLine         = _textVisualLineLogical[topVisual];
+    }
+
+    size_t targetIndex = 0u;
+    if (previous)
+    {
+        const auto it =
+            std::lower_bound(variant->hunkNavigation.begin(),
+                             variant->hunkNavigation.end(),
+                             topLogicalLine,
+                             [](const DiffTextVariant::HunkNavigationEntry& entry, uint32_t line) noexcept { return entry.startLogicalLine < line; });
+        if (it == variant->hunkNavigation.begin())
+        {
+            return false;
+        }
+
+        targetIndex = static_cast<size_t>(std::distance(variant->hunkNavigation.begin(), it) - 1);
+    }
+    else
+    {
+        const auto it =
+            std::upper_bound(variant->hunkNavigation.begin(),
+                             variant->hunkNavigation.end(),
+                             topLogicalLine,
+                             [](uint32_t line, const DiffTextVariant::HunkNavigationEntry& entry) noexcept { return line < entry.startLogicalLine; });
+        if (it == variant->hunkNavigation.end())
+        {
+            return false;
+        }
+
+        targetIndex = static_cast<size_t>(std::distance(variant->hunkNavigation.begin(), it));
+    }
+
+    ScrollToDiffHunk(hwnd, targetIndex);
+    return true;
+}
+
 bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
 {
     if (! hwnd)
@@ -1503,8 +2737,8 @@ bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
         return false;
     }
 
-    const UINT dpi   = GetDpiForWindow(hwnd);
-    const float dpiF = static_cast<float>(dpi);
+    const UINT dpi                          = GetDpiForWindow(hwnd);
+    const float dpiF                        = static_cast<float>(dpi);
     const MonoTextRenderMetrics monoMetrics = ComputeMonoTextRenderMetrics(kMonoFontSizeDip, dpi);
 
     if (! _d2dFactory)
@@ -1585,8 +2819,7 @@ bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
         static_cast<void>(_textViewFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
         static_cast<void>(_textViewFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
         static_cast<void>(_textViewFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
-        static_cast<void>(_textViewFormat->SetLineSpacing(
-            DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
+        static_cast<void>(_textViewFormat->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
     }
 
     if (! _textViewFormatRight)
@@ -1608,8 +2841,7 @@ bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
         static_cast<void>(_textViewFormatRight->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING));
         static_cast<void>(_textViewFormatRight->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
         static_cast<void>(_textViewFormatRight->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
-        static_cast<void>(_textViewFormatRight->SetLineSpacing(
-            DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
+        static_cast<void>(_textViewFormatRight->SetLineSpacing(DWRITE_LINE_SPACING_METHOD_UNIFORM, monoMetrics.lineSpacingDip, monoMetrics.baselineDip));
     }
 
     if (_textCharWidthDip <= 0.0f || _textLineHeightDip <= 0.0f)
@@ -1621,7 +2853,7 @@ bool ViewerText::EnsureTextViewDirect2D(HWND hwnd) noexcept
             DWRITE_TEXT_METRICS metrics{};
             if (SUCCEEDED(layout->GetMetrics(&metrics)))
             {
-                _textCharWidthDip  = std::max(1.0f, metrics.widthIncludingTrailingWhitespace);
+                _textCharWidthDip = std::max(1.0f, metrics.widthIncludingTrailingWhitespace);
             }
         }
 
@@ -1644,11 +2876,7 @@ void ViewerText::DiscardTextViewDirect2D() noexcept
 void ViewerText::SetShowLineNumbers(HWND hwnd, bool showLineNumbers) noexcept
 {
     _config.showLineNumbers = showLineNumbers;
-    _configurationJson      = std::format("{{\"textBufferMiB\":{},\"hexBufferMiB\":{},\"showLineNumbers\":\"{}\",\"wrapText\":\"{}\"}}",
-                                     _config.textBufferMiB,
-                                     _config.hexBufferMiB,
-                                     _config.showLineNumbers ? "1" : "0",
-                                     _config.wrapText ? "1" : "0");
+    RefreshConfigurationJson();
 
     if (_hEdit)
     {
@@ -1671,13 +2899,9 @@ void ViewerText::SetShowLineNumbers(HWND hwnd, bool showLineNumbers) noexcept
 
 void ViewerText::SetWrap(HWND hwnd, bool wrap) noexcept
 {
-    _wrap              = wrap;
-    _config.wrapText   = wrap;
-    _configurationJson = std::format("{{\"textBufferMiB\":{},\"hexBufferMiB\":{},\"showLineNumbers\":\"{}\",\"wrapText\":\"{}\"}}",
-                                     _config.textBufferMiB,
-                                     _config.hexBufferMiB,
-                                     _config.showLineNumbers ? "1" : "0",
-                                     _config.wrapText ? "1" : "0");
+    _wrap            = wrap;
+    _config.wrapText = wrap;
+    RefreshConfigurationJson();
     if (_hEdit)
     {
         RebuildTextVisualLines(_hEdit.get());
@@ -1764,23 +2988,15 @@ void ViewerText::CommandFindNext(HWND hwnd, bool backward)
 
         auto ensureCaretVisible = [&]() noexcept
         {
-            if (_textVisualLineStarts.empty() || _textVisualLineLogical.empty())
+            if (_textVisualLineStarts.empty() || _textVisualLineLogical.empty() || _textVisualLineLayouts.empty())
             {
                 return;
             }
 
-            const uint32_t idx32 = _textCaretIndex > static_cast<size_t>(std::numeric_limits<uint32_t>::max()) ? std::numeric_limits<uint32_t>::max()
-                                                                                                               : static_cast<uint32_t>(_textCaretIndex);
-            auto it              = std::upper_bound(_textVisualLineStarts.begin(), _textVisualLineStarts.end(), idx32);
             uint32_t caretVisual = 0;
-            if (it != _textVisualLineStarts.begin())
+            if (! FindTextVisualLineForIndex(_textCaretIndex, caretVisual))
             {
-                size_t visual = static_cast<size_t>(std::distance(_textVisualLineStarts.begin(), it) - 1);
-                if (visual >= _textVisualLineStarts.size())
-                {
-                    visual = _textVisualLineStarts.size() - 1;
-                }
-                caretVisual = static_cast<uint32_t>(visual);
+                caretVisual = 0u;
             }
 
             SCROLLINFO si{};
@@ -1800,8 +3016,16 @@ void ViewerText::CommandFindNext(HWND hwnd, bool backward)
 
             if (! _wrap)
             {
-                const uint32_t logical   = _textVisualLineLogical[caretVisual];
-                const uint32_t lineStart = _textLineStarts[logical];
+                const TextVisualLineLayoutEntry* caretLayout =
+                    static_cast<size_t>(caretVisual) < _textVisualLineLayouts.size() ? &_textVisualLineLayouts[static_cast<size_t>(caretVisual)] : nullptr;
+                const bool preferRightPane = caretLayout && caretLayout->splitPanes &&
+                                             (_textCaretIndex >= caretLayout->rightStartIndex || (_textCaretIndex >= caretLayout->separatorStartIndex &&
+                                                                                                  caretLayout->rightEndIndex > caretLayout->rightStartIndex));
+                uint32_t logical           = 0u;
+                uint32_t segStart          = 0u;
+                uint32_t segEnd            = 0u;
+                static_cast<void>(GetTextVisualLineSegment(caretVisual, logical, segStart, segEnd, preferRightPane));
+                const uint32_t lineStart = caretLayout && caretLayout->splitPanes ? segStart : _textLineStarts[logical];
                 const size_t caretIndex  = std::min<size_t>(_textCaretIndex, _textBuffer.size());
 
                 uint32_t caretColumn = 0;
@@ -1830,7 +3054,7 @@ void ViewerText::CommandFindNext(HWND hwnd, bool backward)
                 _textLeftColumn = std::min<uint32_t>(_textLeftColumn, _textMaxLineLength);
             }
 
-            UpdateTextViewScrollBars(_hEdit.get());
+            RefreshTextHorizontalViewport(_hEdit.get());
         };
 
         ensureCaretVisible();
@@ -1945,13 +3169,17 @@ HRESULT ViewerText::LoadTextToEdit(HWND hwnd, uint64_t startOffset, bool scrollT
     _textLineEnds.clear();
     _textVisualLineStarts.clear();
     _textVisualLineLogical.clear();
-    _textTopVisualLine   = 0;
-    _textLeftColumn      = 0;
-    _textCaretIndex      = 0;
-    _textSelAnchor       = 0;
-    _textSelActive       = 0;
-    _textPreferredColumn = 0;
-    _textSelecting       = false;
+    _textVisualLineLayouts.clear();
+    _textTopVisualLine              = 0;
+    _textLeftColumn                 = 0;
+    _textCaretIndex                 = 0;
+    _textSelAnchor                  = 0;
+    _textSelActive                  = 0;
+    _textPreferredColumn            = 0;
+    _textSelecting                  = false;
+    _textSideBySideLeftPaneColumns  = 0u;
+    _textSideBySideRightPaneColumns = 0u;
+    _textSideBySideSeparatorColumns = 0u;
 
     if (! _fileReader)
     {

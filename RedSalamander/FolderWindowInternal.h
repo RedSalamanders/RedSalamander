@@ -39,12 +39,13 @@
 #include "WindowMessages.h"
 #include "resource.h"
 
-constexpr UINT_PTR kLeftNavigationId  = 1001;
-constexpr UINT_PTR kLeftFolderViewId  = 1002;
-constexpr UINT_PTR kRightNavigationId = 1003;
-constexpr UINT_PTR kRightFolderViewId = 1004;
-constexpr UINT_PTR kLeftStatusBarId   = 1005;
-constexpr UINT_PTR kRightStatusBarId  = 1006;
+constexpr UINT_PTR kLeftNavigationId                = 1001;
+constexpr UINT_PTR kLeftFolderViewId                = 1002;
+constexpr UINT_PTR kRightNavigationId               = 1003;
+constexpr UINT_PTR kRightFolderViewId               = 1004;
+constexpr UINT_PTR kLeftStatusBarId                 = 1005;
+constexpr UINT_PTR kRightStatusBarId                = 1006;
+constexpr wchar_t kFolderWindowStatusBarClassName[] = L"RedSalamander.FolderWindow.StatusBar";
 
 constexpr wchar_t kStatusBarOwnerProp[]         = L"RedSalamander.StatusBar.Owner";
 constexpr wchar_t kStatusBarSelectionTextProp[] = L"RedSalamander.StatusBar.SelectionText";
@@ -57,20 +58,24 @@ constexpr int kStatusBarPartSelection = 0;
 constexpr int kStatusBarPartSecurity  = 1;
 constexpr int kStatusBarPartSort      = 2;
 
-using CreateFactoryFunc   = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, void**);
-using CreateFactoryExFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using CreateFactoryFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
 
 constexpr int kSplitterWidthDip             = 6;
 constexpr int kSplitterGripDotSizeDip       = 2;
 constexpr int kSplitterGripDotGapDip        = 2;
 constexpr int kSplitterGripDotCount         = 3;
+constexpr int kSplitterArrowChevronSizeDip  = 4;
+constexpr int kSplitterArrowStrokeWidthDip  = 1;
 constexpr int kNavFolderGapDip              = 5;
 constexpr int kStatusBarHeightDip           = 22;
 constexpr int kStatusBarPaddingXDip         = 4;
 constexpr int kStatusBarSortPaddingXDip     = 1;
 constexpr int kStatusBarSortMinPartWidthDip = 34;
+constexpr float kStatusBarTextSizeDip       = 12.0f;
 constexpr int kFunctionBarHeightDip         = 24;
 constexpr float kMinSplitRatio              = 0.0f;
 constexpr float kMaxSplitRatio              = 1.0f;
 
-LRESULT CALLBACK StatusBarSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData);
+[[nodiscard]] HRESULT EnsureFolderWindowStatusBarClass(HINSTANCE instance) noexcept;
+[[nodiscard]] bool GetStatusBarPartRect(HWND hwnd, int part, RECT& rect) noexcept;
+LRESULT CALLBACK StatusBarWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);

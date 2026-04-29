@@ -2,20 +2,23 @@
 
 #include "Framework.h"
 
+#include "DxUi/DxUi.Typography.h"
 #include "Preferences.Plugin.Configuration.h"
 #include "Preferences.Plugins.h"
 
 #include <algorithm>
 #include <array>
 #include <cerrno>
+#include <cmath>
+#include <cstdlib>
 #include <cwchar>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include <commctrl.h>
 #include <commdlg.h>
 #include <shobjidl.h>
 
@@ -32,23 +35,401 @@
 #pragma warning(pop)
 
 #include "FileSystemPluginManager.h"
+#include "FluentIcons.h"
 #include "Helpers.h"
 #include "HostServices.h"
-#include "ManagePluginsDialog.h"
-#include "SettingsHotReload.h"
-#include "ThemedControls.h"
+#include "UiMetrics.h"
 #include "ViewerPluginManager.h"
 #include "WindowMessages.h"
 
 #include "resource.h"
 
+#include <unordered_map>
+
 namespace
 {
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::FontRole;
+using RedSalamander::DxUi::Grid;
+using RedSalamander::DxUi::GridCellData;
+using RedSalamander::DxUi::GridColumnDesc;
+using RedSalamander::DxUi::GridSelectionMode;
+using RedSalamander::DxUi::IDxGridModel;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::TextField;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::WindowHost;
+
 constexpr int kPluginsColumnName            = 0;
 constexpr int kPluginsColumnType            = 1;
 constexpr int kPluginsColumnOrigin          = 2;
 constexpr int kPluginsColumnId              = 3;
 constexpr int kPluginsCustomPathsColumnPath = 0;
+#ifdef ENABLE_TESTS
+enum class DebugCustomPluginBrowseResultKind
+{
+    Path,
+    Cancel,
+};
+
+struct DebugCustomPluginBrowseResult
+{
+    DebugCustomPluginBrowseResultKind kind = DebugCustomPluginBrowseResultKind::Path;
+    std::filesystem::path path{};
+};
+
+std::mutex g_debugCustomPluginBrowseResultMutex;
+std::optional<DebugCustomPluginBrowseResult> g_debugNextCustomPluginBrowseResult;
+#endif
+[[nodiscard]] uint64_t MakeStableRowId(std::wstring_view pluginId) noexcept
+{
+    constexpr uint64_t kFNVOffset = 1469598103934665603ull;
+    constexpr uint64_t kFNVPrime  = 1099511628211ull;
+
+    uint64_t value = kFNVOffset;
+    for (const wchar_t ch : pluginId)
+    {
+        value ^= static_cast<uint64_t>(std::towlower(static_cast<wint_t>(ch)));
+        value *= kFNVPrime;
+    }
+    return value;
+}
+
+struct PluginsDxHostBase
+{
+    PluginsDxHostBase() = default;
+    ~PluginsDxHostBase() noexcept
+    {
+        DetachBase();
+    }
+    PluginsDxHostBase(const PluginsDxHostBase&)            = delete;
+    PluginsDxHostBase& operator=(const PluginsDxHostBase&) = delete;
+    PluginsDxHostBase(PluginsDxHostBase&&)                 = delete;
+    PluginsDxHostBase& operator=(PluginsDxHostBase&&)      = delete;
+
+    wil::unique_hwnd hostHwnd;
+    WindowHost host;
+
+    void DetachBase() noexcept
+    {
+        host.Detach();
+        PrefsDxHost::ResetOwnedHostWindow(hostHwnd);
+    }
+};
+
+struct PluginsLabelDx : PluginsDxHostBase
+{
+    PluginsLabelDx()                                 = default;
+    PluginsLabelDx(const PluginsLabelDx&)            = delete;
+    PluginsLabelDx& operator=(const PluginsLabelDx&) = delete;
+    PluginsLabelDx(PluginsLabelDx&&)                 = delete;
+    PluginsLabelDx& operator=(PluginsLabelDx&&)      = delete;
+
+    Label* label = nullptr;
+
+    void Detach() noexcept
+    {
+        label = nullptr;
+        DetachBase();
+    }
+};
+
+struct PluginsButtonDx : PluginsDxHostBase
+{
+    PluginsButtonDx()                                  = default;
+    PluginsButtonDx(const PluginsButtonDx&)            = delete;
+    PluginsButtonDx& operator=(const PluginsButtonDx&) = delete;
+    PluginsButtonDx(PluginsButtonDx&&)                 = delete;
+    PluginsButtonDx& operator=(PluginsButtonDx&&)      = delete;
+
+    Button* button = nullptr;
+
+    void Detach() noexcept
+    {
+        button = nullptr;
+        DetachBase();
+    }
+};
+
+struct PluginsTextFieldDx : PluginsDxHostBase
+{
+    PluginsTextFieldDx()                                     = default;
+    PluginsTextFieldDx(const PluginsTextFieldDx&)            = delete;
+    PluginsTextFieldDx& operator=(const PluginsTextFieldDx&) = delete;
+    PluginsTextFieldDx(PluginsTextFieldDx&&)                 = delete;
+    PluginsTextFieldDx& operator=(PluginsTextFieldDx&&)      = delete;
+
+    TextField* textField = nullptr;
+    HWND legacyFrame     = nullptr;
+
+    void Detach() noexcept
+    {
+        textField   = nullptr;
+        legacyFrame = nullptr;
+        DetachBase();
+    }
+};
+
+struct PluginsGridRow
+{
+    uint64_t stableId = 0u;
+    std::wstring pluginId;
+    std::wstring name;
+    std::wstring typeText;
+    std::wstring originText;
+    std::wstring shortIdText;
+    bool enabled = true;
+};
+
+class PluginsGridModel final : public IDxGridModel
+{
+public:
+    PluginsGridModel()
+    {
+        _columns = {
+            {L"name", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_NAME), 240.0f, 140.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"type", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_TYPE), 120.0f, 90.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"origin", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_ORIGIN), 120.0f, 90.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"id", LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_ID), 220.0f, 120.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+        };
+    }
+
+    void SetRows(std::vector<PluginsGridRow> rows)
+    {
+        _rows = std::move(rows);
+        _rowIndexByStableId.clear();
+        _rowIndexByStableId.reserve(_rows.size());
+        for (size_t rowIndex = 0u; rowIndex < _rows.size(); ++rowIndex)
+        {
+            _rowIndexByStableId[_rows[rowIndex].stableId] = rowIndex;
+        }
+    }
+
+    [[nodiscard]] const std::vector<PluginsGridRow>& GetRows() const noexcept
+    {
+        return _rows;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowIndexByPluginId(std::wstring_view pluginId) const noexcept
+    {
+        const auto it = std::find_if(_rows.begin(), _rows.end(), [&](const PluginsGridRow& row) noexcept { return row.pluginId == pluginId; });
+        if (it == _rows.end())
+        {
+            return std::nullopt;
+        }
+        return static_cast<size_t>(std::distance(_rows.begin(), it));
+    }
+
+    [[nodiscard]] size_t GetRowCount() const noexcept override
+    {
+        return _rows.size();
+    }
+
+    [[nodiscard]] size_t GetColumnCount() const noexcept override
+    {
+        return _columns.size();
+    }
+
+    [[nodiscard]] GridColumnDesc GetColumn(size_t columnIndex) const override
+    {
+        return _columns.at(columnIndex);
+    }
+
+    void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
+    {
+        outCell = {};
+        if (rowIndex >= _rows.size())
+        {
+            return;
+        }
+
+        const PluginsGridRow& row = _rows[rowIndex];
+        switch (columnIndex)
+        {
+            case kPluginsColumnName:
+                outCell.kind    = RedSalamander::DxUi::GridCellKind::Checkbox;
+                outCell.checked = row.enabled;
+                outCell.text    = row.name;
+                break;
+            case kPluginsColumnType: outCell.text = row.typeText; break;
+            case kPluginsColumnOrigin: outCell.text = row.originText; break;
+            case kPluginsColumnId: outCell.text = row.shortIdText; break;
+            default: break;
+        }
+    }
+
+    [[nodiscard]] uint64_t GetStableRowId(size_t rowIndex) const noexcept override
+    {
+        if (rowIndex >= _rows.size())
+        {
+            return 0u;
+        }
+        return _rows[rowIndex].stableId;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+    {
+        const auto it = _rowIndexByStableId.find(rowId);
+        if (it == _rowIndexByStableId.end())
+        {
+            return std::nullopt;
+        }
+
+        return it->second;
+    }
+
+private:
+    std::vector<GridColumnDesc> _columns;
+    std::vector<PluginsGridRow> _rows;
+    std::unordered_map<uint64_t, size_t> _rowIndexByStableId;
+};
+
+struct PluginsCustomPathGridRow
+{
+    uint64_t stableId = 0u;
+    std::wstring path;
+};
+
+class PluginsCustomPathsGridModel final : public IDxGridModel
+{
+public:
+    PluginsCustomPathsGridModel()
+    {
+        _columns = {
+            {L"path", L"", 320.0f, 180.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+        };
+    }
+
+    void SetRows(std::vector<PluginsCustomPathGridRow> rows)
+    {
+        _rows = std::move(rows);
+        _rowIndexByStableId.clear();
+        _rowIndexByStableId.reserve(_rows.size());
+        for (size_t rowIndex = 0u; rowIndex < _rows.size(); ++rowIndex)
+        {
+            _rowIndexByStableId[_rows[rowIndex].stableId] = rowIndex;
+        }
+    }
+
+    [[nodiscard]] const std::vector<PluginsCustomPathGridRow>& GetRows() const noexcept
+    {
+        return _rows;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowIndexByPath(std::wstring_view path) const noexcept
+    {
+        const std::wstring target(path);
+        const auto it = std::find_if(
+            _rows.begin(), _rows.end(), [&](const PluginsCustomPathGridRow& row) noexcept { return _wcsicmp(row.path.c_str(), target.c_str()) == 0; });
+        if (it == _rows.end())
+        {
+            return std::nullopt;
+        }
+        return static_cast<size_t>(std::distance(_rows.begin(), it));
+    }
+
+    [[nodiscard]] size_t GetRowCount() const noexcept override
+    {
+        return _rows.size();
+    }
+
+    [[nodiscard]] size_t GetColumnCount() const noexcept override
+    {
+        return _columns.size();
+    }
+
+    [[nodiscard]] GridColumnDesc GetColumn(size_t columnIndex) const override
+    {
+        return _columns.at(columnIndex);
+    }
+
+    void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
+    {
+        outCell = {};
+        if (rowIndex >= _rows.size() || columnIndex != kPluginsCustomPathsColumnPath)
+        {
+            return;
+        }
+
+        outCell.text = _rows[rowIndex].path;
+    }
+
+    [[nodiscard]] uint64_t GetStableRowId(size_t rowIndex) const noexcept override
+    {
+        if (rowIndex >= _rows.size())
+        {
+            return 0u;
+        }
+        return _rows[rowIndex].stableId;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+    {
+        const auto it = _rowIndexByStableId.find(rowId);
+        if (it == _rowIndexByStableId.end())
+        {
+            return std::nullopt;
+        }
+
+        return it->second;
+    }
+
+private:
+    std::vector<GridColumnDesc> _columns;
+    std::vector<PluginsCustomPathGridRow> _rows;
+    std::unordered_map<uint64_t, size_t> _rowIndexByStableId;
+};
+
+struct PluginsDxPage
+{
+    PluginsDxPage()                                = default;
+    PluginsDxPage(const PluginsDxPage&)            = delete;
+    PluginsDxPage& operator=(const PluginsDxPage&) = delete;
+    PluginsDxPage(PluginsDxPage&&)                 = delete;
+    PluginsDxPage& operator=(PluginsDxPage&&)      = delete;
+
+    Label* note           = nullptr;
+    Label* searchLabel    = nullptr;
+    TextField* searchEdit = nullptr;
+    Grid* listControl     = nullptr;
+    std::unique_ptr<IDxGridModel> listModelStorage;
+    PluginsGridModel* listModel  = nullptr;
+    Button* configureButton      = nullptr;
+    Button* testButton           = nullptr;
+    Button* testAllButton        = nullptr;
+    Label* detailsIdLabel        = nullptr;
+    Label* detailsConfigError    = nullptr;
+    Label* customPathsHeader     = nullptr;
+    Label* customPathsNote       = nullptr;
+    Grid* customPathsListControl = nullptr;
+    std::unique_ptr<IDxGridModel> customPathsListModelStorage;
+    PluginsCustomPathsGridModel* customPathsListModel = nullptr;
+    Button* customPathsAddButton                      = nullptr;
+    Button* customPathsRemoveButton                   = nullptr;
+
+    void Detach() noexcept
+    {
+        note        = nullptr;
+        searchLabel = nullptr;
+        searchEdit  = nullptr;
+        listControl = nullptr;
+        listModelStorage.reset();
+        listModel              = nullptr;
+        configureButton        = nullptr;
+        testButton             = nullptr;
+        testAllButton          = nullptr;
+        detailsIdLabel         = nullptr;
+        detailsConfigError     = nullptr;
+        customPathsHeader      = nullptr;
+        customPathsNote        = nullptr;
+        customPathsListControl = nullptr;
+        customPathsListModelStorage.reset();
+        customPathsListModel    = nullptr;
+        customPathsAddButton    = nullptr;
+        customPathsRemoveButton = nullptr;
+    }
+};
 
 void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& title, const std::wstring& message) noexcept
 {
@@ -88,32 +469,27 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     return _wcsicmp(ext.c_str(), L".dll") == 0;
 }
 
-[[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
-{
-    if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
-    {
-        return {};
-    }
-
-    const int required = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
-    if (required <= 0)
-    {
-        return {};
-    }
-
-    std::wstring result(static_cast<size_t>(required), L'\0');
-    const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), required);
-    if (written != required)
-    {
-        return {};
-    }
-
-    return result;
-}
-
 [[nodiscard]] bool TryBrowseCustomPluginPath(HWND owner, std::filesystem::path& outPath) noexcept
 {
     outPath.clear();
+
+#ifdef ENABLE_TESTS
+    {
+        std::scoped_lock lock(g_debugCustomPluginBrowseResultMutex);
+        if (g_debugNextCustomPluginBrowseResult.has_value())
+        {
+            const DebugCustomPluginBrowseResult result = *g_debugNextCustomPluginBrowseResult;
+            g_debugNextCustomPluginBrowseResult.reset();
+            if (result.kind == DebugCustomPluginBrowseResultKind::Cancel)
+            {
+                return false;
+            }
+
+            outPath = result.path;
+            return ! outPath.empty();
+        }
+    }
+#endif
 
     std::array<wchar_t, 2048> fileBuffer{};
     fileBuffer[0] = L'\0';
@@ -138,6 +514,28 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     return ! outPath.empty();
 }
 
+#ifdef ENABLE_TESTS
+bool DebugSetPreferencesPluginsNextCustomPathBrowsePathImpl(const std::wstring_view path) noexcept
+{
+    std::scoped_lock lock(g_debugCustomPluginBrowseResultMutex);
+    if (path.empty())
+    {
+        g_debugNextCustomPluginBrowseResult.reset();
+        return true;
+    }
+
+    g_debugNextCustomPluginBrowseResult = DebugCustomPluginBrowseResult{.kind = DebugCustomPluginBrowseResultKind::Path, .path = std::filesystem::path(path)};
+    return true;
+}
+
+bool DebugCancelPreferencesPluginsNextCustomPathBrowseImpl() noexcept
+{
+    std::scoped_lock lock(g_debugCustomPluginBrowseResultMutex);
+    g_debugNextCustomPluginBrowseResult = DebugCustomPluginBrowseResult{.kind = DebugCustomPluginBrowseResultKind::Cancel};
+    return true;
+}
+#endif
+
 [[nodiscard]] std::wstring_view GetPluginDisplayName(const PrefsPluginListItem& item) noexcept
 {
     return PrefsPlugins::GetDisplayName(item);
@@ -151,6 +549,101 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 [[nodiscard]] std::wstring_view GetPluginShortIdOrId(const PrefsPluginListItem& item) noexcept
 {
     return PrefsPlugins::GetShortIdOrId(item);
+}
+
+[[nodiscard]] PreferencesEmptyStateSpec GetPluginNoSettingsEmptyState(const PrefsPluginListItem& item) noexcept
+{
+    return PreferencesEmptyStateSpec{
+        .iconGlyph         = FluentIcons::kPuzzle,
+        .fallbackIconGlyph = L'\u25A1',
+        .tone              = PreferencesEmptyStateSpec::Tone::Neutral,
+        .title             = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_EMPTY_TITLE),
+        .body              = FormatStringResource(nullptr, IDS_PREFS_PLUGINS_EMPTY_BODY, std::wstring(GetPluginDisplayName(item))),
+        .caption           = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_EMPTY_CAPTION),
+    };
+}
+
+[[nodiscard]] PreferencesEmptyStateSpec GetPluginMessageState(const PrefsInlineMessageSeverity severity,
+                                                              std::wstring title,
+                                                              std::wstring body,
+                                                              std::wstring caption = {}) noexcept
+{
+    PreferencesEmptyStateSpec spec{};
+    spec.title   = std::move(title);
+    spec.body    = std::move(body);
+    spec.caption = std::move(caption);
+
+    switch (severity)
+    {
+        case PrefsInlineMessageSeverity::Warning:
+            spec.iconGlyph         = FluentIcons::kWarning;
+            spec.fallbackIconGlyph = FluentIcons::kFallbackWarning;
+            spec.tone              = PreferencesEmptyStateSpec::Tone::Warning;
+            break;
+        case PrefsInlineMessageSeverity::Error:
+            spec.iconGlyph         = FluentIcons::kError;
+            spec.fallbackIconGlyph = FluentIcons::kFallbackError;
+            spec.tone              = PreferencesEmptyStateSpec::Tone::Error;
+            break;
+        case PrefsInlineMessageSeverity::Info:
+        default:
+            spec.iconGlyph         = FluentIcons::kInfo;
+            spec.fallbackIconGlyph = L'i';
+            spec.tone              = PreferencesEmptyStateSpec::Tone::Info;
+            break;
+    }
+
+    return spec;
+}
+
+void ClearPluginsStatusMessage(PreferencesDialogState& state) noexcept
+{
+    state.pluginsStatusTitleText.clear();
+    state.pluginsStatusBodyText.clear();
+    state.pluginsStatusSeverity = PrefsInlineMessageSeverity::Info;
+}
+
+void SetPluginsStatusMessage(PreferencesDialogState& state, HostAlertSeverity severity, std::wstring title, std::wstring body) noexcept
+{
+    switch (severity)
+    {
+        case HOST_ALERT_WARNING: state.pluginsStatusSeverity = PrefsInlineMessageSeverity::Warning; break;
+        case HOST_ALERT_ERROR: state.pluginsStatusSeverity = PrefsInlineMessageSeverity::Error; break;
+        case HOST_ALERT_BUSY:
+        case HOST_ALERT_INFO:
+        default: state.pluginsStatusSeverity = PrefsInlineMessageSeverity::Info; break;
+    }
+    state.pluginsStatusTitleText = std::move(title);
+    state.pluginsStatusBodyText  = std::move(body);
+}
+
+void FlushPluginsFeedbackUi(HWND host) noexcept
+{
+    const HWND dlg    = host ? GetParent(host) : nullptr;
+    const HWND target = (dlg && IsWindow(dlg) != FALSE) ? dlg : host;
+    if (target && IsWindow(target) != FALSE)
+    {
+        RedrawWindow(target, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
+    }
+}
+
+[[nodiscard]] std::wstring JoinPluginNames(const std::vector<std::wstring>& names) noexcept
+{
+    std::wstring result;
+    for (const std::wstring& name : names)
+    {
+        if (name.empty())
+        {
+            continue;
+        }
+
+        if (! result.empty())
+        {
+            result.append(L"\r\n");
+        }
+        result.append(name);
+    }
+    return result;
 }
 
 [[nodiscard]] bool IsPluginLoadable(const PrefsPluginListItem& item) noexcept
@@ -177,96 +670,68 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 
 [[nodiscard]] std::optional<PrefsPluginListItem> TryGetSelectedPluginItem(const PreferencesDialogState& state) noexcept
 {
-    if (! state.pluginsList)
+    // Look up by the stable selected plugin ID tracked in state.
+    if (! state.pluginsSelectedPluginId.empty())
+    {
+        return PrefsPlugins::FindItemById(state.pluginsSelectedPluginId);
+    }
+
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<PrefsPluginListItem> TryGetStableSelectedPluginItem(const PreferencesDialogState& state) noexcept
+{
+    if (! state.pluginsSelectedPluginId.empty())
+    {
+        if (state.pluginsSelectedPlugin.has_value() && GetPluginId(state.pluginsSelectedPlugin.value()) == state.pluginsSelectedPluginId)
+        {
+            return state.pluginsSelectedPlugin;
+        }
+
+        return PrefsPlugins::FindItemById(state.pluginsSelectedPluginId);
+    }
+
+    if (state.pluginsSelectedPlugin.has_value() && GetPluginId(state.pluginsSelectedPlugin.value()).empty())
     {
         return std::nullopt;
     }
 
-    const int selected = ListView_GetNextItem(state.pluginsList.get(), -1, LVNI_SELECTED);
-    if (selected < 0)
+    return state.pluginsSelectedPlugin;
+}
+
+void RefreshSelectedPluginCache(PreferencesDialogState& state) noexcept
+{
+    const std::optional<PrefsPluginListItem> selected = TryGetStableSelectedPluginItem(state);
+    if (! selected.has_value())
     {
-        return std::nullopt;
+        state.pluginsSelectedPlugin.reset();
+        state.pluginsSelectedPluginId.clear();
+        return;
     }
 
-    LVITEMW item{};
-    item.mask  = LVIF_PARAM;
-    item.iItem = selected;
-    if (! ListView_GetItem(state.pluginsList.get(), &item))
+    state.pluginsSelectedPlugin = selected;
+    if (state.pluginsSelectedPluginId.empty())
     {
-        return std::nullopt;
+        state.pluginsSelectedPluginId.assign(GetPluginId(selected.value()));
     }
-
-    const size_t rowIndex = static_cast<size_t>(item.lParam);
-    if (rowIndex >= state.pluginsListItems.size())
+    if (state.pluginsRetainedSelectedPluginId.empty())
     {
-        return std::nullopt;
+        state.pluginsRetainedSelectedPluginId.assign(GetPluginId(selected.value()));
     }
-
-    return state.pluginsListItems[rowIndex];
 }
 
 [[nodiscard]] std::optional<PrefsPluginListItem> TryGetActivePluginItem(const PreferencesDialogState& state) noexcept
 {
-    if (state.pluginsSelectedPlugin.has_value())
+    if (const std::optional<PrefsPluginListItem> selected = TryGetStableSelectedPluginItem(state); selected.has_value())
     {
-        return state.pluginsSelectedPlugin;
+        return selected;
     }
     return TryGetSelectedPluginItem(state);
 }
 
-[[nodiscard]] HTREEITEM FindPluginChildTreeItem(const PreferencesDialogState& state, const PrefsPluginListItem& plugin) noexcept
+void UpdatePluginsActionButtonsEnabled(const PreferencesDialogState& /*state*/) noexcept
 {
-    if (! state.categoryTree || ! state.pluginsTreeRoot)
-    {
-        return nullptr;
-    }
-
-    const LPARAM desired = PrefsNavTree::EncodePluginData(plugin.type, plugin.index);
-
-    HTREEITEM current = TreeView_GetChild(state.categoryTree, state.pluginsTreeRoot);
-    while (current)
-    {
-        TVITEMW item{};
-        item.mask  = TVIF_PARAM;
-        item.hItem = current;
-        if (TreeView_GetItem(state.categoryTree, &item) && item.lParam == desired)
-        {
-            return current;
-        }
-
-        current = TreeView_GetNextSibling(state.categoryTree, current);
-    }
-
-    return nullptr;
-}
-
-void UpdatePluginsActionButtonsEnabled(const PreferencesDialogState& state) noexcept
-{
-    const bool showDetails = state.pluginsSelectedPlugin.has_value();
-
-    bool hasSelection                                 = false;
-    bool loadable                                     = false;
-    const std::optional<PrefsPluginListItem> selected = TryGetActivePluginItem(state);
-    if (selected.has_value())
-    {
-        const std::wstring_view pluginId = GetPluginId(selected.value());
-        hasSelection                     = ! pluginId.empty();
-        loadable                         = hasSelection && IsPluginLoadable(selected.value());
-    }
-
-    if (state.pluginsConfigureButton)
-    {
-        const bool enableConfigure = showDetails ? (loadable && state.settings != nullptr) : hasSelection;
-        EnableWindow(state.pluginsConfigureButton.get(), enableConfigure ? TRUE : FALSE);
-    }
-    if (state.pluginsTestButton)
-    {
-        EnableWindow(state.pluginsTestButton.get(), loadable ? TRUE : FALSE);
-    }
-    if (state.pluginsTestAllButton)
-    {
-        EnableWindow(state.pluginsTestAllButton.get(), TRUE);
-    }
+    // Button enabled states are now managed through DxUi in SyncDxControlsFromState.
 }
 
 [[nodiscard]] bool IsPluginDisabledInWorkingSettings(const PreferencesDialogState& state, std::wstring_view pluginId) noexcept
@@ -281,817 +746,24 @@ void UpdatePluginsActionButtonsEnabled(const PreferencesDialogState& state) noex
     return false;
 }
 
-void EnsurePluginsListColumns(HWND list, UINT dpi) noexcept
+[[nodiscard]] bool TryApplyPluginEnabledStateChange(HWND dlg, PreferencesDialogState& state, const PrefsPluginListItem& row, const bool enabled) noexcept
 {
-    if (! list)
-    {
-        return;
-    }
-
-    HWND header               = ListView_GetHeader(list);
-    const int existingColumns = header ? Header_GetItemCount(header) : 0;
-    if (existingColumns >= 4)
-    {
-        return;
-    }
-
-    const std::wstring colName   = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_NAME);
-    const std::wstring colType   = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_TYPE);
-    const std::wstring colOrigin = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_ORIGIN);
-    const std::wstring colId     = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_COL_ID);
-
-    LVCOLUMNW col{};
-    col.mask     = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
-    col.iSubItem = kPluginsColumnName;
-    col.cx       = std::max(1, ThemedControls::ScaleDip(dpi, 220));
-    col.pszText  = const_cast<LPWSTR>(colName.c_str());
-    ListView_InsertColumn(list, kPluginsColumnName, &col);
-
-    col.iSubItem = kPluginsColumnType;
-    col.cx       = std::max(1, ThemedControls::ScaleDip(dpi, 90));
-    col.pszText  = const_cast<LPWSTR>(colType.c_str());
-    ListView_InsertColumn(list, kPluginsColumnType, &col);
-
-    col.iSubItem = kPluginsColumnOrigin;
-    col.cx       = std::max(1, ThemedControls::ScaleDip(dpi, 90));
-    col.pszText  = const_cast<LPWSTR>(colOrigin.c_str());
-    ListView_InsertColumn(list, kPluginsColumnOrigin, &col);
-
-    col.iSubItem = kPluginsColumnId;
-    col.cx       = std::max(1, ThemedControls::ScaleDip(dpi, 160));
-    col.pszText  = const_cast<LPWSTR>(colId.c_str());
-    ListView_InsertColumn(list, kPluginsColumnId, &col);
-}
-
-void UpdatePluginsListColumnWidths(HWND list, UINT dpi) noexcept
-{
-    if (! list)
-    {
-        return;
-    }
-
-    EnsurePluginsListColumns(list, dpi);
-
-    RECT rc{};
-    GetClientRect(list, &rc);
-    const int width = std::max(0l, rc.right - rc.left);
-    if (width <= 0)
-    {
-        return;
-    }
-
-    const int typeWidth   = std::min(width, std::max(1, ThemedControls::ScaleDip(dpi, 90)));
-    const int originWidth = std::min(width, std::max(1, ThemedControls::ScaleDip(dpi, 90)));
-    const int idWidth     = std::min(width, std::max(1, ThemedControls::ScaleDip(dpi, 170)));
-    const int nameWidth   = std::max(0, width - typeWidth - originWidth - idWidth);
-
-    ListView_SetColumnWidth(list, kPluginsColumnName, nameWidth);
-    ListView_SetColumnWidth(list, kPluginsColumnType, typeWidth);
-    ListView_SetColumnWidth(list, kPluginsColumnOrigin, originWidth);
-    ListView_SetColumnWidth(list, kPluginsColumnId, idWidth);
-}
-
-void EnsurePluginsCustomPathsListColumns(HWND list, UINT dpi) noexcept
-{
-    if (! list)
-    {
-        return;
-    }
-
-    const HWND header         = ListView_GetHeader(list);
-    const int existingColumns = header ? Header_GetItemCount(header) : 0;
-    if (existingColumns > 0)
-    {
-        return;
-    }
-
-    LVCOLUMNW col{};
-    col.mask     = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
-    col.iSubItem = kPluginsCustomPathsColumnPath;
-    col.cx       = std::max(1, ThemedControls::ScaleDip(dpi, 220));
-    col.pszText  = const_cast<LPWSTR>(L"");
-    ListView_InsertColumn(list, kPluginsCustomPathsColumnPath, &col);
-}
-
-void UpdatePluginsCustomPathsListColumnWidths(HWND list) noexcept
-{
-    if (! list)
-    {
-        return;
-    }
-
-    RECT rc{};
-    GetClientRect(list, &rc);
-    const int width = std::max(0l, rc.right - rc.left);
-    ListView_SetColumnWidth(list, kPluginsCustomPathsColumnPath, width);
-}
-
-void SetPluginsListRowEnabled(HWND list, int row, bool enabled) noexcept
-{
-    if (! list || row < 0)
-    {
-        return;
-    }
-
-    const UINT state = static_cast<UINT>(INDEXTOSTATEIMAGEMASK(enabled ? 2 : 1));
-    ListView_SetItemState(list, row, state, static_cast<UINT>(LVIS_STATEIMAGEMASK));
-}
-} // namespace
-
-bool PluginsPane::EnsureCreated(HWND pageHost) noexcept
-{
-    return PrefsPaneHost::EnsureCreated(pageHost, _hWnd);
-}
-
-void PluginsPane::ResizeToHostClient(HWND pageHost) noexcept
-{
-    PrefsPaneHost::ResizeToHostClient(pageHost, _hWnd.get());
-}
-
-void PluginsPane::Show(bool visible) noexcept
-{
-    PrefsPaneHost::Show(_hWnd.get(), visible);
-}
-
-bool PluginsPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT commandId, UINT notifyCode, HWND hwndCtl) noexcept
-{
-    if (! host)
-    {
-        return false;
-    }
-
-    if (! state.refreshingPluginsPage)
-    {
-        if (PrefsPluginConfiguration::HandleCommand(host, state, notifyCode, hwndCtl))
-        {
-            return true;
-        }
-    }
-
-    if (commandId == IDC_PREFS_PLUGINS_CONFIGURE)
-    {
-        if (notifyCode != BN_CLICKED)
-        {
-            return true;
-        }
-
-        HWND dlg = GetParent(host);
-        if (! dlg)
-        {
-            return true;
-        }
-
-        if (! state.pluginsSelectedPlugin.has_value())
-        {
-            const std::optional<PrefsPluginListItem> selected = TryGetSelectedPluginItem(state);
-            if (! selected.has_value())
-            {
-                return true;
-            }
-
-            if (HTREEITEM item = FindPluginChildTreeItem(state, selected.value()))
-            {
-                TreeView_SelectItem(state.categoryTree, item);
-                TreeView_EnsureVisible(state.categoryTree, item);
-            }
-            return true;
-        }
-
-        const std::optional<PrefsPluginListItem> selected = TryGetActivePluginItem(state);
-        if (! selected.has_value())
-        {
-            return true;
-        }
-
-        const std::wstring_view pluginId = GetPluginId(selected.value());
-        if (pluginId.empty() || ! IsPluginLoadable(selected.value()) || ! state.settings)
-        {
-            return true;
-        }
-
-        const std::wstring_view pluginName = GetPluginDisplayName(selected.value());
-        const PluginType pluginType        = (selected.value().type == PrefsPluginType::FileSystem) ? PluginType::FileSystem : PluginType::Viewer;
-
-        SettingsHotReload::UnregisterParticipant(dlg);
-        const HRESULT hr = EditPluginConfigurationDialog(dlg, pluginType, pluginId, pluginName, *state.settings, state.workingSettings, state.theme);
-        SettingsHotReload::RegisterParticipant(dlg);
-        if (hr == S_FALSE)
-        {
-            return true;
-        }
-        if (FAILED(hr))
-        {
-            const std::wstring nameText(pluginName.empty() ? pluginId : pluginName);
-            ShowDialogAlert(dlg,
-                            HOST_ALERT_ERROR,
-                            LoadStringResource(nullptr, IDS_CAPTION_ERROR),
-                            FormatStringResource(nullptr, IDS_PREFS_PLUGINS_CONFIGURE_OPEN_FAILED_FMT, nameText, static_cast<unsigned long>(hr)));
-            return true;
-        }
-
-        SetDirty(dlg, state);
-        PluginsPane::Refresh(host, state);
-        return true;
-    }
-
-    if (commandId == IDC_PLUGINS_TEST)
-    {
-        if (notifyCode != BN_CLICKED)
-        {
-            return true;
-        }
-
-        HWND dlg = GetParent(host);
-        if (! dlg)
-        {
-            return true;
-        }
-
-        const std::optional<PrefsPluginListItem> selected = TryGetActivePluginItem(state);
-        if (! selected.has_value())
-        {
-            return true;
-        }
-
-        const std::wstring_view pluginId = GetPluginId(selected.value());
-        if (pluginId.empty() || ! IsPluginLoadable(selected.value()))
-        {
-            return true;
-        }
-
-        HRESULT hr = E_FAIL;
-        if (selected.value().type == PrefsPluginType::FileSystem)
-        {
-            hr = FileSystemPluginManager::GetInstance().TestPlugin(pluginId);
-        }
-        else
-        {
-            hr = ViewerPluginManager::GetInstance().TestPlugin(pluginId);
-        }
-
-        const UINT textId                = SUCCEEDED(hr) ? IDS_MSG_PLUGIN_TEST_OK : IDS_MSG_PLUGIN_TEST_FAILED;
-        const HostAlertSeverity severity = SUCCEEDED(hr) ? HOST_ALERT_INFO : HOST_ALERT_ERROR;
-        ShowDialogAlert(dlg, severity, LoadStringResource(nullptr, IDS_CAPTION_PLUGINS_MANAGER), LoadStringResource(nullptr, textId));
-        return true;
-    }
-
-    if (commandId == IDC_PLUGINS_TEST_ALL)
-    {
-        if (notifyCode != BN_CLICKED)
-        {
-            return true;
-        }
-
-        HWND dlg = GetParent(host);
-        if (! dlg)
-        {
-            return true;
-        }
-
-        size_t okCount   = 0;
-        size_t failCount = 0;
-
-        {
-            auto& manager = FileSystemPluginManager::GetInstance();
-            for (const auto& entry : manager.GetPlugins())
-            {
-                if (entry.id.empty())
-                {
-                    continue;
-                }
-
-                const HRESULT hr = manager.TestPlugin(entry.id);
-                if (SUCCEEDED(hr))
-                {
-                    ++okCount;
-                }
-                else
-                {
-                    ++failCount;
-                }
-            }
-        }
-
-        {
-            auto& manager = ViewerPluginManager::GetInstance();
-            for (const auto& entry : manager.GetPlugins())
-            {
-                if (entry.id.empty())
-                {
-                    continue;
-                }
-
-                const HRESULT hr = manager.TestPlugin(entry.id);
-                if (SUCCEEDED(hr))
-                {
-                    ++okCount;
-                }
-                else
-                {
-                    ++failCount;
-                }
-            }
-        }
-
-        ShowDialogAlert(dlg,
-                        HOST_ALERT_INFO,
-                        LoadStringResource(nullptr, IDS_CAPTION_PLUGINS_MANAGER),
-                        FormatStringResource(nullptr, IDS_FMT_PLUGIN_TEST_ALL_RESULT, okCount, failCount));
-        return true;
-    }
-
-    if (commandId == IDC_PREFS_PLUGINS_SEARCH_EDIT)
-    {
-        if (notifyCode == EN_CHANGE)
-        {
-            PluginsPane::Refresh(host, state);
-        }
-        return true;
-    }
-
-    if (commandId == IDC_PREFS_PLUGINS_CUSTOM_PATHS_ADD)
-    {
-        if (notifyCode != BN_CLICKED)
-        {
-            return true;
-        }
-
-        HWND dlg = GetParent(host);
-        if (! dlg)
-        {
-            return true;
-        }
-
-        std::filesystem::path selectedPath;
-        if (! TryBrowseCustomPluginPath(dlg, selectedPath))
-        {
-            return true;
-        }
-
-        if (! IsDllPath(selectedPath))
-        {
-            ShowDialogAlert(
-                dlg, HOST_ALERT_ERROR, LoadStringResource(nullptr, IDS_CAPTION_ERROR), LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_INVALID));
-            return true;
-        }
-
-        auto& customPaths = state.workingSettings.plugins.customPluginPaths;
-        if (std::find(customPaths.begin(), customPaths.end(), selectedPath) == customPaths.end())
-        {
-            customPaths.push_back(selectedPath);
-        }
-
-        PluginsPane::Refresh(host, state);
-        if (state.pluginsCustomPathsList)
-        {
-            const std::wstring selectedText = selectedPath.wstring();
-            for (int i = 0; i < ListView_GetItemCount(state.pluginsCustomPathsList.get()); ++i)
-            {
-                std::array<wchar_t, 2048> buffer{};
-                buffer[0] = L'\0';
-                ListView_GetItemText(state.pluginsCustomPathsList.get(), i, 0, buffer.data(), static_cast<int>(buffer.size()));
-                if (_wcsicmp(buffer.data(), selectedText.c_str()) == 0)
-                {
-                    ListView_SetItemState(state.pluginsCustomPathsList.get(), i, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-                    ListView_EnsureVisible(state.pluginsCustomPathsList.get(), i, FALSE);
-                    break;
-                }
-            }
-        }
-        SetDirty(dlg, state);
-        return true;
-    }
-
-    if (commandId == IDC_PREFS_PLUGINS_CUSTOM_PATHS_REMOVE)
-    {
-        if (notifyCode != BN_CLICKED)
-        {
-            return true;
-        }
-
-        HWND dlg = GetParent(host);
-        if (! dlg || ! state.pluginsCustomPathsList)
-        {
-            return true;
-        }
-
-        const int selected = ListView_GetNextItem(state.pluginsCustomPathsList.get(), -1, LVNI_SELECTED);
-        if (selected < 0)
-        {
-            return true;
-        }
-
-        LVITEMW item{};
-        item.mask  = LVIF_PARAM;
-        item.iItem = selected;
-        if (! ListView_GetItem(state.pluginsCustomPathsList.get(), &item))
-        {
-            return true;
-        }
-
-        const size_t pathIndex = static_cast<size_t>(item.lParam);
-        auto& customPaths      = state.workingSettings.plugins.customPluginPaths;
-        if (pathIndex >= customPaths.size())
-        {
-            return true;
-        }
-
-        customPaths.erase(customPaths.begin() + static_cast<std::ptrdiff_t>(pathIndex));
-        PluginsPane::Refresh(host, state);
-        SetDirty(dlg, state);
-        return true;
-    }
-
-    return false;
-}
-
-void PluginsPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
-{
-    if (! host)
-    {
-        return;
-    }
-
-    if (state.pluginsSelectedPlugin.has_value())
-    {
-        state.refreshingPluginsPage = true;
-        auto clearRefreshFlag       = wil::scope_exit([&]() noexcept { state.refreshingPluginsPage = false; });
-
-        const PrefsPluginListItem pluginItem = state.pluginsSelectedPlugin.value();
-        const std::wstring_view pluginId     = GetPluginId(pluginItem);
-
-        const HWND parent                   = state.pluginsConfigureButton ? GetParent(state.pluginsConfigureButton.get()) : nullptr;
-        const std::wstring previousEditorId = state.pluginsDetailsConfigPluginId;
-        const bool hadEditor                = ! state.pluginsDetailsConfigFields.empty();
-        static_cast<void>(PrefsPluginConfiguration::EnsureEditor(parent, state, pluginItem));
-        const bool hasEditor = ! state.pluginsDetailsConfigFields.empty();
-
-        if (state.pluginsDetailsConfigEdit)
-        {
-            std::wstring configText;
-
-            if (! pluginId.empty())
-            {
-                const std::wstring pluginIdText(pluginId);
-                const auto it = state.workingSettings.plugins.configurationByPluginId.find(pluginIdText);
-                if (it != state.workingSettings.plugins.configurationByPluginId.end() && ! std::holds_alternative<std::monostate>(it->second.value))
-                {
-                    std::string configUtf8;
-                    const HRESULT hr = Common::Settings::SerializeJsonValue(it->second, configUtf8);
-                    if (SUCCEEDED(hr))
-                    {
-                        configText = Utf16FromUtf8(configUtf8);
-                        if (configText.empty() && ! configUtf8.empty())
-                        {
-                            configText = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE);
-                        }
-                    }
-                    else
-                    {
-                        configText = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE);
-                    }
-                }
-
-                if (configText.empty() && IsPluginLoadable(pluginItem))
-                {
-                    std::string configUtf8;
-                    HRESULT configHr = E_FAIL;
-                    if (pluginItem.type == PrefsPluginType::FileSystem)
-                    {
-                        configHr = FileSystemPluginManager::GetInstance().GetConfiguration(pluginId, state.baselineSettings, configUtf8);
-                    }
-                    else
-                    {
-                        configHr = ViewerPluginManager::GetInstance().GetConfiguration(pluginId, state.baselineSettings, configUtf8);
-                    }
-
-                    if (SUCCEEDED(configHr))
-                    {
-                        if (configUtf8.empty())
-                        {
-                            // Some plugins report "no configuration" via an empty string / nullptr.
-                            // Show a valid JSON object so the user can still see a concrete representation.
-                            configText = L"{}";
-                        }
-                        else
-                        {
-                            configText = Utf16FromUtf8(configUtf8);
-                        }
-                    }
-                    else
-                    {
-                        configText = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE);
-                    }
-                }
-            }
-
-            if (configText.empty())
-            {
-                configText = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_DEFAULT);
-            }
-
-            SetWindowTextW(state.pluginsDetailsConfigEdit.get(), configText.c_str());
-            SendMessageW(state.pluginsDetailsConfigEdit.get(), EM_SETSEL, 0, 0);
-            SendMessageW(state.pluginsDetailsConfigEdit.get(), EM_SCROLLCARET, 0, 0);
-        }
-
-        if (previousEditorId != state.pluginsDetailsConfigPluginId || hadEditor != hasEditor)
-        {
-            RECT client{};
-            if (GetClientRect(host, &client))
-            {
-                const int w = std::max(0l, client.right - client.left);
-                const int h = std::max(0l, client.bottom - client.top);
-                SendMessageW(host, WM_SIZE, SIZE_RESTORED, MAKELPARAM(w, h));
-            }
-            else
-            {
-                SendMessageW(host, WM_SIZE, SIZE_RESTORED, 0);
-            }
-        }
-
-        UpdatePluginsActionButtonsEnabled(state);
-        return;
-    }
-
-    if (! state.pluginsList)
-    {
-        return;
-    }
-
-    PrefsPluginConfiguration::Clear(state);
-    if (state.pluginsDetailsConfigError)
-    {
-        SetWindowTextW(state.pluginsDetailsConfigError.get(), L"");
-    }
-
-    state.refreshingPluginsPage = true;
-    auto clearRefreshFlag       = wil::scope_exit([&]() noexcept { state.refreshingPluginsPage = false; });
-
-    const UINT dpi = GetDpiForWindow(host);
-
-    std::wstring filterText;
-    std::wstring_view filter;
-    if (state.pluginsSearchEdit)
-    {
-        filterText = PrefsUi::GetWindowTextString(state.pluginsSearchEdit.get());
-        filter     = PrefsUi::TrimWhitespace(filterText);
-    }
-
-    ThemedControls::ApplyThemeToListView(state.pluginsList, state.theme);
-    EnsurePluginsListColumns(state.pluginsList.get(), dpi);
-    ListView_SetExtendedListViewStyle(state.pluginsList.get(), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP | LVS_EX_CHECKBOXES);
-
-    std::wstring selectedPluginId;
-    const int selected = ListView_GetNextItem(state.pluginsList.get(), -1, LVNI_SELECTED);
-    if (selected >= 0)
-    {
-        LVITEMW item{};
-        item.mask  = LVIF_PARAM;
-        item.iItem = selected;
-        if (ListView_GetItem(state.pluginsList.get(), &item))
-        {
-            const size_t rowIndex = static_cast<size_t>(item.lParam);
-            if (rowIndex < state.pluginsListItems.size())
-            {
-                selectedPluginId.assign(GetPluginId(state.pluginsListItems[rowIndex]));
-            }
-        }
-    }
-
-    state.pluginsListItems.clear();
-    ListView_DeleteAllItems(state.pluginsList.get());
-    PrefsPlugins::BuildListItems(state.pluginsListItems);
-
-    const std::wstring typeFileSystem = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM);
-    const std::wstring typeViewer     = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
-
-    int insertPos = 0;
-    for (size_t i = 0; i < state.pluginsListItems.size(); ++i)
-    {
-        const auto& row = state.pluginsListItems[i];
-
-        const std::wstring_view nameText = GetPluginDisplayName(row);
-        const std::wstring_view idText   = GetPluginId(row);
-        const std::wstring_view shortId  = GetPluginShortIdOrId(row);
-        const std::wstring originText    = GetPluginOriginText(row);
-
-        if (nameText.empty() || idText.empty())
-        {
-            continue;
-        }
-
-        const std::wstring_view typeText = (row.type == PrefsPluginType::FileSystem) ? std::wstring_view(typeFileSystem) : std::wstring_view(typeViewer);
-        if (! filter.empty() && ! PrefsUi::ContainsCaseInsensitive(nameText, filter) && ! PrefsUi::ContainsCaseInsensitive(idText, filter) &&
-            ! PrefsUi::ContainsCaseInsensitive(shortId, filter) && ! PrefsUi::ContainsCaseInsensitive(typeText, filter) &&
-            ! PrefsUi::ContainsCaseInsensitive(originText, filter))
-        {
-            continue;
-        }
-
-        LVITEMW item{};
-        item.mask          = LVIF_TEXT | LVIF_PARAM;
-        item.iItem         = insertPos;
-        item.iSubItem      = 0;
-        item.pszText       = const_cast<LPWSTR>(nameText.data());
-        item.lParam        = static_cast<LPARAM>(i);
-        const int inserted = ListView_InsertItem(state.pluginsList.get(), &item);
-        if (inserted < 0)
-        {
-            continue;
-        }
-
-        ++insertPos;
-
-        ListView_SetItemText(state.pluginsList.get(), inserted, kPluginsColumnType, const_cast<LPWSTR>(typeText.data()));
-        ListView_SetItemText(state.pluginsList.get(), inserted, kPluginsColumnOrigin, const_cast<LPWSTR>(originText.c_str()));
-        ListView_SetItemText(state.pluginsList.get(), inserted, kPluginsColumnId, const_cast<LPWSTR>(shortId.data()));
-
-        const bool enabled = ! IsPluginDisabledInWorkingSettings(state, idText);
-        SetPluginsListRowEnabled(state.pluginsList.get(), inserted, enabled);
-    }
-
-    UpdatePluginsListColumnWidths(state.pluginsList.get(), dpi);
-
-    if (! selectedPluginId.empty())
-    {
-        for (int i = 0; i < ListView_GetItemCount(state.pluginsList.get()); ++i)
-        {
-            LVITEMW item{};
-            item.mask  = LVIF_PARAM;
-            item.iItem = i;
-            if (! ListView_GetItem(state.pluginsList.get(), &item))
-            {
-                continue;
-            }
-
-            const size_t rowIndex = static_cast<size_t>(item.lParam);
-            if (rowIndex >= state.pluginsListItems.size())
-            {
-                continue;
-            }
-
-            if (std::wstring_view(GetPluginId(state.pluginsListItems[rowIndex])) == selectedPluginId)
-            {
-                ListView_SetItemState(state.pluginsList.get(), i, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-                ListView_EnsureVisible(state.pluginsList.get(), i, FALSE);
-                break;
-            }
-        }
-    }
-
-    if (state.pluginsCustomPathsList)
-    {
-        std::wstring selectedPathText;
-        const int selectedPathIndex = ListView_GetNextItem(state.pluginsCustomPathsList.get(), -1, LVNI_SELECTED);
-        if (selectedPathIndex >= 0)
-        {
-            std::array<wchar_t, 2048> buffer{};
-            buffer[0] = L'\0';
-            ListView_GetItemText(state.pluginsCustomPathsList.get(), selectedPathIndex, 0, buffer.data(), static_cast<int>(buffer.size()));
-            selectedPathText.assign(buffer.data());
-        }
-
-        ThemedControls::ApplyThemeToListView(state.pluginsCustomPathsList, state.theme);
-        EnsurePluginsCustomPathsListColumns(state.pluginsCustomPathsList.get(), dpi);
-        ListView_SetExtendedListViewStyle(state.pluginsCustomPathsList.get(), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP);
-
-        ListView_DeleteAllItems(state.pluginsCustomPathsList.get());
-
-        for (size_t i = 0; i < state.workingSettings.plugins.customPluginPaths.size(); ++i)
-        {
-            const std::wstring pathText = state.workingSettings.plugins.customPluginPaths[i].wstring();
-            LVITEMW item{};
-            item.mask     = LVIF_TEXT | LVIF_PARAM;
-            item.iItem    = static_cast<int>(i);
-            item.iSubItem = 0;
-            item.pszText  = const_cast<LPWSTR>(pathText.c_str());
-            item.lParam   = static_cast<LPARAM>(i);
-            ListView_InsertItem(state.pluginsCustomPathsList.get(), &item);
-        }
-
-        UpdatePluginsCustomPathsListColumnWidths(state.pluginsCustomPathsList.get());
-
-        if (! selectedPathText.empty())
-        {
-            for (int i = 0; i < ListView_GetItemCount(state.pluginsCustomPathsList.get()); ++i)
-            {
-                std::array<wchar_t, 2048> buffer{};
-                buffer[0] = L'\0';
-                ListView_GetItemText(state.pluginsCustomPathsList.get(), i, 0, buffer.data(), static_cast<int>(buffer.size()));
-                if (_wcsicmp(buffer.data(), selectedPathText.c_str()) == 0)
-                {
-                    ListView_SetItemState(state.pluginsCustomPathsList.get(), i, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-                    ListView_EnsureVisible(state.pluginsCustomPathsList.get(), i, FALSE);
-                    break;
-                }
-            }
-        }
-
-        const bool hasSelection = ListView_GetNextItem(state.pluginsCustomPathsList.get(), -1, LVNI_SELECTED) >= 0;
-        if (state.pluginsCustomPathsRemoveButton)
-        {
-            EnableWindow(state.pluginsCustomPathsRemoveButton.get(), hasSelection ? TRUE : FALSE);
-        }
-    }
-
-    UpdatePluginsActionButtonsEnabled(state);
-}
-
-bool PluginsPane::HandleNotify(HWND host, PreferencesDialogState& state, const NMHDR* hdr, LRESULT& /*outResult*/) noexcept
-{
-    if (! host || ! hdr)
-    {
-        return false;
-    }
-
-    if (state.refreshingPluginsPage)
-    {
-        return true;
-    }
-
-    if (state.pluginsCustomPathsList && hdr->hwndFrom == state.pluginsCustomPathsList.get())
-    {
-        if (hdr->code == LVN_ITEMCHANGED)
-        {
-            const bool hasSelection = ListView_GetNextItem(state.pluginsCustomPathsList.get(), -1, LVNI_SELECTED) >= 0;
-            if (state.pluginsCustomPathsRemoveButton)
-            {
-                EnableWindow(state.pluginsCustomPathsRemoveButton.get(), hasSelection ? TRUE : FALSE);
-            }
-
-            PrefsPaneHost::EnsureControlVisible(host, state, state.pluginsCustomPathsList.get());
-            return true;
-        }
-
-        return false;
-    }
-
-    if (! state.pluginsList || hdr->hwndFrom != state.pluginsList.get())
-    {
-        return false;
-    }
-
-    if (hdr->code != LVN_ITEMCHANGED)
-    {
-        return false;
-    }
-
-    const auto* nmlv = reinterpret_cast<const NMLISTVIEW*>(hdr);
-    if (! nmlv || nmlv->iItem < 0 || (nmlv->uChanged & LVIF_STATE) == 0)
-    {
-        return true;
-    }
-
-    if ((nmlv->uOldState & LVIS_SELECTED) != (nmlv->uNewState & LVIS_SELECTED))
-    {
-        UpdatePluginsActionButtonsEnabled(state);
-    }
-
-    if ((nmlv->uOldState & LVIS_STATEIMAGEMASK) == (nmlv->uNewState & LVIS_STATEIMAGEMASK))
-    {
-        return true;
-    }
-
-    LVITEMW item{};
-    item.mask  = LVIF_PARAM;
-    item.iItem = nmlv->iItem;
-    if (! ListView_GetItem(state.pluginsList.get(), &item))
-    {
-        return true;
-    }
-
-    const size_t rowIndex = static_cast<size_t>(item.lParam);
-    if (rowIndex >= state.pluginsListItems.size())
-    {
-        return true;
-    }
-
-    HWND dlg = GetParent(host);
-    if (! dlg)
-    {
-        return true;
-    }
-
-    const PrefsPluginListItem& row   = state.pluginsListItems[rowIndex];
     const std::wstring_view pluginId = GetPluginId(row);
     if (pluginId.empty())
     {
-        return true;
+        return false;
     }
 
-    const bool enabled = (ListView_GetCheckState(state.pluginsList.get(), nmlv->iItem) != FALSE);
     if (! enabled && row.type == PrefsPluginType::FileSystem && pluginId == state.workingSettings.plugins.currentFileSystemPluginId)
     {
-        state.refreshingPluginsPage = true;
-        SetPluginsListRowEnabled(state.pluginsList.get(), nmlv->iItem, true);
-        state.refreshingPluginsPage = false;
-
-        ShowDialogAlert(dlg,
-                        HOST_ALERT_WARNING,
-                        LoadStringResource(nullptr, IDS_CAPTION_WARNING),
-                        LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CANNOT_DISABLE_ACTIVE_FILE_SYSTEM));
-        return true;
+        if (dlg)
+        {
+            ShowDialogAlert(dlg,
+                            HOST_ALERT_WARNING,
+                            LoadStringResource(nullptr, IDS_CAPTION_WARNING),
+                            LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CANNOT_DISABLE_ACTIVE_FILE_SYSTEM));
+        }
+        return false;
     }
 
     auto& disabled = state.workingSettings.plugins.disabledPluginIds;
@@ -1109,60 +781,1427 @@ bool PluginsPane::HandleNotify(HWND host, PreferencesDialogState& state, const N
         }
     }
 
-    SetDirty(dlg, state);
+    if (dlg)
+    {
+        SetDirty(dlg, state);
+    }
     return true;
 }
 
-void PluginsPane::LayoutControls(
-    HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept
-{
-    using namespace PrefsLayoutConstants;
+} // namespace
 
+struct PluginsPane::DxState
+{
+    DxState()                          = default;
+    DxState(const DxState&)            = delete;
+    DxState& operator=(const DxState&) = delete;
+    DxState(DxState&&)                 = delete;
+    DxState& operator=(DxState&&)      = delete;
+
+    PluginsDxPage page;
+
+    void Detach() noexcept
+    {
+        page.Detach();
+    }
+};
+
+PluginsPane::PluginsPane() = default;
+
+PluginsPane::~PluginsPane()
+{
+    DetachDxHosts();
+}
+
+void PluginsPane::Destroy(PreferencesDialogState& state) noexcept
+{
+    _state = &state;
+    PrefsPluginConfiguration::Clear(state);
+    DetachDxHosts();
+
+    state.pluginsListItems.clear();
+    _pageHost = nullptr;
+}
+
+void PluginsPane::SyncDxListSelectionFromState(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _dxState->page.listModel)
+    {
+        return;
+    }
+
+    std::wstring selectedPluginId;
+    if (! state.pluginsSelectedPluginId.empty())
+    {
+        selectedPluginId = state.pluginsSelectedPluginId;
+    }
+    else if (state.pluginsSelectedPlugin.has_value())
+    {
+        selectedPluginId.assign(GetPluginId(state.pluginsSelectedPlugin.value()));
+    }
+
+    if (selectedPluginId.empty())
+    {
+        _dxState->page.listControl->GetSelectionModel().Clear();
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+        return;
+    }
+
+    const auto dxRowIndex = _dxState->page.listModel->FindRowIndexByPluginId(selectedPluginId);
+    if (! dxRowIndex.has_value())
+    {
+        _dxState->page.listControl->GetSelectionModel().Clear();
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+        return;
+    }
+
+    _dxState->page.listControl->GetSelectionModel().SetSingle(_dxState->page.listModel->GetStableRowId(dxRowIndex.value()));
+    if (_pageHostDx)
+    {
+        _pageHostDx->Invalidate();
+    }
+}
+
+void PluginsPane::SyncDxCustomPathsSelectionFromState(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState || ! _dxState->page.customPathsListControl || ! _dxState->page.customPathsListModel)
+    {
+        return;
+    }
+
+    const std::wstring selectedPath = state.pluginsSelectedCustomPathText;
+
+    if (selectedPath.empty())
+    {
+        _dxState->page.customPathsListControl->GetSelectionModel().Clear();
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+        return;
+    }
+
+    const auto dxRowIndex = _dxState->page.customPathsListModel->FindRowIndexByPath(selectedPath);
+    if (! dxRowIndex.has_value())
+    {
+        _dxState->page.customPathsListControl->GetSelectionModel().Clear();
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+        return;
+    }
+
+    _dxState->page.customPathsListControl->GetSelectionModel().SetSingle(_dxState->page.customPathsListModel->GetStableRowId(dxRowIndex.value()));
+    if (_pageHostDx)
+    {
+        _pageHostDx->Invalidate();
+    }
+}
+
+bool PluginsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexcept
+{
+    _pageHostDx      = state.pageHostDxHost;
+    _pageContentRoot = state.pageHostDxContentRootControl;
+    if (! _pageHostDx || ! _pageContentRoot)
+    {
+        Debug::Error(L"Preferences.Plugins: Shared page-host DX surface is unavailable; DxUi controls cannot be created.");
+        return false;
+    }
+
+    if (_dxState && PrefsUi::HasRetainedDxChildren(_pageContentRoot))
+    {
+        _state      = &state;
+        _hostWindow = parent;
+        ApplyDxTheme(state);
+        SyncDxControlsFromState(state);
+        return true;
+    }
+
+    // Children were cleared by ResetPreferencesSharedPageSurface — the
+    // config panel pointer in shared state is dangling.  Null it before
+    // ClearChildren (which is harmless on an already-empty root) so that
+    // PrefsPluginConfiguration::Clear won't dereference freed memory.
+    state.pluginsDetailsConfigDxPanel = nullptr;
+    state.pluginsDetailsConfigFields.clear();
+    state.pluginsDetailsConfigPluginId.clear();
+    state.pluginsDetailsConfigErrorText.clear();
+    ClearPluginsStatusMessage(state);
+
+    auto dxState = std::make_unique<DxState>();
+    _pageHostDx->ResetInteractionState();
+    _pageContentRoot->ClearChildren();
+
+    dxState->page.note                    = _pageContentRoot->AddChild<Label>();
+    dxState->page.searchLabel             = _pageContentRoot->AddChild<Label>();
+    dxState->page.searchEdit              = _pageContentRoot->AddChild<TextField>();
+    dxState->page.listControl             = _pageContentRoot->AddChild<Grid>();
+    dxState->page.configureButton         = _pageContentRoot->AddChild<Button>();
+    dxState->page.testButton              = _pageContentRoot->AddChild<Button>();
+    dxState->page.testAllButton           = _pageContentRoot->AddChild<Button>();
+    dxState->page.detailsIdLabel          = _pageContentRoot->AddChild<Label>();
+    dxState->page.detailsConfigError      = _pageContentRoot->AddChild<Label>();
+    dxState->page.customPathsHeader       = _pageContentRoot->AddChild<Label>();
+    dxState->page.customPathsNote         = _pageContentRoot->AddChild<Label>();
+    dxState->page.customPathsListControl  = _pageContentRoot->AddChild<Grid>();
+    dxState->page.customPathsAddButton    = _pageContentRoot->AddChild<Button>();
+    dxState->page.customPathsRemoveButton = _pageContentRoot->AddChild<Button>();
+
+    dxState->page.note->SetFontRole(FontRole::Small);
+    dxState->page.note->SetMultiline(true);
+    dxState->page.detailsIdLabel->SetMultiline(true);
+    dxState->page.detailsConfigError->SetFontRole(FontRole::Small);
+    dxState->page.detailsConfigError->SetMultiline(true);
+    dxState->page.customPathsHeader->SetFontRole(FontRole::Header);
+    dxState->page.customPathsNote->SetFontRole(FontRole::Small);
+    dxState->page.customPathsNote->SetMultiline(true);
+
+    dxState->page.listControl->SetDelegate(this);
+    dxState->page.listControl->SetSelectionMode(GridSelectionMode::Single);
+    dxState->page.listControl->SetHeaderHeightDip(30.0f);
+    dxState->page.listControl->SetRowHeightDip(30.0f);
+    dxState->page.listControl->SetLineClamp(1u);
+
+    dxState->page.customPathsListControl->SetDelegate(this);
+    dxState->page.customPathsListControl->SetSelectionMode(GridSelectionMode::Single);
+    dxState->page.customPathsListControl->SetHeaderHeightDip(0.0f);
+    dxState->page.customPathsListControl->SetRowHeightDip(28.0f);
+    dxState->page.customPathsListControl->SetLineClamp(1u);
+    dxState->page.customPathsListControl->SetEmptyStateText(LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_EMPTY));
+
+    auto listModel          = std::make_unique<PluginsGridModel>();
+    dxState->page.listModel = listModel.get();
+    dxState->page.listControl->SetModel(dxState->page.listModel);
+    dxState->page.listModelStorage = std::move(listModel);
+
+    auto customPathsModel              = std::make_unique<PluginsCustomPathsGridModel>();
+    dxState->page.customPathsListModel = customPathsModel.get();
+    dxState->page.customPathsListControl->SetModel(dxState->page.customPathsListModel);
+    dxState->page.customPathsListModelStorage = std::move(customPathsModel);
+
+    dxState->page.searchEdit->SetOnTextChanged([this, parent](std::wstring_view text) noexcept
+    {
+        if (_syncingDxInputs || ! _state)
+        {
+            return;
+        }
+
+        _state->pluginsSearchText.assign(text);
+        if (parent && IsWindow(parent) != FALSE)
+        {
+            static_cast<void>(PrefsUi::PostDeferredAction(parent, PreferencesDeferredActionKind::PluginsSearchChanged));
+        }
+    });
+    dxState->page.configureButton->SetOnClick([this]() noexcept
+    {
+        if (! _hostWindow || IsWindow(_hostWindow) == FALSE)
+            return;
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::PluginsConfigure));
+    });
+    dxState->page.testButton->SetOnClick([this]() noexcept
+    {
+        if (! _hostWindow || IsWindow(_hostWindow) == FALSE)
+            return;
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::PluginsTest));
+    });
+    dxState->page.testAllButton->SetOnClick([this]() noexcept
+    {
+        if (! _hostWindow || IsWindow(_hostWindow) == FALSE)
+            return;
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::PluginsTestAll));
+    });
+    dxState->page.customPathsAddButton->SetOnClick([this]() noexcept
+    {
+        if (! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+            return;
+        OnCustomPathsAddButtonClick(_hostWindow, *_state);
+    });
+    dxState->page.customPathsRemoveButton->SetOnClick([this]() noexcept
+    {
+        if (! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+            return;
+        OnCustomPathsRemoveButtonClick(_hostWindow, *_state);
+    });
+
+    _dxState    = std::move(dxState);
+    _state      = &state;
+    _hostWindow = parent;
+    ApplyDxTheme(state);
+    SyncDxControlsFromState(state);
+    return true;
+}
+
+void PluginsPane::DetachDxHosts() noexcept
+{
+    if (_state)
+    {
+        _state->pluginsDetailsConfigDxPanel = nullptr;
+    }
+
+    if (_pageContentRoot && _pageHostDx && _pageHost && IsWindow(_pageHost) != FALSE)
+    {
+        _pageHostDx->ResetInteractionState();
+        _pageContentRoot->ClearChildren();
+    }
+
+    _pageHostDx      = nullptr;
+    _pageContentRoot = nullptr;
+
+    if (_dxState)
+    {
+        _dxState->Detach();
+        _dxState.reset();
+    }
+
+    _syncingDxInputs    = false;
+    _syncingDxSelection = false;
+    _state              = nullptr;
+    _hostWindow         = nullptr;
+}
+
+void PluginsPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return;
+    }
+
+    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    _pageHostDx->SetTheme(palette);
+}
+
+void PluginsPane::SyncDxControlsFromState(PreferencesDialogState& state) noexcept
+{
+    if (! _dxState)
+    {
+        return;
+    }
+
+    _dxState->page.note->SetText(LoadStringResource(nullptr, IDS_PREFS_PLUGINS_NOTE));
+    _dxState->page.searchLabel->SetText(LoadStringResource(nullptr, IDS_PREFS_COMMON_SEARCH));
+    _dxState->page.searchLabel->SetMnemonicTarget(_dxState->page.searchEdit);
+    _dxState->page.detailsIdLabel->SetText(state.pluginsDetailsIdText);
+    _dxState->page.detailsConfigError->SetText(state.pluginsDetailsMessageKind == PrefsPluginDetailsMessageKind::EmptyState
+                                                   ? state.pluginsDetailsConfigEmptyStateText
+                                                   : state.pluginsDetailsConfigErrorText);
+    _dxState->page.customPathsHeader->SetText(LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_HEADER));
+    _dxState->page.customPathsNote->SetText(LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_NOTE));
+
+    _syncingDxInputs = true;
+    auto clearSync   = wil::scope_exit([this]() noexcept { _syncingDxInputs = false; });
+    _dxState->page.searchEdit->SetText(state.pluginsSearchText);
+    _dxState->page.searchEdit->SetEnabled(true);
+
+    if (_dxState->page.listControl && _dxState->page.listModel)
+    {
+        std::vector<PluginsGridRow> rows;
+        rows.reserve(state.pluginsListItems.size());
+        for (const PrefsPluginListItem& item : state.pluginsListItems)
+        {
+            const std::wstring_view pluginId = GetPluginId(item);
+            if (pluginId.empty())
+            {
+                continue;
+            }
+
+            PluginsGridRow row{};
+            row.pluginId.assign(pluginId);
+            row.stableId    = MakeStableRowId(row.pluginId);
+            row.name        = std::wstring(GetPluginDisplayName(item));
+            row.typeText    = (item.type == PrefsPluginType::FileSystem) ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
+                                                                         : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+            row.originText  = GetPluginOriginText(item);
+            row.shortIdText = std::wstring(GetPluginShortIdOrId(item));
+            row.enabled     = ! IsPluginDisabledInWorkingSettings(state, pluginId);
+            rows.push_back(std::move(row));
+        }
+
+        _dxState->page.listModel->SetRows(std::move(rows));
+        SyncDxListSelectionFromState(state);
+        _dxState->page.listControl->NotifyDataChanged();
+    }
+
+    if (_dxState->page.customPathsListControl && _dxState->page.customPathsListModel)
+    {
+        std::vector<PluginsCustomPathGridRow> rows;
+        rows.reserve(state.workingSettings.plugins.customPluginPaths.size());
+        for (const std::filesystem::path& path : state.workingSettings.plugins.customPluginPaths)
+        {
+            const std::wstring pathText = path.wstring();
+            if (pathText.empty())
+            {
+                continue;
+            }
+
+            PluginsCustomPathGridRow row{};
+            row.path     = pathText;
+            row.stableId = MakeStableRowId(row.path);
+            rows.push_back(std::move(row));
+        }
+
+        _dxState->page.customPathsListModel->SetRows(std::move(rows));
+        SyncDxCustomPathsSelectionFromState(state);
+        _dxState->page.customPathsListControl->NotifyDataChanged();
+    }
+
+    bool hasSelection = false;
+    bool loadable     = false;
+    if (const std::optional<PrefsPluginListItem> selected = TryGetActivePluginItem(state); selected.has_value())
+    {
+        const std::wstring_view pluginId = GetPluginId(selected.value());
+        hasSelection                     = ! pluginId.empty();
+        loadable                         = hasSelection && IsPluginLoadable(selected.value());
+    }
+
+    if (_dxState->page.configureButton)
+    {
+        _dxState->page.configureButton->SetText(LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CONFIGURE_ELLIPSIS));
+        _dxState->page.configureButton->SetEnabled(hasSelection);
+    }
+    if (_dxState->page.testButton)
+    {
+        _dxState->page.testButton->SetText(LoadStringResource(nullptr, IDS_BTN_TEST));
+        _dxState->page.testButton->SetEnabled(loadable);
+    }
+    if (_dxState->page.testAllButton)
+    {
+        _dxState->page.testAllButton->SetText(LoadStringResource(nullptr, IDS_BTN_TEST_ALL));
+        _dxState->page.testAllButton->SetEnabled(true);
+    }
+    if (_dxState->page.customPathsAddButton)
+    {
+        _dxState->page.customPathsAddButton->SetText(LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_ADD_ELLIPSIS));
+        _dxState->page.customPathsAddButton->SetEnabled(true);
+    }
+    if (_dxState->page.customPathsRemoveButton)
+    {
+        _dxState->page.customPathsRemoveButton->SetText(LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_REMOVE));
+        _dxState->page.customPathsRemoveButton->SetEnabled(! state.pluginsSelectedCustomPathText.empty());
+    }
+    if (_pageHostDx)
+    {
+        _pageHostDx->Invalidate();
+    }
+}
+
+void PluginsPane::LayoutDxHosts(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState || ! _pageHost || ! _pageHostDx || ! _pageContentRoot)
+    {
+        return;
+    }
+
+    const bool showDetails  = state.pluginsDetailsActive && state.pluginsSelectedPlugin.has_value();
+    const bool showListMode = ! showDetails;
+    _dxState->page.note->SetVisible(showListMode);
+    _dxState->page.searchLabel->SetVisible(showListMode);
+    _dxState->page.searchEdit->SetVisible(showListMode);
+    _dxState->page.listControl->SetVisible(showListMode);
+    _dxState->page.configureButton->SetVisible(showListMode);
+    _dxState->page.testButton->SetVisible(showListMode);
+    _dxState->page.testAllButton->SetVisible(showListMode);
+    _dxState->page.customPathsHeader->SetVisible(showListMode);
+    _dxState->page.customPathsNote->SetVisible(showListMode);
+    _dxState->page.customPathsListControl->SetVisible(showListMode);
+    _dxState->page.customPathsAddButton->SetVisible(showListMode);
+    _dxState->page.customPathsRemoveButton->SetVisible(showListMode);
+    _pageHostDx->Invalidate();
+}
+
+#ifdef ENABLE_TESTS
+size_t PluginsPane::DebugMainListRowCount() const noexcept
+{
+    if (! _dxState || ! _dxState->page.listModel)
+    {
+        return 0u;
+    }
+
+    return _dxState->page.listModel->GetRowCount();
+}
+
+RedSalamander::DxUi::GridVisibleWorkMetrics PluginsPane::DebugMainListVisibleWorkMetrics() const noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl)
+    {
+        return {};
+    }
+
+    return _dxState->page.listControl->GetVisibleWorkMetrics();
+}
+
+uint64_t PluginsPane::DebugMainListRenderCount() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return 0u;
+    }
+
+    return _pageHostDx->DebugGetRenderCount();
+}
+
+uint64_t PluginsPane::DebugMainListResizeCount() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return 0u;
+    }
+
+    return _pageHostDx->DebugGetResizeCount();
+}
+
+uint64_t PluginsPane::DebugMainListResizeFailureCount() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return 0u;
+    }
+
+    return _pageHostDx->DebugGetResizeFailureCount();
+}
+
+bool PluginsPane::DebugFindToggleableMainListRow(size_t& outRowIndex, bool& outEnabled) const noexcept
+{
+    if (! _dxState || ! _dxState->page.listModel || ! _state)
+    {
+        return false;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    for (size_t i = 0; i < rows.size(); ++i)
+    {
+        const PluginsGridRow& row                     = rows[i];
+        const std::optional<PrefsPluginListItem> item = PrefsPlugins::FindItemById(row.pluginId);
+        if (! item.has_value())
+        {
+            continue;
+        }
+
+        const bool disableBlocked =
+            row.enabled && item->type == PrefsPluginType::FileSystem && row.pluginId == _state->workingSettings.plugins.currentFileSystemPluginId;
+        if (disableBlocked)
+        {
+            continue;
+        }
+
+        outRowIndex = i;
+        outEnabled  = row.enabled;
+        return true;
+    }
+
+    return false;
+}
+
+bool PluginsPane::DebugFindLoadableMainListRow(size_t& outRowIndex) const noexcept
+{
+    if (! _dxState || ! _dxState->page.listModel)
+    {
+        return false;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    for (size_t i = 0; i < rows.size(); ++i)
+    {
+        const std::optional<PrefsPluginListItem> item = PrefsPlugins::FindItemById(rows[i].pluginId);
+        if (! item.has_value() || ! IsPluginLoadable(item.value()))
+        {
+            continue;
+        }
+
+        outRowIndex = i;
+        return true;
+    }
+
+    return false;
+}
+
+bool PluginsPane::DebugGetMainListRowEnabled(const size_t rowIndex, bool& outEnabled) const noexcept
+{
+    if (! _dxState || ! _dxState->page.listModel)
+    {
+        return false;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    if (rowIndex >= rows.size())
+    {
+        return false;
+    }
+
+    outEnabled = rows[rowIndex].enabled;
+    return true;
+}
+
+bool PluginsPane::DebugGetMainListCheckboxClientRect(const size_t rowIndex, RECT& outRect) const noexcept
+{
+    outRect = RECT{};
+    if (! _dxState || ! _dxState->page.listControl || ! _pageHostDx || ! _dxState->page.listModel)
+    {
+        return false;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    if (rowIndex >= rows.size())
+    {
+        return false;
+    }
+
+    const std::optional<D2D1_RECT_F> cellRect = _dxState->page.listControl->GetVisibleCellRect(rowIndex, kPluginsColumnName);
+    if (! cellRect.has_value())
+    {
+        return false;
+    }
+
+    const float contentLeft        = cellRect->left + 8.0f;
+    const float contentTop         = cellRect->top + 3.0f;
+    const float contentBottom      = cellRect->bottom - 3.0f;
+    const float contentHeight      = std::max(0.0f, contentBottom - contentTop);
+    const float indicatorSize      = std::min(16.0f, std::max(12.0f, contentHeight));
+    const float indicatorTop       = contentTop + std::max(0.0f, (contentHeight - indicatorSize) * 0.5f);
+    const D2D1_RECT_F checkboxRect = D2D1::RectF(contentLeft, indicatorTop, contentLeft + indicatorSize, indicatorTop + indicatorSize);
+
+    outRect.left   = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(checkboxRect.left)));
+    outRect.top    = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(checkboxRect.top)));
+    outRect.right  = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(checkboxRect.right)));
+    outRect.bottom = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(checkboxRect.bottom)));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
+}
+
+bool PluginsPane::DebugGetMainListHeaderClientRect(const size_t columnIndex, RECT& outRect) const noexcept
+{
+    outRect = RECT{};
+    if (! _dxState || ! _dxState->page.listControl || ! _dxState->page.listModel || ! _pageHostDx || columnIndex >= _dxState->page.listModel->GetColumnCount())
+    {
+        return false;
+    }
+
+    const auto headerRect = _dxState->page.listControl->GetVisibleColumnHeaderRect(columnIndex);
+    if (! headerRect.has_value())
+    {
+        return false;
+    }
+
+    outRect.left   = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->left)));
+    outRect.top    = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->top)));
+    outRect.right  = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->right)));
+    outRect.bottom = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->bottom)));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
+}
+
+size_t PluginsPane::DebugCustomPathsListRowCount() const noexcept
+{
+    if (! _dxState || ! _dxState->page.customPathsListModel)
+    {
+        return 0u;
+    }
+
+    return _dxState->page.customPathsListModel->GetRowCount();
+}
+
+RedSalamander::DxUi::GridVisibleWorkMetrics PluginsPane::DebugCustomPathsListVisibleWorkMetrics() const noexcept
+{
+    if (! _dxState || ! _dxState->page.customPathsListControl)
+    {
+        return {};
+    }
+
+    return _dxState->page.customPathsListControl->GetVisibleWorkMetrics();
+}
+
+uint64_t PluginsPane::DebugCustomPathsListRenderCount() const noexcept
+{
+    return DebugMainListRenderCount();
+}
+
+uint64_t PluginsPane::DebugCustomPathsListResizeCount() const noexcept
+{
+    return DebugMainListResizeCount();
+}
+
+uint64_t PluginsPane::DebugCustomPathsListResizeFailureCount() const noexcept
+{
+    return DebugMainListResizeFailureCount();
+}
+
+bool PluginsPane::DebugGetCustomPathsListHeaderClientRect(const size_t columnIndex, RECT& outRect) const noexcept
+{
+    outRect = RECT{};
+    if (! _dxState || ! _dxState->page.customPathsListControl || ! _dxState->page.customPathsListModel || ! _pageHostDx ||
+        columnIndex >= _dxState->page.customPathsListModel->GetColumnCount())
+    {
+        return false;
+    }
+
+    const auto headerRect = _dxState->page.customPathsListControl->GetVisibleColumnHeaderRect(columnIndex);
+    if (! headerRect.has_value())
+    {
+        return false;
+    }
+
+    outRect.left   = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->left)));
+    outRect.top    = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->top)));
+    outRect.right  = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->right)));
+    outRect.bottom = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->bottom)));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
+}
+
+PreferencesPluginsDebugFocusTarget PluginsPane::DebugGetFocusTarget() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return PreferencesPluginsDebugFocusTarget::None;
+    }
+
+    RedSalamander::DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
+    if (! focusedControl)
+    {
+        return PreferencesPluginsDebugFocusTarget::None;
+    }
+
+    if (focusedControl == _dxState->page.searchEdit)
+    {
+        return PreferencesPluginsDebugFocusTarget::SearchField;
+    }
+    if (focusedControl == _dxState->page.listControl)
+    {
+        return PreferencesPluginsDebugFocusTarget::MainList;
+    }
+    if (focusedControl == _dxState->page.configureButton)
+    {
+        return PreferencesPluginsDebugFocusTarget::ConfigureButton;
+    }
+    if (focusedControl == _dxState->page.testButton)
+    {
+        return PreferencesPluginsDebugFocusTarget::TestButton;
+    }
+    if (focusedControl == _dxState->page.testAllButton)
+    {
+        return PreferencesPluginsDebugFocusTarget::TestAllButton;
+    }
+    if (focusedControl == _dxState->page.customPathsListControl)
+    {
+        return PreferencesPluginsDebugFocusTarget::CustomPathsList;
+    }
+    if (focusedControl == _dxState->page.customPathsAddButton)
+    {
+        return PreferencesPluginsDebugFocusTarget::CustomPathsAddButton;
+    }
+    if (focusedControl == _dxState->page.customPathsRemoveButton)
+    {
+        return PreferencesPluginsDebugFocusTarget::CustomPathsRemoveButton;
+    }
+
+    return PreferencesPluginsDebugFocusTarget::None;
+}
+
+bool PluginsPane::DebugSelectMainListRow(const size_t rowIndex) noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _dxState->page.listModel)
+    {
+        return false;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    if (rowIndex >= rows.size())
+    {
+        return false;
+    }
+
+    _dxState->page.listControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
+    OnGridSelectionChanged(*_dxState->page.listControl);
+    return true;
+}
+
+bool PluginsPane::DebugClickMainListRow(const size_t rowIndex) noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _dxState->page.listModel)
+    {
+        return false;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    if (rowIndex >= rows.size())
+    {
+        return false;
+    }
+
+    _dxState->page.listControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
+    OnGridSelectionChanged(*_dxState->page.listControl);
+    return true;
+}
+
+bool PluginsPane::DebugToggleMainListCheckbox(const size_t rowIndex) noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _pageHostDx || ! _dxState->page.listModel)
+    {
+        return false;
+    }
+
+    return _dxState->page.listControl->RequestToggleCheckboxCell(*_pageHostDx, rowIndex, kPluginsColumnName);
+}
+
+bool PluginsPane::DebugSelectCustomPathsListRow(const size_t rowIndex) noexcept
+{
+    if (! _dxState || ! _dxState->page.customPathsListControl || ! _dxState->page.customPathsListModel)
+    {
+        return false;
+    }
+
+    const auto& rows = _dxState->page.customPathsListModel->GetRows();
+    if (rowIndex >= rows.size())
+    {
+        return false;
+    }
+
+    _dxState->page.customPathsListControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
+    OnGridSelectionChanged(*_dxState->page.customPathsListControl);
+    return true;
+}
+
+bool PluginsPane::DebugClearCustomPaths() noexcept
+{
+    PreferencesDialogState* state = _state;
+    if (! state && _hostWindow)
+    {
+        state  = PrefsUi::GetDialogState(_hostWindow);
+        _state = state;
+    }
+
+    if (! state)
+    {
+        return false;
+    }
+
+    state->workingSettings.plugins.customPluginPaths.clear();
+    state->pluginsSelectedCustomPathText.clear();
+
+    if (_hostWindow && IsWindow(_hostWindow) != FALSE)
+    {
+        Refresh(_hostWindow, *state);
+        return true;
+    }
+
+    SyncDxControlsFromState(*state);
+    return true;
+}
+
+bool PluginsPane::DebugSetSearchText(std::wstring_view text) noexcept
+{
+    if (! _state)
+    {
+        return false;
+    }
+
+    _state->pluginsSearchText.assign(text);
+    if (_dxState && _dxState->page.searchEdit)
+    {
+        _dxState->page.searchEdit->SetText(std::wstring(text));
+        if (_hostWindow && IsWindow(_hostWindow) != FALSE)
+        {
+            Refresh(_hostWindow, *_state);
+        }
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+        return true;
+    }
+
+    return false;
+}
+
+bool PluginsPane::DebugFocusMainList() noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(_dxState->page.listControl);
+    return true;
+}
+
+bool PluginsPane::DebugFocusSearchField() noexcept
+{
+    if (! _dxState || ! _dxState->page.searchEdit || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(_dxState->page.searchEdit);
+    return true;
+}
+
+bool PluginsPane::DebugScrollMainListByWheelDetents(const int detents) noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(_dxState->page.listControl);
+    const float wheelDelta = detents >= 0 ? static_cast<float>(WHEEL_DELTA) : -static_cast<float>(WHEEL_DELTA);
+    const int steps        = std::abs(detents);
+    for (int i = 0; i < steps; ++i)
+    {
+        static_cast<void>(_dxState->page.listControl->OnMouseWheel(*_pageHostDx, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0u));
+    }
+    return true;
+}
+
+bool PluginsPane::DebugScrollCustomPathsListByWheelDetents(const int detents) noexcept
+{
+    if (! _dxState || ! _dxState->page.customPathsListControl || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(_dxState->page.customPathsListControl);
+    const float wheelDelta = detents >= 0 ? static_cast<float>(WHEEL_DELTA) : -static_cast<float>(WHEEL_DELTA);
+    const int steps        = std::abs(detents);
+    for (int i = 0; i < steps; ++i)
+    {
+        static_cast<void>(_dxState->page.customPathsListControl->OnMouseWheel(*_pageHostDx, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0u));
+    }
+    return true;
+}
+#endif
+
+void PluginsPane::OnGridSelectionChanged(Grid& sender)
+{
+    PreferencesDialogState* state = _state;
+    if (! state && _hostWindow)
+    {
+        state  = PrefsUi::GetDialogState(_hostWindow);
+        _state = state;
+    }
+
+    if (! state || ! _dxState || _syncingDxSelection)
+    {
+        return;
+    }
+
+    if (&sender == _dxState->page.listControl && _dxState->page.listModel)
+    {
+        const auto selectedRowIds = _dxState->page.listControl->GetSelectionModel().GetOrderedSelection();
+        std::wstring selectedPluginId;
+        if (! selectedRowIds.empty())
+        {
+            const auto& rows    = _dxState->page.listModel->GetRows();
+            const auto rowIndex = _dxState->page.listModel->FindRowByStableId(selectedRowIds.front());
+            if (rowIndex.has_value() && rowIndex.value() < rows.size())
+            {
+                selectedPluginId = rows[rowIndex.value()].pluginId;
+            }
+        }
+
+        if (! selectedPluginId.empty())
+        {
+            if (const std::optional<PrefsPluginListItem> selected = PrefsPlugins::FindItemById(selectedPluginId); selected.has_value())
+            {
+                state->pluginsSelectedPlugin = selected;
+                state->pluginsSelectedPluginId.assign(selectedPluginId);
+                state->pluginsRetainedSelectedPluginId.assign(selectedPluginId);
+            }
+            else
+            {
+                state->pluginsSelectedPlugin.reset();
+                state->pluginsSelectedPluginId.clear();
+                state->pluginsRetainedSelectedPluginId.clear();
+                state->pluginsDetailsActive = false;
+            }
+        }
+        else
+        {
+            state->pluginsSelectedPlugin.reset();
+            state->pluginsSelectedPluginId.clear();
+            state->pluginsDetailsActive = false;
+        }
+        UpdatePluginsActionButtonsEnabled(*state);
+        if (_hostWindow && IsWindow(_hostWindow) != FALSE)
+        {
+            SyncDxControlsFromState(*state);
+        }
+        else
+        {
+            SyncDxControlsFromState(*state);
+        }
+        return;
+    }
+
+    if (&sender == _dxState->page.customPathsListControl && _dxState->page.customPathsListModel)
+    {
+        const auto selectedRowIds = _dxState->page.customPathsListControl->GetSelectionModel().GetOrderedSelection();
+        std::wstring selectedPath;
+        if (! selectedRowIds.empty())
+        {
+            const auto& rows    = _dxState->page.customPathsListModel->GetRows();
+            const auto rowIndex = _dxState->page.customPathsListModel->FindRowByStableId(selectedRowIds.front());
+            if (rowIndex.has_value() && rowIndex.value() < rows.size())
+            {
+                selectedPath = rows[rowIndex.value()].path;
+            }
+        }
+
+        state->pluginsSelectedCustomPathText = selectedPath;
+        if (_dxState->page.customPathsRemoveButton)
+        {
+            _dxState->page.customPathsRemoveButton->SetEnabled(! selectedPath.empty());
+        }
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+    }
+}
+
+void PluginsPane::OnGridCheckboxToggled(Grid& sender, size_t rowIndex, size_t /*columnIndex*/, bool checked)
+{
+    PreferencesDialogState* state = _state;
+    if (! state && _hostWindow)
+    {
+        state  = PrefsUi::GetDialogState(_hostWindow);
+        _state = state;
+    }
+
+    if (! _dxState || &sender != _dxState->page.listControl || ! state || ! _dxState->page.listModel)
+    {
+        return;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    if (rowIndex >= rows.size())
+    {
+        return;
+    }
+
+    const PluginsGridRow& row                         = rows[rowIndex];
+    const std::optional<PrefsPluginListItem> selected = PrefsPlugins::FindItemById(row.pluginId);
+    if (! selected.has_value())
+    {
+        return;
+    }
+
+    HWND dlg = _hostWindow ? GetParent(_hostWindow) : nullptr;
+    if (! dlg && state->categoryTreeWindow)
+    {
+        dlg = GetParent(state->categoryTreeWindow);
+    }
+
+    static_cast<void>(TryApplyPluginEnabledStateChange(dlg, *state, selected.value(), checked));
+    UpdatePluginsActionButtonsEnabled(*state);
+    SyncDxControlsFromState(*state);
+}
+
+void PluginsPane::OnVisibilityChanged(bool visible) noexcept
+{
+    if (! visible && _pageHostDx)
+    {
+        _pageHostDx->ResetInteractionState();
+    }
+}
+
+void PluginsPane::OnConfigureButtonClick(HWND host, PreferencesDialogState& state) noexcept
+{
+    const std::optional<PrefsPluginListItem> selected = state.pluginsSelectedPlugin.has_value() ? state.pluginsSelectedPlugin : TryGetActivePluginItem(state);
+    if (! selected.has_value())
+    {
+        return;
+    }
+
+    const std::wstring_view pluginId = GetPluginId(selected.value());
+    if (pluginId.empty())
+    {
+        return;
+    }
+
+    HWND dlg = GetParent(host);
+    if (! dlg)
+    {
+        return;
+    }
+
+    ClearPluginsStatusMessage(state);
+    state.initialCategory       = PrefCategory::Plugins;
+    state.currentCategory       = PrefCategory::Plugins;
+    state.pluginsSelectedPlugin = selected;
+    state.pluginsSelectedPluginId.assign(pluginId);
+    state.pluginsRetainedSelectedPluginId.assign(pluginId);
+    state.pluginsDetailsActive = true;
+    PluginsPane::Refresh(host, state);
+    SendMessageW(dlg, WndMsg::kPreferencesSelectPluginDetails, static_cast<WPARAM>(selected->type), static_cast<LPARAM>(selected->index));
+}
+
+void PluginsPane::OnTestButtonClick(HWND host, PreferencesDialogState& state) noexcept
+{
+    HWND dlg = GetParent(host);
+    if (! dlg)
+    {
+        return;
+    }
+
+    const std::optional<PrefsPluginListItem> selected = TryGetActivePluginItem(state);
+    if (! selected.has_value())
+    {
+        return;
+    }
+
+    const std::wstring_view pluginId = GetPluginId(selected.value());
+    if (pluginId.empty() || ! IsPluginLoadable(selected.value()))
+    {
+        return;
+    }
+
+    HRESULT hr = E_FAIL;
+    if (selected.value().type == PrefsPluginType::FileSystem)
+    {
+        hr = FileSystemPluginManager::GetInstance().TestPlugin(pluginId);
+    }
+    else
+    {
+        hr = ViewerPluginManager::GetInstance().TestPlugin(pluginId);
+    }
+
+    const UINT textId                = SUCCEEDED(hr) ? IDS_MSG_PLUGIN_TEST_OK : IDS_FMT_PLUGIN_TEST_FAILED_NAMED;
+    const HostAlertSeverity severity = SUCCEEDED(hr) ? HOST_ALERT_INFO : HOST_ALERT_ERROR;
+    const std::wstring pluginName    = std::wstring(GetPluginDisplayName(selected.value()));
+    const std::wstring message       = SUCCEEDED(hr) ? LoadStringResource(nullptr, textId) : FormatStringResource(nullptr, textId, pluginName);
+    SetPluginsStatusMessage(state, severity, LoadStringResource(nullptr, IDS_CAPTION_PLUGINS_MANAGER), message);
+    PluginsPane::Refresh(host, state);
+    FlushPluginsFeedbackUi(host);
+    ShowDialogAlert(dlg, severity, LoadStringResource(nullptr, IDS_CAPTION_PLUGINS_MANAGER), message);
+}
+
+void PluginsPane::OnTestAllButtonClick(HWND host, PreferencesDialogState& state) noexcept
+{
+    HWND dlg = GetParent(host);
+    if (! dlg)
+    {
+        return;
+    }
+
+    size_t okCount   = 0;
+    size_t failCount = 0;
+    std::vector<std::wstring> failedPluginNames;
+
+    {
+        auto& manager = FileSystemPluginManager::GetInstance();
+        for (const auto& entry : manager.GetPlugins())
+        {
+            if (entry.id.empty())
+            {
+                continue;
+            }
+
+            const HRESULT hr = manager.TestPlugin(entry.id);
+            if (SUCCEEDED(hr))
+            {
+                ++okCount;
+            }
+            else
+            {
+                ++failCount;
+                failedPluginNames.push_back(entry.name.empty() ? entry.id : entry.name);
+            }
+        }
+    }
+
+    {
+        auto& manager = ViewerPluginManager::GetInstance();
+        for (const auto& entry : manager.GetPlugins())
+        {
+            if (entry.id.empty())
+            {
+                continue;
+            }
+
+            const HRESULT hr = manager.TestPlugin(entry.id);
+            if (SUCCEEDED(hr))
+            {
+                ++okCount;
+            }
+            else
+            {
+                ++failCount;
+                failedPluginNames.push_back(entry.name.empty() ? entry.id : entry.name);
+            }
+        }
+    }
+
+    const std::wstring failedNames   = JoinPluginNames(failedPluginNames);
+    const std::wstring resultText    = failedNames.empty()
+                                           ? FormatStringResource(nullptr, IDS_FMT_PLUGIN_TEST_ALL_RESULT, okCount, failCount)
+                                           : FormatStringResource(nullptr, IDS_FMT_PLUGIN_TEST_ALL_RESULT_WITH_FAILURES, okCount, failCount, failedNames);
+    const HostAlertSeverity severity = failCount == 0 ? HOST_ALERT_INFO : HOST_ALERT_WARNING;
+    SetPluginsStatusMessage(state, severity, LoadStringResource(nullptr, IDS_CAPTION_PLUGINS_MANAGER), resultText);
+    PluginsPane::Refresh(host, state);
+    FlushPluginsFeedbackUi(host);
+    ShowDialogAlert(dlg, severity, LoadStringResource(nullptr, IDS_CAPTION_PLUGINS_MANAGER), resultText);
+}
+
+void PluginsPane::OnCustomPathsAddButtonClick(HWND host, PreferencesDialogState& state) noexcept
+{
+    HWND dlg = GetParent(host);
+    if (! dlg)
+    {
+        return;
+    }
+
+    std::filesystem::path selectedPath;
+    if (! TryBrowseCustomPluginPath(dlg, selectedPath))
+    {
+        return;
+    }
+
+    if (! IsDllPath(selectedPath))
+    {
+        ShowDialogAlert(
+            dlg, HOST_ALERT_ERROR, LoadStringResource(nullptr, IDS_CAPTION_ERROR), LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_INVALID));
+        return;
+    }
+
+    auto& customPaths = state.workingSettings.plugins.customPluginPaths;
+    if (std::find(customPaths.begin(), customPaths.end(), selectedPath) == customPaths.end())
+    {
+        customPaths.push_back(selectedPath);
+    }
+
+    state.pluginsSelectedCustomPathText = selectedPath.wstring();
+    PluginsPane::Refresh(host, state);
+    SetDirty(dlg, state);
+}
+
+void PluginsPane::OnCustomPathsRemoveButtonClick(HWND host, PreferencesDialogState& state) noexcept
+{
+    HWND dlg = GetParent(host);
+    if (! dlg)
+    {
+        return;
+    }
+
+    auto& customPaths = state.workingSettings.plugins.customPluginPaths;
+    std::optional<size_t> pathIndex;
+    if (! state.pluginsSelectedCustomPathText.empty())
+    {
+        for (size_t i = 0; i < customPaths.size(); ++i)
+        {
+            if (OrdinalString::EqualsNoCase(customPaths[i].native(), state.pluginsSelectedCustomPathText))
+            {
+                pathIndex = i;
+                break;
+            }
+        }
+    }
+    if (! pathIndex.has_value())
+    {
+        return;
+    }
+
+    customPaths.erase(customPaths.begin() + static_cast<std::ptrdiff_t>(pathIndex.value()));
+    state.pluginsSelectedCustomPathText.clear();
+    PluginsPane::Refresh(host, state);
+    SetDirty(dlg, state);
+}
+
+bool PluginsPane::HandleDeferredAction(HWND host, PreferencesDialogState& state, PreferencesDeferredActionKind action) noexcept
+{
+    _hostWindow = host;
+    _state      = &state;
+
+    if (! host || ! _dxState)
+    {
+        return false;
+    }
+
+#pragma warning(push)
+#pragma warning(disable : 4061) // Not all enum values handled explicitly -- intentional; this pane only handles its own actions.
+    switch (action)
+    {
+        case PreferencesDeferredActionKind::PluginsSearchChanged:
+            // DxUi callbacks already updated the search text; preserve it and just rebuild the filtered view.
+            PluginsPane::Refresh(host, state);
+            return true;
+
+        case PreferencesDeferredActionKind::PluginsConfigure: OnConfigureButtonClick(host, state); return true;
+
+        case PreferencesDeferredActionKind::PluginsTest: OnTestButtonClick(host, state); return true;
+
+        case PreferencesDeferredActionKind::PluginsTestAll: OnTestAllButtonClick(host, state); return true;
+        default: return false;
+    }
+#pragma warning(pop)
+}
+
+void PluginsPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
+{
     if (! host)
     {
         return;
     }
+
+    if (! _dxState)
+    {
+        if (! EnsureDxHosts(_pageHost ? _pageHost : host, state))
+        {
+            Debug::Error(L"Preferences.Plugins: Failed to ensure DxUi hosts during Refresh.");
+        }
+    }
+    if (_dxState)
+    {
+        ApplyDxTheme(state);
+    }
+
+    RefreshSelectedPluginCache(state);
+    if (state.pluginsDetailsActive && state.pluginsSelectedPlugin.has_value())
+    {
+        state.refreshingPluginsPage = true;
+        auto clearRefreshFlag       = wil::scope_exit([&]() noexcept { state.refreshingPluginsPage = false; });
+
+        const PrefsPluginListItem pluginItem = state.pluginsSelectedPlugin.value();
+
+        const HWND parent                   = _pageHost ? _pageHost : host;
+        const std::wstring previousEditorId = state.pluginsDetailsConfigPluginId;
+        const bool hadEditor                = ! state.pluginsDetailsConfigFields.empty();
+        static_cast<void>(PrefsPluginConfiguration::EnsureEditor(parent, state, pluginItem));
+        const bool hasEditor = ! state.pluginsDetailsConfigFields.empty();
+
+        if (previousEditorId != state.pluginsDetailsConfigPluginId || hadEditor != hasEditor)
+        {
+            RECT client{};
+            if (GetClientRect(host, &client))
+            {
+                const int w = std::max(0l, client.right - client.left);
+                const int h = std::max(0l, client.bottom - client.top);
+                SendMessageW(host, WM_SIZE, SIZE_RESTORED, MAKELPARAM(w, h));
+            }
+            else
+            {
+                SyncDxControlsFromState(state);
+            }
+        }
+
+        UpdatePluginsActionButtonsEnabled(state);
+        SyncDxControlsFromState(state);
+        return;
+    }
+
+    PrefsPluginConfiguration::Clear(state);
+    PrefsPluginConfiguration::SetDetailsIdText(state, L"");
+
+    state.refreshingPluginsPage = true;
+    auto clearRefreshFlag       = wil::scope_exit([&]() noexcept { state.refreshingPluginsPage = false; });
+
+    const std::wstring_view filter = PrefsUi::TrimWhitespace(state.pluginsSearchText);
+
+    std::wstring selectedPluginId = state.pluginsSelectedPluginId;
+    if (selectedPluginId.empty())
+    {
+        // Preserve the user's last stable row across filtered rebuilds, even when the
+        // details pane is not active. Search round-trips temporarily clear the visible
+        // selection when the chosen row is filtered out, then should restore it.
+        selectedPluginId = state.pluginsRetainedSelectedPluginId;
+    }
+
+    state.pluginsListItems.clear();
+    PrefsPlugins::BuildListItems(state.pluginsListItems);
+    if (! filter.empty())
+    {
+        std::erase_if(state.pluginsListItems,
+                      [filter](const PrefsPluginListItem& item) noexcept
+        {
+            const std::wstring_view pluginId    = GetPluginId(item);
+            const std::wstring_view displayName = GetPluginDisplayName(item);
+            const std::wstring_view shortId     = GetPluginShortIdOrId(item);
+            const std::wstring originText       = GetPluginOriginText(item);
+            const std::wstring typeText         = item.type == PrefsPluginType::FileSystem ? LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_FILE_SYSTEM)
+                                                                                           : LoadStringResource(nullptr, IDS_PREFS_PLUGINS_TYPE_VIEWER);
+            return ! (PrefsUi::ContainsCaseInsensitive(pluginId, filter) || PrefsUi::ContainsCaseInsensitive(displayName, filter) ||
+                      PrefsUi::ContainsCaseInsensitive(shortId, filter) || PrefsUi::ContainsCaseInsensitive(originText, filter) ||
+                      PrefsUi::ContainsCaseInsensitive(typeText, filter));
+        });
+    }
+
+    if (! selectedPluginId.empty() &&
+        std::none_of(state.pluginsListItems.begin(), state.pluginsListItems.end(), [selectedPluginId](const PrefsPluginListItem& item) noexcept {
+        return GetPluginId(item) == selectedPluginId;
+    }))
+    {
+        state.pluginsSelectedPlugin.reset();
+        state.pluginsSelectedPluginId.clear();
+    }
+    else if (! selectedPluginId.empty())
+    {
+        if (const std::optional<PrefsPluginListItem> selected = PrefsPlugins::FindItemById(selectedPluginId); selected.has_value())
+        {
+            state.pluginsSelectedPlugin = selected;
+            state.pluginsSelectedPluginId.assign(selectedPluginId);
+            state.pluginsRetainedSelectedPluginId.assign(selectedPluginId);
+        }
+        else
+        {
+            state.pluginsSelectedPlugin.reset();
+            state.pluginsSelectedPluginId.clear();
+            state.pluginsRetainedSelectedPluginId.clear();
+        }
+    }
+    else if (! state.pluginsDetailsActive)
+    {
+        state.pluginsSelectedPlugin.reset();
+        state.pluginsSelectedPluginId.clear();
+    }
+
+    UpdatePluginsActionButtonsEnabled(state);
+    SyncDxControlsFromState(state);
+}
+
+void PluginsPane::LayoutDxPage(HWND host,
+                               PreferencesDialogState& state,
+                               int x,
+                               int& y,
+                               int width,
+                               int margin,
+                               int gapY,
+                               int sectionY,
+                               const PreferencesTypographyContext& typography) noexcept
+{
+    using namespace PrefsLayoutConstants;
+
+    Debug::Perf::Scope layoutPerf(L"preferences.ui.plugins_layout_us");
+    layoutPerf.SetValue0(static_cast<uint64_t>(std::max(0, width)));
+    layoutPerf.SetValue1(static_cast<uint64_t>(typography.dpi));
 
     RECT hostClient{};
     GetClientRect(host, &hostClient);
     const int hostBottom        = std::max(0l, hostClient.bottom - hostClient.top);
     const int hostContentBottom = std::max(0, hostBottom - margin);
 
-    const UINT dpi        = GetDpiForWindow(host);
-    const int rowHeight   = std::max(1, ThemedControls::ScaleDip(dpi, kRowHeightDip));
-    const int labelHeight = std::max(1, ThemedControls::ScaleDip(dpi, kTitleHeightDip));
-    const int gapX        = ThemedControls::ScaleDip(dpi, kToggleGapXDip);
+    const UINT dpi        = std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI);
+    const auto pxToDip    = [dpi](const int pixels) noexcept { return (static_cast<float>(pixels) * 96.0f) / static_cast<float>(std::max<UINT>(1u, dpi)); };
+    const int rowHeight   = std::max(1, UiMetrics::ScaleDip(dpi, kRowHeightDip));
+    const int labelHeight = std::max(1, UiMetrics::ScaleDip(dpi, kTitleHeightDip));
+    const int gapX        = UiMetrics::ScaleDip(dpi, kToggleGapXDip);
 
     const int buttonHeight = rowHeight;
-    const int buttonPadX   = ThemedControls::ScaleDip(dpi, kCardPaddingXDip);
+    const int buttonPadX   = UiMetrics::ScaleDip(dpi, kCardPaddingXDip);
 
-    const auto measureButtonWidth = [&](HWND button, int minWidthDip) noexcept
+    const auto measureButtonWidth = [&](HWND button, std::wstring_view fallbackText, int minWidthDip) noexcept
     {
-        if (! button)
+        std::wstring text(fallbackText);
+        if (button)
         {
-            return 0;
+            text = PrefsUi::GetWindowTextString(button);
         }
-
-        HFONT font = reinterpret_cast<HFONT>(SendMessageW(button, WM_GETFONT, 0, 0));
-        if (! font)
-        {
-            font = dialogFont ? dialogFont : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        }
-
-        const std::wstring text = PrefsUi::GetWindowTextString(button);
-        const int textW         = ThemedControls::MeasureTextWidth(host, font, text);
-        return std::max(ThemedControls::ScaleDip(dpi, minWidthDip), textW + 2 * buttonPadX);
+        const int textW = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.body, text);
+        return std::max(UiMetrics::ScaleDip(dpi, minWidthDip), textW + 2 * buttonPadX);
     };
 
-    const auto setVisible = [&](HWND hwnd, bool visible) noexcept
-    {
-        if (hwnd)
-        {
-            ShowWindow(hwnd, visible ? SW_SHOW : SW_HIDE);
-        }
-    };
-
-    const bool showDetails = state.pluginsSelectedPlugin.has_value();
+    RefreshSelectedPluginCache(state);
+    const bool showDetails = state.pluginsDetailsActive && state.pluginsSelectedPlugin.has_value();
     if (showDetails)
     {
         const PrefsPluginListItem pluginItem     = state.pluginsSelectedPlugin.value();
@@ -1171,70 +2210,31 @@ void PluginsPane::LayoutControls(
         if (! selectedPluginId.empty() && ! state.pluginsDetailsConfigPluginId.empty() && state.pluginsDetailsConfigPluginId != selectedPluginId)
         {
             PrefsPluginConfiguration::Clear(state);
-            if (state.pluginsDetailsConfigError)
-            {
-                SetWindowTextW(state.pluginsDetailsConfigError.get(), L"");
-            }
         }
 
-        if (state.pluginsDetailsIdLabel && ! selectedPluginId.empty())
+        if (! selectedPluginId.empty())
         {
-            std::wstring formatted;
-            formatted = FormatStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_ID_FMT, std::wstring(selectedPluginId));
-
-            const std::wstring current = PrefsUi::GetWindowTextString(state.pluginsDetailsIdLabel.get());
-            if (current != formatted)
-            {
-                SetWindowTextW(state.pluginsDetailsIdLabel.get(), formatted.c_str());
-            }
+            PrefsPluginConfiguration::SetDetailsIdText(state, FormatStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_ID_FMT, std::wstring(selectedPluginId)));
         }
 
         const bool hasEditor =
             ! selectedPluginId.empty() && state.pluginsDetailsConfigPluginId == selectedPluginId && ! state.pluginsDetailsConfigFields.empty();
 
-        bool showConfigError = false;
-        if (state.pluginsDetailsConfigError)
-        {
-            showConfigError = ! PrefsUi::GetWindowTextString(state.pluginsDetailsConfigError.get()).empty();
-        }
-
-        setVisible(state.pluginsNote.get(), false);
-        setVisible(state.pluginsSearchLabel.get(), false);
-        setVisible(state.pluginsSearchFrame.get(), false);
-        setVisible(state.pluginsSearchEdit.get(), false);
-        setVisible(state.pluginsList.get(), false);
-        setVisible(state.pluginsCustomPathsHeader.get(), false);
-        setVisible(state.pluginsCustomPathsNote.get(), false);
-        setVisible(state.pluginsCustomPathsList.get(), false);
-        setVisible(state.pluginsCustomPathsAddButton.get(), false);
-        setVisible(state.pluginsCustomPathsRemoveButton.get(), false);
-
-        setVisible(state.pluginsConfigureButton.get(), false);
-        setVisible(state.pluginsTestButton.get(), false);
-        setVisible(state.pluginsTestAllButton.get(), false);
-        setVisible(state.pluginsDetailsHint.get(), false);
-        setVisible(state.pluginsDetailsIdLabel.get(), true);
-        setVisible(state.pluginsDetailsConfigLabel.get(), false);
-        setVisible(state.pluginsDetailsConfigError.get(), showConfigError);
-        setVisible(state.pluginsDetailsConfigFrame.get(), false);
-        setVisible(state.pluginsDetailsConfigEdit.get(), false);
-
-        const HFONT infoFont = state.italicFont ? state.italicFont.get() : dialogFont;
-
-        const int cardPaddingX = ThemedControls::ScaleDip(dpi, kCardPaddingXDip);
-        const int cardPaddingY = ThemedControls::ScaleDip(dpi, kCardPaddingYDip);
-        const int cardSpacingY = ThemedControls::ScaleDip(dpi, kCardSpacingYDip);
+        const bool showConfigError     = ! state.pluginsDetailsConfigErrorText.empty() || ! state.pluginsDetailsConfigEmptyStateText.empty();
+        const bool useDxDetailsStatics = _dxState != nullptr;
+        const int cardSpacingY         = UiMetrics::ScaleDip(dpi, kCardSpacingYDip);
 
         const auto pushCard = [&](const RECT& card) noexcept { state.pageSettingCards.push_back(card); };
 
-        if (state.pluginsDetailsIdLabel)
+        if (useDxDetailsStatics && _dxState->page.detailsIdLabel)
         {
-            const std::wstring idText = PrefsUi::GetWindowTextString(state.pluginsDetailsIdLabel.get());
-            const int measuredHeight  = idText.empty() ? 0 : PrefsUi::MeasureStaticTextHeight(host, dialogFont, width, idText);
-            const int idHeight        = std::max(labelHeight, std::max(0, measuredHeight));
+            const std::wstring& idText = state.pluginsDetailsIdText;
+            const int measuredHeight   = idText.empty() ? 0 : PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, width, idText);
+            const int idHeight         = std::max(labelHeight, std::max(0, measuredHeight));
 
-            SetWindowPos(state.pluginsDetailsIdLabel.get(), nullptr, x, y, width, idHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(state.pluginsDetailsIdLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            _dxState->page.detailsIdLabel->SetText(idText);
+            _dxState->page.detailsIdLabel->SetVisible(! idText.empty());
+            _dxState->page.detailsIdLabel->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + idHeight)));
             y += idHeight + sectionY;
         }
         else
@@ -1242,102 +2242,92 @@ void PluginsPane::LayoutControls(
             y += sectionY;
         }
 
-        if (showConfigError && ! hasEditor && state.pluginsDetailsConfigError)
+        if (showConfigError && ! hasEditor)
         {
-            const std::wstring errorText = PrefsUi::GetWindowTextString(state.pluginsDetailsConfigError.get());
-            const int textWidth          = std::max(0, width - 2 * cardPaddingX);
-            const int textHeight         = errorText.empty() ? 0 : PrefsUi::MeasureStaticTextHeight(host, infoFont, textWidth, errorText);
-            const int cardHeight         = std::max(rowHeight + 2 * cardPaddingY, std::max(0, textHeight) + 2 * cardPaddingY);
+            if (useDxDetailsStatics && _dxState->page.detailsConfigError)
+            {
+                _dxState->page.detailsConfigError->SetVisible(false);
+                _dxState->page.detailsConfigError->SetBounds(D2D1::RectF());
+                _dxState->page.detailsConfigError->SetText(L"");
+            }
 
-            RECT card{};
-            card.left   = x;
-            card.top    = y;
-            card.right  = x + width;
-            card.bottom = y + cardHeight;
-            pushCard(card);
+            PreferencesEmptyStateSpec spec{};
+            if (state.pluginsDetailsMessageKind == PrefsPluginDetailsMessageKind::EmptyState)
+            {
+                spec = GetPluginNoSettingsEmptyState(pluginItem);
+            }
+            else
+            {
+                spec = GetPluginMessageState(
+                    PrefsInlineMessageSeverity::Warning, LoadStringResource(nullptr, IDS_CAPTION_WARNING), state.pluginsDetailsConfigErrorText);
+            }
 
-            SetWindowPos(state.pluginsDetailsConfigError.get(),
-                         nullptr,
-                         x + cardPaddingX,
-                         y + cardPaddingY,
-                         textWidth,
-                         std::max(0, textHeight),
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(state.pluginsDetailsConfigError.get(), WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
-            y += cardHeight + cardSpacingY;
+            const int cardHeight = PrefsUi::ShowSharedPageEmptyState(host, state, spec, x, y, width, typography);
+            if (cardHeight > 0)
+            {
+                RECT card{x, y, x + width, y + cardHeight};
+                pushCard(card);
+                y += cardHeight + cardSpacingY;
+            }
+
+            LayoutDxHosts(state);
             return;
         }
 
         if (hasEditor)
         {
-            PrefsPluginConfiguration::LayoutCards(host, state, x, y, width, dialogFont);
+            PrefsPluginConfiguration::LayoutCards(host, state, x, y, width, typography);
+            LayoutDxHosts(state);
             return;
         }
+
+        LayoutDxHosts(state);
         return;
     }
 
     PrefsPluginConfiguration::Clear(state);
-    setVisible(state.pluginsDetailsHint.get(), false);
-    setVisible(state.pluginsDetailsIdLabel.get(), false);
-    setVisible(state.pluginsDetailsConfigLabel.get(), false);
-    setVisible(state.pluginsDetailsConfigError.get(), false);
-    setVisible(state.pluginsDetailsConfigFrame.get(), false);
-    setVisible(state.pluginsDetailsConfigEdit.get(), false);
 
-    setVisible(state.pluginsNote.get(), true);
-    setVisible(state.pluginsSearchLabel.get(), true);
-    setVisible(state.pluginsSearchFrame.get(), true);
-    setVisible(state.pluginsSearchEdit.get(), true);
-    setVisible(state.pluginsList.get(), true);
-    setVisible(state.pluginsConfigureButton.get(), true);
-    setVisible(state.pluginsTestButton.get(), true);
-    setVisible(state.pluginsTestAllButton.get(), true);
-    setVisible(state.pluginsCustomPathsHeader.get(), true);
-    setVisible(state.pluginsCustomPathsNote.get(), true);
-    setVisible(state.pluginsCustomPathsList.get(), true);
-    setVisible(state.pluginsCustomPathsAddButton.get(), true);
-    setVisible(state.pluginsCustomPathsRemoveButton.get(), true);
-
-    const std::wstring noteText = PrefsUi::GetWindowTextString(state.pluginsNote.get());
-    if (state.pluginsNote)
+    const std::wstring noteText = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_NOTE);
+    const int noteHeight        = noteText.empty() ? 0 : PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, width, noteText);
+    if (_dxState)
     {
-        const int noteHeight = noteText.empty() ? 0 : PrefsUi::MeasureStaticTextHeight(host, dialogFont, width, noteText);
-        SetWindowPos(state.pluginsNote.get(), nullptr, x, y, width, std::max(0, noteHeight), SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.pluginsNote.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        y += std::max(0, noteHeight) + sectionY;
+        _dxState->page.detailsIdLabel->SetVisible(false);
+        _dxState->page.detailsConfigError->SetVisible(false);
+        _dxState->page.note->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + std::max(0, noteHeight))));
+    }
+    y += std::max(0, noteHeight) + sectionY;
+
+    if (! state.pluginsStatusBodyText.empty())
+    {
+        const int statusCardHeight =
+            PrefsUi::ShowSharedPageEmptyState(host,
+                                              state,
+                                              GetPluginMessageState(state.pluginsStatusSeverity, state.pluginsStatusTitleText, state.pluginsStatusBodyText),
+                                              x,
+                                              y,
+                                              width,
+                                              typography);
+        if (statusCardHeight > 0)
+        {
+            state.pageSettingCards.push_back(RECT{x, y, x + width, y + statusCardHeight});
+            y += statusCardHeight + UiMetrics::ScaleDip(dpi, kCardSpacingYDip);
+        }
     }
 
-    const int searchLabelWidth   = std::min(width, ThemedControls::ScaleDip(dpi, 52));
-    const int searchEditWidth    = std::max(0, width - searchLabelWidth - gapX);
-    const int searchEditX        = x + searchLabelWidth + gapX;
-    const int searchFramePadding = (state.pluginsSearchFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-    if (state.pluginsSearchLabel)
+    const int searchLabelWidth = std::min(width, UiMetrics::ScaleDip(dpi, 52));
+    const int searchEditWidth  = std::max(0, width - searchLabelWidth - gapX);
+    const int searchEditX      = x + searchLabelWidth + gapX;
+    if (_dxState)
     {
-        SetWindowPos(
-            state.pluginsSearchLabel.get(), nullptr, x, y + (rowHeight - labelHeight) / 2, searchLabelWidth, labelHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.pluginsSearchLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        _dxState->page.searchLabel->SetBounds(D2D1::RectF(
+            pxToDip(x), pxToDip(y + (rowHeight - labelHeight) / 2), pxToDip(x + searchLabelWidth), pxToDip(y + (rowHeight - labelHeight) / 2 + labelHeight)));
+        _dxState->page.searchEdit->SetBounds(D2D1::RectF(pxToDip(searchEditX), pxToDip(y), pxToDip(searchEditX + searchEditWidth), pxToDip(y + rowHeight)));
     }
-    if (state.pluginsSearchFrame)
-    {
-        SetWindowPos(state.pluginsSearchFrame.get(), nullptr, searchEditX, y, searchEditWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    if (state.pluginsSearchEdit)
-    {
-        SetWindowPos(state.pluginsSearchEdit.get(),
-                     nullptr,
-                     searchEditX + searchFramePadding,
-                     y + searchFramePadding,
-                     std::max(1, searchEditWidth - 2 * searchFramePadding),
-                     std::max(1, rowHeight - 2 * searchFramePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.pluginsSearchEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-
     y += rowHeight + gapY;
 
-    const int configureButtonWidth = std::min(width, measureButtonWidth(state.pluginsConfigureButton.get(), 120));
-    const int testButtonWidth      = std::min(width, measureButtonWidth(state.pluginsTestButton.get(), 70));
-    const int testAllButtonWidth   = std::min(width, measureButtonWidth(state.pluginsTestAllButton.get(), 90));
+    const int configureButtonWidth = std::min(width, measureButtonWidth(nullptr, LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CONFIGURE_ELLIPSIS), 90));
+    const int testButtonWidth      = std::min(width, measureButtonWidth(nullptr, LoadStringResource(nullptr, IDS_BTN_TEST), 70));
+    const int testAllButtonWidth   = std::min(width, measureButtonWidth(nullptr, LoadStringResource(nullptr, IDS_BTN_TEST_ALL), 90));
 
     const int buttonsRowWidth =
         configureButtonWidth + (testButtonWidth > 0 ? (gapX + testButtonWidth) : 0) + (testAllButtonWidth > 0 ? (gapX + testAllButtonWidth) : 0);
@@ -1363,29 +2353,26 @@ void PluginsPane::LayoutControls(
 
     const int actionsBlockHeight = (buttonsRowCount > 0) ? (gapY + (buttonsRowCount * buttonHeight) + ((buttonsRowCount - 1) * gapY) + sectionY) : sectionY;
 
-    int customAddWidth    = std::min(width, measureButtonWidth(state.pluginsCustomPathsAddButton.get(), 70));
-    int customRemoveWidth = std::min(width, measureButtonWidth(state.pluginsCustomPathsRemoveButton.get(), 70));
+    int customAddWidth    = std::min(width, measureButtonWidth(nullptr, LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_ADD_ELLIPSIS), 70));
+    int customRemoveWidth = std::min(width, measureButtonWidth(nullptr, LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_REMOVE), 70));
     if (customAddWidth > 0 && customRemoveWidth > 0 && (customAddWidth + gapX + customRemoveWidth > width))
     {
         customRemoveWidth = std::max(0, width - customAddWidth - gapX);
     }
 
-    const HFONT headerFont = state.boldFont ? state.boldFont.get() : dialogFont;
-    const HFONT infoFont   = state.italicFont ? state.italicFont.get() : dialogFont;
-
-    const std::wstring customNoteText = PrefsUi::GetWindowTextString(state.pluginsCustomPathsNote.get());
-    const int customNoteHeight        = customNoteText.empty() ? 0 : PrefsUi::MeasureStaticTextHeight(host, infoFont, width, customNoteText);
+    const std::wstring customNoteText = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_NOTE);
+    const int customNoteHeight        = customNoteText.empty() ? 0 : PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, width, customNoteText);
 
     int customBlockHeight = labelHeight + gapY;
     if (customNoteHeight > 0)
     {
         customBlockHeight += customNoteHeight + gapY;
     }
-    const int customListHeight = std::max(1, ThemedControls::ScaleDip(dpi, 90));
+    const int customListHeight = std::max(1, UiMetrics::ScaleDip(dpi, 90));
     customBlockHeight += customListHeight + gapY;
 
     const int pinnedCustomBtnsTop  = hostContentBottom - buttonHeight;
-    const int minPluginsListHeight = std::max(1, ThemedControls::ScaleDip(dpi, 120));
+    const int minPluginsListHeight = std::max(1, UiMetrics::ScaleDip(dpi, 120));
 
     const int pinnedPluginsHeight = pinnedCustomBtnsTop - y - customBlockHeight - actionsBlockHeight;
     const bool pinnedLayout       = pinnedCustomBtnsTop >= y && pinnedPluginsHeight >= minPluginsListHeight;
@@ -1395,11 +2382,10 @@ void PluginsPane::LayoutControls(
     const int preferredPluginsHeight = std::max(0, hostContentBottom - y - reservedForActions);
     const int pluginsListHeight      = pinnedLayout ? pinnedPluginsHeight : std::max(minPluginsListHeight, preferredPluginsHeight);
 
-    if (state.pluginsList)
+    if (_dxState)
     {
-        SetWindowPos(state.pluginsList.get(), nullptr, x, pluginsListTop, width, pluginsListHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.pluginsList.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        UpdatePluginsListColumnWidths(state.pluginsList.get(), dpi);
+        _dxState->page.listControl->SetBounds(
+            D2D1::RectF(pxToDip(x), pxToDip(pluginsListTop), pxToDip(x + width), pxToDip(pluginsListTop + pluginsListHeight)));
     }
 
     y += pluginsListHeight;
@@ -1408,66 +2394,65 @@ void PluginsPane::LayoutControls(
     if (buttonsSingleRow)
     {
         int currentX = x;
-        if (state.pluginsConfigureButton && configureButtonWidth > 0)
+        if (_dxState)
         {
-            SetWindowPos(
-                state.pluginsConfigureButton.get(), nullptr, currentX, y, std::max(0, configureButtonWidth), buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(state.pluginsConfigureButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            _dxState->page.configureButton->SetBounds(
+                D2D1::RectF(pxToDip(currentX), pxToDip(y), pxToDip(currentX + configureButtonWidth), pxToDip(y + buttonHeight)));
             currentX += configureButtonWidth + gapX;
         }
-        if (state.pluginsTestButton && testButtonWidth > 0)
+        if (_dxState && testButtonWidth > 0)
         {
-            SetWindowPos(state.pluginsTestButton.get(), nullptr, currentX, y, std::max(0, testButtonWidth), buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(state.pluginsTestButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            _dxState->page.testButton->SetBounds(D2D1::RectF(pxToDip(currentX), pxToDip(y), pxToDip(currentX + testButtonWidth), pxToDip(y + buttonHeight)));
             currentX += testButtonWidth + gapX;
         }
-        if (state.pluginsTestAllButton && testAllButtonWidth > 0)
+        if (_dxState && testAllButtonWidth > 0)
         {
-            SetWindowPos(state.pluginsTestAllButton.get(), nullptr, currentX, y, std::max(0, testAllButtonWidth), buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(state.pluginsTestAllButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            _dxState->page.testAllButton->SetBounds(
+                D2D1::RectF(pxToDip(currentX), pxToDip(y), pxToDip(currentX + testAllButtonWidth), pxToDip(y + buttonHeight)));
         }
 
         y += buttonHeight + sectionY;
     }
     else
     {
-        int rows               = 0;
-        const auto layoutStack = [&](HWND button, int buttonWidth) noexcept
+        int currentY = y;
+        if (_dxState)
         {
-            if (! button || buttonWidth <= 0)
+            if (configureButtonWidth > 0)
             {
-                return;
+                _dxState->page.configureButton->SetBounds(
+                    D2D1::RectF(pxToDip(x), pxToDip(currentY), pxToDip(x + configureButtonWidth), pxToDip(currentY + buttonHeight)));
+                currentY += buttonHeight + gapY;
             }
-
-            SetWindowPos(button, nullptr, x, y, buttonWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(button, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-            y += buttonHeight + gapY;
-            ++rows;
-        };
-
-        layoutStack(state.pluginsConfigureButton.get(), configureButtonWidth);
-        layoutStack(state.pluginsTestButton.get(), testButtonWidth);
-        layoutStack(state.pluginsTestAllButton.get(), testAllButtonWidth);
-
-        if (rows > 0)
-        {
-            y -= gapY;
+            if (testButtonWidth > 0)
+            {
+                _dxState->page.testButton->SetBounds(
+                    D2D1::RectF(pxToDip(x), pxToDip(currentY), pxToDip(x + testButtonWidth), pxToDip(currentY + buttonHeight)));
+                currentY += buttonHeight + gapY;
+            }
+            if (testAllButtonWidth > 0)
+            {
+                _dxState->page.testAllButton->SetBounds(
+                    D2D1::RectF(pxToDip(x), pxToDip(currentY), pxToDip(x + testAllButtonWidth), pxToDip(currentY + buttonHeight)));
+            }
         }
-        y += sectionY;
+        if (configureButtonWidth > 0 || testButtonWidth > 0 || testAllButtonWidth > 0)
+        {
+            currentY -= gapY;
+        }
+        y = currentY + sectionY;
     }
 
-    if (state.pluginsCustomPathsHeader)
+    if (_dxState)
     {
-        SetWindowPos(state.pluginsCustomPathsHeader.get(), nullptr, x, y, width, labelHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.pluginsCustomPathsHeader.get(), WM_SETFONT, reinterpret_cast<WPARAM>(headerFont), TRUE);
+        _dxState->page.customPathsHeader->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + labelHeight)));
     }
 
     y += labelHeight + gapY;
 
-    if (state.pluginsCustomPathsNote)
+    if (_dxState)
     {
-        SetWindowPos(state.pluginsCustomPathsNote.get(), nullptr, x, y, width, std::max(0, customNoteHeight), SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.pluginsCustomPathsNote.get(), WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
+        _dxState->page.customPathsNote->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + std::max(0, customNoteHeight))));
     }
     y += std::max(0, customNoteHeight);
     if (customNoteHeight > 0)
@@ -1475,264 +2460,87 @@ void PluginsPane::LayoutControls(
         y += gapY;
     }
 
-    if (state.pluginsCustomPathsList)
+    if (_dxState)
     {
-        SetWindowPos(state.pluginsCustomPathsList.get(), nullptr, x, y, width, customListHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.pluginsCustomPathsList.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        _dxState->page.customPathsListControl->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + customListHeight)));
     }
     y += customListHeight + gapY;
 
     const int customButtonsTop = pinnedLayout ? pinnedCustomBtnsTop : y;
-    if (state.pluginsCustomPathsAddButton)
+    if (_dxState && customAddWidth > 0)
     {
-        SetWindowPos(
-            state.pluginsCustomPathsAddButton.get(), nullptr, x, customButtonsTop, std::max(0, customAddWidth), buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.pluginsCustomPathsAddButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        _dxState->page.customPathsAddButton->SetBounds(
+            D2D1::RectF(pxToDip(x), pxToDip(customButtonsTop), pxToDip(x + customAddWidth), pxToDip(customButtonsTop + buttonHeight)));
     }
-    if (state.pluginsCustomPathsRemoveButton)
+    if (_dxState && customRemoveWidth > 0)
     {
         const int removeX = x + customAddWidth + gapX;
-        SetWindowPos(state.pluginsCustomPathsRemoveButton.get(),
-                     nullptr,
-                     removeX,
-                     customButtonsTop,
-                     std::max(0, customRemoveWidth),
-                     buttonHeight,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.pluginsCustomPathsRemoveButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        _dxState->page.customPathsRemoveButton->SetBounds(
+            D2D1::RectF(pxToDip(removeX), pxToDip(customButtonsTop), pxToDip(removeX + customRemoveWidth), pxToDip(customButtonsTop + buttonHeight)));
     }
 
     y = customButtonsTop + buttonHeight;
+
+    LayoutDxHosts(state);
 }
 
-void PluginsPane::CreateControls(HWND parent, PreferencesDialogState& state) noexcept
+void PluginsPane::LayoutPage(HWND host,
+                             PreferencesDialogState& state,
+                             int x,
+                             int& y,
+                             int width,
+                             int margin,
+                             int gapY,
+                             int sectionY,
+                             const PreferencesTypographyContext& typography) noexcept
+{
+    if (! host)
+    {
+        return;
+    }
+
+    if (EnsureDxHosts(_pageHost ? _pageHost : host, state))
+    {
+        LayoutDxPage(host, state, x, y, width, margin, gapY, sectionY, typography);
+        return;
+    }
+
+    Debug::Error(L"Preferences.Plugins: DxUi surface initialization failed; page will not render correctly.");
+}
+
+void PluginsPane::InitializePage(HWND parent, PreferencesDialogState& state) noexcept
 {
     if (! parent)
     {
         return;
     }
 
-    const DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
-    const bool customButtons    = ! state.theme.systemHighContrast;
-    const DWORD buttonStyle     = WS_CHILD | WS_VISIBLE | WS_TABSTOP | (customButtons ? BS_OWNERDRAW : 0U);
-    const DWORD wrapStyle       = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-    const DWORD listExStyle     = state.theme.systemHighContrast ? WS_EX_CLIENTEDGE : 0;
-    const DWORD listStyle       = WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS;
+    _pageHost = parent;
 
-    state.pluginsConfigureButton.reset(CreateWindowExW(0,
-                                                       L"Button",
-                                                       LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CONFIGURE_ELLIPSIS).c_str(),
-                                                       buttonStyle,
-                                                       0,
-                                                       0,
-                                                       10,
-                                                       10,
-                                                       parent,
-                                                       reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_PLUGINS_CONFIGURE)),
-                                                       GetModuleHandleW(nullptr),
-                                                       nullptr));
-    if (state.pluginsConfigureButton)
+    if (state.currentCategory == PrefCategory::Plugins)
     {
-        EnableWindow(state.pluginsConfigureButton.get(), FALSE);
-    }
-
-    state.pluginsTestButton.reset(CreateWindowExW(0,
-                                                  L"Button",
-                                                  LoadStringResource(nullptr, IDS_BTN_TEST).c_str(),
-                                                  buttonStyle,
-                                                  0,
-                                                  0,
-                                                  10,
-                                                  10,
-                                                  parent,
-                                                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PLUGINS_TEST)),
-                                                  GetModuleHandleW(nullptr),
-                                                  nullptr));
-    if (state.pluginsTestButton)
-    {
-        EnableWindow(state.pluginsTestButton.get(), FALSE);
-    }
-
-    state.pluginsTestAllButton.reset(CreateWindowExW(0,
-                                                     L"Button",
-                                                     LoadStringResource(nullptr, IDS_BTN_TEST_ALL).c_str(),
-                                                     buttonStyle,
-                                                     0,
-                                                     0,
-                                                     10,
-                                                     10,
-                                                     parent,
-                                                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PLUGINS_TEST_ALL)),
-                                                     GetModuleHandleW(nullptr),
-                                                     nullptr));
-
-    state.pluginsNote.reset(CreateWindowExW(0,
-                                            L"Static",
-                                            LoadStringResource(nullptr, IDS_PREFS_PLUGINS_NOTE).c_str(),
-                                            wrapStyle,
-                                            0,
-                                            0,
-                                            10,
-                                            10,
-                                            parent,
-                                            nullptr,
-                                            GetModuleHandleW(nullptr),
-                                            nullptr));
-
-    state.pluginsSearchLabel.reset(CreateWindowExW(0,
-                                                   L"Static",
-                                                   LoadStringResource(nullptr, IDS_PREFS_COMMON_SEARCH).c_str(),
-                                                   baseStaticStyle,
-                                                   0,
-                                                   0,
-                                                   10,
-                                                   10,
-                                                   parent,
-                                                   nullptr,
-                                                   GetModuleHandleW(nullptr),
-                                                   nullptr));
-    PrefsInput::CreateFramedEditBox(
-        state, parent, state.pluginsSearchFrame, state.pluginsSearchEdit, IDC_PREFS_PLUGINS_SEARCH_EDIT, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.pluginsSearchEdit)
-    {
-        SendMessageW(state.pluginsSearchEdit.get(), EM_SETLIMITTEXT, 128, 0);
-    }
-
-    state.pluginsList.reset(CreateWindowExW(listExStyle,
-                                            WC_LISTVIEWW,
-                                            L"",
-                                            listStyle,
-                                            0,
-                                            0,
-                                            10,
-                                            10,
-                                            parent,
-                                            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_PLUGINS_LIST)),
-                                            GetModuleHandleW(nullptr),
-                                            nullptr));
-
-    if (state.pluginsList)
-    {
-        const UINT dpi = GetDpiForWindow(state.pluginsList.get());
-        ThemedControls::ApplyThemeToListView(state.pluginsList, state.theme);
-        EnsurePluginsListColumns(state.pluginsList.get(), dpi);
-        ListView_SetExtendedListViewStyle(state.pluginsList.get(), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP | LVS_EX_CHECKBOXES);
-    }
-
-    state.pluginsCustomPathsHeader.reset(CreateWindowExW(0,
-                                                         L"Static",
-                                                         LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_HEADER).c_str(),
-                                                         baseStaticStyle,
-                                                         0,
-                                                         0,
-                                                         10,
-                                                         10,
-                                                         parent,
-                                                         nullptr,
-                                                         GetModuleHandleW(nullptr),
-                                                         nullptr));
-
-    state.pluginsCustomPathsNote.reset(CreateWindowExW(0,
-                                                       L"Static",
-                                                       LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_NOTE).c_str(),
-                                                       wrapStyle,
-                                                       0,
-                                                       0,
-                                                       10,
-                                                       10,
-                                                       parent,
-                                                       nullptr,
-                                                       GetModuleHandleW(nullptr),
-                                                       nullptr));
-
-    state.pluginsCustomPathsList.reset(CreateWindowExW(listExStyle,
-                                                       WC_LISTVIEWW,
-                                                       L"",
-                                                       listStyle | LVS_NOCOLUMNHEADER,
-                                                       0,
-                                                       0,
-                                                       10,
-                                                       10,
-                                                       parent,
-                                                       reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_PLUGINS_CUSTOM_PATHS_LIST)),
-                                                       GetModuleHandleW(nullptr),
-                                                       nullptr));
-
-    state.pluginsCustomPathsAddButton.reset(CreateWindowExW(0,
-                                                            L"Button",
-                                                            LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_ADD_ELLIPSIS).c_str(),
-                                                            buttonStyle,
-                                                            0,
-                                                            0,
-                                                            10,
-                                                            10,
-                                                            parent,
-                                                            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_PLUGINS_CUSTOM_PATHS_ADD)),
-                                                            GetModuleHandleW(nullptr),
-                                                            nullptr));
-    state.pluginsCustomPathsRemoveButton.reset(CreateWindowExW(0,
-                                                               L"Button",
-                                                               LoadStringResource(nullptr, IDS_PREFS_PLUGINS_CUSTOM_PATHS_REMOVE).c_str(),
-                                                               buttonStyle,
-                                                               0,
-                                                               0,
-                                                               10,
-                                                               10,
-                                                               parent,
-                                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_PLUGINS_CUSTOM_PATHS_REMOVE)),
-                                                               GetModuleHandleW(nullptr),
-                                                               nullptr));
-    if (state.pluginsCustomPathsRemoveButton)
-    {
-        EnableWindow(state.pluginsCustomPathsRemoveButton.get(), FALSE);
-    }
-
-    state.pluginsDetailsHint.reset(CreateWindowExW(0,
-                                                   L"Static",
-                                                   LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_HINT).c_str(),
-                                                   wrapStyle,
-                                                   0,
-                                                   0,
-                                                   10,
-                                                   10,
-                                                   parent,
-                                                   nullptr,
-                                                   GetModuleHandleW(nullptr),
-                                                   nullptr));
-    state.pluginsDetailsIdLabel.reset(CreateWindowExW(0, L"Static", L"", wrapStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
-    state.pluginsDetailsConfigLabel.reset(CreateWindowExW(0,
-                                                          L"Static",
-                                                          LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_LABEL).c_str(),
-                                                          baseStaticStyle,
-                                                          0,
-                                                          0,
-                                                          10,
-                                                          10,
-                                                          parent,
-                                                          nullptr,
-                                                          GetModuleHandleW(nullptr),
-                                                          nullptr));
-    state.pluginsDetailsConfigError.reset(CreateWindowExW(0, L"Static", L"", wrapStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
-    PrefsInput::CreateFramedEditBox(state,
-                                    parent,
-                                    state.pluginsDetailsConfigFrame,
-                                    state.pluginsDetailsConfigEdit,
-                                    IDC_PREFS_PLUGINS_DETAILS_CONFIG_EDIT,
-                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | ES_NOHIDESEL);
-
-    const std::array<HWND, 6> detailControls = {
-        state.pluginsDetailsHint.get(),
-        state.pluginsDetailsIdLabel.get(),
-        state.pluginsDetailsConfigLabel.get(),
-        state.pluginsDetailsConfigError.get(),
-        state.pluginsDetailsConfigFrame.get(),
-        state.pluginsDetailsConfigEdit.get(),
-    };
-    for (HWND hwnd : detailControls)
-    {
-        if (hwnd)
+        if (! EnsureDxHosts(parent, state))
         {
-            ShowWindow(hwnd, SW_HIDE);
+            Debug::Error(L"Preferences.Plugins: Failed to initialize DxUi hosts in CreateControls.");
+            DetachDxHosts();
+            return;
         }
     }
+
+    if (state.currentCategory != PrefCategory::Plugins)
+    {
+        return;
+    }
 }
+
+#ifdef ENABLE_TESTS
+bool DebugSetPreferencesPluginsNextCustomPathBrowsePath(const std::wstring_view path) noexcept
+{
+    return DebugSetPreferencesPluginsNextCustomPathBrowsePathImpl(path);
+}
+
+bool DebugCancelPreferencesPluginsNextCustomPathBrowse() noexcept
+{
+    return DebugCancelPreferencesPluginsNextCustomPathBrowseImpl();
+}
+#endif

@@ -1,0 +1,36 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSQLITE_NAME "Visionneuse SQLite"
+    IDS_VIEWERSQLITE_DESCRIPTION "Visionneuse de bases SQLite en lecture seule avec navigation paginée des tables."
+    IDS_VIEWERSQLITE_LABEL_FILE "Fichier :"
+    IDS_VIEWERSQLITE_LABEL_TABLE "Table :"
+    IDS_VIEWERSQLITE_LABEL_QUERY "Requête :"
+    IDS_VIEWERSQLITE_BUTTON_RELOAD "Recharger"
+    IDS_VIEWERSQLITE_BUTTON_PREVIOUS "Précédent"
+    IDS_VIEWERSQLITE_BUTTON_NEXT "Suivant"
+    IDS_VIEWERSQLITE_BUTTON_RUN_QUERY "Exécuter la requête"
+    IDS_VIEWERSQLITE_BUTTON_TABLE_PREVIEW "Aperçu de table"
+    IDS_VIEWERSQLITE_COLUMN_RESULT "Résultat"
+    IDS_VIEWERSQLITE_STATUS_READY "Prêt."
+    IDS_VIEWERSQLITE_STATUS_LOADING "Ouverture de la base de données..."
+    IDS_VIEWERSQLITE_STATUS_LOADING_ROWS "Chargement des lignes..."
+    IDS_VIEWERSQLITE_STATUS_RUNNING_QUERY "Exécution de la requête..."
+    IDS_VIEWERSQLITE_STATUS_ENTER_QUERY "Saisissez une requête SQL en lecture seule."
+    IDS_VIEWERSQLITE_STATUS_SELECT_TABLE "Choisissez une table à prévisualiser."
+    IDS_VIEWERSQLITE_STATUS_NO_TABLES "Aucune table ni vue trouvée."
+    IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_FMT "Table {0} : lignes {1:L}-{2:L}"
+    IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_MORE_FMT "Table {0} : lignes {1:L}-{2:L}+"
+    IDS_VIEWERSQLITE_STATUS_QUERY_FMT "La requête a renvoyé {0:L} lignes."
+    IDS_VIEWERSQLITE_STATUS_QUERY_TRUNCATED_FMT "La requête a renvoyé {0:L}+ lignes (tronquées)."
+    IDS_VIEWERSQLITE_ERROR_OPEN_FAILED "Impossible d’ouvrir la base de données SQLite."
+    IDS_VIEWERSQLITE_ERROR_QUERY_FAILED "Impossible d’exécuter la requête SQLite."
+    IDS_VIEWERSQLITE_ERROR_QUEUE_FAILED "Impossible de mettre en file d’attente le travail SQLite en arrière-plan."
+    IDS_VIEWERSQLITE_ERROR_OUT_OF_MEMORY "La visionneuse SQLite a épuisé la mémoire."
+    IDS_VIEWERSQLITE_TITLE_FORMAT "{0} - {1}"
+END

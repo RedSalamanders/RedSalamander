@@ -2,6 +2,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 
+#include "InvalidRectVisualization.h"
+
 #include <algorithm>
 #include <atomic>
 #include <bit>
@@ -60,6 +62,7 @@ public:
         D2D1_COLOR_F metaError   = D2D1::ColorF(D2D1::ColorF::Red);
         D2D1_COLOR_F metaWarning = D2D1::ColorF(D2D1::ColorF::Orange);
         D2D1_COLOR_F metaInfo    = D2D1::ColorF(D2D1::ColorF::DodgerBlue);
+        D2D1_COLOR_F metaPerf    = D2D1::ColorF(D2D1::ColorF::MediumSeaGreen);
         D2D1_COLOR_F metaDebug   = D2D1::ColorF(D2D1::ColorF::MediumPurple);
     };
 
@@ -527,6 +530,12 @@ private:
 
     void ClearTextLayoutEffects();
 
+#if RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED
+    wil::com_ptr<ID2D1SolidColorBrush> _debugDirtyRectBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _debugDirtyRectFillBrush;
+    size_t _debugDirtyColorIndex = 0;
+#endif
+
 #ifdef _DEBUG
     // Debug span visualization (always declared, only used in debug)
     struct DebugSpanRect
@@ -534,9 +543,6 @@ private:
         D2D1_RECT_F rect;
         D2D1_COLOR_F color;
     };
-    wil::com_ptr<ID2D1SolidColorBrush> _debugDirtyRectBrush;
-    wil::com_ptr<ID2D1SolidColorBrush> _debugDirtyRectFillBrush;
-    size_t _debugDirtyColorIndex = 0;
     std::vector<DebugSpanRect> _debugSpanRects;
     void DrawDebugSpans();
     void ClearDebugSpans();

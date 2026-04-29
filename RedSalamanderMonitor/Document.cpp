@@ -22,6 +22,7 @@ static std::wstring_view EmojiForType(Debug::InfoParam::Type t)
         case Debug::InfoParam::Type::Error: return L"🛑 ";
         case Debug::InfoParam::Type::Warning: return L"⚠️ ";
         case Debug::InfoParam::Type::Info: return L"ℹ️ ";
+        case Debug::InfoParam::Type::Perf: return L"⏱️ ";
         case Debug::InfoParam::Type::Debug: return L"🐞 ";
         case Debug::InfoParam::Type::Text: return L"📝 ";
         case Debug::InfoParam::Type::All: // Not a message type
@@ -489,19 +490,13 @@ void Document::RebuildVisibleLines()
             if (line.hasMeta)
             {
                 // Check filter mask for this line's type
-                uint32_t bitPos = 0;
-                switch (line.meta.type)
+                if (line.meta.type == Debug::InfoParam::Type::All)
                 {
-                    case Debug::InfoParam::Type::Text: bitPos = 0; break;
-                    case Debug::InfoParam::Type::Error: bitPos = 1; break;
-                    case Debug::InfoParam::Type::Warning: bitPos = 2; break;
-                    case Debug::InfoParam::Type::Info: bitPos = 3; break;
-                    case Debug::InfoParam::Type::Debug: bitPos = 4; break;
-                    case Debug::InfoParam::Type::All: visible = true; break;
+                    visible = true;
                 }
-                if (line.meta.type != Debug::InfoParam::Type::All)
+                else
                 {
-                    visible = (_filterMask & (1u << bitPos)) != 0;
+                    visible = (_filterMask & Debug::FilterBitForType(line.meta.type)) != 0u;
                 }
             }
 
@@ -535,19 +530,10 @@ bool Document::IsLineVisibleUnsafe(size_t sourceIndex) const
     if (! line.hasMeta)
         return true; // Lines without metadata always visible
 
-    // Convert InfoParam::Type enum value to bit position
-    uint32_t bitPos = 0;
-    switch (line.meta.type)
-    {
-        case Debug::InfoParam::Type::Text: bitPos = 0; break;
-        case Debug::InfoParam::Type::Error: bitPos = 1; break;
-        case Debug::InfoParam::Type::Warning: bitPos = 2; break;
-        case Debug::InfoParam::Type::Info: bitPos = 3; break;
-        case Debug::InfoParam::Type::Debug: bitPos = 4; break;
-        case Debug::InfoParam::Type::All: return true;
-    }
+    if (line.meta.type == Debug::InfoParam::Type::All)
+        return true;
 
-    return (_filterMask & (1u << bitPos)) != 0;
+    return (_filterMask & Debug::FilterBitForType(line.meta.type)) != 0u;
 }
 
 bool Document::IsLineVisible(size_t sourceIndex) const

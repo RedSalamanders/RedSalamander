@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "PlugInterfaces/Host.h"
 
 // Returns a process-lifetime host services object that plugins can use via QueryInterface.
@@ -15,6 +17,15 @@ HRESULT HostShowPrompt(const HostPromptRequest& request, void* cookie, HostPromp
 // Intended for automated self-tests that must not block on modal dialogs.
 void HostSetAutoAcceptPrompts(bool enabled) noexcept;
 bool HostGetAutoAcceptPrompts() noexcept;
+
+#ifdef ENABLE_TESTS
+// Debug/testing hook: force the next prompts to return a specific supported result.
+// Used by self-tests that need to exercise non-default prompt branches.
+void HostSetTestPromptResultOverride(HostPromptResult result) noexcept;
+void HostClearTestPromptResultOverride() noexcept;
+void HostResetTestPromptRequestCount() noexcept;
+uint64_t HostGetTestPromptRequestCount() noexcept;
+#endif
 
 // FolderWindow dispatch helper for cross-thread plugin calls.
 // Returns true if the message was handled (and `result` is set).

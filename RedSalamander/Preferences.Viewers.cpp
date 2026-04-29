@@ -5,7 +5,9 @@
 #include "Preferences.Viewers.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <cwctype>
 #include <optional>
 #include <string>
@@ -13,8 +15,8 @@
 #include <unordered_map>
 #include <vector>
 
-#include <commctrl.h>
 #include <uxtheme.h>
+#include <windowsx.h>
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -24,212 +26,958 @@
 
 #include "Helpers.h"
 #include "HostServices.h"
-#include "ThemedControls.h"
+#include "UiMetrics.h"
 #include "ViewerPluginManager.h"
 #include "resource.h"
 
-bool ViewersPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT commandId, UINT notifyCode, HWND /*hwndCtl*/) noexcept
-{
-    switch (commandId)
-    {
-        case IDC_PREFS_VIEWERS_SEARCH_EDIT:
-            if (notifyCode == EN_CHANGE)
-            {
-                Refresh(host, state);
-                return true;
-            }
-            break;
-        case IDC_PREFS_VIEWERS_SAVE:
-            if (notifyCode == BN_CLICKED)
-            {
-                AddOrUpdateMapping(host, state);
-                return true;
-            }
-            break;
-        case IDC_PREFS_VIEWERS_REMOVE:
-            if (notifyCode == BN_CLICKED)
-            {
-                RemoveSelectedMapping(host, state);
-                return true;
-            }
-            break;
-        case IDC_PREFS_VIEWERS_RESET:
-            if (notifyCode == BN_CLICKED)
-            {
-                ResetMappingsToDefaults(host, state);
-                return true;
-            }
-            break;
-    }
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::ComboBox;
+using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::Grid;
+using RedSalamander::DxUi::GridCellData;
+using RedSalamander::DxUi::GridColumnDesc;
+using RedSalamander::DxUi::GridSelectionMode;
+using RedSalamander::DxUi::GridSortSpec;
+using RedSalamander::DxUi::IDxGridModel;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::SortDirection;
+using RedSalamander::DxUi::TextField;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::WindowHost;
 
-    return false;
+namespace
+{
+[[nodiscard]] uint64_t MakeStableRowId(std::wstring_view extension) noexcept
+{
+    constexpr uint64_t kFNVOffset = 1469598103934665603ull;
+    constexpr uint64_t kFNVPrime  = 1099511628211ull;
+
+    uint64_t value = kFNVOffset;
+    for (const wchar_t ch : extension)
+    {
+        value ^= static_cast<uint64_t>(std::towlower(static_cast<wint_t>(ch)));
+        value *= kFNVPrime;
+    }
+    return value;
 }
 
-bool ViewersPane::HandleNotify(HWND host, PreferencesDialogState& state, NMHDR* hdr, LRESULT& outResult) noexcept
+} // namespace
+
+struct ViewersGridRow
 {
-    if (! hdr || ! state.viewersList || hdr->hwndFrom != state.viewersList.get())
+    uint64_t stableId = 0u;
+    std::wstring extension;
+    std::wstring viewerId;
+    std::wstring viewerText;
+};
+
+struct ViewersMappingEntry
+{
+    std::wstring_view extension;
+    std::wstring_view viewerId;
+    std::wstring_view viewerText;
+};
+
+class ViewersGridModel final : public IDxGridModel
+{
+public:
+    ViewersGridModel()
+    {
+        _columns = {
+            {L"extension",
+             LoadStringResource(nullptr, IDS_PREFS_VIEWERS_COL_EXTENSION),
+             120.0f,
+             90.0f,
+             RedSalamander::DxUi::GridColumnKind::Text,
+             false,
+             false},
+            {L"viewer", LoadStringResource(nullptr, IDS_PREFS_VIEWERS_COL_VIEWER), 220.0f, 120.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+        };
+    }
+
+    [[nodiscard]] bool SetViewportWidthDip(float widthDip) noexcept
+    {
+        widthDip = std::max(0.0f, widthDip);
+        if (std::abs(_viewportWidthDip - widthDip) < 0.5f)
+        {
+            return false;
+        }
+
+        _viewportWidthDip          = widthDip;
+        const float extensionWidth = std::clamp(widthDip * 0.32f, 90.0f, 180.0f);
+        const float viewerWidth    = std::max(120.0f, widthDip - extensionWidth);
+        _columns[0].widthDip       = extensionWidth;
+        _columns[1].widthDip       = viewerWidth;
+        return true;
+    }
+
+    void SetRows(std::vector<ViewersGridRow> rows)
+    {
+        _rows = std::move(rows);
+        _rowIndexByStableId.clear();
+        _rowIndexByStableId.reserve(_rows.size());
+        for (size_t rowIndex = 0u; rowIndex < _rows.size(); ++rowIndex)
+        {
+            _rowIndexByStableId[_rows[rowIndex].stableId] = rowIndex;
+        }
+    }
+
+    [[nodiscard]] const std::vector<ViewersGridRow>& GetRows() const noexcept
+    {
+        return _rows;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowIndexByExtension(std::wstring_view extension) const noexcept
+    {
+        const auto it = std::find_if(_rows.begin(), _rows.end(), [&](const ViewersGridRow& row) noexcept { return row.extension == extension; });
+        if (it == _rows.end())
+        {
+            return std::nullopt;
+        }
+        return static_cast<size_t>(std::distance(_rows.begin(), it));
+    }
+
+    [[nodiscard]] size_t GetRowCount() const noexcept override
+    {
+        return _rows.size();
+    }
+
+    [[nodiscard]] size_t GetColumnCount() const noexcept override
+    {
+        return _columns.size();
+    }
+
+    [[nodiscard]] GridColumnDesc GetColumn(size_t columnIndex) const override
+    {
+        return _columns.at(columnIndex);
+    }
+
+    void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
+    {
+        outCell = {};
+        if (rowIndex >= _rows.size())
+        {
+            return;
+        }
+
+        const ViewersGridRow& row = _rows[rowIndex];
+        switch (columnIndex)
+        {
+            case 0: outCell.text = row.extension; break;
+            case 1: outCell.text = row.viewerText; break;
+            default: break;
+        }
+    }
+
+    [[nodiscard]] uint64_t GetStableRowId(size_t rowIndex) const noexcept override
+    {
+        if (rowIndex >= _rows.size())
+        {
+            return 0u;
+        }
+        return _rows[rowIndex].stableId;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+    {
+        const auto it = _rowIndexByStableId.find(rowId);
+        if (it == _rowIndexByStableId.end())
+        {
+            return std::nullopt;
+        }
+
+        return it->second;
+    }
+
+private:
+    std::vector<GridColumnDesc> _columns;
+    std::vector<ViewersGridRow> _rows;
+    std::unordered_map<uint64_t, size_t> _rowIndexByStableId;
+    float _viewportWidthDip = 0.0f;
+};
+
+[[nodiscard]] std::wstring GetSelectedViewerExtensionForDxSync(const PreferencesDialogState& state) noexcept
+{
+    return state.viewersSelectedExtensionText;
+}
+
+ViewersPane::~ViewersPane() = default;
+
+void ViewersPane::OnViewersSaveClicked(HWND host, PreferencesDialogState& state) noexcept
+{
+    AddOrUpdateMapping(host, state);
+}
+
+void ViewersPane::OnViewersRemoveClicked(HWND host, PreferencesDialogState& state) noexcept
+{
+    RemoveSelectedMapping(host, state);
+}
+
+void ViewersPane::OnViewersResetClicked(HWND host, PreferencesDialogState& state) noexcept
+{
+    ResetMappingsToDefaults(host, state);
+}
+
+bool ViewersPane::HandleDeferredAction(HWND host, PreferencesDialogState& state, PreferencesDeferredActionKind action) noexcept
+{
+    _hostWindow = host;
+    _state      = &state;
+
+    if (! _pageHost)
     {
         return false;
     }
 
-    switch (hdr->code)
+#pragma warning(push)
+#pragma warning(disable : 4061) // Not all enum values handled explicitly -- intentional; this pane only handles its own actions.
+    switch (action)
     {
-        case NM_CUSTOMDRAW: outResult = CDRF_DODEFAULT; return true;
-        case NM_SETFOCUS:
-            PrefsPaneHost::EnsureControlVisible(host, state, state.viewersList.get());
-            InvalidateRect(state.viewersList.get(), nullptr, FALSE);
-            outResult = 0;
-            return true;
-        case NM_KILLFOCUS:
-            InvalidateRect(state.viewersList.get(), nullptr, FALSE);
-            outResult = 0;
-            return true;
-        case LVN_ITEMCHANGED:
-            ViewersPane::UpdateEditorFromSelection(host, state);
-            outResult = 0;
-            return true;
+        case PreferencesDeferredActionKind::ViewersSearchChanged: Refresh(host, state); return true;
+        default: return false;
+    }
+#pragma warning(pop)
+}
+
+void ViewersPane::OnGridSortRequested(const GridSortSpec& sortSpec)
+{
+    if (! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+    {
+        return;
     }
 
-    return false;
+    _state->viewersListSortSpec = sortSpec;
+    Refresh(_hostWindow, *_state);
 }
 
-bool ViewersPane::EnsureCreated(HWND pageHost) noexcept
+void ViewersPane::OnVisibilityChanged(bool visible) noexcept
 {
-    return PrefsPaneHost::EnsureCreated(pageHost, _hWnd);
+    if (! visible && _pageHost)
+    {
+        _pageHost->ResetInteractionState();
+    }
 }
 
-void ViewersPane::ResizeToHostClient(HWND pageHost) noexcept
+void ViewersPane::Destroy(PreferencesDialogState& state) noexcept
 {
-    PrefsPaneHost::ResizeToHostClient(pageHost, _hWnd.get());
+    DetachDxPageHost();
+
+    state.viewersExtensionKeys.clear();
+    state.viewersPluginOptions.clear();
+    _syncingDxCombo     = false;
+    _syncingDxEdits     = false;
+    _syncingDxSelection = false;
+    _pageParentHwnd     = nullptr;
 }
 
-void ViewersPane::Show(bool visible) noexcept
+bool ViewersPane::EnsureDxPageHost(HWND parent, PreferencesDialogState& state) noexcept
 {
-    PrefsPaneHost::Show(_hWnd.get(), visible);
+    UNREFERENCED_PARAMETER(parent);
+
+    _pageHost        = state.pageHostDxHost;
+    _pageContentRoot = state.pageHostDxContentRootControl;
+    if (! _pageHost || ! _pageContentRoot)
+    {
+        return false;
+    }
+
+    if (PrefsUi::HasRetainedDxChildren(_pageContentRoot) && _listControl)
+    {
+        return true;
+    }
+
+    // Children may have been freed externally by ResetPreferencesSharedPageSurface;
+    // cached control pointers are potentially dangling here. Clear them before
+    // touching any stale objects to avoid use-after-free.
+    _listControl = nullptr;
+    _listModel   = nullptr;
+    _listModelStorage.reset();
+    _searchLabelControl    = nullptr;
+    _searchEditControl     = nullptr;
+    _extensionLabelControl = nullptr;
+    _extensionEditControl  = nullptr;
+    _viewerLabelControl    = nullptr;
+    _viewerComboControl    = nullptr;
+    _hintControl           = nullptr;
+    _saveButtonControl     = nullptr;
+    _removeButtonControl   = nullptr;
+    _resetButtonControl    = nullptr;
+
+    _pageHost->ResetInteractionState();
+    _pageContentRoot->ClearChildren();
+
+    _searchLabelControl    = _pageContentRoot->AddChild<Label>();
+    _searchEditControl     = _pageContentRoot->AddChild<TextField>();
+    _listControl           = _pageContentRoot->AddChild<Grid>();
+    _extensionLabelControl = _pageContentRoot->AddChild<Label>();
+    _extensionEditControl  = _pageContentRoot->AddChild<TextField>();
+    _viewerLabelControl    = _pageContentRoot->AddChild<Label>();
+    _viewerComboControl    = _pageContentRoot->AddChild<ComboBox>();
+    _hintControl           = _pageContentRoot->AddChild<Label>();
+    _saveButtonControl     = _pageContentRoot->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_VIEWERS_BUTTON_ADD_UPDATE));
+    _removeButtonControl   = _pageContentRoot->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_VIEWERS_BUTTON_REMOVE));
+    _resetButtonControl    = _pageContentRoot->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_VIEWERS_BUTTON_RESET_DEFAULTS));
+
+    _hintControl->SetMultiline(true);
+    _hintControl->SetFontRole(RedSalamander::DxUi::FontRole::Small);
+    _viewerComboControl->SetVariant(ComboBoxVariant::Window);
+    _listControl->SetDelegate(this);
+    _listControl->SetSelectionMode(GridSelectionMode::Single);
+    _listControl->SetHeaderHeightDip(30.0f);
+    _listControl->SetRowHeightDip(30.0f);
+    _listControl->SetLineClamp(1u);
+
+    auto model = std::make_unique<ViewersGridModel>();
+    _listModel = model.get();
+    _listControl->SetModel(_listModel);
+    _listModelStorage = std::move(model);
+
+    _searchEditControl->SetOnTextChanged([this, &state, parent](std::wstring_view text)
+    {
+        state.viewersSearchText.assign(text);
+        if (_syncingDxEdits)
+        {
+            return;
+        }
+
+        if (parent && IsWindow(parent) != FALSE)
+        {
+            static_cast<void>(PrefsUi::PostDeferredAction(parent, PreferencesDeferredActionKind::ViewersSearchChanged));
+        }
+    });
+
+    _extensionEditControl->SetOnTextChanged([this](std::wstring_view text)
+    {
+        if (_syncingDxEdits)
+        {
+            return;
+        }
+
+        UNREFERENCED_PARAMETER(text);
+    });
+
+    _viewerComboControl->SetOnSelectionChanged([this, &state](const size_t itemIndex)
+    {
+        if (_syncingDxCombo)
+        {
+            return;
+        }
+
+        UNREFERENCED_PARAMETER(itemIndex);
+        UNREFERENCED_PARAMETER(state);
+    });
+
+    _saveButtonControl->SetPrimary(true);
+    _saveButtonControl->SetOnClick([this]() noexcept
+    {
+        if (! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+        OnViewersSaveClicked(_hostWindow, *_state);
+    });
+
+    _removeButtonControl->SetOnClick([this]() noexcept
+    {
+        if (! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+        OnViewersRemoveClicked(_hostWindow, *_state);
+    });
+
+    _resetButtonControl->SetOnClick([this]() noexcept
+    {
+        if (! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+        OnViewersResetClicked(_hostWindow, *_state);
+    });
+
+    ApplyDxStaticTheme(state);
+    ApplyDxEditTheme(state);
+    ApplyDxChromeTheme(state);
+    ApplyDxListTheme(state);
+    SyncDxStaticsFromState(state);
+    SyncDxEditsFromState(state);
+    SyncDxComboFromState(state);
+    SyncDxButtonsFromState(state);
+    SyncDxListFromState(state);
+    return true;
 }
 
-void ViewersPane::CreateControls(HWND parent, PreferencesDialogState& state) noexcept
+void ViewersPane::SyncDxControlsFromState(PreferencesDialogState& state) noexcept
+{
+    SyncDxStaticsFromState(state);
+    SyncDxEditsFromState(state);
+    SyncDxComboFromState(state);
+    SyncDxButtonsFromState(state);
+    SyncDxListFromState(state);
+}
+
+void ViewersPane::DetachDxPageHost() noexcept
+{
+    if (_listControl)
+    {
+        _listControl->SetModel(nullptr);
+    }
+    if (_pageContentRoot && _pageHost)
+    {
+        _pageHost->ResetInteractionState();
+        _pageContentRoot->ClearChildren();
+    }
+    _pageHost              = nullptr;
+    _pageContentRoot       = nullptr;
+    _searchLabelControl    = nullptr;
+    _extensionLabelControl = nullptr;
+    _viewerLabelControl    = nullptr;
+    _hintControl           = nullptr;
+    _searchEditControl     = nullptr;
+    _extensionEditControl  = nullptr;
+    _listControl           = nullptr;
+    _viewerComboControl    = nullptr;
+    _saveButtonControl     = nullptr;
+    _removeButtonControl   = nullptr;
+    _resetButtonControl    = nullptr;
+    _listModel             = nullptr;
+    _listModelStorage.reset();
+    _usesDxUiTypographyContext = false;
+    _usesDxUiTypographyMetrics = false;
+
+    ResetCallbackContextIfDetached();
+}
+
+void ViewersPane::InitializePage(HWND parent, PreferencesDialogState& state) noexcept
 {
     if (! parent)
     {
         return;
     }
 
-    const DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
-    const DWORD wrapStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-    const bool customButtons    = ! state.theme.systemHighContrast;
-    const DWORD listExStyle     = state.theme.systemHighContrast ? WS_EX_CLIENTEDGE : 0;
+    _pageParentHwnd = parent;
+    _state          = &state;
 
-    state.viewersSearchLabel.reset(CreateWindowExW(0,
-                                                   L"Static",
-                                                   LoadStringResource(nullptr, IDS_PREFS_COMMON_SEARCH).c_str(),
-                                                   baseStaticStyle,
-                                                   0,
-                                                   0,
-                                                   10,
-                                                   10,
-                                                   parent,
-                                                   nullptr,
-                                                   GetModuleHandleW(nullptr),
-                                                   nullptr));
-    PrefsInput::CreateFramedEditBox(
-        state, parent, state.viewersSearchFrame, state.viewersSearchEdit, IDC_PREFS_VIEWERS_SEARCH_EDIT, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.viewersSearchEdit)
+    if (state.currentCategory != PrefCategory::Viewers)
     {
-        SendMessageW(state.viewersSearchEdit.get(), EM_SETLIMITTEXT, 128, 0);
+        return;
     }
 
-    state.viewersList.reset(CreateWindowExW(listExStyle,
-                                            WC_LISTVIEWW,
-                                            L"",
-                                            WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_OWNERDRAWFIXED,
-                                            0,
-                                            0,
-                                            10,
-                                            10,
-                                            parent,
-                                            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_VIEWERS_LIST)),
-                                            GetModuleHandleW(nullptr),
-                                            nullptr));
-
-    state.viewersExtensionLabel.reset(CreateWindowExW(0,
-                                                      L"Static",
-                                                      LoadStringResource(nullptr, IDS_PREFS_VIEWERS_COL_EXTENSION).c_str(),
-                                                      baseStaticStyle,
-                                                      0,
-                                                      0,
-                                                      10,
-                                                      10,
-                                                      parent,
-                                                      nullptr,
-                                                      GetModuleHandleW(nullptr),
-                                                      nullptr));
-
-    PrefsInput::CreateFramedEditBox(state,
-                                    parent,
-                                    state.viewersExtensionFrame,
-                                    state.viewersExtensionEdit,
-                                    IDC_PREFS_VIEWERS_EXTENSION_EDIT,
-                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.viewersExtensionEdit)
+    if (! EnsureDxPageHost(parent, state))
     {
-        SendMessageW(state.viewersExtensionEdit.get(), EM_SETLIMITTEXT, 33, 0);
+        Debug::Error(L"Preferences.Viewers: Failed to initialize DxUi hosts in CreateControls.");
+        DetachDxPageHost();
+        return;
     }
 
-    state.viewersViewerLabel.reset(CreateWindowExW(0,
-                                                   L"Static",
-                                                   LoadStringResource(nullptr, IDS_PREFS_VIEWERS_COL_VIEWER).c_str(),
-                                                   baseStaticStyle,
-                                                   0,
-                                                   0,
-                                                   10,
-                                                   10,
-                                                   parent,
-                                                   nullptr,
-                                                   GetModuleHandleW(nullptr),
-                                                   nullptr));
-    PrefsInput::CreateFramedComboBox(state, parent, state.viewersViewerFrame, state.viewersViewerCombo, IDC_PREFS_VIEWERS_VIEWER_COMBO);
-
-    const DWORD viewerButtonStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | (customButtons ? BS_OWNERDRAW : 0U);
-    state.viewersSaveButton.reset(CreateWindowExW(0,
-                                                  L"Button",
-                                                  LoadStringResource(nullptr, IDS_PREFS_VIEWERS_BUTTON_ADD_UPDATE).c_str(),
-                                                  viewerButtonStyle,
-                                                  0,
-                                                  0,
-                                                  10,
-                                                  10,
-                                                  parent,
-                                                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_VIEWERS_SAVE)),
-                                                  GetModuleHandleW(nullptr),
-                                                  nullptr));
-    state.viewersRemoveButton.reset(CreateWindowExW(0,
-                                                    L"Button",
-                                                    LoadStringResource(nullptr, IDS_PREFS_VIEWERS_BUTTON_REMOVE).c_str(),
-                                                    viewerButtonStyle,
-                                                    0,
-                                                    0,
-                                                    10,
-                                                    10,
-                                                    parent,
-                                                    reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_VIEWERS_REMOVE)),
-                                                    GetModuleHandleW(nullptr),
-                                                    nullptr));
-    state.viewersResetButton.reset(CreateWindowExW(0,
-                                                   L"Button",
-                                                   LoadStringResource(nullptr, IDS_PREFS_VIEWERS_BUTTON_RESET_DEFAULTS).c_str(),
-                                                   viewerButtonStyle,
-                                                   0,
-                                                   0,
-                                                   10,
-                                                   10,
-                                                   parent,
-                                                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_VIEWERS_RESET)),
-                                                   GetModuleHandleW(nullptr),
-                                                   nullptr));
-
-    state.viewersHint.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
+    SyncDxStaticsFromState(state);
 }
+void ViewersPane::ResetCallbackContextIfDetached() noexcept
+{
+    if (_pageHost)
+    {
+        return;
+    }
+
+    _hostWindow = nullptr;
+    _state      = nullptr;
+}
+
+void ViewersPane::ApplyDxChromeTheme(const PreferencesDialogState& state) noexcept
+{
+    if (! _pageHost)
+    {
+        return;
+    }
+
+    _pageHost->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+}
+
+void ViewersPane::ApplyDxStaticTheme(const PreferencesDialogState& state) noexcept
+{
+    if (! _pageHost)
+    {
+        return;
+    }
+
+    _pageHost->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+}
+
+void ViewersPane::ApplyDxEditTheme(const PreferencesDialogState& state) noexcept
+{
+    if (! _pageHost)
+    {
+        return;
+    }
+
+    _pageHost->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+}
+
+void ViewersPane::SyncDxStaticsFromState(const PreferencesDialogState& state) noexcept
+{
+    UNREFERENCED_PARAMETER(state);
+
+    if (_searchLabelControl)
+    {
+        _searchLabelControl->SetText(LoadStringResource(nullptr, IDS_PREFS_COMMON_SEARCH));
+        _searchLabelControl->SetMnemonicTarget(_searchEditControl);
+    }
+    if (_extensionLabelControl)
+    {
+        _extensionLabelControl->SetText(LoadStringResource(nullptr, IDS_PREFS_VIEWERS_COL_EXTENSION));
+        _extensionLabelControl->SetMnemonicTarget(_extensionEditControl);
+    }
+    if (_viewerLabelControl)
+    {
+        _viewerLabelControl->SetText(LoadStringResource(nullptr, IDS_PREFS_VIEWERS_COL_VIEWER));
+        _viewerLabelControl->SetMnemonicTarget(_viewerComboControl);
+    }
+    if (_hintControl)
+    {
+        _hintControl->SetText(LoadStringResource(nullptr, IDS_PREFS_VIEWERS_HINT));
+        _hintControl->SetFontRole(RedSalamander::DxUi::FontRole::Small);
+    }
+
+    if (_pageHost)
+    {
+        _pageHost->Invalidate();
+    }
+}
+
+void ViewersPane::ApplyDxListTheme(const PreferencesDialogState& state) noexcept
+{
+    if (! _pageHost)
+    {
+        return;
+    }
+
+    _pageHost->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+}
+
+void ViewersPane::SyncDxEditsFromState(const PreferencesDialogState& state) noexcept
+{
+    _syncingDxEdits = true;
+    if (_searchEditControl)
+    {
+        _searchEditControl->SetText(state.viewersSearchText);
+    }
+    if (_extensionEditControl)
+    {
+        _extensionEditControl->SetText(state.viewersSelectedExtensionText);
+    }
+    _syncingDxEdits = false;
+
+    if (_pageHost)
+    {
+        _pageHost->Invalidate();
+    }
+}
+
+void ViewersPane::SyncDxComboFromState(const PreferencesDialogState& state) noexcept
+{
+    if (! _viewerComboControl)
+    {
+        return;
+    }
+
+    std::vector<ComboBox::Item> items;
+    items.reserve(state.viewersPluginOptions.size());
+    for (const auto& option : state.viewersPluginOptions)
+    {
+        ComboBox::Item item{};
+        item.value   = option.id;
+        item.display = option.displayName;
+        items.push_back(std::move(item));
+    }
+
+    _syncingDxCombo = true;
+    _viewerComboControl->SetItems(std::move(items));
+
+    {
+        // Determine selection from state data.
+        std::optional<size_t> selectedIndex;
+        if (! state.viewersSelectedExtensionText.empty())
+        {
+            std::wstring_view pluginId = L"builtin/viewer-text";
+            const auto it              = state.workingSettings.extensions.openWithViewerByExtension.find(state.viewersSelectedExtensionText);
+            if (it != state.workingSettings.extensions.openWithViewerByExtension.end())
+            {
+                pluginId = it->second;
+            }
+            for (size_t i = 0; i < state.viewersPluginOptions.size(); ++i)
+            {
+                if (state.viewersPluginOptions[i].id == pluginId)
+                {
+                    selectedIndex = i;
+                    break;
+                }
+            }
+        }
+        _viewerComboControl->SetSelectedIndex(selectedIndex);
+    }
+    _syncingDxCombo = false;
+    if (_pageHost)
+    {
+        _pageHost->Invalidate();
+    }
+}
+
+void ViewersPane::SyncDxButtonsFromState(const PreferencesDialogState& /*state*/) noexcept
+{
+    // _usesDxUiChrome is always true now
+    // Early return removed - always process
+
+    if (_saveButtonControl)
+    {
+        _saveButtonControl->SetEnabled(true);
+    }
+    if (_removeButtonControl)
+    {
+        _removeButtonControl->SetEnabled(true);
+    }
+    if (_resetButtonControl)
+    {
+        _resetButtonControl->SetEnabled(true);
+    }
+
+    if (_pageHost)
+    {
+        _pageHost->Invalidate();
+    }
+}
+
+void ViewersPane::SyncDxListFromState(PreferencesDialogState& state) noexcept
+{
+    if (! _listControl || ! _listModel)
+    {
+        return;
+    }
+
+    std::vector<ViewersGridRow> rows;
+    rows.reserve(state.viewersExtensionKeys.size());
+    for (const std::wstring& extension : state.viewersExtensionKeys)
+    {
+        ViewersGridRow row{};
+        row.extension = extension;
+        row.stableId  = MakeStableRowId(row.extension);
+
+        const auto mappingIt = state.workingSettings.extensions.openWithViewerByExtension.find(extension);
+        if (mappingIt != state.workingSettings.extensions.openWithViewerByExtension.end())
+        {
+            row.viewerId = mappingIt->second;
+        }
+
+        const auto pluginIt = std::find_if(state.viewersPluginOptions.begin(),
+                                           state.viewersPluginOptions.end(),
+                                           [&](const ViewerPluginOption& option) noexcept { return option.id == row.viewerId; });
+        row.viewerText      = (pluginIt != state.viewersPluginOptions.end()) ? pluginIt->displayName : row.viewerId;
+        rows.push_back(std::move(row));
+    }
+
+    _listModel->SetRows(std::move(rows));
+    _listControl->SetSortSpec(state.viewersListSortSpec);
+    SyncDxListSelectionFromState(state);
+    _listControl->NotifyDataChanged();
+    if (_pageHost)
+    {
+        _pageHost->Invalidate();
+    }
+}
+
+void ViewersPane::SyncDxListSelectionFromState(const PreferencesDialogState& state) noexcept
+{
+    if (! _listControl || ! _listModel)
+    {
+        return;
+    }
+
+    const std::wstring selectedExtension = GetSelectedViewerExtensionForDxSync(state);
+    if (selectedExtension.empty())
+    {
+        _listControl->GetSelectionModel().Clear();
+        if (_pageHost)
+        {
+            _pageHost->Invalidate();
+        }
+        return;
+    }
+
+    const auto dxRowIndex = _listModel->FindRowIndexByExtension(selectedExtension);
+    if (! dxRowIndex.has_value())
+    {
+        _listControl->GetSelectionModel().Clear();
+        if (_pageHost)
+        {
+            _pageHost->Invalidate();
+        }
+        return;
+    }
+
+    _listControl->GetSelectionModel().SetSingle(_listModel->GetStableRowId(dxRowIndex.value()));
+    if (_pageHost)
+    {
+        _pageHost->Invalidate();
+    }
+}
+
+void ViewersPane::OnGridSelectionChanged()
+{
+    PreferencesDialogState* const state = _state;
+    const HWND hostWindow               = _hostWindow;
+    if (! state || ! _listControl || ! _listModel || _syncingDxSelection)
+    {
+        return;
+    }
+
+    const auto selectedRowIds = _listControl->GetSelectionModel().GetOrderedSelection();
+    _syncingDxSelection       = true;
+
+    if (! selectedRowIds.empty())
+    {
+        const auto it = std::find_if(_listModel->GetRows().begin(), _listModel->GetRows().end(), [&](const ViewersGridRow& row) noexcept {
+            return row.stableId == selectedRowIds.front();
+        });
+        if (it != _listModel->GetRows().end())
+        {
+            state->viewersSelectedExtensionText.assign(it->extension);
+        }
+    }
+    else
+    {
+        state->viewersSelectedExtensionText.clear();
+    }
+    _syncingDxSelection = false;
+
+    if (hostWindow && IsWindow(hostWindow))
+    {
+        UpdateEditorFromSelection(hostWindow, *state);
+    }
+}
+
+#ifdef ENABLE_TESTS
+size_t ViewersPane::DebugListRowCount() const noexcept
+{
+    if (! _listModel)
+    {
+        return 0u;
+    }
+
+    return _listModel->GetRowCount();
+}
+
+RedSalamander::DxUi::GridVisibleWorkMetrics ViewersPane::DebugListVisibleWorkMetrics() const noexcept
+{
+    if (! _listControl)
+    {
+        return {};
+    }
+
+    return _listControl->GetVisibleWorkMetrics();
+}
+
+uint64_t ViewersPane::DebugListRenderCount() const noexcept
+{
+    if (! _pageHost)
+    {
+        return 0u;
+    }
+    return _pageHost->DebugGetRenderCount();
+}
+
+uint64_t ViewersPane::DebugListResizeCount() const noexcept
+{
+    if (! _pageHost)
+    {
+        return 0u;
+    }
+    return _pageHost->DebugGetResizeCount();
+}
+
+uint64_t ViewersPane::DebugListResizeFailureCount() const noexcept
+{
+    if (! _pageHost)
+    {
+        return 0u;
+    }
+    return _pageHost->DebugGetResizeFailureCount();
+}
+
+PreferencesViewersDebugFocusTarget ViewersPane::DebugGetFocusTarget() const noexcept
+{
+    if (! _pageHost)
+    {
+        return PreferencesViewersDebugFocusTarget::None;
+    }
+
+    RedSalamander::DxUi::Control* const focusedControl = _pageHost->GetFocusControl();
+    if (! focusedControl)
+    {
+        return PreferencesViewersDebugFocusTarget::None;
+    }
+
+    if (focusedControl == _searchEditControl)
+    {
+        return PreferencesViewersDebugFocusTarget::SearchField;
+    }
+    if (focusedControl == _listControl)
+    {
+        return PreferencesViewersDebugFocusTarget::MappingsGrid;
+    }
+    if (focusedControl == _extensionEditControl)
+    {
+        return PreferencesViewersDebugFocusTarget::ExtensionField;
+    }
+    if (focusedControl == _viewerComboControl)
+    {
+        return PreferencesViewersDebugFocusTarget::ViewerCombo;
+    }
+    if (focusedControl == _saveButtonControl)
+    {
+        return PreferencesViewersDebugFocusTarget::SaveButton;
+    }
+    if (focusedControl == _removeButtonControl)
+    {
+        return PreferencesViewersDebugFocusTarget::RemoveButton;
+    }
+    if (focusedControl == _resetButtonControl)
+    {
+        return PreferencesViewersDebugFocusTarget::ResetButton;
+    }
+
+    return PreferencesViewersDebugFocusTarget::None;
+}
+
+bool ViewersPane::DebugUsesDxUiTypographyContext() const noexcept
+{
+    return _usesDxUiTypographyContext;
+}
+
+bool ViewersPane::DebugUsesDxUiTypographyMetrics() const noexcept
+{
+    return _usesDxUiTypographyMetrics;
+}
+
+bool ViewersPane::DebugGetListRowClientRect(const size_t rowIndex, RECT& outRect) const noexcept
+{
+    if (! _listControl || ! _pageHost)
+    {
+        return false;
+    }
+
+    const auto rowRect = _listControl->GetVisibleRowRect(rowIndex);
+    if (! rowRect.has_value())
+    {
+        return false;
+    }
+
+    outRect.left   = static_cast<LONG>(std::lround(_pageHost->DipsToPixels(rowRect->left)));
+    outRect.top    = static_cast<LONG>(std::lround(_pageHost->DipsToPixels(rowRect->top)));
+    outRect.right  = static_cast<LONG>(std::lround(_pageHost->DipsToPixels(rowRect->right)));
+    outRect.bottom = static_cast<LONG>(std::lround(_pageHost->DipsToPixels(rowRect->bottom)));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
+}
+
+bool ViewersPane::DebugGetListHeaderClientRect(const size_t columnIndex, RECT& outRect) const noexcept
+{
+    if (! _listControl || ! _listModel || ! _pageHost || columnIndex >= _listModel->GetColumnCount())
+    {
+        return false;
+    }
+
+    const auto headerRect = _listControl->GetVisibleColumnHeaderRect(columnIndex);
+    if (! headerRect.has_value())
+    {
+        return false;
+    }
+
+    outRect.left   = static_cast<LONG>(std::lround(_pageHost->DipsToPixels(headerRect->left)));
+    outRect.top    = static_cast<LONG>(std::lround(_pageHost->DipsToPixels(headerRect->top)));
+    outRect.right  = static_cast<LONG>(std::lround(_pageHost->DipsToPixels(headerRect->right)));
+    outRect.bottom = static_cast<LONG>(std::lround(_pageHost->DipsToPixels(headerRect->bottom)));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
+}
+
+bool ViewersPane::DebugSelectListRow(const size_t rowIndex) noexcept
+{
+    if (! _listControl || ! _listModel)
+    {
+        return false;
+    }
+
+    const auto& rows = _listModel->GetRows();
+    if (rowIndex >= rows.size())
+    {
+        return false;
+    }
+
+    _listControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
+    OnGridSelectionChanged();
+    if (_pageHost)
+    {
+        _pageHost->Invalidate();
+    }
+    return true;
+}
+
+bool ViewersPane::DebugSetSearchText(std::wstring_view text) noexcept
+{
+    if (! _state)
+    {
+        return false;
+    }
+
+    _state->viewersSearchText.assign(text);
+    if (_searchEditControl)
+    {
+        _searchEditControl->SetText(std::wstring(text));
+    }
+
+    // TextField::SetText does not fire the OnTextChanged callback, so the
+    // normal PostMessage → HandleCommand → Refresh chain is not triggered.
+    // Manually refresh to re-filter the grid with the new search text.
+    if (_hostWindow && _state)
+    {
+        Refresh(_hostWindow, *_state);
+    }
+
+    return _searchEditControl != nullptr;
+}
+
+bool ViewersPane::DebugFocusSearchField() noexcept
+{
+    if (! _pageHost || ! _searchEditControl)
+    {
+        return false;
+    }
+
+    _pageHost->SetFocusControl(_searchEditControl);
+    return true;
+}
+
+bool ViewersPane::DebugScrollListByWheelDetents(const int detents) noexcept
+{
+    if (detents == 0 || ! _listControl)
+    {
+        return false;
+    }
+
+    if (! _pageHost)
+    {
+        return false;
+    }
+    _pageHost->SetFocusControl(_listControl);
+
+    const int direction = detents < 0 ? -1 : 1;
+    const int steps     = std::abs(detents);
+    for (int index = 0; index < steps; ++index)
+    {
+        const float wheelDelta = static_cast<float>(direction * WHEEL_DELTA);
+        _listControl->OnMouseWheel(*_pageHost, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0u);
+    }
+
+    return true;
+}
+#endif
 
 namespace
 {
@@ -252,36 +1000,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     request.closable     = TRUE;
 
     static_cast<void>(HostShowAlert(request));
-}
-
-void EnsureViewersListColumns(HWND list, UINT dpi) noexcept
-{
-    if (! list)
-    {
-        return;
-    }
-
-    const HWND header         = ListView_GetHeader(list);
-    const int existingColumns = header ? Header_GetItemCount(header) : 0;
-    if (existingColumns >= 2)
-    {
-        return;
-    }
-
-    const std::wstring colExtension = LoadStringResource(nullptr, IDS_PREFS_VIEWERS_COL_EXTENSION);
-    const std::wstring colViewer    = LoadStringResource(nullptr, IDS_PREFS_VIEWERS_COL_VIEWER);
-
-    LVCOLUMNW col{};
-    col.mask     = LVCF_TEXT | LVCF_WIDTH | LVCF_SUBITEM;
-    col.iSubItem = 0;
-    col.cx       = std::max(1, ThemedControls::ScaleDip(dpi, 110));
-    col.pszText  = const_cast<LPWSTR>(colExtension.c_str());
-    ListView_InsertColumn(list, 0, &col);
-
-    col.iSubItem = 1;
-    col.cx       = std::max(1, ThemedControls::ScaleDip(dpi, 220));
-    col.pszText  = const_cast<LPWSTR>(colViewer.c_str());
-    ListView_InsertColumn(list, 1, &col);
 }
 
 [[nodiscard]] std::wstring ToLowerInvariantText(std::wstring_view text)
@@ -360,11 +1078,6 @@ void EnsureViewersListColumns(HWND list, UINT dpi) noexcept
 
 void PopulateViewersPluginCombo(PreferencesDialogState& state) noexcept
 {
-    if (! state.viewersViewerCombo)
-    {
-        return;
-    }
-
     state.viewersPluginOptions.clear();
 
     for (const auto& plugin : ViewerPluginManager::GetInstance().GetPlugins())
@@ -400,461 +1113,253 @@ void PopulateViewersPluginCombo(PreferencesDialogState& state) noexcept
     std::sort(state.viewersPluginOptions.begin(), state.viewersPluginOptions.end(), [](const ViewerPluginOption& a, const ViewerPluginOption& b) noexcept {
         return _wcsicmp(a.displayName.c_str(), b.displayName.c_str()) < 0;
     });
-
-    SendMessageW(state.viewersViewerCombo.get(), CB_RESETCONTENT, 0, 0);
-
-    for (size_t i = 0; i < state.viewersPluginOptions.size(); ++i)
-    {
-        const auto& opt     = state.viewersPluginOptions[i];
-        const LRESULT index = SendMessageW(state.viewersViewerCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(opt.displayName.c_str()));
-        if (index == CB_ERR || index == CB_ERRSPACE)
-        {
-            continue;
-        }
-
-        SendMessageW(state.viewersViewerCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(index), static_cast<LPARAM>(i));
-    }
-
-    if (SendMessageW(state.viewersViewerCombo.get(), CB_GETCOUNT, 0, 0) > 0)
-    {
-        SendMessageW(state.viewersViewerCombo.get(), CB_SETCURSEL, 0, 0);
-    }
-
-    ThemedControls::ApplyThemeToComboBox(state.viewersViewerCombo.get(), state.theme);
-    PrefsUi::InvalidateComboBox(state.viewersViewerCombo.get());
 }
 
-void SelectViewerPluginById(PreferencesDialogState& state, std::wstring_view pluginId) noexcept
-{
-    if (! state.viewersViewerCombo)
-    {
-        return;
-    }
-
-    const LRESULT count = SendMessageW(state.viewersViewerCombo.get(), CB_GETCOUNT, 0, 0);
-    if (count == CB_ERR)
-    {
-        return;
-    }
-
-    for (LRESULT i = 0; i < count; ++i)
-    {
-        const LRESULT data = SendMessageW(state.viewersViewerCombo.get(), CB_GETITEMDATA, static_cast<WPARAM>(i), 0);
-        if (data == CB_ERR)
-        {
-            continue;
-        }
-
-        const size_t optionIndex = static_cast<size_t>(data);
-        if (optionIndex >= state.viewersPluginOptions.size())
-        {
-            continue;
-        }
-
-        if (state.viewersPluginOptions[optionIndex].id == pluginId)
-        {
-            SendMessageW(state.viewersViewerCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(i), 0);
-            PrefsUi::InvalidateComboBox(state.viewersViewerCombo.get());
-            return;
-        }
-    }
-}
-
-[[nodiscard]] std::optional<std::wstring_view> TryGetSelectedViewerPluginId(const PreferencesDialogState& state) noexcept
-{
-    if (! state.viewersViewerCombo)
-    {
-        return std::nullopt;
-    }
-
-    const LRESULT sel = SendMessageW(state.viewersViewerCombo.get(), CB_GETCURSEL, 0, 0);
-    if (sel == CB_ERR)
-    {
-        return std::nullopt;
-    }
-
-    const LRESULT data = SendMessageW(state.viewersViewerCombo.get(), CB_GETITEMDATA, static_cast<WPARAM>(sel), 0);
-    if (data == CB_ERR)
-    {
-        return std::nullopt;
-    }
-
-    const size_t optionIndex = static_cast<size_t>(data);
-    if (optionIndex >= state.viewersPluginOptions.size())
-    {
-        return std::nullopt;
-    }
-
-    return state.viewersPluginOptions[optionIndex].id;
-}
-
-void SelectViewerListRowByExtension(PreferencesDialogState& state, std::wstring_view extension) noexcept
-{
-    if (! state.viewersList)
-    {
-        return;
-    }
-
-    for (size_t i = 0; i < state.viewersExtensionKeys.size(); ++i)
-    {
-        if (state.viewersExtensionKeys[i] != extension)
-        {
-            continue;
-        }
-
-        const int item = static_cast<int>(i);
-        ListView_SetItemState(state.viewersList.get(), item, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-        ListView_EnsureVisible(state.viewersList.get(), item, FALSE);
-        return;
-    }
-}
 } // namespace
 
-void ViewersPane::UpdateListColumnWidths(HWND list, UINT dpi) noexcept
+void ViewersPane::LayoutDxPage(
+    HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, const PreferencesTypographyContext& typography) noexcept
 {
-    if (! list)
-    {
-        return;
-    }
-
-    EnsureViewersListColumns(list, dpi);
-
-    RECT rc{};
-    GetClientRect(list, &rc);
-    const int width = std::max(0l, rc.right - rc.left);
-    if (width <= 0)
-    {
-        return;
-    }
-
-    const int extWidth    = std::min(width, std::max(1, ThemedControls::ScaleDip(dpi, 120)));
-    const int viewerWidth = std::max(0, width - extWidth);
-
-    ListView_SetColumnWidth(list, 0, extWidth);
-    ListView_SetColumnWidth(list, 1, viewerWidth);
-}
-
-void ViewersPane::LayoutControls(HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, HFONT dialogFont) noexcept
-{
-    if (! host)
-    {
-        return;
-    }
+    _hostWindow = host;
+    _state      = &state;
 
     RECT hostClient{};
     GetClientRect(host, &hostClient);
     const int hostBottom        = std::max(0l, hostClient.bottom - hostClient.top);
     const int hostContentBottom = std::max(0, hostBottom - margin);
 
-    const UINT dpi        = GetDpiForWindow(host);
-    const int rowHeight   = std::max(1, ThemedControls::ScaleDip(dpi, 26));
-    const int labelHeight = std::max(1, ThemedControls::ScaleDip(dpi, 18));
-    const int gapX        = ThemedControls::ScaleDip(dpi, 8);
+    Debug::Perf::Scope layoutPerf(L"preferences.ui.viewers_layout_us");
+    layoutPerf.SetValue0(static_cast<uint64_t>(std::max(0, width)));
+    layoutPerf.SetValue1(typography.dpi);
 
-    const int searchLabelWidth   = std::min(width, ThemedControls::ScaleDip(dpi, 52));
-    const int searchEditWidth    = std::max(0, width - searchLabelWidth - gapX);
-    const int searchEditX        = x + searchLabelWidth + gapX;
-    const int searchFramePadding = (state.viewersSearchFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, 2) : 0;
-    if (state.viewersSearchLabel)
+    _usesDxUiTypographyContext = true;
+    _usesDxUiTypographyMetrics = false;
+
+    const UINT dpi        = std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI);
+    const int rowHeight   = std::max(1, UiMetrics::ScaleDip(dpi, 26));
+    const int labelHeight = std::max(1, UiMetrics::ScaleDip(dpi, 18));
+    const int gapX        = UiMetrics::ScaleDip(dpi, 8);
+    const auto pxToDip    = [dpi](const int pixels) noexcept { return (static_cast<float>(pixels) * 96.0f) / static_cast<float>(dpi); };
+    const bool usesDxPage = _pageHost && _pageContentRoot;
+
+    if (usesDxPage)
     {
-        SetWindowPos(
-            state.viewersSearchLabel.get(), nullptr, x, y + (rowHeight - labelHeight) / 2, searchLabelWidth, labelHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersSearchLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-    if (state.viewersSearchFrame)
-    {
-        SetWindowPos(state.viewersSearchFrame.get(), nullptr, searchEditX, y, searchEditWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    if (state.viewersSearchEdit)
-    {
-        SetWindowPos(state.viewersSearchEdit.get(),
-                     nullptr,
-                     searchEditX + searchFramePadding,
-                     y + searchFramePadding,
-                     std::max(1, searchEditWidth - 2 * searchFramePadding),
-                     std::max(1, rowHeight - 2 * searchFramePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersSearchEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
+        const int searchLabelWidth = std::min(width, UiMetrics::ScaleDip(dpi, 52));
+        const int searchEditWidth  = std::max(0, width - searchLabelWidth - gapX);
+        const int searchEditX      = searchLabelWidth + gapX;
 
-    y += rowHeight + gapY;
+        const std::wstring hintText = LoadStringResource(nullptr, IDS_PREFS_VIEWERS_HINT);
+        const int hintHeight        = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, width, hintText);
+        _usesDxUiTypographyMetrics  = hintHeight > 0;
+        const int editorHeight      = (2 * rowHeight) + gapY + gapY + std::max(0, hintHeight);
+        const int listTop           = y + rowHeight + gapY;
+        const int editorTop         = std::max(listTop, hostContentBottom - editorHeight);
+        const int listBottom        = std::max(listTop, editorTop - gapY);
+        const int listHeight        = std::max(0, listBottom - listTop);
+        const int extLabelWidth     = std::min(width, UiMetrics::ScaleDip(dpi, 70));
+        const int extEditWidth      = std::min(width, UiMetrics::ScaleDip(dpi, 90));
+        const int viewerLabelWidth  = std::min(width, UiMetrics::ScaleDip(dpi, 50));
+        const int buttonHeight      = rowHeight;
+        const int saveWidth         = std::min(width, UiMetrics::ScaleDip(dpi, 120));
+        const int removeWidth       = std::min(width, UiMetrics::ScaleDip(dpi, 90));
+        const int resetWidth        = std::min(width, UiMetrics::ScaleDip(dpi, 150));
 
-    const HFONT infoFont        = state.italicFont ? state.italicFont.get() : dialogFont;
-    const std::wstring hintText = LoadStringResource(nullptr, IDS_PREFS_VIEWERS_HINT);
-    const int hintHeight        = PrefsUi::MeasureStaticTextHeight(host, infoFont, width, hintText);
+        if (_searchLabelControl)
+        {
+            _searchLabelControl->SetBounds(D2D1::RectF(pxToDip(x),
+                                                       pxToDip(y + (rowHeight - labelHeight) / 2),
+                                                       pxToDip(x + searchLabelWidth),
+                                                       pxToDip(y + (rowHeight - labelHeight) / 2 + labelHeight)));
+        }
+        if (_searchEditControl)
+        {
+            _searchEditControl->SetBounds(
+                D2D1::RectF(pxToDip(x + searchEditX), pxToDip(y), pxToDip(x + searchEditX + searchEditWidth), pxToDip(y + rowHeight)));
+        }
+        if (_listControl)
+        {
+            int modelViewportWidthPx = width;
+            if (_listModel)
+            {
+                const int headerHeightPx          = std::max(1, UiMetrics::ScaleDip(dpi, 30));
+                const int rowHeightPx             = std::max(1, UiMetrics::ScaleDip(dpi, 30));
+                const int bodyHeightPx            = std::max(0, listHeight - headerHeightPx);
+                const size_t visibleRowCapacity   = rowHeightPx > 0 ? static_cast<size_t>(bodyHeightPx / rowHeightPx) : 0u;
+                const bool needsVerticalScrollbar = bodyHeightPx > 0 && _listModel->GetRowCount() > visibleRowCapacity;
+                if (needsVerticalScrollbar)
+                {
+                    constexpr float kDxUiScrollbarThicknessDip = 12.0f;
+                    const int scrollbarWidthPx = std::max(1, static_cast<int>(std::lround((kDxUiScrollbarThicknessDip * static_cast<float>(dpi)) / 96.0f)));
+                    modelViewportWidthPx       = std::max(0, width - scrollbarWidthPx);
+                }
+            }
 
-    const int editorHeight = (2 * rowHeight) + gapY + gapY + std::max(0, hintHeight);
-    const int editorTop    = std::max(y, hostContentBottom - editorHeight);
-    const int listTop      = y;
-    const int listBottom   = std::max(listTop, editorTop - gapY);
-    const int listHeight   = std::max(0, listBottom - listTop);
+            if (_listModel && _listModel->SetViewportWidthDip(pxToDip(modelViewportWidthPx)))
+            {
+                const auto previousSelection = _listControl->GetSelectionModel().GetOrderedSelection();
+                _syncingDxSelection          = true;
+                _listControl->SetModel(_listModel);
+                if (! previousSelection.empty())
+                {
+                    _listControl->GetSelectionModel().SetSingle(previousSelection.front());
+                }
+                _syncingDxSelection = false;
+            }
+            _listControl->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(listTop), pxToDip(x + width), pxToDip(listTop + listHeight)));
+        }
 
-    if (state.viewersList)
-    {
-        SetWindowPos(state.viewersList.get(), nullptr, x, listTop, width, listHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersList.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        ViewersPane::UpdateListColumnWidths(state.viewersList.get(), dpi);
-    }
+        int xCur              = x;
+        const int yEditor     = editorTop;
+        const int extLabelTop = yEditor + (rowHeight - labelHeight) / 2;
+        if (_extensionLabelControl)
+        {
+            _extensionLabelControl->SetBounds(
+                D2D1::RectF(pxToDip(xCur), pxToDip(extLabelTop), pxToDip(xCur + extLabelWidth), pxToDip(extLabelTop + labelHeight)));
+        }
+        xCur += extLabelWidth + gapX;
+        if (_extensionEditControl)
+        {
+            _extensionEditControl->SetBounds(D2D1::RectF(pxToDip(xCur), pxToDip(yEditor), pxToDip(xCur + extEditWidth), pxToDip(yEditor + rowHeight)));
+        }
+        xCur += extEditWidth + gapX;
+        const int viewerLabelTop = yEditor + (rowHeight - labelHeight) / 2;
+        if (_viewerLabelControl)
+        {
+            _viewerLabelControl->SetBounds(
+                D2D1::RectF(pxToDip(xCur), pxToDip(viewerLabelTop), pxToDip(xCur + viewerLabelWidth), pxToDip(viewerLabelTop + labelHeight)));
+        }
+        xCur += viewerLabelWidth + gapX;
+        const int availableComboWidth = std::max(0, width - xCur);
+        int desiredComboWidth         = UiMetrics::ScaleDip(dpi, 140);
+        for (const ViewerPluginOption& option : state.viewersPluginOptions)
+        {
+            const int optionWidth      = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.body, option.displayName);
+            _usesDxUiTypographyMetrics = _usesDxUiTypographyMetrics || optionWidth > 0;
+            desiredComboWidth          = std::max(desiredComboWidth, optionWidth);
+        }
+        desiredComboWidth += UiMetrics::ScaleDip(dpi, 44);
+        const int comboWidth = std::min(availableComboWidth, desiredComboWidth);
+        if (_viewerComboControl)
+        {
+            _viewerComboControl->SetBounds(D2D1::RectF(pxToDip(xCur), pxToDip(yEditor), pxToDip(xCur + comboWidth), pxToDip(yEditor + rowHeight)));
+        }
 
-    int yEditor = editorTop;
-
-    const int extLabelWidth    = std::min(width, ThemedControls::ScaleDip(dpi, 70));
-    const int extEditWidth     = std::min(width, ThemedControls::ScaleDip(dpi, 90));
-    const int viewerLabelWidth = std::min(width, ThemedControls::ScaleDip(dpi, 50));
-
-    int xCur = x;
-    if (state.viewersExtensionLabel)
-    {
-        SetWindowPos(state.viewersExtensionLabel.get(),
-                     nullptr,
-                     xCur,
-                     yEditor + (rowHeight - labelHeight) / 2,
-                     extLabelWidth,
-                     labelHeight,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersExtensionLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-    xCur += extLabelWidth + gapX;
-    const int extFramePadding = (state.viewersExtensionFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, 2) : 0;
-    if (state.viewersExtensionFrame)
-    {
-        SetWindowPos(state.viewersExtensionFrame.get(), nullptr, xCur, yEditor, extEditWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    if (state.viewersExtensionEdit)
-    {
-        SetWindowPos(state.viewersExtensionEdit.get(),
-                     nullptr,
-                     xCur + extFramePadding,
-                     yEditor + extFramePadding,
-                     std::max(1, extEditWidth - 2 * extFramePadding),
-                     std::max(1, rowHeight - 2 * extFramePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersExtensionEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-    xCur += extEditWidth + gapX;
-    if (state.viewersViewerLabel)
-    {
-        SetWindowPos(state.viewersViewerLabel.get(),
-                     nullptr,
-                     xCur,
-                     yEditor + (rowHeight - labelHeight) / 2,
-                     viewerLabelWidth,
-                     labelHeight,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersViewerLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-    xCur += viewerLabelWidth + gapX;
-    const int availableComboWidth = std::max(0, (x + width) - xCur);
-    int desiredComboWidth         = state.viewersViewerCombo ? ThemedControls::MeasureComboBoxPreferredWidth(state.viewersViewerCombo.get(), dpi) : 0;
-    desiredComboWidth             = std::max(desiredComboWidth, ThemedControls::ScaleDip(dpi, 100));
-    const int comboWidth          = std::min(availableComboWidth, desiredComboWidth);
-
-    const int framePadding = (state.viewersViewerFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, 2) : 0;
-    if (state.viewersViewerFrame)
-    {
-        SetWindowPos(state.viewersViewerFrame.get(), nullptr, xCur, yEditor, comboWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    if (state.viewersViewerCombo)
-    {
-        SetWindowPos(state.viewersViewerCombo.get(),
-                     nullptr,
-                     xCur + framePadding,
-                     yEditor + framePadding,
-                     std::max(1, comboWidth - 2 * framePadding),
-                     std::max(1, rowHeight - 2 * framePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersViewerCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        ThemedControls::EnsureComboBoxDroppedWidth(state.viewersViewerCombo.get(), dpi);
-    }
-
-    yEditor += rowHeight + gapY;
-
-    const int buttonHeight = rowHeight;
-    const int saveWidth    = std::min(width, ThemedControls::ScaleDip(dpi, 120));
-    const int removeWidth  = std::min(width, ThemedControls::ScaleDip(dpi, 90));
-    const int resetWidth   = std::min(width, ThemedControls::ScaleDip(dpi, 150));
-
-    int buttonsLeftX = x;
-    if (state.viewersSaveButton)
-    {
-        SetWindowPos(state.viewersSaveButton.get(), nullptr, buttonsLeftX, yEditor, saveWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersSaveButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        int yButtons     = yEditor + rowHeight + gapY;
+        int buttonsLeftX = x;
+        if (_saveButtonControl)
+        {
+            _saveButtonControl->SetBounds(
+                D2D1::RectF(pxToDip(buttonsLeftX), pxToDip(yButtons), pxToDip(buttonsLeftX + saveWidth), pxToDip(yButtons + buttonHeight)));
+        }
         buttonsLeftX += saveWidth + gapX;
-    }
-    if (state.viewersRemoveButton)
-    {
-        SetWindowPos(state.viewersRemoveButton.get(), nullptr, buttonsLeftX, yEditor, removeWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersRemoveButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        if (_removeButtonControl)
+        {
+            _removeButtonControl->SetBounds(
+                D2D1::RectF(pxToDip(buttonsLeftX), pxToDip(yButtons), pxToDip(buttonsLeftX + removeWidth), pxToDip(yButtons + buttonHeight)));
+        }
         buttonsLeftX += removeWidth + gapX;
+        int resetX = x + width - resetWidth;
+        if (resetX < buttonsLeftX)
+        {
+            resetX = buttonsLeftX;
+        }
+        if (_resetButtonControl)
+        {
+            _resetButtonControl->SetBounds(D2D1::RectF(pxToDip(resetX), pxToDip(yButtons), pxToDip(resetX + resetWidth), pxToDip(yButtons + buttonHeight)));
+        }
+
+        const int hintTop = yButtons + buttonHeight + gapY;
+        if (_hintControl)
+        {
+            _hintControl->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(hintTop), pxToDip(x + width), pxToDip(hintTop + std::max(0, hintHeight))));
+        }
+
+        _pageHost->Invalidate();
+        y = hostContentBottom;
+        return;
     }
 
-    int resetX = x + width - resetWidth;
-    if (resetX < buttonsLeftX)
-    {
-        resetX = buttonsLeftX;
-    }
-    if (state.viewersResetButton)
-    {
-        SetWindowPos(state.viewersResetButton.get(), nullptr, resetX, yEditor, resetWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersResetButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-    yEditor += buttonHeight + gapY;
-
-    if (state.viewersHint)
-    {
-        SetWindowTextW(state.viewersHint.get(), hintText.c_str());
-        SetWindowPos(state.viewersHint.get(), nullptr, x, yEditor, width, std::max(0, hintHeight), SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.viewersHint.get(), WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
-    }
+    // Legacy layout fallback is no longer needed — all Viewers controls are DxUi-hosted.
+    y = hostContentBottom;
 }
 
-LRESULT ViewersPane::OnMeasureList(MEASUREITEMSTRUCT* mis, PreferencesDialogState& state) noexcept
+void ViewersPane::LayoutPage(
+    HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, const PreferencesTypographyContext& typography) noexcept
 {
-    if (! mis || mis->CtlType != ODT_LISTVIEW || mis->CtlID != static_cast<UINT>(IDC_PREFS_VIEWERS_LIST))
+    if (! host)
     {
-        return 0;
+        return;
     }
 
-    if (! state.viewersList)
+    if (EnsureDxPageHost(host, state))
     {
-        return 0;
+        LayoutDxPage(host, state, x, y, width, margin, gapY, typography);
+        return;
     }
 
-    wil::unique_hdc_window hdc(GetDC(state.viewersList.get()));
-    if (! hdc)
-    {
-        mis->itemHeight = 26u;
-        return 1;
-    }
-
-    const HFONT font = reinterpret_cast<HFONT>(SendMessageW(state.viewersList.get(), WM_GETFONT, 0, 0));
-    if (font)
-    {
-        [[maybe_unused]] auto oldFont = wil::SelectObject(hdc.get(), font);
-        mis->itemHeight               = static_cast<UINT>(std::max(1, PrefsListView::GetSingleLineRowHeightPx(state.viewersList.get(), hdc.get())));
-        return 1;
-    }
-
-    mis->itemHeight = 26u;
-    return 1;
-}
-
-LRESULT ViewersPane::OnDrawList(DRAWITEMSTRUCT* dis, PreferencesDialogState& state) noexcept
-{
-    return PrefsListView::DrawThemedTwoColumnListRow(dis, state, state.viewersList.get(), static_cast<UINT>(IDC_PREFS_VIEWERS_LIST), false);
+    Debug::Error(L"Preferences.Viewers: DxUi surface initialization failed; page will not render correctly.");
 }
 
 void ViewersPane::UpdateEditorFromSelection(HWND host, PreferencesDialogState& state) noexcept
 {
-    if (! host || ! state.viewersList)
+    if (! host)
     {
         return;
     }
 
-    const int selected = ListView_GetNextItem(state.viewersList.get(), -1, LVNI_SELECTED);
-    if (selected < 0)
+    _hostWindow = host;
+    _state      = &state;
+
+    SyncDxStaticsFromState(state);
+    const std::wstring selectedExtension = GetSelectedViewerExtensionForDxSync(state);
+    if (selectedExtension.empty())
     {
-        if (state.viewersExtensionEdit)
-        {
-            SetWindowTextW(state.viewersExtensionEdit.get(), L"");
-        }
-        SelectViewerPluginById(state, L"builtin/viewer-text");
-        if (state.viewersRemoveButton)
-        {
-            EnableWindow(state.viewersRemoveButton.get(), FALSE);
-        }
+        state.viewersSelectedExtensionText.clear();
+        SyncDxEditsFromState(state);
+        SyncDxListSelectionFromState(state);
+        SyncDxComboFromState(state);
+        SyncDxButtonsFromState(state);
         return;
     }
+    state.viewersSelectedExtensionText.assign(selectedExtension);
 
-    LVITEMW item{};
-    item.mask  = LVIF_PARAM;
-    item.iItem = selected;
-    if (! ListView_GetItem(state.viewersList.get(), &item))
-    {
-        return;
-    }
-
-    const size_t rowIndex = static_cast<size_t>(item.lParam);
-    if (rowIndex >= state.viewersExtensionKeys.size())
-    {
-        return;
-    }
-
-    const std::wstring& ext = state.viewersExtensionKeys[rowIndex];
-
-    if (state.viewersExtensionEdit)
-    {
-        SetWindowTextW(state.viewersExtensionEdit.get(), ext.c_str());
-    }
-
-    const auto it = state.workingSettings.extensions.openWithViewerByExtension.find(ext);
-    if (it != state.workingSettings.extensions.openWithViewerByExtension.end())
-    {
-        SelectViewerPluginById(state, it->second);
-    }
-    else
-    {
-        SelectViewerPluginById(state, L"builtin/viewer-text");
-    }
-
-    if (state.viewersRemoveButton)
-    {
-        EnableWindow(state.viewersRemoveButton.get(), TRUE);
-    }
+    SyncDxEditsFromState(state);
+    SyncDxListSelectionFromState(state);
+    SyncDxComboFromState(state);
+    SyncDxButtonsFromState(state);
 }
 
 void ViewersPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
 {
-    if (! host || ! state.viewersList)
+    if (! host)
     {
         return;
     }
 
-    const UINT dpi = GetDpiForWindow(host);
-
-    std::wstring filterText;
-    std::wstring_view filter;
-    if (state.viewersSearchEdit)
+    if (state.currentCategory == PrefCategory::Viewers)
     {
-        filterText = PrefsUi::GetWindowTextString(state.viewersSearchEdit.get());
-        filter     = PrefsUi::TrimWhitespace(filterText);
-    }
-
-    std::wstring selectedExt;
-    const int selected = ListView_GetNextItem(state.viewersList.get(), -1, LVNI_SELECTED);
-    if (selected >= 0)
-    {
-        LVITEMW item{};
-        item.mask  = LVIF_PARAM;
-        item.iItem = selected;
-        if (ListView_GetItem(state.viewersList.get(), &item))
+        const HWND parent = _pageParentHwnd ? _pageParentHwnd : host;
+        if (! _pageHost && ! EnsureDxPageHost(parent, state))
         {
-            const size_t rowIndex = static_cast<size_t>(item.lParam);
-            if (rowIndex < state.viewersExtensionKeys.size())
-            {
-                selectedExt = state.viewersExtensionKeys[rowIndex];
-            }
+            Debug::Error(L"Preferences.Viewers: Failed to ensure DxUi page host during Refresh.");
         }
     }
 
-    ThemedControls::ApplyThemeToListView(state.viewersList.get(), state.theme);
+    _hostWindow = host;
+    _state      = &state;
+
+    const std::wstring_view filter = PrefsUi::TrimWhitespace(state.viewersSearchText);
+
+    std::wstring selectedExt = GetSelectedViewerExtensionForDxSync(state);
+
     PopulateViewersPluginCombo(state);
-    EnsureViewersListColumns(state.viewersList.get(), dpi);
-
-    ListView_SetExtendedListViewStyle(state.viewersList.get(), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP);
-
-    std::vector<std::pair<std::wstring_view, std::wstring_view>> mappings;
-    mappings.reserve(state.workingSettings.extensions.openWithViewerByExtension.size());
-    for (const auto& [ext, pluginId] : state.workingSettings.extensions.openWithViewerByExtension)
-    {
-        mappings.emplace_back(ext, pluginId);
-    }
-
-    std::sort(mappings.begin(), mappings.end(), [](const auto& a, const auto& b) noexcept { return _wcsicmp(a.first.data(), b.first.data()) < 0; });
-
-    state.viewersExtensionKeys.clear();
-    state.viewersExtensionKeys.reserve(mappings.size());
-    ListView_DeleteAllItems(state.viewersList.get());
+    ApplyDxStaticTheme(state);
+    ApplyDxEditTheme(state);
+    ApplyDxChromeTheme(state);
+    ApplyDxListTheme(state);
+    SyncDxStaticsFromState(state);
+    SyncDxEditsFromState(state);
+    SyncDxComboFromState(state);
 
     std::unordered_map<std::wstring_view, std::wstring_view> displayNameById;
     displayNameById.reserve(state.viewersPluginOptions.size());
@@ -863,56 +1368,85 @@ void ViewersPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
         displayNameById.emplace(std::wstring_view(opt.id), std::wstring_view(opt.displayName));
     }
 
-    for (size_t i = 0; i < mappings.size(); ++i)
+    std::vector<ViewersMappingEntry> mappings;
+    mappings.reserve(state.workingSettings.extensions.openWithViewerByExtension.size());
+    for (const auto& [ext, pluginId] : state.workingSettings.extensions.openWithViewerByExtension)
     {
-        const auto [ext, pluginId]         = mappings[i];
         const auto nameIt                  = displayNameById.find(pluginId);
-        const std::wstring_view viewerText = (nameIt != displayNameById.end()) ? nameIt->second : pluginId;
-
-        if (! filter.empty() && ! (PrefsUi::ContainsCaseInsensitive(ext, filter) || PrefsUi::ContainsCaseInsensitive(viewerText, filter) ||
-                                   PrefsUi::ContainsCaseInsensitive(pluginId, filter)))
-        {
-            continue;
-        }
-
-        const size_t rowIndex = state.viewersExtensionKeys.size();
-        state.viewersExtensionKeys.emplace_back(ext);
-
-        LVITEMW item{};
-        item.mask     = LVIF_TEXT | LVIF_PARAM;
-        item.iItem    = static_cast<int>(rowIndex);
-        item.iSubItem = 0;
-        item.pszText  = const_cast<LPWSTR>(state.viewersExtensionKeys.back().c_str());
-        item.lParam   = static_cast<LPARAM>(rowIndex);
-
-        const int inserted = ListView_InsertItem(state.viewersList.get(), &item);
-        if (inserted < 0)
-        {
-            continue;
-        }
-
-        ListView_SetItemText(state.viewersList.get(), inserted, 1, const_cast<LPWSTR>(viewerText.data()));
+        const std::wstring_view viewerText = (nameIt != displayNameById.end()) ? nameIt->second : std::wstring_view(pluginId);
+        mappings.push_back({ext, pluginId, viewerText});
     }
 
-    UpdateListColumnWidths(state.viewersList.get(), dpi);
+    const auto compareCaseInsensitive = [](std::wstring_view lhs, std::wstring_view rhs) noexcept { return _wcsicmp(lhs.data(), rhs.data()); };
+
+    const auto compareMappings = [&](const ViewersMappingEntry& lhs, const ViewersMappingEntry& rhs) noexcept
+    {
+        const bool sortByViewer = state.viewersListSortSpec.direction != SortDirection::None && state.viewersListSortSpec.columnIndex == 1u;
+        const bool descending   = state.viewersListSortSpec.direction == SortDirection::Descending;
+
+        const std::wstring_view lhsPrimary = sortByViewer ? lhs.viewerText : lhs.extension;
+        const std::wstring_view rhsPrimary = sortByViewer ? rhs.viewerText : rhs.extension;
+        const int primaryCompare           = compareCaseInsensitive(lhsPrimary, rhsPrimary);
+        if (primaryCompare != 0)
+        {
+            return descending ? (primaryCompare > 0) : (primaryCompare < 0);
+        }
+
+        const int extensionCompare = compareCaseInsensitive(lhs.extension, rhs.extension);
+        if (extensionCompare != 0)
+        {
+            return descending ? (extensionCompare > 0) : (extensionCompare < 0);
+        }
+
+        return compareCaseInsensitive(lhs.viewerId, rhs.viewerId) < 0;
+    };
+
+    std::stable_sort(mappings.begin(), mappings.end(), compareMappings);
+
+    state.viewersExtensionKeys.clear();
+    state.viewersExtensionKeys.reserve(mappings.size());
+
+    for (const auto& mapping : mappings)
+    {
+        if (! filter.empty() && ! (PrefsUi::ContainsCaseInsensitive(mapping.extension, filter) ||
+                                   PrefsUi::ContainsCaseInsensitive(mapping.viewerText, filter) || PrefsUi::ContainsCaseInsensitive(mapping.viewerId, filter)))
+        {
+            continue;
+        }
+
+        state.viewersExtensionKeys.emplace_back(mapping.extension);
+    }
+
+    SyncDxListFromState(state);
 
     if (! selectedExt.empty())
     {
-        SelectViewerListRowByExtension(state, selectedExt);
+        SyncDxListSelectionFromState(state);
+    }
+    else
+    {
+        state.viewersSelectedExtensionText.clear();
     }
     UpdateEditorFromSelection(host, state);
+    SyncDxButtonsFromState(state);
 }
 
 void ViewersPane::AddOrUpdateMapping(HWND host, PreferencesDialogState& state) noexcept
 {
     HWND dlg = GetParent(host);
-    if (! dlg || ! state.viewersExtensionEdit || ! state.viewersList)
+    if (! dlg)
     {
         return;
     }
 
-    const std::wstring extensionText = PrefsUi::GetWindowTextString(state.viewersExtensionEdit.get());
-    const auto normalizedOpt         = TryNormalizeExtension(extensionText);
+    // Get extension text from DxUi edit.
+    std::wstring extensionText;
+    if (_extensionEditControl)
+    {
+        extensionText.assign(_extensionEditControl->GetText());
+    }
+
+    const auto normalizedOpt = TryNormalizeExtension(extensionText);
     if (! normalizedOpt.has_value())
     {
         ShowDialogAlert(
@@ -920,7 +1454,16 @@ void ViewersPane::AddOrUpdateMapping(HWND host, PreferencesDialogState& state) n
         return;
     }
 
-    const auto pluginIdOpt = TryGetSelectedViewerPluginId(state);
+    // Get selected plugin ID from DxUi combo.
+    std::optional<std::wstring_view> pluginIdOpt;
+    if (_viewerComboControl)
+    {
+        const std::wstring_view selectedValue = _viewerComboControl->GetSelectedValue();
+        if (! selectedValue.empty())
+        {
+            pluginIdOpt = selectedValue;
+        }
+    }
     if (! pluginIdOpt.has_value() || pluginIdOpt.value().empty())
     {
         ShowDialogAlert(
@@ -930,22 +1473,7 @@ void ViewersPane::AddOrUpdateMapping(HWND host, PreferencesDialogState& state) n
 
     const std::wstring& normalized = normalizedOpt.value();
 
-    std::wstring selectedExt;
-    const int selected = ListView_GetNextItem(state.viewersList.get(), -1, LVNI_SELECTED);
-    if (selected >= 0)
-    {
-        LVITEMW item{};
-        item.mask  = LVIF_PARAM;
-        item.iItem = selected;
-        if (ListView_GetItem(state.viewersList.get(), &item))
-        {
-            const size_t rowIndex = static_cast<size_t>(item.lParam);
-            if (rowIndex < state.viewersExtensionKeys.size())
-            {
-                selectedExt = state.viewersExtensionKeys[rowIndex];
-            }
-        }
-    }
+    std::wstring selectedExt = GetSelectedViewerExtensionForDxSync(state);
 
     if (! selectedExt.empty() && selectedExt != normalized)
     {
@@ -953,43 +1481,46 @@ void ViewersPane::AddOrUpdateMapping(HWND host, PreferencesDialogState& state) n
     }
 
     state.workingSettings.extensions.openWithViewerByExtension[normalized] = std::wstring(pluginIdOpt.value());
+    state.viewersSelectedExtensionText.assign(normalized);
 
     SetDirty(dlg, state);
     Refresh(host, state);
-    SelectViewerListRowByExtension(state, normalized);
+    SyncDxListSelectionFromState(state);
     UpdateEditorFromSelection(host, state);
 }
 
 void ViewersPane::RemoveSelectedMapping(HWND host, PreferencesDialogState& state) noexcept
 {
     HWND dlg = GetParent(host);
-    if (! dlg || ! state.viewersList)
+    if (! dlg)
     {
         return;
     }
 
-    const int selected = ListView_GetNextItem(state.viewersList.get(), -1, LVNI_SELECTED);
-    if (selected < 0)
+    // Determine the selected extension from DxUi grid.
+    std::wstring selectedExtension;
+    if (_listControl && _listModel)
+    {
+        const auto selectedRowIds = _listControl->GetSelectionModel().GetOrderedSelection();
+        if (! selectedRowIds.empty())
+        {
+            const auto it = std::find_if(_listModel->GetRows().begin(), _listModel->GetRows().end(), [&](const ViewersGridRow& row) noexcept {
+                return row.stableId == selectedRowIds.front();
+            });
+            if (it != _listModel->GetRows().end())
+            {
+                selectedExtension = it->extension;
+            }
+        }
+    }
+
+    if (selectedExtension.empty())
     {
         return;
     }
 
-    LVITEMW item{};
-    item.mask  = LVIF_PARAM;
-    item.iItem = selected;
-    if (! ListView_GetItem(state.viewersList.get(), &item))
-    {
-        return;
-    }
-
-    const size_t rowIndex = static_cast<size_t>(item.lParam);
-    if (rowIndex >= state.viewersExtensionKeys.size())
-    {
-        return;
-    }
-
-    const std::wstring& ext = state.viewersExtensionKeys[rowIndex];
-    state.workingSettings.extensions.openWithViewerByExtension.erase(ext);
+    state.workingSettings.extensions.openWithViewerByExtension.erase(selectedExtension);
+    state.viewersSelectedExtensionText.clear();
 
     SetDirty(dlg, state);
     Refresh(host, state);
@@ -1004,6 +1535,7 @@ void ViewersPane::ResetMappingsToDefaults(HWND host, PreferencesDialogState& sta
     }
 
     state.workingSettings.extensions.openWithViewerByExtension = Common::Settings::ExtensionsSettings{}.openWithViewerByExtension;
+    state.viewersSelectedExtensionText.clear();
 
     SetDirty(dlg, state);
     Refresh(host, state);

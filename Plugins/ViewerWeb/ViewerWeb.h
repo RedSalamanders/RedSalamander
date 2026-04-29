@@ -25,6 +25,9 @@
 
 #include <WebView2.h>
 
+#include "DxUi/DxUi.h"
+#include "DxUi/DxUiNativeMenuInterop.h"
+#include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
@@ -36,6 +39,8 @@ enum class ViewerWebKind : uint8_t
     Json,
     Markdown,
 };
+
+[[nodiscard]] const char* GetViewerWebStaticConfigurationSchema(ViewerWebKind kind) noexcept;
 
 class ViewerWeb final : public IViewer, public IInformations
 {
@@ -65,6 +70,8 @@ public:
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
     HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
 
+    LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
+
 private:
     enum class JsonViewMode : uint8_t
     {
@@ -79,16 +86,6 @@ private:
         bool allowExternalNavigation = true;
         bool devToolsEnabled         = false;
         JsonViewMode jsonViewMode    = JsonViewMode::Pretty;
-    };
-
-    struct MenuItemData
-    {
-        UINT id = 0;
-        std::wstring text;
-        std::wstring shortcut;
-        bool separator  = false;
-        bool topLevel   = false;
-        bool hasSubMenu = false;
     };
 
     struct AsyncLoadResult
@@ -122,8 +119,6 @@ private:
     void OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggested) noexcept;
     LRESULT OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
     void OnFindMessage(const FINDREPLACEW* findReplace) noexcept;
-    LRESULT OnMeasureItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept;
-    LRESULT OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* draw) noexcept;
     void OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noexcept;
 
     void Layout(HWND hwnd) noexcept;
@@ -132,8 +127,7 @@ private:
     void ApplyTheme(HWND hwnd) noexcept;
     void ApplyTitleBarTheme(bool windowActive) noexcept;
     void ApplyMenuTheme(HWND hwnd) noexcept;
-    void UpdateMenuState(HWND hwnd) noexcept;
-    void PrepareMenuTheme(HMENU menu, bool topLevel, std::vector<MenuItemData>& outItems) noexcept;
+    void UpdateMenuState(HWND hwnd, bool syncDxMenuBar = true) noexcept;
 
     HRESULT EnsureWebView2(HWND hwnd) noexcept;
     HRESULT CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment) noexcept;
@@ -174,8 +168,7 @@ private:
     IHost* _host = nullptr;
     wil::com_ptr<IHostAlerts> _hostAlerts;
 
-    IViewerCallback* _callback = nullptr;
-    void* _callbackCookie      = nullptr;
+    RegistrationCallbackState<IViewerCallback> _callbackState;
 
     PluginMetaData _metaData{};
     std::wstring _metaId;
@@ -194,19 +187,20 @@ private:
     std::vector<std::wstring> _otherFiles;
     size_t _otherIndex = 0;
     std::wstring _currentPath;
+    bool _syncingFileCombo = false;
 
     wil::unique_hwnd _hWnd;
-    wil::unique_hwnd _hFileCombo;
-    HWND _hFileComboItem = nullptr;
-    HWND _hFileComboList = nullptr;
+    wil::unique_hmenu _menuHandle;
+    RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
+    wil::unique_hwnd _hFileComboHost;
+    RedSalamander::DxUi::WindowHost _fileComboHost;
+    RedSalamander::DxUi::ComboBox* _fileComboControl = nullptr;
+    bool _fileComboHostPreExpandPopup                = false;
 
     RECT _headerRect{};
     RECT _contentRect{};
 
-    wil::unique_hfont _uiFont;
     wil::unique_hbrush _headerBrush;
-
-    std::vector<MenuItemData> _menuThemeItems;
 
     uint64_t _openRequestId = 0;
     std::wstring _statusMessage;
@@ -216,9 +210,9 @@ private:
     std::optional<std::string> _pendingDocumentUtf8;
     std::optional<std::wstring> _internalDocumentUrl;
     std::optional<std::filesystem::path> _tempExtractedPath;
-    bool _markdownShowSource    = false;
+    bool _markdownShowSource          = false;
     bool _jsonExpandCollapseAvailable = false;
-    bool _webViewInitInProgress = false;
+    bool _webViewInitInProgress       = false;
 
     wil::com_ptr<ICoreWebView2Controller> _webViewController;
     wil::com_ptr<ICoreWebView2> _webView;

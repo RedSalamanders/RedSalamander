@@ -2,7 +2,7 @@
 name: async-threading
 description: Threading model and async operation patterns for Windows applications. Use when implementing background operations, thread synchronization, posting to UI thread, or using thread pools.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 
@@ -88,6 +88,16 @@ If an `HWND` can be destroyed while payload messages are still queued, Windows m
 - Call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`).
 - Call `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`.
 - Always receive with `TakeMessagePayload<T>(lParam)` (not a manual `unique_ptr` wrap).
+
+### UI-host cross-thread checklist
+
+For every UI-host change that posts work across threads, review and cover:
+
+- Payload ownership: every heap payload is posted with `PostMessagePayload(...)` and received with `TakeMessagePayload<T>(lParam)`.
+- UI-thread boundary: UI state is mutated only from the owning UI thread or explicitly marshaled there.
+- Cancellation path: producers stop or observe cancellation before teardown begins.
+- Teardown drain: receiving windows initialize/drain the posted-payload registry.
+- Regression guard: add a focused teardown stress/selftest when the touched host can queue payloads.
 
 ## Async Icon Pattern
 

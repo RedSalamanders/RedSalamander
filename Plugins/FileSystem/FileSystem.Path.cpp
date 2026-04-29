@@ -2,6 +2,14 @@
 
 namespace FileSystemInternal
 {
+namespace
+{
+void NormalizePathSeparators(std::wstring& path) noexcept
+{
+    std::ranges::replace(path, L'/', L'\\');
+}
+} // namespace
+
 [[nodiscard]] bool IsDotOrDotDot(std::wstring_view name) noexcept
 {
     return (name == L"." || name == L"..");
@@ -10,6 +18,7 @@ namespace FileSystemInternal
 std::wstring MakeAbsolutePath(const std::wstring& path)
 {
     std::wstring input = path;
+    NormalizePathSeparators(input);
     if (input.empty())
     {
         input = L".";
@@ -40,6 +49,7 @@ std::wstring MakeAbsolutePath(const std::wstring& path)
 std::wstring ToExtendedPath(const std::wstring& path)
 {
     std::wstring normalized = path;
+    NormalizePathSeparators(normalized);
     if (normalized.empty())
     {
         normalized = L".";
@@ -194,7 +204,8 @@ std::wstring GetPathDirectory(std::wstring_view path)
 PathInfo MakePathInfo(const std::wstring& path)
 {
     PathInfo info{};
-    info.display  = path;
+    info.display = path;
+    NormalizePathSeparators(info.display);
     info.extended = ToExtendedPath(path);
     return info;
 }
@@ -204,7 +215,8 @@ PathInfo MakePathInfo(const wchar_t* path)
     PathInfo info{};
     if (path)
     {
-        info.display  = path;
+        info.display = path;
+        NormalizePathSeparators(info.display);
         info.extended = ToExtendedPath(info.display);
     }
     return info;

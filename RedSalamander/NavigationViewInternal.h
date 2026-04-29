@@ -15,6 +15,8 @@
 #include "PlugInterfaces/FileSystem.h"
 #include "WindowMessages.h"
 
+#include "DxUi/DxUi.h"
+#include "DxUiThemePalette.h"
 #include "Helpers.h"
 
 #include <algorithm>
@@ -32,9 +34,64 @@
 // C5245 : unreferenced function with internal linkage has been removed
 #pragma warning(disable : 5245)
 
+struct NavigationDxTextHost
+{
+    wil::unique_hwnd hwnd;
+    RedSalamander::DxUi::WindowHost host;
+    RedSalamander::DxUi::TextField* field = nullptr;
+
+    NavigationDxTextHost()                                       = default;
+    NavigationDxTextHost(const NavigationDxTextHost&)            = delete;
+    NavigationDxTextHost& operator=(const NavigationDxTextHost&) = delete;
+    NavigationDxTextHost(NavigationDxTextHost&&)                 = delete;
+    NavigationDxTextHost& operator=(NavigationDxTextHost&&)      = delete;
+
+    ~NavigationDxTextHost() noexcept
+    {
+        // Destroy the child HWND while WindowHost is still fully alive. The Dx host
+        // window routes WM_NCDESTROY back through GWLP_USERDATA to `host`, so letting
+        // the member destructors run in declaration order would otherwise destroy the
+        // host state first and then re-enter a dead WindowHost during child teardown.
+        if (hwnd)
+        {
+            if (IsWindow(hwnd.get()) != FALSE)
+            {
+                hwnd.reset();
+            }
+            else
+            {
+                static_cast<void>(hwnd.release());
+            }
+        }
+
+        field = nullptr;
+    }
+
+    [[nodiscard]] HWND GetBridgeHwnd() const noexcept
+    {
+        return host.GetTextInputBridgeHwnd();
+    }
+};
+
 namespace
 {
-constexpr UINT_PTR EDIT_SUBCLASS_ID          = 1;
+[[nodiscard]] RedSalamander::DxUi::ThemePalette MakeNavigationDxEditPalette(const AppTheme& theme, const NavigationViewTheme& viewTheme) noexcept
+{
+    auto palette              = MakeAppThemeDxPalette(theme, ColorToCOLORREF(viewTheme.background));
+    palette.windowBackground  = viewTheme.background;
+    palette.surfaceBackground = viewTheme.background;
+    palette.cardBackground    = viewTheme.background;
+    palette.inputFill         = viewTheme.background;
+    palette.inputBorder       = D2D1::ColorF(viewTheme.background.r, viewTheme.background.g, viewTheme.background.b, 0.0f);
+    palette.border            = palette.inputBorder;
+    palette.borderDefault     = palette.inputBorder;
+    palette.borderStrong      = palette.inputBorder;
+    palette.focusStroke       = D2D1::ColorF(theme.accent.r, theme.accent.g, theme.accent.b, 0.0f);
+    palette.focusStrokeOuter  = palette.focusStroke;
+    palette.focusStrokeInner  = palette.focusStroke;
+    return palette;
+}
+
 constexpr float kIntrinsicTextLayoutMaxWidth = 4096.0f;
 constexpr float kFocusRingCornerRadiusDip    = 2.0f;
 
@@ -45,12 +102,8 @@ constexpr float kPathSeparatorWidthDip          = 32.0f;
 constexpr float kPathTextInsetDip               = kPathSpacingDip * 0.5f;
 constexpr float kBreadcrumbHoverInsetDip        = 1.0f;
 constexpr float kBreadcrumbHoverCornerRadiusDip = 2.0f;
-constexpr int kEditCloseButtonWidthDip          = 24;
-constexpr float kEditCloseIconHalfDip           = 5.0f;
-constexpr float kEditCloseIconStrokeDip         = 1.5f;
 constexpr int kEditTextPaddingXDip              = 6;
 constexpr int kEditTextPaddingYDip              = 0;
-constexpr int kEditUnderlineHeightDip           = 2;
 
 constexpr size_t kEditSuggestMaxItems      = 11u;
 constexpr size_t kEditSuggestMaxCandidates = 256u;
@@ -91,29 +144,21 @@ constexpr wchar_t kHistoryText[]          = L"⩔";
 struct EditChromeRects
 {
     RECT editRect{};
-    RECT closeRect{};
-    RECT underlineRect{};
 };
 
-[[nodiscard]] EditChromeRects ComputeEditChromeRects(const RECT& pathRect, UINT dpi) noexcept
+[[nodiscard]] EditChromeRects ComputeEditChromeRects(const RECT& pathRect, [[maybe_unused]] UINT dpi) noexcept
 {
-    const int closeWidth      = std::max(1, DipsToPixelsInt(kEditCloseButtonWidthDip, dpi));
-    const int underlineHeight = std::max(1, DipsToPixelsInt(kEditUnderlineHeightDip, dpi));
-
     EditChromeRects result{};
-    result.editRect        = pathRect;
-    result.editRect.right  = std::max(result.editRect.left, result.editRect.right - closeWidth);
-    result.editRect.bottom = std::max(result.editRect.top, result.editRect.bottom - underlineHeight);
+    result.editRect = pathRect;
 
-    result.closeRect        = pathRect;
-    result.closeRect.left   = std::max(result.closeRect.left, result.closeRect.right - closeWidth);
-    result.closeRect.bottom = result.editRect.bottom;
+    return result;
+}
 
-    result.underlineRect       = pathRect;
-    result.underlineRect.left  = result.editRect.left;
-    result.underlineRect.right = result.editRect.right;
-    result.underlineRect.top   = std::max(result.underlineRect.top, result.underlineRect.bottom - underlineHeight);
-
+[[nodiscard]] RECT GetPathEditBoundsRect(const RECT& pathRect, const RECT& historyRect) noexcept
+{
+    RECT result   = pathRect;
+    result.right  = std::max(result.right, historyRect.right);
+    result.bottom = std::max(result.bottom, historyRect.bottom);
     return result;
 }
 
@@ -697,54 +742,6 @@ void BuildEditSuggestLists(const std::filesystem::path& displayFolder,
     return wcscmp(className, L"#32768") == 0;
 }
 
-void LayoutSingleLineEditInRect(HWND edit, const RECT& containerRect) noexcept
-{
-    if (! edit)
-    {
-        return;
-    }
-
-    const LONG containerWidth  = std::max(0l, containerRect.right - containerRect.left);
-    const LONG containerHeight = std::max(0l, containerRect.bottom - containerRect.top);
-
-    SetWindowPos(edit, nullptr, containerRect.left, containerRect.top, containerWidth, containerHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-
-    RECT clientRect{};
-    GetClientRect(edit, &clientRect);
-
-    RECT formatRect     = clientRect;
-    const UINT dpi      = GetDpiForWindow(edit);
-    const LONG paddingX = static_cast<LONG>(DipsToPixelsInt(kEditTextPaddingXDip, dpi));
-    const LONG paddingY = static_cast<LONG>(DipsToPixelsInt(kEditTextPaddingYDip, dpi));
-    formatRect.left     = std::min(formatRect.right, formatRect.left + paddingX);
-    formatRect.right    = std::max(formatRect.left, formatRect.right - paddingX);
-    formatRect.top      = std::min(formatRect.bottom, formatRect.top + paddingY);
-    formatRect.bottom   = std::max(formatRect.top, formatRect.bottom - paddingY);
-
-    HFONT font = reinterpret_cast<HFONT>(SendMessageW(edit, WM_GETFONT, 0, 0));
-    auto hdc   = wil::GetDC(edit);
-    if (hdc)
-    {
-        HFONT fontToUse = font ? font : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-
-        TEXTMETRICW tm{};
-        if (GetTextMetricsW(hdc.get(), &tm) != 0)
-        {
-            const LONG lineHeight      = std::max(1l, static_cast<LONG>(tm.tmHeight));
-            const LONG availableHeight = std::max(0l, formatRect.bottom - formatRect.top);
-
-            if (availableHeight > lineHeight)
-            {
-                formatRect.top = formatRect.top + (availableHeight - lineHeight) / 2;
-            }
-        }
-    }
-
-    SendMessageW(edit, EM_SETRECTNP, 0, reinterpret_cast<LPARAM>(&formatRect));
-    InvalidateRect(edit, nullptr, FALSE);
-}
-
 std::filesystem::path NormalizeDirectoryPath(std::filesystem::path path)
 {
     path = path.lexically_normal();
@@ -920,8 +917,8 @@ std::wstring TruncateTextToWidth(
     auto oldSrcBmp = wil::SelectObject(srcMem.get(), srcDib.get());
 
     const int prevStretch = SetStretchBltMode(srcMem.get(), HALFTONE);
-    const bool copyOk     = (wSrc == wDest && hSrc == hDest) ? BitBlt(srcMem.get(), 0, 0, wDest, hDest, hdcSrc, xoriginSrc, yoriginSrc, SRCCOPY)
-                                                             : StretchBlt(srcMem.get(), 0, 0, wDest, hDest, hdcSrc, xoriginSrc, yoriginSrc, wSrc, hSrc, SRCCOPY);
+    const bool copyOk = (wSrc == wDest && hSrc == hDest) ? BitBlt(srcMem.get(), 0, 0, wDest, hDest, hdcSrc, xoriginSrc, yoriginSrc, SRCCOPY)
+                                                         : StretchBlt(srcMem.get(), 0, 0, wDest, hDest, hdcSrc, xoriginSrc, yoriginSrc, wSrc, hSrc, SRCCOPY);
     SetStretchBltMode(srcMem.get(), prevStretch);
     if (! copyOk)
     {

@@ -1,12 +1,12 @@
 ---
 name: cpp-build
-description: Build Red Salamander C++ project using PowerShell build script. Use when building, compiling, or rebuilding the solution or specific projects like RedSalamander, RedSalamanderMonitor, Common, or FileSystem.
+description: Build RedSalamander C++ project using PowerShell build script. Use when building, compiling, or rebuilding the solution or specific projects like RedSalamander, RedSalamanderMonitor, Common, or FileSystem.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 
-# Building Red Salamander
+# Building RedSalamander
 
 ## Quick Build Commands
 
@@ -64,6 +64,17 @@ metadata:
 - Keep vcpkg.json files up to date
 - Pin versions for critical dependencies
 
+## Shared MSBuild Defaults
+
+- Shared first-party VC++ defaults live in `Directory.Build.props` and `Directory.Build.targets`
+- Family-level overrides live in `Plugins/Directory.Build.props`, `Tests/Directory.Build.props`, and `PoC/Directory.Build.props`
+- Prefer changing shared toolchain, output-path, versioning, and common compile defaults in those shared files instead of copying edits across individual `.vcxproj` files
+- First-party projects default to `LanguageStandard=stdcpplatest` and `WarningLevel=EnableAllWarnings`
+- First-party VC++ projects also default to `/FS`, so solution-targeted builds remain stable under the repo-wide `/MP` compiler settings
+- Plugin DLLs and console test executables inherit shared external-header, include-path, and subsystem defaults from their family-level props files
+- First-party `Application` and `DynamicLibrary` projects default to repo version stamping through `Directory.Build.targets` unless they explicitly opt out
+- Proof-of-concept projects inherit `Level3` plus the shared `C4710/C4711` suppression from `PoC/Directory.Build.props`; keep any extra PoC warning deviations local only when truly project-specific
+
 ## Dependencies
 
 - **WIL** - Windows Implementation Library (RAII wrappers)
@@ -74,6 +85,26 @@ metadata:
 
 - Automatically locates MSBuild (VS 2022 or later)
 - Builds entire solution when no ProjectName specified
+- Resolves most `-ProjectName` builds to the target `.vcxproj` directly; `RedSalamander` stays on the solution build graph so the solution can also build its bundled sibling outputs (`Plugins\*.dll`, `RedSalamanderMonitor.exe`, `RedSalamanderSearchService.exe`)
+- Reuses the saved local beta build number by default, so ordinary repeated local builds stay incremental instead of forcing a fresh version stamp on every invocation
+- Plain consoles that support child-console output keep MSBuild's native console output/color while still capturing a `.build\logs\msbuild-*.log` file; Windows Terminal and redirected hosts such as Codex use the replay helper so build progress stays visible, with replayed errors/warnings/project completion colorized in the console
 - Shows build time and output file sizes
 - Supports multi-processor builds (`/m`)
 - Displays both executables when building full solution
+
+## Required Validation Loop
+
+For perf-sensitive work, building is only the first step.
+
+After a successful build:
+
+1. Run the deterministic selftest or scenario for the changed subsystem.
+2. Confirm a new archived run appears under `Specs/TestRuns/`.
+3. Compare the baseline and candidate runs before claiming an improvement.
+4. If the work finishes a plan, move that plan to `Specs/Plans/Done/` and update the authoritative subsystem spec or repo guidance with the lasting requirement.
+
+See:
+
+- `Specs/Testing/Testing_PerformanceValidation.md`
+- `Specs/TestRuns/README.md`
+- `.github/skills/perf-validation/SKILL.md`

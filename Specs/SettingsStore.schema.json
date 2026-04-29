@@ -21,6 +21,7 @@
     "plugins": { "$ref": "#/$defs/pluginsSettings" },
     "mainMenu": { "$ref": "#/$defs/mainMenuSettings" },
     "startup": { "$ref": "#/$defs/startupSettings" },
+    "ui": { "$ref": "#/$defs/uiSettings" },
     "cache": { "$ref": "#/$defs/cacheSettings" },
     "folders": { "$ref": "#/$defs/foldersSettings" },
     "monitor": { "$ref": "#/$defs/monitorSettings" },
@@ -97,6 +98,33 @@
       "title": "Content Mode",
       "description": "How file content should be matched."
     },
+    "gridColumnLayoutEntry": {
+      "type": "object",
+      "title": "Grid Column Layout Entry",
+      "description": "Persisted grid column layout entry keyed by stable column ID.",
+      "required": ["columnId", "displayIndex", "widthDip"],
+      "properties": {
+        "columnId": {
+          "type": "string",
+          "minLength": 1,
+          "title": "Column ID",
+          "description": "Stable logical column identifier."
+        },
+        "displayIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "title": "Display Index",
+          "description": "Visible column order index."
+        },
+        "widthDip": {
+          "type": "number",
+          "minimum": 0,
+          "title": "Width (DIP)",
+          "description": "Persisted visible column width in device-independent pixels."
+        }
+      },
+      "additionalProperties": false
+    },
     "searchSettings": {
       "type": "object",
       "default": {},
@@ -143,6 +171,26 @@
           "default": 0,
           "title": "Max Results",
           "description": "0 means unlimited."
+        },
+        "sortColumnId": {
+          "type": "string",
+          "default": "",
+          "minLength": 1,
+          "title": "Results Sort Column",
+          "description": "Stable logical column id used for persisted Find results sorting."
+        },
+        "sortDescending": {
+          "type": "boolean",
+          "default": false,
+          "title": "Results Sort Descending",
+          "description": "Whether the persisted Find results sort is descending."
+        },
+        "resultsGridLayout": {
+          "type": "array",
+          "default": [],
+          "title": "Results Grid Layout",
+          "description": "Persisted Find results-grid column order and widths.",
+          "items": { "$ref": "#/$defs/gridColumnLayoutEntry" }
         }
       },
       "additionalProperties": false
@@ -169,6 +217,37 @@
           "title": "Folder View Shortcuts",
           "description": "Shortcut bindings active when interacting with the folder view.",
           "items": { "$ref": "#/$defs/shortcutBinding" }
+        },
+        "functionBarCollapsed": {
+          "type": "boolean",
+          "default": false,
+          "title": "Function Bar Collapsed",
+          "description": "Whether the Function Bar shortcuts group is collapsed."
+        },
+        "folderViewCollapsed": {
+          "type": "boolean",
+          "default": false,
+          "title": "Folder View Collapsed",
+          "description": "Whether the Folder View shortcuts group is collapsed."
+        },
+        "sortColumnId": {
+          "type": "string",
+          "default": "",
+          "title": "Sort Column ID",
+          "description": "Stable logical column ID used for the persisted shortcuts sort."
+        },
+        "sortDescending": {
+          "type": "boolean",
+          "default": false,
+          "title": "Sort Descending",
+          "description": "Whether the persisted shortcuts sort is descending."
+        },
+        "gridLayout": {
+          "type": "array",
+          "default": [],
+          "title": "Grid Layout",
+          "description": "Persisted shortcuts-grid column order and widths.",
+          "items": { "$ref": "#/$defs/gridColumnLayoutEntry" }
         }
       },
       "additionalProperties": false
@@ -359,6 +438,7 @@
             "monitor.textView.metaError": { "$ref": "#/$defs/colorHex" },
             "monitor.textView.metaWarning": { "$ref": "#/$defs/colorHex" },
             "monitor.textView.metaInfo": { "$ref": "#/$defs/colorHex" },
+            "monitor.textView.metaPerf": { "$ref": "#/$defs/colorHex" },
             "monitor.textView.metaDebug": { "$ref": "#/$defs/colorHex" },
 
             "fileOps.progressBackground": { "$ref": "#/$defs/colorHex" },
@@ -369,7 +449,15 @@
             "fileOps.graphLimit": { "$ref": "#/$defs/colorHex" },
             "fileOps.graphLine": { "$ref": "#/$defs/colorHex" },
             "fileOps.scrollbarTrack": { "$ref": "#/$defs/colorHex" },
-            "fileOps.scrollbarThumb": { "$ref": "#/$defs/colorHex" }
+            "fileOps.scrollbarThumb": { "$ref": "#/$defs/colorHex" },
+
+            "viewer.diff.addedBackground": { "$ref": "#/$defs/colorHex" },
+            "viewer.diff.removedBackground": { "$ref": "#/$defs/colorHex" },
+            "viewer.diff.contextBackground": { "$ref": "#/$defs/colorHex" },
+            "viewer.diff.headerBackground": { "$ref": "#/$defs/colorHex" },
+            "viewer.diff.bannerBackground": { "$ref": "#/$defs/colorHex" },
+            "viewer.diff.placeholderBackground": { "$ref": "#/$defs/colorHex" },
+            "viewer.diff.divider": { "$ref": "#/$defs/colorHex" }
           },
           "patternProperties": {
             "^[A-Za-z0-9_.-]{1,64}$": { "$ref": "#/$defs/colorHex" }
@@ -581,6 +669,35 @@
           "default": false,
           "title": "Auto-dismiss Success",
           "description": "Automatically dismiss completed successful file-operation tasks."
+        },
+        "preCalcEnabled": {
+          "type": "boolean",
+          "default": true,
+          "title": "Enable Pre-calculation",
+          "description": "Run the recursive pre-calculation pass before copy, move, and permanent delete operations when that operation type supports it."
+        },
+        "preCalcMaxWorkers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 4,
+          "title": "Pre-calculation Workers",
+          "description": "Maximum worker count for the pre-calculation tree walk. Higher values can improve throughput when many top-level sources are scanned in parallel."
+        },
+        "crossFsBridgeBufferSizeKB": {
+          "type": "integer",
+          "minimum": 512,
+          "maximum": 16384,
+          "default": 4096,
+          "title": "Cross-FS Bridge Buffer (KB)",
+          "description": "Per-buffer size for host-side cross-filesystem bridge copies. Two buffers are allocated per active bridged file transfer."
+        },
+        "defaultBandwidthLimitBytesPerSecond": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "title": "Default Bandwidth Limit (B/s)",
+          "description": "Default speed limit applied to newly created copy and move tasks. A value of 0 leaves new tasks unlimited until the user changes the limit in the progress popup."
         },
         "maxDiagnosticsLogFiles": {
           "type": "integer",
@@ -801,7 +918,7 @@
       "title": "Monitor Filter",
       "description": "Filter applied to Monitor messages.",
       "properties": {
-        "mask": { "type": "integer", "minimum": 0, "maximum": 31, "default": 31, "title": "Mask", "description": "Bitmask of enabled message types (0..31)." },
+        "mask": { "type": "integer", "minimum": 0, "maximum": 63, "default": 63, "title": "Mask", "description": "Bitmask of enabled message types (0..63)." },
         "preset": { "$ref": "#/$defs/monitorFilterPreset", "title": "Preset", "description": "Named preset filter." }
       },
       "additionalProperties": false
@@ -863,6 +980,67 @@
           "x-ui-order": 30,
           "x-ui-control": "custom",
           "x-ui-section": "Startup"
+        }
+      },
+      "additionalProperties": false
+    },
+    "reducedMotionMode": {
+      "type": "string",
+      "title": "Reduced Motion",
+      "default": "system",
+      "enum": ["system", "on", "off"]
+    },
+    "windowBackdropMode": {
+      "type": "string",
+      "title": "Window Backdrop",
+      "default": "default",
+      "enum": ["default", "none", "mica", "micaAlt", "acrylic"]
+    },
+    "uiSettings": {
+      "type": "object",
+      "default": {},
+      "title": "UI",
+      "description": "App-wide DxUI behavior and chrome preferences.",
+      "properties": {
+        "compactMode": {
+          "type": "boolean",
+          "default": false,
+          "title": "Compact mode",
+          "description": "Use compact spacing and control density on supported DxUI surfaces.",
+          "x-ui-pane": "General",
+          "x-ui-order": 40,
+          "x-ui-control": "toggle",
+          "x-ui-section": "DxUI"
+        },
+        "reducedMotion": {
+          "$ref": "#/$defs/reducedMotionMode",
+          "description": "Choose whether DxUI motion follows the OS setting, stays reduced, or stays fully animated.",
+          "x-ui-pane": "General",
+          "x-ui-order": 50,
+          "x-ui-control": "custom",
+          "x-ui-section": "DxUI"
+        },
+        "windowBackdrop": {
+          "$ref": "#/$defs/windowBackdropMode",
+          "description": "Choose the DWM system backdrop policy for supported top-level app windows.",
+          "x-ui-pane": "General",
+          "x-ui-order": 60,
+          "x-ui-control": "custom",
+          "x-ui-section": "DxUI"
+        },
+        "language": {
+          "type": "string",
+          "default": "system",
+          "title": "Language",
+          "description": "Application language. Use system to follow the Windows display language.",
+          "anyOf": [
+            { "const": "system" },
+            { "pattern": "^[a-zA-Z]{2,3}(-[a-zA-Z0-9]{2,8})*$" }
+          ],
+          "x-ui-pane": "General",
+          "x-ui-order": 5,
+          "x-ui-control": "custom",
+          "x-ui-section": "Display"
         }
       },
       "additionalProperties": false

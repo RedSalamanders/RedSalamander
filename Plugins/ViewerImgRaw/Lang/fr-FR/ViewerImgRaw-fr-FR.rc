@@ -1,0 +1,87 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+IDR_VIEWERRAW_MENU MENU
+BEGIN
+    POPUP "&Fichier"
+    BEGIN
+        MENUITEM "&Actualiser\tF5", IDM_VIEWERRAW_FILE_REFRESH
+        MENUITEM SEPARATOR
+        MENUITEM "&Exporter...\tCtrl+S", IDM_VIEWERRAW_FILE_EXPORT
+        MENUITEM SEPARATOR
+        MENUITEM "&Quitter\tEsc", IDM_VIEWERRAW_FILE_EXIT
+    END
+    POPUP "Autres &fichiers"
+    BEGIN
+        MENUITEM "&Suivant\tRight, PgDn, Space", IDM_VIEWERRAW_OTHER_NEXT
+        MENUITEM "&Précédent\tLeft, PgUp, Backspace", IDM_VIEWERRAW_OTHER_PREVIOUS
+        MENUITEM "&Premier\tHome", IDM_VIEWERRAW_OTHER_FIRST
+        MENUITEM "&Dernier\tEnd", IDM_VIEWERRAW_OTHER_LAST
+    END
+    POPUP "&Affichage"
+    BEGIN
+        MENUITEM "&Ajuster à la fenêtre\tCtrl+F, double-clic", IDM_VIEWERRAW_VIEW_FIT
+        MENUITEM "Taille &réelle (100 %)\t1, Ctrl+double-clic", IDM_VIEWERRAW_VIEW_ACTUAL_SIZE
+        MENUITEM "Basculer ajustement/100 %\tF", IDM_VIEWERRAW_VIEW_TOGGLE_FIT_100
+        MENUITEM SEPARATOR
+        MENUITEM "Zoom &avant\t+", IDM_VIEWERRAW_VIEW_ZOOM_IN
+        MENUITEM "Zoom a&rrière\t-", IDM_VIEWERRAW_VIEW_ZOOM_OUT
+        MENUITEM "&Réinitialiser le zoom\t0", IDM_VIEWERRAW_VIEW_ZOOM_RESET
+        MENUITEM SEPARATOR
+        POPUP "&Transformer"
+        BEGIN
+            MENUITEM "Rotation &horaire\tR", IDM_VIEWERRAW_VIEW_ROTATE_CW
+            MENUITEM "Rotation &antihoraire\tCtrl+R, Shift+R", IDM_VIEWERRAW_VIEW_ROTATE_CCW
+            MENUITEM SEPARATOR
+            MENUITEM "Miroir &horizontal\tH", IDM_VIEWERRAW_VIEW_FLIP_HORIZONTAL
+            MENUITEM "Miroir &vertical\tV", IDM_VIEWERRAW_VIEW_FLIP_VERTICAL
+            MENUITEM SEPARATOR
+            MENUITEM "&Réinitialiser l’orientation\tO", IDM_VIEWERRAW_VIEW_RESET_ORIENTATION
+        END
+        POPUP "&Ajuster"
+        BEGIN
+            MENUITEM "Luminosité +\tCtrl+Alt+Up", IDM_VIEWERRAW_VIEW_BRIGHTNESS_INCREASE
+            MENUITEM "Luminosité -\tCtrl+Alt+Down", IDM_VIEWERRAW_VIEW_BRIGHTNESS_DECREASE
+            MENUITEM "Contraste +\tCtrl+Alt+Right", IDM_VIEWERRAW_VIEW_CONTRAST_INCREASE
+            MENUITEM "Contraste -\tCtrl+Alt+Left", IDM_VIEWERRAW_VIEW_CONTRAST_DECREASE
+            MENUITEM "Gamma +\tCtrl+Alt+PgUp", IDM_VIEWERRAW_VIEW_GAMMA_INCREASE
+            MENUITEM "Gamma -\tCtrl+Alt+PgDn", IDM_VIEWERRAW_VIEW_GAMMA_DECREASE
+            MENUITEM SEPARATOR
+            MENUITEM "Niveaux de &gris\tG", IDM_VIEWERRAW_VIEW_TOGGLE_GRAYSCALE
+            MENUITEM "&Négatif\tN", IDM_VIEWERRAW_VIEW_TOGGLE_NEGATIVE
+        END
+        MENUITEM SEPARATOR
+        POPUP "&Source de l’image"
+        BEGIN
+            MENUITEM "&RAW (décodé)", IDM_VIEWERRAW_VIEW_SOURCE_RAW
+            MENUITEM "&Miniature", IDM_VIEWERRAW_VIEW_SOURCE_THUMBNAIL
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "Afficher la superposition &Exif\tI", IDM_VIEWERRAW_VIEW_SHOW_EXIF_OVERLAY
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERRAW_NAME "Image"
+    IDS_VIEWERRAW_DESCRIPTION "Visionneuse d’images (WIC + LibRaw)"
+    IDS_VIEWERRAW_TITLE_FORMAT "{0} - Image"
+    IDS_VIEWERRAW_STATUS_LOADING "Chargement..."
+    IDS_VIEWERRAW_STATUS_ERROR "Impossible de charger l’image."
+    IDS_VIEWERRAW_STATUS_NO_IMAGE "Aucune image."
+    IDS_VIEWERRAW_DIALOG_EXPORT_TITLE "Exporter l’image"
+    IDS_VIEWERRAW_DIALOG_FILTER_JPEG "Image JPEG (*.jpg;*.jpeg)"
+    IDS_VIEWERRAW_DIALOG_FILTER_PNG "Image PNG (*.png)"
+    IDS_VIEWERRAW_DIALOG_FILTER_TIFF "Image TIFF (*.tif;*.tiff)"
+    IDS_VIEWERRAW_DIALOG_FILTER_BMP "Image bitmap (*.bmp;*.dib)"
+    IDS_VIEWERRAW_DIALOG_FILTER_GIF "Image GIF (*.gif)"
+    IDS_VIEWERRAW_DIALOG_FILTER_JXR "Image JPEG XR (*.jxr;*.wdp;*.hdp)"
+    IDS_VIEWERRAW_EXPORT_NO_IMAGE "Aucune image à exporter."
+    IDS_VIEWERRAW_EXPORT_UNSUPPORTED_EXTENSION "Extension d’exportation non prise en charge. Utilisez .png, .jpg/.jpeg, .tif/.tiff, .bmp/.dib, .gif ou .jxr/.wdp/.hdp."
+    IDS_VIEWERRAW_STATUS_FILESYSTEM_MISSING "Le système de fichiers actif est manquant."
+    IDS_VIEWERRAW_STATUS_UNSUPPORTED_FORMAT "Format de fichier non pris en charge."
+    IDS_VIEWERRAW_STATUS_STORE_OOM "Mémoire insuffisante lors du stockage de l’image décodée."
+END

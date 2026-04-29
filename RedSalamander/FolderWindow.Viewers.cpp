@@ -85,29 +85,59 @@ HRESULT FolderWindow::OnViewerClosed(ViewerInstance* instance) noexcept
                 const HRESULT saveCheckHr = infos->SomethingToSave(&something);
                 if (SUCCEEDED(saveCheckHr))
                 {
-                    if (! something)
-                    {
-                        _settings->plugins.configurationByPluginId.erase((*it)->viewerPluginId);
-                    }
-                    else
+                    std::string currentConfigurationJson;
+                    bool hasCurrentConfigurationJson = false;
+                    if ((*it)->hasInitialConfigurationJson)
                     {
                         const char* config  = nullptr;
                         const HRESULT getHr = infos->GetConfiguration(&config);
                         if (SUCCEEDED(getHr))
                         {
-                            Common::Settings::JsonValue persistedValue;
-                            const std::string_view configText = (config && config[0] != '\0') ? std::string_view(config) : std::string_view("{}");
+                            currentConfigurationJson    = config ? config : "";
+                            hasCurrentConfigurationJson = true;
+                        }
+                    }
 
-                            const HRESULT parseHr = Common::Settings::ParseJsonValue(configText, persistedValue);
-                            if (SUCCEEDED(parseHr))
+                    const bool shouldPersistConfiguration =
+                        ! (*it)->hasInitialConfigurationJson || ! hasCurrentConfigurationJson || currentConfigurationJson != (*it)->initialConfigurationJson;
+                    if (shouldPersistConfiguration)
+                    {
+                        if (! something)
+                        {
+                            _settings->plugins.configurationByPluginId.erase((*it)->viewerPluginId);
+                        }
+                        else
+                        {
+                            const char* config = nullptr;
+                            if (hasCurrentConfigurationJson)
                             {
-                                _settings->plugins.configurationByPluginId[(*it)->viewerPluginId] = std::move(persistedValue);
+                                config = currentConfigurationJson.c_str();
                             }
                             else
                             {
-                                Debug::Warning(L"FolderWindow::OnViewerClosed: failed to parse viewer config JSON for '{}' (hr=0x{:08X}).",
-                                               (*it)->viewerPluginId,
-                                               static_cast<unsigned long>(parseHr));
+                                const HRESULT getHr = infos->GetConfiguration(&config);
+                                if (FAILED(getHr))
+                                {
+                                    config = nullptr;
+                                }
+                            }
+
+                            if (config != nullptr || hasCurrentConfigurationJson)
+                            {
+                                Common::Settings::JsonValue persistedValue;
+                                const std::string_view configText = (config && config[0] != '\0') ? std::string_view(config) : std::string_view("{}");
+
+                                const HRESULT parseHr = Common::Settings::ParseJsonValue(configText, persistedValue);
+                                if (SUCCEEDED(parseHr))
+                                {
+                                    _settings->plugins.configurationByPluginId[(*it)->viewerPluginId] = std::move(persistedValue);
+                                }
+                                else
+                                {
+                                    Debug::Warning(L"FolderWindow::OnViewerClosed: failed to parse viewer config JSON for '{}' (hr=0x{:08X}).",
+                                                   (*it)->viewerPluginId,
+                                                   static_cast<unsigned long>(parseHr));
+                                }
                             }
                         }
                     }
@@ -115,11 +145,11 @@ HRESULT FolderWindow::OnViewerClosed(ViewerInstance* instance) noexcept
             }
         }
 
-        if ((*it)->viewer)
-        {
-            static_cast<void>((*it)->viewer->SetCallback(nullptr, nullptr));
-        }
-
+        // Do not clear the callback from inside ViewerClosed itself.
+        // RegistrationCallbackState::Set(nullptr, ...) drains in-flight
+        // callbacks, which would deadlock here because this callback is the
+        // in-flight invocation being drained. ShutdownViewers() still clears
+        // callbacks before forcing Close() from the host side.
         _viewerInstances.erase(it);
         break;
     }
@@ -130,23 +160,30 @@ HRESULT FolderWindow::OnViewerClosed(ViewerInstance* instance) noexcept
 ViewerTheme FolderWindow::BuildViewerTheme() const noexcept
 {
     ViewerTheme theme{};
-    theme.version                    = 2;
-    theme.dpi                        = static_cast<unsigned int>(_dpi);
-    theme.backgroundArgb             = ArgbFromColorF(_theme.folderView.backgroundColor);
-    theme.textArgb                   = ArgbFromColorF(_theme.folderView.textNormal);
-    theme.selectionBackgroundArgb    = ArgbFromColorF(_theme.folderView.itemBackgroundSelected);
-    theme.selectionTextArgb          = ArgbFromColorF(_theme.folderView.textSelected);
-    theme.accentArgb                 = ArgbFromColorF(_theme.accent);
-    theme.alertErrorBackgroundArgb   = ArgbFromColorF(_theme.folderView.errorBackground);
-    theme.alertErrorTextArgb         = ArgbFromColorF(_theme.folderView.errorText);
-    theme.alertWarningBackgroundArgb = ArgbFromColorF(_theme.folderView.warningBackground);
-    theme.alertWarningTextArgb       = ArgbFromColorF(_theme.folderView.warningText);
-    theme.alertInfoBackgroundArgb    = ArgbFromColorF(_theme.folderView.infoBackground);
-    theme.alertInfoTextArgb          = ArgbFromColorF(_theme.folderView.infoText);
-    theme.darkMode                   = _theme.dark ? TRUE : FALSE;
-    theme.highContrast               = _theme.highContrast ? TRUE : FALSE;
-    theme.rainbowMode                = _theme.menu.rainbowMode ? TRUE : FALSE;
-    theme.darkBase                   = _theme.menu.darkBase ? TRUE : FALSE;
+    theme.version                       = 4;
+    theme.dpi                           = static_cast<unsigned int>(_dpi);
+    theme.backgroundArgb                = ArgbFromColorF(_theme.folderView.backgroundColor);
+    theme.textArgb                      = ArgbFromColorF(_theme.folderView.textNormal);
+    theme.selectionBackgroundArgb       = ArgbFromColorF(_theme.folderView.itemBackgroundSelected);
+    theme.selectionTextArgb             = ArgbFromColorF(_theme.folderView.textSelected);
+    theme.accentArgb                    = ArgbFromColorF(_theme.accent);
+    theme.alertErrorBackgroundArgb      = ArgbFromColorF(_theme.folderView.errorBackground);
+    theme.alertErrorTextArgb            = ArgbFromColorF(_theme.folderView.errorText);
+    theme.alertWarningBackgroundArgb    = ArgbFromColorF(_theme.folderView.warningBackground);
+    theme.alertWarningTextArgb          = ArgbFromColorF(_theme.folderView.warningText);
+    theme.alertInfoBackgroundArgb       = ArgbFromColorF(_theme.folderView.infoBackground);
+    theme.alertInfoTextArgb             = ArgbFromColorF(_theme.folderView.infoText);
+    theme.darkMode                      = _theme.dark ? TRUE : FALSE;
+    theme.highContrast                  = _theme.highContrast ? TRUE : FALSE;
+    theme.rainbowMode                   = _theme.menu.rainbowMode ? TRUE : FALSE;
+    theme.darkBase                      = _theme.menu.darkBase ? TRUE : FALSE;
+    theme.diffAddedBackgroundArgb       = ArgbFromColorF(_theme.viewerDiff.addedBackground);
+    theme.diffRemovedBackgroundArgb     = ArgbFromColorF(_theme.viewerDiff.removedBackground);
+    theme.diffContextBackgroundArgb     = ArgbFromColorF(_theme.viewerDiff.contextBackground);
+    theme.diffHeaderBackgroundArgb      = ArgbFromColorF(_theme.viewerDiff.headerBackground);
+    theme.diffBannerBackgroundArgb      = ArgbFromColorF(_theme.viewerDiff.bannerBackground);
+    theme.diffPlaceholderBackgroundArgb = ArgbFromColorF(_theme.viewerDiff.placeholderBackground);
+    theme.diffDividerArgb               = ArgbFromColorF(_theme.viewerDiff.divider);
     return theme;
 }
 
@@ -212,6 +249,19 @@ HRESULT FolderWindow::OpenViewerWithPlugin(std::wstring_view pluginId, const Vie
     instance->fileSystem     = context.fileSystem;
     instance->fileSystemName.assign(context.fileSystemName ? context.fileSystemName : L"");
     instance->focusedPath.assign(context.focusedPath);
+
+    wil::com_ptr<IInformations> infos;
+    const HRESULT infoHr = viewer->QueryInterface(__uuidof(IInformations), infos.put_void());
+    if (SUCCEEDED(infoHr) && infos)
+    {
+        const char* configurationJson = nullptr;
+        const HRESULT getHr           = infos->GetConfiguration(&configurationJson);
+        if (SUCCEEDED(getHr))
+        {
+            instance->hasInitialConfigurationJson = true;
+            instance->initialConfigurationJson    = configurationJson ? configurationJson : "";
+        }
+    }
 
     if (context.selectionPaths && context.selectionCount > 0)
     {
@@ -505,17 +555,17 @@ bool FolderWindow::TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRe
     }
 
     ViewerOpenContext context{};
-    context.ownerWindow           = ownerWindow;
-    context.fileSystem            = state.fileSystem.get();
-    context.fileSystemName        = fileSystemName.empty() ? nullptr : fileSystemName.c_str();
+    context.ownerWindow            = ownerWindow;
+    context.fileSystem             = state.fileSystem.get();
+    context.fileSystemName         = fileSystemName.empty() ? nullptr : fileSystemName.c_str();
     const std::wstring focusedPath = request.focusedPath.wstring();
-    context.focusedPath           = focusedPath.c_str();
-    context.selectionPaths        = selectionPointers.empty() ? nullptr : selectionPointers.data();
-    context.selectionCount        = static_cast<unsigned long>(selectionPointers.size());
-    context.otherFiles            = otherFilePointers.empty() ? nullptr : otherFilePointers.data();
-    context.otherFileCount        = static_cast<unsigned long>(otherFilePointers.size());
-    context.focusedOtherFileIndex = static_cast<unsigned long>(focusedOtherIndex);
-    context.flags                 = VIEWER_OPEN_FLAG_NONE;
+    context.focusedPath            = focusedPath.c_str();
+    context.selectionPaths         = selectionPointers.empty() ? nullptr : selectionPointers.data();
+    context.selectionCount         = static_cast<unsigned long>(selectionPointers.size());
+    context.otherFiles             = otherFilePointers.empty() ? nullptr : otherFilePointers.data();
+    context.otherFileCount         = static_cast<unsigned long>(otherFilePointers.size());
+    context.focusedOtherFileIndex  = static_cast<unsigned long>(focusedOtherIndex);
+    context.flags                  = VIEWER_OPEN_FLAG_NONE;
 
     HRESULT openHr = OpenViewerWithPlugin(pluginIdStorage, context);
     if (FAILED(openHr) && ! EqualsNoCase(pluginIdStorage, kFallbackViewerId))
@@ -597,7 +647,7 @@ bool FolderWindow::TryViewSpaceWithViewer(Pane pane, const std::filesystem::path
     return true;
 }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 size_t FolderWindow::DebugGetViewerInstanceCount() const noexcept
 {
     return _viewerInstances.size();

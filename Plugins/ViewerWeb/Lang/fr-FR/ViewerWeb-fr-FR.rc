@@ -1,0 +1,89 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+IDR_VIEWERWEB_MENU MENU
+BEGIN
+    POPUP "&Fichier"
+    BEGIN
+        MENUITEM "Enregistrer &sous...\tCtrl+S", IDM_VIEWERWEB_FILE_SAVE_AS
+        MENUITEM "&Actualiser\tF5", IDM_VIEWERWEB_FILE_REFRESH
+        POPUP "Autres &fichiers"
+        BEGIN
+            MENUITEM "&Suivant\tSpace, Ctrl+Down", IDM_VIEWERWEB_OTHER_NEXT
+            MENUITEM "&Précédent\tBackspace, Ctrl+Up", IDM_VIEWERWEB_OTHER_PREVIOUS
+            MENUITEM "&Premier\tCtrl+Home", IDM_VIEWERWEB_OTHER_FIRST
+            MENUITEM "&Dernier\tCtrl+End", IDM_VIEWERWEB_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Quitter\tEsc", IDM_VIEWERWEB_FILE_EXIT
+    END
+    POPUP "&Recherche"
+    BEGIN
+        MENUITEM "&Rechercher...\tCtrl+F", IDM_VIEWERWEB_SEARCH_FIND
+        MENUITEM "Rechercher &suivant\tF3", IDM_VIEWERWEB_SEARCH_FIND_NEXT
+        MENUITEM "Rechercher &précédent\tShift+F3", IDM_VIEWERWEB_SEARCH_FIND_PREVIOUS
+    END
+    POPUP "&Affichage"
+    BEGIN
+        MENUITEM "Zoom &avant\tCtrl++", IDM_VIEWERWEB_VIEW_ZOOM_IN
+        MENUITEM "Zoom a&rrière\tCtrl+-", IDM_VIEWERWEB_VIEW_ZOOM_OUT
+        MENUITEM "&Réinitialiser le zoom\tCtrl+0", IDM_VIEWERWEB_VIEW_ZOOM_RESET
+        MENUITEM SEPARATOR
+        MENUITEM "Afficher/masquer les &outils de développement\tF12", IDM_VIEWERWEB_VIEW_DEVTOOLS
+    END
+    POPUP "&Outils"
+    BEGIN
+        MENUITEM "Copier &URL\tCtrl+L", IDM_VIEWERWEB_TOOLS_COPY_URL
+        MENUITEM "Ouvrir dans le &navigateur\tCtrl+Enter", IDM_VIEWERWEB_TOOLS_OPEN_EXTERNAL
+        MENUITEM SEPARATOR
+        MENUITEM "Tout &développer (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL
+        MENUITEM "Tout &réduire (JSON/JSONL)", IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL
+        MENUITEM SEPARATOR
+        MENUITEM "Afficher/masquer la &source Markdown\tCtrl+`", IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERWEB_NAME "Visionneuse Web"
+    IDS_VIEWERWEB_DESCRIPTION "Visionneuse basée sur WebView2 pour les fichiers HTML et PDF."
+
+    IDS_VIEWERJSON_NAME "Visionneuse JSON"
+    IDS_VIEWERJSON_DESCRIPTION "Visionneuse JSON/JSON5/JSONL basée sur WebView2 avec repli et coloration syntaxique."
+
+    IDS_VIEWERMARKDOWN_NAME "Visionneuse Markdown"
+    IDS_VIEWERMARKDOWN_DESCRIPTION "Visionneuse Markdown basée sur WebView2 avec coloration syntaxique."
+
+    IDS_VIEWERWEB_ERROR_TITLE "ViewerWeb"
+    IDS_VIEWERWEB_ERROR_WEBVIEW2_RUNTIME_MISSING "Le runtime Microsoft Edge WebView2 n’est pas installé."
+    IDS_VIEWERWEB_ERROR_WEBVIEW2_INIT_FAILED "L’initialisation de WebView2 a échoué."
+    IDS_VIEWERWEB_ERROR_BUILD_FILE_URL "Impossible de construire l’URL du fichier."
+    IDS_VIEWERWEB_ERROR_BUILD_HTML_DOCUMENT "Impossible de construire le document HTML."
+    IDS_VIEWERWEB_ERROR_NAVIGATE_TO_STRING_FAILED_FMT "NavigateToString a échoué (hr=0x{0:08X})."
+    IDS_VIEWERWEB_ERROR_NAVIGATE_FAILED_FMT "La navigation a échoué (hr=0x{0:08X})."
+    IDS_VIEWERWEB_ERROR_FILE_SYSTEM_UNAVAILABLE "Système de fichiers indisponible."
+    IDS_VIEWERWEB_ERROR_NO_FILE_IO "Le système de fichiers actif ne prend pas en charge les E/S de fichiers."
+    IDS_VIEWERWEB_ERROR_OPEN_FOR_VIEWING_FAILED "Impossible d’ouvrir le fichier pour l’affichage."
+    IDS_VIEWERWEB_STATUS_LOADING "Chargement..."
+    IDS_VIEWERWEB_ERROR_GET_TEMP_FOLDER_FAILED "Impossible d’obtenir le dossier temporaire."
+    IDS_VIEWERWEB_ERROR_CREATE_TEMP_FILE_FAILED "Impossible de créer le fichier temporaire."
+    IDS_VIEWERWEB_ERROR_WRITE_TEMP_FILE_FAILED "Impossible d’écrire le fichier temporaire."
+    IDS_VIEWERWEB_ERROR_READ_FILE_FAILED "Impossible de lire le fichier."
+    IDS_VIEWERWEB_ERROR_READ_FILE_SIZE_FAILED "Impossible de lire la taille du fichier."
+    IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT "Le fichier est trop volumineux ({0}), la limite est {1}."
+    IDS_VIEWERWEB_ERROR_PARSE_JSON_FAILED "Impossible d’analyser le document JSON/JSON5/JSONL."
+    IDS_VIEWERWEB_ERROR_FORMAT_JSON_FAILED "Impossible de formater le document JSON/JSONL."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_FAILED "L’enregistrement sous a échoué."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_NO_FILE_IO "L’enregistrement sous a échoué (E/S du système de fichiers non prises en charge)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_OPEN_FAILED "L’enregistrement sous a échoué (impossible d’ouvrir le fichier)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_SEEK_FAILED "L’enregistrement sous a échoué (positionnement échoué)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_READ_FAILED "L’enregistrement sous a échoué (lecture échouée)."
+    IDS_VIEWERWEB_ERROR_SAVE_AS_WRITE_FAILED "L’enregistrement sous a échoué (écriture échouée)."
+    IDS_VIEWERWEB_ERROR_OPEN_BROWSER_FAILED "Impossible d’ouvrir dans le navigateur."
+    IDS_VIEWERWEB_WARNING_DEVTOOLS_DISABLED "Les outils de développement sont désactivés dans les paramètres du plug-in."
+    IDS_VIEWERWEB_PROMPT_OPEN_TEXT_VIEWER_FMT "{0} L’ouvrir plutôt dans la visionneuse texte ?"
+    IDS_VIEWERWEB_ERROR_OPEN_TEXT_VIEWER_FAILED "Impossible d’ouvrir dans la visionneuse texte."
+END

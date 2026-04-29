@@ -16,6 +16,8 @@
 #include <windows.h>
 #pragma warning(pop)
 
+#include "Helpers.h"
+
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
 #pragma warning(disable : 4625 4626 5026 5027 28182)
@@ -51,6 +53,7 @@ public:
         _inTick             = false;
         _timerRunning       = false;
         _nextSubscriptionId = 1;
+        _lastTickMs         = 0u;
         _hwnd.reset();
     }
 
@@ -236,11 +239,13 @@ private:
         if (! _timerRunning || ! _hwnd)
         {
             _timerRunning = false;
+            _lastTickMs   = 0u;
             return;
         }
 
         KillTimer(_hwnd.get(), kTimerId);
         _timerRunning = false;
+        _lastTickMs   = 0u;
     }
 
     void EnsureTimerState() noexcept
@@ -290,6 +295,16 @@ private:
         }
 
         const uint64_t now = GetTickCount64();
+        if (_lastTickMs != 0u && now > _lastTickMs)
+        {
+            const uint64_t gapMs = now - _lastTickMs;
+            Debug::Perf::EmitValue(L"dxui.animation.tick_gap_ms", gapMs);
+            if (gapMs > 20u)
+            {
+                Debug::Perf::EmitCounter(L"dxui.animation.tick_overrun");
+            }
+        }
+        _lastTickMs = now;
 
         _inTick = true;
         for (auto& entry : _subscriptions)
@@ -317,6 +332,7 @@ private:
     bool _timerRunning           = false;
     bool _inTick                 = false;
     uint64_t _nextSubscriptionId = 1;
+    uint64_t _lastTickMs         = 0u;
     std::vector<Subscription> _subscriptions;
     std::vector<Subscription> _pendingAdds;
 };

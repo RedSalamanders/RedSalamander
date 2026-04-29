@@ -571,22 +571,89 @@ private:
     std::vector<std::byte> _buffer;
 };
 
-class TempFileWriter final : public IFileWriter
+[[nodiscard]] HRESULT EnsureWritableS3Target(
+    FileSystemS3& owner, const FsS3::ResolvedAwsContext& bucketCtx, std::string_view bucket, std::string_view key, bool allowOverwrite) noexcept
+{
+    if (bucket.empty() || key.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    uint64_t existingSize     = 0;
+    __int64 existingLastWrite = 0;
+    bool found                = false;
+    const HRESULT existsHr    = FsS3::TryGetS3ObjectSummary(owner, bucketCtx, bucket, key, existingSize, existingLastWrite, found);
+    if (FAILED(existsHr))
+    {
+        return existsHr;
+    }
+    if (found && ! allowOverwrite)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+    }
+
+    std::string trimmedKey(key);
+    while (! trimmedKey.empty() && trimmedKey.back() == '/')
+    {
+        trimmedKey.pop_back();
+    }
+
+    for (size_t slash = trimmedKey.find('/'); slash != std::string::npos; slash = trimmedKey.find('/', slash + 1u))
+    {
+        const std::string ancestor = trimmedKey.substr(0, slash);
+        uint64_t ancestorSize      = 0;
+        __int64 ancestorLastWrite  = 0;
+        bool ancestorFound         = false;
+        const HRESULT ancestorHr   = FsS3::TryGetS3ObjectSummary(owner, bucketCtx, bucket, ancestor, ancestorSize, ancestorLastWrite, ancestorFound);
+        if (FAILED(ancestorHr))
+        {
+            return ancestorHr;
+        }
+        if (ancestorFound)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+    }
+
+    std::string prefix(key);
+    if (prefix.back() != '/')
+    {
+        prefix.push_back('/');
+    }
+
+    const auto client = FsS3::GetS3Client(owner, bucketCtx);
+    Aws::S3Crt::Model::ListObjectsV2Request req;
+    req.SetBucket(Aws::String(bucket.data(), bucket.size()));
+    req.SetPrefix(Aws::String(prefix.data(), prefix.size()));
+    req.SetMaxKeys(1);
+
+    const auto outcome = client->ListObjectsV2(req);
+    if (! outcome.IsSuccess())
+    {
+        const auto& err            = outcome.GetError();
+        const std::wstring details = std::format(L"bucket='{}' prefix='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(prefix));
+        FsS3::LogAwsFailure(L"S3", L"ListObjectsV2", bucketCtx, err, details);
+        return FsS3::HresultFromAwsError(err);
+    }
+
+    if (! outcome.GetResult().GetContents().empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+    }
+
+    return S_OK;
+}
+
+class MultipartS3FileWriter final : public IFileWriter
 {
 public:
-    TempFileWriter(FileSystemS3* owner,
-                   wil::unique_hfile file,
-                   FileSystemS3Mode mode,
-                   FileSystemS3::Settings settings,
-                   wil::com_ptr<IHostConnections> hostConnections,
-                   std::wstring pluginPath,
-                   FileSystemFlags flags) noexcept
-        : _file(std::move(file)),
-          _mode(mode),
-          _settings(std::move(settings)),
-          _hostConnections(std::move(hostConnections)),
+    MultipartS3FileWriter(
+        FileSystemS3* owner, FsS3::ResolvedAwsContext bucketCtx, std::string bucket, std::string key, std::wstring pluginPath, bool allowOverwrite) noexcept
+        : _bucketCtx(std::move(bucketCtx)),
+          _bucket(std::move(bucket)),
+          _key(std::move(key)),
           _pluginPath(std::move(pluginPath)),
-          _flags(flags)
+          _allowOverwrite(allowOverwrite)
     {
         if (owner)
         {
@@ -594,10 +661,10 @@ public:
         }
     }
 
-    TempFileWriter(const TempFileWriter&)            = delete;
-    TempFileWriter(TempFileWriter&&)                 = delete;
-    TempFileWriter& operator=(const TempFileWriter&) = delete;
-    TempFileWriter& operator=(TempFileWriter&&)      = delete;
+    MultipartS3FileWriter(const MultipartS3FileWriter&)            = delete;
+    MultipartS3FileWriter(MultipartS3FileWriter&&)                 = delete;
+    MultipartS3FileWriter& operator=(const MultipartS3FileWriter&) = delete;
+    MultipartS3FileWriter& operator=(MultipartS3FileWriter&&)      = delete;
 
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppvObject) noexcept override
     {
@@ -639,26 +706,7 @@ public:
             return E_POINTER;
         }
 
-        *positionBytes = 0;
-
-        if (! _file)
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
-        }
-
-        LARGE_INTEGER zero{};
-        LARGE_INTEGER moved{};
-        if (SetFilePointerEx(_file.get(), zero, &moved, FILE_CURRENT) == 0)
-        {
-            return HRESULT_FROM_WIN32(GetLastError());
-        }
-
-        if (moved.QuadPart < 0)
-        {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-        }
-
-        *positionBytes = static_cast<uint64_t>(moved.QuadPart);
+        *positionBytes = _position;
         return S_OK;
     }
 
@@ -681,18 +729,34 @@ public:
             return E_POINTER;
         }
 
-        if (! _file)
+        if (_committed)
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
 
-        DWORD written = 0;
-        if (WriteFile(_file.get(), buffer, bytesToWrite, &written, nullptr) == 0)
+        if (FAILED(_failedHr))
         {
-            return HRESULT_FROM_WIN32(GetLastError());
+            return _failedHr;
         }
 
-        *bytesWritten = static_cast<unsigned long>(written);
+        if (bytesToWrite > (std::numeric_limits<size_t>::max)() - _buffer.size())
+        {
+            _failedHr = E_OUTOFMEMORY;
+            return _failedHr;
+        }
+
+        const auto* src = static_cast<const std::byte*>(buffer);
+        _buffer.insert(_buffer.end(), src, src + bytesToWrite);
+
+        const HRESULT hr = FlushBufferedParts();
+        if (FAILED(hr))
+        {
+            _failedHr = hr;
+            return hr;
+        }
+
+        _position += bytesToWrite;
+        *bytesWritten = bytesToWrite;
         return S_OK;
     }
 
@@ -703,27 +767,9 @@ public:
             return S_OK;
         }
 
-        if (! _file)
+        if (FAILED(_failedHr))
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
-        }
-
-        uint64_t sizeBytes = 0;
-        HRESULT hr         = FsS3::GetFileSizeBytes(_file.get(), sizeBytes);
-        if (FAILED(hr))
-        {
-            return hr;
-        }
-
-        hr = FsS3::ResetFilePointerToStart(_file.get());
-        if (FAILED(hr))
-        {
-            return hr;
-        }
-
-        if (_mode != FileSystemS3Mode::S3)
-        {
-            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+            return _failedHr;
         }
 
         if (! _owner)
@@ -731,103 +777,51 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
         }
 
-        FsS3::ResolvedAwsContext ctx{};
-        std::wstring canonical;
-        hr = FsS3::ResolveAwsContext(_mode, _settings, _pluginPath.c_str(), _hostConnections.get(), true, ctx, canonical);
+        HRESULT hr = EnsureWritableS3Target(*_owner.get(), _bucketCtx, _bucket, _key, _allowOverwrite);
         if (FAILED(hr))
         {
             return hr;
         }
 
-        const std::wstring normalized = FsS3::NormalizePluginPath(canonical);
-        if (normalized == L"/" || normalized.empty() || (! normalized.empty() && normalized.back() == L'/'))
+        if (! _hasSession)
         {
-            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-        }
-
-        const auto segments = FsS3::SplitPathSegments(normalized);
-        if (segments.size() < 2)
-        {
-            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-        }
-
-        const std::string bucket = FsS3::Utf8FromUtf16(segments[0]);
-        if (bucket.empty())
-        {
-            return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
-        }
-
-        std::wstring keyWide;
-        for (size_t i = 1; i < segments.size(); ++i)
-        {
-            if (i > 1)
+            hr = FsS3::PutS3ObjectFromMemory(*_owner.get(), _bucketCtx, _bucket, _key, _buffer.empty() ? nullptr : _buffer.data(), _buffer.size());
+            if (FAILED(hr))
             {
-                keyWide.push_back(L'/');
-            }
-            keyWide.append(segments[i]);
-        }
-
-        const std::string key = FsS3::Utf8FromUtf16(keyWide);
-        if (key.empty())
-        {
-            return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
-        }
-
-        FsS3::ResolvedAwsContext bucketCtx{};
-        hr = FsS3::ResolveS3ContextForBucket(*_owner.get(), ctx, segments[0], bucketCtx);
-        if (FAILED(hr))
-        {
-            return hr;
-        }
-
-        const bool allowOverwrite = (static_cast<unsigned long>(_flags) & FILESYSTEM_FLAG_ALLOW_OVERWRITE) != 0;
-        if (! allowOverwrite)
-        {
-            uint64_t existingSize     = 0;
-            __int64 existingLastWrite = 0;
-            bool found                = false;
-            const HRESULT existsHr    = FsS3::TryGetS3ObjectSummary(*_owner.get(), bucketCtx, bucket, key, existingSize, existingLastWrite, found);
-            if (FAILED(existsHr))
-            {
-                return existsHr;
-            }
-            if (found)
-            {
-                return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
-            }
-
-            // Preserve local FS semantics: don't allow a file to be created at a path that already behaves as a directory.
-            std::string prefix = key;
-            if (prefix.back() != '/')
-            {
-                prefix.push_back('/');
-            }
-
-            const auto client = FsS3::GetS3Client(*_owner.get(), bucketCtx);
-            Aws::S3Crt::Model::ListObjectsV2Request req;
-            req.SetBucket(Aws::String(bucket.data(), bucket.size()));
-            req.SetPrefix(Aws::String(prefix.data(), prefix.size()));
-            req.SetMaxKeys(1);
-
-            const auto outcome = client->ListObjectsV2(req);
-            if (! outcome.IsSuccess())
-            {
-                const auto& err            = outcome.GetError();
-                const std::wstring details = std::format(L"bucket='{}' prefix='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(prefix));
-                FsS3::LogAwsFailure(L"S3", L"ListObjectsV2", bucketCtx, err, details);
-                return FsS3::HresultFromAwsError(err);
-            }
-
-            if (! outcome.GetResult().GetContents().empty())
-            {
-                return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+                _failedHr = hr;
+                return hr;
             }
         }
-
-        hr = FsS3::UploadS3ObjectFromFile(*_owner.get(), bucketCtx, bucket, key, _file.get(), sizeBytes);
-        if (FAILED(hr))
+        else
         {
-            return hr;
+            if (! _buffer.empty())
+            {
+                hr = UploadPart(_buffer.data(), _buffer.size());
+                if (FAILED(hr))
+                {
+                    const HRESULT abortHr = AbortMultipartUpload();
+                    _failedHr             = FAILED(abortHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
+                    return _failedHr;
+                }
+                _buffer.clear();
+            }
+
+            if (_parts.empty())
+            {
+                const HRESULT abortHr = AbortMultipartUpload();
+                return FAILED(abortHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+
+            hr = FsS3::CompleteS3MultipartUpload(*_owner.get(), _session, _parts);
+            if (FAILED(hr))
+            {
+                const HRESULT abortHr = AbortMultipartUpload();
+                _failedHr             = FAILED(abortHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
+                return _failedHr;
+            }
+
+            _hasSession = false;
+            _parts.clear();
         }
 
         _committed = true;
@@ -836,17 +830,122 @@ public:
     }
 
 private:
-    ~TempFileWriter() = default;
+    ~MultipartS3FileWriter()
+    {
+        if (! _committed)
+        {
+            const HRESULT hr = AbortMultipartUpload();
+            if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_INVALID_STATE))
+            {
+                Debug::Warning(L"S3: multipart upload cleanup failed path='{}' hr=0x{:08X}.", _pluginPath, static_cast<unsigned long>(hr));
+            }
+        }
+    }
+
+    HRESULT EnsureMultipartSession() noexcept
+    {
+        if (_hasSession)
+        {
+            return S_OK;
+        }
+
+        if (! _owner)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        }
+
+        HRESULT hr = FsS3::BeginS3MultipartUpload(*_owner.get(), _bucketCtx, _bucket, _key, _session);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        _hasSession = true;
+        return S_OK;
+    }
+
+    HRESULT UploadPart(const void* data, size_t sizeBytes) noexcept
+    {
+        if (! _hasSession)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        }
+
+        if (_nextPartNumber > 10000)
+        {
+            return HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
+        }
+
+        std::string etag;
+        HRESULT hr = FsS3::UploadS3MultipartPartFromMemory(*_owner.get(), _session, _nextPartNumber, data, sizeBytes, etag);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        FsS3::S3MultipartUploadedPart part{};
+        part.partNumber = _nextPartNumber;
+        part.eTag       = std::move(etag);
+        _parts.push_back(std::move(part));
+        ++_nextPartNumber;
+        return S_OK;
+    }
+
+    HRESULT FlushBufferedParts() noexcept
+    {
+        while (_buffer.size() >= FsS3::kMultipartMinPartSizeBytes)
+        {
+            HRESULT hr = EnsureMultipartSession();
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+
+            hr = UploadPart(_buffer.data(), FsS3::kMultipartMinPartSizeBytes);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+
+            const size_t remainingBytes = _buffer.size() - FsS3::kMultipartMinPartSizeBytes;
+            if (remainingBytes > 0)
+            {
+                std::memmove(_buffer.data(), _buffer.data() + FsS3::kMultipartMinPartSizeBytes, remainingBytes);
+            }
+            _buffer.resize(remainingBytes);
+        }
+
+        return S_OK;
+    }
+
+    HRESULT AbortMultipartUpload() noexcept
+    {
+        if (! _hasSession || ! _owner)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        }
+
+        const HRESULT hr = FsS3::AbortS3MultipartUpload(*_owner.get(), _session);
+        _hasSession      = false;
+        _parts.clear();
+        return hr;
+    }
 
     std::atomic_ulong _refCount{1};
-    wil::unique_hfile _file;
     wil::com_ptr<FileSystemS3> _owner;
-    FileSystemS3Mode _mode = FileSystemS3Mode::S3;
-    FileSystemS3::Settings _settings{};
-    wil::com_ptr<IHostConnections> _hostConnections;
+    FsS3::ResolvedAwsContext _bucketCtx;
+    std::string _bucket;
+    std::string _key;
     std::wstring _pluginPath;
-    FileSystemFlags _flags = FILESYSTEM_FLAG_NONE;
-    bool _committed        = false;
+    std::vector<std::byte> _buffer;
+    std::vector<FsS3::S3MultipartUploadedPart> _parts;
+    FsS3::S3MultipartUploadSession _session{};
+    uint64_t _position   = 0;
+    HRESULT _failedHr    = S_OK;
+    int _nextPartNumber  = 1;
+    bool _allowOverwrite = false;
+    bool _committed      = false;
+    bool _hasSession     = false;
 };
 } // namespace
 
@@ -1134,9 +1233,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileReader(const wchar_t* path, IF
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileWriter([[maybe_unused]] const wchar_t* path,
-                                                         [[maybe_unused]] FileSystemFlags flags,
-                                                         IFileWriter** writer) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileWriter(const wchar_t* path, FileSystemFlags flags, IFileWriter** writer) noexcept
 {
     if (writer == nullptr)
     {
@@ -1182,13 +1279,62 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::CreateFileWriter([[maybe_unused]] const 
         settings = _settings;
     }
 
-    wil::unique_hfile file = FsS3::CreateTemporaryDeleteOnCloseFile();
-    if (! file)
+    FsS3::ResolvedAwsContext ctx{};
+    std::wstring canonical;
+    HRESULT hr = FsS3::ResolveAwsContext(_mode, settings, path, _hostConnections.get(), true, ctx, canonical);
+    if (FAILED(hr))
     {
-        return HRESULT_FROM_WIN32(GetLastError());
+        return hr;
     }
 
-    auto* impl = new (std::nothrow) TempFileWriter(this, std::move(file), _mode, settings, _hostConnections, path, flags);
+    const std::wstring normalized = FsS3::NormalizePluginPath(canonical);
+    if (normalized == L"/" || normalized.empty() || (! normalized.empty() && normalized.back() == L'/'))
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    const auto segments = FsS3::SplitPathSegments(normalized);
+    if (segments.size() < 2)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    const std::string bucket = FsS3::Utf8FromUtf16(segments[0]);
+    if (bucket.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+    }
+
+    std::wstring keyWide;
+    for (size_t i = 1; i < segments.size(); ++i)
+    {
+        if (i > 1)
+        {
+            keyWide.push_back(L'/');
+        }
+        keyWide.append(segments[i]);
+    }
+
+    const std::string key = FsS3::Utf8FromUtf16(keyWide);
+    if (key.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+    }
+
+    FsS3::ResolvedAwsContext bucketCtx{};
+    hr = FsS3::ResolveS3ContextForBucket(*this, ctx, segments[0], bucketCtx);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = EnsureWritableS3Target(*this, bucketCtx, bucket, key, allowOverwrite);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    auto* impl = new (std::nothrow) MultipartS3FileWriter(this, std::move(bucketCtx), std::string(bucket), std::string(key), path, allowOverwrite);
     if (! impl)
     {
         return E_OUTOFMEMORY;

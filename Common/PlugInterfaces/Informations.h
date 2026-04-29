@@ -5,6 +5,8 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include "Version.h"
+
 #pragma warning(push)
 #pragma warning(disable : 4820) // padding in data structure
 struct PluginMetaData

@@ -45,6 +45,10 @@ public:
     void SetModifiers(uint32_t modifiers) noexcept;
     void SetPressedFunctionKey(std::optional<uint32_t> vk) noexcept;
 
+#ifdef ENABLE_TESTS
+    [[nodiscard]] bool DebugUsesDirectWriteTextMetrics() const noexcept;
+#endif
+
 private:
     static ATOM RegisterWndClass(HINSTANCE instance);
     static constexpr PCWSTR kClassName = L"RedSalamander.FunctionBar";
@@ -55,7 +59,9 @@ private:
     void OnCreate(HWND hwnd) noexcept;
     void OnDestroy() noexcept;
     void OnPaint() noexcept;
+    void PaintToHdc(HDC hdc) noexcept;
     void OnSize(UINT width, UINT height) noexcept;
+    [[nodiscard]] bool OnKeyDown(WPARAM key) noexcept;
     void OnMouseMove(POINT pt) noexcept;
     void OnMouseLeave() noexcept;
     void OnLButtonUp(POINT pt) noexcept;
@@ -64,8 +70,6 @@ private:
     void RecomputeModifierText();
     [[nodiscard]] int PxFromDip(int dip) const noexcept;
     [[nodiscard]] std::optional<uint32_t> HitTestFunctionKey(POINT pt) const noexcept;
-    void EnsureKeyFont() noexcept;
-    void EnsureTextFont() noexcept;
 
 private:
     wil::unique_hwnd _hWnd;
@@ -82,12 +86,4 @@ private:
 
     std::array<std::wstring, 12> _labels{};
     std::wstring _modifierText;
-
-    wil::unique_hbrush _backgroundBrush;
-    wil::unique_hbrush _pressedBrush;
-    wil::unique_hbrush _hoverBrush;
-    wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> _glyphPen;
-    wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> _separatorPen;
-    wil::unique_hfont _keyFont;
-    wil::unique_hfont _textFont;
 };

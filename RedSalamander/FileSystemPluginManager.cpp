@@ -10,6 +10,7 @@
 
 #include "Helpers.h"
 #include "HostServices.h"
+#include "LocalizationManager.h"
 #include "PlugInterfaces/Factory.h"
 #include "SessionState.h"
 
@@ -21,9 +22,9 @@
 
 namespace
 {
-using CreateFactoryFunc    = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, void**);
-using CreateFactoryExFunc  = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
-using EnumeratePluginsFunc = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
+using CreateFactoryFunc                = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using EnumeratePluginsFunc             = HRESULT(__stdcall*)(REFIID, const PluginMetaData**, unsigned int*);
+using GetConfigurationSchemaExportFunc = HRESULT(__stdcall*)(REFIID, const wchar_t*, const char**);
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -50,6 +51,17 @@ std::wstring SafeCoalesce(const wchar_t* value) noexcept
 std::string SafeCoalesce(const char* value) noexcept
 {
     return value ? std::string(value) : std::string();
+}
+
+HRESULT RegisterPluginResourceOwner(const std::filesystem::path& path, HINSTANCE module) noexcept
+{
+    const std::wstring ownerName = path.stem().wstring();
+    if (ownerName.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    return Localization::RegisterResourceOwner(ownerName, module);
 }
 
 bool IsValidShortId(std::wstring_view shortId) noexcept
@@ -100,6 +112,101 @@ void RemoveStringFromVector(std::vector<std::wstring>& values, std::wstring_view
 void RemovePathFromVector(std::vector<std::filesystem::path>& values, const std::filesystem::path& needle)
 {
     values.erase(std::remove_if(values.begin(), values.end(), [&](const std::filesystem::path& v) { return v == needle; }), values.end());
+}
+
+void PopulateEntryIdentityFromMetaData(FileSystemPluginManager::PluginEntry& entry, const PluginMetaData& metaData)
+{
+    entry.id      = SafeCoalesce(metaData.id);
+    entry.shortId = SafeCoalesce(metaData.shortId);
+}
+
+void PopulateEntryPresentationFromMetaData(FileSystemPluginManager::PluginEntry& entry, const PluginMetaData& metaData)
+{
+    entry.name        = SafeCoalesce(metaData.name);
+    entry.description = SafeCoalesce(metaData.description);
+    entry.author      = SafeCoalesce(metaData.author);
+    entry.version     = SafeCoalesce(metaData.version);
+}
+
+[[nodiscard]] std::wstring_view RequestedPluginId(const FileSystemPluginManager::PluginEntry& entry) noexcept
+{
+    if (! entry.factoryPluginId.empty())
+    {
+        return entry.factoryPluginId;
+    }
+
+    return entry.id;
+}
+
+struct EnumeratedPluginSet
+{
+    HRESULT hr = S_OK;
+    std::wstring loadError;
+    std::vector<FileSystemPluginManager::PluginEntry> entries;
+};
+
+[[nodiscard]] EnumeratedPluginSet EnumerateFileSystemPlugins(const std::filesystem::path& path, FileSystemPluginManager::PluginOrigin origin) noexcept
+{
+    EnumeratedPluginSet result;
+
+    wil::unique_hmodule module(LoadLibraryExW(path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
+    if (! module)
+    {
+        const DWORD lastError = GetLastError();
+        result.hr             = HRESULT_FROM_WIN32(lastError);
+        result.loadError      = std::format(L"LoadLibraryExW failed (0x{:08X}).", lastError);
+        return result;
+    }
+
+#pragma warning(push)
+#pragma warning(disable : 4191) // unsafe conversion from FARPROC
+    const auto enumerate = reinterpret_cast<EnumeratePluginsFunc>(GetProcAddress(module.get(), "RedSalamanderEnumeratePlugins"));
+#pragma warning(pop)
+    if (! enumerate)
+    {
+        DWORD lastError = GetLastError();
+        if (lastError == ERROR_SUCCESS)
+        {
+            lastError = ERROR_PROC_NOT_FOUND;
+        }
+
+        result.hr        = HRESULT_FROM_WIN32(lastError);
+        result.loadError = L"Missing export RedSalamanderEnumeratePlugins.";
+        return result;
+    }
+
+    const PluginMetaData* metaData = nullptr;
+    unsigned int count             = 0;
+    const HRESULT enumHr           = enumerate(__uuidof(IFileSystem), &metaData, &count);
+    if (FAILED(enumHr))
+    {
+        result.hr = enumHr;
+        if (enumHr != E_NOINTERFACE)
+        {
+            result.loadError = std::format(L"RedSalamanderEnumeratePlugins failed (hr=0x{:08X}).", static_cast<unsigned long>(enumHr));
+        }
+        return result;
+    }
+
+    if (! metaData || count == 0)
+    {
+        result.hr        = E_INVALIDARG;
+        result.loadError = L"RedSalamanderEnumeratePlugins returned no file system plugins.";
+        return result;
+    }
+
+    result.entries.reserve(count);
+    for (unsigned int i = 0; i < count; ++i)
+    {
+        FileSystemPluginManager::PluginEntry entry;
+        entry.origin          = origin;
+        entry.path            = path;
+        entry.factoryPluginId = SafeCoalesce(metaData[i].id);
+        PopulateEntryIdentityFromMetaData(entry, metaData[i]);
+        result.entries.push_back(std::move(entry));
+    }
+
+    return result;
 }
 } // namespace
 
@@ -417,25 +524,47 @@ HRESULT FileSystemPluginManager::AddCustomPluginPath(const std::filesystem::path
         return refreshHr;
     }
 
-    PluginEntry probe;
-    probe.origin = PluginOrigin::Custom;
-    probe.path   = path;
+    EnumeratedPluginSet enumeration = EnumerateFileSystemPlugins(path, PluginOrigin::Custom);
+    if (FAILED(enumeration.hr))
+    {
+        return enumeration.hr;
+    }
 
+    std::unordered_set<std::wstring> seenProbeIds;
+    std::unordered_set<std::wstring> seenProbeShortIds;
     Common::Settings::Settings scratch = settings;
-    const HRESULT probeHr              = EnsureLoaded(probe, scratch);
-    if (FAILED(probeHr))
-    {
-        return probeHr;
-    }
 
-    if (probe.id.empty())
+    for (PluginEntry& probe : enumeration.entries)
     {
-        return E_INVALIDARG;
-    }
+        if (probe.id.empty() || ! IsValidShortId(probe.shortId))
+        {
+            return E_INVALIDARG;
+        }
 
-    if (FindPluginById(probe.id))
-    {
-        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        const std::wstring idKey    = ToLowerInvariant(probe.id);
+        const std::wstring shortKey = ToLowerInvariant(probe.shortId);
+        if (! seenProbeIds.insert(idKey).second || ! seenProbeShortIds.insert(shortKey).second)
+        {
+            return E_INVALIDARG;
+        }
+
+        if (FindPluginById(probe.id))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+
+        const bool duplicateShortId =
+            std::any_of(_plugins.begin(), _plugins.end(), [&](const PluginEntry& entry) { return EqualsNoCase(entry.shortId, probe.shortId); });
+        if (duplicateShortId)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+
+        const HRESULT probeHr = EnsureLoaded(probe, scratch);
+        if (FAILED(probeHr))
+        {
+            return probeHr;
+        }
     }
 
     settings.plugins.customPluginPaths.push_back(path);
@@ -451,19 +580,40 @@ FileSystemPluginManager::GetConfigurationSchema(std::wstring_view pluginId, Comm
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
-    const HRESULT hr = EnsureLoaded(*entry, settings);
-    if (FAILED(hr))
+    static_cast<void>(settings);
+
+    wil::unique_hmodule transientModule;
+    HMODULE moduleHandle = entry->module.get();
+    if (! moduleHandle)
     {
-        return hr;
+        transientModule.reset(LoadLibraryExW(entry->path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
+        if (! transientModule)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        moduleHandle = transientModule.get();
     }
 
-    if (! entry->informations)
+#pragma warning(push)
+#pragma warning(disable : 4191) // unsafe conversion from FARPROC
+    const auto getConfigurationSchema = reinterpret_cast<GetConfigurationSchemaExportFunc>(GetProcAddress(moduleHandle, "RedSalamanderGetConfigurationSchema"));
+#pragma warning(pop)
+    if (! getConfigurationSchema)
     {
-        return E_NOINTERFACE;
+        DWORD lastError = GetLastError();
+        if (lastError == ERROR_SUCCESS)
+        {
+            lastError = ERROR_PROC_NOT_FOUND;
+        }
+
+        return HRESULT_FROM_WIN32(lastError);
     }
 
-    const char* schema     = nullptr;
-    const HRESULT schemaHr = entry->informations->GetConfigurationSchema(&schema);
+    const std::wstring requestedPluginId(RequestedPluginId(*entry));
+    const wchar_t* requestedPluginIdPtr = requestedPluginId.empty() ? nullptr : requestedPluginId.c_str();
+    const char* schema                  = nullptr;
+    const HRESULT schemaHr              = getConfigurationSchema(__uuidof(IFileSystem), requestedPluginIdPtr, &schema);
     if (FAILED(schemaHr))
     {
         return schemaHr;
@@ -771,18 +921,6 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
         const HRESULT loadHr               = EnsureLoaded(entry, scratch);
         if (FAILED(loadHr))
         {
-            if (loadHr == E_NOINTERFACE)
-            {
-                // Not a file system plugin (may be another RedSalamander plugin type).
-                return;
-            }
-
-            if (loadHr == HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND) && entry.loadError.find(L"RedSalamanderCreateEx") == std::wstring::npos)
-            {
-                Debug::Warning(L"Plugin '{}' skipped: missing RedSalamanderCreate export.", entry.path.wstring());
-                return;
-            }
-
             _plugins.push_back(std::move(entry));
             return;
         }
@@ -803,54 +941,50 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
             continue;
         }
 
-        bool handledAsMulti = false;
-        bool isFileSystem   = true;
-
-        wil::unique_hmodule probe(LoadLibraryExW(candidate.path.c_str(), nullptr, LOAD_WITH_ALTERED_SEARCH_PATH));
-        if (probe)
+        EnumeratedPluginSet enumeration = EnumerateFileSystemPlugins(candidate.path, candidate.origin);
+        if (enumeration.hr == E_NOINTERFACE)
         {
-#pragma warning(push)
-#pragma warning(disable : 4191) // unsafe conversion from FARPROC
-            const auto enumerate = reinterpret_cast<EnumeratePluginsFunc>(GetProcAddress(probe.get(), "RedSalamanderEnumeratePlugins"));
-#pragma warning(pop)
-            if (enumerate)
+            if (candidate.origin == PluginOrigin::Custom)
             {
-                const PluginMetaData* metaData = nullptr;
-                unsigned int count             = 0;
-                const HRESULT enumHr           = enumerate(__uuidof(IFileSystem), &metaData, &count);
-                if (enumHr == E_NOINTERFACE)
-                {
-                    isFileSystem = false;
-                }
-                else if (SUCCEEDED(enumHr) && metaData != nullptr && count > 0)
-                {
-                    handledAsMulti = true;
-                    for (unsigned int i = 0; i < count; ++i)
-                    {
-                        PluginEntry entry;
-                        entry.origin          = candidate.origin;
-                        entry.path            = candidate.path;
-                        entry.factoryPluginId = SafeCoalesce(metaData[i].id);
-                        tryLoadAndAddEntry(std::move(entry));
-                    }
-                }
+                PluginEntry entry;
+                entry.origin    = candidate.origin;
+                entry.path      = candidate.path;
+                entry.loadable  = false;
+                entry.loadError = L"Custom plugin does not expose IFileSystem through RedSalamanderEnumeratePlugins.";
+                _plugins.push_back(std::move(entry));
             }
-        }
-
-        if (! isFileSystem)
-        {
             continue;
         }
 
-        if (handledAsMulti)
+        if (enumeration.hr == HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND))
         {
+            if (candidate.origin == PluginOrigin::Custom)
+            {
+                PluginEntry entry;
+                entry.origin    = candidate.origin;
+                entry.path      = candidate.path;
+                entry.loadable  = false;
+                entry.loadError = enumeration.loadError;
+                _plugins.push_back(std::move(entry));
+            }
             continue;
         }
 
-        PluginEntry entry;
-        entry.origin = candidate.origin;
-        entry.path   = candidate.path;
-        tryLoadAndAddEntry(std::move(entry));
+        if (FAILED(enumeration.hr))
+        {
+            PluginEntry entry;
+            entry.origin    = candidate.origin;
+            entry.path      = candidate.path;
+            entry.loadable  = false;
+            entry.loadError = enumeration.loadError;
+            _plugins.push_back(std::move(entry));
+            continue;
+        }
+
+        for (PluginEntry& entry : enumeration.entries)
+        {
+            tryLoadAndAddEntry(std::move(entry));
+        }
     }
 
     const auto byOriginNameId = [](const PluginEntry& a, const PluginEntry& b)
@@ -873,6 +1007,14 @@ HRESULT FileSystemPluginManager::Discover(Common::Settings::Settings& settings) 
     };
 
     std::sort(_plugins.begin(), _plugins.end(), byOriginNameId);
+
+    const bool hasLoadablePlugin = std::any_of(_plugins.begin(), _plugins.end(), [](const PluginEntry& entry) { return entry.loadable; });
+    if (! hasLoadablePlugin)
+    {
+        Debug::Error(L"File system plugin discovery found zero loadable plugins under '{}'.", (_exeDir / L"Plugins").wstring());
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
     return S_OK;
 }
 
@@ -885,6 +1027,10 @@ HRESULT FileSystemPluginManager::EnsureLoaded(PluginEntry& entry, Common::Settin
 
     entry.loadable = false;
     entry.loadError.clear();
+    if (entry.module)
+    {
+        Localization::UnregisterResourceOwner(entry.module.get());
+    }
     entry.module.reset();
     entry.fileSystem   = nullptr;
     entry.informations = nullptr;
@@ -892,6 +1038,12 @@ HRESULT FileSystemPluginManager::EnsureLoaded(PluginEntry& entry, Common::Settin
     if (entry.path.empty())
     {
         entry.loadError = L"Plugin path is empty.";
+        return E_INVALIDARG;
+    }
+
+    if (entry.factoryPluginId.empty())
+    {
+        entry.loadError = L"Plugin id is missing. File system plugins must be discovered via RedSalamanderEnumeratePlugins.";
         return E_INVALIDARG;
     }
 
@@ -904,40 +1056,36 @@ HRESULT FileSystemPluginManager::EnsureLoaded(PluginEntry& entry, Common::Settin
         return HRESULT_FROM_WIN32(lastError);
     }
 
+    const HRESULT registerHr = RegisterPluginResourceOwner(entry.path, module.get());
+    if (FAILED(registerHr))
+    {
+        entry.loadError = std::format(L"RegisterResourceOwner failed (0x{:08X}).", static_cast<unsigned int>(registerHr));
+        return registerHr;
+    }
+    bool keepResourceOwnerRegistered = false;
+    auto unregisterOnFailure         = wil::scope_exit([&]() noexcept
+    {
+        if (! keepResourceOwnerRegistered)
+        {
+            Localization::UnregisterResourceOwner(module.get());
+        }
+    });
+
 #pragma warning(push)
 #pragma warning(disable : 4191) // unsafe conversion from FARPROC
-    const auto createFactory   = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(module.get(), "RedSalamanderCreate"));
-    const auto createFactoryEx = reinterpret_cast<CreateFactoryExFunc>(GetProcAddress(module.get(), "RedSalamanderCreateEx"));
+    const auto createFactory = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(module.get(), "RedSalamanderCreate"));
 #pragma warning(pop)
     if (! createFactory)
     {
-        DWORD lastError = GetLastError();
-        if (lastError == ERROR_SUCCESS)
-        {
-            lastError = ERROR_PROC_NOT_FOUND;
-        }
         entry.loadError = L"Missing export RedSalamanderCreate.";
-        return HRESULT_FROM_WIN32(lastError);
+        return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
     }
 
     FactoryOptions options{};
     options.debugLevel = DEBUG_LEVEL_NONE;
 
     wil::com_ptr<IFileSystem> fileSystem;
-    HRESULT createHr = E_FAIL;
-    if (! entry.factoryPluginId.empty())
-    {
-        if (! createFactoryEx)
-        {
-            entry.loadError = L"Missing export RedSalamanderCreateEx for multi-plugin DLL.";
-            return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
-        }
-        createHr = createFactoryEx(__uuidof(IFileSystem), &options, GetHostServices(), entry.factoryPluginId.c_str(), fileSystem.put_void());
-    }
-    else
-    {
-        createHr = createFactory(__uuidof(IFileSystem), &options, GetHostServices(), fileSystem.put_void());
-    }
+    const HRESULT createHr = createFactory(__uuidof(IFileSystem), &options, GetHostServices(), entry.factoryPluginId.c_str(), fileSystem.put_void());
     if (FAILED(createHr))
     {
         entry.loadError = std::format(L"Factory failed (hr=0x{:08X}).", static_cast<unsigned long>(createHr));
@@ -962,18 +1110,31 @@ HRESULT FileSystemPluginManager::EnsureLoaded(PluginEntry& entry, Common::Settin
 
     if (meta)
     {
-        entry.id          = SafeCoalesce(meta->id);
-        entry.shortId     = SafeCoalesce(meta->shortId);
-        entry.name        = SafeCoalesce(meta->name);
-        entry.description = SafeCoalesce(meta->description);
-        entry.author      = SafeCoalesce(meta->author);
-        entry.version     = SafeCoalesce(meta->version);
-    }
+        const std::wstring reportedId = SafeCoalesce(meta->id);
+        if (! reportedId.empty() && ! EqualsNoCase(entry.factoryPluginId, reportedId))
+        {
+            entry.loadError = std::format(L"Plugin id mismatch: requested '{}' but instance reported '{}'.", entry.factoryPluginId, reportedId);
+            return E_FAIL;
+        }
 
-    if (! entry.factoryPluginId.empty() && ! entry.id.empty() && ! EqualsNoCase(entry.factoryPluginId, entry.id))
-    {
-        entry.loadError = std::format(L"Plugin id mismatch: requested '{}' but instance reported '{}'.", entry.factoryPluginId, entry.id);
-        return E_FAIL;
+        if (entry.id.empty())
+        {
+            entry.id = reportedId;
+        }
+
+        if (! entry.id.empty() && reportedId.empty())
+        {
+            entry.loadError = L"Plugin id is missing.";
+            return E_INVALIDARG;
+        }
+
+        const std::wstring reportedShortId = SafeCoalesce(meta->shortId);
+        if (! reportedShortId.empty())
+        {
+            entry.shortId = std::move(reportedShortId);
+        }
+
+        PopulateEntryPresentationFromMetaData(entry, *meta);
     }
 
     if (entry.id.empty())
@@ -988,10 +1149,11 @@ HRESULT FileSystemPluginManager::EnsureLoaded(PluginEntry& entry, Common::Settin
         return E_INVALIDARG;
     }
 
-    entry.module       = std::move(module);
-    entry.fileSystem   = std::move(fileSystem);
-    entry.informations = std::move(infos);
-    entry.loadable     = true;
+    entry.module                = std::move(module);
+    entry.fileSystem            = std::move(fileSystem);
+    entry.informations          = std::move(infos);
+    entry.loadable              = true;
+    keepResourceOwnerRegistered = true;
 
     static_cast<void>(ApplyConfigurationFromSettings(entry, settings));
     return S_OK;
@@ -1001,6 +1163,10 @@ void FileSystemPluginManager::Unload(PluginEntry& entry) noexcept
 {
     entry.informations = nullptr;
     entry.fileSystem   = nullptr;
+    if (entry.module)
+    {
+        Localization::UnregisterResourceOwner(entry.module.get());
+    }
     entry.module.reset();
 }
 

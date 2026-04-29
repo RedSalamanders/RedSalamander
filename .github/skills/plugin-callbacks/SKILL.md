@@ -2,7 +2,7 @@
 name: plugin-callbacks
 description: Plugin callback patterns with cookie-based context for INavigationMenuCallback, IFileSystemCallback, and IFileSystemSearchCallback interfaces. Use when implementing or consuming plugin interfaces.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 
@@ -113,6 +113,16 @@ void StartWorkAsync(HWND hwnd)
 ```
 
 **Rule of thumb:** unloading must be a “quiet point” where no background worker can still call a cleared callback or touch freed memory.
+
+## Host/Plugin ABI Evolution Checklist
+
+For COM-style host/plugin service interfaces (for example `IHostConnections`):
+
+1. Keep same-GUID vtable slots stable: never insert, remove, reorder, or change existing virtual methods.
+2. Allow append-only same-GUID changes only with an explicit old-plugin/new-host slot-compatibility test.
+3. Use a new IID/name (for example `IHostConnections2`) when compatibility is not proven.
+4. Require new plugins to probe newer interfaces with `QueryInterface` so old hosts remain supported.
+5. Validate callback shutdown order before release: stop producers, clear callbacks, release instances, then unload.
 
 ## “Quiet Point” Shutdown / Unload Ordering
 

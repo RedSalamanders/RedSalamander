@@ -236,6 +236,9 @@ struct ResolvedLocation
 [[nodiscard]] bool HasFlag(FileSystemFlags flags, FileSystemFlags flag) noexcept;
 [[nodiscard]] HRESULT NormalizeCancellation(HRESULT hr) noexcept;
 
+// Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded while worker threads are running.
+extern const int kFileSystemCurlModuleAnchor;
+
 // Stops and joins the shared background copy/move worker threads.
 // Intended to be invoked at a host "quiet point" when the last FileSystemCurl instance is being destroyed.
 void ShutdownSharedCopyMoveJobScheduler() noexcept;

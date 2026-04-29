@@ -23,6 +23,8 @@
 #include "NavigationView.h"
 #include "NavigationViewInternal.h"
 
+#include "D2DHdcPaint.h"
+#include "DxUi/DxUi.Typography.h"
 #include "NavigationLocation.h"
 
 #include "DirectoryInfoCache.h"
@@ -32,8 +34,36 @@
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
-#include "ThemedControls.h"
+#include "UiMetrics.h"
 #include "resource.h"
+
+namespace
+{
+[[maybe_unused]] [[nodiscard]] HWND FindOwnedVisibleDxContextMenuWindow(HWND ownerHwnd) noexcept
+{
+    if (! ownerHwnd)
+    {
+        return nullptr;
+    }
+
+    const HWND rootOwner = GetAncestor(ownerHwnd, GA_ROOT);
+    for (HWND popup = FindWindowW(L"DxUi_ContextMenu", nullptr); popup != nullptr; popup = FindWindowExW(nullptr, popup, L"DxUi_ContextMenu", nullptr))
+    {
+        if (IsWindowVisible(popup) == FALSE)
+        {
+            continue;
+        }
+
+        const HWND popupOwner = GetWindow(popup, GW_OWNER);
+        if (popupOwner == ownerHwnd || (rootOwner && popupOwner == rootOwner))
+        {
+            return popup;
+        }
+    }
+
+    return nullptr;
+}
+} // namespace
 
 NavigationView::NavigationView() = default;
 
@@ -120,6 +150,57 @@ ATOM NavigationView::RegisterWndClass(HINSTANCE instance)
 
     atom = RegisterClassExW(&wc);
     return atom;
+}
+
+ATOM NavigationView::RegisterDxHostWndClass(HINSTANCE instance)
+{
+    static ATOM atom = 0;
+    if (atom)
+    {
+        return atom;
+    }
+
+    WNDCLASSEXW wc{};
+    wc.cbSize        = sizeof(wc);
+    wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    wc.lpfnWndProc   = DxHostWndProcThunk;
+    wc.hInstance     = instance;
+    wc.hCursor       = LoadCursor(nullptr, IDC_IBEAM);
+    wc.hbrBackground = nullptr;
+    wc.lpszClassName = kDxHostClassName;
+
+    atom = RegisterClassExW(&wc);
+    return atom;
+}
+
+LRESULT CALLBACK NavigationView::DxHostWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (msg == WM_NCCREATE)
+    {
+        auto* cs = reinterpret_cast<CREATESTRUCTW*>(lp);
+        host     = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(cs->lpCreateParams);
+        if (! host || ! host->Attach(hwnd))
+        {
+            return FALSE;
+        }
+
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(host));
+    }
+
+    if (! host)
+    {
+        return DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    bool handled     = false;
+    const LRESULT dx = host->HandleMessage(hwnd, msg, wp, lp, handled);
+    if (msg == WM_NCDESTROY)
+    {
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+    }
+
+    return handled ? dx : DefWindowProcW(hwnd, msg, wp, lp);
 }
 
 HWND NavigationView::Create(HWND parent, int x, int y, int width, int height)
@@ -222,10 +303,9 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hwnd)); break;
         case WM_ERASEBKGND: return 1;
         case WM_PAINT: OnPaint(); return 0;
+        case WM_DPICHANGED_AFTERPARENT: OnDpiChanged(static_cast<float>(GetDpiForWindow(hwnd))); return 0;
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
         case WM_COMMAND: OnCommand(LOWORD(wp), reinterpret_cast<HWND>(lp), HIWORD(wp)); return 0;
-        case WM_MEASUREITEM: OnMeasureItem(reinterpret_cast<MEASUREITEMSTRUCT*>(lp)); return TRUE;
-        case WM_DRAWITEM: OnDrawItem(reinterpret_cast<DRAWITEMSTRUCT*>(lp)); return TRUE;
         case WM_CTLCOLOREDIT: return OnCtlColorEdit(reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
         case WM_LBUTTONDOWN: OnLButtonDown({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
         case WM_LBUTTONDBLCLK: OnLButtonDblClk({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
@@ -271,6 +351,22 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             ShowSiblingsDropdown(static_cast<size_t>(wp));
             return 0;                                                            // Deferred menu opening
         case WndMsg::kNavigationMenuShowFullPath: ShowFullPathPopup(); return 0; // Deferred full-path popup opening
+        case WndMsg::kNavigationViewShowHistoryDropdown: ShowHistoryDropdown(); return 0;
+        case WndMsg::kNavigationViewShowMenuDropdown: ShowMenuDropdown(); return 0;
+        case WndMsg::kNavigationViewShowDiskInfoDropdown: ShowDiskInfoDropdown(); return 0;
+        case WndMsg::kNavigationViewShowDriveMenuDropdown: ShowFileSystemDriveMenuDropdown(); return 0;
+        case WndMsg::kNavigationViewRestoreFolderFocus:
+            if (_requestFolderViewFocusCallback && _hWnd)
+            {
+                const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
+                if (root && GetActiveWindow() != root)
+                {
+                    SetActiveWindow(root);
+                }
+
+                _requestFolderViewFocusCallback();
+            }
+            return 0;
     }
 
     return DefWindowProcW(hwnd, msg, wp, lp);
@@ -295,26 +391,6 @@ void NavigationView::OnCreate(HWND hWindow)
         _dpi = GetDpiForWindow(hWindow);
     }
 
-    // Create GDI resources
-    {
-        Debug::Perf::Scope perfFont(L"NavigationView.OnCreate.CreateFontW.PathFont");
-        int pathFontHeight = -MulDiv(12, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI);
-        _pathFont.reset(CreateFontW(pathFontHeight,
-                                    0,
-                                    0,
-                                    0,
-                                    FW_NORMAL,
-                                    FALSE,
-                                    FALSE,
-                                    FALSE,
-                                    DEFAULT_CHARSET,
-                                    OUT_DEFAULT_PRECIS,
-                                    CLIP_DEFAULT_PRECIS,
-                                    CLEARTYPE_QUALITY,
-                                    DEFAULT_PITCH,
-                                    L"Segoe UI"));
-    }
-
     {
         Debug::Perf::Scope perfTheme(L"NavigationView.OnCreate.SetTheme");
         const AppTheme resolvedTheme = ResolveAppTheme(ThemeMode::System, L"");
@@ -329,30 +405,6 @@ void NavigationView::OnCreate(HWND hWindow)
     {
         Debug::Perf::Scope perfIcc(L"NavigationView.OnCreate.InitCommonControls");
         InitCommonControls();
-    }
-
-    if (! _navDropdownCombo)
-    {
-        Debug::Perf::Scope perfCombo(L"NavigationView.OnCreate.NavDropdownCombo.Create");
-        _navDropdownCombo.reset(ThemedControls::CreateModernComboBox(hWindow, ID_NAV_DROPDOWN_COMBO, &_appTheme));
-        if (_navDropdownCombo)
-        {
-            Debug::Perf::Scope perfComboInit(L"NavigationView.OnCreate.NavDropdownCombo.Initialize");
-            HFONT fontToUse = _pathFont ? _pathFont.get() : (_menuFont ? _menuFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT)));
-            SendMessageW(_navDropdownCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(fontToUse), FALSE);
-            ThemedControls::SetModernComboCloseOnOutsideAccept(_navDropdownCombo.get(), false);
-            ThemedControls::SetModernComboDropDownPreferBelow(_navDropdownCombo.get(), true);
-            ThemedControls::SetModernComboCompactMode(_navDropdownCombo.get(), true);
-            ThemedControls::SetModernComboUseMiddleEllipsis(_navDropdownCombo.get(), true);
-
-            wil::unique_hrgn emptyRgn(CreateRectRgn(0, 0, 0, 0));
-            if (emptyRgn)
-            {
-                SetWindowRgn(_navDropdownCombo.get(), emptyRgn.release(), TRUE);
-            }
-
-            SetWindowPos(_navDropdownCombo.get(), nullptr, -32000, -32000, 10, 10, SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW);
-        }
     }
 }
 
@@ -373,6 +425,10 @@ void NavigationView::OnDeferredInit()
     if (_d2dContext)
     {
         IconCache::GetInstance().Initialize(_d2dContext.get(), static_cast<float>(_dpi));
+        if (_showMenuSection && _currentPluginPath)
+        {
+            UpdateMenuIconBitmap();
+        }
     }
 
     if (_currentPluginPath)
@@ -435,8 +491,13 @@ void NavigationView::OnDestroy()
     // Clean up menu bitmaps (automatic with wil::unique_hbitmap)
     _menuBitmaps.clear();
 
-    // Destroy child controls
+    if (_pathEdit && _pathEdit->field)
+    {
+        _pathEdit->field->SetOnTextChanged({});
+        _pathEdit->field->SetOnBlur({});
+    }
     _pathEdit.reset();
+    _fullPathPopupEdit.reset();
 
     // Release Direct2D resources
     DiscardD2DResources();
@@ -454,10 +515,14 @@ void NavigationView::OnPaint()
     // Fill background
     FillRect(hdc.get(), &ps.rcPaint, _backgroundBrush.get());
 
-    // Draw bottom border
-    auto oldPen = wil::SelectObject(hdc.get(), _borderPen.get());
-    MoveToEx(hdc.get(), 0, _clientSize.cy - 1, nullptr);
-    LineTo(hdc.get(), _clientSize.cx, _clientSize.cy - 1);
+    RECT client{};
+    GetClientRect(_hWnd.get(), &client);
+    D2DHdcPaint::Session borderPaint;
+    if (borderPaint.Begin(hdc.get(), client))
+    {
+        const float y = static_cast<float>(std::max<LONG>(0, _clientSize.cy - 1));
+        borderPaint.DrawLine(0.0f, y, static_cast<float>(std::max<LONG>(0, _clientSize.cx)), y, _theme.gdiBorderPen);
+    }
 
     if (! _swapChain || ! _d2dTarget || ! _d2dContext)
     {
@@ -561,16 +626,14 @@ void NavigationView::OnSize(UINT width, UINT height)
         UpdateBreadcrumbLayout();
     }
 
-    if (_pathEdit)
-    {
-        const auto chrome = ComputeEditChromeRects(_sectionPathRect, _dpi);
-        LayoutSingleLineEditInRect(_pathEdit.get(), chrome.editRect);
-    }
+    UpdatePathEditHostLayout();
 
     if (_editSuggestPopup)
     {
         UpdateEditSuggestPopupWindow();
     }
+
+    UpdateFullPathPopupEditHostLayout();
 
     if (_hWnd)
     {
@@ -578,74 +641,8 @@ void NavigationView::OnSize(UINT width, UINT height)
     }
 }
 
-void NavigationView::OnCommand(UINT id, [[maybe_unused]] HWND hwndCtl, UINT codeNotify)
+void NavigationView::OnCommand(UINT id, [[maybe_unused]] HWND hwndCtl, [[maybe_unused]] UINT codeNotify)
 {
-    if (_editMode && id == ID_PATH_EDIT && codeNotify == EN_CHANGE && _pathEdit && hwndCtl == _pathEdit.get())
-    {
-        UpdateEditSuggest();
-        return;
-    }
-
-    if (id == ID_NAV_DROPDOWN_COMBO && _navDropdownCombo && hwndCtl == _navDropdownCombo.get())
-    {
-        if (codeNotify == CBN_SELENDOK)
-        {
-            const int sel = static_cast<int>(SendMessageW(_navDropdownCombo.get(), CB_GETCURSEL, 0, 0));
-            if (sel >= 0 && static_cast<size_t>(sel) < _navDropdownPaths.size())
-            {
-                const std::filesystem::path selectedPath = _navDropdownPaths[static_cast<size_t>(sel)];
-
-                _navDropdownKind = ModernDropdownKind::None;
-                _navDropdownPaths.clear();
-
-                if (_menuOpenForSeparator != -1)
-                {
-                    _pendingSeparatorMenuSwitchIndex = -1;
-                    StartSeparatorAnimation(static_cast<size_t>(_menuOpenForSeparator), 0.0f);
-                    _menuOpenForSeparator = -1;
-                    _activeSeparatorIndex = -1;
-                    RenderPathSection();
-                }
-
-                SetWindowPos(_navDropdownCombo.get(), nullptr, -32000, -32000, 10, 10, SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW);
-                RequestPathChange(selectedPath);
-            }
-            return;
-        }
-
-        if (codeNotify == CBN_SELENDCANCEL || codeNotify == CBN_CLOSEUP)
-        {
-            _navDropdownKind = ModernDropdownKind::None;
-            _navDropdownPaths.clear();
-
-            if (_menuOpenForSeparator != -1)
-            {
-                _pendingSeparatorMenuSwitchIndex = -1;
-                StartSeparatorAnimation(static_cast<size_t>(_menuOpenForSeparator), 0.0f);
-                _menuOpenForSeparator = -1;
-                _activeSeparatorIndex = -1;
-                RenderPathSection();
-            }
-
-            if (_requestFolderViewFocusCallback && _hWnd)
-            {
-                const HWND root = GetAncestor(_hWnd.get(), GA_ROOT);
-                if (root && GetActiveWindow() == root)
-                {
-                    _requestFolderViewFocusCallback();
-                }
-            }
-
-            if (_navDropdownCombo)
-            {
-                SetWindowPos(_navDropdownCombo.get(), nullptr, -32000, -32000, 10, 10, SWP_NOZORDER | SWP_NOACTIVATE | SWP_HIDEWINDOW);
-            }
-            return;
-        }
-
-        return;
-    }
-
     if (ExecuteNavigationMenuAction(id))
     {
         _navigationMenuActions.clear();
@@ -661,41 +658,17 @@ void NavigationView::OnCommand(UINT id, [[maybe_unused]] HWND hwndCtl, UINT code
     // History button and disk static handlers removed - now handled in OnLButtonDown
     if (id >= ID_SIBLING_BASE)
     {
-        // Handle sibling folder navigation - no limit on number of siblings
-        // Actual navigation is handled in ShowSiblingsDropdown via TrackPopupMenu return value
-    }
-    else if (id == ID_PATH_EDIT && codeNotify == EN_KILLFOCUS)
-    {
-        ExitEditMode(false);
+        // Handle sibling folder navigation - selection is dispatched directly by the DxUi sibling dropdown.
     }
 }
 
 void NavigationView::OnDpiChanged(float newDpi)
 {
+    Debug::Perf::Scope perf(L"navigation.ui.dpi_change_us");
     _dpi = static_cast<UINT>(newDpi);
     IconCache::GetInstance().SetDpi(newDpi);
 
     InvalidateBreadcrumbLayoutCache();
-
-    // Recreate fonts with new DPI
-    int pathFontHeight = -MulDiv(12, static_cast<int>(_dpi), USER_DEFAULT_SCREEN_DPI);
-    _pathFont.reset(CreateFontW(pathFontHeight,
-                                0,
-                                0,
-                                0,
-                                FW_NORMAL,
-                                FALSE,
-                                FALSE,
-                                FALSE,
-                                DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,
-                                CLIP_DEFAULT_PRECIS,
-                                CLEARTYPE_QUALITY,
-                                DEFAULT_PITCH,
-                                L"Segoe UI"));
-
-    _menuFont    = CreateMenuFontForDpi(_dpi);
-    _menuFontDpi = _dpi;
 
     // GDI menus are NOT DPI-aware - menu icon size does not change with DPI
     // It always stays at the system's base small icon size (96 DPI physical pixels)
@@ -709,35 +682,22 @@ void NavigationView::OnDpiChanged(float newDpi)
     // Regenerate menu icon bitmap at new DPI
     UpdateMenuIconBitmap();
 
-    if (_navDropdownCombo)
-    {
-        HFONT fontToUse = _pathFont ? _pathFont.get() : (_menuFont ? _menuFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT)));
-        SendMessageW(_navDropdownCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(fontToUse), FALSE);
-    }
-
-    if (_pathEdit)
-    {
-        SendMessageW(_pathEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_pathFont.get()), TRUE);
-        const auto chrome = ComputeEditChromeRects(_sectionPathRect, _dpi);
-        LayoutSingleLineEditInRect(_pathEdit.get(), chrome.editRect);
-    }
+    ApplyDxEditHostThemes();
+    UpdatePathEditHostLayout();
 
     if (_editSuggestPopup)
     {
+        DiscardEditSuggestPopupD2DResources();
         UpdateEditSuggestPopupWindow();
     }
 
-    if (_fullPathPopupEdit)
+    if (_fullPathPopup)
     {
-        SendMessageW(_fullPathPopupEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_pathFont.get()), TRUE);
-
-        if (_fullPathPopup)
-        {
-            RECT rc{};
-            GetClientRect(_fullPathPopup.get(), &rc);
-            LayoutSingleLineEditInRect(_fullPathPopupEdit.get(), rc);
-        }
+        DiscardFullPathPopupD2DResources();
+        UpdateFullPathPopupWindow();
     }
+
+    UpdateFullPathPopupEditHostLayout();
 
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
 }
@@ -951,9 +911,6 @@ void NavigationView::SetTheme(const AppTheme& theme)
 {
     _appTheme  = theme;
     _baseTheme = _appTheme.navigationView;
-    _menuTheme = _appTheme.menu;
-
-    _menuBackgroundBrush.reset(CreateSolidBrush(_menuTheme.background));
 
     UpdateEffectiveTheme();
     InvalidateBreadcrumbLayoutCache();
@@ -978,11 +935,7 @@ void NavigationView::SetTheme(const AppTheme& theme)
     {
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
-
-    if (_navDropdownCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(_navDropdownCombo.get(), _appTheme);
-    }
+    ApplyDxEditHostThemes();
 }
 
 void NavigationView::SetPaneFocused(bool focused) noexcept
@@ -1005,6 +958,264 @@ void NavigationView::SetPaneFocused(bool focused) noexcept
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
 }
+
+void NavigationView::UpdatePathEditHostLayout() noexcept
+{
+    if (! _pathEdit || ! _pathEdit->hwnd)
+    {
+        return;
+    }
+
+    const RECT editBounds = GetPathEditBoundsRect(_sectionPathRect, _sectionHistoryRect);
+    const auto chrome     = ComputeEditChromeRects(editBounds, _dpi);
+    const int hostWidth   = static_cast<int>((std::max)(0L, chrome.editRect.right - chrome.editRect.left));
+    const int hostHeight  = static_cast<int>((std::max)(0L, chrome.editRect.bottom - chrome.editRect.top));
+    SetWindowPos(_pathEdit->hwnd.get(), nullptr, chrome.editRect.left, chrome.editRect.top, hostWidth, hostHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+void NavigationView::UpdateFullPathPopupEditHostLayout() noexcept
+{
+    if (! _fullPathPopupEdit || ! _fullPathPopupEdit->hwnd || ! _fullPathPopup)
+    {
+        return;
+    }
+
+    RECT rc{};
+    GetClientRect(_fullPathPopup.get(), &rc);
+    const int hostWidth  = static_cast<int>((std::max)(0L, rc.right - rc.left));
+    const int hostHeight = static_cast<int>((std::max)(0L, rc.bottom - rc.top));
+    SetWindowPos(_fullPathPopupEdit->hwnd.get(), nullptr, rc.left, rc.top, hostWidth, hostHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+void NavigationView::ApplyDxEditHostThemes() noexcept
+{
+    const auto palette = MakeNavigationDxEditPalette(_appTheme, _theme);
+    if (_pathEdit)
+    {
+        _pathEdit->host.SetTheme(palette);
+        if (_pathEdit->field)
+        {
+            _pathEdit->field->SetCaretColor(_theme.text);
+        }
+    }
+    if (_fullPathPopupEdit)
+    {
+        _fullPathPopupEdit->host.SetTheme(palette);
+        if (_fullPathPopupEdit->field)
+        {
+            _fullPathPopupEdit->field->SetCaretColor(_theme.text);
+        }
+    }
+}
+
+#ifdef ENABLE_TESTS
+bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const noexcept
+{
+    out = {};
+    if (! _hWnd || IsWindow(_hWnd.get()) == FALSE)
+    {
+        return false;
+    }
+
+    out.dpi                   = _dpi;
+    out.editMode              = _editMode;
+    out.fullPathPopupVisible  = _fullPathPopup && IsWindowVisible(_fullPathPopup.get()) != FALSE;
+    out.fullPathPopupEditMode = _fullPathPopupEditMode;
+    out.showMenuSection       = _showMenuSection;
+    out.showDiskInfoSection   = _showDiskInfoSection;
+    out.menuIconBitmapLoaded  = _menuIconBitmapD2D != nullptr;
+    out.historyCount          = _pathHistory.size();
+    out.menuRegionRect        = _sectionDriveRect;
+    out.pathRegionRect        = _sectionPathRect;
+    out.historyRegionRect     = _sectionHistoryRect;
+    out.diskInfoRegionRect    = _sectionDiskInfoRect;
+    for (const auto& segment : _segments)
+    {
+        if (! segment.isEllipsis)
+        {
+            if (_currentPath.has_value() && segment.fullPath != _currentPath.value())
+            {
+                out.pathAncestorSegmentVisible     = true;
+                out.pathAncestorSegmentRect.left   = _sectionPathRect.left + static_cast<LONG>(std::floor(segment.bounds.left));
+                out.pathAncestorSegmentRect.top    = _sectionPathRect.top + static_cast<LONG>(std::floor(segment.bounds.top));
+                out.pathAncestorSegmentRect.right  = _sectionPathRect.left + static_cast<LONG>(std::ceil(segment.bounds.right));
+                out.pathAncestorSegmentRect.bottom = _sectionPathRect.top + static_cast<LONG>(std::ceil(segment.bounds.bottom));
+                out.pathAncestorTargetText         = segment.fullPath.wstring();
+            }
+
+            continue;
+        }
+
+        out.pathEllipsisVisible     = true;
+        out.pathEllipsisRect.left   = _sectionPathRect.left + static_cast<LONG>(std::floor(segment.bounds.left));
+        out.pathEllipsisRect.top    = _sectionPathRect.top + static_cast<LONG>(std::floor(segment.bounds.top));
+        out.pathEllipsisRect.right  = _sectionPathRect.left + static_cast<LONG>(std::ceil(segment.bounds.right));
+        out.pathEllipsisRect.bottom = _sectionPathRect.top + static_cast<LONG>(std::ceil(segment.bounds.bottom));
+        break;
+    }
+    HWND navDropdownPopup = nullptr;
+    if (_navDropdownKind != ModernDropdownKind::None)
+    {
+        const HWND popup = FindOwnedVisibleDxContextMenuWindow(_hWnd.get());
+        if (popup && IsWindowVisible(popup) != FALSE)
+        {
+            navDropdownPopup           = popup;
+            out.historyDropdownVisible = true;
+            switch (_navDropdownKind)
+            {
+                case ModernDropdownKind::Menu: out.dropdownKind = NavigationViewDebugDropdownKind::Menu; break;
+                case ModernDropdownKind::Drive: out.dropdownKind = NavigationViewDebugDropdownKind::Drive; break;
+                case ModernDropdownKind::History: out.dropdownKind = NavigationViewDebugDropdownKind::History; break;
+                case ModernDropdownKind::DiskInfo: out.dropdownKind = NavigationViewDebugDropdownKind::DiskInfo; break;
+                case ModernDropdownKind::Siblings: out.dropdownKind = NavigationViewDebugDropdownKind::Siblings; break;
+                case ModernDropdownKind::None: break;
+            }
+            out.historyDropdownItemCount     = _navDropdownPaths.size();
+            out.historyDropdownSelectedIndex = _navDropdownSelectedIndex;
+        }
+    }
+    if (_editSuggestPopup && IsWindowVisible(_editSuggestPopup.get()) != FALSE)
+    {
+        out.editSuggestPopupVisible    = true;
+        out.editSuggestItemCount       = _editSuggestItems.size();
+        out.editSuggestSelectedIndex   = _editSuggestSelectedIndex;
+        out.editSuggestPopupClientSize = _editSuggestPopupClientSize;
+    }
+    if (_currentPath.has_value())
+    {
+        out.currentPathText = _currentPath->wstring();
+    }
+
+    const auto copyWindowText = [](const HWND hwnd, std::wstring& text) noexcept
+    {
+        text.clear();
+        if (! hwnd || IsWindow(hwnd) == FALSE)
+        {
+            return;
+        }
+
+        const int length = GetWindowTextLengthW(hwnd);
+        if (length <= 0)
+        {
+            return;
+        }
+
+        text.resize(static_cast<size_t>(length));
+        const int copied = GetWindowTextW(hwnd, text.data(), length + 1);
+        if (copied <= 0)
+        {
+            text.clear();
+            return;
+        }
+        text.resize(static_cast<size_t>(copied));
+    };
+
+    if (_pathEdit && _pathEdit->field && _pathEdit->hwnd && IsWindowVisible(_pathEdit->hwnd.get()) != FALSE)
+    {
+        out.currentEditText.assign(_pathEdit->field->GetText());
+        out.currentEditHostHwnd   = _pathEdit->hwnd.get();
+        out.currentEditBridgeHwnd = _pathEdit->GetBridgeHwnd();
+        if (const auto selection = _pathEdit->field->GetSelectionRange(); selection.has_value())
+        {
+            out.currentEditHasSelection   = true;
+            out.currentEditSelectionStart = selection->first;
+            out.currentEditSelectionEnd   = selection->second;
+        }
+    }
+
+    if (_fullPathPopup && IsWindowVisible(_fullPathPopup.get()) != FALSE)
+    {
+        out.fullPathPopupClientSize = _fullPathPopupClientSize;
+        for (const auto& segment : _fullPathPopupSegments)
+        {
+            if (_currentPath.has_value() && segment.fullPath != _currentPath.value())
+            {
+                out.fullPathPopupAncestorSegmentVisible     = true;
+                out.fullPathPopupAncestorSegmentRect.left   = static_cast<LONG>(std::floor(segment.bounds.left));
+                out.fullPathPopupAncestorSegmentRect.top    = static_cast<LONG>(std::floor(segment.bounds.top - _fullPathPopupScrollY));
+                out.fullPathPopupAncestorSegmentRect.right  = static_cast<LONG>(std::ceil(segment.bounds.right));
+                out.fullPathPopupAncestorSegmentRect.bottom = static_cast<LONG>(std::ceil(segment.bounds.bottom - _fullPathPopupScrollY));
+                out.fullPathPopupAncestorTargetText         = segment.fullPath.wstring();
+            }
+        }
+    }
+
+    if (_fullPathPopupEdit && _fullPathPopupEdit->field && _fullPathPopupEdit->hwnd && IsWindowVisible(_fullPathPopupEdit->hwnd.get()) != FALSE)
+    {
+        out.currentEditText.assign(_fullPathPopupEdit->field->GetText());
+        out.currentEditHostHwnd   = _fullPathPopupEdit->hwnd.get();
+        out.currentEditBridgeHwnd = _fullPathPopupEdit->GetBridgeHwnd();
+        if (const auto selection = _fullPathPopupEdit->field->GetSelectionRange(); selection.has_value())
+        {
+            out.currentEditHasSelection   = true;
+            out.currentEditSelectionStart = selection->first;
+            out.currentEditSelectionEnd   = selection->second;
+        }
+    }
+    else if ((! _pathEdit || ! _pathEdit->field || ! _pathEdit->hwnd || IsWindowVisible(_pathEdit->hwnd.get()) == FALSE) && _currentEditPath.has_value())
+    {
+        out.currentEditText = _currentEditPath->wstring();
+    }
+
+    out.visibleChildWindowCount = 0u;
+    if (_pathEdit && _pathEdit->hwnd && IsWindowVisible(_pathEdit->hwnd.get()) != FALSE)
+    {
+        ++out.visibleChildWindowCount;
+    }
+    if (out.historyDropdownVisible)
+    {
+        ++out.visibleChildWindowCount;
+    }
+
+    const HWND focused = GetFocus();
+    if (_pathEdit && _pathEdit->hwnd && focused &&
+        (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetBridgeHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE))
+    {
+        out.focusTarget = NavigationViewDebugFocusTarget::PathEdit;
+        return true;
+    }
+
+    if (navDropdownPopup && focused && (focused == navDropdownPopup || IsChild(navDropdownPopup, focused) != FALSE))
+    {
+        out.focusTarget = NavigationViewDebugFocusTarget::HistoryDropdown;
+        return true;
+    }
+
+    if (_fullPathPopupEdit && _fullPathPopupEdit->hwnd && focused &&
+        (focused == _fullPathPopupEdit->hwnd.get() || focused == _fullPathPopupEdit->GetBridgeHwnd() ||
+         IsChild(_fullPathPopupEdit->hwnd.get(), focused) != FALSE))
+    {
+        out.focusTarget = NavigationViewDebugFocusTarget::FullPathPopupEdit;
+        return true;
+    }
+
+    if (focused && (focused == _hWnd.get() || IsChild(_hWnd.get(), focused) != FALSE))
+    {
+        switch (_focusedRegion)
+        {
+            case FocusRegion::Menu: out.focusTarget = NavigationViewDebugFocusTarget::MenuRegion; break;
+            case FocusRegion::Path: out.focusTarget = NavigationViewDebugFocusTarget::PathRegion; break;
+            case FocusRegion::History: out.focusTarget = NavigationViewDebugFocusTarget::HistoryRegion; break;
+            case FocusRegion::DiskInfo: out.focusTarget = NavigationViewDebugFocusTarget::DiskInfoRegion; break;
+        }
+    }
+
+    return true;
+}
+
+bool NavigationView::DebugFocusRegion(FocusRegion region) noexcept
+{
+    if (! _hWnd || IsWindow(_hWnd.get()) == FALSE)
+    {
+        return false;
+    }
+
+    SetFocusRegion(region);
+    SetFocus(_hWnd.get());
+    return GetFocus() == _hWnd.get();
+}
+
+#endif
 
 void NavigationView::UpdateEffectiveTheme() noexcept
 {
@@ -1046,8 +1257,6 @@ void NavigationView::UpdateEffectiveTheme() noexcept
     _theme.gdiBorder     = _theme.gdiBackground;
 
     _backgroundBrush.reset(CreateSolidBrush(_theme.gdiBackground));
-    _borderBrush.reset(CreateSolidBrush(_theme.gdiBorder));
-    _borderPen.reset(CreatePen(PS_SOLID, 1, _theme.gdiBorderPen));
 }
 
 void NavigationView::SetFocusRegion(FocusRegion region)
@@ -1100,8 +1309,8 @@ void NavigationView::OpenHistoryDropdownFromKeyboard()
     if (_hWnd)
     {
         SetFocus(_hWnd.get());
+        PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowHistoryDropdown, 0, 0);
     }
-    ShowHistoryDropdown();
 }
 
 // Direct2D implementation continues in next part...

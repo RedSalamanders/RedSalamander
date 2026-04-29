@@ -25,6 +25,20 @@ enum class ThemeMode : uint8_t
     HighContrast,
 };
 
+enum class AppBackdropType : uint8_t
+{
+    None,
+    Mica,
+    Acrylic,
+    MicaAlt,
+};
+
+enum class WindowBackdropTarget : uint8_t
+{
+    Primary,
+    Tool,
+};
+
 struct MenuTheme
 {
     COLORREF background         = RGB(255, 255, 255);
@@ -126,17 +140,33 @@ struct FileOperationsTheme
     D2D1::ColorF scrollbarThumb = D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.22f);
 };
 
+struct ViewerDiffTheme
+{
+    D2D1::ColorF addedBackground       = D2D1::ColorF(46.0f / 255.0f, 160.0f / 255.0f, 67.0f / 255.0f, 0.16f);
+    D2D1::ColorF removedBackground     = D2D1::ColorF(204.0f / 255.0f, 51.0f / 255.0f, 51.0f / 255.0f, 0.16f);
+    D2D1::ColorF contextBackground     = D2D1::ColorF(0.0f, 120.0f / 255.0f, 215.0f / 255.0f, 0.05f);
+    D2D1::ColorF headerBackground      = D2D1::ColorF(0.0f, 120.0f / 255.0f, 215.0f / 255.0f, 0.10f);
+    D2D1::ColorF bannerBackground      = D2D1::ColorF(0.0f, 120.0f / 255.0f, 215.0f / 255.0f, 0.16f);
+    D2D1::ColorF placeholderBackground = D2D1::ColorF(0.0f, 120.0f / 255.0f, 215.0f / 255.0f, 0.12f);
+    D2D1::ColorF divider               = D2D1::ColorF(0.70f, 0.70f, 0.70f, 0.75f);
+};
+
 struct AppTheme
 {
     ThemeMode requestedMode = ThemeMode::System;
     bool highContrast       = false;
     bool systemHighContrast = false;
     bool dark               = false;
-    D2D1::ColorF accent     = D2D1::ColorF(0.0f, 0.47f, 0.84f);
+    bool compactMode        = false;
+    std::optional<bool> reducedMotionOverride;
+    D2D1::ColorF accent                   = D2D1::ColorF(0.0f, 0.47f, 0.84f);
+    AppBackdropType primaryWindowBackdrop = AppBackdropType::None;
+    AppBackdropType toolWindowBackdrop    = AppBackdropType::None;
 
     NavigationViewTheme navigationView;
     FolderViewTheme folderView;
     FileOperationsTheme fileOperations;
+    ViewerDiffTheme viewerDiff;
     MenuTheme menu;
     TitleBarTheme titleBar;
 
@@ -158,9 +188,11 @@ uint32_t StableHash32(std::wstring_view text) noexcept;
 
 COLORREF RainbowMenuSelectionColor(std::wstring_view seed, bool darkBase) noexcept;
 COLORREF ChooseContrastingTextColor(COLORREF background) noexcept;
-wil::unique_hfont CreateMenuFontForDpi(UINT dpi) noexcept;
 
 AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed) noexcept;
 AppTheme ResolveAppTheme(ThemeMode requestedMode, std::wstring_view rainbowSeed, std::optional<D2D1::ColorF> accentOverride) noexcept;
+TitleBarTheme ResolveEffectiveTitleBarTheme(const AppTheme& theme, bool windowActive) noexcept;
 void ApplyTitleBarTheme(HWND hwnd, const TitleBarTheme& theme) noexcept;
 void ApplyTitleBarTheme(HWND hwnd, const AppTheme& theme, bool windowActive) noexcept;
+void ApplyWindowBackdropTheme(HWND hwnd, const AppTheme& theme, WindowBackdropTarget target) noexcept;
+void ApplyWindowChromeTheme(HWND hwnd, const AppTheme& theme, WindowBackdropTarget target, bool windowActive) noexcept;

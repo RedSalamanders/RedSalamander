@@ -18,6 +18,9 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "DxUi/DxUi.h"
+#include "DxUi/DxUiNativeMenuInterop.h"
+#include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
@@ -29,6 +32,8 @@ struct ID2D1SolidColorBrush;
 struct IDWriteFactory;
 struct IDWriteTextFormat;
 struct IDWriteTextLayout;
+
+[[nodiscard]] const char* GetViewerPEStaticConfigurationSchema() noexcept;
 
 class ViewerPE final : public IViewer, public IInformations
 {
@@ -58,6 +63,8 @@ public:
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
     HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
 
+    LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
+
 private:
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
     static constexpr wchar_t kClassName[] = L"RedSalamander.ViewerPE";
@@ -72,10 +79,7 @@ private:
     void OnMouseWheel(short delta) noexcept;
     void OnVScroll(WORD request, WORD position) noexcept;
     void OnKeyDown(UINT vk) noexcept;
-    void OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND control) noexcept;
-    LRESULT OnMeasureItem(MEASUREITEMSTRUCT* measure) noexcept;
-    LRESULT OnDrawItem(DRAWITEMSTRUCT* draw) noexcept;
-    LRESULT OnCtlColor(UINT msg, HDC hdc, HWND control) noexcept;
+    void OnCommand(HWND hwnd, UINT commandId, [[maybe_unused]] UINT notifyCode, [[maybe_unused]] HWND control) noexcept;
 
     void ApplyTitleBarTheme(bool windowActive) noexcept;
     void ResetDeviceResources() noexcept;
@@ -86,7 +90,7 @@ private:
     void Layout(HWND hwnd) noexcept;
     void RefreshFileCombo(HWND hwnd) noexcept;
     void SyncFileComboSelection() noexcept;
-    void UpdateMenuState(HWND hwnd) noexcept;
+    void UpdateMenuState(HWND hwnd, bool syncDxMenuBar = true) noexcept;
 
     void SetScrollDip(HWND hwnd, float scrollDip) noexcept;
     void ScrollByDip(HWND hwnd, float deltaDip) noexcept;
@@ -128,8 +132,7 @@ private:
     bool _hasTheme  = false;
     bool _isLoading = false;
 
-    IViewerCallback* _callback = nullptr;
-    void* _callbackCookie      = nullptr;
+    RegistrationCallbackState<IViewerCallback> _callbackState;
 
     wil::com_ptr<IHostAlerts> _hostAlerts;
 
@@ -140,13 +143,13 @@ private:
     bool _syncingFileCombo = false;
 
     wil::unique_hwnd _hWnd;
-    wil::unique_hwnd _hFileCombo;
-    HWND _hFileComboList = nullptr;
-    HWND _hFileComboItem = nullptr;
-    UINT _dpi            = 96;
-
-    wil::unique_hfont _uiFont;
-    wil::unique_hbrush _headerBrush;
+    wil::unique_hmenu _menuHandle;
+    RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
+    wil::unique_hwnd _hFileComboHost;
+    RedSalamander::DxUi::WindowHost _fileComboHost;
+    RedSalamander::DxUi::ComboBox* _fileComboControl = nullptr;
+    bool _fileComboHostPreExpandPopup                = false;
+    UINT _dpi                                        = 96;
 
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<IDWriteFactory> _writeFactory;

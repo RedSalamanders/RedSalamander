@@ -31,48 +31,36 @@
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{d2b87eb8-e4d3-43b4-9610-407e297f8916}</ProjectGuid>
     <RootNamespace>RedSalamander</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
     <EnableASAN>true</EnableASAN>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
-    <CharacterSet>Unicode</CharacterSet>
     <EnableASAN>true</EnableASAN>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
-    <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -98,20 +86,13 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
-  <PropertyGroup Label="Vcpkg">
-    <VcpkgEnableManifest>true</VcpkgEnableManifest>
-  </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
-      <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
-      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /bigobj /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SelfTest\Common;$(ProjectDir)SelfTest\Commands;$(ProjectDir)SelfTest\CompareDirectories;$(ProjectDir)SelfTest\FileOperations;$(SolutionDir)Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MinimalRebuild>false</MinimalRebuild>
       <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
@@ -129,15 +110,11 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
     <ClCompile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
-      <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
-      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /bigobj /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SelfTest\Common;$(ProjectDir)SelfTest\Commands;$(ProjectDir)SelfTest\CompareDirectories;$(ProjectDir)SelfTest\FileOperations;$(SolutionDir)Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MinimalRebuild>false</MinimalRebuild>
       <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
@@ -155,15 +132,11 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
     <ClCompile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
-      <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
-      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /bigobj /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SelfTest\Common;$(ProjectDir)SelfTest\Commands;$(ProjectDir)SelfTest\CompareDirectories;$(ProjectDir)SelfTest\FileOperations;$(SolutionDir)Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MinimalRebuild>false</MinimalRebuild>
       <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
@@ -181,15 +154,11 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
     <ClCompile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
-      <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
-      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /bigobj /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SelfTest\Common;$(ProjectDir)SelfTest\Commands;$(ProjectDir)SelfTest\CompareDirectories;$(ProjectDir)SelfTest\FileOperations;$(SolutionDir)Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MinimalRebuild>false</MinimalRebuild>
       <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
@@ -207,17 +176,13 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <PreprocessorDefinitions>NDEBUG;$(RSBuildTestDefinitions)_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
-      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /bigobj /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SelfTest\Common;$(ProjectDir)SelfTest\Commands;$(ProjectDir)SelfTest\CompareDirectories;$(ProjectDir)SelfTest\FileOperations;$(SolutionDir)Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MinimalRebuild>false</MinimalRebuild>
       <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
@@ -229,21 +194,19 @@
     <Manifest>
       <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
     </Manifest>
-    <ResourceCompile />
+    <ResourceCompile>
+      <PreprocessorDefinitions>$(RSBuildTestDefinitions)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <ClCompile>
-      <WarningLevel>EnableAllWarnings</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
-      <ConformanceMode>true</ConformanceMode>
-      <LanguageStandard>stdcpplatest</LanguageStandard>
+      <PreprocessorDefinitions>NDEBUG;$(RSBuildTestDefinitions)_WINDOWS;%(PreprocessorDefinitions);_SILENCE_STDEXT_ARR_ITERS_DEPRECATION_WARNING;_SILENCE_ALL_MS_EXT_DEPRECATION_WARNINGS</PreprocessorDefinitions>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <ExternalWarningLevel>TurnOffAllWarnings</ExternalWarningLevel>
-      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /MP %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalIncludeDirectories>$(SolutionDir)Common</AdditionalIncludeDirectories>
+      <AdditionalOptions>/utf-8 /external:anglebrackets /external:templates- /wd5045 /wd4820 /bigobj /MP %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);$(ProjectDir)SelfTest\Common;$(ProjectDir)SelfTest\Commands;$(ProjectDir)SelfTest\CompareDirectories;$(ProjectDir)SelfTest\FileOperations;$(SolutionDir)Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MinimalRebuild>false</MinimalRebuild>
       <DisableSpecificWarnings>4710;4711;4514;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
@@ -255,19 +218,22 @@
     <Manifest>
       <AdditionalManifestFiles>$(ProjectDir)res\exe.manifest</AdditionalManifestFiles>
     </Manifest>
-    <ResourceCompile />
+    <ResourceCompile>
+      <PreprocessorDefinitions>$(RSBuildTestDefinitions)%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="AppTheme.h" />
     <ClInclude Include="CommandDispatch.Debug.h" />
     <ClInclude Include="CrashHandler.h" />
+    <ClInclude Include="D2DHdcPaint.h" />
     <ClInclude Include="DirectoryInfoCache.h" />
     <ClInclude Include="FileSystemPluginManager.h" />
     <ClInclude Include="FluentIcons.h" />
     <ClInclude Include="FunctionBar.h" />
     <ClInclude Include="Framework.h" />
     <ClInclude Include="ConnectionSecrets.h" />
-    <ClInclude Include="ConnectionManagerDialog.h" />
+    <ClInclude Include="ConnectionManagerWindow.h" />
     <ClInclude Include="ConnectionCredentialPromptDialog.h" />
     <ClInclude Include="NavigationLocation.h" />
     <ClInclude Include="SettingsSave.h" />
@@ -277,12 +243,15 @@
     <ClInclude Include="WindowsHello.h" />
     <ClInclude Include="ThemedInputFrames.h" />
     <ClInclude Include="FolderView.h" />
+    <ClInclude Include="FolderViewEmptyStateLayout.h" />
+    <ClInclude Include="FolderViewIncrementalSearch.h" />
+    <ClInclude Include="FolderViewVisualState.h" />
     <ClInclude Include="FolderViewInternal.h" />
     <ClInclude Include="FolderWindow.h" />
     <ClInclude Include="FolderWindow.FileOperationsInternal.h" />
     <ClInclude Include="FolderWindow.FileOperations.IssuesPane.h" />
     <ClInclude Include="FolderWindow.FileOperations.Popup.h" />
-    <ClInclude Include="FolderWindow.FileOperations.SelfTest.h" />
+    <ClInclude Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.h" />
     <ClInclude Include="FolderWindowInternal.h" />
     <ClInclude Include="FolderWatcher.h" />
     <ClInclude Include="HostServices.h" />
@@ -291,9 +260,9 @@
     <ClInclude Include="Ui\\AlertOverlayWindow.h" />
     <ClInclude Include="Ui\\AnimationDispatcher.h" />
     <ClInclude Include="ChangeCase.h" />
-    <ClInclude Include="Commands.SelfTest.h" />
+    <ClInclude Include="SelfTest\Commands\Commands.SelfTest.h" />
     <ClInclude Include="CommandRegistry.h" />
-    <ClInclude Include="CompareDirectoriesEngine.SelfTest.h" />
+    <ClInclude Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.h" />
     <ClInclude Include="CompareDirectoriesEngine.h" />
     <ClInclude Include="FindFilesWindow.h" />
     <ClInclude Include="SearchFallbackEngine.h" />
@@ -307,6 +276,7 @@
     <ClInclude Include="Preferences.Dialog.h" />
     <ClInclude Include="Preferences.Advanced.h" />
     <ClInclude Include="Preferences.CompareDirectories.h" />
+    <ClInclude Include="Preferences.FileOperations.h" />
     <ClInclude Include="Preferences.HotPaths.h" />
     <ClInclude Include="Preferences.Editors.h" />
     <ClInclude Include="Preferences.General.h" />
@@ -326,9 +296,9 @@
     <ClInclude Include="ShortcutManager.h" />
     <ClInclude Include="ShortcutText.h" />
     <ClInclude Include="SessionState.h" />
-    <ClInclude Include="SelfTestCommon.h" />
+    <ClInclude Include="SelfTest\Common\SelfTestCommon.h" />
     <ClInclude Include="SettingsSchemaExport.h" />
-    <ClInclude Include="ThemedControls.h" />
+    <ClInclude Include="UiMetrics.h" />
     <ClInclude Include="SplashScreen.h" />
     <ClInclude Include="StartupMetrics.h" />
     <ClInclude Include="targetver.h" />
@@ -339,18 +309,21 @@
     <ClInclude Include="ConnectionProfileUtils.h" />
     <ClInclude Include="..\Common\LocalSearchIndexCore.h" />
     <ClInclude Include="..\Common\SearchServiceBroker.h" />
+    <ClInclude Include="..\Common\SqliteIndexStore.h" />
     <ClInclude Include="..\Common\SearchTextHelpers.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Common\LocalSearchIndexCore.cpp" />
     <ClCompile Include="..\Common\SearchServiceBroker.cpp" />
+    <ClCompile Include="..\Common\SqliteIndexStore.cpp" />
     <ClCompile Include="..\Common\SearchTextHelpers.cpp" />
     <ClCompile Include="AppDataPaths.cpp" />
     <ClCompile Include="AppTheme.cpp" />
     <ClCompile Include="CrashQuarantine.cpp" />
     <ClCompile Include="CrashHandler.cpp" />
+    <ClCompile Include="D2DHdcPaint.cpp" />
     <ClCompile Include="ChangeCase.cpp" />
-    <ClCompile Include="Commands.SelfTest.cpp" />
+    <ClCompile Include="SelfTest\Commands\Commands.SelfTest.cpp" />
     <ClCompile Include="ConnectionProfileUtils.cpp" />
     <ClCompile Include="DirectoryInfoCache.cpp" />
     <ClCompile Include="FileSystemPluginManager.cpp" />
@@ -371,7 +344,7 @@
     <ClCompile Include="FolderWindow.FileOperations.Dialog.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.IssuesPane.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.Popup.cpp" />
-    <ClCompile Include="FolderWindow.FileOperations.SelfTest.cpp" />
+    <ClCompile Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.State.cpp" />
     <ClCompile Include="FolderWindow.ItemProperties.cpp" />
     <ClCompile Include="FolderWindow.FileSystem.cpp" />
@@ -382,14 +355,14 @@
     <ClCompile Include="FolderWindow.Viewers.cpp" />
     <ClCompile Include="FolderWatcher.cpp" />
     <ClCompile Include="ConnectionSecrets.cpp" />
-    <ClCompile Include="ConnectionManagerDialog.cpp" />
+    <ClCompile Include="ConnectionManagerWindow.cpp" />
     <ClCompile Include="ConnectionCredentialPromptDialog.cpp" />
     <ClCompile Include="WindowsHello.cpp" />
     <ClCompile Include="HostServices.cpp" />
     <ClCompile Include="IconCache.cpp" />
     <ClCompile Include="Ui\\AlertOverlayWindow.cpp" />
     <ClCompile Include="CommandRegistry.cpp" />
-    <ClCompile Include="CompareDirectoriesEngine.SelfTest.cpp" />
+    <ClCompile Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp" />
     <ClCompile Include="CompareDirectoriesEngine.cpp" />
     <ClCompile Include="FindFilesWindow.cpp" />
     <ClCompile Include="SearchFallbackEngine.cpp" />
@@ -412,6 +385,7 @@
     <ClCompile Include="Preferences.Internal.cpp" />
     <ClCompile Include="Preferences.Advanced.cpp" />
     <ClCompile Include="Preferences.CompareDirectories.cpp" />
+    <ClCompile Include="Preferences.FileOperations.cpp" />
     <ClCompile Include="Preferences.HotPaths.cpp" />
     <ClCompile Include="Preferences.Editors.cpp" />
     <ClCompile Include="Preferences.General.cpp" />
@@ -428,15 +402,47 @@
     <ClCompile Include="ShortcutsWindow.cpp" />
     <ClCompile Include="RedSalamander.cpp" />
     <ClCompile Include="SettingsSchemaExport.cpp" />
-    <ClCompile Include="ThemedControls.cpp" />
+    <ClCompile Include="UiMetrics.cpp" />
     <ClCompile Include="ThemedInputFrames.cpp" />
     <ClCompile Include="ShortcutDefaults.cpp" />
     <ClCompile Include="ShortcutManager.cpp" />
     <ClCompile Include="ShortcutText.cpp" />
-    <ClCompile Include="SelfTestCommon.cpp" />
+    <ClCompile Include="SelfTest\Common\SelfTestCommon.cpp" />
     <ClCompile Include="SplashScreen.cpp" />
     <ClCompile Include="ViewerPluginManager.cpp" />
     <ClCompile Include="WSLDistro.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="FolderWindow.FileSystem.Commands.Part.cpp" />
+    <None Include="FolderWindow.FileSystem.Navigation.Part.cpp" />
+    <None Include="FolderWindow.FileOperations.State.Runtime.Part.cpp" />
+    <None Include="FolderWindow.FileOperations.State.Diagnostics.Part.cpp" />
+    <None Include="FolderWindow.FileOperations.State.Queue.Part.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Connections.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Dialogs.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.FileOps.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Navigation.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.PluginsThemesAdvanced.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.Dispatch.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Search.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Settings.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.CoreDiffs.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases05_06.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases07_09.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases10_13.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases14_16.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="RedSalamander.rc" />
@@ -461,6 +467,15 @@
   <ItemGroup>
     <ProjectReference Include="..\Common\Common\Common.vcxproj">
       <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
+    </ProjectReference>
+    <ProjectReference Include="..\Common\DxUi\DxUi.vcxproj">
+      <Project>{e0d8e4a1-7aa7-4377-9e4c-a53794e43a1f}</Project>
+    </ProjectReference>
+    <ProjectReference Include="Lang\fr-FR\RedSalamander-fr-FR.vcxproj" Condition="'$(CurrentSolutionConfigurationContents)' == ''">
+      <Project>{7ca7ed64-f179-451f-8127-d9a670e4d455}</Project>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
+      <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

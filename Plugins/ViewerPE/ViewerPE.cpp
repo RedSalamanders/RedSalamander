@@ -1,5 +1,7 @@
 #include "ViewerPE.h"
 
+#include "LocalizationManager.h"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -29,46 +31,154 @@
 #pragma comment(lib, "Ole32.lib")
 #pragma comment(lib, "uxtheme")
 
+#include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
 #include "WindowMessages.h"
 #include "resource.h"
 
 extern HINSTANCE g_hInstance;
 
+namespace Typography = RedSalamander::DxUi::Typography;
+
+using RedSalamander::DxUi::ComboBox;
+using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::MakeDefaultThemePalette;
+using RedSalamander::DxUi::MakeThemePaletteFromViewerTheme;
+
 namespace
 {
-constexpr UINT kAsyncParseCompleteMessage = WndMsg::kViewerPeAsyncParseComplete;
+constexpr UINT kAsyncParseCompleteMessage             = WndMsg::kViewerPeAsyncParseComplete;
+constexpr size_t kViewerComboPopupMaxVisibleItems     = 8u;
+constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerPE.FileComboHostOriginalWndProc";
+constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerPE.FileComboHostState";
 
-constexpr UINT_PTR kFileComboEscCloseSubclassId = 1u;
+LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
-LRESULT CALLBACK
-FileComboEscCloseSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, [[maybe_unused]] UINT_PTR subclassId, [[maybe_unused]] DWORD_PTR refData) noexcept
+[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
 {
-    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
-    {
-        const bool dropped = SendMessageW(hwnd, CB_GETDROPPEDSTATE, 0, 0) != 0;
-        if (! dropped)
-        {
-            const HWND root = GetAncestor(hwnd, GA_ROOT);
-            if (root)
-            {
-                PostMessageW(root, WM_CLOSE, 0, 0);
-            }
-            return 0;
-        }
-    }
-
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, propName);
 }
 
-void InstallFileComboEscClose(HWND combo) noexcept
+[[nodiscard]] bool InstallWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, WNDPROC hookWndProc) noexcept
 {
-    if (! combo)
+    if (! hwnd || ! originalWndProcProp || ! hookWndProc)
+    {
+        return false;
+    }
+
+    if (GetStoredWndProc(hwnd, originalWndProcProp))
+    {
+        return true;
+    }
+
+    const auto originalWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC));
+    if (! originalWndProc)
+    {
+        return false;
+    }
+
+    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, originalWndProcProp, reinterpret_cast<HANDLE>(originalWndProc)))
+    {
+        return false;
+    }
+
+    const auto previousWndProc =
+        reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(hookWndProc)));
+    if (previousWndProc != originalWndProc)
+    {
+        RemovePropW(hwnd, originalWndProcProp);
+        if (previousWndProc)
+        {
+            static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previousWndProc)));
+        }
+        return false;
+    }
+
+    return true;
+}
+
+void UnhookFileComboHostWindow(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
     {
         return;
     }
 
-    static_cast<void>(SetWindowSubclass(combo, FileComboEscCloseSubclassProc, kFileComboEscCloseSubclassId, 0));
+    RemovePropW(hwnd, kFileComboHostStateProp);
+    RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+}
+
+[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    if (const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp))
+    {
+        return RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp);
+    }
+
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+[[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
+{
+    switch (msg)
+    {
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK: return true;
+        case WM_SYSKEYDOWN: return static_cast<UINT>(wp) == VK_DOWN || static_cast<UINT>(wp) == VK_UP;
+        case WM_KEYDOWN:
+        {
+            const UINT vk = static_cast<UINT>(wp);
+            return vk == VK_SPACE || vk == VK_RETURN || vk == VK_F4 || vk == VK_DOWN || vk == VK_UP;
+        }
+        default: return false;
+    }
+}
+
+[[nodiscard]] int ComputeWindowComboPopupHeightPx(size_t itemCount, UINT dpi) noexcept
+{
+    const size_t visibleRows = std::max<size_t>(1u, std::min(itemCount, kViewerComboPopupMaxVisibleItems));
+    const int popupHeightDip = 2 + 8 + (24 * static_cast<int>(visibleRows));
+    return std::max(0, MulDiv(popupHeightDip, static_cast<int>(dpi), 96));
+}
+
+LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    auto* self = reinterpret_cast<ViewerPE*>(GetPropW(hwnd, kFileComboHostStateProp));
+    if (! self)
+    {
+        return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
+    }
+
+    if (msg == WM_NCDESTROY)
+    {
+        const auto originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp);
+        RemovePropW(hwnd, kFileComboHostStateProp);
+        RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+
+        bool handled = false;
+        static_cast<void>(self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled));
+
+        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    bool handled           = false;
+    const LRESULT dxResult = self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled);
+    if (handled)
+    {
+        return dxResult;
+    }
+
+    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
+    {
+        const HWND root = GetAncestor(hwnd, GA_ROOT);
+        if (root)
+        {
+            PostMessageW(root, WM_CLOSE, 0, 0);
+            return 0;
+        }
+    }
+
+    return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
 }
 
 constexpr float kOuterPaddingDip    = 12.0f;
@@ -83,6 +193,11 @@ constexpr char kViewerPESchemaJson[] = R"json({
   "title": "PE Viewer",
   "fields": []
 })json";
+
+[[nodiscard]] const char* GetViewerPEStaticConfigurationSchemaImpl() noexcept
+{
+    return kViewerPESchemaJson;
+}
 
 constexpr std::array<std::wstring_view, 16> kDataDirectoryNames = {
     std::wstring_view(L"Export"),
@@ -469,6 +584,11 @@ struct ParsedPeDeleter
 }
 } // namespace
 
+const char* GetViewerPEStaticConfigurationSchema() noexcept
+{
+    return GetViewerPEStaticConfigurationSchemaImpl();
+}
+
 ViewerPE::ViewerPE()
 {
     _metaId          = L"builtin/viewer-pe";
@@ -481,12 +601,24 @@ ViewerPE::ViewerPE()
     _metaData.name        = _metaName.empty() ? nullptr : _metaName.c_str();
     _metaData.description = _metaDescription.empty() ? nullptr : _metaDescription.c_str();
     _metaData.author      = nullptr;
-    _metaData.version     = nullptr;
+    _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     _configurationJson = "{}";
 }
 
-ViewerPE::~ViewerPE() = default;
+ViewerPE::~ViewerPE()
+{
+    if (! _hFileComboHost)
+    {
+        return;
+    }
+
+    _fileComboControl            = nullptr;
+    _fileComboHostPreExpandPopup = false;
+    UnhookFileComboHostWindow(_hFileComboHost.get());
+    _fileComboHost.Detach();
+    _hFileComboHost.reset();
+}
 
 void ViewerPE::SetHost(IHost* host) noexcept
 {
@@ -558,7 +690,7 @@ HRESULT STDMETHODCALLTYPE ViewerPE::GetMetaData(const PluginMetaData** metaData)
     _metaData.name        = _metaName.empty() ? nullptr : _metaName.c_str();
     _metaData.description = _metaDescription.empty() ? nullptr : _metaDescription.c_str();
     _metaData.author      = nullptr;
-    _metaData.version     = nullptr;
+    _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     *metaData = &_metaData;
     return S_OK;
@@ -571,7 +703,7 @@ HRESULT STDMETHODCALLTYPE ViewerPE::GetConfigurationSchema(const char** schemaJs
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = kViewerPESchemaJson;
+    *schemaJsonUtf8 = GetViewerPEStaticConfigurationSchema();
     return S_OK;
 }
 
@@ -659,32 +791,49 @@ LRESULT ViewerPE::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
         case WM_DPICHANGED: OnDpiChanged(static_cast<UINT>(LOWORD(wp)), *reinterpret_cast<const RECT*>(lp)); return 0;
         case WM_COMMAND: OnCommand(hwnd, LOWORD(wp), HIWORD(wp), reinterpret_cast<HWND>(lp)); return 0;
-        case WM_MEASUREITEM: return OnMeasureItem(reinterpret_cast<MEASUREITEMSTRUCT*>(lp));
-        case WM_DRAWITEM: return OnDrawItem(reinterpret_cast<DRAWITEMSTRUCT*>(lp));
+        case WM_SYSKEYDOWN:
+            if ((wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())
+            {
+                return 0;
+            }
+            break;
+        case WM_SYSCHAR:
+            if (wp >= 0x20u && _menuBarHost.ActivateMnemonic(static_cast<wchar_t>(wp)))
+            {
+                return 0;
+            }
+            break;
         case WM_PAINT: OnPaint(hwnd); return 0;
         case WM_ERASEBKGND: return 1;
         case WM_MOUSEWHEEL: OnMouseWheel(GET_WHEEL_DELTA_WPARAM(wp)); return 0;
         case WM_VSCROLL: OnVScroll(LOWORD(wp), HIWORD(wp)); return 0;
         case WM_KEYDOWN: OnKeyDown(static_cast<UINT>(wp)); return 0;
-        case WM_CTLCOLORLISTBOX:
-        case WM_CTLCOLOREDIT:
-        case WM_CTLCOLORSTATIC:
-        case WM_CTLCOLORBTN: return OnCtlColor(msg, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
         case WM_NCACTIVATE: ApplyTitleBarTheme(wp != FALSE); return DefWindowProcW(hwnd, msg, wp, lp);
-        case WM_CLOSE: DestroyWindow(hwnd); return 0;
+        case WM_CLOSE: static_cast<void>(Close()); return 0;
         case WM_NCDESTROY:
         {
             static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
             ResetDeviceResources();
-            _hFileCombo.release();
-            _hFileComboList = nullptr;
-            _hFileComboItem = nullptr;
+            _menuBarHost.Detach();
+            _menuHandle.reset();
+            UnhookFileComboHostWindow(_hFileComboHost.get());
+            _fileComboControl            = nullptr;
+            _fileComboHostPreExpandPopup = false;
+            _fileComboHost.Detach();
+            _hFileComboHost.release();
             _hWnd.release();
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
 
-            if (_callback)
+            RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
+            if (_callbackState.TryCapture(callbackSnapshot))
             {
-                static_cast<void>(_callback->ViewerClosed(_callbackCookie));
+                IViewerCallback* callback = nullptr;
+                void* cookie              = nullptr;
+                if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
+                {
+                    auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
+                    static_cast<void>(callback->ViewerClosed(cookie));
+                }
             }
 
             Release();
@@ -698,77 +847,102 @@ LRESULT ViewerPE::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         }
         default: return DefWindowProcW(hwnd, msg, wp, lp);
     }
+
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+LRESULT ViewerPE::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
+{
+    const bool popupWasOpen      = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
+    const bool preExpandForPopup = ! popupWasOpen && _fileComboControl && MessageMayOpenWindowComboPopup(msg, wp);
+    if (preExpandForPopup)
+    {
+        _fileComboHostPreExpandPopup = true;
+        if (_hWnd)
+        {
+            Layout(_hWnd.get());
+        }
+    }
+
+    const LRESULT dxResult = _fileComboHost.HandleMessage(hwnd, msg, wp, lp, handled);
+    if (msg == WM_NCDESTROY)
+    {
+        handled = true;
+        _fileComboHost.ReleaseMouseCapture();
+        _fileComboControl            = nullptr;
+        _fileComboHostPreExpandPopup = false;
+        _hFileComboHost.release();
+        return dxResult;
+    }
+
+    const bool popupIsOpen = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
+    if (popupIsOpen != popupWasOpen || (preExpandForPopup && ! popupIsOpen))
+    {
+        _fileComboHostPreExpandPopup = false;
+        if (_hWnd)
+        {
+            Layout(_hWnd.get());
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
+    }
+    return dxResult;
 }
 
 void ViewerPE::OnCreate(HWND hwnd) noexcept
 {
     _dpi = GetDpiForWindow(hwnd);
 
-    const int uiHeightPx = -MulDiv(9, static_cast<int>(_dpi), 72);
-    _uiFont.reset(CreateFontW(uiHeightPx,
-                              0,
-                              0,
-                              0,
-                              FW_NORMAL,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              DEFAULT_CHARSET,
-                              OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS,
-                              CLEARTYPE_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE,
-                              L"Segoe UI"));
-    if (! _uiFont)
+    const DWORD comboHostStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | SS_NOTIFY;
+    _hFileComboHost.reset(CreateWindowExW(
+        0, L"Static", L"", comboHostStyle, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VIEWERPE_FILE_COMBO)), g_hInstance, nullptr));
+    if (! _hFileComboHost)
     {
-        Debug::ErrorWithLastError(L"ViewerPE: CreateFontW failed for UI font.");
+        Debug::ErrorWithLastError(L"ViewerPE: CreateWindowExW failed for DxUi file combo host.");
     }
-
-    const DWORD comboStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS;
-    _hFileCombo.reset(CreateWindowExW(
-        0, L"COMBOBOX", nullptr, comboStyle, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VIEWERPE_FILE_COMBO)), g_hInstance, nullptr));
-    if (! _hFileCombo)
+    else if (! _fileComboHost.Attach(_hFileComboHost.get()))
     {
-        Debug::ErrorWithLastError(L"ViewerPE: CreateWindowExW failed for file combo.");
+        Debug::Error(L"ViewerPE: failed to attach DxUi host for file combo.");
+        _hFileComboHost.reset();
     }
-    if (_hFileCombo && _uiFont)
+    else if (! SetPropW(_hFileComboHost.get(), kFileComboHostStateProp, reinterpret_cast<HANDLE>(this)) ||
+             ! InstallWndProcHook(_hFileComboHost.get(), kFileComboHostOriginalWndProcProp, FileComboHostWndProc))
     {
-        SendMessageW(_hFileCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
+        RemovePropW(_hFileComboHost.get(), kFileComboHostStateProp);
+        Debug::ErrorWithLastError(L"ViewerPE: failed to install WNDPROC hook for DxUi file combo host.");
+        _fileComboHost.Detach();
+        _hFileComboHost.reset();
     }
-    if (_hFileCombo)
+    else
     {
-        InstallFileComboEscClose(_hFileCombo.get());
-    }
-    if (_hFileCombo)
-    {
-        int itemHeight = PxFromDip(24, _dpi);
-        auto hdc       = wil::GetDC(hwnd);
-        if (hdc)
+        auto combo        = std::make_unique<ComboBox>();
+        _fileComboControl = combo.get();
+        _fileComboControl->SetVariant(ComboBoxVariant::Window);
+        _fileComboControl->SetOnSelectionChanged([this, hwnd](size_t selectedIndex)
         {
-            HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-            static_cast<void>(oldFont);
-
-            TEXTMETRICW tm{};
-            if (GetTextMetricsW(hdc.get(), &tm) != 0)
+            if (_syncingFileCombo || selectedIndex >= _otherFiles.size())
             {
-                itemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, _dpi);
+                return;
             }
-        }
 
-        itemHeight = std::max(itemHeight, 1);
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, static_cast<WPARAM>(-1), static_cast<LPARAM>(itemHeight));
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, 0, static_cast<LPARAM>(itemHeight));
+            _otherIndex  = selectedIndex;
+            _currentPath = _otherFiles[_otherIndex];
+            StartAsyncParse(hwnd, _fileSystem, _currentPath);
+            UpdateMenuState(hwnd);
+            SetFocus(hwnd);
+        });
+        _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+        _fileComboHost.SetRoot(std::move(combo));
     }
-    if (_hFileCombo)
+
+    if (! _menuHandle)
     {
-        COMBOBOXINFO info{};
-        info.cbSize = sizeof(info);
-        if (GetComboBoxInfo(_hFileCombo.get(), &info) != 0)
-        {
-            _hFileComboList = info.hwndList;
-            _hFileComboItem = info.hwndItem;
-        }
+        _menuHandle.reset(GetMenu(hwnd));
+    }
+    if (_menuHandle)
+    {
+        _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+        _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuState(hwnd, false); });
+        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
     ApplyTitleBarTheme(true);
@@ -815,51 +989,11 @@ void ViewerPE::OnDpiChanged(UINT dpi, const RECT& suggestedRect) noexcept
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    const int uiHeightPx = -MulDiv(9, static_cast<int>(_dpi), 72);
-    _uiFont.reset(CreateFontW(uiHeightPx,
-                              0,
-                              0,
-                              0,
-                              FW_NORMAL,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              DEFAULT_CHARSET,
-                              OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS,
-                              CLEARTYPE_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE,
-                              L"Segoe UI"));
-    if (_hFileCombo && _uiFont)
-    {
-        SendMessageW(_hFileCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
-
-        int itemHeight = PxFromDip(24, _dpi);
-        auto hdc       = wil::GetDC(_hWnd.get());
-        if (hdc)
-        {
-            HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-            static_cast<void>(oldFont);
-
-            TEXTMETRICW tm{};
-            if (GetTextMetricsW(hdc.get(), &tm) != 0)
-            {
-                itemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, _dpi);
-            }
-        }
-
-        itemHeight = std::max(itemHeight, 1);
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, static_cast<WPARAM>(-1), static_cast<LPARAM>(itemHeight));
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, 0, static_cast<LPARAM>(itemHeight));
-    }
-
     _textLayout.reset();
     if (_renderTarget)
     {
         _renderTarget->SetDpi(static_cast<float>(dpi), static_cast<float>(dpi));
     }
-    _headerBrush.reset();
 
     if (_hWnd)
     {
@@ -881,10 +1015,13 @@ void ViewerPE::OnPaint(HWND hwnd) noexcept
 
     const D2D1_SIZE_F size = _renderTarget->GetSize();
 
-    const float cardLeft   = kOuterPaddingDip;
-    const float cardTop    = kOuterPaddingDip;
-    const float cardRight  = std::max(cardLeft + 1.0f, size.width - kOuterPaddingDip);
-    const float cardBottom = std::max(cardTop + 1.0f, size.height - kOuterPaddingDip);
+    const float cardLeft         = kOuterPaddingDip;
+    const float menuBarHeightDip = (_menuBarHost.GetHwnd() != nullptr)
+                                       ? (static_cast<float>(_menuBarHost.GetVisibleHeightPx()) * 96.0f / static_cast<float>(std::max<UINT>(1u, _dpi)))
+                                       : 0.0f;
+    const float cardTop          = menuBarHeightDip + kOuterPaddingDip;
+    const float cardRight        = std::max(cardLeft + 1.0f, size.width - kOuterPaddingDip);
+    const float cardBottom       = std::max(cardTop + 1.0f, size.height - kOuterPaddingDip);
     const D2D1_ROUNDED_RECT card{D2D1::RectF(cardLeft, cardTop, cardRight, cardBottom), kCardRadiusDip, kCardRadiusDip};
 
     const float contentLeft       = cardLeft + kInnerPaddingDip;
@@ -1048,63 +1185,10 @@ void ViewerPE::OnKeyDown(UINT vk) noexcept
     }
 }
 
-void ViewerPE::OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND control) noexcept
+void ViewerPE::OnCommand(HWND hwnd, UINT commandId, [[maybe_unused]] UINT notifyCode, [[maybe_unused]] HWND control) noexcept
 {
     if (! hwnd)
     {
-        return;
-    }
-
-    if (_hFileCombo && control == _hFileCombo.get() && commandId == IDC_VIEWERPE_FILE_COMBO)
-    {
-        if (notifyCode == CBN_DROPDOWN)
-        {
-            COMBOBOXINFO info{};
-            info.cbSize = sizeof(info);
-            if (GetComboBoxInfo(_hFileCombo.get(), &info) != 0)
-            {
-                _hFileComboList = info.hwndList;
-                _hFileComboItem = info.hwndItem;
-            }
-
-            const wchar_t* winTheme = L"Explorer";
-            if (_hasTheme && _theme.highContrast)
-            {
-                winTheme = L"";
-            }
-            else if (_hasTheme && _theme.darkMode)
-            {
-                winTheme = L"DarkMode_Explorer";
-            }
-
-            SetWindowTheme(_hFileCombo.get(), winTheme, nullptr);
-            if (_hFileComboList)
-            {
-                SetWindowTheme(_hFileComboList, winTheme, nullptr);
-                SendMessageW(_hFileComboList, WM_THEMECHANGED, 0, 0);
-            }
-            if (_hFileComboItem)
-            {
-                SetWindowTheme(_hFileComboItem, winTheme, nullptr);
-                SendMessageW(_hFileComboItem, WM_THEMECHANGED, 0, 0);
-            }
-            SendMessageW(_hFileCombo.get(), WM_THEMECHANGED, 0, 0);
-            return;
-        }
-
-        if (notifyCode == CBN_SELCHANGE && ! _syncingFileCombo)
-        {
-            const LRESULT sel = SendMessageW(_hFileCombo.get(), CB_GETCURSEL, 0, 0);
-            if (sel >= 0 && static_cast<size_t>(sel) < _otherFiles.size())
-            {
-                _otherIndex  = static_cast<size_t>(sel);
-                _currentPath = _otherFiles[_otherIndex];
-                StartAsyncParse(hwnd, _fileSystem, _currentPath);
-                UpdateMenuState(hwnd);
-                SetFocus(hwnd);
-            }
-        }
-
         return;
     }
 
@@ -1124,164 +1208,9 @@ void ViewerPE::OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND contro
     }
 }
 
-LRESULT ViewerPE::OnMeasureItem(MEASUREITEMSTRUCT* measure) noexcept
-{
-    if (! measure)
-    {
-        return FALSE;
-    }
-
-    if (measure->CtlType == ODT_COMBOBOX && measure->CtlID == IDC_VIEWERPE_FILE_COMBO)
-    {
-        const UINT dpi = _hWnd ? GetDpiForWindow(_hWnd.get()) : USER_DEFAULT_SCREEN_DPI;
-
-        int height = PxFromDip(24, dpi);
-        auto hdc   = wil::GetDC(_hWnd.get());
-        if (hdc)
-        {
-            HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-            static_cast<void>(oldFont);
-
-            TEXTMETRICW tm{};
-            if (GetTextMetricsW(hdc.get(), &tm) != 0)
-            {
-                height = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, dpi);
-            }
-        }
-
-        measure->itemHeight = static_cast<UINT>(std::max(height, 1));
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-LRESULT ViewerPE::OnDrawItem(DRAWITEMSTRUCT* draw) noexcept
-{
-    if (! draw)
-    {
-        return FALSE;
-    }
-
-    if (draw->CtlType != ODT_COMBOBOX || ! _hFileCombo || draw->hwndItem != _hFileCombo.get())
-    {
-        return FALSE;
-    }
-
-    if (! draw->hDC)
-    {
-        return TRUE;
-    }
-
-    const UINT dpi    = _hWnd ? GetDpiForWindow(_hWnd.get()) : USER_DEFAULT_SCREEN_DPI;
-    const int padding = PxFromDip(6, dpi);
-
-    const bool selected = (draw->itemState & ODS_SELECTED) != 0;
-    const bool disabled = (draw->itemState & ODS_DISABLED) != 0;
-
-    const bool themed = _hasTheme && ! _theme.highContrast;
-    const COLORREF bg = themed ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
-    const COLORREF fg = themed ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
-    COLORREF baseBg   = themed ? BlendColor(bg, fg, themed && _theme.darkMode ? 24u : 18u) : GetSysColor(COLOR_WINDOW);
-    COLORREF baseFg   = fg;
-    COLORREF selBg    = themed ? ResolveAccentColor(_theme, L"combo") : GetSysColor(COLOR_HIGHLIGHT);
-    COLORREF selFg    = themed ? ContrastingTextColor(selBg) : GetSysColor(COLOR_HIGHLIGHTTEXT);
-
-    if (_hasTheme && _theme.highContrast)
-    {
-        baseBg = GetSysColor(COLOR_WINDOW);
-        baseFg = GetSysColor(COLOR_WINDOWTEXT);
-        selBg  = GetSysColor(COLOR_HIGHLIGHT);
-        selFg  = GetSysColor(COLOR_HIGHLIGHTTEXT);
-    }
-
-    COLORREF fillColor = selected ? selBg : baseBg;
-    COLORREF textColor = selected ? selFg : baseFg;
-
-    if (disabled)
-    {
-        textColor = BlendColor(fillColor, textColor, 120u);
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
-    FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
-
-    int itemId = static_cast<int>(draw->itemID);
-    if (itemId < 0)
-    {
-        const LRESULT sel = SendMessageW(_hFileCombo.get(), CB_GETCURSEL, 0, 0);
-        if (sel >= 0)
-        {
-            itemId = static_cast<int>(sel);
-        }
-    }
-
-    std::wstring text;
-    if (itemId >= 0)
-    {
-        const LRESULT lenRes = SendMessageW(_hFileCombo.get(), CB_GETLBTEXTLEN, static_cast<WPARAM>(itemId), 0);
-        const int len        = (lenRes > 0) ? static_cast<int>(lenRes) : 0;
-        if (len > 0)
-        {
-            text.resize(static_cast<size_t>(len) + 1);
-            SendMessageW(_hFileCombo.get(), CB_GETLBTEXT, static_cast<WPARAM>(itemId), reinterpret_cast<LPARAM>(text.data()));
-            text.resize(wcsnlen(text.c_str(), text.size()));
-        }
-    }
-
-    HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(draw->hDC, fontToUse);
-    static_cast<void>(oldFont);
-
-    SetBkMode(draw->hDC, TRANSPARENT);
-    SetTextColor(draw->hDC, textColor);
-
-    RECT textRc = draw->rcItem;
-    textRc.left += padding;
-    textRc.right -= padding;
-    DrawTextW(draw->hDC, text.c_str(), static_cast<int>(text.size()), &textRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-
-    if ((draw->itemState & ODS_FOCUS) != 0)
-    {
-        DrawFocusRect(draw->hDC, &draw->rcItem);
-    }
-
-    return TRUE;
-}
-
-LRESULT ViewerPE::OnCtlColor(UINT /*msg*/, HDC hdc, HWND control) noexcept
-{
-    if (! hdc || ! control || ! _hasTheme || _theme.highContrast)
-    {
-        return 0;
-    }
-
-    if (_hFileCombo && (control == _hFileCombo.get() || (_hFileComboList != nullptr && control == _hFileComboList) ||
-                        (_hFileComboItem != nullptr && control == _hFileComboItem)))
-    {
-        const COLORREF bg = BlendColor(ColorRefFromArgb(_theme.backgroundArgb), ColorRefFromArgb(_theme.textArgb), _theme.darkMode ? 24u : 18u);
-        if (! _headerBrush)
-        {
-            _headerBrush.reset(CreateSolidBrush(bg));
-        }
-        if (! _headerBrush)
-        {
-            return 0;
-        }
-
-        SetBkMode(hdc, OPAQUE);
-        SetTextColor(hdc, ColorRefFromArgb(_theme.textArgb));
-        SetBkColor(hdc, bg);
-        return reinterpret_cast<LRESULT>(_headerBrush.get());
-    }
-
-    return 0;
-}
-
 void ViewerPE::Layout(HWND hwnd) noexcept
 {
-    if (! hwnd || ! _hFileCombo)
+    if (! hwnd || ! _hFileComboHost)
     {
         _headerHeightDip = 0.0f;
         return;
@@ -1289,45 +1218,50 @@ void ViewerPE::Layout(HWND hwnd) noexcept
 
     RECT client{};
     GetClientRect(hwnd, &client);
+    _menuBarHost.UpdateLayout();
 
-    const UINT dpi           = GetDpiForWindow(hwnd);
-    const bool showCombo     = (_otherFiles.size() > 1);
-    const int outerPaddingPx = PxFromDip(kOuterPaddingDip, dpi);
-    const int innerPaddingPx = PxFromDip(kInnerPaddingDip, dpi);
+    const UINT dpi            = GetDpiForWindow(hwnd);
+    const int menuBarHeightPx = _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
+    const bool showCombo      = (_otherFiles.size() > 1);
+    const int outerPaddingPx  = PxFromDip(kOuterPaddingDip, dpi);
+    const int innerPaddingPx  = PxFromDip(kInnerPaddingDip, dpi);
 
     const int cardLeft  = outerPaddingPx;
-    const int cardTop   = outerPaddingPx;
+    const int cardTop   = menuBarHeightPx + outerPaddingPx;
     const int cardRight = std::max(cardLeft + 1, static_cast<int>(client.right) - outerPaddingPx);
 
     const int contentLeft  = cardLeft + innerPaddingPx;
     const int contentRight = std::max(contentLeft + 1, cardRight - innerPaddingPx);
 
-    ShowWindow(_hFileCombo.get(), showCombo ? SW_SHOW : SW_HIDE);
-    EnableWindow(_hFileCombo.get(), showCombo ? TRUE : FALSE);
+    ShowWindow(_hFileComboHost.get(), showCombo ? SW_SHOW : SW_HIDE);
+    EnableWindow(_hFileComboHost.get(), showCombo ? TRUE : FALSE);
+    if (_fileComboControl)
+    {
+        _fileComboControl->SetEnabled(showCombo);
+        _fileComboControl->SetVisible(showCombo);
+    }
+    if (! showCombo)
+    {
+        _fileComboHostPreExpandPopup = false;
+    }
 
     float newHeaderHeightDip = 0.0f;
     if (showCombo)
     {
-        int comboItemHeight           = 0;
-        const LRESULT selectionHeight = SendMessageW(_hFileCombo.get(), CB_GETITEMHEIGHT, static_cast<WPARAM>(-1), 0);
-        if (selectionHeight != CB_ERR && selectionHeight > 0)
-        {
-            comboItemHeight = static_cast<int>(selectionHeight);
-        }
-        if (comboItemHeight <= 0)
-        {
-            comboItemHeight = PxFromDip(24, dpi);
-        }
+        const int comboHeight      = std::max(1, PxFromDip(32.0f, dpi));
+        const int comboX           = contentLeft;
+        const int comboW           = std::max(1, contentRight - contentLeft);
+        const int comboY           = cardTop + innerPaddingPx;
+        const bool expandPopupHost = _fileComboHostPreExpandPopup || (_fileComboControl && _fileComboControl->DebugIsPopupOpen());
+        const int hostHeight       = comboHeight + (expandPopupHost ? ComputeWindowComboPopupHeightPx(_otherFiles.size(), dpi) : 0);
 
-        const int edgeSizeY     = GetSystemMetricsForDpi(SM_CYEDGE, dpi);
-        const int comboBorder   = std::max(0, edgeSizeY) * 2;
-        const int chromePadding = std::max(PxFromDip(4, dpi), comboBorder);
-        const int comboHeight   = std::max(1, comboItemHeight + chromePadding);
-        const int comboX        = contentLeft;
-        const int comboW        = std::max(1, contentRight - contentLeft);
-        const int comboY        = cardTop + innerPaddingPx;
-
-        SetWindowPos(_hFileCombo.get(), nullptr, comboX, comboY, comboW, comboHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(_hFileComboHost.get(), HWND_TOP, comboX, comboY, comboW, hostHeight, SWP_NOACTIVATE);
+        if (_fileComboControl)
+        {
+            _fileComboControl->SetBounds(D2D1::RectF(
+                0.0f, 0.0f, static_cast<float>(comboW) * 96.0f / static_cast<float>(dpi), static_cast<float>(comboHeight) * 96.0f / static_cast<float>(dpi)));
+            _fileComboHost.Invalidate();
+        }
 
         newHeaderHeightDip = static_cast<float>(comboHeight) * 96.0f / static_cast<float>(dpi) + kHeaderGapDip;
     }
@@ -1341,7 +1275,7 @@ void ViewerPE::Layout(HWND hwnd) noexcept
 
 void ViewerPE::RefreshFileCombo(HWND hwnd) noexcept
 {
-    if (! _hFileCombo)
+    if (! _fileComboControl)
     {
         return;
     }
@@ -1349,11 +1283,10 @@ void ViewerPE::RefreshFileCombo(HWND hwnd) noexcept
     _syncingFileCombo = true;
     auto restore      = wil::scope_exit([&] { _syncingFileCombo = false; });
 
-    SendMessageW(_hFileCombo.get(), CB_RESETCONTENT, 0, 0);
-
     if (_otherFiles.size() <= 1)
     {
-        SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(-1), 0);
+        _fileComboControl->SetItems({});
+        _fileComboControl->SetSelectedIndex(std::nullopt);
         if (hwnd)
         {
             Layout(hwnd);
@@ -1362,20 +1295,26 @@ void ViewerPE::RefreshFileCombo(HWND hwnd) noexcept
         return;
     }
 
+    std::vector<ComboBox::Item> items;
+    items.reserve(_otherFiles.size());
     for (const auto& path : _otherFiles)
     {
-        std::wstring itemText;
-        itemText = std::filesystem::path(path).filename().wstring();
-        SendMessageW(_hFileCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(itemText.c_str()));
+        std::wstring itemText = std::filesystem::path(path).filename().wstring();
+        if (itemText.empty())
+        {
+            itemText = path;
+        }
+        items.push_back(ComboBox::Item{path, std::move(itemText)});
     }
+    _fileComboControl->SetItems(std::move(items));
 
     if (_otherIndex >= _otherFiles.size())
     {
         _otherIndex = 0;
     }
 
-    SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(_otherIndex), 0);
-    SendMessageW(_hFileCombo.get(), CB_SETMINVISIBLE, static_cast<WPARAM>(std::min<size_t>(_otherFiles.size(), 15)), 0);
+    _fileComboControl->SetSelectedIndex(_otherIndex);
+    _fileComboHost.Invalidate();
 
     if (hwnd)
     {
@@ -1386,7 +1325,7 @@ void ViewerPE::RefreshFileCombo(HWND hwnd) noexcept
 
 void ViewerPE::SyncFileComboSelection() noexcept
 {
-    if (! _hFileCombo)
+    if (! _fileComboControl)
     {
         return;
     }
@@ -1404,17 +1343,18 @@ void ViewerPE::SyncFileComboSelection() noexcept
     _syncingFileCombo = true;
     auto restore      = wil::scope_exit([&] { _syncingFileCombo = false; });
 
-    SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(_otherIndex), 0);
+    _fileComboControl->SetSelectedIndex(_otherIndex);
+    _fileComboHost.Invalidate();
 }
 
-void ViewerPE::UpdateMenuState([[maybe_unused]] HWND hwnd) noexcept
+void ViewerPE::UpdateMenuState([[maybe_unused]] HWND hwnd, bool syncDxMenuBar) noexcept
 {
     if (! hwnd)
     {
         return;
     }
 
-    HMENU menu = GetMenu(hwnd);
+    HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
     if (! menu)
     {
         return;
@@ -1435,7 +1375,14 @@ void ViewerPE::UpdateMenuState([[maybe_unused]] HWND hwnd) noexcept
     EnableMenuItem(menu, IDM_VIEWERPE_FILE_EXPORT_TEXT, static_cast<UINT>(MF_BYCOMMAND | (canExport ? MF_ENABLED : MF_GRAYED)));
     EnableMenuItem(menu, IDM_VIEWERPE_FILE_EXPORT_MARKDOWN, static_cast<UINT>(MF_BYCOMMAND | (canExport ? MF_ENABLED : MF_GRAYED)));
 
-    DrawMenuBar(hwnd);
+    if (syncDxMenuBar && _menuBarHost.GetHwnd())
+    {
+        _menuBarHost.SyncMenuModel();
+    }
+    else
+    {
+        DrawMenuBar(hwnd);
+    }
 }
 
 void ViewerPE::CommandExit() noexcept
@@ -1687,9 +1634,9 @@ void ViewerPE::EnsureDeviceResources(HWND /*hwnd*/) noexcept
         const D2D1_SIZE_U size = D2D1::SizeU(static_cast<UINT>(std::max(1l, rc.right - rc.left)), static_cast<UINT>(std::max(1l, rc.bottom - rc.top)));
 
         D2D1_RENDER_TARGET_PROPERTIES rtProps        = D2D1::RenderTargetProperties(D2D1_RENDER_TARGET_TYPE_DEFAULT,
-                                                                             D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_IGNORE),
-                                                                             static_cast<float>(_dpi),
-                                                                             static_cast<float>(_dpi));
+                                                                                    D2D1::PixelFormat(DXGI_FORMAT_UNKNOWN, D2D1_ALPHA_MODE_IGNORE),
+                                                                                    static_cast<float>(_dpi),
+                                                                                    static_cast<float>(_dpi));
         D2D1_HWND_RENDER_TARGET_PROPERTIES hwndProps = D2D1::HwndRenderTargetProperties(hwnd, size);
 
         const HRESULT hr = _d2dFactory->CreateHwndRenderTarget(rtProps, hwndProps, _renderTarget.put());
@@ -1741,12 +1688,10 @@ void ViewerPE::EnsureTextLayout(float viewportWidthDip, float viewportHeightDip)
     if (! _baseTextFormat)
     {
         wil::com_ptr<IDWriteTextFormat> fmt;
-        HRESULT hr = _writeFactory->CreateTextFormat(
-            L"Consolas", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 11.0f, L"en-us", fmt.put());
+        HRESULT hr = Typography::CreateTextFormat(_writeFactory.get(), Typography::MakeUiMonospaceSpec(11.0f), fmt.put(), L"en-us");
         if (FAILED(hr))
         {
-            hr = _writeFactory->CreateTextFormat(
-                L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 11.0f, L"en-us", fmt.put());
+            hr = Typography::CreateTextFormat(_writeFactory.get(), Typography::MakeUiTextSpec(11.0f), fmt.put(), L"en-us");
         }
         if (FAILED(hr))
         {
@@ -1775,14 +1720,14 @@ void ViewerPE::EnsureTextLayout(float viewportWidthDip, float viewportHeightDip)
     if (titleLen > 0)
     {
         const DWRITE_TEXT_RANGE r{0u, titleLen};
-        layout->SetFontFamilyName(L"Segoe UI", r);
+        layout->SetFontFamilyName(Typography::kSegoeUiVariableTextFamily, r);
         layout->SetFontSize(20.0f, r);
         layout->SetFontWeight(DWRITE_FONT_WEIGHT_SEMI_BOLD, r);
     }
     if (subtitleLen > 0 && subtitleStart < text.size())
     {
         const DWRITE_TEXT_RANGE r{subtitleStart, subtitleLen};
-        layout->SetFontFamilyName(L"Segoe UI", r);
+        layout->SetFontFamilyName(Typography::kSegoeUiVariableTextFamily, r);
         layout->SetFontSize(12.0f, r);
         layout->SetFontStyle(DWRITE_FONT_STYLE_ITALIC, r);
     }
@@ -2792,7 +2737,7 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexc
             const int w = std::max(1, static_cast<int>(ownerRect.right - ownerRect.left));
             const int h = std::max(1, static_cast<int>(ownerRect.bottom - ownerRect.top));
 
-            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(LoadMenuW(g_hInstance, MAKEINTRESOURCEW(IDR_VIEWERPE_MENU)));
+            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERPE_MENU));
             HWND window = CreateWindowExW(0,
                                           kClassName,
                                           L"",
@@ -2816,7 +2761,7 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexc
         }
         else
         {
-            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(LoadMenuW(g_hInstance, MAKEINTRESOURCEW(IDR_VIEWERPE_MENU)));
+            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERPE_MENU));
             HWND window = CreateWindowExW(0,
                                           kClassName,
                                           L"",
@@ -2906,13 +2851,15 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexc
 
 HRESULT STDMETHODCALLTYPE ViewerPE::Close() noexcept
 {
+    AddRef();
+    const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE ViewerPE::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (! theme || theme->version != 2)
+    if (! theme || theme->version < 2u || theme->version > 4u)
     {
         return E_INVALIDARG;
     }
@@ -2922,6 +2869,7 @@ HRESULT STDMETHODCALLTYPE ViewerPE::SetTheme(const ViewerTheme* theme) noexcept
 
     if (_hWnd)
     {
+        _fileComboHost.SetTheme(MakeThemePaletteFromViewerTheme(_theme));
         const bool active = GetActiveWindow() == _hWnd.get();
         ApplyTitleBarTheme(active);
         _textBrush.reset();
@@ -2936,7 +2884,6 @@ HRESULT STDMETHODCALLTYPE ViewerPE::SetTheme(const ViewerTheme* theme) noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerPE::SetCallback(IViewerCallback* callback, void* cookie) noexcept
 {
-    _callback       = callback;
-    _callbackCookie = cookie;
+    _callbackState.Set(callback, cookie);
     return S_OK;
 }

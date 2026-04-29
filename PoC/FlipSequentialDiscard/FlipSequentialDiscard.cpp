@@ -567,8 +567,8 @@ struct App
             const LONG sourceTop    = scrollRect.top + scrollAmount;
             const LONG sourceBottom = scrollRect.bottom + scrollAmount;
             const bool destValid    = scrollRect.left >= 0 && scrollRect.top >= 0 && scrollRect.left < scrollRect.right && scrollRect.top < scrollRect.bottom &&
-                                   scrollRect.right <= backbufferW && scrollRect.bottom <= backbufferH;
-            const bool sourceValid = sourceTop >= 0 && sourceTop < sourceBottom && sourceBottom <= backbufferH;
+                                      scrollRect.right <= backbufferW && scrollRect.bottom <= backbufferH;
+            const bool sourceValid  = sourceTop >= 0 && sourceTop < sourceBottom && sourceBottom <= backbufferH;
 
 #if _DEBUG
             {

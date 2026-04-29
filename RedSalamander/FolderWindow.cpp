@@ -9,10 +9,18 @@
 #include "FolderWindowInternal.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
+#include "SelfTestCommon.h"
 
 #include <netioapi.h>
 
 #pragma comment(lib, "Iphlpapi.lib")
+
+#ifdef ENABLE_TESTS
+[[nodiscard]] bool IsFolderWindowSelfTestTracingEnabled() noexcept
+{
+    return ! SelfTest::GetRunStartedUtcIso().empty();
+}
+#endif
 
 namespace
 {
@@ -62,11 +70,8 @@ public:
         HANDLE handle                  = nullptr;
         const BOOL initialNotification = FALSE;
 
-#pragma warning(push)
-        // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-#pragma warning(disable : 5039)
-        const NTSTATUS status = NotifyIpInterfaceChange(AF_UNSPEC, &NetworkChangeSubscription::OnIpInterfaceChanged, this, initialNotification, &handle);
-#pragma warning(pop)
+        const NTSTATUS status = RedSalamander::Win32Callback::InvokeC5039Suppressed([&]() noexcept
+        { return NotifyIpInterfaceChange(AF_UNSPEC, &NetworkChangeSubscription::OnIpInterfaceChanged, this, initialNotification, &handle); });
 
         if (status != NO_ERROR)
         {
@@ -128,17 +133,71 @@ FolderWindow::~FolderWindow()
 
 void FolderWindow::SetSettings(Common::Settings::Settings* settings) noexcept
 {
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::SetSettings: begin");
+    }
+#endif
     _settings = settings;
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::SetSettings: settings assigned");
+    }
+#endif
     _leftPane.navigationView.SetSettings(settings);
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::SetSettings: left navigation set");
+    }
+#endif
     _rightPane.navigationView.SetSettings(settings);
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::SetSettings: right navigation set");
+    }
+#endif
 }
 
 void FolderWindow::SetShortcutManager(const ShortcutManager* shortcuts) noexcept
 {
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::SetShortcutManager: begin");
+    }
+#endif
     _shortcutManager = shortcuts;
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::SetShortcutManager: shortcut pointer assigned");
+    }
+#endif
     _functionBar.SetShortcutManager(shortcuts);
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::SetShortcutManager: function bar set");
+    }
+#endif
     _leftPane.folderView.SetShortcutManager(shortcuts);
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::SetShortcutManager: left folder view set");
+    }
+#endif
     _rightPane.folderView.SetShortcutManager(shortcuts);
+#ifdef ENABLE_TESTS
+    if (IsFolderWindowSelfTestTracingEnabled())
+    {
+        SelfTest::AppendSelfTestTrace(L"FolderWindow::SetShortcutManager: right folder view set");
+    }
+#endif
 }
 
 void FolderWindow::SetFunctionBarModifiers(uint32_t modifiers) noexcept
@@ -153,11 +212,7 @@ void FolderWindow::SetFunctionBarPressedKey(std::optional<uint32_t> vk) noexcept
 
 void FolderWindow::SetFunctionBarVisible(bool visible) noexcept
 {
-    if (_functionBarVisible == visible)
-    {
-        return;
-    }
-
+    const bool changed  = _functionBarVisible != visible;
     _functionBarVisible = visible;
 
     if (_hWnd)
@@ -168,9 +223,49 @@ void FolderWindow::SetFunctionBarVisible(bool visible) noexcept
 
     if (const HWND bar = _functionBar.GetHwnd())
     {
-        ShowWindow(bar, _functionBarVisible ? SW_SHOW : SW_HIDE);
+        if (_hWnd)
+        {
+            const int x = _functionBarRect.left;
+            const int y = _functionBarRect.top;
+            const int w = std::max(0L, _functionBarRect.right - _functionBarRect.left);
+            const int h = std::max(0L, _functionBarRect.bottom - _functionBarRect.top);
+            SetWindowPos(bar, nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
+        }
+
+        ShowWindow(bar, _functionBarVisible ? SW_SHOWNA : SW_HIDE);
+        if (_functionBarVisible)
+        {
+            RedrawWindow(bar, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+        }
+    }
+
+    if (_hWnd)
+    {
+        if (changed)
+        {
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
     }
 }
+
+#ifdef ENABLE_TESTS
+bool FolderWindow::DebugGetFunctionBarSnapshot(FolderWindowFunctionBarDebugSnapshot& out) const noexcept
+{
+    out         = {};
+    out.visible = _functionBarVisible;
+
+    const HWND bar = _functionBar.GetHwnd();
+    if (! bar || IsWindow(bar) == FALSE)
+    {
+        return false;
+    }
+
+    out.windowVisible              = IsWindowVisible(bar) != FALSE;
+    out.rect                       = _functionBarRect;
+    out.usesDirectWriteTextMetrics = _functionBar.DebugUsesDirectWriteTextMetrics();
+    return true;
+}
+#endif
 
 void FolderWindow::SetPanePathChangedCallback(PanePathChangedCallback callback)
 {
@@ -272,6 +367,7 @@ HWND FolderWindow::Create(HWND parent, int x, int y, int width, int height)
     _backgroundBrush.reset(CreateSolidBrush(_theme.windowBackground));
     _splitterBrush.reset(CreateSolidBrush(_theme.menu.separator));
     _splitterGripBrush.reset(CreateSolidBrush(SplitterGripColor(_theme)));
+    _splitterArrowHoverBrush.reset(CreateSolidBrush(_theme.menu.selectionBg));
 
     return hwnd;
 }
@@ -300,6 +396,7 @@ void FolderWindow::Destroy()
     _backgroundBrush.reset();
     _splitterBrush.reset();
     _splitterGripBrush.reset();
+    _splitterArrowHoverBrush.reset();
 
     _functionBar.Destroy();
 
@@ -315,10 +412,7 @@ void FolderWindow::Destroy()
         _leftPane.hFolderView.reset();
     }
 
-    if (_leftPane.hStatusBar)
-    {
-        _leftPane.hStatusBar.reset();
-    }
+    _leftPane.hStatusBar.reset();
 
     if (_rightPane.hNavigationView)
     {
@@ -332,10 +426,7 @@ void FolderWindow::Destroy()
         _rightPane.hFolderView.reset();
     }
 
-    if (_rightPane.hStatusBar)
-    {
-        _rightPane.hStatusBar.reset();
-    }
+    _rightPane.hStatusBar.reset();
 
     if (_leftPane.fileSystem)
     {
@@ -405,11 +496,13 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_LBUTTONDBLCLK: OnLButtonDblClk({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
         case WM_LBUTTONUP: OnLButtonUp(); return 0;
         case WM_MOUSEMOVE: OnMouseMove({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
+        case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_CAPTURECHANGED: OnCaptureChanged(); return 0;
         case WM_PARENTNOTIFY: OnParentNotify(LOWORD(wp), HIWORD(wp)); return 0;
         case WM_NOTIFY: return OnNotify(reinterpret_cast<const NMHDR*>(lp));
         case WM_SETCURSOR: return OnSetCursor(reinterpret_cast<HWND>(wp), LOWORD(lp), HIWORD(lp));
         case WndMsg::kPaneFocusChanged: UpdatePaneFocusStates(); return 0;
+        case WndMsg::kPaneRestoreFolderFocus: static_cast<void>(TryRestoreActivePaneFolderViewFocus()); return 0;
         case WndMsg::kPaneSelectionSizeComputed: return OnPaneSelectionSizeComputed(lp);
         case WndMsg::kPaneSelectionSizeProgress: return OnPaneSelectionSizeProgress(lp);
         case WndMsg::kFileOperationCompleted: return OnFileOperationCompleted(lp);
@@ -551,11 +644,9 @@ LRESULT FolderWindow::OnNotify(const NMHDR* header)
 
             RECT partRect{};
             POINT screenPoint{};
-            if (SendMessageW(header->hwndFrom, SB_GETRECT, kStatusBarPartSort, reinterpret_cast<LPARAM>(&partRect)) != 0)
+            if (GetStatusBarPartRect(header->hwndFrom, kStatusBarPartSort, partRect))
             {
-                const int dpi      = static_cast<int>(GetDpiForWindow(header->hwndFrom));
-                const int paddingX = MulDiv(kStatusBarSortPaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI);
-                screenPoint        = {std::max(partRect.left, partRect.right - paddingX), partRect.top};
+                screenPoint = {partRect.right, partRect.top};
             }
             else
             {
@@ -588,12 +679,10 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
         EnsureFileOperations();
     }
 
+    if (FAILED(EnsureFolderWindowStatusBarClass(_hInstance)))
     {
-        Debug::Perf::Scope perf(L"FolderWindow.OnCreate.InitCommonControlsEx");
-        INITCOMMONCONTROLSEX icc{};
-        icc.dwSize = sizeof(icc);
-        icc.dwICC  = ICC_BAR_CLASSES;
-        InitCommonControlsEx(&icc);
+        Debug::Error(L"FolderWindow::OnCreate failed to register status-bar class.");
+        return false;
     }
 
     {
@@ -638,12 +727,12 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
 
         const int statusWidth   = std::max(0L, statusRect.right - statusRect.left);
         const int statusHeight  = std::max(0L, statusRect.bottom - statusRect.top);
-        const DWORD statusStyle = WS_CHILD | WS_VISIBLE | CCS_NOPARENTALIGN | CCS_NORESIZE | SBARS_TOOLTIPS;
+        const DWORD statusStyle = WS_CHILD | WS_VISIBLE;
         {
             Debug::Perf::Scope perf(L"FolderWindow.OnCreate.CreatePane.StatusBar.CreateWindowExW");
             perf.SetDetail(paneName);
             state.hStatusBar.reset(CreateWindowExW(0,
-                                                   STATUSCLASSNAMEW,
+                                                   kFolderWindowStatusBarClassName,
                                                    nullptr,
                                                    statusStyle,
                                                    statusRect.left,
@@ -667,10 +756,6 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             SetPropW(state.hStatusBar.get(), kStatusBarSecurityTextProp, reinterpret_cast<HANDLE>(&state.statusSecurityText));
             SetPropW(state.hStatusBar.get(), kStatusBarSortTextProp, reinterpret_cast<HANDLE>(&state.statusSortText));
             SetPropW(state.hStatusBar.get(), kStatusBarFocusHueProp, reinterpret_cast<HANDLE>(&state.statusFocusHueDegrees));
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-            SetWindowSubclass(state.hStatusBar.get(), StatusBarSubclassProc, statusId, 0);
-#pragma warning(pop)
         }
 
         {
@@ -685,10 +770,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             perf.SetDetail(paneName);
             state.navigationView.SetPathChangedCallback([this, pane](const std::optional<std::filesystem::path>& path)
             { OnNavigationPathChanged(pane, path); });
-            state.navigationView.SetRequestFolderViewFocusCallback([this, pane]
-            {
-                FocusPaneFolderView(pane);
-            });
+            state.navigationView.SetRequestFolderViewFocusCallback([this, pane] { FocusPaneFolderView(pane); });
 
             state.folderView.SetPathChangedCallback([this, pane](const std::optional<std::filesystem::path>& path) { OnFolderViewPathChanged(pane, path); });
             state.folderView.SetDirectoryImpactCallback([this, pane](const DirectoryInfoCache::DirectoryImpact& impact) noexcept
@@ -744,6 +826,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
                 UpdatePaneStatusBar(pane);
             });
 
+            state.folderView.SetFocusedItemChangedCallback([this, pane] { UpdatePaneStatusBar(pane); });
             state.folderView.SetIncrementalSearchChangedCallback([this, pane] { UpdatePaneStatusBar(pane); });
             state.folderView.SetSelectionSizeComputationRequestedCallback([this, pane] { RequestSelectionSizeComputation(pane); });
         }
@@ -798,6 +881,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
         _functionBar.SetDpi(_dpi);
         _functionBar.SetShortcutManager(_shortcutManager);
         _functionBar.SetTheme(_theme);
+        ShowWindow(functionBarHwnd, _functionBarVisible ? SW_SHOWNA : SW_HIDE);
     }
 
     {

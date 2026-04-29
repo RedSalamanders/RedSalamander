@@ -95,10 +95,12 @@ RAW + sidecar pairing:
 - Next/Previous/First/Last navigation operates on these pairs as single items.
 - When the viewer is in **Thumbnail** mode and a sidecar JPEG exists, ViewerImgRaw displays the sidecar JPEG instead of opening/decoding the RAW.
 
-Menu (themed/owner-drawn like ViewerText):
+Menu (DxUi-hosted from the hidden native menu model):
 - File: Refresh (`F5`), Export..., Exit (`Esc`)
 - Other Files: Next / Previous / First / Last
 - View: Fit to Window / Actual Size / Toggle Fit↔100%, Zoom In/Out/Reset, Transform (rotate/flip/reset), Adjust (brightness/contrast/gamma + grayscale/negative), Image Source (RAW / Thumbnail), Show Exif Overlay
+
+The window detaches its live native `HMENU` after opening and renders the visible top menu bar through the shared `RedSalamander.DxNativeMenuBar` host. `Alt`, `F10`, and menu mnemonics continue to route through that DxUi menu bar.
 
 Keyboard shortcuts (ViewerText-aligned where meaningful):
 - `Esc`: dismiss alert (if visible) or close viewer

@@ -2,66 +2,38 @@
 
 #include "Framework.h"
 
-#include <algorithm>
-
 #include "Preferences.Editors.h"
 
-#include "Helpers.h"
-
-#include "resource.h"
-
-bool EditorsPane::EnsureCreated(HWND pageHost) noexcept
+void EditorsPane::OnVisibilityChanged(bool visible) noexcept
 {
-    return PrefsPaneHost::EnsureCreated(pageHost, _hWnd);
+    static_cast<void>(visible);
 }
 
-void EditorsPane::ResizeToHostClient(HWND pageHost) noexcept
+void EditorsPane::Destroy(PreferencesDialogState& state) noexcept
 {
-    PrefsPaneHost::ResizeToHostClient(pageHost, _hWnd.get());
+    static_cast<void>(state);
 }
 
-void EditorsPane::Show(bool visible) noexcept
+void EditorsPane::InitializePage(HWND parent, PreferencesDialogState& state) noexcept
 {
-    PrefsPaneHost::Show(_hWnd.get(), visible);
+    static_cast<void>(parent);
+    static_cast<void>(state);
 }
 
-void EditorsPane::CreateControls(HWND parent, PreferencesDialogState& state) noexcept
+void EditorsPane::LayoutPage(HWND host,
+                             PreferencesDialogState& state,
+                             int /*x*/,
+                             int& y,
+                             int width,
+                             int /*margin*/,
+                             int /*gapY*/,
+                             int sectionY,
+                             const PreferencesTypographyContext& typography) noexcept
 {
-    if (! parent)
-    {
-        return;
-    }
-
-    const DWORD wrapStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-    state.editorsNote.reset(CreateWindowExW(0,
-                                            L"Static",
-                                            LoadStringResource(nullptr, IDS_PREFS_EDITORS_PLACEHOLDER).c_str(),
-                                            wrapStyle,
-                                            0,
-                                            0,
-                                            10,
-                                            10,
-                                            parent,
-                                            nullptr,
-                                            GetModuleHandleW(nullptr),
-                                            nullptr));
-}
-
-void EditorsPane::LayoutControls(
-    HWND host, PreferencesDialogState& state, int x, int& y, int width, int /*margin*/, int /*gapY*/, int sectionY, HFONT dialogFont) noexcept
-{
-    if (! host)
-    {
-        return;
-    }
-
-    if (state.editorsNote)
-    {
-        const HFONT infoFont        = state.italicFont ? state.italicFont.get() : dialogFont;
-        const std::wstring noteText = PrefsUi::GetWindowTextString(state.editorsNote.get());
-        const int noteHeight        = noteText.empty() ? 0 : PrefsUi::MeasureStaticTextHeight(host, infoFont, width, noteText);
-        SetWindowPos(state.editorsNote.get(), nullptr, x, y, width, std::max(0, noteHeight), SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.editorsNote.get(), WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
-        y += std::max(0, noteHeight) + sectionY;
-    }
+    static_cast<void>(host);
+    static_cast<void>(state);
+    static_cast<void>(y);
+    static_cast<void>(width);
+    static_cast<void>(sectionY);
+    static_cast<void>(typography);
 }

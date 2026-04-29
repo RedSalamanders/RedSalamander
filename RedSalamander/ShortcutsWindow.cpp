@@ -4,42 +4,107 @@
 
 #include <algorithm>
 #include <array>
-#include <cwchar>
 #include <cwctype>
+#include <iterator>
 #include <optional>
 #include <unordered_map>
 #include <vector>
 
-#include <CommCtrl.h>
-#include <Uxtheme.h>
-
 #include "CommandRegistry.h"
+#include "DxUiThemePalette.h"
 #include "Helpers.h"
 #include "SettingsHotReload.h"
 #include "ShortcutManager.h"
 #include "ShortcutText.h"
-#include "ThemedControls.h"
-#include "ThemedInputFrames.h"
 #include "WindowMaximizeBehavior.h"
 #include "WindowPlacementPersistence.h"
 #include "resource.h"
 
 #pragma warning(push)
-// WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
 #pragma warning(disable : 4625 4626 5026 5027)
 #include <wil/resource.h>
 #pragma warning(pop)
 
+[[nodiscard]] bool DispatchShortcutCommandFromWindow(HWND ownerWindow, std::wstring_view commandId) noexcept;
+
 namespace
 {
-constexpr int kListCtrlId                = 100;
-constexpr int kSearchEditId              = 101;
-constexpr UINT_PTR kListHeaderSubclassId = 1u;
-constexpr wchar_t kShortcutsWindowId[]   = L"ShortcutsWindow";
-constexpr wchar_t kSettingsAppId[]       = L"RedSalamander";
+using RedSalamander::DxUi::FontRole;
+using RedSalamander::DxUi::Grid;
+using RedSalamander::DxUi::GridCellData;
+using RedSalamander::DxUi::GridColumnDesc;
+using RedSalamander::DxUi::GridGroupDesc;
+using RedSalamander::DxUi::GridSelectionMode;
+using RedSalamander::DxUi::GridSortSpec;
+using RedSalamander::DxUi::IDxGridDelegate;
+using RedSalamander::DxUi::IDxGridModel;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::SortDirection;
+using RedSalamander::DxUi::TextField;
+using RedSalamander::DxUi::WindowHost;
 
-constexpr int kGroupFunctionBar = 1;
-constexpr int kGroupFolderView  = 2;
+constexpr wchar_t kShortcutsWindowId[] = L"ShortcutsWindow";
+constexpr wchar_t kSettingsAppId[]     = L"RedSalamander";
+constexpr wchar_t kClassName[]         = L"RedSalamander.ShortcutsWindow";
+
+constexpr uint64_t kGroupStableIdFunctionBar = 1u;
+constexpr uint64_t kGroupStableIdFolderView  = 2u;
+
+[[nodiscard]] int CompareNoCase(std::wstring_view left, std::wstring_view right) noexcept
+{
+    return CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE) - CSTR_EQUAL;
+}
+
+[[nodiscard]] std::vector<RedSalamander::DxUi::GridColumnLayoutEntry> ConvertColumnLayout(const std::vector<Common::Settings::GridColumnLayoutEntry>& layout)
+{
+    std::vector<RedSalamander::DxUi::GridColumnLayoutEntry> converted;
+    converted.reserve(layout.size());
+    for (const auto& entry : layout)
+    {
+        if (entry.columnId.empty())
+        {
+            continue;
+        }
+
+        converted.push_back(RedSalamander::DxUi::GridColumnLayoutEntry{
+            .columnId     = entry.columnId,
+            .displayIndex = entry.displayIndex,
+            .widthDip     = entry.widthDip,
+        });
+    }
+    return converted;
+}
+
+[[nodiscard]] std::vector<Common::Settings::GridColumnLayoutEntry> ConvertColumnLayout(const std::vector<RedSalamander::DxUi::GridColumnLayoutEntry>& layout)
+{
+    std::vector<Common::Settings::GridColumnLayoutEntry> converted;
+    converted.reserve(layout.size());
+    for (const auto& entry : layout)
+    {
+        if (entry.columnId.empty())
+        {
+            continue;
+        }
+
+        converted.push_back(Common::Settings::GridColumnLayoutEntry{
+            .columnId     = entry.columnId,
+            .displayIndex = static_cast<uint32_t>(entry.displayIndex),
+            .widthDip     = entry.widthDip,
+        });
+    }
+    return converted;
+}
+
+[[nodiscard]] HWND NormalizeOwnedWindow(HWND owner) noexcept
+{
+    if (! owner || IsWindow(owner) == FALSE)
+    {
+        return nullptr;
+    }
+
+    return GetAncestor(owner, GA_ROOT);
+}
 
 [[nodiscard]] std::wstring_view TrimWhitespace(std::wstring_view text) noexcept
 {
@@ -71,155 +136,53 @@ constexpr int kGroupFolderView  = 2;
     const auto it = std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(), [](wchar_t a, wchar_t b) noexcept {
         return std::towupper(static_cast<wint_t>(a)) == std::towupper(static_cast<wint_t>(b));
     });
-
     return it != haystack.end();
 }
 
-[[nodiscard]] std::vector<std::pair<size_t, size_t>> FindAllMatchesNoCase(std::wstring_view text, std::wstring_view needle) noexcept
+#ifdef ENABLE_TESTS
+[[nodiscard]] bool IsActuallyVisibleChildWindow(HWND hwnd) noexcept
 {
-    std::vector<std::pair<size_t, size_t>> matches;
-    if (needle.empty() || text.empty() || needle.size() > text.size())
+    if (! hwnd || IsWindowVisible(hwnd) == FALSE)
     {
-        return matches;
+        return false;
     }
 
-    size_t startIndex = 0;
-    while (startIndex + needle.size() <= text.size())
+    // DxUi text bridges stay WS_VISIBLE for IME routing, but an empty region keeps them off-screen.
+    wil::unique_hrgn region(CreateRectRgn(0, 0, 0, 0));
+    if (region)
     {
-        const auto it =
-            std::search(text.begin() + static_cast<ptrdiff_t>(startIndex), text.end(), needle.begin(), needle.end(), [](wchar_t a, wchar_t b) noexcept {
-            return std::towupper(static_cast<wint_t>(a)) == std::towupper(static_cast<wint_t>(b));
-        });
-
-        if (it == text.end())
+        const int rgnType = GetWindowRgn(hwnd, region.get());
+        if (rgnType == NULLREGION)
         {
-            break;
+            return false;
         }
-
-        const size_t index = static_cast<size_t>(it - text.begin());
-        matches.emplace_back(index, needle.size());
-        startIndex = index + needle.size();
     }
 
-    return matches;
+    return true;
 }
 
-void DrawTextWithHighlights(HDC hdc,
-                            std::wstring_view text,
-                            const RECT& rc,
-                            UINT format,
-                            std::wstring_view query,
-                            COLORREF textColor,
-                            COLORREF highlightTextColor,
-                            HBRUSH highlightBrush) noexcept
+[[nodiscard]] size_t CountVisibleChildWindowsLocal(HWND parent) noexcept
 {
-    if (! hdc || rc.right <= rc.left || rc.bottom <= rc.top)
+    if (! parent || IsWindow(parent) == FALSE)
     {
-        return;
+        return 0u;
     }
 
-    query = TrimWhitespace(query);
-    if (query.empty() || highlightBrush == nullptr || ! ContainsNoCase(text, query))
+    size_t count = 0u;
+    EnumChildWindows(parent,
+                     [](HWND hwnd, LPARAM lParam) noexcept -> BOOL
     {
-        SetTextColor(hdc, textColor);
-        DrawTextW(hdc, text.data(), static_cast<int>(text.size()), const_cast<RECT*>(&rc), format);
-        return;
-    }
-
-    const std::vector<std::pair<size_t, size_t>> matches = FindAllMatchesNoCase(text, query);
-    if (matches.empty())
-    {
-        SetTextColor(hdc, textColor);
-        DrawTextW(hdc, text.data(), static_cast<int>(text.size()), const_cast<RECT*>(&rc), format);
-        return;
-    }
-
-    TEXTMETRICW tm{};
-    GetTextMetricsW(hdc, &tm);
-    const int lineHeight = std::max(1, static_cast<int>(tm.tmHeight + tm.tmExternalLeading));
-
-    int baseY = rc.top;
-    if ((format & DT_VCENTER) != 0)
-    {
-        const int height = std::max(0l, rc.bottom - rc.top);
-        baseY            = rc.top + std::max(0, (height - lineHeight) / 2);
-    }
-
-    int baseX = rc.left;
-    if ((format & DT_RIGHT) != 0)
-    {
-        SIZE totalSize{};
-        if (GetTextExtentPoint32W(hdc, text.data(), static_cast<int>(text.size()), &totalSize) != FALSE)
+        auto* count = reinterpret_cast<size_t*>(lParam);
+        if (count && IsActuallyVisibleChildWindow(hwnd))
         {
-            const int maxW   = std::max(0, static_cast<int>(rc.right - rc.left));
-            const int totalW = std::max(0, static_cast<int>(totalSize.cx));
-            const int w      = std::min(maxW, totalW);
-            baseX            = static_cast<int>(rc.right) - w;
+            ++(*count);
         }
-
-        baseX = std::clamp(baseX, static_cast<int>(rc.left), static_cast<int>(rc.right));
-    }
-
-    const int saved = SaveDC(hdc);
-    IntersectClipRect(hdc, rc.left, rc.top, rc.right, rc.bottom);
-
-    RECT highlightRc{};
-    highlightRc.top    = std::clamp(baseY, static_cast<int>(rc.top), static_cast<int>(rc.bottom));
-    highlightRc.bottom = std::clamp(baseY + lineHeight, static_cast<int>(rc.top), static_cast<int>(rc.bottom));
-
-    for (const auto& [index, length] : matches)
-    {
-        if (length == 0 || index >= text.size())
-        {
-            continue;
-        }
-
-        SIZE prefixSize{};
-        if (index > 0)
-        {
-            GetTextExtentPoint32W(hdc, text.data(), static_cast<int>(index), &prefixSize);
-        }
-
-        const size_t clampedLength = std::min(length, text.size() - index);
-        SIZE matchSize{};
-        GetTextExtentPoint32W(hdc, text.data() + index, static_cast<int>(clampedLength), &matchSize);
-
-        const int x0      = baseX + prefixSize.cx;
-        const int x1      = x0 + matchSize.cx;
-        highlightRc.left  = std::clamp(x0, static_cast<int>(rc.left), static_cast<int>(rc.right));
-        highlightRc.right = std::clamp(x1, static_cast<int>(rc.left), static_cast<int>(rc.right));
-
-        if (highlightRc.right > highlightRc.left && highlightRc.bottom > highlightRc.top)
-        {
-            FillRect(hdc, &highlightRc, highlightBrush);
-        }
-    }
-
-    SetTextColor(hdc, textColor);
-    DrawTextW(hdc, text.data(), static_cast<int>(text.size()), const_cast<RECT*>(&rc), format);
-
-    SetTextColor(hdc, highlightTextColor);
-    for (const auto& [index, length] : matches)
-    {
-        if (length == 0 || index >= text.size())
-        {
-            continue;
-        }
-
-        SIZE prefixSize{};
-        if (index > 0)
-        {
-            GetTextExtentPoint32W(hdc, text.data(), static_cast<int>(index), &prefixSize);
-        }
-
-        const size_t clampedLength = std::min(length, text.size() - index);
-        const int x                = baseX + prefixSize.cx;
-
-        ExtTextOutW(hdc, x, baseY, 0, nullptr, text.data() + index, static_cast<UINT>(clampedLength), nullptr);
-    }
-
-    RestoreDC(hdc, saved);
+        return TRUE;
+    },
+                     reinterpret_cast<LPARAM>(&count));
+    return count;
 }
+#endif
 
 [[nodiscard]] std::wstring GetCommandDisplayName(std::wstring_view commandId) noexcept
 {
@@ -229,33 +192,28 @@ void DrawTextWithHighlights(HDC hdc,
 [[nodiscard]] std::wstring GetCommandDescription(std::wstring_view commandId) noexcept
 {
     const std::optional<unsigned int> descIdOpt = TryGetCommandDescriptionStringId(commandId);
-    if (descIdOpt.has_value())
+    if (! descIdOpt.has_value())
     {
-        const std::wstring desc = LoadStringResource(nullptr, descIdOpt.value());
-        if (! desc.empty())
-        {
-            return desc;
-        }
+        return {};
     }
 
-    return {};
+    const std::wstring description = LoadStringResource(nullptr, descIdOpt.value());
+    return description;
 }
 
 [[nodiscard]] std::wstring FormatChordText(uint32_t vk, uint32_t modifiers) noexcept
 {
     std::vector<std::wstring> parts;
-    parts.reserve(4);
+    parts.reserve(4u);
 
     if ((modifiers & ShortcutManager::kModCtrl) != 0)
     {
         parts.push_back(LoadStringResource(nullptr, IDS_MOD_CTRL));
     }
-
     if ((modifiers & ShortcutManager::kModAlt) != 0)
     {
         parts.push_back(LoadStringResource(nullptr, IDS_MOD_ALT));
     }
-
     if ((modifiers & ShortcutManager::kModShift) != 0)
     {
         parts.push_back(LoadStringResource(nullptr, IDS_MOD_SHIFT));
@@ -264,9 +222,9 @@ void DrawTextWithHighlights(HDC hdc,
     parts.push_back(ShortcutText::VkToDisplayText(vk));
 
     std::wstring result;
-    for (size_t i = 0; i < parts.size(); ++i)
+    for (const std::wstring& part : parts)
     {
-        if (parts[i].empty())
+        if (part.empty())
         {
             continue;
         }
@@ -275,8 +233,9 @@ void DrawTextWithHighlights(HDC hdc,
         {
             result.append(L" + ");
         }
-        result.append(parts[i]);
+        result.append(part);
     }
+
     return result;
 }
 
@@ -285,35 +244,386 @@ void DrawTextWithHighlights(HDC hdc,
     return std::binary_search(conflicts.begin(), conflicts.end(), chordKey);
 }
 
-[[nodiscard]] COLORREF BlendColor(COLORREF base, COLORREF overlay, int overlayWeight, int denom) noexcept
+[[nodiscard]] const std::wstring& GetConflictMark() noexcept
 {
-    if (denom <= 0)
-    {
-        return base;
-    }
+    static const std::wstring mark = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_CONFLICT_MARK);
+    return mark;
+}
 
-    overlayWeight        = std::clamp(overlayWeight, 0, denom);
-    const int baseWeight = denom - overlayWeight;
-
-    const int r = (static_cast<int>(GetRValue(base)) * baseWeight + static_cast<int>(GetRValue(overlay)) * overlayWeight) / denom;
-    const int g = (static_cast<int>(GetGValue(base)) * baseWeight + static_cast<int>(GetGValue(overlay)) * overlayWeight) / denom;
-    const int b = (static_cast<int>(GetBValue(base)) * baseWeight + static_cast<int>(GetBValue(overlay)) * overlayWeight) / denom;
-    return RGB(static_cast<BYTE>(r), static_cast<BYTE>(g), static_cast<BYTE>(b));
+[[nodiscard]] uint64_t MakeShortcutStableRowId(uint64_t groupStableId, size_t bindingIndex) noexcept
+{
+    return (groupStableId << 32u) | (static_cast<uint64_t>(bindingIndex) + 1u);
 }
 
 struct ShortcutRow final
 {
-    Common::Settings::ShortcutBinding binding;
-    std::wstring displayName;
-    std::wstring description;
+    uint64_t stableId  = 0u;
+    uint32_t vk        = 0u;
+    uint32_t modifiers = 0u;
+    std::wstring commandId;
+    std::wstring commandText;
     std::wstring keyText;
-    uint32_t chordKey = 0;
-    int groupId       = 0;
-    bool conflict     = false;
-    std::wstring conflictWith;
+    std::wstring tooltipText;
+    uint64_t groupStableId = 0u;
+    bool hasConflict       = false;
 };
 
-class ShortcutsWindow final
+enum class ShortcutKeySortGroup : uint8_t
+{
+    Function = 0u,
+    Number,
+    Letter,
+    Other,
+};
+
+struct ShortcutKeySortKey final
+{
+    ShortcutKeySortGroup group = ShortcutKeySortGroup::Other;
+    uint32_t ordinal           = 0u;
+    std::wstring baseText;
+    std::wstring modifierText;
+};
+
+[[nodiscard]] std::wstring FormatModifierSortText(uint32_t modifiers) noexcept
+{
+    std::wstring result;
+    const auto appendPart = [&](UINT stringId)
+    {
+        const std::wstring part = LoadStringResource(nullptr, stringId);
+        if (part.empty())
+        {
+            return;
+        }
+        if (! result.empty())
+        {
+            result.append(L" + ");
+        }
+        result.append(part);
+    };
+
+    if ((modifiers & ShortcutManager::kModCtrl) != 0)
+    {
+        appendPart(IDS_MOD_CTRL);
+    }
+    if ((modifiers & ShortcutManager::kModAlt) != 0)
+    {
+        appendPart(IDS_MOD_ALT);
+    }
+    if ((modifiers & ShortcutManager::kModShift) != 0)
+    {
+        appendPart(IDS_MOD_SHIFT);
+    }
+
+    return result;
+}
+
+[[nodiscard]] ShortcutKeySortKey MakeShortcutKeySortKey(const ShortcutRow& row)
+{
+    ShortcutKeySortKey key{
+        .modifierText = FormatModifierSortText(row.modifiers),
+    };
+
+    if (row.vk >= VK_F1 && row.vk <= VK_F24)
+    {
+        key.group   = ShortcutKeySortGroup::Function;
+        key.ordinal = row.vk - VK_F1 + 1u;
+        return key;
+    }
+
+    if (row.vk >= static_cast<uint32_t>(L'0') && row.vk <= static_cast<uint32_t>(L'9'))
+    {
+        key.group   = ShortcutKeySortGroup::Number;
+        key.ordinal = row.vk - static_cast<uint32_t>(L'0');
+        return key;
+    }
+
+    if (row.vk >= static_cast<uint32_t>(L'A') && row.vk <= static_cast<uint32_t>(L'Z'))
+    {
+        key.group   = ShortcutKeySortGroup::Letter;
+        key.ordinal = row.vk - static_cast<uint32_t>(L'A');
+        return key;
+    }
+
+    key.group    = ShortcutKeySortGroup::Other;
+    key.baseText = ShortcutText::VkToDisplayText(row.vk);
+    return key;
+}
+
+[[nodiscard]] int CompareShortcutKeySort(const ShortcutRow& left, const ShortcutRow& right)
+{
+    const ShortcutKeySortKey leftKey  = MakeShortcutKeySortKey(left);
+    const ShortcutKeySortKey rightKey = MakeShortcutKeySortKey(right);
+
+    if (leftKey.group != rightKey.group)
+    {
+        return static_cast<int>(leftKey.group) - static_cast<int>(rightKey.group);
+    }
+
+    if (leftKey.ordinal != rightKey.ordinal)
+    {
+        return leftKey.ordinal < rightKey.ordinal ? -1 : 1;
+    }
+
+    int comparison = CompareNoCase(leftKey.baseText, rightKey.baseText);
+    if (comparison != 0)
+    {
+        return comparison;
+    }
+
+    comparison = CompareNoCase(leftKey.modifierText, rightKey.modifierText);
+    if (comparison != 0)
+    {
+        return comparison;
+    }
+
+    return CompareNoCase(left.keyText, right.keyText);
+}
+
+class ShortcutsGridModel final : public IDxGridModel
+{
+public:
+    ShortcutsGridModel()
+    {
+        _columns = {
+            {L"command", LoadStringResource(nullptr, IDS_SHORTCUTS_COL_COMMAND), 460.0f, 260.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"key", LoadStringResource(nullptr, IDS_SHORTCUTS_COL_KEY), 220.0f, 140.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+        };
+    }
+
+    void SetRows(std::vector<ShortcutRow> rows)
+    {
+        _rows = std::move(rows);
+        RebuildGroups();
+    }
+
+    [[nodiscard]] size_t GetRowCount() const noexcept override
+    {
+        return _rows.size();
+    }
+
+    [[nodiscard]] size_t GetColumnCount() const noexcept override
+    {
+        return _columns.size();
+    }
+
+    [[nodiscard]] GridColumnDesc GetColumn(size_t columnIndex) const override
+    {
+        return _columns.at(columnIndex);
+    }
+
+    void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
+    {
+        outCell = {};
+        if (rowIndex >= _rows.size() || columnIndex >= _columns.size())
+        {
+            return;
+        }
+
+        const ShortcutRow& row = _rows[rowIndex];
+        if (columnIndex == 0u)
+        {
+            outCell.kind        = row.hasConflict ? RedSalamander::DxUi::GridCellKind::IconText : RedSalamander::DxUi::GridCellKind::Text;
+            outCell.iconText    = row.hasConflict ? GetConflictMark() : std::wstring{};
+            outCell.text        = row.commandText;
+            outCell.multiline   = true;
+            outCell.tooltipText = row.tooltipText;
+            return;
+        }
+
+        outCell.text          = row.keyText;
+        outCell.textAlignment = DWRITE_TEXT_ALIGNMENT_TRAILING;
+        outCell.tooltipText   = row.tooltipText;
+    }
+
+    [[nodiscard]] RedSalamander::DxUi::GridRowStyle GetRowStyle(size_t rowIndex) const override
+    {
+        if (rowIndex >= _rows.size())
+        {
+            return {};
+        }
+
+        const ShortcutRow& row = _rows[rowIndex];
+        return RedSalamander::DxUi::GridRowStyle{
+            .tone        = RedSalamander::DxUi::GridRowTone::None,
+            .rainbowSeed = ! row.commandText.empty() ? row.commandText : row.keyText,
+        };
+    }
+
+    [[nodiscard]] size_t GetGroupCount() const noexcept override
+    {
+        return _groups.size();
+    }
+
+    [[nodiscard]] GridGroupDesc GetGroup(size_t groupIndex) const override
+    {
+        return _groups.at(groupIndex);
+    }
+
+    [[nodiscard]] uint64_t GetStableRowId(size_t rowIndex) const noexcept override
+    {
+        return rowIndex < _rows.size() ? _rows[rowIndex].stableId : 0u;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+    {
+        const auto it = std::find_if(_rows.begin(), _rows.end(), [&](const ShortcutRow& row) noexcept { return row.stableId == rowId; });
+        if (it == _rows.end())
+        {
+            return std::nullopt;
+        }
+
+        return static_cast<size_t>(std::distance(_rows.begin(), it));
+    }
+
+    [[nodiscard]] std::wstring GetRowAccessibleName(size_t rowIndex) const
+    {
+        if (rowIndex >= _rows.size())
+        {
+            return {};
+        }
+
+        return _rows[rowIndex].commandText;
+    }
+
+    [[nodiscard]] const ShortcutRow* GetRow(size_t rowIndex) const noexcept
+    {
+        return rowIndex < _rows.size() ? &_rows[rowIndex] : nullptr;
+    }
+
+    [[nodiscard]] bool SetGroupCollapsed(uint64_t stableId, bool collapsed) noexcept
+    {
+        _collapsedByStableId[stableId] = collapsed;
+
+        bool found = false;
+        for (auto& group : _groups)
+        {
+            if (group.stableId != stableId)
+            {
+                continue;
+            }
+
+            group.collapsed = collapsed;
+            found           = true;
+            break;
+        }
+
+        return found;
+    }
+
+    [[nodiscard]] bool IsGroupCollapsed(uint64_t stableId) const noexcept
+    {
+        const auto it = _collapsedByStableId.find(stableId);
+        return it != _collapsedByStableId.end() && it->second;
+    }
+
+    void SortRows(const GridSortSpec& sortSpec)
+    {
+        if (_rows.empty())
+        {
+            RebuildGroups();
+            return;
+        }
+
+        const auto compareRows = [&](const ShortcutRow& left, const ShortcutRow& right) noexcept
+        {
+            if (sortSpec.direction == SortDirection::None)
+            {
+                return left.stableId < right.stableId;
+            }
+
+            int comparison = 0;
+            switch (sortSpec.columnIndex)
+            {
+                case 1u:
+                    comparison = CompareShortcutKeySort(left, right);
+                    if (comparison == 0)
+                    {
+                        comparison = CompareNoCase(left.commandText, right.commandText);
+                    }
+                    break;
+                case 0u:
+                default:
+                    comparison = CompareNoCase(left.commandText, right.commandText);
+                    if (comparison == 0)
+                    {
+                        comparison = CompareNoCase(left.keyText, right.keyText);
+                    }
+                    break;
+            }
+
+            if (comparison == 0)
+            {
+                return left.stableId < right.stableId;
+            }
+
+            return sortSpec.direction == SortDirection::Ascending ? comparison < 0 : comparison > 0;
+        };
+
+        size_t groupBegin = 0u;
+        while (groupBegin < _rows.size())
+        {
+            size_t groupEnd = groupBegin + 1u;
+            while (groupEnd < _rows.size() && _rows[groupEnd].groupStableId == _rows[groupBegin].groupStableId)
+            {
+                ++groupEnd;
+            }
+
+            std::stable_sort(_rows.begin() + static_cast<ptrdiff_t>(groupBegin), _rows.begin() + static_cast<ptrdiff_t>(groupEnd), compareRows);
+            groupBegin = groupEnd;
+        }
+
+        RebuildGroups();
+    }
+
+private:
+    void RebuildGroups()
+    {
+        _groups.clear();
+        if (_rows.empty())
+        {
+            return;
+        }
+
+        const auto appendGroup = [&](uint64_t stableId, const std::wstring& title) noexcept
+        {
+            const auto it = std::find_if(_rows.begin(), _rows.end(), [&](const ShortcutRow& row) noexcept { return row.groupStableId == stableId; });
+            if (it == _rows.end())
+            {
+                return;
+            }
+
+            const size_t start = static_cast<size_t>(std::distance(_rows.begin(), it));
+            size_t count       = 0u;
+            for (size_t rowIndex = start; rowIndex < _rows.size(); ++rowIndex)
+            {
+                if (_rows[rowIndex].groupStableId != stableId)
+                {
+                    break;
+                }
+                ++count;
+            }
+
+            _groups.push_back(GridGroupDesc{
+                .stableId      = stableId,
+                .title         = title,
+                .startRowIndex = start,
+                .rowCount      = count,
+                .collapsed     = IsGroupCollapsed(stableId),
+            });
+        };
+
+        appendGroup(kGroupStableIdFunctionBar, LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_FUNCTION_BAR));
+        appendGroup(kGroupStableIdFolderView, LoadStringResource(nullptr, IDS_SHORTCUTS_GROUP_FOLDER_VIEW));
+    }
+
+private:
+    std::vector<GridColumnDesc> _columns;
+    std::vector<ShortcutRow> _rows;
+    std::vector<GridGroupDesc> _groups;
+    std::unordered_map<uint64_t, bool> _collapsedByStableId;
+};
+
+class ShortcutsWindow final : public IDxGridDelegate
 {
 public:
     ShortcutsWindow() = default;
@@ -341,74 +651,140 @@ public:
         return _hWnd.get();
     }
 
+#ifdef ENABLE_TESTS
+    [[nodiscard]] bool DebugGetSnapshot(ShortcutsWindowDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugScrollByWheelDetents(int detents) noexcept;
+    [[nodiscard]] bool DebugSelectRow(size_t rowIndex) noexcept;
+    [[nodiscard]] bool DebugSetSearchText(std::wstring_view text) noexcept;
+    [[nodiscard]] bool DebugFocusSearch() noexcept;
+    [[nodiscard]] bool DebugFocusGrid() noexcept;
+    [[nodiscard]] bool DebugCycleGridSortByColumn(size_t columnIndex) noexcept;
+    [[nodiscard]] bool DebugApplyGridLayout(const std::vector<Common::Settings::GridColumnLayoutEntry>& layout) noexcept;
+    [[nodiscard]] bool DebugSetGroupCollapsed(size_t groupIndex, bool collapsed) noexcept;
+#endif
+
+    void OnGridSelectionChanged(Grid& sender) override
+    {
+        if (! _gridModel)
+        {
+            _selectedRowId.reset();
+            return;
+        }
+
+        const std::optional<size_t> rowIndex = sender.GetPrimarySelectedRow();
+        _selectedRowId                       = rowIndex.has_value() ? std::optional<uint64_t>(_gridModel->GetStableRowId(rowIndex.value())) : std::nullopt;
+    }
+
+    void OnGridSelectionChanged() override
+    {
+        if (! _grid || ! _gridModel)
+        {
+            _selectedRowId.reset();
+            return;
+        }
+
+        const std::optional<size_t> rowIndex = _grid->GetPrimarySelectedRow();
+        _selectedRowId                       = rowIndex.has_value() ? std::optional<uint64_t>(_gridModel->GetStableRowId(rowIndex.value())) : std::nullopt;
+    }
+
+    void OnGridGroupToggled(Grid& /*sender*/, uint64_t groupStableId, bool collapsed) override
+    {
+        if (! _gridModel)
+        {
+            return;
+        }
+
+        static_cast<void>(_gridModel->SetGroupCollapsed(groupStableId, collapsed));
+    }
+
+    void OnGridGroupToggled(uint64_t groupStableId, bool collapsed) override
+    {
+        if (! _gridModel)
+        {
+            return;
+        }
+
+        static_cast<void>(_gridModel->SetGroupCollapsed(groupStableId, collapsed));
+    }
+
+    void OnGridSortRequested(const GridSortSpec& sortSpec) override
+    {
+        if (! _gridModel || ! _grid)
+        {
+            return;
+        }
+
+        _gridModel->SortRows(sortSpec);
+        _grid->NotifyDataChanged();
+        RestoreSelection();
+        _dxHost.Invalidate();
+    }
+
+    void OnGridRowActivated(Grid& /*sender*/, size_t rowIndex) override
+    {
+        OnGridRowActivated(rowIndex);
+    }
+
+    void OnGridRowActivated(size_t rowIndex) override
+    {
+        if (! _gridModel || rowIndex >= _gridModel->GetRowCount())
+        {
+            return;
+        }
+
+        const ShortcutRow* const row = _gridModel->GetRow(rowIndex);
+        if (! row || row->commandId.empty())
+        {
+            return;
+        }
+
+        const HWND dispatchOwner = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? _ownerWindow : _hWnd.get();
+        if (! dispatchOwner || IsWindow(dispatchOwner) == FALSE)
+        {
+            return;
+        }
+
+        static_cast<void>(DispatchShortcutCommandFromWindow(dispatchOwner, row->commandId));
+    }
+
 private:
     static ATOM RegisterWndClass(HINSTANCE instance) noexcept;
-    static constexpr PCWSTR kClassName = L"RedSalamander.ShortcutsWindow";
+    static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+    LRESULT WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
-    static LRESULT CALLBACK WndProcThunk(HWND hWindow, UINT msg, WPARAM wp, LPARAM lp);
-    static LRESULT CALLBACK HeaderSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) noexcept;
-    LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
-
+    [[nodiscard]] bool OnCreate(HWND hwnd) noexcept;
+    void PersistSettingsForClose(HWND hwnd) noexcept;
+    void OnNcDestroy(HWND hwnd) noexcept;
     void Destroy() noexcept;
-    void OnCreate(HWND hwnd) noexcept;
-    void OnDestroy() noexcept;
-    void OnSize(UINT width, UINT height) noexcept;
-    void OnPaint(HWND hwnd) noexcept;
-    void OnActivate(HWND hwnd) noexcept;
-    void OnHeaderPaint(HWND header) noexcept;
-    LRESULT OnHeaderNcDestroy(HWND header, WPARAM wParam, LPARAM lParam, UINT_PTR subclassId) noexcept;
-    LRESULT OnMeasureItem(MEASUREITEMSTRUCT* mis) noexcept;
-    LRESULT OnDrawItem(DRAWITEMSTRUCT* dis) noexcept;
-    void OnCommandMessage(UINT controlId, UINT notifyCode) noexcept;
-    LRESULT OnNotify(const NMHDR* header, LPARAM lp) noexcept;
-    LRESULT OnCustomDraw(NMLVCUSTOMDRAW* cd) noexcept;
-    LRESULT OnGetInfoTip(NMLVGETINFOTIPW* tip) noexcept;
-    LRESULT OnDpiChangedMessage(HWND hwnd, UINT dpi, const RECT* suggested) noexcept;
-    LRESULT OnGetMinMaxInfoMessage(HWND hwnd, MINMAXINFO* info) noexcept;
-    LRESULT OnNcDestroyMessage() noexcept;
-    LRESULT OnCtlColorEdit(HDC hdc, HWND control) noexcept;
-    void OnSearchChanged() noexcept;
-    void EnsureFonts(UINT dpi) noexcept;
-
-    void EnsureSearchControls(HWND hwnd) noexcept;
-    void EnsureListView(HWND hwnd) noexcept;
-    void EnsureColumns(UINT dpi) noexcept;
-    void EnsureGroups() noexcept;
-    void ApplyListTheme() noexcept;
-    void PopulateList() noexcept;
-    void ResizeWindowToContent(HWND hwnd) noexcept;
-    void AutoSizeColumnsToContent(UINT dpi) noexcept;
-    [[nodiscard]] int GetRowHeightPx(HDC hdc) const noexcept;
+    void BuildUi();
+    void ApplyTheme() noexcept;
+    void Layout() noexcept;
+    void RebuildRows() noexcept;
+    void RestoreSelection() noexcept;
+    void ResizeWindowToDefault(HWND hwnd) noexcept;
 
 private:
     wil::unique_hwnd _hWnd;
-    HINSTANCE _hInstance = nullptr;
-    wil::unique_hwnd _searchFrame;
-    HWND _searchEdit = nullptr;
-    HWND _list       = nullptr;
-
-    wil::unique_any<HIMAGELIST, decltype(&::ImageList_Destroy), ::ImageList_Destroy> _imageList;
-    AppTheme _theme;
-
-    std::wstring _searchQuery;
-
-    ThemedInputFrames::FrameStyle _searchFrameStyle{};
-    COLORREF _searchInputBackgroundColor         = RGB(255, 255, 255);
-    COLORREF _searchInputFocusedBackgroundColor  = RGB(255, 255, 255);
-    COLORREF _searchInputDisabledBackgroundColor = RGB(255, 255, 255);
-    wil::unique_hbrush _searchInputBrush;
-    wil::unique_hbrush _searchInputFocusedBrush;
-    wil::unique_hbrush _searchInputDisabledBrush;
-
-    Common::Settings::ShortcutsSettings _shortcuts;
+    HINSTANCE _instance                     = nullptr;
+    Common::Settings::Settings* _settings   = nullptr;
     const ShortcutManager* _shortcutManager = nullptr;
-    std::vector<ShortcutRow> _rows;
+    Common::Settings::ShortcutsSettings _shortcuts;
+    AppTheme _theme{};
+    std::wstring _searchQuery;
+    std::optional<uint64_t> _selectedRowId;
+    size_t _dispatchDepth           = 0u;
+    bool _deletePending             = false;
+    bool _settingsPersistedForClose = false;
+    HWND _ownerWindow               = nullptr;
 
-    Common::Settings::Settings* _settings = nullptr;
-
-    wil::unique_hbrush _backgroundBrush;
-    UINT _dpi = USER_DEFAULT_SCREEN_DPI;
-    wil::unique_hfont _uiFont;
+    WindowHost _dxHost;
+    std::unique_ptr<Panel> _rootStorage;
+    Panel* _root           = nullptr;
+    Label* _subtitleLabel  = nullptr;
+    TextField* _searchEdit = nullptr;
+    Grid* _grid            = nullptr;
+    std::unique_ptr<ShortcutsGridModel> _gridModelStorage;
+    ShortcutsGridModel* _gridModel = nullptr;
 };
 
 ShortcutsWindow* g_shortcutsWindow = nullptr;
@@ -416,18 +792,19 @@ ShortcutsWindow* g_shortcutsWindow = nullptr;
 ATOM ShortcutsWindow::RegisterWndClass(HINSTANCE instance) noexcept
 {
     static ATOM atom = 0;
-    if (atom)
+    if (atom != 0)
     {
         return atom;
     }
 
     WNDCLASSEXW wc{};
     wc.cbSize        = sizeof(wc);
-    wc.style         = CS_HREDRAW | CS_VREDRAW;
-    wc.lpfnWndProc   = WndProcThunk;
+    wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
+    wc.lpfnWndProc   = ShortcutsWindow::WndProcThunk;
     wc.hInstance     = instance;
-    wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
-    wc.hbrBackground = nullptr;
+    wc.hIcon         = LoadIconW(instance, MAKEINTRESOURCEW(IDI_REDSALAMANDER));
+    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+    wc.hIconSm       = LoadIconW(instance, MAKEINTRESOURCEW(IDI_SMALL));
     wc.lpszClassName = kClassName;
 
     atom = RegisterClassExW(&wc);
@@ -440,8 +817,8 @@ HWND ShortcutsWindow::Create(HWND owner,
                              const ShortcutManager& shortcutManager,
                              const AppTheme& theme) noexcept
 {
-    _hInstance = GetModuleHandleW(nullptr);
-    if (! RegisterWndClass(_hInstance))
+    _instance = GetModuleHandleW(nullptr);
+    if (! RegisterWndClass(_instance))
     {
         return nullptr;
     }
@@ -449,93 +826,59 @@ HWND ShortcutsWindow::Create(HWND owner,
     _settings        = &settings;
     _shortcuts       = shortcuts;
     _shortcutManager = &shortcutManager;
-    UpdateTheme(theme);
+    _theme           = theme;
 
-    const std::wstring title = LoadStringResource(nullptr, IDS_CMD_SHORTCUTS);
+    const std::wstring title   = LoadStringResource(nullptr, IDS_CMD_SHORTCUTS);
+    const HWND normalizedOwner = NormalizeOwnedWindow(owner);
+    _ownerWindow               = normalizedOwner;
+    const UINT dpi             = normalizedOwner ? GetDpiForWindow(normalizedOwner) : GetDpiForSystem();
+    const int defaultWidth     = MulDiv(900, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
+    const int defaultHeight    = MulDiv(620, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
 
-    if (owner && IsWindow(owner))
-    {
-        owner = GetAncestor(owner, GA_ROOT);
-    }
-    else
-    {
-        owner = nullptr;
-    }
+    const bool hasSavedPlacement = _settings->windows.find(std::wstring(kShortcutsWindowId)) != _settings->windows.end();
 
-    const UINT dpi          = owner ? GetDpiForWindow(owner) : USER_DEFAULT_SCREEN_DPI;
-    const int defaultWidth  = std::max(1, ThemedControls::ScaleDip(dpi, 820));
-    const int defaultHeight = std::max(1, ThemedControls::ScaleDip(dpi, 520));
-
-    const bool hasSavedPlacement = settings.windows.find(std::wstring(kShortcutsWindowId)) != settings.windows.end();
-
-    CreateWindowExW(0,
-                    kClassName,
-                    title.c_str(),
-                    WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-                    CW_USEDEFAULT,
-                    CW_USEDEFAULT,
-                    defaultWidth,
-                    defaultHeight,
-                    owner,
-                    nullptr,
-                    _hInstance,
-                    this);
-
-    if (! _hWnd)
+    const HWND hwnd = CreateWindowExW(0,
+                                      kClassName,
+                                      title.c_str(),
+                                      WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                      CW_USEDEFAULT,
+                                      CW_USEDEFAULT,
+                                      defaultWidth,
+                                      defaultHeight,
+                                      nullptr,
+                                      nullptr,
+                                      _instance,
+                                      this);
+    if (! hwnd)
     {
         return nullptr;
     }
 
-    if (! hasSavedPlacement)
+    if (! _hWnd)
     {
-        ResizeWindowToContent(_hWnd.get());
+        _hWnd.reset(hwnd);
     }
 
-    const int showCmd = hasSavedPlacement ? WindowPlacementPersistence::Restore(settings, kShortcutsWindowId, _hWnd.get()) : SW_SHOWNORMAL;
-    ShowWindow(_hWnd.get(), showCmd);
-    SetForegroundWindow(_hWnd.get());
-    return _hWnd.get();
+    if (! hasSavedPlacement)
+    {
+        ResizeWindowToDefault(hwnd);
+    }
+
+    const int showCmd = hasSavedPlacement ? WindowPlacementPersistence::Restore(*_settings, kShortcutsWindowId, hwnd) : SW_SHOWNORMAL;
+    ShowWindow(hwnd, showCmd);
+    SetForegroundWindow(hwnd);
+    return hwnd;
 }
 
 void ShortcutsWindow::UpdateTheme(const AppTheme& theme) noexcept
 {
     _theme = theme;
-    _backgroundBrush.reset(CreateSolidBrush(_theme.windowBackground));
-
-    const COLORREF surface              = ThemedControls::GetControlSurfaceColor(_theme);
-    _searchInputBackgroundColor         = ThemedControls::BlendColor(surface, _theme.windowBackground, _theme.dark ? 50 : 30, 255);
-    _searchInputFocusedBackgroundColor  = ThemedControls::BlendColor(_searchInputBackgroundColor, _theme.menu.text, _theme.dark ? 20 : 16, 255);
-    _searchInputDisabledBackgroundColor = ThemedControls::BlendColor(_theme.windowBackground, _searchInputBackgroundColor, _theme.dark ? 70 : 40, 255);
-
-    _searchInputBrush.reset();
-    _searchInputFocusedBrush.reset();
-    _searchInputDisabledBrush.reset();
-    if (! _theme.highContrast)
-    {
-        _searchInputBrush.reset(CreateSolidBrush(_searchInputBackgroundColor));
-        _searchInputFocusedBrush.reset(CreateSolidBrush(_searchInputFocusedBackgroundColor));
-        _searchInputDisabledBrush.reset(CreateSolidBrush(_searchInputDisabledBackgroundColor));
-    }
-
-    _searchFrameStyle.theme                        = &_theme;
-    _searchFrameStyle.backdropBrush                = _backgroundBrush ? _backgroundBrush.get() : nullptr;
-    _searchFrameStyle.inputBackgroundColor         = _searchInputBackgroundColor;
-    _searchFrameStyle.inputFocusedBackgroundColor  = _searchInputFocusedBackgroundColor;
-    _searchFrameStyle.inputDisabledBackgroundColor = _searchInputDisabledBackgroundColor;
+    ApplyTheme();
 
     if (_hWnd)
     {
         ApplyTitleBarTheme(_hWnd.get(), _theme, GetActiveWindow() == _hWnd.get());
-        ApplyListTheme();
-        if (_searchFrame)
-        {
-            InvalidateRect(_searchFrame.get(), nullptr, TRUE);
-        }
-        if (_searchEdit)
-        {
-            InvalidateRect(_searchEdit, nullptr, TRUE);
-        }
-        InvalidateRect(_hWnd.get(), nullptr, TRUE);
+        _dxHost.Invalidate();
     }
 }
 
@@ -543,1235 +886,804 @@ void ShortcutsWindow::UpdateData(const Common::Settings::ShortcutsSettings& shor
 {
     _shortcuts       = shortcuts;
     _shortcutManager = &shortcutManager;
-    PopulateList();
-    if (_hWnd)
+    if (_gridModel)
     {
-        const UINT dpi = GetDpiForWindow(_hWnd.get());
-        AutoSizeColumnsToContent(dpi);
-        ResizeWindowToContent(_hWnd.get());
+        static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdFunctionBar, _shortcuts.functionBarCollapsed));
+        static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdFolderView, _shortcuts.folderViewCollapsed));
     }
+    RebuildRows();
 }
 
-LRESULT CALLBACK ShortcutsWindow::WndProcThunk(HWND hWindow, UINT msg, WPARAM wp, LPARAM lp)
+LRESULT CALLBACK ShortcutsWindow::WndProcThunk(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
-    ShortcutsWindow* self = nullptr;
-
-    if (msg == WM_NCCREATE)
+    if (message == WM_NCCREATE)
     {
-        auto cs = reinterpret_cast<CREATESTRUCTW*>(lp);
-        self    = reinterpret_cast<ShortcutsWindow*>(cs->lpCreateParams);
-        SetWindowLongPtrW(hWindow, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
-        self->_hWnd.reset(hWindow);
+        const auto* cs = reinterpret_cast<CREATESTRUCTW*>(lParam);
+        auto* self     = static_cast<ShortcutsWindow*>(cs ? cs->lpCreateParams : nullptr);
+        if (! self)
+        {
+            return FALSE;
+        }
+
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+        if (! self->_hWnd)
+        {
+            self->_hWnd.reset(hwnd);
+        }
         g_shortcutsWindow = self;
     }
-    else
+
+    auto* self = reinterpret_cast<ShortcutsWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! self)
     {
-        self = reinterpret_cast<ShortcutsWindow*>(GetWindowLongPtrW(hWindow, GWLP_USERDATA));
+        return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 
-    if (self)
+    ++self->_dispatchDepth;
+    const auto finishDispatch = wil::scope_exit([self]() noexcept
     {
-        return self->WndProc(hWindow, msg, wp, lp);
-    }
+        if (self->_dispatchDepth > 0u)
+        {
+            --self->_dispatchDepth;
+        }
+        if (self->_dispatchDepth == 0u && self->_deletePending)
+        {
+            delete self;
+        }
+    });
 
-    return DefWindowProcW(hWindow, msg, wp, lp);
+    return self->WndProc(hwnd, message, wParam, lParam);
 }
 
-LRESULT CALLBACK ShortcutsWindow::HeaderSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) noexcept
+LRESULT ShortcutsWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
-    auto* self = reinterpret_cast<ShortcutsWindow*>(dwRefData);
-    if (! self || self->_theme.highContrast)
+    bool handled     = false;
+    LRESULT dxResult = 0;
+    if (message != WM_CREATE)
     {
-        return DefSubclassProc(hwnd, msg, wParam, lParam);
+        dxResult = _dxHost.HandleMessage(hwnd, message, wParam, lParam, handled);
     }
 
-    switch (msg)
+    if (handled)
     {
+        if (message == WM_NCDESTROY)
+        {
+            OnNcDestroy(hwnd);
+        }
+        else if (message == WM_SIZE || message == WM_DPICHANGED)
+        {
+            Layout();
+        }
+        return dxResult;
+    }
+
+    switch (message)
+    {
+        case WM_CREATE: return OnCreate(hwnd) ? 0 : -1;
+        case WM_SIZE: Layout(); return 0;
+        case WM_DPICHANGED:
+        {
+            const auto* suggested = reinterpret_cast<const RECT*>(lParam);
+            if (suggested)
+            {
+                SetWindowPos(hwnd,
+                             nullptr,
+                             suggested->left,
+                             suggested->top,
+                             suggested->right - suggested->left,
+                             suggested->bottom - suggested->top,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            Layout();
+            return 0;
+        }
+        case WM_GETMINMAXINFO:
+        {
+            auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
+            if (info)
+            {
+                const UINT dpi         = GetDpiForWindow(hwnd);
+                info->ptMinTrackSize.x = std::max<LONG>(info->ptMinTrackSize.x, MulDiv(680, static_cast<int>(dpi), 96));
+                info->ptMinTrackSize.y = std::max<LONG>(info->ptMinTrackSize.y, MulDiv(420, static_cast<int>(dpi), 96));
+                static_cast<void>(WindowMaximizeBehavior::ApplyVerticalMaximize(hwnd, *info));
+            }
+            return 0;
+        }
         case WM_ERASEBKGND: return 1;
-        case WM_PAINT: self->OnHeaderPaint(hwnd); return 0;
-        case WM_NCDESTROY: return self->OnHeaderNcDestroy(hwnd, wParam, lParam, uIdSubclass);
+        case WM_KEYDOWN:
+            if (wParam == VK_ESCAPE)
+            {
+                DestroyWindow(hwnd);
+                return 0;
+            }
+            break;
+        case WM_SHOWWINDOW:
+            if (wParam != FALSE && _grid && ! _grid->GetPrimarySelectedRow().has_value() && _gridModel && _gridModel->GetRowCount() != 0u)
+            {
+                RestoreSelection();
+            }
+            return 0;
+        case WM_ACTIVATE:
+            ApplyTitleBarTheme(hwnd, _theme, LOWORD(wParam) != WA_INACTIVE);
+            if (LOWORD(wParam) != WA_INACTIVE && _grid && ! _grid->GetPrimarySelectedRow().has_value() && _gridModel && _gridModel->GetRowCount() != 0u)
+            {
+                RestoreSelection();
+            }
+            return 0;
+        case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, _theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
+        case WM_CLOSE:
+            PersistSettingsForClose(hwnd);
+            DestroyWindow(hwnd);
+            return 0;
+        case WM_NCDESTROY: OnNcDestroy(hwnd); break;
     }
 
-    return DefSubclassProc(hwnd, msg, wParam, lParam);
+    return DefWindowProcW(hwnd, message, wParam, lParam);
 }
 
-LRESULT ShortcutsWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+bool ShortcutsWindow::OnCreate(HWND hwnd) noexcept
 {
-    switch (msg)
+    if (! _dxHost.Attach(hwnd))
     {
-        case WM_CREATE: OnCreate(hwnd); return 0;
-        case WM_DESTROY: OnDestroy(); return 0;
-        case WM_PAINT: OnPaint(hwnd); return 0;
-        case WM_ERASEBKGND: return 1;
-        case WM_ACTIVATE: OnActivate(hwnd); return 0;
-        case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, _theme, wp != FALSE); return DefWindowProcW(hwnd, msg, wp, lp);
-        case WM_GETMINMAXINFO: return OnGetMinMaxInfoMessage(hwnd, reinterpret_cast<MINMAXINFO*>(lp));
-        case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
-        case WM_MEASUREITEM: return OnMeasureItem(reinterpret_cast<MEASUREITEMSTRUCT*>(lp));
-        case WM_DRAWITEM: return OnDrawItem(reinterpret_cast<DRAWITEMSTRUCT*>(lp));
-        case WM_DPICHANGED: return OnDpiChangedMessage(hwnd, static_cast<UINT>(HIWORD(wp)), reinterpret_cast<const RECT*>(lp));
-        case WM_NOTIFY: return OnNotify(reinterpret_cast<const NMHDR*>(lp), lp);
-        case WM_COMMAND: OnCommandMessage(LOWORD(wp), HIWORD(wp)); return 0;
-        case WM_CTLCOLORSTATIC:
-        case WM_CTLCOLOREDIT: return OnCtlColorEdit(reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
-        case WM_CLOSE: DestroyWindow(hwnd); return 0;
-        case WM_NCDESTROY: return OnNcDestroyMessage();
+        return false;
     }
+    _dxHost.SetOnEscape([this]() noexcept
+    {
+        const HWND hwnd = _hWnd.get();
+        if (! hwnd || IsWindow(hwnd) == FALSE)
+        {
+            return false;
+        }
+        return PostMessageW(hwnd, WM_CLOSE, 0, 0) != FALSE;
+    });
 
-    return DefWindowProcW(hwnd, msg, wp, lp);
+    BuildUi();
+    ApplyTheme();
+    RebuildRows();
+    Layout();
+    if (_searchEdit)
+    {
+        _dxHost.SetFocusControl(_searchEdit);
+        RestoreSelection();
+    }
+    _settingsPersistedForClose = false;
+    return true;
 }
 
-LRESULT ShortcutsWindow::OnHeaderNcDestroy(HWND header, WPARAM wParam, LPARAM lParam, UINT_PTR subclassId) noexcept
+void ShortcutsWindow::PersistSettingsForClose(HWND hwnd) noexcept
 {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-    RemoveWindowSubclass(header, HeaderSubclassProc, subclassId);
-#pragma warning(pop)
-    return DefSubclassProc(header, WM_NCDESTROY, wParam, lParam);
-}
-
-LRESULT ShortcutsWindow::OnDpiChangedMessage(HWND hwnd, UINT dpi, const RECT* suggested) noexcept
-{
-    if (suggested)
-    {
-        const int width  = static_cast<int>(std::max(0l, suggested->right - suggested->left));
-        const int height = static_cast<int>(std::max(0l, suggested->bottom - suggested->top));
-        SetWindowPos(hwnd, nullptr, suggested->left, suggested->top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-
-    EnsureFonts(dpi);
-    EnsureColumns(dpi);
-    AutoSizeColumnsToContent(dpi);
-
-    if (_searchEdit && ! _theme.highContrast)
-    {
-        ThemedControls::ApplyModernEditStyle(_searchEdit, _theme);
-    }
-
-    PopulateList();
-    return 0;
-}
-
-LRESULT ShortcutsWindow::OnGetMinMaxInfoMessage(HWND hwnd, MINMAXINFO* info) noexcept
-{
-    if (! hwnd || ! info)
-    {
-        return 0;
-    }
-
-    const UINT dpi         = GetDpiForWindow(hwnd);
-    const LONG minW        = static_cast<LONG>(ThemedControls::ScaleDip(dpi, 560));
-    const LONG minH        = static_cast<LONG>(ThemedControls::ScaleDip(dpi, 420));
-    info->ptMinTrackSize.x = std::max(info->ptMinTrackSize.x, minW);
-    info->ptMinTrackSize.y = std::max(info->ptMinTrackSize.y, minH);
-
-    static_cast<void>(WindowMaximizeBehavior::ApplyVerticalMaximize(hwnd, *info));
-    return 0;
-}
-
-void ShortcutsWindow::EnsureFonts(UINT dpi) noexcept
-{
-    if (dpi == 0)
-    {
-        dpi = USER_DEFAULT_SCREEN_DPI;
-    }
-
-    if (_dpi == dpi && _uiFont)
+    if (_settingsPersistedForClose || ! _settings || ! _hWnd || _hWnd.get() != hwnd)
     {
         return;
     }
 
-    _dpi    = dpi;
-    _uiFont = CreateMenuFontForDpi(dpi);
-
-    HFONT fontToUse = _uiFont.get();
-    if (! fontToUse)
+    Common::Settings::ShortcutsSettings settings = _settings->shortcuts.value_or(_shortcuts);
+    settings.functionBar                         = _shortcuts.functionBar;
+    settings.folderView                          = _shortcuts.folderView;
+    settings.functionBarCollapsed                = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFunctionBar);
+    settings.folderViewCollapsed                 = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFolderView);
+    settings.sortColumnId.clear();
+    settings.sortDescending = false;
+    if (_grid && _gridModel)
     {
-        fontToUse = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    }
-
-    if (_searchEdit)
-    {
-        SendMessageW(_searchEdit, WM_SETFONT, reinterpret_cast<WPARAM>(fontToUse), TRUE);
-    }
-
-    if (_list)
-    {
-        SendMessageW(_list, WM_SETFONT, reinterpret_cast<WPARAM>(fontToUse), TRUE);
-
-        const HWND header = ListView_GetHeader(_list);
-        if (header)
+        const auto sortSpec = _grid->GetSortSpec();
+        if (sortSpec.direction != SortDirection::None && sortSpec.columnIndex < _gridModel->GetColumnCount())
         {
-            SendMessageW(header, WM_SETFONT, reinterpret_cast<WPARAM>(fontToUse), TRUE);
+            settings.sortColumnId   = _gridModel->GetColumn(sortSpec.columnIndex).id;
+            settings.sortDescending = sortSpec.direction == SortDirection::Descending;
         }
     }
+    settings.gridLayout.clear();
+    if (_grid)
+    {
+        settings.gridLayout = ConvertColumnLayout(_grid->CaptureColumnLayout());
+    }
+    _settings->shortcuts = std::move(settings);
+
+    WindowPlacementPersistence::Save(*_settings, kShortcutsWindowId, hwnd);
+    const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kSettingsAppId, *_settings);
+    if (FAILED(saveHr))
+    {
+        Debug::Error(L"SaveSettings failed for Shortcuts window (hr=0x{:08X}).", static_cast<unsigned long>(saveHr));
+    }
+
+    _settingsPersistedForClose = true;
 }
 
-LRESULT ShortcutsWindow::OnNcDestroyMessage() noexcept
+void ShortcutsWindow::OnNcDestroy(HWND hwnd) noexcept
 {
-    if (_settings && _hWnd)
+    PersistSettingsForClose(hwnd);
+    const HWND restoreOwner = (_ownerWindow && IsWindow(_ownerWindow) != FALSE) ? _ownerWindow : nullptr;
+
+    _dxHost.Detach();
+    if (_hWnd.get() == hwnd)
     {
-        WindowPlacementPersistence::Save(*_settings, kShortcutsWindowId, _hWnd.get());
-
-        const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kSettingsAppId, *_settings);
-        if (FAILED(saveHr))
-        {
-            const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kSettingsAppId);
-            Debug::Error(L"SaveSettings failed (hr=0x{:08X}) path={}", static_cast<unsigned long>(saveHr), settingsPath.wstring());
-        }
+        _hWnd.release();
     }
-
-    _hWnd.release();
+    SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
     if (g_shortcutsWindow == this)
     {
         g_shortcutsWindow = nullptr;
     }
-    delete this;
-    return 0;
+    _deletePending = true;
+    if (_dispatchDepth == 0u)
+    {
+        delete this;
+    }
+
+    if (restoreOwner)
+    {
+        static_cast<void>(SetActiveWindow(restoreOwner));
+        static_cast<void>(SetForegroundWindow(restoreOwner));
+    }
 }
 
 void ShortcutsWindow::Destroy() noexcept
 {
-    _backgroundBrush.reset();
-    _searchInputBrush.reset();
-    _searchInputFocusedBrush.reset();
-    _searchInputDisabledBrush.reset();
-    _imageList.reset();
-    _rows.clear();
-    _uiFont.reset();
-    _searchFrame.reset();
-    _searchEdit = nullptr;
-    _searchQuery.clear();
-    _list            = nullptr;
+    _gridModel = nullptr;
+    _gridModelStorage.reset();
+    _grid          = nullptr;
+    _searchEdit    = nullptr;
+    _subtitleLabel = nullptr;
+    _root          = nullptr;
+    _rootStorage.reset();
+    _dxHost.Detach();
     _shortcutManager = nullptr;
+    _ownerWindow     = nullptr;
+    _searchQuery.clear();
+    _selectedRowId.reset();
     _hWnd.reset();
 }
 
-void ShortcutsWindow::OnCreate(HWND hwnd) noexcept
+void ShortcutsWindow::BuildUi()
 {
-    INITCOMMONCONTROLSEX icc{};
-    icc.dwSize = sizeof(icc);
-    icc.dwICC  = ICC_LISTVIEW_CLASSES;
-    InitCommonControlsEx(&icc);
-
-    ApplyTitleBarTheme(hwnd, _theme, true);
-    EnsureSearchControls(hwnd);
-    EnsureListView(hwnd);
-
-    const UINT dpi = GetDpiForWindow(hwnd);
-    EnsureFonts(dpi);
-    EnsureColumns(dpi);
-    EnsureGroups();
-    ApplyListTheme();
-    PopulateList();
-    AutoSizeColumnsToContent(dpi);
-    ResizeWindowToContent(hwnd);
-
-    if (_searchEdit)
-    {
-        SetFocus(_searchEdit);
-    }
-}
-
-void ShortcutsWindow::OnDestroy() noexcept
-{
-}
-
-void ShortcutsWindow::OnSize(UINT width, UINT height) noexcept
-{
-    if (! _list)
+    if (_root)
     {
         return;
     }
 
-    const UINT dpi         = _hWnd ? GetDpiForWindow(_hWnd.get()) : USER_DEFAULT_SCREEN_DPI;
-    const int padding      = ThemedControls::ScaleDip(dpi, 8);
-    const int gapY         = ThemedControls::ScaleDip(dpi, 8);
-    const int framePadding = std::max(1, ThemedControls::ScaleDip(dpi, 3));
-    const int searchHeight = ThemedControls::ScaleDip(dpi, 34);
+    _rootStorage = std::make_unique<Panel>();
+    _root        = _rootStorage.get();
 
-    int topY = 0;
+    _subtitleLabel = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_CMD_DESC_SHORTCUTS));
+    _subtitleLabel->SetFontRole(FontRole::Small);
+    _subtitleLabel->SetMultiline(false);
 
-    if (_searchEdit)
+    _searchEdit = _root->AddChild<TextField>();
+    _searchEdit->SetPlaceholder(LoadStringResource(nullptr, IDS_SHORTCUTS_SEARCH_CUE));
+    _searchEdit->SetAccessibleName(LoadStringResource(nullptr, IDS_SHORTCUTS_SEARCH_CUE));
+    _searchEdit->SetOnTextChanged([this](std::wstring_view text)
     {
-        const int x = padding;
-        const int y = padding;
-        const int w = std::max(0, static_cast<int>(width) - 2 * padding);
-        const int h = std::max(0, searchHeight);
-
-        if (_searchFrame)
+        const std::wstring trimmed = std::wstring(TrimWhitespace(text));
+        if (trimmed == _searchQuery)
         {
-            SetWindowPos(_searchFrame.get(), nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+            return;
         }
 
-        SetWindowPos(_searchEdit,
-                     nullptr,
-                     x + framePadding,
-                     y + framePadding,
-                     std::max(1, w - 2 * framePadding),
-                     std::max(1, h - 2 * framePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
+        _searchQuery = trimmed;
+        RebuildRows();
+    });
 
-        topY = y + h + gapY;
-    }
+    _grid = _root->AddChild<Grid>();
+    _grid->SetDelegate(this);
+    _grid->SetSelectionMode(GridSelectionMode::Single);
+    _grid->SetHeaderHeightDip(30.0f);
+    _grid->SetRowHeightDip(48.0f);
+    _grid->SetLineClamp(2u);
 
-    MoveWindow(_list, 0, topY, static_cast<int>(width), std::max(0, static_cast<int>(height) - topY), TRUE);
-}
-
-void ShortcutsWindow::OnPaint(HWND hwnd) noexcept
-{
-    PAINTSTRUCT ps{};
-    wil::unique_hdc_paint hdc = wil::BeginPaint(hwnd, &ps);
-    const HBRUSH bg           = _backgroundBrush ? _backgroundBrush.get() : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH));
-    FillRect(hdc.get(), &ps.rcPaint, bg);
-}
-
-void ShortcutsWindow::OnActivate(HWND /*hwnd*/) noexcept
-{
-    if (_list)
+    _gridModelStorage = std::make_unique<ShortcutsGridModel>();
+    _gridModel        = _gridModelStorage.get();
+    static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdFunctionBar, _shortcuts.functionBarCollapsed));
+    static_cast<void>(_gridModel->SetGroupCollapsed(kGroupStableIdFolderView, _shortcuts.folderViewCollapsed));
+    _grid->SetModel(_gridModel);
+    if (_settings && _settings->shortcuts.has_value())
     {
-        InvalidateRect(_list, nullptr, FALSE);
-        const HWND header = ListView_GetHeader(_list);
-        if (header)
+        const auto layout = ConvertColumnLayout(_settings->shortcuts->gridLayout);
+        if (! layout.empty())
         {
-            InvalidateRect(header, nullptr, FALSE);
+            _grid->ApplyColumnLayout(layout);
+        }
+        if (! _settings->shortcuts->sortColumnId.empty())
+        {
+            for (size_t columnIndex = 0u; columnIndex < _gridModel->GetColumnCount(); ++columnIndex)
+            {
+                if (_gridModel->GetColumn(columnIndex).id != _settings->shortcuts->sortColumnId)
+                {
+                    continue;
+                }
+
+                _grid->SetSortSpec(GridSortSpec{
+                    .columnIndex = columnIndex,
+                    .direction   = _settings->shortcuts->sortDescending ? SortDirection::Descending : SortDirection::Ascending,
+                });
+                break;
+            }
         }
     }
+
+    _dxHost.SetRoot(std::move(_rootStorage));
+}
+
+void ShortcutsWindow::ApplyTheme() noexcept
+{
+    _dxHost.SetTheme(MakeAppThemeDxPalette(_theme));
     if (_hWnd)
     {
-        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        ApplyTitleBarTheme(_hWnd.get(), _theme, GetActiveWindow() == _hWnd.get());
+        ApplyWindowBackdropTheme(_hWnd.get(), _theme, WindowBackdropTarget::Tool);
     }
 }
 
-void ShortcutsWindow::OnHeaderPaint(HWND header) noexcept
+void ShortcutsWindow::Layout() noexcept
 {
-    if (! header)
+    if (! _root)
     {
         return;
     }
 
-    PAINTSTRUCT ps{};
-    wil::unique_hdc_paint hdc = wil::BeginPaint(header, &ps);
+    const D2D1_RECT_F bounds = _dxHost.GetClientBoundsDip();
+    _root->SetBounds(bounds);
 
-    RECT client{};
-    if (! GetClientRect(header, &client))
+    const float outer        = 16.0f;
+    const float gap          = 12.0f;
+    const float titleHeight  = 20.0f;
+    const float searchHeight = 36.0f;
+
+    float top = outer;
+    if (_subtitleLabel)
     {
-        return;
+        _subtitleLabel->SetBounds(D2D1::RectF(outer, top, bounds.right - outer, top + titleHeight));
+        top += titleHeight + gap;
     }
 
-    const bool windowActive = _hWnd && GetActiveWindow() == _hWnd.get();
-    const COLORREF bg       = BlendColor(_theme.windowBackground, _theme.menu.separator, 1, 12);
-    COLORREF textColor      = windowActive ? _theme.menu.headerText : _theme.menu.headerTextDisabled;
-    if (textColor == bg)
-    {
-        textColor = ChooseContrastingTextColor(bg);
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(bg));
-    FillRect(hdc.get(), &ps.rcPaint, bgBrush.get());
-
-    HFONT fontToUse = reinterpret_cast<HFONT>(SendMessageW(header, WM_GETFONT, 0, 0));
-    if (! fontToUse)
-    {
-        fontToUse = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    }
-    [[maybe_unused]] auto oldFont = wil::SelectObject(hdc.get(), fontToUse);
-
-    const int dpi      = GetDeviceCaps(hdc.get(), LOGPIXELSX);
-    const int paddingX = MulDiv(8, dpi, USER_DEFAULT_SCREEN_DPI);
-
-    const COLORREF lineColor = _theme.menu.separator;
-    wil::unique_hbrush lineBrush(CreateSolidBrush(lineColor));
-
-    const int count = Header_GetItemCount(header);
-    for (int i = 0; i < count; ++i)
-    {
-        RECT rc{};
-        if (Header_GetItemRect(header, i, &rc) == FALSE)
-        {
-            continue;
-        }
-
-        if (! IntersectRect(&rc, &rc, &client))
-        {
-            continue;
-        }
-
-        wchar_t buf[128]{};
-        HDITEMW item{};
-        item.mask       = HDI_TEXT | HDI_FORMAT;
-        item.pszText    = buf;
-        item.cchTextMax = static_cast<int>(std::size(buf));
-        if (Header_GetItem(header, i, &item) == FALSE)
-        {
-            continue;
-        }
-
-        RECT textRect  = rc;
-        textRect.left  = std::min(textRect.right, textRect.left + paddingX);
-        textRect.right = std::max(textRect.left, textRect.right - paddingX);
-
-        UINT flags = DT_SINGLELINE | DT_VCENTER | DT_END_ELLIPSIS | DT_NOPREFIX;
-        if ((item.fmt & HDF_RIGHT) != 0)
-        {
-            flags |= DT_RIGHT;
-        }
-        else if ((item.fmt & HDF_CENTER) != 0)
-        {
-            flags |= DT_CENTER;
-        }
-        else
-        {
-            flags |= DT_LEFT;
-        }
-
-        SetBkMode(hdc.get(), TRANSPARENT);
-        SetTextColor(hdc.get(), textColor);
-        DrawTextW(hdc.get(), buf, static_cast<int>(std::wcslen(buf)), &textRect, flags);
-
-        RECT rightLine = rc;
-        rightLine.left = std::max(rightLine.left, rightLine.right - 1);
-        FillRect(hdc.get(), &rightLine, lineBrush.get());
-    }
-
-    RECT bottomLine = client;
-    bottomLine.top  = std::max(bottomLine.top, bottomLine.bottom - 1);
-    FillRect(hdc.get(), &bottomLine, lineBrush.get());
-}
-
-LRESULT ShortcutsWindow::OnMeasureItem(MEASUREITEMSTRUCT* mis) noexcept
-{
-    if (! mis || mis->CtlType != ODT_LISTVIEW || mis->CtlID != static_cast<UINT>(kListCtrlId))
-    {
-        return 0;
-    }
-
-    if (! _list)
-    {
-        return 0;
-    }
-
-    wil::unique_hdc_window hdc(GetDC(_list));
-    if (! hdc)
-    {
-        return 1;
-    }
-
-    const HFONT font = reinterpret_cast<HFONT>(SendMessageW(_list, WM_GETFONT, 0, 0));
-    if (font)
-    {
-        [[maybe_unused]] auto oldFont = wil::SelectObject(hdc.get(), font);
-        mis->itemHeight               = static_cast<UINT>(std::max(1, GetRowHeightPx(hdc.get())));
-        return 1;
-    }
-
-    mis->itemHeight = 36u;
-    return 1;
-}
-
-LRESULT ShortcutsWindow::OnDrawItem(DRAWITEMSTRUCT* dis) noexcept
-{
-    if (! dis || dis->CtlType != ODT_LISTVIEW || dis->CtlID != static_cast<UINT>(kListCtrlId))
-    {
-        return 0;
-    }
-
-    if (! _list || ! dis->hDC)
-    {
-        return 1;
-    }
-
-    const int itemIndex = static_cast<int>(dis->itemID);
-    if (itemIndex < 0)
-    {
-        return 1;
-    }
-
-    LVITEMW item{};
-    item.mask  = LVIF_PARAM;
-    item.iItem = itemIndex;
-    if (ListView_GetItem(_list, &item) == FALSE)
-    {
-        return 1;
-    }
-
-    const size_t rowIndex = static_cast<size_t>(item.lParam);
-    if (rowIndex >= _rows.size())
-    {
-        return 1;
-    }
-
-    const ShortcutRow& row = _rows[rowIndex];
-
-    RECT rc = dis->rcItem;
-    if (rc.right <= rc.left || rc.bottom <= rc.top)
-    {
-        return 1;
-    }
-
-    const bool selected    = (dis->itemState & ODS_SELECTED) != 0;
-    const bool focus       = (dis->itemState & ODS_FOCUS) != 0;
-    const bool listFocused = _list && GetFocus() == _list;
-
-    COLORREF bg = _theme.windowBackground;
-    if (selected)
-    {
-        COLORREF selBg = _theme.menu.selectionBg;
-        if (_theme.menu.rainbowMode && ! row.displayName.empty())
-        {
-            selBg = RainbowMenuSelectionColor(row.displayName, _theme.menu.darkBase);
-        }
-
-        if (listFocused || _theme.highContrast)
-        {
-            bg = selBg;
-        }
-        else
-        {
-            const int denom = _theme.menu.darkBase ? 2 : 3;
-            bg              = BlendColor(_theme.windowBackground, selBg, 1, denom);
-        }
-    }
-    else if (! _theme.highContrast && ((itemIndex % 2) == 1))
-    {
-        const COLORREF tint = _theme.menu.rainbowMode ? RainbowMenuSelectionColor(row.displayName, _theme.menu.darkBase) : _theme.menu.selectionBg;
-        const int denom     = _theme.menu.darkBase ? 6 : 8;
-        bg                  = BlendColor(_theme.windowBackground, tint, 1, denom);
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(bg));
-    FillRect(dis->hDC, &rc, bgBrush.get());
-
-    COLORREF textColor = selected ? ChooseContrastingTextColor(bg) : _theme.menu.text;
-    if (textColor == bg)
-    {
-        textColor = ChooseContrastingTextColor(bg);
-    }
-
-    COLORREF descColor = textColor;
-    if (! _theme.highContrast)
-    {
-        descColor = BlendColor(textColor, bg, 1, 3);
-        if (descColor == bg)
-        {
-            descColor = textColor;
-        }
-    }
-
-    constexpr int paddingX = 8;
-    constexpr int paddingY = 3;
-    constexpr int lineGap  = 1;
-
-    const int commandColWidth = std::max(0, ListView_GetColumnWidth(_list, 0));
-    RECT commandRect          = rc;
-    commandRect.right         = std::min(rc.right, rc.left + commandColWidth);
-
-    RECT keyRect = rc;
-    keyRect.left = commandRect.right;
-
-    int iconOffsetX = 0;
-    if (row.conflict && _imageList)
-    {
-        constexpr int iconSize = 16;
-        const int iconX        = commandRect.left + paddingX;
-        const int iconY        = commandRect.top + std::max(0, (static_cast<int>(commandRect.bottom - commandRect.top) - iconSize) / 2);
-        ImageList_Draw(_imageList.get(), 0, dis->hDC, iconX, iconY, ILD_NORMAL);
-        iconOffsetX = iconSize + 6;
-    }
-
-    RECT textRect   = commandRect;
-    textRect.left   = std::min(textRect.right, textRect.left + paddingX + iconOffsetX);
-    textRect.right  = std::max(textRect.left, textRect.right - paddingX);
-    textRect.top    = std::min(textRect.bottom, textRect.top + paddingY);
-    textRect.bottom = std::max(textRect.top, textRect.bottom - paddingY);
-
-    TEXTMETRICW tm{};
-    GetTextMetricsW(dis->hDC, &tm);
-    const int lineHeight = std::max(1, static_cast<int>(tm.tmHeight + tm.tmExternalLeading));
-
-    RECT nameRect   = textRect;
-    nameRect.bottom = std::min(textRect.bottom, nameRect.top + lineHeight);
-
-    RECT descRect = textRect;
-    descRect.top  = std::min(textRect.bottom, nameRect.bottom + lineGap);
-
-    SetBkMode(dis->hDC, TRANSPARENT);
-
-    const std::wstring_view query        = _searchQuery;
-    const std::wstring_view trimmedQuery = TrimWhitespace(query);
-
-    COLORREF highlightBg        = bg;
-    COLORREF highlightTextColor = textColor;
-    if (! trimmedQuery.empty())
-    {
-        if (_theme.highContrast)
-        {
-            highlightBg = GetSysColor(COLOR_HIGHLIGHT);
-        }
-        else
-        {
-            const int denom = _theme.menu.darkBase ? 2 : 3;
-            highlightBg     = BlendColor(bg, _theme.menu.selectionBg, 1, denom);
-            if (highlightBg == bg)
-            {
-                highlightBg = BlendColor(bg, textColor, 1, _theme.menu.darkBase ? 4 : 6);
-            }
-        }
-        highlightTextColor = ChooseContrastingTextColor(highlightBg);
-    }
-
-    HBRUSH highlightBrush = nullptr;
-    wil::unique_hbrush ownedHighlightBrush;
-    if (! trimmedQuery.empty() && ! _theme.highContrast)
-    {
-        ownedHighlightBrush.reset(CreateSolidBrush(highlightBg));
-        highlightBrush = ownedHighlightBrush.get();
-    }
-    else if (! trimmedQuery.empty() && _theme.highContrast)
-    {
-        highlightBrush = GetSysColorBrush(COLOR_HIGHLIGHT);
-    }
-
-    DrawTextWithHighlights(
-        dis->hDC, row.displayName, nameRect, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS, query, textColor, highlightTextColor, highlightBrush);
-
-    if (! row.description.empty())
-    {
-        DrawTextWithHighlights(
-            dis->hDC, row.description, descRect, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS, query, descColor, highlightTextColor, highlightBrush);
-    }
-
-    RECT keyTextRect  = keyRect;
-    keyTextRect.left  = std::min(keyTextRect.right, keyTextRect.left + paddingX);
-    keyTextRect.right = std::max(keyTextRect.left, keyTextRect.right - paddingX);
-
-    DrawTextWithHighlights(dis->hDC,
-                           row.keyText,
-                           keyTextRect,
-                           DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS,
-                           query,
-                           textColor,
-                           highlightTextColor,
-                           highlightBrush);
-
-    if (focus)
-    {
-        DrawFocusRect(dis->hDC, &rc);
-    }
-
-    return 1;
-}
-
-void ShortcutsWindow::OnCommandMessage(UINT controlId, UINT notifyCode) noexcept
-{
-    if (controlId != static_cast<UINT>(kSearchEditId))
-    {
-        return;
-    }
-
-    if (notifyCode == EN_CHANGE)
-    {
-        OnSearchChanged();
-    }
-}
-
-LRESULT ShortcutsWindow::OnCtlColorEdit(HDC hdc, HWND control) noexcept
-{
-    if (! hdc || ! control)
-    {
-        return 0;
-    }
-
-    if (_theme.highContrast || control != _searchEdit)
-    {
-        return 0;
-    }
-
-    const bool enabled = IsWindowEnabled(control) != FALSE;
-    const bool focused = GetFocus() == control;
-
-    COLORREF bg  = _searchInputBackgroundColor;
-    HBRUSH brush = _searchInputBrush.get();
-    if (! enabled)
-    {
-        bg    = _searchInputDisabledBackgroundColor;
-        brush = _searchInputDisabledBrush.get();
-    }
-    else if (focused)
-    {
-        bg    = _searchInputFocusedBackgroundColor;
-        brush = _searchInputFocusedBrush.get();
-    }
-
-    if (! brush)
-    {
-        return 0;
-    }
-
-    COLORREF textColor = _theme.menu.text;
-    if (textColor == bg)
-    {
-        textColor = ChooseContrastingTextColor(bg);
-    }
-
-    SetBkColor(hdc, bg);
-    SetTextColor(hdc, textColor);
-    return reinterpret_cast<LRESULT>(brush);
-}
-
-void ShortcutsWindow::OnSearchChanged() noexcept
-{
-    if (! _searchEdit)
-    {
-        return;
-    }
-
-    const std::wstring text         = Win32Text::GetWindowTextString(_searchEdit);
-    const std::wstring_view trimmed = TrimWhitespace(text);
-
-    std::wstring newQuery(trimmed);
-    if (newQuery == _searchQuery)
-    {
-        return;
-    }
-
-    _searchQuery = std::move(newQuery);
-    PopulateList();
-}
-
-LRESULT ShortcutsWindow::OnNotify(const NMHDR* header, LPARAM lp) noexcept
-{
-    if (! header || ! _list || header->hwndFrom != _list)
-    {
-        return 0;
-    }
-
-    if (header->code == NM_CUSTOMDRAW)
-    {
-        return OnCustomDraw(reinterpret_cast<NMLVCUSTOMDRAW*>(lp));
-    }
-
-    if (header->code == LVN_GETINFOTIPW)
-    {
-        return OnGetInfoTip(reinterpret_cast<NMLVGETINFOTIPW*>(lp));
-    }
-
-    return 0;
-}
-
-LRESULT ShortcutsWindow::OnCustomDraw(NMLVCUSTOMDRAW* cd) noexcept
-{
-    if (! cd)
-    {
-        return CDRF_DODEFAULT;
-    }
-
-    if (cd->nmcd.dwDrawStage == CDDS_PREPAINT)
-    {
-        return CDRF_NOTIFYITEMDRAW;
-    }
-
-    if (cd->nmcd.dwDrawStage == CDDS_ITEMPREPAINT || cd->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM))
-    {
-        if (cd->dwItemType == LVCDI_GROUP)
-        {
-            cd->clrTextBk           = _theme.windowBackground;
-            const bool windowActive = _hWnd && GetActiveWindow() == _hWnd.get();
-            COLORREF text           = windowActive ? _theme.menu.headerText : _theme.menu.headerTextDisabled;
-            if (text == _theme.windowBackground)
-            {
-                text = ChooseContrastingTextColor(_theme.windowBackground);
-            }
-            cd->clrText = text;
-            return CDRF_NEWFONT;
-        }
-    }
-
-    return CDRF_DODEFAULT;
-}
-
-LRESULT ShortcutsWindow::OnGetInfoTip(NMLVGETINFOTIPW* tip) noexcept
-{
-    if (! tip || tip->iItem < 0 || ! tip->pszText || tip->cchTextMax <= 0)
-    {
-        return 0;
-    }
-
-    LVITEMW item{};
-    item.mask  = LVIF_PARAM;
-    item.iItem = tip->iItem;
-    if (ListView_GetItem(_list, &item) == FALSE)
-    {
-        return 0;
-    }
-
-    const size_t rowIndex = static_cast<size_t>(item.lParam);
-    if (rowIndex >= _rows.size())
-    {
-        return 0;
-    }
-
-    const ShortcutRow& row = _rows[rowIndex];
-    if (! row.conflict || row.conflictWith.empty())
-    {
-        return 0;
-    }
-
-    const std::wstring chordText = FormatChordText(row.binding.vk, row.binding.modifiers);
-    const std::wstring text      = FormatStringResource(nullptr, IDS_FMT_SHORTCUT_CONFLICT, row.conflictWith, chordText);
-
-    wcsncpy_s(tip->pszText, static_cast<size_t>(tip->cchTextMax), text.c_str(), _TRUNCATE);
-    return 0;
-}
-
-void ShortcutsWindow::EnsureSearchControls(HWND hwnd) noexcept
-{
     if (_searchEdit)
     {
-        return;
+        _searchEdit->SetBounds(D2D1::RectF(outer, top, bounds.right - outer, top + searchHeight));
+        top += searchHeight + gap;
     }
 
-    if (! hwnd)
+    if (_grid)
     {
-        return;
-    }
-
-    const DWORD exStyle = _theme.highContrast ? WS_EX_CLIENTEDGE : 0;
-    _searchEdit         = CreateWindowExW(exStyle,
-                                  L"Edit",
-                                  _searchQuery.c_str(),
-                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-                                  0,
-                                  0,
-                                  10,
-                                  10,
-                                  hwnd,
-                                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(kSearchEditId)),
-                                  _hInstance,
-                                  nullptr);
-
-    if (! _searchEdit)
-    {
-        return;
-    }
-
-    const std::wstring cue = LoadStringResource(nullptr, IDS_SHORTCUTS_SEARCH_CUE);
-    if (! cue.empty())
-    {
-        SendMessageW(_searchEdit, EM_SETCUEBANNER, TRUE, reinterpret_cast<LPARAM>(cue.c_str()));
-    }
-
-    if (_theme.highContrast)
-    {
-        return;
-    }
-
-    ThemedControls::ApplyModernEditStyle(_searchEdit, _theme);
-
-    _searchFrame.reset(CreateWindowExW(0, L"Static", L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0, 10, 10, hwnd, nullptr, _hInstance, nullptr));
-
-    if (! _searchFrame)
-    {
-        return;
-    }
-
-    SetWindowPos(_searchFrame.get(), _searchEdit, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-    ThemedInputFrames::InstallFrame(_searchFrame.get(), _searchEdit, &_searchFrameStyle);
-}
-
-void ShortcutsWindow::EnsureListView(HWND hwnd) noexcept
-{
-    if (_list)
-    {
-        return;
-    }
-
-    _list = CreateWindowExW(0,
-                            WC_LISTVIEWW,
-                            L"",
-                            WS_CHILD | WS_VISIBLE | LVS_REPORT | LVS_OWNERDRAWFIXED | LVS_SHOWSELALWAYS,
-                            0,
-                            0,
-                            0,
-                            0,
-                            hwnd,
-                            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kListCtrlId)),
-                            _hInstance,
-                            nullptr);
-
-    if (! _list)
-    {
-        return;
-    }
-
-    ListView_SetExtendedListViewStyle(_list, LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP | LVS_EX_INFOTIP);
-
-    _imageList.reset(ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 1, 1));
-    if (_imageList)
-    {
-        wil::unique_hicon warnIcon(static_cast<HICON>(LoadImageW(nullptr, IDI_WARNING, IMAGE_ICON, 16, 16, 0)));
-        if (warnIcon)
-        {
-            ImageList_AddIcon(_imageList.get(), warnIcon.get());
-        }
-    }
-
-    ListView_SetImageList(_list, _imageList.get(), LVSIL_SMALL);
-    ListView_EnableGroupView(_list, TRUE);
-}
-
-void ShortcutsWindow::EnsureColumns(UINT dpi) noexcept
-{
-    if (! _list)
-    {
-        return;
-    }
-
-    ListView_DeleteAllItems(_list);
-
-    while (ListView_DeleteColumn(_list, 0))
-    {
-    }
-
-    const auto add = [&](int index, UINT textId, int widthDip, int fmt = LVCFMT_LEFT) noexcept
-    {
-        const std::wstring text = LoadStringResource(nullptr, textId);
-        LVCOLUMNW col{};
-        col.mask    = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
-        col.pszText = const_cast<wchar_t*>(text.c_str());
-        col.cx      = MulDiv(widthDip, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
-        col.fmt     = fmt;
-        ListView_InsertColumn(_list, index, &col);
-    };
-
-    add(0, IDS_SHORTCUTS_COL_COMMAND, 520);
-    add(1, IDS_SHORTCUTS_COL_KEY, 260, LVCFMT_RIGHT);
-}
-
-void ShortcutsWindow::EnsureGroups() noexcept
-{
-    if (! _list)
-    {
-        return;
-    }
-
-    ListView_RemoveAllGroups(_list);
-
-    const auto addGroup = [&](int groupId, UINT titleId) noexcept
-    {
-        const std::wstring title = LoadStringResource(nullptr, titleId);
-        LVGROUP group{};
-        group.cbSize    = sizeof(group);
-        group.mask      = LVGF_GROUPID | LVGF_HEADER;
-        group.iGroupId  = groupId;
-        group.pszHeader = const_cast<wchar_t*>(title.c_str());
-        ListView_InsertGroup(_list, -1, &group);
-    };
-
-    addGroup(kGroupFunctionBar, IDS_SHORTCUTS_GROUP_FUNCTION_BAR);
-    addGroup(kGroupFolderView, IDS_SHORTCUTS_GROUP_FOLDER_VIEW);
-}
-
-void ShortcutsWindow::ApplyListTheme() noexcept
-{
-    if (! _list)
-    {
-        return;
-    }
-
-    ListView_SetBkColor(_list, _theme.windowBackground);
-    ListView_SetTextBkColor(_list, _theme.windowBackground);
-    ListView_SetTextColor(_list, _theme.menu.text);
-
-    const bool darkBackground = ChooseContrastingTextColor(_theme.windowBackground) == RGB(255, 255, 255);
-    const wchar_t* listTheme  = (_theme.highContrast ? L"" : (darkBackground ? L"DarkMode_Explorer" : L"Explorer"));
-    SetWindowTheme(_list, listTheme, nullptr);
-
-    const HWND header = ListView_GetHeader(_list);
-    if (header)
-    {
-        SetWindowTheme(header, listTheme, nullptr);
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        SetWindowSubclass(header, HeaderSubclassProc, kListHeaderSubclassId, reinterpret_cast<DWORD_PTR>(this));
-#pragma warning(pop)
-        InvalidateRect(header, nullptr, TRUE);
-    }
-
-    const HWND tooltips = ListView_GetToolTips(_list);
-    if (tooltips)
-    {
-        SetWindowTheme(tooltips, listTheme, nullptr);
-    }
-
-    if (_searchEdit && ! _theme.highContrast)
-    {
-        SetWindowTheme(_searchEdit, listTheme, nullptr);
+        _grid->SetBounds(D2D1::RectF(outer, top, bounds.right - outer, bounds.bottom - outer));
     }
 }
 
-void ShortcutsWindow::PopulateList() noexcept
+void ShortcutsWindow::RebuildRows() noexcept
 {
-    if (! _list || ! _shortcutManager)
+    if (! _gridModel || ! _shortcutManager)
     {
         return;
     }
 
-    ListView_DeleteAllItems(_list);
-    _rows.clear();
+    const std::optional<uint64_t> previousSelectedRowId = _selectedRowId;
+    std::vector<ShortcutRow> rows;
+    rows.reserve(_shortcuts.functionBar.size() + _shortcuts.folderView.size());
 
-    auto addScope = [&](const std::vector<Common::Settings::ShortcutBinding>& bindings, const std::vector<uint32_t>& conflicts, int groupId) noexcept
+    const auto addScope =
+        [&](const std::vector<Common::Settings::ShortcutBinding>& bindings, const std::vector<uint32_t>& conflicts, uint64_t groupStableId) noexcept
     {
         std::unordered_map<uint32_t, std::vector<size_t>> chordToRows;
+        const size_t scopeStart = rows.size();
 
-        for (const auto& binding : bindings)
+        for (size_t bindingIndex = 0u; bindingIndex < bindings.size(); ++bindingIndex)
         {
+            const auto& binding = bindings[bindingIndex];
             ShortcutRow row;
-            row.binding     = binding;
-            row.displayName = GetCommandDisplayName(binding.commandId);
-            row.description = GetCommandDescription(binding.commandId);
-            row.keyText     = FormatChordText(binding.vk, binding.modifiers);
-            row.chordKey    = ShortcutManager::MakeChordKey(binding.vk, binding.modifiers);
-            row.groupId     = groupId;
-            row.conflict    = IsConflictChord(row.chordKey, conflicts);
+            row.stableId      = MakeShortcutStableRowId(groupStableId, bindingIndex);
+            row.vk            = binding.vk;
+            row.modifiers     = binding.modifiers;
+            row.groupStableId = groupStableId;
+            row.commandId     = binding.commandId;
+            row.hasConflict   = IsConflictChord(ShortcutManager::MakeChordKey(binding.vk, binding.modifiers), conflicts);
+            row.keyText       = FormatChordText(binding.vk, binding.modifiers);
 
-            const size_t rowIndex = _rows.size();
-            _rows.push_back(std::move(row));
-            chordToRows[_rows[rowIndex].chordKey].push_back(rowIndex);
+            const std::wstring displayName = GetCommandDisplayName(binding.commandId);
+            const std::wstring description = GetCommandDescription(binding.commandId);
+            row.commandText                = displayName;
+            if (! description.empty())
+            {
+                row.commandText.append(L"\n");
+                row.commandText.append(description);
+            }
+            row.tooltipText = displayName;
+            if (! description.empty())
+            {
+                row.tooltipText.append(L"\n");
+                row.tooltipText.append(description);
+            }
+
+            const uint32_t chordKey = ShortcutManager::MakeChordKey(binding.vk, binding.modifiers);
+            rows.push_back(std::move(row));
+            chordToRows[chordKey].push_back(rows.size() - 1u);
         }
 
         for (const auto& [_, indices] : chordToRows)
         {
-            if (indices.size() <= 1)
+            if (indices.size() <= 1u)
             {
                 continue;
             }
 
             for (size_t i = 0; i < indices.size(); ++i)
             {
-                const size_t idx   = indices[i];
-                const size_t other = indices[(i + 1) % indices.size()];
-                if (idx < _rows.size() && other < _rows.size())
+                const size_t rowIndex   = indices[i];
+                const size_t otherIndex = indices[(i + 1u) % indices.size()];
+                if (rowIndex >= rows.size() || otherIndex >= rows.size())
                 {
-                    _rows[idx].conflictWith = _rows[other].displayName;
+                    continue;
                 }
+
+                const std::wstring conflictText =
+                    FormatStringResource(nullptr, IDS_FMT_SHORTCUT_CONFLICT, rows[otherIndex].tooltipText, rows[rowIndex].keyText);
+                rows[rowIndex].tooltipText.append(L"\n");
+                rows[rowIndex].tooltipText.append(conflictText);
             }
         }
+
+        const std::wstring_view query = TrimWhitespace(_searchQuery);
+        if (query.empty())
+        {
+            return;
+        }
+
+        std::vector<ShortcutRow> filtered;
+        filtered.reserve(rows.size());
+        for (size_t rowIndex = scopeStart; rowIndex < rows.size(); ++rowIndex)
+        {
+            const ShortcutRow& row = rows[rowIndex];
+            if (ContainsNoCase(row.commandText, query) || ContainsNoCase(row.keyText, query) || ContainsNoCase(row.tooltipText, query))
+            {
+                filtered.push_back(row);
+            }
+        }
+
+        rows.resize(scopeStart);
+        rows.insert(rows.end(), std::make_move_iterator(filtered.begin()), std::make_move_iterator(filtered.end()));
     };
 
-    addScope(_shortcuts.functionBar, _shortcutManager->GetFunctionBarConflicts(), kGroupFunctionBar);
-    addScope(_shortcuts.folderView, _shortcutManager->GetFolderViewConflicts(), kGroupFolderView);
+    addScope(_shortcuts.functionBar, _shortcutManager->GetFunctionBarConflicts(), kGroupStableIdFunctionBar);
+    addScope(_shortcuts.folderView, _shortcutManager->GetFolderViewConflicts(), kGroupStableIdFolderView);
 
-    const std::wstring_view query = TrimWhitespace(_searchQuery);
-    const bool filterEnabled      = ! query.empty();
-
-    int listIndex = 0;
-    for (size_t rowIndex = 0; rowIndex < _rows.size(); ++rowIndex)
+    _gridModel->SetRows(std::move(rows));
+    if (_grid)
     {
-        ShortcutRow& row = _rows[rowIndex];
-        if (filterEnabled)
+        _gridModel->SortRows(_grid->GetSortSpec());
+    }
+    _grid->NotifyDataChanged();
+    if (_gridModel->GetRowCount() == 0u && previousSelectedRowId.has_value())
+    {
+        _selectedRowId = previousSelectedRowId;
+    }
+    RestoreSelection();
+    _dxHost.Invalidate();
+}
+
+void ShortcutsWindow::RestoreSelection() noexcept
+{
+    if (! _grid || ! _gridModel)
+    {
+        return;
+    }
+
+    if (_selectedRowId.has_value())
+    {
+        if (const std::optional<size_t> rowIndex = _gridModel->FindRowByStableId(_selectedRowId.value()); rowIndex.has_value())
         {
-            const bool matches = ContainsNoCase(row.displayName, query) || ContainsNoCase(row.description, query) || ContainsNoCase(row.keyText, query);
-            if (! matches)
+            if (_grid->RequestSelectRow(rowIndex.value(), 0u))
             {
-                continue;
+                return;
             }
         }
+    }
 
-        LVITEMW item{};
-        item.mask     = LVIF_TEXT | LVIF_PARAM | LVIF_IMAGE | LVIF_GROUPID;
-        item.iItem    = listIndex;
-        item.iSubItem = 0;
-        item.pszText  = const_cast<wchar_t*>(row.displayName.c_str());
-        item.lParam   = static_cast<LPARAM>(rowIndex);
-        item.iImage   = row.conflict ? 0 : I_IMAGENONE;
-        item.iGroupId = row.groupId;
-
-        const int inserted = ListView_InsertItem(_list, &item);
-        if (inserted < 0)
-        {
-            continue;
-        }
-
-        ListView_SetItemText(_list, inserted, 1, const_cast<wchar_t*>(row.keyText.c_str()));
-        ++listIndex;
+    if (_gridModel->GetRowCount() != 0u)
+    {
+        static_cast<void>(_grid->RequestSelectRow(0u, 0u));
     }
 }
 
-void ShortcutsWindow::ResizeWindowToContent(HWND hwnd) noexcept
+void ShortcutsWindow::ResizeWindowToDefault(HWND hwnd) noexcept
 {
     if (! hwnd)
     {
         return;
     }
 
-    if (! _list)
+    HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO info{};
+    info.cbSize = sizeof(info);
+    if (! GetMonitorInfoW(monitor, &info))
     {
         return;
     }
 
-    HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
-    MONITORINFO mi{};
-    mi.cbSize = sizeof(mi);
-    if (! GetMonitorInfoW(mon, &mi))
-    {
-        return;
-    }
+    const RECT& rcWork   = info.rcWork;
+    const int workWidth  = std::max(0L, rcWork.right - rcWork.left);
+    const int workHeight = std::max(0L, rcWork.bottom - rcWork.top);
+    const UINT dpi       = GetDpiForWindow(hwnd);
+    const int width      = std::min(workWidth, MulDiv(960, static_cast<int>(dpi), 96));
+    const int height     = std::min(workHeight, MulDiv(680, static_cast<int>(dpi), 96));
 
-    const RECT& rcWork = mi.rcWork;
-    const int workW    = static_cast<int>(std::max(0l, rcWork.right - rcWork.left));
-    const int workH    = static_cast<int>(std::max(0l, rcWork.bottom - rcWork.top));
-    if (workW <= 0 || workH <= 0)
-    {
-        return;
-    }
-
-    RECT windowRect{};
-    RECT clientRect{};
-    if (! GetWindowRect(hwnd, &windowRect) || ! GetClientRect(hwnd, &clientRect))
-    {
-        return;
-    }
-
-    const int nonClientW = static_cast<int>(std::max(0l, (windowRect.right - windowRect.left) - (clientRect.right - clientRect.left)));
-
-    const UINT dpi    = GetDpiForWindow(hwnd);
-    const int scrollW = GetSystemMetricsForDpi(SM_CXVSCROLL, dpi);
-
-    const int listItems   = ListView_GetItemCount(_list);
-    const int perPage     = ListView_GetCountPerPage(_list);
-    const bool hasVScroll = perPage > 0 && listItems > perPage;
-
-    int desiredListClientW = std::max(0, ListView_GetColumnWidth(_list, 0) + ListView_GetColumnWidth(_list, 1));
-    if (hasVScroll)
-    {
-        desiredListClientW += scrollW;
-    }
-
-    const int minWindowW = MulDiv(640, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
-    const int maxWindowW = std::max(minWindowW, MulDiv(1200, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-
-    int desiredWindowW = desiredListClientW + nonClientW;
-    desiredWindowW     = std::clamp(desiredWindowW, minWindowW, std::min(workW, maxWindowW));
-
-    const int desiredWindowH = workH;
-    SetWindowPos(hwnd, nullptr, rcWork.left, rcWork.top, desiredWindowW, desiredWindowH, SWP_NOZORDER | SWP_NOACTIVATE);
+    SetWindowPos(hwnd, nullptr, rcWork.left, rcWork.top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-int ShortcutsWindow::GetRowHeightPx(HDC hdc) const noexcept
+#ifdef ENABLE_TESTS
+bool ShortcutsWindow::DebugGetSnapshot(ShortcutsWindowDebugSnapshot& out) const noexcept
 {
-    if (! hdc)
+    out = {};
+
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
     {
-        return 36;
+        return false;
     }
 
-    TEXTMETRICW tm{};
-    if (! GetTextMetricsW(hdc, &tm))
+    out.usesDxUiHost            = true;
+    out.visibleChildWindowCount = CountVisibleChildWindowsLocal(hwnd);
+    out.themeDark               = _theme.dark;
+    out.themeHighContrast       = _theme.highContrast;
+    out.themeRainbow            = _theme.menu.rainbowMode;
+    out.rowCount                = _gridModel ? _gridModel->GetRowCount() : 0u;
+    out.groupCount              = _gridModel ? _gridModel->GetGroupCount() : 0u;
+    out.functionBarCollapsed    = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFunctionBar);
+    out.folderViewCollapsed     = _gridModel && _gridModel->IsGroupCollapsed(kGroupStableIdFolderView);
+    out.collapsedGroupCount     = static_cast<size_t>(out.functionBarCollapsed) + static_cast<size_t>(out.folderViewCollapsed);
+    if (_gridModel)
     {
-        return 36;
-    }
-
-    const int lineHeight   = std::max(1, static_cast<int>(tm.tmHeight + tm.tmExternalLeading));
-    constexpr int paddingY = 3;
-    constexpr int lineGap  = 1;
-    return (paddingY * 2) + (lineHeight * 2) + lineGap;
-}
-
-void ShortcutsWindow::AutoSizeColumnsToContent(UINT dpi) noexcept
-{
-    if (! _list)
-    {
-        return;
-    }
-
-    wil::unique_hdc_window hdc(GetDC(_list));
-    if (! hdc)
-    {
-        return;
-    }
-
-    const HFONT font = reinterpret_cast<HFONT>(SendMessageW(_list, WM_GETFONT, 0, 0));
-    if (font)
-    {
-        [[maybe_unused]] auto oldFont = wil::SelectObject(hdc.get(), font);
-    }
-
-    int maxCommand = 0;
-    int maxKey     = 0;
-
-    auto measure = [&](const std::wstring& text, int& outMax) noexcept
-    {
-        if (text.empty())
+        out.rowKeyTexts.reserve(_gridModel->GetRowCount());
+        for (size_t rowIndex = 0u; rowIndex < _gridModel->GetRowCount(); ++rowIndex)
         {
-            return;
-        }
-
-        SIZE s{};
-        GetTextExtentPoint32W(hdc.get(), text.c_str(), static_cast<int>(text.size()), &s);
-        outMax = std::max(outMax, static_cast<int>(s.cx));
-    };
-
-    measure(LoadStringResource(nullptr, IDS_SHORTCUTS_COL_COMMAND), maxCommand);
-    measure(LoadStringResource(nullptr, IDS_SHORTCUTS_COL_KEY), maxKey);
-
-    for (const auto& row : _rows)
-    {
-        measure(row.displayName, maxCommand);
-        measure(row.description, maxCommand);
-        measure(row.keyText, maxKey);
-    }
-
-    const int paddingX      = MulDiv(16, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
-    constexpr int iconSpace = 22;
-    int desiredCommandWidth = maxCommand + paddingX + iconSpace;
-    int desiredKeyWidth     = maxKey + paddingX;
-
-    RECT client{};
-    if (! GetClientRect(_list, &client))
-    {
-        return;
-    }
-
-    const int listItems   = ListView_GetItemCount(_list);
-    const int perPage     = ListView_GetCountPerPage(_list);
-    const bool hasVScroll = perPage > 0 && listItems > perPage;
-
-    int available = static_cast<int>(std::max(0l, client.right - client.left));
-    if (hasVScroll)
-    {
-        available = std::max(0, available - GetSystemMetricsForDpi(SM_CXVSCROLL, dpi));
-    }
-
-    const int minKeyWidth     = MulDiv(160, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
-    const int minCommandWidth = MulDiv(260, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
-
-    desiredKeyWidth     = std::max(desiredKeyWidth, minKeyWidth);
-    desiredCommandWidth = std::max(desiredCommandWidth, minCommandWidth);
-
-    int keyWidth     = desiredKeyWidth;
-    int commandWidth = desiredCommandWidth;
-
-    if (available > 0)
-    {
-        if ((commandWidth + keyWidth) > available)
-        {
-            keyWidth     = std::min(keyWidth, std::max(minKeyWidth, available / 2));
-            commandWidth = std::max(minCommandWidth, available - keyWidth);
-            if ((commandWidth + keyWidth) > available)
+            if (const ShortcutRow* const row = _gridModel->GetRow(rowIndex))
             {
-                keyWidth     = std::max(minKeyWidth, available - minCommandWidth);
-                commandWidth = std::max(minCommandWidth, available - keyWidth);
+                out.rowKeyTexts.push_back(row->keyText);
             }
         }
-        else
+    }
+    if (_grid)
+    {
+        const auto metrics          = _grid->GetVisibleWorkMetrics();
+        out.visibleRowCount         = static_cast<size_t>(metrics.visibleRowCount);
+        out.visibleGroupHeaderCount = static_cast<size_t>(metrics.visibleGroupHeaderCount);
+        out.visibleColumnCount      = metrics.visibleColumnCount;
+        out.visibleCellCount        = static_cast<size_t>(metrics.visibleCellCount);
+        out.verticalScrollDip       = metrics.verticalScrollDip;
+        out.horizontalScrollDip     = metrics.horizontalScrollDip;
+        out.hasVerticalScrollbar    = metrics.hasVerticalScrollbar;
+        out.hasHorizontalScrollbar  = metrics.hasHorizontalScrollbar;
+        out.firstColumnHeaderRect   = _grid->GetVisibleDisplayColumnHeaderRect(0u).value_or(D2D1::RectF());
+        out.secondColumnHeaderRect  = _grid->GetVisibleDisplayColumnHeaderRect(1u).value_or(D2D1::RectF());
+        const auto columnLayout     = _grid->CaptureColumnLayout();
+        out.displayColumnIds.clear();
+        out.displayColumnWidthsDip.clear();
+        out.displayColumnIds.reserve(columnLayout.size());
+        out.displayColumnWidthsDip.reserve(columnLayout.size());
+        for (const auto& entry : columnLayout)
         {
-            commandWidth = std::max(minCommandWidth, available - keyWidth);
+            out.displayColumnIds.push_back(entry.columnId);
+            out.displayColumnWidthsDip.push_back(entry.widthDip);
+        }
+        if (! columnLayout.empty())
+        {
+            out.firstDisplayColumnId = columnLayout[0].columnId;
+        }
+        if (columnLayout.size() > 1u)
+        {
+            out.secondDisplayColumnId = columnLayout[1].columnId;
+        }
+        if (const auto firstVisibleRow = _grid->GetVisibleRowAt(0u); firstVisibleRow.has_value())
+        {
+            out.firstVisibleRowIndex = firstVisibleRow.value();
+            if (const ShortcutRow* const row = _gridModel ? _gridModel->GetRow(firstVisibleRow.value()) : nullptr; row)
+            {
+                out.firstVisibleRowName    = row->commandText;
+                out.firstVisibleRowKeyText = row->keyText;
+            }
+        }
+        if (const std::optional<size_t> firstVisibleRow = _grid->GetVisibleRowAt(0u); firstVisibleRow.has_value())
+        {
+            out.firstVisibleRowRect           = _grid->GetVisibleRowRect(firstVisibleRow.value()).value_or(D2D1::RectF());
+            out.firstVisibleCommandCellRect   = _grid->GetVisibleCellRect(firstVisibleRow.value(), 0u).value_or(D2D1::RectF());
+            out.firstVisibleKeyCellRect       = _grid->GetVisibleCellRect(firstVisibleRow.value(), 1u).value_or(D2D1::RectF());
+            out.firstVisibleCommandLayoutRect = _grid->GetCellLayoutMetrics(_dxHost, firstVisibleRow.value(), 0u).cellRect;
+            out.firstVisibleKeyLayoutRect     = _grid->GetCellLayoutMetrics(_dxHost, firstVisibleRow.value(), 1u).cellRect;
+        }
+        if (_gridModel)
+        {
+            const std::optional<size_t> selectedRow = _grid->GetPrimarySelectedRow();
+            if (selectedRow.has_value())
+            {
+                out.selectedRowName = _gridModel->GetRowAccessibleName(selectedRow.value());
+                if (const ShortcutRow* const row = _gridModel->GetRow(selectedRow.value()))
+                {
+                    out.selectedRowKeyText = row->keyText;
+                }
+                out.selectedRowKeyCellRect        = _grid->GetVisibleCellRect(selectedRow.value(), 1u).value_or(D2D1::RectF());
+                out.selectedRowCommandCellHasIcon = _grid->GetCellLayoutMetrics(_dxHost, selectedRow.value(), 0u).hasIcon;
+                RedSalamander::DxUi::GridDebugRowVisualState rowVisualState{};
+                if (_grid->DebugGetRowVisualState(_dxHost.GetTheme(), selectedRow.value(), rowVisualState))
+                {
+                    out.selectedRowFillArgb    = rowVisualState.fillArgb;
+                    out.selectedRowTextArgb    = rowVisualState.textArgb;
+                    out.selectedRowUsesRainbow = rowVisualState.usesRainbow;
+                }
+            }
         }
     }
-
-    ListView_SetColumnWidth(_list, 0, commandWidth);
-    ListView_SetColumnWidth(_list, 1, keyWidth);
+    out.renderCount        = _dxHost.DebugGetRenderCount();
+    out.resizeCount        = _dxHost.DebugGetResizeCount();
+    out.resizeFailureCount = _dxHost.DebugGetResizeFailureCount();
+    out.searchText         = _searchEdit ? _searchEdit->GetText() : _searchQuery;
+    out.hasTooltip         = _dxHost.HasTooltip();
+    out.tooltipBounds      = _dxHost.DebugGetTooltipBoundsDip();
+    out.tooltipText        = std::wstring(_dxHost.GetTooltipText());
+    if (RedSalamander::DxUi::Control* const focusedControl = _dxHost.GetFocusControl())
+    {
+        if (focusedControl == _searchEdit)
+        {
+            out.focusTarget = ShortcutsWindowDebugFocusTarget::SearchField;
+        }
+        else if (focusedControl == _grid)
+        {
+            out.focusTarget = ShortcutsWindowDebugFocusTarget::Grid;
+        }
+    }
+    if (_grid)
+    {
+        const auto sortSpec = _grid->GetSortSpec();
+        out.sortDirection   = sortSpec.direction == RedSalamander::DxUi::SortDirection::None ? 0xFFu : static_cast<uint8_t>(sortSpec.direction);
+        out.sortColumnIndex = sortSpec.direction == RedSalamander::DxUi::SortDirection::None ? 0xFFu : static_cast<uint8_t>(sortSpec.columnIndex);
+    }
+    return true;
 }
+
+bool ShortcutsWindow::DebugScrollByWheelDetents(const int detents) noexcept
+{
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    if (! _grid || detents == 0)
+    {
+        return detents == 0;
+    }
+
+    _dxHost.SetFocusControl(_grid);
+    const float wheelDelta = detents > 0 ? static_cast<float>(WHEEL_DELTA) : -static_cast<float>(WHEEL_DELTA);
+    const int stepCount    = detents > 0 ? detents : -detents;
+    for (int remaining = stepCount; remaining > 0; --remaining)
+    {
+        if (! _grid->OnMouseWheel(_dxHost, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0u))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool ShortcutsWindow::DebugSelectRow(const size_t rowIndex) noexcept
+{
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! _grid || ! _gridModel)
+    {
+        return false;
+    }
+
+    if (rowIndex >= _gridModel->GetRowCount())
+    {
+        return false;
+    }
+
+    _dxHost.SetFocusControl(_grid);
+    return _grid->RequestSelectRow(rowIndex, 0u);
+}
+
+bool ShortcutsWindow::DebugSetSearchText(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! _searchEdit)
+    {
+        return false;
+    }
+
+    const std::wstring trimmed = std::wstring(TrimWhitespace(text));
+    _searchEdit->SetTextAndNotify(trimmed);
+    _dxHost.SyncTextInputBridge(_searchEdit);
+    if (trimmed != _searchQuery)
+    {
+        _searchQuery = trimmed;
+        RebuildRows();
+    }
+    _dxHost.Invalidate();
+    return true;
+}
+
+bool ShortcutsWindow::DebugFocusSearch() noexcept
+{
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! _searchEdit)
+    {
+        return false;
+    }
+
+    _dxHost.SetFocusControl(_searchEdit);
+    return true;
+}
+
+bool ShortcutsWindow::DebugFocusGrid() noexcept
+{
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! _grid)
+    {
+        return false;
+    }
+
+    _dxHost.SetFocusControl(_grid);
+    return true;
+}
+
+bool ShortcutsWindow::DebugCycleGridSortByColumn(const size_t columnIndex) noexcept
+{
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! _grid || ! _gridModel || columnIndex >= _gridModel->GetColumnCount())
+    {
+        return false;
+    }
+
+    const GridSortSpec beforeSort = _grid->GetSortSpec();
+    GridSortSpec nextSort{};
+    nextSort.columnIndex = columnIndex;
+    nextSort.direction   = beforeSort.columnIndex == columnIndex ? NextSortDirection(beforeSort.direction) : SortDirection::Ascending;
+    _grid->SetSortSpec(nextSort);
+    OnGridSortRequested(nextSort);
+    const GridSortSpec afterSort = _grid->GetSortSpec();
+    return beforeSort.columnIndex != afterSort.columnIndex || beforeSort.direction != afterSort.direction;
+}
+
+bool ShortcutsWindow::DebugApplyGridLayout(const std::vector<Common::Settings::GridColumnLayoutEntry>& layout) noexcept
+{
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! _grid)
+    {
+        return false;
+    }
+
+    const auto converted = ConvertColumnLayout(layout);
+    if (converted.empty())
+    {
+        return false;
+    }
+
+    _grid->ApplyColumnLayout(converted);
+    _dxHost.Invalidate();
+    return true;
+}
+
+bool ShortcutsWindow::DebugSetGroupCollapsed(const size_t groupIndex, const bool collapsed) noexcept
+{
+    const HWND hwnd = GetHwnd();
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! _grid || ! _gridModel)
+    {
+        return false;
+    }
+
+    if (groupIndex >= _gridModel->GetGroupCount())
+    {
+        return false;
+    }
+
+    const GridGroupDesc group = _gridModel->GetGroup(groupIndex);
+    if (! _gridModel->SetGroupCollapsed(group.stableId, collapsed))
+    {
+        return false;
+    }
+
+    _grid->NotifyDataChanged();
+    _dxHost.Invalidate();
+    return true;
+}
+#endif
 
 } // namespace
 
@@ -1802,7 +1714,6 @@ void ShowShortcutsWindow(HWND owner,
     auto window = std::make_unique<ShortcutsWindow>();
     if (window->Create(owner, settings, shortcuts, shortcutManager, theme))
     {
-        // Window successfully created - it will self-delete in WM_NCDESTROY
         static_cast<void>(window.release());
     }
 }
@@ -1829,16 +1740,52 @@ void UpdateShortcutsWindowData(const Common::Settings::ShortcutsSettings& shortc
 
 HWND GetShortcutsWindowHandle() noexcept
 {
-    if (! g_shortcutsWindow)
-    {
-        return nullptr;
-    }
-
-    const HWND hwnd = g_shortcutsWindow->GetHwnd();
-    if (! hwnd || ! IsWindow(hwnd))
-    {
-        return nullptr;
-    }
-
-    return hwnd;
+    return g_shortcutsWindow ? g_shortcutsWindow->GetHwnd() : nullptr;
 }
+
+#ifdef ENABLE_TESTS
+bool DebugGetShortcutsWindowSnapshot(ShortcutsWindowDebugSnapshot& out) noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugGetSnapshot(out);
+}
+
+bool DebugScrollShortcutsWindowByWheelDetents(const int detents) noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugScrollByWheelDetents(detents);
+}
+
+bool DebugSelectShortcutsWindowRow(const size_t rowIndex) noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugSelectRow(rowIndex);
+}
+
+bool DebugSetShortcutsWindowSearchText(std::wstring_view text) noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugSetSearchText(text);
+}
+
+bool DebugFocusShortcutsWindowSearch() noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugFocusSearch();
+}
+
+bool DebugFocusShortcutsWindowGrid() noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugFocusGrid();
+}
+
+bool DebugCycleShortcutsWindowGridSortByColumn(const size_t columnIndex) noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugCycleGridSortByColumn(columnIndex);
+}
+
+bool DebugApplyShortcutsWindowGridLayout(const std::vector<Common::Settings::GridColumnLayoutEntry>& layout) noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugApplyGridLayout(layout);
+}
+
+bool DebugSetShortcutsWindowGroupCollapsed(const size_t groupIndex, const bool collapsed) noexcept
+{
+    return g_shortcutsWindow && g_shortcutsWindow->DebugSetGroupCollapsed(groupIndex, collapsed);
+}
+#endif

@@ -374,6 +374,6 @@ The fix is:
 ---
 
 *Generated: December 30, 2025*
-*Project: Red Salamander*
-*Repository: https://github.com/DualTail/RedSalamander*
+*Project: RedSalamander*
+*Repository: https://github.com/RedSalamanders/RedSalamander*
 *Branch: master*

@@ -21,11 +21,14 @@
 
 #include <yyjson.h>
 
+#include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
 
 #include "resource.h"
 
 extern HINSTANCE g_hInstance;
+
+namespace Typography = RedSalamander::DxUi::Typography;
 
 #pragma comment(lib, "Dwmapi.lib")
 #pragma comment(lib, "d2d1.lib")
@@ -57,7 +60,7 @@ constexpr char kViewerVlcSchemaJson[] = R"json(
       "type": "text",
       "default": "",
       "browse": "folder",
-      "description": "Folder containing vlc.exe and libvlc.dll (typically: C:\\\\Program Files\\\\VideoLAN\\\\VLC)."
+      "description": "Folder containing vlc.exe and libvlc.dll (typically: C:\\Program Files\\VideoLAN\\VLC)."
     },
     {
       "key": "autoDetectVlc",
@@ -155,6 +158,11 @@ constexpr char kViewerVlcSchemaJson[] = R"json(
   ]
 }
 )json";
+
+[[nodiscard]] const char* GetViewerVlcStaticConfigurationSchemaImpl() noexcept
+{
+    return kViewerVlcSchemaJson;
+}
 
 template <typename T> [[nodiscard]] bool TryLoadProc(HMODULE module, const char* name, T& out) noexcept
 {
@@ -768,6 +776,11 @@ struct HudLayout
 }
 } // namespace
 
+const char* GetViewerVlcStaticConfigurationSchema() noexcept
+{
+    return GetViewerVlcStaticConfigurationSchemaImpl();
+}
+
 struct VlcState
 {
     VlcState()                           = default;
@@ -872,7 +885,7 @@ ViewerVLC::ViewerVLC()
     _metaData.name        = _metaName.empty() ? nullptr : _metaName.c_str();
     _metaData.description = _metaDescription.empty() ? nullptr : _metaDescription.c_str();
     _metaData.author      = nullptr;
-    _metaData.version     = nullptr;
+    _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     static_cast<void>(SetConfiguration(nullptr));
 }
@@ -955,7 +968,7 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::GetConfigurationSchema(const char** schemaJ
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = kViewerVlcSchemaJson;
+    *schemaJsonUtf8 = GetViewerVlcStaticConfigurationSchema();
     return S_OK;
 }
 
@@ -1527,7 +1540,7 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 }
                 else
                 {
-                    DestroyWindow(hwnd);
+                    static_cast<void>(Close());
                 }
                 return 0;
             }
@@ -1546,7 +1559,7 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
             return 0;
         }
         case WM_ERASEBKGND: return 1;
-        case WM_CLOSE: DestroyWindow(hwnd); return 0;
+        case WM_CLOSE: static_cast<void>(Close()); return 0;
         case WM_NCDESTROY: return OnNcDestroy(hwnd, wp, lp);
         default: break;
     }
@@ -1607,9 +1620,9 @@ LRESULT ViewerVLC::VideoProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
                 {
                     SetFullscreen(false);
                 }
-                else if (_hWnd)
+                else
                 {
-                    _hWnd.reset();
+                    static_cast<void>(Close());
                 }
                 return 0;
             }
@@ -1867,13 +1880,18 @@ void ViewerVLC::OnDestroy() noexcept
 {
     StopPlayback();
 
-    IViewerCallback* callback = _callback;
-    void* cookie              = _callbackCookie;
-    if (callback)
+    RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
+    if (_callbackState.TryCapture(callbackSnapshot))
     {
-        AddRef();
-        static_cast<void>(callback->ViewerClosed(cookie));
-        Release();
+        IViewerCallback* callback = nullptr;
+        void* cookie              = nullptr;
+        if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
+        {
+            auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
+            AddRef();
+            static_cast<void>(callback->ViewerClosed(cookie));
+            Release();
+        }
     }
 }
 
@@ -2034,13 +2052,15 @@ HRESULT STDMETHODCALLTYPE ViewerVLC::Open(const ViewerOpenContext* context) noex
 
 HRESULT STDMETHODCALLTYPE ViewerVLC::Close() noexcept
 {
+    AddRef();
+    const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE ViewerVLC::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (! theme || theme->version != 2)
+    if (! theme || theme->version < 2u || theme->version > 4u)
     {
         return E_INVALIDARG;
     }
@@ -2127,8 +2147,7 @@ void ViewerVLC::CreateOrUpdateWindowBackgroundBrush() noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerVLC::SetCallback(IViewerCallback* callback, void* cookie) noexcept
 {
-    _callback       = callback;
-    _callbackCookie = cookie;
+    _callbackState.Set(callback, cookie);
     return S_OK;
 }
 
@@ -2546,8 +2565,7 @@ bool ViewerVLC::EnsureHudDirect2D(HWND hwnd) noexcept
     if (! _hudTextFormat && _hudDWriteFactory)
     {
         const float size = static_cast<float>(MulDiv(12, static_cast<int>(dpi), 96));
-        const HRESULT hr = _hudDWriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, L"", _hudTextFormat.put());
+        const HRESULT hr = Typography::CreateTextFormat(_hudDWriteFactory.get(), Typography::MakeUiTextSpec(size), _hudTextFormat.put());
         if (SUCCEEDED(hr))
         {
             _hudTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -2559,8 +2577,7 @@ bool ViewerVLC::EnsureHudDirect2D(HWND hwnd) noexcept
     if (! _hudMonoFormat && _hudDWriteFactory)
     {
         const float size = static_cast<float>(MulDiv(12, static_cast<int>(dpi), 96));
-        const HRESULT hr = _hudDWriteFactory->CreateTextFormat(
-            L"Consolas", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, L"", _hudMonoFormat.put());
+        const HRESULT hr = Typography::CreateTextFormat(_hudDWriteFactory.get(), Typography::MakeUiMonospaceSpec(size), _hudMonoFormat.put());
         if (SUCCEEDED(hr))
         {
             _hudMonoFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -2633,8 +2650,8 @@ bool ViewerVLC::EnsureOverlayDirect2D(HWND hwnd) noexcept
     if (! _overlayTitleFormat && _hudDWriteFactory)
     {
         const float size = static_cast<float>(MulDiv(17, static_cast<int>(dpi), 96));
-        const HRESULT hr = _hudDWriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, L"", _overlayTitleFormat.put());
+        const HRESULT hr =
+            Typography::CreateTextFormat(_hudDWriteFactory.get(), Typography::MakeUiTextSpec(size, DWRITE_FONT_WEIGHT_SEMI_BOLD), _overlayTitleFormat.put());
         if (SUCCEEDED(hr))
         {
             _overlayTitleFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
@@ -2646,8 +2663,7 @@ bool ViewerVLC::EnsureOverlayDirect2D(HWND hwnd) noexcept
     if (! _overlayBodyFormat && _hudDWriteFactory)
     {
         const float size = static_cast<float>(MulDiv(12, static_cast<int>(dpi), 96));
-        const HRESULT hr = _hudDWriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, L"", _overlayBodyFormat.put());
+        const HRESULT hr = Typography::CreateTextFormat(_hudDWriteFactory.get(), Typography::MakeUiTextSpec(size), _overlayBodyFormat.put());
         if (SUCCEEDED(hr))
         {
             _overlayBodyFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
@@ -2659,8 +2675,7 @@ bool ViewerVLC::EnsureOverlayDirect2D(HWND hwnd) noexcept
     if (! _overlayLinkFormat && _hudDWriteFactory)
     {
         const float size = static_cast<float>(MulDiv(12, static_cast<int>(dpi), 96));
-        const HRESULT hr = _hudDWriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, L"", _overlayLinkFormat.put());
+        const HRESULT hr = Typography::CreateTextFormat(_hudDWriteFactory.get(), Typography::MakeUiTextSpec(size), _overlayLinkFormat.put());
         if (SUCCEEDED(hr))
         {
             _overlayLinkFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -2743,8 +2758,7 @@ bool ViewerVLC::EnsureSeekPreviewDirect2D(HWND hwnd) noexcept
     if (! _seekPreviewTextFormat && _hudDWriteFactory)
     {
         const float size = static_cast<float>(MulDiv(11, static_cast<int>(dpi), 96));
-        const HRESULT hr = _hudDWriteFactory->CreateTextFormat(
-            L"Consolas", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, size, L"", _seekPreviewTextFormat.put());
+        const HRESULT hr = Typography::CreateTextFormat(_hudDWriteFactory.get(), Typography::MakeUiMonospaceSpec(size), _seekPreviewTextFormat.put());
         if (SUCCEEDED(hr))
         {
             _seekPreviewTextFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -3266,10 +3280,7 @@ void ViewerVLC::OnHudKeyDown(HWND hwnd, UINT vkey) noexcept
             return;
         }
 
-        if (_hWnd)
-        {
-            _hWnd.reset();
-        }
+        static_cast<void>(Close());
         return;
     }
 

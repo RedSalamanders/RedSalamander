@@ -14,6 +14,45 @@
 #include "PlugInterfaces/NavigationMenu.h"
 #include "resource.h"
 
+namespace
+{
+constexpr wchar_t kNavigationEditOriginalWndProcProp[] = L"RS.NavigationView.Edit.OriginalWndProc";
+constexpr wchar_t kNavigationEditOwnerProp[]           = L"RS.NavigationView.Edit.Owner";
+
+[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp) noexcept
+{
+    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, originalWndProcProp);
+}
+
+[[nodiscard]] bool InstallWndProcHook(HWND hwnd, WNDPROC wndProc, const wchar_t* originalWndProcProp) noexcept
+{
+    if (! hwnd || ! wndProc)
+    {
+        return false;
+    }
+
+    if (GetStoredWndProc(hwnd, originalWndProcProp))
+    {
+        return true;
+    }
+
+    const auto previous =
+        reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(wndProc)));
+    if (! previous)
+    {
+        return false;
+    }
+
+    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, originalWndProcProp, reinterpret_cast<HANDLE>(previous)))
+    {
+        static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previous)));
+        return false;
+    }
+
+    return true;
+}
+} // namespace
+
 ATOM NavigationView::RegisterFullPathPopupWndClass(HINSTANCE instance)
 {
     static ATOM atom = 0;
@@ -75,6 +114,10 @@ LRESULT NavigationView::OnFullPathPopupCreate(HWND hwnd)
 
 LRESULT NavigationView::OnFullPathPopupNcDestroy(HWND hwnd)
 {
+    const bool restoreFolderViewFocus              = _restoreFolderViewFocusAfterFullPathPopupClose;
+    _restoreFolderViewFocusAfterFullPathPopupClose = false;
+    _fullPathPopupEditMode                         = false;
+
     if (_fullPathPopupHoverTimer != 0)
     {
         KillTimer(hwnd, HOVER_TIMER_ID);
@@ -89,6 +132,12 @@ LRESULT NavigationView::OnFullPathPopupNcDestroy(HWND hwnd)
     _fullPathPopupActiveSeparatorIndex            = -1;
     _fullPathPopupMenuOpenForSeparator            = -1;
     _fullPathPopupPendingSeparatorMenuSwitchIndex = -1;
+
+    if (restoreFolderViewFocus && _hWnd && IsWindow(_hWnd.get()) != FALSE)
+    {
+        PostMessageW(_hWnd.get(), WndMsg::kNavigationViewRestoreFolderFocus, 0, 0);
+    }
+
     return 0;
 }
 
@@ -194,9 +243,7 @@ LRESULT NavigationView::OnFullPathPopupSize(HWND hwnd, UINT width, UINT height)
 
     if (_fullPathPopupEdit && _fullPathPopupEditMode)
     {
-        RECT rc{};
-        GetClientRect(hwnd, &rc);
-        LayoutSingleLineEditInRect(_fullPathPopupEdit.get(), rc);
+        UpdateFullPathPopupEditHostLayout();
     }
 
     InvalidateRect(hwnd, nullptr, FALSE);
@@ -343,11 +390,8 @@ LRESULT NavigationView::OnFullPathPopupKeyDown(WPARAM key)
 {
     if (key == VK_ESCAPE)
     {
+        _restoreFolderViewFocusAfterFullPathPopupClose = true;
         CloseFullPathPopup();
-        if (_requestFolderViewFocusCallback)
-        {
-            _requestFolderViewFocusCallback();
-        }
         return 0;
     }
 
@@ -390,15 +434,15 @@ LRESULT NavigationView::OnFullPathPopupMouseWheel(HWND hwnd, int delta)
     const float lineHeight = static_cast<float>(_sectionPathRect.bottom - _sectionPathRect.top);
     const float step       = lineHeight > 0.0f ? lineHeight : 24.0f;
     _fullPathPopupScrollY  = std::clamp(_fullPathPopupScrollY - (static_cast<float>(delta) / static_cast<float>(WHEEL_DELTA)) * step,
-                                       0.0f,
-                                       std::max(0.0f, _fullPathPopupContentHeight - static_cast<float>(_fullPathPopupClientSize.cy)));
+                                        0.0f,
+                                        std::max(0.0f, _fullPathPopupContentHeight - static_cast<float>(_fullPathPopupClientSize.cy)));
     InvalidateRect(hwnd, nullptr, FALSE);
     return 0;
 }
 
 LRESULT NavigationView::OnFullPathPopupCtlColorEdit(HWND hwnd, HDC hdc, HWND hwndControl)
 {
-    if (_fullPathPopupEdit && hwndControl == _fullPathPopupEdit.get())
+    if (_fullPathPopupEdit && hwndControl == _fullPathPopupEdit->GetBridgeHwnd())
     {
         SetTextColor(hdc, ColorToCOLORREF(_theme.text));
         SetBkColor(hdc, _theme.gdiBackground);
@@ -410,12 +454,6 @@ LRESULT NavigationView::OnFullPathPopupCtlColorEdit(HWND hwnd, HDC hdc, HWND hwn
 
 LRESULT NavigationView::OnFullPathPopupCommand(HWND hwnd, UINT id, UINT codeNotify, HWND hwndCtl)
 {
-    if (id == ID_PATH_EDIT && codeNotify == EN_KILLFOCUS)
-    {
-        ExitFullPathPopupEditMode(false);
-        return 0;
-    }
-
     return DefWindowProcW(hwnd, WM_COMMAND, MAKEWPARAM(static_cast<WORD>(id), static_cast<WORD>(codeNotify)), reinterpret_cast<LPARAM>(hwndCtl));
 }
 
@@ -445,8 +483,6 @@ LRESULT NavigationView::FullPathPopupWndProc(HWND hwnd, UINT msg, WPARAM wp, LPA
         case WM_SYSKEYDOWN: return OnFullPathPopupSysKeyDown(hwnd, wp, lp);
         case WM_SYSCHAR: return OnFullPathPopupSysChar(hwnd, wp, lp);
         case WM_MOUSEWHEEL: return OnFullPathPopupMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
-        case WM_MEASUREITEM: OnMeasureItem(reinterpret_cast<MEASUREITEMSTRUCT*>(lp)); return TRUE;
-        case WM_DRAWITEM: OnDrawItem(reinterpret_cast<DRAWITEMSTRUCT*>(lp)); return TRUE;
         case WM_CTLCOLOREDIT: return OnFullPathPopupCtlColorEdit(hwnd, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
         case WM_COMMAND: return OnFullPathPopupCommand(hwnd, LOWORD(wp), HIWORD(wp), reinterpret_cast<HWND>(lp));
         case WM_EXITMENULOOP: OnFullPathPopupExitMenuLoop(hwnd, static_cast<BOOL>(wp)); return 0;
@@ -488,45 +524,73 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
         return;
     }
 
-    HMENU menu = CreatePopupMenu();
-    if (! menu)
+    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    items.reserve(siblings.size());
+
+    const std::filesystem::path normalizedCurrentPath = NormalizeDirectoryPath(segment.fullPath);
+    const std::wstring currentPathText                = normalizedCurrentPath.wstring();
+    int selectedIndex                                 = 0;
+
+    for (size_t i = 0; i < siblings.size(); ++i)
     {
-        return;
+        const std::filesystem::path normalizedSiblingPath = NormalizeDirectoryPath(siblings[i]);
+        RedSalamander::DxUi::MenuFlyoutItem item{};
+        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+        item.text      = FilenameOrPath(normalizedSiblingPath);
+        item.commandId = static_cast<int>(ID_SIBLING_BASE + i);
+        item.checked   = wil::compare_string_ordinal(normalizedSiblingPath.wstring(), currentPathText, true) == wistd::weak_ordering::equivalent;
+        if (item.checked)
+        {
+            selectedIndex = static_cast<int>(i);
+        }
+        items.push_back(std::move(item));
     }
 
-    auto menuCleanup = wil::scope_exit([&]
-    {
-        if (menu)
-        {
-            DestroyMenu(menu);
-        }
-        _menuBitmaps.clear();
-    });
-
-    BuildSiblingFoldersMenu(menu, siblings, segment.fullPath);
-
     _fullPathPopupActiveSeparatorIndex            = static_cast<int>(separatorIndex);
-    _fullPathPopupMenuOpenForSeparator            = static_cast<int>(separatorIndex);
+    _fullPathPopupMenuOpenForSeparator            = -1;
     _fullPathPopupPendingSeparatorMenuSwitchIndex = -1;
+    _navDropdownKind                              = ModernDropdownKind::Siblings;
+    _navDropdownPaths                             = siblings;
+    _navDropdownSelectedIndex                     = selectedIndex;
     InvalidateRect(popupHwnd, nullptr, FALSE);
 
-    // Convert separator bottom-left to screen coords (accounting for scroll).
+    auto clearPopupState = wil::scope_exit([&]() noexcept
+    {
+        _fullPathPopupActiveSeparatorIndex            = -1;
+        _fullPathPopupMenuOpenForSeparator            = -1;
+        _fullPathPopupPendingSeparatorMenuSwitchIndex = -1;
+        _navDropdownKind                              = ModernDropdownKind::None;
+        _navDropdownPaths.clear();
+        _navDropdownSelectedIndex = -1;
+        if (popupHwnd && IsWindow(popupHwnd) != FALSE)
+        {
+            InvalidateRect(popupHwnd, nullptr, FALSE);
+        }
+    });
+
     POINT pt = {static_cast<LONG>(separator.bounds.left), static_cast<LONG>(separator.bounds.bottom - _fullPathPopupScrollY)};
     ClientToScreen(popupHwnd, &pt);
 
-    const bool previousEditSuggestStyle = _themedMenuUseEditSuggestStyle;
-    auto editSuggestStyleReset          = wil::scope_exit([&] { _themedMenuUseEditSuggestStyle = previousEditSuggestStyle; });
-    _themedMenuUseEditSuggestStyle      = true;
+    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    sessionCallbacks.ignoreInitialLeftButtonUp = true;
 
-    const int selectedId = TrackThemedPopupMenuReturnCmd(menu, TPM_LEFTALIGN | TPM_TOPALIGN, pt, popupHwnd);
+    const auto startedAt = std::chrono::steady_clock::now();
+    const auto selectedId =
+        RedSalamander::DxUi::ContextMenu::Show(popupHwnd, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
+    Debug::Perf::Emit(L"navigation.ui.dropdown_popup_us",
+                      L"fullpath-siblings",
+                      Debug::Perf::ElapsedUs(startedAt),
+                      static_cast<uint64_t>(items.size()),
+                      static_cast<uint64_t>(selectedIndex >= 0 ? selectedIndex : 0));
 
-    if (selectedId >= ID_SIBLING_BASE)
+    if (selectedId.has_value() && selectedId.value() >= ID_SIBLING_BASE)
     {
-        const size_t siblingIndex = static_cast<size_t>(selectedId - ID_SIBLING_BASE);
+        const size_t siblingIndex = static_cast<size_t>(selectedId.value() - ID_SIBLING_BASE);
         if (siblingIndex < siblings.size())
         {
             RequestPathChange(siblings[siblingIndex]);
             CloseFullPathPopup();
+            return;
         }
     }
 }
@@ -558,15 +622,8 @@ void NavigationView::RequestFullPathPopup(const D2D1_RECT_F& anchorBounds)
     ShowFullPathPopup();
 }
 
-void NavigationView::ShowFullPathPopup()
+void NavigationView::UpdateFullPathPopupWindow()
 {
-    if (! _pendingFullPathPopup)
-    {
-        return;
-    }
-
-    _pendingFullPathPopup = false;
-
     if (! _hWnd || ! _currentPluginPath)
     {
         return;
@@ -604,12 +661,6 @@ void NavigationView::ShowFullPathPopup()
         needsPathRedraw        = true;
     }
 
-    if (_editCloseHovered)
-    {
-        _editCloseHovered = false;
-        needsPathRedraw   = true;
-    }
-
     if (needsPathRedraw)
     {
         RenderPathSection();
@@ -620,13 +671,14 @@ void NavigationView::ShowFullPathPopup()
         return;
     }
 
-    CloseFullPathPopup();
-
     const float paddingX       = DipsToPixels(kPathPaddingDip, _dpi);
     const float paddingY       = paddingX;
     const float separatorWidth = DipsToPixels(kPathSeparatorWidthDip, _dpi);
     const float spacing        = DipsToPixels(kPathSpacingDip, _dpi);
     const float lineHeight     = static_cast<float>(_sectionPathRect.bottom - _sectionPathRect.top);
+    POINT anchor               = {_sectionPathRect.left, _sectionPathRect.bottom};
+    ClientToScreen(_hWnd.get(), &anchor);
+    _pendingFullPathPopupAnchor = anchor;
 
     auto parts = SplitPathComponents(_currentPluginPath.value());
     if (parts.empty())
@@ -665,7 +717,7 @@ void NavigationView::ShowFullPathPopup()
     }
 
     const LONG nonClientWidth         = nonClientRect.right - nonClientRect.left;
-    const LONG maxWindowWidthForX     = std::max(0L, work.right - _pendingFullPathPopupAnchor.x);
+    const LONG maxWindowWidthForX     = std::max(0L, work.right - anchor.x);
     const float maxAlignedClientWidth = std::max(1.0f, static_cast<float>(std::max(0L, maxWindowWidthForX - nonClientWidth)));
 
     const float desiredClientWidth = std::max(1.0f, std::min(contentSingleLineWidth + paddingX * 2.0f, std::min(maxClientWidth, maxAlignedClientWidth)));
@@ -687,12 +739,12 @@ void NavigationView::ShowFullPathPopup()
     const int winWidth  = windowRect.right - windowRect.left;
     const int winHeight = windowRect.bottom - windowRect.top;
 
-    int x = _pendingFullPathPopupAnchor.x;
-    int y = _pendingFullPathPopupAnchor.y;
+    int x = anchor.x;
+    int y = anchor.y;
 
     if (y + winHeight > work.bottom)
     {
-        const int aboveY = _pendingFullPathPopupAnchor.y - winHeight;
+        const int aboveY = anchor.y - winHeight;
         if (aboveY >= work.top)
         {
             y = aboveY;
@@ -711,13 +763,20 @@ void NavigationView::ShowFullPathPopup()
     x = std::clamp(x, static_cast<int>(work.left), static_cast<int>(work.right - winWidth));
     y = std::clamp(y, static_cast<int>(work.top), static_cast<int>(work.bottom - winHeight));
 
-    HWND popup = CreateWindowExW(exStyle, kFullPathPopupClassName, L"", style, x, y, winWidth, winHeight, _hWnd.get(), nullptr, _hInstance, this);
-    if (! popup)
+    if (! _fullPathPopup)
     {
-        return;
-    }
+        HWND popup = CreateWindowExW(exStyle, kFullPathPopupClassName, L"", style, x, y, winWidth, winHeight, _hWnd.get(), nullptr, _hInstance, this);
+        if (! popup)
+        {
+            return;
+        }
 
-    _fullPathPopup.reset(popup);
+        _fullPathPopup.reset(popup);
+    }
+    else
+    {
+        SetWindowPos(_fullPathPopup.get(), HWND_TOP, x, y, winWidth, winHeight, SWP_NOACTIVATE);
+    }
 
     RECT clientRect{};
     GetClientRect(_fullPathPopup.get(), &clientRect);
@@ -725,6 +784,54 @@ void NavigationView::ShowFullPathPopup()
     _fullPathPopupClientSize.cy = clientRect.bottom - clientRect.top;
 
     BuildFullPathPopupLayout(static_cast<float>(_fullPathPopupClientSize.cx));
+}
+
+void NavigationView::ShowFullPathPopup()
+{
+    if (! _pendingFullPathPopup)
+    {
+        return;
+    }
+
+    _pendingFullPathPopup = false;
+
+    bool needsPathRedraw = false;
+    if (_menuButtonHovered)
+    {
+        _menuButtonHovered = false;
+        RenderDriveSection();
+    }
+
+    if (_historyButtonHovered)
+    {
+        _historyButtonHovered = false;
+        RenderHistorySection();
+    }
+
+    if (_diskInfoHovered)
+    {
+        _diskInfoHovered = false;
+        RenderDiskInfoSection();
+    }
+
+    if (_hoveredSegmentIndex != -1 || _hoveredSeparatorIndex != -1)
+    {
+        _hoveredSegmentIndex   = -1;
+        _hoveredSeparatorIndex = -1;
+        needsPathRedraw        = true;
+    }
+
+    if (needsPathRedraw)
+    {
+        RenderPathSection();
+    }
+
+    CloseFullPathPopup();
+    UpdateFullPathPopupWindow();
+    if (! _fullPathPopup)
+    {
+        return;
+    }
 
     ShowWindow(_fullPathPopup.get(), SW_SHOW);
     SetForegroundWindow(_fullPathPopup.get());
@@ -1013,50 +1120,79 @@ void NavigationView::EnterFullPathPopupEditMode()
 
     if (! _fullPathPopupEdit)
     {
-        RECT rc{};
-        GetClientRect(_fullPathPopup.get(), &rc);
-
-        const auto& currentPath = _currentEditPath.value();
-        _fullPathPopupEdit.reset(CreateWindowExW(0,
-                                                 L"EDIT",
-                                                 currentPath.c_str(),
-                                                 WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOHSCROLL | ES_LEFT,
-                                                 rc.left,
-                                                 rc.top,
-                                                 rc.right - rc.left,
-                                                 rc.bottom - rc.top,
-                                                 _fullPathPopup.get(),
-                                                 reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_PATH_EDIT)),
-                                                 _hInstance,
-                                                 nullptr));
-        if (! _fullPathPopupEdit)
+        if (! RegisterDxHostWndClass(_hInstance))
         {
             _fullPathPopupEditMode = false;
             return;
         }
 
-        SendMessageW(_fullPathPopupEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_pathFont.get()), TRUE);
-
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-        SetWindowSubclass(_fullPathPopupEdit.get(), EditSubclassProc, EDIT_SUBCLASS_ID + 1, reinterpret_cast<DWORD_PTR>(this));
-#pragma warning(pop)
-    }
-    else
-    {
-        SetWindowTextW(_fullPathPopupEdit.get(), _currentEditPath.value().c_str());
-        ShowWindow(_fullPathPopupEdit.get(), SW_SHOW);
-    }
-
-    if (_fullPathPopupEdit)
-    {
         RECT rc{};
         GetClientRect(_fullPathPopup.get(), &rc);
-        LayoutSingleLineEditInRect(_fullPathPopupEdit.get(), rc);
+        const int hostWidth  = static_cast<int>((std::max)(0L, rc.right - rc.left));
+        const int hostHeight = static_cast<int>((std::max)(0L, rc.bottom - rc.top));
+
+        auto hostState = std::make_unique<NavigationDxTextHost>();
+        HWND hwnd      = CreateWindowExW(0,
+                                         kDxHostClassName,
+                                         L"",
+                                         WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                         rc.left,
+                                         rc.top,
+                                         hostWidth,
+                                         hostHeight,
+                                         _fullPathPopup.get(),
+                                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_PATH_EDIT)),
+                                         _hInstance,
+                                         &hostState->host);
+        if (! hwnd)
+        {
+            _fullPathPopupEditMode = false;
+            return;
+        }
+
+        hostState->hwnd.reset(hwnd);
+        hostState->host.SetTheme(MakeNavigationDxEditPalette(_appTheme, _theme));
+
+        auto field       = std::make_unique<RedSalamander::DxUi::TextField>();
+        hostState->field = field.get();
+        hostState->field->SetMultiline(false);
+        hostState->field->SetClearButtonEnabled(false);
+        hostState->field->SetCaretColor(_theme.text);
+        hostState->field->SetHorizontalTextPadding(2.0f, 2.0f);
+        hostState->field->SetVerticalTextPadding(1.0f, 1.0f);
+        hostState->field->SetOnBlur([this]() noexcept
+        {
+            if (_fullPathPopupEditMode)
+            {
+                ExitFullPathPopupEditMode(false);
+            }
+        });
+        hostState->host.SetRoot(std::move(field));
+        _fullPathPopupEdit = std::move(hostState);
     }
 
-    SendMessageW(_fullPathPopupEdit.get(), EM_SETSEL, 0, -1);
-    SetFocus(_fullPathPopupEdit.get());
+    if (! _fullPathPopupEdit || ! _fullPathPopupEdit->field || ! _fullPathPopupEdit->hwnd)
+    {
+        _fullPathPopupEditMode = false;
+        return;
+    }
+
+    _fullPathPopupEdit->field->SetText(_currentEditPath.value().native());
+    _fullPathPopupEdit->field->SetSelectionRange(0u, _currentEditPath.value().native().size());
+    UpdateFullPathPopupEditHostLayout();
+    ApplyDxEditHostThemes();
+    ShowWindow(_fullPathPopupEdit->hwnd.get(), SW_SHOW);
+    _fullPathPopupEdit->host.SetFocusControl(_fullPathPopupEdit->field);
+    SetFocus(_fullPathPopupEdit->hwnd.get());
+
+    if (const HWND bridge = _fullPathPopupEdit->GetBridgeHwnd(); bridge && IsWindow(bridge) != FALSE)
+    {
+        SetPropW(bridge, kNavigationEditOwnerProp, reinterpret_cast<HANDLE>(this));
+        if (! InstallWndProcHook(bridge, NavigationView::EditWndProc, kNavigationEditOriginalWndProcProp))
+        {
+            RemovePropW(bridge, kNavigationEditOwnerProp);
+        }
+    }
     InvalidateRect(_fullPathPopup.get(), nullptr, FALSE);
 }
 
@@ -1073,21 +1209,33 @@ void NavigationView::ExitFullPathPopupEditMode(bool accept)
         return;
     }
 
-    if (! _fullPathPopupEdit)
+    if (! _fullPathPopupEdit || ! _fullPathPopupEdit->field)
     {
         CloseFullPathPopup();
         return;
     }
 
-    const int length = GetWindowTextLengthW(_fullPathPopupEdit.get());
-    std::wstring buffer;
-    buffer.resize(static_cast<size_t>(std::max(0, length)) + 1u);
-    GetWindowTextW(_fullPathPopupEdit.get(), buffer.data(), static_cast<int>(buffer.size()));
-    buffer.resize(wcsnlen(buffer.c_str(), buffer.size()));
+    const std::wstring buffer(_fullPathPopupEdit->field->GetText());
 
     if (ValidatePath(buffer))
     {
-        std::filesystem::path newPath(buffer);
+        std::filesystem::path newPath(NavigationLocation::NormalizeUserTypedLocationText(buffer));
+        const bool isFilePlugin = _pluginShortId.empty() || EqualsNoCase(_pluginShortId, L"file");
+        const std::wstring_view typedText(newPath.native());
+        if (! isFilePlugin && ! _currentInstanceContext.empty() && typedText.find(L'|') != std::wstring_view::npos)
+        {
+            std::wstring_view typedPrefix;
+            std::wstring_view typedRemainder;
+            if (! TryParsePluginPrefix(typedText, typedPrefix, typedRemainder))
+            {
+                std::wstring canonical;
+                canonical.reserve(_pluginShortId.size() + 1u + typedText.size());
+                canonical.append(_pluginShortId);
+                canonical.push_back(L':');
+                canonical.append(typedText);
+                newPath = std::filesystem::path(std::move(canonical));
+            }
+        }
         bool changed = true;
         if (_currentEditPath)
         {
@@ -1102,7 +1250,14 @@ void NavigationView::ExitFullPathPopupEditMode(bool accept)
         }
 
         _fullPathPopupEditMode = false;
-        ShowWindow(_fullPathPopupEdit.get(), SW_HIDE);
+        const HWND focused     = GetFocus();
+        if (focused && _fullPathPopupEdit->hwnd &&
+            (focused == _fullPathPopupEdit->hwnd.get() || focused == _fullPathPopupEdit->GetBridgeHwnd() ||
+             IsChild(_fullPathPopupEdit->hwnd.get(), focused) != FALSE))
+        {
+            SetFocus(_fullPathPopup.get());
+        }
+        ShowWindow(_fullPathPopupEdit->hwnd.get(), SW_HIDE);
         if (_fullPathPopup)
         {
             SetFocus(_fullPathPopup.get());
@@ -1119,7 +1274,13 @@ void NavigationView::ExitFullPathPopupEditMode(bool accept)
     tip.pszTitle = title.c_str();
     tip.pszText  = message.c_str();
     tip.ttiIcon  = TTI_WARNING;
-    SendMessageW(_fullPathPopupEdit.get(), EM_SHOWBALLOONTIP, 0, reinterpret_cast<LPARAM>(&tip));
-    SendMessageW(_fullPathPopupEdit.get(), EM_SETSEL, 0, -1);
-    SetFocus(_fullPathPopupEdit.get());
+    if (const HWND bridge = _fullPathPopupEdit->GetBridgeHwnd(); bridge && IsWindow(bridge) != FALSE)
+    {
+        SendMessageW(bridge, EM_SHOWBALLOONTIP, 0, reinterpret_cast<LPARAM>(&tip));
+        SetFocus(bridge);
+    }
+    else if (_fullPathPopupEdit->hwnd)
+    {
+        SetFocus(_fullPathPopupEdit->hwnd.get());
+    }
 }

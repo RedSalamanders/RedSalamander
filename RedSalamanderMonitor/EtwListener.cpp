@@ -402,7 +402,7 @@ bool EtwListener::ExtractEventData(PEVENT_RECORD eventRecord, Debug::InfoParam& 
 
     if (message.empty() && ! perfScopeName.empty())
     {
-        info.type = Debug::InfoParam::Type::Debug;
+        info.type = Debug::InfoParam::Type::Perf;
 
         constexpr UINT64 kPerfWarningUs = 500'000;   // 500ms
         constexpr UINT64 kPerfErrorUs   = 1'000'000; // 1s

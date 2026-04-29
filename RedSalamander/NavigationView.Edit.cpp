@@ -16,8 +16,70 @@
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
 #include "SettingsStore.h"
-#include "ThemedControls.h"
+#include "UiMetrics.h"
 #include "resource.h"
+
+namespace
+{
+constexpr wchar_t kNavigationEditOriginalWndProcProp[] = L"RS.NavigationView.Edit.OriginalWndProc";
+constexpr wchar_t kNavigationEditOwnerProp[]           = L"RS.NavigationView.Edit.Owner";
+
+[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp) noexcept
+{
+    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, originalWndProcProp);
+}
+
+[[nodiscard]] bool InstallWndProcHook(HWND hwnd, WNDPROC wndProc, const wchar_t* originalWndProcProp) noexcept
+{
+    if (! hwnd || ! wndProc)
+    {
+        return false;
+    }
+
+    if (GetStoredWndProc(hwnd, originalWndProcProp))
+    {
+        return true;
+    }
+
+    const auto previous =
+        reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(wndProc)));
+    if (! previous)
+    {
+        return false;
+    }
+
+    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, originalWndProcProp, reinterpret_cast<HANDLE>(previous)))
+    {
+        static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previous)));
+        return false;
+    }
+
+    return true;
+}
+
+void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wchar_t* ownerProp) noexcept
+{
+    if (! hwnd)
+    {
+        return;
+    }
+
+    const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp);
+    if (originalWndProc && IsWindow(hwnd))
+    {
+        static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(originalWndProc)));
+    }
+
+    RemovePropW(hwnd, originalWndProcProp);
+    RemovePropW(hwnd, ownerProp);
+}
+
+[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp);
+    return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
+}
+} // namespace
 
 ATOM NavigationView::RegisterEditSuggestPopupWndClass(HINSTANCE instance)
 {
@@ -34,7 +96,7 @@ ATOM NavigationView::RegisterEditSuggestPopupWndClass(HINSTANCE instance)
     wc.hInstance     = instance;
     wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wc.hbrBackground = nullptr;
-    wc.lpszClassName = kEditSuggestPopupClassName;
+    wc.lpszClassName = kSuggestPopupClassName;
 
     atom = RegisterClassExW(&wc);
     return atom;
@@ -65,7 +127,7 @@ LRESULT CALLBACK NavigationView::EditSuggestPopupWndProcThunk(HWND hwnd, UINT ms
 
 LRESULT NavigationView::OnCtlColorEdit(HDC hdc, HWND hwndControl)
 {
-    if (_pathEdit && hwndControl == _pathEdit.get())
+    if (_pathEdit && hwndControl == _pathEdit->GetBridgeHwnd())
     {
         SetTextColor(hdc, ColorToCOLORREF(_theme.text));
         SetBkColor(hdc, _theme.gdiBackground);
@@ -256,63 +318,108 @@ void NavigationView::EnterEditMode()
 {
     if (_editMode || ! _currentPath)
         return;
-    _editMode         = true;
-    _renderMode       = RenderMode::Edit;
-    _editCloseHovered = false;
+    _editMode   = true;
+    _renderMode = RenderMode::Edit;
     _editSuggestItems.clear();
     _editSuggestHighlightText.clear();
     CloseEditSuggestPopup();
 
     const std::filesystem::path& currentPath = _currentEditPath.has_value() ? _currentEditPath.value() : _currentPath.value();
+    _currentEditPath                         = currentPath;
 
-    // Create or show Edit control overlay
     if (! _pathEdit)
     {
-        int x      = _sectionPathRect.left;
-        int y      = _sectionPathRect.top;
-        int width  = _sectionPathRect.right - _sectionPathRect.left;
-        int height = _sectionPathRect.bottom - _sectionPathRect.top;
+        if (! RegisterDxHostWndClass(_hInstance))
+        {
+            _editMode = false;
+            return;
+        }
 
-        _pathEdit.reset(CreateWindowExW(0,
-                                        L"EDIT",
-                                        currentPath.c_str(),
-                                        WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOHSCROLL | ES_LEFT,
-                                        x,
-                                        y,
-                                        width,
-                                        height,
-                                        _hWnd.get(),
-                                        reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_PATH_EDIT)),
-                                        _hInstance,
-                                        nullptr));
+        const RECT editBounds = GetPathEditBoundsRect(_sectionPathRect, _sectionHistoryRect);
+        const auto chrome     = ComputeEditChromeRects(editBounds, _dpi);
+        const int hostWidth   = static_cast<int>((std::max)(0L, chrome.editRect.right - chrome.editRect.left));
+        const int hostHeight  = static_cast<int>((std::max)(0L, chrome.editRect.bottom - chrome.editRect.top));
 
-        SendMessageW(_pathEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_pathFont.get()), TRUE);
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-        SetWindowSubclass(_pathEdit.get(), NavigationView::EditSubclassProc, EDIT_SUBCLASS_ID, reinterpret_cast<DWORD_PTR>(this));
-#pragma warning(pop)
+        auto hostState = std::make_unique<NavigationDxTextHost>();
+        HWND hwnd      = CreateWindowExW(0,
+                                         kDxHostClassName,
+                                         L"",
+                                         WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                         chrome.editRect.left,
+                                         chrome.editRect.top,
+                                         hostWidth,
+                                         hostHeight,
+                                         _hWnd.get(),
+                                         reinterpret_cast<HMENU>(static_cast<INT_PTR>(ID_PATH_EDIT)),
+                                         _hInstance,
+                                         &hostState->host);
+        if (! hwnd)
+        {
+            _editMode = false;
+            return;
+        }
+
+        hostState->hwnd.reset(hwnd);
+        hostState->host.SetTheme(MakeNavigationDxEditPalette(_appTheme, _theme));
+
+        auto field       = std::make_unique<RedSalamander::DxUi::TextField>();
+        hostState->field = field.get();
+        hostState->field->SetMultiline(false);
+        hostState->field->SetClearButtonEnabled(false);
+        hostState->field->SetCaretColor(_theme.text);
+        hostState->field->SetHorizontalTextPadding(2.0f, 2.0f);
+        hostState->field->SetVerticalTextPadding(1.0f, 1.0f);
+        hostState->host.SetRoot(std::move(field));
+        _pathEdit = std::move(hostState);
     }
-    else
+
+    if (! _pathEdit || ! _pathEdit->field || ! _pathEdit->hwnd)
     {
-        SetWindowTextW(_pathEdit.get(), currentPath.c_str());
-        ShowWindow(_pathEdit.get(), SW_SHOW);
+        _editMode = false;
+        return;
     }
 
-    if (_pathEdit)
+    _pathEdit->field->SetOnTextChanged([this](std::wstring_view text)
     {
-        const auto chrome = ComputeEditChromeRects(_sectionPathRect, _dpi);
-        LayoutSingleLineEditInRect(_pathEdit.get(), chrome.editRect);
-    }
+        _currentEditPath = std::filesystem::path(text);
+        UpdateEditSuggest();
+    });
+    _pathEdit->field->SetOnBlur([this]() noexcept
+    {
+        if (_editMode)
+        {
+            ExitEditMode(false);
+        }
+    });
 
-    // Select all text
-    SendMessageW(_pathEdit.get(), EM_SETSEL, 0, -1);
-    SetFocus(_pathEdit.get());
+    _pathEdit->field->SetText(currentPath.native());
+    _pathEdit->field->SetSelectionRange(0u, currentPath.native().size());
+    UpdatePathEditHostLayout();
+    ApplyDxEditHostThemes();
+    ShowWindow(_pathEdit->hwnd.get(), SW_SHOW);
+    _pathEdit->host.SetFocusControl(_pathEdit->field);
+    SetFocus(_pathEdit->hwnd.get());
+
+    if (const HWND bridge = _pathEdit->GetBridgeHwnd(); bridge && IsWindow(bridge) != FALSE)
+    {
+        SetPropW(bridge, kNavigationEditOwnerProp, reinterpret_cast<HANDLE>(this));
+        if (! InstallWndProcHook(bridge, NavigationView::EditWndProc, kNavigationEditOriginalWndProcProp))
+        {
+            RemovePropW(bridge, kNavigationEditOwnerProp);
+        }
+    }
 
     const std::wstring_view currentPathText = currentPath.native();
     const bool endsWithSeparator            = ! currentPathText.empty() && (currentPathText.back() == L'\\' || currentPathText.back() == L'/');
     if (endsWithSeparator)
     {
         UpdateEditSuggest();
+    }
+
+    if (_hWnd)
+    {
+        const RECT editBounds = GetPathEditBoundsRect(_sectionPathRect, _sectionHistoryRect);
+        InvalidateRect(_hWnd.get(), &editBounds, FALSE);
     }
 
     UpdateHoverTimerState();
@@ -333,17 +440,16 @@ void NavigationView::ExitEditMode(bool accept)
 
     _editMode = false;
 
-    if (accept && _pathEdit)
+    if (accept && _pathEdit && _pathEdit->field)
     {
-        wchar_t buffer[MAX_PATH];
-        GetWindowTextW(_pathEdit.get(), buffer, MAX_PATH);
+        const std::wstring acceptedText = NavigationLocation::NormalizeUserTypedLocationText(std::wstring(_pathEdit->field->GetText()));
 
-        if (ValidatePath(buffer))
+        if (ValidatePath(acceptedText))
         {
-            std::filesystem::path newPath(buffer);
+            std::filesystem::path newPath(acceptedText);
 
             const bool isFilePlugin = _pluginShortId.empty() || EqualsNoCase(_pluginShortId, L"file");
-            const std::wstring_view typedText(buffer);
+            const std::wstring_view typedText(acceptedText);
             if (! isFilePlugin && ! _currentInstanceContext.empty() && typedText.find(L'|') != std::wstring_view::npos)
             {
                 std::wstring_view typedPrefix;
@@ -362,25 +468,44 @@ void NavigationView::ExitEditMode(bool accept)
         }
         else
         {
-            const std::wstring message = FormatStringResource(nullptr, IDS_FMT_INVALID_PATH, buffer);
+            const std::wstring message = FormatStringResource(nullptr, IDS_FMT_INVALID_PATH, acceptedText.c_str());
             const std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_INVALID_PATH);
 
-            EDITBALLOONTIP tip{};
-            tip.cbStruct = sizeof(tip);
-            tip.pszTitle = title.c_str();
-            tip.pszText  = message.c_str();
-            tip.ttiIcon  = TTI_WARNING;
-            SendMessageW(_pathEdit.get(), EM_SHOWBALLOONTIP, 0, reinterpret_cast<LPARAM>(&tip));
-            // Keep edit mode active
+            if (const HWND bridge = _pathEdit->GetBridgeHwnd(); bridge && IsWindow(bridge) != FALSE)
+            {
+                EDITBALLOONTIP tip{};
+                tip.cbStruct = sizeof(tip);
+                tip.pszTitle = title.c_str();
+                tip.pszText  = message.c_str();
+                tip.ttiIcon  = TTI_WARNING;
+                SendMessageW(bridge, EM_SHOWBALLOONTIP, 0, reinterpret_cast<LPARAM>(&tip));
+                SetFocus(bridge);
+            }
+            else if (_pathEdit->hwnd)
+            {
+                SetFocus(_pathEdit->hwnd.get());
+            }
+
             _editMode = true;
             UpdateHoverTimerState();
             return;
         }
     }
 
-    if (_pathEdit)
+    if (_pathEdit && _pathEdit->hwnd)
     {
-        ShowWindow(_pathEdit.get(), SW_HIDE);
+        if (_pathEdit->field)
+        {
+            _pathEdit->field->SetOnTextChanged({});
+            _pathEdit->field->SetOnBlur({});
+        }
+
+        const HWND focused = GetFocus();
+        if (focused && (focused == _pathEdit->hwnd.get() || focused == _pathEdit->GetBridgeHwnd() || IsChild(_pathEdit->hwnd.get(), focused) != FALSE) && _hWnd)
+        {
+            SetFocus(_hWnd.get());
+        }
+        ShowWindow(_pathEdit->hwnd.get(), SW_HIDE);
     }
     _renderMode = RenderMode::Breadcrumb;
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
@@ -390,7 +515,7 @@ void NavigationView::ExitEditMode(bool accept)
 
 void NavigationView::UpdateEditSuggest()
 {
-    if (! _editMode || ! _pathEdit)
+    if (! _editMode || ! _pathEdit || ! _pathEdit->field)
     {
         _editSuggestItems.clear();
         _editSuggestHighlightText.clear();
@@ -398,11 +523,7 @@ void NavigationView::UpdateEditSuggest()
         return;
     }
 
-    const int length = GetWindowTextLengthW(_pathEdit.get());
-    std::wstring text;
-    text.resize(static_cast<size_t>(std::max(0, length)) + 1u);
-    GetWindowTextW(_pathEdit.get(), text.data(), static_cast<int>(text.size()));
-    text.resize(wcsnlen(text.c_str(), text.size()));
+    std::wstring text(_pathEdit->field->GetText());
 
     const uint64_t requestId        = _editSuggestRequestId.fetch_add(1, std::memory_order_acq_rel) + 1u;
     _editSuggestAdditionalRequestId = 0;
@@ -832,13 +953,11 @@ void NavigationView::UpdateEditSuggest()
 
                         if (module)
                         {
-                            using CreateFactoryFunc   = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, void**);
-                            using CreateFactoryExFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+                            using CreateFactoryFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
 
 #pragma warning(push)
 #pragma warning(disable : 4191) // C4191: unsafe conversion from FARPROC
-                            const auto createFactory   = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(module.get(), "RedSalamanderCreate"));
-                            const auto createFactoryEx = reinterpret_cast<CreateFactoryExFunc>(GetProcAddress(module.get(), "RedSalamanderCreateEx"));
+                            const auto createFactory = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(module.get(), "RedSalamanderCreate"));
 #pragma warning(pop)
 
                             if (createFactory)
@@ -847,19 +966,11 @@ void NavigationView::UpdateEditSuggest()
                                 options.debugLevel = DEBUG_LEVEL_NONE;
 
                                 wil::com_ptr<IFileSystem> created;
-                                HRESULT createHr = E_FAIL;
-                                if (entry->factoryPluginId.empty())
+                                const std::wstring requestedPluginId = entry->factoryPluginId.empty() ? entry->id : entry->factoryPluginId;
+                                HRESULT createHr                     = E_INVALIDARG;
+                                if (! requestedPluginId.empty())
                                 {
-                                    createHr = createFactory(__uuidof(IFileSystem), &options, GetHostServices(), created.put_void());
-                                }
-                                else if (createFactoryEx)
-                                {
-                                    createHr =
-                                        createFactoryEx(__uuidof(IFileSystem), &options, GetHostServices(), entry->factoryPluginId.c_str(), created.put_void());
-                                }
-                                else
-                                {
-                                    createHr = HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+                                    createHr = createFactory(__uuidof(IFileSystem), &options, GetHostServices(), requestedPluginId.c_str(), created.put_void());
                                 }
                                 if (SUCCEEDED(createHr) && created)
                                 {
@@ -1054,7 +1165,8 @@ void NavigationView::UpdateEditSuggestPopupWindow()
         return;
     }
 
-    const auto chrome = ComputeEditChromeRects(_sectionPathRect, _dpi);
+    const RECT editBounds = GetPathEditBoundsRect(_sectionPathRect, _sectionHistoryRect);
+    const auto chrome     = ComputeEditChromeRects(editBounds, _dpi);
 
     const int navHeightPx         = std::max(1, static_cast<int>(_sectionPathRect.bottom - _sectionPathRect.top));
     const int minRowHeightPx      = std::max(1, DipsToPixelsInt(40, _dpi));
@@ -1076,7 +1188,7 @@ void NavigationView::UpdateEditSuggestPopupWindow()
     const int winWidth  = windowRect.right - windowRect.left;
     const int winHeight = windowRect.bottom - windowRect.top;
 
-    POINT anchor = {chrome.editRect.left, _sectionPathRect.bottom};
+    POINT anchor = {chrome.editRect.left, editBounds.bottom};
     ClientToScreen(_hWnd.get(), &anchor);
 
     HMONITOR hMon = MonitorFromPoint(anchor, MONITOR_DEFAULTTONEAREST);
@@ -1115,7 +1227,7 @@ void NavigationView::UpdateEditSuggestPopupWindow()
 
     if (! _editSuggestPopup)
     {
-        HWND popup = CreateWindowExW(exStyle, kEditSuggestPopupClassName, L"", style, x, y, winWidth, winHeight, _hWnd.get(), nullptr, _hInstance, this);
+        HWND popup = CreateWindowExW(exStyle, kSuggestPopupClassName, L"", style, x, y, winWidth, winHeight, _hWnd.get(), nullptr, _hInstance, this);
         if (! popup)
         {
             return;
@@ -1207,7 +1319,7 @@ void NavigationView::EnsureEditSuggestPopupD2DResources()
             const COLORREF surface    = _appTheme.systemHighContrast ? GetSysColor(COLOR_WINDOW) : _appTheme.menu.background;
             const int highlightWeight = _appTheme.dark ? 30 : 18;
             const COLORREF highlightColor =
-                _appTheme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : ThemedControls::BlendColor(surface, _appTheme.menu.text, highlightWeight, 255);
+                _appTheme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : UiMetrics::BlendColor(surface, _appTheme.menu.text, highlightWeight, 255);
             _editSuggestPopupTarget->CreateSolidColorBrush(ColorFromCOLORREF(highlightColor), _editSuggestPopupHoverBrush.addressof());
         }
         if (! _editSuggestPopupBorderBrush)
@@ -1215,7 +1327,7 @@ void NavigationView::EnsureEditSuggestPopupD2DResources()
             if (! _appTheme.systemHighContrast)
             {
                 const COLORREF surface = _appTheme.menu.background;
-                const COLORREF border  = ThemedControls::BlendColor(surface, _appTheme.menu.text, _appTheme.dark ? 60 : 40, 255);
+                const COLORREF border  = UiMetrics::BlendColor(surface, _appTheme.menu.text, _appTheme.dark ? 60 : 40, 255);
                 _editSuggestPopupTarget->CreateSolidColorBrush(ColorFromCOLORREF(border), _editSuggestPopupBorderBrush.addressof());
             }
         }
@@ -1387,7 +1499,7 @@ void NavigationView::RenderEditSuggestPopup()
 
 void NavigationView::ApplyEditSuggestIndex(size_t index)
 {
-    if (! _editMode || ! _pathEdit || index >= _editSuggestItems.size())
+    if (! _editMode || ! _pathEdit || ! _pathEdit->field || index >= _editSuggestItems.size())
     {
         return;
     }
@@ -1407,11 +1519,54 @@ void NavigationView::ApplyEditSuggestIndex(size_t index)
         }
     }
 
-    SetWindowTextW(_pathEdit.get(), text.c_str());
-    const LONG caret = static_cast<LONG>(std::min<size_t>(text.size(), static_cast<size_t>(std::numeric_limits<LONG>::max())));
-    SendMessageW(_pathEdit.get(), EM_SETSEL, static_cast<WPARAM>(caret), static_cast<LPARAM>(caret));
-    SetFocus(_pathEdit.get());
-    UpdateEditSuggest();
+    _pathEdit->field->SetText(text);
+    _pathEdit->field->SetSelectionRange(text.size(), text.size());
+    _currentEditPath = std::filesystem::path(text);
+    _pathEdit->host.SetFocusControl(_pathEdit->field);
+    SetFocus(_pathEdit->hwnd.get());
+    _editSuggestHoveredIndex  = -1;
+    _editSuggestSelectedIndex = -1;
+    _editSuggestHighlightText.clear();
+    CloseEditSuggestPopup();
+}
+
+bool NavigationView::TryHandleEditClipboardCommand(UINT commandId) noexcept
+{
+    if (! _editMode || ! _pathEdit || ! _pathEdit->field || ! _pathEdit->hwnd)
+    {
+        return false;
+    }
+
+    const HWND focused = GetFocus();
+    if (! focused || (focused != _pathEdit->hwnd.get() && focused != _pathEdit->GetBridgeHwnd() && IsChild(_pathEdit->hwnd.get(), focused) == FALSE))
+    {
+        return false;
+    }
+
+    _pathEdit->host.SetFocusControl(_pathEdit->field);
+    const auto syncBridge = [this]() noexcept { _pathEdit->host.SyncTextInputBridge(_pathEdit->field); };
+
+    switch (commandId)
+    {
+        case IDM_PANE_SELECTION_SELECT_ALL:
+            static_cast<void>(_pathEdit->field->OnSelectAll(_pathEdit->host));
+            syncBridge();
+            return true;
+        case IDM_PANE_CLIPBOARD_COPY:
+            static_cast<void>(_pathEdit->field->OnKeyDown(_pathEdit->host, 'C', MK_CONTROL));
+            syncBridge();
+            return true;
+        case IDM_PANE_CLIPBOARD_CUT:
+            static_cast<void>(_pathEdit->field->OnKeyDown(_pathEdit->host, 'X', MK_CONTROL));
+            syncBridge();
+            return true;
+        case IDM_PANE_CLIPBOARD_PASTE:
+        case IDM_PANE_CLIPBOARD_PASTE_SHORTCUT:
+            static_cast<void>(_pathEdit->field->OnKeyDown(_pathEdit->host, 'V', MK_CONTROL));
+            syncBridge();
+            return true;
+        default: return false;
+    }
 }
 
 void NavigationView::EnsureEditSuggestWorker()
@@ -1735,20 +1890,11 @@ bool NavigationView::ValidatePath(const std::wstring& pathStr)
     return (attrs & FILE_ATTRIBUTE_DIRECTORY) != 0;
 }
 
-LRESULT NavigationView::OnEditSubclassNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp, UINT_PTR subclassId) noexcept
-{
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-    RemoveWindowSubclass(hwnd, NavigationView::EditSubclassProc, subclassId);
-#pragma warning(pop)
-    return DefSubclassProc(hwnd, WM_NCDESTROY, wp, lp);
-}
-
 bool NavigationView::HandleEditSubclassKeyDown(HWND editHwnd, WPARAM key)
 {
     _suppressCtrlBackspaceCharHwnd = nullptr;
 
-    const bool isPopupEdit = _fullPathPopupEdit && editHwnd == _fullPathPopupEdit.get();
+    const bool isPopupEdit = _fullPathPopupEdit && editHwnd == _fullPathPopupEdit->GetBridgeHwnd();
     if (key == VK_BACK)
     {
         const bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
@@ -1843,6 +1989,7 @@ bool NavigationView::HandleEditSubclassKeyDown(HWND editHwnd, WPARAM key)
 
         if (isPopupEdit)
         {
+            _restoreFolderViewFocusAfterFullPathPopupClose = true;
             ExitFullPathPopupEditMode(false);
         }
         else
@@ -1898,8 +2045,6 @@ bool NavigationView::HandleEditSubclassKeyDown(HWND editHwnd, WPARAM key)
 
     if (key == VK_TAB)
     {
-        const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
-
         if (isPopupEdit)
         {
             ExitFullPathPopupEditMode(false);
@@ -1908,6 +2053,13 @@ bool NavigationView::HandleEditSubclassKeyDown(HWND editHwnd, WPARAM key)
         {
             ExitEditMode(false);
         }
+        if (_requestFolderViewFocusCallback)
+        {
+            _requestFolderViewFocusCallback();
+            return true;
+        }
+
+        const bool shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
         if (_hWnd)
         {
             SetFocus(_hWnd.get());
@@ -1960,15 +2112,14 @@ bool NavigationView::HandleEditSubclassPaste(HWND editHwnd)
 
 namespace
 {
-void NotifyPaneFocusChangedForEdit(HWND editHwnd) noexcept
+void NotifyPaneFocusChangedForEdit(const NavigationView* self) noexcept
 {
-    const HWND navigationView = GetParent(editHwnd);
-    if (! navigationView)
+    if (! self || ! self->GetHwnd())
     {
         return;
     }
 
-    const HWND paneWindow = GetParent(navigationView);
+    const HWND paneWindow = GetParent(self->GetHwnd());
     if (! paneWindow)
     {
         return;
@@ -1978,14 +2129,14 @@ void NotifyPaneFocusChangedForEdit(HWND editHwnd) noexcept
 }
 } // namespace
 
-LRESULT CALLBACK NavigationView::EditSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData)
+LRESULT CALLBACK NavigationView::EditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
-    auto* self = reinterpret_cast<NavigationView*>(refData);
+    auto* self = reinterpret_cast<NavigationView*>(GetPropW(hwnd, kNavigationEditOwnerProp));
 
     switch (msg)
     {
-        case WM_SETFOCUS: NotifyPaneFocusChangedForEdit(hwnd); break;
-        case WM_KILLFOCUS: NotifyPaneFocusChangedForEdit(hwnd); break;
+        case WM_SETFOCUS: NotifyPaneFocusChangedForEdit(self); break;
+        case WM_KILLFOCUS: NotifyPaneFocusChangedForEdit(self); break;
         case WM_KEYDOWN:
             if (self && self->HandleEditSubclassKeyDown(hwnd, wp))
             {
@@ -2004,8 +2155,13 @@ LRESULT CALLBACK NavigationView::EditSubclassProc(HWND hwnd, UINT msg, WPARAM wp
                 return 0;
             }
             break;
-        case WM_NCDESTROY: return OnEditSubclassNcDestroy(hwnd, wp, lp, subclassId);
+        case WM_NCDESTROY:
+        {
+            const LRESULT result = CallStoredWndProc(hwnd, kNavigationEditOriginalWndProcProp, msg, wp, lp);
+            RestoreWndProcHook(hwnd, kNavigationEditOriginalWndProcProp, kNavigationEditOwnerProp);
+            return result;
+        }
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return CallStoredWndProc(hwnd, kNavigationEditOriginalWndProcProp, msg, wp, lp);
 }

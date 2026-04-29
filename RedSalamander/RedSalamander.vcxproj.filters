@@ -1,11 +1,13 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClInclude Include="..\Common\SearchTextHelpers.h" />
+    <ClInclude Include="..\Common\SqliteIndexStore.h" />
     <ClInclude Include="AppTheme.h" />
+    <ClInclude Include="D2DHdcPaint.h" />
     <ClInclude Include="Framework.h" />
     <ClInclude Include="ConnectionSecrets.h" />
-    <ClInclude Include="ConnectionManagerDialog.h" />
+    <ClInclude Include="ConnectionManagerWindow.h" />
     <ClInclude Include="ConnectionCredentialPromptDialog.h" />
     <ClInclude Include="WindowsHello.h" />
     <ClInclude Include="targetver.h" />
@@ -13,12 +15,15 @@
     <ClInclude Include="RedSalamander.h" />
     <ClInclude Include="CrashHandler.h" />
     <ClInclude Include="FolderView.h" />
+    <ClInclude Include="FolderViewEmptyStateLayout.h" />
+    <ClInclude Include="FolderViewIncrementalSearch.h" />
+    <ClInclude Include="FolderViewVisualState.h" />
     <ClInclude Include="FolderViewInternal.h" />
     <ClInclude Include="FolderWindow.h" />
     <ClInclude Include="FolderWindow.FileOperationsInternal.h" />
     <ClInclude Include="FolderWindow.FileOperations.IssuesPane.h" />
     <ClInclude Include="FolderWindow.FileOperations.Popup.h" />
-    <ClInclude Include="FolderWindow.FileOperations.SelfTest.h" />
+    <ClInclude Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.h" />
     <ClInclude Include="FolderWindowInternal.h" />
     <ClInclude Include="DirectoryInfoCache.h" />
     <ClInclude Include="MaskSyntax.h" />
@@ -36,6 +41,7 @@
     <ClInclude Include="Preferences.Dialog.h" />
     <ClInclude Include="Preferences.Advanced.h" />
     <ClInclude Include="Preferences.CompareDirectories.h" />
+    <ClInclude Include="Preferences.FileOperations.h" />
     <ClInclude Include="Preferences.HotPaths.h" />
     <ClInclude Include="Preferences.Editors.h" />
     <ClInclude Include="Preferences.General.h" />
@@ -52,20 +58,20 @@
     <ClInclude Include="FunctionBar.h" />
     <ClInclude Include="ManagePluginsDialog.h" />
     <ClInclude Include="ChangeCase.h" />
-    <ClInclude Include="Commands.SelfTest.h" />
+    <ClInclude Include="SelfTest\Commands\Commands.SelfTest.h" />
     <ClInclude Include="CommandRegistry.h" />
-    <ClInclude Include="CompareDirectoriesEngine.SelfTest.h" />
+    <ClInclude Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.h" />
     <ClInclude Include="CompareDirectoriesEngine.h" />
     <ClInclude Include="FindFilesWindow.h" />
     <ClInclude Include="SearchFallbackEngine.h" />
     <ClInclude Include="CompareDirectoriesWindow.h" />
     <ClInclude Include="ShortcutDefaults.h" />
     <ClInclude Include="ShortcutManager.h" />
-    <ClInclude Include="SelfTestCommon.h" />
+    <ClInclude Include="SelfTest\Common\SelfTestCommon.h" />
     <ClInclude Include="ShortcutText.h" />
     <ClInclude Include="ShortcutsWindow.h" />
     <ClInclude Include="SettingsSchemaExport.h" />
-    <ClInclude Include="ThemedControls.h" />
+    <ClInclude Include="UiMetrics.h" />
     <ClInclude Include="ThemedInputFrames.h" />
     <ClInclude Include="Preferences.Plugin.Configuration.h" />
     <ClInclude Include="SettingsSchemaParser.h" />
@@ -79,10 +85,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="..\Common\SearchTextHelpers.cpp" />
+    <ClCompile Include="..\Common\SqliteIndexStore.cpp" />
     <ClCompile Include="AppTheme.cpp" />
+    <ClCompile Include="D2DHdcPaint.cpp" />
     <ClCompile Include="CrashHandler.cpp" />
     <ClCompile Include="ChangeCase.cpp" />
-    <ClCompile Include="Commands.SelfTest.cpp" />
+    <ClCompile Include="SelfTest\Commands\Commands.SelfTest.cpp" />
     <ClCompile Include="RedSalamander.cpp" />
     <ClCompile Include="FolderView.cpp" />
     <ClCompile Include="FolderView.DragDrop.cpp" />
@@ -100,7 +108,7 @@
     <ClCompile Include="FolderWindow.FileOperations.Dialog.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.IssuesPane.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.Popup.cpp" />
-    <ClCompile Include="FolderWindow.FileOperations.SelfTest.cpp" />
+    <ClCompile Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp" />
     <ClCompile Include="FolderWindow.FileOperations.State.cpp" />
     <ClCompile Include="FolderWindow.FileSystem.cpp" />
     <ClCompile Include="FolderWindow.Interaction.cpp" />
@@ -111,7 +119,7 @@
     <ClCompile Include="DirectoryInfoCache.cpp" />
     <ClCompile Include="FolderWatcher.cpp" />
     <ClCompile Include="ConnectionSecrets.cpp" />
-    <ClCompile Include="ConnectionManagerDialog.cpp" />
+    <ClCompile Include="ConnectionManagerWindow.cpp" />
     <ClCompile Include="ConnectionCredentialPromptDialog.cpp" />
     <ClCompile Include="WindowsHello.cpp" />
     <ClCompile Include="HostServices.cpp" />
@@ -131,6 +139,7 @@
     <ClCompile Include="Preferences.Internal.cpp" />
     <ClCompile Include="Preferences.Advanced.cpp" />
     <ClCompile Include="Preferences.CompareDirectories.cpp" />
+    <ClCompile Include="Preferences.FileOperations.cpp" />
     <ClCompile Include="Preferences.HotPaths.cpp" />
     <ClCompile Include="Preferences.Editors.cpp" />
     <ClCompile Include="Preferences.General.cpp" />
@@ -147,18 +156,18 @@
     <ClCompile Include="ManagePluginsDialog.cpp" />
     <ClCompile Include="MaskSyntax.cpp" />
     <ClCompile Include="CommandRegistry.cpp" />
-    <ClCompile Include="CompareDirectoriesEngine.SelfTest.cpp" />
+    <ClCompile Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp" />
     <ClCompile Include="CompareDirectoriesEngine.cpp" />
     <ClCompile Include="FindFilesWindow.cpp" />
     <ClCompile Include="SearchFallbackEngine.cpp" />
     <ClCompile Include="CompareDirectoriesWindow.cpp" />
     <ClCompile Include="ShortcutDefaults.cpp" />
     <ClCompile Include="ShortcutManager.cpp" />
-    <ClCompile Include="SelfTestCommon.cpp" />
+    <ClCompile Include="SelfTest\Common\SelfTestCommon.cpp" />
     <ClCompile Include="ShortcutText.cpp" />
     <ClCompile Include="ShortcutsWindow.cpp" />
     <ClCompile Include="SettingsSchemaExport.cpp" />
-    <ClCompile Include="ThemedControls.cpp" />
+    <ClCompile Include="UiMetrics.cpp" />
     <ClCompile Include="FolderWindow.ItemProperties.cpp" />
     <ClCompile Include="Preferences.Plugin.Configuration.cpp" />
     <ClCompile Include="SettingsSchemaParser.cpp" />
@@ -184,5 +193,32 @@
     <Image Include="res\wsl_debian.png" />
     <Image Include="res\wsl_fedora.png" />
     <Image Include="res\wsl_linux_black.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Connections.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Dialogs.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.FileOps.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Navigation.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.PluginsThemesAdvanced.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.Dispatch.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Search.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Settings.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.CoreDiffs.cpp" />
+    <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases05_06.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases07_09.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases10_13.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases14_16.cpp" />
   </ItemGroup>
 </Project>

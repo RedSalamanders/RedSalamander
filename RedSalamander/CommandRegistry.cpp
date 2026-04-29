@@ -7,6 +7,9 @@
 
 namespace
 {
+constexpr unsigned int kCommandShortDisplayNameStringIdOffset = IDS_CMD_SHORT_BASE;
+constexpr unsigned int kCommandShortDisplayNameStringIdMax    = IDS_CMD_SHORT_BASE + 1999u;
+
 constexpr std::array<CommandInfo, 124> kCommands = {
     CommandInfo{L"cmd/app/about", IDS_CMD_ABOUT, IDS_CMD_DESC_ABOUT, IDM_ABOUT},
     CommandInfo{L"cmd/app/compare", IDS_CMD_COMPARE, IDS_CMD_DESC_COMPARE, IDM_APP_COMPARE},
@@ -290,6 +293,20 @@ std::optional<unsigned int> TryGetCommandDisplayNameStringId(std::wstring_view c
         return std::nullopt;
     }
     return info->displayNameStringId;
+}
+
+std::optional<unsigned int> TryGetCommandShortDisplayNameStringId(std::wstring_view commandId) noexcept
+{
+    const CommandInfo* info = FindCommandInfo(commandId);
+    if (! info || info->displayNameStringId == 0)
+    {
+        return std::nullopt;
+    }
+    if (info->displayNameStringId > kCommandShortDisplayNameStringIdMax - kCommandShortDisplayNameStringIdOffset)
+    {
+        return std::nullopt;
+    }
+    return info->displayNameStringId + kCommandShortDisplayNameStringIdOffset;
 }
 
 std::optional<unsigned int> TryGetCommandDescriptionStringId(std::wstring_view commandId) noexcept

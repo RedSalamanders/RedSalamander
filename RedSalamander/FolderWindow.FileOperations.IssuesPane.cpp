@@ -1,22 +1,32 @@
 #include "FolderWindow.FileOperations.IssuesPane.h"
 
+#include "DxUi/DxUi.h"
 #include "FolderWindow.FileOperationsInternal.h"
-#include "ThemedControls.h"
+#include "Helpers.h"
 #include "WindowMaximizeBehavior.h"
 
-#include <array>
-#include <bit>
-#include <commctrl.h>
+#include <algorithm>
 #include <format>
 #include <memory>
-#include <uxtheme.h>
+#include <unordered_set>
 #include <vector>
-#include <windowsx.h>
 
 namespace
 {
+using RedSalamander::DxUi::Grid;
+using RedSalamander::DxUi::GridCellData;
+using RedSalamander::DxUi::GridColumnDesc;
+using RedSalamander::DxUi::GridRowStyle;
+using RedSalamander::DxUi::GridRowTone;
+using RedSalamander::DxUi::GridSortSpec;
+using RedSalamander::DxUi::IDxGridDelegate;
+using RedSalamander::DxUi::IDxGridModel;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::SortDirection;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::WindowHost;
+
 constexpr wchar_t kFileOperationsIssuesPaneClassName[] = L"RedSalamander.FileOperationsIssuesPane";
-constexpr int kIssuesListControlId                     = 1;
 constexpr UINT_PTR kRefreshTimerId                     = 1;
 constexpr UINT kRefreshTimerIntervalMs                 = 750;
 
@@ -39,45 +49,7 @@ int DipsToPixels(int dip, UINT dpi) noexcept
 
 [[nodiscard]] std::wstring FormatStatusText(HRESULT hr) noexcept
 {
-    wchar_t buffer[512]{};
-    DWORD messageId = std::bit_cast<DWORD>(hr);
-    if (HRESULT_FACILITY(hr) == FACILITY_WIN32)
-    {
-        const DWORD code = HRESULT_CODE(static_cast<DWORD>(hr));
-        if (code != 0)
-        {
-            messageId = code;
-        }
-    }
-
-    const DWORD written = FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                                         nullptr,
-                                         messageId,
-                                         MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                         buffer,
-                                         static_cast<DWORD>(std::size(buffer)),
-                                         nullptr);
-    if (written == 0)
-    {
-        return std::format(L"HRESULT 0x{:08X}", static_cast<unsigned long>(hr));
-    }
-
-    std::wstring result(buffer, written);
-    while (! result.empty())
-    {
-        const wchar_t ch = result.back();
-        if (ch != L'\r' && ch != L'\n' && ch != L' ' && ch != L'\t')
-        {
-            break;
-        }
-        result.pop_back();
-    }
-    if (result.empty())
-    {
-        return std::format(L"HRESULT 0x{:08X}", static_cast<unsigned long>(hr));
-    }
-
-    return result;
+    return FormatHResultMessage(hr);
 }
 
 [[nodiscard]] UINT OperationStringId(FileSystemOperation operation) noexcept
@@ -95,6 +67,7 @@ int DipsToPixels(int dip, UINT dpi) noexcept
 struct IssuesRow
 {
     FolderWindow::FileOperationState::DiagnosticSeverity severity = FolderWindow::FileOperationState::DiagnosticSeverity::Warning;
+    uint64_t stableId                                             = 0;
     uint64_t taskId                                               = 0;
     std::wstring timeText;
     std::wstring taskText;
@@ -117,29 +90,187 @@ struct IssuesRow
 
     for (size_t i = 0; i < lhs.size(); ++i)
     {
-        if (lhs[i].severity != rhs[i].severity || lhs[i].taskId != rhs[i].taskId || lhs[i].timeText != rhs[i].timeText ||
-            lhs[i].statusText != rhs[i].statusText || lhs[i].statusTextDetail != rhs[i].statusTextDetail || lhs[i].categoryText != rhs[i].categoryText ||
-            lhs[i].messageText != rhs[i].messageText || lhs[i].sourcePathText != rhs[i].sourcePathText ||
-            lhs[i].destinationPathText != rhs[i].destinationPathText)
+        if (lhs[i].stableId != rhs[i].stableId || lhs[i].statusText != rhs[i].statusText || lhs[i].messageText != rhs[i].messageText)
         {
             return false;
         }
     }
-
     return true;
 }
 
-[[nodiscard]] D2D1::ColorF RainbowRowColor(const AppTheme& theme, const IssuesRow& row) noexcept
+[[nodiscard]] ThemePalette MakeDxPalette(const AppTheme& theme) noexcept
 {
-    const std::wstring_view seed = ! row.messageText.empty() ? std::wstring_view(row.messageText) : std::wstring_view(row.categoryText);
-    const uint32_t hash          = StableHash32(seed);
-    const float hue              = static_cast<float>((hash + static_cast<uint32_t>(row.taskId & 0xFFFFu)) % 360u);
-    const float saturation       = theme.dark ? 0.35f : 0.28f;
-    const float value            = theme.dark ? 0.34f : 0.96f;
-    return ColorFromHSV(hue, saturation, value, 1.0f);
+    const auto mix = [](const D2D1_COLOR_F& a, const D2D1_COLOR_F& b, float t) noexcept
+    {
+        const float clamped = std::clamp(t, 0.0f, 1.0f);
+        return D2D1::ColorF(a.r + ((b.r - a.r) * clamped), a.g + ((b.g - a.g) * clamped), a.b + ((b.b - a.b) * clamped), a.a + ((b.a - a.a) * clamped));
+    };
+
+    ThemePalette palette          = RedSalamander::DxUi::MakeDefaultThemePalette(theme.dark);
+    palette.dark                  = theme.dark;
+    palette.highContrast          = theme.highContrast;
+    palette.rainbowMode           = theme.menu.rainbowMode;
+    palette.accent                = theme.accent;
+    palette.windowBackground      = ColorFromCOLORREF(theme.windowBackground);
+    palette.surfaceBackground     = theme.folderView.backgroundColor;
+    palette.headerBackground      = ColorFromCOLORREF(theme.menu.background);
+    palette.headerHovered         = mix(palette.headerBackground, palette.accent, theme.dark ? 0.22f : 0.10f);
+    palette.headerPressed         = mix(palette.headerBackground, palette.accent, theme.dark ? 0.32f : 0.18f);
+    palette.border                = ColorFromCOLORREF(theme.menu.border);
+    palette.gridLine              = theme.folderView.gridLines;
+    palette.text                  = theme.folderView.textNormal;
+    palette.subduedText           = ColorFromCOLORREF(theme.menu.shortcutText);
+    palette.selectionFill         = ColorFromCOLORREF(theme.menu.selectionBg);
+    palette.selectionText         = ColorFromCOLORREF(theme.menu.selectionText);
+    palette.selectionInactiveFill = D2D1::ColorF(palette.selectionFill.r, palette.selectionFill.g, palette.selectionFill.b, theme.highContrast ? 1.0f : 0.55f);
+    palette.focusStroke           = theme.folderView.focusBorder;
+    palette.hoverFill             = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.dark ? 0.18f : 0.10f);
+    palette.buttonFill            = ColorFromCOLORREF(theme.menu.background);
+    palette.buttonBorder          = ColorFromCOLORREF(theme.menu.border);
+    palette.buttonHotFill         = palette.headerHovered;
+    palette.buttonPressedFill     = palette.headerPressed;
+    palette.inputFill             = theme.folderView.backgroundColor;
+    palette.inputBorder           = ColorFromCOLORREF(theme.menu.border);
+    palette.scrollbarTrack        = theme.fileOperations.scrollbarTrack;
+    palette.scrollbarThumb        = theme.fileOperations.scrollbarThumb;
+    palette.scrollbarThumbHot =
+        D2D1::ColorF(palette.scrollbarThumb.r, palette.scrollbarThumb.g, palette.scrollbarThumb.b, std::min(1.0f, palette.scrollbarThumb.a + 0.10f));
+    palette.infoFill    = theme.folderView.infoBackground;
+    palette.infoText    = theme.folderView.infoText;
+    palette.warningFill = theme.folderView.warningBackground;
+    palette.warningText = theme.folderView.warningText;
+    palette.errorFill   = theme.folderView.errorBackground;
+    palette.errorText   = theme.folderView.errorText;
+    return palette;
 }
 
-class FileOperationsIssuesPaneState final
+class IssuesGridModel final : public IDxGridModel
+{
+public:
+    explicit IssuesGridModel(const AppTheme& theme) : _theme(&theme)
+    {
+        _columns = {
+            {L"time", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_TIME), 170.0f, 120.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
+            {L"task", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_TASK), 70.0f, 56.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
+            {L"operation", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_OPERATION), 90.0f, 80.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
+            {L"severity", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_SEVERITY), 86.0f, 72.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
+            {L"hresult", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_HRESULT), 104.0f, 100.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
+            {L"status", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_STATUS_TEXT), 220.0f, 120.0f, RedSalamander::DxUi::GridColumnKind::Text, true, true},
+            {L"category", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_CATEGORY), 140.0f, 100.0f, RedSalamander::DxUi::GridColumnKind::Text, true, true},
+            {L"message", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_MESSAGE), 300.0f, 140.0f, RedSalamander::DxUi::GridColumnKind::Text, true, true},
+            {L"source", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_SOURCE), 300.0f, 160.0f, RedSalamander::DxUi::GridColumnKind::Text, true, true},
+            {L"destination",
+             LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_DESTINATION),
+             300.0f,
+             160.0f,
+             RedSalamander::DxUi::GridColumnKind::Text,
+             true,
+             true},
+        };
+    }
+
+    void SetRows(const std::vector<IssuesRow>* rows) noexcept
+    {
+        _rows = rows;
+    }
+
+    [[nodiscard]] size_t GetRowCount() const noexcept override
+    {
+        return _rows ? _rows->size() : 0u;
+    }
+
+    [[nodiscard]] size_t GetColumnCount() const noexcept override
+    {
+        return _columns.size();
+    }
+
+    [[nodiscard]] GridColumnDesc GetColumn(size_t columnIndex) const override
+    {
+        return _columns.at(columnIndex);
+    }
+
+    void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
+    {
+        if (! _rows || rowIndex >= _rows->size())
+        {
+            outCell = {};
+            return;
+        }
+
+        const IssuesRow& row = _rows->at(rowIndex);
+        switch (columnIndex)
+        {
+            case 0: outCell.text = row.timeText; break;
+            case 1: outCell.text = row.taskText; break;
+            case 2: outCell.text = row.operationText; break;
+            case 3: outCell.text = row.severityText; break;
+            case 4: outCell.text = row.statusText; break;
+            case 5: outCell.text = row.statusTextDetail; break;
+            case 6: outCell.text = row.categoryText; break;
+            case 7:
+                outCell.text      = row.messageText;
+                outCell.multiline = true;
+                break;
+            case 8:
+                outCell.text      = row.sourcePathText;
+                outCell.multiline = true;
+                break;
+            case 9:
+                outCell.text      = row.destinationPathText;
+                outCell.multiline = true;
+                break;
+            default: outCell = {}; break;
+        }
+    }
+
+    [[nodiscard]] GridRowStyle GetRowStyle(size_t rowIndex) const override
+    {
+        GridRowStyle style{};
+        if (! _rows || rowIndex >= _rows->size())
+        {
+            return style;
+        }
+
+        const IssuesRow& row = _rows->at(rowIndex);
+        if (_theme && _theme->menu.rainbowMode)
+        {
+            style.rainbowSeed = ! row.messageText.empty() ? row.messageText : row.categoryText;
+            return style;
+        }
+
+        style.tone = (row.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error) ? GridRowTone::Error : GridRowTone::Warning;
+        return style;
+    }
+
+    [[nodiscard]] uint64_t GetStableRowId(size_t rowIndex) const noexcept override
+    {
+        return (_rows && rowIndex < _rows->size()) ? _rows->at(rowIndex).stableId : 0u;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+    {
+        if (! _rows)
+        {
+            return std::nullopt;
+        }
+
+        for (size_t rowIndex = 0; rowIndex < _rows->size(); ++rowIndex)
+        {
+            if (_rows->at(rowIndex).stableId == rowId)
+            {
+                return rowIndex;
+            }
+        }
+        return std::nullopt;
+    }
+
+private:
+    const AppTheme* _theme              = nullptr;
+    const std::vector<IssuesRow>* _rows = nullptr;
+    std::vector<GridColumnDesc> _columns;
+};
+
+class FileOperationsIssuesPaneState final : public IDxGridDelegate
 {
 public:
     FileOperationsIssuesPaneState()                                                = default;
@@ -155,19 +286,36 @@ public:
     static LRESULT CALLBACK WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
+    void OnGridSortRequested(const GridSortSpec& sortSpec) override
+    {
+        _sortSpec = sortSpec;
+        SortRows();
+        if (_grid)
+        {
+            _grid->SetSortSpec(_sortSpec);
+            _grid->NotifyDataChanged();
+        }
+        SaveViewState();
+        _dxHost.Invalidate();
+    }
+
+#ifdef ENABLE_TESTS
+    void FillSelfTestSnapshot(FileOperationsIssuesPane::SelfTestSnapshot& outSnapshot) const noexcept;
+    [[nodiscard]] bool SelfTestHitTestGridPoint(D2D1_POINT_2F pointDip, FileOperationsIssuesPane::SelfTestGridHit& outHit) const noexcept;
+    [[nodiscard]] bool SelfTestSelectTask(uint64_t taskId) noexcept;
+    [[nodiscard]] bool SelfTestFocusGrid() noexcept;
+    [[nodiscard]] bool SelfTestRefresh(bool force) noexcept;
+    [[nodiscard]] bool SelfTestScrollByWheelDetents(int detents) noexcept;
+#endif
+
 private:
-    void ApplyTheme(HWND hwnd) noexcept;
-    void ApplyColumnLayout() noexcept;
-    void EnsureColumns() noexcept;
-    void RefreshRows(bool force) noexcept;
-    std::vector<IssuesRow> BuildRows() const;
-    void RebuildList() noexcept;
+    [[nodiscard]] bool HasLiveOwnerState() const noexcept
+    {
+        return fileOps && ! hostLifetime.expired();
+    }
 
     LRESULT OnCreate(HWND hwnd) noexcept;
-    LRESULT OnEraseBkgnd() noexcept;
-    LRESULT OnPaint(HWND hwnd) noexcept;
     LRESULT OnSize(HWND hwnd, UINT width, UINT height) noexcept;
-    LRESULT OnNotify(NMHDR* header) noexcept;
     LRESULT OnTimer(HWND hwnd, UINT_PTR timerId) noexcept;
     LRESULT OnMove(HWND hwnd) noexcept;
     LRESULT OnExitSizeMove(HWND hwnd) noexcept;
@@ -177,13 +325,31 @@ private:
     LRESULT OnThemeChanged(HWND hwnd) noexcept;
     LRESULT OnNcDestroy(HWND hwnd) noexcept;
 
+    void ApplyTheme(HWND hwnd) noexcept;
+    void RefreshRows(bool force) noexcept;
+    std::vector<IssuesRow> BuildRows() const;
+    void Layout() noexcept;
+    void SortRows() noexcept;
+    void ApplySavedViewState() noexcept;
+    void SaveViewState() noexcept;
+#ifdef ENABLE_TESTS
+    [[nodiscard]] std::optional<size_t> FindRowIndexForTask(uint64_t taskId) const noexcept;
+#endif
+
     UINT _dpi                  = USER_DEFAULT_SCREEN_DPI;
     bool _inThemeChange        = false;
     bool _inTitleBarThemeApply = false;
+    size_t _dispatchDepth      = 0u;
+    bool _deletePending        = false;
     AppTheme _theme{};
-    wil::unique_hbrush _backgroundBrush;
-    wil::unique_hwnd _list;
+    WindowHost _dxHost;
+    std::unique_ptr<Panel> _rootStorage;
+    Panel* _root = nullptr;
+    Grid* _grid  = nullptr;
+    IssuesGridModel _model{_theme};
+    GridSortSpec _sortSpec{};
     std::vector<IssuesRow> _rows;
+    uint64_t _refreshGeneration = 0;
 };
 
 ATOM RegisterFileOperationsIssuesPaneClass(HINSTANCE instance)
@@ -208,7 +374,6 @@ ATOM RegisterFileOperationsIssuesPaneClass(HINSTANCE instance)
     atom = RegisterClassExW(&wc);
     return atom;
 }
-
 } // namespace
 
 void FileOperationsIssuesPaneState::ApplyTheme(HWND hwnd) noexcept
@@ -224,89 +389,12 @@ void FileOperationsIssuesPaneState::ApplyTheme(HWND hwnd) noexcept
         if (! _inTitleBarThemeApply)
         {
             _inTitleBarThemeApply = true;
-            ApplyTitleBarTheme(hwnd, _theme, GetActiveWindow() == hwnd);
+            ApplyWindowChromeTheme(hwnd, _theme, WindowBackdropTarget::Tool, GetActiveWindow() == hwnd);
             _inTitleBarThemeApply = false;
         }
     }
 
-    _backgroundBrush.reset(CreateSolidBrush(_theme.windowBackground));
-
-    if (_list)
-    {
-        ThemedControls::ApplyThemeToListView(_list.get(), _theme);
-        InvalidateRect(_list.get(), nullptr, TRUE);
-    }
-    InvalidateRect(hwnd, nullptr, TRUE);
-}
-
-void FileOperationsIssuesPaneState::ApplyColumnLayout() noexcept
-{
-    if (! _list)
-    {
-        return;
-    }
-
-    const int kWidthsDip[] = {
-        170,
-        70,
-        80,
-        80,
-        100,
-        220,
-        130,
-        280,
-        300,
-        300,
-    };
-
-    for (int i = 0; i < static_cast<int>(std::size(kWidthsDip)); ++i)
-    {
-        ListView_SetColumnWidth(_list.get(), i, DipsToPixels(kWidthsDip[i], _dpi));
-    }
-}
-
-void FileOperationsIssuesPaneState::EnsureColumns() noexcept
-{
-    if (! _list)
-    {
-        return;
-    }
-
-    ListView_DeleteAllItems(_list.get());
-
-    while (ListView_DeleteColumn(_list.get(), 0) != FALSE)
-    {
-    }
-
-    struct ColumnDef
-    {
-        UINT titleId;
-        int widthDip;
-    };
-
-    static constexpr ColumnDef kColumns[] = {
-        {IDS_FILEOPS_ISSUES_COL_TIME, 170},
-        {IDS_FILEOPS_ISSUES_COL_TASK, 70},
-        {IDS_FILEOPS_ISSUES_COL_OPERATION, 80},
-        {IDS_FILEOPS_ISSUES_COL_SEVERITY, 80},
-        {IDS_FILEOPS_ISSUES_COL_HRESULT, 100},
-        {IDS_FILEOPS_ISSUES_COL_STATUS_TEXT, 220},
-        {IDS_FILEOPS_ISSUES_COL_CATEGORY, 130},
-        {IDS_FILEOPS_ISSUES_COL_MESSAGE, 280},
-        {IDS_FILEOPS_ISSUES_COL_SOURCE, 300},
-        {IDS_FILEOPS_ISSUES_COL_DESTINATION, 300},
-    };
-
-    for (int i = 0; i < static_cast<int>(std::size(kColumns)); ++i)
-    {
-        std::wstring title = LoadStringResource(nullptr, kColumns[i].titleId);
-        LVCOLUMNW column{};
-        column.mask    = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
-        column.fmt     = LVCFMT_LEFT;
-        column.cx      = DipsToPixels(kColumns[i].widthDip, _dpi);
-        column.pszText = title.empty() ? const_cast<wchar_t*>(L"") : title.data();
-        ListView_InsertColumn(_list.get(), i, &column);
-    }
+    _dxHost.SetTheme(MakeDxPalette(_theme));
 }
 
 std::vector<IssuesRow> FileOperationsIssuesPaneState::BuildRows() const
@@ -317,78 +405,192 @@ std::vector<IssuesRow> FileOperationsIssuesPaneState::BuildRows() const
         return rows;
     }
 
+    std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry> liveDiagnostics;
+    fileOps->CollectDiagnostics(liveDiagnostics);
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completed;
     fileOps->CollectCompletedTasks(completed);
 
+    std::unordered_set<std::wstring> seenKeys;
+    const auto appendIssue = [&](const FolderWindow::FileOperationState::TaskDiagnosticEntry& issue) noexcept
+    {
+        if (issue.severity != FolderWindow::FileOperationState::DiagnosticSeverity::Warning &&
+            issue.severity != FolderWindow::FileOperationState::DiagnosticSeverity::Error)
+        {
+            return;
+        }
+
+        std::wstring key = std::format(L"{}|{}|{}|{}|{}|{}|{}|{}",
+                                       static_cast<unsigned long long>(issue.taskId),
+                                       static_cast<unsigned>(issue.localTime.wMilliseconds),
+                                       static_cast<unsigned long>(issue.status),
+                                       static_cast<unsigned>(static_cast<unsigned char>(issue.severity)),
+                                       issue.category,
+                                       issue.message,
+                                       issue.sourcePath,
+                                       issue.destinationPath);
+        if (! seenKeys.insert(key).second)
+        {
+            return;
+        }
+
+        const uint64_t stableId = (static_cast<uint64_t>(StableHash32(key)) << 32u) ^ static_cast<uint64_t>(issue.taskId);
+
+        IssuesRow row{};
+        row.severity      = issue.severity;
+        row.stableId      = stableId;
+        row.taskId        = issue.taskId;
+        row.timeText      = FormatTimeText(issue.localTime);
+        row.taskText      = std::to_wstring(static_cast<unsigned long long>(issue.taskId));
+        row.operationText = LoadStringResource(nullptr, OperationStringId(issue.operation));
+        row.severityText  = LoadStringResource(
+            nullptr, issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error ? IDS_CAPTION_ERROR : IDS_CAPTION_WARNING);
+        row.statusText          = std::format(L"0x{:08X}", static_cast<unsigned long>(issue.status));
+        row.statusTextDetail    = FormatStatusText(issue.status);
+        row.categoryText        = issue.category.empty() ? L"-" : issue.category;
+        row.messageText         = issue.message.empty() ? L"-" : issue.message;
+        row.sourcePathText      = issue.sourcePath.empty() ? L"-" : issue.sourcePath;
+        row.destinationPathText = issue.destinationPath.empty() ? L"-" : issue.destinationPath;
+        rows.push_back(std::move(row));
+    };
+
+    for (const auto& issue : liveDiagnostics)
+    {
+        appendIssue(issue);
+    }
     for (const auto& task : completed)
     {
-        const std::wstring operationText = LoadStringResource(nullptr, OperationStringId(task.operation));
-
         for (const auto& issue : task.issueDiagnostics)
         {
-            if (issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Info)
-            {
-                continue;
-            }
-
-            IssuesRow row{};
-            row.severity      = issue.severity;
-            row.taskId        = issue.taskId;
-            row.timeText      = FormatTimeText(issue.localTime);
-            row.taskText      = std::to_wstring(static_cast<unsigned long long>(issue.taskId));
-            row.operationText = operationText;
-            row.severityText  = LoadStringResource(
-                nullptr, issue.severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error ? IDS_CAPTION_ERROR : IDS_CAPTION_WARNING);
-            row.statusText          = std::format(L"0x{:08X}", static_cast<unsigned long>(issue.status));
-            row.statusTextDetail    = FormatStatusText(issue.status);
-            row.categoryText        = issue.category.empty() ? L"-" : issue.category;
-            row.messageText         = issue.message.empty() ? L"-" : issue.message;
-            row.sourcePathText      = issue.sourcePath.empty() ? L"-" : issue.sourcePath;
-            row.destinationPathText = issue.destinationPath.empty() ? L"-" : issue.destinationPath;
-            rows.push_back(std::move(row));
+            appendIssue(issue);
         }
     }
-
     return rows;
 }
 
-void FileOperationsIssuesPaneState::RebuildList() noexcept
+void FileOperationsIssuesPaneState::ApplySavedViewState() noexcept
 {
-    if (! _list)
+    if (! fileOps || ! _grid)
     {
         return;
     }
 
-    SendMessageW(_list.get(), WM_SETREDRAW, FALSE, 0);
-    ListView_DeleteAllItems(_list.get());
-
-    for (size_t i = 0; i < _rows.size(); ++i)
+    std::wstring savedSortColumnId;
+    bool savedSortDescending = false;
+    std::vector<Common::Settings::GridColumnLayoutEntry> savedGridLayout;
+    if (! fileOps->TryGetIssuesPaneViewState(savedSortColumnId, savedSortDescending, savedGridLayout))
     {
-        LVITEMW item{};
-        item.mask          = LVIF_TEXT | LVIF_PARAM;
-        item.iItem         = static_cast<int>(i);
-        item.iSubItem      = 0;
-        item.pszText       = const_cast<wchar_t*>(_rows[i].timeText.c_str());
-        item.lParam        = static_cast<LPARAM>(i);
-        const int rowIndex = ListView_InsertItem(_list.get(), &item);
-        if (rowIndex < 0)
+        return;
+    }
+
+    if (! savedGridLayout.empty())
+    {
+        std::vector<RedSalamander::DxUi::GridColumnLayoutEntry> layout;
+        layout.reserve(savedGridLayout.size());
+        for (const auto& entry : savedGridLayout)
+        {
+            if (entry.columnId.empty())
+            {
+                continue;
+            }
+
+            layout.push_back(RedSalamander::DxUi::GridColumnLayoutEntry{
+                .columnId     = entry.columnId,
+                .displayIndex = static_cast<size_t>(entry.displayIndex),
+                .widthDip     = entry.widthDip,
+            });
+        }
+
+        if (! layout.empty())
+        {
+            _grid->ApplyColumnLayout(layout);
+        }
+    }
+
+    if (! savedSortColumnId.empty())
+    {
+        for (size_t columnIndex = 0; columnIndex < _model.GetColumnCount(); ++columnIndex)
+        {
+            if (_model.GetColumn(columnIndex).id == savedSortColumnId)
+            {
+                _sortSpec.columnIndex = columnIndex;
+                _sortSpec.direction   = savedSortDescending ? SortDirection::Descending : SortDirection::Ascending;
+                _grid->SetSortSpec(_sortSpec);
+                break;
+            }
+        }
+    }
+}
+
+void FileOperationsIssuesPaneState::SaveViewState() noexcept
+{
+    if (! fileOps || ! _grid)
+    {
+        return;
+    }
+
+    std::wstring sortColumnId;
+    if (_sortSpec.direction != SortDirection::None && _sortSpec.columnIndex < _model.GetColumnCount())
+    {
+        sortColumnId = _model.GetColumn(_sortSpec.columnIndex).id;
+    }
+
+    std::vector<Common::Settings::GridColumnLayoutEntry> savedGridLayout;
+    const auto capturedLayout = _grid->CaptureColumnLayout();
+    savedGridLayout.reserve(capturedLayout.size());
+    for (const auto& entry : capturedLayout)
+    {
+        if (entry.columnId.empty())
         {
             continue;
         }
 
-        ListView_SetItemText(_list.get(), rowIndex, 1, const_cast<wchar_t*>(_rows[i].taskText.c_str()));
-        ListView_SetItemText(_list.get(), rowIndex, 2, const_cast<wchar_t*>(_rows[i].operationText.c_str()));
-        ListView_SetItemText(_list.get(), rowIndex, 3, const_cast<wchar_t*>(_rows[i].severityText.c_str()));
-        ListView_SetItemText(_list.get(), rowIndex, 4, const_cast<wchar_t*>(_rows[i].statusText.c_str()));
-        ListView_SetItemText(_list.get(), rowIndex, 5, const_cast<wchar_t*>(_rows[i].statusTextDetail.c_str()));
-        ListView_SetItemText(_list.get(), rowIndex, 6, const_cast<wchar_t*>(_rows[i].categoryText.c_str()));
-        ListView_SetItemText(_list.get(), rowIndex, 7, const_cast<wchar_t*>(_rows[i].messageText.c_str()));
-        ListView_SetItemText(_list.get(), rowIndex, 8, const_cast<wchar_t*>(_rows[i].sourcePathText.c_str()));
-        ListView_SetItemText(_list.get(), rowIndex, 9, const_cast<wchar_t*>(_rows[i].destinationPathText.c_str()));
+        savedGridLayout.push_back(Common::Settings::GridColumnLayoutEntry{
+            .columnId     = entry.columnId,
+            .displayIndex = static_cast<uint32_t>(entry.displayIndex),
+            .widthDip     = entry.widthDip,
+        });
     }
 
-    SendMessageW(_list.get(), WM_SETREDRAW, TRUE, 0);
-    InvalidateRect(_list.get(), nullptr, TRUE);
+    fileOps->SaveIssuesPaneViewState(sortColumnId, _sortSpec.direction == SortDirection::Descending, savedGridLayout);
+}
+
+void FileOperationsIssuesPaneState::SortRows() noexcept
+{
+    if (_sortSpec.direction == SortDirection::None)
+    {
+        std::sort(_rows.begin(), _rows.end(), [](const IssuesRow& lhs, const IssuesRow& rhs) noexcept { return lhs.stableId < rhs.stableId; });
+        return;
+    }
+
+    const auto getColumnText = [&](const IssuesRow& row) noexcept -> std::wstring_view
+    {
+        switch (_sortSpec.columnIndex)
+        {
+            case 0: return row.timeText;
+            case 1: return row.taskText;
+            case 2: return row.operationText;
+            case 3: return row.severityText;
+            case 4: return row.statusText;
+            case 5: return row.statusTextDetail;
+            case 6: return row.categoryText;
+            case 7: return row.messageText;
+            case 8: return row.sourcePathText;
+            case 9: return row.destinationPathText;
+            default: return row.messageText;
+        }
+    };
+
+    std::sort(_rows.begin(),
+              _rows.end(),
+              [&](const IssuesRow& lhs, const IssuesRow& rhs) noexcept
+    {
+        const int cmp = OrdinalString::Compare(getColumnText(lhs), getColumnText(rhs), true);
+        if (cmp == 0)
+        {
+            return lhs.stableId < rhs.stableId;
+        }
+        return _sortSpec.direction == SortDirection::Ascending ? (cmp < 0) : (cmp > 0);
+    });
 }
 
 void FileOperationsIssuesPaneState::RefreshRows(bool force) noexcept
@@ -400,197 +602,217 @@ void FileOperationsIssuesPaneState::RefreshRows(bool force) noexcept
     }
 
     _rows = std::move(rows);
-    RebuildList();
+    SortRows();
+    _model.SetRows(&_rows);
+    ++_refreshGeneration;
+    if (_grid)
+    {
+        _grid->NotifyDataChanged();
+    }
+    _dxHost.Invalidate();
+}
+
+#ifdef ENABLE_TESTS
+std::optional<size_t> FileOperationsIssuesPaneState::FindRowIndexForTask(uint64_t taskId) const noexcept
+{
+    for (size_t rowIndex = 0; rowIndex < _rows.size(); ++rowIndex)
+    {
+        if (_rows[rowIndex].taskId == taskId)
+        {
+            return rowIndex;
+        }
+    }
+
+    return std::nullopt;
+}
+
+void FileOperationsIssuesPaneState::FillSelfTestSnapshot(FileOperationsIssuesPane::SelfTestSnapshot& outSnapshot) const noexcept
+{
+    outSnapshot                      = {};
+    outSnapshot.rowCount             = _rows.size();
+    outSnapshot.refreshGeneration    = _refreshGeneration;
+    outSnapshot.visibleWork          = _grid ? _grid->GetVisibleWorkMetrics() : RedSalamander::DxUi::GridVisibleWorkMetrics{};
+    outSnapshot.themeDark            = _theme.dark;
+    outSnapshot.themeHighContrast    = _theme.highContrast;
+    outSnapshot.themeRainbow         = _theme.menu.rainbowMode;
+    outSnapshot.dxRenderCount        = _dxHost.DebugGetRenderCount();
+    outSnapshot.dxResizeCount        = _dxHost.DebugGetResizeCount();
+    outSnapshot.dxResizeFailureCount = _dxHost.DebugGetResizeFailureCount();
+    outSnapshot.gridFocused          = _dxHost.GetFocusControl() == _grid;
+    if (! _rows.empty())
+    {
+        outSnapshot.firstVisibleTaskId = _rows.front().taskId;
+    }
+    outSnapshot.taskHeaderRect      = _grid ? _grid->GetVisibleColumnHeaderRect(1u).value_or(D2D1::RectF()) : D2D1::RectF();
+    outSnapshot.operationHeaderRect = _grid ? _grid->GetVisibleColumnHeaderRect(2u).value_or(D2D1::RectF()) : D2D1::RectF();
+    outSnapshot.messageHeaderRect   = _grid ? _grid->GetVisibleColumnHeaderRect(7u).value_or(D2D1::RectF()) : D2D1::RectF();
+    outSnapshot.hasActiveSort       = _sortSpec.direction != SortDirection::None;
+    outSnapshot.sortColumnIndex     = _sortSpec.columnIndex;
+    outSnapshot.sortDescending      = _sortSpec.direction == SortDirection::Descending;
+
+    if (! _grid)
+    {
+        return;
+    }
+
+    const auto selection       = _grid->GetSelectionModel().GetOrderedSelection();
+    outSnapshot.selectionCount = selection.size();
+    if (selection.empty())
+    {
+        return;
+    }
+
+    outSnapshot.primarySelectedRowId     = selection.front();
+    const std::optional<size_t> rowIndex = _model.FindRowByStableId(selection.front());
+    if (! rowIndex.has_value() || rowIndex.value() >= _rows.size())
+    {
+        return;
+    }
+
+    outSnapshot.primarySelectedTaskId = _rows[rowIndex.value()].taskId;
+    RedSalamander::DxUi::GridDebugRowVisualState rowVisualState{};
+    if (_grid->DebugGetRowVisualState(_dxHost.GetTheme(), rowIndex.value(), rowVisualState))
+    {
+        outSnapshot.selectedIssueRowFillArgb    = rowVisualState.fillArgb;
+        outSnapshot.selectedIssueRowTextArgb    = rowVisualState.textArgb;
+        outSnapshot.selectedIssueRowUsesRainbow = rowVisualState.usesRainbow;
+    }
+}
+
+bool FileOperationsIssuesPaneState::SelfTestHitTestGridPoint(D2D1_POINT_2F pointDip, FileOperationsIssuesPane::SelfTestGridHit& outHit) const noexcept
+{
+    outHit = {};
+    if (! _grid)
+    {
+        return false;
+    }
+
+    Grid::GridDebugHitInfo hit{};
+    if (! _grid->DebugHitTestPoint(RedSalamander::DxUi::MakePointDip(pointDip), hit))
+    {
+        return false;
+    }
+
+    outHit.zone             = hit.zone;
+    outHit.rowIndex         = hit.rowIndex;
+    outHit.groupIndex       = hit.groupIndex;
+    outHit.columnIndex      = hit.columnIndex;
+    outHit.rectDip          = hit.rectDip;
+    outHit.onScrollbarThumb = hit.onScrollbarThumb;
+    outHit.isHeaderResize   = hit.isHeaderResize;
+    return true;
+}
+
+bool FileOperationsIssuesPaneState::SelfTestSelectTask(uint64_t taskId) noexcept
+{
+    if (! _grid)
+    {
+        return false;
+    }
+
+    const std::optional<size_t> rowIndex = FindRowIndexForTask(taskId);
+    if (! rowIndex.has_value())
+    {
+        return false;
+    }
+
+    _grid->GetSelectionModel().SetSingle(_rows[rowIndex.value()].stableId);
+    _grid->NotifyDataChanged();
+    _dxHost.Invalidate();
+    return true;
+}
+
+bool FileOperationsIssuesPaneState::SelfTestFocusGrid() noexcept
+{
+    if (! _grid)
+    {
+        return false;
+    }
+
+    _dxHost.SetFocusControl(_grid);
+    return _dxHost.GetFocusControl() == _grid;
+}
+
+bool FileOperationsIssuesPaneState::SelfTestRefresh(bool force) noexcept
+{
+    RefreshRows(force);
+    return true;
+}
+
+bool FileOperationsIssuesPaneState::SelfTestScrollByWheelDetents(int detents) noexcept
+{
+    if (! _grid || detents == 0)
+    {
+        return detents == 0;
+    }
+
+    _dxHost.SetFocusControl(_grid);
+    const float wheelDelta = detents > 0 ? static_cast<float>(WHEEL_DELTA) : -static_cast<float>(WHEEL_DELTA);
+    const int stepCount    = detents > 0 ? detents : -detents;
+    for (int remaining = stepCount; remaining > 0; --remaining)
+    {
+        if (! _grid->OnMouseWheel(_dxHost, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+#endif
+
+void FileOperationsIssuesPaneState::Layout() noexcept
+{
+    if (! _root || ! _grid || ! _dxHost.GetHwnd())
+    {
+        return;
+    }
+
+    RECT client{};
+    GetClientRect(_dxHost.GetHwnd(), &client);
+    const float widthDip  = _dxHost.PixelsToDip(static_cast<float>(std::max(0L, client.right - client.left)));
+    const float heightDip = _dxHost.PixelsToDip(static_cast<float>(std::max(0L, client.bottom - client.top)));
+    _root->SetBounds(D2D1::RectF(0.0f, 0.0f, widthDip, heightDip));
+    const float padding = _dxHost.PixelsToDip(static_cast<float>(DipsToPixels(6, _dpi)));
+    _grid->SetBounds(D2D1::RectF(padding, padding, std::max(padding + 1.0f, widthDip - padding), std::max(padding + 1.0f, heightDip - padding)));
 }
 
 LRESULT FileOperationsIssuesPaneState::OnCreate(HWND hwnd) noexcept
 {
     _dpi = GetDpiForWindow(hwnd);
-
-    HWND list = CreateWindowExW(0,
-                                WC_LISTVIEWW,
-                                nullptr,
-                                WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_SINGLESEL,
-                                0,
-                                0,
-                                1,
-                                1,
-                                hwnd,
-                                reinterpret_cast<HMENU>(static_cast<INT_PTR>(kIssuesListControlId)),
-                                GetModuleHandleW(nullptr),
-                                nullptr);
-    if (! list)
+    if (! _dxHost.Attach(hwnd))
     {
         return -1;
     }
 
-    _list.reset(list);
-    ListView_SetExtendedListViewStyle(_list.get(), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP | LVS_EX_INFOTIP);
+    _rootStorage = std::make_unique<Panel>();
+    _root        = _rootStorage.get();
+    _grid        = _root->AddChild<Grid>();
+    _grid->SetDelegate(this);
+    _grid->SetModel(&_model);
+    _grid->SetHeaderHeightDip(30.0f);
+    _grid->SetRowHeightDip(34.0f);
+    _grid->SetLineClamp(2u);
+    _dxHost.SetRoot(std::move(_rootStorage));
+    ApplySavedViewState();
 
-    EnsureColumns();
-    ApplyColumnLayout();
     ApplyTheme(hwnd);
-
-    RECT rc{};
-    GetClientRect(hwnd, &rc);
-    OnSize(hwnd, static_cast<UINT>(std::max(0L, rc.right - rc.left)), static_cast<UINT>(std::max(0L, rc.bottom - rc.top)));
-
+    Layout();
     RefreshRows(true);
     SetTimer(hwnd, kRefreshTimerId, kRefreshTimerIntervalMs, nullptr);
     return 0;
 }
 
-LRESULT FileOperationsIssuesPaneState::OnEraseBkgnd() noexcept
-{
-    return 1;
-}
-
-LRESULT FileOperationsIssuesPaneState::OnPaint(HWND hwnd) noexcept
-{
-    if (! hwnd)
-    {
-        return 0;
-    }
-
-    PAINTSTRUCT ps{};
-    wil::unique_hdc_paint hdc = wil::BeginPaint(hwnd, &ps);
-    if (! hdc)
-    {
-        return 0;
-    }
-
-    HBRUSH brush = _backgroundBrush ? _backgroundBrush.get() : static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH));
-    FillRect(hdc.get(), &ps.rcPaint, brush);
-    return 0;
-}
-
 LRESULT FileOperationsIssuesPaneState::OnSize(HWND hwnd, UINT width, UINT height) noexcept
 {
-    if (_list)
-    {
-        const int padding = DipsToPixels(6, _dpi);
-        const int x       = padding;
-        const int y       = padding;
-        const int w       = std::max(1, static_cast<int>(width) - (padding * 2));
-        const int h       = std::max(1, static_cast<int>(height) - (padding * 2));
-        MoveWindow(_list.get(), x, y, w, h, TRUE);
-    }
-
-    if (hwnd && fileOps && hostLifetime.lock())
+    static_cast<void>(width);
+    static_cast<void>(height);
+    Layout();
+    if (hwnd && HasLiveOwnerState())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
-
     return 0;
-}
-
-LRESULT FileOperationsIssuesPaneState::OnNotify(NMHDR* header) noexcept
-{
-    if (! header || ! _list || header->hwndFrom != _list.get() || header->idFrom != kIssuesListControlId || header->code != NM_CUSTOMDRAW)
-    {
-        return 0;
-    }
-
-    if (_theme.highContrast)
-    {
-        return CDRF_DODEFAULT;
-    }
-
-    auto* cd = reinterpret_cast<NMLVCUSTOMDRAW*>(header);
-    if (! cd)
-    {
-        return CDRF_DODEFAULT;
-    }
-
-    if (cd->nmcd.dwDrawStage == CDDS_PREPAINT)
-    {
-        return CDRF_NOTIFYITEMDRAW;
-    }
-
-    if (cd->nmcd.dwDrawStage == CDDS_ITEMPREPAINT)
-    {
-        const size_t index = static_cast<size_t>(cd->nmcd.dwItemSpec);
-        if (index >= _rows.size())
-        {
-            return CDRF_DODEFAULT;
-        }
-
-        const bool selected = (cd->nmcd.uItemState & CDIS_SELECTED) != 0;
-        if (selected)
-        {
-            cd->clrText   = _theme.menu.selectionText;
-            cd->clrTextBk = _theme.menu.selectionBg;
-            return CDRF_NOTIFYPOSTPAINT;
-        }
-
-        if (_theme.menu.rainbowMode)
-        {
-            const COLORREF bg = ColorToCOLORREF(RainbowRowColor(_theme, _rows[index]));
-            cd->clrTextBk     = bg;
-            cd->clrText       = ChooseContrastingTextColor(bg);
-            return CDRF_NOTIFYPOSTPAINT;
-        }
-
-        if (_rows[index].severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error)
-        {
-            cd->clrTextBk = ColorToCOLORREF(_theme.folderView.errorBackground);
-            cd->clrText   = ColorToCOLORREF(_theme.folderView.errorText);
-            return CDRF_NOTIFYPOSTPAINT;
-        }
-
-        cd->clrTextBk = ColorToCOLORREF(_theme.folderView.warningBackground);
-        cd->clrText   = ColorToCOLORREF(_theme.folderView.warningText);
-        return CDRF_NOTIFYPOSTPAINT;
-    }
-
-    if (cd->nmcd.dwDrawStage == CDDS_ITEMPOSTPAINT)
-    {
-        const size_t index = static_cast<size_t>(cd->nmcd.dwItemSpec);
-        if (index >= _rows.size())
-        {
-            return CDRF_DODEFAULT;
-        }
-
-        const bool selected = (cd->nmcd.uItemState & CDIS_SELECTED) != 0;
-
-        COLORREF rowBg = _theme.windowBackground;
-        if (selected)
-        {
-            rowBg = _theme.menu.selectionBg;
-        }
-        else
-        {
-            if (_theme.menu.rainbowMode)
-            {
-                rowBg = ColorToCOLORREF(RainbowRowColor(_theme, _rows[index]));
-            }
-            else if (_rows[index].severity == FolderWindow::FileOperationState::DiagnosticSeverity::Error)
-            {
-                rowBg = ColorToCOLORREF(_theme.folderView.errorBackground);
-            }
-            else
-            {
-                rowBg = ColorToCOLORREF(_theme.folderView.warningBackground);
-            }
-        }
-
-        const COLORREF lineColor = ThemedControls::BlendColor(rowBg, _theme.menu.separator, 1, 6);
-
-        const RECT& rc = cd->nmcd.rc;
-        const int y    = rc.bottom - 1;
-
-        wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> pen(CreatePen(PS_SOLID, 1, lineColor));
-        if (pen)
-        {
-            auto oldPen = wil::SelectObject(cd->nmcd.hdc, pen.get());
-            MoveToEx(cd->nmcd.hdc, rc.left, y, nullptr);
-            LineTo(cd->nmcd.hdc, rc.right, y);
-        }
-
-        return CDRF_DODEFAULT;
-    }
-
-    return CDRF_DODEFAULT;
 }
 
 LRESULT FileOperationsIssuesPaneState::OnTimer(HWND hwnd, UINT_PTR timerId) noexcept
@@ -599,20 +821,18 @@ LRESULT FileOperationsIssuesPaneState::OnTimer(HWND hwnd, UINT_PTR timerId) noex
     {
         return 0;
     }
-
     if (! hostLifetime.lock())
     {
         DestroyWindow(hwnd);
         return 0;
     }
-
     RefreshRows(false);
     return 0;
 }
 
 LRESULT FileOperationsIssuesPaneState::OnMove(HWND hwnd) noexcept
 {
-    if (fileOps && hostLifetime.lock())
+    if (HasLiveOwnerState())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
@@ -621,7 +841,7 @@ LRESULT FileOperationsIssuesPaneState::OnMove(HWND hwnd) noexcept
 
 LRESULT FileOperationsIssuesPaneState::OnExitSizeMove(HWND hwnd) noexcept
 {
-    if (fileOps && hostLifetime.lock())
+    if (HasLiveOwnerState())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
@@ -635,22 +855,24 @@ LRESULT FileOperationsIssuesPaneState::OnShowWindow(HWND hwnd, BOOL visible) noe
         RefreshRows(true);
         ApplyTheme(hwnd);
     }
-
-    if (fileOps && hostLifetime.lock())
+    else if (HasLiveOwnerState())
+    {
+        SaveViewState();
+    }
+    if (HasLiveOwnerState())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
-
     return 0;
 }
 
 LRESULT FileOperationsIssuesPaneState::OnClose(HWND hwnd) noexcept
 {
-    if (fileOps && hostLifetime.lock())
+    if (HasLiveOwnerState())
     {
+        SaveViewState();
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
-
     ShowWindow(hwnd, SW_HIDE);
     return 0;
 }
@@ -658,22 +880,22 @@ LRESULT FileOperationsIssuesPaneState::OnClose(HWND hwnd) noexcept
 LRESULT FileOperationsIssuesPaneState::OnDpiChanged(HWND hwnd, UINT dpi, const RECT* suggested) noexcept
 {
     _dpi = dpi == 0 ? USER_DEFAULT_SCREEN_DPI : dpi;
-
     if (suggested)
     {
-        const int width  = static_cast<int>(std::max(0L, suggested->right - suggested->left));
-        const int height = static_cast<int>(std::max(0L, suggested->bottom - suggested->top));
-        SetWindowPos(hwnd, nullptr, suggested->left, suggested->top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
+        SetWindowPos(hwnd,
+                     nullptr,
+                     suggested->left,
+                     suggested->top,
+                     std::max(1L, suggested->right - suggested->left),
+                     std::max(1L, suggested->bottom - suggested->top),
+                     SWP_NOZORDER | SWP_NOACTIVATE);
     }
-
-    ApplyColumnLayout();
+    Layout();
     ApplyTheme(hwnd);
-
-    if (fileOps)
+    if (HasLiveOwnerState())
     {
         fileOps->SaveIssuesPanePlacement(hwnd);
     }
-
     return 0;
 }
 
@@ -683,7 +905,6 @@ LRESULT FileOperationsIssuesPaneState::OnThemeChanged(HWND hwnd) noexcept
     {
         return 0;
     }
-
     _inThemeChange = true;
     ApplyTheme(hwnd);
     _inThemeChange = false;
@@ -693,29 +914,46 @@ LRESULT FileOperationsIssuesPaneState::OnThemeChanged(HWND hwnd) noexcept
 LRESULT FileOperationsIssuesPaneState::OnNcDestroy(HWND hwnd) noexcept
 {
     KillTimer(hwnd, kRefreshTimerId);
-
-    if (fileOps && hostLifetime.lock())
+    if (HasLiveOwnerState())
     {
+        SaveViewState();
         fileOps->OnIssuesPaneDestroyed(hwnd);
     }
-
-    _rows.clear();
-    _list.reset();
-
+    _dxHost.Detach();
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-    delete this;
+    _deletePending = true;
+    if (_dispatchDepth == 0u)
+    {
+        delete this;
+    }
     return 0;
 }
 
 LRESULT FileOperationsIssuesPaneState::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
+    bool dxHandled         = false;
+    const LRESULT dxResult = _dxHost.HandleMessage(hwnd, msg, wp, lp, dxHandled);
+    if (dxHandled)
+    {
+        switch (msg)
+        {
+            case WM_LBUTTONUP:
+            case WM_RBUTTONUP:
+            case WM_MBUTTONUP:
+            case WM_CAPTURECHANGED:
+                if (HasLiveOwnerState())
+                {
+                    SaveViewState();
+                }
+                break;
+        }
+        return dxResult;
+    }
+
     switch (msg)
     {
         case WM_CREATE: return OnCreate(hwnd);
-        case WM_ERASEBKGND: return OnEraseBkgnd();
-        case WM_PAINT: return OnPaint(hwnd);
         case WM_SIZE: return OnSize(hwnd, LOWORD(lp), HIWORD(lp));
-        case WM_NOTIFY: return OnNotify(reinterpret_cast<NMHDR*>(lp));
         case WM_TIMER: return OnTimer(hwnd, wp);
         case WM_MOVE: return OnMove(hwnd);
         case WM_GETMINMAXINFO:
@@ -730,31 +968,26 @@ LRESULT FileOperationsIssuesPaneState::WndProc(HWND hwnd, UINT msg, WPARAM wp, L
         case WM_EXITSIZEMOVE: return OnExitSizeMove(hwnd);
         case WM_SHOWWINDOW: return OnShowWindow(hwnd, wp != FALSE);
         case WM_DPICHANGED: return OnDpiChanged(hwnd, static_cast<UINT>(HIWORD(wp)), reinterpret_cast<const RECT*>(lp));
-        case WM_THEMECHANGED: return OnThemeChanged(hwnd);
+        case WM_THEMECHANGED:
         case WM_SETTINGCHANGE:
         case WM_SYSCOLORCHANGE: return OnThemeChanged(hwnd);
         case WM_NCACTIVATE:
-            if (folderWindow && hostLifetime.lock())
+            if (folderWindow && hostLifetime.lock() && ! _inTitleBarThemeApply)
             {
-                if (! _inTitleBarThemeApply)
-                {
-                    _inTitleBarThemeApply = true;
-                    ApplyTitleBarTheme(hwnd, folderWindow->GetTheme(), wp != FALSE);
-                    _inTitleBarThemeApply = false;
-                }
+                _inTitleBarThemeApply = true;
+                ApplyTitleBarTheme(hwnd, folderWindow->GetTheme(), wp != FALSE);
+                _inTitleBarThemeApply = false;
             }
             return DefWindowProcW(hwnd, msg, wp, lp);
         case WM_CLOSE: return OnClose(hwnd);
         case WM_NCDESTROY: return OnNcDestroy(hwnd);
     }
-
     return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
 LRESULT CALLBACK FileOperationsIssuesPaneState::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     auto* state = reinterpret_cast<FileOperationsIssuesPaneState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-
     if (msg == WM_NCCREATE)
     {
         auto* cs = reinterpret_cast<CREATESTRUCTW*>(lp);
@@ -766,12 +999,25 @@ LRESULT CALLBACK FileOperationsIssuesPaneState::WndProcThunk(HWND hwnd, UINT msg
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
     }
 
-    if (state)
+    if (! state)
     {
-        return state->WndProc(hwnd, msg, wp, lp);
+        return DefWindowProcW(hwnd, msg, wp, lp);
     }
 
-    return DefWindowProcW(hwnd, msg, wp, lp);
+    ++state->_dispatchDepth;
+    const auto finishDispatch = wil::scope_exit([state]() noexcept
+    {
+        if (state->_dispatchDepth > 0u)
+        {
+            --state->_dispatchDepth;
+        }
+        if (state->_dispatchDepth == 0u && state->_deletePending)
+        {
+            delete state;
+        }
+    });
+
+    return state->WndProc(hwnd, msg, wp, lp);
 }
 
 HWND FileOperationsIssuesPane::Create(FolderWindow::FileOperationState* fileOps,
@@ -779,17 +1025,7 @@ HWND FileOperationsIssuesPane::Create(FolderWindow::FileOperationState* fileOps,
                                       HWND ownerWindow,
                                       std::weak_ptr<void> hostLifetime) noexcept
 {
-    if (! fileOps || ! folderWindow)
-    {
-        return nullptr;
-    }
-
-    if (hostLifetime.expired())
-    {
-        return nullptr;
-    }
-
-    if (! RegisterFileOperationsIssuesPaneClass(GetModuleHandleW(nullptr)))
+    if (! fileOps || ! folderWindow || hostLifetime.expired() || ! RegisterFileOperationsIssuesPaneClass(GetModuleHandleW(nullptr)))
     {
         return nullptr;
     }
@@ -800,20 +1036,17 @@ HWND FileOperationsIssuesPane::Create(FolderWindow::FileOperationState* fileOps,
     statePtr->hostLifetime = std::move(hostLifetime);
 
     const UINT ownerDpi = ownerWindow ? GetDpiForWindow(ownerWindow) : USER_DEFAULT_SCREEN_DPI;
-
     RECT windowRect{};
     bool startMaximized = false;
     if (! fileOps->TryGetIssuesPanePlacement(windowRect, startMaximized, ownerDpi))
     {
         const DWORD style   = WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN;
         const DWORD exStyle = WS_EX_APPWINDOW;
-
         RECT desiredWindowRect{0, 0, DipsToPixels(1100, ownerDpi), DipsToPixels(560, ownerDpi)};
         AdjustWindowRectExForDpi(&desiredWindowRect, style, FALSE, exStyle, ownerDpi);
 
         const int width  = std::max(1L, desiredWindowRect.right - desiredWindowRect.left);
         const int height = std::max(1L, desiredWindowRect.bottom - desiredWindowRect.top);
-
         HMONITOR monitor = MonitorFromWindow(ownerWindow ? ownerWindow : folderWindow->GetHwnd(), MONITOR_DEFAULTTONEAREST);
         MONITORINFO mi{};
         mi.cbSize = sizeof(mi);
@@ -822,44 +1055,33 @@ HWND FileOperationsIssuesPane::Create(FolderWindow::FileOperationState* fileOps,
             return nullptr;
         }
 
-        const RECT work      = mi.rcWork;
-        const int workLeft   = static_cast<int>(work.left);
-        const int workTop    = static_cast<int>(work.top);
-        const int workRight  = static_cast<int>(work.right);
-        const int workBottom = static_cast<int>(work.bottom);
-
-        const int maxX    = workRight - width;
-        const int maxY    = workBottom - height;
-        const int centerX = workLeft + (workRight - workLeft - width) / 2;
-        const int centerY = workTop + (workBottom - workTop - height) / 2;
-
-        const int x = maxX >= workLeft ? std::clamp(centerX, workLeft, maxX) : workLeft;
-        const int y = maxY >= workTop ? std::clamp(centerY, workTop, maxY) : workTop;
-
-        windowRect.left   = x;
-        windowRect.top    = y;
-        windowRect.right  = x + width;
-        windowRect.bottom = y + height;
+        const int maxX    = static_cast<int>(mi.rcWork.right - width);
+        const int maxY    = static_cast<int>(mi.rcWork.bottom - height);
+        const int centerX = static_cast<int>(mi.rcWork.left + (mi.rcWork.right - mi.rcWork.left - width) / 2);
+        const int centerY = static_cast<int>(mi.rcWork.top + (mi.rcWork.bottom - mi.rcWork.top - height) / 2);
+        windowRect.left   = maxX >= mi.rcWork.left ? std::clamp(centerX, static_cast<int>(mi.rcWork.left), maxX) : mi.rcWork.left;
+        windowRect.top    = maxY >= mi.rcWork.top ? std::clamp(centerY, static_cast<int>(mi.rcWork.top), maxY) : mi.rcWork.top;
+        windowRect.right  = windowRect.left + width;
+        windowRect.bottom = windowRect.top + height;
     }
 
     const std::wstring title = LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_PANE_TITLE);
-
-    auto* state = statePtr.release();
-    HWND pane   = CreateWindowExW(WS_EX_APPWINDOW,
-                                kFileOperationsIssuesPaneClassName,
-                                title.c_str(),
-                                WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
-                                windowRect.left,
-                                windowRect.top,
-                                std::max(1L, windowRect.right - windowRect.left),
-                                std::max(1L, windowRect.bottom - windowRect.top),
-                                nullptr,
-                                nullptr,
-                                GetModuleHandleW(nullptr),
-                                state);
+    auto* state              = statePtr.release();
+    HWND pane                = CreateWindowExW(WS_EX_APPWINDOW,
+                                               kFileOperationsIssuesPaneClassName,
+                                               title.c_str(),
+                                               WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+                                               windowRect.left,
+                                               windowRect.top,
+                                               std::max(1L, windowRect.right - windowRect.left),
+                                               std::max(1L, windowRect.bottom - windowRect.top),
+                                               nullptr,
+                                               nullptr,
+                                               GetModuleHandleW(nullptr),
+                                               state);
     if (! pane)
     {
-        std::unique_ptr<FileOperationsIssuesPaneState> reclaimed(state);
+        std::unique_ptr<FileOperationsIssuesPaneState> reclaim(state);
         return nullptr;
     }
 
@@ -867,3 +1089,86 @@ HWND FileOperationsIssuesPane::Create(FolderWindow::FileOperationState* fileOps,
     UpdateWindow(pane);
     return pane;
 }
+
+#ifdef ENABLE_TESTS
+bool FileOperationsIssuesPane::TryGetSelfTestSnapshot(HWND hwnd, SelfTestSnapshot& outSnapshot) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        outSnapshot = {};
+        return false;
+    }
+
+    const auto* state = reinterpret_cast<FileOperationsIssuesPaneState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! state)
+    {
+        outSnapshot = {};
+        return false;
+    }
+
+    state->FillSelfTestSnapshot(outSnapshot);
+    return true;
+}
+
+bool FileOperationsIssuesPane::SelfTestSelectTask(HWND hwnd, uint64_t taskId) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    auto* state = reinterpret_cast<FileOperationsIssuesPaneState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return state && state->SelfTestSelectTask(taskId);
+}
+
+bool FileOperationsIssuesPane::SelfTestHitTestGridPoint(HWND hwnd, float xDip, float yDip, SelfTestGridHit& outHit) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        outHit = {};
+        return false;
+    }
+
+    const auto* state = reinterpret_cast<FileOperationsIssuesPaneState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! state)
+    {
+        outHit = {};
+        return false;
+    }
+
+    return state->SelfTestHitTestGridPoint(D2D1::Point2F(xDip, yDip), outHit);
+}
+
+bool FileOperationsIssuesPane::SelfTestFocusGrid(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    auto* state = reinterpret_cast<FileOperationsIssuesPaneState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return state && state->SelfTestFocusGrid();
+}
+
+bool FileOperationsIssuesPane::SelfTestRefresh(HWND hwnd, bool force) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    auto* state = reinterpret_cast<FileOperationsIssuesPaneState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return state && state->SelfTestRefresh(force);
+}
+
+bool FileOperationsIssuesPane::SelfTestScrollByWheelDetents(HWND hwnd, int detents) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    auto* state = reinterpret_cast<FileOperationsIssuesPaneState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return state && state->SelfTestScrollByWheelDetents(detents);
+}
+#endif

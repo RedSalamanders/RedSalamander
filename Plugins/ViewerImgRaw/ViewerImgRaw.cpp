@@ -1,6 +1,6 @@
 #include "ViewerImgRaw.h"
 
-#include "FluentIcons.h"
+#include "LocalizationManager.h"
 #include "ViewerImgRaw.Internal.h"
 #include "ViewerImgRaw.ThemeHelpers.h"
 
@@ -48,124 +48,197 @@
 #pragma comment(lib, "raw_r")
 #endif
 
+#include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
+#include "WindowMessages.h"
 #include "resource.h"
+
+using RedSalamander::DxUi::ComboBox;
+using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::MakeDefaultThemePalette;
+using RedSalamander::DxUi::MakeThemePaletteFromViewerTheme;
+namespace Typography = RedSalamander::DxUi::Typography;
 
 namespace
 {
 constexpr int kHeaderHeightDip = 28;
 constexpr int kStatusHeightDip = 22;
 
-constexpr UINT_PTR kLoadingDelayTimerId  = 1;
-constexpr UINT_PTR kLoadingAnimTimerId   = 2;
-constexpr UINT kLoadingDelayMs           = 200u;
-constexpr UINT kLoadingAnimIntervalMs    = 16u;
-constexpr float kLoadingSpinnerDegPerSec = 90.0f;
+constexpr UINT_PTR kLoadingDelayTimerId           = 1;
+constexpr UINT_PTR kLoadingAnimTimerId            = 2;
+constexpr UINT kLoadingDelayMs                    = 200u;
+constexpr UINT kLoadingAnimIntervalMs             = 16u;
+constexpr float kLoadingSpinnerDegPerSec          = 90.0f;
+constexpr size_t kViewerComboPopupMaxVisibleItems = 8u;
 
-constexpr UINT_PTR kFileComboEscCloseSubclassId = 1u;
+constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerImgRaw.FileComboHostOriginalWndProc";
+constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerImgRaw.FileComboHostState";
 
-LRESULT CALLBACK
-FileComboEscCloseSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, [[maybe_unused]] UINT_PTR subclassId, [[maybe_unused]] DWORD_PTR refData) noexcept
+[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
 {
-    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
-    {
-        const bool dropped = SendMessageW(hwnd, CB_GETDROPPEDSTATE, 0, 0) != 0;
-        if (! dropped)
-        {
-            const HWND root = GetAncestor(hwnd, GA_ROOT);
-            if (root)
-            {
-                PostMessageW(root, WM_CLOSE, 0, 0);
-            }
-            return 0;
-        }
-    }
-
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, propName);
 }
 
-void InstallFileComboEscClose(HWND combo) noexcept
+[[nodiscard]] bool InstallWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, WNDPROC hookWndProc) noexcept
 {
-    if (! combo)
-    {
-        return;
-    }
-
-    static_cast<void>(SetWindowSubclass(combo, FileComboEscCloseSubclassProc, kFileComboEscCloseSubclassId, 0));
-}
-
-wil::unique_hfont g_viewerImgRawMenuIconFont;
-UINT g_viewerImgRawMenuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
-bool g_viewerImgRawMenuIconFontValid = false;
-
-[[nodiscard]] bool EnsureViewerImgRawMenuIconFont(HDC hdc, UINT dpi) noexcept
-{
-    if (! hdc)
+    if (! hwnd || ! originalWndProcProp || ! hookWndProc)
     {
         return false;
     }
 
-    if (dpi == 0)
+    if (GetStoredWndProc(hwnd, originalWndProcProp))
     {
-        dpi = USER_DEFAULT_SCREEN_DPI;
+        return true;
     }
 
-    if (dpi != g_viewerImgRawMenuIconFontDpi || ! g_viewerImgRawMenuIconFont)
+    const auto originalWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC));
+    if (! originalWndProc)
     {
-        g_viewerImgRawMenuIconFont      = FluentIcons::CreateFontForDpi(dpi, FluentIcons::kDefaultSizeDip);
-        g_viewerImgRawMenuIconFontDpi   = dpi;
-        g_viewerImgRawMenuIconFontValid = false;
+        return false;
+    }
 
-        if (g_viewerImgRawMenuIconFont)
+    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, originalWndProcProp, reinterpret_cast<HANDLE>(originalWndProc)))
+    {
+        return false;
+    }
+
+    const auto previousWndProc =
+        reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(hookWndProc)));
+    if (previousWndProc != originalWndProc)
+    {
+        RemovePropW(hwnd, originalWndProcProp);
+        if (previousWndProc)
         {
-            g_viewerImgRawMenuIconFontValid = FluentIcons::FontHasGlyph(hdc, g_viewerImgRawMenuIconFont.get(), FluentIcons::kChevronRightSmall) &&
-                                              FluentIcons::FontHasGlyph(hdc, g_viewerImgRawMenuIconFont.get(), FluentIcons::kCheckMark);
+            static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previousWndProc)));
         }
+        return false;
     }
 
-    return g_viewerImgRawMenuIconFontValid;
+    return true;
 }
 
-[[nodiscard]] std::wstring KeyGlyphFromVirtualKey(UINT vk, HKL keyboardLayout) noexcept
+[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    if (! keyboardLayout)
+    if (const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp))
     {
-        return {};
+        return RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp);
     }
 
-    const UINT scanCode = MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, keyboardLayout);
-    if (scanCode == 0)
-    {
-        return {};
-    }
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
 
-    std::array<BYTE, 256> keyboardState{};
-    std::array<wchar_t, 8> buffer{};
-    const int result = ToUnicodeEx(vk, scanCode, keyboardState.data(), buffer.data(), static_cast<int>(buffer.size() - 1), 0, keyboardLayout);
-
-    if (result > 0)
+[[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
+{
+    switch (msg)
     {
-        std::wstring out(buffer.data(), buffer.data() + result);
-        if (! out.empty() && ! std::iswcntrl(out.front()))
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK: return true;
+        case WM_SYSKEYDOWN: return static_cast<UINT>(wp) == VK_DOWN || static_cast<UINT>(wp) == VK_UP;
+        case WM_KEYDOWN:
         {
-            return out;
+            const UINT vk = static_cast<UINT>(wp);
+            return vk == VK_SPACE || vk == VK_RETURN || vk == VK_F4 || vk == VK_DOWN || vk == VK_UP;
+        }
+        default: return false;
+    }
+}
+
+[[nodiscard]] int ComputeWindowComboPopupHeightPx(size_t itemCount, UINT dpi) noexcept
+{
+    const size_t visibleRows = std::max<size_t>(1u, std::min(itemCount, kViewerComboPopupMaxVisibleItems));
+    const int popupHeightDip = 2 + 8 + (24 * static_cast<int>(visibleRows));
+    return std::max(0, MulDiv(popupHeightDip, static_cast<int>(dpi), 96));
+}
+
+LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+
+void UnhookFileComboHostWindow(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return;
+    }
+
+    RemovePropW(hwnd, kFileComboHostStateProp);
+    RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+}
+
+LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    auto* self = reinterpret_cast<ViewerImgRaw*>(GetPropW(hwnd, kFileComboHostStateProp));
+    if (! self)
+    {
+        return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
+    }
+
+    if (msg == WM_NCDESTROY)
+    {
+        const auto originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp);
+        RemovePropW(hwnd, kFileComboHostStateProp);
+        RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+
+        bool handled = false;
+        static_cast<void>(self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled));
+
+        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    bool handled           = false;
+    const LRESULT dxResult = self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled);
+    if (handled)
+    {
+        return dxResult;
+    }
+
+    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
+    {
+        const HWND root = GetAncestor(hwnd, GA_ROOT);
+        if (root)
+        {
+            PostMessageW(root, WM_CLOSE, 0, 0);
+            return 0;
         }
     }
-    else if (result < 0)
+
+    return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
+}
+
+[[nodiscard]] size_t CountOwnerDrawMenuItems(HMENU menu) noexcept
+{
+    if (! menu)
     {
-        std::array<wchar_t, 8> clearBuf{};
-        static_cast<void>(ToUnicodeEx(vk, scanCode, keyboardState.data(), clearBuf.data(), static_cast<int>(clearBuf.size() - 1), 0, keyboardLayout));
+        return 0u;
     }
 
-    wchar_t nameBuf[64]{};
-    const LONG lParam = static_cast<LONG>(scanCode << 16);
-    const int nameLen = GetKeyNameTextW(lParam, nameBuf, static_cast<int>(std::size(nameBuf)));
-    if (nameLen > 0)
+    const int itemCount = GetMenuItemCount(menu);
+    if (itemCount <= 0)
     {
-        return std::wstring(nameBuf, nameBuf + nameLen);
+        return 0u;
     }
 
-    return {};
+    size_t ownerDrawCount = 0u;
+    for (UINT position = 0; position < static_cast<UINT>(itemCount); ++position)
+    {
+        MENUITEMINFOW itemInfo{};
+        itemInfo.cbSize = sizeof(itemInfo);
+        itemInfo.fMask  = MIIM_FTYPE | MIIM_SUBMENU;
+        if (GetMenuItemInfoW(menu, position, TRUE, &itemInfo) == 0)
+        {
+            continue;
+        }
+
+        if ((itemInfo.fType & MFT_OWNERDRAW) != 0)
+        {
+            ++ownerDrawCount;
+        }
+
+        if (itemInfo.hSubMenu)
+        {
+            ownerDrawCount += CountOwnerDrawMenuItems(itemInfo.hSubMenu);
+        }
+    }
+
+    return ownerDrawCount;
 }
 
 [[nodiscard]] UINT VkFromScanCode(UINT scanCode, HKL keyboardLayout) noexcept
@@ -343,6 +416,11 @@ constexpr char kViewerImgRawSchemaJson[] = R"json({
         }
     ]
 })json";
+
+[[nodiscard]] const char* GetViewerImgRawStaticConfigurationSchemaImpl() noexcept
+{
+    return kViewerImgRawSchemaJson;
+}
 
 uint32_t StableHash32(std::wstring_view text) noexcept
 {
@@ -550,6 +628,11 @@ void ApplyPendingViewerImgRawClassBackgroundBrush(HWND hwnd) noexcept
 
 } // namespace
 
+const char* GetViewerImgRawStaticConfigurationSchema() noexcept
+{
+    return GetViewerImgRawStaticConfigurationSchemaImpl();
+}
+
 ViewerImgRaw::ViewerImgRaw()
 {
     _metaId          = L"builtin/viewer-imgraw";
@@ -562,12 +645,27 @@ ViewerImgRaw::ViewerImgRaw()
     _metaData.name        = _metaName.empty() ? nullptr : _metaName.c_str();
     _metaData.description = _metaDescription.empty() ? nullptr : _metaDescription.c_str();
     _metaData.author      = nullptr;
-    _metaData.version     = nullptr;
+    _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     static_cast<void>(SetConfiguration(nullptr));
 }
 
-ViewerImgRaw::~ViewerImgRaw() = default;
+ViewerImgRaw::~ViewerImgRaw()
+{
+    // Tear down the embedded DX combo host while the viewer object is still fully alive.
+    // Otherwise the member destruction order would destroy WindowHost before the owned
+    // child HWND, which can leave teardown messages touching freed DXUI state.
+    if (! _hFileComboHost)
+    {
+        return;
+    }
+
+    _fileComboControl            = nullptr;
+    _fileComboHostPreExpandPopup = false;
+    UnhookFileComboHostWindow(_hFileComboHost.get());
+    _fileComboHost.Detach();
+    _hFileComboHost.reset();
+}
 
 void ViewerImgRaw::SetHost(IHost* host) noexcept
 {
@@ -645,7 +743,7 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::GetConfigurationSchema(const char** sche
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = kViewerImgRawSchemaJson;
+    *schemaJsonUtf8 = GetViewerImgRawStaticConfigurationSchema();
     return S_OK;
 }
 
@@ -884,6 +982,21 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
 {
     switch (msg)
     {
+#ifdef ENABLE_TESTS
+        case WndMsg::kViewerDebugGetNativeMenuModelSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerNativeMenuModelDebugSnapshot*>(lp);
+            if (! snapshot)
+            {
+                return FALSE;
+            }
+
+            *snapshot                    = {};
+            snapshot->hasHiddenMenuModel = _menuHandle != nullptr;
+            snapshot->ownerDrawItemCount = CountOwnerDrawMenuItems(_menuHandle.get());
+            return TRUE;
+        }
+#endif
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_SIZE: OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp))); return 0;
         case WM_COMMAND: OnCommand(hwnd, static_cast<UINT>(LOWORD(wp)), static_cast<UINT>(HIWORD(wp)), reinterpret_cast<HWND>(lp)); return 0;
@@ -895,13 +1008,21 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
         case WM_MOUSEMOVE: OnMouseMove(hwnd, static_cast<int>(static_cast<short>(LOWORD(lp))), static_cast<int>(static_cast<short>(HIWORD(lp)))); return 0;
         case WM_CAPTURECHANGED: OnCaptureChanged(); return 0;
         case WM_TIMER: OnTimer(static_cast<UINT_PTR>(wp)); return 0;
-        case WM_MEASUREITEM: return OnMeasureItem(hwnd, reinterpret_cast<MEASUREITEMSTRUCT*>(lp));
-        case WM_DRAWITEM: return OnDrawItem(hwnd, reinterpret_cast<DRAWITEMSTRUCT*>(lp));
         case WM_KEYDOWN: OnKeyDown(hwnd, static_cast<UINT>(wp)); return 0;
         case WM_SYSKEYDOWN:
+            if ((wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())
+            {
+                return 0;
+            }
             if ((GetKeyState(VK_CONTROL) & 0x8000) != 0)
             {
                 OnKeyDown(hwnd, static_cast<UINT>(wp));
+                return 0;
+            }
+            return DefWindowProcW(hwnd, msg, wp, lp);
+        case WM_SYSCHAR:
+            if (wp >= 0x20u && _menuBarHost.ActivateMnemonic(static_cast<wchar_t>(wp)))
+            {
                 return 0;
             }
             return DefWindowProcW(hwnd, msg, wp, lp);
@@ -930,7 +1051,7 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
             OnAsyncExportComplete(std::move(result));
             return 0;
         }
-        case WM_CLOSE: DestroyWindow(hwnd); return 0;
+        case WM_CLOSE: static_cast<void>(Close()); return 0;
         case WM_NCACTIVATE:
         {
             const bool windowActive = wp != FALSE;
@@ -1270,50 +1391,8 @@ void ViewerImgRaw::OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggested) n
         SetWindowPos(hwnd, nullptr, suggested->left, suggested->top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    const int uiHeightPx = -MulDiv(9, static_cast<int>(newDpi), 72);
-    _uiFont.reset(CreateFontW(uiHeightPx,
-                              0,
-                              0,
-                              0,
-                              FW_NORMAL,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              DEFAULT_CHARSET,
-                              OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS,
-                              CLEARTYPE_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE,
-                              L"Segoe UI"));
-
-    if (_hFileCombo && _uiFont)
-    {
-        SendMessageW(_hFileCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
-    }
-
-    if (_hFileCombo)
-    {
-        int itemHeight = PxFromDip(24, newDpi);
-        auto hdc       = wil::GetDC(hwnd);
-        if (hdc)
-        {
-            HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-            static_cast<void>(oldFont);
-
-            TEXTMETRICW tm{};
-            if (GetTextMetricsW(hdc.get(), &tm) != 0)
-            {
-                itemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, newDpi);
-            }
-        }
-
-        itemHeight = std::max(itemHeight, 1);
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, static_cast<WPARAM>(-1), static_cast<LPARAM>(itemHeight));
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, 0, static_cast<LPARAM>(itemHeight));
-    }
-
     DiscardDirect2D();
+    ApplyTheme(hwnd);
     Layout(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
@@ -1326,8 +1405,14 @@ void ViewerImgRaw::OnNcActivate(bool windowActive) noexcept
 LRESULT ViewerImgRaw::OnInputLangChange(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
 {
     const LRESULT result = DefWindowProcW(hwnd, WM_INPUTLANGCHANGE, wp, lp);
-    UpdateMenuShortcutTextForKeyboardLayout();
-    DrawMenuBar(hwnd);
+    if (_menuBarHost.GetHwnd())
+    {
+        _menuBarHost.SyncMenuModel();
+    }
+    else
+    {
+        DrawMenuBar(hwnd);
+    }
     return result;
 }
 
@@ -1336,7 +1421,13 @@ LRESULT ViewerImgRaw::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     OnDestroy();
     static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
 
-    _hFileCombo.release();
+    _menuBarHost.Detach();
+    _menuHandle.reset();
+    UnhookFileComboHostWindow(_hFileComboHost.get());
+    _fileComboControl            = nullptr;
+    _fileComboHostPreExpandPopup = false;
+    _fileComboHost.Detach();
+    _hFileComboHost.release();
     _hWnd.release();
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
 
@@ -1344,75 +1435,114 @@ LRESULT ViewerImgRaw::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     return DefWindowProcW(hwnd, WM_NCDESTROY, wp, lp);
 }
 
+LRESULT ViewerImgRaw::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
+{
+    const bool popupWasOpen      = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
+    const bool preExpandForPopup = ! popupWasOpen && _fileComboControl && MessageMayOpenWindowComboPopup(msg, wp);
+    if (preExpandForPopup)
+    {
+        _fileComboHostPreExpandPopup = true;
+        if (_hWnd)
+        {
+            Layout(_hWnd.get());
+        }
+    }
+
+    const LRESULT dxResult = _fileComboHost.HandleMessage(hwnd, msg, wp, lp, handled);
+    if (msg == WM_NCDESTROY)
+    {
+        handled = true;
+        _fileComboHost.ReleaseMouseCapture();
+        _fileComboControl            = nullptr;
+        _fileComboHostPreExpandPopup = false;
+        _hFileComboHost.release();
+        return dxResult;
+    }
+
+    const bool popupIsOpen = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
+    if (popupIsOpen != popupWasOpen || (preExpandForPopup && ! popupIsOpen))
+    {
+        _fileComboHostPreExpandPopup = false;
+        if (_hWnd)
+        {
+            Layout(_hWnd.get());
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
+    }
+    return dxResult;
+}
+
 void ViewerImgRaw::OnCreate(HWND hwnd)
 {
-    const UINT dpi       = GetDpiForWindow(hwnd);
-    const int uiHeightPx = -MulDiv(9, static_cast<int>(dpi), 72);
-
     _allowEraseBkgnd = true;
 
-    _uiFont.reset(CreateFontW(uiHeightPx,
-                              0,
-                              0,
-                              0,
-                              FW_NORMAL,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              DEFAULT_CHARSET,
-                              OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS,
-                              CLEARTYPE_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE,
-                              L"Segoe UI"));
-    if (! _uiFont)
+    _hFileComboHost.reset(CreateWindowExW(0,
+                                          L"Static",
+                                          nullptr,
+                                          WS_CHILD | WS_VISIBLE | WS_TABSTOP | SS_NOTIFY,
+                                          0,
+                                          0,
+                                          0,
+                                          0,
+                                          hwnd,
+                                          reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VIEWERRAW_FILE_COMBO)),
+                                          g_hInstance,
+                                          nullptr));
+    if (! _hFileComboHost)
     {
-        Debug::ErrorWithLastError(L"ViewerImgRaw: CreateFontW failed for UI font.");
+        Debug::ErrorWithLastError(L"ViewerImgRaw: CreateWindowExW failed for DxUi file combo host.");
+    }
+    else if (! _fileComboHost.Attach(_hFileComboHost.get()))
+    {
+        Debug::Error(L"ViewerImgRaw: failed to attach DxUi host for file combo.");
+        _hFileComboHost.reset();
+    }
+    else if (! SetPropW(_hFileComboHost.get(), kFileComboHostStateProp, reinterpret_cast<HANDLE>(this)) ||
+             ! InstallWndProcHook(_hFileComboHost.get(), kFileComboHostOriginalWndProcProp, FileComboHostWndProc))
+    {
+        RemovePropW(_hFileComboHost.get(), kFileComboHostStateProp);
+        Debug::ErrorWithLastError(L"ViewerImgRaw: failed to install WNDPROC hook for DxUi file combo host.");
+        _fileComboHost.Detach();
+        _hFileComboHost.reset();
     }
 
-    const DWORD comboStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS;
-    _hFileCombo.reset(CreateWindowExW(
-        0, L"COMBOBOX", nullptr, comboStyle, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VIEWERRAW_FILE_COMBO)), g_hInstance, nullptr));
-    if (! _hFileCombo)
+    if (_hFileComboHost)
     {
-        Debug::ErrorWithLastError(L"ViewerImgRaw: CreateWindowExW failed for file combo.");
-    }
-    if (_hFileCombo && _uiFont)
-    {
-        SendMessageW(_hFileCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
-    }
-    if (_hFileCombo)
-    {
-        InstallFileComboEscClose(_hFileCombo.get());
-    }
-    if (_hFileCombo)
-    {
-        int itemHeight = PxFromDip(24, dpi);
-        auto hdc       = wil::GetDC(hwnd);
-        if (hdc)
+        auto combo        = std::make_unique<ComboBox>();
+        _fileComboControl = combo.get();
+        _fileComboControl->SetVariant(ComboBoxVariant::Window);
+        _fileComboControl->SetOnSelectionChanged([this, hwnd](const size_t selection) noexcept
         {
-            HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-            static_cast<void>(oldFont);
-
-            TEXTMETRICW tm{};
-            if (GetTextMetricsW(hdc.get(), &tm) != 0)
+            if (_syncingFileCombo)
             {
-                itemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, dpi);
+                return;
             }
-        }
 
-        itemHeight = std::max(itemHeight, 1);
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, static_cast<WPARAM>(-1), static_cast<LPARAM>(itemHeight));
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, 0, static_cast<LPARAM>(itemHeight));
+            const size_t index = selection;
+            if (index >= _otherItems.size())
+            {
+                return;
+            }
 
-        COMBOBOXINFO info{};
-        info.cbSize = sizeof(info);
-        if (GetComboBoxInfo(_hFileCombo.get(), &info) != 0)
-        {
-            _hFileComboList = info.hwndList;
-            _hFileComboItem = info.hwndItem;
-        }
+            _otherIndex             = index;
+            _currentSidecarJpegPath = _otherItems[_otherIndex].sidecarJpegPath;
+            _currentLabel           = _otherItems[_otherIndex].label;
+            StartAsyncOpen(hwnd, _otherItems[_otherIndex].primaryPath, false);
+            SetFocus(hwnd);
+        });
+        _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+        _fileComboHost.SetRoot(std::move(combo));
+    }
+
+    if (! _menuHandle)
+    {
+        _menuHandle.reset(GetMenu(hwnd));
+    }
+    if (_menuHandle)
+    {
+        _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+        _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuChecks(hwnd, false); });
+        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
     ApplyTheme(hwnd);
@@ -1426,13 +1556,18 @@ void ViewerImgRaw::OnDestroy()
     DiscardDirect2D();
     ClearImageCache();
 
-    IViewerCallback* callback = _callback;
-    void* cookie              = _callbackCookie;
-    if (callback)
+    RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
+    if (_callbackState.TryCapture(callbackSnapshot))
     {
-        AddRef();
-        static_cast<void>(callback->ViewerClosed(cookie));
-        Release();
+        IViewerCallback* callback = nullptr;
+        void* cookie              = nullptr;
+        if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
+        {
+            auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
+            AddRef();
+            static_cast<void>(callback->ViewerClosed(cookie));
+            Release();
+        }
     }
 }
 
@@ -1492,6 +1627,7 @@ void ViewerImgRaw::OnSize(UINT width, UINT height)
 
 void ViewerImgRaw::Layout(HWND hwnd) noexcept
 {
+    _menuBarHost.UpdateLayout();
     ComputeLayoutRects(hwnd);
     UpdateScrollBars(hwnd);
 }
@@ -1500,6 +1636,7 @@ void ViewerImgRaw::ComputeLayoutRects(HWND hwnd) noexcept
 {
     RECT client{};
     GetClientRect(hwnd, &client);
+    client.top += _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
 
     const UINT dpi = GetDpiForWindow(hwnd);
     if (_vScrollVisible)
@@ -1526,18 +1663,31 @@ void ViewerImgRaw::ComputeLayoutRects(HWND hwnd) noexcept
     _contentRect.top    = _headerRect.bottom;
     _contentRect.bottom = _statusRect.top;
 
-    if (_hFileCombo)
+    if (_hFileComboHost)
     {
         const bool showCombo = _otherItems.size() > 1;
-        ShowWindow(_hFileCombo.get(), showCombo ? SW_SHOW : SW_HIDE);
+        ShowWindow(_hFileComboHost.get(), showCombo ? SW_SHOW : SW_HIDE);
+        if (! showCombo)
+        {
+            _fileComboHostPreExpandPopup = false;
+        }
         if (showCombo)
         {
-            const int padding = PxFromDip(6, dpi);
-            const int x       = _headerRect.left + padding;
-            const int y       = _headerRect.top + padding / 2;
-            const int w       = std::max(1L, (_headerRect.right - _headerRect.left) - 2 * padding);
-            const int h       = std::max(1L, (_headerRect.bottom - _headerRect.top) - padding);
-            SetWindowPos(_hFileCombo.get(), nullptr, x, y, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
+            const int padding          = PxFromDip(6, dpi);
+            const int comboH           = std::max(1, MulDiv(32, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
+            const int x                = _headerRect.left + padding;
+            const int w                = std::max(1L, (_headerRect.right - _headerRect.left) - 2 * padding);
+            const int y                = _headerRect.top + std::max(0L, ((_headerRect.bottom - _headerRect.top) - comboH) / 2);
+            const bool expandPopupHost = _fileComboHostPreExpandPopup || (_fileComboControl && _fileComboControl->DebugIsPopupOpen());
+            const int hostHeight       = comboH + (expandPopupHost ? ComputeWindowComboPopupHeightPx(_otherItems.size(), dpi) : 0);
+            SetWindowPos(_hFileComboHost.get(), HWND_TOP, x, y, w, hostHeight, SWP_NOACTIVATE);
+
+            if (_fileComboControl)
+            {
+                _fileComboControl->SetBounds(D2D1::RectF(
+                    0.0f, 0.0f, static_cast<float>(w) * 96.0f / static_cast<float>(dpi), static_cast<float>(comboH) * 96.0f / static_cast<float>(dpi)));
+                _fileComboHost.Invalidate();
+            }
         }
     }
 }
@@ -1684,9 +1834,6 @@ void ViewerImgRaw::UpdateScrollBars(HWND hwnd) noexcept
 
 void ViewerImgRaw::ApplyTheme(HWND hwnd) noexcept
 {
-    const bool useDarkMode  = (_hasTheme && _theme.darkMode && ! _theme.highContrast);
-    const wchar_t* winTheme = useDarkMode ? L"DarkMode_Explorer" : L"Explorer";
-
     _uiBg       = _hasTheme ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
     _uiText     = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
     _uiHeaderBg = _uiBg;
@@ -1700,27 +1847,7 @@ void ViewerImgRaw::ApplyTheme(HWND hwnd) noexcept
         _uiStatusBg                     = BlendColor(_uiBg, accent, kAlpha);
     }
 
-    _menuHeaderBrush.reset(CreateSolidBrush(_uiHeaderBg));
-    if (! _menuHeaderBrush)
-    {
-        Debug::Warning(L"ViewerImgRaw: CreateSolidBrush failed for menu header brush.");
-    }
-
-    if (_hFileCombo)
-    {
-        SetWindowTheme(_hFileCombo.get(), winTheme, nullptr);
-        SendMessageW(_hFileCombo.get(), WM_THEMECHANGED, 0, 0);
-        if (_hFileComboList)
-        {
-            SetWindowTheme(_hFileComboList, winTheme, nullptr);
-            SendMessageW(_hFileComboList, WM_THEMECHANGED, 0, 0);
-        }
-        if (_hFileComboItem)
-        {
-            SetWindowTheme(_hFileComboItem, winTheme, nullptr);
-            SendMessageW(_hFileComboItem, WM_THEMECHANGED, 0, 0);
-        }
-    }
+    _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
 
     UpdateMenuChecks(hwnd);
     ApplyMenuTheme(hwnd);
@@ -1770,14 +1897,14 @@ void ViewerImgRaw::ApplyTitleBarTheme(bool windowActive) noexcept
     DwmSetWindowAttribute(_hWnd.get(), kDwmwaTextColor, &textValue, sizeof(textValue));
 }
 
-void ViewerImgRaw::UpdateMenuChecks(HWND hwnd) noexcept
+void ViewerImgRaw::UpdateMenuChecks(HWND hwnd, bool syncDxMenuBar) noexcept
 {
     if (! hwnd)
     {
         return;
     }
 
-    const HMENU menu = GetMenu(hwnd);
+    const HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
     if (! menu)
     {
         return;
@@ -1805,407 +1932,25 @@ void ViewerImgRaw::UpdateMenuChecks(HWND hwnd) noexcept
 
     CheckMenuItem(menu, IDM_VIEWERRAW_VIEW_TOGGLE_GRAYSCALE, static_cast<UINT>(MF_BYCOMMAND | (_grayscale ? MF_CHECKED : MF_UNCHECKED)));
     CheckMenuItem(menu, IDM_VIEWERRAW_VIEW_TOGGLE_NEGATIVE, static_cast<UINT>(MF_BYCOMMAND | (_negative ? MF_CHECKED : MF_UNCHECKED)));
+
+    if (syncDxMenuBar && _menuBarHost.GetHwnd())
+    {
+        _menuBarHost.SyncMenuModel();
+    }
 }
 
 void ViewerImgRaw::ApplyMenuTheme(HWND hwnd) noexcept
 {
-    HMENU menu = hwnd ? GetMenu(hwnd) : nullptr;
-    if (! menu)
+    static_cast<void>(hwnd);
+    _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+    if (_menuBarHost.GetHwnd())
     {
-        return;
+        _menuBarHost.SyncMenuModel();
     }
-
-    if (_menuHeaderBrush)
+    else
     {
-        MENUINFO mi{};
-        mi.cbSize  = sizeof(mi);
-        mi.fMask   = MIM_BACKGROUND | MIM_APPLYTOSUBMENUS;
-        mi.hbrBack = _menuHeaderBrush.get();
-        SetMenuInfo(menu, &mi);
+        DrawMenuBar(hwnd);
     }
-
-    _menuThemeItems.clear();
-    PrepareMenuTheme(menu, true, _menuThemeItems);
-    UpdateMenuShortcutTextForKeyboardLayout();
-    DrawMenuBar(hwnd);
-}
-
-void ViewerImgRaw::UpdateMenuShortcutTextForKeyboardLayout() noexcept
-{
-    const HKL keyboardLayout = GetKeyboardLayout(0);
-    if (! keyboardLayout)
-    {
-        return;
-    }
-
-    const UINT zoomInVk             = ZoomInVirtualKeyForLayout(keyboardLayout);
-    const UINT zoomOutVk            = ZoomOutVirtualKeyForLayout(keyboardLayout);
-    const std::wstring zoomInKey    = KeyGlyphFromVirtualKey(zoomInVk, keyboardLayout);
-    const std::wstring zoomOutKey   = KeyGlyphFromVirtualKey(zoomOutVk, keyboardLayout);
-    const std::wstring zoomResetKey = KeyGlyphFromVirtualKey(static_cast<UINT>('0'), keyboardLayout);
-
-    for (MenuItemData& item : _menuThemeItems)
-    {
-        switch (item.id)
-        {
-            case IDM_VIEWERRAW_VIEW_ZOOM_IN:
-                if (! zoomInKey.empty())
-                {
-                    item.shortcut = zoomInKey;
-                }
-                break;
-            case IDM_VIEWERRAW_VIEW_ZOOM_OUT:
-                if (! zoomOutKey.empty())
-                {
-                    item.shortcut = zoomOutKey;
-                }
-                break;
-            case IDM_VIEWERRAW_VIEW_ZOOM_RESET:
-                if (! zoomResetKey.empty())
-                {
-                    item.shortcut = zoomResetKey;
-                }
-                break;
-            default: break;
-        }
-    }
-}
-
-void ViewerImgRaw::PrepareMenuTheme(HMENU menu, bool topLevel, std::vector<MenuItemData>& outItems) noexcept
-{
-    const int count = GetMenuItemCount(menu);
-    if (count <= 0)
-    {
-        return;
-    }
-
-    for (UINT pos = 0; pos < static_cast<UINT>(count); ++pos)
-    {
-        MENUITEMINFOW info{};
-        info.cbSize = sizeof(info);
-        wchar_t textBuf[256]{};
-        info.fMask      = MIIM_FTYPE | MIIM_STRING | MIIM_SUBMENU | MIIM_ID;
-        info.dwTypeData = textBuf;
-        info.cch        = static_cast<UINT>(std::size(textBuf) - 1);
-        if (GetMenuItemInfoW(menu, pos, TRUE, &info) == 0)
-        {
-            continue;
-        }
-
-        MenuItemData data{};
-        data.id         = info.wID;
-        data.separator  = (info.fType & MFT_SEPARATOR) != 0;
-        data.topLevel   = topLevel;
-        data.hasSubMenu = info.hSubMenu != nullptr;
-
-        if (! data.separator)
-        {
-            std::wstring text = textBuf;
-            const size_t tab  = text.find(L'\t');
-            if (tab != std::wstring::npos)
-            {
-                data.shortcut = text.substr(tab + 1);
-                text.resize(tab);
-            }
-            data.text = std::move(text);
-        }
-
-        const size_t index = outItems.size();
-        outItems.push_back(std::move(data));
-
-        MENUITEMINFOW ownerDraw{};
-        ownerDraw.cbSize     = sizeof(ownerDraw);
-        ownerDraw.fMask      = MIIM_FTYPE | MIIM_DATA;
-        ownerDraw.fType      = info.fType | MFT_OWNERDRAW;
-        ownerDraw.dwItemData = static_cast<ULONG_PTR>(index);
-        SetMenuItemInfoW(menu, pos, TRUE, &ownerDraw);
-
-        if (info.hSubMenu)
-        {
-            PrepareMenuTheme(info.hSubMenu, false, outItems);
-        }
-    }
-}
-
-void ViewerImgRaw::OnMeasureMenuItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept
-{
-    if (! measure || measure->CtlType != ODT_MENU)
-    {
-        return;
-    }
-
-    const size_t index = static_cast<size_t>(measure->itemData);
-    if (index >= _menuThemeItems.size())
-    {
-        return;
-    }
-
-    const MenuItemData& data = _menuThemeItems[index];
-    const UINT dpi           = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
-
-    if (data.separator)
-    {
-        measure->itemWidth  = 1;
-        measure->itemHeight = static_cast<UINT>(MulDiv(8, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-        return;
-    }
-
-    const UINT heightDip = data.topLevel ? 20u : 24u;
-    measure->itemHeight  = static_cast<UINT>(MulDiv(static_cast<int>(heightDip), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-
-    auto hdc = wil::GetDC(hwnd);
-    if (! hdc)
-    {
-        measure->itemWidth = 120;
-        return;
-    }
-
-    HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-    static_cast<void>(oldFont);
-
-    SIZE textSize{};
-    if (! data.text.empty())
-    {
-        GetTextExtentPoint32W(hdc.get(), data.text.c_str(), static_cast<int>(data.text.size()), &textSize);
-    }
-
-    SIZE shortcutSize{};
-    if (! data.shortcut.empty())
-    {
-        GetTextExtentPoint32W(hdc.get(), data.shortcut.c_str(), static_cast<int>(data.shortcut.size()), &shortcutSize);
-    }
-
-    const int dpiInt           = static_cast<int>(dpi);
-    const int paddingX         = MulDiv(8, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    const int shortcutGap      = MulDiv(20, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    const int subMenuAreaWidth = data.hasSubMenu && ! data.topLevel ? MulDiv(18, dpiInt, USER_DEFAULT_SCREEN_DPI) : 0;
-    const int checkAreaWidth   = data.topLevel ? 0 : MulDiv(20, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    const int checkGap         = data.topLevel ? 0 : MulDiv(4, dpiInt, USER_DEFAULT_SCREEN_DPI);
-
-    int width = paddingX + checkAreaWidth + checkGap + textSize.cx + paddingX;
-    if (! data.shortcut.empty())
-    {
-        width += shortcutGap + shortcutSize.cx;
-    }
-    width += subMenuAreaWidth;
-
-    measure->itemWidth = static_cast<UINT>(std::max(width, 60));
-}
-
-void ViewerImgRaw::OnDrawMenuItem(DRAWITEMSTRUCT* draw) noexcept
-{
-    if (! draw || draw->CtlType != ODT_MENU || ! draw->hDC)
-    {
-        return;
-    }
-
-    const size_t index = static_cast<size_t>(draw->itemData);
-    if (index >= _menuThemeItems.size())
-    {
-        return;
-    }
-
-    const MenuItemData& data = _menuThemeItems[index];
-    const bool selected      = (draw->itemState & ODS_SELECTED) != 0;
-    const bool disabled      = (draw->itemState & ODS_DISABLED) != 0;
-    const bool checked       = (draw->itemState & ODS_CHECKED) != 0;
-
-    const COLORREF bg             = _hasTheme ? (data.topLevel ? _uiHeaderBg : ColorRefFromArgb(_theme.backgroundArgb)) : GetSysColor(COLOR_MENU);
-    const COLORREF fg             = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_MENUTEXT);
-    const COLORREF selBg          = _hasTheme ? ColorRefFromArgb(_theme.selectionBackgroundArgb) : GetSysColor(COLOR_HIGHLIGHT);
-    const COLORREF selFg          = _hasTheme ? ColorRefFromArgb(_theme.selectionTextArgb) : GetSysColor(COLOR_HIGHLIGHTTEXT);
-    const COLORREF disabledFg     = _hasTheme ? BlendColor(bg, fg, 120u) : GetSysColor(COLOR_GRAYTEXT);
-    const COLORREF separatorColor = _hasTheme ? BlendColor(bg, fg, 80u) : GetSysColor(COLOR_3DSHADOW);
-
-    COLORREF fillColor = selected ? selBg : bg;
-    COLORREF textColor = selected ? selFg : fg;
-    if (disabled)
-    {
-        textColor = disabledFg;
-    }
-
-    RECT itemRect = draw->rcItem;
-    wil::unique_any<HRGN, decltype(&::DeleteObject), ::DeleteObject> clipRgn(CreateRectRgnIndirect(&itemRect));
-    if (clipRgn)
-    {
-        SelectClipRgn(draw->hDC, clipRgn.get());
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
-    FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
-
-    if (data.separator)
-    {
-        const int dpi      = GetDeviceCaps(draw->hDC, LOGPIXELSX);
-        const int paddingX = MulDiv(6, dpi, USER_DEFAULT_SCREEN_DPI);
-        const int y        = (draw->rcItem.top + draw->rcItem.bottom) / 2;
-        wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> pen(CreatePen(PS_SOLID, 1, separatorColor));
-        auto oldPen = wil::SelectObject(draw->hDC, pen.get());
-        static_cast<void>(oldPen);
-        MoveToEx(draw->hDC, draw->rcItem.left + paddingX, y, nullptr);
-        LineTo(draw->hDC, draw->rcItem.right - paddingX, y);
-        return;
-    }
-
-    HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(draw->hDC, fontToUse);
-    static_cast<void>(oldFont);
-
-    const int dpi              = GetDeviceCaps(draw->hDC, LOGPIXELSX);
-    const bool iconFontValid   = EnsureViewerImgRawMenuIconFont(draw->hDC, static_cast<UINT>(dpi));
-    const int paddingX         = MulDiv(8, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int checkAreaWidth   = data.topLevel ? 0 : MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int subMenuAreaWidth = data.hasSubMenu && ! data.topLevel ? MulDiv(18, dpi, USER_DEFAULT_SCREEN_DPI) : 0;
-    const int checkGap         = data.topLevel ? 0 : MulDiv(4, dpi, USER_DEFAULT_SCREEN_DPI);
-
-    RECT textRect = draw->rcItem;
-    textRect.left += paddingX + checkAreaWidth + checkGap;
-    textRect.right -= paddingX + subMenuAreaWidth;
-    RECT shortcutRect = textRect;
-
-    SetBkMode(draw->hDC, TRANSPARENT);
-    SetTextColor(draw->hDC, textColor);
-
-    if (checked && checkAreaWidth > 0)
-    {
-        RECT checkRect = draw->rcItem;
-        checkRect.left += paddingX;
-        checkRect.right     = checkRect.left + checkAreaWidth;
-        const bool useIcons = iconFontValid && g_viewerImgRawMenuIconFont;
-        const wchar_t glyph = useIcons ? FluentIcons::kCheckMark : FluentIcons::kFallbackCheckMark;
-        wchar_t glyphText[2]{glyph, 0};
-
-        HFONT glyphFont  = useIcons ? g_viewerImgRawMenuIconFont.get() : fontToUse;
-        auto oldIconFont = wil::SelectObject(draw->hDC, glyphFont);
-        DrawTextW(draw->hDC, glyphText, 1, &checkRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    }
-
-    const UINT drawFlags = DT_VCENTER | DT_SINGLELINE | DT_HIDEPREFIX;
-
-    if (! data.text.empty())
-    {
-        DrawTextW(draw->hDC, data.text.c_str(), static_cast<int>(data.text.size()), &textRect, DT_LEFT | drawFlags);
-    }
-
-    if (! data.shortcut.empty())
-    {
-        DrawTextW(draw->hDC, data.shortcut.c_str(), static_cast<int>(data.shortcut.size()), &shortcutRect, DT_RIGHT | drawFlags);
-    }
-
-    if (data.hasSubMenu && ! data.topLevel)
-    {
-        RECT arrowRect = draw->rcItem;
-        arrowRect.right -= paddingX;
-        arrowRect.left = std::max(arrowRect.left, arrowRect.right - subMenuAreaWidth);
-
-        const bool useIcons = iconFontValid && g_viewerImgRawMenuIconFont;
-        const wchar_t glyph = useIcons ? FluentIcons::kChevronRightSmall : FluentIcons::kFallbackChevronRight;
-        wchar_t glyphText[2]{glyph, 0};
-
-        COLORREF arrowColor = textColor;
-        if (! selected && ! disabled)
-        {
-            arrowColor = BlendColor(fillColor, textColor, 120u);
-        }
-
-        SetTextColor(draw->hDC, arrowColor);
-        HFONT arrowFont  = useIcons ? g_viewerImgRawMenuIconFont.get() : fontToUse;
-        auto oldIconFont = wil::SelectObject(draw->hDC, arrowFont);
-        DrawTextW(draw->hDC, glyphText, 1, &arrowRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-        const int arrowExcludeWidth = std::max(subMenuAreaWidth, GetSystemMetricsForDpi(SM_CXMENUCHECK, static_cast<UINT>(dpi)));
-        RECT arrowExcludeRect       = itemRect;
-        arrowExcludeRect.left       = std::max(arrowExcludeRect.left, arrowExcludeRect.right - arrowExcludeWidth);
-        ExcludeClipRect(draw->hDC, arrowExcludeRect.left, arrowExcludeRect.top, arrowExcludeRect.right, arrowExcludeRect.bottom);
-    }
-}
-
-LRESULT ViewerImgRaw::OnMeasureItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept
-{
-    if (! measure)
-    {
-        return FALSE;
-    }
-
-    if (measure->CtlType == ODT_COMBOBOX && measure->CtlID == IDC_VIEWERRAW_FILE_COMBO)
-    {
-        const UINT dpi      = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
-        measure->itemHeight = static_cast<UINT>(std::max(1, PxFromDip(24, dpi)));
-        return TRUE;
-    }
-
-    if (measure->CtlType == ODT_MENU)
-    {
-        OnMeasureMenuItem(hwnd, measure);
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-LRESULT ViewerImgRaw::OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* draw) noexcept
-{
-    if (! draw)
-    {
-        return FALSE;
-    }
-
-    if (draw->CtlType == ODT_COMBOBOX && draw->CtlID == IDC_VIEWERRAW_FILE_COMBO)
-    {
-        const HDC hdc = draw->hDC;
-        RECT rc       = draw->rcItem;
-
-        const bool selected = (draw->itemState & ODS_SELECTED) != 0;
-        const bool disabled = (draw->itemState & ODS_DISABLED) != 0;
-
-        COLORREF bg   = _uiHeaderBg;
-        COLORREF text = _uiText;
-        if (selected)
-        {
-            bg   = (_hasTheme && ! _theme.highContrast) ? ResolveAccentColor(_theme, L"combo") : GetSysColor(COLOR_HIGHLIGHT);
-            text = (_hasTheme && ! _theme.highContrast) ? ContrastingTextColor(bg) : GetSysColor(COLOR_HIGHLIGHTTEXT);
-        }
-        if (disabled)
-        {
-            text = GetSysColor(COLOR_GRAYTEXT);
-        }
-
-        SetBkColor(hdc, bg);
-        SetTextColor(hdc, text);
-        SetDCBrushColor(hdc, bg);
-        FillRect(hdc, &rc, static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
-
-        auto oldFont = wil::SelectObject(hdc, _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT)));
-        static_cast<void>(oldFont);
-
-        const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
-        rc.left += PxFromDip(6, dpi);
-        rc.right = std::max(rc.left, rc.right - PxFromDip(2, dpi));
-
-        const UINT itemId = draw->itemID;
-        if (itemId != static_cast<UINT>(-1) && itemId < _otherItems.size())
-        {
-            const OtherItem& item              = _otherItems[itemId];
-            const std::wstring_view textToDraw = ! item.label.empty() ? std::wstring_view(item.label) : std::wstring_view(item.primaryPath);
-            DrawTextW(hdc, textToDraw.data(), static_cast<int>(textToDraw.size()), &rc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
-        }
-
-        if ((draw->itemState & ODS_FOCUS) != 0)
-        {
-            DrawFocusRect(hdc, &draw->rcItem);
-        }
-
-        return TRUE;
-    }
-
-    if (draw->CtlType == ODT_MENU)
-    {
-        OnDrawMenuItem(draw);
-        return TRUE;
-    }
-
-    return FALSE;
 }
 
 void ViewerImgRaw::BeginLoadingUi() noexcept
@@ -2370,8 +2115,7 @@ void ViewerImgRaw::DrawLoadingOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidC
     if (! _loadingOverlayFormat && _dwriteFactory)
     {
         wil::com_ptr<IDWriteTextFormat> format;
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 22.0f, L"", format.put());
+        const HRESULT hr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(22.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), format.put());
         if (SUCCEEDED(hr) && format)
         {
             static_cast<void>(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
@@ -2415,8 +2159,7 @@ void ViewerImgRaw::DrawLoadingOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidC
         if (! _loadingOverlaySubFormat && _dwriteFactory)
         {
             wil::com_ptr<IDWriteTextFormat> format;
-            const HRESULT hr = _dwriteFactory->CreateTextFormat(
-                L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"", format.put());
+            const HRESULT hr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(12.0f), format.put());
             if (SUCCEEDED(hr) && format)
             {
                 static_cast<void>(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
@@ -2524,8 +2267,7 @@ void ViewerImgRaw::DrawExifOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidColo
     if (! _exifOverlayFormat && _dwriteFactory)
     {
         wil::com_ptr<IDWriteTextFormat> format;
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"", format.put());
+        const HRESULT hr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(12.0f), format.put());
         if (SUCCEEDED(hr) && format)
         {
             static_cast<void>(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
@@ -2608,27 +2350,8 @@ void ViewerImgRaw::DrawExifOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidColo
 
 void ViewerImgRaw::OnCommand(HWND hwnd, UINT id, UINT code, HWND control)
 {
-    if (id == IDC_VIEWERRAW_FILE_COMBO && code == CBN_SELCHANGE && control == _hFileCombo.get())
-    {
-        if (_syncingFileCombo)
-        {
-            return;
-        }
-
-        const LRESULT sel = SendMessageW(_hFileCombo.get(), CB_GETCURSEL, 0, 0);
-        if (sel != CB_ERR)
-        {
-            const size_t index = static_cast<size_t>(sel);
-            if (index < _otherItems.size())
-            {
-                _otherIndex             = index;
-                _currentSidecarJpegPath = _otherItems[_otherIndex].sidecarJpegPath;
-                _currentLabel           = _otherItems[_otherIndex].label;
-                StartAsyncOpen(hwnd, _otherItems[_otherIndex].primaryPath, false);
-            }
-        }
-        return;
-    }
+    static_cast<void>(code);
+    static_cast<void>(control);
 
     switch (id)
     {
@@ -2639,7 +2362,7 @@ void ViewerImgRaw::OnCommand(HWND hwnd, UINT id, UINT code, HWND control)
             }
             return;
         case IDM_VIEWERRAW_FILE_EXPORT: BeginExport(hwnd); return;
-        case IDM_VIEWERRAW_FILE_EXIT: DestroyWindow(hwnd); return;
+        case IDM_VIEWERRAW_FILE_EXIT: static_cast<void>(Close()); return;
         case IDM_VIEWERRAW_OTHER_NEXT:
             if (_otherItems.size() > 1)
             {
@@ -2962,7 +2685,7 @@ void ViewerImgRaw::OnKeyDown(HWND hwnd, UINT vk) noexcept
             return;
         }
 
-        DestroyWindow(hwnd);
+        static_cast<void>(Close());
         return;
     }
 
@@ -3378,7 +3101,7 @@ void ViewerImgRaw::OnCaptureChanged() noexcept
 
 void ViewerImgRaw::RefreshFileCombo(HWND hwnd) noexcept
 {
-    if (! _hFileCombo)
+    if (! _fileComboControl)
     {
         return;
     }
@@ -3386,11 +3109,11 @@ void ViewerImgRaw::RefreshFileCombo(HWND hwnd) noexcept
     _syncingFileCombo = true;
     auto restore      = wil::scope_exit([&] { _syncingFileCombo = false; });
 
-    SendMessageW(_hFileCombo.get(), CB_RESETCONTENT, 0, 0);
-
     if (_otherItems.size() <= 1)
     {
-        SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(-1), 0);
+        _fileComboControl->SetItems({});
+        _fileComboControl->SetSelectedIndex(std::nullopt);
+        _fileComboHost.Invalidate();
         if (hwnd)
         {
             Layout(hwnd);
@@ -3399,19 +3122,22 @@ void ViewerImgRaw::RefreshFileCombo(HWND hwnd) noexcept
         return;
     }
 
+    std::vector<ComboBox::Item> items;
+    items.reserve(_otherItems.size());
     for (const auto& item : _otherItems)
     {
-        const wchar_t* text = item.label.empty() ? item.primaryPath.c_str() : item.label.c_str();
-        SendMessageW(_hFileCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text));
+        const std::wstring_view text = item.label.empty() ? std::wstring_view(item.primaryPath) : std::wstring_view(item.label);
+        items.push_back(ComboBox::Item{item.primaryPath, std::wstring(text)});
     }
+    _fileComboControl->SetItems(std::move(items));
 
     if (_otherIndex >= _otherItems.size())
     {
         _otherIndex = 0;
     }
 
-    SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(_otherIndex), 0);
-    SendMessageW(_hFileCombo.get(), CB_SETMINVISIBLE, static_cast<WPARAM>(std::min<size_t>(_otherItems.size(), 15)), 0);
+    _fileComboControl->SetSelectedIndex(_otherIndex);
+    _fileComboHost.Invalidate();
 
     if (hwnd)
     {
@@ -3422,7 +3148,7 @@ void ViewerImgRaw::RefreshFileCombo(HWND hwnd) noexcept
 
 void ViewerImgRaw::SyncFileComboSelection() noexcept
 {
-    if (! _hFileCombo)
+    if (! _fileComboControl)
     {
         return;
     }
@@ -3440,7 +3166,8 @@ void ViewerImgRaw::SyncFileComboSelection() noexcept
     _syncingFileCombo = true;
     auto restore      = wil::scope_exit([&] { _syncingFileCombo = false; });
 
-    SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(_otherIndex), 0);
+    _fileComboControl->SetSelectedIndex(_otherIndex);
+    _fileComboHost.Invalidate();
 }
 
 bool ViewerImgRaw::EnsureDirect2D(HWND hwnd) noexcept
@@ -3514,8 +3241,7 @@ bool ViewerImgRaw::EnsureDirect2D(HWND hwnd) noexcept
     if (! _uiTextFormat && _dwriteFactory)
     {
         const float fontSizeDip = 12.0f;
-        const HRESULT hr        = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, fontSizeDip, L"", _uiTextFormat.put());
+        const HRESULT hr        = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(fontSizeDip), _uiTextFormat.put());
         if (FAILED(hr))
         {
             _uiTextFormat.reset();
@@ -3530,8 +3256,7 @@ bool ViewerImgRaw::EnsureDirect2D(HWND hwnd) noexcept
     if (! _uiTextFormatRight && _dwriteFactory)
     {
         const float fontSizeDip = 12.0f;
-        const HRESULT hr        = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, fontSizeDip, L"", _uiTextFormatRight.put());
+        const HRESULT hr        = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(fontSizeDip), _uiTextFormatRight.put());
         if (FAILED(hr))
         {
             _uiTextFormatRight.reset();
@@ -3915,7 +3640,7 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
             h = std::max(1L, ownerRc.bottom - ownerRc.top);
         }
 
-        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(LoadMenuW(g_hInstance, MAKEINTRESOURCEW(IDR_VIEWERRAW_MENU)));
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERRAW_MENU));
         HWND window = CreateWindowExW(0,
                                       kClassName,
                                       _metaName.empty() ? L"" : _metaName.c_str(),
@@ -4130,13 +3855,15 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
 
 HRESULT STDMETHODCALLTYPE ViewerImgRaw::Close() noexcept
 {
+    AddRef();
+    const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE ViewerImgRaw::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (theme == nullptr || theme->version != 2)
+    if (theme == nullptr || theme->version < 2u || theme->version > 4u)
     {
         return E_INVALIDARG;
     }
@@ -4159,7 +3886,6 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::SetTheme(const ViewerTheme* theme) noexc
 
 HRESULT STDMETHODCALLTYPE ViewerImgRaw::SetCallback(IViewerCallback* callback, void* cookie) noexcept
 {
-    _callback       = callback;
-    _callbackCookie = cookie;
+    _callbackState.Set(callback, cookie);
     return S_OK;
 }

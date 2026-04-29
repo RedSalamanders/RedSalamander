@@ -450,6 +450,18 @@ bool GetUInt32(yyjson_val* obj, const char* key, uint32_t& out) noexcept
     return true;
 }
 
+bool GetUInt64(yyjson_val* obj, const char* key, uint64_t& out) noexcept
+{
+    yyjson_val* v = yyjson_obj_get(obj, key);
+    if (! v || ! yyjson_is_uint(v))
+    {
+        Debug::Error(L"Expected unsigned integer value for key '{}'", Utf16FromUtf8(key).c_str());
+        return false;
+    }
+    out = yyjson_get_uint(v);
+    return true;
+}
+
 bool IsAsciiSpace(char ch) noexcept
 {
     return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' || ch == '\f' || ch == '\v';
@@ -1868,6 +1880,113 @@ const char* PresetToString(Common::Settings::MonitorFilterPreset preset)
     return "custom";
 }
 
+Common::Settings::ReducedMotionMode ParseReducedMotionMode(std::string_view value) noexcept
+{
+    if (value == "on")
+    {
+        return Common::Settings::ReducedMotionMode::On;
+    }
+    if (value == "off")
+    {
+        return Common::Settings::ReducedMotionMode::Off;
+    }
+    return Common::Settings::ReducedMotionMode::System;
+}
+
+const char* ReducedMotionModeToString(Common::Settings::ReducedMotionMode mode) noexcept
+{
+    switch (mode)
+    {
+        case Common::Settings::ReducedMotionMode::On: return "on";
+        case Common::Settings::ReducedMotionMode::Off: return "off";
+        case Common::Settings::ReducedMotionMode::System: return "system";
+    }
+    return "system";
+}
+
+Common::Settings::WindowBackdropMode ParseWindowBackdropMode(std::string_view value) noexcept
+{
+    if (value == "none")
+    {
+        return Common::Settings::WindowBackdropMode::None;
+    }
+    if (value == "mica")
+    {
+        return Common::Settings::WindowBackdropMode::Mica;
+    }
+    if (value == "micaAlt")
+    {
+        return Common::Settings::WindowBackdropMode::MicaAlt;
+    }
+    if (value == "acrylic")
+    {
+        return Common::Settings::WindowBackdropMode::Acrylic;
+    }
+    return Common::Settings::WindowBackdropMode::Default;
+}
+
+const char* WindowBackdropModeToString(Common::Settings::WindowBackdropMode mode) noexcept
+{
+    switch (mode)
+    {
+        case Common::Settings::WindowBackdropMode::None: return "none";
+        case Common::Settings::WindowBackdropMode::Mica: return "mica";
+        case Common::Settings::WindowBackdropMode::MicaAlt: return "micaAlt";
+        case Common::Settings::WindowBackdropMode::Acrylic: return "acrylic";
+        case Common::Settings::WindowBackdropMode::Default: return "default";
+    }
+    return "default";
+}
+
+bool IsValidLanguagePreference(std::string_view value) noexcept
+{
+    if (value == "system")
+    {
+        return true;
+    }
+
+    size_t segmentStart = 0;
+    size_t segmentIndex = 0;
+    while (segmentStart <= value.size())
+    {
+        const size_t separator     = value.find('-', segmentStart);
+        const size_t segmentEnd    = (separator == std::string_view::npos) ? value.size() : separator;
+        const size_t segmentLength = segmentEnd - segmentStart;
+        if (segmentIndex == 0)
+        {
+            if (segmentLength < 2 || segmentLength > 3)
+            {
+                return false;
+            }
+        }
+        else if (segmentLength < 2 || segmentLength > 8)
+        {
+            return false;
+        }
+
+        for (size_t index = segmentStart; index < segmentEnd; ++index)
+        {
+            const char ch      = value[index];
+            const bool isAlpha = (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z');
+            const bool isDigit = (ch >= '0' && ch <= '9');
+            if (segmentIndex == 0 ? ! isAlpha : (! isAlpha && ! isDigit))
+            {
+                return false;
+            }
+        }
+
+        if (separator == std::string_view::npos)
+        {
+            return true;
+        }
+
+        segmentStart = separator + 1;
+        ++segmentIndex;
+    }
+
+    return false;
+}
+
 void ParseMonitor(yyjson_val* root, Common::Settings::Settings& out)
 {
     yyjson_val* monitor = yyjson_obj_get(root, "monitor");
@@ -1892,12 +2011,21 @@ void ParseMonitor(yyjson_val* root, Common::Settings::Settings& out)
     if (filter)
     {
         GetUInt32(filter, "mask", settings.filter.mask);
-        settings.filter.mask &= 31u;
+        settings.filter.mask &= 63u;
 
         const auto preset = GetString(filter, "preset");
         if (preset)
         {
             settings.filter.preset = ParsePreset(*preset);
+        }
+
+        switch (settings.filter.preset)
+        {
+            case Common::Settings::MonitorFilterPreset::ErrorsOnly: settings.filter.mask = 0x02u; break;
+            case Common::Settings::MonitorFilterPreset::ErrorsWarnings: settings.filter.mask = 0x06u; break;
+            case Common::Settings::MonitorFilterPreset::AllTypes: settings.filter.mask = 0x3Fu; break;
+            case Common::Settings::MonitorFilterPreset::Custom:
+            default: break;
         }
     }
 
@@ -1929,6 +2057,44 @@ void ParseStartup(yyjson_val* root, Common::Settings::Settings& out)
     Common::Settings::StartupSettings settings;
     GetBool(startup, "showSplash", settings.showSplash);
     out.startup = std::move(settings);
+}
+
+void ParseUi(yyjson_val* root, Common::Settings::Settings& out)
+{
+    yyjson_val* ui = yyjson_obj_get(root, "ui");
+    if (! ui || ! yyjson_is_obj(ui))
+    {
+        return;
+    }
+
+    Common::Settings::UiSettings settings;
+    GetBool(ui, "compactMode", settings.compactMode);
+
+    if (const auto reducedMotion = GetString(ui, "reducedMotion"); reducedMotion.has_value())
+    {
+        settings.reducedMotion = ParseReducedMotionMode(*reducedMotion);
+    }
+
+    if (const auto windowBackdrop = GetString(ui, "windowBackdrop"); windowBackdrop.has_value())
+    {
+        settings.windowBackdrop = ParseWindowBackdropMode(*windowBackdrop);
+    }
+    if (const auto language = GetString(ui, "language"); language.has_value())
+    {
+        if (IsValidLanguagePreference(*language))
+        {
+            settings.language = Utf16FromUtf8(*language);
+        }
+        else
+        {
+            static std::once_flag loggedInvalidLanguage;
+            std::call_once(loggedInvalidLanguage, [&] {
+                Debug::Warning(L"Invalid persisted ui.language value '{}' ignored; falling back to System Language.", Utf16FromUtf8(*language).c_str());
+            });
+        }
+    }
+
+    out.ui = std::move(settings);
 }
 
 void ParseConnections(yyjson_val* root, Common::Settings::Settings& out)
@@ -2157,8 +2323,27 @@ void ParseFileOperations(yyjson_val* root, Common::Settings::Settings& out)
 
     Common::Settings::FileOperationsSettings settings;
     GetBool(fileOperations, "autoDismissSuccess", settings.autoDismissSuccess);
+    GetBool(fileOperations, "preCalcEnabled", settings.preCalcEnabled);
     GetBool(fileOperations, "diagnosticsInfoEnabled", settings.diagnosticsInfoEnabled);
     GetBool(fileOperations, "diagnosticsDebugEnabled", settings.diagnosticsDebugEnabled);
+
+    uint32_t preCalcMaxWorkers = settings.preCalcMaxWorkers;
+    if (GetUInt32(fileOperations, "preCalcMaxWorkers", preCalcMaxWorkers))
+    {
+        settings.preCalcMaxWorkers = std::clamp(preCalcMaxWorkers, 1u, 8u);
+    }
+
+    uint32_t crossFsBridgeBufferSizeKB = settings.crossFsBridgeBufferSizeKB;
+    if (GetUInt32(fileOperations, "crossFsBridgeBufferSizeKB", crossFsBridgeBufferSizeKB))
+    {
+        settings.crossFsBridgeBufferSizeKB = std::clamp(crossFsBridgeBufferSizeKB, 512u, 16384u);
+    }
+
+    uint64_t defaultBandwidthLimitBytesPerSecond = settings.defaultBandwidthLimitBytesPerSecond;
+    if (GetUInt64(fileOperations, "defaultBandwidthLimitBytesPerSecond", defaultBandwidthLimitBytesPerSecond))
+    {
+        settings.defaultBandwidthLimitBytesPerSecond = defaultBandwidthLimitBytesPerSecond;
+    }
 
     uint32_t maxDiagnosticsLogFiles = settings.maxDiagnosticsLogFiles;
     if (GetUInt32(fileOperations, "maxDiagnosticsLogFiles", maxDiagnosticsLogFiles))
@@ -2194,6 +2379,50 @@ void ParseFileOperations(yyjson_val* root, Common::Settings::Settings& out)
     if (GetUInt32(fileOperations, "diagnosticsCleanupIntervalMs", diagnosticsCleanupIntervalMs))
     {
         settings.diagnosticsCleanupIntervalMs = diagnosticsCleanupIntervalMs;
+    }
+
+    if (const auto issuesPaneSortColumnId = GetString(fileOperations, "issuesPaneSortColumnId"); issuesPaneSortColumnId.has_value())
+    {
+        settings.issuesPaneSortColumnId = Utf16FromUtf8(issuesPaneSortColumnId.value());
+    }
+    GetBool(fileOperations, "issuesPaneSortDescending", settings.issuesPaneSortDescending);
+
+    if (yyjson_val* issuesPaneGridLayout = yyjson_obj_get(fileOperations, "issuesPaneGridLayout"); issuesPaneGridLayout && yyjson_is_arr(issuesPaneGridLayout))
+    {
+        const size_t entryCount = yyjson_arr_size(issuesPaneGridLayout);
+        settings.issuesPaneGridLayout.reserve(entryCount);
+        for (size_t entryIndex = 0; entryIndex < entryCount; ++entryIndex)
+        {
+            yyjson_val* entry = yyjson_arr_get(issuesPaneGridLayout, entryIndex);
+            if (! entry || ! yyjson_is_obj(entry))
+            {
+                continue;
+            }
+
+            const auto columnId = GetString(entry, "columnId");
+            if (! columnId.has_value())
+            {
+                continue;
+            }
+
+            Common::Settings::GridColumnLayoutEntry layoutEntry{};
+            layoutEntry.columnId = Utf16FromUtf8(columnId.value());
+            if (layoutEntry.columnId.empty())
+            {
+                continue;
+            }
+
+            if (yyjson_val* displayIndex = yyjson_obj_get(entry, "displayIndex"); displayIndex && yyjson_is_uint(displayIndex))
+            {
+                layoutEntry.displayIndex = static_cast<uint32_t>(yyjson_get_uint(displayIndex));
+            }
+            if (yyjson_val* widthDip = yyjson_obj_get(entry, "widthDip"); widthDip && yyjson_is_num(widthDip))
+            {
+                layoutEntry.widthDip = static_cast<float>(std::clamp(yyjson_get_num(widthDip), 0.0, 10000.0));
+            }
+
+            settings.issuesPaneGridLayout.push_back(std::move(layoutEntry));
+        }
     }
 
     out.fileOperations = std::move(settings);
@@ -2506,6 +2735,49 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
     {
         settings.maxResults = static_cast<uint64_t>(yyjson_get_uint(maxResults));
     }
+    if (const auto sortColumnId = GetString(search, "sortColumnId"); sortColumnId.has_value())
+    {
+        settings.sortColumnId = Utf16FromUtf8(sortColumnId.value());
+    }
+    GetBool(search, "sortDescending", settings.sortDescending);
+
+    if (yyjson_val* resultsGridLayout = yyjson_obj_get(search, "resultsGridLayout"); resultsGridLayout && yyjson_is_arr(resultsGridLayout))
+    {
+        const size_t entryCount = yyjson_arr_size(resultsGridLayout);
+        settings.resultsGridLayout.reserve(entryCount);
+        for (size_t entryIndex = 0; entryIndex < entryCount; ++entryIndex)
+        {
+            yyjson_val* entry = yyjson_arr_get(resultsGridLayout, entryIndex);
+            if (! entry || ! yyjson_is_obj(entry))
+            {
+                continue;
+            }
+
+            const auto columnId = GetString(entry, "columnId");
+            if (! columnId.has_value())
+            {
+                continue;
+            }
+
+            Common::Settings::GridColumnLayoutEntry layoutEntry{};
+            layoutEntry.columnId = Utf16FromUtf8(columnId.value());
+            if (layoutEntry.columnId.empty())
+            {
+                continue;
+            }
+
+            if (yyjson_val* displayIndex = yyjson_obj_get(entry, "displayIndex"); displayIndex && yyjson_is_uint(displayIndex))
+            {
+                layoutEntry.displayIndex = static_cast<uint32_t>(yyjson_get_uint(displayIndex));
+            }
+            if (yyjson_val* widthDip = yyjson_obj_get(entry, "widthDip"); widthDip && yyjson_is_num(widthDip))
+            {
+                layoutEntry.widthDip = static_cast<float>(std::clamp(yyjson_get_num(widthDip), 0.0, 10000.0));
+            }
+
+            settings.resultsGridLayout.push_back(std::move(layoutEntry));
+        }
+    }
 
     const Common::Settings::SearchDialogSettings defaults{};
     const bool hasNonDefault = ! settings.recentRoots.empty() || ! settings.recentNamePatterns.empty() || ! settings.recentContentPatterns.empty() ||
@@ -2515,7 +2787,8 @@ void ParseSearchSettings(yyjson_val* root, Common::Settings::Settings& out)
                                settings.matchCaseName != defaults.matchCaseName || settings.matchCaseContent != defaults.matchCaseContent ||
                                settings.preferIndex != defaults.preferIndex || settings.wantSnippets != defaults.wantSnippets ||
                                settings.nameMode != defaults.nameMode || settings.contentMode != defaults.contentMode ||
-                               settings.maxResults != defaults.maxResults;
+                               settings.maxResults != defaults.maxResults || ! settings.sortColumnId.empty() ||
+                               settings.sortDescending != defaults.sortDescending || ! settings.resultsGridLayout.empty();
     if (hasNonDefault)
     {
         out.search = std::move(settings);
@@ -2541,7 +2814,7 @@ HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexce
     auto parseBindings = [&](const char* name, std::vector<Common::Settings::ShortcutBinding>& dest) noexcept -> HRESULT
     {
         const std::wstring scopeName = Utf16FromUtf8(name);
-        yyjson_val* arr = yyjson_obj_get(shortcuts, name);
+        yyjson_val* arr              = yyjson_obj_get(shortcuts, name);
         if (! arr)
         {
             return S_OK;
@@ -2687,6 +2960,52 @@ HRESULT ParseShortcuts(yyjson_val* root, Common::Settings::Settings& out) noexce
         return hr;
     }
 
+    GetBool(shortcuts, "functionBarCollapsed", settings.functionBarCollapsed);
+    GetBool(shortcuts, "folderViewCollapsed", settings.folderViewCollapsed);
+    if (const auto sortColumnId = GetString(shortcuts, "sortColumnId"); sortColumnId.has_value())
+    {
+        settings.sortColumnId = Utf16FromUtf8(sortColumnId.value());
+    }
+    GetBool(shortcuts, "sortDescending", settings.sortDescending);
+
+    if (yyjson_val* gridLayout = yyjson_obj_get(shortcuts, "gridLayout"); gridLayout && yyjson_is_arr(gridLayout))
+    {
+        const size_t entryCount = yyjson_arr_size(gridLayout);
+        settings.gridLayout.reserve(entryCount);
+        for (size_t entryIndex = 0; entryIndex < entryCount; ++entryIndex)
+        {
+            yyjson_val* entry = yyjson_arr_get(gridLayout, entryIndex);
+            if (! entry || ! yyjson_is_obj(entry))
+            {
+                continue;
+            }
+
+            const auto columnId = GetString(entry, "columnId");
+            if (! columnId.has_value())
+            {
+                continue;
+            }
+
+            Common::Settings::GridColumnLayoutEntry layoutEntry{};
+            layoutEntry.columnId = Utf16FromUtf8(columnId.value());
+            if (layoutEntry.columnId.empty())
+            {
+                continue;
+            }
+
+            if (yyjson_val* displayIndex = yyjson_obj_get(entry, "displayIndex"); displayIndex && yyjson_is_uint(displayIndex))
+            {
+                layoutEntry.displayIndex = static_cast<uint32_t>(yyjson_get_uint(displayIndex));
+            }
+            if (yyjson_val* widthDip = yyjson_obj_get(entry, "widthDip"); widthDip && yyjson_is_num(widthDip))
+            {
+                layoutEntry.widthDip = static_cast<float>(std::clamp(yyjson_get_num(widthDip), 0.0, 10000.0));
+            }
+
+            settings.gridLayout.push_back(std::move(layoutEntry));
+        }
+    }
+
     out.shortcuts = std::move(settings);
     return S_OK;
 }
@@ -2734,6 +3053,34 @@ yyjson_mut_val* NewString(yyjson_mut_doc* doc, const std::wstring& value)
         return yyjson_mut_strcpy(doc, "");
     }
     return yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
+}
+
+[[nodiscard]] HRESULT AddStringObjectMember(yyjson_mut_doc* doc, yyjson_mut_val* object, const char* key, const std::wstring& value) noexcept
+{
+    yyjson_mut_val* stringValue = NewString(doc, value);
+    if (! stringValue)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, object, key, stringValue))
+    {
+        return E_OUTOFMEMORY;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AppendStringArrayValue(yyjson_mut_doc* doc, yyjson_mut_val* array, const std::wstring& value) noexcept
+{
+    yyjson_mut_val* stringValue = NewString(doc, value);
+    if (! stringValue)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_arr_add_val(array, stringValue))
+    {
+        return E_OUTOFMEMORY;
+    }
+    return S_OK;
 }
 
 } // namespace
@@ -2791,12 +3138,14 @@ namespace
     return fileName;
 }
 
+#ifdef _DEBUG
 [[nodiscard]] std::wstring GetDebugSettingsFileName(std::wstring_view appId)
 {
     std::wstring fileName(appId);
     fileName += L"-debug.settings.json";
     return fileName;
 }
+#endif
 
 [[nodiscard]] std::filesystem::path GetLegacySettingsPath(std::wstring_view appId) noexcept
 {
@@ -2808,6 +3157,7 @@ namespace
     return base / GetLegacySettingsFileName(appId);
 }
 
+#ifdef _DEBUG
 [[nodiscard]] std::filesystem::path GetVersionedSettingsPath(std::wstring_view appId) noexcept
 {
     const std::filesystem::path base = GetSettingsDirectoryPath();
@@ -2817,6 +3167,7 @@ namespace
     }
     return base / GetVersionedSettingsFileName(appId);
 }
+#endif
 
 [[nodiscard]] bool IsSettingsFilePresent(const std::filesystem::path& path) noexcept
 {
@@ -3042,6 +3393,7 @@ namespace
     ParseMonitor(root, out);
     ParseMainMenu(root, out);
     ParseStartup(root, out);
+    ParseUi(root, out);
     ParseConnections(root, out);
     ParseFileOperations(root, out);
     ParseCompareDirectories(root, out);
@@ -3197,7 +3549,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
     std::wstring schemaRef(L"./");
     schemaRef.append(appId);
     schemaRef.append(L".settings.schema.json");
-    yyjson_mut_obj_add_val(doc, root, "$schema", NewString(doc, schemaRef));
+    if (const HRESULT hr = AddStringObjectMember(doc, root, "$schema", schemaRef); FAILED(hr))
+    {
+        return hr;
+    }
 
     yyjson_mut_obj_add_int(doc, root, "schemaVersion", 11);
 
@@ -3291,7 +3646,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
 
             if (writeThemeId)
             {
-                yyjson_mut_obj_add_val(doc, theme, "currentThemeId", NewString(doc, currentThemeId));
+                if (const HRESULT hr = AddStringObjectMember(doc, theme, "currentThemeId", currentThemeId); FAILED(hr))
+                {
+                    return hr;
+                }
             }
 
             if (writeThemes)
@@ -3318,9 +3676,18 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                     {
                         return E_OUTOFMEMORY;
                     }
-                    yyjson_mut_obj_add_val(doc, defObj, "id", NewString(doc, def->id));
-                    yyjson_mut_obj_add_val(doc, defObj, "name", NewString(doc, def->name));
-                    yyjson_mut_obj_add_val(doc, defObj, "baseThemeId", NewString(doc, def->baseThemeId));
+                    if (const HRESULT hr = AddStringObjectMember(doc, defObj, "id", def->id); FAILED(hr))
+                    {
+                        return hr;
+                    }
+                    if (const HRESULT hr = AddStringObjectMember(doc, defObj, "name", def->name); FAILED(hr))
+                    {
+                        return hr;
+                    }
+                    if (const HRESULT hr = AddStringObjectMember(doc, defObj, "baseThemeId", def->baseThemeId); FAILED(hr))
+                    {
+                        return hr;
+                    }
 
                     yyjson_mut_val* colors = yyjson_mut_obj(doc);
                     if (! colors)
@@ -3423,7 +3790,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
 
             if (writeCurrentPluginId)
             {
-                yyjson_mut_obj_add_val(doc, plugins, "currentFileSystemPluginId", NewString(doc, currentPluginId));
+                if (const HRESULT hr = AddStringObjectMember(doc, plugins, "currentFileSystemPluginId", currentPluginId); FAILED(hr))
+                {
+                    return hr;
+                }
             }
 
             if (writeDisabledIds)
@@ -3436,7 +3806,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 yyjson_mut_obj_add_val(doc, plugins, "disabledPluginIds", disabled);
                 for (const auto& id : disabledIds)
                 {
-                    yyjson_mut_arr_add_val(disabled, NewString(doc, id));
+                    if (const HRESULT hr = AppendStringArrayValue(doc, disabled, id); FAILED(hr))
+                    {
+                        return hr;
+                    }
                 }
             }
 
@@ -3450,7 +3823,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 yyjson_mut_obj_add_val(doc, plugins, "customPluginPaths", custom);
                 for (const auto& customPath : customPaths)
                 {
-                    yyjson_mut_arr_add_val(custom, NewString(doc, customPath));
+                    if (const HRESULT hr = AppendStringArrayValue(doc, custom, customPath); FAILED(hr))
+                    {
+                        return hr;
+                    }
                 }
             }
 
@@ -3695,6 +4071,59 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
         {
             return hr;
         }
+
+        if (settings.shortcuts->functionBarCollapsed)
+        {
+            yyjson_mut_obj_add_bool(doc, shortcuts, "functionBarCollapsed", true);
+        }
+        if (settings.shortcuts->folderViewCollapsed)
+        {
+            yyjson_mut_obj_add_bool(doc, shortcuts, "folderViewCollapsed", true);
+        }
+        if (! settings.shortcuts->sortColumnId.empty())
+        {
+            yyjson_mut_val* sortColumnId = NewString(doc, settings.shortcuts->sortColumnId);
+            if (! sortColumnId)
+            {
+                return E_OUTOFMEMORY;
+            }
+            yyjson_mut_obj_add_val(doc, shortcuts, "sortColumnId", sortColumnId);
+            yyjson_mut_obj_add_bool(doc, shortcuts, "sortDescending", settings.shortcuts->sortDescending);
+        }
+
+        if (! settings.shortcuts->gridLayout.empty())
+        {
+            yyjson_mut_val* gridLayout = yyjson_mut_arr(doc);
+            if (! gridLayout)
+            {
+                return E_OUTOFMEMORY;
+            }
+            yyjson_mut_obj_add_val(doc, shortcuts, "gridLayout", gridLayout);
+
+            for (const auto& entry : settings.shortcuts->gridLayout)
+            {
+                if (entry.columnId.empty())
+                {
+                    continue;
+                }
+
+                yyjson_mut_val* obj = yyjson_mut_obj(doc);
+                if (! obj)
+                {
+                    return E_OUTOFMEMORY;
+                }
+
+                yyjson_mut_val* columnId = NewString(doc, entry.columnId);
+                if (! columnId)
+                {
+                    return E_OUTOFMEMORY;
+                }
+                yyjson_mut_obj_add_val(doc, obj, "columnId", columnId);
+                yyjson_mut_obj_add_uint(doc, obj, "displayIndex", entry.displayIndex);
+                yyjson_mut_obj_add_real(doc, obj, "widthDip", static_cast<double>(entry.widthDip));
+                yyjson_mut_arr_add_val(gridLayout, obj);
+            }
+        }
     }
 
     if (settings.mainMenu)
@@ -3735,6 +4164,44 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             }
             yyjson_mut_obj_add_val(doc, root, "startup", startup);
             yyjson_mut_obj_add_bool(doc, startup, "showSplash", settings.startup->showSplash);
+        }
+    }
+
+    if (settings.ui)
+    {
+        const UiSettings defaults{};
+        const bool writeCompactMode    = (settings.ui->compactMode != defaults.compactMode);
+        const bool writeReducedMotion  = (settings.ui->reducedMotion != defaults.reducedMotion);
+        const bool writeWindowBackdrop = (settings.ui->windowBackdrop != defaults.windowBackdrop);
+        const bool writeLanguage       = (settings.ui->language != defaults.language);
+        if (writeCompactMode || writeReducedMotion || writeWindowBackdrop || writeLanguage)
+        {
+            yyjson_mut_val* ui = yyjson_mut_obj(doc);
+            if (! ui)
+            {
+                return E_OUTOFMEMORY;
+            }
+            yyjson_mut_obj_add_val(doc, root, "ui", ui);
+
+            if (writeCompactMode)
+            {
+                yyjson_mut_obj_add_bool(doc, ui, "compactMode", settings.ui->compactMode);
+            }
+            if (writeReducedMotion)
+            {
+                yyjson_mut_obj_add_str(doc, ui, "reducedMotion", ReducedMotionModeToString(settings.ui->reducedMotion));
+            }
+            if (writeWindowBackdrop)
+            {
+                yyjson_mut_obj_add_str(doc, ui, "windowBackdrop", WindowBackdropModeToString(settings.ui->windowBackdrop));
+            }
+            if (writeLanguage)
+            {
+                if (const HRESULT hr = AddStringObjectMember(doc, ui, "language", settings.ui->language); FAILED(hr))
+                {
+                    return hr;
+                }
+            }
         }
     }
 
@@ -3845,7 +4312,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             const std::wstring activeSlot        = settings.folders->active.empty() ? defaultActiveSlot : settings.folders->active;
             if (! activeSlot.empty() && activeSlot != defaultActiveSlot)
             {
-                yyjson_mut_obj_add_val(doc, folders, "active", NewString(doc, activeSlot));
+                if (const HRESULT hr = AddStringObjectMember(doc, folders, "active", activeSlot); FAILED(hr))
+                {
+                    return hr;
+                }
             }
 
             const float splitRatio                = std::clamp(settings.folders->layout.splitRatio, 0.0f, 1.0f);
@@ -3868,7 +4338,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 }
                 if (writeZoomedPane)
                 {
-                    yyjson_mut_obj_add_val(doc, layout, "zoomedPane", NewString(doc, settings.folders->layout.zoomedPane.value()));
+                    if (const HRESULT hr = AddStringObjectMember(doc, layout, "zoomedPane", settings.folders->layout.zoomedPane.value()); FAILED(hr))
+                    {
+                        return hr;
+                    }
                 }
                 if (writeZoomRestoreSplitRatio)
                 {
@@ -3906,7 +4379,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                         continue;
                     }
 
-                    yyjson_mut_arr_add_val(history, NewString(doc, entry.wstring()));
+                    if (const HRESULT hr = AppendStringArrayValue(doc, history, entry.wstring()); FAILED(hr))
+                    {
+                        return hr;
+                    }
                     ++historyWritten;
                     if (historyWritten >= static_cast<size_t>(historyMax))
                     {
@@ -3963,14 +4439,20 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                         return E_OUTOFMEMORY;
                     }
 
-                    yyjson_mut_obj_add_val(doc, item, "path", NewString(doc, historyPath.wstring()));
+                    if (const HRESULT hr = AddStringObjectMember(doc, item, "path", historyPath.wstring()); FAILED(hr))
+                    {
+                        return hr;
+                    }
                     if (it->enabled)
                     {
                         yyjson_mut_obj_add_bool(doc, item, "enabled", it->enabled);
                     }
                     if (! it->text.empty())
                     {
-                        yyjson_mut_obj_add_val(doc, item, "text", NewString(doc, it->text));
+                        if (const HRESULT hr = AddStringObjectMember(doc, item, "text", it->text); FAILED(hr))
+                        {
+                            return hr;
+                        }
                     }
 
                     yyjson_mut_arr_add_val(filters, item);
@@ -4001,8 +4483,14 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 {
                     return E_OUTOFMEMORY;
                 }
-                yyjson_mut_obj_add_val(doc, paneObj, "slot", NewString(doc, pane->slot));
-                yyjson_mut_obj_add_val(doc, paneObj, "current", NewString(doc, pane->current.wstring()));
+                if (const HRESULT hr = AddStringObjectMember(doc, paneObj, "slot", pane->slot); FAILED(hr))
+                {
+                    return hr;
+                }
+                if (const HRESULT hr = AddStringObjectMember(doc, paneObj, "current", pane->current.wstring()); FAILED(hr))
+                {
+                    return hr;
+                }
 
                 const FolderViewSettings viewDefaults{};
 
@@ -4114,8 +4602,8 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             return E_OUTOFMEMORY;
         }
         bool wroteFilter    = false;
-        const uint32_t mask = settings.monitor->filter.mask & 31u;
-        if (mask != (defaults.filter.mask & 31u))
+        const uint32_t mask = settings.monitor->filter.mask & 63u;
+        if (mask != (defaults.filter.mask & 63u))
         {
             yyjson_mut_obj_add_int(doc, filter, "mask", static_cast<int>(mask));
             wroteFilter = true;
@@ -4298,12 +4786,24 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                         return E_OUTOFMEMORY;
                     }
 
-                    yyjson_mut_obj_add_val(doc, item, "id", NewString(doc, profile.id));
-                    yyjson_mut_obj_add_val(doc, item, "name", NewString(doc, profile.name));
-                    yyjson_mut_obj_add_val(doc, item, "pluginId", NewString(doc, profile.pluginId));
+                    if (const HRESULT hr = AddStringObjectMember(doc, item, "id", profile.id); FAILED(hr))
+                    {
+                        return hr;
+                    }
+                    if (const HRESULT hr = AddStringObjectMember(doc, item, "name", profile.name); FAILED(hr))
+                    {
+                        return hr;
+                    }
+                    if (const HRESULT hr = AddStringObjectMember(doc, item, "pluginId", profile.pluginId); FAILED(hr))
+                    {
+                        return hr;
+                    }
                     if (! profile.host.empty())
                     {
-                        yyjson_mut_obj_add_val(doc, item, "host", NewString(doc, profile.host));
+                        if (const HRESULT hr = AddStringObjectMember(doc, item, "host", profile.host); FAILED(hr))
+                        {
+                            return hr;
+                        }
                     }
                     if (profile.port != 0)
                     {
@@ -4311,12 +4811,18 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                     }
                     if (! profile.initialPath.empty() && profile.initialPath != profileDefaults.initialPath)
                     {
-                        yyjson_mut_obj_add_val(doc, item, "initialPath", NewString(doc, profile.initialPath));
+                        if (const HRESULT hr = AddStringObjectMember(doc, item, "initialPath", profile.initialPath); FAILED(hr))
+                        {
+                            return hr;
+                        }
                     }
 
                     if (! profile.userName.empty())
                     {
-                        yyjson_mut_obj_add_val(doc, item, "userName", NewString(doc, profile.userName));
+                        if (const HRESULT hr = AddStringObjectMember(doc, item, "userName", profile.userName); FAILED(hr))
+                        {
+                            return hr;
+                        }
                     }
 
                     if (profile.authMode != profileDefaults.authMode)
@@ -4359,12 +4865,16 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
     {
         const Common::Settings::FileOperationsSettings defaults{};
         const bool wroteFileOperations =
-            settings.fileOperations->autoDismissSuccess != defaults.autoDismissSuccess ||
+            settings.fileOperations->autoDismissSuccess != defaults.autoDismissSuccess || settings.fileOperations->preCalcEnabled != defaults.preCalcEnabled ||
+            settings.fileOperations->preCalcMaxWorkers != defaults.preCalcMaxWorkers ||
+            settings.fileOperations->crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+            settings.fileOperations->defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
             settings.fileOperations->maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
             settings.fileOperations->diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
             settings.fileOperations->diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || settings.fileOperations->maxIssueReportFiles.has_value() ||
             settings.fileOperations->maxDiagnosticsInMemory.has_value() || settings.fileOperations->maxDiagnosticsPerFlush.has_value() ||
-            settings.fileOperations->diagnosticsFlushIntervalMs.has_value() || settings.fileOperations->diagnosticsCleanupIntervalMs.has_value();
+            settings.fileOperations->diagnosticsFlushIntervalMs.has_value() || settings.fileOperations->diagnosticsCleanupIntervalMs.has_value() ||
+            ! settings.fileOperations->issuesPaneSortColumnId.empty() || ! settings.fileOperations->issuesPaneGridLayout.empty();
 
         if (wroteFileOperations)
         {
@@ -4378,6 +4888,28 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             if (settings.fileOperations->autoDismissSuccess != defaults.autoDismissSuccess)
             {
                 yyjson_mut_obj_add_bool(doc, fileOperations, "autoDismissSuccess", settings.fileOperations->autoDismissSuccess);
+            }
+
+            if (settings.fileOperations->preCalcEnabled != defaults.preCalcEnabled)
+            {
+                yyjson_mut_obj_add_bool(doc, fileOperations, "preCalcEnabled", settings.fileOperations->preCalcEnabled);
+            }
+
+            if (settings.fileOperations->preCalcMaxWorkers != defaults.preCalcMaxWorkers)
+            {
+                yyjson_mut_obj_add_uint(doc, fileOperations, "preCalcMaxWorkers", std::clamp(settings.fileOperations->preCalcMaxWorkers, 1u, 8u));
+            }
+
+            if (settings.fileOperations->crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB)
+            {
+                yyjson_mut_obj_add_uint(
+                    doc, fileOperations, "crossFsBridgeBufferSizeKB", std::clamp(settings.fileOperations->crossFsBridgeBufferSizeKB, 512u, 16384u));
+            }
+
+            if (settings.fileOperations->defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond)
+            {
+                yyjson_mut_obj_add_uint(
+                    doc, fileOperations, "defaultBandwidthLimitBytesPerSecond", settings.fileOperations->defaultBandwidthLimitBytesPerSecond);
             }
 
             if (settings.fileOperations->maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles)
@@ -4418,6 +4950,50 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             if (settings.fileOperations->diagnosticsCleanupIntervalMs.has_value())
             {
                 yyjson_mut_obj_add_uint(doc, fileOperations, "diagnosticsCleanupIntervalMs", settings.fileOperations->diagnosticsCleanupIntervalMs.value());
+            }
+
+            if (! settings.fileOperations->issuesPaneSortColumnId.empty())
+            {
+                if (const HRESULT hr = AddStringObjectMember(doc, fileOperations, "issuesPaneSortColumnId", settings.fileOperations->issuesPaneSortColumnId);
+                    FAILED(hr))
+                {
+                    return hr;
+                }
+                yyjson_mut_obj_add_bool(doc, fileOperations, "issuesPaneSortDescending", settings.fileOperations->issuesPaneSortDescending);
+            }
+
+            if (! settings.fileOperations->issuesPaneGridLayout.empty())
+            {
+                yyjson_mut_val* issuesPaneGridLayout = yyjson_mut_arr(doc);
+                if (! issuesPaneGridLayout)
+                {
+                    return E_OUTOFMEMORY;
+                }
+                yyjson_mut_obj_add_val(doc, fileOperations, "issuesPaneGridLayout", issuesPaneGridLayout);
+
+                for (const auto& entry : settings.fileOperations->issuesPaneGridLayout)
+                {
+                    if (entry.columnId.empty())
+                    {
+                        continue;
+                    }
+
+                    yyjson_mut_val* obj = yyjson_mut_obj(doc);
+                    if (! obj)
+                    {
+                        return E_OUTOFMEMORY;
+                    }
+
+                    yyjson_mut_val* columnId = NewString(doc, entry.columnId);
+                    if (! columnId)
+                    {
+                        return E_OUTOFMEMORY;
+                    }
+                    yyjson_mut_obj_add_val(doc, obj, "columnId", columnId);
+                    yyjson_mut_obj_add_uint(doc, obj, "displayIndex", static_cast<uint64_t>(entry.displayIndex));
+                    yyjson_mut_obj_add_real(doc, obj, "widthDip", static_cast<double>(entry.widthDip));
+                    yyjson_mut_arr_add_val(issuesPaneGridLayout, obj);
+                }
             }
         }
     }
@@ -4479,7 +5055,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             }
             if (! compare.ignoreFilesPatterns.empty())
             {
-                yyjson_mut_obj_add_val(doc, compareObj, "ignoreFilesPatterns", NewString(doc, compare.ignoreFilesPatterns));
+                if (const HRESULT hr = AddStringObjectMember(doc, compareObj, "ignoreFilesPatterns", compare.ignoreFilesPatterns); FAILED(hr))
+                {
+                    return hr;
+                }
             }
             if (compare.ignoreDirectories != defaults.ignoreDirectories)
             {
@@ -4487,7 +5066,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             }
             if (! compare.ignoreDirectoriesPatterns.empty())
             {
-                yyjson_mut_obj_add_val(doc, compareObj, "ignoreDirectoriesPatterns", NewString(doc, compare.ignoreDirectoriesPatterns));
+                if (const HRESULT hr = AddStringObjectMember(doc, compareObj, "ignoreDirectoriesPatterns", compare.ignoreDirectoriesPatterns); FAILED(hr))
+                {
+                    return hr;
+                }
             }
             if (compare.keepIdenticalItems != defaults.keepIdenticalItems)
             {
@@ -4499,7 +5081,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             }
             if (compare.contentCompareWorkerCount != defaults.contentCompareWorkerCount)
             {
-                yyjson_mut_obj_add_uint(doc, compareObj, "contentCompareWorkerCount", compare.contentCompareWorkerCount);
+                yyjson_mut_obj_add_uint(doc, compareObj, "contentCompareWorkerCount", std::clamp(compare.contentCompareWorkerCount, 0u, 4u));
             }
         }
     }
@@ -4556,10 +5138,16 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 }
                 yyjson_mut_arr_add_val(slotsArr, slotObj);
 
-                yyjson_mut_obj_add_val(doc, slotObj, "path", NewString(doc, slotValue.path));
+                if (const HRESULT hr = AddStringObjectMember(doc, slotObj, "path", slotValue.path); FAILED(hr))
+                {
+                    return hr;
+                }
                 if (! slotValue.label.empty())
                 {
-                    yyjson_mut_obj_add_val(doc, slotObj, "label", NewString(doc, slotValue.label));
+                    if (const HRESULT hr = AddStringObjectMember(doc, slotObj, "label", slotValue.label); FAILED(hr))
+                    {
+                        return hr;
+                    }
                 }
                 if (slotValue.showInMenu)
                 {
@@ -4607,7 +5195,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                         continue;
                     }
 
-                    yyjson_mut_arr_add_val(arr, NewString(doc, entry));
+                    if (const HRESULT hr = AppendStringArrayValue(doc, arr, entry); FAILED(hr))
+                    {
+                        return hr;
+                    }
 
                     ++added;
                     if (added >= kMaxHistoryItems)
@@ -4640,8 +5231,9 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
 
         const bool wroteSearch = ! search.recentRoots.empty() || ! search.recentNamePatterns.empty() || ! search.recentContentPatterns.empty() ||
                                  ! search.lastRoot.empty() || ! search.lastNamePattern.empty() || ! search.lastContentPattern.empty() || ! search.recursive ||
-                                 ! search.includeFiles || search.includeDirectories || search.followSymlinks || search.matchCaseName || search.matchCaseContent ||
-                                 ! search.preferIndex || search.wantSnippets || search.nameMode != Common::Settings::SearchNameMode::Wildcard ||
+                                 ! search.includeFiles || search.includeDirectories || search.followSymlinks || search.matchCaseName ||
+                                 search.matchCaseContent || ! search.preferIndex || search.wantSnippets ||
+                                 search.nameMode != Common::Settings::SearchNameMode::Wildcard ||
                                  search.contentMode != Common::Settings::SearchContentMode::Disabled || search.maxResults != 0u;
         if (wroteSearch)
         {
@@ -4675,7 +5267,10 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                         continue;
                     }
 
-                    yyjson_mut_arr_add_val(arr, NewString(doc, entry));
+                    if (const HRESULT hr = AppendStringArrayValue(doc, arr, entry); FAILED(hr))
+                    {
+                        return hr;
+                    }
                     ++added;
                     if (added >= kMaxHistoryItems)
                     {
@@ -4701,15 +5296,24 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
 
             if (! search.lastRoot.empty())
             {
-                yyjson_mut_obj_add_val(doc, searchObj, "lastRoot", NewString(doc, search.lastRoot));
+                if (const HRESULT hr = AddStringObjectMember(doc, searchObj, "lastRoot", search.lastRoot); FAILED(hr))
+                {
+                    return hr;
+                }
             }
             if (! search.lastNamePattern.empty())
             {
-                yyjson_mut_obj_add_val(doc, searchObj, "lastNamePattern", NewString(doc, search.lastNamePattern));
+                if (const HRESULT hr = AddStringObjectMember(doc, searchObj, "lastNamePattern", search.lastNamePattern); FAILED(hr))
+                {
+                    return hr;
+                }
             }
             if (! search.lastContentPattern.empty())
             {
-                yyjson_mut_obj_add_val(doc, searchObj, "lastContentPattern", NewString(doc, search.lastContentPattern));
+                if (const HRESULT hr = AddStringObjectMember(doc, searchObj, "lastContentPattern", search.lastContentPattern); FAILED(hr))
+                {
+                    return hr;
+                }
             }
 
             yyjson_mut_obj_add_bool(doc, searchObj, "recursive", search.recursive ? 1 : 0);
@@ -4723,6 +5327,46 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
             yyjson_mut_obj_add_str(doc, searchObj, "nameMode", SearchNameModeToString(search.nameMode));
             yyjson_mut_obj_add_str(doc, searchObj, "contentMode", SearchContentModeToString(search.contentMode));
             yyjson_mut_obj_add_uint(doc, searchObj, "maxResults", search.maxResults);
+            if (! search.sortColumnId.empty())
+            {
+                if (const HRESULT hr = AddStringObjectMember(doc, searchObj, "sortColumnId", search.sortColumnId); FAILED(hr))
+                {
+                    return hr;
+                }
+                yyjson_mut_obj_add_bool(doc, searchObj, "sortDescending", search.sortDescending);
+            }
+            if (! search.resultsGridLayout.empty())
+            {
+                yyjson_mut_val* layoutArr = yyjson_mut_arr(doc);
+                if (! layoutArr)
+                {
+                    return E_OUTOFMEMORY;
+                }
+
+                for (const auto& entry : search.resultsGridLayout)
+                {
+                    if (entry.columnId.empty())
+                    {
+                        continue;
+                    }
+
+                    yyjson_mut_val* layoutObj = yyjson_mut_obj(doc);
+                    if (! layoutObj)
+                    {
+                        return E_OUTOFMEMORY;
+                    }
+
+                    if (const HRESULT hr = AddStringObjectMember(doc, layoutObj, "columnId", entry.columnId); FAILED(hr))
+                    {
+                        return hr;
+                    }
+                    yyjson_mut_obj_add_uint(doc, layoutObj, "displayIndex", entry.displayIndex);
+                    yyjson_mut_obj_add_real(doc, layoutObj, "widthDip", entry.widthDip);
+                    yyjson_mut_arr_add_val(layoutArr, layoutObj);
+                }
+
+                yyjson_mut_obj_add_val(doc, searchObj, "resultsGridLayout", layoutArr);
+            }
         }
     }
 

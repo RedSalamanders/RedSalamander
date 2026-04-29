@@ -17,11 +17,6 @@ void NavigationView::OnLButtonDown(POINT pt)
 {
     if (_editMode)
     {
-        const auto chrome = ComputeEditChromeRects(_sectionPathRect, _dpi);
-        if (PtInRect(&chrome.closeRect, pt))
-        {
-            ExitEditMode(false);
-        }
         return;
     }
 
@@ -29,7 +24,7 @@ void NavigationView::OnLButtonDown(POINT pt)
     if (_showMenuSection && PtInRect(&_sectionDriveRect, pt))
     {
         _focusedRegion = FocusRegion::Menu;
-        ShowMenuDropdown();
+        ShowMenuDropdown(true);
         return;
     }
 
@@ -37,7 +32,7 @@ void NavigationView::OnLButtonDown(POINT pt)
     if (PtInRect(&_sectionHistoryRect, pt))
     {
         _focusedRegion = FocusRegion::History;
-        ShowHistoryDropdown();
+        ShowHistoryDropdown(true);
         return;
     }
 
@@ -45,7 +40,7 @@ void NavigationView::OnLButtonDown(POINT pt)
     if (_showDiskInfoSection && PtInRect(&_sectionDiskInfoRect, pt))
     {
         _focusedRegion = FocusRegion::DiskInfo;
-        ShowDiskInfoDropdown();
+        ShowDiskInfoDropdown(true);
         return;
     }
 
@@ -96,14 +91,13 @@ void NavigationView::OnLButtonDown(POINT pt)
             }
 
             // If a different separator menu is open, close it first
-            if (_menuOpenForSeparator != -1 && _menuOpenForSeparator != static_cast<int>(i))
+            if (_hWnd)
             {
-                SendMessageW(_hWnd.get(), WM_CANCELMODE, 0, 0);
+                if (_menuOpenForSeparator != -1 && _menuOpenForSeparator != static_cast<int>(i))
+                {
+                    SendMessageW(_hWnd.get(), WM_CANCELMODE, 0, 0);
+                }
                 PostMessageW(_hWnd.get(), WndMsg::kNavigationMenuShowSiblingsDropdown, static_cast<WPARAM>(i), 0);
-            }
-            else
-            {
-                ShowSiblingsDropdown(i);
             }
             return;
         }
@@ -315,10 +309,7 @@ void NavigationView::OnMouseLeave()
     bool hadHoveredSegment = (_hoveredSegmentIndex != -1);
     _hoveredSegmentIndex   = -1;
 
-    const bool hadEditCloseHovered = _editCloseHovered;
-    _editCloseHovered              = false;
-
-    bool needsRedraw = hadHoveredSeparator || hadHoveredSegment || hadEditCloseHovered;
+    bool needsRedraw = hadHoveredSeparator || hadHoveredSegment;
     if (needsRedraw)
     {
         RenderPathSection();
@@ -382,16 +373,6 @@ void NavigationView::OnSetCursor([[maybe_unused]] HWND hwnd, UINT hitTest, [[may
         }
 
         // Check Section 2 segments and separators (hover tracking now in OnTimer)
-        if (_editMode)
-        {
-            const auto chrome = ComputeEditChromeRects(_sectionPathRect, _dpi);
-            if (PtInRect(&chrome.closeRect, pt))
-            {
-                SetCursor(LoadCursor(nullptr, IDC_HAND));
-                return;
-            }
-        }
-
         if (PtInRect(&_sectionPathRect, pt))
         {
             SetCursor(LoadCursor(nullptr, IDC_ARROW));
@@ -487,14 +468,6 @@ void NavigationView::OnTimer(UINT_PTR timerId)
     if (_editMode)
     {
         bool needsRedraw = false;
-
-        const auto chrome       = ComputeEditChromeRects(_sectionPathRect, _dpi);
-        const bool closeHovered = inClient && PtInRect(&chrome.closeRect, pt);
-        if (closeHovered != _editCloseHovered)
-        {
-            _editCloseHovered = closeHovered;
-            needsRedraw       = true;
-        }
 
         if (_hoveredSegmentIndex != -1 || _hoveredSeparatorIndex != -1)
         {
@@ -650,7 +623,8 @@ void NavigationView::OnKillFocus(HWND newFocus)
     {
         PostMessageW(GetParent(_hWnd.get()), WndMsg::kPaneFocusChanged, 0, 0);
     }
-    if (_pathEdit && newFocus == _pathEdit.get())
+    if (_pathEdit && _pathEdit->hwnd &&
+        (newFocus == _pathEdit->hwnd.get() || newFocus == _pathEdit->GetBridgeHwnd() || IsChild(_pathEdit->hwnd.get(), newFocus) != FALSE))
     {
         return;
     }
@@ -785,10 +759,25 @@ void NavigationView::ActivateFocusedRegion()
     NormalizeFocusRegion();
     switch (_focusedRegion)
     {
-        case FocusRegion::Menu: ShowMenuDropdown(); break;
+        case FocusRegion::Menu:
+            if (_hWnd)
+            {
+                PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowMenuDropdown, 0, 0);
+            }
+            break;
         case FocusRegion::Path: EnterEditMode(); break;
-        case FocusRegion::History: ShowHistoryDropdown(); break;
-        case FocusRegion::DiskInfo: ShowDiskInfoDropdown(); break;
+        case FocusRegion::History:
+            if (_hWnd)
+            {
+                PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowHistoryDropdown, 0, 0);
+            }
+            break;
+        case FocusRegion::DiskInfo:
+            if (_hWnd)
+            {
+                PostMessageW(_hWnd.get(), WndMsg::kNavigationViewShowDiskInfoDropdown, 0, 0);
+            }
+            break;
     }
 }
 

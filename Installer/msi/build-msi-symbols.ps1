@@ -9,43 +9,34 @@ param(
     [string]$Platform = "x64",
 
     [Parameter(HelpMessage = "Output directory for the MSI")]
-    [string]$OutputDirectory = $null
+    [string]$OutputDirectory = $null,
+
+    [Parameter(HelpMessage = "Build number to stamp into the MSI")]
+    [int]$BuildNumber = 0
 )
 
 $ErrorActionPreference = "Stop"
 
-function Get-DefineInt {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$HeaderPath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Name
-    )
-
-    $pattern = '^\s*#define\s+' + [Regex]::Escape($Name) + '\s+(\d+)\s*$'
-    $line = Get-Content -Path $HeaderPath | Where-Object { $_ -match $pattern } | Select-Object -First 1
-    if (-not $line) {
-        throw "Failed to find $Name in $HeaderPath"
-    }
-
-    $match = [Regex]::Match($line, $pattern)
-    return [int]$match.Groups[1].Value
-}
-
 $solutionDir = (Resolve-Path (Join-Path $PSScriptRoot "..\\..")).Path
 $solutionDirWithSlash = $solutionDir.TrimEnd('\') + '\'
-
-$versionHeader = Join-Path $solutionDir "Common\\Version.h"
-$major = Get-DefineInt -HeaderPath $versionHeader -Name "VERSINFO_MAJOR"
-$minor = Get-DefineInt -HeaderPath $versionHeader -Name "VERSINFO_MINORA"
-$build = Get-DefineInt -HeaderPath $versionHeader -Name "VERSINFO_BUILDNUMBER"
-
-if ($major -gt 255 -or $minor -gt 255 -or $build -gt 65535) {
-    throw "MSI version components out of range (major/minor must be <=255, build must be <=65535): $major.$minor.$build"
+$versioningScript = Join-Path $solutionDir "Tools\Versioning.ps1"
+if (-not (Test-Path $versioningScript)) {
+    throw "Version helper script not found: $versioningScript"
 }
 
-$productVersion = "$major.$minor.$build"
+. $versioningScript
+$versionContext = if ($BuildNumber -gt 0) {
+    Get-RSVersionContext -RepoRoot $solutionDir -Configuration $Configuration -Platform $Platform -BuildNumber $BuildNumber
+} else {
+    $savedContext = Read-RSVersionContext -RepoRoot $solutionDir
+    if ($savedContext) { $savedContext } else { Get-RSVersionContext -RepoRoot $solutionDir -Configuration $Configuration -Platform $Platform }
+}
+
+if ($versionContext.Major -gt 255 -or $versionContext.MinorPacked -gt 255 -or $versionContext.BuildNumber -gt 65535) {
+    throw "MSI version components out of range (major/minor must be <=255, build must be <=65535): $($versionContext.PackagingVersion)"
+}
+
+$productVersion = $versionContext.PackagingVersion
 
 $releaseDir = Join-Path $solutionDir (".build\\{0}\\{1}" -f $Platform, $Configuration)
 if (-not (Test-Path $releaseDir)) {

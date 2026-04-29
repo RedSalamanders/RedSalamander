@@ -61,6 +61,16 @@ Host services are provided to plugins via a **single factory entry point**. This
 
 `IHost` is a COM object that supports `QueryInterface` for specific service interfaces (alerts, prompts, future services).
 
+### ABI evolution policy
+
+This is a guard for future host/plugin interface changes, not a current defect in the planned interfaces.
+
+- Same-GUID COM interfaces have fixed vtable slot order. Do not insert, remove, reorder, or change existing virtual methods on an interface that keeps the same IID.
+- Append-only same-GUID changes are allowed only when old-plugin/new-host compatibility is explicitly covered by a slot-compatibility test fixture.
+- If that compatibility is not proven, create a new IID/name such as `IHostConnections2` and expose it through `IHost::QueryInterface`.
+- New-plugin/old-host compatibility must probe the newer IID with `QueryInterface`; plugins must not assume appended methods exist on an older host implementation.
+- Callback shutdown/order validation and an old-plugin/new-host compatibility fixture are required before treating an interface evolution as complete.
+
 Proposed factory signature:
 
 ```cpp
@@ -70,6 +80,7 @@ extern "C"
         REFIID riid,
         const FactoryOptions* factoryOptions,
         IHost* host,
+        const wchar_t* pluginId,
         void** result
     );
 }
@@ -77,6 +88,7 @@ extern "C"
 
 Lifetime/ownership:
 - `host` is caller-owned and remains valid for the lifetime of the plugin instance created from this call.
+- `pluginId` identifies the logical plugin being created; single-plugin DLLs MAY accept `nullptr` or empty.
 - Plugins MAY `AddRef()` `host` (or any queried service interface) if they need to store it beyond the factory call.
 
 ### Context routing (cookie)
@@ -244,7 +256,7 @@ interface __declspec(uuid("afb5a715-1110-41f3-b7bb-133d6ca735fd")) __declspec(no
    - map `cookie` → pane instance (left/right) for pane scopes,
    - application scope does not use cookies.
 4. **Plugin handshake**:
-   - update `RedSalamanderCreate` signature to accept `IHost*`,
+   - update `RedSalamanderCreate` signature to accept `IHost*` and logical `pluginId`,
    - update all plugins (built-in + shipped) to the new signature,
    - expose `IHostAlerts` + `IHostPrompts` from `IHost`,
    - update built-in plugins to consume it (optional).

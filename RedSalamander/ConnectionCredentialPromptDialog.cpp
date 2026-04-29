@@ -3,7 +3,7 @@
 #include "ConnectionCredentialPromptDialog.h"
 
 #include <algorithm>
-#include <commctrl.h>
+#include <atomic>
 #include <cwctype>
 
 #pragma warning(push)
@@ -11,100 +11,71 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "DxUi/DxUi.h"
 #include "Helpers.h"
-#include "ThemedControls.h"
-#include "ThemedInputFrames.h"
+#include "UiMetrics.h"
+#include "WindowMessages.h"
 #include "resource.h"
 
 namespace
 {
-constexpr UINT_PTR kSecretEditSubclassId = 1u;
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::Control;
+using RedSalamander::DxUi::FontRole;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::TextField;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::Toggle;
+using RedSalamander::DxUi::WindowHost;
 
-struct DialogState
+constexpr wchar_t kPromptWindowClassName[] = L"RedSalamander.ConnectionCredentialPromptWindow";
+constexpr UINT kPromptDeferredCloseMessage = WM_APP + 1u;
+std::atomic<HWND> g_connectionCredentialPromptWindow{nullptr};
+
+#ifdef ENABLE_TESTS
+enum class PromptDebugCommand : WPARAM
 {
-    DialogState()                              = default;
-    DialogState(const DialogState&)            = delete;
-    DialogState& operator=(const DialogState&) = delete;
-    DialogState(DialogState&&)                 = delete;
-    DialogState& operator=(DialogState&&)      = delete;
-    ~DialogState()                             = default;
-
-    AppTheme theme{};
-    wil::unique_hbrush backgroundBrush;
-
-    COLORREF inputBackgroundColor         = RGB(255, 255, 255);
-    COLORREF inputFocusedBackgroundColor  = RGB(255, 255, 255);
-    COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
-    wil::unique_hbrush inputBrush;
-    wil::unique_hbrush inputFocusedBrush;
-    wil::unique_hbrush inputDisabledBrush;
-
-    ThemedInputFrames::FrameStyle inputFrameStyle{};
-    wil::unique_hwnd userFrame;
-    wil::unique_hwnd secretFrame;
-
-    bool showUserName      = false;
-    bool allowEmptySecret  = false;
-    bool secretVisible     = false;
-    bool showingValidation = false;
-
-    std::wstring caption;
-    std::wstring message;
-    std::wstring secretLabel;
-    std::wstring initialUserName;
-
-    std::wstring userNameOut;
-    std::wstring secretOut;
+    GetSnapshot = 1,
+    SetUserName,
+    SetSecret,
+    GetToggleSecretButtonRect,
+    ToggleSecretVisibility,
+    Confirm,
 };
 
-COLORREF ColorRefFromColorF(const D2D1::ColorF& color) noexcept
+struct PromptDebugText
 {
-    const auto toByte = [](float v) noexcept
-    {
-        const float clamped = std::clamp(v, 0.0f, 1.0f);
-        const float scaled  = (clamped * 255.0f) + 0.5f;
-        const int asInt     = static_cast<int>(scaled);
-        const int bounded   = std::clamp(asInt, 0, 255);
-        return static_cast<BYTE>(bounded);
-    };
+    const wchar_t* text = nullptr;
+    size_t length       = 0u;
+};
 
-    return RGB(toByte(color.r), toByte(color.g), toByte(color.b));
-}
-
-void CenterWindowOnOwner(HWND window, HWND owner) noexcept
+struct PromptDebugHostRect
 {
-    if (! window || ! owner)
+    HWND host = nullptr;
+    RECT rect{};
+};
+#endif
+
+[[nodiscard]] HWND NormalizeOwnerWindow(HWND ownerWindow) noexcept
+{
+    if (! ownerWindow || IsWindow(ownerWindow) == FALSE)
     {
-        return;
+        return nullptr;
     }
-
-    RECT ownerRect{};
-    RECT windowRect{};
-    if (GetWindowRect(owner, &ownerRect) == 0 || GetWindowRect(window, &windowRect) == 0)
-    {
-        return;
-    }
-
-    const int ownerW  = ownerRect.right - ownerRect.left;
-    const int ownerH  = ownerRect.bottom - ownerRect.top;
-    const int windowW = windowRect.right - windowRect.left;
-    const int windowH = windowRect.bottom - windowRect.top;
-
-    const int x = ownerRect.left + (ownerW - windowW) / 2;
-    const int y = ownerRect.top + (ownerH - windowH) / 2;
-    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+    return GetAncestor(ownerWindow, GA_ROOT);
 }
 
 [[nodiscard]] std::wstring TrimWhitespace(std::wstring_view text) noexcept
 {
-    size_t start = 0;
+    size_t start = 0u;
     while (start < text.size() && std::iswspace(static_cast<wint_t>(text[start])) != 0)
     {
         ++start;
     }
 
     size_t end = text.size();
-    while (end > start && std::iswspace(static_cast<wint_t>(text[end - 1])) != 0)
+    while (end > start && std::iswspace(static_cast<wint_t>(text[end - 1u])) != 0)
     {
         --end;
     }
@@ -112,570 +83,810 @@ void CenterWindowOnOwner(HWND window, HWND owner) noexcept
     return std::wstring(text.substr(start, end - start));
 }
 
-void PrepareFlatControl(HWND control) noexcept
+void CenterWindowOnOwner(HWND window, HWND owner) noexcept
 {
-    if (! control)
+    if (! window || IsWindow(window) == FALSE || ! owner || IsWindow(owner) == FALSE)
     {
         return;
     }
 
-    const LONG_PTR exStyle = GetWindowLongPtrW(control, GWL_EXSTYLE);
-    if ((exStyle & WS_EX_CLIENTEDGE) == 0)
+    RECT ownerRect{};
+    RECT windowRect{};
+    if (GetWindowRect(owner, &ownerRect) == FALSE || GetWindowRect(window, &windowRect) == FALSE)
     {
         return;
     }
 
-    SetWindowLongPtrW(control, GWL_EXSTYLE, exStyle & ~WS_EX_CLIENTEDGE);
-    SetWindowPos(control, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    InvalidateRect(control, nullptr, TRUE);
+    const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
+    const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
+    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-void PrepareEditMargins(HWND edit) noexcept
+[[maybe_unused]] [[nodiscard]] size_t CountVisibleChildWindows(HWND hwnd) noexcept
 {
-    if (! edit)
+    if (! hwnd || IsWindow(hwnd) == FALSE)
     {
-        return;
+        return 0u;
     }
 
-    const UINT dpi       = GetDpiForWindow(edit);
-    const int textMargin = ThemedControls::ScaleDip(dpi, 6);
-    SendMessageW(edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(textMargin, textMargin));
+    struct VisibleChildCounter
+    {
+        size_t count = 0u;
+    } counter{};
+
+    static_cast<void>(EnumChildWindows(hwnd,
+                                       [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto& counterRef = *reinterpret_cast<VisibleChildCounter*>(lParam);
+        if (const auto isActuallyVisibleChildWindow =
+                [](HWND window) noexcept
+        {
+            if (! window || IsWindowVisible(window) == FALSE)
+            {
+                return false;
+            }
+
+            wil::unique_hrgn region(CreateRectRgn(0, 0, 0, 0));
+            if (region)
+            {
+                const int regionType = GetWindowRgn(window, region.get());
+                if (regionType == NULLREGION)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        };
+            isActuallyVisibleChildWindow(child))
+        {
+            ++counterRef.count;
+        }
+        return TRUE;
+    },
+                                       reinterpret_cast<LPARAM>(&counter)));
+
+    return counter.count;
 }
 
-void ClearValidation(HWND dlg, DialogState* state) noexcept
+[[nodiscard]] ThemePalette MakeDxPalette(const AppTheme& theme) noexcept
 {
-    if (! dlg || ! state)
+    const auto mix = [](const D2D1_COLOR_F& a, const D2D1_COLOR_F& b, float t) noexcept
     {
-        return;
-    }
-    state->showingValidation = false;
-    SetDlgItemTextW(dlg, IDC_CONNECTION_CRED_PROMPT_VALIDATION, L"");
-    InvalidateRect(GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_VALIDATION), nullptr, TRUE);
+        const float clamped = std::clamp(t, 0.0f, 1.0f);
+        return D2D1::ColorF(a.r + ((b.r - a.r) * clamped), a.g + ((b.g - a.g) * clamped), a.b + ((b.b - a.b) * clamped), a.a + ((b.a - a.a) * clamped));
+    };
+
+    ThemePalette palette          = RedSalamander::DxUi::MakeDefaultThemePalette(theme.dark);
+    palette.dark                  = theme.dark;
+    palette.highContrast          = theme.highContrast;
+    palette.accent                = theme.accent;
+    palette.windowBackground      = ColorFromCOLORREF(theme.windowBackground);
+    palette.surfaceBackground     = ColorFromCOLORREF(UiMetrics::GetControlSurfaceColor(theme));
+    palette.headerBackground      = ColorFromCOLORREF(theme.menu.background);
+    palette.headerHovered         = mix(palette.headerBackground, palette.accent, theme.dark ? 0.22f : 0.10f);
+    palette.headerPressed         = mix(palette.headerBackground, palette.accent, theme.dark ? 0.30f : 0.16f);
+    palette.border                = ColorFromCOLORREF(theme.menu.border);
+    palette.gridLine              = ColorFromCOLORREF(theme.menu.border);
+    palette.text                  = ColorFromCOLORREF(theme.menu.text);
+    palette.subduedText           = ColorFromCOLORREF(theme.menu.shortcutText);
+    palette.disabledText          = ColorFromCOLORREF(theme.menu.disabledText);
+    palette.selectionFill         = ColorFromCOLORREF(theme.menu.selectionBg);
+    palette.selectionText         = ColorFromCOLORREF(theme.menu.selectionText);
+    palette.selectionInactiveFill = D2D1::ColorF(palette.selectionFill.r, palette.selectionFill.g, palette.selectionFill.b, theme.highContrast ? 1.0f : 0.55f);
+    palette.focusStroke           = theme.folderView.focusBorder;
+    palette.hoverFill             = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.dark ? 0.18f : 0.10f);
+    palette.buttonFill            = ColorFromCOLORREF(theme.menu.background);
+    palette.buttonBorder          = ColorFromCOLORREF(theme.menu.border);
+    palette.buttonHotFill         = palette.headerHovered;
+    palette.buttonPressedFill     = palette.headerPressed;
+    palette.inputFill             = ColorFromCOLORREF(UiMetrics::GetControlSurfaceColor(theme));
+    palette.inputBorder           = ColorFromCOLORREF(theme.menu.border);
+    palette.scrollbarTrack        = theme.fileOperations.scrollbarTrack;
+    palette.scrollbarThumb        = theme.fileOperations.scrollbarThumb;
+    palette.scrollbarThumbHot =
+        D2D1::ColorF(palette.scrollbarThumb.r, palette.scrollbarThumb.g, palette.scrollbarThumb.b, std::min(1.0f, palette.scrollbarThumb.a + 0.10f));
+    palette.infoFill    = theme.folderView.infoBackground;
+    palette.infoText    = theme.folderView.infoText;
+    palette.warningFill = theme.folderView.warningBackground;
+    palette.warningText = theme.folderView.warningText;
+    palette.errorFill   = theme.folderView.errorBackground;
+    palette.errorText   = theme.folderView.errorText;
+    return palette;
 }
 
-void ShowValidation(HWND dlg, DialogState* state, std::wstring_view text) noexcept
+[[nodiscard]] HRESULT EnsurePromptWindowClass() noexcept;
+
+class ConnectionCredentialPromptWindow final
 {
-    if (! dlg || ! state)
+public:
+    ConnectionCredentialPromptWindow(HWND ownerWindow,
+                                     const AppTheme& theme,
+                                     std::wstring caption,
+                                     std::wstring message,
+                                     std::wstring secretLabel,
+                                     bool showUserName,
+                                     bool allowEmptySecret,
+                                     std::wstring initialUserName) noexcept;
+    ConnectionCredentialPromptWindow(const ConnectionCredentialPromptWindow&)            = delete;
+    ConnectionCredentialPromptWindow& operator=(const ConnectionCredentialPromptWindow&) = delete;
+    ConnectionCredentialPromptWindow(ConnectionCredentialPromptWindow&&)                 = delete;
+    ConnectionCredentialPromptWindow& operator=(ConnectionCredentialPromptWindow&&)      = delete;
+
+    [[nodiscard]] HRESULT ShowModal(std::wstring& userNameOut, std::wstring& secretOut) noexcept;
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+
+private:
+    [[nodiscard]] bool OnCreate(HWND hwnd) noexcept;
+    void BuildUi() noexcept;
+    void ApplyTheme() noexcept;
+    void Layout() noexcept;
+    void ClearValidation() noexcept;
+    void ShowValidation(UINT resourceId) noexcept;
+    [[maybe_unused]] [[nodiscard]] void ToggleSecretVisibility() noexcept;
+    void SetSecretVisibility(bool visible) noexcept;
+    void CloseDeferred() noexcept;
+    void Confirm() noexcept;
+    void Cancel() noexcept;
+    [[nodiscard]] LRESULT WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
+#ifdef ENABLE_TESTS
+    [[nodiscard]] LRESULT OnDebugMessage(WPARAM command, LPARAM payload) noexcept;
+#endif
+
+    HWND _ownerWindow = nullptr;
+    AppTheme _theme{};
+    ThemePalette _palette{};
+    std::wstring _caption;
+    std::wstring _message;
+    std::wstring _secretLabelText;
+    std::wstring _initialUserName;
+    std::wstring _validationText;
+    std::wstring _acceptedUserName;
+    std::wstring _acceptedSecret;
+    wil::unique_hwnd _hWnd;
+    WindowHost _dxHost;
+    std::unique_ptr<Panel> _rootStorage;
+    Panel* _root                = nullptr;
+    Label* _messageLabel        = nullptr;
+    Label* _userLabel           = nullptr;
+    TextField* _userField       = nullptr;
+    Label* _secretLabel         = nullptr;
+    TextField* _secretField     = nullptr;
+    Toggle* _toggleSecretButton = nullptr;
+    Label* _validationLabel     = nullptr;
+    Button* _okButton           = nullptr;
+    Button* _cancelButton       = nullptr;
+    bool _showUserName          = false;
+    bool _allowEmptySecret      = false;
+    bool _secretVisible         = false;
+    bool _closing               = false;
+    bool _done                  = false;
+    HRESULT _result             = E_FAIL;
+};
+
+HRESULT EnsurePromptWindowClass() noexcept
+{
+    static ATOM atom = 0;
+    if (atom != 0)
+    {
+        return S_OK;
+    }
+
+    WNDCLASSEXW wc{};
+    wc.cbSize        = sizeof(wc);
+    wc.lpfnWndProc   = ConnectionCredentialPromptWindow::WndProc;
+    wc.hInstance     = GetModuleHandleW(nullptr);
+    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = kPromptWindowClassName;
+    wc.style         = CS_DBLCLKS;
+
+    atom = RegisterClassExW(&wc);
+    if (atom != 0)
+    {
+        return S_OK;
+    }
+
+    const DWORD lastError = GetLastError();
+    if (lastError == ERROR_CLASS_ALREADY_EXISTS)
+    {
+        atom = 1;
+        return S_OK;
+    }
+
+    Debug::ErrorWithLastError(L"ConnectionCredentialPrompt: RegisterClassExW failed.");
+    return HRESULT_FROM_WIN32(lastError);
+}
+
+ConnectionCredentialPromptWindow::ConnectionCredentialPromptWindow(HWND ownerWindow,
+                                                                   const AppTheme& theme,
+                                                                   std::wstring caption,
+                                                                   std::wstring message,
+                                                                   std::wstring secretLabel,
+                                                                   bool showUserName,
+                                                                   bool allowEmptySecret,
+                                                                   std::wstring initialUserName) noexcept
+    : _ownerWindow(NormalizeOwnerWindow(ownerWindow)),
+      _theme(theme),
+      _caption(std::move(caption)),
+      _message(std::move(message)),
+      _secretLabelText(std::move(secretLabel)),
+      _initialUserName(std::move(initialUserName)),
+      _showUserName(showUserName),
+      _allowEmptySecret(allowEmptySecret)
+{
+}
+
+HRESULT ConnectionCredentialPromptWindow::ShowModal(std::wstring& userNameOut, std::wstring& secretOut) noexcept
+{
+    userNameOut.clear();
+    secretOut.clear();
+
+    const HRESULT classHr = EnsurePromptWindowClass();
+    if (FAILED(classHr))
+    {
+        return classHr;
+    }
+
+    const DWORD style        = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+    const DWORD exStyle      = WS_EX_DLGMODALFRAME;
+    const UINT dpi           = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
+    const int clientWidthPx  = UiMetrics::ScaleDip(dpi, 520);
+    const int clientHeightPx = UiMetrics::ScaleDip(dpi, _showUserName ? 320 : 262);
+
+    RECT bounds{0, 0, clientWidthPx, clientHeightPx};
+    if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
+    {
+        const DWORD lastError = Debug::ErrorWithLastError(L"ConnectionCredentialPrompt: AdjustWindowRectExForDpi failed.");
+        return HRESULT_FROM_WIN32(lastError);
+    }
+
+    const bool restoreOwnerEnabled = _ownerWindow && IsWindow(_ownerWindow) != FALSE && IsWindowEnabled(_ownerWindow) != FALSE;
+    if (restoreOwnerEnabled)
+    {
+        EnableWindow(_ownerWindow, FALSE);
+    }
+    const auto restoreOwner = wil::scope_exit([this, restoreOwnerEnabled] noexcept
+    {
+        if (restoreOwnerEnabled && _ownerWindow && IsWindow(_ownerWindow) != FALSE)
+        {
+            EnableWindow(_ownerWindow, TRUE);
+            SetActiveWindow(_ownerWindow);
+        }
+    });
+
+    const HWND hwnd = CreateWindowExW(exStyle,
+                                      kPromptWindowClassName,
+                                      _caption.c_str(),
+                                      style,
+                                      CW_USEDEFAULT,
+                                      CW_USEDEFAULT,
+                                      bounds.right - bounds.left,
+                                      bounds.bottom - bounds.top,
+                                      _ownerWindow,
+                                      nullptr,
+                                      GetModuleHandleW(nullptr),
+                                      this);
+    if (! hwnd)
+    {
+        const DWORD lastError = Debug::ErrorWithLastError(L"ConnectionCredentialPrompt: CreateWindowExW failed.");
+        return HRESULT_FROM_WIN32(lastError);
+    }
+    if (! _hWnd)
+    {
+        _hWnd.reset(hwnd);
+    }
+
+    CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+    ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+    UpdateWindow(_hWnd.get());
+    SetForegroundWindow(_hWnd.get());
+
+    MSG msg{};
+    while (! _done)
+    {
+        const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
+        if (getMessageResult == -1)
+        {
+            const DWORD lastError = Debug::ErrorWithLastError(L"ConnectionCredentialPrompt: GetMessageW failed.");
+            return HRESULT_FROM_WIN32(lastError);
+        }
+        if (getMessageResult == 0)
+        {
+            _done   = true;
+            _result = S_FALSE;
+            PostQuitMessage(static_cast<int>(msg.wParam));
+            break;
+        }
+
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    if (_result == S_OK)
+    {
+        userNameOut = _acceptedUserName;
+        secretOut   = _acceptedSecret;
+    }
+
+    return _result;
+}
+
+bool ConnectionCredentialPromptWindow::OnCreate(HWND hwnd) noexcept
+{
+    if (! _dxHost.Attach(hwnd))
+    {
+        Debug::Error(L"ConnectionCredentialPrompt: failed to attach DxUi host.");
+        return false;
+    }
+
+    BuildUi();
+    ApplyTheme();
+    Layout();
+    _dxHost.SetFocusControl(_showUserName ? static_cast<Control*>(_userField) : static_cast<Control*>(_secretField));
+    return true;
+}
+
+void ConnectionCredentialPromptWindow::BuildUi() noexcept
+{
+    if (_root != nullptr)
     {
         return;
     }
 
-    state->showingValidation = true;
-    SetDlgItemTextW(dlg, IDC_CONNECTION_CRED_PROMPT_VALIDATION, std::wstring(text).c_str());
-    InvalidateRect(GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_VALIDATION), nullptr, TRUE);
+    _rootStorage = std::make_unique<Panel>();
+    _root        = _rootStorage.get();
+
+    _messageLabel = _root->AddChild<Label>(_message);
+    _messageLabel->SetMultiline(true);
+    _messageLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+    _userLabel = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_USER));
+    _userLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    _userLabel->SetMnemonic(L'U');
+    _userLabel->SetVisible(_showUserName);
+
+    _userField = _root->AddChild<TextField>(_initialUserName);
+    _userField->SetVisible(_showUserName);
+    _userField->SetOnTextChanged([this](std::wstring_view) { ClearValidation(); });
+    _userLabel->SetMnemonicTarget(_userField);
+
+    _secretLabel = _root->AddChild<Label>(_secretLabelText);
+    _secretLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    _secretLabel->SetMnemonic(L'P');
+
+    _secretField = _root->AddChild<TextField>();
+    _secretField->SetMasked(true);
+    _secretField->SetOnTextChanged([this](std::wstring_view) { ClearValidation(); });
+    _secretLabel->SetMnemonicTarget(_secretField);
+
+    _toggleSecretButton = _root->AddChild<Toggle>(LoadStringResource(nullptr, IDS_CONNECTIONS_BTN_SHOW_SECRET));
+    _toggleSecretButton->SetChecked(_secretVisible);
+    _toggleSecretButton->SetOnToggled([this](bool checked) { SetSecretVisibility(checked); });
+
+    _validationLabel = _root->AddChild<Label>();
+    _validationLabel->SetMultiline(true);
+    _validationLabel->SetFontRole(FontRole::Small);
+    _validationLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+    _okButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_OK));
+    _okButton->SetPrimary(true);
+    _okButton->SetMnemonic(L'O');
+    _okButton->SetOnClick([this] { Confirm(); });
+
+    _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
+    _cancelButton->SetMnemonic(L'C');
+    _cancelButton->SetOnClick([this] { Cancel(); });
+
+    _dxHost.SetRoot(std::move(_rootStorage));
+    _dxHost.SetDefaultButton(_okButton);
+    _dxHost.SetCancelButton(_cancelButton);
+}
+
+void ConnectionCredentialPromptWindow::ApplyTheme() noexcept
+{
+    _palette = MakeDxPalette(_theme);
+    _dxHost.SetTheme(_palette);
+    if (_validationLabel)
+    {
+        _validationLabel->SetTextColor(_palette.errorText);
+    }
+    if (_hWnd)
+    {
+        ApplyWindowChromeTheme(_hWnd.get(), _theme, WindowBackdropTarget::Tool, GetActiveWindow() == _hWnd.get());
+    }
+}
+
+void ConnectionCredentialPromptWindow::Layout() noexcept
+{
+    if (! _root)
+    {
+        return;
+    }
+
+    const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
+    _root->SetBounds(client);
+
+    constexpr float kMarginDip            = 16.0f;
+    constexpr float kFieldHeightDip       = 32.0f;
+    constexpr float kButtonHeightDip      = 34.0f;
+    constexpr float kButtonWidthDip       = 104.0f;
+    constexpr float kSecretToggleWidthDip = 88.0f;
+    constexpr float kLabelHeightDip       = 20.0f;
+    constexpr float kMessageHeightDip     = 42.0f;
+    constexpr float kGapDip               = 10.0f;
+    constexpr float kButtonGapDip         = 8.0f;
+
+    const float left  = client.left + kMarginDip;
+    const float right = client.right - kMarginDip;
+    float y           = client.top + kMarginDip;
+
+    _messageLabel->SetBounds(D2D1::RectF(left, y, right, y + kMessageHeightDip));
+    y += kMessageHeightDip + kGapDip;
+
+    if (_showUserName)
+    {
+        _userLabel->SetBounds(D2D1::RectF(left, y, right, y + kLabelHeightDip));
+        y += kLabelHeightDip + 4.0f;
+        _userField->SetBounds(D2D1::RectF(left, y, right, y + kFieldHeightDip));
+        y += kFieldHeightDip + kGapDip;
+    }
+
+    _secretLabel->SetBounds(D2D1::RectF(left, y, right, y + kLabelHeightDip));
+    y += kLabelHeightDip + 4.0f;
+
+    const float toggleLeft = right - kSecretToggleWidthDip;
+    _secretField->SetBounds(D2D1::RectF(left, y, toggleLeft - kButtonGapDip, y + kFieldHeightDip));
+    _toggleSecretButton->SetBounds(D2D1::RectF(toggleLeft, y, right, y + kFieldHeightDip));
+
+    const float buttonsTop = client.bottom - kMarginDip - kButtonHeightDip;
+    _validationLabel->SetBounds(D2D1::RectF(left, y + kFieldHeightDip + 8.0f, right, buttonsTop - 8.0f));
+
+    const float cancelLeft = right - kButtonWidthDip;
+    const float okLeft     = cancelLeft - kButtonGapDip - kButtonWidthDip;
+    _okButton->SetBounds(D2D1::RectF(okLeft, buttonsTop, okLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+    _cancelButton->SetBounds(D2D1::RectF(cancelLeft, buttonsTop, cancelLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+}
+
+void ConnectionCredentialPromptWindow::ClearValidation() noexcept
+{
+    if (_validationText.empty())
+    {
+        return;
+    }
+
+    _validationText.clear();
+    if (_validationLabel)
+    {
+        _validationLabel->SetText({});
+    }
+    _dxHost.Invalidate();
+}
+
+void ConnectionCredentialPromptWindow::ShowValidation(UINT resourceId) noexcept
+{
+    _validationText = LoadStringResource(nullptr, resourceId);
+    if (_validationLabel)
+    {
+        _validationLabel->SetText(_validationText);
+    }
+    _dxHost.Invalidate();
     MessageBeep(MB_ICONWARNING);
 }
 
-INT_PTR OnCtlColorDialog(DialogState* state) noexcept
+void ConnectionCredentialPromptWindow::ToggleSecretVisibility() noexcept
 {
-    if (! state || ! state->backgroundBrush)
-    {
-        return FALSE;
-    }
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+    SetSecretVisibility(! _secretVisible);
 }
 
-INT_PTR OnCtlColorStatic(DialogState* state, HDC hdc, HWND control) noexcept
+void ConnectionCredentialPromptWindow::SetSecretVisibility(const bool visible) noexcept
 {
-    if (! state || ! state->backgroundBrush)
+    _secretVisible = visible;
+    if (_secretField)
     {
-        return FALSE;
+        _secretField->SetMasked(! _secretVisible);
     }
-
-    COLORREF textColor = state->theme.menu.text;
-    if (control && state->showingValidation)
+    if (_toggleSecretButton)
     {
-        const int controlId = GetDlgCtrlID(control);
-        if (controlId == IDC_CONNECTION_CRED_PROMPT_VALIDATION)
-        {
-            textColor = ColorRefFromColorF(state->theme.folderView.errorText);
-        }
+        _toggleSecretButton->SetChecked(_secretVisible);
     }
-
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, textColor);
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
+    _dxHost.Invalidate();
 }
 
-INT_PTR OnCtlColorEdit(DialogState* state, HDC hdc, HWND control) noexcept
+void ConnectionCredentialPromptWindow::Confirm() noexcept
 {
-    if (! state || ! hdc)
-    {
-        return FALSE;
-    }
-
-    const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
-    const bool focused = enabled && control && GetFocus() == control;
-    const COLORREF bg  = enabled ? (focused ? state->inputFocusedBackgroundColor : state->inputBackgroundColor) : state->inputDisabledBackgroundColor;
-
-    SetBkColor(hdc, bg);
-    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
-
-    if (state->theme.highContrast)
-    {
-        return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
-    }
-
-    if (! enabled)
-    {
-        return reinterpret_cast<INT_PTR>(state->inputDisabledBrush.get());
-    }
-    return reinterpret_cast<INT_PTR>(focused && state->inputFocusedBrush ? state->inputFocusedBrush.get() : state->inputBrush.get());
-}
-
-void UpdateSecretVisibility(HWND dlg, DialogState* state) noexcept
-{
-    if (! dlg || ! state)
+    if (_closing)
     {
         return;
     }
 
-    const HWND secretEdit = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT);
-    if (! secretEdit)
-    {
-        return;
-    }
-
-    DWORD selStart = 0;
-    DWORD selEnd   = 0;
-    SendMessageW(secretEdit, EM_GETSEL, reinterpret_cast<WPARAM>(&selStart), reinterpret_cast<LPARAM>(&selEnd));
-
-    LONG_PTR style = GetWindowLongPtrW(secretEdit, GWL_STYLE);
-    if (state->secretVisible)
-    {
-        style &= ~static_cast<LONG_PTR>(ES_PASSWORD);
-        SetWindowLongPtrW(secretEdit, GWL_STYLE, style);
-        SendMessageW(secretEdit, EM_SETPASSWORDCHAR, 0, 0);
-    }
-    else
-    {
-        style |= ES_PASSWORD;
-        SetWindowLongPtrW(secretEdit, GWL_STYLE, style);
-        SendMessageW(secretEdit, EM_SETPASSWORDCHAR, static_cast<WPARAM>(L'\u2022'), 0);
-    }
-
-    SetWindowPos(secretEdit, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    SendMessageW(secretEdit, EM_SETSEL, selStart, selEnd);
-    InvalidateRect(secretEdit, nullptr, TRUE);
-
-    if (const HWND showBtn = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_SHOW_SECRET))
-    {
-        const UINT labelId       = state->secretVisible ? IDS_CONNECTIONS_BTN_HIDE_SECRET : IDS_CONNECTIONS_BTN_SHOW_SECRET;
-        const std::wstring label = LoadStringResource(nullptr, labelId);
-        if (! label.empty())
-        {
-            SetWindowTextW(showBtn, label.c_str());
-        }
-    }
-}
-
-void MoveControlY(HWND dlg, int controlId, int deltaY) noexcept
-{
-    const HWND control = dlg ? GetDlgItem(dlg, controlId) : nullptr;
-    if (! control || deltaY == 0)
-    {
-        return;
-    }
-
-    RECT rect{};
-    if (GetWindowRect(control, &rect) == 0)
-    {
-        return;
-    }
-
-    MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&rect), 2);
-    SetWindowPos(control, nullptr, rect.left, rect.top + deltaY, rect.right - rect.left, rect.bottom - rect.top, SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-void CompactLayoutIfNoUser(HWND dlg, DialogState* state) noexcept
-{
-    if (! dlg || ! state || state->showUserName)
-    {
-        return;
-    }
-
-    const HWND userLabel   = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_USER_LABEL);
-    const HWND secretLabel = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_LABEL);
-    if (! userLabel || ! secretLabel)
-    {
-        return;
-    }
-
-    RECT userRect{};
-    RECT secretRect{};
-    if (GetWindowRect(userLabel, &userRect) == 0 || GetWindowRect(secretLabel, &secretRect) == 0)
-    {
-        return;
-    }
-
-    MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&userRect), 2);
-    MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&secretRect), 2);
-
-    const int deltaY = userRect.top - secretRect.top;
-    if (deltaY == 0)
-    {
-        return;
-    }
-
-    ShowWindow(userLabel, SW_HIDE);
-    if (const HWND userEdit = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_USER_EDIT))
-    {
-        ShowWindow(userEdit, SW_HIDE);
-    }
-
-    MoveControlY(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_LABEL, deltaY);
-    MoveControlY(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT, deltaY);
-    MoveControlY(dlg, IDC_CONNECTION_CRED_PROMPT_SHOW_SECRET, deltaY);
-    MoveControlY(dlg, IDC_CONNECTION_CRED_PROMPT_VALIDATION, deltaY);
-    MoveControlY(dlg, IDOK, deltaY);
-    MoveControlY(dlg, IDCANCEL, deltaY);
-
-    RECT windowRect{};
-    if (GetWindowRect(dlg, &windowRect) == 0)
-    {
-        return;
-    }
-
-    const int height    = std::max(0l, windowRect.bottom - windowRect.top);
-    const int newHeight = std::max(0, height + deltaY);
-
-    SetWindowPos(dlg, nullptr, 0, 0, std::max(0l, windowRect.right - windowRect.left), newHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-LRESULT CALLBACK SecretEditSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept
-{
-    UNREFERENCED_PARAMETER(subclassId);
-
-    auto* state = reinterpret_cast<DialogState*>(refData);
-    if (! state)
-    {
-        return DefSubclassProc(hwnd, msg, wp, lp);
-    }
-
-    if (msg == WM_KEYDOWN)
-    {
-        if (ThemedControls::HandleEditCtrlBackspaceKeyDown(hwnd, wp))
-        {
-            return 0;
-        }
-
-        if (wp == VK_ESCAPE)
-        {
-            HWND dlg = GetParent(hwnd);
-            if (dlg)
-            {
-                SendMessageW(dlg, WM_COMMAND, MAKEWPARAM(IDCANCEL, BN_CLICKED), 0);
-                return 0;
-            }
-        }
-    }
-
-    if (msg == WM_CHAR && ThemedControls::HandleEditCtrlBackspaceChar(hwnd, wp))
-    {
-        return 0;
-    }
-
-    if (msg == WM_NCDESTROY)
-    {
-#pragma warning(push)
-#pragma warning(disable : 5039) // passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        RemoveWindowSubclass(hwnd, SecretEditSubclassProc, kSecretEditSubclassId);
-#pragma warning(pop)
-    }
-
-    return DefSubclassProc(hwnd, msg, wp, lp);
-}
-
-INT_PTR OnInitDialog(HWND dlg, DialogState* state) noexcept
-{
-    if (! dlg || ! state)
-    {
-        return FALSE;
-    }
-
-    SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
-
-    ApplyTitleBarTheme(dlg, state->theme, GetActiveWindow() == dlg);
-    state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
-
-    const COLORREF surface             = ThemedControls::GetControlSurfaceColor(state->theme);
-    state->inputBackgroundColor        = ThemedControls::BlendColor(surface, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
-    state->inputFocusedBackgroundColor = ThemedControls::BlendColor(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
-    state->inputDisabledBackgroundColor =
-        ThemedControls::BlendColor(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
-
-    state->inputBrush.reset();
-    state->inputFocusedBrush.reset();
-    state->inputDisabledBrush.reset();
-    if (! state->theme.highContrast)
-    {
-        state->inputBrush.reset(CreateSolidBrush(state->inputBackgroundColor));
-        state->inputFocusedBrush.reset(CreateSolidBrush(state->inputFocusedBackgroundColor));
-        state->inputDisabledBrush.reset(CreateSolidBrush(state->inputDisabledBackgroundColor));
-    }
-
-    state->inputFrameStyle.theme                        = &state->theme;
-    state->inputFrameStyle.backdropBrush                = state->backgroundBrush.get();
-    state->inputFrameStyle.inputBackgroundColor         = state->inputBackgroundColor;
-    state->inputFrameStyle.inputFocusedBackgroundColor  = state->inputFocusedBackgroundColor;
-    state->inputFrameStyle.inputDisabledBackgroundColor = state->inputDisabledBackgroundColor;
-
-    if (! state->caption.empty())
-    {
-        SetWindowTextW(dlg, state->caption.c_str());
-    }
-
-    SetDlgItemTextW(dlg, IDC_CONNECTION_CRED_PROMPT_MESSAGE, state->message.c_str());
-    SetDlgItemTextW(dlg, IDC_CONNECTION_CRED_PROMPT_USER_LABEL, LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_USER).c_str());
-    SetDlgItemTextW(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_LABEL, state->secretLabel.c_str());
-
-    SetDlgItemTextW(dlg, IDOK, LoadStringResource(nullptr, IDS_BTN_OK).c_str());
-    SetDlgItemTextW(dlg, IDCANCEL, LoadStringResource(nullptr, IDS_BTN_CANCEL).c_str());
-
-    if (! state->theme.highContrast)
-    {
-        ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
-        ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
-        ThemedControls::EnableOwnerDrawButton(dlg, IDC_CONNECTION_CRED_PROMPT_SHOW_SECRET);
-    }
-
-    if (const HWND userEdit = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_USER_EDIT))
-    {
-        SetWindowTextW(userEdit, state->initialUserName.c_str());
-        PrepareFlatControl(userEdit);
-        PrepareEditMargins(userEdit);
-        ThemedControls::CenterEditTextVertically(userEdit);
-    }
-
-    if (const HWND secretEdit = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT))
-    {
-        PrepareFlatControl(secretEdit);
-        PrepareEditMargins(secretEdit);
-        ThemedControls::CenterEditTextVertically(secretEdit);
-#pragma warning(push)
-#pragma warning(disable : 5039) // passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        SetWindowSubclass(secretEdit, SecretEditSubclassProc, kSecretEditSubclassId, reinterpret_cast<DWORD_PTR>(state));
-#pragma warning(pop)
-    }
-
-    state->secretVisible = false;
-    UpdateSecretVisibility(dlg, state);
-    ClearValidation(dlg, state);
-
-    CompactLayoutIfNoUser(dlg, state);
-
-    if (! state->theme.highContrast)
-    {
-        auto createFrame = [&](wil::unique_hwnd& frameOut, HWND input) noexcept
-        {
-            if (! input)
-            {
-                return;
-            }
-
-            frameOut.reset(
-                CreateWindowExW(0, L"Static", L"", WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS, 0, 0, 10, 10, dlg, nullptr, GetModuleHandleW(nullptr), nullptr));
-            if (! frameOut)
-            {
-                return;
-            }
-
-            SetWindowPos(frameOut.get(), input, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            ThemedInputFrames::InstallFrame(frameOut.get(), input, &state->inputFrameStyle);
-        };
-
-        if (state->showUserName)
-        {
-            createFrame(state->userFrame, GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_USER_EDIT));
-        }
-        createFrame(state->secretFrame, GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT));
-    }
-
-    CenterWindowOnOwner(dlg, GetParent(dlg));
-
-    if (state->showUserName)
-    {
-        if (const HWND userEdit = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_USER_EDIT))
-        {
-            SendMessageW(userEdit, EM_SETSEL, 0, -1);
-            SetFocus(userEdit);
-            return FALSE;
-        }
-    }
-
-    if (const HWND secretEdit = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT))
-    {
-        SetFocus(secretEdit);
-        return FALSE;
-    }
-
-    return TRUE;
-}
-
-INT_PTR OnCommand(HWND dlg, DialogState* state, int controlId, int notifyCode) noexcept
-{
-    if (! dlg)
-    {
-        return FALSE;
-    }
-
-    if (controlId == IDC_CONNECTION_CRED_PROMPT_SHOW_SECRET && notifyCode == BN_CLICKED && state)
-    {
-        state->secretVisible = ! state->secretVisible;
-        UpdateSecretVisibility(dlg, state);
-        return TRUE;
-    }
-
-    if (state && (notifyCode == EN_SETFOCUS || notifyCode == EN_KILLFOCUS) &&
-        (controlId == IDC_CONNECTION_CRED_PROMPT_USER_EDIT || controlId == IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT))
-    {
-        if (const HWND edit = GetDlgItem(dlg, controlId))
-        {
-            InvalidateRect(edit, nullptr, TRUE);
-        }
-
-        if (! state->theme.highContrast)
-        {
-            if (controlId == IDC_CONNECTION_CRED_PROMPT_USER_EDIT && state->userFrame)
-            {
-                InvalidateRect(state->userFrame.get(), nullptr, TRUE);
-            }
-            if (controlId == IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT && state->secretFrame)
-            {
-                InvalidateRect(state->secretFrame.get(), nullptr, TRUE);
-            }
-        }
-
-        return FALSE;
-    }
-
-    if (controlId == IDCANCEL)
-    {
-        EndDialog(dlg, IDCANCEL);
-        return TRUE;
-    }
-
-    if (controlId != IDOK)
-    {
-        return FALSE;
-    }
-
-    if (! state)
-    {
-        return FALSE;
-    }
-
-    ClearValidation(dlg, state);
+    ClearValidation();
 
     std::wstring userName;
-    if (state->showUserName)
+    if (_showUserName)
     {
-        userName = TrimWhitespace(Win32Text::GetDlgItemTextString(dlg, IDC_CONNECTION_CRED_PROMPT_USER_EDIT));
+        userName = TrimWhitespace(_userField ? _userField->GetText() : std::wstring_view{});
         if (userName.empty())
         {
-            ShowValidation(dlg, state, LoadStringResource(nullptr, IDS_CONNECTIONS_ERR_PROMPT_USER_REQUIRED));
-            if (const HWND userEdit = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_USER_EDIT))
-            {
-                SetFocus(userEdit);
-            }
-            return TRUE;
+            ShowValidation(IDS_CONNECTIONS_ERR_PROMPT_USER_REQUIRED);
+            _dxHost.SetFocusControl(_userField);
+            return;
         }
     }
 
-    std::wstring secret = Win32Text::GetDlgItemTextString(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT);
-    if (! state->allowEmptySecret)
+    const std::wstring secret = _secretField ? std::wstring(_secretField->GetText()) : std::wstring{};
+    if (! _allowEmptySecret && secret.empty())
     {
-        if (secret.empty())
-        {
-            ShowValidation(dlg, state, LoadStringResource(nullptr, IDS_CONNECTIONS_ERR_PROMPT_PASSWORD_REQUIRED));
-            if (const HWND secretEdit = GetDlgItem(dlg, IDC_CONNECTION_CRED_PROMPT_SECRET_EDIT))
-            {
-                SetFocus(secretEdit);
-            }
-            return TRUE;
-        }
+        ShowValidation(IDS_CONNECTIONS_ERR_PROMPT_PASSWORD_REQUIRED);
+        _dxHost.SetFocusControl(_secretField);
+        return;
     }
 
-    state->userNameOut = std::move(userName);
-    state->secretOut   = std::move(secret);
-    EndDialog(dlg, IDOK);
-    return TRUE;
+    _acceptedUserName = std::move(userName);
+    _acceptedSecret   = secret;
+    _result           = S_OK;
+    _closing          = true;
+    CloseDeferred();
 }
 
-INT_PTR CALLBACK DialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
+void ConnectionCredentialPromptWindow::Cancel() noexcept
 {
-    auto* state = reinterpret_cast<DialogState*>(GetWindowLongPtrW(dlg, DWLP_USER));
-
-    switch (msg)
+    if (_closing)
     {
-        case WM_INITDIALOG: return OnInitDialog(dlg, reinterpret_cast<DialogState*>(lp));
-        case WM_ERASEBKGND:
-            if (state && state->backgroundBrush && wp)
-            {
-                RECT rc{};
-                if (GetClientRect(dlg, &rc))
-                {
-                    FillRect(reinterpret_cast<HDC>(wp), &rc, state->backgroundBrush.get());
-                    return TRUE;
-                }
-            }
-            break;
-        case WM_CTLCOLORDLG: return OnCtlColorDialog(state);
-        case WM_CTLCOLORSTATIC: return OnCtlColorStatic(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
-        case WM_CTLCOLOREDIT: return OnCtlColorEdit(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
-        case WM_NCACTIVATE:
-            if (state)
-            {
-                ApplyTitleBarTheme(dlg, state->theme, wp != FALSE);
-            }
-            return FALSE;
-        case WM_DRAWITEM:
+        return;
+    }
+
+    _acceptedUserName.clear();
+    _acceptedSecret.clear();
+    _result  = S_FALSE;
+    _closing = true;
+    CloseDeferred();
+}
+
+void ConnectionCredentialPromptWindow::CloseDeferred() noexcept
+{
+    if (! _hWnd)
+    {
+        return;
+    }
+
+    if (PostMessageW(_hWnd.get(), kPromptDeferredCloseMessage, 0, 0) == 0)
+    {
+        Debug::ErrorWithLastError(L"Connection credential prompt failed to post deferred close.");
+        _hWnd.reset();
+    }
+}
+
+#ifdef ENABLE_TESTS
+LRESULT ConnectionCredentialPromptWindow::OnDebugMessage(WPARAM command, LPARAM payload) noexcept
+{
+    switch (static_cast<PromptDebugCommand>(command))
+    {
+        case PromptDebugCommand::GetSnapshot:
         {
-            if (! state || state->theme.highContrast)
+            auto* snapshot = reinterpret_cast<ConnectionCredentialPromptDebugSnapshot*>(payload);
+            if (! snapshot)
             {
-                break;
+                return FALSE;
             }
 
-            auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
-            if (! dis || dis->CtlType != ODT_BUTTON)
-            {
-                break;
-            }
+            snapshot->usesDxUiHost            = _dxHost.GetRoot() == _root;
+            snapshot->showUserName            = _showUserName;
+            snapshot->allowEmptySecret        = _allowEmptySecret;
+            snapshot->secretVisible           = _secretVisible;
+            snapshot->themeDark               = _theme.dark;
+            snapshot->themeHighContrast       = _theme.highContrast;
+            snapshot->themeRainbow            = _theme.menu.rainbowMode;
+            snapshot->secretLength            = _secretField ? _secretField->GetText().size() : 0u;
+            snapshot->visibleChildWindowCount = CountVisibleChildWindows(_hWnd.get());
+            snapshot->userNameText            = _userField ? std::wstring(_userField->GetText()) : std::wstring{};
+            snapshot->validationText          = _validationText;
 
-            ThemedControls::DrawThemedPushButton(*dis, state->theme);
+            const Control* focusControl = _dxHost.GetFocusControl();
+            snapshot->focusTarget       = ConnectionCredentialPromptDebugFocusTarget::None;
+            if (focusControl == _userField)
+            {
+                snapshot->focusTarget = ConnectionCredentialPromptDebugFocusTarget::UserField;
+            }
+            else if (focusControl == _secretField)
+            {
+                snapshot->focusTarget = ConnectionCredentialPromptDebugFocusTarget::SecretField;
+            }
+            else if (focusControl == _toggleSecretButton)
+            {
+                snapshot->focusTarget = ConnectionCredentialPromptDebugFocusTarget::ToggleSecretButton;
+            }
+            else if (focusControl == _okButton)
+            {
+                snapshot->focusTarget = ConnectionCredentialPromptDebugFocusTarget::OkButton;
+            }
+            else if (focusControl == _cancelButton)
+            {
+                snapshot->focusTarget = ConnectionCredentialPromptDebugFocusTarget::CancelButton;
+            }
             return TRUE;
         }
-        case WM_COMMAND: return OnCommand(dlg, state, LOWORD(wp), HIWORD(wp));
+        case PromptDebugCommand::SetUserName:
+        {
+            if (! _showUserName || ! _userField)
+            {
+                return FALSE;
+            }
+            const auto* text = reinterpret_cast<const PromptDebugText*>(payload);
+            if (! text)
+            {
+                return FALSE;
+            }
+
+            _userField->SetText(text->text ? std::wstring(text->text, text->length) : std::wstring{});
+            ClearValidation();
+            _dxHost.SetFocusControl(_userField);
+            _dxHost.Invalidate();
+            return TRUE;
+        }
+        case PromptDebugCommand::SetSecret:
+        {
+            if (! _secretField)
+            {
+                return FALSE;
+            }
+            const auto* text = reinterpret_cast<const PromptDebugText*>(payload);
+            if (! text)
+            {
+                return FALSE;
+            }
+
+            _secretField->SetText(text->text ? std::wstring(text->text, text->length) : std::wstring{});
+            ClearValidation();
+            _dxHost.SetFocusControl(_secretField);
+            _dxHost.Invalidate();
+            return TRUE;
+        }
+        case PromptDebugCommand::GetToggleSecretButtonRect:
+        {
+            auto* hostRect = reinterpret_cast<PromptDebugHostRect*>(payload);
+            if (! hostRect)
+            {
+                return FALSE;
+            }
+
+            hostRect->host = nullptr;
+            hostRect->rect = {};
+            if (! _toggleSecretButton || ! _toggleSecretButton->IsVisible() || ! _toggleSecretButton->IsEnabled() || ! _hWnd)
+            {
+                return FALSE;
+            }
+
+            hostRect->host           = _hWnd.get();
+            const D2D1_RECT_F bounds = _toggleSecretButton->GetBounds();
+            hostRect->rect.left      = static_cast<LONG>(std::lround(_dxHost.DipsToPixels(bounds.left)));
+            hostRect->rect.top       = static_cast<LONG>(std::lround(_dxHost.DipsToPixels(bounds.top)));
+            hostRect->rect.right     = static_cast<LONG>(std::lround(_dxHost.DipsToPixels(bounds.right)));
+            hostRect->rect.bottom    = static_cast<LONG>(std::lround(_dxHost.DipsToPixels(bounds.bottom)));
+            return TRUE;
+        }
+        case PromptDebugCommand::ToggleSecretVisibility:
+            ToggleSecretVisibility();
+            _dxHost.SetFocusControl(_toggleSecretButton);
+            return TRUE;
+        case PromptDebugCommand::Confirm: Confirm(); return TRUE;
     }
 
     return FALSE;
 }
+#endif
 
-[[nodiscard]] HRESULT ShowPromptDialog(HWND ownerWindow, DialogState& state) noexcept
+LRESULT ConnectionCredentialPromptWindow::WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
 {
-#pragma warning(push)
-    // pointer or reference to potentially throwing function passed to 'extern "C"' function
-#pragma warning(disable : 5039)
-    const INT_PTR result =
-        DialogBoxParamW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_CONNECTION_CRED_PROMPT), ownerWindow, DialogProc, reinterpret_cast<LPARAM>(&state));
-#pragma warning(pop)
-
-    if (result == IDCANCEL)
+    if (message == WM_NCDESTROY)
     {
-        state.userNameOut.clear();
-        state.secretOut.clear();
-        return S_FALSE;
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+        _dxHost.ReleaseMouseCapture();
+        _dxHost.Detach();
+        if (_hWnd.get() == hwnd)
+        {
+            static_cast<void>(_hWnd.release());
+        }
+        g_connectionCredentialPromptWindow.store(nullptr, std::memory_order_release);
+        if (_result == E_FAIL)
+        {
+            _result = S_FALSE;
+        }
+        _closing = false;
+        _done    = true;
+        return 0;
     }
 
-    if (result != IDOK)
+    bool dxHandled         = false;
+    const LRESULT dxResult = _dxHost.HandleMessage(hwnd, message, wParam, lParam, dxHandled);
+    if (dxHandled)
     {
-        state.userNameOut.clear();
-        state.secretOut.clear();
-        return E_FAIL;
+        if (message == WM_SIZE)
+        {
+            Layout();
+        }
+        return dxResult;
     }
 
-    return S_OK;
+    switch (message)
+    {
+        case WM_CREATE: return OnCreate(hwnd) ? 0 : -1;
+        case WM_SIZE: Layout(); return 0;
+        case WM_DPICHANGED:
+        {
+            if (const RECT* suggested = reinterpret_cast<const RECT*>(lParam))
+            {
+                SetWindowPos(hwnd,
+                             nullptr,
+                             suggested->left,
+                             suggested->top,
+                             suggested->right - suggested->left,
+                             suggested->bottom - suggested->top,
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            ApplyTheme();
+            Layout();
+            return 0;
+        }
+        case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, _theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
+        case WndMsg::kConnectionCredentialPromptApplyTheme:
+        {
+            const auto* theme = reinterpret_cast<const AppTheme*>(lParam);
+            if (! theme)
+            {
+                return FALSE;
+            }
+
+            _theme = *theme;
+            ApplyTheme();
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return TRUE;
+        }
+        case kPromptDeferredCloseMessage:
+            if (_hWnd.get() == hwnd)
+            {
+                _hWnd.reset();
+            }
+            return 0;
+        case WM_CLOSE:
+            if (_closing)
+            {
+                return 0;
+            }
+            Cancel();
+            return 0;
+#ifdef ENABLE_TESTS
+        case WndMsg::kConnectionCredentialPromptDebug: return OnDebugMessage(wParam, lParam);
+#endif
+    }
+
+    return DefWindowProcW(hwnd, message, wParam, lParam);
 }
+
+LRESULT CALLBACK ConnectionCredentialPromptWindow::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+{
+    auto* self = reinterpret_cast<ConnectionCredentialPromptWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (message == WM_NCCREATE)
+    {
+        const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+        self               = create ? reinterpret_cast<ConnectionCredentialPromptWindow*>(create->lpCreateParams) : nullptr;
+        if (! self)
+        {
+            return FALSE;
+        }
+
+        self->_hWnd.reset(hwnd);
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+        g_connectionCredentialPromptWindow.store(hwnd, std::memory_order_release);
+    }
+
+    if (! self)
+    {
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+    return self->WindowProc(hwnd, message, wParam, lParam);
+}
+
 } // namespace
 
 HRESULT PromptForConnectionSecret(HWND ownerWindow,
@@ -686,23 +897,18 @@ HRESULT PromptForConnectionSecret(HWND ownerWindow,
                                   bool allowEmptySecret,
                                   std::wstring& secretOut) noexcept
 {
+    std::wstring userName;
     secretOut.clear();
 
-    DialogState state{};
-    state.theme            = theme;
-    state.showUserName     = false;
-    state.allowEmptySecret = allowEmptySecret;
-    state.caption          = std::wstring(caption);
-    state.message          = std::wstring(message);
-    state.secretLabel      = std::wstring(secretLabel);
-
-    const HRESULT hr = ShowPromptDialog(ownerWindow, state);
+    ConnectionCredentialPromptWindow window(
+        ownerWindow, theme, std::wstring(caption), std::wstring(message), std::wstring(secretLabel), false, allowEmptySecret, {});
+    const HRESULT hr = window.ShowModal(userName, secretOut);
     if (hr != S_OK)
     {
+        secretOut.clear();
         return hr;
     }
 
-    secretOut = std::move(state.secretOut);
     return S_OK;
 }
 
@@ -717,22 +923,112 @@ HRESULT PromptForConnectionUserAndPassword(HWND ownerWindow,
     userNameOut.clear();
     passwordOut.clear();
 
-    DialogState state{};
-    state.theme            = theme;
-    state.showUserName     = true;
-    state.allowEmptySecret = false;
-    state.caption          = std::wstring(caption);
-    state.message          = std::wstring(message);
-    state.secretLabel      = LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_PASSWORD);
-    state.initialUserName  = std::wstring(initialUserName);
-
-    const HRESULT hr = ShowPromptDialog(ownerWindow, state);
+    ConnectionCredentialPromptWindow window(ownerWindow,
+                                            theme,
+                                            std::wstring(caption),
+                                            std::wstring(message),
+                                            LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_PASSWORD),
+                                            true,
+                                            false,
+                                            std::wstring(initialUserName));
+    const HRESULT hr = window.ShowModal(userNameOut, passwordOut);
     if (hr != S_OK)
     {
+        userNameOut.clear();
+        passwordOut.clear();
         return hr;
     }
 
-    userNameOut = std::move(state.userNameOut);
-    passwordOut = std::move(state.secretOut);
     return S_OK;
 }
+
+HWND GetConnectionCredentialPromptDialogHandle() noexcept
+{
+    const HWND hwnd = g_connectionCredentialPromptWindow.load(std::memory_order_acquire);
+    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
+}
+
+void UpdateConnectionCredentialPromptWindowsTheme(const AppTheme& theme) noexcept
+{
+    const HWND hwnd = GetConnectionCredentialPromptDialogHandle();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return;
+    }
+
+    static_cast<void>(SendMessageW(hwnd, WndMsg::kConnectionCredentialPromptApplyTheme, 0, reinterpret_cast<LPARAM>(&theme)));
+}
+
+#ifdef ENABLE_TESTS
+bool DebugGetConnectionCredentialPromptSnapshot(ConnectionCredentialPromptDebugSnapshot& out) noexcept
+{
+    const HWND hwnd = GetConnectionCredentialPromptDialogHandle();
+    return hwnd &&
+           SendMessageW(hwnd, WndMsg::kConnectionCredentialPromptDebug, static_cast<WPARAM>(PromptDebugCommand::GetSnapshot), reinterpret_cast<LPARAM>(&out)) !=
+               FALSE;
+}
+
+bool DebugSetConnectionCredentialPromptUserName(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetConnectionCredentialPromptDialogHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    const PromptDebugText payload{.text = text.data(), .length = text.size()};
+    return SendMessageW(
+               hwnd, WndMsg::kConnectionCredentialPromptDebug, static_cast<WPARAM>(PromptDebugCommand::SetUserName), reinterpret_cast<LPARAM>(&payload)) !=
+           FALSE;
+}
+
+bool DebugSetConnectionCredentialPromptSecret(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetConnectionCredentialPromptDialogHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    const PromptDebugText payload{.text = text.data(), .length = text.size()};
+    return SendMessageW(
+               hwnd, WndMsg::kConnectionCredentialPromptDebug, static_cast<WPARAM>(PromptDebugCommand::SetSecret), reinterpret_cast<LPARAM>(&payload)) != FALSE;
+}
+
+bool DebugGetConnectionCredentialPromptToggleSecretButtonHostAndClientRect(HWND& outHost, RECT& outRect) noexcept
+{
+    outHost = nullptr;
+    outRect = {};
+
+    PromptDebugHostRect payload{};
+    const HWND hwnd = GetConnectionCredentialPromptDialogHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    if (SendMessageW(hwnd,
+                     WndMsg::kConnectionCredentialPromptDebug,
+                     static_cast<WPARAM>(PromptDebugCommand::GetToggleSecretButtonRect),
+                     reinterpret_cast<LPARAM>(&payload)) == FALSE)
+    {
+        return false;
+    }
+
+    outHost = payload.host;
+    outRect = payload.rect;
+    return outHost != nullptr;
+}
+
+bool DebugToggleConnectionCredentialPromptSecretVisibility() noexcept
+{
+    const HWND hwnd = GetConnectionCredentialPromptDialogHandle();
+    return hwnd && SendMessageW(hwnd, WndMsg::kConnectionCredentialPromptDebug, static_cast<WPARAM>(PromptDebugCommand::ToggleSecretVisibility), 0) != FALSE;
+}
+
+bool DebugConfirmConnectionCredentialPrompt() noexcept
+{
+    const HWND hwnd = GetConnectionCredentialPromptDialogHandle();
+    return hwnd && SendMessageW(hwnd, WndMsg::kConnectionCredentialPromptDebug, static_cast<WPARAM>(PromptDebugCommand::Confirm), 0) != FALSE;
+}
+#endif

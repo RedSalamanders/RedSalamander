@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <cwctype>
@@ -21,6 +23,7 @@
 
 #include <commctrl.h>
 #include <commdlg.h>
+#include <d2d1.h>
 #include <dwmapi.h>
 #include <shellapi.h>
 #include <shlobj.h>
@@ -36,60 +39,292 @@
 #pragma warning(pop)
 
 #pragma comment(lib, "comctl32")
+#pragma comment(lib, "d2d1")
 #pragma comment(lib, "Dwmapi.lib")
+#pragma comment(lib, "dwrite")
 #pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "uxtheme")
 #pragma comment(lib, "WebView2Loader.dll.lib")
 
+#include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
+#include "LocalizationManager.h"
 #include "WindowMessages.h"
-
-#include "FluentIcons.h"
 
 #include "resource.h"
 
 extern HINSTANCE g_hInstance;
 
+namespace Typography = RedSalamander::DxUi::Typography;
+
+using RedSalamander::DxUi::ComboBox;
+using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::MakeDefaultThemePalette;
+using RedSalamander::DxUi::MakeThemePaletteFromViewerTheme;
+
 namespace
 {
-constexpr UINT kAsyncLoadCompleteMessage = WndMsg::kViewerWebAsyncLoadComplete;
-constexpr int kHeaderHeightDip           = 28;
+constexpr UINT kAsyncLoadCompleteMessage          = WndMsg::kViewerWebAsyncLoadComplete;
+constexpr int kHeaderHeightDip                    = 28;
+constexpr size_t kViewerComboPopupMaxVisibleItems = 8u;
 
 static const int kViewerWebModuleAnchor = 0;
 
-constexpr UINT_PTR kFileComboEscCloseSubclassId = 1u;
+constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerWeb.FileComboHostOriginalWndProc";
+constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerWeb.FileComboHostState";
 
-LRESULT CALLBACK
-FileComboEscCloseSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, [[maybe_unused]] UINT_PTR subclassId, [[maybe_unused]] DWORD_PTR refData) noexcept
+[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
 {
-    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
-    {
-        const bool dropped = SendMessageW(hwnd, CB_GETDROPPEDSTATE, 0, 0) != 0;
-        if (! dropped)
-        {
-            const HWND root = GetAncestor(hwnd, GA_ROOT);
-            if (root)
-            {
-                PostMessageW(root, WM_CLOSE, 0, 0);
-            }
-            return 0;
-        }
-    }
-
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, propName);
 }
 
-void InstallFileComboEscClose(HWND combo) noexcept
+[[nodiscard]] bool InstallWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, WNDPROC hookWndProc) noexcept
 {
-    if (! combo)
+    if (! hwnd || ! originalWndProcProp || ! hookWndProc)
+    {
+        return false;
+    }
+
+    if (GetStoredWndProc(hwnd, originalWndProcProp))
+    {
+        return true;
+    }
+
+    const auto originalWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC));
+    if (! originalWndProc)
+    {
+        return false;
+    }
+
+    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, originalWndProcProp, reinterpret_cast<HANDLE>(originalWndProc)))
+    {
+        return false;
+    }
+
+    const auto previousWndProc =
+        reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(hookWndProc)));
+    if (previousWndProc != originalWndProc)
+    {
+        RemovePropW(hwnd, originalWndProcProp);
+        if (previousWndProc)
+        {
+            static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previousWndProc)));
+        }
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    if (const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp))
+    {
+        return RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp);
+    }
+
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+
+void UnhookFileComboHostWindow(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
     {
         return;
     }
 
-    static_cast<void>(SetWindowSubclass(combo, FileComboEscCloseSubclassProc, kFileComboEscCloseSubclassId, 0));
+    RemovePropW(hwnd, kFileComboHostStateProp);
+    RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
 }
 
-[[nodiscard]] std::wstring KeyGlyphFromVirtualKey(UINT vk, HKL keyboardLayout) noexcept
+[[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
+{
+    switch (msg)
+    {
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK: return true;
+        case WM_SYSKEYDOWN: return static_cast<UINT>(wp) == VK_DOWN || static_cast<UINT>(wp) == VK_UP;
+        case WM_KEYDOWN:
+        {
+            const UINT vk = static_cast<UINT>(wp);
+            return vk == VK_SPACE || vk == VK_RETURN || vk == VK_F4 || vk == VK_DOWN || vk == VK_UP;
+        }
+        default: return false;
+    }
+}
+
+[[nodiscard]] int ComputeWindowComboPopupHeightPx(size_t itemCount, UINT dpi) noexcept
+{
+    const size_t visibleRows = std::max<size_t>(1u, std::min(itemCount, kViewerComboPopupMaxVisibleItems));
+    const int popupHeightDip = 2 + 8 + (24 * static_cast<int>(visibleRows));
+    return std::max(0, MulDiv(popupHeightDip, static_cast<int>(dpi), 96));
+}
+
+[[nodiscard]] size_t CountOwnerDrawMenuItems(HMENU menu) noexcept
+{
+    if (! menu)
+    {
+        return 0u;
+    }
+
+    const int itemCount = GetMenuItemCount(menu);
+    if (itemCount <= 0)
+    {
+        return 0u;
+    }
+
+    size_t ownerDrawCount = 0u;
+    for (UINT position = 0; position < static_cast<UINT>(itemCount); ++position)
+    {
+        MENUITEMINFOW itemInfo{};
+        itemInfo.cbSize = sizeof(itemInfo);
+        itemInfo.fMask  = MIIM_FTYPE | MIIM_SUBMENU;
+        if (GetMenuItemInfoW(menu, position, TRUE, &itemInfo) == 0)
+        {
+            continue;
+        }
+
+        if ((itemInfo.fType & MFT_OWNERDRAW) != 0)
+        {
+            ++ownerDrawCount;
+        }
+
+        if (itemInfo.hSubMenu)
+        {
+            ownerDrawCount += CountOwnerDrawMenuItems(itemInfo.hSubMenu);
+        }
+    }
+
+    return ownerDrawCount;
+}
+
+[[nodiscard]] D2D1_COLOR_F D2DColor(COLORREF color) noexcept
+{
+    return D2D1::ColorF(
+        static_cast<float>(GetRValue(color)) / 255.0f, static_cast<float>(GetGValue(color)) / 255.0f, static_cast<float>(GetBValue(color)) / 255.0f, 1.0f);
+}
+
+[[nodiscard]] float PixelsToDips(float pixels, UINT dpi) noexcept
+{
+    const UINT effectiveDpi = std::max<UINT>(dpi, USER_DEFAULT_SCREEN_DPI);
+    return (pixels * static_cast<float>(USER_DEFAULT_SCREEN_DPI)) / static_cast<float>(effectiveDpi);
+}
+
+[[nodiscard]] ID2D1Factory* GetSharedStatusD2DFactory() noexcept
+{
+    static const auto resources = []() noexcept
+    {
+        wil::com_ptr<ID2D1Factory> factory;
+        static_cast<void>(D2D1CreateFactory(D2D1_FACTORY_TYPE_SINGLE_THREADED, factory.put()));
+        return factory;
+    }();
+
+    return resources.get();
+}
+
+[[nodiscard]] bool DrawStatusMessageWithDirectWrite(HDC hdc, HWND hwnd, const RECT& rcPx, std::wstring_view text, COLORREF textColor) noexcept
+{
+    if (! hdc || ! hwnd || text.empty() || rcPx.right <= rcPx.left || rcPx.bottom <= rcPx.top ||
+        text.size() > static_cast<size_t>((std::numeric_limits<UINT32>::max)()))
+    {
+        return false;
+    }
+
+    ID2D1Factory* const d2dFactory      = GetSharedStatusD2DFactory();
+    IDWriteFactory* const dwriteFactory = Typography::GetSharedMeasurementFactory();
+    if (! d2dFactory || ! dwriteFactory)
+    {
+        return false;
+    }
+
+    const UINT dpi = std::max<UINT>(GetDpiForWindow(hwnd), USER_DEFAULT_SCREEN_DPI);
+    wil::com_ptr<IDWriteTextFormat> format;
+    if (FAILED(Typography::CreateTextFormat(dwriteFactory, Typography::MakeUiTextSpec(12.0f), format.put())) || ! format)
+    {
+        return false;
+    }
+    static_cast<void>(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING));
+    static_cast<void>(format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+    static_cast<void>(format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+
+    D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties();
+    props.dpiX                          = static_cast<float>(dpi);
+    props.dpiY                          = static_cast<float>(dpi);
+
+    wil::com_ptr<ID2D1DCRenderTarget> target;
+    if (FAILED(d2dFactory->CreateDCRenderTarget(&props, target.put())) || ! target)
+    {
+        return false;
+    }
+    if (FAILED(target->BindDC(hdc, &rcPx)))
+    {
+        return false;
+    }
+
+    wil::com_ptr<ID2D1SolidColorBrush> brush;
+    if (FAILED(target->CreateSolidColorBrush(D2DColor(textColor), brush.put())) || ! brush)
+    {
+        return false;
+    }
+
+    const D2D1_RECT_F textRect =
+        D2D1::RectF(0.0f, 0.0f, PixelsToDips(static_cast<float>(rcPx.right - rcPx.left), dpi), PixelsToDips(static_cast<float>(rcPx.bottom - rcPx.top), dpi));
+
+    target->BeginDraw();
+    target->DrawText(
+        text.data(), static_cast<UINT32>(text.size()), format.get(), textRect, brush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
+    const HRESULT endHr = target->EndDraw();
+    if (FAILED(endHr))
+    {
+        Debug::Warning(L"ViewerWeb: DirectWrite status rendering EndDraw failed: 0x{:08X}", endHr);
+        return false;
+    }
+    return true;
+}
+
+LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    auto* self = reinterpret_cast<ViewerWeb*>(GetPropW(hwnd, kFileComboHostStateProp));
+    if (! self)
+    {
+        return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
+    }
+
+    if (msg == WM_NCDESTROY)
+    {
+        const auto originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp);
+        RemovePropW(hwnd, kFileComboHostStateProp);
+        RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+
+        bool handled = false;
+        static_cast<void>(self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled));
+
+        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    bool handled           = false;
+    const LRESULT dxResult = self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled);
+    if (handled)
+    {
+        return dxResult;
+    }
+
+    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
+    {
+        const HWND root = GetAncestor(hwnd, GA_ROOT);
+        if (root)
+        {
+            PostMessageW(root, WM_CLOSE, 0, 0);
+            return 0;
+        }
+    }
+
+    return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
+}
+
+[[maybe_unused]] [[nodiscard]] std::wstring KeyGlyphFromVirtualKey(UINT vk, HKL keyboardLayout) noexcept
 {
     if (! keyboardLayout)
     {
@@ -387,16 +622,16 @@ struct HsvColor
 
 struct JsonTokenColors
 {
-    COLORREF key         = RGB(0, 0, 0);
-    COLORREF stringValue = RGB(0, 0, 0);
-    COLORREF numberValue = RGB(0, 0, 0);
+    COLORREF key          = RGB(0, 0, 0);
+    COLORREF stringValue  = RGB(0, 0, 0);
+    COLORREF numberValue  = RGB(0, 0, 0);
     COLORREF literalValue = RGB(0, 0, 0);
 };
 
 [[nodiscard]] COLORREF ThemeAwareSemanticColor(
     float hue, float saturation, float value, COLORREF accent, COLORREF fg, uint8_t accentAlpha, uint8_t fgAlpha) noexcept
 {
-    const COLORREF semantic  = ColorFromHSV(hue, saturation, value);
+    const COLORREF semantic   = ColorFromHSV(hue, saturation, value);
     const COLORREF harmonized = BlendColor(semantic, accent, accentAlpha);
     return BlendColor(harmonized, fg, fgAlpha);
 }
@@ -568,33 +803,15 @@ void ApplyPendingViewerWebClassBackgroundBrush(HWND hwnd) noexcept
     SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, reinterpret_cast<LONG_PTR>(g_viewerWebClassBackgroundBrush.activeBrush.get()));
 }
 
-std::string_view ResourceBytesView(HINSTANCE hinst, UINT id) noexcept
+std::string ResourceBytesString(HINSTANCE hinst, UINT id) noexcept
 {
-    HRSRC res = FindResourceW(hinst, MAKEINTRESOURCEW(id), RT_RCDATA);
-    if (! res)
+    std::vector<std::byte> bytes;
+    if (! Localization::LoadResourceBytes(hinst, MAKEINTRESOURCEW(id), RT_RCDATA, bytes))
     {
         return {};
     }
 
-    const DWORD size = SizeofResource(hinst, res);
-    if (size == 0)
-    {
-        return {};
-    }
-
-    HGLOBAL loaded = LoadResource(hinst, res);
-    if (! loaded)
-    {
-        return {};
-    }
-
-    const void* bytes = LockResource(loaded);
-    if (! bytes)
-    {
-        return {};
-    }
-
-    return {reinterpret_cast<const char*>(bytes), static_cast<size_t>(size)};
+    return {reinterpret_cast<const char*>(bytes.data()), bytes.size()};
 }
 
 // ----- Shared WebView2 Environment -----
@@ -730,10 +947,10 @@ constexpr std::wstring_view kInternalDocumentFilter = L"https://viewer.redsalama
 
 struct ScrollbarColors
 {
-    COLORREF track = RGB(0, 0, 0);
-    COLORREF thumb = RGB(0, 0, 0);
+    COLORREF track      = RGB(0, 0, 0);
+    COLORREF thumb      = RGB(0, 0, 0);
     COLORREF thumbHover = RGB(0, 0, 0);
-    COLORREF corner = RGB(0, 0, 0);
+    COLORREF corner     = RGB(0, 0, 0);
 };
 
 [[nodiscard]] ScrollbarColors BuildScrollbarColors(COLORREF bg, COLORREF fg, COLORREF accent, bool darkMode) noexcept
@@ -871,8 +1088,7 @@ struct JsonLinesEntry
         {
             std::string mutableLine(line);
             yyjson_read_err lineErr{};
-            unique_yyjson_doc lineDoc(
-                yyjson_read_opts(mutableLine.data(), mutableLine.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &lineErr));
+            unique_yyjson_doc lineDoc(yyjson_read_opts(mutableLine.data(), mutableLine.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &lineErr));
             if (! lineDoc)
             {
                 outEntries.clear();
@@ -895,7 +1111,7 @@ struct JsonLinesEntry
             }
 
             JsonLinesEntry entry{};
-            entry.lineNumber    = lineNumber;
+            entry.lineNumber = lineNumber;
             entry.prettyJson.assign(pretty.get(), prettyLen);
             entry.timestampText = ReadJsonObjectSummaryValue(root, {"ts", "timestamp", "@timestamp", "time"});
             entry.levelText     = ReadJsonObjectSummaryValue(root, {"level", "severity", "lvl", "type"});
@@ -972,13 +1188,13 @@ constexpr char kCommonScrollbarCss[] =
                                              COLORREF accent,
                                              bool darkMode)
 {
-    const COLORREF codeBg     = BlendColor(bg, fg, darkMode ? 18u : 8u);
-    const COLORREF cardBg     = BlendColor(bg, fg, darkMode ? 12u : 5u);
-    const COLORREF cardBgOpen = BlendColor(bg, fg, darkMode ? 18u : 10u);
-    const COLORREF border     = BlendColor(bg, fg, darkMode ? 36u : 58u);
-    const COLORREF mutedFg    = BlendColor(bg, fg, 140u);
+    const COLORREF codeBg             = BlendColor(bg, fg, darkMode ? 18u : 8u);
+    const COLORREF cardBg             = BlendColor(bg, fg, darkMode ? 12u : 5u);
+    const COLORREF cardBgOpen         = BlendColor(bg, fg, darkMode ? 18u : 10u);
+    const COLORREF border             = BlendColor(bg, fg, darkMode ? 36u : 58u);
+    const COLORREF mutedFg            = BlendColor(bg, fg, 140u);
     const JsonTokenColors tokenColors = BuildJsonTokenColors(accent, fg, darkMode);
-    const ScrollbarColors scrollbar = BuildScrollbarColors(bg, fg, accent, darkMode);
+    const ScrollbarColors scrollbar   = BuildScrollbarColors(bg, fg, accent, darkMode);
 
     std::string entriesJs;
     entriesJs.reserve(entries.size() * 256u);
@@ -1014,14 +1230,14 @@ constexpr char kCommonScrollbarCss[] =
     html += "<!doctype html><html><head><meta charset=\"utf-8\">";
     html += "<style>";
     html += ":root{--rs-bg:" + CssRgb(bg) + ";--rs-fg:" + CssRgb(fg) + ";--rs-sel-bg:" + CssRgb(selBg) + ";--rs-sel-fg:" + CssRgb(selFg) +
-            ";--rs-accent:" + CssRgb(accent) + ";--rs-code-bg:" + CssRgb(codeBg) + ";--rs-card-bg:" + CssRgb(cardBg) + ";--rs-card-bg-open:" +
-            CssRgb(cardBgOpen) + ";--rs-border:" + CssRgb(border) + ";--rs-muted-fg:" + CssRgb(mutedFg) + ";--rs-key:" + CssRgb(tokenColors.key) +
-            ";--rs-string:" + CssRgb(tokenColors.stringValue) + ";--rs-number:" + CssRgb(tokenColors.numberValue) + ";--rs-literal:" +
-            CssRgb(tokenColors.literalValue) + ";--rs-scroll-track:" + CssRgb(scrollbar.track) +
+            ";--rs-accent:" + CssRgb(accent) + ";--rs-code-bg:" + CssRgb(codeBg) + ";--rs-card-bg:" + CssRgb(cardBg) +
+            ";--rs-card-bg-open:" + CssRgb(cardBgOpen) + ";--rs-border:" + CssRgb(border) + ";--rs-muted-fg:" + CssRgb(mutedFg) +
+            ";--rs-key:" + CssRgb(tokenColors.key) + ";--rs-string:" + CssRgb(tokenColors.stringValue) + ";--rs-number:" + CssRgb(tokenColors.numberValue) +
+            ";--rs-literal:" + CssRgb(tokenColors.literalValue) + ";--rs-scroll-track:" + CssRgb(scrollbar.track) +
             ";--rs-scroll-thumb:" + CssRgb(scrollbar.thumb) + ";--rs-scroll-thumb-hover:" + CssRgb(scrollbar.thumbHover) +
             ";--rs-scroll-corner:" + CssRgb(scrollbar.corner) + ";}";
     html += "html,body{height:100%;margin:0;}*,*::before,*::after{box-sizing:border-box;}body{background:var(--rs-bg);color:var(--rs-fg);"
-            "font-family:Segoe UI,sans-serif;overflow:hidden;}";
+            "font-family:\"Segoe UI Variable Text\",\"Segoe UI Variable Small\",\"Segoe UI\",sans-serif;overflow:hidden;}";
     html += kCommonScrollbarCss;
     html += "::selection{background:var(--rs-sel-bg);color:var(--rs-sel-fg);}.rs-shell{height:100%;min-height:0;display:flex;flex-direction:column;}";
     html += ".rs-toolbar{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;"
@@ -1071,7 +1287,8 @@ constexpr char kCommonScrollbarCss[] =
             "r.setProperty('--rs-code-bg',rgb(blend(bg,fg,dark?18:8)));r.setProperty('--rs-card-bg',rgb(blend(bg,fg,dark?12:5)));"
             "r.setProperty('--rs-card-bg-open',rgb(blend(bg,fg,dark?18:10)));r.setProperty('--rs-border',rgb(blend(bg,fg,dark?36:58)));"
             "r.setProperty('--rs-muted-fg',rgb(blend(bg,fg,140)));setJsonTokenVars(r,bg,fg,acc);setScrollbarVars(r,bg,fg,acc);}";
-    html += "const entries=" + entriesJs + ";const list=document.getElementById('list');"
+    html += "const entries=" + entriesJs +
+            ";const list=document.getElementById('list');"
             "document.getElementById('summary').textContent=`${entries.length} record${entries.length===1?'':'s'}`;";
     html += "function makeBadge(text,kind,level){if(!text){return null;}const el=document.createElement('span');el.className='rs-badge';"
             "el.textContent=text;el.dataset.kind=kind;if(level){el.dataset.level=String(level).toLowerCase();}return el;}";
@@ -1081,13 +1298,17 @@ constexpr char kCommonScrollbarCss[] =
             "if(header){header.setAttribute('aria-expanded',open?'true':'false');}if(body){body.hidden=!open;}"
             "if(open&&typeof entryEl._ensureRendered==='function'){entryEl._ensureRendered();if(scrollIntoView){entryEl.scrollIntoView({block:'nearest'});}}}";
     html += "function makeEntry(entry,index){const entryEl=document.createElement('article');entryEl.className='rs-entry';"
-            "const summary=document.createElement('button');summary.type='button';summary.className='rs-entry-summary';summary.setAttribute('aria-expanded','false');"
-            "const linePill=document.createElement('span');linePill.className='rs-pill rs-line-pill';linePill.textContent=`#${entry.line}`;summary.appendChild(linePill);"
+            "const "
+            "summary=document.createElement('button');summary.type='button';summary.className='rs-entry-summary';summary.setAttribute('aria-expanded','false');"
+            "const linePill=document.createElement('span');linePill.className='rs-pill "
+            "rs-line-pill';linePill.textContent=`#${entry.line}`;summary.appendChild(linePill);"
             "if(entry.ts){const ts=document.createElement('span');ts.className='rs-toolbar-meta';ts.textContent=entry.ts;summary.appendChild(ts);}"
-            "const levelBadge=makeBadge(entry.level,'level',entry.level);if(levelBadge){summary.appendChild(levelBadge);}const categoryBadge=makeBadge(entry.category,'category','');"
+            "const levelBadge=makeBadge(entry.level,'level',entry.level);if(levelBadge){summary.appendChild(levelBadge);}const "
+            "categoryBadge=makeBadge(entry.category,'category','');"
             "if(categoryBadge){summary.appendChild(categoryBadge);}const text=document.createElement('span');text.className='rs-summary-text';"
             "text.textContent=entry.message||entry.summary||'JSON value';summary.appendChild(text);entryEl.appendChild(summary);"
-            "const body=document.createElement('div');body.className='rs-entry-body';body.hidden=true;const pre=document.createElement('pre');const code=document.createElement('code');"
+            "const body=document.createElement('div');body.className='rs-entry-body';body.hidden=true;const pre=document.createElement('pre');const "
+            "code=document.createElement('code');"
             "code.className='language-json';pre.appendChild(code);body.appendChild(pre);entryEl.appendChild(body);let rendered=false;"
             "entryEl._ensureRendered=()=>{if(rendered){return;}renderCode(code,entry.json);rendered=true;};"
             "summary.addEventListener('click',()=>setEntryOpen(entryEl,!entryEl.classList.contains('is-open'),true));"
@@ -1095,8 +1316,9 @@ constexpr char kCommonScrollbarCss[] =
     html += "function renderList(){const frag=document.createDocumentFragment();entries.forEach((entry,index)=>frag.appendChild(makeEntry(entry,index)));"
             "list.replaceChildren(frag);}function expandAll(){document.querySelectorAll('.rs-entry').forEach((entryEl)=>setEntryOpen(entryEl,true,false));}"
             "function collapseAll(){document.querySelectorAll('.rs-entry').forEach((entryEl)=>setEntryOpen(entryEl,false,false));}";
-    html += "document.getElementById('expandAll').addEventListener('click',expandAll);document.getElementById('collapseAll').addEventListener('click',collapseAll);"
-            "window.RS={applyTheme:applyTheme,expandAll:expandAll,collapseAll:collapseAll};applyTheme(initialTheme);renderList();})();";
+    html +=
+        "document.getElementById('expandAll').addEventListener('click',expandAll);document.getElementById('collapseAll').addEventListener('click',collapseAll);"
+        "window.RS={applyTheme:applyTheme,expandAll:expandAll,collapseAll:collapseAll};applyTheme(initialTheme);renderList();})();";
     html += "</script></body></html>";
     return html;
 }
@@ -1207,28 +1429,39 @@ constexpr char kViewerMarkdownSchemaJson[] = R"json({
     ]
 })json";
 
+[[nodiscard]] const char* GetViewerWebStaticConfigurationSchemaImpl(ViewerWebKind kind) noexcept
+{
+    switch (kind)
+    {
+        case ViewerWebKind::Json: return kViewerJsonSchemaJson;
+        case ViewerWebKind::Markdown: return kViewerMarkdownSchemaJson;
+        case ViewerWebKind::Web:
+        default: return kViewerWebSchemaJson;
+    }
+}
+
 // ----- Cached Resource Helpers -----
-// JS/CSS resource data is immutable and valid for the DLL lifetime via
-// LockResource.  The helpers below avoid repeated allocations by caching
-// derived data (base64-encoded icons, CSS with icons inlined, and the common
-// theme helper JS shared by all three HTML templates).
+// JS/CSS resource data is immutable after load. The helpers below avoid
+// repeated allocations by caching derived data (base64-encoded icons, CSS with
+// icons inlined, and the common theme helper JS shared by all three HTML
+// templates).
 
 std::string_view GetHighlightJs() noexcept
 {
-    static const std::string_view s = ResourceBytesView(g_hInstance, IDR_VIEWERWEB_HIGHLIGHT_JS);
-    return s;
+    static const std::string s = ResourceBytesString(g_hInstance, IDR_VIEWERWEB_HIGHLIGHT_JS);
+    return {s.data(), s.size()};
 }
 
 std::string_view GetMarkdownItJs() noexcept
 {
-    static const std::string_view s = ResourceBytesView(g_hInstance, IDR_VIEWERWEB_MARKDOWNIT_JS);
-    return s;
+    static const std::string s = ResourceBytesString(g_hInstance, IDR_VIEWERWEB_MARKDOWNIT_JS);
+    return {s.data(), s.size()};
 }
 
 std::string_view GetJsonEditorJs() noexcept
 {
-    static const std::string_view s = ResourceBytesView(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_JS);
-    return s;
+    static const std::string s = ResourceBytesString(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_JS);
+    return {s.data(), s.size()};
 }
 
 // Returns the jsoneditor CSS with SVG icon URLs already inlined as data-URIs.
@@ -1272,10 +1505,10 @@ const std::string& GetJsonEditorCssWithIcons() noexcept
             return out;
         };
 
-        const std::string_view iconsSvg = ResourceBytesView(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_ICONS_SVG);
-        const std::string iconsUrl      = std::string("data:image/svg+xml;base64,") + base64Encode(iconsSvg);
+        const std::string iconsSvg = ResourceBytesString(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_ICONS_SVG);
+        const std::string iconsUrl = std::string("data:image/svg+xml;base64,") + base64Encode(iconsSvg);
 
-        std::string css(ResourceBytesView(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_CSS));
+        std::string css = ResourceBytesString(g_hInstance, IDR_VIEWERWEB_JSONEDITOR_CSS);
 
         auto replaceAll = [](std::string& text, std::string_view needle, std::string_view replacement) noexcept
         {
@@ -1298,78 +1531,99 @@ const std::string& GetJsonEditorCssWithIcons() noexcept
 
 } // namespace
 
+const char* GetViewerWebStaticConfigurationSchema(ViewerWebKind kind) noexcept
+{
+    return GetViewerWebStaticConfigurationSchemaImpl(kind);
+}
+
+LRESULT ViewerWeb::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
+{
+    const bool popupWasOpen      = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
+    const bool preExpandForPopup = ! popupWasOpen && _fileComboControl && MessageMayOpenWindowComboPopup(msg, wp);
+    if (preExpandForPopup)
+    {
+        _fileComboHostPreExpandPopup = true;
+        if (_hWnd)
+        {
+            Layout(_hWnd.get());
+        }
+    }
+
+    const LRESULT dxResult = _fileComboHost.HandleMessage(hwnd, msg, wp, lp, handled);
+    if (msg == WM_NCDESTROY)
+    {
+        handled = true;
+        _fileComboHost.ReleaseMouseCapture();
+        _fileComboControl            = nullptr;
+        _fileComboHostPreExpandPopup = false;
+        _hFileComboHost.release();
+        return dxResult;
+    }
+
+    const bool popupIsOpen = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
+    if (popupIsOpen != popupWasOpen || (preExpandForPopup && ! popupIsOpen))
+    {
+        _fileComboHostPreExpandPopup = false;
+        if (_hWnd)
+        {
+            Layout(_hWnd.get());
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
+    }
+    return dxResult;
+}
+
 void ViewerWeb::OnCreate(HWND hwnd)
 {
-    const UINT dpi       = GetDpiForWindow(hwnd);
-    const int uiHeightPx = -MulDiv(9, static_cast<int>(dpi), 72);
-
-    _uiFont.reset(CreateFontW(uiHeightPx,
-                              0,
-                              0,
-                              0,
-                              FW_NORMAL,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              DEFAULT_CHARSET,
-                              OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS,
-                              CLEARTYPE_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE,
-                              L"Segoe UI"));
-    if (! _uiFont)
+    const DWORD comboHostStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | SS_NOTIFY;
+    _hFileComboHost.reset(CreateWindowExW(
+        0, L"Static", L"", comboHostStyle, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VIEWERWEB_FILE_COMBO)), g_hInstance, nullptr));
+    if (! _hFileComboHost)
     {
-        Debug::ErrorWithLastError(L"ViewerWeb: CreateFontW failed for UI font.");
+        Debug::ErrorWithLastError(L"ViewerWeb: CreateWindowExW failed for DxUi file combo host.");
     }
-
-    const DWORD comboStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS;
-    _hFileCombo.reset(CreateWindowExW(
-        0, L"COMBOBOX", nullptr, comboStyle, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VIEWERWEB_FILE_COMBO)), g_hInstance, nullptr));
-    if (! _hFileCombo)
+    else if (! _fileComboHost.Attach(_hFileComboHost.get()))
     {
-        Debug::ErrorWithLastError(L"ViewerWeb: CreateWindowExW failed for file combo.");
+        Debug::Error(L"ViewerWeb: failed to attach DxUi host for file combo.");
+        _hFileComboHost.reset();
     }
-
-    if (_hFileCombo && _uiFont)
+    else if (! SetPropW(_hFileComboHost.get(), kFileComboHostStateProp, reinterpret_cast<HANDLE>(this)) ||
+             ! InstallWndProcHook(_hFileComboHost.get(), kFileComboHostOriginalWndProcProp, FileComboHostWndProc))
     {
-        SendMessageW(_hFileCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
+        RemovePropW(_hFileComboHost.get(), kFileComboHostStateProp);
+        Debug::ErrorWithLastError(L"ViewerWeb: failed to install WNDPROC hook for DxUi file combo host.");
+        _fileComboHost.Detach();
+        _hFileComboHost.reset();
     }
-    if (_hFileCombo)
+    else
     {
-        InstallFileComboEscClose(_hFileCombo.get());
-    }
-
-    if (_hFileCombo)
-    {
-        int itemHeight = PxFromDip(24, dpi);
-        auto hdc       = wil::GetDC(hwnd);
-        if (hdc)
+        auto combo        = std::make_unique<ComboBox>();
+        _fileComboControl = combo.get();
+        _fileComboControl->SetVariant(ComboBoxVariant::Window);
+        _fileComboControl->SetOnSelectionChanged([this, hwnd](size_t selectedIndex)
         {
-            HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-            static_cast<void>(oldFont);
-
-            TEXTMETRICW tm{};
-            if (GetTextMetricsW(hdc.get(), &tm) != 0)
+            if (_syncingFileCombo || selectedIndex >= _otherFiles.size())
             {
-                itemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, dpi);
+                return;
             }
-        }
 
-        itemHeight = std::max(itemHeight, 1);
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, static_cast<WPARAM>(-1), static_cast<LPARAM>(itemHeight));
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, 0, static_cast<LPARAM>(itemHeight));
+            _otherIndex = selectedIndex;
+            static_cast<void>(OpenPath(hwnd, _otherFiles[_otherIndex], false));
+            SetFocus(hwnd);
+        });
+        _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+        _fileComboHost.SetRoot(std::move(combo));
     }
 
-    if (_hFileCombo)
+    if (! _menuHandle)
     {
-        COMBOBOXINFO info{};
-        info.cbSize = sizeof(info);
-        if (GetComboBoxInfo(_hFileCombo.get(), &info) != 0)
-        {
-            _hFileComboList = info.hwndList;
-            _hFileComboItem = info.hwndItem;
-        }
+        _menuHandle.reset(GetMenu(hwnd));
+    }
+    if (_menuHandle)
+    {
+        _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+        _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuState(hwnd, false); });
+        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
     ApplyTheme(hwnd);
@@ -1383,10 +1637,10 @@ void ViewerWeb::OnDestroy() noexcept
     _hFindDialog.reset();
     DiscardWebView2();
 
-    if (_tempExtractedPath.has_value() && ! _tempExtractedPath->empty())
+    if (_tempExtractedPath.has_value() && ! _tempExtractedPath.value().empty())
     {
         std::error_code ec;
-        static_cast<void>(std::filesystem::remove(*_tempExtractedPath, ec));
+        static_cast<void>(std::filesystem::remove(_tempExtractedPath.value(), ec));
         _tempExtractedPath.reset();
     }
 
@@ -1395,13 +1649,18 @@ void ViewerWeb::OnDestroy() noexcept
     _pendingDocumentUtf8.reset();
     _internalDocumentUrl.reset();
 
-    IViewerCallback* callback = _callback;
-    void* cookie              = _callbackCookie;
-    if (callback)
+    RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
+    if (_callbackState.TryCapture(callbackSnapshot))
     {
-        AddRef();
-        static_cast<void>(callback->ViewerClosed(cookie));
-        Release();
+        IViewerCallback* callback = nullptr;
+        void* cookie              = nullptr;
+        if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
+        {
+            auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
+            AddRef();
+            static_cast<void>(callback->ViewerClosed(cookie));
+            Release();
+        }
     }
 }
 
@@ -1413,28 +1672,13 @@ void ViewerWeb::OnSize(UINT /*width*/, UINT /*height*/) noexcept
     }
 }
 
-void ViewerWeb::OnCommand(HWND hwnd, UINT commandId, UINT code, HWND /*control*/) noexcept
+void ViewerWeb::OnCommand(HWND hwnd, UINT commandId, [[maybe_unused]] UINT code, HWND /*control*/) noexcept
 {
-    if (commandId == IDC_VIEWERWEB_FILE_COMBO && code == CBN_SELCHANGE && _hFileCombo)
-    {
-        const LRESULT sel = SendMessageW(_hFileCombo.get(), CB_GETCURSEL, 0, 0);
-        if (sel != CB_ERR)
-        {
-            const size_t index = static_cast<size_t>(sel);
-            if (index < _otherFiles.size())
-            {
-                _otherIndex = index;
-                static_cast<void>(OpenPath(hwnd, _otherFiles[_otherIndex], false));
-            }
-        }
-        return;
-    }
-
     switch (commandId)
     {
         case IDM_VIEWERWEB_FILE_SAVE_AS: static_cast<void>(CommandSaveAs(hwnd)); break;
         case IDM_VIEWERWEB_FILE_REFRESH: static_cast<void>(OpenPath(hwnd, _currentPath, false)); break;
-        case IDM_VIEWERWEB_FILE_EXIT: DestroyWindow(hwnd); break;
+        case IDM_VIEWERWEB_FILE_EXIT: static_cast<void>(Close()); break;
 
         case IDM_VIEWERWEB_OTHER_NEXT:
             if (_otherFiles.size() > 1)
@@ -1503,7 +1747,7 @@ void ViewerWeb::OnKeyDown(HWND hwnd, UINT vk) noexcept
 
     if (vk == VK_ESCAPE)
     {
-        DestroyWindow(hwnd);
+        static_cast<void>(Close());
         return;
     }
 
@@ -1642,14 +1886,15 @@ void ViewerWeb::OnPaint(HWND hwnd) noexcept
         rc.left           = std::min(rc.right, rc.left + padding);
         rc.right          = std::max(rc.left, rc.right - padding);
 
-        SetBkMode(hdc.get(), TRANSPARENT);
-        SetTextColor(hdc.get(), _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT));
-
-        HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-        static_cast<void>(oldFont);
-
-        DrawTextW(hdc.get(), _statusMessage.c_str(), static_cast<int>(_statusMessage.size()), &rc, DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        const COLORREF textColor = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
+        if (! DrawStatusMessageWithDirectWrite(hdc.get(), hwnd, rc, _statusMessage, textColor))
+        {
+            static std::atomic<bool> loggedStatusRenderFailure{false};
+            if (! loggedStatusRenderFailure.exchange(true, std::memory_order_relaxed))
+            {
+                Debug::Error(L"ViewerWeb: DirectWrite/D2D status rendering failed; status text is unavailable without a DX render path.");
+            }
+        }
     }
 }
 
@@ -1671,31 +1916,7 @@ void ViewerWeb::OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggested) noex
                      SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    const int uiHeightPx = -MulDiv(9, static_cast<int>(newDpi), 72);
-    _uiFont.reset(CreateFontW(uiHeightPx,
-                              0,
-                              0,
-                              0,
-                              FW_NORMAL,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              DEFAULT_CHARSET,
-                              OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS,
-                              CLEARTYPE_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE,
-                              L"Segoe UI"));
-    if (! _uiFont)
-    {
-        Debug::ErrorWithLastError(L"ViewerWeb: CreateFontW failed for UI font on DPI change.");
-    }
-
-    if (_hFileCombo && _uiFont)
-    {
-        SendMessageW(_hFileCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
-    }
-
+    static_cast<void>(newDpi);
     ApplyTheme(hwnd);
     Layout(hwnd);
 }
@@ -1705,7 +1926,11 @@ LRESULT ViewerWeb::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     OnDestroy();
     static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
 
-    _hFileCombo.release();
+    _menuBarHost.Detach();
+    _menuHandle.reset();
+    UnhookFileComboHostWindow(_hFileComboHost.get());
+    _fileComboHost.Detach();
+    _hFileComboHost.release();
     _hWnd.release();
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
 
@@ -1744,274 +1969,9 @@ void ViewerWeb::OnFindMessage(const FINDREPLACEW* findReplace) noexcept
     const bool backwards        = (findReplace->Flags & FR_DOWN) == 0;
     const std::wstring queryEsc = EscapeJavaScriptString(_findQuery);
     const std::wstring script   = std::format(L"(function(){{try{{return window.find('{}',false,{},true,false,true,false);}}catch(e){{return false;}}}})();",
-                                            queryEsc,
-                                            backwards ? L"true" : L"false");
+                                              queryEsc,
+                                              backwards ? L"true" : L"false");
     static_cast<void>(_webView->ExecuteScript(script.c_str(), nullptr));
-}
-
-LRESULT ViewerWeb::OnMeasureItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept
-{
-    if (! measure)
-    {
-        return FALSE;
-    }
-
-    if (measure->CtlType == ODT_MENU)
-    {
-        const size_t index = static_cast<size_t>(measure->itemData);
-        if (index >= _menuThemeItems.size())
-        {
-            return TRUE;
-        }
-
-        const MenuItemData& data = _menuThemeItems[index];
-        const UINT dpi           = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
-
-        if (data.separator)
-        {
-            measure->itemWidth  = 1;
-            measure->itemHeight = static_cast<UINT>(MulDiv(8, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-            return TRUE;
-        }
-
-        const UINT heightDip = data.topLevel ? 20u : 24u;
-        measure->itemHeight  = static_cast<UINT>(MulDiv(static_cast<int>(heightDip), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-
-        auto hdc = wil::GetDC(hwnd);
-        if (! hdc)
-        {
-            measure->itemWidth = 120;
-            return TRUE;
-        }
-
-        HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-        static_cast<void>(oldFont);
-
-        SIZE textSize{};
-        if (! data.text.empty())
-        {
-            GetTextExtentPoint32W(hdc.get(), data.text.c_str(), static_cast<int>(data.text.size()), &textSize);
-        }
-
-        SIZE shortcutSize{};
-        if (! data.shortcut.empty())
-        {
-            GetTextExtentPoint32W(hdc.get(), data.shortcut.c_str(), static_cast<int>(data.shortcut.size()), &shortcutSize);
-        }
-
-        const int dpiInt           = static_cast<int>(dpi);
-        const int paddingX         = MulDiv(8, dpiInt, USER_DEFAULT_SCREEN_DPI);
-        const int shortcutGap      = MulDiv(20, dpiInt, USER_DEFAULT_SCREEN_DPI);
-        const int subMenuAreaWidth = data.hasSubMenu && ! data.topLevel ? MulDiv(18, dpiInt, USER_DEFAULT_SCREEN_DPI) : 0;
-        const int checkAreaWidth   = data.topLevel ? 0 : MulDiv(20, dpiInt, USER_DEFAULT_SCREEN_DPI);
-        const int checkGap         = data.topLevel ? 0 : MulDiv(4, dpiInt, USER_DEFAULT_SCREEN_DPI);
-
-        int width = paddingX + checkAreaWidth + checkGap + textSize.cx + paddingX;
-        if (! data.shortcut.empty())
-        {
-            width += shortcutGap + shortcutSize.cx;
-        }
-        width += subMenuAreaWidth;
-
-        measure->itemWidth = static_cast<UINT>(std::max(width, 60));
-        return TRUE;
-    }
-
-    if (measure->CtlType == ODT_COMBOBOX && measure->CtlID == IDC_VIEWERWEB_FILE_COMBO)
-    {
-        const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
-
-        int height = PxFromDip(24, dpi);
-        auto hdc   = wil::GetDC(hwnd);
-        if (hdc)
-        {
-            HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-            static_cast<void>(oldFont);
-
-            TEXTMETRICW tm{};
-            if (GetTextMetricsW(hdc.get(), &tm) != 0)
-            {
-                height = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, dpi);
-            }
-        }
-
-        measure->itemHeight = static_cast<UINT>(std::max(height, 1));
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-LRESULT ViewerWeb::OnDrawItem(HWND /*hwnd*/, DRAWITEMSTRUCT* draw) noexcept
-{
-    if (! draw || ! draw->hDC)
-    {
-        return FALSE;
-    }
-
-    if (draw->CtlType == ODT_MENU)
-    {
-        const size_t index = static_cast<size_t>(draw->itemData);
-        if (index >= _menuThemeItems.size())
-        {
-            return TRUE;
-        }
-
-        const MenuItemData& data = _menuThemeItems[index];
-        const bool selected      = (draw->itemState & ODS_SELECTED) != 0;
-        const bool disabled      = (draw->itemState & ODS_DISABLED) != 0;
-        const bool checked       = (draw->itemState & ODS_CHECKED) != 0;
-
-        const COLORREF bg             = _hasTheme ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_MENU);
-        const COLORREF fg             = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_MENUTEXT);
-        const COLORREF selBg          = _hasTheme ? ColorRefFromArgb(_theme.selectionBackgroundArgb) : GetSysColor(COLOR_HIGHLIGHT);
-        const COLORREF selFg          = _hasTheme ? ColorRefFromArgb(_theme.selectionTextArgb) : GetSysColor(COLOR_HIGHLIGHTTEXT);
-        const COLORREF disabledFg     = _hasTheme ? BlendColor(bg, fg, 120u) : GetSysColor(COLOR_GRAYTEXT);
-        const COLORREF separatorColor = _hasTheme ? BlendColor(bg, fg, 80u) : GetSysColor(COLOR_3DSHADOW);
-
-        COLORREF fillColor = selected ? selBg : bg;
-        COLORREF textColor = selected ? selFg : fg;
-        if (disabled)
-        {
-            textColor = disabledFg;
-        }
-
-        wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
-        FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
-
-        if (data.separator)
-        {
-            const int dpi      = GetDeviceCaps(draw->hDC, LOGPIXELSX);
-            const int paddingX = MulDiv(6, dpi, USER_DEFAULT_SCREEN_DPI);
-            const int y        = (draw->rcItem.top + draw->rcItem.bottom) / 2;
-            wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> pen(CreatePen(PS_SOLID, 1, separatorColor));
-            auto oldPen = wil::SelectObject(draw->hDC, pen.get());
-            static_cast<void>(oldPen);
-            MoveToEx(draw->hDC, draw->rcItem.left + paddingX, y, nullptr);
-            LineTo(draw->hDC, draw->rcItem.right - paddingX, y);
-            return TRUE;
-        }
-
-        HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        auto oldFont    = wil::SelectObject(draw->hDC, fontToUse);
-        static_cast<void>(oldFont);
-
-        SetBkMode(draw->hDC, TRANSPARENT);
-        SetTextColor(draw->hDC, textColor);
-
-        const int dpi              = GetDeviceCaps(draw->hDC, LOGPIXELSX);
-        const int paddingX         = MulDiv(8, dpi, USER_DEFAULT_SCREEN_DPI);
-        const int checkAreaWidth   = data.topLevel ? 0 : MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
-        const int subMenuAreaWidth = data.hasSubMenu && ! data.topLevel ? MulDiv(18, dpi, USER_DEFAULT_SCREEN_DPI) : 0;
-        const int checkGap         = data.topLevel ? 0 : MulDiv(4, dpi, USER_DEFAULT_SCREEN_DPI);
-
-        RECT textRect = draw->rcItem;
-        textRect.left += paddingX + checkAreaWidth + checkGap;
-        textRect.right -= paddingX + subMenuAreaWidth;
-
-        DrawTextW(draw->hDC, data.text.c_str(), static_cast<int>(data.text.size()), &textRect, DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-
-        if (! data.shortcut.empty())
-        {
-            RECT sc  = draw->rcItem;
-            sc.left  = std::min(sc.right, textRect.left + (textRect.right - textRect.left) / 2);
-            sc.right = std::max(sc.left, draw->rcItem.right - paddingX - subMenuAreaWidth);
-            DrawTextW(draw->hDC, data.shortcut.c_str(), static_cast<int>(data.shortcut.size()), &sc, DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_RIGHT);
-        }
-
-        if (! data.topLevel)
-        {
-            if (checked)
-            {
-                RECT checkRect = draw->rcItem;
-                checkRect.left += paddingX;
-                checkRect.right     = checkRect.left + checkAreaWidth;
-                const wchar_t glyph = FluentIcons::kFallbackCheckMark;
-                DrawTextW(draw->hDC, &glyph, 1, &checkRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            }
-
-            if (data.hasSubMenu)
-            {
-                RECT arrowRect      = draw->rcItem;
-                arrowRect.left      = std::max<LONG>(arrowRect.left, arrowRect.right - paddingX - subMenuAreaWidth);
-                arrowRect.right     = std::max(arrowRect.right, arrowRect.left);
-                const wchar_t glyph = FluentIcons::kFallbackChevronRight;
-                DrawTextW(draw->hDC, &glyph, 1, &arrowRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            }
-        }
-
-        return TRUE;
-    }
-
-    if (draw->CtlType == ODT_COMBOBOX && _hFileCombo && draw->hwndItem == _hFileCombo.get())
-    {
-        const UINT dpi    = _hWnd ? GetDpiForWindow(_hWnd.get()) : USER_DEFAULT_SCREEN_DPI;
-        const int padding = PxFromDip(6, dpi);
-
-        const bool selected = (draw->itemState & ODS_SELECTED) != 0;
-        const bool disabled = (draw->itemState & ODS_DISABLED) != 0;
-
-        const COLORREF bgBase = _hasTheme ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
-        COLORREF headerBg     = bgBase;
-        if (_hasTheme && _theme.darkMode)
-        {
-            headerBg = RGB(std::max(0, GetRValue(bgBase) - 10), std::max(0, GetGValue(bgBase) - 10), std::max(0, GetBValue(bgBase) - 10));
-        }
-        else
-        {
-            headerBg = RGB(std::max(0, GetRValue(bgBase) - 5), std::max(0, GetGValue(bgBase) - 5), std::max(0, GetBValue(bgBase) - 5));
-        }
-
-        const COLORREF baseFg = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
-        const COLORREF selBg  = _hasTheme ? ColorRefFromArgb(_theme.selectionBackgroundArgb) : GetSysColor(COLOR_HIGHLIGHT);
-        const COLORREF selFg  = _hasTheme ? ColorRefFromArgb(_theme.selectionTextArgb) : GetSysColor(COLOR_HIGHLIGHTTEXT);
-
-        COLORREF fill = selected ? selBg : headerBg;
-        COLORREF text = selected ? selFg : baseFg;
-        if (disabled)
-        {
-            text = BlendColor(fill, text, 160u);
-        }
-
-        wil::unique_hbrush bgBrush(CreateSolidBrush(fill));
-        FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
-
-        if (draw->itemID == static_cast<UINT>(-1))
-        {
-            return TRUE;
-        }
-
-        const int len = static_cast<int>(SendMessageW(draw->hwndItem, CB_GETLBTEXTLEN, draw->itemID, 0));
-        if (len <= 0)
-        {
-            return TRUE;
-        }
-
-        std::wstring buf(static_cast<size_t>(len) + 1, L'\0');
-        const LRESULT got = SendMessageW(draw->hwndItem, CB_GETLBTEXT, draw->itemID, reinterpret_cast<LPARAM>(buf.data()));
-        if (got == CB_ERR)
-        {
-            return TRUE;
-        }
-        buf.resize(static_cast<size_t>(got));
-
-        HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        auto oldFont    = wil::SelectObject(draw->hDC, fontToUse);
-        static_cast<void>(oldFont);
-
-        SetBkMode(draw->hDC, TRANSPARENT);
-        SetTextColor(draw->hDC, text);
-
-        RECT rc = draw->rcItem;
-        rc.left += padding;
-        rc.right -= padding;
-        DrawTextW(draw->hDC, buf.c_str(), static_cast<int>(buf.size()), &rc, DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-        return TRUE;
-    }
-
-    return FALSE;
 }
 
 ViewerWeb::ViewerWeb(ViewerWebKind kind) noexcept : _kind(kind)
@@ -2050,10 +2010,21 @@ ViewerWeb::~ViewerWeb()
     // WebView2 cleanup is handled in OnDestroy() to allow async shutdown to complete
     // before the object is destroyed. Do not call DiscardWebView2() here.
 
-    if (_tempExtractedPath.has_value() && ! _tempExtractedPath->empty())
+    if (! _hFileComboHost)
+    {
+        return;
+    }
+
+    _fileComboControl            = nullptr;
+    _fileComboHostPreExpandPopup = false;
+    UnhookFileComboHostWindow(_hFileComboHost.get());
+    _fileComboHost.Detach();
+    _hFileComboHost.reset();
+
+    if (_tempExtractedPath.has_value() && ! _tempExtractedPath.value().empty())
     {
         std::error_code ec;
-        static_cast<void>(std::filesystem::remove(*_tempExtractedPath, ec));
+        static_cast<void>(std::filesystem::remove(_tempExtractedPath.value(), ec));
         _tempExtractedPath.reset();
     }
 }
@@ -2129,7 +2100,7 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::GetMetaData(const PluginMetaData** metaData
     _metaData.name        = _metaName.empty() ? nullptr : _metaName.c_str();
     _metaData.description = _metaDescription.empty() ? nullptr : _metaDescription.c_str();
     _metaData.author      = nullptr;
-    _metaData.version     = nullptr;
+    _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     *metaData = &_metaData;
     return S_OK;
@@ -2142,13 +2113,7 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::GetConfigurationSchema(const char** schemaJ
         return E_POINTER;
     }
 
-    switch (_kind)
-    {
-        case ViewerWebKind::Json: *schemaJsonUtf8 = kViewerJsonSchemaJson; break;
-        case ViewerWebKind::Markdown: *schemaJsonUtf8 = kViewerMarkdownSchemaJson; break;
-        case ViewerWebKind::Web:
-        default: *schemaJsonUtf8 = kViewerWebSchemaJson; break;
-    }
+    *schemaJsonUtf8 = GetViewerWebStaticConfigurationSchema(_kind);
     return S_OK;
 }
 
@@ -2259,8 +2224,9 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SetConfiguration(const char* configurationJ
     "devToolsEnabled": {}
 }})json",
                 _config.maxDocumentMiB,
-                _config.jsonViewMode == JsonViewMode::Tree ? "tree" :
-                _config.jsonViewMode == JsonViewMode::JsonLines ? "jsonl" : "pretty",
+                _config.jsonViewMode == JsonViewMode::Tree        ? "tree"
+                : _config.jsonViewMode == JsonViewMode::JsonLines ? "jsonl"
+                                                                  : "pretty",
                 _config.devToolsEnabled ? "true" : "false");
             break;
         case ViewerWebKind::Markdown:
@@ -2386,7 +2352,7 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Open(const ViewerOpenContext* context) noex
         RECT ownerRect{};
         const bool hasOwnerRect = ownerWindow && GetWindowRect(ownerWindow, &ownerRect) != 0;
 
-        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(LoadMenuW(g_hInstance, MAKEINTRESOURCEW(IDR_VIEWERWEB_MENU)));
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERWEB_MENU));
 
         const int x      = hasOwnerRect ? static_cast<int>(ownerRect.left) : CW_USEDEFAULT;
         const int y      = hasOwnerRect ? static_cast<int>(ownerRect.top) : CW_USEDEFAULT;
@@ -2431,13 +2397,15 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Open(const ViewerOpenContext* context) noex
 
 HRESULT STDMETHODCALLTYPE ViewerWeb::Close() noexcept
 {
+    AddRef();
+    const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE ViewerWeb::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (! theme || theme->version != 2)
+    if (! theme || theme->version < 2u || theme->version > 4u)
     {
         return E_INVALIDARG;
     }
@@ -2459,8 +2427,7 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::SetTheme(const ViewerTheme* theme) noexcept
 
 HRESULT STDMETHODCALLTYPE ViewerWeb::SetCallback(IViewerCallback* callback, void* cookie) noexcept
 {
-    _callback       = callback;
-    _callbackCookie = cookie;
+    _callbackState.Set(callback, cookie);
     return S_OK;
 }
 
@@ -2527,29 +2494,52 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 
     switch (msg)
     {
+#ifdef ENABLE_TESTS
+        case WndMsg::kViewerDebugGetNativeMenuModelSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerNativeMenuModelDebugSnapshot*>(lp);
+            if (! snapshot)
+            {
+                return FALSE;
+            }
+
+            *snapshot                    = {};
+            snapshot->hasHiddenMenuModel = _menuHandle != nullptr;
+            snapshot->ownerDrawItemCount = CountOwnerDrawMenuItems(_menuHandle.get());
+            return TRUE;
+        }
+#endif
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_SIZE: OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp))); return 0;
         case WM_COMMAND: OnCommand(hwnd, static_cast<UINT>(LOWORD(wp)), static_cast<UINT>(HIWORD(wp)), reinterpret_cast<HWND>(lp)); return 0;
         case WM_KEYDOWN: OnKeyDown(hwnd, static_cast<UINT>(wp)); return 0;
         case WM_SYSKEYDOWN:
+            if ((wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())
+            {
+                return 0;
+            }
             if ((GetKeyState(VK_CONTROL) & 0x8000) != 0)
             {
                 OnKeyDown(hwnd, static_cast<UINT>(wp));
                 return 0;
             }
             return DefWindowProcW(hwnd, msg, wp, lp);
+        case WM_SYSCHAR:
+            if (wp >= 0x20u && _menuBarHost.ActivateMnemonic(static_cast<wchar_t>(wp)))
+            {
+                return 0;
+            }
+            return DefWindowProcW(hwnd, msg, wp, lp);
         case WM_PAINT: OnPaint(hwnd); return 0;
         case WM_ERASEBKGND: return OnEraseBkgnd(hwnd, reinterpret_cast<HDC>(wp));
         case WM_DPICHANGED: OnDpiChanged(hwnd, HIWORD(wp), reinterpret_cast<const RECT*>(lp)); return 0;
-        case WM_MEASUREITEM: return OnMeasureItem(hwnd, reinterpret_cast<MEASUREITEMSTRUCT*>(lp));
-        case WM_DRAWITEM: return OnDrawItem(hwnd, reinterpret_cast<DRAWITEMSTRUCT*>(lp));
         case kAsyncLoadCompleteMessage:
         {
             auto result = TakeMessagePayload<AsyncLoadResult>(lp);
             OnAsyncLoadComplete(std::move(result));
             return 0;
         }
-        case WM_CLOSE: DestroyWindow(hwnd); return 0;
+        case WM_CLOSE: static_cast<void>(Close()); return 0;
         case WM_NCACTIVATE:
         {
             const bool windowActive = wp != FALSE;
@@ -2573,12 +2563,12 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
         if (result->extractedWin32Path.has_value() && ! result->extractedWin32Path->empty())
         {
             std::error_code ec;
-            static_cast<void>(std::filesystem::remove(*result->extractedWin32Path, ec));
+            static_cast<void>(std::filesystem::remove(result->extractedWin32Path.value(), ec));
         }
         return;
     }
 
-    _statusMessage = result->statusMessage;
+    _statusMessage               = result->statusMessage;
     _jsonExpandCollapseAvailable = SUCCEEDED(result->hr) && result->jsonExpandCollapseAvailable;
     UpdateMenuState(_hWnd.get());
 
@@ -2634,18 +2624,18 @@ void ViewerWeb::OnAsyncLoadComplete(std::unique_ptr<AsyncLoadResult> result) noe
                 if (_tempExtractedPath.has_value() && _tempExtractedPath != navPath)
                 {
                     std::error_code ec;
-                    static_cast<void>(std::filesystem::remove(*_tempExtractedPath, ec));
+                    static_cast<void>(std::filesystem::remove(_tempExtractedPath.value(), ec));
                 }
                 _tempExtractedPath = navPath;
             }
             else if (_tempExtractedPath.has_value())
             {
                 std::error_code ec;
-                static_cast<void>(std::filesystem::remove(*_tempExtractedPath, ec));
+                static_cast<void>(std::filesystem::remove(_tempExtractedPath.value(), ec));
                 _tempExtractedPath.reset();
             }
 
-            const std::wstring url = UrlFromFilePath(navPath->wstring());
+            const std::wstring url = UrlFromFilePath(navPath.value().wstring());
             if (url.empty())
             {
                 _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_BUILD_FILE_URL);
@@ -2703,51 +2693,14 @@ void ViewerWeb::Layout(HWND hwnd) noexcept
         return;
     }
 
+    _menuBarHost.UpdateLayout();
     ComputeLayoutRects(hwnd);
 
-    const UINT dpi        = GetDpiForWindow(hwnd);
-    const int edgeSizeY   = GetSystemMetricsForDpi(SM_CYEDGE, dpi);
-    const int minPadding  = PxFromDip(3, dpi);
-    const int accentH     = std::max(1, PxFromDip(1, dpi));
-    const int accentGap   = std::max(1, PxFromDip(1, dpi));
-    const int comboBorder = std::max(0, edgeSizeY) * 2;
-
-    const int padding    = PxFromDip(8, dpi);
-    const bool showCombo = _hFileCombo && _otherFiles.size() > 1;
-
-    const int headerH = std::max(0L, _headerRect.bottom - _headerRect.top);
-
-    int desiredComboHeight = 0;
-    if (showCombo && _hFileCombo)
-    {
-        int comboItemHeight           = 0;
-        const LRESULT selectionHeight = SendMessageW(_hFileCombo.get(), CB_GETITEMHEIGHT, static_cast<WPARAM>(-1), 0);
-        if (selectionHeight != CB_ERR && selectionHeight > 0)
-        {
-            comboItemHeight = static_cast<int>(selectionHeight);
-        }
-
-        if (comboItemHeight <= 0)
-        {
-            comboItemHeight = PxFromDip(24, dpi);
-            auto hdc        = wil::GetDC(hwnd);
-            if (hdc)
-            {
-                HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-                auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-                static_cast<void>(oldFont);
-
-                TEXTMETRICW tm{};
-                if (GetTextMetricsW(hdc.get(), &tm) != 0)
-                {
-                    comboItemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, dpi);
-                }
-            }
-        }
-
-        const int comboChromePadding = std::max(PxFromDip(4, dpi), comboBorder);
-        desiredComboHeight           = std::max(1, comboItemHeight + comboChromePadding);
-    }
+    const UINT dpi       = GetDpiForWindow(hwnd);
+    const int minPadding = MulDiv(3, static_cast<int>(dpi), 96);
+    const int accentH    = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
+    const int accentGap  = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
+    const bool showCombo = _hFileComboHost && _otherFiles.size() > 1;
 
     RECT headerContentRect{};
     headerContentRect        = _headerRect;
@@ -2755,10 +2708,19 @@ void ViewerWeb::Layout(HWND hwnd) noexcept
     headerContentRect.bottom = std::max(headerContentRect.top, headerContentRect.bottom - accentH - accentGap - minPadding);
     const int headerContentH = std::max(0L, headerContentRect.bottom - headerContentRect.top);
 
-    if (_hFileCombo)
+    if (_hFileComboHost)
     {
-        ShowWindow(_hFileCombo.get(), showCombo ? SW_SHOW : SW_HIDE);
-        EnableWindow(_hFileCombo.get(), showCombo ? TRUE : FALSE);
+        ShowWindow(_hFileComboHost.get(), showCombo ? SW_SHOW : SW_HIDE);
+        EnableWindow(_hFileComboHost.get(), showCombo ? TRUE : FALSE);
+        if (_fileComboControl)
+        {
+            _fileComboControl->SetEnabled(showCombo);
+            _fileComboControl->SetVisible(showCombo);
+        }
+        if (! showCombo)
+        {
+            _fileComboHostPreExpandPopup = false;
+        }
 
         if (showCombo)
         {
@@ -2773,27 +2735,25 @@ void ViewerWeb::Layout(HWND hwnd) noexcept
             }
             const int comboW = std::max(0, rightLimit - comboX);
 
-            int comboH = desiredComboHeight > 0 ? desiredComboHeight : std::max(1, headerH - 2 * padding);
+            int comboH = std::max(1, MulDiv(32, static_cast<int>(dpi), 96));
             comboH     = std::clamp(comboH, 1, std::max(1, headerContentH));
 
-            SetWindowPos(_hFileCombo.get(), nullptr, comboX, headerContentRect.top, comboW, comboH, SWP_NOZORDER | SWP_NOACTIVATE);
-
-            RECT comboRc{};
-            int actualComboH = comboH;
-            if (GetWindowRect(_hFileCombo.get(), &comboRc) != 0)
-            {
-                actualComboH = std::max(0L, comboRc.bottom - comboRc.top);
-            }
-
-            int comboY = headerContentRect.top + std::max(0, (headerContentH - actualComboH) / 2);
-
+            int comboY          = headerContentRect.top + std::max(0, (headerContentH - comboH) / 2);
             const int maxBottom = std::max(static_cast<int>(headerContentRect.top), static_cast<int>(headerContentRect.bottom));
-            if (comboY + actualComboH > maxBottom)
+            if (comboY + comboH > maxBottom)
             {
-                comboY = std::max(static_cast<int>(headerContentRect.top), maxBottom - actualComboH);
+                comboY = std::max(static_cast<int>(headerContentRect.top), maxBottom - comboH);
             }
 
-            SetWindowPos(_hFileCombo.get(), nullptr, comboX, comboY, 0, 0, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
+            const bool expandPopupHost = _fileComboHostPreExpandPopup || (_fileComboControl && _fileComboControl->DebugIsPopupOpen());
+            const int hostHeight       = comboH + (expandPopupHost ? ComputeWindowComboPopupHeightPx(_otherFiles.size(), dpi) : 0);
+            SetWindowPos(_hFileComboHost.get(), HWND_TOP, comboX, comboY, comboW, hostHeight, SWP_NOACTIVATE);
+            if (_fileComboControl)
+            {
+                _fileComboControl->SetBounds(D2D1::RectF(
+                    0.0f, 0.0f, static_cast<float>(comboW) * 96.0f / static_cast<float>(dpi), static_cast<float>(comboH) * 96.0f / static_cast<float>(dpi)));
+                _fileComboHost.Invalidate();
+            }
         }
     }
 
@@ -2816,50 +2776,19 @@ void ViewerWeb::ComputeLayoutRects(HWND hwnd) noexcept
         return;
     }
 
-    const UINT dpi             = GetDpiForWindow(hwnd);
-    const int edgeSizeY        = GetSystemMetricsForDpi(SM_CYEDGE, dpi);
-    const int baseHeaderHeight = PxFromDip(kHeaderHeightDip, dpi);
-    const int accentH          = std::max(1, PxFromDip(1, dpi));
-    const int accentGap        = std::max(1, PxFromDip(1, dpi));
-    const int minPadding       = PxFromDip(3, dpi);
-    const int comboBorder      = std::max(0, edgeSizeY) * 2;
+    client.top += _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
 
-    const bool showCombo   = _hFileCombo && _otherFiles.size() > 1;
-    int desiredComboHeight = 0;
-    if (showCombo && _hFileCombo)
-    {
-        int comboItemHeight           = 0;
-        const LRESULT selectionHeight = SendMessageW(_hFileCombo.get(), CB_GETITEMHEIGHT, static_cast<WPARAM>(-1), 0);
-        if (selectionHeight != CB_ERR && selectionHeight > 0)
-        {
-            comboItemHeight = static_cast<int>(selectionHeight);
-        }
+    const UINT dpi               = GetDpiForWindow(hwnd);
+    const int baseHeaderHeight   = MulDiv(kHeaderHeightDip, static_cast<int>(dpi), 96);
+    const int accentH            = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
+    const int accentGap          = std::max(1, MulDiv(1, static_cast<int>(dpi), 96));
+    const int minPadding         = MulDiv(3, static_cast<int>(dpi), 96);
+    const bool showCombo         = _hFileComboHost && _otherFiles.size() > 1;
+    const int desiredComboHeight = std::max(1, MulDiv(32, static_cast<int>(dpi), 96));
 
-        if (comboItemHeight <= 0)
-        {
-            comboItemHeight = PxFromDip(24, dpi);
-            auto hdc        = wil::GetDC(hwnd);
-            if (hdc)
-            {
-                HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-                auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-                static_cast<void>(oldFont);
-
-                TEXTMETRICW tm{};
-                if (GetTextMetricsW(hdc.get(), &tm) != 0)
-                {
-                    comboItemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, dpi);
-                }
-            }
-        }
-
-        const int comboChromePadding = std::max(PxFromDip(4, dpi), comboBorder);
-        desiredComboHeight           = std::max(1, comboItemHeight + comboChromePadding);
-    }
-
-    const int minChromeHeight = PxFromDip(22, dpi) + accentH + accentGap + 2 * minPadding;
+    const int minChromeHeight = MulDiv(22, static_cast<int>(dpi), 96) + accentH + accentGap + 2 * minPadding;
     int headerH               = std::max(baseHeaderHeight, minChromeHeight);
-    if (showCombo && desiredComboHeight > 0)
+    if (showCombo)
     {
         headerH = std::max(headerH, desiredComboHeight + accentH + accentGap + 2 * minPadding);
     }
@@ -2903,40 +2832,16 @@ void ViewerWeb::ApplyTheme(HWND hwnd) noexcept
         ApplyTitleBarTheme(windowActive);
     }
 
-    const wchar_t* winTheme = L"Explorer";
-    if (_hasTheme && _theme.highContrast)
-    {
-        winTheme = L"";
-    }
-    else if (_hasTheme && _theme.darkMode)
-    {
-        winTheme = L"DarkMode_Explorer";
-    }
-
-    if (_hFileCombo)
-    {
-        SetWindowTheme(_hFileCombo.get(), winTheme, nullptr);
-        SendMessageW(_hFileCombo.get(), WM_THEMECHANGED, 0, 0);
-        if (_hFileComboList)
-        {
-            SetWindowTheme(_hFileComboList, winTheme, nullptr);
-            SendMessageW(_hFileComboList, WM_THEMECHANGED, 0, 0);
-        }
-        if (_hFileComboItem)
-        {
-            SetWindowTheme(_hFileComboItem, winTheme, nullptr);
-            SendMessageW(_hFileComboItem, WM_THEMECHANGED, 0, 0);
-        }
-    }
+    _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
 
     ApplyMenuTheme(hwnd);
     UpdateMenuState(hwnd);
     ApplyWebViewThemeScript();
 }
 
-void ViewerWeb::UpdateMenuState(HWND hwnd) noexcept
+void ViewerWeb::UpdateMenuState(HWND hwnd, bool syncDxMenuBar) noexcept
 {
-    HMENU menu = hwnd ? GetMenu(hwnd) : nullptr;
+    HMENU menu = _menuHandle ? _menuHandle.get() : (hwnd ? GetMenu(hwnd) : nullptr);
     if (! menu)
     {
         return;
@@ -2955,7 +2860,14 @@ void ViewerWeb::UpdateMenuState(HWND hwnd) noexcept
                   IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE,
                   static_cast<UINT>(MF_BYCOMMAND | ((_kind == ViewerWebKind::Markdown && _markdownShowSource) ? MF_CHECKED : MF_UNCHECKED)));
 
-    DrawMenuBar(hwnd);
+    if (syncDxMenuBar && _menuBarHost.GetHwnd())
+    {
+        _menuBarHost.SyncMenuModel();
+    }
+    else if (hwnd)
+    {
+        DrawMenuBar(hwnd);
+    }
 }
 
 void ViewerWeb::ApplyTitleBarTheme(bool windowActive) noexcept
@@ -3002,114 +2914,11 @@ void ViewerWeb::ApplyTitleBarTheme(bool windowActive) noexcept
 
 void ViewerWeb::ApplyMenuTheme(HWND hwnd) noexcept
 {
-    HMENU menu = hwnd ? GetMenu(hwnd) : nullptr;
-    if (! menu)
+    static_cast<void>(hwnd);
+    _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+    if (_menuBarHost.GetHwnd())
     {
-        return;
-    }
-
-    if (_headerBrush)
-    {
-        MENUINFO mi{};
-        mi.cbSize  = sizeof(mi);
-        mi.fMask   = MIM_BACKGROUND | MIM_APPLYTOSUBMENUS;
-        mi.hbrBack = _headerBrush.get();
-        SetMenuInfo(menu, &mi);
-    }
-
-    _menuThemeItems.clear();
-    PrepareMenuTheme(menu, true, _menuThemeItems);
-    const HKL keyboardLayout = GetKeyboardLayout(0);
-    if (keyboardLayout)
-    {
-        const UINT zoomInVk             = ZoomInVirtualKeyForLayout(keyboardLayout);
-        const UINT zoomOutVk            = ZoomOutVirtualKeyForLayout(keyboardLayout);
-        const std::wstring zoomInKey    = KeyGlyphFromVirtualKey(zoomInVk, keyboardLayout);
-        const std::wstring zoomOutKey   = KeyGlyphFromVirtualKey(zoomOutVk, keyboardLayout);
-        const std::wstring zoomResetKey = KeyGlyphFromVirtualKey(static_cast<UINT>('0'), keyboardLayout);
-
-        for (MenuItemData& item : _menuThemeItems)
-        {
-            switch (item.id)
-            {
-                case IDM_VIEWERWEB_VIEW_ZOOM_IN:
-                    if (! zoomInKey.empty())
-                    {
-                        item.shortcut = std::format(L"Ctrl+{}", zoomInKey);
-                    }
-                    break;
-                case IDM_VIEWERWEB_VIEW_ZOOM_OUT:
-                    if (! zoomOutKey.empty())
-                    {
-                        item.shortcut = std::format(L"Ctrl+{}", zoomOutKey);
-                    }
-                    break;
-                case IDM_VIEWERWEB_VIEW_ZOOM_RESET:
-                    if (! zoomResetKey.empty())
-                    {
-                        item.shortcut = std::format(L"Ctrl+{}", zoomResetKey);
-                    }
-                    break;
-                default: break;
-            }
-        }
-    }
-    DrawMenuBar(hwnd);
-}
-
-void ViewerWeb::PrepareMenuTheme(HMENU menu, bool topLevel, std::vector<MenuItemData>& outItems) noexcept
-{
-    const int count = GetMenuItemCount(menu);
-    if (count <= 0)
-    {
-        return;
-    }
-
-    for (UINT pos = 0; pos < static_cast<UINT>(count); ++pos)
-    {
-        MENUITEMINFOW info{};
-        info.cbSize = sizeof(info);
-        wchar_t textBuf[256]{};
-        info.fMask      = MIIM_FTYPE | MIIM_STRING | MIIM_SUBMENU | MIIM_ID;
-        info.dwTypeData = textBuf;
-        info.cch        = static_cast<UINT>(std::size(textBuf) - 1);
-        if (GetMenuItemInfoW(menu, pos, TRUE, &info) == 0)
-        {
-            continue;
-        }
-
-        MenuItemData data{};
-        data.id         = info.wID;
-        data.separator  = (info.fType & MFT_SEPARATOR) != 0;
-        data.topLevel   = topLevel;
-        data.hasSubMenu = info.hSubMenu != nullptr;
-
-        if (! data.separator)
-        {
-            std::wstring text = textBuf;
-            const size_t tab  = text.find(L'\t');
-            if (tab != std::wstring::npos)
-            {
-                data.shortcut = text.substr(tab + 1);
-                text.resize(tab);
-            }
-            data.text = std::move(text);
-        }
-
-        const size_t index = outItems.size();
-        outItems.push_back(std::move(data));
-
-        MENUITEMINFOW ownerDraw{};
-        ownerDraw.cbSize     = sizeof(ownerDraw);
-        ownerDraw.fMask      = MIIM_FTYPE | MIIM_DATA;
-        ownerDraw.fType      = info.fType | MFT_OWNERDRAW;
-        ownerDraw.dwItemData = static_cast<ULONG_PTR>(index);
-        SetMenuItemInfoW(menu, pos, TRUE, &ownerDraw);
-
-        if (info.hSubMenu)
-        {
-            PrepareMenuTheme(info.hSubMenu, false, outItems);
-        }
+        _menuBarHost.SyncMenuModel();
     }
 }
 
@@ -3174,7 +2983,7 @@ bool ViewerWeb::OfferTextViewerFallbackPrompt() noexcept
         return false;
     }
 
-    const std::wstring title = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_TITLE);
+    const std::wstring title   = LoadStringResource(g_hInstance, IDS_VIEWERWEB_ERROR_TITLE);
     std::wstring promptMessage = FormatStringResource(g_hInstance, IDS_VIEWERWEB_PROMPT_OPEN_TEXT_VIEWER_FMT, _statusMessage);
     if (promptMessage.empty())
     {
@@ -3248,19 +3057,19 @@ HRESULT ViewerWeb::OpenCurrentDocumentInTextViewer() noexcept
     }
 
     HostViewerOpenRequest request{};
-    request.version              = 1;
-    request.sizeBytes            = sizeof(request);
-    request.pluginId             = L"builtin/viewer-text";
-    request.ownerWindow          = _hWnd.get();
-    request.fileSystem           = _fileSystem.get();
-    request.fileSystemName       = _fileSystemName.empty() ? nullptr : _fileSystemName.c_str();
-    request.focusedPath          = _currentPath.c_str();
-    request.selectionPaths       = nullptr;
-    request.selectionCount       = 0;
-    request.otherFiles           = otherFilePointers.data();
-    request.otherFileCount       = static_cast<unsigned long>(otherFilePointers.size());
+    request.version               = 1;
+    request.sizeBytes             = sizeof(request);
+    request.pluginId              = L"builtin/viewer-text";
+    request.ownerWindow           = _hWnd.get();
+    request.fileSystem            = _fileSystem.get();
+    request.fileSystemName        = _fileSystemName.empty() ? nullptr : _fileSystemName.c_str();
+    request.focusedPath           = _currentPath.c_str();
+    request.selectionPaths        = nullptr;
+    request.selectionCount        = 0;
+    request.otherFiles            = otherFilePointers.data();
+    request.otherFileCount        = static_cast<unsigned long>(otherFilePointers.size());
     request.focusedOtherFileIndex = _otherIndex < otherFilePointers.size() ? static_cast<unsigned long>(_otherIndex) : 0;
-    request.viewerFlags          = VIEWER_OPEN_FLAG_NONE;
+    request.viewerFlags           = VIEWER_OPEN_FLAG_NONE;
 
     return hostViewers->OpenViewer(&request);
 }
@@ -3320,9 +3129,9 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
             }
 
             const std::wstring_view url(uri.get());
-            const bool isHttp  = OrdinalString::StartsWithNoCase(url, L"http://") || OrdinalString::StartsWithNoCase(url, L"https://");
-            const bool isAbout = OrdinalString::StartsWithNoCase(url, L"about:");
-            const bool isData  = OrdinalString::StartsWithNoCase(url, L"data:");
+            const bool isHttp             = OrdinalString::StartsWithNoCase(url, L"http://") || OrdinalString::StartsWithNoCase(url, L"https://");
+            const bool isAbout            = OrdinalString::StartsWithNoCase(url, L"about:");
+            const bool isData             = OrdinalString::StartsWithNoCase(url, L"data:");
             const bool isInternalDocument = _internalDocumentUrl.has_value() && OrdinalString::EqualsNoCase(url, _internalDocumentUrl.value());
 
             if (_kind == ViewerWebKind::Web)
@@ -3386,9 +3195,7 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
             }
 
             wil::com_ptr<ICoreWebView2WebResourceResponse> response;
-            if (_internalDocumentUrl.has_value() &&
-                OrdinalString::EqualsNoCase(requestUrl, _internalDocumentUrl.value()) &&
-                _pendingDocumentUtf8.has_value())
+            if (_internalDocumentUrl.has_value() && OrdinalString::EqualsNoCase(requestUrl, _internalDocumentUrl.value()) && _pendingDocumentUtf8.has_value())
             {
                 const auto* data = reinterpret_cast<const BYTE*>(_pendingDocumentUtf8->data());
                 const UINT size  = static_cast<UINT>(std::min<size_t>(_pendingDocumentUtf8->size(), static_cast<size_t>(std::numeric_limits<UINT>::max())));
@@ -3400,11 +3207,7 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
                 }
 
                 const HRESULT responseHr = g_sharedEnvironment.environment->CreateWebResourceResponse(
-                    stream.get(),
-                    200,
-                    L"OK",
-                    L"Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n",
-                    response.put());
+                    stream.get(), 200, L"OK", L"Content-Type: text/html; charset=utf-8\r\nCache-Control: no-store\r\n", response.put());
                 if (FAILED(responseHr) || ! response)
                 {
                     return responseHr;
@@ -3413,11 +3216,7 @@ HRESULT ViewerWeb::CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Envir
             else
             {
                 const HRESULT responseHr = g_sharedEnvironment.environment->CreateWebResourceResponse(
-                    nullptr,
-                    404,
-                    L"Not Found",
-                    L"Content-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\n",
-                    response.put());
+                    nullptr, 404, L"Not Found", L"Content-Type: text/plain; charset=utf-8\r\nCache-Control: no-store\r\n", response.put());
                 if (FAILED(responseHr) || ! response)
                 {
                     return responseHr;
@@ -3794,9 +3593,9 @@ void ViewerWeb::DiscardWebView2() noexcept
         static_cast<void>(_webView->remove_WebResourceRequested(_webResourceRequestedToken));
     }
 
-    _navStartingToken         = {};
-    _navCompletedToken        = {};
-    _accelToken               = {};
+    _navStartingToken          = {};
+    _navCompletedToken         = {};
+    _accelToken                = {};
     _webResourceRequestedToken = {};
 
     // Close the WebView2 controller. Note: Close() is asynchronous and may have
@@ -3921,9 +3720,12 @@ HRESULT ViewerWeb::OpenPath(HWND hwnd, const std::wstring& path, bool updateOthe
             }
         }
 
-        if (_hFileCombo)
+        if (_fileComboControl)
         {
-            SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(_otherIndex), 0);
+            _syncingFileCombo = true;
+            auto restore      = wil::scope_exit([&] { _syncingFileCombo = false; });
+            _fileComboControl->SetSelectedIndex(_otherIndex);
+            _fileComboHost.Invalidate();
         }
     }
 
@@ -3938,7 +3740,7 @@ HRESULT ViewerWeb::OpenPath(HWND hwnd, const std::wstring& path, bool updateOthe
         SetWindowTextW(_hWnd.get(), title.c_str());
     }
 
-    _statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERWEB_STATUS_LOADING);
+    _statusMessage               = LoadStringResource(g_hInstance, IDS_VIEWERWEB_STATUS_LOADING);
     _jsonExpandCollapseAvailable = false;
     _pendingPath.reset();
     _pendingWebContent.reset();
@@ -3954,13 +3756,16 @@ HRESULT ViewerWeb::OpenPath(HWND hwnd, const std::wstring& path, bool updateOthe
 
 void ViewerWeb::RefreshFileCombo(HWND hwnd) noexcept
 {
-    if (! _hFileCombo)
+    if (! _fileComboControl)
     {
         return;
     }
 
-    SendMessageW(_hFileCombo.get(), CB_RESETCONTENT, 0, 0);
+    _syncingFileCombo = true;
+    auto restore      = wil::scope_exit([&] { _syncingFileCombo = false; });
 
+    std::vector<ComboBox::Item> items;
+    items.reserve(_otherFiles.size());
     for (const auto& path : _otherFiles)
     {
         std::wstring leaf = LeafNameFromPath(path);
@@ -3969,14 +3774,20 @@ void ViewerWeb::RefreshFileCombo(HWND hwnd) noexcept
             leaf = path;
         }
 
-        SendMessageW(_hFileCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(leaf.c_str()));
+        items.push_back(ComboBox::Item{path, std::move(leaf)});
     }
+    _fileComboControl->SetItems(std::move(items));
 
     if (_otherIndex < _otherFiles.size())
     {
-        SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(_otherIndex), 0);
+        _fileComboControl->SetSelectedIndex(_otherIndex);
+    }
+    else
+    {
+        _fileComboControl->SetSelectedIndex(std::nullopt);
     }
 
+    _fileComboHost.Invalidate();
     Layout(hwnd);
 }
 
@@ -4145,7 +3956,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             if (cleanupTempOnFailure && extractedPath.has_value() && ! extractedPath->empty())
             {
                 std::error_code ec;
-                static_cast<void>(std::filesystem::remove(*extractedPath, ec));
+                static_cast<void>(std::filesystem::remove(extractedPath.value(), ec));
             }
             return;
         }
@@ -4325,11 +4136,8 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         {
             result->hr                      = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
             result->offerTextViewerFallback = true;
-            result->statusMessage =
-                FormatStringResource(g_hInstance,
-                                     IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT,
-                                     FormatBytesCompact(static_cast<uint64_t>(bytes.size())),
-                                     FormatBytesCompact(maxBytes));
+            result->statusMessage           = FormatStringResource(
+                g_hInstance, IDS_VIEWERWEB_ERROR_FILE_TOO_LARGE_FMT, FormatBytesCompact(static_cast<uint64_t>(bytes.size())), FormatBytesCompact(maxBytes));
             postBack(false);
             return;
         }
@@ -4353,8 +4161,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
                 return;
             }
 
-            result->utf8 = BuildJsonLinesHtml(
-                jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
+            result->utf8 = BuildJsonLinesHtml(jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
             result->jsonExpandCollapseAvailable = true;
             result->hr                          = S_OK;
             postBack(false);
@@ -4363,8 +4170,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
 
         if (pathLooksJsonLines && TryParseJsonLinesEntries(textUtf8, true, jsonLinesEntries))
         {
-            result->utf8 = BuildJsonLinesHtml(
-                jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
+            result->utf8 = BuildJsonLinesHtml(jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
             result->jsonExpandCollapseAvailable = true;
             result->hr                          = S_OK;
             postBack(false);
@@ -4378,8 +4184,7 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         {
             if (TryParseJsonLinesEntries(textUtf8, false, jsonLinesEntries))
             {
-                result->utf8 = BuildJsonLinesHtml(
-                    jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
+                result->utf8 = BuildJsonLinesHtml(jsonLinesEntries, GetHighlightJs(), themeObj, bg, fg, selBg, selFg, accent, theme.darkMode != FALSE);
                 result->jsonExpandCollapseAvailable = true;
                 result->hr                          = S_OK;
                 postBack(false);
@@ -4409,11 +4214,11 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         {
             const std::string_view highlightJs = GetHighlightJs();
 
-            const COLORREF codeBg   = BlendColor(bg, fg, theme.darkMode ? 20u : 10u);
-            const COLORREF border   = BlendColor(bg, fg, theme.darkMode ? 35u : 45u);
-            const COLORREF mutedFg  = BlendColor(bg, fg, 140u);
+            const COLORREF codeBg             = BlendColor(bg, fg, theme.darkMode ? 20u : 10u);
+            const COLORREF border             = BlendColor(bg, fg, theme.darkMode ? 35u : 45u);
+            const COLORREF mutedFg            = BlendColor(bg, fg, 140u);
             const JsonTokenColors tokenColors = BuildJsonTokenColors(accent, fg, theme.darkMode != FALSE);
-            const ScrollbarColors scrollbar = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
+            const ScrollbarColors scrollbar   = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
 
             std::string html;
             html.reserve(highlightJs.size() + escapedJson.size() + 8192);
@@ -4423,10 +4228,10 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
                     ";--rs-accent:" + cssRgb(accent) + ";--rs-code-bg:" + cssRgb(codeBg) + ";--rs-border:" + cssRgb(border) +
                     ";--rs-muted-fg:" + cssRgb(mutedFg) + ";--rs-key:" + cssRgb(tokenColors.key) + ";--rs-string:" + cssRgb(tokenColors.stringValue) +
                     ";--rs-number:" + cssRgb(tokenColors.numberValue) + ";--rs-literal:" + cssRgb(tokenColors.literalValue) +
-                    ";--rs-scroll-track:" + cssRgb(scrollbar.track) + ";--rs-scroll-thumb:" +
-                    cssRgb(scrollbar.thumb) + ";--rs-scroll-thumb-hover:" + cssRgb(scrollbar.thumbHover) + ";--rs-scroll-corner:" +
-                    cssRgb(scrollbar.corner) + ";}";
-            html += "html,body{height:100%;margin:0;}body{background:var(--rs-bg);color:var(--rs-fg);font-family:Segoe UI,sans-serif;}";
+                    ";--rs-scroll-track:" + cssRgb(scrollbar.track) + ";--rs-scroll-thumb:" + cssRgb(scrollbar.thumb) +
+                    ";--rs-scroll-thumb-hover:" + cssRgb(scrollbar.thumbHover) + ";--rs-scroll-corner:" + cssRgb(scrollbar.corner) + ";}";
+            html += "html,body{height:100%;margin:0;}body{background:var(--rs-bg);color:var(--rs-fg);font-family:\"Segoe UI Variable Text\",\"Segoe UI "
+                    "Variable Small\",\"Segoe UI\",sans-serif;}";
             html += kCommonScrollbarCss;
             html += "::selection{background:var(--rs-sel-bg);color:var(--rs-sel-fg);}#app{height:100%;box-sizing:border-box;padding:12px;display:flex;}";
             html += "pre{flex:1;margin:0;background:var(--rs-code-bg);border:1px solid var(--rs-border);padding:12px;overflow:auto;border-radius:6px;}";
@@ -4456,9 +4261,9 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             html += "})();";
             html += "</script></body></html>";
 
-            result->utf8                       = std::move(html);
+            result->utf8                        = std::move(html);
             result->jsonExpandCollapseAvailable = false;
-            result->hr                         = S_OK;
+            result->hr                          = S_OK;
             postBack(false);
             return;
         }
@@ -4466,22 +4271,23 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         const std::string_view jsonEditorJs = GetJsonEditorJs();
         const std::string& jsonEditorCss    = GetJsonEditorCssWithIcons();
 
-        const COLORREF border  = BlendColor(bg, fg, theme.darkMode ? 45u : 80u);
-        const COLORREF mutedFg = BlendColor(bg, fg, 140u);
+        const COLORREF border             = BlendColor(bg, fg, theme.darkMode ? 45u : 80u);
+        const COLORREF mutedFg            = BlendColor(bg, fg, 140u);
         const JsonTokenColors tokenColors = BuildJsonTokenColors(accent, fg, theme.darkMode != FALSE);
-        const ScrollbarColors scrollbar = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
+        const ScrollbarColors scrollbar   = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
 
         std::string html;
         html.reserve(jsonEditorJs.size() + jsonEditorCss.size() + escapedJson.size() + 8192);
         html += "<!doctype html><html><head><meta charset=\"utf-8\">";
         html += "<style>";
         html += ":root{--rs-bg:" + cssRgb(bg) + ";--rs-fg:" + cssRgb(fg) + ";--rs-sel-bg:" + cssRgb(selBg) + ";--rs-sel-fg:" + cssRgb(selFg) +
-                ";--rs-accent:" + cssRgb(accent) + ";--rs-border:" + cssRgb(border) + ";--rs-muted-fg:" + cssRgb(mutedFg) + ";--rs-scroll-track:" +
-                cssRgb(scrollbar.track) + ";--rs-scroll-thumb:" + cssRgb(scrollbar.thumb) + ";--rs-scroll-thumb-hover:" +
-                cssRgb(scrollbar.thumbHover) + ";--rs-scroll-corner:" + cssRgb(scrollbar.corner) + ";--rs-key:" + cssRgb(tokenColors.key) +
-                ";--rs-string:" + cssRgb(tokenColors.stringValue) + ";--rs-number:" + cssRgb(tokenColors.numberValue) + ";--rs-literal:" +
-                cssRgb(tokenColors.literalValue) + ";}";
-        html += "html,body{height:100%;margin:0;}body{background:var(--rs-bg);color:var(--rs-fg);font-family:Segoe UI,sans-serif;}#app{height:100%;}";
+                ";--rs-accent:" + cssRgb(accent) + ";--rs-border:" + cssRgb(border) + ";--rs-muted-fg:" + cssRgb(mutedFg) +
+                ";--rs-scroll-track:" + cssRgb(scrollbar.track) + ";--rs-scroll-thumb:" + cssRgb(scrollbar.thumb) +
+                ";--rs-scroll-thumb-hover:" + cssRgb(scrollbar.thumbHover) + ";--rs-scroll-corner:" + cssRgb(scrollbar.corner) +
+                ";--rs-key:" + cssRgb(tokenColors.key) + ";--rs-string:" + cssRgb(tokenColors.stringValue) + ";--rs-number:" + cssRgb(tokenColors.numberValue) +
+                ";--rs-literal:" + cssRgb(tokenColors.literalValue) + ";}";
+        html += "html,body{height:100%;margin:0;}body{background:var(--rs-bg);color:var(--rs-fg);font-family:\"Segoe UI Variable Text\",\"Segoe UI Variable "
+                "Small\",\"Segoe UI\",sans-serif;}#app{height:100%;}";
         html += kCommonScrollbarCss;
         html += jsonEditorCss;
         html += "html,body{background:var(--rs-bg)!important;color:var(--rs-fg)!important;}#app{height:100%!important;}";
@@ -4527,9 +4333,9 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
         html += "})();";
         html += "</script></body></html>";
 
-        result->utf8                       = std::move(html);
+        result->utf8                        = std::move(html);
         result->jsonExpandCollapseAvailable = true;
-        result->hr                         = S_OK;
+        result->hr                          = S_OK;
         postBack(false);
         return;
     }
@@ -4539,11 +4345,11 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
     const std::string_view markdownItJs = GetMarkdownItJs();
     const std::string_view highlightJs  = GetHighlightJs();
 
-    const COLORREF codeBg      = BlendColor(bg, fg, theme.darkMode ? 20u : 10u);
-    const COLORREF border      = BlendColor(bg, fg, theme.darkMode ? 35u : 45u);
-    const COLORREF mutedFg     = BlendColor(bg, fg, 140u);
-    const COLORREF stringColor = BlendColor(accent, fg, 60u);
-    const COLORREF numberColor = BlendColor(accent, fg, 90u);
+    const COLORREF codeBg           = BlendColor(bg, fg, theme.darkMode ? 20u : 10u);
+    const COLORREF border           = BlendColor(bg, fg, theme.darkMode ? 35u : 45u);
+    const COLORREF mutedFg          = BlendColor(bg, fg, 140u);
+    const COLORREF stringColor      = BlendColor(accent, fg, 60u);
+    const COLORREF numberColor      = BlendColor(accent, fg, 90u);
     const ScrollbarColors scrollbar = BuildScrollbarColors(bg, fg, accent, theme.darkMode != FALSE);
 
     std::string html;
@@ -4555,7 +4361,8 @@ void ViewerWeb::AsyncLoadProc(AsyncLoadResult* payload) noexcept
             ";--rs-string:" + cssRgb(stringColor) + ";--rs-number:" + cssRgb(numberColor) + ";--rs-scroll-track:" + cssRgb(scrollbar.track) +
             ";--rs-scroll-thumb:" + cssRgb(scrollbar.thumb) + ";--rs-scroll-thumb-hover:" + cssRgb(scrollbar.thumbHover) +
             ";--rs-scroll-corner:" + cssRgb(scrollbar.corner) + ";}";
-    html += "html,body{height:100%;margin:0;}body{background:var(--rs-bg);color:var(--rs-fg);font-family:Segoe UI,sans-serif;}";
+    html += "html,body{height:100%;margin:0;}body{background:var(--rs-bg);color:var(--rs-fg);font-family:\"Segoe UI Variable Text\",\"Segoe UI Variable "
+            "Small\",\"Segoe UI\",sans-serif;}";
     html += kCommonScrollbarCss;
     html += "#app{max-width:100%;padding:16px;box-sizing:border-box;}a{color:var(--rs-accent);}";
     html += "pre{background:var(--rs-code-bg);border:1px solid var(--rs-border);padding:12px;overflow:auto;border-radius:6px;}";
@@ -4764,9 +4571,9 @@ void ViewerWeb::CommandCopyUrl(HWND hwnd) noexcept
     {
         if (_kind == ViewerWebKind::Web)
         {
-            if (_tempExtractedPath.has_value() && ! _tempExtractedPath->empty())
+            if (_tempExtractedPath.has_value() && ! _tempExtractedPath.value().empty())
             {
-                toCopy = UrlFromFilePath(_tempExtractedPath->wstring());
+                toCopy = UrlFromFilePath(_tempExtractedPath.value().wstring());
             }
             else if (IsProbablyWin32Path(_currentPath))
             {
@@ -4804,9 +4611,9 @@ void ViewerWeb::CommandOpenExternal(HWND hwnd) noexcept
     {
         if (_kind == ViewerWebKind::Web)
         {
-            if (_tempExtractedPath.has_value() && ! _tempExtractedPath->empty())
+            if (_tempExtractedPath.has_value() && ! _tempExtractedPath.value().empty())
             {
-                url = UrlFromFilePath(_tempExtractedPath->wstring());
+                url = UrlFromFilePath(_tempExtractedPath.value().wstring());
             }
             else if (IsProbablyWin32Path(_currentPath))
             {
@@ -4904,12 +4711,19 @@ void ViewerWeb::CommandMarkdownToggleSource() noexcept
 
     if (_hWnd)
     {
-        HMENU menu = GetMenu(_hWnd.get());
+        HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(_hWnd.get());
         if (menu)
         {
             CheckMenuItem(
                 menu, IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE, static_cast<UINT>(MF_BYCOMMAND | (_markdownShowSource ? MF_CHECKED : MF_UNCHECKED)));
-            DrawMenuBar(_hWnd.get());
+            if (_menuBarHost.GetHwnd())
+            {
+                _menuBarHost.SyncMenuModel();
+            }
+            else
+            {
+                DrawMenuBar(_hWnd.get());
+            }
         }
     }
 

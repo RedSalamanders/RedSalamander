@@ -1,6 +1,6 @@
 ---
 name: yyjson
-description: Safe yyjson usage patterns for Red Salamander C++23 (UTF-16). Use when parsing or serializing JSON/JSON5 with yyjson, adding keys/strings to `yyjson_mut_doc`, managing `yyjson_doc` lifetimes, or auditing code for yyjson ownership and cleanup bugs (use-after-free/leaks).
+description: Safe yyjson usage patterns for RedSalamander C++23 (UTF-16). Use when parsing or serializing JSON/JSON5 with yyjson, adding keys/strings to `yyjson_mut_doc`, managing `yyjson_doc` lifetimes, or auditing code for yyjson ownership and cleanup bugs (use-after-free/leaks).
 ---
 
 # yyjson

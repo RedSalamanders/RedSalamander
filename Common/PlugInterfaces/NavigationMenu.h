@@ -37,6 +37,10 @@ struct NavigationMenuItem
 // Notes:
 // - This is NOT a COM interface (no IUnknown inheritance); lifetime is managed by the host.
 // - The host must call INavigationMenu::SetCallback(nullptr, nullptr) before releasing/unloading the plugin.
+// - SetCallback(nullptr, nullptr) is the synchronous drain point for registration-style callbacks:
+//   after it returns, the plugin MUST NOT invoke the previously registered callback again.
+// - Plugins with queued or background work MUST either let that work complete before SetCallback(nullptr, nullptr)
+//   returns or self-drop stale work before invoking the callback.
 // - The cookie is provided by the host at registration time and must be passed back verbatim by the plugin.
 interface __declspec(novtable) INavigationMenuCallback
 {
@@ -52,5 +56,10 @@ interface __declspec(uuid("a7c7d693-5ba9-4f4d-8e90-0a2d9d7e49e4")) __declspec(no
 {
     virtual HRESULT STDMETHODCALLTYPE GetMenuItems(const NavigationMenuItem** items, unsigned int* count) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE ExecuteMenuCommand(unsigned int commandId) noexcept                          = 0;
-    virtual HRESULT STDMETHODCALLTYPE SetCallback(INavigationMenuCallback * callback, void* cookie) noexcept       = 0;
+    // Registration-style callback contract:
+    // - SetCallback(callback, cookie) registers or replaces the current host callback.
+    // - SetCallback(nullptr, nullptr) clears the registration and synchronously drains callback delivery.
+    // - Clearing the callback is idempotent.
+    // - Plugins MUST NOT hold locks across the drain wait if callback delivery can take those same locks.
+    virtual HRESULT STDMETHODCALLTYPE SetCallback(INavigationMenuCallback * callback, void* cookie) noexcept = 0;
 };

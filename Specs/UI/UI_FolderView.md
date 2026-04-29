@@ -21,8 +21,45 @@
 - **Rendering**: D3D11 swap chain with Direct2D surface rendering
 - **Startup performance**: D3D/D2D device + swap chain initialization is **deferred until after the first paint** (via `WndMsg::kFolderViewDeferredInit`) to keep `WM_CREATE` fast; first paint uses a GDI background fill until Direct2D is ready.
 - **Threading**: Background enumeration thread for non-blocking folder loading
-- **Icon Management**: Async icon loading **grouped by system icon index**; cached bitmaps are stamped immediately and missing icons are extracted once (background) + converted once (UI) then applied to all matching items. Icon bitmap conversion begins once Direct2D is ready (no synchronous icon bitmap pre-warm during startup).
+- **Icon Management**: Async icon loading **grouped by system icon index**; cached bitmaps are stamped immediately and missing icons are extracted once (background) + converted once (UI) then applied to all matching items. Icon bitmap conversion begins once a Direct2D device context is ready (no synchronous icon bitmap pre-warm during startup) and MUST NOT be blocked by pending swap-chain resize completion; otherwise fast startup can leave enumerated items stuck on placeholder icons.
 - **Parent-Child**: Child window of main application, coordinates with NavigationView
+
+## Typography Contract
+
+- FolderView labels/details must use the shared Windows 11 typography helper, not hardcoded `Segoe UI`.
+- Visible text uses the shared Segoe UI Variable split:
+  - details/caption-scale text may resolve to `Segoe UI Variable Small`
+  - normal row labels and overlays use `Segoe UI Variable Text`
+  - large overlay titles follow the shared size-based mapping
+- Watermark and status glyphs use `Segoe Fluent Icons`.
+- Any future visible HWND/GDI text added to FolderView-owned surfaces must route through the shared HFONT helper instead of `DEFAULT_GUI_FONT`.
+
+## Performance Validation Contract
+
+FolderView is a primary hot path and MUST be treated as performance-critical for new feature work.
+
+Any new FolderView feature or optimization that can affect:
+
+- cold or warm folder open,
+- enumeration,
+- sorting,
+- icon loading,
+- rendering,
+- selection/scroll responsiveness,
+- filter behavior,
+- empty-state or overlay behavior,
+
+MUST:
+
+- define the protected scenario up front,
+- add or reuse measurable instrumentation,
+- add deterministic selftest coverage or another deterministic harness,
+- archive validation runs under `Specs/TestRuns/`,
+- use archived evidence when claiming improvement.
+
+This requirement applies even when the first landing only establishes a baseline.
+
+FolderView work SHOULD prefer existing metric families such as `render.*`, `icons.*`, and enumeration/sort metrics when they cover the scenario. If they do not, the feature MUST add the missing instrumentation with the change.
 
 ## Architecture
 
@@ -35,6 +72,10 @@
 ### Files
 - **Header**: `RedSalamander/FolderView.h`
 - **Internal Helpers**: `RedSalamander/FolderViewInternal.h`
+- **Helper Headers**:
+  - `RedSalamander/FolderViewEmptyStateLayout.h`
+  - `RedSalamander/FolderViewIncrementalSearch.h`
+  - `RedSalamander/FolderViewVisualState.h`
 - **Implementation (split)**:
   - `RedSalamander/FolderView.cpp` (window lifecycle + message dispatch)
   - `RedSalamander/FolderView.Interaction.cpp` (mouse/keyboard/scroll/command handling)
@@ -104,9 +145,12 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
 ```
 
 **Item Spacing:**
-- **Vertical spacing**: 8 DIP between items
-- **Horizontal spacing**: 16 DIP between columns
+- **Vertical spacing**:
+  - Standard density: `4 DIP` between rows
+  - Compact mode: `0 DIP` between rows so adjacent item bounds touch vertically
+- **Horizontal spacing**: `18 DIP` between columns
 - **Padding**: 8 DIP around icon and text
+- Switching compact mode on an existing pane MUST relayout the visible grid immediately so rendering, hit testing, focus cues, and keyboard/mouse interactions all use the same row spacing in the new density.
 
 **Text Truncation:**
 - If filename exceeds column width, truncate with ellipsis ("...")
@@ -159,6 +203,7 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
 - **Selected**: Accent color background (theme-defined)
 - **Focused**: 2 DIP border (theme-defined); when the item is also **Selected**, the border uses a contrasting color (e.g., selected text color) to remain visible.
 - Selection/hover backgrounds and the focus border use small rounded corners (see `Specs/UI/UI_VisualStyle.md`).
+- **Unfocused pane**: normal, unselected item text/details/metadata and icons must render dimmer than the focused pane so the inactive FolderView is visually clear. Selected items use inactive-selection text/background colors instead of normal dimmed text, and the current item keeps a thinner/dimmer focus border.
 
 **Multi-Selection Visual:**
 - Multiple items show selection background
@@ -188,6 +233,8 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
     - Title text: **Empty folder**.
     - A fun, friendly message with a large emoji, chosen randomly from a small set of resource strings.
     - Double-click anywhere in the pane navigates **up to the parent folder**.
+    - The focused empty-folder placeholder item is drawn as a normal item row at the top of the pane with localized label text **Go to parent**. Its focus/selection cue MUST span the current pane row width and use the current display mode's row height; it MUST NOT expand to the full pane body and MUST NOT shrink to a compact label-sized tile.
+    - Empty-folder placeholder metrics MUST be recomputed from the current client width, DPI, icon size, and display-mode text-line heights. They MUST NOT inherit tile width/height from the previously displayed non-empty folder or from a previous Brief/Detailed/Extra Detailed mode.
 
 **View options & filtering:**
 - **Hidden/System visibility** is controlled by settings:
@@ -208,7 +255,7 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
   - FolderView SHOULD instead render a small filter badge in a corner.
 
 **Enumeration Contract (Plugin Only):**
-- The host obtains an `IFileSystem` instance via the plugin factory (`RedSalamanderCreate`) and uses it as the only source of directory entries.
+- The host obtains an `IFileSystem` instance via the plugin factory (`RedSalamanderCreate(..., pluginId, ...)`) and uses it as the only source of directory entries.
 - Each enumeration calls `IFileSystem::ReadDirectoryInfo(path, info.put())` to obtain an `IFilesInformation` result object.
 - The returned `FileInfo` buffer is traversed via `NextEntryOffset` (preferred) to build `FolderItem` entries.
 
@@ -241,7 +288,10 @@ while (entry != nullptr)
 - Special folders (Desktop, Documents, etc.)
 
 **Icon Rendering:**
-- Uses IconCache system image lists (`SHIL_SMALL`/`SHIL_LARGE`/`SHIL_EXTRALARGE`) and selects the **optimal** list size based on the target icon DIP size and current DPI (FolderView default is 16 DIP list-mode icons).
+- Uses IconCache system image lists (`SHIL_SMALL`/`SHIL_LARGE`/`SHIL_EXTRALARGE`/`SHIL_JUMBO`) and selects the **optimal** list size based on the target icon DIP size and current DPI (FolderView default is 16 DIP list-mode icons).
+- IconCache MUST choose the smallest shell image-list source that is at least as large as the target physical pixel size; do not upscale 16px shell icons on high-DPI displays.
+- FolderView icon bitmap draws MUST use nearest-neighbor interpolation only when the source bitmap and destination physical pixel size match exactly; scaled shell icons use linear filtering to avoid chunky edges.
+- IconCache D2D bitmap normalization MUST premultiply translucent BGRA pixels and, for shell icons that carry RGB data but no alpha channel, apply Windows icon AND mask semantics: black mask pixels are opaque and non-black mask pixels are transparent.
 - Fallback chain: **optimal → remaining sizes** (best-effort quality preservation)
 - Icons cached in IconCache component (LRU cache, 2000 icons ≈18MB)
 - Async loading with viewport prioritization: visible items first, offscreen queued
@@ -388,7 +438,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 ### Incremental Search (FolderView)
 
 FolderView implements **incremental search mode** (type-to-search) as specified in `Specs/UI/UI_CommandMenuKeyboard.md`:
-- Typing printable characters searches item display names (substring match) and moves focus to the next match.
+- Typing printable characters updates the search query. Highlighting uses a case-insensitive substring match across all visible item display names, but focus navigation uses a case-insensitive prefix match: the current item jumps to the next visible item whose name starts with the query.
 - Matching text is highlighted while the mode is active.
   - All **visible** items whose display name matches the query show the highlight on the matched substring.
   - Highlight style: the matched substring gets a **selection-style background** (use `itemBackgroundSelected` / `itemBackgroundSelectedInactive`) with the corresponding selection text color; do **not** change font weight.
@@ -405,6 +455,7 @@ FolderView implements **incremental search mode** (type-to-search) as specified 
 
 **Visual Feedback:**
 - On folder entry (after enumeration), FolderView sets the `Current item` to the first item (or nearest preserved focus), and starts with **no selection**.
+- On refresh of the currently displayed folder, including refreshes triggered by `DirectoryInfoCache` callbacks, the user selection is preserved for every surviving item whose display name is still present even when size, time, attributes, details, layout, or icon rendering state changed. Items that disappeared from the refreshed list are removed from the selection. When the refresh impact carries chained same-folder rename hints, a selected old display name MUST transfer selection through the full chain to the final new display name; an unselected original MUST NOT become selected merely because it was renamed. When no rename hint is available, the old name is treated as removed.
 - Selected items: Selection background differs between the focused vs unfocused pane (subtle inactive selection), per `Specs/UI/UI_CommandMenuKeyboard.md`.
 - Current item: Focus border always; in the focused pane it also has a background fill.
 - Selected + Current item: Draw selection background plus a contrasting focus border stroke so the focus state remains visible on top of selection.
@@ -978,8 +1029,12 @@ Example: `FolderView::ReportError(L"EnumerateFolder", hr)` logs the failure and 
 
 ### Unit Tests
 - Grid layout calculation with various window sizes
+- Compact-mode density toggle collapses row spacing to `0 DIP` and updates hit testing immediately
 - Selection state management (single, multi, range)
 - Keyboard navigation logic
+- Incremental search keeps contains-based highlights but uses prefix matching for focus/jump.
+- Inactive-pane visual-state helpers dim normal text/icons while preserving selected/focused inactive states.
+- Empty-folder placeholder metric helpers recompute placeholder item width/height for the current empty layout and clamp width to the current client area.
 - Icon cache hit/miss rates
 
 ### Integration Tests
@@ -992,6 +1047,7 @@ Example: `FolderView::ReportError(L"EnumerateFolder", hr)` logs the failure and 
 - Large folder (10K+ files) render time: <500ms
 - Scroll smoothness: 60fps sustained
 - Icon loading: 100 icons/second
+- `folderView_perf_large_folder_baseline` must verify that stock icon loading resolves into item bitmap icons, not only that icon-index lookup or cache warming occurred.
 - Memory usage: <100MB for 10K items
 
 ### Manual Tests

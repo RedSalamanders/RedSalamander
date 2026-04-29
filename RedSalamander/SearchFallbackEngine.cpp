@@ -52,11 +52,11 @@ struct SearchContentResult final
 
 struct SearchRuntime final
 {
-    SearchRuntime()                           = default;
-    SearchRuntime(const SearchRuntime&)       = delete;
-    SearchRuntime(SearchRuntime&&)            = delete;
+    SearchRuntime()                                = default;
+    SearchRuntime(const SearchRuntime&)            = delete;
+    SearchRuntime(SearchRuntime&&)                 = delete;
     SearchRuntime& operator=(const SearchRuntime&) = delete;
-    SearchRuntime& operator=(SearchRuntime&&) = delete;
+    SearchRuntime& operator=(SearchRuntime&&)      = delete;
 
     wil::com_ptr<IFileSystem> fileSystem;
     wil::com_ptr<IFileSystemIO> fileSystemIo;
@@ -69,26 +69,26 @@ struct SearchRuntime final
     std::unique_ptr<std::wregex> nameRegex;
     std::unique_ptr<std::wregex> contentRegex;
     std::unordered_set<std::wstring> queuedDirectories;
-    bool includeFiles              = false;
-    bool includeDirectories        = false;
-    bool recursive                 = false;
-    bool followSymlinks            = false;
-    bool wantSnippets              = false;
-    bool matchCaseName             = false;
-    bool matchCaseContent          = false;
-    uint64_t maxResults            = 0;
-    uint64_t maxContentBytesPerFile = SearchTextHelpers::kDefaultContentBytesPerFile;
-    uint32_t maxSnippetCharacters  = SearchTextHelpers::kDefaultSnippetCharacters;
-    uint64_t scannedDirectories    = 0;
-    uint64_t scannedFiles          = 0;
-    uint64_t candidateFiles        = 0;
-    uint64_t matchedEntries        = 0;
-    uint32_t warningFlags          = FILESYSTEM_SEARCH_WARNING_NONE;
-    ULONGLONG lastProgressTick     = 0u;
-    uint64_t lastProgressItems     = 0u;
+    bool includeFiles                       = false;
+    bool includeDirectories                 = false;
+    bool recursive                          = false;
+    bool followSymlinks                     = false;
+    bool wantSnippets                       = false;
+    bool matchCaseName                      = false;
+    bool matchCaseContent                   = false;
+    uint64_t maxResults                     = 0;
+    uint64_t maxContentBytesPerFile         = SearchTextHelpers::kDefaultContentBytesPerFile;
+    uint32_t maxSnippetCharacters           = SearchTextHelpers::kDefaultSnippetCharacters;
+    uint64_t scannedDirectories             = 0;
+    uint64_t scannedFiles                   = 0;
+    uint64_t candidateFiles                 = 0;
+    uint64_t matchedEntries                 = 0;
+    uint32_t warningFlags                   = FILESYSTEM_SEARCH_WARNING_NONE;
+    ULONGLONG lastProgressTick              = 0u;
+    uint64_t lastProgressItems              = 0u;
     FileSystemSearchPhase lastProgressPhase = FILESYSTEM_SEARCH_PHASE_INITIALIZING;
-    bool hasReportedProgress       = false;
-    bool stopRequested             = false;
+    bool hasReportedProgress                = false;
+    bool stopRequested                      = false;
 };
 
 [[nodiscard]] unsigned long ByteCountOfString(std::wstring_view text) noexcept
@@ -104,12 +104,7 @@ struct SearchRuntime final
 
 [[nodiscard]] std::wstring FoldText(std::wstring_view text) noexcept
 {
-    std::wstring result(text);
-    if (! result.empty())
-    {
-        static_cast<void>(::CharLowerBuffW(result.data(), static_cast<DWORD>(result.size())));
-    }
-    return result;
+    return OrdinalString::FoldCaseInvariant(text);
 }
 
 [[nodiscard]] bool WildcardMatchCaseSensitive(std::wstring_view text, std::wstring_view pattern) noexcept
@@ -213,7 +208,7 @@ struct SearchRuntime final
     }
 
     std::wstring result(basePath);
-    const wchar_t lastChar  = result.back();
+    const wchar_t lastChar = result.back();
     if (lastChar != L'\\' && lastChar != L'/')
     {
         result.push_back(separator);
@@ -279,17 +274,12 @@ HRESULT STDMETHODCALLTYPE SearchReadCancelThunk(void* cookie) noexcept
     return CheckSearchCancelled(*static_cast<SearchRuntime*>(cookie));
 }
 
-HRESULT ReportSearchProgress(SearchRuntime& runtime,
-                             FileSystemSearchPhase phase,
-                             const std::wstring* currentPath,
-                             HRESULT statusHint,
-                             bool force) noexcept
+HRESULT ReportSearchProgress(SearchRuntime& runtime, FileSystemSearchPhase phase, const std::wstring* currentPath, HRESULT statusHint, bool force) noexcept
 {
     const uint64_t processedItems = runtime.scannedDirectories + runtime.scannedFiles;
     const ULONGLONG now           = ::GetTickCount64();
 
-    if (! force && runtime.hasReportedProgress && phase == runtime.lastProgressPhase &&
-        (processedItems - runtime.lastProgressItems) < kProgressIntervalItems &&
+    if (! force && runtime.hasReportedProgress && phase == runtime.lastProgressPhase && (processedItems - runtime.lastProgressItems) < kProgressIntervalItems &&
         (now - runtime.lastProgressTick) < kProgressIntervalMs)
     {
         return S_OK;
@@ -420,10 +410,7 @@ HRESULT MatchFileContent(SearchRuntime& runtime, const std::wstring& fullPath, S
     return S_OK;
 }
 
-HRESULT EmitSearchMatch(SearchRuntime& runtime,
-                        const SearchEntryMetadata& entry,
-                        uint32_t matchedBy,
-                        const SearchContentResult& contentResult) noexcept
+HRESULT EmitSearchMatch(SearchRuntime& runtime, const SearchEntryMetadata& entry, uint32_t matchedBy, const SearchContentResult& contentResult) noexcept
 {
     FileSystemSearchMatch match{};
     match.sizeBytes              = sizeof(FileSystemSearchMatch);
@@ -583,9 +570,9 @@ HRESULT SearchDirectoryTree(SearchRuntime& runtime) noexcept
             }
 
             SearchEntryMetadata metadata{};
-            metadata.displayName    = std::wstring(name);
-            metadata.relativePath   = frame.relativeBase.empty() ? metadata.displayName
-                                                                 : AppendPath(frame.relativeBase, metadata.displayName, PickPathSeparator(frame.fullPath));
+            metadata.displayName = std::wstring(name);
+            metadata.relativePath =
+                frame.relativeBase.empty() ? metadata.displayName : AppendPath(frame.relativeBase, metadata.displayName, PickPathSeparator(frame.fullPath));
             metadata.fullPath       = AppendPath(frame.fullPath, metadata.displayName);
             metadata.fileAttributes = entry->FileAttributes;
             metadata.creationTime   = entry->CreationTime;
@@ -689,15 +676,13 @@ HRESULT Execute(IFileSystem* fileSystem, const FileSystemSearchQuery* query, IFi
 
         if (query->nameMode == FILESYSTEM_SEARCH_NAME_REGEX)
         {
-            const auto flags = runtime.matchCaseName ? std::regex_constants::ECMAScript
-                                                     : (std::regex_constants::ECMAScript | std::regex_constants::icase);
+            const auto flags  = runtime.matchCaseName ? std::regex_constants::ECMAScript : (std::regex_constants::ECMAScript | std::regex_constants::icase);
             runtime.nameRegex = std::make_unique<std::wregex>(runtime.namePattern, flags);
         }
 
         if (query->contentMode == FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX)
         {
-            const auto flags = runtime.matchCaseContent ? std::regex_constants::ECMAScript
-                                                        : (std::regex_constants::ECMAScript | std::regex_constants::icase);
+            const auto flags = runtime.matchCaseContent ? std::regex_constants::ECMAScript : (std::regex_constants::ECMAScript | std::regex_constants::icase);
             runtime.contentRegex = std::make_unique<std::wregex>(runtime.contentPattern, flags);
         }
 
@@ -724,7 +709,7 @@ HRESULT Execute(IFileSystem* fileSystem, const FileSystemSearchQuery* query, IFi
             return S_OK;
         }
 
-        bool rootIsDirectory      = true;
+        bool rootIsDirectory         = true;
         unsigned long rootAttributes = FILE_ATTRIBUTE_DIRECTORY;
         if (runtime.fileSystemIo)
         {
@@ -784,14 +769,15 @@ HRESULT Execute(IFileSystem* fileSystem, const FileSystemSearchQuery* query, IFi
 
         if (runtime.warningFlags != FILESYSTEM_SEARCH_WARNING_NONE)
         {
-            Debug::Warning(L"SearchFallbackEngine: degraded root='{}' status=0x{:08X} matched={} candidates={} scannedFiles={} scannedDirs={} warnings=0x{:08X}",
-                           runtime.rootPath,
-                           static_cast<unsigned long>(FAILED(hr) ? hr : finalStatus),
-                           runtime.matchedEntries,
-                           runtime.candidateFiles,
-                           runtime.scannedFiles,
-                           runtime.scannedDirectories,
-                           runtime.warningFlags);
+            Debug::Warning(
+                L"SearchFallbackEngine: degraded root='{}' status=0x{:08X} matched={} candidates={} scannedFiles={} scannedDirs={} warnings=0x{:08X}",
+                runtime.rootPath,
+                static_cast<unsigned long>(FAILED(hr) ? hr : finalStatus),
+                runtime.matchedEntries,
+                runtime.candidateFiles,
+                runtime.scannedFiles,
+                runtime.scannedDirectories,
+                runtime.warningFlags);
         }
 
         Debug::Info(L"SearchFallbackEngine: completed root='{}' status=0x{:08X} matched={} candidates={} scannedFiles={} scannedDirs={} warnings=0x{:08X}",

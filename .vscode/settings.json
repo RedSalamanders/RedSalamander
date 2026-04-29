@@ -8,5 +8,6 @@
         "random": "cpp"
     },
     "claudeCode.initialPermissionMode": "plan",
-    "C_Cpp.default.compilerPath": "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/Llvm/x64/bin/clang++.exe"
+    "C_Cpp.default.compilerPath": "C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/Llvm/x64/bin/clang++.exe",
+    "git.ignoreLimitWarning": true
 }

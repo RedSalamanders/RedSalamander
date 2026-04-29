@@ -3,9 +3,14 @@
 #include <aws/s3-crt/model/Delete.h>
 #include <aws/s3-crt/model/DeleteObjectRequest.h>
 #include <aws/s3-crt/model/DeleteObjectsRequest.h>
+#include <aws/s3-crt/model/ListObjectsV2Request.h>
 #include <aws/s3-crt/model/ObjectIdentifier.h>
 
+#include <atomic>
+#include <filesystem>
 #include <format>
+#include <functional>
+#include <unordered_map>
 
 namespace FsS3 = FileSystemS3Internal;
 
@@ -117,28 +122,1161 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::ReadDirectoryInfo(const wchar_t* path, I
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItem([[maybe_unused]] const wchar_t* sourcePath,
-                                                 [[maybe_unused]] const wchar_t* destinationPath,
-                                                 [[maybe_unused]] FileSystemFlags flags,
-                                                 [[maybe_unused]] const FileSystemOptions* options,
-                                                 [[maybe_unused]] IFileSystemCallback* callback,
-                                                 [[maybe_unused]] void* cookie) noexcept
+namespace
 {
-    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+enum class S3ResolvedKind
+{
+    Missing,
+    Object,
+    Prefix,
+};
+
+struct ResolvedS3Path
+{
+    std::wstring originalPath;
+    std::wstring canonicalPath;
+    std::wstring normalizedPath;
+    FsS3::ResolvedAwsContext rootCtx;
+    FsS3::ResolvedAwsContext bucketCtx;
+    std::wstring bucketWide;
+    std::string bucket;
+    std::string key;
+    bool isRoot       = false;
+    bool isBucketRoot = false;
+};
+
+struct ResolvedS3Probe
+{
+    S3ResolvedKind kind          = S3ResolvedKind::Missing;
+    uint64_t sizeBytes           = 0;
+    __int64 lastWriteTime        = 0;
+    bool objectExists            = false;
+    bool prefixExists            = false;
+    bool explicitDirectorySyntax = false;
+};
+
+struct PlannedTransferObject
+{
+    std::string sourceKey;
+    std::string destinationKey;
+    uint64_t sizeBytes = 0;
+};
+
+struct TransferPlan
+{
+    bool sourceIsPrefix = false;
+    std::string sourcePrefix;
+    std::string destinationPrefix;
+    std::vector<PlannedTransferObject> objects;
+    uint64_t totalBytes = 0;
+};
+
+struct DestinationState
+{
+    bool exists        = false;
+    uint64_t sizeBytes = 0;
+};
+
+struct DestinationBackup
+{
+    std::string destinationKey;
+    std::string backupKey;
+    uint64_t sizeBytes = 0;
+};
+
+struct TransferJournal
+{
+    std::vector<std::string> touchedDestinationKeys;
+    std::vector<DestinationBackup> backups;
+    std::vector<const PlannedTransferObject*> deletedSourceObjects;
+};
+
+inline constexpr size_t kMaxDeleteBatchSize = 1000u;
+
+[[nodiscard]] HRESULT NormalizeCallbackResult(HRESULT hr) noexcept
+{
+    if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT)
+    {
+        return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    }
+    return hr;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem([[maybe_unused]] const wchar_t* sourcePath,
-                                                 [[maybe_unused]] const wchar_t* destinationPath,
-                                                 [[maybe_unused]] FileSystemFlags flags,
-                                                 [[maybe_unused]] const FileSystemOptions* options,
-                                                 [[maybe_unused]] IFileSystemCallback* callback,
-                                                 [[maybe_unused]] void* cookie) noexcept
+[[nodiscard]] std::string MakeDirectoryPrefix(std::string_view key) noexcept
 {
-    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    std::string prefix(key);
+    if (! prefix.empty() && prefix.back() != '/')
+    {
+        prefix.push_back('/');
+    }
+    return prefix;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(
-    const wchar_t* path, [[maybe_unused]] FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept
+[[nodiscard]] std::wstring JoinPluginPath(std::wstring_view parent, std::wstring_view leaf) noexcept
+{
+    std::wstring result(parent);
+    if (result.empty())
+    {
+        result = L"/";
+    }
+    if (! result.empty() && result.back() != L'/' && result.back() != L'\\')
+    {
+        result.push_back(L'/');
+    }
+    result.append(leaf);
+    return result;
+}
+
+[[nodiscard]] std::wstring GetLeafName(std::wstring_view path) noexcept
+{
+    const std::wstring normalized = FsS3::NormalizePluginPath(path);
+    const auto segments           = FsS3::SplitPathSegments(normalized);
+    return segments.empty() ? std::wstring() : std::wstring(segments.back());
+}
+
+[[nodiscard]] std::wstring GetParentPluginPath(std::wstring_view path) noexcept
+{
+    const std::wstring normalized = FsS3::NormalizePluginPath(path);
+    const auto segments           = FsS3::SplitPathSegments(normalized);
+    if (segments.size() <= 1u)
+    {
+        return L"/";
+    }
+
+    std::wstring parent = L"/";
+    for (size_t i = 0; i + 1u < segments.size(); ++i)
+    {
+        if (i > 0u)
+        {
+            parent.push_back(L'/');
+        }
+        parent.append(segments[i]);
+    }
+    return parent;
+}
+
+[[nodiscard]] bool IsLeafRenameNameValid(std::wstring_view name) noexcept
+{
+    return ! name.empty() && name != L"." && name != L".." && name.find_first_of(L"/\\") == std::wstring_view::npos;
+}
+
+[[nodiscard]] bool IsSameStorageLocation(const ResolvedS3Path& left, const ResolvedS3Path& right) noexcept
+{
+    return left.bucket == right.bucket && left.key == right.key && FsS3::IsSameAwsContextIdentity(left.rootCtx, right.rootCtx);
+}
+
+[[nodiscard]] HRESULT DeleteS3Object(FileSystemS3& fs, const FsS3::ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key) noexcept
+{
+    if (bucket.empty() || key.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    const auto client = FsS3::GetS3Client(fs, ctx);
+
+    Aws::S3Crt::Model::DeleteObjectRequest req;
+    req.SetBucket(Aws::String(bucket.data(), bucket.size()));
+    req.SetKey(Aws::String(key.data(), key.size()));
+
+    const auto outcome = client->DeleteObject(req);
+    if (! outcome.IsSuccess())
+    {
+        const auto& err            = outcome.GetError();
+        const std::wstring details = std::format(L"bucket='{}' key='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(key));
+        FsS3::LogAwsFailure(L"S3", L"DeleteObject", ctx, err, details);
+        return FsS3::HresultFromAwsError(err);
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ResolveS3Path(FileSystemS3& fs,
+                                    FileSystemS3Mode mode,
+                                    IHostConnections* hostConnections,
+                                    const FileSystemS3::Settings& settings,
+                                    const wchar_t* path,
+                                    ResolvedS3Path& out) noexcept
+{
+    out = {};
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    out.originalPath = path;
+
+    HRESULT hr = FsS3::ResolveAwsContext(mode, settings, path, hostConnections, true, out.rootCtx, out.canonicalPath);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    out.normalizedPath = FsS3::NormalizePluginPath(out.canonicalPath);
+    out.isRoot         = out.normalizedPath == L"/" || out.normalizedPath.empty();
+    if (out.isRoot)
+    {
+        return S_OK;
+    }
+
+    const auto segments = FsS3::SplitPathSegments(out.normalizedPath);
+    if (segments.empty())
+    {
+        out.isRoot = true;
+        return S_OK;
+    }
+
+    out.bucketWide = std::wstring(segments[0]);
+    out.bucket     = FsS3::Utf8FromUtf16(out.bucketWide);
+    if (out.bucket.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+    }
+
+    out.isBucketRoot = segments.size() == 1u;
+
+    if (! out.isBucketRoot)
+    {
+        std::wstring keyWide;
+        for (size_t i = 1; i < segments.size(); ++i)
+        {
+            if (i > 1)
+            {
+                keyWide.push_back(L'/');
+            }
+            keyWide.append(segments[i]);
+        }
+
+        out.key = FsS3::Utf8FromUtf16(keyWide);
+        if (out.key.empty() && ! keyWide.empty())
+        {
+            return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
+        }
+    }
+
+    return FsS3::ResolveS3ContextForBucket(fs, out.rootCtx, out.bucketWide, out.bucketCtx);
+}
+
+[[nodiscard]] HRESULT TryGetPrefixExists(
+    FileSystemS3& fs, const FsS3::ResolvedAwsContext& ctx, std::string_view bucket, std::string_view prefix, bool& outExists) noexcept
+{
+    outExists = false;
+
+    if (bucket.empty() || prefix.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    Aws::S3Crt::Model::ListObjectsV2Request req;
+    req.SetBucket(Aws::String(bucket.data(), bucket.size()));
+    req.SetPrefix(Aws::String(prefix.data(), prefix.size()));
+    req.SetMaxKeys(1);
+
+    const auto client  = FsS3::GetS3Client(fs, ctx);
+    const auto outcome = client->ListObjectsV2(req);
+    if (! outcome.IsSuccess())
+    {
+        const auto& err            = outcome.GetError();
+        const std::wstring details = std::format(L"bucket='{}' prefix='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(prefix));
+        FsS3::LogAwsFailure(L"S3", L"ListObjectsV2", ctx, err, details);
+        return FsS3::HresultFromAwsError(err);
+    }
+
+    outExists = ! outcome.GetResult().GetContents().empty();
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ProbeS3Path(FileSystemS3& fs, const ResolvedS3Path& path, ResolvedS3Probe& out) noexcept
+{
+    out                         = {};
+    out.explicitDirectorySyntax = ! path.normalizedPath.empty() && path.normalizedPath.back() == L'/';
+
+    if (path.isRoot || path.isBucketRoot)
+    {
+        out.kind         = S3ResolvedKind::Prefix;
+        out.prefixExists = true;
+        return S_OK;
+    }
+
+    if (! out.explicitDirectorySyntax)
+    {
+        HRESULT hr = FsS3::TryGetS3ObjectSummary(fs, path.bucketCtx, path.bucket, path.key, out.sizeBytes, out.lastWriteTime, out.objectExists);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (out.objectExists)
+        {
+            out.kind = S3ResolvedKind::Object;
+        }
+    }
+
+    const std::string prefix = MakeDirectoryPrefix(path.key);
+    HRESULT hr               = TryGetPrefixExists(fs, path.bucketCtx, path.bucket, prefix, out.prefixExists);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (out.explicitDirectorySyntax)
+    {
+        out.kind = out.prefixExists ? S3ResolvedKind::Prefix : S3ResolvedKind::Missing;
+        return S_OK;
+    }
+
+    if (! out.objectExists && out.prefixExists)
+    {
+        out.kind = S3ResolvedKind::Prefix;
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ListRecursiveObjects(
+    FileSystemS3& fs, const ResolvedS3Path& source, std::string_view prefix, std::vector<PlannedTransferObject>& outObjects, uint64_t& outTotalBytes) noexcept
+{
+    outObjects.clear();
+    outTotalBytes = 0;
+
+    if (prefix.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    Aws::S3Crt::Model::ListObjectsV2Request req;
+    req.SetBucket(Aws::String(source.bucket.data(), source.bucket.size()));
+    req.SetPrefix(Aws::String(prefix.data(), prefix.size()));
+    req.SetMaxKeys(static_cast<int>(std::min<unsigned long>(source.bucketCtx.maxKeys, 1000u)));
+
+    const auto client = FsS3::GetS3Client(fs, source.bucketCtx);
+    while (true)
+    {
+        const auto outcome = client->ListObjectsV2(req);
+        if (! outcome.IsSuccess())
+        {
+            const auto& err            = outcome.GetError();
+            const std::wstring details = std::format(L"bucket='{}' prefix='{}'", FsS3::Utf16FromUtf8(source.bucket), FsS3::Utf16FromUtf8(prefix));
+            FsS3::LogAwsFailure(L"S3", L"ListObjectsV2", source.bucketCtx, err, details);
+            return FsS3::HresultFromAwsError(err);
+        }
+
+        const auto& result = outcome.GetResult();
+        for (const auto& object : result.GetContents())
+        {
+            PlannedTransferObject entry{};
+            entry.sourceKey = std::string(object.GetKey().c_str(), object.GetKey().size());
+            entry.sizeBytes = static_cast<uint64_t>(object.GetSize());
+            outTotalBytes += static_cast<uint64_t>(object.GetSize());
+            outObjects.push_back(std::move(entry));
+        }
+
+        if (! result.GetIsTruncated())
+        {
+            break;
+        }
+
+        req.SetContinuationToken(result.GetNextContinuationToken());
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT HasAncestorObjectConflict(FileSystemS3& fs, const ResolvedS3Path& destination, std::string_view key, bool& outConflict) noexcept
+{
+    outConflict = false;
+
+    std::string trimmed(key);
+    while (! trimmed.empty() && trimmed.back() == '/')
+    {
+        trimmed.pop_back();
+    }
+
+    for (size_t slash = trimmed.find('/'); slash != std::string::npos; slash = trimmed.find('/', slash + 1))
+    {
+        const std::string ancestor = trimmed.substr(0, slash);
+        uint64_t sizeBytes         = 0;
+        __int64 lastWriteTime      = 0;
+        bool found                 = false;
+        HRESULT hr                 = FsS3::TryGetS3ObjectSummary(fs, destination.bucketCtx, destination.bucket, ancestor, sizeBytes, lastWriteTime, found);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (found)
+        {
+            outConflict = true;
+            return S_OK;
+        }
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT CopyS3ObjectWithFallback(FileSystemS3& fs,
+                                               const FsS3::ResolvedAwsContext& sourceCtx,
+                                               std::string_view sourceBucket,
+                                               std::string_view sourceKey,
+                                               const FsS3::ResolvedAwsContext& destinationCtx,
+                                               std::string_view destinationBucket,
+                                               std::string_view destinationKey,
+                                               uint64_t sizeBytes) noexcept
+{
+    HRESULT hr = FsS3::CopyS3ObjectServerSide(fs, destinationCtx, sourceBucket, sourceKey, destinationBucket, destinationKey, sizeBytes);
+    if (SUCCEEDED(hr))
+    {
+        return S_OK;
+    }
+
+    wil::unique_hfile relayFile;
+    HRESULT relayHr = FsS3::DownloadS3ObjectToTempFile(fs, sourceCtx, sourceBucket, sourceKey, relayFile);
+    if (FAILED(relayHr))
+    {
+        return relayHr;
+    }
+
+    return FsS3::UploadS3ObjectFromFile(fs, destinationCtx, destinationBucket, destinationKey, relayFile.get(), sizeBytes);
+}
+
+[[nodiscard]] std::string BuildHiddenSiblingKey(std::string_view destinationKey, std::string_view tag) noexcept
+{
+    static std::atomic_uint64_t s_nonce{1};
+    const uint64_t nonce = s_nonce.fetch_add(1, std::memory_order_relaxed);
+    const size_t slash   = destinationKey.find_last_of('/');
+
+    const std::string_view parent = (slash == std::string_view::npos) ? std::string_view{} : destinationKey.substr(0, slash + 1u);
+    const std::string_view leaf   = (slash == std::string_view::npos) ? destinationKey : destinationKey.substr(slash + 1u);
+
+    std::string key(parent);
+    key.append(".rs-");
+    key.append(tag);
+    key.push_back('-');
+    key.append(std::to_string(GetCurrentProcessId()));
+    key.push_back('-');
+    key.append(std::to_string(GetTickCount64()));
+    key.push_back('-');
+    key.append(std::to_string(nonce));
+    if (! leaf.empty())
+    {
+        key.push_back('-');
+        key.append(leaf);
+    }
+    return key;
+}
+
+[[nodiscard]] HRESULT CleanupBackupObjects(FileSystemS3& fs, const ResolvedS3Path& destination, const TransferJournal& journal) noexcept
+{
+    for (const auto& backup : journal.backups)
+    {
+        const HRESULT hr = DeleteS3Object(fs, destination.bucketCtx, destination.bucket, backup.backupKey);
+        if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+        {
+            return hr;
+        }
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT RollbackTransfer(FileSystemS3& fs,
+                                       const ResolvedS3Path& source,
+                                       const ResolvedS3Path& destination,
+                                       const TransferJournal& journal) noexcept
+{
+    bool hadFailure = false;
+
+    for (auto it = journal.deletedSourceObjects.rbegin(); it != journal.deletedSourceObjects.rend(); ++it)
+    {
+        const PlannedTransferObject& object = **it;
+        const HRESULT hr                    = CopyS3ObjectWithFallback(
+            fs, destination.bucketCtx, destination.bucket, object.destinationKey, source.bucketCtx, source.bucket, object.sourceKey, object.sizeBytes);
+        if (FAILED(hr))
+        {
+            hadFailure = true;
+        }
+    }
+
+    for (auto it = journal.touchedDestinationKeys.rbegin(); it != journal.touchedDestinationKeys.rend(); ++it)
+    {
+        const HRESULT hr = DeleteS3Object(fs, destination.bucketCtx, destination.bucket, *it);
+        if (FAILED(hr) && hr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+        {
+            hadFailure = true;
+        }
+    }
+
+    for (auto it = journal.backups.rbegin(); it != journal.backups.rend(); ++it)
+    {
+        const HRESULT copyHr = CopyS3ObjectWithFallback(
+            fs, destination.bucketCtx, destination.bucket, it->backupKey, destination.bucketCtx, destination.bucket, it->destinationKey, it->sizeBytes);
+        if (FAILED(copyHr))
+        {
+            hadFailure = true;
+            continue;
+        }
+
+        const HRESULT deleteHr = DeleteS3Object(fs, destination.bucketCtx, destination.bucket, it->backupKey);
+        if (FAILED(deleteHr) && deleteHr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+        {
+            hadFailure = true;
+        }
+    }
+
+    return hadFailure ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
+}
+
+[[nodiscard]] HRESULT BuildTransferPlan(
+    FileSystemS3& fs, const ResolvedS3Path& source, const ResolvedS3Probe& sourceProbe, const ResolvedS3Path& destination, TransferPlan& outPlan) noexcept
+{
+    outPlan = {};
+
+    if (sourceProbe.kind == S3ResolvedKind::Missing)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    }
+
+    if (sourceProbe.kind == S3ResolvedKind::Object)
+    {
+        if (destination.key.empty() || destination.isRoot || destination.isBucketRoot ||
+            (! destination.normalizedPath.empty() && destination.normalizedPath.back() == L'/'))
+        {
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+
+        PlannedTransferObject object{};
+        object.sourceKey      = source.key;
+        object.destinationKey = destination.key;
+        object.sizeBytes      = sourceProbe.sizeBytes;
+        outPlan.totalBytes    = sourceProbe.sizeBytes;
+        outPlan.objects.push_back(std::move(object));
+        return S_OK;
+    }
+
+    if (destination.key.empty() || destination.isRoot || destination.isBucketRoot)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    const std::string sourcePrefix      = MakeDirectoryPrefix(source.key);
+    const std::string destinationPrefix = MakeDirectoryPrefix(destination.key);
+    if (source.bucket == destination.bucket && FsS3::IsSameAwsContextIdentity(source.rootCtx, destination.rootCtx) &&
+        destinationPrefix.rfind(sourcePrefix, 0) == 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    outPlan.sourceIsPrefix    = true;
+    outPlan.sourcePrefix      = sourcePrefix;
+    outPlan.destinationPrefix = destinationPrefix;
+
+    HRESULT hr = ListRecursiveObjects(fs, source, sourcePrefix, outPlan.objects, outPlan.totalBytes);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (outPlan.objects.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    }
+
+    for (auto& object : outPlan.objects)
+    {
+        std::string relative = object.sourceKey;
+        relative.erase(0, sourcePrefix.size());
+        object.destinationKey = destinationPrefix + relative;
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT DeleteS3Keys(FileSystemS3& fs,
+                                   const FsS3::ResolvedAwsContext& ctx,
+                                   std::string_view bucket,
+                                   const std::vector<std::string>& keys) noexcept
+{
+    if (bucket.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    if (keys.empty())
+    {
+        return S_OK;
+    }
+
+    const auto client = FsS3::GetS3Client(fs, ctx);
+    for (size_t batchStart = 0; batchStart < keys.size(); batchStart += kMaxDeleteBatchSize)
+    {
+        const size_t batchEnd = std::min(keys.size(), batchStart + kMaxDeleteBatchSize);
+
+        Aws::S3Crt::Model::DeleteObjectsRequest req;
+        req.SetBucket(Aws::String(bucket.data(), bucket.size()));
+
+        Aws::S3Crt::Model::Delete payload;
+        payload.SetQuiet(true);
+        for (size_t i = batchStart; i < batchEnd; ++i)
+        {
+            Aws::S3Crt::Model::ObjectIdentifier objectIdentifier;
+            objectIdentifier.SetKey(Aws::String(keys[i].data(), keys[i].size()));
+            payload.AddObjects(std::move(objectIdentifier));
+        }
+
+        req.SetDelete(std::move(payload));
+        const auto outcome = client->DeleteObjects(req);
+        if (! outcome.IsSuccess())
+        {
+            const auto& err = outcome.GetError();
+            FsS3::LogAwsFailure(L"S3", L"DeleteObjects", ctx, err, FsS3::Utf16FromUtf8(bucket));
+            return FsS3::HresultFromAwsError(err);
+        }
+
+        const auto& errors = outcome.GetResult().GetErrors();
+        if (! errors.empty())
+        {
+            const auto& error = errors.front();
+            Debug::Warning(L"S3: DeleteObjects partial failure bucket='{}' key='{}' code='{}'",
+                           FsS3::Utf16FromUtf8(bucket),
+                           FsS3::Utf16FromUtf8(error.GetKey()),
+                           FsS3::Utf16FromUtf8(error.GetCode()));
+            return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        }
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT DeleteResolvedPath(FileSystemS3& fs, const ResolvedS3Path& path, const ResolvedS3Probe& probe, FileSystemFlags flags) noexcept
+{
+    if (path.isRoot || path.isBucketRoot)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    if (probe.kind == S3ResolvedKind::Missing)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    }
+
+    if (probe.kind == S3ResolvedKind::Object)
+    {
+        return DeleteS3Object(fs, path.bucketCtx, path.bucket, path.key);
+    }
+
+    if ((flags & FILESYSTEM_FLAG_RECURSIVE) == 0)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    std::vector<PlannedTransferObject> objects;
+    uint64_t totalBytes = 0;
+    HRESULT hr          = ListRecursiveObjects(fs, path, MakeDirectoryPrefix(path.key), objects, totalBytes);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (objects.empty())
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
+    }
+
+    std::vector<std::string> keys;
+    keys.reserve(objects.size());
+    for (const auto& object : objects)
+    {
+        keys.push_back(object.sourceKey);
+    }
+    return DeleteS3Keys(fs, path.bucketCtx, path.bucket, keys);
+}
+
+[[nodiscard]] HRESULT EstimateTransferBytes(FileSystemS3& fs,
+                                            FileSystemS3Mode mode,
+                                            IHostConnections* hostConnections,
+                                            const FileSystemS3::Settings& settings,
+                                            const wchar_t* sourcePath,
+                                            const wchar_t* destinationPath,
+                                            uint64_t& outTotalBytes) noexcept
+{
+    outTotalBytes = 0;
+
+    ResolvedS3Path source{};
+    ResolvedS3Path destination{};
+    HRESULT hr = ResolveS3Path(fs, mode, hostConnections, settings, sourcePath, source);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = ResolveS3Path(fs, mode, hostConnections, settings, destinationPath, destination);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (source.isRoot || source.isBucketRoot || destination.isRoot || destination.isBucketRoot)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    ResolvedS3Probe sourceProbe{};
+    ResolvedS3Probe destinationProbe{};
+    hr = ProbeS3Path(fs, source, sourceProbe);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = ProbeS3Path(fs, destination, destinationProbe);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if ((sourceProbe.kind == S3ResolvedKind::Object && destinationProbe.kind == S3ResolvedKind::Prefix) ||
+        (sourceProbe.kind == S3ResolvedKind::Prefix && destinationProbe.kind == S3ResolvedKind::Object))
+    {
+        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+    }
+
+    TransferPlan plan{};
+    hr = BuildTransferPlan(fs, source, sourceProbe, destination, plan);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    outTotalBytes = plan.totalBytes;
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ExecuteCopyOrMove(FileSystemS3& fs,
+                                        FileSystemS3Mode mode,
+                                        IHostConnections* hostConnections,
+                                        const FileSystemS3::Settings& settings,
+                                        const wchar_t* sourcePath,
+                                        const wchar_t* destinationPath,
+                                        FileSystemFlags flags,
+                                        bool isMove,
+                                        const std::function<HRESULT()>& checkCancel,
+                                        const std::function<HRESULT(uint64_t, uint64_t)>& reportBytes,
+                                        uint64_t& outTotalBytes) noexcept
+{
+    outTotalBytes = 0;
+
+    ResolvedS3Path source{};
+    ResolvedS3Path destination{};
+    HRESULT hr = ResolveS3Path(fs, mode, hostConnections, settings, sourcePath, source);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = ResolveS3Path(fs, mode, hostConnections, settings, destinationPath, destination);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (source.isRoot || source.isBucketRoot || destination.isRoot || destination.isBucketRoot)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    if (IsSameStorageLocation(source, destination))
+    {
+        return isMove ? S_OK : HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+    }
+
+    ResolvedS3Probe sourceProbe{};
+    ResolvedS3Probe destinationProbe{};
+    hr = ProbeS3Path(fs, source, sourceProbe);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = ProbeS3Path(fs, destination, destinationProbe);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (sourceProbe.kind == S3ResolvedKind::Object && destinationProbe.kind == S3ResolvedKind::Prefix)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+    }
+
+    if (sourceProbe.kind == S3ResolvedKind::Prefix && destinationProbe.kind == S3ResolvedKind::Object)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+    }
+
+    TransferPlan plan{};
+    hr = BuildTransferPlan(fs, source, sourceProbe, destination, plan);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    outTotalBytes = plan.totalBytes;
+
+    const bool allowOverwrite = (flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) != 0;
+    std::vector<DestinationState> destinationStates(plan.objects.size());
+    for (size_t i = 0; i < plan.objects.size(); ++i)
+    {
+        bool ancestorConflict = false;
+        hr                    = HasAncestorObjectConflict(fs, destination, plan.objects[i].destinationKey, ancestorConflict);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (ancestorConflict)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+
+        uint64_t existingSize     = 0;
+        __int64 existingLastWrite = 0;
+        bool found                = false;
+        hr = FsS3::TryGetS3ObjectSummary(fs, destination.bucketCtx, destination.bucket, plan.objects[i].destinationKey, existingSize, existingLastWrite, found);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        destinationStates[i].exists    = found;
+        destinationStates[i].sizeBytes = existingSize;
+
+        if (found && ! allowOverwrite)
+        {
+            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+        }
+    }
+
+    if (reportBytes)
+    {
+        hr = reportBytes(0, outTotalBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    TransferJournal journal{};
+    journal.touchedDestinationKeys.reserve(plan.objects.size());
+
+    uint64_t completedBytes = 0;
+    for (size_t i = 0; i < plan.objects.size(); ++i)
+    {
+        if (checkCancel)
+        {
+            hr = checkCancel();
+            if (FAILED(hr))
+            {
+                const HRESULT rollbackHr = RollbackTransfer(fs, source, destination, journal);
+                return FAILED(rollbackHr) ? rollbackHr : hr;
+            }
+        }
+
+        const PlannedTransferObject& object = plan.objects[i];
+        if (destinationStates[i].exists)
+        {
+            DestinationBackup backup{};
+            backup.destinationKey = object.destinationKey;
+            backup.backupKey      = BuildHiddenSiblingKey(object.destinationKey, "bak");
+            backup.sizeBytes      = destinationStates[i].sizeBytes;
+
+            hr = CopyS3ObjectWithFallback(fs,
+                                          destination.bucketCtx,
+                                          destination.bucket,
+                                          backup.destinationKey,
+                                          destination.bucketCtx,
+                                          destination.bucket,
+                                          backup.backupKey,
+                                          backup.sizeBytes);
+            if (FAILED(hr))
+            {
+                const HRESULT rollbackHr = RollbackTransfer(fs, source, destination, journal);
+                return FAILED(rollbackHr) ? rollbackHr : hr;
+            }
+
+            journal.backups.push_back(std::move(backup));
+        }
+
+        hr = CopyS3ObjectWithFallback(
+            fs, source.bucketCtx, source.bucket, object.sourceKey, destination.bucketCtx, destination.bucket, object.destinationKey, object.sizeBytes);
+        if (FAILED(hr))
+        {
+            const HRESULT rollbackHr = RollbackTransfer(fs, source, destination, journal);
+            return FAILED(rollbackHr) ? rollbackHr : hr;
+        }
+
+        journal.touchedDestinationKeys.push_back(object.destinationKey);
+        completedBytes += object.sizeBytes;
+        if (reportBytes)
+        {
+            hr = reportBytes(completedBytes, outTotalBytes);
+            if (FAILED(hr))
+            {
+                const HRESULT rollbackHr = RollbackTransfer(fs, source, destination, journal);
+                return FAILED(rollbackHr) ? rollbackHr : hr;
+            }
+        }
+    }
+
+    if (isMove)
+    {
+        for (const auto& object : plan.objects)
+        {
+            if (checkCancel)
+            {
+                hr = checkCancel();
+                if (FAILED(hr))
+                {
+                    const HRESULT rollbackHr = RollbackTransfer(fs, source, destination, journal);
+                    return FAILED(rollbackHr) ? rollbackHr : hr;
+                }
+            }
+
+            hr = DeleteS3Object(fs, source.bucketCtx, source.bucket, object.sourceKey);
+            if (FAILED(hr))
+            {
+                const HRESULT rollbackHr = RollbackTransfer(fs, source, destination, journal);
+                return FAILED(rollbackHr) ? rollbackHr : hr;
+            }
+
+            journal.deletedSourceObjects.push_back(&object);
+        }
+    }
+
+    const HRESULT cleanupHr = CleanupBackupObjects(fs, destination, journal);
+    return FAILED(cleanupHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : S_OK;
+}
+} // namespace
+
+HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItem(const wchar_t* sourcePath,
+                                                 const wchar_t* destinationPath,
+                                                 FileSystemFlags flags,
+                                                 const FileSystemOptions* options,
+                                                 IFileSystemCallback* callback,
+                                                 void* cookie) noexcept
+{
+    if (_mode != FileSystemS3Mode::S3)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    if (sourcePath == nullptr || destinationPath == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    if (sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
+    FileSystemOptions optionsState{};
+    if (options != nullptr)
+    {
+        optionsState = *options;
+    }
+    optionsState.sizeBytes             = sizeof(FileSystemOptions);
+    FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+
+    Settings settings;
+    {
+        std::lock_guard lock(_stateMutex);
+        settings = _settings;
+    }
+
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        BOOL cancel = FALSE;
+        HRESULT hr  = callback->FileSystemShouldCancel(&cancel, cookie);
+        hr          = NormalizeCallbackResult(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        return cancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    uint64_t totalBytes    = 0;
+    const auto reportBytes = [&](uint64_t completedBytes, uint64_t totalBytesInner) noexcept -> HRESULT
+    {
+        totalBytes = totalBytesInner;
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        const unsigned long completedItems = (totalBytesInner != 0 && completedBytes >= totalBytesInner) ? 1u : 0u;
+        HRESULT hr                         = callback->FileSystemProgress(
+            FILESYSTEM_COPY, 1, completedItems, totalBytesInner, completedBytes, sourcePath, destinationPath, 0, 0, callbackOptions, 0, cookie);
+        return NormalizeCallbackResult(hr);
+    };
+
+    HRESULT hr = checkCancel();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    HRESULT itemHr =
+        ExecuteCopyOrMove(*this, _mode, _hostConnections.get(), settings, sourcePath, destinationPath, flags, false, checkCancel, reportBytes, totalBytes);
+
+    if (FAILED(itemHr))
+    {
+        Debug::Warning(L"S3: CopyItem failed '{}' -> '{}' (hr={:#x})", sourcePath, destinationPath, static_cast<unsigned long>(itemHr));
+    }
+
+    if (callback)
+    {
+        hr = callback->FileSystemItemCompleted(FILESYSTEM_COPY, 0, sourcePath, destinationPath, itemHr, callbackOptions, cookie);
+        hr = NormalizeCallbackResult(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    if (SUCCEEDED(itemHr))
+    {
+        hr = reportBytes(totalBytes, totalBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        NotifySyntheticPathCreated(destinationPath);
+    }
+
+    return itemHr;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItem(const wchar_t* sourcePath,
+                                                 const wchar_t* destinationPath,
+                                                 FileSystemFlags flags,
+                                                 const FileSystemOptions* options,
+                                                 IFileSystemCallback* callback,
+                                                 void* cookie) noexcept
+{
+    if (_mode != FileSystemS3Mode::S3)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    if (sourcePath == nullptr || destinationPath == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    if (sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
+    FileSystemOptions optionsState{};
+    if (options != nullptr)
+    {
+        optionsState = *options;
+    }
+    optionsState.sizeBytes             = sizeof(FileSystemOptions);
+    FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+
+    Settings settings;
+    {
+        std::lock_guard lock(_stateMutex);
+        settings = _settings;
+    }
+
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        BOOL cancel = FALSE;
+        HRESULT hr  = callback->FileSystemShouldCancel(&cancel, cookie);
+        hr          = NormalizeCallbackResult(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        return cancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    uint64_t totalBytes    = 0;
+    const auto reportBytes = [&](uint64_t completedBytes, uint64_t totalBytesInner) noexcept -> HRESULT
+    {
+        totalBytes = totalBytesInner;
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        const unsigned long completedItems = (completedBytes >= totalBytesInner && totalBytesInner != 0) ? 1u : 0u;
+        HRESULT hr                         = callback->FileSystemProgress(
+            FILESYSTEM_MOVE, 1, completedItems, totalBytesInner, completedBytes, sourcePath, destinationPath, 0, 0, callbackOptions, 0, cookie);
+        return NormalizeCallbackResult(hr);
+    };
+
+    HRESULT hr = checkCancel();
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    HRESULT itemHr =
+        ExecuteCopyOrMove(*this, _mode, _hostConnections.get(), settings, sourcePath, destinationPath, flags, true, checkCancel, reportBytes, totalBytes);
+
+    if (FAILED(itemHr))
+    {
+        Debug::Warning(L"S3: MoveItem failed '{}' -> '{}' (hr={:#x})", sourcePath, destinationPath, static_cast<unsigned long>(itemHr));
+    }
+
+    if (callback)
+    {
+        hr = callback->FileSystemItemCompleted(FILESYSTEM_MOVE, 0, sourcePath, destinationPath, itemHr, callbackOptions, cookie);
+        hr = NormalizeCallbackResult(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    if (SUCCEEDED(itemHr))
+    {
+        hr = reportBytes(totalBytes, totalBytes);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        NotifySyntheticPathCreated(destinationPath);
+        NotifySyntheticPathDeleted(sourcePath);
+    }
+
+    return itemHr;
+}
+
+HRESULT STDMETHODCALLTYPE
+FileSystemS3::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept
 {
     if (path == nullptr)
     {
@@ -217,51 +1355,28 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(
         settings = _settings;
     }
 
-    FsS3::ResolvedAwsContext ctx{};
-    std::wstring canonical;
-    HRESULT hr = FsS3::ResolveAwsContext(_mode, settings, path, _hostConnections.get(), true, ctx, canonical);
+    HRESULT hr = checkCancel();
     if (FAILED(hr))
     {
         return hr;
     }
 
-    const std::wstring normalized = FsS3::NormalizePluginPath(canonical);
-    if (normalized == L"/" || normalized.empty() || (! normalized.empty() && normalized.back() == L'/'))
+    ResolvedS3Path resolved{};
+    hr = ResolveS3Path(*this, _mode, _hostConnections.get(), settings, path, resolved);
+    if (FAILED(hr))
     {
-        // Prefix deletes (directories) are intentionally not supported (potentially huge).
-        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        return hr;
     }
 
-    const auto segments = FsS3::SplitPathSegments(normalized);
-    if (segments.size() < 2)
+    ResolvedS3Probe probe{};
+    hr = ProbeS3Path(*this, resolved, probe);
+    if (FAILED(hr))
     {
-        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        return hr;
     }
 
-    const std::string bucket = FsS3::Utf8FromUtf16(segments[0]);
-    if (bucket.empty())
-    {
-        return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
-    }
-
-    std::wstring keyWide;
-    for (size_t i = 1; i < segments.size(); ++i)
-    {
-        if (i > 1)
-        {
-            keyWide.push_back(L'/');
-        }
-        keyWide.append(segments[i]);
-    }
-
-    const std::string key = FsS3::Utf8FromUtf16(keyWide);
-    if (key.empty())
-    {
-        return HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
-    }
-
-    FsS3::ResolvedAwsContext bucketCtx{};
-    hr = FsS3::ResolveS3ContextForBucket(*this, ctx, segments[0], bucketCtx);
+    const std::wstring_view progressPath = resolved.normalizedPath.empty() ? std::wstring_view(path) : std::wstring_view(resolved.normalizedPath);
+    hr                                   = reportProgress(0, progressPath);
     if (FAILED(hr))
     {
         return hr;
@@ -273,51 +1388,12 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(
         return hr;
     }
 
-    hr = reportProgress(0, normalized);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    hr = checkCancel();
-    if (FAILED(hr))
-    {
-        return hr;
-    }
-
-    HRESULT itemHr                         = S_OK;
-    [[maybe_unused]] uint64_t sizeBytes    = 0;
-    [[maybe_unused]] __int64 lastWriteTime = 0;
-    bool found                             = false;
-    hr                                     = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
-    if (FAILED(hr))
-    {
-        itemHr = hr;
-    }
-    else if (! found)
-    {
-        itemHr = HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-    }
-    else
-    {
-        const auto client = FsS3::GetS3Client(*this, bucketCtx);
-        Aws::S3Crt::Model::DeleteObjectRequest req;
-        req.SetBucket(Aws::String(bucket.data(), bucket.size()));
-        req.SetKey(Aws::String(key.data(), key.size()));
-
-        const auto outcome = client->DeleteObject(req);
-        if (! outcome.IsSuccess())
-        {
-            const auto& err            = outcome.GetError();
-            const std::wstring details = std::format(L"bucket='{}' key='{}'", FsS3::Utf16FromUtf8(bucket), FsS3::Utf16FromUtf8(key));
-            FsS3::LogAwsFailure(L"S3", L"DeleteObject", bucketCtx, err, details);
-            itemHr = FsS3::HresultFromAwsError(err);
-        }
-    }
+    const HRESULT itemHr = DeleteResolvedPath(*this, resolved, probe, flags);
 
     if (callback)
     {
-        hr = callback->FileSystemItemCompleted(FILESYSTEM_DELETE, 0, normalized.c_str(), nullptr, itemHr, callbackOptions, cookie);
+        hr = callback->FileSystemItemCompleted(
+            FILESYSTEM_DELETE, 0, resolved.normalizedPath.empty() ? path : resolved.normalizedPath.c_str(), nullptr, itemHr, callbackOptions, cookie);
         hr = normalizeCancellation(hr);
         if (FAILED(hr))
         {
@@ -325,7 +1401,7 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(
         }
     }
 
-    hr = reportProgress(1, normalized);
+    hr = reportProgress(1, progressPath);
     if (FAILED(hr))
     {
         return hr;
@@ -344,36 +1420,468 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItem(
     return itemHr;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::RenameItem([[maybe_unused]] const wchar_t* sourcePath,
-                                                   [[maybe_unused]] const wchar_t* destinationPath,
-                                                   [[maybe_unused]] FileSystemFlags flags,
-                                                   [[maybe_unused]] const FileSystemOptions* options,
-                                                   [[maybe_unused]] IFileSystemCallback* callback,
-                                                   [[maybe_unused]] void* cookie) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::RenameItem(const wchar_t* sourcePath,
+                                                   const wchar_t* destinationPath,
+                                                   FileSystemFlags flags,
+                                                   const FileSystemOptions* options,
+                                                   IFileSystemCallback* callback,
+                                                   void* cookie) noexcept
 {
-    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    if (_mode != FileSystemS3Mode::S3)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    if (sourcePath == nullptr || destinationPath == nullptr)
+    {
+        return E_POINTER;
+    }
+
+    if (sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
+    Settings settings;
+    {
+        std::lock_guard lock(_stateMutex);
+        settings = _settings;
+    }
+
+    ResolvedS3Path source{};
+    ResolvedS3Path destination{};
+    HRESULT hr = ResolveS3Path(*this, _mode, _hostConnections.get(), settings, sourcePath, source);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = ResolveS3Path(*this, _mode, _hostConnections.get(), settings, destinationPath, destination);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (source.isRoot || source.isBucketRoot || destination.isRoot || destination.isBucketRoot)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    }
+
+    if (! FsS3::IsSameAwsContextIdentity(source.rootCtx, destination.rootCtx) || source.bucket != destination.bucket ||
+        GetParentPluginPath(source.normalizedPath) != GetParentPluginPath(destination.normalizedPath))
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SAME_DEVICE);
+    }
+
+    return MoveItem(sourcePath, destinationPath, flags, options, callback, cookie);
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItems([[maybe_unused]] const wchar_t* const* sourcePaths,
-                                                  [[maybe_unused]] unsigned long count,
-                                                  [[maybe_unused]] const wchar_t* destinationFolder,
-                                                  [[maybe_unused]] FileSystemFlags flags,
-                                                  [[maybe_unused]] const FileSystemOptions* options,
-                                                  [[maybe_unused]] IFileSystemCallback* callback,
-                                                  [[maybe_unused]] void* cookie) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::CopyItems(const wchar_t* const* sourcePaths,
+                                                  unsigned long count,
+                                                  const wchar_t* destinationFolder,
+                                                  FileSystemFlags flags,
+                                                  const FileSystemOptions* options,
+                                                  IFileSystemCallback* callback,
+                                                  void* cookie) noexcept
 {
-    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    if (count == 0)
+    {
+        return S_OK;
+    }
+
+    if (! sourcePaths || ! destinationFolder)
+    {
+        return E_POINTER;
+    }
+
+    if (destinationFolder[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (_mode != FileSystemS3Mode::S3)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
+    Settings settings;
+    {
+        std::lock_guard lock(_stateMutex);
+        settings = _settings;
+    }
+
+    FileSystemOptions optionsState{};
+    if (options != nullptr)
+    {
+        optionsState = *options;
+    }
+    optionsState.sizeBytes             = sizeof(FileSystemOptions);
+    FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+
+    const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
+    uint64_t totalBytes        = 0;
+    std::vector<std::wstring> destinations(count);
+    for (unsigned long index = 0; index < count; ++index)
+    {
+        const wchar_t* sourcePath = sourcePaths[index];
+        if (! sourcePath)
+        {
+            return E_POINTER;
+        }
+        if (sourcePath[0] == L'\0')
+        {
+            return E_INVALIDARG;
+        }
+
+        const std::wstring leaf = GetLeafName(sourcePath);
+        if (! leaf.empty())
+        {
+            destinations[index] = JoinPluginPath(destinationFolder, leaf);
+
+            uint64_t itemBytes = 0;
+            if (SUCCEEDED(EstimateTransferBytes(*this, _mode, _hostConnections.get(), settings, sourcePath, destinations[index].c_str(), itemBytes)))
+            {
+                totalBytes += itemBytes;
+            }
+        }
+    }
+
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        BOOL cancel = FALSE;
+        HRESULT hr  = callback->FileSystemShouldCancel(&cancel, cookie);
+        hr          = NormalizeCallbackResult(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        return cancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    uint64_t progressBytes       = 0;
+    unsigned long completedItems = 0;
+    HRESULT firstFailure         = S_OK;
+    bool hadFailure              = false;
+
+    const auto reportProgress = [&](const wchar_t* currentSource, const wchar_t* currentDestination) noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        HRESULT hr = callback->FileSystemProgress(
+            FILESYSTEM_COPY, count, completedItems, totalBytes, progressBytes, currentSource, currentDestination, 0, 0, callbackOptions, 0, cookie);
+        return NormalizeCallbackResult(hr);
+    };
+
+    HRESULT hr = reportProgress(sourcePaths[0], destinations[0].empty() ? destinationFolder : destinations[0].c_str());
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    for (unsigned long index = 0; index < count; ++index)
+    {
+        const wchar_t* sourcePath      = sourcePaths[index];
+        const wchar_t* destinationPath = destinations[index].empty() ? nullptr : destinations[index].c_str();
+
+        hr = checkCancel();
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        HRESULT itemHr = destinationPath ? S_OK : HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        if (destinationPath)
+        {
+            const uint64_t itemBaseProgress = progressBytes;
+            uint64_t itemReportedBytes      = 0;
+            uint64_t itemTotalBytes         = 0;
+
+            const auto reportBytes = [&](uint64_t completedBytes, uint64_t totalBytesInner) noexcept -> HRESULT
+            {
+                itemTotalBytes    = totalBytesInner;
+                itemReportedBytes = std::max(itemReportedBytes, completedBytes);
+                if (! callback)
+                {
+                    return S_OK;
+                }
+
+                HRESULT progressHr = callback->FileSystemProgress(FILESYSTEM_COPY,
+                                                                  count,
+                                                                  completedItems,
+                                                                  totalBytes,
+                                                                  itemBaseProgress + completedBytes,
+                                                                  sourcePath,
+                                                                  destinationPath,
+                                                                  0,
+                                                                  0,
+                                                                  callbackOptions,
+                                                                  0,
+                                                                  cookie);
+                return NormalizeCallbackResult(progressHr);
+            };
+
+            itemHr = ExecuteCopyOrMove(
+                *this, _mode, _hostConnections.get(), settings, sourcePath, destinationPath, flags, false, checkCancel, reportBytes, itemTotalBytes);
+            progressBytes = itemBaseProgress + itemReportedBytes;
+        }
+
+        if (callback)
+        {
+            hr = callback->FileSystemItemCompleted(FILESYSTEM_COPY, index, sourcePath, destinationPath, itemHr, callbackOptions, cookie);
+            hr = NormalizeCallbackResult(hr);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+
+        if (FAILED(itemHr))
+        {
+            hadFailure = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = itemHr;
+            }
+        }
+        else
+        {
+            NotifySyntheticPathCreated(destinationPath);
+        }
+
+        ++completedItems;
+        hr = reportProgress(sourcePath, destinationPath);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (FAILED(itemHr) && ! continueOnError)
+        {
+            return itemHr;
+        }
+    }
+
+    return hadFailure ? (continueOnError ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure) : S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItems([[maybe_unused]] const wchar_t* const* sourcePaths,
-                                                  [[maybe_unused]] unsigned long count,
-                                                  [[maybe_unused]] const wchar_t* destinationFolder,
-                                                  [[maybe_unused]] FileSystemFlags flags,
-                                                  [[maybe_unused]] const FileSystemOptions* options,
-                                                  [[maybe_unused]] IFileSystemCallback* callback,
-                                                  [[maybe_unused]] void* cookie) noexcept
+HRESULT STDMETHODCALLTYPE FileSystemS3::MoveItems(const wchar_t* const* sourcePaths,
+                                                  unsigned long count,
+                                                  const wchar_t* destinationFolder,
+                                                  FileSystemFlags flags,
+                                                  const FileSystemOptions* options,
+                                                  IFileSystemCallback* callback,
+                                                  void* cookie) noexcept
 {
-    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    if (count == 0)
+    {
+        return S_OK;
+    }
+
+    if (! sourcePaths || ! destinationFolder)
+    {
+        return E_POINTER;
+    }
+
+    if (destinationFolder[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (_mode != FileSystemS3Mode::S3)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
+    {
+        return E_INVALIDARG;
+    }
+
+    Settings settings;
+    {
+        std::lock_guard lock(_stateMutex);
+        settings = _settings;
+    }
+
+    FileSystemOptions optionsState{};
+    if (options != nullptr)
+    {
+        optionsState = *options;
+    }
+    optionsState.sizeBytes             = sizeof(FileSystemOptions);
+    FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
+
+    const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
+    uint64_t totalBytes        = 0;
+    std::vector<std::wstring> destinations(count);
+    for (unsigned long index = 0; index < count; ++index)
+    {
+        const wchar_t* sourcePath = sourcePaths[index];
+        if (! sourcePath)
+        {
+            return E_POINTER;
+        }
+        if (sourcePath[0] == L'\0')
+        {
+            return E_INVALIDARG;
+        }
+
+        const std::wstring leaf = GetLeafName(sourcePath);
+        if (! leaf.empty())
+        {
+            destinations[index] = JoinPluginPath(destinationFolder, leaf);
+
+            uint64_t itemBytes = 0;
+            if (SUCCEEDED(EstimateTransferBytes(*this, _mode, _hostConnections.get(), settings, sourcePath, destinations[index].c_str(), itemBytes)))
+            {
+                totalBytes += itemBytes;
+            }
+        }
+    }
+
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        BOOL cancel = FALSE;
+        HRESULT hr  = callback->FileSystemShouldCancel(&cancel, cookie);
+        hr          = NormalizeCallbackResult(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        return cancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    uint64_t progressBytes       = 0;
+    unsigned long completedItems = 0;
+    HRESULT firstFailure         = S_OK;
+    bool hadFailure              = false;
+
+    const auto reportProgress = [&](const wchar_t* currentSource, const wchar_t* currentDestination) noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        HRESULT hr = callback->FileSystemProgress(
+            FILESYSTEM_MOVE, count, completedItems, totalBytes, progressBytes, currentSource, currentDestination, 0, 0, callbackOptions, 0, cookie);
+        return NormalizeCallbackResult(hr);
+    };
+
+    HRESULT hr = reportProgress(sourcePaths[0], destinations[0].empty() ? destinationFolder : destinations[0].c_str());
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    for (unsigned long index = 0; index < count; ++index)
+    {
+        const wchar_t* sourcePath      = sourcePaths[index];
+        const wchar_t* destinationPath = destinations[index].empty() ? nullptr : destinations[index].c_str();
+
+        hr = checkCancel();
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        HRESULT itemHr = destinationPath ? S_OK : HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        if (destinationPath)
+        {
+            const uint64_t itemBaseProgress = progressBytes;
+            uint64_t itemReportedBytes      = 0;
+            uint64_t itemTotalBytes         = 0;
+
+            const auto reportBytes = [&](uint64_t completedBytes, uint64_t totalBytesInner) noexcept -> HRESULT
+            {
+                itemTotalBytes    = totalBytesInner;
+                itemReportedBytes = std::max(itemReportedBytes, completedBytes);
+                if (! callback)
+                {
+                    return S_OK;
+                }
+
+                HRESULT progressHr = callback->FileSystemProgress(FILESYSTEM_MOVE,
+                                                                  count,
+                                                                  completedItems,
+                                                                  totalBytes,
+                                                                  itemBaseProgress + completedBytes,
+                                                                  sourcePath,
+                                                                  destinationPath,
+                                                                  0,
+                                                                  0,
+                                                                  callbackOptions,
+                                                                  0,
+                                                                  cookie);
+                return NormalizeCallbackResult(progressHr);
+            };
+
+            itemHr = ExecuteCopyOrMove(
+                *this, _mode, _hostConnections.get(), settings, sourcePath, destinationPath, flags, true, checkCancel, reportBytes, itemTotalBytes);
+            progressBytes = itemBaseProgress + itemReportedBytes;
+        }
+
+        if (callback)
+        {
+            hr = callback->FileSystemItemCompleted(FILESYSTEM_MOVE, index, sourcePath, destinationPath, itemHr, callbackOptions, cookie);
+            hr = NormalizeCallbackResult(hr);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+
+        if (FAILED(itemHr))
+        {
+            hadFailure = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = itemHr;
+            }
+        }
+        else
+        {
+            NotifySyntheticPathCreated(destinationPath);
+            NotifySyntheticPathDeleted(sourcePath);
+        }
+
+        ++completedItems;
+        hr = reportProgress(sourcePath, destinationPath);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (FAILED(itemHr) && ! continueOnError)
+        {
+            return itemHr;
+        }
+    }
+
+    return hadFailure ? (continueOnError ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure) : S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
@@ -473,54 +1981,6 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
 
     const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
 
-    struct DeleteEntry final
-    {
-        unsigned long itemIndex = 0;
-        std::string key;
-        std::wstring normalizedPath;
-    };
-
-    struct DeleteGroup final
-    {
-        FsS3::ResolvedAwsContext ctx;
-        std::string bucket;
-        std::vector<DeleteEntry> entries;
-    };
-
-    const auto isSameClientContext = [](const FsS3::ResolvedAwsContext& left, const FsS3::ResolvedAwsContext& right) noexcept
-    {
-        return left.connectionName == right.connectionName && left.region == right.region && left.explicitRegion == right.explicitRegion &&
-               left.endpointOverride == right.endpointOverride && left.useHttps == right.useHttps && left.verifyTls == right.verifyTls &&
-               left.useVirtualAddressing == right.useVirtualAddressing && left.accessKeyId == right.accessKeyId &&
-               left.secretAccessKey == right.secretAccessKey;
-    };
-
-    const auto hresultFromErrorCode = [](std::string_view code) noexcept -> HRESULT
-    {
-        if (code.empty())
-        {
-            return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
-        }
-
-        if (code == "AccessDenied")
-        {
-            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-        }
-        if (code == "NoSuchKey")
-        {
-            return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-        }
-        if (code == "InvalidRequest" || code == "InvalidArgument")
-        {
-            return E_INVALIDARG;
-        }
-
-        return HRESULT_FROM_WIN32(ERROR_GEN_FAILURE);
-    };
-
-    std::vector<DeleteGroup> groups;
-    groups.reserve(4);
-
     unsigned long completedItems = 0;
     HRESULT firstFailure         = S_OK;
     bool hadFailure              = false;
@@ -550,9 +2010,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
             return hr;
         }
 
-        FsS3::ResolvedAwsContext ctx{};
-        std::wstring canonical;
-        hr = FsS3::ResolveAwsContext(_mode, settings, path, _hostConnections.get(), true, ctx, canonical);
+        ResolvedS3Path resolved{};
+        hr = ResolveS3Path(*this, _mode, _hostConnections.get(), settings, path, resolved);
         if (FAILED(hr))
         {
             hadFailure = true;
@@ -581,138 +2040,8 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
             continue;
         }
 
-        const std::wstring normalized = FsS3::NormalizePluginPath(canonical);
-        if (normalized == L"/" || normalized.empty() || (! normalized.empty() && normalized.back() == L'/'))
-        {
-            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-            hadFailure           = true;
-            if (firstFailure == S_OK)
-            {
-                firstFailure = itemHr;
-            }
-
-            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            ++completedItems;
-            cbHr = reportProgress(completedItems, path);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            if (! continueOnError)
-            {
-                return itemHr;
-            }
-            continue;
-        }
-
-        const auto segments = FsS3::SplitPathSegments(normalized);
-        if (segments.size() < 2)
-        {
-            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
-            hadFailure           = true;
-            if (firstFailure == S_OK)
-            {
-                firstFailure = itemHr;
-            }
-
-            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            ++completedItems;
-            cbHr = reportProgress(completedItems, path);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            if (! continueOnError)
-            {
-                return itemHr;
-            }
-            continue;
-        }
-
-        const std::string bucket = FsS3::Utf8FromUtf16(segments[0]);
-        if (bucket.empty())
-        {
-            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
-            hadFailure           = true;
-            if (firstFailure == S_OK)
-            {
-                firstFailure = itemHr;
-            }
-
-            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            ++completedItems;
-            cbHr = reportProgress(completedItems, path);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            if (! continueOnError)
-            {
-                return itemHr;
-            }
-            continue;
-        }
-
-        std::wstring keyWide;
-        for (size_t i = 1; i < segments.size(); ++i)
-        {
-            if (i > 1)
-            {
-                keyWide.push_back(L'/');
-            }
-            keyWide.append(segments[i]);
-        }
-
-        const std::string key = FsS3::Utf8FromUtf16(keyWide);
-        if (key.empty())
-        {
-            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_NO_UNICODE_TRANSLATION);
-            hadFailure           = true;
-            if (firstFailure == S_OK)
-            {
-                firstFailure = itemHr;
-            }
-
-            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            ++completedItems;
-            cbHr = reportProgress(completedItems, path);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            if (! continueOnError)
-            {
-                return itemHr;
-            }
-            continue;
-        }
-
-        FsS3::ResolvedAwsContext bucketCtx{};
-        hr = FsS3::ResolveS3ContextForBucket(*this, ctx, segments[0], bucketCtx);
+        ResolvedS3Probe probe{};
+        hr = ProbeS3Path(*this, resolved, probe);
         if (FAILED(hr))
         {
             hadFailure = true;
@@ -741,59 +2070,31 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
             continue;
         }
 
-        [[maybe_unused]] uint64_t sizeBytes    = 0;
-        [[maybe_unused]] __int64 lastWriteTime = 0;
-        bool found                             = false;
-        hr                                     = FsS3::TryGetS3ObjectSummary(*this, bucketCtx, bucket, key, sizeBytes, lastWriteTime, found);
-        if (FAILED(hr))
+        const HRESULT itemHr = DeleteResolvedPath(*this, resolved, probe, flags);
+        if (FAILED(itemHr))
         {
             hadFailure = true;
             if (firstFailure == S_OK)
             {
-                firstFailure = hr;
-            }
-
-            HRESULT cbHr = reportItemCompleted(index, path, hr);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            ++completedItems;
-            cbHr = reportProgress(completedItems, path);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
-
-            if (! continueOnError)
-            {
-                return hr;
-            }
-            continue;
-        }
-        if (! found)
-        {
-            const HRESULT itemHr = HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
-            hadFailure           = true;
-            if (firstFailure == S_OK)
-            {
                 firstFailure = itemHr;
             }
+        }
 
-            HRESULT cbHr = reportItemCompleted(index, path, itemHr);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
+        HRESULT cbHr = reportItemCompleted(index, path, itemHr);
+        if (FAILED(cbHr))
+        {
+            return cbHr;
+        }
 
-            ++completedItems;
-            cbHr = reportProgress(completedItems, path);
-            if (FAILED(cbHr))
-            {
-                return cbHr;
-            }
+        ++completedItems;
+        cbHr = reportProgress(completedItems, path);
+        if (FAILED(cbHr))
+        {
+            return cbHr;
+        }
 
+        if (FAILED(itemHr))
+        {
             if (! continueOnError)
             {
                 return itemHr;
@@ -801,184 +2102,166 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::DeleteItems(const wchar_t* const* paths,
             continue;
         }
 
-        size_t groupIndex = groups.size();
-        for (size_t i = 0; i < groups.size(); ++i)
-        {
-            if (groups[i].bucket == bucket && isSameClientContext(groups[i].ctx, bucketCtx))
-            {
-                groupIndex = i;
-                break;
-            }
-        }
-
-        if (groupIndex == groups.size())
-        {
-            DeleteGroup added{};
-            added.ctx    = std::move(bucketCtx);
-            added.bucket = bucket;
-            groups.push_back(std::move(added));
-        }
-
-        DeleteEntry entry{};
-        entry.itemIndex      = index;
-        entry.key            = key;
-        entry.normalizedPath = normalized;
-        groups[groupIndex].entries.push_back(std::move(entry));
+        NotifySyntheticPathDeleted(path);
     }
 
-    constexpr size_t kMaxBatchSize = 1000u;
+    return hadFailure ? (continueOnError ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure) : S_OK;
+}
 
-    for (const auto& group : groups)
+HRESULT STDMETHODCALLTYPE FileSystemS3::RenameItems(const FileSystemRenamePair* items,
+                                                    unsigned long count,
+                                                    FileSystemFlags flags,
+                                                    const FileSystemOptions* options,
+                                                    IFileSystemCallback* callback,
+                                                    void* cookie) noexcept
+{
+    if (! items && count > 0)
     {
-        const auto client = FsS3::GetS3Client(*this, group.ctx);
-
-        for (size_t batchStart = 0; batchStart < group.entries.size(); batchStart += kMaxBatchSize)
-        {
-            const size_t batchEnd = std::min(group.entries.size(), batchStart + kMaxBatchSize);
-
-            hr = checkCancel();
-            if (FAILED(hr))
-            {
-                return hr;
-            }
-
-            Aws::S3Crt::Model::DeleteObjectsRequest req;
-            req.SetBucket(Aws::String(group.bucket.data(), group.bucket.size()));
-
-            Aws::S3Crt::Model::Delete deletePayload;
-            deletePayload.SetQuiet(true);
-
-            for (size_t i = batchStart; i < batchEnd; ++i)
-            {
-                Aws::S3Crt::Model::ObjectIdentifier obj;
-                const std::string& key = group.entries[i].key;
-                obj.SetKey(Aws::String(key.data(), key.size()));
-                deletePayload.AddObjects(std::move(obj));
-            }
-
-            req.SetDelete(std::move(deletePayload));
-
-            const auto outcome = client->DeleteObjects(req);
-            if (! outcome.IsSuccess())
-            {
-                const auto& err = outcome.GetError();
-                FsS3::LogAwsFailure(L"S3", L"DeleteObjects", group.ctx, err, FsS3::Utf16FromUtf8(group.bucket));
-                const HRESULT batchHr = FsS3::HresultFromAwsError(err);
-
-                hadFailure = true;
-                if (firstFailure == S_OK)
-                {
-                    firstFailure = batchHr;
-                }
-
-                for (size_t i = batchStart; i < batchEnd; ++i)
-                {
-                    const unsigned long itemIndex = group.entries[i].itemIndex;
-                    const wchar_t* currentPath    = paths[itemIndex];
-
-                    HRESULT cbHr = reportItemCompleted(itemIndex, currentPath, batchHr);
-                    if (FAILED(cbHr))
-                    {
-                        return cbHr;
-                    }
-
-                    ++completedItems;
-                    cbHr = reportProgress(completedItems, currentPath);
-                    if (FAILED(cbHr))
-                    {
-                        return cbHr;
-                    }
-                }
-
-                if (! continueOnError)
-                {
-                    return batchHr;
-                }
-
-                continue;
-            }
-
-            std::unordered_map<std::string, HRESULT> errors;
-            const auto& errList = outcome.GetResult().GetErrors();
-            errors.reserve(errList.size());
-            for (const auto& e : errList)
-            {
-                const std::string keyUtf8  = std::string(e.GetKey().c_str(), e.GetKey().size());
-                const std::string codeUtf8 = std::string(e.GetCode().c_str(), e.GetCode().size());
-                errors[keyUtf8]            = hresultFromErrorCode(codeUtf8);
-            }
-
-            for (size_t i = batchStart; i < batchEnd; ++i)
-            {
-                const unsigned long itemIndex = group.entries[i].itemIndex;
-                const wchar_t* currentPath    = paths[itemIndex];
-
-                HRESULT itemHr = S_OK;
-                if (const auto it = errors.find(group.entries[i].key); it != errors.end())
-                {
-                    itemHr     = it->second;
-                    hadFailure = true;
-                    if (firstFailure == S_OK)
-                    {
-                        firstFailure = itemHr;
-                    }
-                }
-
-                HRESULT cbHr = reportItemCompleted(itemIndex, currentPath, itemHr);
-                if (FAILED(cbHr))
-                {
-                    return cbHr;
-                }
-
-                ++completedItems;
-                cbHr = reportProgress(completedItems, currentPath);
-                if (FAILED(cbHr))
-                {
-                    return cbHr;
-                }
-
-                if (FAILED(itemHr) && ! continueOnError)
-                {
-                    return itemHr;
-                }
-            }
-        }
+        return E_POINTER;
     }
 
-    hr = reportProgress(completedItems, (count > 0 && paths) ? paths[count - 1] : nullptr);
-    if (FAILED(hr))
+    if (count == 0)
     {
-        return hr;
+        return S_OK;
     }
 
-    hr = checkCancel();
-    if (FAILED(hr))
+    if (_mode != FileSystemS3Mode::S3)
     {
-        return hr;
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
-    if (hadFailure)
+    if (options != nullptr && options->sizeBytes != sizeof(FileSystemOptions))
     {
-        return continueOnError ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure;
+        return E_INVALIDARG;
     }
 
     for (unsigned long index = 0; index < count; ++index)
     {
-        if (paths[index] && paths[index][0] != L'\0')
+        if (items[index].sizeBytes != sizeof(FileSystemRenamePair))
         {
-            NotifySyntheticPathDeleted(paths[index]);
+            return E_INVALIDARG;
         }
     }
 
-    return S_OK;
-}
+    FileSystemOptions optionsState{};
+    if (options != nullptr)
+    {
+        optionsState = *options;
+    }
+    optionsState.sizeBytes             = sizeof(FileSystemOptions);
+    FileSystemOptions* callbackOptions = callback ? &optionsState : nullptr;
 
-HRESULT STDMETHODCALLTYPE FileSystemS3::RenameItems([[maybe_unused]] const FileSystemRenamePair* items,
-                                                    [[maybe_unused]] unsigned long count,
-                                                    [[maybe_unused]] FileSystemFlags flags,
-                                                    [[maybe_unused]] const FileSystemOptions* options,
-                                                    [[maybe_unused]] IFileSystemCallback* callback,
-                                                    [[maybe_unused]] void* cookie) noexcept
-{
-    return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    const bool continueOnError   = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
+    unsigned long completedItems = 0;
+    HRESULT firstFailure         = S_OK;
+    bool hadFailure              = false;
+
+    const auto normalizeCancellation = [](HRESULT hr) noexcept
+    {
+        if (hr == HRESULT_FROM_WIN32(ERROR_CANCELLED) || hr == E_ABORT)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+        return hr;
+    };
+
+    const auto checkCancel = [&]() noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        BOOL cancel = FALSE;
+        HRESULT hr  = callback->FileSystemShouldCancel(&cancel, cookie);
+        hr          = normalizeCancellation(hr);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        return cancel ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : S_OK;
+    };
+
+    const auto reportProgress = [&](const wchar_t* currentSource, const wchar_t* currentDestination) noexcept -> HRESULT
+    {
+        if (! callback)
+        {
+            return S_OK;
+        }
+
+        HRESULT hr =
+            callback->FileSystemProgress(FILESYSTEM_RENAME, count, completedItems, 0, 0, currentSource, currentDestination, 0, 0, callbackOptions, 0, cookie);
+        return normalizeCancellation(hr);
+    };
+
+    HRESULT hr = reportProgress(items[0].sourcePath, nullptr);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    for (unsigned long index = 0; index < count; ++index)
+    {
+        hr = checkCancel();
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        const FileSystemRenamePair& item = items[index];
+        std::wstring destinationPath;
+        HRESULT itemHr = S_OK;
+
+        if (! item.sourcePath || ! item.newName)
+        {
+            itemHr = E_POINTER;
+        }
+        else if (item.sourcePath[0] == L'\0' || item.newName[0] == L'\0')
+        {
+            itemHr = E_INVALIDARG;
+        }
+        else if (! IsLeafRenameNameValid(item.newName))
+        {
+            itemHr = HRESULT_FROM_WIN32(ERROR_INVALID_NAME);
+        }
+        else
+        {
+            destinationPath = JoinPluginPath(GetParentPluginPath(item.sourcePath), item.newName);
+            itemHr          = RenameItem(item.sourcePath, destinationPath.c_str(), flags, options, nullptr, nullptr);
+        }
+
+        if (callback)
+        {
+            hr = callback->FileSystemItemCompleted(
+                FILESYSTEM_RENAME, index, item.sourcePath, destinationPath.empty() ? nullptr : destinationPath.c_str(), itemHr, callbackOptions, cookie);
+            hr = normalizeCancellation(hr);
+            if (FAILED(hr))
+            {
+                return hr;
+            }
+        }
+
+        if (FAILED(itemHr))
+        {
+            hadFailure = true;
+            if (firstFailure == S_OK)
+            {
+                firstFailure = itemHr;
+            }
+        }
+
+        ++completedItems;
+        hr = reportProgress(item.sourcePath, destinationPath.empty() ? nullptr : destinationPath.c_str());
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (FAILED(itemHr) && ! continueOnError)
+        {
+            return itemHr;
+        }
+    }
+
+    return hadFailure ? (continueOnError ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure) : S_OK;
 }

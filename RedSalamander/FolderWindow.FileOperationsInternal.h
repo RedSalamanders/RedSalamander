@@ -40,6 +40,11 @@ struct FolderWindow::FileOperationState
         std::wstring message;
         std::wstring sourcePath;
         std::wstring destinationPath;
+        std::wstring concurrencyMode;
+        std::wstring storageType;
+        std::wstring destinationStorageType;
+        unsigned long autoTunedConcurrency       = 0;
+        unsigned long effectiveConcurrencyBudget = 0;
     };
 
     struct CompletedTaskSummary
@@ -64,6 +69,12 @@ struct FolderWindow::FileOperationState
         std::wstring sourcePath;
         std::wstring destinationPath;
 
+        bool autoConcurrencyUsed                       = false;
+        uint32_t autoConcurrencyStorageKind            = FILESYSTEM_STORAGE_UNKNOWN;
+        uint32_t autoConcurrencyDestinationStorageKind = FILESYSTEM_STORAGE_UNKNOWN;
+        unsigned int autoTunedConcurrency              = 0;
+        unsigned int effectiveConcurrencyBudget        = 0;
+
         unsigned long warningCount = 0;
         unsigned long errorCount   = 0;
         std::wstring lastDiagnosticMessage;
@@ -77,7 +88,7 @@ struct FolderWindow::FileOperationState
     {
         // Maximum number of in-flight file lines the popup can display for a single task.
         // This should be >= the Copy/Move worker concurrency cap so parallel file copies can be represented.
-        static constexpr size_t kMaxInFlightFiles = 8u;
+        static constexpr size_t kMaxInFlightFiles = 16u;
 
         enum class ConflictBucket : uint8_t
         {
@@ -137,6 +148,85 @@ struct FolderWindow::FileOperationState
             uint64_t totalBytes      = 0;
             uint64_t completedBytes  = 0;
             ULONGLONG lastUpdateTick = 0;
+        };
+
+        struct ProgressStreamPerf
+        {
+            const void* cookieKey           = nullptr;
+            uint64_t progressStreamId       = 0;
+            uint64_t callbackCount          = 0;
+            uint64_t callbackUs             = 0;
+            uint64_t lockWaitUs             = 0;
+            uint64_t callbackGapCount       = 0;
+            uint64_t callbackGapMs          = 0;
+            uint64_t callbackGapBytes       = 0;
+            uint64_t maxCallbackGapMs       = 0;
+            uint64_t maxCallbackGapBytes    = 0;
+            uint64_t lastItemCompletedBytes = 0;
+            ULONGLONG firstUpdateTick       = 0;
+            ULONGLONG lastUpdateTick        = 0;
+        };
+
+        struct ConflictWorkerPerf
+        {
+            const void* cookieKey    = nullptr;
+            uint64_t promptCount     = 0;
+            uint64_t waitUs          = 0;
+            ULONGLONG lastUpdateTick = 0;
+        };
+
+        struct DiagnosticPathSnapshot
+        {
+            std::wstring progressSourcePath;
+            std::wstring progressDestinationPath;
+            std::wstring lastProgressCallbackSourcePath;
+            std::wstring lastProgressCallbackDestinationPath;
+        };
+
+        struct PerfStats
+        {
+            uint64_t queueWaitUs                         = 0;
+            uint64_t schedulerWaitUs                     = 0;
+            uint64_t schedulerWaitForWorkUs              = 0;
+            uint64_t schedulerProcessIndexUs             = 0;
+            uint64_t schedulerDequeueAttempts            = 0;
+            uint64_t schedulerDequeueSuccess             = 0;
+            uint64_t bridgeCopyUs                        = 0;
+            uint64_t bridgeReaderWaitUs                  = 0;
+            uint64_t bridgeWriterWaitUs                  = 0;
+            uint64_t bridgeReadUs                        = 0;
+            uint64_t bridgeWriteUs                       = 0;
+            uint64_t preCalcUs                           = 0;
+            uint64_t preCalcCallbackCount                = 0;
+            uint64_t preCalcCallbackUs                   = 0;
+            uint64_t preCalcLockWaitUs                   = 0;
+            uint64_t progressCallbackUs                  = 0;
+            uint64_t progressFirstCallbackDelayMs        = 0;
+            uint64_t progressLockWaitUs                  = 0;
+            uint64_t progressLockHoldUs                  = 0;
+            uint64_t progressLockContentionCount         = 0;
+            uint64_t progressPathUpdateBytes             = 0;
+            uint64_t progressPathUpdateAppliedCount      = 0;
+            uint64_t progressPathUpdateSkippedCount      = 0;
+            uint64_t progressPathUpdateThrottledCount    = 0;
+            uint64_t progressInFlightEvictions           = 0;
+            uint64_t perItemInFlightEvictions            = 0;
+            uint64_t pauseWaitUs                         = 0;
+            uint64_t conflictWaitUs                      = 0;
+            uint64_t conflictConvergenceWaitUs           = 0;
+            uint64_t conflictPromptCount                 = 0;
+            uint64_t queueEnterCount                     = 0;
+            uint64_t queueNotifyAllCount                 = 0;
+            uint64_t queueCancelWhileWaiting             = 0;
+            uint64_t queueDepthOnEnter                   = 0;
+            uint64_t queueActiveOperations               = 0;
+            uint64_t itemCompletedCallbackUs             = 0;
+            uint64_t itemCompletedLockWaitUs             = 0;
+            uint64_t itemCompletedLockHoldUs             = 0;
+            uint64_t itemCompletedLockContentionCount    = 0;
+            uint64_t itemCompletedPathUpdateBytes        = 0;
+            uint64_t itemCompletedPathUpdateAppliedCount = 0;
+            uint64_t itemCompletedPathUpdateSkippedCount = 0;
         };
 
         explicit Task(FileOperationState& state) noexcept;
@@ -251,8 +341,17 @@ struct FolderWindow::FileOperationState
         std::vector<DWORD> _sourcePathAttributesHint;
         mutable std::mutex _operationMutex;
         std::filesystem::path _destinationFolder;
-        FileSystemFlags _flags = FILESYSTEM_FLAG_NONE;
-        bool _enablePreCalc    = true;
+        FileSystemFlags _flags                  = FILESYSTEM_FLAG_NONE;
+        bool _enablePreCalc                     = true;
+        unsigned int _preCalcMaxWorkers         = 4u;
+        unsigned long _crossFsBridgeBufferBytes = 4096u * 1024u;
+        std::atomic<unsigned long> _resolvedCrossFsBridgeBufferBytes{0};
+        std::atomic<unsigned int> _preCalcWorkerCountUsed{0};
+        std::atomic<bool> _autoConcurrencyUsed{false};
+        std::atomic<uint32_t> _autoConcurrencyStorageKind{FILESYSTEM_STORAGE_UNKNOWN};
+        std::atomic<uint32_t> _autoConcurrencyDestinationStorageKind{FILESYSTEM_STORAGE_UNKNOWN};
+        std::atomic<unsigned int> _autoTunedConcurrency{0};
+        std::atomic<unsigned int> _effectiveConcurrencyBudget{0};
 
         unsigned long _perItemTotalItems          = 0;
         unsigned int _perItemMaxConcurrencyBudget = 1;
@@ -271,8 +370,12 @@ struct FolderWindow::FileOperationState
             ULONGLONG lastUpdateTick     = 0;
         };
 
+        std::mutex _perItemInFlightCallsMutex;
         std::array<PerItemInFlightCall, kMaxInFlightFiles> _perItemInFlightCalls{};
-        size_t _perItemInFlightCallCount = 0;
+        size_t _perItemInFlightCallCount        = 0;
+        uint64_t _perItemInFlightCompletedBytes = 0;
+        uint64_t _perItemInFlightCompletedItems = 0;
+        uint64_t _perItemInFlightTotalItems     = 0;
 
         enum class TopLevelItemKind : uint8_t
         {
@@ -280,6 +383,7 @@ struct FolderWindow::FileOperationState
             File,
             Folder,
         };
+        std::mutex _topLevelCompletionMutex;
         std::vector<TopLevelItemKind> _topLevelItemKinds;
         std::vector<uint8_t> _topLevelItemCompleted;
         unsigned long _plannedTopLevelFiles     = 0;
@@ -308,6 +412,7 @@ struct FolderWindow::FileOperationState
         std::condition_variable _conflictCv;
         std::array<std::optional<ConflictAction>, static_cast<size_t>(ConflictBucket::Count)> _conflictDecisionCache{};
         ConflictPromptState _conflictPrompt{};
+        DWORD _conflictOwnerThreadId = 0;
         std::optional<ConflictAction> _conflictDecisionAction;
         bool _conflictDecisionApplyToAll = false;
         wil::unique_event_nothrow _conflictDecisionEvent;
@@ -333,20 +438,39 @@ struct FolderWindow::FileOperationState
         uint64_t _progressCompletedBytes      = 0;
         uint64_t _progressItemTotalBytes      = 0;
         uint64_t _progressItemCompletedBytes  = 0;
+        std::atomic<unsigned long> _publishedProgressTotalItems{0};
+        std::atomic<unsigned long> _publishedProgressCompletedItems{0};
+        std::atomic<uint64_t> _publishedProgressTotalBytes{0};
+        std::atomic<uint64_t> _publishedProgressCompletedBytes{0};
+        std::atomic<uint64_t> _publishedProgressItemTotalBytes{0};
+        std::atomic<uint64_t> _publishedProgressItemCompletedBytes{0};
+        std::atomic<unsigned long> _publishedCompletedTopLevelFiles{0};
+        std::atomic<unsigned long> _publishedCompletedTopLevelFolders{0};
+        std::mutex _progressPathMutex;
         std::wstring _progressSourcePath;
         std::wstring _progressDestinationPath;
         std::wstring _lastProgressCallbackSourcePath;
         std::wstring _lastProgressCallbackDestinationPath;
-        ULONGLONG _lastProgressCallbackTick  = 0;
-        unsigned long _lastItemIndex         = 0;
-        HRESULT _lastItemHr                  = S_OK;
-        uint64_t _progressCallbackCount      = 0;
-        uint64_t _itemCompletedCallbackCount = 0;
+        std::atomic<std::shared_ptr<const DiagnosticPathSnapshot>> _publishedDiagnosticPathSnapshot{};
+        ULONGLONG _lastVisibleProgressPathUpdateTick = 0;
+        ULONGLONG _lastProgressCallbackTick          = 0;
+        unsigned long _lastItemIndex                 = 0;
+        HRESULT _lastItemHr                          = S_OK;
+        std::atomic<uint64_t> _progressCallbackCount{0};
+        std::atomic<uint64_t> _itemCompletedCallbackCount{0};
 
+        std::mutex _inFlightFilesMutex;
         std::array<InFlightFileProgress, kMaxInFlightFiles> _inFlightFiles{};
         size_t _inFlightFileCount = 0;
+        std::mutex _progressStreamPerfMutex;
+        std::array<ProgressStreamPerf, kMaxInFlightFiles> _progressStreamPerf{};
+        size_t _progressStreamPerfCount = 0;
+        std::array<ConflictWorkerPerf, kMaxInFlightFiles> _conflictWorkerPerf{};
+        size_t _conflictWorkerPerfCount = 0;
 
-#ifdef _DEBUG
+        PerfStats _perf{};
+
+#ifdef ENABLE_TESTS
         unsigned int _dbgConfiguredMaxConcurrency      = 1;
         ULONGLONG _dbgSingleInFlightStartTick          = 0;
         ULONGLONG _dbgLastSingleInFlightWarnTick       = 0;
@@ -392,6 +516,7 @@ struct FolderWindow::FileOperationState
     void CollectTasks(std::vector<Task*>& outTasks) noexcept;
     void CollectInformationalTasks(std::vector<FolderWindow::InformationalTaskUpdate>& outTasks) noexcept;
     void CollectCompletedTasks(std::vector<CompletedTaskSummary>& outTasks) noexcept;
+    void CollectDiagnostics(std::vector<TaskDiagnosticEntry>& outEntries) noexcept;
     void DismissCompletedTask(uint64_t taskId) noexcept;
     uint64_t CreateOrUpdateInformationalTask(const FolderWindow::InformationalTaskUpdate& update) noexcept;
     void DismissInformationalTask(uint64_t taskId) noexcept;
@@ -403,14 +528,23 @@ struct FolderWindow::FileOperationState
     bool IsIssuesPaneVisible() noexcept;
     bool TryGetIssuesPanePlacement(RECT& outRect, bool& outMaximized, UINT currentDpi) const noexcept;
     void SaveIssuesPanePlacement(HWND hwnd) noexcept;
+    bool TryGetIssuesPaneViewState(std::wstring& outSortColumnId,
+                                   bool& outSortDescending,
+                                   std::vector<Common::Settings::GridColumnLayoutEntry>& outGridLayout) const noexcept;
+    void SaveIssuesPaneViewState(std::wstring_view sortColumnId,
+                                 bool sortDescending,
+                                 const std::vector<Common::Settings::GridColumnLayoutEntry>& gridLayout) noexcept;
     bool TryGetPopupPlacement(RECT& outRect, bool& outMaximized, UINT currentDpi) const noexcept;
     void SavePopupPlacement(HWND hwnd) noexcept;
     void OnPopupDestroyed(HWND hwnd) noexcept;
     void OnIssuesPaneDestroyed(HWND hwnd) noexcept;
     void UpdateLastPopupRect(const RECT& rect) noexcept;
     std::optional<RECT> GetLastPopupRect() noexcept;
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     HWND GetPopupHwndForSelfTest() noexcept;
+    HWND GetIssuesPaneHwndForSelfTest() noexcept;
+    void DebugResetIssuesPaneForSelfTest() noexcept;
+    void DebugRemoveDiagnosticsForTask(uint64_t taskId) noexcept;
 #endif
 
     void RecordTaskDiagnostic(uint64_t taskId,
@@ -421,6 +555,7 @@ struct FolderWindow::FileOperationState
                               std::wstring_view message,
                               std::wstring_view sourcePath,
                               std::wstring_view destinationPath) noexcept;
+    void EnqueueTaskDiagnostic(TaskDiagnosticEntry entry) noexcept;
 
     bool EnterOperation(Task& task, std::stop_token stopToken) noexcept;
     void LeaveOperation() noexcept;
@@ -471,3 +606,15 @@ private:
 
     std::atomic<bool> _queueNewTasks{true};
 };
+
+#ifdef ENABLE_TESTS
+enum class FileOpsBridgePipelineMode : unsigned char
+{
+    Default,
+    Disabled,
+    Enabled,
+};
+
+void SetFileOpsBridgePipelineModeForSelfTest(FileOpsBridgePipelineMode mode) noexcept;
+FileOpsBridgePipelineMode GetFileOpsBridgePipelineModeForSelfTest() noexcept;
+#endif

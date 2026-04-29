@@ -34,6 +34,7 @@ The left tree contains:
 - **Mouse**: placeholder (not implemented yet).
 - **Themes**: theme selection, user-theme editing, and theme file management.
 - **Plugins**: enable/disable plugins, configure plugins, and run plugin tests.
+- **File Operations**: host-wide defaults for pre-calculation, default copy/move speed limit, and cross-filesystem bridge buffering.
 - **Compare Directories**: default options used by the Compare Directories window.
 - **Hot Paths**: bookmark folder paths for quick access (`Ctrl+1`..`Ctrl+0`).
 - **Advanced**: expert settings such as diagnostics, monitor filters, and cache limits.
@@ -72,6 +73,14 @@ Tip: Plugins also appear as child nodes under **Plugins** when a plugin exposes 
 - Add/remove custom plugin DLL paths.
 - Run **Test** for the selected plugin or **Test All** for the whole set.
 - Use the **Plugins** root page for the plugin list, then open child nodes for per-plugin settings.
+
+### File Operations
+
+- Turn the copy/move pre-calculation scan on or off.
+- Choose the pre-calculation worker budget (`1` to `8`) used before copy/move starts.
+- Set the default per-task speed limit for new copy/move operations using presets or a custom value.
+- Tune the cross-filesystem bridge buffer size used when the host copies between different file-system implementations.
+- Use **Plugins → File System** for plugin-owned concurrency, recycle-bin batching, and search-walker settings; those are not duplicated on the File Operations page.
 
 ### Hot Paths and Advanced
 

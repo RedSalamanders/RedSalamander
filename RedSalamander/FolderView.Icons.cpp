@@ -1,12 +1,36 @@
 #include "FolderViewInternal.h"
+#ifdef ENABLE_TESTS
+#include "SelfTestCommon.h"
+#endif
+
+#include <exception>
 
 namespace
 {
 constexpr unsigned int kMaxIconLoadRetries = 2u;
+
+[[nodiscard]] uint64_t PerfElapsedUs(const std::chrono::steady_clock::time_point& start) noexcept
+{
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
 }
+
+void PerfEmitCounter(std::wstring_view name, uint64_t value) noexcept
+{
+    Debug::Perf::Emit(name, L"", 0, value, 0, S_OK);
+}
+
+void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
+{
+    Debug::Perf::Emit(name, L"", durationUs, value0, value1, hr);
+}
+} // namespace
 
 void FolderView::QueueIconLoading()
 {
+#ifdef ENABLE_TESTS
+    ++_debugQueueIconLoadingCallCount;
+#endif
     if (_items.empty() || ! _hWnd)
     {
         return;
@@ -20,8 +44,12 @@ void FolderView::QueueIconLoading()
         return;
     }
 
+    Debug::Perf::Scope queuePerf(L"icons.queue_build_us");
+    queuePerf.SetDetail(_itemsFolder.native());
+
     // Initialize telemetry (per-batch)
-    const uint64_t batchId = _iconLoadStats.batchId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+    const uint64_t batchId               = _iconLoadStats.batchId.fetch_add(1u, std::memory_order_acq_rel) + 1u;
+    const uint64_t enumerationGeneration = _enumerationGeneration.load(std::memory_order_acquire);
     _iconLoadStats.totalRequests.store(0u, std::memory_order_release);
     _iconLoadStats.visibleRequests.store(0u, std::memory_order_release);
     _iconLoadStats.cacheHits.store(0u, std::memory_order_release);
@@ -55,6 +83,7 @@ void FolderView::QueueIconLoading()
 
     uint64_t totalNeeded   = 0;
     uint64_t visibleNeeded = 0;
+    uint64_t visibleGroups = 0;
     size_t skippedNoIndex  = 0;
     size_t skippedHasIcon  = 0;
 
@@ -127,13 +156,16 @@ void FolderView::QueueIconLoading()
         }
 
         IconLoadRequest request;
+        request.enumerationGeneration = enumerationGeneration;
         request.iconIndex             = iconIndex;
         request.hasVisibleItems       = group.hasVisibleItems;
         request.firstVisibleItemIndex = group.firstVisibleItemIndex;
+        request.enqueuedAt            = std::chrono::steady_clock::now();
         request.itemIndices           = std::move(group.itemIndices);
 
         if (request.hasVisibleItems)
         {
+            ++visibleGroups;
             visibleRequests.push_back(std::move(request));
         }
         else
@@ -169,6 +201,9 @@ void FolderView::QueueIconLoading()
     _iconLoadStats.visibleRequests.store(visibleNeeded, std::memory_order_release);
     _iconLoadStats.cacheHits.store(stampedFromCache, std::memory_order_release);
     _iconLoadStats.uniqueIconsQueued.store(uniqueIconsQueued, std::memory_order_release);
+    PerfEmitCounter(L"icons.queue_groups_total", static_cast<uint64_t>(groups.size()));
+    PerfEmitCounter(L"icons.queue_visible_groups", visibleGroups);
+    PerfEmitCounter(L"icons.cache_stamp_count", stampedFromCache);
 
     if (uniqueIconsQueued > 0)
     {
@@ -289,6 +324,9 @@ void FolderView::BoostIconLoadingForVisibleRange()
 
 void FolderView::ProcessIconLoadQueue()
 {
+#ifdef ENABLE_TESTS
+    ++_debugProcessIconQueueCallCount;
+#endif
     const uint64_t batchId = _iconLoadStats.batchId.load(std::memory_order_acquire);
     Debug::Perf::Scope perf(L"FolderView.IconLoading.ProcessQueue");
     perf.SetDetail(_itemsFolder.native());
@@ -333,12 +371,14 @@ void FolderView::ProcessIconLoadQueue()
                             uniqueQueued,
                             _iconLoadStats.extracted.load(std::memory_order_relaxed),
                             elapsedMs);
-                Debug::Info(L"FolderView: IconCache stats - {} cached icons (~{} MB), {} hits, {} misses, {} LRU evictions",
+                Debug::Info(L"FolderView: IconCache stats - {} cached icons (~{} MB), {} hits, {} misses, {} LRU evictions, {} path cached, {} path evictions",
                             cacheStats.cacheSize,
                             cacheMemoryMB,
                             cacheStats.hitCount,
                             cacheStats.missCount,
-                            cacheStats.lruEvictions);
+                            cacheStats.lruEvictions,
+                            cacheStats.pathCacheSize,
+                            cacheStats.pathLruEvictions);
                 break;
             }
 
@@ -351,6 +391,15 @@ void FolderView::ProcessIconLoadQueue()
             continue;
         }
 
+        if (request.enqueuedAt.time_since_epoch().count() > 0)
+        {
+            PerfEmitDuration(L"icons.queue_wait_to_dequeue_us",
+                             PerfElapsedUs(request.enqueuedAt),
+                             static_cast<uint64_t>(request.iconIndex),
+                             static_cast<uint64_t>(request.itemIndices.size()),
+                             S_OK);
+        }
+
         wil::com_ptr<ID2D1Device> d2dDeviceSnapshot;
         {
             std::lock_guard lock(_d2dDeviceMutex);
@@ -358,20 +407,29 @@ void FolderView::ProcessIconLoadQueue()
         }
         const bool cachedForDevice = d2dDeviceSnapshot && IconCache::GetInstance().HasCachedIcon(request.iconIndex, d2dDeviceSnapshot.get());
 
-        auto bitmapRequest             = std::make_unique<IconBitmapRequest>();
-        bitmapRequest->iconLoadBatchId = batchId;
-        bitmapRequest->iconIndex       = request.iconIndex;
-        bitmapRequest->itemIndices     = std::move(request.itemIndices);
+        auto bitmapRequest                   = std::make_unique<IconBitmapRequest>();
+        bitmapRequest->iconLoadBatchId       = batchId;
+        bitmapRequest->enumerationGeneration = request.enumerationGeneration;
+        bitmapRequest->iconIndex             = request.iconIndex;
+        bitmapRequest->postedAt              = std::chrono::steady_clock::now();
+        bitmapRequest->itemIndices           = std::move(request.itemIndices);
 
         // Background thread: extract once per iconIndex (unless already cached).
         if (! cachedForDevice)
         {
+            const auto extractStart = std::chrono::steady_clock::now();
             wil::unique_hicon hIcon = IconCache::GetInstance().ExtractSystemIcon(request.iconIndex, _iconSizeDip);
+            PerfEmitDuration(L"icons.extract_us",
+                             PerfElapsedUs(extractStart),
+                             static_cast<uint64_t>(request.iconIndex),
+                             static_cast<uint64_t>(request.retryCount),
+                             hIcon ? S_OK : S_FALSE);
             if (! hIcon)
             {
                 if (request.retryCount < kMaxIconLoadRetries)
                 {
                     ++request.retryCount;
+                    PerfEmitCounter(L"icons.extract_retries", 1);
                     {
                         std::lock_guard lock(_enumerationMutex);
                         if (request.hasVisibleItems)
@@ -387,6 +445,7 @@ void FolderView::ProcessIconLoadQueue()
                 }
                 else
                 {
+                    PerfEmitCounter(L"icons.extract_failures", 1);
                     Debug::Warning(L"FolderView: Failed to extract icon index {} after {} attempts", request.iconIndex, request.retryCount + 1u);
                 }
                 continue;
@@ -438,9 +497,29 @@ void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPt
         return;
     }
 
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::OnCreateIconBitmap: begin requestGeneration={} iconIndex={} itemCount={}",
+                                              requestPtr->enumerationGeneration,
+                                              requestPtr->iconIndex,
+                                              requestPtr->itemIndices.size()));
+#endif
+
     const uint64_t batchId = _iconLoadStats.batchId.load(std::memory_order_acquire);
     if (requestPtr->iconLoadBatchId != batchId)
     {
+        return;
+    }
+
+    const uint64_t enumerationGeneration = _enumerationGeneration.load(std::memory_order_acquire);
+    if (requestPtr->enumerationGeneration != enumerationGeneration)
+    {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"FolderView::OnCreateIconBitmap: dropped stale payload requestGeneration={} currentGeneration={} iconIndex={}",
+                        requestPtr->enumerationGeneration,
+                        enumerationGeneration,
+                        requestPtr->iconIndex));
+#endif
         return;
     }
 
@@ -456,15 +535,44 @@ void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPt
         return;
     }
 
+    if (requestPtr->postedAt.time_since_epoch().count() > 0)
+    {
+        PerfEmitDuration(L"icons.post_message_latency_us",
+                         PerfElapsedUs(requestPtr->postedAt),
+                         static_cast<uint64_t>(requestPtr->iconIndex),
+                         static_cast<uint64_t>(requestPtr->itemIndices.size()),
+                         S_OK);
+    }
+
     wil::com_ptr<ID2D1Bitmap1> bitmap;
     if (requestPtr->hIcon)
     {
         // Convert HICON to D2D bitmap on UI thread (thread-safe)
         const auto convertStart = std::chrono::steady_clock::now();
-        bitmap                  = IconCache::GetInstance().ConvertIconToBitmapOnUIThread(requestPtr->hIcon.get(), requestPtr->iconIndex, _d2dContext.get());
-        const auto convertEnd   = std::chrono::steady_clock::now();
-
-        const uint64_t convertUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(convertEnd - convertStart).count());
+        try
+        {
+            bitmap = IconCache::GetInstance().ConvertIconToBitmapOnUIThread(requestPtr->hIcon.get(), requestPtr->iconIndex, _d2dContext.get());
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::exception& ex)
+        {
+            // This runs from a posted Win32 callback; recoverable icon conversion failures must not escape WndProc.
+            Debug::Warning(L"FolderView: icon bitmap conversion threw for icon index {}", requestPtr->iconIndex);
+            static_cast<void>(ex);
+#ifdef ENABLE_TESTS
+            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::OnCreateIconBitmap: conversion exception iconIndex={}", requestPtr->iconIndex));
+#endif
+            bitmap = nullptr;
+        }
+        const uint64_t convertUs = PerfElapsedUs(convertStart);
+        PerfEmitDuration(L"icons.ui_convert_us",
+                         convertUs,
+                         static_cast<uint64_t>(requestPtr->iconIndex),
+                         static_cast<uint64_t>(requestPtr->itemIndices.size()),
+                         bitmap ? S_OK : S_FALSE);
         _iconLoadStats.bitmapConverted.fetch_add(1u, std::memory_order_relaxed);
         _iconLoadStats.bitmapConvertUsTotal.fetch_add(convertUs, std::memory_order_relaxed);
 
@@ -519,6 +627,8 @@ void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPt
         return;
     }
 
+    PerfEmitCounter(L"icons.ui_apply_count", static_cast<uint64_t>(applied));
+
     // For single-item updates, invalidate only that region. Otherwise invalidate the whole view.
     if (applied == 1 && firstAppliedIndex.has_value())
     {
@@ -532,16 +642,31 @@ void FolderView::OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> requestPt
             updateRect.top    = PxFromDip(viewBounds.top);
             updateRect.right  = PxFromDip(viewBounds.right);
             updateRect.bottom = PxFromDip(viewBounds.bottom);
+            PerfEmitCounter(L"icons.invalidate_single_count", 1);
+            PerfEmitCounter(L"icons.invalidate_area_px",
+                            static_cast<uint64_t>(std::max<LONG>(0, updateRect.right - updateRect.left)) *
+                                static_cast<uint64_t>(std::max<LONG>(0, updateRect.bottom - updateRect.top)));
             InvalidateRect(_hWnd.get(), &updateRect, FALSE);
             return;
         }
     }
 
+    PerfEmitCounter(L"icons.invalidate_full_count", 1);
+    PerfEmitCounter(L"icons.invalidate_area_px", static_cast<uint64_t>(_clientSize.cx) * static_cast<uint64_t>(_clientSize.cy));
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::OnCreateIconBitmap: end applied={} iconIndex={}", applied, requestPtr->iconIndex));
+#endif
 }
 
 void FolderView::OnBatchIconUpdate()
 {
+#ifdef ENABLE_TESTS
+    ++_debugBatchIconUpdateCallCount;
+#endif
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::OnBatchIconUpdate: begin itemCount={}", _items.size()));
+#endif
     if (_items.empty() || ! _d2dContext)
     {
         return;
@@ -551,7 +676,8 @@ void FolderView::OnBatchIconUpdate()
     perf.SetDetail(_itemsFolder.native());
     perf.SetValue0(_items.size());
 
-    size_t retrieved = 0;
+    const auto scanStart = std::chrono::steady_clock::now();
+    size_t retrieved     = 0;
 
     for (auto& item : _items)
     {
@@ -576,8 +702,13 @@ void FolderView::OnBatchIconUpdate()
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
 
+    PerfEmitDuration(L"icons.batch_update_scan_us", PerfElapsedUs(scanStart), static_cast<uint64_t>(_items.size()), static_cast<uint64_t>(retrieved), S_OK);
+    PerfEmitCounter(L"icons.batch_update_retrieved", static_cast<uint64_t>(retrieved));
     perf.SetValue1(retrieved);
     MaybeEmitIconBitmapSummary(_iconLoadStats.batchId.load(std::memory_order_acquire));
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::OnBatchIconUpdate: end retrieved={}", retrieved));
+#endif
 }
 
 void FolderView::MaybeEmitIconBitmapSummary(uint64_t batchId) noexcept
@@ -656,6 +787,10 @@ void FolderView::OnIconLoaded(size_t itemIndex)
         updateRect.right  = PxFromDip(viewBounds.right);
         updateRect.bottom = PxFromDip(viewBounds.bottom);
 
+        PerfEmitCounter(L"icons.invalidate_single_count", 1);
+        PerfEmitCounter(L"icons.invalidate_area_px",
+                        static_cast<uint64_t>(std::max<LONG>(0, updateRect.right - updateRect.left)) *
+                            static_cast<uint64_t>(std::max<LONG>(0, updateRect.bottom - updateRect.top)));
         InvalidateRect(_hWnd.get(), &updateRect, FALSE);
     }
 }

@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -107,6 +108,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetConfiguration(const char* configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetConfiguration(const char** configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE SomethingToSave(BOOL* pSomethingToSave) noexcept override;
+    [[nodiscard]] static const char* StaticConfigurationSchema(FileSystemMicrosoftDriveMode mode) noexcept;
 
     HRESULT STDMETHODCALLTYPE GetMenuItems(const NavigationMenuItem** items, unsigned int* count) noexcept override;
     HRESULT STDMETHODCALLTYPE ExecuteMenuCommand(unsigned int commandId) noexcept override;
@@ -167,6 +169,11 @@ public:
                                           IFileSystemCallback* callback    = nullptr,
                                           void* cookie                     = nullptr) noexcept override;
     HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
+                                               FileSystemOperation operationType,
+                                               FileSystemTransferEndpoint endpoint,
+                                               FileSystemTransferHints* hints) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
 
     HRESULT STDMETHODCALLTYPE GetAttributes(const wchar_t* path, unsigned long* fileAttributes) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateFileReader(const wchar_t* path, IFileReader** reader) noexcept override;
@@ -222,6 +229,18 @@ private:
     [[nodiscard]] IHostAlerts* GetHostAlerts() const noexcept;
     void ShowMissingClientIdAlert() const noexcept;
 
+    // Drain-guard invoke pattern: capture callback snapshot under lock, then invoke outside the lock.
+    // Required for safe callback invocation with the generation/drain infrastructure in SetCallback.
+    struct NavigationMenuCallbackSnapshot
+    {
+        INavigationMenuCallback* callback = nullptr;
+        void* cookie                      = nullptr;
+        uint64_t generation               = 0;
+    };
+
+    [[nodiscard]] bool TryCaptureNavigationMenuCallback(NavigationMenuCallbackSnapshot& snapshot) noexcept;
+    HRESULT InvokeNavigationMenuCallback(const NavigationMenuCallbackSnapshot& snapshot, const wchar_t* path) noexcept;
+
     struct CachedToken
     {
         std::string accessToken;
@@ -247,7 +266,7 @@ private:
     static constexpr wchar_t kPluginShortIdSharePoint[] = L"sharepoint";
 
     static constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
-    static constexpr wchar_t kPluginVersion[] = L"0.1";
+    static constexpr wchar_t kPluginVersion[] = VERSINFO_PLUGIN_VERSION;
 
     static constexpr char kSchemaJson[] = R"json(
 {
@@ -327,8 +346,9 @@ private:
     std::atomic_ulong _refCount{1};
     mutable std::mutex _stateMutex;
     Settings _settings{};
-    std::string _configurationJson = "{}";
-    std::string _propertiesJson    = "{}";
+    std::string _configurationJsonStorage[2] = {"{}", "{}"}; // Double-buffer to keep old pointer valid
+    size_t _configurationJsonIndex           = 0;
+    std::string _propertiesJson              = "{}";
     std::wstring _driveDisplayName;
     std::wstring _driveVolumeLabel;
     std::wstring _driveFileSystem;
@@ -338,4 +358,9 @@ private:
     std::unordered_map<std::wstring, CachedDrive> _driveCacheByConnectionName;
     INavigationMenuCallback* _navigationMenuCallback = nullptr;
     void* _navigationMenuCookie                      = nullptr;
+    uint64_t _navigationMenuCallbackGeneration       = 0;
+    size_t _navigationMenuCallbacksInFlight          = 0;
+    std::condition_variable _navigationMenuDrainCv;
 };
+
+[[nodiscard]] const char* GetFileSystemMicrosoftDriveStaticConfigurationSchema(FileSystemMicrosoftDriveMode mode) noexcept;

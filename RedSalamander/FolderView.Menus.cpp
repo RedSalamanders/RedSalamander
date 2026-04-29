@@ -1,6 +1,7 @@
 #include "FolderViewInternal.h"
 
 #include "FluentIcons.h"
+#include "LocalizationManager.h"
 #include "ShortcutManager.h"
 
 namespace
@@ -80,6 +81,29 @@ bool MenuContainsCommandIdRecursive(HMENU menu, UINT commandId) noexcept
     }
 
     return false;
+}
+
+[[nodiscard]] std::wstring StripMenuMnemonicMarkers(std::wstring_view text)
+{
+    std::wstring result;
+    result.reserve(text.size());
+
+    for (size_t i = 0; i < text.size(); ++i)
+    {
+        if (text[i] != L'&')
+        {
+            result.push_back(text[i]);
+            continue;
+        }
+
+        if ((i + 1u) < text.size() && text[i + 1u] == L'&')
+        {
+            result.push_back(L'&');
+            ++i;
+        }
+    }
+
+    return result;
 }
 
 void RemoveOverlaySampleSubmenu(HMENU menu, UINT sampleErrorCommandId) noexcept
@@ -220,6 +244,92 @@ void RemoveOverlaySampleSubmenu(HMENU menu, UINT sampleErrorCommandId) noexcept
 
     return std::nullopt;
 }
+[[nodiscard]] std::wstring GetIconGlyphForCommand(UINT commandId) noexcept
+{
+    switch (commandId)
+    {
+        case IDM_FOLDERVIEW_CONTEXT_OPEN: return std::wstring(1, FluentIcons::kOpenFile);
+        case IDM_FOLDERVIEW_CONTEXT_COPY: return std::wstring(1, FluentIcons::kCopy);
+        case IDM_FOLDERVIEW_CONTEXT_PASTE: return std::wstring(1, FluentIcons::kPaste);
+        case IDM_FOLDERVIEW_CONTEXT_DELETE: return std::wstring(1, FluentIcons::kDelete);
+        case IDM_FOLDERVIEW_CONTEXT_RENAME: return std::wstring(1, FluentIcons::kRename);
+        case IDM_FOLDERVIEW_CONTEXT_PROPERTIES: return std::wstring(1, FluentIcons::kInfo);
+    }
+    return {};
+}
+
+[[nodiscard]] std::vector<RedSalamander::DxUi::MenuFlyoutItem> ConvertHMenuToFlyoutItems(HMENU menu, const ShortcutManager* shortcutManager) noexcept
+{
+    using RedSalamander::DxUi::MenuFlyoutItem;
+    using RedSalamander::DxUi::MenuItemKind;
+
+    std::vector<MenuFlyoutItem> result;
+    if (! menu)
+        return result;
+
+    const int count = GetMenuItemCount(menu);
+    if (count < 0)
+        return result;
+
+    for (UINT pos = 0; pos < static_cast<UINT>(count); ++pos)
+    {
+        MENUITEMINFOW mii{};
+        mii.cbSize = sizeof(mii);
+        mii.fMask  = MIIM_FTYPE | MIIM_ID | MIIM_STATE | MIIM_SUBMENU;
+        if (! GetMenuItemInfoW(menu, pos, TRUE, &mii))
+            continue;
+
+        MenuFlyoutItem item;
+
+        if ((mii.fType & MFT_SEPARATOR) != 0)
+        {
+            item.kind = MenuItemKind::Separator;
+            result.push_back(std::move(item));
+            continue;
+        }
+
+        wchar_t textBuffer[256]{};
+        const int textLen = GetMenuStringW(menu, pos, textBuffer, static_cast<int>(std::size(textBuffer)), MF_BYPOSITION);
+        if (textLen > 0)
+        {
+            std::wstring_view fullText(textBuffer, static_cast<size_t>(textLen));
+            const size_t tabPos               = fullText.find(L'\t');
+            const std::wstring_view labelText = tabPos != std::wstring_view::npos ? fullText.substr(0, tabPos) : fullText;
+            item.text                         = StripMenuMnemonicMarkers(labelText);
+        }
+
+        item.commandId = static_cast<int>(mii.wID);
+        item.enabled   = (mii.fState & MFS_GRAYED) == 0;
+        item.checked   = (mii.fState & MFS_CHECKED) != 0;
+
+        if ((mii.fState & MFS_CHECKED) != 0)
+            item.kind = MenuItemKind::Toggle;
+
+        // Icon glyph
+        item.iconGlyph = GetIconGlyphForCommand(mii.wID);
+
+        // Accelerator text from ShortcutManager
+        if (shortcutManager && mii.wID != 0u)
+        {
+            const auto commandIdOpt = TryGetCommandIdForContextMenuItem(mii.wID);
+            if (commandIdOpt.has_value())
+            {
+                const auto chordOpt = shortcutManager->TryGetShortcutForCommand(commandIdOpt.value());
+                if (chordOpt.has_value())
+                    item.acceleratorText = FormatMenuChordText(chordOpt.value().vk, chordOpt.value().modifiers);
+            }
+        }
+
+        // Recurse for submenus
+        if (mii.hSubMenu)
+            item.children = ConvertHMenuToFlyoutItems(mii.hSubMenu, shortcutManager);
+
+        result.push_back(std::move(item));
+    }
+
+    return result;
+}
+
 } // namespace
 
 void FolderView::OnContextMenu(POINT screenPt)
@@ -227,7 +337,7 @@ void FolderView::OnContextMenu(POINT screenPt)
     if (! _hWnd)
         return;
 
-    HMENU rootMenu = LoadMenuW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDR_FOLDERVIEW_CONTEXT));
+    HMENU rootMenu = Localization::LoadMenuResource(GetModuleHandleW(nullptr), IDR_FOLDERVIEW_CONTEXT);
     if (! rootMenu)
         return;
 
@@ -235,9 +345,7 @@ void FolderView::OnContextMenu(POINT screenPt)
 
     HMENU menu = GetSubMenu(rootMenu, 0);
     if (! menu)
-    {
         return;
-    }
 
     auto clientPt = ScreenToClientPoint(screenPt);
     auto hit      = HitTest(clientPt);
@@ -253,359 +361,17 @@ void FolderView::OnContextMenu(POINT screenPt)
         RemoveOverlaySampleSubmenu(menu, CmdOverlaySampleError);
     }
 
-    PrepareThemedMenu(menu);
-    TrackPopupMenu(menu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON, screenPt.x, screenPt.y, 0, _hWnd.get(), nullptr);
-    ClearThemedMenuState();
-}
-
-void FolderView::ClearThemedMenuState()
-{
-    _menuItemData.clear();
-}
-
-void FolderView::PrepareThemedMenu(HMENU menu)
-{
-    ClearThemedMenuState();
-    if (! menu)
+    // Convert the HMENU to DxUI MenuFlyoutItems and show via D2D menu
+    auto flyoutItems   = ConvertHMenuToFlyoutItems(menu, _shortcutManager);
+    const auto palette = MakeAppThemeDxPalette(_appTheme);
+    auto result        = RedSalamander::DxUi::ContextMenu::Show(_hWnd.get(), screenPt, flyoutItems, palette);
+    if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
     {
-        return;
+        SetFocus(_hWnd.get());
     }
-
-    if (! _menuBackgroundBrush)
+    if (result.has_value())
     {
-        _menuBackgroundBrush.reset(CreateSolidBrush(_menuTheme.background));
-    }
-
-    auto applyMenu = [&](auto&& self, HMENU currentMenu) -> void
-    {
-        if (! currentMenu)
-        {
-            return;
-        }
-
-        MENUINFO menuInfo{};
-        menuInfo.cbSize  = sizeof(menuInfo);
-        menuInfo.fMask   = MIM_BACKGROUND;
-        menuInfo.hbrBack = _menuBackgroundBrush.get();
-        SetMenuInfo(currentMenu, &menuInfo);
-
-        const int itemCount = GetMenuItemCount(currentMenu);
-        if (itemCount < 0)
-        {
-            Debug::ErrorWithLastError(L"GetMenuItemCount failed");
-            return;
-        }
-
-        for (UINT pos = 0; pos < static_cast<UINT>(itemCount); ++pos)
-        {
-            MENUITEMINFOW itemInfo{};
-            itemInfo.cbSize = sizeof(itemInfo);
-            itemInfo.fMask  = MIIM_FTYPE | MIIM_ID | MIIM_STATE | MIIM_SUBMENU;
-            if (! GetMenuItemInfoW(currentMenu, pos, TRUE, &itemInfo))
-            {
-                continue;
-            }
-
-            wchar_t textBuffer[512]{};
-            const int textLen = GetMenuStringW(currentMenu, pos, textBuffer, static_cast<int>(std::size(textBuffer)), MF_BYPOSITION);
-            std::wstring fullText;
-            if (textLen > 0)
-            {
-                fullText.assign(textBuffer, static_cast<size_t>(textLen));
-            }
-
-            auto data        = std::make_unique<MenuItemData>();
-            data->separator  = (itemInfo.fType & MFT_SEPARATOR) != 0;
-            data->header     = (itemInfo.wID == 0 && itemInfo.hSubMenu == nullptr && ! data->separator);
-            data->hasSubMenu = itemInfo.hSubMenu != nullptr;
-
-            const size_t tabPos = fullText.find(L'\t');
-            if (tabPos != std::wstring::npos)
-            {
-                data->text     = fullText.substr(0, tabPos);
-                data->shortcut = fullText.substr(tabPos + 1);
-            }
-            else
-            {
-                data->text = std::move(fullText);
-            }
-
-            if (! data->separator && itemInfo.wID != 0u)
-            {
-                data->shortcut.clear();
-
-                if (_shortcutManager)
-                {
-                    const std::optional<std::wstring_view> commandIdOpt = TryGetCommandIdForContextMenuItem(itemInfo.wID);
-                    if (commandIdOpt.has_value())
-                    {
-                        if (const std::optional<ShortcutManager::ShortcutChord> chordOpt = _shortcutManager->TryGetShortcutForCommand(commandIdOpt.value()))
-                        {
-                            data->shortcut = FormatMenuChordText(chordOpt.value().vk, chordOpt.value().modifiers);
-                        }
-                    }
-                }
-            }
-
-            _menuItemData.emplace_back(std::move(data));
-
-            MENUITEMINFOW ownerDrawInfo{};
-            ownerDrawInfo.cbSize     = sizeof(ownerDrawInfo);
-            ownerDrawInfo.fMask      = MIIM_FTYPE | MIIM_DATA | MIIM_STATE;
-            ownerDrawInfo.fType      = itemInfo.fType | MFT_OWNERDRAW;
-            ownerDrawInfo.fState     = itemInfo.fState;
-            ownerDrawInfo.dwItemData = reinterpret_cast<ULONG_PTR>(_menuItemData.back().get());
-            SetMenuItemInfoW(currentMenu, pos, TRUE, &ownerDrawInfo);
-
-            if (itemInfo.hSubMenu)
-            {
-                self(self, itemInfo.hSubMenu);
-            }
-        }
-    };
-
-    applyMenu(applyMenu, menu);
-}
-
-void FolderView::OnMeasureItem(MEASUREITEMSTRUCT* mis)
-{
-    if (! mis || mis->CtlType != ODT_MENU)
-    {
-        return;
-    }
-
-    const auto* data = reinterpret_cast<const MenuItemData*>(mis->itemData);
-    if (! data)
-    {
-        return;
-    }
-
-    const int dpi = static_cast<int>(_dpi);
-
-    if (data->separator)
-    {
-        mis->itemWidth  = 1;
-        mis->itemHeight = static_cast<UINT>(MulDiv(10, dpi, USER_DEFAULT_SCREEN_DPI));
-        return;
-    }
-
-    const UINT height = static_cast<UINT>(MulDiv(24, dpi, USER_DEFAULT_SCREEN_DPI));
-    mis->itemHeight   = height;
-
-    auto hdc = wil::GetDC(_hWnd.get());
-    if (! hdc)
-    {
-        mis->itemWidth = 200;
-        return;
-    }
-
-    const int paddingX      = MulDiv(10, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int iconAreaWidth = MulDiv(28, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int shortcutGap   = MulDiv(24, dpi, USER_DEFAULT_SCREEN_DPI);
-
-    HFONT fontToUse = _menuFont ? _menuFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-
-    SIZE textSize{};
-    if (! data->text.empty())
-    {
-        GetTextExtentPoint32W(hdc.get(), data->text.c_str(), static_cast<int>(data->text.size()), &textSize);
-    }
-
-    SIZE shortcutSize{};
-    if (! data->shortcut.empty())
-    {
-        GetTextExtentPoint32W(hdc.get(), data->shortcut.c_str(), static_cast<int>(data->shortcut.size()), &shortcutSize);
-    }
-
-    int width = paddingX + iconAreaWidth + textSize.cx + paddingX;
-    if (! data->shortcut.empty())
-    {
-        width += shortcutGap + shortcutSize.cx;
-    }
-
-    mis->itemWidth = static_cast<UINT>(std::max(width, 120));
-}
-
-void FolderView::OnDrawItem(DRAWITEMSTRUCT* dis)
-{
-    if (! dis || dis->CtlType != ODT_MENU || ! dis->hDC)
-    {
-        return;
-    }
-
-    const auto* data = reinterpret_cast<const MenuItemData*>(dis->itemData);
-    if (! data)
-    {
-        return;
-    }
-
-    const bool selected = (dis->itemState & ODS_SELECTED) != 0;
-    const bool disabled = (dis->itemState & ODS_DISABLED) != 0;
-    const bool checked  = (dis->itemState & ODS_CHECKED) != 0;
-
-    COLORREF bgColor = selected ? _menuTheme.selectionBg : _menuTheme.background;
-
-    COLORREF textColor     = _menuTheme.text;
-    COLORREF shortcutColor = _menuTheme.shortcutText;
-    if (selected)
-    {
-        textColor     = _menuTheme.selectionText;
-        shortcutColor = _menuTheme.shortcutTextSel;
-    }
-    else if (disabled)
-    {
-        textColor     = data->header ? _menuTheme.headerTextDisabled : _menuTheme.disabledText;
-        shortcutColor = _menuTheme.disabledText;
-    }
-    else if (data->header)
-    {
-        textColor     = _menuTheme.headerText;
-        shortcutColor = _menuTheme.shortcutText;
-    }
-
-    if (selected && _menuTheme.rainbowMode && ! disabled && ! data->separator && ! data->text.empty())
-    {
-        bgColor = RainbowMenuSelectionColor(data->text, _menuTheme.darkBase);
-
-        const COLORREF contrastText = ChooseContrastingTextColor(bgColor);
-        textColor                   = contrastText;
-        shortcutColor               = contrastText;
-    }
-
-    RECT itemRect       = dis->rcItem;
-    const HWND menuHwnd = WindowFromDC(dis->hDC);
-    if (menuHwnd)
-    {
-        RECT menuClient{};
-        if (GetClientRect(menuHwnd, &menuClient))
-        {
-            itemRect.right = menuClient.right;
-        }
-    }
-
-    wil::unique_any<HRGN, decltype(&::DeleteObject), ::DeleteObject> clipRgn(CreateRectRgnIndirect(&itemRect));
-    if (clipRgn)
-    {
-        SelectClipRgn(dis->hDC, clipRgn.get());
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(bgColor));
-    FillRect(dis->hDC, &itemRect, bgBrush.get());
-
-    const int dpi                   = static_cast<int>(_dpi);
-    const int paddingX              = MulDiv(10, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int iconAreaWidth         = MulDiv(28, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int subMenuArrowAreaWidth = MulDiv(14, dpi, USER_DEFAULT_SCREEN_DPI);
-
-    if (data->separator)
-    {
-        const int y = (dis->rcItem.top + dis->rcItem.bottom) / 2;
-        wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> pen(CreatePen(PS_SOLID, 1, _menuTheme.separator));
-        auto oldPen = wil::SelectObject(dis->hDC, pen.get());
-        MoveToEx(dis->hDC, dis->rcItem.left + paddingX, y, nullptr);
-        LineTo(dis->hDC, dis->rcItem.right - paddingX, y);
-        return;
-    }
-
-    RECT iconRect = itemRect;
-    iconRect.left += paddingX;
-    iconRect.right = std::min(itemRect.right, iconRect.left + iconAreaWidth);
-
-    RECT textRect = itemRect;
-    textRect.left += paddingX + iconAreaWidth;
-    textRect.right -= paddingX;
-    if (data->hasSubMenu)
-    {
-        textRect.right = std::max(textRect.left, textRect.right - subMenuArrowAreaWidth);
-    }
-
-    SetBkMode(dis->hDC, TRANSPARENT);
-    HFONT fontToUse = _menuFont ? _menuFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(dis->hDC, fontToUse);
-
-    if (! data->header && iconRect.right > iconRect.left)
-    {
-        SetTextColor(dis->hDC, textColor);
-
-        if (checked)
-        {
-            const wchar_t glyph = _menuIconFontValid ? FluentIcons::kCheckMark : FluentIcons::kFallbackCheckMark;
-            wchar_t glyphText[2]{glyph, 0};
-
-            HFONT glyphFont  = (_menuIconFontValid && _menuIconFont) ? _menuIconFont.get() : fontToUse;
-            auto oldIconFont = wil::SelectObject(dis->hDC, glyphFont);
-            DrawTextW(dis->hDC, glyphText, 1, &iconRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        }
-        else if (_menuIconFontValid && _menuIconFont)
-        {
-            const wchar_t glyph = [&]() noexcept -> wchar_t
-            {
-                switch (dis->itemID)
-                {
-                    case IDM_FOLDERVIEW_CONTEXT_OPEN: return FluentIcons::kOpenFile;
-                    case IDM_FOLDERVIEW_CONTEXT_COPY: return FluentIcons::kCopy;
-                    case IDM_FOLDERVIEW_CONTEXT_PASTE: return FluentIcons::kPaste;
-                    case IDM_FOLDERVIEW_CONTEXT_DELETE: return FluentIcons::kDelete;
-                    case IDM_FOLDERVIEW_CONTEXT_RENAME: return FluentIcons::kRename;
-                    case IDM_FOLDERVIEW_CONTEXT_PROPERTIES: return FluentIcons::kInfo;
-                }
-                return 0;
-            }();
-
-            if (glyph != 0)
-            {
-                wchar_t glyphText[2]{glyph, 0};
-                auto oldIconFont = wil::SelectObject(dis->hDC, _menuIconFont.get());
-                DrawTextW(dis->hDC, glyphText, 1, &iconRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            }
-        }
-    }
-
-    DWORD drawFlags = DT_VCENTER | DT_SINGLELINE | DT_HIDEPREFIX;
-
-    if (! data->shortcut.empty())
-    {
-        SIZE shortcutSize{};
-        GetTextExtentPoint32W(dis->hDC, data->shortcut.c_str(), static_cast<int>(data->shortcut.size()), &shortcutSize);
-
-        RECT shortcutRect = textRect;
-        shortcutRect.left = std::max(textRect.left, textRect.right - shortcutSize.cx);
-
-        RECT mainTextRect  = textRect;
-        mainTextRect.right = std::max(mainTextRect.left, shortcutRect.left - MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI));
-
-        SetTextColor(dis->hDC, shortcutColor);
-        DrawTextW(dis->hDC, data->shortcut.c_str(), static_cast<int>(data->shortcut.size()), &shortcutRect, DT_RIGHT | drawFlags);
-
-        SetTextColor(dis->hDC, textColor);
-        DrawTextW(dis->hDC, data->text.c_str(), static_cast<int>(data->text.size()), &mainTextRect, DT_LEFT | drawFlags);
-    }
-    else
-    {
-        SetTextColor(dis->hDC, textColor);
-        DrawTextW(dis->hDC, data->text.c_str(), static_cast<int>(data->text.size()), &textRect, DT_LEFT | drawFlags);
-    }
-
-    if (data->hasSubMenu)
-    {
-        RECT arrowRect = itemRect;
-        arrowRect.right -= paddingX;
-        arrowRect.left = std::max(arrowRect.left, arrowRect.right - subMenuArrowAreaWidth);
-
-        const wchar_t glyph = _menuIconFontValid ? FluentIcons::kChevronRightSmall : FluentIcons::kFallbackChevronRight;
-        wchar_t glyphText[2]{glyph, 0};
-
-        HFONT iconFont   = (_menuIconFontValid && _menuIconFont) ? _menuIconFont.get() : fontToUse;
-        auto oldIconFont = wil::SelectObject(dis->hDC, iconFont);
-
-        SetTextColor(dis->hDC, shortcutColor);
-        DrawTextW(dis->hDC, glyphText, 1, &arrowRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-        const int arrowExcludeWidth = std::max(subMenuArrowAreaWidth, GetSystemMetricsForDpi(SM_CXMENUCHECK, static_cast<UINT>(dpi)));
-        RECT arrowExcludeRect       = itemRect;
-        arrowExcludeRect.left       = std::max(arrowExcludeRect.left, arrowExcludeRect.right - arrowExcludeWidth);
-        ExcludeClipRect(dis->hDC, arrowExcludeRect.left, arrowExcludeRect.top, arrowExcludeRect.right, arrowExcludeRect.bottom);
+        PostMessageW(_hWnd.get(), WM_COMMAND, MAKEWPARAM(static_cast<WORD>(result.value()), 0), 0);
     }
 }
 

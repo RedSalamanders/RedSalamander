@@ -4,6 +4,7 @@
 
 #include <new>
 #include <string>
+#include <string_view>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182)
@@ -15,8 +16,8 @@
 #include "PlugInterfaces/Factory.h"
 
 #define REDSAL_DEFINE_TRACE_PROVIDER
-#include "Helpers.h"
 #include "FileSystemGoogleDriveResources.h"
+#include "Helpers.h"
 
 #include "FileSystemGoogleDrive.h"
 
@@ -34,20 +35,23 @@ namespace
         .name        = name.c_str(),
         .description = description.c_str(),
         .author      = L"RedSalamander",
-        .version     = L"0.1",
+        .version     = VERSINFO_PLUGIN_VERSION,
     };
     return metaData;
 }
-}
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, void** result)
+[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
 {
-    if (! result)
+    if (! pluginId.empty() && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
     {
-        return E_POINTER;
+        return nullptr;
     }
 
-    *result = nullptr;
+    return GetFileSystemGoogleDriveStaticConfigurationSchema();
+}
+
+HRESULT CreatePluginInstance(REFIID riid, IHost* host, void** result)
+{
     if (riid != __uuidof(IFileSystem))
     {
         return E_NOINTERFACE;
@@ -63,6 +67,7 @@ extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptio
     instance->Release();
     return hr;
 }
+} // namespace
 
 extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
 {
@@ -83,7 +88,7 @@ extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const Pl
     return S_OK;
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreateEx(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
 {
     if (! result)
     {
@@ -95,14 +100,34 @@ extern "C" HRESULT __stdcall RedSalamanderCreateEx(REFIID riid, const FactoryOpt
     {
         return E_NOINTERFACE;
     }
-    if (! pluginId || pluginId[0] == L'\0')
-    {
-        return E_INVALIDARG;
-    }
-    if (! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
+    if (pluginId && pluginId[0] != L'\0' && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
-    return RedSalamanderCreate(riid, factoryOptions, host, result);
+    return CreatePluginInstance(riid, host, result);
+}
+
+extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
+{
+    if (! schemaJsonUtf8)
+    {
+        return E_POINTER;
+    }
+
+    *schemaJsonUtf8 = nullptr;
+    if (riid != __uuidof(IFileSystem))
+    {
+        return E_NOINTERFACE;
+    }
+
+    const std::wstring_view requestedId = pluginId ? std::wstring_view(pluginId) : std::wstring_view{};
+    const char* schema                  = GetPluginSchema(requestedId);
+    if (! schema)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
+    *schemaJsonUtf8 = schema;
+    return S_OK;
 }

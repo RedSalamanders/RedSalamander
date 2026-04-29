@@ -12,6 +12,7 @@
 #include <optional>
 #include <stop_token>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <vector>
 
@@ -69,6 +70,8 @@ public:
         std::filesystem::path currentFolder;
         std::filesystem::path targetFolder;
         std::wstring focusDisplayName;
+        std::wstring renamedFromDisplayName;
+        std::wstring renamedToDisplayName;
         std::wstring newInstanceContext;
     };
 
@@ -252,7 +255,10 @@ private:
     std::shared_ptr<Entry> GetOrCreateEntryLocked(const Key& key) noexcept;
     wil::com_ptr<IFileSystem> ResolveProviderLocked(const ContextKey& context, IFileSystem* preferredFileSystem = nullptr) const noexcept;
     void OnWatcherNotification(const ContextKey& context, std::wstring watchedFolder, const struct FolderWatcherNotification& notification) noexcept;
-    void NotifyFolderContentsChangedLocked(const ContextKey& context, const std::wstring& normalizedFolder) noexcept;
+    void NotifyFolderContentsChangedLocked(const ContextKey& context,
+                                           const std::wstring& normalizedFolder,
+                                           std::wstring_view renamedFromDisplayName = {},
+                                           std::wstring_view renamedToDisplayName   = {}) noexcept;
     void MarkSubtreeDirtyLocked(const ContextKey& context, const std::wstring& normalizedRootPath) noexcept;
     void NotifyPathDeletedLocked(const ContextKey& context, const std::wstring& normalizedPath) noexcept;
     void NotifyPathMovedLocked(const ContextKey& context, const std::wstring& normalizedSourcePath, const std::wstring& normalizedDestinationPath) noexcept;

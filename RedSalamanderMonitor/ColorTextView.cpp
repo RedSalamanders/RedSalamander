@@ -39,7 +39,10 @@ static const D2D1_COLOR_F debugColors[] = {
     D2D1::ColorF(0.9f, 0.8f, 1.0f, 0.3f), // Light purple
 };
 static constexpr size_t debugColorCount = sizeof(debugColors) / sizeof(debugColors[0]);
+#endif
 
+// Build RedSalamanderMonitor with RS_MONITOR_SHOW_INVALID_RECTS to visualize invalid paint and dirty update rectangles.
+#if RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED
 static const D2D1_COLOR_F debugDirtyPalette[] = {
     D2D1::ColorF(D2D1::ColorF::LawnGreen, 0.35f),
     D2D1::ColorF(D2D1::ColorF::Orange, 0.35f),
@@ -142,7 +145,7 @@ ATOM ColorTextView::RegisterWndClass(HINSTANCE hinst)
 }
 HWND ColorTextView::Create(HWND parent, int x, int y, int w, int h)
 {
-    HINSTANCE hinst = (HINSTANCE)GetWindowLongPtr(parent, GWLP_HINSTANCE);
+    HINSTANCE hinst = reinterpret_cast<HINSTANCE>(GetWindowLongPtr(parent, GWLP_HINSTANCE));
     RegisterWndClass(hinst);
     // Add scrollbar styles
     _hWnd = CreateWindowEx(
@@ -193,6 +196,8 @@ void ColorTextView::SetTheme(const Theme& t)
         validTheme.metaWarning = D2D1::ColorF(D2D1::ColorF::Orange);
     if (! isValidColor(t.metaInfo))
         validTheme.metaInfo = D2D1::ColorF(D2D1::ColorF::Cyan);
+    if (! isValidColor(t.metaPerf))
+        validTheme.metaPerf = D2D1::ColorF(D2D1::ColorF::MediumSeaGreen);
     if (! isValidColor(t.metaDebug))
         validTheme.metaDebug = D2D1::ColorF(D2D1::ColorF::Gray);
     if (! isValidColor(t.metaText))
@@ -218,6 +223,7 @@ void ColorTextView::SetTheme(const Theme& t)
         GetBrush(_theme.metaError);
         GetBrush(_theme.metaWarning);
         GetBrush(_theme.metaInfo);
+        GetBrush(_theme.metaPerf);
         GetBrush(_theme.metaDebug);
     }
 
@@ -1108,7 +1114,7 @@ void ColorTextView::EnsureCaretVisible()
 
         if (localPos)
         {
-            _textLayout->HitTestTextPosition(*localPos, FALSE, &x, &y, &metrics);
+            _textLayout->HitTestTextPosition(localPos.value(), FALSE, &x, &y, &metrics);
             caretLeft  = x;
             caretRight = x + 2.f;
         }
@@ -1135,7 +1141,7 @@ LRESULT CALLBACK ColorTextView::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPA
     {
         auto cs = reinterpret_cast<CREATESTRUCT*>(lp);
         self    = static_cast<ColorTextView*>(cs->lpCreateParams);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)self);
+        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
         if (self)
         {
             self->_hWnd = hwnd;
@@ -1394,7 +1400,7 @@ void ColorTextView::DiscardDeviceResources()
     _sliceBitmap.reset();
     _sliceCmd.reset();
 
-#ifdef _DEBUG
+#if RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED
     _debugDirtyRectBrush.reset();
     _debugDirtyRectFillBrush.reset();
     _debugDirtyColorIndex = 0;
@@ -1835,10 +1841,10 @@ void ColorTextView::RebuildSliceBitmap()
     _sliceDipW                   = clampedWidth; // Store clamped width, not original
     _sliceDipH                   = hDip;
     auto msg                     = std::format("RebuildSliceBitmap: Cached slice {:.2f}x{:.2f} dip at line {} {}\n",
-                           static_cast<double>(_sliceDipW),
-                           static_cast<double>(_sliceDipH),
-                           static_cast<int>(_sliceFirstLine),
-                           isClipped ? "(clipped with overflow indicator)" : "");
+                                               static_cast<double>(_sliceDipW),
+                                               static_cast<double>(_sliceDipH),
+                                               static_cast<int>(_sliceFirstLine),
+                                               isClipped ? "(clipped with overflow indicator)" : "");
     OutputDebugStringA(msg.c_str());
 }
 
@@ -2212,15 +2218,14 @@ void ColorTextView::DrawScene(bool clearTarget)
         // HOT PATH: Simple direct rendering of tail layout
         // No slice coverage checks, no fallbacks, no complexity
         wil::com_ptr<IDWriteTextLayout> layoutToUse = _tailLayout;
-        const size_t firstLine                      = _tailFirstLine;
 
 #ifdef _DEBUG
         static int autoScrollFrameCounter = 0;
         const bool shouldLog              = (++autoScrollFrameCounter % 60 == 0); // Log every 60th frame
         if (shouldLog)
         {
-            auto msg =
-                std::format("DrawScene: AUTO_SCROLL mode, tailFirstLine={}, scrollY={:.1f}, docLines={}\n", firstLine, _scrollY, _document.TotalLineCount());
+            auto msg = std::format(
+                "DrawScene: AUTO_SCROLL mode, tailFirstLine={}, scrollY={:.1f}, docLines={}\n", _tailFirstLine, _scrollY, _document.TotalLineCount());
             OutputDebugStringA(msg.c_str());
         }
 #endif
@@ -2234,8 +2239,7 @@ void ColorTextView::DrawScene(bool clearTarget)
             layoutToUse->GetMetrics(&metrics);
 
             // Calculate how many display rows this layout occupies
-            const float lineHeight         = GetLineHeight();
-            const UINT32 layoutDisplayRows = static_cast<UINT32>(std::ceil(metrics.height / lineHeight));
+            const float lineHeight = GetLineHeight();
 
             // Position layout so its bottom aligns with document bottom
             const UINT32 totalDisplayRows = _document.TotalDisplayRows();
@@ -2245,13 +2249,14 @@ void ColorTextView::DrawScene(bool clearTarget)
 #ifdef _DEBUG
             if (shouldLog)
             {
-                const UINT32 firstDisplayRow = _document.DisplayRowForSource(firstLine);
-                const float contentHeight    = _contentHeight;
-                const float viewTop          = _scrollY - _padding;
-                const float viewBottom       = viewTop + _clientDipH;
+                const UINT32 firstDisplayRow   = _document.DisplayRowForSource(_tailFirstLine);
+                const UINT32 layoutDisplayRows = static_cast<UINT32>(std::ceil(metrics.height / lineHeight));
+                const float contentHeight      = _contentHeight;
+                const float viewTop            = _scrollY - _padding;
+                const float viewBottom         = viewTop + _clientDipH;
                 auto msg = std::format("  AUTO_SCROLL: firstLine={}, firstDisplayRow={}, totalDisplayRows={}, layoutDisplayRows={}, layoutHeight={:.1f}, "
                                        "yBase={:.1f}, documentBottom={:.1f}, contentHeight={:.1f}, viewTop={:.1f}, viewBottom={:.1f}\n",
-                                       firstLine,
+                                       _tailFirstLine,
                                        firstDisplayRow,
                                        totalDisplayRows,
                                        layoutDisplayRows,
@@ -2378,7 +2383,6 @@ void ColorTextView::DrawScene(bool clearTarget)
                 // TRACER_CTX(L"TextLayout");
                 //  Cache layout pointer to prevent re-entrant painting issues
                 wil::com_ptr<IDWriteTextLayout> layoutToUse = _textLayout;
-                const size_t firstLine                      = _sliceFirstLine;
 
 #ifdef _DEBUG
                 {
@@ -2395,7 +2399,7 @@ void ColorTextView::DrawScene(bool clearTarget)
                                     "sliceRange=[{},{}], scrollY={:.1f}, ty={:.1f}, layoutSize={:.1f}x{:.1f}, lineCount={}\n",
                                     static_cast<const void*>(layoutToUse.get()),
                                     (layoutToUse ? 1 : 0),
-                                    firstLine,
+                                    _sliceFirstLine,
                                     _sliceFirstDisplayRow,
                                     yBase,
                                     lineHeight,
@@ -2445,7 +2449,7 @@ void ColorTextView::OnPaint()
     // scope for BeginPaint/EndPaint
     {
         wil::unique_hdc_paint paint_dc = wil::BeginPaint(_hWnd, &ps);
-#ifdef _DEBUG
+#if RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED
         static const LOGBRUSH logBrush{BS_SOLID, RGB(255, 0, 0), 0};
         static wil::unique_hbrush redBrush(CreateBrushIndirect(&logBrush));
         if (redBrush)
@@ -2571,7 +2575,7 @@ void ColorTextView::OnPaint()
             {
                 _d2dCtx->FillRectangle(dirtyDip, bgBrush);
             }
-#ifdef _DEBUG
+#if RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED
             if (_d2dCtx)
             {
                 if (! _debugDirtyRectFillBrush)
@@ -2598,7 +2602,7 @@ void ColorTextView::OnPaint()
 
             _d2dCtx->PopAxisAlignedClip();
 
-#ifdef _DEBUG
+#if RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED
             if (_d2dCtx)
             {
                 if (! _debugDirtyRectBrush)
@@ -2983,10 +2987,10 @@ void ColorTextView::RebuildTailLayout()
             const UINT32 firstDisplayRow  = _document.DisplayRowForSource(_tailFirstLine);
             const UINT32 totalDisplayRows = _document.TotalDisplayRows();
             auto msg                      = std::format("  FILTERED: visibleInTail={}, firstDisplayRow={}, totalDisplayRows={}, textLength={}\n",
-                                   filteredTail.visibleCount,
-                                   firstDisplayRow,
-                                   totalDisplayRows,
-                                   tailText.length());
+                                                        filteredTail.visibleCount,
+                                                        firstDisplayRow,
+                                                        totalDisplayRows,
+                                                        tailText.length());
             OutputDebugStringA(msg.c_str());
         }
 #endif
@@ -3073,6 +3077,7 @@ void ColorTextView::ApplyColoringToTailLayout()
                     case Debug::InfoParam::Error: color = _theme.metaError; break;
                     case Debug::InfoParam::Warning: color = _theme.metaWarning; break;
                     case Debug::InfoParam::Info: color = _theme.metaInfo; break;
+                    case Debug::InfoParam::Perf: color = _theme.metaPerf; break;
                     case Debug::InfoParam::Debug: color = _theme.metaDebug; break;
                     case Debug::InfoParam::Text:
                     case Debug::InfoParam::All:
@@ -3110,6 +3115,7 @@ void ColorTextView::ApplyColoringToTailLayout()
                 case Debug::InfoParam::Error: color = _theme.metaError; break;
                 case Debug::InfoParam::Warning: color = _theme.metaWarning; break;
                 case Debug::InfoParam::Info: color = _theme.metaInfo; break;
+                case Debug::InfoParam::Perf: color = _theme.metaPerf; break;
                 case Debug::InfoParam::Debug: color = _theme.metaDebug; break;
                 case Debug::InfoParam::Text:
                 case Debug::InfoParam::All: // Not a message type, use default
@@ -3484,6 +3490,7 @@ inline D2D1_COLOR_F MetaColorForType(const ColorTextView::Theme& th, Debug::Info
         case Debug::InfoParam::Type::Error: return th.metaError;
         case Debug::InfoParam::Type::Warning: return th.metaWarning;
         case Debug::InfoParam::Type::Info: return th.metaInfo;
+        case Debug::InfoParam::Type::Perf: return th.metaPerf;
         case Debug::InfoParam::Type::Debug: return th.metaDebug;
         case Debug::InfoParam::Type::Text:
         case Debug::InfoParam::Type::All: // Not a message type, use default
@@ -4194,7 +4201,7 @@ RECT ColorTextView::GetCaretRectPx() const
     if (! localPos)
         return rc;
 
-    _textLayout->HitTestTextPosition(*localPos, FALSE, &cx, &cy, &m);
+    _textLayout->HitTestTextPosition(localPos.value(), FALSE, &cx, &cy, &m);
     const float left   = (tx + cx) * dpiScale;
     const float top    = (ty + cy) * dpiScale;
     const float right  = (tx + cx + 2.f) * dpiScale;
@@ -4364,8 +4371,6 @@ void ColorTextView::DrawLineNumbers()
     const auto& visibleLines  = _document.VisibleLines();
     const size_t clampedStart = std::min(startVisIdx, visibleLines.size() - 1);
     const size_t clampedEnd   = std::min(endVisIdx, visibleLines.size() - 1);
-    const size_t startLineAll = visibleLines[clampedStart].sourceIndex;
-    const size_t endLineAll   = visibleLines[clampedEnd].sourceIndex;
 
 #ifdef _DEBUG
     static int debugCounter = 0;
@@ -4375,13 +4380,13 @@ void ColorTextView::DrawLineNumbers()
         const size_t visibleCount = _document.VisibleLineCount();
         const size_t totalCount   = _document.TotalLineCount();
         auto msg                  = std::format("DrawLineNumbers: topRow={}, bottomRow={}, startLine={}, endLine={}, visible={}/{}, mask=0x{:02X}\n",
-                               clampedTopRow,
-                               clampedBottomRow,
-                               startLineAll,
-                               endLineAll,
-                               visibleCount,
-                               totalCount,
-                               filterMask);
+                                                clampedTopRow,
+                                                clampedBottomRow,
+                                                visibleLines[clampedStart].sourceIndex,
+                                                visibleLines[clampedEnd].sourceIndex,
+                                                visibleCount,
+                                                totalCount,
+                                                filterMask);
         OutputDebugStringA(msg.c_str());
     }
 #endif
@@ -4454,7 +4459,7 @@ void ColorTextView::DrawCaret()
     if (! localPos)
         return;
 
-    _textLayout->HitTestTextPosition(*localPos, FALSE, &cx, &cy, &m);
+    _textLayout->HitTestTextPosition(localPos.value(), FALSE, &cx, &cy, &m);
     const float yBase = static_cast<float>(_sliceFirstDisplayRow) * GetLineHeight();
     const float tx    = _padding + (_displayLineNumbers ? _gutterDipW : 0.f) - _scrollX;
     const float ty    = _padding - _scrollY;
@@ -4887,7 +4892,7 @@ void ColorTextView::EnsureFindBar()
     if (! parent)
         parent = _hWnd;
 
-    const HINSTANCE instance = (HINSTANCE)GetWindowLongPtr(_hWnd, GWLP_HINSTANCE);
+    const HINSTANCE instance = reinterpret_cast<HINSTANCE>(GetWindowLongPtr(_hWnd, GWLP_HINSTANCE));
 
     _hFindPanel.reset(CreateWindowEx(0, L"STATIC", nullptr, WS_CHILD | WS_CLIPSIBLINGS | WS_CLIPCHILDREN, 0, 0, 0, 0, parent, nullptr, instance, nullptr));
     if (! _hFindPanel)
@@ -4932,9 +4937,9 @@ void ColorTextView::EnsureFindBar()
                                     nullptr));
     if (_hFindFrom)
     {
-        SendMessageW(_hFindFrom.get(), CB_ADDSTRING, 0, (LPARAM)(findCurrent.empty() ? L"Current Position" : findCurrent.c_str()));
-        SendMessageW(_hFindFrom.get(), CB_ADDSTRING, 0, (LPARAM)(findTop.empty() ? L"Top" : findTop.c_str()));
-        SendMessageW(_hFindFrom.get(), CB_ADDSTRING, 0, (LPARAM)(findBottom.empty() ? L"Bottom" : findBottom.c_str()));
+        SendMessageW(_hFindFrom.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(findCurrent.empty() ? L"Current Position" : findCurrent.c_str()));
+        SendMessageW(_hFindFrom.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(findTop.empty() ? L"Top" : findTop.c_str()));
+        SendMessageW(_hFindFrom.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(findBottom.empty() ? L"Bottom" : findBottom.c_str()));
         SendMessageW(_hFindFrom.get(), CB_SETCURSEL, static_cast<WPARAM>(_findStartMode), 0);
     }
 
@@ -5798,7 +5803,7 @@ void ColorTextView::MoveCaretToLine(UINT32 targetLine, bool extendSelection)
     {
         DWRITE_HIT_TEST_METRICS currentMetrics{};
         FLOAT currentY = 0.f;
-        layout->HitTestTextPosition(*localCaret, FALSE, &currentX, &currentY, &currentMetrics);
+        layout->HitTestTextPosition(localCaret.value(), FALSE, &currentX, &currentY, &currentMetrics);
     }
 
     // Compute target Y by hit-testing the start of the target line to get its layout row Y.
@@ -5834,7 +5839,7 @@ void ColorTextView::MoveCaretToLine(UINT32 targetLine, bool extendSelection)
     FLOAT startX = 0.f;
     FLOAT startY = 0.f;
     DWRITE_HIT_TEST_METRICS startMetrics{};
-    layout->HitTestTextPosition(*targetLineLocalStart, FALSE, &startX, &startY, &startMetrics);
+    layout->HitTestTextPosition(targetLineLocalStart.value(), FALSE, &startX, &startY, &startMetrics);
     const float lineH   = GetLineHeight();
     const FLOAT targetY = startY + (lineH * 0.5f);
 

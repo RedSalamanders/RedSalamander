@@ -20,6 +20,7 @@
 #include <new>
 #include <string_view>
 #include <thread>
+#include <unordered_map>
 
 #include <commctrl.h>
 #include <commdlg.h>
@@ -44,6 +45,7 @@
 #pragma comment(lib, "dwrite")
 #pragma comment(lib, "uxtheme")
 
+#include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
 #include "WindowMessages.h"
 
@@ -51,51 +53,653 @@
 
 extern HINSTANCE g_hInstance;
 
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::ComboBox;
+using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::MakeDefaultThemePalette;
+using RedSalamander::DxUi::MakeThemePaletteFromViewerTheme;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::TextField;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::WindowHost;
+namespace Typography = RedSalamander::DxUi::Typography;
+
+enum class ParsedDiffLineKind : uint8_t
+{
+    Context,
+    Added,
+    Removed,
+    NoNewlineMarker,
+};
+
+struct ParsedDiffLine
+{
+    ParsedDiffLineKind kind = ParsedDiffLineKind::Context;
+    std::wstring text;
+    uint32_t oldLine = 0u;
+    uint32_t newLine = 0u;
+    bool hasOldLine  = false;
+    bool hasNewLine  = false;
+};
+
+struct ParsedDiffHunk
+{
+    std::wstring header;
+    uint32_t oldStart = 0u;
+    uint32_t newStart = 0u;
+    std::vector<ParsedDiffLine> lines;
+};
+
+struct ParsedDiffFileSection
+{
+    std::vector<std::wstring> metadataLines;
+    std::wstring leftDisplayPath;
+    std::wstring rightDisplayPath;
+    std::vector<ParsedDiffHunk> hunks;
+};
+
+struct ParsedDiffDocument
+{
+    std::vector<ParsedDiffFileSection> files;
+};
+
+struct ResolvedDiffTextFile
+{
+    bool available                 = false;
+    bool existsInCurrentFileSystem = false;
+    std::wstring reason;
+    std::filesystem::path resolvedPath;
+    wil::com_ptr<IFileReader> reader;
+    ViewerText::FileEncoding encoding = ViewerText::FileEncoding::Unknown;
+    UINT codePage                     = CP_ACP;
+    uint64_t fileSize                 = 0u;
+    size_t bomBytes                   = 0u;
+    uint64_t nextReadOffset           = 0u;
+    uint64_t bytesRead                = 0u;
+    bool loadComplete                 = false;
+    bool hadDecodeFailure             = false;
+    std::vector<uint8_t> pendingBytes;
+    std::vector<std::wstring> lines;
+};
+
+struct DiffReferenceCache
+{
+    std::unordered_map<std::wstring, std::shared_ptr<ResolvedDiffTextFile>> files;
+};
+
 namespace
 {
-constexpr int kHeaderHeightDip           = 28;
-constexpr int kStatusHeightDip           = 22;
-constexpr float kWatermarkAngleDegrees   = -22.0f;
-constexpr float kWatermarkFontSizeDip    = 56.0f;
-constexpr float kWatermarkAngleRadians   = kWatermarkAngleDegrees * 0.01745329252f;
-constexpr uint64_t kMaxHexLoadBytes      = 128u * 1024u * 1024u; // 128 MiB
-constexpr UINT kAsyncOpenCompleteMessage = WndMsg::kViewerTextAsyncOpenComplete;
-constexpr UINT kLoadingDelayMs           = 500u;
-constexpr UINT kLoadingAnimIntervalMs    = 16u;
-constexpr float kLoadingSpinnerDegPerSec = 90.0f;
+constexpr int kHeaderHeightDip                        = 28;
+constexpr int kStatusHeightDip                        = 22;
+constexpr float kWatermarkAngleDegrees                = -22.0f;
+constexpr float kWatermarkFontSizeDip                 = 56.0f;
+constexpr uint64_t kMaxHexLoadBytes                   = 128u * 1024u * 1024u; // 128 MiB
+constexpr UINT kAsyncOpenCompleteMessage              = WndMsg::kViewerTextAsyncOpenComplete;
+constexpr UINT kLoadingDelayMs                        = 500u;
+constexpr UINT kLoadingAnimIntervalMs                 = 16u;
+constexpr float kLoadingSpinnerDegPerSec              = 90.0f;
+constexpr uint64_t kMaxFullyBufferedParsedDiffBytes   = 16u * 1024u * 1024u;
+constexpr uint64_t kMaxBoundedStreamedDiffIndexBytes  = 64u * 1024u * 1024u;
+constexpr uint64_t kMaxReferencedDiffFileBytes        = 2u * 1024u * 1024u;
+constexpr size_t kReferencedDiffProbeBytes            = 16u * 1024u;
+constexpr size_t kReferencedDiffChunkBytes            = 16u * 1024u;
+constexpr size_t kMaxBoundedStreamedDiffSections      = 4096u;
+constexpr size_t kViewerComboPopupMaxVisibleItems     = 8u;
+constexpr wchar_t kFileComboHostOriginalWndProcProp[] = L"RS.ViewerText.FileComboHostOriginalWndProc";
+constexpr wchar_t kFileComboHostStateProp[]           = L"RS.ViewerText.FileComboHostState";
+constexpr wchar_t kViewerTextPromptWindowClassName[]  = L"RedSalamander.ViewerText.Prompt";
 
-static const int kViewerTextModuleAnchor = 0;
-
-constexpr UINT_PTR kFileComboEscCloseSubclassId = 1u;
-
-LRESULT CALLBACK
-FileComboEscCloseSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, [[maybe_unused]] UINT_PTR subclassId, [[maybe_unused]] DWORD_PTR refData) noexcept
+[[nodiscard]] size_t CountOwnerDrawMenuItems(HMENU menu) noexcept
 {
-    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
+    if (! menu)
     {
-        const bool dropped = SendMessageW(hwnd, CB_GETDROPPEDSTATE, 0, 0) != 0;
-        if (! dropped)
+        return 0u;
+    }
+
+    const int itemCount = GetMenuItemCount(menu);
+    if (itemCount <= 0)
+    {
+        return 0u;
+    }
+
+    size_t ownerDrawCount = 0u;
+    for (UINT position = 0; position < static_cast<UINT>(itemCount); ++position)
+    {
+        MENUITEMINFOW itemInfo{};
+        itemInfo.cbSize = sizeof(itemInfo);
+        itemInfo.fMask  = MIIM_FTYPE | MIIM_SUBMENU;
+        if (GetMenuItemInfoW(menu, position, TRUE, &itemInfo) == 0)
         {
-            const HWND root = GetAncestor(hwnd, GA_ROOT);
-            if (root)
-            {
-                PostMessageW(root, WM_CLOSE, 0, 0);
-            }
-            return 0;
+            continue;
+        }
+
+        if ((itemInfo.fType & MFT_OWNERDRAW) != 0)
+        {
+            ++ownerDrawCount;
+        }
+
+        if (itemInfo.hSubMenu)
+        {
+            ownerDrawCount += CountOwnerDrawMenuItems(itemInfo.hSubMenu);
         }
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return ownerDrawCount;
 }
 
-void InstallFileComboEscClose(HWND combo) noexcept
+static const int kViewerTextModuleAnchor = 0;
+
+struct DiffVariantBuildResult
 {
-    if (! combo)
+    ViewerText::DiffTextVariant variant;
+};
+
+[[nodiscard]] const char* DiffDefaultLayoutToConfigString(ViewerText::DiffDefaultLayout value) noexcept;
+[[nodiscard]] const char* DiffContextModeToConfigString(ViewerText::DiffContextMode value) noexcept;
+[[nodiscard]] const char* DiffAutoOpenModeToConfigString(ViewerText::DiffAutoOpenMode value) noexcept;
+[[nodiscard]] ViewerText::DiffDefaultLayout ParseDiffDefaultLayout(std::string_view value) noexcept;
+[[nodiscard]] ViewerText::DiffContextMode ParseDiffContextMode(std::string_view value) noexcept;
+[[nodiscard]] ViewerText::DiffAutoOpenMode ParseDiffAutoOpenMode(std::string_view value) noexcept;
+[[nodiscard]] bool HasDiffLikeExtension(const std::filesystem::path& path) noexcept;
+[[nodiscard]] bool LooksLikeUnifiedDiffText(std::wstring_view text) noexcept;
+[[nodiscard]] bool ParseUnifiedDiffDocument(std::wstring_view text, ParsedDiffDocument& outDocument) noexcept;
+[[nodiscard]] std::wstring TrimDiffPathLabel(std::wstring_view text);
+[[nodiscard]] std::wstring StripGitDiffPrefix(std::wstring_view path);
+[[nodiscard]] std::wstring FormatDiffSummaryPath(std::wstring_view path);
+[[nodiscard]] std::wstring BuildDiffSectionNavigationLabel(const ParsedDiffFileSection& file, size_t fileIndex);
+[[nodiscard]] std::wstring BuildDiffSectionNavigationLabel(std::wstring_view leftPath, std::wstring_view rightPath, size_t fileIndex);
+[[nodiscard]] std::wstring BuildDiffHunkNavigationLabel(const ParsedDiffFileSection& file,
+                                                        size_t fileIndex,
+                                                        const ParsedDiffHunk& hunk,
+                                                        size_t hunkIndexInFile);
+[[nodiscard]] std::wstring BuildHiddenContextBannerLabel(uint32_t oldHiddenLineCount, uint32_t newHiddenLineCount);
+[[nodiscard]] bool ParseUnifiedRange(std::wstring_view text, uint32_t& startOut, uint32_t& countOut, size_t& consumedChars) noexcept;
+[[nodiscard]] bool ParseUnifiedHunkHeader(std::wstring_view line, uint32_t& oldStartOut, uint32_t& newStartOut) noexcept;
+[[nodiscard]] std::wstring DecodeBytesToWide(std::span<const uint8_t> bytes, ViewerText::FileEncoding encoding, UINT codePage, HRESULT& hrOut) noexcept;
+[[nodiscard]] std::wstring DecodeBytesToWide(const std::vector<uint8_t>& bytes, ViewerText::FileEncoding encoding, UINT codePage, HRESULT& hrOut) noexcept;
+[[nodiscard]] bool BuildBoundedStreamedDiffSectionIndex(IFileReader* reader,
+                                                        uint64_t fileSize,
+                                                        uint64_t streamSkipBytes,
+                                                        ViewerText::FileEncoding encoding,
+                                                        UINT codePage,
+                                                        std::vector<ViewerText::StreamedDiffSectionEntry>& outSections) noexcept;
+[[nodiscard]] std::shared_ptr<ResolvedDiffTextFile> OpenReferencedDiffTextFile(IFileSystemIO* fileIo, const std::filesystem::path& path) noexcept;
+[[nodiscard]] std::shared_ptr<ResolvedDiffTextFile> ResolveDiffReference(
+    IFileSystemIO* fileIo,
+    const std::filesystem::path& diffPath,
+    std::wstring_view label,
+    UINT missingFileMessageId,
+    std::unordered_map<std::wstring, std::shared_ptr<ResolvedDiffTextFile>>& cache) noexcept;
+[[nodiscard]] bool EnsureReferencedDiffLinesLoaded(ResolvedDiffTextFile& file, uint32_t lineNumberInclusive) noexcept;
+[[nodiscard]] std::wstring_view TryGetReferencedDiffLine(const ResolvedDiffTextFile& file, uint32_t lineNumber) noexcept;
+[[nodiscard]] DiffVariantBuildResult BuildInlineDiffText(const ParsedDiffDocument& document,
+                                                         ViewerText::DiffContextMode contextMode,
+                                                         const std::filesystem::path& diffPath,
+                                                         IFileSystemIO* fileIo,
+                                                         DiffReferenceCache* referenceCache                                = nullptr,
+                                                         std::optional<size_t> hydratedSectionIndex                        = std::nullopt,
+                                                         std::optional<std::pair<uint32_t, uint32_t>> hydratedLogicalRange = std::nullopt) noexcept;
+[[nodiscard]] DiffVariantBuildResult BuildSideBySideDiffText(const ParsedDiffDocument& document,
+                                                             ViewerText::DiffContextMode contextMode,
+                                                             const std::filesystem::path& diffPath,
+                                                             IFileSystemIO* fileIo,
+                                                             DiffReferenceCache* referenceCache                                = nullptr,
+                                                             std::optional<size_t> hydratedSectionIndex                        = std::nullopt,
+                                                             std::optional<std::pair<uint32_t, uint32_t>> hydratedLogicalRange = std::nullopt) noexcept;
+[[nodiscard]] bool ShouldHydrateExpandedDiffSection(ViewerText::DiffContextMode contextMode,
+                                                    std::optional<size_t> hydratedSectionIndex,
+                                                    size_t fileIndex) noexcept;
+[[nodiscard]] bool ShouldHydrateExpandedDiffLogicalLine(std::optional<std::pair<uint32_t, uint32_t>> hydratedLogicalRange, uint32_t logicalLine) noexcept;
+[[nodiscard]] std::wstring MaskDeferredDiffText(std::wstring_view text);
+void AppendLine(std::wstring& target, std::wstring_view line);
+[[nodiscard]] size_t DecimalDigits(uint32_t value) noexcept;
+
+[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept;
+[[nodiscard]] bool InstallWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, WNDPROC hookWndProc) noexcept;
+[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+void UnhookFileComboHostWindow(HWND hwnd) noexcept;
+[[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept;
+[[nodiscard]] int ComputeWindowComboPopupHeightPx(size_t itemCount, UINT dpi) noexcept;
+
+[[nodiscard]] HWND NormalizeOwnerWindow(HWND ownerWindow) noexcept
+{
+    if (! ownerWindow || IsWindow(ownerWindow) == FALSE)
+    {
+        return nullptr;
+    }
+
+    return GetAncestor(ownerWindow, GA_ROOT);
+}
+
+void CenterWindowOnOwner(HWND window, HWND owner) noexcept
+{
+    if (! window || IsWindow(window) == FALSE || ! owner || IsWindow(owner) == FALSE)
     {
         return;
     }
 
-    static_cast<void>(SetWindowSubclass(combo, FileComboEscCloseSubclassProc, kFileComboEscCloseSubclassId, 0));
+    RECT ownerRect{};
+    RECT windowRect{};
+    if (GetWindowRect(owner, &ownerRect) == FALSE || GetWindowRect(window, &windowRect) == FALSE)
+    {
+        return;
+    }
+
+    const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
+    const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
+    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+[[nodiscard]] int ScaleForDpi(const UINT dpi, const int dip) noexcept
+{
+    return MulDiv(dip, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
+}
+
+class ViewerTextPromptWindow final
+{
+public:
+    ViewerTextPromptWindow(const ViewerTextPromptWindow&)            = delete;
+    ViewerTextPromptWindow& operator=(const ViewerTextPromptWindow&) = delete;
+    ViewerTextPromptWindow(ViewerTextPromptWindow&&)                 = delete;
+    ViewerTextPromptWindow& operator=(ViewerTextPromptWindow&&)      = delete;
+
+    ViewerTextPromptWindow(HWND ownerWindow, const ViewerTheme* theme, std::wstring caption, std::wstring label, std::wstring initialText) noexcept
+        : _ownerWindow(NormalizeOwnerWindow(ownerWindow)),
+          _caption(std::move(caption)),
+          _labelText(std::move(label)),
+          _initialText(std::move(initialText))
+    {
+        if (theme)
+        {
+            _theme    = *theme;
+            _hasTheme = true;
+        }
+    }
+
+    [[nodiscard]] HRESULT ShowModal(std::wstring& textOut) noexcept
+    {
+        const HRESULT classHr = EnsureWindowClass();
+        if (FAILED(classHr))
+        {
+            return classHr;
+        }
+
+        const DWORD style        = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        const DWORD exStyle      = WS_EX_DLGMODALFRAME;
+        const UINT dpi           = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
+        const int clientWidthPx  = ScaleForDpi(dpi, 420);
+        const int clientHeightPx = ScaleForDpi(dpi, 164);
+
+        RECT bounds{0, 0, clientWidthPx, clientHeightPx};
+        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        const bool restoreOwnerEnabled = _ownerWindow && IsWindow(_ownerWindow) != FALSE && IsWindowEnabled(_ownerWindow) != FALSE;
+        if (restoreOwnerEnabled)
+        {
+            EnableWindow(_ownerWindow, FALSE);
+        }
+        const auto restoreOwner = wil::scope_exit([this, restoreOwnerEnabled] noexcept
+        {
+            if (restoreOwnerEnabled && _ownerWindow && IsWindow(_ownerWindow) != FALSE)
+            {
+                EnableWindow(_ownerWindow, TRUE);
+                SetActiveWindow(_ownerWindow);
+            }
+        });
+
+        const HWND hwnd = CreateWindowExW(exStyle,
+                                          kViewerTextPromptWindowClassName,
+                                          _caption.c_str(),
+                                          style,
+                                          CW_USEDEFAULT,
+                                          CW_USEDEFAULT,
+                                          bounds.right - bounds.left,
+                                          bounds.bottom - bounds.top,
+                                          _ownerWindow,
+                                          nullptr,
+                                          g_hInstance,
+                                          this);
+        if (! hwnd)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        if (! _hWnd)
+        {
+            _hWnd.reset(hwnd);
+        }
+
+        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+        UpdateWindow(_hWnd.get());
+        SetForegroundWindow(_hWnd.get());
+
+        MSG msg{};
+        while (! _done)
+        {
+            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
+            if (getMessageResult == -1)
+            {
+                return HRESULT_FROM_WIN32(GetLastError());
+            }
+            if (getMessageResult == 0)
+            {
+                _done   = true;
+                _result = S_FALSE;
+                PostQuitMessage(static_cast<int>(msg.wParam));
+                break;
+            }
+
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+
+        if (_result == S_OK)
+        {
+            textOut = _acceptedText;
+        }
+
+        return _result;
+    }
+
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        if (message == WM_NCCREATE)
+        {
+            auto* cs   = reinterpret_cast<CREATESTRUCTW*>(lParam);
+            auto* self = static_cast<ViewerTextPromptWindow*>(cs ? cs->lpCreateParams : nullptr);
+            if (! self)
+            {
+                return FALSE;
+            }
+
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            if (! self->_hWnd)
+            {
+                self->_hWnd.reset(hwnd);
+            }
+        }
+
+        auto* self = reinterpret_cast<ViewerTextPromptWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        if (! self)
+        {
+            return DefWindowProcW(hwnd, message, wParam, lParam);
+        }
+
+        bool handled     = false;
+        LRESULT dxResult = 0;
+        if (message != WM_CREATE)
+        {
+            dxResult = self->_dxHost.HandleMessage(hwnd, message, wParam, lParam, handled);
+        }
+        if (handled)
+        {
+            if (message == WM_SIZE || message == WM_DPICHANGED)
+            {
+                self->Layout();
+            }
+            else if (message == WM_NCDESTROY)
+            {
+                if (self->_hWnd.get() == hwnd)
+                {
+                    static_cast<void>(self->_hWnd.release());
+                }
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                if (! self->_done)
+                {
+                    self->_done   = true;
+                    self->_result = S_FALSE;
+                }
+            }
+            return dxResult;
+        }
+
+        switch (message)
+        {
+            case WM_CREATE: return self->OnCreate(hwnd) ? 0 : -1;
+            case WM_SIZE: self->Layout(); return 0;
+            case WM_DPICHANGED:
+            {
+                const auto* suggested = reinterpret_cast<const RECT*>(lParam);
+                if (suggested)
+                {
+                    SetWindowPos(hwnd,
+                                 nullptr,
+                                 suggested->left,
+                                 suggested->top,
+                                 suggested->right - suggested->left,
+                                 suggested->bottom - suggested->top,
+                                 SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                self->Layout();
+                return 0;
+            }
+            case WM_ERASEBKGND:
+            {
+                HDC hdc = reinterpret_cast<HDC>(wParam);
+                if (! hdc)
+                {
+                    return 1;
+                }
+
+                RECT client{};
+                GetClientRect(hwnd, &client);
+                const COLORREF bg       = self->_hasTheme ? ColorRefFromArgb(self->_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
+                const COLORREF oldColor = SetDCBrushColor(hdc, bg);
+                FillRect(hdc, &client, reinterpret_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
+                SetDCBrushColor(hdc, oldColor);
+                return 1;
+            }
+            case WM_CLOSE: self->Cancel(); return 0;
+        }
+
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+private:
+    [[nodiscard]] static HRESULT EnsureWindowClass() noexcept
+    {
+        static ATOM atom = 0;
+        if (atom != 0)
+        {
+            return S_OK;
+        }
+
+        WNDCLASSEXW wc{};
+        wc.cbSize        = sizeof(wc);
+        wc.lpfnWndProc   = ViewerTextPromptWindow::WndProc;
+        wc.hInstance     = g_hInstance;
+        wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kViewerTextPromptWindowClassName;
+        wc.style         = CS_DBLCLKS;
+
+        atom = RegisterClassExW(&wc);
+        return atom != 0 ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    [[nodiscard]] bool OnCreate(HWND hwnd) noexcept
+    {
+        if (! _dxHost.Attach(hwnd))
+        {
+            return false;
+        }
+
+        BuildUi();
+        ApplyTheme();
+        Layout();
+        _dxHost.SetFocusControl(_field);
+        return true;
+    }
+
+    void BuildUi()
+    {
+        if (_root != nullptr)
+        {
+            return;
+        }
+
+        _rootStorage = std::make_unique<Panel>();
+        _root        = _rootStorage.get();
+
+        _label = _root->AddChild<Label>(_labelText);
+        _label->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        _field = _root->AddChild<TextField>(_initialText);
+
+        _okButton = _root->AddChild<Button>(LoadStringResource(g_hInstance, IDS_VIEWERTEXT_BTN_OK));
+        _okButton->SetPrimary(true);
+        _okButton->SetOnClick([this] { Confirm(); });
+
+        _cancelButton = _root->AddChild<Button>(LoadStringResource(g_hInstance, IDS_VIEWERTEXT_BTN_CANCEL));
+        _cancelButton->SetOnClick([this] { Cancel(); });
+
+        _dxHost.SetRoot(std::move(_rootStorage));
+        _dxHost.SetDefaultButton(_okButton);
+        _dxHost.SetCancelButton(_cancelButton);
+    }
+
+    void ApplyTheme() noexcept
+    {
+        _palette = _hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false);
+        _dxHost.SetTheme(_palette);
+    }
+
+    void Layout() noexcept
+    {
+        if (! _root)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
+        _root->SetBounds(client);
+
+        constexpr float kMarginDip       = 16.0f;
+        constexpr float kLabelHeightDip  = 22.0f;
+        constexpr float kFieldHeightDip  = 32.0f;
+        constexpr float kButtonHeightDip = 34.0f;
+        constexpr float kButtonWidthDip  = 96.0f;
+        constexpr float kGapDip          = 8.0f;
+
+        const float left  = client.left + kMarginDip;
+        const float right = std::max(left, client.right - kMarginDip);
+        float y           = client.top + kMarginDip;
+
+        if (_label)
+        {
+            _label->SetBounds(D2D1::RectF(left, y, right, y + kLabelHeightDip));
+        }
+        y += kLabelHeightDip + kGapDip;
+
+        if (_field)
+        {
+            _field->SetBounds(D2D1::RectF(left, y, right, y + kFieldHeightDip));
+        }
+
+        const float buttonsTop = std::max(y + kFieldHeightDip + kGapDip, client.bottom - kMarginDip - kButtonHeightDip);
+        const float cancelLeft = std::max(left, right - kButtonWidthDip);
+        const float okLeft     = std::max(left, cancelLeft - kGapDip - kButtonWidthDip);
+
+        if (_okButton)
+        {
+            _okButton->SetBounds(D2D1::RectF(okLeft, buttonsTop, okLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+        }
+        if (_cancelButton)
+        {
+            _cancelButton->SetBounds(D2D1::RectF(cancelLeft, buttonsTop, cancelLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+        }
+    }
+
+    void Confirm() noexcept
+    {
+        _acceptedText = _field ? _field->GetText() : std::wstring{};
+        _result       = S_OK;
+        _done         = true;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            DestroyWindow(_hWnd.get());
+        }
+    }
+
+    void Cancel() noexcept
+    {
+        _result = S_FALSE;
+        _done   = true;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            DestroyWindow(_hWnd.get());
+        }
+    }
+
+    HWND _ownerWindow = nullptr;
+    ViewerTheme _theme{};
+    bool _hasTheme = false;
+    ThemePalette _palette{};
+    std::wstring _caption;
+    std::wstring _labelText;
+    std::wstring _initialText;
+    std::wstring _acceptedText;
+    wil::unique_hwnd _hWnd;
+    WindowHost _dxHost;
+    std::unique_ptr<Panel> _rootStorage;
+    Panel* _root          = nullptr;
+    Label* _label         = nullptr;
+    TextField* _field     = nullptr;
+    Button* _okButton     = nullptr;
+    Button* _cancelButton = nullptr;
+    bool _done            = false;
+    HRESULT _result       = E_ABORT;
+};
+
+[[nodiscard]] HRESULT ShowViewerTextPromptDialog(
+    HWND ownerWindow, const ViewerTheme* theme, const UINT captionId, const UINT labelId, std::wstring initialText, std::wstring& resultText) noexcept
+{
+    ViewerTextPromptWindow window(
+        ownerWindow, theme, LoadStringResource(g_hInstance, captionId), LoadStringResource(g_hInstance, labelId), std::move(initialText));
+    return window.ShowModal(resultText);
+}
+
+LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    auto* self = reinterpret_cast<ViewerText*>(GetPropW(hwnd, kFileComboHostStateProp));
+    if (! self)
+    {
+        return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
+    }
+
+    if (msg == WM_NCDESTROY)
+    {
+        const auto originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp);
+        RemovePropW(hwnd, kFileComboHostStateProp);
+        RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+
+        bool handled = false;
+        static_cast<void>(self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled));
+
+        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    bool handled           = false;
+    const LRESULT dxResult = self->HandleFileComboHostMessage(hwnd, msg, wp, lp, handled);
+    if (handled)
+    {
+        return dxResult;
+    }
+
+    if (msg == WM_KEYDOWN && wp == VK_ESCAPE)
+    {
+        const HWND root = GetAncestor(hwnd, GA_ROOT);
+        if (root)
+        {
+            PostMessageW(root, WM_CLOSE, 0, 0);
+            return 0;
+        }
+    }
+
+    return CallStoredWndProc(hwnd, kFileComboHostOriginalWndProcProp, msg, wp, lp);
 }
 
 int HexNibbleValue(wchar_t ch) noexcept
@@ -215,9 +819,58 @@ constexpr char kViewerTextSchemaJson[] = R"json({
                 { "value": "0", "label": "Off" },
                 { "value": "1", "label": "On" }
             ]
+        },
+        {
+            "key": "hexByteColorMode",
+            "type": "option",
+            "label": "Hex byte colors",
+            "description": "Color-code visible bytes in hex mode to make binary patterns easier to spot.",
+            "default": "leadingNibble",
+            "options": [
+                { "value": "leadingNibble", "label": "Leading nibble (00/FF emphasized)" },
+                { "value": "off", "label": "Off" }
+            ]
+        },
+        {
+            "key": "diffDefaultLayout",
+            "type": "option",
+            "label": "Default diff layout",
+            "description": "Choose how parsed diff documents open by default.",
+            "default": "sideBySide",
+            "options": [
+                { "value": "sideBySide", "label": "Side by side" },
+                { "value": "inline", "label": "Inline" }
+            ]
+        },
+        {
+            "key": "diffContextMode",
+            "type": "option",
+            "label": "Unchanged text",
+            "description": "Show only changed hunks or expand unchanged text when the referenced files are available.",
+            "default": "hunksOnly",
+            "options": [
+                { "value": "hunksOnly", "label": "Changed hunks only" },
+                { "value": "fullFileWhenAvailable", "label": "Show unchanged text when referenced files are available" }
+            ]
+        },
+        {
+            "key": "diffAutoOpenMode",
+            "type": "option",
+            "label": "Open recognized diff files as",
+            "description": "Choose whether .diff, .patch, and .rej files open as parsed diffs or raw text by default.",
+            "default": "parsed",
+            "options": [
+                { "value": "parsed", "label": "Parsed diff" },
+                { "value": "rawText", "label": "Raw text" }
+            ]
         }
     ]
 })json";
+
+[[nodiscard]] const char* GetViewerTextStaticConfigurationSchemaImpl() noexcept
+{
+    return kViewerTextSchemaJson;
+}
 
 bool IsValidUtf8(const uint8_t* data, size_t size) noexcept
 {
@@ -552,6 +1205,2179 @@ void BuildTextLineIndex(std::wstring_view text, std::vector<uint32_t>& outLineSt
     }
 }
 
+const char* DiffDefaultLayoutToConfigString(ViewerText::DiffDefaultLayout value) noexcept
+{
+    return value == ViewerText::DiffDefaultLayout::Inline ? "inline" : "sideBySide";
+}
+
+const char* DiffContextModeToConfigString(ViewerText::DiffContextMode value) noexcept
+{
+    return value == ViewerText::DiffContextMode::FullFileWhenAvailable ? "fullFileWhenAvailable" : "hunksOnly";
+}
+
+const char* DiffAutoOpenModeToConfigString(ViewerText::DiffAutoOpenMode value) noexcept
+{
+    return value == ViewerText::DiffAutoOpenMode::RawText ? "rawText" : "parsed";
+}
+
+ViewerText::DiffDefaultLayout ParseDiffDefaultLayout(std::string_view value) noexcept
+{
+    return value == "inline" ? ViewerText::DiffDefaultLayout::Inline : ViewerText::DiffDefaultLayout::SideBySide;
+}
+
+ViewerText::DiffContextMode ParseDiffContextMode(std::string_view value) noexcept
+{
+    return value == "fullFileWhenAvailable" ? ViewerText::DiffContextMode::FullFileWhenAvailable : ViewerText::DiffContextMode::HunksOnly;
+}
+
+ViewerText::DiffAutoOpenMode ParseDiffAutoOpenMode(std::string_view value) noexcept
+{
+    return value == "rawText" ? ViewerText::DiffAutoOpenMode::RawText : ViewerText::DiffAutoOpenMode::Parsed;
+}
+
+bool HasDiffLikeExtension(const std::filesystem::path& path) noexcept
+{
+    std::wstring extension = path.extension().wstring();
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](wchar_t ch) noexcept { return static_cast<wchar_t>(std::towlower(ch)); });
+    return extension == L".diff" || extension == L".patch" || extension == L".rej";
+}
+
+bool LooksLikeUnifiedDiffText(std::wstring_view text) noexcept
+{
+    size_t inspectedLines = 0u;
+    size_t start          = 0u;
+    while (start <= text.size() && inspectedLines < 32u)
+    {
+        size_t end = start;
+        while (end < text.size() && text[end] != L'\r' && text[end] != L'\n')
+        {
+            end += 1u;
+        }
+
+        const std::wstring_view line = text.substr(start, end - start);
+        if (line.starts_with(L"diff --git ") || line.starts_with(L"@@ -") || line.starts_with(L"--- ") || line.starts_with(L"+++ "))
+        {
+            return true;
+        }
+
+        if (end >= text.size())
+        {
+            break;
+        }
+
+        if (text[end] == L'\r' && (end + 1u) < text.size() && text[end + 1u] == L'\n')
+        {
+            start = end + 2u;
+        }
+        else
+        {
+            start = end + 1u;
+        }
+        inspectedLines += 1u;
+    }
+
+    return false;
+}
+
+void AppendLine(std::wstring& target, std::wstring_view line)
+{
+    target.append(line);
+    target.push_back(L'\n');
+}
+
+size_t DecimalDigits(uint32_t value) noexcept
+{
+    size_t digits = 1u;
+    while (value >= 10u)
+    {
+        value /= 10u;
+        digits += 1u;
+    }
+    return digits;
+}
+
+std::wstring TrimDiffPathLabel(std::wstring_view text)
+{
+    while (! text.empty() && std::iswspace(text.front()))
+    {
+        text.remove_prefix(1u);
+    }
+
+    const size_t tabPos = text.find(L'\t');
+    if (tabPos != std::wstring_view::npos)
+    {
+        text = text.substr(0, tabPos);
+    }
+
+    while (! text.empty() && std::iswspace(text.back()))
+    {
+        text.remove_suffix(1u);
+    }
+
+    if (text.size() >= 2u && text.front() == L'"' && text.back() == L'"')
+    {
+        text.remove_prefix(1u);
+        text.remove_suffix(1u);
+    }
+
+    return std::wstring(text);
+}
+
+std::wstring StripGitDiffPrefix(std::wstring_view path)
+{
+    if (path.size() > 2u && (path[0] == L'a' || path[0] == L'b') && path[1] == L'/')
+    {
+        return std::wstring(path.substr(2u));
+    }
+
+    return std::wstring(path);
+}
+
+std::wstring FormatDiffSummaryPath(std::wstring_view path)
+{
+    std::wstring normalized = StripGitDiffPrefix(TrimDiffPathLabel(path));
+    if (normalized.empty())
+    {
+        normalized = L"(unknown)";
+    }
+    return normalized;
+}
+
+std::wstring BuildDiffSectionNavigationLabel(const ParsedDiffFileSection& file, size_t fileIndex)
+{
+    return BuildDiffSectionNavigationLabel(file.leftDisplayPath, file.rightDisplayPath, fileIndex);
+}
+
+std::wstring BuildDiffSectionNavigationLabel(std::wstring_view leftPathLabel, std::wstring_view rightPathLabel, size_t fileIndex)
+{
+    const std::wstring leftPath  = FormatDiffSummaryPath(leftPathLabel);
+    const std::wstring rightPath = FormatDiffSummaryPath(rightPathLabel);
+    if (leftPathLabel == L"/dev/null")
+    {
+        return std::format(L"add: {}", rightPath);
+    }
+    if (rightPathLabel == L"/dev/null")
+    {
+        return std::format(L"delete: {}", leftPath);
+    }
+    if (! leftPath.empty() && ! rightPath.empty() && leftPath != rightPath)
+    {
+        return std::format(L"{} -> {}", leftPath, rightPath);
+    }
+    if (! rightPath.empty())
+    {
+        return rightPath;
+    }
+    if (! leftPath.empty())
+    {
+        return leftPath;
+    }
+
+    return std::format(L"section {}", fileIndex + 1u);
+}
+
+std::wstring BuildDiffHunkNavigationLabel(const ParsedDiffFileSection& file, size_t fileIndex, const ParsedDiffHunk& hunk, size_t hunkIndexInFile)
+{
+    return std::format(L"{} / hunk {} {}", BuildDiffSectionNavigationLabel(file, fileIndex), hunkIndexInFile + 1u, hunk.header);
+}
+
+std::wstring BuildHiddenContextBannerLabel(uint32_t oldHiddenLineCount, uint32_t newHiddenLineCount)
+{
+    const auto lineLabel = [](uint32_t count) noexcept -> const wchar_t* { return count == 1u ? L"line" : L"lines"; };
+
+    if (oldHiddenLineCount == 0u)
+    {
+        return std::format(L"Show {} hidden new {}", newHiddenLineCount, lineLabel(newHiddenLineCount));
+    }
+    if (newHiddenLineCount == 0u)
+    {
+        return std::format(L"Show {} hidden old {}", oldHiddenLineCount, lineLabel(oldHiddenLineCount));
+    }
+    if (oldHiddenLineCount == newHiddenLineCount)
+    {
+        return std::format(L"Show {} hidden {}", oldHiddenLineCount, lineLabel(oldHiddenLineCount));
+    }
+
+    return std::format(
+        L"Show {} hidden old {} and {} hidden new {}", oldHiddenLineCount, lineLabel(oldHiddenLineCount), newHiddenLineCount, lineLabel(newHiddenLineCount));
+}
+
+bool ParseUnifiedRange(std::wstring_view text, uint32_t& startOut, uint32_t& countOut, size_t& consumedChars) noexcept
+{
+    consumedChars = 0u;
+    if (text.empty() || ! std::iswdigit(text.front()))
+    {
+        return false;
+    }
+
+    uint64_t start = 0u;
+    size_t pos     = 0u;
+    while (pos < text.size() && std::iswdigit(text[pos]))
+    {
+        start = (start * 10u) + static_cast<uint64_t>(text[pos] - L'0');
+        pos += 1u;
+    }
+
+    uint64_t count = 1u;
+    if (pos < text.size() && text[pos] == L',')
+    {
+        pos += 1u;
+        if (pos >= text.size() || ! std::iswdigit(text[pos]))
+        {
+            return false;
+        }
+
+        count = 0u;
+        while (pos < text.size() && std::iswdigit(text[pos]))
+        {
+            count = (count * 10u) + static_cast<uint64_t>(text[pos] - L'0');
+            pos += 1u;
+        }
+    }
+
+    startOut      = start > static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) ? std::numeric_limits<uint32_t>::max() : static_cast<uint32_t>(start);
+    countOut      = count > static_cast<uint64_t>(std::numeric_limits<uint32_t>::max()) ? std::numeric_limits<uint32_t>::max() : static_cast<uint32_t>(count);
+    consumedChars = pos;
+    return true;
+}
+
+bool ParseUnifiedHunkHeader(std::wstring_view line, uint32_t& oldStartOut, uint32_t& newStartOut) noexcept
+{
+    if (! line.starts_with(L"@@ -"))
+    {
+        return false;
+    }
+
+    size_t pos        = 4u;
+    uint32_t oldCount = 0u;
+    uint32_t newCount = 0u;
+    size_t consumed   = 0u;
+    if (! ParseUnifiedRange(line.substr(pos), oldStartOut, oldCount, consumed))
+    {
+        return false;
+    }
+    pos += consumed;
+
+    if (pos >= line.size() || line[pos] != L' ')
+    {
+        return false;
+    }
+    pos += 1u;
+
+    if (pos >= line.size() || line[pos] != L'+')
+    {
+        return false;
+    }
+    pos += 1u;
+
+    if (! ParseUnifiedRange(line.substr(pos), newStartOut, newCount, consumed))
+    {
+        return false;
+    }
+    pos += consumed;
+
+    return line.find(L"@@", pos) != std::wstring_view::npos;
+}
+
+std::wstring DecodeBytesToWide(std::span<const uint8_t> bytes, ViewerText::FileEncoding encoding, UINT codePage, HRESULT& hrOut) noexcept
+{
+    hrOut = S_OK;
+    std::wstring text;
+
+    if (bytes.empty())
+    {
+        return text;
+    }
+
+    if (encoding == ViewerText::FileEncoding::Utf16LE || encoding == ViewerText::FileEncoding::Utf16BE)
+    {
+        if ((bytes.size() % 2u) != 0u)
+        {
+            hrOut = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            return {};
+        }
+
+        text.resize(bytes.size() / 2u);
+        memcpy(text.data(), bytes.data(), bytes.size_bytes());
+        if (encoding == ViewerText::FileEncoding::Utf16BE)
+        {
+            for (wchar_t& ch : text)
+            {
+                const uint16_t value = static_cast<uint16_t>(ch);
+                ch                   = static_cast<wchar_t>((value >> 8) | (value << 8));
+            }
+        }
+        return text;
+    }
+
+    if (encoding == ViewerText::FileEncoding::Utf32LE || encoding == ViewerText::FileEncoding::Utf32BE)
+    {
+        if ((bytes.size() % 4u) != 0u)
+        {
+            hrOut = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            return {};
+        }
+
+        const bool bigEndian = (encoding == ViewerText::FileEncoding::Utf32BE);
+        for (size_t i = 0; i + 3u < bytes.size(); i += 4u)
+        {
+            uint32_t cp = 0u;
+            if (bigEndian)
+            {
+                cp = (static_cast<uint32_t>(bytes[i]) << 24) | (static_cast<uint32_t>(bytes[i + 1u]) << 16) | (static_cast<uint32_t>(bytes[i + 2u]) << 8) |
+                     static_cast<uint32_t>(bytes[i + 3u]);
+            }
+            else
+            {
+                cp = static_cast<uint32_t>(bytes[i]) | (static_cast<uint32_t>(bytes[i + 1u]) << 8) | (static_cast<uint32_t>(bytes[i + 2u]) << 16) |
+                     (static_cast<uint32_t>(bytes[i + 3u]) << 24);
+            }
+
+            if (cp <= 0xFFFFu)
+            {
+                text.push_back(static_cast<wchar_t>(cp));
+            }
+            else if (cp <= 0x10FFFFu)
+            {
+                const uint32_t value = cp - 0x10000u;
+                text.push_back(static_cast<wchar_t>(0xD800u + (value >> 10)));
+                text.push_back(static_cast<wchar_t>(0xDC00u + (value & 0x3FFu)));
+            }
+            else
+            {
+                text.push_back(static_cast<wchar_t>(0xFFFDu));
+            }
+        }
+
+        return text;
+    }
+
+    if (bytes.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        hrOut = HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
+        return {};
+    }
+
+    const int srcLen       = static_cast<int>(bytes.size());
+    const int requiredWide = MultiByteToWideChar(codePage, 0, reinterpret_cast<LPCCH>(bytes.data()), srcLen, nullptr, 0);
+    if (requiredWide <= 0)
+    {
+        const DWORD lastError = GetLastError();
+        hrOut                 = HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_INVALID_DATA);
+        return {};
+    }
+
+    text.resize(static_cast<size_t>(requiredWide));
+    const int written = MultiByteToWideChar(codePage, 0, reinterpret_cast<LPCCH>(bytes.data()), srcLen, text.data(), requiredWide);
+    if (written <= 0)
+    {
+        const DWORD lastError = GetLastError();
+        hrOut                 = HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_INVALID_DATA);
+        return {};
+    }
+
+    text.resize(static_cast<size_t>(written));
+    return text;
+}
+
+std::wstring DecodeBytesToWide(const std::vector<uint8_t>& bytes, ViewerText::FileEncoding encoding, UINT codePage, HRESULT& hrOut) noexcept
+{
+    return DecodeBytesToWide(std::span<const uint8_t>(bytes.data(), bytes.size()), encoding, codePage, hrOut);
+}
+
+bool BuildBoundedStreamedDiffSectionIndex(IFileReader* reader,
+                                          uint64_t fileSize,
+                                          uint64_t streamSkipBytes,
+                                          ViewerText::FileEncoding encoding,
+                                          UINT codePage,
+                                          std::vector<ViewerText::StreamedDiffSectionEntry>& outSections) noexcept
+{
+    outSections.clear();
+
+    if (! reader || fileSize <= streamSkipBytes)
+    {
+        return false;
+    }
+
+    const uint64_t availableBytes = fileSize - streamSkipBytes;
+    if (availableBytes == 0u || availableBytes > kMaxBoundedStreamedDiffIndexBytes ||
+        availableBytes > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+    {
+        return false;
+    }
+
+    if (streamSkipBytes > static_cast<uint64_t>(std::numeric_limits<__int64>::max()))
+    {
+        return false;
+    }
+
+    uint64_t newPosition = 0u;
+    const HRESULT seekHr = reader->Seek(static_cast<__int64>(streamSkipBytes), FILE_BEGIN, &newPosition);
+    if (FAILED(seekHr))
+    {
+        return false;
+    }
+
+    std::vector<uint8_t> bytes(static_cast<size_t>(availableBytes));
+    size_t totalRead = 0u;
+    while (totalRead < bytes.size())
+    {
+        const unsigned long want = static_cast<unsigned long>(std::min<size_t>(bytes.size() - totalRead, 256u * 1024u));
+        unsigned long read       = 0u;
+        const HRESULT readHr     = reader->Read(bytes.data() + totalRead, want, &read);
+        if (FAILED(readHr))
+        {
+            return false;
+        }
+        if (read == 0u)
+        {
+            break;
+        }
+
+        totalRead += static_cast<size_t>(read);
+    }
+    bytes.resize(totalRead);
+    if (bytes.empty())
+    {
+        return false;
+    }
+
+    struct IndexedSectionState
+    {
+        uint64_t startOffset = 0u;
+        std::wstring leftPath;
+        std::wstring rightPath;
+        bool sawHunk = false;
+    };
+
+    std::vector<IndexedSectionState> indexedSections;
+    indexedSections.reserve(16u);
+
+    IndexedSectionState* currentSection = nullptr;
+    auto startSection                   = [&](uint64_t startOffset) noexcept -> IndexedSectionState&
+    {
+        indexedSections.push_back(IndexedSectionState{startOffset});
+        currentSection = &indexedSections.back();
+        return *currentSection;
+    };
+    auto ensureSection = [&](uint64_t startOffset) noexcept -> IndexedSectionState&
+    {
+        if (! currentSection)
+        {
+            return startSection(startOffset);
+        }
+        return *currentSection;
+    };
+
+    auto processLine = [&](uint64_t lineStartOffset, std::wstring_view line) noexcept -> bool
+    {
+        if (line.empty() && ! currentSection)
+        {
+            return true;
+        }
+
+        const bool startsDiffGit      = line.starts_with(L"diff --git ");
+        const bool startsIndex        = line.starts_with(L"Index: ");
+        const bool startsLegacyHeader = line.starts_with(L"--- ") && currentSection && currentSection->sawHunk;
+        if (startsDiffGit || startsIndex || startsLegacyHeader)
+        {
+            startSection(lineStartOffset);
+            if (indexedSections.size() >= kMaxBoundedStreamedDiffSections)
+            {
+                return false;
+            }
+        }
+
+        if (line.starts_with(L"@@ -"))
+        {
+            ensureSection(lineStartOffset).sawHunk = true;
+        }
+
+        if (line.starts_with(L"--- "))
+        {
+            ensureSection(lineStartOffset).leftPath = TrimDiffPathLabel(line.substr(4u));
+        }
+        else if (line.starts_with(L"+++ "))
+        {
+            ensureSection(lineStartOffset).rightPath = TrimDiffPathLabel(line.substr(4u));
+        }
+
+        return indexedSections.size() < kMaxBoundedStreamedDiffSections;
+    };
+
+    auto decodeAndProcessLine = [&](uint64_t lineStartOffset, size_t startIndex, size_t endIndex) noexcept -> bool
+    {
+        if (endIndex < startIndex || endIndex > bytes.size())
+        {
+            return false;
+        }
+
+        HRESULT decodeHr = S_OK;
+        const std::wstring line =
+            DecodeBytesToWide(std::span<const uint8_t>(bytes.data() + static_cast<ptrdiff_t>(startIndex), endIndex - startIndex), encoding, codePage, decodeHr);
+        return SUCCEEDED(decodeHr) && processLine(lineStartOffset, line);
+    };
+
+    if (encoding == ViewerText::FileEncoding::Utf16LE || encoding == ViewerText::FileEncoding::Utf16BE)
+    {
+        if ((bytes.size() % 2u) != 0u)
+        {
+            bytes.pop_back();
+        }
+
+        const auto readUnit = [&](size_t index) noexcept -> uint16_t
+        {
+            const uint16_t lo = static_cast<uint16_t>(bytes[index]);
+            const uint16_t hi = static_cast<uint16_t>(bytes[index + 1u]);
+            if (encoding == ViewerText::FileEncoding::Utf16BE)
+            {
+                return static_cast<uint16_t>((lo << 8) | hi);
+            }
+            return static_cast<uint16_t>(lo | (hi << 8));
+        };
+
+        size_t lineStart = 0u;
+        while (lineStart + 1u < bytes.size())
+        {
+            size_t lineEnd = lineStart;
+            while (lineEnd + 1u < bytes.size())
+            {
+                const uint16_t ch = readUnit(lineEnd);
+                if (ch == L'\r' || ch == L'\n')
+                {
+                    break;
+                }
+                lineEnd += 2u;
+            }
+
+            if (! decodeAndProcessLine(streamSkipBytes + static_cast<uint64_t>(lineStart), lineStart, lineEnd))
+            {
+                break;
+            }
+
+            if (lineEnd + 1u >= bytes.size())
+            {
+                break;
+            }
+
+            size_t nextStart = lineEnd + 2u;
+            if (readUnit(lineEnd) == L'\r' && nextStart + 1u < bytes.size() && readUnit(nextStart) == L'\n')
+            {
+                nextStart += 2u;
+            }
+            lineStart = nextStart;
+        }
+    }
+    else if (encoding == ViewerText::FileEncoding::Utf32LE || encoding == ViewerText::FileEncoding::Utf32BE)
+    {
+        const size_t remainder = bytes.size() % 4u;
+        if (remainder != 0u)
+        {
+            bytes.resize(bytes.size() - remainder);
+        }
+
+        const auto readUnit = [&](size_t index) noexcept -> uint32_t
+        {
+            const uint32_t b0 = static_cast<uint32_t>(bytes[index]);
+            const uint32_t b1 = static_cast<uint32_t>(bytes[index + 1u]);
+            const uint32_t b2 = static_cast<uint32_t>(bytes[index + 2u]);
+            const uint32_t b3 = static_cast<uint32_t>(bytes[index + 3u]);
+            if (encoding == ViewerText::FileEncoding::Utf32BE)
+            {
+                return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
+            }
+            return b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+        };
+
+        size_t lineStart = 0u;
+        while (lineStart + 3u < bytes.size())
+        {
+            size_t lineEnd = lineStart;
+            while (lineEnd + 3u < bytes.size())
+            {
+                const uint32_t ch = readUnit(lineEnd);
+                if (ch == L'\r' || ch == L'\n')
+                {
+                    break;
+                }
+                lineEnd += 4u;
+            }
+
+            if (! decodeAndProcessLine(streamSkipBytes + static_cast<uint64_t>(lineStart), lineStart, lineEnd))
+            {
+                break;
+            }
+
+            if (lineEnd + 3u >= bytes.size())
+            {
+                break;
+            }
+
+            size_t nextStart = lineEnd + 4u;
+            if (readUnit(lineEnd) == L'\r' && nextStart + 3u < bytes.size() && readUnit(nextStart) == L'\n')
+            {
+                nextStart += 4u;
+            }
+            lineStart = nextStart;
+        }
+    }
+    else
+    {
+        size_t lineStart = 0u;
+        while (lineStart < bytes.size())
+        {
+            size_t lineEnd = lineStart;
+            while (lineEnd < bytes.size() && bytes[lineEnd] != 0x0Du && bytes[lineEnd] != 0x0Au)
+            {
+                lineEnd += 1u;
+            }
+
+            if (! decodeAndProcessLine(streamSkipBytes + static_cast<uint64_t>(lineStart), lineStart, lineEnd))
+            {
+                break;
+            }
+
+            if (lineEnd >= bytes.size())
+            {
+                break;
+            }
+
+            size_t nextStart = lineEnd + 1u;
+            if (bytes[lineEnd] == 0x0Du && nextStart < bytes.size() && bytes[nextStart] == 0x0Au)
+            {
+                nextStart += 1u;
+            }
+            lineStart = nextStart;
+        }
+    }
+
+    if (indexedSections.empty())
+    {
+        return false;
+    }
+
+    outSections.reserve(indexedSections.size());
+    for (size_t i = 0; i < indexedSections.size(); ++i)
+    {
+        const IndexedSectionState& section = indexedSections[i];
+        outSections.push_back(
+            ViewerText::StreamedDiffSectionEntry{BuildDiffSectionNavigationLabel(section.leftPath, section.rightPath, i), section.startOffset});
+    }
+
+    return ! outSections.empty();
+}
+
+[[nodiscard]] bool TryFindReferencedDiffLineBreak(std::span<const uint8_t> bytes,
+                                                  ViewerText::FileEncoding encoding,
+                                                  size_t& contentBytesOut,
+                                                  size_t& consumedBytesOut) noexcept
+{
+    if (bytes.empty())
+    {
+        return false;
+    }
+
+    switch (encoding)
+    {
+        case ViewerText::FileEncoding::Utf16LE:
+        case ViewerText::FileEncoding::Utf16BE:
+        {
+            const size_t usable = bytes.size() - (bytes.size() % 2u);
+            for (size_t i = 0u; i + 1u < usable; i += 2u)
+            {
+                const uint16_t codeUnit = (encoding == ViewerText::FileEncoding::Utf16LE)
+                                              ? static_cast<uint16_t>(bytes[i] | (static_cast<uint16_t>(bytes[i + 1u]) << 8u))
+                                              : static_cast<uint16_t>((static_cast<uint16_t>(bytes[i]) << 8u) | bytes[i + 1u]);
+                if (codeUnit != L'\r' && codeUnit != L'\n')
+                {
+                    continue;
+                }
+
+                contentBytesOut  = i;
+                consumedBytesOut = i + 2u;
+                if (codeUnit == L'\r' && (i + 3u) < usable)
+                {
+                    const uint16_t nextCodeUnit = (encoding == ViewerText::FileEncoding::Utf16LE)
+                                                      ? static_cast<uint16_t>(bytes[i + 2u] | (static_cast<uint16_t>(bytes[i + 3u]) << 8u))
+                                                      : static_cast<uint16_t>((static_cast<uint16_t>(bytes[i + 2u]) << 8u) | bytes[i + 3u]);
+                    if (nextCodeUnit == L'\n')
+                    {
+                        consumedBytesOut += 2u;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+        case ViewerText::FileEncoding::Utf32LE:
+        case ViewerText::FileEncoding::Utf32BE:
+        {
+            const size_t usable = bytes.size() - (bytes.size() % 4u);
+            for (size_t i = 0u; i + 3u < usable; i += 4u)
+            {
+                const uint32_t codePoint = (encoding == ViewerText::FileEncoding::Utf32LE)
+                                               ? static_cast<uint32_t>(bytes[i]) | (static_cast<uint32_t>(bytes[i + 1u]) << 8u) |
+                                                     (static_cast<uint32_t>(bytes[i + 2u]) << 16u) | (static_cast<uint32_t>(bytes[i + 3u]) << 24u)
+                                               : (static_cast<uint32_t>(bytes[i]) << 24u) | (static_cast<uint32_t>(bytes[i + 1u]) << 16u) |
+                                                     (static_cast<uint32_t>(bytes[i + 2u]) << 8u) | static_cast<uint32_t>(bytes[i + 3u]);
+                if (codePoint != L'\r' && codePoint != L'\n')
+                {
+                    continue;
+                }
+
+                contentBytesOut  = i;
+                consumedBytesOut = i + 4u;
+                if (codePoint == L'\r' && (i + 7u) < usable)
+                {
+                    const uint32_t nextCodePoint = (encoding == ViewerText::FileEncoding::Utf32LE)
+                                                       ? static_cast<uint32_t>(bytes[i + 4u]) | (static_cast<uint32_t>(bytes[i + 5u]) << 8u) |
+                                                             (static_cast<uint32_t>(bytes[i + 6u]) << 16u) | (static_cast<uint32_t>(bytes[i + 7u]) << 24u)
+                                                       : (static_cast<uint32_t>(bytes[i + 4u]) << 24u) | (static_cast<uint32_t>(bytes[i + 5u]) << 16u) |
+                                                             (static_cast<uint32_t>(bytes[i + 6u]) << 8u) | static_cast<uint32_t>(bytes[i + 7u]);
+                    if (nextCodePoint == L'\n')
+                    {
+                        consumedBytesOut += 4u;
+                    }
+                }
+                return true;
+            }
+            return false;
+        }
+        case ViewerText::FileEncoding::Utf8: break;
+        case ViewerText::FileEncoding::Unknown:
+        default: break;
+    }
+
+    for (size_t i = 0u; i < bytes.size(); ++i)
+    {
+        const uint8_t value = bytes[i];
+        if (value != '\r' && value != '\n')
+        {
+            continue;
+        }
+
+        contentBytesOut  = i;
+        consumedBytesOut = i + 1u;
+        if (value == '\r' && (i + 1u) < bytes.size() && bytes[i + 1u] == '\n')
+        {
+            consumedBytesOut += 1u;
+        }
+        return true;
+    }
+
+    return false;
+}
+
+[[nodiscard]] bool DecodeReferencedDiffLineBytes(ResolvedDiffTextFile& file, std::span<const uint8_t> bytes) noexcept
+{
+    HRESULT decodeHr  = S_OK;
+    std::wstring line = DecodeBytesToWide(bytes, file.encoding, file.codePage, decodeHr);
+    if (FAILED(decodeHr))
+    {
+        file.available        = false;
+        file.hadDecodeFailure = true;
+        file.reason           = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY);
+        file.reader.reset();
+        file.pendingBytes.clear();
+        return false;
+    }
+
+    file.lines.push_back(std::move(line));
+    return true;
+}
+
+[[nodiscard]] bool ProcessReferencedDiffPendingBytes(ResolvedDiffTextFile& file, bool finalChunk) noexcept
+{
+    if (! file.available)
+    {
+        return false;
+    }
+
+    size_t contentBytes  = 0u;
+    size_t consumedBytes = 0u;
+    while (TryFindReferencedDiffLineBreak(file.pendingBytes, file.encoding, contentBytes, consumedBytes))
+    {
+        if (! DecodeReferencedDiffLineBytes(file, std::span<const uint8_t>(file.pendingBytes.data(), contentBytes)))
+        {
+            return false;
+        }
+
+        file.pendingBytes.erase(file.pendingBytes.begin(), file.pendingBytes.begin() + static_cast<ptrdiff_t>(consumedBytes));
+    }
+
+    if (! finalChunk)
+    {
+        return true;
+    }
+
+    if (! file.pendingBytes.empty())
+    {
+        const bool hasIncompleteCodeUnit = ((file.encoding == ViewerText::FileEncoding::Utf16LE || file.encoding == ViewerText::FileEncoding::Utf16BE) &&
+                                            ((file.pendingBytes.size() % 2u) != 0u)) ||
+                                           ((file.encoding == ViewerText::FileEncoding::Utf32LE || file.encoding == ViewerText::FileEncoding::Utf32BE) &&
+                                            ((file.pendingBytes.size() % 4u) != 0u));
+        if (hasIncompleteCodeUnit)
+        {
+            file.available        = false;
+            file.hadDecodeFailure = true;
+            file.reason           = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY);
+            file.reader.reset();
+            file.pendingBytes.clear();
+            return false;
+        }
+
+        if (! DecodeReferencedDiffLineBytes(file, file.pendingBytes))
+        {
+            return false;
+        }
+        file.pendingBytes.clear();
+    }
+
+    file.loadComplete = true;
+    file.reader.reset();
+    return true;
+}
+
+std::shared_ptr<ResolvedDiffTextFile> OpenReferencedDiffTextFile(IFileSystemIO* fileIo, const std::filesystem::path& path) noexcept
+{
+    auto result = std::make_shared<ResolvedDiffTextFile>();
+    if (! result)
+    {
+        return {};
+    }
+
+    if (! fileIo || path.empty())
+    {
+        result->reason = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE);
+        return result;
+    }
+
+    wil::com_ptr<IFileReader> reader;
+    const HRESULT openHr = fileIo->CreateFileReader(path.c_str(), reader.put());
+    if (FAILED(openHr) || ! reader)
+    {
+        result->reason = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE);
+        return result;
+    }
+
+    result->existsInCurrentFileSystem = true;
+    result->resolvedPath              = path;
+
+    uint64_t fileSize    = 0u;
+    const HRESULT sizeHr = reader->GetSize(&fileSize);
+    if (FAILED(sizeHr))
+    {
+        result->reason = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE);
+        return result;
+    }
+
+    if (fileSize > kMaxReferencedDiffFileBytes || fileSize > static_cast<uint64_t>(std::numeric_limits<size_t>::max()))
+    {
+        result->reason = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE);
+        return result;
+    }
+
+    const size_t probeSize = static_cast<size_t>(std::min<uint64_t>(fileSize, kReferencedDiffProbeBytes));
+    std::vector<uint8_t> probe(probeSize);
+    if (! probe.empty())
+    {
+        unsigned long probeRead = 0u;
+        const HRESULT readHr    = reader->Read(probe.data(), static_cast<unsigned long>(probe.size()), &probeRead);
+        if (FAILED(readHr))
+        {
+            result->reason = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE);
+            return result;
+        }
+        probe.resize(static_cast<size_t>(probeRead));
+        result->bytesRead = probeRead;
+    }
+
+    ViewerText::FileEncoding encoding = ViewerText::FileEncoding::Unknown;
+    size_t skipBytes                  = 0u;
+    if (probe.size() >= 4u && probe[0] == 0xFFu && probe[1] == 0xFEu && probe[2] == 0x00u && probe[3] == 0x00u)
+    {
+        encoding  = ViewerText::FileEncoding::Utf32LE;
+        skipBytes = 4u;
+    }
+    else if (probe.size() >= 4u && probe[0] == 0x00u && probe[1] == 0x00u && probe[2] == 0xFEu && probe[3] == 0xFFu)
+    {
+        encoding  = ViewerText::FileEncoding::Utf32BE;
+        skipBytes = 4u;
+    }
+    else if (probe.size() >= 3u && probe[0] == 0xEFu && probe[1] == 0xBBu && probe[2] == 0xBFu)
+    {
+        encoding  = ViewerText::FileEncoding::Utf8;
+        skipBytes = 3u;
+    }
+    else if (probe.size() >= 2u && probe[0] == 0xFFu && probe[1] == 0xFEu)
+    {
+        encoding  = ViewerText::FileEncoding::Utf16LE;
+        skipBytes = 2u;
+    }
+    else if (probe.size() >= 2u && probe[0] == 0xFEu && probe[1] == 0xFFu)
+    {
+        encoding  = ViewerText::FileEncoding::Utf16BE;
+        skipBytes = 2u;
+    }
+
+    const size_t payloadStart = std::min(skipBytes, probe.size());
+    const uint8_t* textBytes  = payloadStart < probe.size() ? (probe.data() + payloadStart) : nullptr;
+    const size_t textSize     = probe.size() - payloadStart;
+    if (encoding == ViewerText::FileEncoding::Unknown && textSize > 0u && LooksLikeBinaryData(textBytes, textSize))
+    {
+        result->reason = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY);
+        return result;
+    }
+
+    UINT codePage = GetACP();
+    if (encoding == ViewerText::FileEncoding::Utf8 || (encoding == ViewerText::FileEncoding::Unknown && textSize > 0u && IsValidUtf8(textBytes, textSize)))
+    {
+        codePage = CP_UTF8;
+    }
+
+    result->available = true;
+    result->reason.clear();
+    result->reader         = std::move(reader);
+    result->encoding       = encoding;
+    result->codePage       = codePage;
+    result->fileSize       = fileSize;
+    result->bomBytes       = skipBytes;
+    result->nextReadOffset = probe.size();
+    if (payloadStart < probe.size())
+    {
+        result->pendingBytes.insert(result->pendingBytes.end(), probe.begin() + static_cast<ptrdiff_t>(payloadStart), probe.end());
+    }
+    if (result->nextReadOffset >= result->fileSize && result->pendingBytes.empty())
+    {
+        result->loadComplete = true;
+        result->reader.reset();
+    }
+
+    return result;
+}
+
+bool EnsureReferencedDiffLinesLoaded(ResolvedDiffTextFile& file, uint32_t lineNumberInclusive) noexcept
+{
+    if (! file.available)
+    {
+        return false;
+    }
+
+    if (lineNumberInclusive == 0u || file.lines.size() >= static_cast<size_t>(lineNumberInclusive) || file.loadComplete)
+    {
+        return true;
+    }
+
+    while (file.lines.size() < static_cast<size_t>(lineNumberInclusive) && ! file.loadComplete)
+    {
+        if (! ProcessReferencedDiffPendingBytes(file, false))
+        {
+            return false;
+        }
+        if (file.lines.size() >= static_cast<size_t>(lineNumberInclusive) || file.loadComplete)
+        {
+            break;
+        }
+
+        if (! file.reader)
+        {
+            file.loadComplete = true;
+            break;
+        }
+
+        const uint64_t remaining = (file.fileSize > file.nextReadOffset) ? (file.fileSize - file.nextReadOffset) : 0u;
+        if (remaining == 0u)
+        {
+            return ProcessReferencedDiffPendingBytes(file, true);
+        }
+
+        const size_t wantSize     = static_cast<size_t>(std::min<uint64_t>(remaining, kReferencedDiffChunkBytes));
+        const size_t previousSize = file.pendingBytes.size();
+        file.pendingBytes.resize(previousSize + wantSize);
+
+        unsigned long read   = 0u;
+        const HRESULT readHr = file.reader->Read(file.pendingBytes.data() + previousSize, static_cast<unsigned long>(wantSize), &read);
+        if (FAILED(readHr))
+        {
+            file.available        = false;
+            file.hadDecodeFailure = true;
+            file.reason           = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE);
+            file.pendingBytes.resize(previousSize);
+            file.reader.reset();
+            return false;
+        }
+
+        file.pendingBytes.resize(previousSize + static_cast<size_t>(read));
+        file.nextReadOffset += read;
+        file.bytesRead += read;
+        if (read == 0u)
+        {
+            return ProcessReferencedDiffPendingBytes(file, true);
+        }
+    }
+
+    if (file.lines.size() < static_cast<size_t>(lineNumberInclusive) && ! file.loadComplete && file.nextReadOffset >= file.fileSize)
+    {
+        return ProcessReferencedDiffPendingBytes(file, true);
+    }
+
+    return true;
+}
+
+std::wstring_view TryGetReferencedDiffLine(const ResolvedDiffTextFile& file, uint32_t lineNumber) noexcept
+{
+    if (lineNumber == 0u)
+    {
+        return {};
+    }
+
+    const size_t index = static_cast<size_t>(lineNumber - 1u);
+    if (index >= file.lines.size())
+    {
+        return {};
+    }
+
+    return file.lines[index];
+}
+
+std::shared_ptr<ResolvedDiffTextFile> ResolveDiffReference(IFileSystemIO* fileIo,
+                                                           const std::filesystem::path& diffPath,
+                                                           std::wstring_view label,
+                                                           UINT missingFileMessageId,
+                                                           std::unordered_map<std::wstring, std::shared_ptr<ResolvedDiffTextFile>>& cache) noexcept
+{
+    const std::wstring trimmed = TrimDiffPathLabel(label);
+    if (trimmed.empty() || trimmed == L"/dev/null")
+    {
+        auto result = std::make_shared<ResolvedDiffTextFile>();
+        if (result)
+        {
+            result->reason = LoadStringResource(g_hInstance, missingFileMessageId);
+        }
+        return result;
+    }
+
+    std::vector<std::filesystem::path> candidates;
+    const std::filesystem::path exactPath(trimmed);
+    const std::wstring stripped = StripGitDiffPrefix(trimmed);
+    const std::filesystem::path strippedPath(stripped);
+
+    if (exactPath.is_absolute())
+    {
+        candidates.push_back(exactPath);
+        if (strippedPath.is_absolute() && strippedPath != exactPath)
+        {
+            candidates.push_back(strippedPath);
+        }
+    }
+    else
+    {
+        const std::filesystem::path baseDir = diffPath.parent_path();
+        candidates.push_back((baseDir / exactPath).lexically_normal());
+        if (strippedPath != exactPath)
+        {
+            candidates.push_back((baseDir / strippedPath).lexically_normal());
+        }
+    }
+
+    std::shared_ptr<ResolvedDiffTextFile> bestFailure;
+    for (const std::filesystem::path& candidate : candidates)
+    {
+        const std::wstring key = candidate.lexically_normal().wstring();
+        auto [it, inserted]    = cache.try_emplace(key);
+        if (inserted || ! it->second)
+        {
+            it->second = OpenReferencedDiffTextFile(fileIo, candidate);
+        }
+
+        if (it->second && it->second->available)
+        {
+            return it->second;
+        }
+
+        if (it->second && it->second->existsInCurrentFileSystem)
+        {
+            bestFailure = it->second;
+        }
+    }
+
+    if (bestFailure && ! bestFailure->reason.empty())
+    {
+        return bestFailure;
+    }
+
+    auto missing = std::make_shared<ResolvedDiffTextFile>();
+    if (missing)
+    {
+        missing->reason = LoadStringResource(g_hInstance, missingFileMessageId);
+    }
+    return missing;
+}
+
+bool ParseUnifiedDiffDocument(std::wstring_view text, ParsedDiffDocument& outDocument) noexcept
+{
+    outDocument.files.clear();
+
+    ParsedDiffFileSection* currentFile = nullptr;
+    ParsedDiffHunk* currentHunk        = nullptr;
+    uint32_t oldCursor                 = 0u;
+    uint32_t newCursor                 = 0u;
+
+    auto ensureFileSection = [&]() noexcept -> ParsedDiffFileSection&
+    {
+        if (! currentFile)
+        {
+            outDocument.files.emplace_back();
+            currentFile = &outDocument.files.back();
+        }
+        return *currentFile;
+    };
+
+    size_t start = 0u;
+    while (start <= text.size())
+    {
+        size_t end = start;
+        while (end < text.size() && text[end] != L'\r' && text[end] != L'\n')
+        {
+            end += 1u;
+        }
+
+        const std::wstring_view line = text.substr(start, end - start);
+
+        const bool startsDiffGit       = line.starts_with(L"diff --git ");
+        const bool startsIndex         = line.starts_with(L"Index: ");
+        const bool startsLegacySection = line.starts_with(L"--- ") && currentFile && ! currentFile->hunks.empty() && currentHunk == nullptr;
+        if (startsDiffGit || startsIndex || startsLegacySection)
+        {
+            outDocument.files.emplace_back();
+            currentFile = &outDocument.files.back();
+            currentHunk = nullptr;
+            if (startsDiffGit || startsIndex)
+            {
+                currentFile->metadataLines.emplace_back(line);
+            }
+        }
+
+        if (line.starts_with(L"@@ -"))
+        {
+            ParsedDiffFileSection& file = ensureFileSection();
+
+            uint32_t oldStart = 0u;
+            uint32_t newStart = 0u;
+            if (! ParseUnifiedHunkHeader(line, oldStart, newStart))
+            {
+                return false;
+            }
+
+            file.hunks.emplace_back();
+            currentHunk           = &file.hunks.back();
+            currentHunk->header   = std::wstring(line);
+            currentHunk->oldStart = oldStart;
+            currentHunk->newStart = newStart;
+            oldCursor             = oldStart;
+            newCursor             = newStart;
+        }
+        else if (currentHunk && ! line.empty())
+        {
+            const wchar_t prefix = line.front();
+            if (prefix == L' ' || prefix == L'+' || prefix == L'-' || prefix == L'\\')
+            {
+                ParsedDiffLine parsedLine{};
+                parsedLine.text = std::wstring(prefix == L'\\' ? line : line.substr(1u));
+
+                switch (prefix)
+                {
+                    case L' ':
+                        parsedLine.kind       = ParsedDiffLineKind::Context;
+                        parsedLine.oldLine    = oldCursor;
+                        parsedLine.newLine    = newCursor;
+                        parsedLine.hasOldLine = true;
+                        parsedLine.hasNewLine = true;
+                        oldCursor += 1u;
+                        newCursor += 1u;
+                        break;
+                    case L'+':
+                        parsedLine.kind       = ParsedDiffLineKind::Added;
+                        parsedLine.newLine    = newCursor;
+                        parsedLine.hasNewLine = true;
+                        newCursor += 1u;
+                        break;
+                    case L'-':
+                        parsedLine.kind       = ParsedDiffLineKind::Removed;
+                        parsedLine.oldLine    = oldCursor;
+                        parsedLine.hasOldLine = true;
+                        oldCursor += 1u;
+                        break;
+                    case L'\\': parsedLine.kind = ParsedDiffLineKind::NoNewlineMarker; break;
+                    default: break;
+                }
+
+                currentHunk->lines.push_back(std::move(parsedLine));
+            }
+            else
+            {
+                currentHunk = nullptr;
+            }
+        }
+
+        if (! currentHunk)
+        {
+            ParsedDiffFileSection* fileForMetadata = currentFile;
+            if (! fileForMetadata && (line.starts_with(L"--- ") || line.starts_with(L"+++ ")))
+            {
+                fileForMetadata = &ensureFileSection();
+            }
+
+            if (fileForMetadata)
+            {
+                if (line.starts_with(L"--- "))
+                {
+                    fileForMetadata->leftDisplayPath = TrimDiffPathLabel(line.substr(4u));
+                    fileForMetadata->metadataLines.emplace_back(line);
+                }
+                else if (line.starts_with(L"+++ "))
+                {
+                    fileForMetadata->rightDisplayPath = TrimDiffPathLabel(line.substr(4u));
+                    fileForMetadata->metadataLines.emplace_back(line);
+                }
+                else if (! line.empty() && ! line.starts_with(L"@@ -") && ! startsDiffGit && ! startsIndex)
+                {
+                    fileForMetadata->metadataLines.emplace_back(line);
+                }
+            }
+        }
+
+        if (end >= text.size())
+        {
+            break;
+        }
+
+        if (text[end] == L'\r' && (end + 1u) < text.size() && text[end + 1u] == L'\n')
+        {
+            start = end + 2u;
+        }
+        else
+        {
+            start = end + 1u;
+        }
+    }
+
+    bool hasHunks = false;
+    for (const ParsedDiffFileSection& file : outDocument.files)
+    {
+        if (! file.hunks.empty())
+        {
+            hasHunks = true;
+            break;
+        }
+    }
+
+    return ! outDocument.files.empty() && hasHunks;
+}
+
+DiffVariantBuildResult BuildInlineDiffText(const ParsedDiffDocument& document,
+                                           ViewerText::DiffContextMode contextMode,
+                                           const std::filesystem::path& diffPath,
+                                           IFileSystemIO* fileIo,
+                                           DiffReferenceCache* referenceCache,
+                                           std::optional<size_t> hydratedSectionIndex,
+                                           std::optional<std::pair<uint32_t, uint32_t>> hydratedLogicalRange) noexcept
+{
+    DiffVariantBuildResult result{};
+    result.variant.fileSectionCount        = document.files.size();
+    result.variant.referencedFilesResolved = (contextMode == ViewerText::DiffContextMode::FullFileWhenAvailable);
+    if (hydratedLogicalRange.has_value())
+    {
+        result.variant.hydratedLogicalLineStart        = hydratedLogicalRange->first;
+        result.variant.hydratedLogicalLineEndExclusive = hydratedLogicalRange->second;
+    }
+
+    std::unordered_map<std::wstring, std::shared_ptr<ResolvedDiffTextFile>> localCache;
+    auto& cache                 = referenceCache ? referenceCache->files : localCache;
+    uint32_t currentLogicalLine = 0u;
+    const auto recordRowStyle   = [&](const ViewerText::DiffTextVariant::LogicalRowStyleEntry& style) noexcept
+    {
+        const auto countKind = [&](ViewerText::DiffTextVariant::SemanticRowKind kind) noexcept
+        {
+            switch (kind)
+            {
+                case ViewerText::DiffTextVariant::SemanticRowKind::Context: result.variant.contextRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::Added: result.variant.addedRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::Removed: result.variant.removedRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::FileHeader: result.variant.headerRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::HunkHeader:
+                case ViewerText::DiffTextVariant::SemanticRowKind::HiddenContextBanner: result.variant.bannerRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::Placeholder: result.variant.placeholderRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::None: break;
+            }
+        };
+
+        bool styled = false;
+        if (style.fullRow != ViewerText::DiffTextVariant::SemanticRowKind::None)
+        {
+            countKind(style.fullRow);
+            styled = true;
+        }
+        else
+        {
+            if (style.leftPane != ViewerText::DiffTextVariant::SemanticRowKind::None)
+            {
+                countKind(style.leftPane);
+                styled = true;
+            }
+            if (style.rightPane != ViewerText::DiffTextVariant::SemanticRowKind::None)
+            {
+                countKind(style.rightPane);
+                styled = true;
+            }
+        }
+
+        if (styled)
+        {
+            result.variant.styledRowCount += 1u;
+        }
+    };
+    const auto appendOutputLine =
+        [&](std::wstring_view line,
+            ViewerText::DiffTextVariant::LogicalRowStyleEntry style       = ViewerText::DiffTextVariant::LogicalRowStyleEntry{},
+            ViewerText::DiffTextVariant::LogicalRowRenderEntry renderInfo = ViewerText::DiffTextVariant::LogicalRowRenderEntry{}) noexcept
+    {
+        const uint32_t lineStartIndex = static_cast<uint32_t>(std::min<size_t>(result.variant.text.size(), std::numeric_limits<uint32_t>::max()));
+        if (renderInfo.fullMarkerIndex != std::numeric_limits<uint32_t>::max())
+        {
+            renderInfo.fullMarkerIndex += lineStartIndex;
+        }
+        if (renderInfo.leftMarkerIndex != std::numeric_limits<uint32_t>::max())
+        {
+            renderInfo.leftMarkerIndex += lineStartIndex;
+        }
+        if (renderInfo.rightMarkerIndex != std::numeric_limits<uint32_t>::max())
+        {
+            renderInfo.rightMarkerIndex += lineStartIndex;
+        }
+        AppendLine(result.variant.text, line);
+        result.variant.logicalRowStyles.push_back(style);
+        result.variant.logicalRowRenderInfo.push_back(renderInfo);
+        result.variant.logicalRowPaneLayouts.push_back({});
+        recordRowStyle(style);
+        currentLogicalLine += 1u;
+    };
+    const auto appendPlaceholderBand = [&](ViewerText::DiffTextVariant::PlaceholderBandPlacement placement) noexcept
+    {
+        result.variant.placeholderBands.push_back(ViewerText::DiffTextVariant::PlaceholderBandEntry{currentLogicalLine, placement});
+        result.variant.placeholderBandCount = result.variant.placeholderBands.size();
+    };
+
+    for (size_t fileIndex = 0u; fileIndex < document.files.size(); ++fileIndex)
+    {
+        const ParsedDiffFileSection& file = document.files[fileIndex];
+        const bool hydrateExpandedContext = ShouldHydrateExpandedDiffSection(contextMode, hydratedSectionIndex, fileIndex);
+        if (fileIndex != 0u)
+        {
+            appendOutputLine(L"");
+        }
+
+        result.variant.sectionNavigation.push_back(
+            ViewerText::DiffTextVariant::SectionNavigationEntry{BuildDiffSectionNavigationLabel(file, fileIndex), currentLogicalLine});
+        appendOutputLine(std::format(L"old path: {}", FormatDiffSummaryPath(file.leftDisplayPath)), {ViewerText::DiffTextVariant::SemanticRowKind::FileHeader});
+        appendOutputLine(std::format(L"new path: {}", FormatDiffSummaryPath(file.rightDisplayPath)),
+                         {ViewerText::DiffTextVariant::SemanticRowKind::FileHeader});
+        for (const std::wstring& metadataLine : file.metadataLines)
+        {
+            appendOutputLine(metadataLine, {ViewerText::DiffTextVariant::SemanticRowKind::FileHeader});
+        }
+
+        std::shared_ptr<ResolvedDiffTextFile> leftFile;
+        std::shared_ptr<ResolvedDiffTextFile> rightFile;
+        if (hydrateExpandedContext)
+        {
+            const UINT leftMissingId =
+                (file.leftDisplayPath == L"/dev/null") ? IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_ADDED_FILE : IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE;
+            const UINT rightMissingId =
+                (file.rightDisplayPath == L"/dev/null") ? IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_DELETED_FILE : IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE;
+            leftFile  = ResolveDiffReference(fileIo, diffPath, file.leftDisplayPath, leftMissingId, cache);
+            rightFile = ResolveDiffReference(fileIo, diffPath, file.rightDisplayPath, rightMissingId, cache);
+        }
+
+        uint32_t maxLineNumber = 1u;
+        for (const ParsedDiffHunk& hunk : file.hunks)
+        {
+            for (const ParsedDiffLine& line : hunk.lines)
+            {
+                if (line.hasOldLine)
+                {
+                    maxLineNumber = std::max(maxLineNumber, line.oldLine);
+                }
+                if (line.hasNewLine)
+                {
+                    maxLineNumber = std::max(maxLineNumber, line.newLine);
+                }
+            }
+        }
+
+        if (hydrateExpandedContext && leftFile && leftFile->lines.size() <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+        {
+            maxLineNumber = std::max(maxLineNumber, static_cast<uint32_t>(leftFile->lines.size()));
+        }
+        if (hydrateExpandedContext && rightFile && rightFile->lines.size() <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+        {
+            maxLineNumber = std::max(maxLineNumber, static_cast<uint32_t>(rightFile->lines.size()));
+        }
+
+        const size_t digits = DecimalDigits(maxLineNumber);
+        auto formatNumber   = [digits](bool hasValue, uint32_t value) -> std::wstring
+        {
+            if (! hasValue)
+            {
+                return std::wstring(digits, L' ');
+            }
+            return std::format(L"{:>{}}", value, digits);
+        };
+
+        auto appendInlineRow = [&](bool hasOld, uint32_t oldLine, bool hasNew, uint32_t newLine, wchar_t marker, std::wstring_view text) noexcept
+        {
+            ViewerText::DiffTextVariant::LogicalRowStyleEntry style{};
+            if (marker == L'+')
+            {
+                style.fullRow = ViewerText::DiffTextVariant::SemanticRowKind::Added;
+            }
+            else if (marker == L'-')
+            {
+                style.fullRow = ViewerText::DiffTextVariant::SemanticRowKind::Removed;
+            }
+            else if (marker == L' ' && hasOld && hasNew)
+            {
+                style.fullRow = ViewerText::DiffTextVariant::SemanticRowKind::Context;
+            }
+
+            const std::wstring oldNumber = formatNumber(hasOld, oldLine);
+            const std::wstring newNumber = formatNumber(hasNew, newLine);
+            const std::wstring lineText  = std::format(L"{} {} {} {}", oldNumber, newNumber, marker, std::wstring(text));
+            ViewerText::DiffTextVariant::LogicalRowRenderEntry renderInfo{};
+            if (marker == L'+' || marker == L'-')
+            {
+                renderInfo.fullMarkerIndex = static_cast<uint32_t>(oldNumber.size() + 1u + newNumber.size() + 1u);
+            }
+            appendOutputLine(lineText, style, renderInfo);
+        };
+
+        auto appendPlaceholder = [&](std::wstring_view message) noexcept
+        {
+            result.variant.hasPlaceholderRows = true;
+            appendPlaceholderBand(ViewerText::DiffTextVariant::PlaceholderBandPlacement::FullRow);
+            appendOutputLine(std::format(L"{} {} ! {}", formatNumber(false, 0u), formatNumber(false, 0u), std::wstring(message)),
+                             {ViewerText::DiffTextVariant::SemanticRowKind::Placeholder});
+        };
+
+        auto appendGap = [&](uint32_t oldStartInclusive, uint32_t oldEndExclusive, uint32_t newStartInclusive, uint32_t newEndExclusive) noexcept
+        {
+            const uint32_t oldGap = oldEndExclusive > oldStartInclusive ? (oldEndExclusive - oldStartInclusive) : 0u;
+            const uint32_t newGap = newEndExclusive > newStartInclusive ? (newEndExclusive - newStartInclusive) : 0u;
+            if (oldGap == 0u && newGap == 0u)
+            {
+                return;
+            }
+
+            if (! hydrateExpandedContext)
+            {
+                appendOutputLine(BuildHiddenContextBannerLabel(oldGap, newGap),
+                                 {ViewerText::DiffTextVariant::SemanticRowKind::HiddenContextBanner},
+                                 {.clickableBanner = true});
+                return;
+            }
+
+            if (leftFile && rightFile && ! leftFile->available && ! rightFile->available)
+            {
+                result.variant.referencedFilesResolved = false;
+                appendPlaceholder(! leftFile->reason.empty() ? leftFile->reason : rightFile->reason);
+                return;
+            }
+
+            if (! leftFile || ! rightFile || ! leftFile->available || ! rightFile->available)
+            {
+                result.variant.referencedFilesResolved = false;
+            }
+
+            const uint32_t rowCount = std::max(oldGap, newGap);
+            if (hydratedLogicalRange.has_value() && rowCount > 0u)
+            {
+                const uint32_t gapLogicalStart = currentLogicalLine;
+                const uint32_t gapLogicalEnd   = gapLogicalStart + rowCount;
+                const uint32_t hydratedStart   = std::max<uint32_t>(gapLogicalStart, hydratedLogicalRange->first);
+                const uint32_t hydratedEnd     = std::min<uint32_t>(gapLogicalEnd, hydratedLogicalRange->second);
+                if (hydratedStart < hydratedEnd)
+                {
+                    const uint32_t rowEndExclusive = hydratedEnd - gapLogicalStart;
+                    if (leftFile && leftFile->available && oldGap > 0u)
+                    {
+                        const uint32_t neededOldRows = std::min<uint32_t>(oldGap, rowEndExclusive);
+                        if (neededOldRows > 0u)
+                        {
+                            static_cast<void>(EnsureReferencedDiffLinesLoaded(*leftFile, oldStartInclusive + neededOldRows - 1u));
+                        }
+                    }
+                    if (rightFile && rightFile->available && newGap > 0u)
+                    {
+                        const uint32_t neededNewRows = std::min<uint32_t>(newGap, rowEndExclusive);
+                        if (neededNewRows > 0u)
+                        {
+                            static_cast<void>(EnsureReferencedDiffLinesLoaded(*rightFile, newStartInclusive + neededNewRows - 1u));
+                        }
+                    }
+                }
+            }
+
+            for (uint32_t row = 0u; row < rowCount; ++row)
+            {
+                const bool hasOld             = row < oldGap;
+                const bool hasNew             = row < newGap;
+                const bool hydrateLogicalLine = ShouldHydrateExpandedDiffLogicalLine(hydratedLogicalRange, currentLogicalLine);
+
+                std::wstring_view lineText;
+                if (hasNew && rightFile && rightFile->available)
+                {
+                    lineText = TryGetReferencedDiffLine(*rightFile, newStartInclusive + row);
+                }
+                if (lineText.empty() && hasOld && leftFile && leftFile->available)
+                {
+                    lineText = TryGetReferencedDiffLine(*leftFile, oldStartInclusive + row);
+                }
+
+                std::wstring deferredLineText;
+                if (! hydrateLogicalLine)
+                {
+                    deferredLineText = MaskDeferredDiffText(lineText);
+                    lineText         = deferredLineText;
+                    result.variant.deferredContextRowCount += 1u;
+                }
+
+                appendInlineRow(hasOld, oldStartInclusive + row, hasNew, newStartInclusive + row, L' ', lineText);
+                result.variant.hasExpandedContext = true;
+            }
+        };
+
+        uint32_t nextOldLine = 1u;
+        uint32_t nextNewLine = 1u;
+        for (size_t hunkIndex = 0u; hunkIndex < file.hunks.size(); ++hunkIndex)
+        {
+            const ParsedDiffHunk& hunk = file.hunks[hunkIndex];
+            appendGap(nextOldLine, hunk.oldStart, nextNewLine, hunk.newStart);
+            result.variant.hunkNavigation.push_back(ViewerText::DiffTextVariant::HunkNavigationEntry{
+                BuildDiffHunkNavigationLabel(file, fileIndex, hunk, hunkIndex), currentLogicalLine, fileIndex});
+
+            uint32_t oldCursorLine = hunk.oldStart;
+            uint32_t newCursorLine = hunk.newStart;
+            for (const ParsedDiffLine& line : hunk.lines)
+            {
+                switch (line.kind)
+                {
+                    case ParsedDiffLineKind::Context:
+                        appendInlineRow(true, line.oldLine, true, line.newLine, L' ', line.text);
+                        oldCursorLine += 1u;
+                        newCursorLine += 1u;
+                        break;
+                    case ParsedDiffLineKind::Added:
+                        appendInlineRow(false, 0u, true, line.newLine, L'+', line.text);
+                        newCursorLine += 1u;
+                        break;
+                    case ParsedDiffLineKind::Removed:
+                        appendInlineRow(true, line.oldLine, false, 0u, L'-', line.text);
+                        oldCursorLine += 1u;
+                        break;
+                    case ParsedDiffLineKind::NoNewlineMarker: appendPlaceholder(line.text); break;
+                }
+            }
+
+            nextOldLine = oldCursorLine;
+            nextNewLine = newCursorLine;
+        }
+
+        if (hydrateExpandedContext)
+        {
+            uint32_t requestedTailRows = 0u;
+            if (hydratedLogicalRange.has_value() && hydratedLogicalRange->second > currentLogicalLine)
+            {
+                requestedTailRows = hydratedLogicalRange->second - currentLogicalLine;
+            }
+
+            if (requestedTailRows > 0u)
+            {
+                if (leftFile && leftFile->available)
+                {
+                    static_cast<void>(EnsureReferencedDiffLinesLoaded(*leftFile, nextOldLine + requestedTailRows - 1u));
+                }
+                if (rightFile && rightFile->available)
+                {
+                    static_cast<void>(EnsureReferencedDiffLinesLoaded(*rightFile, nextNewLine + requestedTailRows - 1u));
+                }
+            }
+
+            uint32_t oldTail = nextOldLine;
+            uint32_t newTail = nextNewLine;
+            if (leftFile && leftFile->available && leftFile->lines.size() <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+            {
+                oldTail = std::max<uint32_t>(nextOldLine, static_cast<uint32_t>(leftFile->lines.size()) + 1u);
+                if (! leftFile->loadComplete)
+                {
+                    result.variant.hasExpandableTail = true;
+                }
+            }
+            if (rightFile && rightFile->available && rightFile->lines.size() <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+            {
+                newTail = std::max<uint32_t>(nextNewLine, static_cast<uint32_t>(rightFile->lines.size()) + 1u);
+                if (! rightFile->loadComplete)
+                {
+                    result.variant.hasExpandableTail = true;
+                }
+            }
+            appendGap(nextOldLine, oldTail, nextNewLine, newTail);
+        }
+    }
+
+    result.variant.builtLogicalLineCount = currentLogicalLine;
+    if (! result.variant.text.empty())
+    {
+        result.variant.logicalRowStyles.push_back({});
+        result.variant.logicalRowPaneLayouts.push_back({});
+    }
+
+    return result;
+}
+
+DiffVariantBuildResult BuildSideBySideDiffText(const ParsedDiffDocument& document,
+                                               ViewerText::DiffContextMode contextMode,
+                                               const std::filesystem::path& diffPath,
+                                               IFileSystemIO* fileIo,
+                                               DiffReferenceCache* referenceCache,
+                                               std::optional<size_t> hydratedSectionIndex,
+                                               std::optional<std::pair<uint32_t, uint32_t>> hydratedLogicalRange) noexcept
+{
+    DiffVariantBuildResult result{};
+    result.variant.fileSectionCount        = document.files.size();
+    result.variant.referencedFilesResolved = (contextMode == ViewerText::DiffContextMode::FullFileWhenAvailable);
+    if (hydratedLogicalRange.has_value())
+    {
+        result.variant.hydratedLogicalLineStart        = hydratedLogicalRange->first;
+        result.variant.hydratedLogicalLineEndExclusive = hydratedLogicalRange->second;
+    }
+
+    std::unordered_map<std::wstring, std::shared_ptr<ResolvedDiffTextFile>> localCache;
+    auto& cache                 = referenceCache ? referenceCache->files : localCache;
+    uint32_t currentLogicalLine = 0u;
+    const auto recordRowStyle   = [&](const ViewerText::DiffTextVariant::LogicalRowStyleEntry& style) noexcept
+    {
+        const auto countKind = [&](ViewerText::DiffTextVariant::SemanticRowKind kind) noexcept
+        {
+            switch (kind)
+            {
+                case ViewerText::DiffTextVariant::SemanticRowKind::Context: result.variant.contextRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::Added: result.variant.addedRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::Removed: result.variant.removedRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::FileHeader: result.variant.headerRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::HunkHeader:
+                case ViewerText::DiffTextVariant::SemanticRowKind::HiddenContextBanner: result.variant.bannerRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::Placeholder: result.variant.placeholderRowCount += 1u; break;
+                case ViewerText::DiffTextVariant::SemanticRowKind::None: break;
+            }
+        };
+
+        bool styled = false;
+        if (style.fullRow != ViewerText::DiffTextVariant::SemanticRowKind::None)
+        {
+            countKind(style.fullRow);
+            styled = true;
+        }
+        else
+        {
+            if (style.leftPane != ViewerText::DiffTextVariant::SemanticRowKind::None)
+            {
+                countKind(style.leftPane);
+                styled = true;
+            }
+            if (style.rightPane != ViewerText::DiffTextVariant::SemanticRowKind::None)
+            {
+                countKind(style.rightPane);
+                styled = true;
+            }
+        }
+
+        if (styled)
+        {
+            result.variant.styledRowCount += 1u;
+        }
+    };
+    const auto appendOutputLine =
+        [&](std::wstring_view line,
+            ViewerText::DiffTextVariant::LogicalRowStyleEntry style       = ViewerText::DiffTextVariant::LogicalRowStyleEntry{},
+            ViewerText::DiffTextVariant::LogicalRowRenderEntry renderInfo = ViewerText::DiffTextVariant::LogicalRowRenderEntry{}) noexcept
+    {
+        const uint32_t lineStartIndex = static_cast<uint32_t>(std::min<size_t>(result.variant.text.size(), std::numeric_limits<uint32_t>::max()));
+        if (renderInfo.fullMarkerIndex != std::numeric_limits<uint32_t>::max())
+        {
+            renderInfo.fullMarkerIndex += lineStartIndex;
+        }
+        if (renderInfo.leftMarkerIndex != std::numeric_limits<uint32_t>::max())
+        {
+            renderInfo.leftMarkerIndex += lineStartIndex;
+        }
+        if (renderInfo.rightMarkerIndex != std::numeric_limits<uint32_t>::max())
+        {
+            renderInfo.rightMarkerIndex += lineStartIndex;
+        }
+        AppendLine(result.variant.text, line);
+        result.variant.logicalRowStyles.push_back(style);
+        result.variant.logicalRowRenderInfo.push_back(renderInfo);
+        result.variant.logicalRowPaneLayouts.push_back({});
+        recordRowStyle(style);
+        currentLogicalLine += 1u;
+    };
+    const auto appendPlaceholderBand = [&](ViewerText::DiffTextVariant::PlaceholderBandPlacement placement) noexcept
+    {
+        result.variant.placeholderBands.push_back(ViewerText::DiffTextVariant::PlaceholderBandEntry{currentLogicalLine, placement});
+        result.variant.placeholderBandCount = result.variant.placeholderBands.size();
+    };
+
+    for (size_t fileIndex = 0u; fileIndex < document.files.size(); ++fileIndex)
+    {
+        struct PendingSideBySideRow
+        {
+            bool splitRow = false;
+            std::wstring fullText;
+            std::wstring leftCell;
+            std::wstring rightCell;
+            ViewerText::DiffTextVariant::LogicalRowStyleEntry style{};
+            ViewerText::DiffTextVariant::LogicalRowRenderEntry renderInfo{};
+            ViewerText::DiffTextVariant::SideBySidePaneLayoutEntry paneLayout{};
+        };
+
+        const ParsedDiffFileSection& file = document.files[fileIndex];
+        const bool hydrateExpandedContext = ShouldHydrateExpandedDiffSection(contextMode, hydratedSectionIndex, fileIndex);
+        if (fileIndex != 0u)
+        {
+            appendOutputLine(L"");
+        }
+
+        result.variant.sectionNavigation.push_back(
+            ViewerText::DiffTextVariant::SectionNavigationEntry{BuildDiffSectionNavigationLabel(file, fileIndex), currentLogicalLine});
+        appendOutputLine(std::format(L"old path: {}", FormatDiffSummaryPath(file.leftDisplayPath)), {ViewerText::DiffTextVariant::SemanticRowKind::FileHeader});
+        appendOutputLine(std::format(L"new path: {}", FormatDiffSummaryPath(file.rightDisplayPath)),
+                         {ViewerText::DiffTextVariant::SemanticRowKind::FileHeader});
+        for (const std::wstring& metadataLine : file.metadataLines)
+        {
+            appendOutputLine(metadataLine, {ViewerText::DiffTextVariant::SemanticRowKind::FileHeader});
+        }
+
+        std::shared_ptr<ResolvedDiffTextFile> leftFile;
+        std::shared_ptr<ResolvedDiffTextFile> rightFile;
+        if (hydrateExpandedContext)
+        {
+            const UINT leftMissingId =
+                (file.leftDisplayPath == L"/dev/null") ? IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_ADDED_FILE : IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE;
+            const UINT rightMissingId =
+                (file.rightDisplayPath == L"/dev/null") ? IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_DELETED_FILE : IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_MISSING_FILE;
+            leftFile  = ResolveDiffReference(fileIo, diffPath, file.leftDisplayPath, leftMissingId, cache);
+            rightFile = ResolveDiffReference(fileIo, diffPath, file.rightDisplayPath, rightMissingId, cache);
+        }
+
+        uint32_t maxLineNumber = 1u;
+        for (const ParsedDiffHunk& hunk : file.hunks)
+        {
+            for (const ParsedDiffLine& line : hunk.lines)
+            {
+                if (line.hasOldLine)
+                {
+                    maxLineNumber = std::max(maxLineNumber, line.oldLine);
+                }
+                if (line.hasNewLine)
+                {
+                    maxLineNumber = std::max(maxLineNumber, line.newLine);
+                }
+            }
+        }
+
+        if (hydrateExpandedContext && leftFile && leftFile->lines.size() <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+        {
+            maxLineNumber = std::max(maxLineNumber, static_cast<uint32_t>(leftFile->lines.size()));
+        }
+        if (hydrateExpandedContext && rightFile && rightFile->lines.size() <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+        {
+            maxLineNumber = std::max(maxLineNumber, static_cast<uint32_t>(rightFile->lines.size()));
+        }
+
+        const size_t digits = DecimalDigits(maxLineNumber);
+        auto formatNumber   = [digits](bool hasValue, uint32_t value) -> std::wstring
+        {
+            if (! hasValue)
+            {
+                return std::wstring(digits, L' ');
+            }
+            return std::format(L"{:>{}}", value, digits);
+        };
+        std::vector<PendingSideBySideRow> pendingRows;
+        const auto emitQueuedRows = [&]() noexcept
+        {
+            for (const PendingSideBySideRow& row : pendingRows)
+            {
+                auto renderInfo               = row.renderInfo;
+                const uint32_t lineStartIndex = static_cast<uint32_t>(std::min<size_t>(result.variant.text.size(), std::numeric_limits<uint32_t>::max()));
+                if (renderInfo.fullMarkerIndex != std::numeric_limits<uint32_t>::max())
+                {
+                    renderInfo.fullMarkerIndex += lineStartIndex;
+                }
+                if (renderInfo.leftMarkerIndex != std::numeric_limits<uint32_t>::max())
+                {
+                    renderInfo.leftMarkerIndex += lineStartIndex;
+                }
+                if (renderInfo.rightMarkerIndex != std::numeric_limits<uint32_t>::max())
+                {
+                    renderInfo.rightMarkerIndex += lineStartIndex;
+                }
+                if (row.splitRow)
+                {
+                    AppendLine(result.variant.text, std::format(L"{}{}{}", row.leftCell, std::wstring(row.paneLayout.separatorColumns, L' '), row.rightCell));
+                }
+                else
+                {
+                    AppendLine(result.variant.text, row.fullText);
+                }
+                result.variant.logicalRowStyles.push_back(row.style);
+                result.variant.logicalRowRenderInfo.push_back(renderInfo);
+                result.variant.logicalRowPaneLayouts.push_back(row.paneLayout);
+                recordRowStyle(row.style);
+            }
+            pendingRows.clear();
+        };
+        const auto queueFullRow =
+            [&](std::wstring_view line,
+                ViewerText::DiffTextVariant::LogicalRowStyleEntry style       = ViewerText::DiffTextVariant::LogicalRowStyleEntry{},
+                ViewerText::DiffTextVariant::LogicalRowRenderEntry renderInfo = ViewerText::DiffTextVariant::LogicalRowRenderEntry{}) noexcept
+        {
+            pendingRows.push_back(PendingSideBySideRow{
+                .splitRow   = false,
+                .fullText   = std::wstring(line),
+                .style      = style,
+                .renderInfo = renderInfo,
+                .paneLayout = {},
+            });
+            currentLogicalLine += 1u;
+        };
+
+        auto appendRow = [&](bool hasLeftNumber,
+                             uint32_t leftNumber,
+                             wchar_t leftMarker,
+                             std::wstring_view leftText,
+                             bool hasRightNumber,
+                             uint32_t rightNumber,
+                             wchar_t rightMarker,
+                             std::wstring_view rightText,
+                             ViewerText::DiffTextVariant::LogicalRowStyleEntry style = ViewerText::DiffTextVariant::LogicalRowStyleEntry{}) noexcept
+        {
+            if (style.fullRow == ViewerText::DiffTextVariant::SemanticRowKind::None && style.leftPane == ViewerText::DiffTextVariant::SemanticRowKind::None &&
+                style.rightPane == ViewerText::DiffTextVariant::SemanticRowKind::None)
+            {
+                if (leftMarker == L'!')
+                {
+                    style.leftPane = ViewerText::DiffTextVariant::SemanticRowKind::Placeholder;
+                }
+                else if (leftMarker == L'-')
+                {
+                    style.leftPane = ViewerText::DiffTextVariant::SemanticRowKind::Removed;
+                }
+                else if (leftMarker == L'+')
+                {
+                    style.leftPane = ViewerText::DiffTextVariant::SemanticRowKind::Added;
+                }
+                else if (hasLeftNumber)
+                {
+                    style.leftPane = ViewerText::DiffTextVariant::SemanticRowKind::Context;
+                }
+
+                if (rightMarker == L'!')
+                {
+                    style.rightPane = ViewerText::DiffTextVariant::SemanticRowKind::Placeholder;
+                }
+                else if (rightMarker == L'-')
+                {
+                    style.rightPane = ViewerText::DiffTextVariant::SemanticRowKind::Removed;
+                }
+                else if (rightMarker == L'+')
+                {
+                    style.rightPane = ViewerText::DiffTextVariant::SemanticRowKind::Added;
+                }
+                else if (hasRightNumber)
+                {
+                    style.rightPane = ViewerText::DiffTextVariant::SemanticRowKind::Context;
+                }
+            }
+
+            std::wstring leftCell  = std::format(L"{} {} {}", formatNumber(hasLeftNumber, leftNumber), leftMarker, std::wstring(leftText));
+            std::wstring rightCell = std::format(L"{} {} {}", formatNumber(hasRightNumber, rightNumber), rightMarker, std::wstring(rightText));
+            ViewerText::DiffTextVariant::SideBySidePaneLayoutEntry paneLayout{};
+            paneLayout.splitRow         = true;
+            paneLayout.leftTextColumns  = static_cast<uint32_t>(std::min<size_t>(leftCell.size(), std::numeric_limits<uint32_t>::max()));
+            paneLayout.separatorColumns = 3u;
+            paneLayout.rightTextColumns = static_cast<uint32_t>(std::min<size_t>(rightCell.size(), std::numeric_limits<uint32_t>::max()));
+            ViewerText::DiffTextVariant::LogicalRowRenderEntry renderInfo{};
+            if (leftMarker == L'+' || leftMarker == L'-')
+            {
+                renderInfo.leftMarkerIndex = static_cast<uint32_t>(formatNumber(hasLeftNumber, leftNumber).size() + 1u);
+            }
+            if (rightMarker == L'+' || rightMarker == L'-')
+            {
+                renderInfo.rightMarkerIndex =
+                    static_cast<uint32_t>(paneLayout.leftTextColumns + paneLayout.separatorColumns + formatNumber(hasRightNumber, rightNumber).size() + 1u);
+            }
+            renderInfo.leftPaneAbsent  = ! hasLeftNumber && leftMarker == L' ' && leftText.empty();
+            renderInfo.rightPaneAbsent = ! hasRightNumber && rightMarker == L' ' && rightText.empty();
+            pendingRows.push_back(PendingSideBySideRow{
+                .splitRow   = true,
+                .leftCell   = std::move(leftCell),
+                .rightCell  = std::move(rightCell),
+                .style      = style,
+                .renderInfo = renderInfo,
+                .paneLayout = paneLayout,
+            });
+            currentLogicalLine += 1u;
+        };
+
+        auto appendGap = [&](uint32_t oldStartInclusive, uint32_t oldEndExclusive, uint32_t newStartInclusive, uint32_t newEndExclusive) noexcept
+        {
+            const uint32_t oldGap = oldEndExclusive > oldStartInclusive ? (oldEndExclusive - oldStartInclusive) : 0u;
+            const uint32_t newGap = newEndExclusive > newStartInclusive ? (newEndExclusive - newStartInclusive) : 0u;
+            if (oldGap == 0u && newGap == 0u)
+            {
+                return;
+            }
+
+            if (! hydrateExpandedContext)
+            {
+                queueFullRow(BuildHiddenContextBannerLabel(oldGap, newGap),
+                             {ViewerText::DiffTextVariant::SemanticRowKind::HiddenContextBanner},
+                             {.clickableBanner = true});
+                return;
+            }
+
+            if (! leftFile || ! rightFile || ! leftFile->available || ! rightFile->available)
+            {
+                result.variant.referencedFilesResolved = false;
+            }
+
+            if (leftFile && rightFile && ! leftFile->available && ! rightFile->available)
+            {
+                result.variant.hasPlaceholderRows = true;
+                appendPlaceholderBand(ViewerText::DiffTextVariant::PlaceholderBandPlacement::FullRow);
+                appendRow(false,
+                          0u,
+                          L'!',
+                          ! leftFile->reason.empty() ? leftFile->reason : rightFile->reason,
+                          false,
+                          0u,
+                          L'!',
+                          ! rightFile->reason.empty() ? rightFile->reason : leftFile->reason,
+                          {ViewerText::DiffTextVariant::SemanticRowKind::Placeholder});
+                return;
+            }
+
+            const uint32_t rowCount = std::max(oldGap, newGap);
+            if (hydratedLogicalRange.has_value() && rowCount > 0u)
+            {
+                const uint32_t gapLogicalStart = currentLogicalLine;
+                const uint32_t gapLogicalEnd   = gapLogicalStart + rowCount;
+                const uint32_t hydratedStart   = std::max<uint32_t>(gapLogicalStart, hydratedLogicalRange->first);
+                const uint32_t hydratedEnd     = std::min<uint32_t>(gapLogicalEnd, hydratedLogicalRange->second);
+                if (hydratedStart < hydratedEnd)
+                {
+                    const uint32_t rowEndExclusive = hydratedEnd - gapLogicalStart;
+                    if (leftFile && leftFile->available && oldGap > 0u)
+                    {
+                        const uint32_t neededOldRows = std::min<uint32_t>(oldGap, rowEndExclusive);
+                        if (neededOldRows > 0u)
+                        {
+                            static_cast<void>(EnsureReferencedDiffLinesLoaded(*leftFile, oldStartInclusive + neededOldRows - 1u));
+                        }
+                    }
+                    if (rightFile && rightFile->available && newGap > 0u)
+                    {
+                        const uint32_t neededNewRows = std::min<uint32_t>(newGap, rowEndExclusive);
+                        if (neededNewRows > 0u)
+                        {
+                            static_cast<void>(EnsureReferencedDiffLinesLoaded(*rightFile, newStartInclusive + neededNewRows - 1u));
+                        }
+                    }
+                }
+            }
+
+            for (uint32_t row = 0u; row < rowCount; ++row)
+            {
+                const bool hasLeftRow         = row < oldGap;
+                const bool hasRightRow        = row < newGap;
+                const bool hydrateLogicalLine = ShouldHydrateExpandedDiffLogicalLine(hydratedLogicalRange, currentLogicalLine);
+
+                std::wstring_view leftText;
+                if (hasLeftRow && leftFile && leftFile->available)
+                {
+                    leftText = TryGetReferencedDiffLine(*leftFile, oldStartInclusive + row);
+                }
+
+                std::wstring_view rightText;
+                if (hasRightRow && rightFile && rightFile->available)
+                {
+                    rightText = TryGetReferencedDiffLine(*rightFile, newStartInclusive + row);
+                }
+
+                if (leftFile && ! leftFile->available && row == 0u)
+                {
+                    leftText                          = leftFile->reason;
+                    result.variant.hasPlaceholderRows = true;
+                    appendPlaceholderBand(ViewerText::DiffTextVariant::PlaceholderBandPlacement::LeftPane);
+                }
+                if (rightFile && ! rightFile->available && row == 0u)
+                {
+                    rightText                         = rightFile->reason;
+                    result.variant.hasPlaceholderRows = true;
+                    appendPlaceholderBand(ViewerText::DiffTextVariant::PlaceholderBandPlacement::RightPane);
+                }
+
+                std::wstring deferredLeftText;
+                std::wstring deferredRightText;
+                if (leftFile && rightFile && leftFile->available && rightFile->available && ! hydrateLogicalLine)
+                {
+                    deferredLeftText  = MaskDeferredDiffText(leftText);
+                    deferredRightText = MaskDeferredDiffText(rightText);
+                    leftText          = deferredLeftText;
+                    rightText         = deferredRightText;
+                    result.variant.deferredContextRowCount += 1u;
+                }
+
+                appendRow(hasLeftRow, oldStartInclusive + row, L' ', leftText, hasRightRow, newStartInclusive + row, L' ', rightText);
+                result.variant.hasExpandedContext = true;
+            }
+        };
+
+        uint32_t nextOldLine = 1u;
+        uint32_t nextNewLine = 1u;
+        for (size_t hunkIndex = 0u; hunkIndex < file.hunks.size(); ++hunkIndex)
+        {
+            const ParsedDiffHunk& hunk = file.hunks[hunkIndex];
+            appendGap(nextOldLine, hunk.oldStart, nextNewLine, hunk.newStart);
+            result.variant.hunkNavigation.push_back(ViewerText::DiffTextVariant::HunkNavigationEntry{
+                BuildDiffHunkNavigationLabel(file, fileIndex, hunk, hunkIndex), currentLogicalLine, fileIndex});
+
+            std::vector<const ParsedDiffLine*> removedRun;
+            std::vector<const ParsedDiffLine*> addedRun;
+            auto flushRuns = [&]() noexcept
+            {
+                const size_t rowCount = std::max(removedRun.size(), addedRun.size());
+                for (size_t row = 0u; row < rowCount; ++row)
+                {
+                    const ParsedDiffLine* removed = row < removedRun.size() ? removedRun[row] : nullptr;
+                    const ParsedDiffLine* added   = row < addedRun.size() ? addedRun[row] : nullptr;
+                    appendRow(removed != nullptr && removed->hasOldLine,
+                              removed ? removed->oldLine : 0u,
+                              removed ? L'-' : L' ',
+                              removed ? std::wstring_view(removed->text) : std::wstring_view{},
+                              added != nullptr && added->hasNewLine,
+                              added ? added->newLine : 0u,
+                              added ? L'+' : L' ',
+                              added ? std::wstring_view(added->text) : std::wstring_view{});
+                }
+                removedRun.clear();
+                addedRun.clear();
+            };
+
+            uint32_t oldCursorLine = hunk.oldStart;
+            uint32_t newCursorLine = hunk.newStart;
+            for (const ParsedDiffLine& line : hunk.lines)
+            {
+                if (line.kind == ParsedDiffLineKind::Removed)
+                {
+                    removedRun.push_back(&line);
+                    oldCursorLine += 1u;
+                    continue;
+                }
+                if (line.kind == ParsedDiffLineKind::Added)
+                {
+                    addedRun.push_back(&line);
+                    newCursorLine += 1u;
+                    continue;
+                }
+
+                flushRuns();
+                switch (line.kind)
+                {
+                    case ParsedDiffLineKind::Context:
+                        appendRow(true, line.oldLine, L' ', line.text, true, line.newLine, L' ', line.text);
+                        oldCursorLine += 1u;
+                        newCursorLine += 1u;
+                        break;
+                    case ParsedDiffLineKind::NoNewlineMarker:
+                        result.variant.hasPlaceholderRows = true;
+                        appendPlaceholderBand(ViewerText::DiffTextVariant::PlaceholderBandPlacement::FullRow);
+                        appendRow(false, 0u, L'!', line.text, false, 0u, L'!', line.text, {ViewerText::DiffTextVariant::SemanticRowKind::Placeholder});
+                        break;
+                    case ParsedDiffLineKind::Added:
+                    case ParsedDiffLineKind::Removed: break;
+                }
+            }
+
+            flushRuns();
+            nextOldLine = oldCursorLine;
+            nextNewLine = newCursorLine;
+        }
+
+        if (hydrateExpandedContext)
+        {
+            uint32_t requestedTailRows = 0u;
+            if (hydratedLogicalRange.has_value() && hydratedLogicalRange->second > currentLogicalLine)
+            {
+                requestedTailRows = hydratedLogicalRange->second - currentLogicalLine;
+            }
+
+            if (requestedTailRows > 0u)
+            {
+                if (leftFile && leftFile->available)
+                {
+                    static_cast<void>(EnsureReferencedDiffLinesLoaded(*leftFile, nextOldLine + requestedTailRows - 1u));
+                }
+                if (rightFile && rightFile->available)
+                {
+                    static_cast<void>(EnsureReferencedDiffLinesLoaded(*rightFile, nextNewLine + requestedTailRows - 1u));
+                }
+            }
+
+            uint32_t oldTail = nextOldLine;
+            uint32_t newTail = nextNewLine;
+            if (leftFile && leftFile->available && leftFile->lines.size() <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+            {
+                oldTail = std::max<uint32_t>(nextOldLine, static_cast<uint32_t>(leftFile->lines.size()) + 1u);
+                if (! leftFile->loadComplete)
+                {
+                    result.variant.hasExpandableTail = true;
+                }
+            }
+            if (rightFile && rightFile->available && rightFile->lines.size() <= static_cast<size_t>(std::numeric_limits<uint32_t>::max()))
+            {
+                newTail = std::max<uint32_t>(nextNewLine, static_cast<uint32_t>(rightFile->lines.size()) + 1u);
+                if (! rightFile->loadComplete)
+                {
+                    result.variant.hasExpandableTail = true;
+                }
+            }
+            appendGap(nextOldLine, oldTail, nextNewLine, newTail);
+        }
+
+        emitQueuedRows();
+    }
+
+    result.variant.builtLogicalLineCount = currentLogicalLine;
+    if (! result.variant.text.empty())
+    {
+        result.variant.logicalRowStyles.push_back({});
+        result.variant.logicalRowPaneLayouts.push_back({});
+    }
+    return result;
+}
+
 uint32_t MakeBgra(uint8_t r, uint8_t g, uint8_t b, uint8_t a) noexcept
 {
     return static_cast<uint32_t>(b) | (static_cast<uint32_t>(g) << 8) | (static_cast<uint32_t>(r) << 16) | (static_cast<uint32_t>(a) << 24);
@@ -809,6 +3635,63 @@ COLORREF ResolveAccentColor(const ViewerTheme& theme, std::wstring_view seed) no
     return ColorRefFromArgb(theme.accentArgb);
 }
 
+uint32_t ArgbFromColorRef(COLORREF rgb, uint8_t alpha = 0xFFu) noexcept
+{
+    const uint32_t r = static_cast<uint32_t>(GetRValue(rgb));
+    const uint32_t g = static_cast<uint32_t>(GetGValue(rgb));
+    const uint32_t b = static_cast<uint32_t>(GetBValue(rgb));
+    return (static_cast<uint32_t>(alpha) << 24) | (r << 16) | (g << 8) | b;
+}
+
+void PopulateViewerDiffThemeDefaults(ViewerTheme& theme) noexcept
+{
+    const bool dark         = theme.darkMode != FALSE;
+    const bool highContrast = theme.highContrast != FALSE;
+    const bool rainbowMode  = theme.rainbowMode != FALSE;
+    const COLORREF bg       = ColorRefFromArgb(theme.backgroundArgb);
+    const COLORREF accent   = ResolveAccentColor(theme, L"viewer-diff");
+
+    const auto ensureArgb = [&](uint32_t& target, COLORREF rgb, uint8_t alpha) noexcept
+    {
+        if (target == 0u)
+        {
+            target = ArgbFromColorRef(rgb, alpha);
+        }
+    };
+
+    if (highContrast)
+    {
+        ensureArgb(theme.diffAddedBackgroundArgb, RGB(56, 198, 96), dark ? 90u : 72u);
+        ensureArgb(theme.diffRemovedBackgroundArgb, RGB(224, 84, 84), dark ? 90u : 72u);
+        ensureArgb(theme.diffContextBackgroundArgb, accent, dark ? 48u : 36u);
+        ensureArgb(theme.diffHeaderBackgroundArgb, accent, dark ? 76u : 60u);
+        ensureArgb(theme.diffBannerBackgroundArgb, accent, dark ? 96u : 76u);
+        ensureArgb(theme.diffPlaceholderBackgroundArgb, accent, dark ? 88u : 70u);
+        ensureArgb(theme.diffDividerArgb, dark ? RGB(255, 255, 255) : RGB(0, 0, 0), dark ? 230u : 216u);
+        return;
+    }
+
+    if (rainbowMode)
+    {
+        ensureArgb(theme.diffAddedBackgroundArgb, ResolveAccentColor(theme, L"viewer-diff-added"), dark ? 62u : 44u);
+        ensureArgb(theme.diffRemovedBackgroundArgb, ResolveAccentColor(theme, L"viewer-diff-removed"), dark ? 62u : 44u);
+        ensureArgb(theme.diffContextBackgroundArgb, accent, dark ? 28u : 18u);
+        ensureArgb(theme.diffHeaderBackgroundArgb, accent, dark ? 46u : 30u);
+        ensureArgb(theme.diffBannerBackgroundArgb, accent, dark ? 64u : 46u);
+        ensureArgb(theme.diffPlaceholderBackgroundArgb, accent, dark ? 52u : 38u);
+        ensureArgb(theme.diffDividerArgb, BlendColor(bg, accent, dark ? 40u : 28u), dark ? 232u : 210u);
+        return;
+    }
+
+    ensureArgb(theme.diffAddedBackgroundArgb, RGB(46, 160, 67), dark ? 56u : 36u);
+    ensureArgb(theme.diffRemovedBackgroundArgb, RGB(204, 51, 51), dark ? 56u : 36u);
+    ensureArgb(theme.diffContextBackgroundArgb, accent, dark ? 20u : 12u);
+    ensureArgb(theme.diffHeaderBackgroundArgb, accent, dark ? 40u : 24u);
+    ensureArgb(theme.diffBannerBackgroundArgb, accent, dark ? 56u : 36u);
+    ensureArgb(theme.diffPlaceholderBackgroundArgb, accent, dark ? 46u : 30u);
+    ensureArgb(theme.diffDividerArgb, BlendColor(bg, accent, dark ? 28u : 18u), dark ? 220u : 200u);
+}
+
 int PxFromDip(int dip, UINT dpi) noexcept
 {
     return MulDiv(dip, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
@@ -853,122 +3736,7 @@ void ClampRectNonNegative(RECT& rc) noexcept
     }
 }
 
-struct FindDialogState
-{
-    ViewerText* viewer = nullptr;
-    std::wstring initial;
-    std::wstring result;
-};
-
-std::wstring ReadDialogItemText(HWND dlg, int controlId)
-{
-    const HWND control = GetDlgItem(dlg, controlId);
-    if (! control)
-    {
-        return {};
-    }
-
-    const int length = GetWindowTextLengthW(control);
-    if (length <= 0)
-    {
-        return {};
-    }
-
-    std::wstring text;
-    text.resize(static_cast<size_t>(length) + 1u);
-    GetWindowTextW(control, text.data(), length + 1);
-    text.resize(static_cast<size_t>(length));
-    return text;
-}
-
-INT_PTR OnFindDialogInit(HWND dlg, FindDialogState* state)
-{
-    SetWindowLongPtrW(dlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
-    if (state)
-    {
-        SetDlgItemTextW(dlg, IDC_VIEWERTEXT_FIND_TEXT, state->initial.c_str());
-        SendDlgItemMessageW(dlg, IDC_VIEWERTEXT_FIND_TEXT, EM_SETSEL, 0, -1);
-        SetFocus(GetDlgItem(dlg, IDC_VIEWERTEXT_FIND_TEXT));
-    }
-    return FALSE;
-}
-
-INT_PTR OnFindDialogCommand(HWND dlg, UINT commandId)
-{
-    if (commandId == IDOK)
-    {
-        auto* state = reinterpret_cast<FindDialogState*>(GetWindowLongPtrW(dlg, GWLP_USERDATA));
-        if (state)
-        {
-            state->result = ReadDialogItemText(dlg, IDC_VIEWERTEXT_FIND_TEXT);
-        }
-        EndDialog(dlg, IDOK);
-        return TRUE;
-    }
-
-    if (commandId == IDCANCEL)
-    {
-        EndDialog(dlg, IDCANCEL);
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-INT_PTR CALLBACK FindDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
-{
-    switch (msg)
-    {
-        case WM_INITDIALOG: return OnFindDialogInit(dlg, reinterpret_cast<FindDialogState*>(lp));
-        case WM_COMMAND: return OnFindDialogCommand(dlg, LOWORD(wp));
-    }
-
-    return FALSE;
-}
-
-struct GoToDialogState
-{
-    std::optional<uint64_t> offset;
-};
-
-INT_PTR OnGoToDialogInit(HWND dlg, GoToDialogState* state)
-{
-    SetWindowLongPtrW(dlg, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
-    SetDlgItemInt(dlg, IDC_VIEWERTEXT_GOTO_OFFSET, 0, FALSE);
-    SendDlgItemMessageW(dlg, IDC_VIEWERTEXT_GOTO_OFFSET, EM_SETSEL, 0, -1);
-    SetFocus(GetDlgItem(dlg, IDC_VIEWERTEXT_GOTO_OFFSET));
-    return FALSE;
-}
-
 bool TryParseOffset(std::wstring_view text, uint64_t& value) noexcept;
-
-INT_PTR OnGoToDialogCommand(HWND dlg, UINT commandId)
-{
-    if (commandId == IDOK)
-    {
-        auto* state = reinterpret_cast<GoToDialogState*>(GetWindowLongPtrW(dlg, GWLP_USERDATA));
-        if (state)
-        {
-            const std::wstring text = ReadDialogItemText(dlg, IDC_VIEWERTEXT_GOTO_OFFSET);
-            uint64_t value          = 0;
-            if (TryParseOffset(text, value))
-            {
-                state->offset = value;
-            }
-        }
-
-        EndDialog(dlg, IDOK);
-        return TRUE;
-    }
-
-    if (commandId == IDCANCEL)
-    {
-        EndDialog(dlg, IDCANCEL);
-        return TRUE;
-    }
-
-    return FALSE;
-}
 
 bool TryParseOffset(std::wstring_view text, uint64_t& value) noexcept
 {
@@ -1015,17 +3783,6 @@ bool TryParseOffset(std::wstring_view text, uint64_t& value) noexcept
     return true;
 }
 
-INT_PTR CALLBACK GoToDlgProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
-{
-    switch (msg)
-    {
-        case WM_INITDIALOG: return OnGoToDialogInit(dlg, reinterpret_cast<GoToDialogState*>(lp));
-        case WM_COMMAND: return OnGoToDialogCommand(dlg, LOWORD(wp));
-    }
-
-    return FALSE;
-}
-
 HRESULT WriteAllHandle(HANDLE file, const void* data, size_t size) noexcept
 {
     if (! file)
@@ -1054,6 +3811,11 @@ HRESULT WriteAllHandle(HANDLE file, const void* data, size_t size) noexcept
 }
 } // namespace
 
+const char* GetViewerTextStaticConfigurationSchema() noexcept
+{
+    return GetViewerTextStaticConfigurationSchemaImpl();
+}
+
 ViewerText::ViewerText()
 {
     _metaId          = L"builtin/viewer-text";
@@ -1069,12 +3831,25 @@ ViewerText::ViewerText()
     _metaData.name        = _metaName.empty() ? nullptr : _metaName.c_str();
     _metaData.description = _metaDescription.empty() ? nullptr : _metaDescription.c_str();
     _metaData.author      = nullptr;
-    _metaData.version     = nullptr;
+    _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     static_cast<void>(SetConfiguration(nullptr));
 }
 
-ViewerText::~ViewerText() = default;
+ViewerText::~ViewerText()
+{
+    if (! _hFileComboHost)
+    {
+        return;
+    }
+
+    _fileComboControl            = nullptr;
+    _fileComboHostPreExpandPopup = false;
+    _lastSyncedFileComboIndex.reset();
+    UnhookFileComboHostWindow(_hFileComboHost.get());
+    _fileComboHost.Detach();
+    _hFileComboHost.reset();
+}
 
 void ViewerText::SetHost(IHost* host) noexcept
 {
@@ -1146,7 +3921,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::GetMetaData(const PluginMetaData** metaDat
     _metaData.name        = _metaName.empty() ? nullptr : _metaName.c_str();
     _metaData.description = _metaDescription.empty() ? nullptr : _metaDescription.c_str();
     _metaData.author      = nullptr;
-    _metaData.version     = nullptr;
+    _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     *metaData = &_metaData;
     return S_OK;
@@ -1159,16 +3934,20 @@ HRESULT STDMETHODCALLTYPE ViewerText::GetConfigurationSchema(const char** schema
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = kViewerTextSchemaJson;
+    *schemaJsonUtf8 = GetViewerTextStaticConfigurationSchema();
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE ViewerText::SetConfiguration(const char* configurationJsonUtf8) noexcept
 {
-    uint32_t textBufferMiB = 16;
-    uint32_t hexBufferMiB  = 8;
-    bool showLineNumbers   = false;
-    bool wrapText          = true;
+    uint32_t textBufferMiB              = 16;
+    uint32_t hexBufferMiB               = 8;
+    bool showLineNumbers                = false;
+    bool wrapText                       = true;
+    HexByteColorMode hexByteColorMode   = HexByteColorMode::LeadingNibble;
+    DiffDefaultLayout diffDefaultLayout = DiffDefaultLayout::SideBySide;
+    DiffContextMode diffContextMode     = DiffContextMode::HunksOnly;
+    DiffAutoOpenMode diffAutoOpenMode   = DiffAutoOpenMode::Parsed;
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
@@ -1222,22 +4001,66 @@ HRESULT STDMETHODCALLTYPE ViewerText::SetConfiguration(const char* configuration
                             wrapText = (strcmp(value, "1") == 0) || (strcmp(value, "true") == 0) || (strcmp(value, "on") == 0);
                         }
                     }
+
+                    yyjson_val* hexByteColors = yyjson_obj_get(root, "hexByteColorMode");
+                    if (hexByteColors && yyjson_is_str(hexByteColors))
+                    {
+                        const char* value = yyjson_get_str(hexByteColors);
+                        if (value != nullptr && strcmp(value, "off") == 0)
+                        {
+                            hexByteColorMode = HexByteColorMode::Off;
+                        }
+                        else if (value != nullptr && strcmp(value, "leadingNibble") == 0)
+                        {
+                            hexByteColorMode = HexByteColorMode::LeadingNibble;
+                        }
+                    }
+
+                    yyjson_val* diffLayout = yyjson_obj_get(root, "diffDefaultLayout");
+                    if (diffLayout && yyjson_is_str(diffLayout))
+                    {
+                        const char* value = yyjson_get_str(diffLayout);
+                        if (value != nullptr)
+                        {
+                            diffDefaultLayout = ParseDiffDefaultLayout(value);
+                        }
+                    }
+
+                    yyjson_val* diffContext = yyjson_obj_get(root, "diffContextMode");
+                    if (diffContext && yyjson_is_str(diffContext))
+                    {
+                        const char* value = yyjson_get_str(diffContext);
+                        if (value != nullptr)
+                        {
+                            diffContextMode = ParseDiffContextMode(value);
+                        }
+                    }
+
+                    yyjson_val* diffOpenMode = yyjson_obj_get(root, "diffAutoOpenMode");
+                    if (diffOpenMode && yyjson_is_str(diffOpenMode))
+                    {
+                        const char* value = yyjson_get_str(diffOpenMode);
+                        if (value != nullptr)
+                        {
+                            diffAutoOpenMode = ParseDiffAutoOpenMode(value);
+                        }
+                    }
                 }
             }
         }
     }
 
-    _config.textBufferMiB   = textBufferMiB;
-    _config.hexBufferMiB    = hexBufferMiB;
-    _config.showLineNumbers = showLineNumbers;
-    _config.wrapText        = wrapText;
-    _wrap                   = wrapText;
+    _config.textBufferMiB     = textBufferMiB;
+    _config.hexBufferMiB      = hexBufferMiB;
+    _config.showLineNumbers   = showLineNumbers;
+    _config.wrapText          = wrapText;
+    _config.hexByteColorMode  = hexByteColorMode;
+    _config.diffDefaultLayout = diffDefaultLayout;
+    _config.diffContextMode   = diffContextMode;
+    _config.diffAutoOpenMode  = diffAutoOpenMode;
+    _wrap                     = wrapText;
 
-    _configurationJson = std::format("{{\"textBufferMiB\":{},\"hexBufferMiB\":{},\"showLineNumbers\":\"{}\",\"wrapText\":\"{}\"}}",
-                                     _config.textBufferMiB,
-                                     _config.hexBufferMiB,
-                                     _config.showLineNumbers ? "1" : "0",
-                                     _config.wrapText ? "1" : "0");
+    RefreshConfigurationJson();
     return S_OK;
 }
 
@@ -1265,9 +4088,26 @@ HRESULT STDMETHODCALLTYPE ViewerText::SomethingToSave(BOOL* pSomethingToSave) no
         return E_POINTER;
     }
 
-    const bool isDefault = _config.textBufferMiB == 16u && _config.hexBufferMiB == 8u && ! _config.showLineNumbers && _config.wrapText;
+    const bool isDefault = _config.textBufferMiB == 16u && _config.hexBufferMiB == 8u && ! _config.showLineNumbers && _config.wrapText &&
+                           _config.hexByteColorMode == HexByteColorMode::LeadingNibble && _config.diffDefaultLayout == DiffDefaultLayout::SideBySide &&
+                           _config.diffContextMode == DiffContextMode::HunksOnly && _config.diffAutoOpenMode == DiffAutoOpenMode::Parsed;
     *pSomethingToSave    = isDefault ? FALSE : TRUE;
     return S_OK;
+}
+
+void ViewerText::RefreshConfigurationJson() noexcept
+{
+    const char* const hexByteColorMode = (_config.hexByteColorMode == HexByteColorMode::LeadingNibble) ? "leadingNibble" : "off";
+    _configurationJson = std::format("{{\"textBufferMiB\":{},\"hexBufferMiB\":{},\"showLineNumbers\":\"{}\",\"wrapText\":\"{}\",\"hexByteColorMode\":\"{}\","
+                                     "\"diffDefaultLayout\":\"{}\",\"diffContextMode\":\"{}\",\"diffAutoOpenMode\":\"{}\"}}",
+                                     _config.textBufferMiB,
+                                     _config.hexBufferMiB,
+                                     _config.showLineNumbers ? "1" : "0",
+                                     _config.wrapText ? "1" : "0",
+                                     hexByteColorMode,
+                                     DiffDefaultLayoutToConfigString(_config.diffDefaultLayout),
+                                     DiffContextModeToConfigString(_config.diffContextMode),
+                                     DiffAutoOpenModeToConfigString(_config.diffAutoOpenMode));
 }
 
 namespace
@@ -1555,13 +4395,236 @@ LRESULT ViewerText::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     switch (msg)
     {
+#ifdef ENABLE_TESTS
+        case WndMsg::kViewerDebugGetNativeMenuModelSnapshot:
+        {
+            auto* menuSnapshot = reinterpret_cast<WndMsg::ViewerNativeMenuModelDebugSnapshot*>(lp);
+            if (! menuSnapshot)
+            {
+                return FALSE;
+            }
+
+            *menuSnapshot                    = {};
+            menuSnapshot->hasHiddenMenuModel = _menuHandle != nullptr;
+            menuSnapshot->ownerDrawItemCount = CountOwnerDrawMenuItems(_menuHandle.get());
+            return TRUE;
+        }
+#endif
+#ifdef _DEBUG
+        case WndMsg::kViewerTextDebugGetSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerTextDebugSnapshot*>(lp);
+            if (! snapshot)
+            {
+                return FALSE;
+            }
+
+            *snapshot          = {};
+            snapshot->viewMode = (_viewMode == ViewMode::Hex) ? WndMsg::ViewerTextDebugViewMode::Hex : WndMsg::ViewerTextDebugViewMode::Text;
+            snapshot->documentKind =
+                (_documentKind == DocumentKind::Diff) ? WndMsg::ViewerTextDebugDocumentKind::Diff : WndMsg::ViewerTextDebugDocumentKind::PlainText;
+            snapshot->diffPresentation = WndMsg::ViewerTextDebugDiffPresentation::None;
+            if (_documentKind == DocumentKind::Diff)
+            {
+                switch (_diffPresentation)
+                {
+                    case DiffPresentationMode::RawText: snapshot->diffPresentation = WndMsg::ViewerTextDebugDiffPresentation::RawText; break;
+                    case DiffPresentationMode::Inline: snapshot->diffPresentation = WndMsg::ViewerTextDebugDiffPresentation::Inline; break;
+                    case DiffPresentationMode::SideBySide: snapshot->diffPresentation = WndMsg::ViewerTextDebugDiffPresentation::SideBySide; break;
+                }
+            }
+            snapshot->hexByteColorMode = (_config.hexByteColorMode == HexByteColorMode::LeadingNibble) ? WndMsg::ViewerTextDebugHexByteColorMode::LeadingNibble
+                                                                                                       : WndMsg::ViewerTextDebugHexByteColorMode::Off;
+            snapshot->diffParsedAvailable           = _diffParsedAvailable;
+            snapshot->fileComboUsesDiffSections     = UseDiffSectionFileCombo();
+            snapshot->fileComboEntryCount           = ActiveFileComboEntryCount();
+            snapshot->activeDiffSectionIndex        = CurrentDiffSectionIndex();
+            snapshot->activeDiffHunkIndex           = CurrentDiffHunkIndex();
+            snapshot->themeRainbow                  = _theme.rainbowMode != FALSE;
+            snapshot->diffAddedBackgroundArgb       = _theme.diffAddedBackgroundArgb;
+            snapshot->diffRemovedBackgroundArgb     = _theme.diffRemovedBackgroundArgb;
+            snapshot->diffContextBackgroundArgb     = _theme.diffContextBackgroundArgb;
+            snapshot->diffHeaderBackgroundArgb      = _theme.diffHeaderBackgroundArgb;
+            snapshot->diffBannerBackgroundArgb      = _theme.diffBannerBackgroundArgb;
+            snapshot->diffPlaceholderBackgroundArgb = _theme.diffPlaceholderBackgroundArgb;
+            snapshot->diffDividerArgb               = _theme.diffDividerArgb;
+            if (const auto* variant = CurrentDiffVariant())
+            {
+                snapshot->fileSectionCount                = variant->fileSectionCount;
+                snapshot->diffHunkCount                   = variant->hunkNavigation.size();
+                snapshot->styledRowCount                  = variant->styledRowCount;
+                snapshot->contextRowCount                 = variant->contextRowCount;
+                snapshot->addedRowCount                   = variant->addedRowCount;
+                snapshot->removedRowCount                 = variant->removedRowCount;
+                snapshot->headerRowCount                  = variant->headerRowCount;
+                snapshot->bannerRowCount                  = variant->bannerRowCount;
+                snapshot->placeholderRowCount             = variant->placeholderRowCount;
+                snapshot->placeholderBandCount            = variant->placeholderBandCount;
+                snapshot->deferredContextRowCount         = variant->deferredContextRowCount;
+                snapshot->diffExpandedContext             = variant->hasExpandedContext;
+                snapshot->diffHasPlaceholderRows          = variant->hasPlaceholderRows;
+                snapshot->diffReferencedFilesResolved     = variant->referencedFilesResolved;
+                snapshot->hydratedLogicalLineStart        = variant->hydratedLogicalLineStart;
+                snapshot->hydratedLogicalLineEndExclusive = variant->hydratedLogicalLineEndExclusive;
+                snapshot->builtLogicalLineCount           = variant->builtLogicalLineCount;
+                snapshot->diffHasExpandableTail           = variant->hasExpandableTail;
+                for (size_t logicalLine = 0; logicalLine < variant->logicalRowStyles.size() && logicalLine < variant->logicalRowRenderInfo.size();
+                     ++logicalLine)
+                {
+                    if (variant->logicalRowStyles[logicalLine].fullRow == DiffTextVariant::SemanticRowKind::HiddenContextBanner &&
+                        variant->logicalRowRenderInfo[logicalLine].clickableBanner)
+                    {
+                        snapshot->firstClickableBannerLogicalLine = logicalLine;
+                        break;
+                    }
+                }
+            }
+            else if (_documentKind == DocumentKind::Diff && ! _diffParsedAvailable && _textStreamActive && ! _diffStreamSections.empty())
+            {
+                snapshot->fileSectionCount = _diffStreamSections.size();
+            }
+            if (_diffReferenceCache)
+            {
+                uint64_t referencedBytesRead = 0u;
+                for (const auto& [key, value] : _diffReferenceCache->files)
+                {
+                    (void)key;
+                    if (value)
+                    {
+                        referencedBytesRead += value->bytesRead;
+                    }
+                }
+                snapshot->referencedBytesRead = referencedBytesRead;
+            }
+            snapshot->renderCount                      = (_viewMode == ViewMode::Hex) ? _debugHexRenderCount : _debugTextRenderCount;
+            snapshot->legacyVisibleGdiTextSurfaceCount = 0u;
+            snapshot->legacyVisibleHfontSurfaceCount   = 0u;
+            snapshot->diffParseCount                   = _debugDiffParseCount;
+            snapshot->visibleRowCount                  = (_viewMode == ViewMode::Hex) ? _debugHexVisibleRowCount : _debugTextVisibleRowCount;
+            snapshot->textLeftColumn                   = _textLeftColumn;
+            snapshot->visibleStyledRowCount            = _debugTextVisibleStyledRowCount;
+            snapshot->visibleContextRowCount           = _debugTextVisibleContextRowCount;
+            snapshot->visibleAddedRowCount             = _debugTextVisibleAddedRowCount;
+            snapshot->visibleRemovedRowCount           = _debugTextVisibleRemovedRowCount;
+            snapshot->visibleHeaderRowCount            = _debugTextVisibleHeaderRowCount;
+            snapshot->visibleBannerRowCount            = _debugTextVisibleBannerRowCount;
+            snapshot->visibleGapHatchCount             = _debugTextVisibleGapHatchCount;
+            snapshot->visibleSplitRowCount             = _debugTextVisibleSplitRowCount;
+            snapshot->textLastPaintUs                  = _debugTextLastPaintUs;
+            snapshot->paneLocalSideBySideLayout        = HasPaneLocalSideBySideVisualLayout();
+            snapshot->sideBySideLeftPaneColumns        = _textSideBySideLeftPaneColumns;
+            snapshot->sideBySideRightPaneColumns       = _textSideBySideRightPaneColumns;
+            snapshot->sideBySideSeparatorColumns       = _textSideBySideSeparatorColumns;
+            snapshot->diffContextUsesBaseBackground    = _debugDiffContextUsesBaseBackground;
+            snapshot->diffMarkerArgb                   = _debugDiffMarkerArgb;
+            snapshot->diffGapHatchArgb                 = _debugDiffGapHatchArgb;
+            snapshot->visibleByteCount                 = _debugHexVisibleByteCount;
+            snapshot->visibleColorizedByteCount        = _debugHexColorizedByteCount;
+            snapshot->visibleUniqueColorBucketCount    = _debugHexUniqueColorBucketCount;
+            snapshot->highContrastFallback             = _debugHexHighContrastFallback;
+            if (_viewMode == ViewMode::Text)
+            {
+                const auto copyPreviewText = [](std::wstring_view source, auto& destination) noexcept
+                {
+                    destination[0]         = L'\0';
+                    const size_t copyCount = std::min(source.size(), std::size(destination) - 1u);
+                    std::copy_n(source.begin(), copyCount, destination);
+                    destination[copyCount] = L'\0';
+                };
+
+                const auto copyPreviewLine = [&](wchar_t(&destination)[WndMsg::kViewerTextDebugTextPreviewChars], size_t lineIndex) noexcept
+                {
+                    destination[0] = L'\0';
+                    if (lineIndex >= _textLineStarts.size() || lineIndex >= _textLineEnds.size())
+                    {
+                        return;
+                    }
+
+                    const size_t start = static_cast<size_t>(_textLineStarts[lineIndex]);
+                    const size_t end   = static_cast<size_t>(_textLineEnds[lineIndex]);
+                    if (start > end || end > _textBuffer.size())
+                    {
+                        return;
+                    }
+
+                    const std::wstring_view line(_textBuffer.data() + static_cast<ptrdiff_t>(start), end - start);
+                    const size_t copyCount = std::min(line.size(), std::size(destination) - 1u);
+                    std::copy_n(line.begin(), copyCount, destination);
+                    destination[copyCount] = L'\0';
+                };
+
+                copyPreviewLine(snapshot->firstTextLine, 0u);
+                copyPreviewLine(snapshot->secondTextLine, 1u);
+                if (! _textVisualLineLogical.empty())
+                {
+                    const size_t topVisual          = std::min<size_t>(_textTopVisualLine, _textVisualLineLogical.size() - 1u);
+                    snapshot->topVisibleLogicalLine = _textVisualLineLogical[topVisual];
+                    copyPreviewLine(snapshot->topVisibleTextLine, snapshot->topVisibleLogicalLine);
+                    if (snapshot->topVisibleLogicalLine < _textLineStarts.size() && topVisual < _textVisualLineLayouts.size())
+                    {
+                        const uint32_t logicalStart = _textLineStarts[snapshot->topVisibleLogicalLine];
+                        const auto& layout          = _textVisualLineLayouts[topVisual];
+                        uint32_t segmentStart       = layout.segmentStartIndex;
+                        const uint32_t segmentEnd   = layout.segmentEndIndex;
+                        if (! _wrap && ! layout.splitPanes && segmentEnd >= segmentStart && _textLeftColumn != 0u)
+                        {
+                            const uint32_t skip = std::min<uint32_t>(_textLeftColumn, segmentEnd - segmentStart);
+                            segmentStart += skip;
+                        }
+                        snapshot->topVisibleSegmentColumnStart = segmentStart >= logicalStart ? (segmentStart - logicalStart) : 0u;
+                        if (layout.splitPanes)
+                        {
+                            snapshot->topVisibleLeftPaneColumnStart  = layout.leftStartIndex >= logicalStart ? (layout.leftStartIndex - logicalStart) : 0u;
+                            snapshot->topVisibleRightPaneColumnStart = layout.rightStartIndex >= logicalStart ? (layout.rightStartIndex - logicalStart) : 0u;
+                        }
+                    }
+
+                    const size_t maxVisibleVisual = std::min(_textVisualLineLayouts.size(), topVisual + std::max<size_t>(1u, _debugTextVisibleRowCount));
+                    for (size_t visual = topVisual; visual < maxVisibleVisual; ++visual)
+                    {
+                        const auto& layout = _textVisualLineLayouts[visual];
+                        if (! layout.splitPanes)
+                        {
+                            continue;
+                        }
+
+                        const size_t logicalLine = _textVisualLineLogical[visual];
+                        if (logicalLine >= _textLineStarts.size())
+                        {
+                            break;
+                        }
+
+                        const uint32_t logicalStart                     = _textLineStarts[logicalLine];
+                        snapshot->firstVisibleSplitLeftPaneColumnStart  = layout.leftStartIndex >= logicalStart ? (layout.leftStartIndex - logicalStart) : 0u;
+                        snapshot->firstVisibleSplitRightPaneColumnStart = layout.rightStartIndex >= logicalStart ? (layout.rightStartIndex - logicalStart) : 0u;
+                        break;
+                    }
+                }
+                copyPreviewText(_textBuffer, snapshot->textPreview);
+            }
+            return TRUE;
+        }
+        case WndMsg::kViewerTextDebugSelectDiffSection: ScrollToDiffSection(hwnd, static_cast<size_t>(wp)); return TRUE;
+        case WndMsg::kViewerTextDebugSelectDiffHunk: ScrollToDiffHunk(hwnd, static_cast<size_t>(wp)); return TRUE;
+        case WndMsg::kViewerTextDebugClickTextLogicalLine: return (_hEdit && DebugClickTextLogicalLine(_hEdit.get(), static_cast<uint32_t>(wp))) ? TRUE : FALSE;
+#endif
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
         case WM_DPICHANGED: OnDpiChanged(hwnd, static_cast<UINT>(LOWORD(wp)), reinterpret_cast<const RECT*>(lp)); return 0;
         case WM_COMMAND: OnCommand(hwnd, LOWORD(wp), HIWORD(wp), reinterpret_cast<HWND>(lp)); return 0;
         case WM_NOTIFY: return OnNotify(reinterpret_cast<const NMHDR*>(lp));
-        case WM_MEASUREITEM: return OnMeasureItem(hwnd, reinterpret_cast<MEASUREITEMSTRUCT*>(lp));
-        case WM_DRAWITEM: return OnDrawItem(reinterpret_cast<DRAWITEMSTRUCT*>(lp));
+        case WM_SYSKEYDOWN:
+            if ((wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())
+            {
+                return 0;
+            }
+            break;
+        case WM_SYSCHAR:
+            if (wp >= 0x20u && _menuBarHost.ActivateMnemonic(static_cast<wchar_t>(wp)))
+            {
+                return 0;
+            }
+            break;
         case WM_KEYDOWN:
             if (HandleShortcutKey(hwnd, wp))
             {
@@ -1625,7 +4688,11 @@ LRESULT ViewerText::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     OnDestroy();
     static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
 
-    _hFileCombo.release();
+    _menuBarHost.Detach();
+    _menuHandle.reset();
+    UnhookFileComboHostWindow(_hFileComboHost.get());
+    _fileComboHost.Detach();
+    _hFileComboHost.release();
     _hEdit.release();
     _hHex.release();
     _hWnd.release();
@@ -1635,98 +4702,126 @@ LRESULT ViewerText::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
     return DefWindowProcW(hwnd, WM_NCDESTROY, wp, lp);
 }
 
+LRESULT ViewerText::HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
+{
+    const bool popupWasOpen      = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
+    const bool preExpandForPopup = ! popupWasOpen && _fileComboControl && MessageMayOpenWindowComboPopup(msg, wp);
+    if (preExpandForPopup)
+    {
+        _fileComboHostPreExpandPopup = true;
+        if (_hWnd)
+        {
+            Layout(_hWnd.get());
+        }
+    }
+
+    const LRESULT dxResult = _fileComboHost.HandleMessage(hwnd, msg, wp, lp, handled);
+    if (msg == WM_NCDESTROY)
+    {
+        handled = true;
+        _fileComboHost.ReleaseMouseCapture();
+        _fileComboControl            = nullptr;
+        _fileComboHostPreExpandPopup = false;
+        _lastSyncedFileComboIndex.reset();
+        _hFileComboHost.release();
+        return dxResult;
+    }
+
+    const bool popupIsOpen = _fileComboControl && _fileComboControl->DebugIsPopupOpen();
+    if (popupIsOpen != popupWasOpen || (preExpandForPopup && ! popupIsOpen))
+    {
+        _fileComboHostPreExpandPopup = false;
+        if (_hWnd)
+        {
+            Layout(_hWnd.get());
+            InvalidateRect(_hWnd.get(), nullptr, FALSE);
+        }
+    }
+    return dxResult;
+}
+
 void ViewerText::OnCreate(HWND hwnd)
 {
-    const UINT dpi         = GetDpiForWindow(hwnd);
-    const int uiHeightPx   = -MulDiv(9, static_cast<int>(dpi), 72);
-    const int monoHeightPx = -MulDiv(10, static_cast<int>(dpi), 72);
-
     _allowEraseBkgnd         = true;
     _allowEraseBkgndTextView = true;
     _allowEraseBkgndHexView  = true;
 
-    _uiFont.reset(CreateFontW(uiHeightPx,
-                              0,
-                              0,
-                              0,
-                              FW_NORMAL,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              DEFAULT_CHARSET,
-                              OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS,
-                              CLEARTYPE_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE,
-                              L"Segoe UI"));
-    if (! _uiFont)
+    const DWORD comboHostStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | SS_NOTIFY;
+    _hFileComboHost.reset(CreateWindowExW(
+        0, L"Static", L"", comboHostStyle, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VIEWERTEXT_FILE_COMBO)), g_hInstance, nullptr));
+    if (! _hFileComboHost)
     {
-        Debug::ErrorWithLastError(L"ViewerText: CreateFontW failed for UI font.");
+        Debug::ErrorWithLastError(L"ViewerText: CreateWindowExW failed for DxUi file combo host.");
     }
-    _monoFont.reset(CreateFontW(monoHeightPx,
-                                0,
-                                0,
-                                0,
-                                FW_NORMAL,
-                                FALSE,
-                                FALSE,
-                                FALSE,
-                                DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,
-                                CLIP_DEFAULT_PRECIS,
-                                CLEARTYPE_QUALITY,
-                                FIXED_PITCH | FF_MODERN,
-                                L"Consolas"));
-    if (! _monoFont)
+    else if (! _fileComboHost.Attach(_hFileComboHost.get()))
     {
-        Debug::ErrorWithLastError(L"ViewerText: CreateFontW failed for monospace font.");
+        Debug::Error(L"ViewerText: failed to attach DxUi host for file combo.");
+        _hFileComboHost.reset();
     }
-
-    const DWORD comboStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | CBS_DROPDOWNLIST | CBS_OWNERDRAWFIXED | CBS_HASSTRINGS;
-    _hFileCombo.reset(CreateWindowExW(
-        0, L"COMBOBOX", nullptr, comboStyle, 0, 0, 0, 0, hwnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_VIEWERTEXT_FILE_COMBO)), g_hInstance, nullptr));
-    if (! _hFileCombo)
+    else if (! SetPropW(_hFileComboHost.get(), kFileComboHostStateProp, reinterpret_cast<HANDLE>(this)) ||
+             ! InstallWndProcHook(_hFileComboHost.get(), kFileComboHostOriginalWndProcProp, FileComboHostWndProc))
     {
-        Debug::ErrorWithLastError(L"ViewerText: CreateWindowExW failed for file combo.");
+        RemovePropW(_hFileComboHost.get(), kFileComboHostStateProp);
+        Debug::ErrorWithLastError(L"ViewerText: failed to install WNDPROC hook for DxUi file combo host.");
+        _fileComboHost.Detach();
+        _hFileComboHost.reset();
     }
-    if (_hFileCombo && _uiFont)
+    else
     {
-        SendMessageW(_hFileCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
-    }
-    if (_hFileCombo)
-    {
-        InstallFileComboEscClose(_hFileCombo.get());
-    }
-    if (_hFileCombo)
-    {
-        int itemHeight = PxFromDip(24, dpi);
-        auto hdc       = wil::GetDC(hwnd);
-        if (hdc)
+        auto combo        = std::make_unique<ComboBox>();
+        _fileComboControl = combo.get();
+        _fileComboControl->SetVariant(ComboBoxVariant::Window);
+        _fileComboControl->SetOnSelectionChanged([this, hwnd](size_t selectedIndex)
         {
-            HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-            static_cast<void>(oldFont);
-
-            TEXTMETRICW tm{};
-            if (GetTextMetricsW(hdc.get(), &tm) != 0)
+            if (_syncingFileCombo)
             {
-                itemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, dpi);
+                return;
             }
-        }
 
-        itemHeight = std::max(itemHeight, 1);
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, static_cast<WPARAM>(-1), static_cast<LPARAM>(itemHeight));
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, 0, static_cast<LPARAM>(itemHeight));
+            if (UseDiffSectionFileCombo())
+            {
+                ScrollToDiffSection(hwnd, selectedIndex);
+            }
+            else
+            {
+                if (selectedIndex >= _otherFiles.size())
+                {
+                    return;
+                }
+
+                _otherIndex = selectedIndex;
+                static_cast<void>(OpenPath(hwnd, _otherFiles[_otherIndex], false));
+            }
+
+            if (_viewMode == ViewMode::Hex)
+            {
+                if (_hHex)
+                {
+                    SetFocus(_hHex.get());
+                }
+            }
+            else if (_hEdit)
+            {
+                SetFocus(_hEdit.get());
+            }
+            else
+            {
+                SetFocus(hwnd);
+            }
+        });
+        _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+        _fileComboHost.SetRoot(std::move(combo));
     }
-    if (_hFileCombo)
+
+    if (! _menuHandle)
     {
-        COMBOBOXINFO info{};
-        info.cbSize = sizeof(info);
-        if (GetComboBoxInfo(_hFileCombo.get(), &info) != 0)
-        {
-            _hFileComboList = info.hwndList;
-            _hFileComboItem = info.hwndItem;
-        }
+        _menuHandle.reset(GetMenu(hwnd));
+    }
+    if (_menuHandle)
+    {
+        _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
+        _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuChecks(hwnd, false); });
+        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
     static_cast<void>(RegisterTextViewClass(g_hInstance));
@@ -1762,13 +4857,18 @@ void ViewerText::OnDestroy()
     _windowIconSmall.reset();
     _windowIconBig.reset();
 
-    IViewerCallback* callback = _callback;
-    void* cookie              = _callbackCookie;
-    if (callback)
+    RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
+    if (_callbackState.TryCapture(callbackSnapshot))
     {
-        AddRef();
-        static_cast<void>(callback->ViewerClosed(cookie));
-        Release();
+        IViewerCallback* callback = nullptr;
+        void* cookie              = nullptr;
+        if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
+        {
+            auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
+            AddRef();
+            static_cast<void>(callback->ViewerClosed(cookie));
+            Release();
+        }
     }
 }
 
@@ -1828,6 +4928,7 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
     _detectedCodePage               = 0;
     _detectedCodePageValid          = false;
     _detectedCodePageIsGuess        = false;
+    ResetDiffState();
 
     _textBuffer.clear();
     _searchMatchStarts.clear();
@@ -1857,6 +4958,8 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
     const UINT previousDisplayEncodingSelection = _displayEncodingMenuSelection;
     const uint32_t textBufferMiB                = _config.textBufferMiB;
     const uint32_t hexBufferMiB                 = _config.hexBufferMiB;
+    const DiffDefaultLayout diffDefaultLayout   = _config.diffDefaultLayout;
+    const DiffAutoOpenMode diffAutoOpenMode     = _config.diffAutoOpenMode;
     const bool allowHexFallback                 = static_cast<bool>(_hHex);
 
     wil::com_ptr<IFileSystem> fileSystem = _fileSystem;
@@ -1877,18 +4980,20 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
 
     ctx->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerTextModuleAnchor);
     ctx->work            = [this,
-                 hwnd,
-                 requestId,
-                 fileSystem = std::move(fileSystem),
-                 path,
-                 pathChanged,
-                 desiredViewMode,
-                 updateOtherFiles,
-                 displayEncodingMenuSelection,
-                 previousDisplayEncodingSelection,
-                 textBufferMiB,
-                 hexBufferMiB,
-                 allowHexFallback]() mutable
+                            hwnd,
+                            requestId,
+                            fileSystem = std::move(fileSystem),
+                            path,
+                            pathChanged,
+                            desiredViewMode,
+                            updateOtherFiles,
+                            displayEncodingMenuSelection,
+                            previousDisplayEncodingSelection,
+                            textBufferMiB,
+                            hexBufferMiB,
+                            diffDefaultLayout,
+                            diffAutoOpenMode,
+                            allowHexFallback]() mutable
     {
         auto releaseSelf = wil::scope_exit([&] { Release(); });
 
@@ -2042,10 +5147,62 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
         const FileEncoding displayEncoding = DisplayEncodingFileEncodingForSelection(selection);
         const UINT displayCodePage         = CodePageForSelection(selection);
         const uint64_t maxChunkBytes       = ::TextStreamChunkBytes(textBufferMiB, displayEncoding);
+        const uint64_t maxParsedDiffBytes  = kMaxFullyBufferedParsedDiffBytes;
+        const bool diffByExtension         = HasDiffLikeExtension(path);
 
-        const uint64_t availableBytes = (detectedFileSize > clampedStart) ? (detectedFileSize - clampedStart) : 0;
-        const uint64_t wantBytes64    = std::min<uint64_t>(availableBytes, maxChunkBytes);
-        const size_t wantBytes        = static_cast<size_t>(std::min<uint64_t>(wantBytes64, static_cast<uint64_t>(std::numeric_limits<size_t>::max())));
+        const uint64_t availableBytes        = (detectedFileSize > clampedStart) ? (detectedFileSize - clampedStart) : 0;
+        const bool readWholeFileForDiffProbe = diffByExtension && availableBytes <= maxParsedDiffBytes;
+        const uint64_t wantBytes64           = readWholeFileForDiffProbe ? availableBytes : std::min<uint64_t>(availableBytes, maxChunkBytes);
+        std::vector<uint8_t> bytes;
+
+        const auto readBytesFromOffset = [&](const uint64_t bytesToRead) noexcept -> bool
+        {
+            const size_t nextWantBytes = static_cast<size_t>(std::min<uint64_t>(bytesToRead, static_cast<uint64_t>(std::numeric_limits<size_t>::max())));
+
+            uint64_t nextPosition     = 0;
+            const HRESULT seekBytesHr = result->fileReader->Seek(static_cast<__int64>(clampedStart), FILE_BEGIN, &nextPosition);
+            if (FAILED(seekBytesHr))
+            {
+                Debug::Error(L"ViewerText: Seek to data start offset failed (0x{:016X}) for '{}' (hr=0x{:08X}).",
+                             clampedStart,
+                             path.c_str(),
+                             static_cast<unsigned long>(seekBytesHr));
+                result->hr = seekBytesHr;
+                return false;
+            }
+
+            bytes.assign(nextWantBytes, 0u);
+            size_t bytesReadTotal = 0u;
+            while (bytesReadTotal < bytes.size())
+            {
+                const size_t remaining   = bytes.size() - bytesReadTotal;
+                const unsigned long want = remaining > static_cast<size_t>(std::numeric_limits<unsigned long>::max())
+                                               ? std::numeric_limits<unsigned long>::max()
+                                               : static_cast<unsigned long>(remaining);
+
+                unsigned long chunkRead = 0u;
+                const HRESULT chunkHr   = result->fileReader->Read(bytes.data() + bytesReadTotal, want, &chunkRead);
+                if (FAILED(chunkHr))
+                {
+                    Debug::Error(L"ViewerText: Read failed for '{}' at offset 0x{:016X} (hr=0x{:08X}).",
+                                 path.c_str(),
+                                 clampedStart + bytesReadTotal,
+                                 static_cast<unsigned long>(chunkHr));
+                    result->hr = chunkHr;
+                    return false;
+                }
+
+                if (chunkRead == 0u)
+                {
+                    break;
+                }
+
+                bytesReadTotal += static_cast<size_t>(chunkRead);
+            }
+
+            bytes.resize(bytesReadTotal);
+            return true;
+        };
 
         if (clampedStart > static_cast<uint64_t>(std::numeric_limits<__int64>::max()))
         {
@@ -2054,47 +5211,10 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
             return;
         }
 
-        uint64_t newPosition     = 0;
-        const HRESULT seekDataHr = result->fileReader->Seek(static_cast<__int64>(clampedStart), FILE_BEGIN, &newPosition);
-        if (FAILED(seekDataHr))
+        if (! readBytesFromOffset(wantBytes64))
         {
-            Debug::Error(L"ViewerText: Seek to data start offset failed (0x{:016X}) for '{}' (hr=0x{:08X}).",
-                         clampedStart,
-                         path.c_str(),
-                         static_cast<unsigned long>(seekDataHr));
-            result->hr = seekDataHr;
             return;
         }
-
-        std::vector<uint8_t> bytes(wantBytes);
-        size_t bytesReadTotal = 0;
-        while (bytesReadTotal < bytes.size())
-        {
-            const size_t remaining   = bytes.size() - bytesReadTotal;
-            const unsigned long want = remaining > static_cast<size_t>(std::numeric_limits<unsigned long>::max()) ? std::numeric_limits<unsigned long>::max()
-                                                                                                                  : static_cast<unsigned long>(remaining);
-
-            unsigned long chunkRead = 0;
-            const HRESULT chunkHr   = result->fileReader->Read(bytes.data() + bytesReadTotal, want, &chunkRead);
-            if (FAILED(chunkHr))
-            {
-                Debug::Error(L"ViewerText: Read failed for '{}' at offset 0x{:016X} (hr=0x{:08X}).",
-                             path.c_str(),
-                             clampedStart + bytesReadTotal,
-                             static_cast<unsigned long>(chunkHr));
-                result->hr = chunkHr;
-                return;
-            }
-
-            if (chunkRead == 0)
-            {
-                break;
-            }
-
-            bytesReadTotal += static_cast<size_t>(chunkRead);
-        }
-
-        bytes.resize(bytesReadTotal);
 
         ViewMode targetViewMode = desiredViewMode;
         if (targetViewMode == ViewMode::Text && allowHexFallback)
@@ -2219,9 +5339,9 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
         }
 
         result->textStreamStartOffset = clampedStart;
-        if (bytesReadTotal >= carryBytes)
+        if (bytes.size() >= carryBytes)
         {
-            const uint64_t consumed     = static_cast<uint64_t>(bytesReadTotal - carryBytes);
+            const uint64_t consumed     = static_cast<uint64_t>(bytes.size() - carryBytes);
             result->textStreamEndOffset = std::min<uint64_t>(clampedStart + consumed, detectedFileSize);
         }
         else
@@ -2281,6 +5401,78 @@ void ViewerText::StartAsyncOpen(HWND hwnd, const std::filesystem::path& path, bo
         }
 
         BuildTextLineIndex(result->textBuffer, result->textLineStarts, result->textLineEnds, result->textMaxLineLength);
+
+        bool looksLikeDiffDocument            = diffByExtension || LooksLikeUnifiedDiffText(result->textBuffer);
+        const bool canPromoteFullBufferedDiff = targetViewMode == ViewMode::Text && looksLikeDiffDocument && availableBytes <= maxParsedDiffBytes &&
+                                                clampedStart == streamSkipBytes && result->textStreamEndOffset < detectedFileSize;
+        if (canPromoteFullBufferedDiff && ! readWholeFileForDiffProbe)
+        {
+            if (! readBytesFromOffset(availableBytes))
+            {
+                return;
+            }
+
+            HRESULT decodeHr     = S_OK;
+            std::wstring decoded = DecodeBytesToWide(bytes, displayEncoding, displayCodePage, decodeHr);
+            if (FAILED(decodeHr))
+            {
+                result->hr = decodeHr;
+                return;
+            }
+
+            result->textBuffer            = std::move(decoded);
+            result->textStreamStartOffset = clampedStart;
+            result->textStreamEndOffset   = detectedFileSize;
+            result->textStreamActive      = false;
+            BuildTextLineIndex(result->textBuffer, result->textLineStarts, result->textLineEnds, result->textMaxLineLength);
+            looksLikeDiffDocument = diffByExtension || LooksLikeUnifiedDiffText(result->textBuffer);
+        }
+        if (looksLikeDiffDocument)
+        {
+            result->documentKind = DocumentKind::Diff;
+        }
+
+        if (targetViewMode == ViewMode::Text && looksLikeDiffDocument && availableBytes <= maxParsedDiffBytes && clampedStart == streamSkipBytes &&
+            result->textStreamEndOffset >= detectedFileSize)
+        {
+            auto parsedDocument = std::make_shared<ParsedDiffDocument>();
+            if (ParseUnifiedDiffDocument(result->textBuffer, *parsedDocument))
+            {
+                result->diffParsedAvailable     = true;
+                result->parsedDiffDocument      = parsedDocument;
+                result->diffInlineHunksOnly     = BuildInlineDiffText(*parsedDocument, DiffContextMode::HunksOnly, path, fileIo.get()).variant;
+                result->diffSideBySideHunksOnly = BuildSideBySideDiffText(*parsedDocument, DiffContextMode::HunksOnly, path, fileIo.get()).variant;
+#ifdef _DEBUG
+                result->diffParseCount += 1u;
+#endif
+                result->initialDiffMode =
+                    diffAutoOpenMode == DiffAutoOpenMode::RawText
+                        ? DiffPresentationMode::RawText
+                        : (diffDefaultLayout == DiffDefaultLayout::Inline ? DiffPresentationMode::Inline : DiffPresentationMode::SideBySide);
+
+                if (diffAutoOpenMode == DiffAutoOpenMode::RawText)
+                {
+                    result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_SHOWING_RAW_TEXT);
+                }
+
+                result->textStreamActive = false;
+            }
+            else if (diffByExtension)
+            {
+                result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_PARSE_UNAVAILABLE);
+            }
+        }
+        else if (diffByExtension && diffAutoOpenMode == DiffAutoOpenMode::Parsed)
+        {
+            result->documentKind  = DocumentKind::Diff;
+            result->statusMessage = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_MSG_DIFF_PARSE_UNAVAILABLE);
+        }
+
+        if (targetViewMode == ViewMode::Text && result->documentKind == DocumentKind::Diff && ! result->diffParsedAvailable && result->textStreamActive)
+        {
+            static_cast<void>(BuildBoundedStreamedDiffSectionIndex(
+                result->fileReader.get(), detectedFileSize, streamSkipBytes, displayEncoding, displayCodePage, result->streamedDiffSections));
+        }
 
         result->viewMode = targetViewMode;
 
@@ -2537,41 +5729,71 @@ void ViewerText::OnAsyncOpenComplete(std::unique_ptr<AsyncOpenResult> result) no
     _detectedCodePageValid        = result->detectedCodePageValid;
     _detectedCodePageIsGuess      = result->detectedCodePageIsGuess;
 
-    _statusMessage = result->statusMessage;
+    _statusMessage       = result->statusMessage;
+    _documentKind        = result->documentKind;
+    _diffParsedAvailable = result->diffParsedAvailable;
+    _diffPresentation    = result->initialDiffMode;
+    _lastParsedDiffPresentation =
+        result->initialDiffMode == DiffPresentationMode::RawText
+            ? (_config.diffDefaultLayout == DiffDefaultLayout::Inline ? DiffPresentationMode::Inline : DiffPresentationMode::SideBySide)
+            : result->initialDiffMode;
+    _parsedDiffDocument = std::move(result->parsedDiffDocument);
+    _diffReferenceCache.reset();
+    _diffStreamSections          = std::move(result->streamedDiffSections);
+    _diffInlineHunksOnly         = std::move(result->diffInlineHunksOnly);
+    _diffInlineExpanded          = std::move(result->diffInlineExpanded);
+    _diffSideBySideHunksOnly     = std::move(result->diffSideBySideHunksOnly);
+    _diffSideBySideExpanded      = std::move(result->diffSideBySideExpanded);
+    _diffInlineExpandedBuilt     = false;
+    _diffSideBySideExpandedBuilt = false;
+#ifdef _DEBUG
+    _debugDiffParseCount = result->diffParseCount;
+#endif
 
     _textStreamSkipBytes   = result->textStreamSkipBytes;
     _textStreamStartOffset = result->textStreamStartOffset;
     _textStreamEndOffset   = result->textStreamEndOffset;
     _textStreamActive      = result->textStreamActive;
 
-    _textBuffer        = std::move(result->textBuffer);
-    _textLineStarts    = std::move(result->textLineStarts);
-    _textLineEnds      = std::move(result->textLineEnds);
-    _textMaxLineLength = result->textMaxLineLength;
-
     _textTotalLineCount.reset();
     _textStreamLineCountedEndOffset = _textStreamStartOffset;
     _textStreamLineCountedNewlines  = 0;
     _textStreamLineCountLastWasCR   = false;
-    UpdateTextStreamTotalLineCountAfterLoad();
 
-    _textVisualLineStarts.clear();
-    _textVisualLineLogical.clear();
-    _textTopVisualLine   = 0;
-    _textLeftColumn      = 0;
-    _textCaretIndex      = 0;
-    _textSelAnchor       = 0;
-    _textSelActive       = 0;
-    _textPreferredColumn = 0;
-    _textSelecting       = false;
-    _searchMatchStarts.clear();
-
-    if (_hEdit)
+    if (_documentKind == DocumentKind::Diff && _diffParsedAvailable)
     {
-        RebuildTextVisualLines(_hEdit.get());
-        UpdateTextViewScrollBars(_hEdit.get());
-        UpdateSearchHighlights();
-        InvalidateRect(_hEdit.get(), nullptr, TRUE);
+        _diffRawTextBuffer = std::move(result->textBuffer);
+        ApplyCurrentTextPresentation(_hEdit.get());
+    }
+    else
+    {
+        _diffRawTextBuffer.clear();
+
+        _textBuffer        = std::move(result->textBuffer);
+        _textLineStarts    = std::move(result->textLineStarts);
+        _textLineEnds      = std::move(result->textLineEnds);
+        _textMaxLineLength = result->textMaxLineLength;
+
+        UpdateTextStreamTotalLineCountAfterLoad();
+
+        _textVisualLineStarts.clear();
+        _textVisualLineLogical.clear();
+        _textTopVisualLine   = 0;
+        _textLeftColumn      = 0;
+        _textCaretIndex      = 0;
+        _textSelAnchor       = 0;
+        _textSelActive       = 0;
+        _textPreferredColumn = 0;
+        _textSelecting       = false;
+        _searchMatchStarts.clear();
+
+        if (_hEdit)
+        {
+            RebuildTextVisualLines(_hEdit.get());
+            UpdateTextViewScrollBars(_hEdit.get());
+            UpdateSearchHighlights();
+            InvalidateRect(_hEdit.get(), nullptr, TRUE);
+        }
     }
 
     _hexBytes = std::move(result->hexBytes);
@@ -2754,8 +5976,7 @@ void ViewerText::DrawLoadingOverlay(ID2D1HwndRenderTarget* target, ID2D1SolidCol
     if (! _loadingOverlayFormat && _dwriteFactory)
     {
         wil::com_ptr<IDWriteTextFormat> format;
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 22.0f, L"", format.put());
+        const HRESULT hr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(22.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), format.put());
         if (SUCCEEDED(hr) && format)
         {
             static_cast<void>(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
@@ -2920,6 +6141,8 @@ void ViewerText::OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggested) noe
         return;
     }
 
+    static_cast<void>(newDpi);
+
     if (suggested)
     {
         const int width  = std::max(1L, suggested->right - suggested->left);
@@ -2927,80 +6150,9 @@ void ViewerText::OnDpiChanged(HWND hwnd, UINT newDpi, const RECT* suggested) noe
         SetWindowPos(hwnd, nullptr, suggested->left, suggested->top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    const int uiHeightPx   = -MulDiv(9, static_cast<int>(newDpi), 72);
-    const int monoHeightPx = -MulDiv(10, static_cast<int>(newDpi), 72);
-
-    _uiFont.reset(CreateFontW(uiHeightPx,
-                              0,
-                              0,
-                              0,
-                              FW_NORMAL,
-                              FALSE,
-                              FALSE,
-                              FALSE,
-                              DEFAULT_CHARSET,
-                              OUT_DEFAULT_PRECIS,
-                              CLIP_DEFAULT_PRECIS,
-                              CLEARTYPE_QUALITY,
-                              DEFAULT_PITCH | FF_DONTCARE,
-                              L"Segoe UI"));
-    if (! _uiFont)
+    if (_hFileComboHost)
     {
-        Debug::ErrorWithLastError(L"ViewerText: CreateFontW failed for UI font (DPI change).");
-    }
-
-    _monoFont.reset(CreateFontW(monoHeightPx,
-                                0,
-                                0,
-                                0,
-                                FW_NORMAL,
-                                FALSE,
-                                FALSE,
-                                FALSE,
-                                DEFAULT_CHARSET,
-                                OUT_DEFAULT_PRECIS,
-                                CLIP_DEFAULT_PRECIS,
-                                CLEARTYPE_QUALITY,
-                                FIXED_PITCH | FF_MODERN,
-                                L"Consolas"));
-    if (! _monoFont)
-    {
-        Debug::ErrorWithLastError(L"ViewerText: CreateFontW failed for monospace font (DPI change).");
-    }
-
-    if (_hFileCombo && _uiFont)
-    {
-        SendMessageW(_hFileCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
-    }
-    if (_hEdit && _monoFont)
-    {
-        SendMessageW(_hEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_monoFont.get()), TRUE);
-    }
-    if (_hHex && _monoFont)
-    {
-        SendMessageW(_hHex.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_monoFont.get()), TRUE);
-    }
-
-    if (_hFileCombo)
-    {
-        int itemHeight = PxFromDip(24, newDpi);
-        auto hdc       = wil::GetDC(hwnd);
-        if (hdc)
-        {
-            HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-            static_cast<void>(oldFont);
-
-            TEXTMETRICW tm{};
-            if (GetTextMetricsW(hdc.get(), &tm) != 0)
-            {
-                itemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, newDpi);
-            }
-        }
-
-        itemHeight = std::max(itemHeight, 1);
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, static_cast<WPARAM>(-1), static_cast<LPARAM>(itemHeight));
-        SendMessageW(_hFileCombo.get(), CB_SETITEMHEIGHT, 0, static_cast<LPARAM>(itemHeight));
+        _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
     }
 
     UpdateHexColumns(hwnd);
@@ -3012,50 +6164,19 @@ void ViewerText::Layout(HWND hwnd) noexcept
 {
     RECT client{};
     GetClientRect(hwnd, &client);
+    _menuBarHost.UpdateLayout();
+    client.top += _menuBarHost.GetHwnd() ? _menuBarHost.GetVisibleHeightPx() : 0;
 
     const UINT dpi             = GetDpiForWindow(hwnd);
-    const int edgeSizeY        = GetSystemMetricsForDpi(SM_CYEDGE, dpi);
     const int baseHeaderHeight = PxFromDip(kHeaderHeightDip, dpi);
     const int statusHeight     = PxFromDip(kStatusHeightDip, dpi);
     const int accentHeight     = std::max(1, PxFromDip(2, dpi));
     const int accentGap        = std::max(1, PxFromDip(1, dpi));
     const int minPadding       = PxFromDip(3, dpi);
-    const int comboBorder      = std::max(0, edgeSizeY) * 2;
+    const int minChromeHeight  = PxFromDip(22, dpi) + accentHeight + accentGap + 2 * minPadding;
 
-    const int minChromeHeight = PxFromDip(22, dpi) + accentHeight + accentGap + 2 * minPadding;
-
-    const bool showCombo   = (_hFileCombo && _otherFiles.size() > 1);
-    int desiredComboHeight = 0;
-    if (showCombo)
-    {
-        int comboItemHeight           = 0;
-        const LRESULT selectionHeight = SendMessageW(_hFileCombo.get(), CB_GETITEMHEIGHT, static_cast<WPARAM>(-1), 0);
-        if (selectionHeight != CB_ERR && selectionHeight > 0)
-        {
-            comboItemHeight = static_cast<int>(selectionHeight);
-        }
-
-        if (comboItemHeight <= 0)
-        {
-            comboItemHeight = PxFromDip(24, dpi);
-            auto hdc        = wil::GetDC(hwnd);
-            if (hdc)
-            {
-                HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-                auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-                static_cast<void>(oldFont);
-
-                TEXTMETRICW tm{};
-                if (GetTextMetricsW(hdc.get(), &tm) != 0)
-                {
-                    comboItemHeight = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, dpi);
-                }
-            }
-        }
-
-        const int comboChromePadding = std::max(PxFromDip(4, dpi), comboBorder);
-        desiredComboHeight           = std::max(1, comboItemHeight + comboChromePadding);
-    }
+    const bool showCombo         = (_hFileComboHost && ActiveFileComboEntryCount() > 1u);
+    const int desiredComboHeight = showCombo ? std::max(1, PxFromDip(32, dpi)) : 0;
 
     int headerHeight = baseHeaderHeight;
     headerHeight     = std::max(headerHeight, minChromeHeight);
@@ -3097,39 +6218,43 @@ void ViewerText::Layout(HWND hwnd) noexcept
         _modeButtonRect.bottom   = std::min<LONG>(headerContentRect.bottom, buttonY + buttonH);
 
         int measuredComboHeight = 0;
-        if (_hFileCombo)
+        if (_hFileComboHost)
         {
-            ShowWindow(_hFileCombo.get(), showCombo ? SW_SHOW : SW_HIDE);
-            EnableWindow(_hFileCombo.get(), showCombo ? TRUE : FALSE);
+            ShowWindow(_hFileComboHost.get(), showCombo ? SW_SHOW : SW_HIDE);
+            EnableWindow(_hFileComboHost.get(), showCombo ? TRUE : FALSE);
+            if (! showCombo)
+            {
+                _fileComboHostPreExpandPopup = false;
+            }
 
             if (showCombo)
             {
                 int comboH = desiredComboHeight;
                 comboH     = std::clamp(comboH, 1, std::max(1, headerContentH));
 
-                const int comboX = headerContentRect.left + margin;
-                const int comboW = std::max(0, static_cast<int>(_modeButtonRect.left) - margin - comboX);
-
-                SetWindowPos(_hFileCombo.get(), nullptr, comboX, headerContentRect.top, comboW, comboH, SWP_NOZORDER | SWP_NOACTIVATE);
-
-                RECT comboRc{};
-                int actualComboH = comboH;
-                if (GetWindowRect(_hFileCombo.get(), &comboRc) != 0)
-                {
-                    actualComboH = std::max(0L, comboRc.bottom - comboRc.top);
-                }
-
-                measuredComboHeight = actualComboH;
-
-                int comboY = headerContentRect.top + std::max(0, (headerContentH - actualComboH) / 2);
+                const int comboX    = headerContentRect.left + margin;
+                const int comboW    = std::max(0, static_cast<int>(_modeButtonRect.left) - margin - comboX);
+                measuredComboHeight = comboH;
+                int comboY          = headerContentRect.top + std::max(0, (headerContentH - comboH) / 2);
 
                 const int maxBottom = std::max(static_cast<int>(headerContentRect.top), static_cast<int>(headerContentRect.bottom));
-                if (comboY + actualComboH > maxBottom)
+                if (comboY + comboH > maxBottom)
                 {
-                    comboY = std::max(static_cast<int>(headerContentRect.top), maxBottom - actualComboH);
+                    comboY = std::max(static_cast<int>(headerContentRect.top), maxBottom - comboH);
                 }
 
-                SetWindowPos(_hFileCombo.get(), nullptr, comboX, comboY, 0, 0, SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOSIZE);
+                const bool expandPopupHost = _fileComboHostPreExpandPopup || (_fileComboControl && _fileComboControl->DebugIsPopupOpen());
+                const int popupExtraHeight = expandPopupHost ? ComputeWindowComboPopupHeightPx(ActiveFileComboEntryCount(), dpi) : 0;
+                const int hostHeight       = std::max(comboH, comboH + popupExtraHeight);
+                SetWindowPos(_hFileComboHost.get(), HWND_TOP, comboX, comboY, comboW, hostHeight, SWP_NOACTIVATE);
+                if (_fileComboControl)
+                {
+                    _fileComboControl->SetBounds(D2D1::RectF(0.0f,
+                                                             0.0f,
+                                                             static_cast<float>(comboW) * 96.0f / static_cast<float>(dpi),
+                                                             static_cast<float>(comboH) * 96.0f / static_cast<float>(dpi)));
+                    _fileComboHost.Invalidate();
+                }
             }
         }
 
@@ -3164,7 +6289,7 @@ void ViewerText::Layout(HWND hwnd) noexcept
 
 void ViewerText::RefreshFileCombo(HWND hwnd) noexcept
 {
-    if (! _hFileCombo)
+    if (! _fileComboControl)
     {
         return;
     }
@@ -3172,11 +6297,13 @@ void ViewerText::RefreshFileCombo(HWND hwnd) noexcept
     _syncingFileCombo = true;
     auto restore      = wil::scope_exit([&] { _syncingFileCombo = false; });
 
-    SendMessageW(_hFileCombo.get(), CB_RESETCONTENT, 0, 0);
-
-    if (_otherFiles.size() <= 1)
+    const bool useDiffSections = UseDiffSectionFileCombo();
+    const size_t entryCount    = ActiveFileComboEntryCount();
+    if (entryCount <= 1u)
     {
-        SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(-1), 0);
+        _fileComboControl->SetItems({});
+        _fileComboControl->SetSelectedIndex(std::nullopt);
+        _lastSyncedFileComboIndex.reset();
         if (hwnd)
         {
             Layout(hwnd);
@@ -3185,24 +6312,58 @@ void ViewerText::RefreshFileCombo(HWND hwnd) noexcept
         return;
     }
 
-    for (const auto& path : _otherFiles)
+    std::vector<ComboBox::Item> items;
+    items.reserve(entryCount);
+    if (useDiffSections)
     {
-        std::wstring itemText = path.filename().wstring();
-        if (itemText.empty())
+        if (const auto* variant = CurrentDiffVariant())
         {
-            itemText = path.wstring();
+            for (const auto& section : variant->sectionNavigation)
+            {
+                items.push_back(ComboBox::Item{section.label, section.label});
+            }
+        }
+        else
+        {
+            for (const auto& section : _diffStreamSections)
+            {
+                items.push_back(ComboBox::Item{section.label, section.label});
+            }
+        }
+    }
+    else
+    {
+        for (const auto& path : _otherFiles)
+        {
+            std::wstring itemText = path.filename().wstring();
+            if (itemText.empty())
+            {
+                itemText = path.wstring();
+            }
+            items.push_back(ComboBox::Item{path.wstring(), std::move(itemText)});
+        }
+    }
+    _fileComboControl->SetItems(std::move(items));
+
+    size_t selectedIndex = 0u;
+    if (useDiffSections)
+    {
+        selectedIndex = CurrentDiffSectionIndex();
+        _fileComboControl->SetSelectedIndex(selectedIndex);
+    }
+    else
+    {
+        if (_otherIndex >= _otherFiles.size())
+        {
+            _otherIndex = 0;
         }
 
-        SendMessageW(_hFileCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(itemText.c_str()));
+        selectedIndex = _otherIndex;
+        _fileComboControl->SetSelectedIndex(selectedIndex);
     }
-
-    if (_otherIndex >= _otherFiles.size())
-    {
-        _otherIndex = 0;
-    }
-
-    SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(_otherIndex), 0);
-    SendMessageW(_hFileCombo.get(), CB_SETMINVISIBLE, static_cast<WPARAM>(std::min<size_t>(_otherFiles.size(), 15)), 0);
+    _lastSyncedFileComboUsesDiffSections = useDiffSections;
+    _lastSyncedFileComboIndex            = selectedIndex;
+    _fileComboHost.Invalidate();
 
     if (hwnd)
     {
@@ -3213,25 +6374,44 @@ void ViewerText::RefreshFileCombo(HWND hwnd) noexcept
 
 void ViewerText::SyncFileComboSelection() noexcept
 {
-    if (! _hFileCombo)
+    if (! _fileComboControl)
     {
         return;
     }
 
-    if (_otherFiles.size() <= 1)
+    const bool useDiffSections = UseDiffSectionFileCombo();
+    const size_t entryCount    = ActiveFileComboEntryCount();
+    if (entryCount <= 1u)
     {
         return;
     }
 
-    if (_otherIndex >= _otherFiles.size())
+    size_t selectedIndex = 0u;
+    if (useDiffSections)
+    {
+        selectedIndex = CurrentDiffSectionIndex();
+    }
+    else
+    {
+        if (_otherIndex >= _otherFiles.size())
+        {
+            return;
+        }
+
+        selectedIndex = _otherIndex;
+    }
+
+    if (_lastSyncedFileComboIndex.has_value() && _lastSyncedFileComboUsesDiffSections == useDiffSections && _lastSyncedFileComboIndex.value() == selectedIndex)
     {
         return;
     }
 
     _syncingFileCombo = true;
     auto restore      = wil::scope_exit([&] { _syncingFileCombo = false; });
-
-    SendMessageW(_hFileCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(_otherIndex), 0);
+    _fileComboControl->SetSelectedIndex(selectedIndex);
+    _lastSyncedFileComboUsesDiffSections = useDiffSections;
+    _lastSyncedFileComboIndex            = selectedIndex;
+    _fileComboHost.Invalidate();
 }
 
 bool ViewerText::EnsureDirect2D(HWND hwnd) noexcept
@@ -3264,6 +6444,75 @@ bool ViewerText::EnsureDirect2D(HWND hwnd) noexcept
         }
     }
 
+    if (! _headerFormat)
+    {
+        const HRESULT hr =
+            Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(12.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _headerFormat.put());
+        if (FAILED(hr) || ! _headerFormat)
+        {
+            _headerFormat.reset();
+            return false;
+        }
+
+        static_cast<void>(_headerFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
+        static_cast<void>(_headerFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+    }
+
+    if (! _headerFormatRight)
+    {
+        const HRESULT hr =
+            Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(12.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _headerFormatRight.put());
+        if (FAILED(hr) || ! _headerFormatRight)
+        {
+            _headerFormatRight.reset();
+            return false;
+        }
+
+        static_cast<void>(_headerFormatRight->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING));
+        static_cast<void>(_headerFormatRight->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+    }
+
+    if (! _modeButtonFormat)
+    {
+        const HRESULT hr =
+            Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(12.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _modeButtonFormat.put());
+        if (FAILED(hr) || ! _modeButtonFormat)
+        {
+            _modeButtonFormat.reset();
+            return false;
+        }
+
+        static_cast<void>(_modeButtonFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
+        static_cast<void>(_modeButtonFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+    }
+
+    if (! _statusFormat)
+    {
+        const HRESULT hr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(11.0f), _statusFormat.put());
+        if (FAILED(hr) || ! _statusFormat)
+        {
+            _statusFormat.reset();
+            return false;
+        }
+
+        static_cast<void>(_statusFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
+        static_cast<void>(_statusFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+    }
+
+    if (! _watermarkFormat)
+    {
+        const HRESULT hr = Typography::CreateTextFormat(
+            _dwriteFactory.get(), Typography::MakeUiTextSpec(kWatermarkFontSizeDip, DWRITE_FONT_WEIGHT_SEMI_BOLD), _watermarkFormat.put());
+        if (FAILED(hr) || ! _watermarkFormat)
+        {
+            _watermarkFormat.reset();
+            return false;
+        }
+
+        static_cast<void>(_watermarkFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
+        static_cast<void>(_watermarkFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
+    }
+
     if (! _d2dTarget)
     {
         RECT client{};
@@ -3283,6 +6532,7 @@ bool ViewerText::EnsureDirect2D(HWND hwnd) noexcept
         if (FAILED(hr) || ! _d2dTarget)
         {
             _d2dTarget.reset();
+            _d2dBrush.reset();
             return false;
         }
 
@@ -3303,83 +6553,7 @@ bool ViewerText::EnsureDirect2D(HWND hwnd) noexcept
         }
     }
 
-    if (! _headerFormat)
-    {
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"", _headerFormat.put());
-        if (FAILED(hr) || ! _headerFormat)
-        {
-            _headerFormat.reset();
-            return false;
-        }
-
-        static_cast<void>(_headerFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
-        static_cast<void>(_headerFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
-    }
-
-    if (! _headerFormatRight)
-    {
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"", _headerFormatRight.put());
-        if (FAILED(hr) || ! _headerFormatRight)
-        {
-            _headerFormatRight.reset();
-            return false;
-        }
-
-        static_cast<void>(_headerFormatRight->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING));
-        static_cast<void>(_headerFormatRight->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
-    }
-
-    if (! _modeButtonFormat)
-    {
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"", _modeButtonFormat.put());
-        if (FAILED(hr) || ! _modeButtonFormat)
-        {
-            _modeButtonFormat.reset();
-            return false;
-        }
-
-        static_cast<void>(_modeButtonFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
-        static_cast<void>(_modeButtonFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
-    }
-
-    if (! _statusFormat)
-    {
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 11.0f, L"", _statusFormat.put());
-        if (FAILED(hr) || ! _statusFormat)
-        {
-            _statusFormat.reset();
-            return false;
-        }
-
-        static_cast<void>(_statusFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
-        static_cast<void>(_statusFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
-    }
-
-    if (! _watermarkFormat)
-    {
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(L"Segoe UI",
-                                                            nullptr,
-                                                            DWRITE_FONT_WEIGHT_SEMI_BOLD,
-                                                            DWRITE_FONT_STYLE_NORMAL,
-                                                            DWRITE_FONT_STRETCH_NORMAL,
-                                                            kWatermarkFontSizeDip,
-                                                            L"",
-                                                            _watermarkFormat.put());
-        if (FAILED(hr) || ! _watermarkFormat)
-        {
-            _watermarkFormat.reset();
-            return false;
-        }
-
-        static_cast<void>(_watermarkFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER));
-        static_cast<void>(_watermarkFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER));
-    }
-
-    return true;
+    return _d2dTarget && _d2dBrush && _headerFormat && _headerFormatRight && _statusFormat && _watermarkFormat;
 }
 
 void ViewerText::DiscardDirect2D() noexcept
@@ -3400,160 +6574,200 @@ void ViewerText::OnPaint()
         return;
     }
 
+    Debug::Perf::Scope paintPerf(L"viewer.chrome.paint_us");
+
     PAINTSTRUCT ps{};
     wil::unique_hdc_paint hdc = wil::BeginPaint(_hWnd.get(), &ps);
     _allowEraseBkgnd          = false;
 
-    const int dpiInt = static_cast<int>(GetDpiForWindow(_hWnd.get()));
+    const UINT dpi   = GetDpiForWindow(_hWnd.get());
+    const int dpiInt = static_cast<int>(dpi);
 
-    if (EnsureDirect2D(_hWnd.get()) && _d2dTarget && _d2dBrush && _headerFormat && _headerFormatRight && _statusFormat && _watermarkFormat)
+    const COLORREF bg = _hasTheme ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
+    const COLORREF fg = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
+
+    COLORREF headerBg = bg;
+    COLORREF statusBg = bg;
+    if (_hasTheme && _theme.darkMode)
     {
-        const UINT dpi = GetDpiForWindow(_hWnd.get());
+        headerBg = RGB(std::max(0, GetRValue(bg) - 10), std::max(0, GetGValue(bg) - 10), std::max(0, GetBValue(bg) - 10));
+        statusBg = RGB(std::min(255, GetRValue(bg) + 5), std::min(255, GetGValue(bg) + 5), std::min(255, GetBValue(bg) + 5));
+    }
+    else
+    {
+        headerBg = RGB(std::max(0, GetRValue(bg) - 5), std::max(0, GetGValue(bg) - 5), std::max(0, GetBValue(bg) - 5));
+        statusBg = RGB(std::min(255, GetRValue(bg) + 5), std::min(255, GetGValue(bg) + 5), std::min(255, GetBValue(bg) + 5));
+    }
 
-        const COLORREF bg = _hasTheme ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
-        const COLORREF fg = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
+    const std::wstring seed = _currentPath.empty() ? std::wstring(L"viewer") : _currentPath.filename().wstring();
+    const COLORREF accent   = _hasTheme ? ResolveAccentColor(_theme, seed) : RGB(0, 120, 215);
 
-        COLORREF headerBg = bg;
-        COLORREF statusBg = bg;
-        if (_hasTheme && _theme.darkMode)
+    std::wstring titleText;
+    if (! _currentPath.empty())
+    {
+        titleText = _currentPath.filename().wstring();
+    }
+
+    UINT modeId = IDS_VIEWERTEXT_MODE_TEXT;
+    if (_viewMode == ViewMode::Hex)
+    {
+        modeId = IDS_VIEWERTEXT_MODE_HEX;
+    }
+    else if (_documentKind == DocumentKind::Diff)
+    {
+        modeId = _diffPresentation == DiffPresentationMode::RawText ? IDS_VIEWERTEXT_MODE_RAW : IDS_VIEWERTEXT_MODE_DIFF;
+    }
+    const std::wstring modeText   = LoadStringResource(g_hInstance, modeId);
+    const std::wstring statusText = BuildStatusText();
+
+    const auto drawChrome = [&](ID2D1RenderTarget* target, ID2D1SolidColorBrush* brush) noexcept
+    {
+        if (! target || ! brush)
         {
-            headerBg = RGB(std::max(0, GetRValue(bg) - 10), std::max(0, GetGValue(bg) - 10), std::max(0, GetBValue(bg) - 10));
-            statusBg = RGB(std::min(255, GetRValue(bg) + 5), std::min(255, GetGValue(bg) + 5), std::min(255, GetBValue(bg) + 5));
+            return;
         }
-        else
+
+        target->SetTransform(D2D1::Matrix3x2F::Identity());
+        target->Clear(ColorFFromColorRef(bg));
+
+        const D2D1_RECT_F headerRc = RectFFromPixels(_headerRect, dpi);
+        const D2D1_RECT_F statusRc = RectFFromPixels(_statusRect, dpi);
+
+        brush->SetColor(ColorFFromColorRef(headerBg));
+        target->FillRectangle(headerRc, brush);
+
+        brush->SetColor(ColorFFromColorRef(statusBg));
+        target->FillRectangle(statusRc, brush);
+
+        const int accentHeightPx = std::max(1, PxFromDip(2, dpi));
+        RECT accentPx            = _headerRect;
+        accentPx.top             = std::max(accentPx.top, accentPx.bottom - accentHeightPx);
+        ClampRectNonNegative(accentPx);
+        const D2D1_RECT_F accentRc = RectFFromPixels(accentPx, dpi);
+
+        brush->SetColor(ColorFFromColorRef(accent));
+        target->FillRectangle(accentRc, brush);
+
+        const float marginDip    = 10.0f;
+        D2D1_RECT_F headerTextRc = headerRc;
+        headerTextRc.left += marginDip;
+        headerTextRc.right -= marginDip;
+
+        const D2D1_RECT_F modeButtonRc = RectFFromPixels(_modeButtonRect, dpi);
+        const float radius             = 2.0f;
+
+        float modeAlpha = 0.16f;
+        if (_modeButtonPressed)
         {
-            headerBg = RGB(std::max(0, GetRValue(bg) - 5), std::max(0, GetGValue(bg) - 5), std::max(0, GetBValue(bg) - 5));
-            statusBg = RGB(std::min(255, GetRValue(bg) + 5), std::min(255, GetGValue(bg) + 5), std::min(255, GetBValue(bg) + 5));
+            modeAlpha = 0.30f;
         }
-
-        const std::wstring seed = _currentPath.empty() ? std::wstring(L"viewer") : _currentPath.filename().wstring();
-        const COLORREF accent   = _hasTheme ? ResolveAccentColor(_theme, seed) : RGB(0, 120, 215);
-
-        std::wstring titleText;
-        if (! _currentPath.empty())
+        else if (_modeButtonHot)
         {
-            titleText = _currentPath.filename().wstring();
+            modeAlpha = 0.22f;
         }
 
-        const UINT modeId           = _viewMode == ViewMode::Hex ? IDS_VIEWERTEXT_MODE_HEX : IDS_VIEWERTEXT_MODE_TEXT;
-        const std::wstring modeText = LoadStringResource(g_hInstance, modeId);
+        brush->SetColor(ColorFFromColorRef(accent, modeAlpha));
+        target->FillRoundedRectangle(D2D1::RoundedRect(modeButtonRc, radius, radius), brush);
 
-        const std::wstring statusText = BuildStatusText();
+        brush->SetColor(ColorFFromColorRef(accent, 0.85f));
+        target->DrawRoundedRectangle(D2D1::RoundedRect(modeButtonRc, radius, radius), brush, 1.0f);
+
+        brush->SetColor(ColorFFromColorRef(fg));
+        target->DrawTextW(modeText.c_str(),
+                          static_cast<UINT32>(modeText.size()),
+                          _modeButtonFormat ? _modeButtonFormat.get() : _headerFormatRight.get(),
+                          modeButtonRc,
+                          brush,
+                          D2D1_DRAW_TEXT_OPTIONS_CLIP);
+
+        if (ActiveFileComboEntryCount() <= 1u)
+        {
+            D2D1_RECT_F fileRc = headerTextRc;
+            fileRc.right       = std::max(fileRc.left, modeButtonRc.left - marginDip);
+            target->DrawTextW(titleText.c_str(), static_cast<UINT32>(titleText.size()), _headerFormat.get(), fileRc, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+        }
+
+        D2D1_RECT_F statusTextRc = statusRc;
+        statusTextRc.left += marginDip;
+        statusTextRc.right -= marginDip;
+        target->DrawTextW(statusText.c_str(), static_cast<UINT32>(statusText.size()), _statusFormat.get(), statusTextRc, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+
+        if (! _isLoading && _fileReader && _fileSize == 0 && ! _currentPath.empty())
+        {
+            const std::wstring emptyText = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_EMPTY_WATERMARK);
+            if (! emptyText.empty())
+            {
+                const D2D1_RECT_F contentRc = RectFFromPixels(_contentRect, dpi);
+                const float centerX         = (contentRc.left + contentRc.right) / 2.0f;
+                const float centerY         = (contentRc.top + contentRc.bottom) / 2.0f;
+                const float alpha           = _hasTheme && _theme.darkMode ? 0.28f : 0.20f;
+                brush->SetColor(ColorFFromColorRef(fg, alpha));
+
+                auto restoreTransform          = wil::scope_exit([&] { target->SetTransform(D2D1::Matrix3x2F::Identity()); });
+                const D2D1_MATRIX_3X2_F rotate = D2D1::Matrix3x2F::Rotation(kWatermarkAngleDegrees, D2D1::Point2F(centerX, centerY));
+                target->SetTransform(rotate * D2D1::Matrix3x2F::Identity());
+                target->DrawTextW(
+                    emptyText.c_str(), static_cast<UINT32>(emptyText.size()), _watermarkFormat.get(), contentRc, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+            }
+        }
+    };
+
+    const auto drawWithTarget = [&](ID2D1RenderTarget* target, ID2D1SolidColorBrush* brush, bool sharedTarget) noexcept -> bool
+    {
+        if (! target || ! brush)
+        {
+            return false;
+        }
 
         HRESULT hr = S_OK;
         {
-            _d2dTarget->BeginDraw();
+            target->BeginDraw();
             auto endDraw = wil::scope_exit([&]
             {
-                hr = _d2dTarget->EndDraw();
-                if (hr == D2DERR_RECREATE_TARGET)
+                hr = target->EndDraw();
+                if (hr == D2DERR_RECREATE_TARGET && sharedTarget)
                 {
                     DiscardDirect2D();
                 }
             });
-
-            _d2dTarget->SetTransform(D2D1::Matrix3x2F::Identity());
-            _d2dTarget->Clear(ColorFFromColorRef(bg));
-
-            const D2D1_RECT_F headerRc = RectFFromPixels(_headerRect, dpi);
-            const D2D1_RECT_F statusRc = RectFFromPixels(_statusRect, dpi);
-
-            _d2dBrush->SetColor(ColorFFromColorRef(headerBg));
-            _d2dTarget->FillRectangle(headerRc, _d2dBrush.get());
-
-            _d2dBrush->SetColor(ColorFFromColorRef(statusBg));
-            _d2dTarget->FillRectangle(statusRc, _d2dBrush.get());
-
-            const int accentHeightPx = std::max(1, PxFromDip(2, dpi));
-            RECT accentPx            = _headerRect;
-            accentPx.top             = std::max(accentPx.top, accentPx.bottom - accentHeightPx);
-            ClampRectNonNegative(accentPx);
-            const D2D1_RECT_F accentRc = RectFFromPixels(accentPx, dpi);
-
-            _d2dBrush->SetColor(ColorFFromColorRef(accent));
-            _d2dTarget->FillRectangle(accentRc, _d2dBrush.get());
-
-            const float marginDip    = 10.0f;
-            D2D1_RECT_F headerTextRc = headerRc;
-            headerTextRc.left += marginDip;
-            headerTextRc.right -= marginDip;
-
-            const D2D1_RECT_F modeButtonRc = RectFFromPixels(_modeButtonRect, dpi);
-            const float radius             = 2.0f;
-
-            float modeAlpha = 0.16f;
-            if (_modeButtonPressed)
-            {
-                modeAlpha = 0.30f;
-            }
-            else if (_modeButtonHot)
-            {
-                modeAlpha = 0.22f;
-            }
-
-            _d2dBrush->SetColor(ColorFFromColorRef(accent, modeAlpha));
-            _d2dTarget->FillRoundedRectangle(D2D1::RoundedRect(modeButtonRc, radius, radius), _d2dBrush.get());
-
-            _d2dBrush->SetColor(ColorFFromColorRef(accent, 0.85f));
-            _d2dTarget->DrawRoundedRectangle(D2D1::RoundedRect(modeButtonRc, radius, radius), _d2dBrush.get(), 1.0f);
-
-            _d2dBrush->SetColor(ColorFFromColorRef(fg));
-            _d2dTarget->DrawTextW(modeText.c_str(),
-                                  static_cast<UINT32>(modeText.size()),
-                                  _modeButtonFormat ? _modeButtonFormat.get() : _headerFormatRight.get(),
-                                  modeButtonRc,
-                                  _d2dBrush.get(),
-                                  D2D1_DRAW_TEXT_OPTIONS_CLIP);
-
-            if (_otherFiles.size() <= 1)
-            {
-                D2D1_RECT_F fileRc = headerTextRc;
-                fileRc.right       = std::max(fileRc.left, modeButtonRc.left - marginDip);
-                _d2dTarget->DrawTextW(
-                    titleText.c_str(), static_cast<UINT32>(titleText.size()), _headerFormat.get(), fileRc, _d2dBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
-            }
-
-            D2D1_RECT_F statusTextRc = statusRc;
-            statusTextRc.left += marginDip;
-            statusTextRc.right -= marginDip;
-            _d2dTarget->DrawTextW(
-                statusText.c_str(), static_cast<UINT32>(statusText.size()), _statusFormat.get(), statusTextRc, _d2dBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
-
-            if (! _isLoading && _fileReader && _fileSize == 0 && ! _currentPath.empty())
-            {
-                const std::wstring emptyText = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_EMPTY_WATERMARK);
-                if (! emptyText.empty())
-                {
-                    const D2D1_RECT_F contentRc = RectFFromPixels(_contentRect, dpi);
-                    const float centerX         = (contentRc.left + contentRc.right) / 2.0f;
-                    const float centerY         = (contentRc.top + contentRc.bottom) / 2.0f;
-                    const float alpha           = _hasTheme && _theme.darkMode ? 0.28f : 0.20f;
-                    _d2dBrush->SetColor(ColorFFromColorRef(fg, alpha));
-
-                    auto restoreTransform          = wil::scope_exit([&] { _d2dTarget->SetTransform(D2D1::Matrix3x2F::Identity()); });
-                    const D2D1_MATRIX_3X2_F rotate = D2D1::Matrix3x2F::Rotation(kWatermarkAngleDegrees, D2D1::Point2F(centerX, centerY));
-                    _d2dTarget->SetTransform(rotate * D2D1::Matrix3x2F::Identity());
-                    _d2dTarget->DrawTextW(emptyText.c_str(),
-                                          static_cast<UINT32>(emptyText.size()),
-                                          _watermarkFormat.get(),
-                                          contentRc,
-                                          _d2dBrush.get(),
-                                          D2D1_DRAW_TEXT_OPTIONS_CLIP);
-                }
-            }
+            drawChrome(target, brush);
         }
 
         if (hr == D2DERR_RECREATE_TARGET)
         {
-            // Discarded in the EndDraw scope.
+            return false;
         }
-        else if (FAILED(hr))
-        {
-            DiscardDirect2D();
-        }
-        else
+
+        return SUCCEEDED(hr);
+    };
+
+    static_cast<void>(EnsureDirect2D(_hWnd.get()));
+    const bool hasDirectWriteChromeResources =
+        _d2dFactory && _headerFormat && _headerFormatRight && _statusFormat && _watermarkFormat && (_modeButtonFormat || _headerFormatRight);
+    if (hasDirectWriteChromeResources)
+    {
+        if (_d2dTarget && _d2dBrush && drawWithTarget(_d2dTarget.get(), _d2dBrush.get(), true))
         {
             return;
+        }
+
+        RECT client{};
+        GetClientRect(_hWnd.get(), &client);
+
+        wil::com_ptr<ID2D1DCRenderTarget> dcTarget;
+        const D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties();
+        if (SUCCEEDED(_d2dFactory->CreateDCRenderTarget(&props, dcTarget.put())) && dcTarget)
+        {
+            dcTarget->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+            if (SUCCEEDED(dcTarget->BindDC(hdc.get(), &client)))
+            {
+                wil::com_ptr<ID2D1SolidColorBrush> dcBrush;
+                if (SUCCEEDED(dcTarget->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::Black), dcBrush.put())) && dcBrush &&
+                    drawWithTarget(dcTarget.get(), dcBrush.get(), false))
+                {
+                    return;
+                }
+            }
         }
     }
 
@@ -3561,10 +6775,6 @@ void ViewerText::OnPaint()
 
     FillRect(hdc.get(), &_headerRect, _headerBrush.get());
     FillRect(hdc.get(), &_statusRect, _statusBrush.get());
-
-    const COLORREF textColor = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
-    const std::wstring seed  = _currentPath.empty() ? std::wstring(L"viewer") : _currentPath.filename().wstring();
-    const COLORREF accent    = _hasTheme ? ResolveAccentColor(_theme, seed) : RGB(0, 120, 215);
 
     const int lineThickness = std::max(1, MulDiv(2, dpiInt, USER_DEFAULT_SCREEN_DPI));
 
@@ -3576,126 +6786,6 @@ void ViewerText::OnPaint()
 
     wil::unique_hbrush accentBrush(CreateSolidBrush(accent));
     FillRect(hdc.get(), &line, accentBrush.get());
-
-    SetBkMode(hdc.get(), TRANSPARENT);
-    SetTextColor(hdc.get(), textColor);
-    HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-
-    RECT headerTextRc = _headerRect;
-    headerTextRc.left += MulDiv(10, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    headerTextRc.right -= MulDiv(10, dpiInt, USER_DEFAULT_SCREEN_DPI);
-
-    std::wstring titleText;
-    if (! _currentPath.empty())
-    {
-        titleText = _currentPath.filename().wstring();
-    }
-
-    const UINT modeId           = _viewMode == ViewMode::Hex ? IDS_VIEWERTEXT_MODE_HEX : IDS_VIEWERTEXT_MODE_TEXT;
-    const std::wstring modeText = LoadStringResource(g_hInstance, modeId);
-
-    RECT modeRc = _modeButtonRect;
-    ClampRectNonNegative(modeRc);
-
-    uint8_t alpha = 40u;
-    if (_modeButtonPressed)
-    {
-        alpha = 90u;
-    }
-    else if (_modeButtonHot)
-    {
-        alpha = 70u;
-    }
-
-    const COLORREF modeBg = BlendColor(_uiHeaderBg, accent, alpha);
-    wil::unique_hbrush modeBrush(CreateSolidBrush(modeBg));
-    FillRect(hdc.get(), &modeRc, modeBrush.get());
-    FrameRect(hdc.get(), &modeRc, accentBrush.get());
-
-    DrawTextW(hdc.get(), modeText.c_str(), static_cast<int>(modeText.size()), &modeRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-
-    if (_otherFiles.size() <= 1)
-    {
-        RECT fileRc  = headerTextRc;
-        fileRc.right = std::max(fileRc.left, _modeButtonRect.left - MulDiv(10, dpiInt, USER_DEFAULT_SCREEN_DPI));
-        DrawTextW(hdc.get(), titleText.c_str(), static_cast<int>(titleText.size()), &fileRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-    }
-
-    RECT statusTextRc = _statusRect;
-    statusTextRc.left += MulDiv(10, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    statusTextRc.right -= MulDiv(10, dpiInt, USER_DEFAULT_SCREEN_DPI);
-
-    const std::wstring statusText = BuildStatusText();
-    DrawTextW(hdc.get(), statusText.c_str(), static_cast<int>(statusText.size()), &statusTextRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-
-    if (_fileSize == 0 && ! _currentPath.empty())
-    {
-        const std::wstring emptyText = LoadStringResource(g_hInstance, IDS_VIEWERTEXT_EMPTY_WATERMARK);
-        if (! emptyText.empty())
-        {
-            RECT contentRc    = _contentRect;
-            const int centerX = (contentRc.left + contentRc.right) / 2;
-            const int centerY = (contentRc.top + contentRc.bottom) / 2;
-
-            XFORM xf{};
-            xf.eM11 = static_cast<float>(std::cos(kWatermarkAngleRadians));
-            xf.eM12 = static_cast<float>(std::sin(kWatermarkAngleRadians));
-            xf.eM21 = -xf.eM12;
-            xf.eM22 = xf.eM11;
-            xf.eDx  = static_cast<float>(centerX);
-            xf.eDy  = static_cast<float>(centerY);
-
-            const int oldMode = SetGraphicsMode(hdc.get(), GM_ADVANCED);
-            XFORM oldXf{};
-            if (GetWorldTransform(hdc.get(), &oldXf) == 0)
-            {
-                oldXf.eM11 = 1.0f;
-                oldXf.eM12 = 0.0f;
-                oldXf.eM21 = 0.0f;
-                oldXf.eM22 = 1.0f;
-                oldXf.eDx  = 0.0f;
-                oldXf.eDy  = 0.0f;
-            }
-
-            SetWorldTransform(hdc.get(), &xf);
-
-            RECT drawRc = contentRc;
-            OffsetRect(&drawRc, -centerX, -centerY);
-
-            const int fontHeight = -MulDiv(static_cast<int>(kWatermarkFontSizeDip), dpiInt, USER_DEFAULT_SCREEN_DPI);
-            wil::unique_hfont stampFont(CreateFontW(fontHeight,
-                                                    0,
-                                                    0,
-                                                    0,
-                                                    FW_SEMIBOLD,
-                                                    FALSE,
-                                                    FALSE,
-                                                    FALSE,
-                                                    DEFAULT_CHARSET,
-                                                    OUT_DEFAULT_PRECIS,
-                                                    CLIP_DEFAULT_PRECIS,
-                                                    CLEARTYPE_QUALITY,
-                                                    DEFAULT_PITCH | FF_DONTCARE,
-                                                    L"Segoe UI"));
-            if (stampFont)
-            {
-                auto oldStamp = wil::SelectObject(hdc.get(), stampFont.get());
-                static_cast<void>(oldStamp);
-            }
-
-            const COLORREF stampColor = BlendColor(_uiBackground, _uiText, _hasTheme && _theme.darkMode ? 100u : 70u);
-            SetTextColor(hdc.get(), stampColor);
-            SetBkMode(hdc.get(), TRANSPARENT);
-            DrawTextW(hdc.get(), emptyText.c_str(), static_cast<int>(emptyText.size()), &drawRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-
-            SetWorldTransform(hdc.get(), &oldXf);
-            if (oldMode != 0)
-            {
-                SetGraphicsMode(hdc.get(), oldMode);
-            }
-        }
-    }
 }
 
 void ViewerText::OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND control) noexcept
@@ -3705,56 +6795,8 @@ void ViewerText::OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND cont
         return;
     }
 
-    if (_hFileCombo && control == _hFileCombo.get() && commandId == IDC_VIEWERTEXT_FILE_COMBO)
-    {
-        if (notifyCode == CBN_DROPDOWN)
-        {
-            COMBOBOXINFO info{};
-            info.cbSize = sizeof(info);
-            if (GetComboBoxInfo(_hFileCombo.get(), &info) != 0)
-            {
-                _hFileComboList = info.hwndList;
-                _hFileComboItem = info.hwndItem;
-            }
-
-            const wchar_t* winTheme = L"Explorer";
-            if (_hasTheme && _theme.highContrast)
-            {
-                winTheme = L"";
-            }
-            else if (_hasTheme && _theme.darkMode)
-            {
-                winTheme = L"DarkMode_Explorer";
-            }
-
-            SetWindowTheme(_hFileCombo.get(), winTheme, nullptr);
-            if (_hFileComboList)
-            {
-                SetWindowTheme(_hFileComboList, winTheme, nullptr);
-                SendMessageW(_hFileComboList, WM_THEMECHANGED, 0, 0);
-            }
-            if (_hFileComboItem)
-            {
-                SetWindowTheme(_hFileComboItem, winTheme, nullptr);
-                SendMessageW(_hFileComboItem, WM_THEMECHANGED, 0, 0);
-            }
-            SendMessageW(_hFileCombo.get(), WM_THEMECHANGED, 0, 0);
-
-            return;
-        }
-
-        if (notifyCode == CBN_SELCHANGE && ! _syncingFileCombo)
-        {
-            const LRESULT sel = SendMessageW(_hFileCombo.get(), CB_GETCURSEL, 0, 0);
-            if (sel >= 0 && static_cast<size_t>(sel) < _otherFiles.size())
-            {
-                _otherIndex = static_cast<size_t>(sel);
-                static_cast<void>(OpenPath(hwnd, _otherFiles[_otherIndex], false));
-            }
-        }
-
-        return;
-    }
+    static_cast<void>(notifyCode);
+    static_cast<void>(control);
 
     if (IsEncodingMenuSelectionValid(commandId))
     {
@@ -3784,8 +6826,28 @@ void ViewerText::OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND cont
         case IDM_VIEWER_SEARCH_FIND_NEXT: CommandFindNext(hwnd, false); break;
         case IDM_VIEWER_SEARCH_FIND_PREVIOUS: CommandFindNext(hwnd, true); break;
 
-        case IDM_VIEWER_VIEW_TEXT: SetViewMode(hwnd, ViewMode::Text); break;
+        case IDM_VIEWER_VIEW_TEXT:
+            if (_documentKind == DocumentKind::Diff && _diffParsedAvailable)
+            {
+                SetDiffPresentation(hwnd, DiffPresentationMode::RawText);
+            }
+            else
+            {
+                SetViewMode(hwnd, ViewMode::Text);
+            }
+            break;
+        case IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE: SetDiffPresentation(hwnd, DiffPresentationMode::SideBySide); break;
+        case IDM_VIEWER_VIEW_DIFF_INLINE: SetDiffPresentation(hwnd, DiffPresentationMode::Inline); break;
+        case IDM_VIEWER_VIEW_DIFF_RAW_TEXT: SetDiffPresentation(hwnd, DiffPresentationMode::RawText); break;
+        case IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED:
+            SetDiffContextMode(
+                hwnd, _config.diffContextMode == DiffContextMode::FullFileWhenAvailable ? DiffContextMode::HunksOnly : DiffContextMode::FullFileWhenAvailable);
+            break;
+        case IDM_VIEWER_VIEW_DIFF_NEXT_HUNK: static_cast<void>(NavigateDiffHunk(hwnd, false)); break;
+        case IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK: static_cast<void>(NavigateDiffHunk(hwnd, true)); break;
         case IDM_VIEWER_VIEW_HEX: SetViewMode(hwnd, ViewMode::Hex); break;
+        case IDM_VIEWER_VIEW_HEX_BYTE_COLORS_LEADING_NIBBLE: SetHexByteColorMode(hwnd, HexByteColorMode::LeadingNibble); break;
+        case IDM_VIEWER_VIEW_HEX_BYTE_COLORS_OFF: SetHexByteColorMode(hwnd, HexByteColorMode::Off); break;
         case IDM_VIEWER_VIEW_GOTO_TOP: CommandGoToTop(hwnd, false); break;
         case IDM_VIEWER_VIEW_GOTO_BOTTOM: CommandGoToBottom(hwnd, false); break;
         case IDM_VIEWER_VIEW_GOTO_OFFSET: CommandGoToOffset(hwnd); break;
@@ -3799,488 +6861,60 @@ void ViewerText::OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND cont
 
 LRESULT ViewerText::OnNotify(const NMHDR* header)
 {
-    if (! header)
-    {
-        return 0;
-    }
-
-    if (_hHex)
-    {
-        const HWND listHeader = ListView_GetHeader(_hHex.get());
-        if (listHeader && header->hwndFrom == listHeader && header->code == NM_CUSTOMDRAW)
-        {
-            if (! _hasTheme || _theme.highContrast)
-            {
-                return CDRF_DODEFAULT;
-            }
-
-            auto* cd = reinterpret_cast<NMCUSTOMDRAW*>(const_cast<NMHDR*>(header));
-            if (! cd)
-            {
-                return CDRF_DODEFAULT;
-            }
-
-            if (cd->dwDrawStage == CDDS_PREPAINT)
-            {
-                RECT rc{};
-                GetClientRect(listHeader, &rc);
-                FillRect(cd->hdc, &rc, _headerBrush.get());
-                return CDRF_NOTIFYITEMDRAW;
-            }
-
-            if (cd->dwDrawStage == CDDS_ITEMPREPAINT)
-            {
-                const UINT dpi    = GetDpiForWindow(listHeader);
-                const int padding = PxFromDip(6, dpi);
-
-                RECT rc = cd->rc;
-                FillRect(cd->hdc, &rc, _headerBrush.get());
-
-                const COLORREF bg     = _uiHeaderBg;
-                const COLORREF fg     = _uiText;
-                const COLORREF border = BlendColor(bg, fg, 80u);
-
-                wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> pen(CreatePen(PS_SOLID, 1, border));
-                auto oldPen = wil::SelectObject(cd->hdc, pen.get());
-                static_cast<void>(oldPen);
-
-                MoveToEx(cd->hdc, rc.left, rc.bottom - 1, nullptr);
-                LineTo(cd->hdc, rc.right, rc.bottom - 1);
-                MoveToEx(cd->hdc, rc.right - 1, rc.top, nullptr);
-                LineTo(cd->hdc, rc.right - 1, rc.bottom);
-
-                wchar_t textBuf[256]{};
-                HDITEMW item{};
-                item.mask       = HDI_TEXT;
-                item.pszText    = textBuf;
-                item.cchTextMax = static_cast<int>(std::size(textBuf));
-                Header_GetItem(listHeader, static_cast<int>(cd->dwItemSpec), &item);
-
-                HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-                auto oldFont    = wil::SelectObject(cd->hdc, fontToUse);
-                static_cast<void>(oldFont);
-
-                SetBkMode(cd->hdc, TRANSPARENT);
-                SetTextColor(cd->hdc, fg);
-
-                RECT textRc = rc;
-                textRc.left += padding;
-                textRc.right -= padding;
-                DrawTextW(cd->hdc, textBuf, -1, &textRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-
-                return CDRF_SKIPDEFAULT;
-            }
-
-            return CDRF_DODEFAULT;
-        }
-    }
-
-    if (_hHex && header->hwndFrom == _hHex.get())
-    {
-        if (header->code == LVN_GETDISPINFO)
-        {
-            auto* info = reinterpret_cast<NMLVDISPINFOW*>(const_cast<NMHDR*>(header));
-            if (! info)
-            {
-                return 0;
-            }
-
-            EnsureHexLineCache(info->item.iItem);
-            const wchar_t* src = nullptr;
-            switch (info->item.iSubItem)
-            {
-                case 0: src = _hexLineCacheOffsetText.c_str(); break;
-                case 1: src = _hexLineCacheHexText.c_str(); break;
-                case 2: src = _hexLineCacheAsciiText.c_str(); break;
-                default: src = L""; break;
-            }
-
-            if (info->item.pszText && info->item.cchTextMax > 0)
-            {
-                wcsncpy_s(info->item.pszText, static_cast<size_t>(info->item.cchTextMax), src, _TRUNCATE);
-            }
-
-            return 0;
-        }
-
-        if (header->code == LVN_COLUMNCLICK)
-        {
-            auto* info = reinterpret_cast<NMLISTVIEW*>(const_cast<NMHDR*>(header));
-            if (! info)
-            {
-                return 0;
-            }
-
-            if (info->iSubItem == 0)
-            {
-                CycleHexOffsetMode();
-                return 0;
-            }
-
-            if (info->iSubItem == 1)
-            {
-                CycleHexColumnMode();
-                return 0;
-            }
-
-            if (info->iSubItem == 2)
-            {
-                CycleHexTextMode();
-            }
-
-            return 0;
-        }
-
-        if (header->code == NM_CUSTOMDRAW)
-        {
-            auto* cd = reinterpret_cast<NMLVCUSTOMDRAW*>(const_cast<NMHDR*>(header));
-            if (! cd)
-            {
-                return CDRF_DODEFAULT;
-            }
-
-            if (cd->nmcd.dwDrawStage == CDDS_PREPAINT)
-            {
-                return CDRF_NOTIFYITEMDRAW;
-            }
-
-            if (cd->nmcd.dwDrawStage == CDDS_ITEMPREPAINT)
-            {
-                return CDRF_NOTIFYSUBITEMDRAW;
-            }
-
-            if (cd->nmcd.dwDrawStage == (CDDS_ITEMPREPAINT | CDDS_SUBITEM))
-            {
-                const int item    = static_cast<int>(cd->nmcd.dwItemSpec);
-                const int subItem = cd->iSubItem;
-
-                RECT cell{};
-                if (ListView_GetSubItemRect(_hHex.get(), item, subItem, LVIR_BOUNDS, &cell) == FALSE)
-                {
-                    return CDRF_DODEFAULT;
-                }
-
-                const UINT dpi    = _hWnd ? GetDpiForWindow(_hWnd.get()) : USER_DEFAULT_SCREEN_DPI;
-                const int padding = PxFromDip(6, dpi);
-
-                const COLORREF baseBg = _hasTheme ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_WINDOW);
-                const COLORREF baseFg = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_WINDOWTEXT);
-
-                const std::wstring seed = _currentPath.empty() ? std::wstring(L"viewer") : _currentPath.filename().wstring();
-                const COLORREF accent   = _hasTheme ? ResolveAccentColor(_theme, seed) : RGB(0, 120, 215);
-
-                const UINT state    = ListView_GetItemState(_hHex.get(), item, LVIS_SELECTED);
-                const bool selected = (state & LVIS_SELECTED) != 0;
-
-                const COLORREF rowBg = selected ? accent : baseBg;
-                const COLORREF rowFg = selected ? ContrastingTextColor(rowBg) : baseFg;
-
-                SetDCBrushColor(cd->nmcd.hdc, rowBg);
-                FillRect(cd->nmcd.hdc, &cell, static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
-
-                HFONT fontToUse = _monoFont ? _monoFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-                auto oldFont    = wil::SelectObject(cd->nmcd.hdc, fontToUse);
-                static_cast<void>(oldFont);
-
-                SetBkMode(cd->nmcd.hdc, TRANSPARENT);
-                SetTextColor(cd->nmcd.hdc, rowFg);
-
-                TEXTMETRICW tm{};
-                GetTextMetricsW(cd->nmcd.hdc, &tm);
-                const int cellH     = std::max(0L, cell.bottom - cell.top);
-                const int y         = cell.top + std::max(0, (cellH - static_cast<int>(tm.tmHeight)) / 2);
-                const int charWidth = std::max(1, static_cast<int>(tm.tmAveCharWidth));
-
-                const int x0 = cell.left + padding;
-
-                const uint64_t lineOffset = static_cast<uint64_t>(item) * static_cast<uint64_t>(kHexBytesPerLine);
-                EnsureHexLineCache(item);
-
-                const wchar_t* src = nullptr;
-                size_t srcLen      = 0;
-                switch (subItem)
-                {
-                    case 0:
-                        src    = _hexLineCacheOffsetText.c_str();
-                        srcLen = _hexLineCacheOffsetText.size();
-                        break;
-                    case 1:
-                        src    = _hexLineCacheHexText.c_str();
-                        srcLen = _hexLineCacheHexText.size();
-                        break;
-                    case 2:
-                        src    = _hexLineCacheAsciiText.c_str();
-                        srcLen = _hexLineCacheAsciiText.size();
-                        break;
-                    default:
-                        src    = L"";
-                        srcLen = 0;
-                        break;
-                }
-
-                bool hasHighlight     = false;
-                size_t highlightStart = 0;
-                size_t highlightLen   = 0;
-                if (_hexSelectedOffset.has_value() && (subItem == 1 || subItem == 2))
-                {
-                    const uint64_t sel = _hexSelectedOffset.value();
-                    if (sel >= lineOffset)
-                    {
-                        const size_t lineBytes = _hexLineCacheValidBytes;
-                        const size_t byteIndex = static_cast<size_t>(sel - lineOffset);
-                        if (byteIndex < lineBytes)
-                        {
-                            const ByteSpan* spans = (subItem == 1) ? _hexLineCacheHexSpans.data() : _hexLineCacheTextSpans.data();
-                            const ByteSpan span   = spans[byteIndex];
-                            if (span.length > 0 && span.start < srcLen)
-                            {
-                                hasHighlight   = true;
-                                highlightStart = span.start;
-                                highlightLen   = span.length;
-                            }
-                        }
-                    }
-                }
-
-                RECT clip = cell;
-                clip.left = x0;
-
-                if (! hasHighlight || highlightLen == 0 || highlightStart >= static_cast<size_t>(srcLen))
-                {
-                    ExtTextOutW(cd->nmcd.hdc, x0, y, ETO_CLIPPED, &clip, src, static_cast<UINT>(srcLen), nullptr);
-                    return CDRF_SKIPDEFAULT;
-                }
-
-                const size_t start = highlightStart;
-                const size_t end   = std::min(static_cast<size_t>(srcLen), start + highlightLen);
-
-                const int highlightX = x0 + static_cast<int>(start) * charWidth;
-                const int highlightW = std::max(0, static_cast<int>(end - start) * charWidth);
-
-                const uint8_t alpha        = 160u;
-                const COLORREF highlightBg = selected ? BlendColor(accent, baseBg, alpha) : BlendColor(baseBg, accent, alpha);
-                const COLORREF highlightFg = ContrastingTextColor(highlightBg);
-
-                const UINT preLen = static_cast<UINT>(start);
-                if (preLen > 0)
-                {
-                    ExtTextOutW(cd->nmcd.hdc, x0, y, ETO_CLIPPED, &clip, src, preLen, nullptr);
-                }
-
-                RECT highlightRc  = cell;
-                highlightRc.left  = highlightX;
-                highlightRc.right = std::min(cell.right, static_cast<LONG>(highlightX + highlightW));
-                if (highlightRc.right > highlightRc.left)
-                {
-                    SetDCBrushColor(cd->nmcd.hdc, highlightBg);
-                    FillRect(cd->nmcd.hdc, &highlightRc, static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
-
-                    SetTextColor(cd->nmcd.hdc, highlightFg);
-                    const int hlLenInt = static_cast<int>(end - start);
-                    ExtTextOutW(cd->nmcd.hdc, highlightX, y, ETO_CLIPPED, &clip, src + start, static_cast<UINT>(hlLenInt), nullptr);
-                    SetTextColor(cd->nmcd.hdc, rowFg);
-                }
-
-                const int postStart = static_cast<int>(end);
-                const int postLen   = std::max(0, static_cast<int>(srcLen - postStart));
-                if (postLen > 0)
-                {
-                    const int postX = x0 + postStart * charWidth;
-                    ExtTextOutW(cd->nmcd.hdc, postX, y, ETO_CLIPPED, &clip, src + postStart, static_cast<UINT>(postLen), nullptr);
-                }
-
-                return CDRF_SKIPDEFAULT;
-            }
-
-            return CDRF_DODEFAULT;
-        }
-    }
-
+    static_cast<void>(header);
     return 0;
 }
 
-LRESULT ViewerText::OnMeasureItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept
+void ViewerText::UpdateMenuChecks(HWND hwnd, bool syncDxMenuBar) noexcept
 {
-    if (! measure)
-    {
-        return FALSE;
-    }
-
-    if (measure->CtlType == ODT_MENU)
-    {
-        OnMeasureMenuItem(hwnd, measure);
-        return TRUE;
-    }
-
-    if (measure->CtlType == ODT_COMBOBOX && measure->CtlID == IDC_VIEWERTEXT_FILE_COMBO)
-    {
-        OnMeasureFileComboItem(hwnd, measure);
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-LRESULT ViewerText::OnDrawItem(DRAWITEMSTRUCT* draw) noexcept
-{
-    if (! draw)
-    {
-        return FALSE;
-    }
-
-    if (draw->CtlType == ODT_MENU)
-    {
-        OnDrawMenuItem(draw);
-        return TRUE;
-    }
-
-    if (draw->CtlType == ODT_COMBOBOX && _hFileCombo && draw->hwndItem == _hFileCombo.get())
-    {
-        OnDrawFileComboItem(draw);
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-void ViewerText::OnMeasureFileComboItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept
-{
-    if (! measure)
-    {
-        return;
-    }
-
-    const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
-
-    int height = PxFromDip(24, dpi);
-    auto hdc   = wil::GetDC(hwnd);
-    if (hdc)
-    {
-        HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-        static_cast<void>(oldFont);
-
-        TEXTMETRICW tm{};
-        if (GetTextMetricsW(hdc.get(), &tm) != 0)
-        {
-            height = tm.tmHeight + tm.tmExternalLeading + PxFromDip(6, dpi);
-        }
-    }
-
-    measure->itemHeight = static_cast<UINT>(std::max(height, 1));
-}
-
-void ViewerText::OnDrawFileComboItem(DRAWITEMSTRUCT* draw) noexcept
-{
-    if (! draw || ! draw->hDC)
-    {
-        return;
-    }
-
-    const UINT dpi    = _hWnd ? GetDpiForWindow(_hWnd.get()) : USER_DEFAULT_SCREEN_DPI;
-    const int padding = PxFromDip(6, dpi);
-
-    const bool selected = (draw->itemState & ODS_SELECTED) != 0;
-    const bool disabled = (draw->itemState & ODS_DISABLED) != 0;
-
-    COLORREF baseBg = _uiHeaderBg;
-    COLORREF baseFg = _uiText;
-    COLORREF selBg  = _hasTheme && ! _theme.highContrast ? ResolveAccentColor(_theme, L"combo") : GetSysColor(COLOR_HIGHLIGHT);
-    COLORREF selFg  = _hasTheme && ! _theme.highContrast ? ContrastingTextColor(selBg) : GetSysColor(COLOR_HIGHLIGHTTEXT);
-
-    if (_theme.highContrast)
-    {
-        baseBg = GetSysColor(COLOR_WINDOW);
-        baseFg = GetSysColor(COLOR_WINDOWTEXT);
-    }
-
-    COLORREF fillColor = selected ? selBg : baseBg;
-    COLORREF textColor = selected ? selFg : baseFg;
-
-    if (disabled)
-    {
-        textColor = BlendColor(fillColor, textColor, 120u);
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
-    FillRect(draw->hDC, &draw->rcItem, bgBrush.get());
-
-    int itemId = static_cast<int>(draw->itemID);
-    if (itemId < 0 && _hFileCombo)
-    {
-        const LRESULT sel = SendMessageW(_hFileCombo.get(), CB_GETCURSEL, 0, 0);
-        if (sel >= 0)
-        {
-            itemId = static_cast<int>(sel);
-        }
-    }
-
-    std::wstring text;
-    if (itemId >= 0 && _hFileCombo)
-    {
-        const LRESULT lenRes = SendMessageW(_hFileCombo.get(), CB_GETLBTEXTLEN, static_cast<WPARAM>(itemId), 0);
-        const int len        = (lenRes > 0) ? static_cast<int>(lenRes) : 0;
-        if (len > 0)
-        {
-            text.resize(static_cast<size_t>(len) + 1);
-            SendMessageW(_hFileCombo.get(), CB_GETLBTEXT, static_cast<WPARAM>(itemId), reinterpret_cast<LPARAM>(text.data()));
-            text.resize(wcsnlen(text.c_str(), text.size()));
-        }
-    }
-
-    HFONT fontToUse = _uiFont ? _uiFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(draw->hDC, fontToUse);
-    static_cast<void>(oldFont);
-
-    SetBkMode(draw->hDC, TRANSPARENT);
-    SetTextColor(draw->hDC, textColor);
-
-    RECT textRc = draw->rcItem;
-    textRc.left += padding;
-    textRc.right -= padding;
-    DrawTextW(draw->hDC, text.c_str(), static_cast<int>(text.size()), &textRc, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-
-    if ((draw->itemState & ODS_FOCUS) != 0)
-    {
-        DrawFocusRect(draw->hDC, &draw->rcItem);
-    }
-}
-
-void ViewerText::UpdateMenuChecks(HWND hwnd) noexcept
-{
-    HMENU menu = GetMenu(hwnd);
+    HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
     if (! menu)
     {
         return;
     }
 
-    const UINT selectedDisplay = EffectiveDisplayEncodingMenuSelection();
-    HMENU encodingMenu         = nullptr;
-    const int topCount         = GetMenuItemCount(menu);
-    if (topCount > 0)
+    const auto findSubmenuContainingCommand = [&](auto&& self, HMENU currentMenu, UINT commandId) noexcept -> HMENU
     {
-        for (UINT pos = 0; pos < static_cast<UINT>(topCount); ++pos)
+        if (! currentMenu)
+        {
+            return nullptr;
+        }
+
+        const int count = GetMenuItemCount(currentMenu);
+        if (count <= 0)
+        {
+            return nullptr;
+        }
+
+        for (UINT pos = 0; pos < static_cast<UINT>(count); ++pos)
         {
             MENUITEMINFOW info{};
             info.cbSize = sizeof(info);
-            info.fMask  = MIIM_SUBMENU;
-            if (GetMenuItemInfoW(menu, pos, TRUE, &info) == 0)
+            info.fMask  = MIIM_FTYPE | MIIM_ID | MIIM_SUBMENU;
+            if (GetMenuItemInfoW(currentMenu, pos, TRUE, &info) == 0)
             {
                 continue;
             }
 
-            if (! info.hSubMenu)
+            if ((info.fType & MFT_SEPARATOR) == 0 && ! info.hSubMenu && info.wID == commandId)
             {
-                continue;
+                return currentMenu;
             }
 
-            if (GetMenuState(info.hSubMenu, IDM_VIEWER_ENCODING_DISPLAY_ANSI, MF_BYCOMMAND) != static_cast<UINT>(-1))
+            if (info.hSubMenu)
             {
-                encodingMenu = info.hSubMenu;
-                break;
+                if (HMENU foundMenu = self(self, info.hSubMenu, commandId))
+                {
+                    return foundMenu;
+                }
             }
         }
-    }
+
+        return nullptr;
+    };
+
+    const UINT selectedDisplay = EffectiveDisplayEncodingMenuSelection();
+    HMENU encodingMenu         = findSubmenuContainingCommand(findSubmenuContainingCommand, menu, IDM_VIEWER_ENCODING_DISPLAY_ANSI);
 
     if (encodingMenu)
     {
@@ -4342,13 +6976,54 @@ void ViewerText::UpdateMenuChecks(HWND hwnd) noexcept
     const UINT selectedSave = EffectiveSaveEncodingMenuSelection();
     CheckMenuRadioItem(menu, IDM_VIEWER_ENCODING_SAVE_FIRST, IDM_VIEWER_ENCODING_SAVE_LAST, selectedSave, MF_BYCOMMAND);
 
-    CheckMenuItem(menu, IDM_VIEWER_VIEW_TEXT, static_cast<UINT>(MF_BYCOMMAND | (_viewMode == ViewMode::Text ? MF_CHECKED : MF_UNCHECKED)));
+    if (HMENU hexByteColorMenu = findSubmenuContainingCommand(findSubmenuContainingCommand, menu, IDM_VIEWER_VIEW_HEX_BYTE_COLORS_LEADING_NIBBLE))
+    {
+        const UINT selectedHexByteColorMode = (_config.hexByteColorMode == HexByteColorMode::LeadingNibble) ? IDM_VIEWER_VIEW_HEX_BYTE_COLORS_LEADING_NIBBLE
+                                                                                                            : IDM_VIEWER_VIEW_HEX_BYTE_COLORS_OFF;
+        CheckMenuRadioItem(
+            hexByteColorMenu, IDM_VIEWER_VIEW_HEX_BYTE_COLORS_FIRST, IDM_VIEWER_VIEW_HEX_BYTE_COLORS_LAST, selectedHexByteColorMode, MF_BYCOMMAND);
+    }
+
+    CheckMenuItem(menu,
+                  IDM_VIEWER_VIEW_TEXT,
+                  static_cast<UINT>(MF_BYCOMMAND |
+                                    (_viewMode == ViewMode::Text && (_documentKind != DocumentKind::Diff || _diffPresentation == DiffPresentationMode::RawText)
+                                         ? MF_CHECKED
+                                         : MF_UNCHECKED)));
     CheckMenuItem(menu, IDM_VIEWER_VIEW_HEX, static_cast<UINT>(MF_BYCOMMAND | (_viewMode == ViewMode::Hex ? MF_CHECKED : MF_UNCHECKED)));
-    CheckMenuItem(menu, IDM_VIEWER_VIEW_LINE_NUMBERS, static_cast<UINT>(MF_BYCOMMAND | (_config.showLineNumbers ? MF_CHECKED : MF_UNCHECKED)));
+    const bool parsedDiffAvailable = _documentKind == DocumentKind::Diff && _diffParsedAvailable;
+    CheckMenuItem(
+        menu,
+        IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE,
+        static_cast<UINT>(MF_BYCOMMAND | (_viewMode == ViewMode::Text && _diffPresentation == DiffPresentationMode::SideBySide ? MF_CHECKED : MF_UNCHECKED)));
+    CheckMenuItem(
+        menu,
+        IDM_VIEWER_VIEW_DIFF_INLINE,
+        static_cast<UINT>(MF_BYCOMMAND | (_viewMode == ViewMode::Text && _diffPresentation == DiffPresentationMode::Inline ? MF_CHECKED : MF_UNCHECKED)));
+    CheckMenuItem(menu,
+                  IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED,
+                  static_cast<UINT>(MF_BYCOMMAND | (_config.diffContextMode == DiffContextMode::FullFileWhenAvailable ? MF_CHECKED : MF_UNCHECKED)));
+    CheckMenuItem(
+        menu, IDM_VIEWER_VIEW_LINE_NUMBERS, static_cast<UINT>(MF_BYCOMMAND | (ShowTextLineNumbersInCurrentPresentation() ? MF_CHECKED : MF_UNCHECKED)));
     CheckMenuItem(menu, IDM_VIEWER_VIEW_WRAP, static_cast<UINT>(MF_BYCOMMAND | (_wrap ? MF_CHECKED : MF_UNCHECKED)));
 
-    EnableMenuItem(menu, IDM_VIEWER_VIEW_LINE_NUMBERS, static_cast<UINT>(MF_BYCOMMAND | (_viewMode == ViewMode::Text ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu, IDM_VIEWER_VIEW_DIFF_SIDE_BY_SIDE, static_cast<UINT>(MF_BYCOMMAND | (parsedDiffAvailable ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu, IDM_VIEWER_VIEW_DIFF_INLINE, static_cast<UINT>(MF_BYCOMMAND | (parsedDiffAvailable ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu, IDM_VIEWER_VIEW_DIFF_SHOW_UNCHANGED, static_cast<UINT>(MF_BYCOMMAND | (parsedDiffAvailable ? MF_ENABLED : MF_GRAYED)));
+    const auto* currentVariant         = CurrentDiffVariant();
+    const bool hunkNavigationAvailable = _viewMode == ViewMode::Text && _documentKind == DocumentKind::Diff &&
+                                         _diffPresentation != DiffPresentationMode::RawText && currentVariant && ! currentVariant->hunkNavigation.empty();
+    EnableMenuItem(menu, IDM_VIEWER_VIEW_DIFF_NEXT_HUNK, static_cast<UINT>(MF_BYCOMMAND | (hunkNavigationAvailable ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu, IDM_VIEWER_VIEW_DIFF_PREVIOUS_HUNK, static_cast<UINT>(MF_BYCOMMAND | (hunkNavigationAvailable ? MF_ENABLED : MF_GRAYED)));
+    EnableMenuItem(menu,
+                   IDM_VIEWER_VIEW_LINE_NUMBERS,
+                   static_cast<UINT>(MF_BYCOMMAND | (_viewMode == ViewMode::Text && ! HasParsedDiffPresentation() ? MF_ENABLED : MF_GRAYED)));
     EnableMenuItem(menu, IDM_VIEWER_VIEW_WRAP, static_cast<UINT>(MF_BYCOMMAND | (_viewMode == ViewMode::Text ? MF_ENABLED : MF_GRAYED)));
+
+    if (syncDxMenuBar && _menuBarHost.GetHwnd())
+    {
+        _menuBarHost.SyncMenuModel();
+    }
 }
 
 LRESULT ViewerText::OnCtlColor([[maybe_unused]] UINT msg, HDC hdc, HWND control) noexcept
@@ -4363,8 +7038,7 @@ LRESULT ViewerText::OnCtlColor([[maybe_unused]] UINT msg, HDC hdc, HWND control)
         return 0;
     }
 
-    if (_hFileCombo && (control == _hFileCombo.get() || (_hFileComboList != nullptr && control == _hFileComboList) ||
-                        (_hFileComboItem != nullptr && control == _hFileComboItem)))
+    if (_hFileComboHost && control == _hFileComboHost.get())
     {
         SetBkMode(hdc, OPAQUE);
         SetTextColor(hdc, _uiText);
@@ -4458,7 +7132,25 @@ void ViewerText::OnLButtonUp(int x, int y) noexcept
         const POINT pt{.x = x, .y = y};
         if (PtInRect(&_modeButtonRect, pt) != 0)
         {
-            SetViewMode(_hWnd.get(), _viewMode == ViewMode::Hex ? ViewMode::Text : ViewMode::Hex);
+            if (_documentKind == DocumentKind::Diff && _diffParsedAvailable)
+            {
+                if (_viewMode == ViewMode::Hex)
+                {
+                    SetDiffPresentation(_hWnd.get(), PreferredParsedDiffPresentation());
+                }
+                else if (_diffPresentation == DiffPresentationMode::RawText)
+                {
+                    SetViewMode(_hWnd.get(), ViewMode::Hex);
+                }
+                else
+                {
+                    SetDiffPresentation(_hWnd.get(), DiffPresentationMode::RawText);
+                }
+            }
+            else
+            {
+                SetViewMode(_hWnd.get(), _viewMode == ViewMode::Hex ? ViewMode::Text : ViewMode::Hex);
+            }
         }
     }
 }
@@ -4550,21 +7242,11 @@ void ViewerText::ApplyTheme(HWND hwnd) noexcept
         SendMessageW(_hHex.get(), WM_THEMECHANGED, 0, 0);
     }
 
-    if (_hFileCombo)
+    if (_hFileComboHost)
     {
-        SetWindowTheme(_hFileCombo.get(), winTheme, nullptr);
-        SendMessageW(_hFileCombo.get(), WM_THEMECHANGED, 0, 0);
-        if (_hFileComboList)
-        {
-            SetWindowTheme(_hFileComboList, winTheme, nullptr);
-            SendMessageW(_hFileComboList, WM_THEMECHANGED, 0, 0);
-        }
-        if (_hFileComboItem)
-        {
-            SetWindowTheme(_hFileComboItem, winTheme, nullptr);
-            SendMessageW(_hFileComboItem, WM_THEMECHANGED, 0, 0);
-        }
+        _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
     }
+    _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
 
     ApplyMenuTheme(hwnd);
     UpdateMenuChecks(hwnd);
@@ -4621,6 +7303,459 @@ void ViewerText::ApplyTitleBarTheme(bool windowActive) noexcept
     DwmSetWindowAttribute(_hWnd.get(), kDwmwaTextColor, &textValue, sizeof(textValue));
 }
 
+void ViewerText::ResetDiffState() noexcept
+{
+    _documentKind               = DocumentKind::PlainText;
+    _diffPresentation           = DiffPresentationMode::RawText;
+    _lastParsedDiffPresentation = _config.diffDefaultLayout == DiffDefaultLayout::Inline ? DiffPresentationMode::Inline : DiffPresentationMode::SideBySide;
+    _diffParsedAvailable        = false;
+    _diffRawTextBuffer.clear();
+    _parsedDiffDocument.reset();
+    _diffReferenceCache.reset();
+    _diffStreamSections.clear();
+    _diffExpandedSectionIndex.reset();
+    _diffInlineHunksOnly         = {};
+    _diffInlineExpanded          = {};
+    _diffSideBySideHunksOnly     = {};
+    _diffSideBySideExpanded      = {};
+    _diffInlineExpandedBuilt     = false;
+    _diffSideBySideExpandedBuilt = false;
+#ifdef _DEBUG
+    _debugDiffParseCount = 0u;
+#endif
+}
+
+bool ViewerText::EnsureDiffVariantBuilt(DiffPresentationMode presentation, DiffContextMode contextMode) noexcept
+{
+    if (_documentKind != DocumentKind::Diff || ! _diffParsedAvailable || presentation == DiffPresentationMode::RawText ||
+        contextMode != DiffContextMode::FullFileWhenAvailable)
+    {
+        return true;
+    }
+
+    DiffTextVariant* variant = nullptr;
+    bool* variantBuilt       = nullptr;
+    if (presentation == DiffPresentationMode::Inline)
+    {
+        variant      = &_diffInlineExpanded;
+        variantBuilt = &_diffInlineExpandedBuilt;
+    }
+    else
+    {
+        variant      = &_diffSideBySideExpanded;
+        variantBuilt = &_diffSideBySideExpandedBuilt;
+    }
+
+    if (! variant || ! variantBuilt || *variantBuilt)
+    {
+        return true;
+    }
+
+    if (! _parsedDiffDocument)
+    {
+        auto parsedDocument = std::make_shared<ParsedDiffDocument>();
+        if (! ParseUnifiedDiffDocument(_diffRawTextBuffer, *parsedDocument))
+        {
+            return false;
+        }
+        _parsedDiffDocument = std::move(parsedDocument);
+#ifdef _DEBUG
+        _debugDiffParseCount += 1u;
+#endif
+    }
+
+    if (! _diffReferenceCache)
+    {
+        _diffReferenceCache = std::make_shared<DiffReferenceCache>();
+    }
+
+    std::optional<size_t> hydratedSectionIndex;
+    if (_parsedDiffDocument && ! _parsedDiffDocument->files.empty())
+    {
+        size_t targetSection      = _diffExpandedSectionIndex.value_or(CurrentDiffSectionIndex());
+        targetSection             = std::min(targetSection, _parsedDiffDocument->files.size() - 1u);
+        hydratedSectionIndex      = targetSection;
+        _diffExpandedSectionIndex = targetSection;
+    }
+    else
+    {
+        _diffExpandedSectionIndex.reset();
+    }
+
+    const auto hydratedLogicalRange = ComputeVisibleDiffHydrationLogicalRange(_hEdit.get());
+
+    wil::com_ptr<IFileSystemIO> fileIo;
+    IFileSystemIO* fileIoRaw = nullptr;
+    if (_fileSystem && SUCCEEDED(_fileSystem->QueryInterface(__uuidof(IFileSystemIO), fileIo.put_void())) && fileIo)
+    {
+        fileIoRaw = fileIo.get();
+    }
+
+    if (presentation == DiffPresentationMode::Inline)
+    {
+        *variant = BuildInlineDiffText(
+                       *_parsedDiffDocument, contextMode, _currentPath, fileIoRaw, _diffReferenceCache.get(), hydratedSectionIndex, hydratedLogicalRange)
+                       .variant;
+    }
+    else
+    {
+        *variant = BuildSideBySideDiffText(
+                       *_parsedDiffDocument, contextMode, _currentPath, fileIoRaw, _diffReferenceCache.get(), hydratedSectionIndex, hydratedLogicalRange)
+                       .variant;
+    }
+
+    *variantBuilt = true;
+    return true;
+}
+
+namespace
+{
+[[nodiscard]] bool ShouldHydrateExpandedDiffSection(ViewerText::DiffContextMode contextMode,
+                                                    std::optional<size_t> hydratedSectionIndex,
+                                                    size_t fileIndex) noexcept
+{
+    return contextMode == ViewerText::DiffContextMode::FullFileWhenAvailable &&
+           (! hydratedSectionIndex.has_value() || hydratedSectionIndex.value() == fileIndex);
+}
+
+[[nodiscard]] bool ShouldHydrateExpandedDiffLogicalLine(std::optional<std::pair<uint32_t, uint32_t>> hydratedLogicalRange, uint32_t logicalLine) noexcept
+{
+    return ! hydratedLogicalRange.has_value() || (logicalLine >= hydratedLogicalRange->first && logicalLine < hydratedLogicalRange->second);
+}
+
+[[nodiscard]] std::wstring MaskDeferredDiffText(std::wstring_view text)
+{
+    return std::wstring(text.size(), L' ');
+}
+} // namespace
+
+bool ViewerText::EnsureCurrentDiffVariantBuilt() noexcept
+{
+    return EnsureDiffVariantBuilt(_diffPresentation, _config.diffContextMode);
+}
+
+const ViewerText::DiffTextVariant* ViewerText::CurrentDiffVariant() const noexcept
+{
+    if (_documentKind != DocumentKind::Diff || ! _diffParsedAvailable || _diffPresentation == DiffPresentationMode::RawText)
+    {
+        return nullptr;
+    }
+
+    const bool expanded = _config.diffContextMode == DiffContextMode::FullFileWhenAvailable;
+    if (_diffPresentation == DiffPresentationMode::Inline)
+    {
+        if (expanded && ! _diffInlineExpandedBuilt)
+        {
+            return nullptr;
+        }
+        return expanded ? &_diffInlineExpanded : &_diffInlineHunksOnly;
+    }
+
+    if (expanded && ! _diffSideBySideExpandedBuilt)
+    {
+        return nullptr;
+    }
+    return expanded ? &_diffSideBySideExpanded : &_diffSideBySideHunksOnly;
+}
+
+bool ViewerText::UseDiffSectionFileCombo() const noexcept
+{
+    const auto* variant = CurrentDiffVariant();
+    if (variant && variant->sectionNavigation.size() > 1u)
+    {
+        return true;
+    }
+
+    return _documentKind == DocumentKind::Diff && ! _diffParsedAvailable && _textStreamActive && _diffStreamSections.size() > 1u;
+}
+
+size_t ViewerText::ActiveFileComboEntryCount() const noexcept
+{
+    if (UseDiffSectionFileCombo())
+    {
+        if (const auto* variant = CurrentDiffVariant())
+        {
+            return variant->sectionNavigation.size();
+        }
+
+        return _diffStreamSections.size();
+    }
+
+    return _otherFiles.size();
+}
+
+size_t ViewerText::CurrentDiffSectionIndex() const noexcept
+{
+    const auto* variant = CurrentDiffVariant();
+    if (variant && ! variant->sectionNavigation.empty())
+    {
+        uint32_t topLogicalLine = 0u;
+        if (! _textVisualLineLogical.empty())
+        {
+            const size_t topVisual = std::min<size_t>(_textTopVisualLine, _textVisualLineLogical.size() - 1u);
+            topLogicalLine         = _textVisualLineLogical[topVisual];
+        }
+
+        const auto it =
+            std::upper_bound(variant->sectionNavigation.begin(),
+                             variant->sectionNavigation.end(),
+                             topLogicalLine,
+                             [](uint32_t line, const DiffTextVariant::SectionNavigationEntry& entry) noexcept { return line < entry.startLogicalLine; });
+        if (it == variant->sectionNavigation.begin())
+        {
+            return 0u;
+        }
+
+        return static_cast<size_t>(std::distance(variant->sectionNavigation.begin(), it) - 1);
+    }
+
+    if (_documentKind == DocumentKind::Diff && ! _diffParsedAvailable && _textStreamActive && ! _diffStreamSections.empty())
+    {
+        const auto it = std::upper_bound(_diffStreamSections.begin(),
+                                         _diffStreamSections.end(),
+                                         _textStreamStartOffset,
+                                         [](uint64_t offset, const StreamedDiffSectionEntry& entry) noexcept { return offset < entry.startOffset; });
+        if (it == _diffStreamSections.begin())
+        {
+            return 0u;
+        }
+
+        return static_cast<size_t>(std::distance(_diffStreamSections.begin(), it) - 1);
+    }
+
+    return 0u;
+}
+
+size_t ViewerText::CurrentDiffHunkIndex() const noexcept
+{
+    const auto* variant = CurrentDiffVariant();
+    if (variant && ! variant->hunkNavigation.empty())
+    {
+        uint32_t topLogicalLine = 0u;
+        if (! _textVisualLineLogical.empty())
+        {
+            const size_t topVisual = std::min<size_t>(_textTopVisualLine, _textVisualLineLogical.size() - 1u);
+            topLogicalLine         = _textVisualLineLogical[topVisual];
+        }
+
+        const auto it =
+            std::upper_bound(variant->hunkNavigation.begin(),
+                             variant->hunkNavigation.end(),
+                             topLogicalLine,
+                             [](uint32_t line, const DiffTextVariant::HunkNavigationEntry& entry) noexcept { return line < entry.startLogicalLine; });
+        if (it == variant->hunkNavigation.begin())
+        {
+            return 0u;
+        }
+
+        return static_cast<size_t>(std::distance(variant->hunkNavigation.begin(), it) - 1);
+    }
+
+    return 0u;
+}
+
+bool ViewerText::ShowTextLineNumbersInCurrentPresentation() const noexcept
+{
+    return _config.showLineNumbers && ! HasParsedDiffPresentation();
+}
+
+bool ViewerText::HasParsedDiffPresentation() const noexcept
+{
+    return _documentKind == DocumentKind::Diff && _diffParsedAvailable && _diffPresentation != DiffPresentationMode::RawText;
+}
+
+ViewerText::DiffPresentationMode ViewerText::PreferredParsedDiffPresentation() const noexcept
+{
+    if (_lastParsedDiffPresentation == DiffPresentationMode::Inline || _lastParsedDiffPresentation == DiffPresentationMode::SideBySide)
+    {
+        return _lastParsedDiffPresentation;
+    }
+
+    return _config.diffDefaultLayout == DiffDefaultLayout::Inline ? DiffPresentationMode::Inline : DiffPresentationMode::SideBySide;
+}
+
+void ViewerText::ApplyCurrentTextPresentation(HWND hwnd, bool preserveViewport) noexcept
+{
+    const bool preserveParsedDiffViewport = preserveViewport && _documentKind == DocumentKind::Diff && _diffParsedAvailable;
+
+    std::wstring nextText;
+    if (_documentKind == DocumentKind::Diff && _diffParsedAvailable)
+    {
+        static_cast<void>(EnsureCurrentDiffVariantBuilt());
+        if (const auto* variant = CurrentDiffVariant())
+        {
+            nextText = variant->text;
+        }
+        else
+        {
+            nextText = _diffRawTextBuffer;
+        }
+    }
+    else
+    {
+        nextText = _textBuffer;
+    }
+
+    const uint32_t savedTopVisualLine = _textTopVisualLine;
+    const uint32_t savedLeftColumn    = _textLeftColumn;
+    const size_t savedCaretIndex      = _textCaretIndex;
+    const size_t savedSelAnchor       = _textSelAnchor;
+    const size_t savedSelActive       = _textSelActive;
+    const size_t savedPreferredColumn = _textPreferredColumn;
+    const bool savedSelecting         = _textSelecting;
+
+    _textBuffer = std::move(nextText);
+    BuildTextLineIndex(_textBuffer, _textLineStarts, _textLineEnds, _textMaxLineLength);
+
+    _textTotalLineCount.reset();
+    _textStreamLineCountedEndOffset = _textStreamStartOffset;
+    _textStreamLineCountedNewlines  = 0;
+    _textStreamLineCountLastWasCR   = false;
+    UpdateTextStreamTotalLineCountAfterLoad();
+
+    _textVisualLineStarts.clear();
+    _textVisualLineLogical.clear();
+    _textTopVisualLine   = preserveViewport ? savedTopVisualLine : 0u;
+    _textLeftColumn      = preserveViewport ? savedLeftColumn : 0u;
+    _textCaretIndex      = preserveViewport ? std::min(savedCaretIndex, _textBuffer.size()) : 0u;
+    _textSelAnchor       = preserveViewport ? std::min(savedSelAnchor, _textBuffer.size()) : 0u;
+    _textSelActive       = preserveViewport ? std::min(savedSelActive, _textBuffer.size()) : 0u;
+    _textPreferredColumn = preserveViewport ? savedPreferredColumn : 0u;
+    _textSelecting       = preserveViewport ? savedSelecting : false;
+    _searchMatchStarts.clear();
+
+    const HWND textWindow = hwnd ? hwnd : _hEdit.get();
+    if (textWindow)
+    {
+        RebuildTextVisualLines(textWindow);
+        if (! _textVisualLineStarts.empty())
+        {
+            _textTopVisualLine = std::min<uint32_t>(_textTopVisualLine, static_cast<uint32_t>(_textVisualLineStarts.size() - 1u));
+        }
+        else
+        {
+            _textTopVisualLine = 0u;
+        }
+        UpdateTextViewScrollBars(textWindow);
+        UpdateSearchHighlights();
+        InvalidateRect(textWindow, nullptr, TRUE);
+    }
+
+    if (_hWnd)
+    {
+        if (preserveParsedDiffViewport)
+        {
+            SyncFileComboSelection();
+        }
+        else
+        {
+            RefreshFileCombo(_hWnd.get());
+            if (textWindow)
+            {
+                RebuildTextVisualLines(textWindow);
+                UpdateTextViewScrollBars(textWindow);
+                InvalidateRect(textWindow, nullptr, TRUE);
+            }
+        }
+        InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
+    }
+}
+
+void ViewerText::SetDiffPresentation(HWND hwnd, DiffPresentationMode mode) noexcept
+{
+    if (_documentKind != DocumentKind::Diff)
+    {
+        return;
+    }
+
+    if (mode != DiffPresentationMode::RawText && ! _diffParsedAvailable)
+    {
+        return;
+    }
+
+    const size_t currentSection = CurrentDiffSectionIndex();
+    if (mode == DiffPresentationMode::Inline)
+    {
+        _config.diffDefaultLayout = DiffDefaultLayout::Inline;
+        RefreshConfigurationJson();
+    }
+    else if (mode == DiffPresentationMode::SideBySide)
+    {
+        _config.diffDefaultLayout = DiffDefaultLayout::SideBySide;
+        RefreshConfigurationJson();
+    }
+
+    if (mode != DiffPresentationMode::RawText && _config.diffContextMode == DiffContextMode::FullFileWhenAvailable && _parsedDiffDocument &&
+        ! _parsedDiffDocument->files.empty())
+    {
+        const size_t targetSection = std::min(CurrentDiffSectionIndex(), _parsedDiffDocument->files.size() - 1u);
+        if (! _diffExpandedSectionIndex.has_value() || _diffExpandedSectionIndex.value() != targetSection)
+        {
+            _diffExpandedSectionIndex = targetSection;
+            _diffReferenceCache.reset();
+            _diffInlineExpandedBuilt     = false;
+            _diffSideBySideExpandedBuilt = false;
+        }
+    }
+
+    _diffPresentation = mode;
+    if (mode != DiffPresentationMode::RawText)
+    {
+        _lastParsedDiffPresentation = mode;
+    }
+    ApplyCurrentTextPresentation(_hEdit.get());
+    if (mode != DiffPresentationMode::RawText && _diffParsedAvailable)
+    {
+        ScrollToDiffSection(_hEdit.get(), currentSection);
+    }
+
+    const HWND root = hwnd ? hwnd : _hWnd.get();
+    if (root)
+    {
+        SetViewMode(root, ViewMode::Text);
+    }
+}
+
+void ViewerText::SetDiffContextMode(HWND hwnd, DiffContextMode mode) noexcept
+{
+    const DiffContextMode previousMode = _config.diffContextMode;
+    const size_t currentSection        = CurrentDiffSectionIndex();
+    _config.diffContextMode            = mode;
+    RefreshConfigurationJson();
+
+    if (_documentKind == DocumentKind::Diff && _diffParsedAvailable)
+    {
+        if (mode == DiffContextMode::FullFileWhenAvailable && _parsedDiffDocument && ! _parsedDiffDocument->files.empty())
+        {
+            _diffExpandedSectionIndex = std::min(currentSection, _parsedDiffDocument->files.size() - 1u);
+        }
+        else
+        {
+            _diffExpandedSectionIndex.reset();
+        }
+
+        if (previousMode != mode)
+        {
+            _diffReferenceCache.reset();
+            _diffInlineExpandedBuilt     = false;
+            _diffSideBySideExpandedBuilt = false;
+        }
+    }
+
+    if (HasParsedDiffPresentation())
+    {
+        ApplyCurrentTextPresentation(_hEdit.get());
+        ScrollToDiffSection(_hEdit.get(), currentSection);
+    }
+
+    const HWND root = hwnd ? hwnd : _hWnd.get();
+    if (root)
+    {
+        UpdateMenuChecks(root);
+        InvalidateRect(root, &_statusRect, FALSE);
+    }
+}
+
 void ViewerText::SetViewMode(HWND hwnd, ViewMode mode) noexcept
 {
     const ViewMode previous = _viewMode;
@@ -4665,6 +7800,27 @@ void ViewerText::SetViewMode(HWND hwnd, ViewMode mode) noexcept
 
     UpdateMenuChecks(hwnd);
     InvalidateRect(hwnd, nullptr, TRUE);
+}
+
+void ViewerText::SetHexByteColorMode(HWND hwnd, HexByteColorMode mode) noexcept
+{
+    _config.hexByteColorMode = mode;
+    RefreshConfigurationJson();
+
+    const HWND menuWindow = hwnd ? hwnd : _hWnd.get();
+    if (menuWindow)
+    {
+        UpdateMenuChecks(menuWindow);
+    }
+
+    if (_hHex)
+    {
+        InvalidateRect(_hHex.get(), nullptr, TRUE);
+        if (_viewMode == ViewMode::Hex)
+        {
+            static_cast<void>(RedrawWindow(_hHex.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW));
+        }
+    }
 }
 
 void ViewerText::CommandExit(HWND /*hwnd*/) noexcept
@@ -4821,7 +7977,7 @@ std::optional<ViewerText::SaveAsResult> ViewerText::ShowSaveAsDialog(HWND hwnd) 
                 return;
             }
 
-            HMENU menu = GetMenu(hwnd);
+            HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
             if (! menu)
             {
                 return;
@@ -4890,7 +8046,7 @@ std::optional<ViewerText::SaveAsResult> ViewerText::ShowSaveAsDialog(HWND hwnd) 
         addMenuItemToCombo(IDM_VIEWER_ENCODING_SAVE_KEEP_ORIGINAL);
         if (hwnd)
         {
-            HMENU rootMenu = GetMenu(hwnd);
+            HMENU rootMenu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
             if (rootMenu)
             {
                 HMENU encodingMenu = nullptr;
@@ -5499,20 +8655,15 @@ void ViewerText::CommandOtherLast(HWND hwnd)
 
 void ViewerText::CommandFind(HWND hwnd)
 {
-    FindDialogState state;
-    state.viewer  = this;
-    state.initial = _searchQuery;
-
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-    const INT_PTR res = DialogBoxParamW(g_hInstance, MAKEINTRESOURCEW(IDD_VIEWERTEXT_FIND), hwnd, FindDlgProc, reinterpret_cast<LPARAM>(&state));
-#pragma warning(pop)
-    if (res != IDOK)
+    std::wstring query;
+    const HRESULT hr =
+        ShowViewerTextPromptDialog(hwnd, _hasTheme ? &_theme : nullptr, IDS_VIEWERTEXT_FIND_CAPTION, IDS_VIEWERTEXT_FIND_LABEL, _searchQuery, query);
+    if (hr != S_OK)
     {
         return;
     }
 
-    _searchQuery = state.result;
+    _searchQuery = std::move(query);
     UpdateSearchHighlights();
     if (_searchQuery.empty())
     {
@@ -5573,22 +8724,20 @@ void ViewerText::UpdateSearchHighlights() noexcept
 
 void ViewerText::CommandGoToOffset(HWND hwnd)
 {
-    GoToDialogState state;
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-    const INT_PTR res = DialogBoxParamW(g_hInstance, MAKEINTRESOURCEW(IDD_VIEWERTEXT_GOTO), hwnd, GoToDlgProc, reinterpret_cast<LPARAM>(&state));
-#pragma warning(pop)
-    if (res != IDOK)
+    std::wstring text;
+    const HRESULT hr = ShowViewerTextPromptDialog(hwnd, _hasTheme ? &_theme : nullptr, IDS_VIEWERTEXT_GOTO_CAPTION, IDS_VIEWERTEXT_GOTO_LABEL, L"0", text);
+    if (hr != S_OK)
     {
         return;
     }
 
-    if (! state.offset.has_value())
+    uint64_t value = 0;
+    if (! TryParseOffset(text, value))
     {
         return;
     }
 
-    CommandGoToOffsetValue(hwnd, state.offset.value());
+    CommandGoToOffsetValue(hwnd, value);
 }
 
 void ViewerText::CommandGoToTop(HWND hwnd, bool extendSelection) noexcept
@@ -5983,7 +9132,7 @@ std::wstring ViewerText::BuildStatusText() const
     std::wstring active;
     if (_hWnd)
     {
-        HMENU menu = GetMenu(_hWnd.get());
+        HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(_hWnd.get());
         if (menu)
         {
             wchar_t buffer[256]{};
@@ -6159,6 +9308,11 @@ bool ViewerText::HandleShortcutKey(HWND hwnd, WPARAM vk) noexcept
         return true;
     }
 
+    if (vk == VK_F7)
+    {
+        return NavigateDiffHunk(hwnd, shift);
+    }
+
     if (vk == VK_F3)
     {
         CommandFindNext(hwnd, shift);
@@ -6274,7 +9428,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             const int w = ownerRect.right - ownerRect.left;
             const int h = ownerRect.bottom - ownerRect.top;
 
-            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(LoadMenuW(g_hInstance, MAKEINTRESOURCEW(IDR_VIEWERTEXT_MENU)));
+            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERTEXT_MENU));
             HWND window = CreateWindowExW(0,
                                           kClassName,
                                           L"",
@@ -6323,7 +9477,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
         }
         else
         {
-            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(LoadMenuW(g_hInstance, MAKEINTRESOURCEW(IDR_VIEWERTEXT_MENU)));
+            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERTEXT_MENU));
             HWND window = CreateWindowExW(
                 0, kClassName, L"", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, 900, 700, nullptr, menu.get(), g_hInstance, this);
             if (! window)
@@ -6379,18 +9533,21 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
 
 HRESULT STDMETHODCALLTYPE ViewerText::Close() noexcept
 {
+    AddRef();
+    const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE ViewerText::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (! theme || theme->version != 2)
+    if (! theme || theme->version < 2u || theme->version > 4u)
     {
         return E_INVALIDARG;
     }
 
-    _theme    = *theme;
+    _theme = *theme;
+    PopulateViewerDiffThemeDefaults(_theme);
     _hasTheme = true;
 
     RequestViewerTextClassBackgroundColor(ColorRefFromArgb(_theme.backgroundArgb));
@@ -6399,15 +9556,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::SetTheme(const ViewerTheme* theme) noexcep
     if (_hWnd)
     {
         ApplyTheme(_hWnd.get());
-        InvalidateRect(_hWnd.get(), nullptr, TRUE);
-        if (_hEdit)
-        {
-            InvalidateRect(_hEdit.get(), nullptr, TRUE);
-        }
-        if (_hHex)
-        {
-            InvalidateRect(_hHex.get(), nullptr, TRUE);
-        }
+        static_cast<void>(RedrawWindow(_hWnd.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW));
     }
 
     return S_OK;
@@ -6415,7 +9564,102 @@ HRESULT STDMETHODCALLTYPE ViewerText::SetTheme(const ViewerTheme* theme) noexcep
 
 HRESULT STDMETHODCALLTYPE ViewerText::SetCallback(IViewerCallback* callback, void* cookie) noexcept
 {
-    _callback       = callback;
-    _callbackCookie = cookie;
+    _callbackState.Set(callback, cookie);
     return S_OK;
 }
+
+namespace
+{
+[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
+{
+    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, propName);
+}
+
+[[nodiscard]] bool InstallWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, WNDPROC hookWndProc) noexcept
+{
+    if (! hwnd || ! originalWndProcProp || ! hookWndProc)
+    {
+        return false;
+    }
+
+    if (GetStoredWndProc(hwnd, originalWndProcProp))
+    {
+        return true;
+    }
+
+    const auto originalWndProc = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC));
+    if (! originalWndProc)
+    {
+        return false;
+    }
+
+    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, originalWndProcProp, reinterpret_cast<HANDLE>(originalWndProc)))
+    {
+        return false;
+    }
+
+    const auto previousWndProc =
+        reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(hookWndProc)));
+    if (previousWndProc != originalWndProc)
+    {
+        RemovePropW(hwnd, originalWndProcProp);
+        if (previousWndProc)
+        {
+            static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(previousWndProc)));
+        }
+        return false;
+    }
+
+    return true;
+}
+
+[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    if (const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp))
+    {
+        return RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp);
+    }
+
+    return DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+LRESULT CALLBACK FileComboHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+
+void UnhookFileComboHostWindow(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return;
+    }
+
+    RemovePropW(hwnd, kFileComboHostStateProp);
+    RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kFileComboHostOriginalWndProcProp, FileComboHostWndProc);
+}
+
+[[nodiscard]] bool MessageMayOpenWindowComboPopup(UINT msg, WPARAM wp) noexcept
+{
+    switch (msg)
+    {
+        case WM_LBUTTONDOWN:
+        case WM_LBUTTONDBLCLK: return true;
+        case WM_SYSKEYDOWN:
+        {
+            const UINT vk = static_cast<UINT>(wp);
+            return vk == VK_DOWN || vk == VK_UP;
+        }
+        case WM_KEYDOWN:
+        {
+            const UINT vk = static_cast<UINT>(wp);
+            return vk == VK_SPACE || vk == VK_RETURN || vk == VK_F4 || vk == VK_DOWN || vk == VK_UP;
+        }
+        default: return false;
+    }
+}
+
+[[nodiscard]] int ComputeWindowComboPopupHeightPx(size_t itemCount, UINT dpi) noexcept
+{
+    const size_t visibleRows = std::max<size_t>(1u, std::min(itemCount, kViewerComboPopupMaxVisibleItems));
+    const int popupHeightDip = 2 + 8 + (24 * static_cast<int>(visibleRows));
+    return std::max(0, MulDiv(popupHeightDip, static_cast<int>(dpi), 96));
+}
+} // namespace

@@ -32,7 +32,7 @@ namespace RedSalamander::Security
 {
 namespace
 {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 std::atomic<WindowsHelloTestVerifier> g_testVerifier{nullptr};
 #endif
 
@@ -135,7 +135,7 @@ template <typename T> [[nodiscard]] HRESULT WaitForOperationWithMessagePump(winr
 }
 } // namespace
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 WindowsHelloTestVerifier SetWindowsHelloTestVerifier(WindowsHelloTestVerifier verifier) noexcept
 {
     return g_testVerifier.exchange(verifier, std::memory_order_acq_rel);
@@ -144,7 +144,7 @@ WindowsHelloTestVerifier SetWindowsHelloTestVerifier(WindowsHelloTestVerifier ve
 
 HRESULT VerifyWindowsHelloForWindow(HWND ownerWindow, std::wstring_view message) noexcept
 {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     if (const WindowsHelloTestVerifier verifier = g_testVerifier.load(std::memory_order_acquire))
     {
         return verifier(ownerWindow, message);

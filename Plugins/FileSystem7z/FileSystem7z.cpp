@@ -50,16 +50,19 @@
 
 #include "FileSystem7z.h"
 
-#include "Helpers.h"
 #include "FileSystem7zResources.h"
+#include "Helpers.h"
 
 #pragma comment(lib, "Ole32.lib")
 #pragma comment(lib, "OleAut32.lib")
 
 extern HINSTANCE g_hInstance;
 
+// Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded while extract threads are running.
 namespace
 {
+const int kFileSystem7zModuleAnchor = 0;
+
 [[nodiscard]] const wchar_t* LocalizedPluginName() noexcept
 {
     static const std::wstring name = LoadStringResource(g_hInstance, IDS_FILESYSTEM7Z_NAME);
@@ -488,8 +491,18 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetConfigurationSchema(const char** sche
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = kSchemaJson;
+    *schemaJsonUtf8 = StaticConfigurationSchema();
     return S_OK;
+}
+
+const char* GetFileSystem7zStaticConfigurationSchema() noexcept
+{
+    return FileSystem7z::StaticConfigurationSchema();
+}
+
+const char* FileSystem7z::StaticConfigurationSchema() noexcept
+{
+    return kSchemaJson;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem7z::SetConfiguration(const char* configurationJsonUtf8) noexcept
@@ -1637,6 +1650,47 @@ HRESULT STDMETHODCALLTYPE FileSystem7z::GetCapabilities(const char** jsonUtf8) n
     }
 
     *jsonUtf8 = kCapabilitiesJson;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem7z::GetTransferHints([[maybe_unused]] const wchar_t* path,
+                                                         [[maybe_unused]] FileSystemOperation operationType,
+                                                         [[maybe_unused]] FileSystemTransferEndpoint endpoint,
+                                                         FileSystemTransferHints* hints) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || hints == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (hints->sizeBytes < sizeof(FileSystemTransferHints))
+    {
+        return E_INVALIDARG;
+    }
+
+    hints->latencyClass              = FILESYSTEM_TRANSFER_LATENCY_LOCAL;
+    hints->flags                     = FILESYSTEM_TRANSFER_HINT_PREFERS_SEQUENTIAL_IO;
+    hints->preferredBufferBytes      = 2u * 1024u * 1024u;
+    hints->preferredProgressPeriodMs = 200u;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem7z::GetStorageCharacteristics([[maybe_unused]] const wchar_t* path,
+                                                                  FileSystemStorageCharacteristics* characteristics) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || characteristics == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (characteristics->sizeBytes < sizeof(FileSystemStorageCharacteristics))
+    {
+        return E_INVALIDARG;
+    }
+
+    characteristics->storageKind                  = FILESYSTEM_STORAGE_VIRTUAL;
+    characteristics->flags                        = FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO;
+    characteristics->queueDepthHint               = 1u;
+    characteristics->preferredCopyMoveConcurrency = 1u;
+    characteristics->preferredDeleteConcurrency   = 1u;
     return S_OK;
 }
 
@@ -3769,7 +3823,23 @@ private:
         _extractTotalBytes.store(0, std::memory_order_relaxed);
         _extractCompletedBytes.store(0, std::memory_order_relaxed);
 
-        _extractThread = std::jthread([this](std::stop_token stopToken) noexcept { ExtractThreadMain(stopToken); });
+        // Pin the module so the DLL cannot be unloaded while the extract thread is running.
+        _modulePin = AcquireModuleReferenceFromAddress(&kFileSystem7zModuleAnchor);
+        if (! _modulePin)
+        {
+            Debug::Error(L"FileSystem7z: Failed to pin module for SevenZipItemFileReader extract thread");
+            return E_FAIL;
+        }
+
+        try
+        {
+            _extractThread = std::jthread([this](std::stop_token stopToken) noexcept { ExtractThreadMain(stopToken); });
+        }
+        catch (const std::system_error&)
+        {
+            // Module pin released via RAII if thread creation fails.
+            return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
+        }
 
         return S_OK;
     }
@@ -4017,6 +4087,7 @@ private:
 
     std::mutex _extractMutex;
     std::condition_variable _extractCv;
+    wil::unique_hmodule _modulePin;
     std::jthread _extractThread;
     uint64_t _extractWantedBytes = 0;
     std::atomic<uint64_t> _extractTotalBytes{0};

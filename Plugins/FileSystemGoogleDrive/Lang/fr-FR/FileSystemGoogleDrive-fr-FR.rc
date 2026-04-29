@@ -1,0 +1,13 @@
+#pragma code_page(65001)
+#include "../../FileSystemGoogleDriveResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMGOOGLEDRIVE_NAME "Google Drive"
+    IDS_FILESYSTEMGOOGLEDRIVE_DESCRIPTION "Système de fichiers virtuel Google Drive."
+    IDS_FILESYSTEMGOOGLEDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED "La connexion ne peut pas démarrer"
+    IDS_FILESYSTEMGOOGLEDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT "{0} nécessite un ID client Google OAuth avant de pouvoir ouvrir la connexion enregistrée.\r\n\r\nOuvrez Plug-ins -> Gestionnaire de plug-ins, sélectionnez '{0}', puis renseignez l’ID client OAuth par défaut."
+END

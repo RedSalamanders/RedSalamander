@@ -1,7 +1,9 @@
 #pragma once
 
 #include <Windows.h>
+#include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "AppTheme.h"
@@ -30,3 +32,57 @@ HRESULT EditPluginConfigurationDialog(HWND owner,
                                       Common::Settings::Settings& baselineSettings,
                                       Common::Settings::Settings& inOutWorkingSettings,
                                       const AppTheme& theme);
+
+[[nodiscard]] HWND GetPluginConfigurationDialogHandle() noexcept;
+void UpdatePluginConfigurationWindowsTheme(const AppTheme& theme) noexcept;
+
+#ifdef ENABLE_TESTS
+enum class PluginConfigurationDialogDebugFocusKind : uint8_t
+{
+    None,
+    Panel,
+    Edit,
+    Combo,
+    Toggle,
+    Choice,
+    CommandButton,
+};
+
+struct PluginConfigurationDialogDebugSnapshot
+{
+    bool usesDxUiCommandButtons                       = false;
+    bool usesDxUiFormSurface                          = false;
+    bool usesDxUiFormStatics                          = false;
+    bool usesDxUiFormInputs                           = false;
+    bool panelHasVerticalScrollbar                    = false;
+    size_t legacyOwnerDrawCommandButtonCount          = 0u;
+    size_t legacyOwnerDrawFormInputCount              = 0u;
+    size_t visibleLegacyCommandButtonCount            = 0u;
+    size_t visibleLegacyFormControlCount              = 0u;
+    size_t visibleLegacyFormStaticCount               = 0u;
+    size_t visibleLegacyFormInputCount                = 0u;
+    size_t visibleDxCommandButtonHostCount            = 0u;
+    size_t visibleDxFormHostCount                     = 0u;
+    size_t visibleDxFormStaticHostCount               = 0u;
+    size_t visibleDxFormInputHostCount                = 0u;
+    int panelClientHeight                             = 0;
+    int panelContentHeight                            = 0;
+    int panelScrollPosY                               = 0;
+    bool themeDark                                    = false;
+    bool themeHighContrast                            = false;
+    bool themeRainbow                                 = false;
+    PluginConfigurationDialogDebugFocusKind focusKind = PluginConfigurationDialogDebugFocusKind::None;
+    std::wstring focusLabel;
+};
+
+[[nodiscard]] bool DebugGetPluginConfigurationDialogSnapshot(PluginConfigurationDialogDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugScrollPluginConfigurationDialogByWheelDetents(int wheelDetents) noexcept;
+[[nodiscard]] bool DebugFocusPluginConfigurationDialogFirstInput() noexcept;
+[[nodiscard]] bool DebugGetPluginConfigurationDialogFirstVisibleToggleHostAndClientRect(HWND& outHost, RECT& outRect) noexcept;
+[[nodiscard]] bool DebugGetPluginConfigurationDialogVisibleToggleHostAndClientRectByLabel(std::wstring_view label, HWND& outHost, RECT& outRect) noexcept;
+[[nodiscard]] bool DebugGetPluginConfigurationDialogFocusedHost(HWND& outHost) noexcept;
+[[nodiscard]] bool DebugAdvancePluginConfigurationDialogTab(bool reverse) noexcept;
+[[nodiscard]] bool DebugSetPluginConfigurationNextBrowsePath(std::wstring_view path) noexcept;
+[[nodiscard]] bool DebugCancelPluginConfigurationNextBrowse() noexcept;
+[[nodiscard]] bool DebugCancelPluginConfigurationDialog() noexcept;
+#endif

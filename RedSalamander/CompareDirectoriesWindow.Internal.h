@@ -31,6 +31,7 @@
 
 #include "CommandRegistry.h"
 #include "CompareDirectoriesEngine.h"
+#include "DxUi/DxUi.h"
 #include "FileSystemPluginManager.h"
 #include "FluentIcons.h"
 #include "FolderView.h"
@@ -42,8 +43,8 @@
 #include "PlugInterfaces/Informations.h"
 #include "SessionState.h"
 #include "ShortcutManager.h"
-#include "ThemedControls.h"
 #include "ThemedInputFrames.h"
+#include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
 #include "resource.h"
@@ -65,28 +66,19 @@ constexpr UINT_PTR kCompareBannerSpinnerTimerId       = 1006;
 constexpr UINT kCompareBannerSpinnerTimerIntervalMs   = 16;
 constexpr UINT_PTR kCompareDecisionRefreshTimerId     = 1007;
 constexpr UINT kCompareDecisionRefreshTimerIntervalMs = 200;
-constexpr UINT_PTR kCompareProgressSpinnerSubclassId  = 3u;
+constexpr int kScanStatusHeightDip                    = 22;
+constexpr int kScanStatusPaddingXDip                  = 6;
+constexpr int kSplitterGripDotSizeDip                 = 2;
+constexpr int kSplitterGripDotGapDip                  = 2;
+constexpr int kSplitterGripDotCount                   = 3;
+constexpr float kMinSplitRatio                        = 0.0f;
+constexpr float kMaxSplitRatio                        = 1.0f;
 
-constexpr int kScanStatusHeightDip    = 22;
-constexpr int kScanStatusPaddingXDip  = 6;
-constexpr int kSplitterGripDotSizeDip = 2;
-constexpr int kSplitterGripDotGapDip  = 2;
-constexpr int kSplitterGripDotCount   = 3;
-constexpr float kMinSplitRatio        = 0.0f;
-constexpr float kMaxSplitRatio        = 1.0f;
-
-struct CompareMenuItemData
-{
-    bool separator  = false;
-    bool topLevel   = false;
-    bool hasSubMenu = false;
-    std::wstring text;
-    std::wstring shortcut;
-};
-
-LRESULT CALLBACK CompareOptionsHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
-LRESULT CALLBACK CompareOptionsWheelRouteSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
-LRESULT CALLBACK CompareProgressSpinnerSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
+LRESULT CALLBACK CompareOptionsHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+LRESULT CALLBACK CompareOptionsWheelRouteWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+LRESULT CALLBACK CompareOptionsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+LRESULT CALLBACK CompareProgressSpinnerWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+LRESULT CALLBACK CompareDxChromeHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
 class CompareDirectoriesWindow final
 {
@@ -111,9 +103,11 @@ private:
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
     static INT_PTR CALLBACK OptionsDlgProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam) noexcept;
 
-    friend LRESULT CALLBACK CompareOptionsHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
-    friend LRESULT CALLBACK CompareOptionsWheelRouteSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
-    friend LRESULT CALLBACK CompareProgressSpinnerSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
+    friend LRESULT CALLBACK CompareOptionsHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    friend LRESULT CALLBACK CompareOptionsWheelRouteWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    friend LRESULT CALLBACK CompareOptionsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    friend LRESULT CALLBACK CompareProgressSpinnerWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    friend LRESULT CALLBACK CompareDxChromeHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
     bool OnCreate(HWND hwnd) noexcept;
     void OnDestroy() noexcept;
@@ -124,12 +118,26 @@ private:
     LRESULT OnFunctionBarInvoke(WPARAM wParam, LPARAM lParam) noexcept;
     void OnPaint() noexcept;
     LRESULT OnCtlColorStatic(HDC hdc, HWND control) noexcept;
-    void PrepareThemedMenu() noexcept;
-    void PrepareThemedMenuRecursive(HMENU menu, bool topLevel, std::vector<std::unique_ptr<CompareMenuItemData>>& itemData) noexcept;
     void UpdateViewMenuChecks() noexcept;
-    void OnMeasureItem(MEASUREITEMSTRUCT* mis) noexcept;
-    void OnDrawItem(DRAWITEMSTRUCT* dis) noexcept;
     void ShowSortMenuPopup(FolderWindow::Pane pane, POINT screenPoint) noexcept;
+    [[nodiscard]] bool EnsureDxChromeHosts() noexcept;
+    void DetachDxChromeHosts() noexcept;
+    void ApplyDxChromeTheme() noexcept;
+    void SyncDxMenuBar() noexcept;
+    void SyncDxBannerButtons() noexcept;
+    void SyncDxBannerText() noexcept;
+    void SyncDxChrome() noexcept;
+    [[nodiscard]] int GetDxMenuBarVisibleHeightPx() const noexcept;
+    [[nodiscard]] bool FocusFirstDxMenuBarItem() noexcept;
+    [[nodiscard]] bool ActivateDxMenuBarMnemonic(wchar_t mnemonic) noexcept;
+    [[nodiscard]] std::optional<size_t> HitTestDxMenuBarScreenPoint(POINT screenPoint) const noexcept;
+    [[nodiscard]] std::optional<POINT> GetDxMenuBarItemAnchorScreenPoint(size_t index) const noexcept;
+    [[nodiscard]] std::optional<size_t> FindNextEnabledDxMenuBarItem(size_t currentIndex, bool forward) const noexcept;
+    [[nodiscard]] std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest> BuildDxMenuBarRootSwitchRequest(size_t index) noexcept;
+    void CaptureDxMenuBarFocusRestoreTarget() noexcept;
+    void RestoreDxMenuBarFocus() noexcept;
+    void OpenDxMenuBarPopup(size_t index, POINT screenPoint, bool keyboardInvocation) noexcept;
+    [[nodiscard]] LRESULT HandleDxChromeHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
 
     void OnLButtonDown(POINT pt) noexcept;
     void OnLButtonDblClk(POINT pt) noexcept;
@@ -145,13 +153,31 @@ private:
     [[nodiscard]] INT_PTR OnOptionsSettingsReloadedFromDisk(HWND dlg) noexcept;
     [[nodiscard]] INT_PTR OnOptionsEraseBkgnd(HWND dlg, HDC hdc) noexcept;
     [[nodiscard]] INT_PTR OnOptionsCommand(HWND dlg, WPARAM wParam, LPARAM lParam) noexcept;
-    [[nodiscard]] INT_PTR OnOptionsDrawItem(const DRAWITEMSTRUCT* dis) noexcept;
     [[nodiscard]] INT_PTR OnOptionsCtlColorEdit(HDC hdc, HWND control) noexcept;
     [[nodiscard]] INT_PTR OnOptionsCtlColorDlg(HDC hdc) noexcept;
     [[nodiscard]] INT_PTR OnOptionsCtlColorStatic(HDC hdc, HWND control) noexcept;
     [[nodiscard]] INT_PTR OnOptionsCtlColorBtn(HDC hdc, HWND control) noexcept;
+    [[nodiscard]] bool HandleOptionsDxMnemonic(wchar_t mnemonic) noexcept;
     void CreateChildWindows(HWND hwnd) noexcept;
     void EnsureOptionsControlsCreated(HWND dlg) noexcept;
+    [[nodiscard]] bool EnsureOptionsDxStaticHosts() noexcept;
+    void DetachOptionsDxStaticHosts() noexcept;
+    [[nodiscard]] bool EnsureOptionsDxButtonHosts() noexcept;
+    void DetachOptionsDxButtonHosts() noexcept;
+    [[nodiscard]] bool EnsureOptionsDxToggleHosts() noexcept;
+    void DetachOptionsDxToggleHosts() noexcept;
+    [[nodiscard]] bool EnsureOptionsDxEditHosts() noexcept;
+    void DetachOptionsDxEditHosts() noexcept;
+    void ApplyOptionsDxStaticTheme() noexcept;
+    void ApplyOptionsDxButtonTheme() noexcept;
+    void ApplyOptionsDxToggleTheme() noexcept;
+    void ApplyOptionsDxEditTheme() noexcept;
+    void SyncOptionsDxStatics() noexcept;
+    void SyncOptionsDxButtons() noexcept;
+    void SyncOptionsDxToggles() noexcept;
+    void SyncOptionsDxEdits() noexcept;
+    [[nodiscard]] bool EnsureOptionsDxBodyControlVisible(RedSalamander::DxUi::Control* control) noexcept;
+    [[nodiscard]] LRESULT HandleOptionsDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
     void LayoutOptionsControls() noexcept;
     void PaintOptionsHostBackgroundAndCards(HDC hdc, HWND host) noexcept;
     void Layout() noexcept;
@@ -200,8 +226,6 @@ private:
     LRESULT OnContentProgress(LPARAM lp) noexcept;
     void UpdateProgressControls() noexcept;
     void OnProgressSpinnerTimer() noexcept;
-    void InvalidateSpinnerPens() noexcept;
-    void EnsureSpinnerPens(COLORREF background, COLORREF accent, bool rainbowSpinner, uint32_t rainbowSeedHash, int stroke) noexcept;
     void DrawProgressSpinner(HDC hdc, const RECT& bounds) noexcept;
     void UpdateCompareWatermark() noexcept;
     void UpdateRescanButtonText() noexcept;
@@ -230,6 +254,27 @@ private:
     wil::unique_hwnd _bannerTitle;
     wil::unique_hwnd _bannerOptionsButton;
     wil::unique_hwnd _bannerRescanButton;
+    wil::unique_hmenu _menuHandle;
+    wil::unique_hwnd _dxMenuBarHostHwnd;
+    wil::unique_hwnd _dxBannerOptionsHostHwnd;
+    wil::unique_hwnd _dxBannerRescanHostHwnd;
+    wil::unique_hwnd _dxBannerTitleHostHwnd;
+    wil::unique_hwnd _dxScanProgressTextHostHwnd;
+    RedSalamander::DxUi::WindowHost _dxMenuBarHost;
+    RedSalamander::DxUi::WindowHost _dxBannerOptionsHost;
+    RedSalamander::DxUi::WindowHost _dxBannerRescanHost;
+    RedSalamander::DxUi::WindowHost _dxBannerTitleHost;
+    RedSalamander::DxUi::WindowHost _dxScanProgressTextHost;
+    RedSalamander::DxUi::MenuBar* _dxMenuBar              = nullptr;
+    RedSalamander::DxUi::Button* _dxBannerOptionsDxButton = nullptr;
+    RedSalamander::DxUi::Button* _dxBannerRescanDxButton  = nullptr;
+    RedSalamander::DxUi::Label* _dxBannerTitleLabel       = nullptr;
+    RedSalamander::DxUi::Label* _dxScanProgressTextLabel  = nullptr;
+    std::atomic<int> _dxMenuBarSelectedIndexSnapshot{-1};
+    HWND _dxMenuBarFocusRestoreHwnd = nullptr;
+    bool _usesDxMenuBar             = false;
+    bool _usesDxBannerButtons       = false;
+    bool _usesDxBannerText          = false;
 
     struct BannerProgressState
     {
@@ -275,22 +320,6 @@ private:
 
     static constexpr int kProgressSpinnerSegments = 12;
 
-    struct ProgressSpinnerPenKey
-    {
-        COLORREF background = 0;
-        COLORREF accent     = 0;
-        bool rainbow        = false;
-        bool darkBase       = false;
-        uint32_t seedHash   = 0;
-        int strokeWidthPx   = 0;
-
-        bool operator==(const ProgressSpinnerPenKey&) const noexcept = default;
-    };
-
-    ProgressSpinnerPenKey _progressSpinnerPenKey{};
-    bool _progressSpinnerPenKeyValid = false;
-    std::array<wil::unique_hpen, kProgressSpinnerSegments> _progressSpinnerPens{};
-
     bool _decisionRefreshPending     = false;
     bool _decisionRefreshTimerActive = false;
 
@@ -303,6 +332,9 @@ private:
     uint64_t _contentEtaLastCompletedBytes = 0;
     double _contentEtaSmoothedBytesPerSec  = 0.0;
     std::optional<uint64_t> _contentEtaSeconds;
+    bool _progressControlsVisible = false;
+    std::wstring _lastProgressMessage;
+    ULONGLONG _lastCompareTaskCardUpdateTickMs = 0;
 
     struct OptionsToggleCard
     {
@@ -344,13 +376,248 @@ private:
     };
 
     OptionsUi _optionsUi{};
+
+    struct OptionsToggleCardDx
+    {
+        RedSalamander::DxUi::CardPanel* card    = nullptr;
+        RedSalamander::DxUi::Label* title       = nullptr;
+        RedSalamander::DxUi::Label* description = nullptr;
+        RedSalamander::DxUi::Toggle* toggle     = nullptr;
+    };
+
+    struct OptionsIgnoreCardDx
+    {
+        RedSalamander::DxUi::CardPanel* card    = nullptr;
+        RedSalamander::DxUi::Label* title       = nullptr;
+        RedSalamander::DxUi::Label* description = nullptr;
+        RedSalamander::DxUi::Toggle* toggle     = nullptr;
+        RedSalamander::DxUi::TextField* edit    = nullptr;
+    };
+
+    struct OptionsBodyDx
+    {
+        OptionsBodyDx() = default;
+        ~OptionsBodyDx() noexcept
+        {
+            Detach();
+        }
+        OptionsBodyDx(const OptionsBodyDx&)                = delete;
+        OptionsBodyDx& operator=(const OptionsBodyDx&)     = delete;
+        OptionsBodyDx(OptionsBodyDx&&) noexcept            = delete;
+        OptionsBodyDx& operator=(OptionsBodyDx&&) noexcept = delete;
+
+        wil::unique_hwnd hostHwnd;
+        RedSalamander::DxUi::WindowHost host;
+        RedSalamander::DxUi::Label* headerCompare  = nullptr;
+        RedSalamander::DxUi::Label* headerSubdirs  = nullptr;
+        RedSalamander::DxUi::Label* headerAdvanced = nullptr;
+        RedSalamander::DxUi::Label* headerIgnore   = nullptr;
+        OptionsToggleCardDx compareSize;
+        OptionsToggleCardDx compareDateTime;
+        OptionsToggleCardDx compareAttributes;
+        OptionsToggleCardDx compareContent;
+        OptionsToggleCardDx compareSubdirectories;
+        OptionsToggleCardDx compareSubdirAttributes;
+        OptionsToggleCardDx selectSubdirsOnlyInOnePane;
+        OptionsToggleCardDx keepIdenticalItems;
+        OptionsIgnoreCardDx ignoreFiles;
+        OptionsIgnoreCardDx ignoreDirectories;
+        RedSalamander::DxUi::Control* lastFooterReturnTarget = nullptr;
+
+        void Detach() noexcept
+        {
+            host.Detach();
+            if (hostHwnd)
+            {
+                if (IsWindow(hostHwnd.get()) != FALSE)
+                {
+                    hostHwnd.reset();
+                }
+                else
+                {
+                    static_cast<void>(hostHwnd.release());
+                }
+            }
+            headerCompare              = nullptr;
+            headerSubdirs              = nullptr;
+            headerAdvanced             = nullptr;
+            headerIgnore               = nullptr;
+            compareSize                = {};
+            compareDateTime            = {};
+            compareAttributes          = {};
+            compareContent             = {};
+            compareSubdirectories      = {};
+            compareSubdirAttributes    = {};
+            selectSubdirsOnlyInOnePane = {};
+            keepIdenticalItems         = {};
+            ignoreFiles                = {};
+            ignoreDirectories          = {};
+            lastFooterReturnTarget     = nullptr;
+        }
+    };
+
+    // Compatibility-only placeholders while the old split-host layout code is
+    // being retired. The stabilized one-host implementation only uses `body`.
+    struct OptionsSectionDxLabel
+    {
+        OptionsSectionDxLabel()                                            = default;
+        ~OptionsSectionDxLabel()                                           = default;
+        OptionsSectionDxLabel(const OptionsSectionDxLabel&)                = delete;
+        OptionsSectionDxLabel& operator=(const OptionsSectionDxLabel&)     = delete;
+        OptionsSectionDxLabel(OptionsSectionDxLabel&&) noexcept            = delete;
+        OptionsSectionDxLabel& operator=(OptionsSectionDxLabel&&) noexcept = delete;
+
+        wil::unique_hwnd hostHwnd;
+        RedSalamander::DxUi::WindowHost host;
+        RedSalamander::DxUi::Label* label = nullptr;
+    };
+
+    struct OptionsCardDxText
+    {
+        OptionsCardDxText()                                        = default;
+        ~OptionsCardDxText()                                       = default;
+        OptionsCardDxText(const OptionsCardDxText&)                = delete;
+        OptionsCardDxText& operator=(const OptionsCardDxText&)     = delete;
+        OptionsCardDxText(OptionsCardDxText&&) noexcept            = delete;
+        OptionsCardDxText& operator=(OptionsCardDxText&&) noexcept = delete;
+
+        wil::unique_hwnd hostHwnd;
+        RedSalamander::DxUi::WindowHost host;
+        RedSalamander::DxUi::Panel* root        = nullptr;
+        RedSalamander::DxUi::Label* title       = nullptr;
+        RedSalamander::DxUi::Label* description = nullptr;
+    };
+
+    struct OptionsButtonDx
+    {
+        OptionsButtonDx() = default;
+        ~OptionsButtonDx() noexcept
+        {
+            Detach();
+        }
+        OptionsButtonDx(const OptionsButtonDx&)                = delete;
+        OptionsButtonDx& operator=(const OptionsButtonDx&)     = delete;
+        OptionsButtonDx(OptionsButtonDx&&) noexcept            = delete;
+        OptionsButtonDx& operator=(OptionsButtonDx&&) noexcept = delete;
+
+        wil::unique_hwnd hostHwnd;
+        RedSalamander::DxUi::WindowHost host;
+        RedSalamander::DxUi::Button* button = nullptr;
+        int attachFailureStage              = 0;
+
+        void Detach() noexcept
+        {
+            host.Detach();
+            if (hostHwnd)
+            {
+                if (IsWindow(hostHwnd.get()) != FALSE)
+                {
+                    hostHwnd.reset();
+                }
+                else
+                {
+                    static_cast<void>(hostHwnd.release());
+                }
+            }
+            button             = nullptr;
+            attachFailureStage = 0;
+        }
+    };
+
+    struct OptionsToggleDx
+    {
+        OptionsToggleDx()                                      = default;
+        ~OptionsToggleDx()                                     = default;
+        OptionsToggleDx(const OptionsToggleDx&)                = delete;
+        OptionsToggleDx& operator=(const OptionsToggleDx&)     = delete;
+        OptionsToggleDx(OptionsToggleDx&&) noexcept            = delete;
+        OptionsToggleDx& operator=(OptionsToggleDx&&) noexcept = delete;
+
+        wil::unique_hwnd hostHwnd;
+        RedSalamander::DxUi::WindowHost host;
+        RedSalamander::DxUi::Toggle* toggle = nullptr;
+    };
+
+    struct OptionsEditDx
+    {
+        OptionsEditDx()                                    = default;
+        ~OptionsEditDx()                                   = default;
+        OptionsEditDx(const OptionsEditDx&)                = delete;
+        OptionsEditDx& operator=(const OptionsEditDx&)     = delete;
+        OptionsEditDx(OptionsEditDx&&) noexcept            = delete;
+        OptionsEditDx& operator=(OptionsEditDx&&) noexcept = delete;
+
+        wil::unique_hwnd hostHwnd;
+        RedSalamander::DxUi::WindowHost host;
+        RedSalamander::DxUi::TextField* edit = nullptr;
+    };
+
+    struct OptionsDxUiState
+    {
+        OptionsDxUiState()                                       = default;
+        ~OptionsDxUiState()                                      = default;
+        OptionsDxUiState(const OptionsDxUiState&)                = delete;
+        OptionsDxUiState& operator=(const OptionsDxUiState&)     = delete;
+        OptionsDxUiState(OptionsDxUiState&&) noexcept            = delete;
+        OptionsDxUiState& operator=(OptionsDxUiState&&) noexcept = delete;
+
+        OptionsBodyDx body;
+        OptionsSectionDxLabel headerCompare;
+        OptionsSectionDxLabel headerSubdirs;
+        OptionsSectionDxLabel headerAdvanced;
+        OptionsSectionDxLabel headerIgnore;
+        OptionsCardDxText compareSize;
+        OptionsCardDxText compareDateTime;
+        OptionsCardDxText compareAttributes;
+        OptionsCardDxText compareContent;
+        OptionsCardDxText compareSubdirectories;
+        OptionsCardDxText compareSubdirAttributes;
+        OptionsCardDxText selectSubdirsOnlyInOnePane;
+        OptionsCardDxText keepIdenticalItems;
+        OptionsCardDxText ignoreFiles;
+        OptionsCardDxText ignoreDirectories;
+        OptionsButtonDx okButton;
+        OptionsButtonDx cancelButton;
+        OptionsToggleDx compareSizeToggle;
+        OptionsToggleDx compareDateTimeToggle;
+        OptionsToggleDx compareAttributesToggle;
+        OptionsToggleDx compareContentToggle;
+        OptionsToggleDx compareSubdirectoriesToggle;
+        OptionsToggleDx compareSubdirAttributesToggle;
+        OptionsToggleDx selectSubdirsOnlyInOnePaneToggle;
+        OptionsToggleDx keepIdenticalItemsToggle;
+        OptionsToggleDx ignoreFilesToggle;
+        OptionsToggleDx ignoreDirectoriesToggle;
+        OptionsEditDx ignoreFilesEdit;
+        OptionsEditDx ignoreDirectoriesEdit;
+        bool usesDxUiStatics = false;
+        bool usesDxUiButtons = false;
+        bool usesDxUiToggles = false;
+        bool usesDxUiEdits   = false;
+
+        void Detach() noexcept
+        {
+            body.Detach();
+            okButton.Detach();
+            cancelButton.Detach();
+            usesDxUiStatics = false;
+            usesDxUiButtons = false;
+            usesDxUiToggles = false;
+            usesDxUiEdits   = false;
+        }
+    };
+
+    std::unique_ptr<OptionsDxUiState> _optionsDxUi;
     std::vector<RECT> _optionsCards;
-    int _optionsScrollOffset             = 0;
-    int _optionsScrollMax                = 0;
-    int _optionsWheelRemainder           = 0;
-    bool _optionsUseTwoColumns           = false;
-    int _optionsTwoColumnSeparatorX      = -1;
-    bool _optionsStaleFromExternalReload = false;
+    int _optionsScrollOffset               = 0;
+    int _optionsScrollMax                  = 0;
+    int _optionsBodyContentHeight          = 0;
+    int _optionsWheelRemainder             = 0;
+    bool _optionsUseTwoColumns             = false;
+    bool _optionsUsesDxUiTypographyMetrics = false;
+    int _optionsTwoColumnSeparatorX        = -1;
+    bool _optionsStaleFromExternalReload   = false;
+    bool _syncingOptionsDxEdits            = false;
 
     Common::Settings::Settings* _settings = nullptr;
     AppTheme _theme{};
@@ -390,10 +657,6 @@ private:
     bool _draggingSplitter    = false;
     int _splitterDragOffsetPx = 0;
 
-    wil::unique_hfont _uiFont;
-    wil::unique_hfont _uiBoldFont;
-    wil::unique_hfont _uiItalicFont;
-    wil::unique_hfont _bannerTitleFont;
     wil::unique_hbrush _backgroundBrush;
     wil::unique_hbrush _splitterBrush;
     wil::unique_hbrush _splitterGripBrush;
@@ -408,9 +671,6 @@ private:
     COLORREF _optionsInputFocusedBackgroundColor  = RGB(255, 255, 255);
     COLORREF _optionsInputDisabledBackgroundColor = RGB(255, 255, 255);
     ThemedInputFrames::FrameStyle _optionsFrameStyle{};
-
-    std::vector<std::unique_ptr<CompareMenuItemData>> _menuItemData;
-    std::vector<std::unique_ptr<CompareMenuItemData>> _popupMenuItemData;
 
     bool _compareStarted            = false;
     bool _compareActive             = false;
@@ -447,6 +707,23 @@ private:
     UINT _dpi               = USER_DEFAULT_SCREEN_DPI;
     int _restoreShowCmd     = SW_SHOWNORMAL;
     bool _hasSavedPlacement = false;
+    size_t _dispatchDepth   = 0u;
+    bool _deletePending     = false;
+
+#ifdef ENABLE_TESTS
+public:
+    [[nodiscard]] bool DebugGetOptionsSnapshot(::CompareDirectoriesOptionsDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugGetRunSnapshot(::CompareDirectoriesRunDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugGetMenuBarItemLabel(size_t index, std::wstring& outText) const noexcept;
+    [[nodiscard]] bool DebugGetMenuBarItemScreenRect(size_t index, RECT& outRect) const noexcept;
+    [[nodiscard]] bool DebugFocusOptionsFirstControl() noexcept;
+    [[nodiscard]] bool DebugFocusOptionsTarget(::CompareDirectoriesOptionsDebugFocusTarget target) noexcept;
+    [[nodiscard]] bool DebugSetOptionsIgnoreFilesEnabled(bool enabled) noexcept;
+    [[nodiscard]] bool DebugSetOptionsIgnoreDirectoriesEnabled(bool enabled) noexcept;
+    [[nodiscard]] HWND DebugGetOptionsDialogHandle() const noexcept;
+    [[nodiscard]] bool DebugScrollOptionsBodyPages(int pageDelta) noexcept;
+    [[nodiscard]] bool DebugGetOptionsTargetHostAndClientRect(::CompareDirectoriesOptionsDebugFocusTarget target, HWND& outHost, RECT& outRect) const noexcept;
+#endif
 };
 
 } // namespace CompareDirectoriesWindowInternal

@@ -45,6 +45,12 @@ enum class FileSystemSearchBackendPreference : uint8_t
     Scan,
 };
 
+enum class FileSystemConcurrencyMode : uint8_t
+{
+    Auto,
+    Manual,
+};
+
 namespace LocalSearchIndexCore
 {
 class Repository;
@@ -135,6 +141,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetConfiguration(const char* configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetConfiguration(const char** configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE SomethingToSave(BOOL* pSomethingToSave) noexcept override;
+    [[nodiscard]] static const char* StaticConfigurationSchema() noexcept;
 
     HRESULT STDMETHODCALLTYPE GetMenuItems(const NavigationMenuItem** items, unsigned int* count) noexcept override;
     HRESULT STDMETHODCALLTYPE ExecuteMenuCommand(unsigned int commandId) noexcept override;
@@ -218,28 +225,44 @@ public:
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
 
     HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
+                                               FileSystemOperation operationType,
+                                               FileSystemTransferEndpoint endpoint,
+                                               FileSystemTransferHints* hints) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
 
 private:
     ~FileSystem();
 
-    static constexpr wchar_t kPluginId[]          = L"builtin/file-system";
-    static constexpr wchar_t kPluginShortId[]     = L"file";
-    static constexpr wchar_t kPluginAuthor[]      = L"RedSalamander";
-    static constexpr wchar_t kPluginVersion[]     = L"1.0";
+    static constexpr wchar_t kPluginId[]      = L"builtin/file-system";
+    static constexpr wchar_t kPluginShortId[] = L"file";
+    static constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
+    static constexpr wchar_t kPluginVersion[] = VERSINFO_PLUGIN_VERSION;
 
     static constexpr char kSchemaJson[] = R"json(
 {
-  "version": 1,
-  "title": "File System",
-  "fields": [
+    "version": 1,
+    "title": "File System",
+    "fields": [
+    {
+      "key": "concurrencyMode",
+      "type": "option",
+      "label": "Concurrency mode",
+      "description": "Auto resolves copy/move and permanent-delete concurrency from storage characteristics at task start. Manual uses the numeric limits below.",
+      "default": "auto",
+      "options": [
+        { "value": "auto", "label": "Auto (storage hints)" },
+        { "value": "manual", "label": "Manual (use numeric limits below)" }
+      ]
+    },
     {
       "key": "copyMoveMaxConcurrency",
       "type": "value",
       "label": "Copy/Move max concurrency",
-      "description": "Maximum number of worker threads used by Copy/Move batch operations (top-level items). 1 disables internal parallelism.",
+      "description": "Maximum Copy/Move worker budget for selected items and recursive directory contents. 1 disables internal parallelism.",
       "default": 4,
       "min": 1,
-      "max": 8
+      "max": 16
     },
     {
       "key": "deleteMaxConcurrency",
@@ -258,6 +281,15 @@ private:
       "default": 2,
       "min": 1,
       "max": 16
+    },
+    {
+      "key": "recycleBinBatchSize",
+      "type": "value",
+      "label": "Recycle Bin batch size",
+      "description": "Maximum sibling items grouped into one Recycle Bin shell batch. 1 disables batching.",
+      "default": 500,
+      "min": 1,
+      "max": 1000
     },
     {
       "key": "enumerationSoftMaxBufferMiB",
@@ -301,22 +333,36 @@ private:
         { "value": "local-index", "label": "Prefer local index" },
         { "value": "scan", "label": "Force scan" }
       ]
+    },
+    {
+      "key": "searchMaxDirectoryWalkers",
+      "type": "value",
+      "label": "Search max directory walkers",
+      "description": "Worker count used by the parallel recursive scan walk for name-only searches. 1 disables the parallel walk.",
+      "default": 4,
+      "min": 1,
+      "max": 8
     }
   ]
 }
 )json";
 
-    static constexpr unsigned int kDefaultCopyMoveMaxConcurrency             = 4u;
-    static constexpr unsigned int kDefaultDeleteMaxConcurrency               = 8u;
-    static constexpr unsigned int kDefaultDeleteRecycleBinMaxConcurrency     = 2u;
-    static constexpr unsigned long kDefaultEnumerationSoftMaxBufferMiB       = 512ul;
-    static constexpr unsigned long kDefaultEnumerationHardMaxBufferMiB       = 2048ul;
-    static constexpr FileSystemReparsePointPolicy kDefaultReparsePointPolicy = FileSystemReparsePointPolicy::CopyReparse;
+    static constexpr FileSystemConcurrencyMode kDefaultConcurrencyMode                 = FileSystemConcurrencyMode::Auto;
+    static constexpr unsigned int kDefaultCopyMoveMaxConcurrency                       = 4u;
+    static constexpr unsigned int kDefaultDeleteMaxConcurrency                         = 8u;
+    static constexpr unsigned int kDefaultDeleteRecycleBinMaxConcurrency               = 2u;
+    static constexpr unsigned int kDefaultRecycleBinBatchSize                          = 500u;
+    static constexpr unsigned long kDefaultEnumerationSoftMaxBufferMiB                 = 512ul;
+    static constexpr unsigned long kDefaultEnumerationHardMaxBufferMiB                 = 2048ul;
+    static constexpr FileSystemReparsePointPolicy kDefaultReparsePointPolicy           = FileSystemReparsePointPolicy::CopyReparse;
     static constexpr FileSystemSearchBackendPreference kDefaultSearchBackendPreference = FileSystemSearchBackendPreference::Auto;
+    static constexpr unsigned int kDefaultSearchMaxDirectoryWalkers                    = 4u;
 
-    static constexpr unsigned int kMaxCopyMoveMaxConcurrency         = 8u;
+    static constexpr unsigned int kMaxCopyMoveMaxConcurrency         = 16u;
     static constexpr unsigned int kMaxDeleteMaxConcurrency           = 64u;
     static constexpr unsigned int kMaxDeleteRecycleBinMaxConcurrency = 16u;
+    static constexpr unsigned int kMaxRecycleBinBatchSize            = 1000u;
+    static constexpr unsigned int kMaxSearchMaxDirectoryWalkers      = 8u;
 
     PluginMetaData _metaData{};
 
@@ -330,14 +376,19 @@ private:
     mutable std::mutex _propertiesMutex;
     std::string _lastPropertiesJson;
 
-    unsigned int _copyMoveMaxConcurrency             = kDefaultCopyMoveMaxConcurrency;
-    unsigned int _deleteMaxConcurrency               = kDefaultDeleteMaxConcurrency;
-    unsigned int _deleteRecycleBinMaxConcurrency     = kDefaultDeleteRecycleBinMaxConcurrency;
-    unsigned long _enumerationSoftMaxBufferMiB       = kDefaultEnumerationSoftMaxBufferMiB;
-    unsigned long _enumerationHardMaxBufferMiB       = kDefaultEnumerationHardMaxBufferMiB;
-    FileSystemReparsePointPolicy _reparsePointPolicy = kDefaultReparsePointPolicy;
+    FileSystemConcurrencyMode _concurrencyMode                 = kDefaultConcurrencyMode;
+    unsigned int _copyMoveMaxConcurrency                       = kDefaultCopyMoveMaxConcurrency;
+    unsigned int _deleteMaxConcurrency                         = kDefaultDeleteMaxConcurrency;
+    unsigned int _deleteRecycleBinMaxConcurrency               = kDefaultDeleteRecycleBinMaxConcurrency;
+    unsigned int _recycleBinBatchSize                          = kDefaultRecycleBinBatchSize;
+    unsigned long _enumerationSoftMaxBufferMiB                 = kDefaultEnumerationSoftMaxBufferMiB;
+    unsigned long _enumerationHardMaxBufferMiB                 = kDefaultEnumerationHardMaxBufferMiB;
+    FileSystemReparsePointPolicy _reparsePointPolicy           = kDefaultReparsePointPolicy;
     FileSystemSearchBackendPreference _searchBackendPreference = kDefaultSearchBackendPreference;
+    unsigned int _searchMaxDirectoryWalkers                    = kDefaultSearchMaxDirectoryWalkers;
     std::shared_ptr<LocalSearchIndexCore::Repository> _searchIndexRepository;
+    std::wstring _searchServiceUnavailablePipeName;
+    ULONGLONG _searchServiceUnavailableUntilTick = 0u;
 #ifdef _DEBUG
     unsigned int _directorySizeDelayMs = 0u;
 #endif
@@ -386,3 +437,5 @@ private:
 
     void UpdateCapabilitiesJson() noexcept;
 };
+
+[[nodiscard]] const char* GetFileSystemStaticConfigurationSchema() noexcept;

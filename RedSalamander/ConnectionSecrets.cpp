@@ -251,7 +251,7 @@ void EnsureQuickConnectProfile(std::wstring_view preferredPluginId) noexcept
     profile.port         = 0;
     profile.userName     = L"";
     profile.authMode     = (profile.pluginId == L"builtin/file-system-onedrive-personal" || profile.pluginId == L"builtin/file-system-onedrive-business" ||
-                        profile.pluginId == L"builtin/file-system-sharepoint" || profile.pluginId == L"builtin/file-system-gdrive")
+                            profile.pluginId == L"builtin/file-system-sharepoint" || profile.pluginId == L"builtin/file-system-gdrive")
                                ? Common::Settings::ConnectionAuthMode::OAuth2Pkce
                                : Common::Settings::ConnectionAuthMode::Password;
     profile.savePassword = true;
@@ -436,7 +436,7 @@ void ClearAllSecretAccessAuthorizations() noexcept
     g_lastSecretAccessAuthorizationTickByConnectionId.clear();
 }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 void SetSecretAccessAuthorizationTickForTesting(std::wstring_view connectionId, uint64_t tick) noexcept
 {
     if (connectionId.empty())

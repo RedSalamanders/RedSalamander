@@ -152,6 +152,32 @@ struct StartupSettings
     bool showSplash = true;
 };
 
+enum class ReducedMotionMode : uint8_t
+{
+    System,
+    On,
+    Off,
+};
+
+enum class WindowBackdropMode : uint8_t
+{
+    Default,
+    None,
+    Mica,
+    MicaAlt,
+    Acrylic,
+};
+
+struct UiSettings
+{
+    bool compactMode                  = false;
+    ReducedMotionMode reducedMotion   = ReducedMotionMode::System;
+    WindowBackdropMode windowBackdrop = WindowBackdropMode::Default;
+    std::wstring language             = L"system";
+
+    bool operator==(const UiSettings&) const noexcept = default;
+};
+
 enum class MonitorFilterPreset : uint8_t
 {
     Custom,
@@ -162,7 +188,7 @@ enum class MonitorFilterPreset : uint8_t
 
 struct MonitorFilterState
 {
-    uint32_t mask              = 31u; // 0..31
+    uint32_t mask              = 63u; // 0..63
     MonitorFilterPreset preset = MonitorFilterPreset::Custom;
 };
 
@@ -261,10 +287,21 @@ struct ConnectionsSettings
     uint32_t windowsHelloReauthTimeoutMinute = 10;
 };
 
+struct GridColumnLayoutEntry
+{
+    std::wstring columnId;
+    uint32_t displayIndex = 0u;
+    float widthDip        = 0.0f;
+};
+
 struct FileOperationsSettings
 {
-    bool autoDismissSuccess         = false;
-    uint32_t maxDiagnosticsLogFiles = 14;
+    bool autoDismissSuccess                      = false;
+    bool preCalcEnabled                          = true;
+    uint32_t preCalcMaxWorkers                   = 4;
+    uint32_t crossFsBridgeBufferSizeKB           = 4096;
+    uint64_t defaultBandwidthLimitBytesPerSecond = 0;
+    uint32_t maxDiagnosticsLogFiles              = 14;
     // Diagnostics verbosity: by default, Debug builds keep more context while Release builds stay lean.
 #if defined(_DEBUG) || defined(DEBUG)
     bool diagnosticsInfoEnabled  = true;
@@ -278,6 +315,9 @@ struct FileOperationsSettings
     std::optional<uint32_t> maxDiagnosticsPerFlush;
     std::optional<uint32_t> diagnosticsFlushIntervalMs;
     std::optional<uint32_t> diagnosticsCleanupIntervalMs;
+    std::wstring issuesPaneSortColumnId;
+    bool issuesPaneSortDescending = false;
+    std::vector<GridColumnLayoutEntry> issuesPaneGridLayout;
 };
 
 struct CompareDirectoriesSettings
@@ -365,6 +405,9 @@ struct SearchDialogSettings
     SearchContentMode contentMode = SearchContentMode::Disabled;
 
     uint64_t maxResults = 0;
+    std::wstring sortColumnId;
+    bool sortDescending = false;
+    std::vector<GridColumnLayoutEntry> resultsGridLayout;
 };
 
 struct ExtensionsSettings
@@ -434,6 +477,14 @@ struct ExtensionsSettings
         {L".ini", L"builtin/viewer-text"},
         {L".cfg", L"builtin/viewer-text"},
         {L".csv", L"builtin/viewer-text"},
+        {L".diff", L"builtin/viewer-text"},
+        {L".patch", L"builtin/viewer-text"},
+        {L".rej", L"builtin/viewer-text"},
+        {L".db", L"builtin/viewer-sqlite"},
+        {L".db3", L"builtin/viewer-sqlite"},
+        {L".s3db", L"builtin/viewer-sqlite"},
+        {L".sqlite", L"builtin/viewer-sqlite"},
+        {L".sqlite3", L"builtin/viewer-sqlite"},
 
         // Default image formats (built-in WIC codecs)
         {L".bmp", L"builtin/viewer-imgraw"},
@@ -546,6 +597,11 @@ struct ShortcutsSettings
 {
     std::vector<ShortcutBinding> functionBar;
     std::vector<ShortcutBinding> folderView;
+    bool functionBarCollapsed = false;
+    bool folderViewCollapsed  = false;
+    std::wstring sortColumnId;
+    bool sortDescending = false;
+    std::vector<GridColumnLayoutEntry> gridLayout;
 };
 
 struct Settings
@@ -558,6 +614,7 @@ struct Settings
     std::optional<ShortcutsSettings> shortcuts;
     std::optional<MainMenuState> mainMenu;
     std::optional<StartupSettings> startup;
+    std::optional<UiSettings> ui;
     std::optional<CacheSettings> cache;
     std::optional<FoldersSettings> folders;
     std::optional<MonitorSettings> monitor;

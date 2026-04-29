@@ -83,6 +83,7 @@ While scanning:
   - `Focus in pane`: navigate the active FolderView pane to the tile’s parent folder and focus the file/folder (when resolvable).
   - `Zoom in` / `Zoom out`
   - Standard FolderView file/folder commands (Open/Open With/Delete/Move/Rename/Copy/Paste/Properties), excluding `View Space` and debug-only items.
+  - The popup surface MUST use the shared DxUI context-menu renderer so the menu matches the viewer theme/backdrop contract instead of falling back to a native `TrackPopupMenu` surface.
 - Up stays available during scanning; if the current scan root has no parent in the current model, Up restarts a scan at the parent path. Up is disabled when the scan root is already at a volume/share root.
 - While scanning, click header **Cancel** (or press `Esc`) to stop the scan.
 - Double-clicking an aggregated “Other” bucket triggers a focused action to explore that part (typically drilling into the parent directory or rescanning it with a higher `topFilesPerDirectory`).
@@ -91,7 +92,7 @@ While scanning:
   - `Backspace` / `Alt+Up`: drill up
   - `F5`: refresh/rescan current node (forces a full rescan; bypasses cache)
   - `Esc`: cancel scan if scanning; otherwise close viewer
-- The window menu bar (`IDR_VIEWERSPACE_MENU`) is owner-drawn and themed like host menus (dark/high-contrast aware; rainbow selection when `rainbowMode` is enabled).
+- The window menu bar still sources commands from `IDR_VIEWERSPACE_MENU`, but the visible top chrome is rendered through the shared `RedSalamander.DxNativeMenuBar` host instead of a native owner-drawn menu bar. The live window menu handle is detached after attach, and `Alt`, `F10`, and menu mnemonics continue to route through the DxUi menu bar.
 
 ### Labels
 - Item name + compact size label (when there is enough space).

@@ -2,7 +2,7 @@
 name: wil-raii
 description: Windows Implementation Library (WIL) RAII patterns for managing Windows resources. Use when creating, managing, or cleaning up Windows handles like HICON, HWND, HBITMAP, HDC, COM objects, or any GDI resources.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 

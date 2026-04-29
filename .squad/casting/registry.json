@@ -1,0 +1,41 @@
+{
+  "registry_version": "1.0",
+  "entries": [
+    {
+      "persistent_name": "Ripley",
+      "role": "Lead / Reviewer",
+      "universe": "user-specified",
+      "created_at": "2026-03-21T09:35:00Z",
+      "legacy_named": false,
+      "status": "active",
+      "notes": "Retained from Alien universe proposal"
+    },
+    {
+      "persistent_name": "Yoko",
+      "role": "Core Dev",
+      "universe": "user-specified",
+      "created_at": "2026-03-21T09:35:00Z",
+      "legacy_named": false,
+      "status": "active",
+      "notes": "User override — replaced Dallas"
+    },
+    {
+      "persistent_name": "Sysadm",
+      "role": "Systems Dev",
+      "universe": "user-specified",
+      "created_at": "2026-03-21T09:35:00Z",
+      "legacy_named": false,
+      "status": "active",
+      "notes": "User override — replaced Parker"
+    },
+    {
+      "persistent_name": "GuineaPig",
+      "role": "Tester",
+      "universe": "user-specified",
+      "created_at": "2026-03-21T09:35:00Z",
+      "legacy_named": false,
+      "status": "active",
+      "notes": "User override — replaced Lambert"
+    }
+  ]
+}

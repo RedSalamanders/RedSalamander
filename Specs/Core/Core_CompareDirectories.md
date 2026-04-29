@@ -22,6 +22,25 @@ TODO
 
 The comparison is directory-oriented and matches items by **name under the same relative folder**.
 
+Related normative documents:
+
+- `Specs/Testing/Testing_SelfTests.md`
+- `Specs/Testing/Testing_PerformanceValidation.md`
+
+## Performance Validation Contract
+
+Compare Directories is a performance-sensitive subsystem across both engine and window paths. Any new feature or optimization that can affect scan throughput, content-compare queueing, visible progress latency, pane refresh work, cache behavior, or memory retention MUST:
+
+- identify the user-visible scenario being protected,
+- add or reuse measurable instrumentation,
+- add deterministic coverage in `--compare-selftest`, `--commands-selftest`, or another deterministic harness,
+- archive validation runs under `Specs/TestRuns/`,
+- ground any claimed improvement in archived before/after evidence.
+
+This requirement applies from the beginning of feature work, including baseline-establishing landings.
+
+When the behavior is window-facing, the preferred metric family is `compare.ui.*`. When the behavior is engine/storage-facing, the change SHOULD keep or extend deterministic compare selftest coverage alongside the instrumentation.
+
 ## Implementation Files
 
 - `RedSalamander/CompareDirectoriesWindow.h/.cpp` (window, banner, options panel, sync logic, progress UI)

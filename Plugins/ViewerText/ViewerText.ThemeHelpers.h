@@ -20,6 +20,11 @@ inline COLORREF ColorRefFromArgb(uint32_t argb) noexcept
     return RGB(r, g, b);
 }
 
+inline float AlphaFromArgb(uint32_t argb) noexcept
+{
+    return static_cast<float>((argb >> 24) & 0xFFu) / 255.0f;
+}
+
 inline COLORREF BlendColor(COLORREF under, COLORREF over, uint8_t alpha) noexcept
 {
     const uint32_t inv = static_cast<uint32_t>(255u - alpha);

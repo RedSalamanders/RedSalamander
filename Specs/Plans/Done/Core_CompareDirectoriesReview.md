@@ -39,7 +39,7 @@ This is the living engineering tracker for **Compare Directories**:
 - [x] Selftests: add regression for differences-only content-compare elision (`content_pending_elided`)
 - [x] S3: content compare reader uses ranged `GetObject` (no full-object download to temp file before first byte compare)
 - [ ] Shutdown: avoid UI-thread joins when closing compare window / app mid-compare
-  - [x] Cleanup scheduling is always off-UI (threadpool; falls back to detached thread if scheduling fails).
+  - [x] Cleanup scheduling is always off-UI (threadpool; scheduling failure logs once and abandons deferred cleanup rather than blocking UI teardown or detaching a thread).
   - [ ] Verify with S3↔FS “close app mid-compare” repro (ensure exit is prompt; no stuck process).
 
 ### Remote perf + memory + exit (in progress)

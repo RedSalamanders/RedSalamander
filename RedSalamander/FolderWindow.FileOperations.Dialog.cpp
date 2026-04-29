@@ -3,10 +3,26 @@
 #include "FolderWindow.FileOperations.Popup.h"
 
 #include <algorithm>
+#include <chrono>
+
+namespace
+{
+[[nodiscard]] uint64_t PerfNowUs() noexcept
+{
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+[[nodiscard]] uint64_t PerfElapsedUs(uint64_t startUs) noexcept
+{
+    const uint64_t nowUs = PerfNowUs();
+    return (nowUs >= startUs) ? (nowUs - startUs) : 0u;
+}
+} // namespace
 
 void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
 {
-    HWND ownerWindow = _owner.GetHwnd();
+    const uint64_t startedUs = PerfNowUs();
+    HWND ownerWindow         = _owner.GetHwnd();
     if (ownerWindow)
     {
         HWND rootWindow = GetAncestor(ownerWindow, GA_ROOT);
@@ -29,8 +45,11 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
         std::scoped_lock lock(_mutex);
         if (_popup)
         {
+            Debug::Perf::EmitCounter(L"FileOps.InfoTask.EnsurePopupVisibleExistingCount");
+            const bool capturePerf       = Debug::Perf::IsCaptureEnabled();
+            const uint64_t showStartedUs = capturePerf ? PerfNowUs() : 0u;
             ShowWindow(_popup.get(), SW_SHOWNOACTIVATE);
-
+            const uint64_t showUs = capturePerf ? PerfElapsedUs(showStartedUs) : 0u;
             RECT popupRect{};
             bool reposition = false;
             int targetX     = 0;
@@ -74,8 +93,19 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
             const UINT flags = SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | (reposition ? 0u : SWP_NOMOVE);
 
             // Keep the popup visible even if it was behind other windows. Avoid stealing focus.
+            const uint64_t positionStartedUs = capturePerf ? PerfNowUs() : 0u;
             SetWindowPos(_popup.get(), HWND_TOP, targetX, targetY, 0, 0, flags);
+            const uint64_t positionUs          = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
+            const uint64_t invalidateStartedUs = capturePerf ? PerfNowUs() : 0u;
             InvalidateRect(_popup.get(), nullptr, FALSE);
+            const uint64_t invalidateUs = capturePerf ? PerfElapsedUs(invalidateStartedUs) : 0u;
+            if (capturePerf)
+            {
+                Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.ShowWindowUs", L"", showUs, 0u, 1u, S_OK);
+                Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.SetWindowPosUs", L"", positionUs, 0u, 1u, S_OK);
+                Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.InvalidateUs", L"", invalidateUs, 0u, 1u, S_OK);
+            }
+            Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 0u, 1u, S_OK);
             return;
         }
     }
@@ -86,9 +116,15 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
         uiLifetime = _uiLifetime;
     }
 
-    HWND popup = FileOperationsPopup::Create(this, &_owner, ownerWindow, std::move(uiLifetime));
+    HWND popup              = FileOperationsPopup::Create(this, &_owner, ownerWindow, std::move(uiLifetime));
+    const uint64_t createUs = PerfElapsedUs(startedUs);
     if (! popup)
     {
+        if (Debug::Perf::IsCaptureEnabled())
+        {
+            Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.CreateUs", L"", createUs, 0u, 0u, E_FAIL);
+        }
+        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 0u, 0u, E_FAIL);
         return;
     }
 
@@ -97,8 +133,11 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
         _popup.reset(popup);
     }
 
+    Debug::Perf::EmitCounter(L"FileOps.InfoTask.EnsurePopupVisibleCreateCount");
+    const bool capturePerf       = Debug::Perf::IsCaptureEnabled();
+    const uint64_t showStartedUs = capturePerf ? PerfNowUs() : 0u;
     ShowWindow(popup, SW_SHOWNOACTIVATE);
-
+    const uint64_t showUs = capturePerf ? PerfElapsedUs(showStartedUs) : 0u;
     RECT popupRect{};
     bool reposition = false;
     int targetX     = 0;
@@ -139,7 +178,19 @@ void FolderWindow::FileOperationState::EnsurePopupVisible() noexcept
         }
     }
 
-    const UINT flags = SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | (reposition ? 0u : SWP_NOMOVE);
+    const UINT flags                 = SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | (reposition ? 0u : SWP_NOMOVE);
+    const uint64_t positionStartedUs = capturePerf ? PerfNowUs() : 0u;
     SetWindowPos(popup, HWND_TOP, targetX, targetY, 0, 0, flags);
+    const uint64_t positionUs      = capturePerf ? PerfElapsedUs(positionStartedUs) : 0u;
+    const uint64_t redrawStartedUs = capturePerf ? PerfNowUs() : 0u;
     RedrawWindow(popup, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW);
+    const uint64_t redrawUs = capturePerf ? PerfElapsedUs(redrawStartedUs) : 0u;
+    if (capturePerf)
+    {
+        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.CreateUs", L"", createUs, 1u, 1u, S_OK);
+        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.ShowWindowUs", L"", showUs, 1u, 1u, S_OK);
+        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.SetWindowPosUs", L"", positionUs, 1u, 1u, S_OK);
+        Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisible.RedrawWindowUs", L"", redrawUs, 1u, 1u, S_OK);
+    }
+    Debug::Perf::Emit(L"FileOps.InfoTask.EnsurePopupVisibleUs", L"", PerfElapsedUs(startedUs), 1u, 1u, S_OK);
 }

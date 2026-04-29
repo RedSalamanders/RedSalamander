@@ -25,6 +25,7 @@ extern "C"
         REFIID riid,
         const FactoryOptions* factoryOptions,
         IHost* host,
+        const wchar_t* pluginId,
         void** result
     );
 }
@@ -34,7 +35,7 @@ extern "C"
 
 A single DLL MAY implement **multiple logical plugins** for the same interface type (e.g. one DLL that exposes `ftp`, `sftp`, and `scp` as separate file systems).
 
-To do so, the DLL exports two additional (optional) entry points:
+To do so, the DLL exports one additional (optional) discovery entry point:
 
 ```cpp
 extern "C"
@@ -47,30 +48,24 @@ extern "C"
         unsigned int* count
     );
 
-    // Creates a specific plugin instance identified by pluginId (metaData[i].id).
-    PLUGFACTORY_API HRESULT __stdcall RedSalamanderCreateEx(
-        REFIID riid,
-        const FactoryOptions* factoryOptions,
-        IHost* host,
-        const wchar_t* pluginId,
-        void** result
-    );
 }
 ```
 
 **Host behavior:**
 - If `RedSalamanderEnumeratePlugins` is present, the host calls it during discovery and registers one plugin entry per returned `PluginMetaData` record.
-- When instantiating a plugin entry originating from enumeration, the host calls `RedSalamanderCreateEx` with `pluginId == metaData[i].id`.
-- If the optional exports are missing, the host falls back to `RedSalamanderCreate`.
+- When instantiating a plugin entry originating from enumeration, the host calls `RedSalamanderCreate` with `pluginId == metaData[i].id`.
+- If `RedSalamanderEnumeratePlugins` is missing, the host treats the DLL as a single-plugin factory and may call `RedSalamanderCreate` with `pluginId == nullptr`.
 
 **Plugin behavior:**
 - `RedSalamanderEnumeratePlugins` MUST return stable metadata pointers for the lifetime of the loaded DLL.
-- `RedSalamanderCreateEx` MUST return `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` (or `E_INVALIDARG`) for unknown `pluginId` values.
+- Because `PluginMetaData` stores raw `const wchar_t*` fields, a multi-plugin DLL MUST only point those fields at backing storage whose lifetime already matches the DLL lifetime. Do not populate `PluginMetaData.name` / `description` / other string fields from temporary or lambda-local `std::wstring` objects.
+- `RedSalamanderCreate` MUST return `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` (or `E_INVALIDARG`) for unknown `pluginId` values.
 
 **Parameters:**
 - `riid`: Interface ID to create (**only** `IID_IFileSystem` is creatable via `RedSalamanderCreate`; see UUID below)
 - `factoryOptions`: Optional configuration (debug level, etc.)
 - `host`: Host services object (caller-owned; remains valid for the lifetime of the created plugin instance)
+- `pluginId`: Logical plugin id from `RedSalamanderEnumeratePlugins`; single-plugin DLLs MAY accept `nullptr` or empty
 - `result`: [out] Pointer to created interface instance
 
 **Return Value:**
@@ -395,6 +390,8 @@ interface __declspec(novtable) INavigationMenuCallback
 **Callback behavior:**
 - The host calls `SetCallback(hostCallback, cookie)` when `INavigationMenu` is available.
 - The host calls `SetCallback(nullptr, nullptr)` when switching/unloading the active file system.
+- `SetCallback(nullptr, nullptr)` is the synchronous drain point for this registration-style callback: after it returns, the plugin must not invoke the previous callback again.
+- Any queued or background work that could still try to navigate must either complete before `SetCallback(nullptr, nullptr)` returns or self-drop as stale before invoking the callback.
 - Plugins can call `RequestNavigate(path, cookie)` (typically from `ExecuteMenuCommand`) to request navigation.
 - `path` is a **plugin path** for the active file system (no `<shortId>:` prefix).
 - The plugin MUST pass back the `cookie` it received in `SetCallback` unchanged.
@@ -596,6 +593,38 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21"))
     virtual HRESULT STDMETHODCALLTYPE GetCapabilities(
         const char** jsonUtf8
     ) noexcept = 0;
+
+    // Transfer hints for cross-filesystem bridge buffering and progress cadence.
+    // Parameters:
+    //   path: Plugin-native path for the source or destination endpoint
+    //   operationType: Top-level file operation (currently copy/move)
+    //   endpoint: Whether the host is reading from the source side or writing to the destination side
+    //   hints: [in/out] Caller-initialized struct (`sizeBytes` must be set before call)
+    // Returns:
+    //   S_OK: Hints populated
+    //   E_POINTER: Null required pointer
+    //   E_INVALIDARG: Invalid path, unsupported endpoint, or invalid sizeBytes
+    //   HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED): Plugin has no meaningful transfer hints for this path
+    virtual HRESULT STDMETHODCALLTYPE GetTransferHints(
+        const wchar_t* path,
+        FileSystemOperation operationType,
+        FileSystemTransferEndpoint endpoint,
+        FileSystemTransferHints* hints
+    ) noexcept = 0;
+
+    // Storage classification used by host-side auto-concurrency and diagnostics.
+    // Parameters:
+    //   path: Plugin-native path whose backing storage is being classified
+    //   characteristics: [in/out] Caller-initialized struct (`sizeBytes` must be set before call)
+    // Returns:
+    //   S_OK: Characteristics populated
+    //   E_POINTER: Null required pointer
+    //   E_INVALIDARG: Invalid path or invalid sizeBytes
+    //   HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED): Plugin cannot classify this path
+    virtual HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(
+        const wchar_t* path,
+        FileSystemStorageCharacteristics* characteristics
+    ) noexcept = 0;
 };
 ```
 
@@ -604,6 +633,14 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21"))
 - No incremental/streaming API (entire directory loaded into memory)
 - Suitable for typical user directories (thousands of files)
 - For massive directories (100K+ files), consider pagination in future versions
+- `GetTransferHints(...)` is a host-tuning contract only; plugins MUST NOT treat it as a user-visible policy surface.
+- `GetStorageCharacteristics(...)` is the authoritative plugin-to-host classification for Auto concurrency and diagnostics; the host does not infer storage behavior from plugin type.
+
+**Transfer/storage-hint contract notes:**
+- `path` is always interpreted in the plugin's own path space.
+- The host calls `GetTransferHints(...)` separately for the source side with `FILESYSTEM_TRANSFER_SOURCE_READ` and for the destination side with `FILESYSTEM_TRANSFER_DESTINATION_WRITE`.
+- For any struct with `sizeBytes`, the caller MUST initialize `sizeBytes = sizeof(...)` before the call, and the callee MUST validate it before reading or writing other fields.
+- Plugins with non-volume-backed storage (cloud, virtual, memory) MUST still return a meaningful classification instead of a Win32-volume approximation when they support these calls.
 
 ### 4. IFileSystemIO Interface
 
@@ -781,6 +818,37 @@ Capabilities are returned via `IFileSystem::GetCapabilities(...)` on the active 
 
 The host MUST treat capabilities as instance-scoped and MUST NOT assume a DLL has a single fixed capability set.
 
+### 4e. Transfer Hints (`IFileSystem::GetTransferHints`)
+
+Provides host-tuning hints for cross-filesystem bridge buffering and progress cadence.
+
+The host uses this to:
+- choose the active bridge buffer size from the host default plus endpoint-specific hints,
+- classify whether the source/destination path benefits from larger batches,
+- tune bridge progress cadence without changing user-visible copy/move policy.
+
+Normative rules:
+- `path` MUST be interpreted in the plugin's own path space.
+- The host MUST call `GetTransferHints(...)` separately for the source endpoint (`FILESYSTEM_TRANSFER_SOURCE_READ`) and the destination endpoint (`FILESYSTEM_TRANSFER_DESTINATION_WRITE`).
+- Callers MUST initialize `FileSystemTransferHints::sizeBytes` before the call; implementations MUST validate it.
+- Implementations SHOULD return meaningful `preferredBufferBytes` / `preferredProgressPeriodMs` when the transport characteristics are known.
+- `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)` is valid when the plugin has no meaningful hint for that path.
+
+### 4f. Storage Characteristics (`IFileSystem::GetStorageCharacteristics`)
+
+Provides storage classification for host-side Auto concurrency and diagnostics.
+
+The host uses this to:
+- resolve `concurrencyMode = auto` into an effective copy/move or delete budget,
+- emit task diagnostics describing the resolved storage class and budget,
+- apply the min-of-source/destination budget for bridged copy/move operations.
+
+Normative rules:
+- `path` MUST be interpreted in the plugin's own path space.
+- Callers MUST initialize `FileSystemStorageCharacteristics::sizeBytes` before the call; implementations MUST validate it.
+- Plugins with non-volume-backed storage (cloud, virtual, memory) SHOULD still return a meaningful classification rather than a Win32-volume approximation.
+- The host treats this call as the authoritative plugin-to-host classification; it does not infer storage behavior from plugin type.
+
 Capabilities JSON (version 1):
 
 ```json5
@@ -883,6 +951,8 @@ Computes the total size of a directory tree, optionally recursively.
 - `FolderWindow` uses `CreateDirectory` for `F7` (Create directory) when available:
   - The host prompts for the new folder name (modal dialog centered on the main window).
   - The host displays the destination path where the folder will be created.
+  - When the prompt opens, the entire suggested folder name is selected so typing immediately replaces it.
+  - The host suggests the first available localized default name before the user confirms: the base default first, then `... (1)`, `... (2)`, and so on when earlier suggestions already exist in the target folder.
   - The host validates the typed folder name as a single path segment and rejects invalid characters (`\\ / : * ? " < > |`) before calling `CreateDirectory`.
   - If the interface is not available (QI fails), the host treats the operation as unsupported and shows a localized error message.
   - If `CreateDirectory` returns `E_NOTIMPL`, the host treats the operation as unsupported and shows a localized error message that includes the plugin display name.
@@ -1515,6 +1585,7 @@ Plugins must implement the `IFileSystem` interface and provide concrete implemen
 - **Optional**: `Plugins\\*.dll` next to the executable (DLLs without `RedSalamanderCreate` are ignored)
 - **Custom**: absolute plugin paths from user settings (`plugins.customPluginPaths[]`); plugins are referenced in place (no copying)
 - Plugins must expose **both** a unique long ID (`builtin/...` or `user/...`) and a unique short ID (navigation scheme). Conflicts are logged and the plugin is skipped/unloaded.
+- Discovery is a startup health gate: if the manager finishes with zero **loadable** file-system plugins, it MUST log an error and return `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` instead of silently succeeding with an empty plugin set.
 - DLLs missing the `RedSalamanderCreate` export are not shown in the plugin list.
 - The **Plugins** top-level menu sits between **File** and **View** and contains a `Manage Plugins...` entry plus a pane-specific dynamic list.
 - The Plugin Manager dialog lists plugins grouped as Embedded / Optional / Custom, with columns **Plugin** and **Short Id**, and action buttons stacked vertically (`Add...`, `Remove...`, `Configure...`, `Test`, `Test All`, `About`, `Close`).
@@ -1829,7 +1900,7 @@ interface IFileSystemStreams : public IUnknown {
 
 ## AGENTS.md Compliance
 
-This specification follows Red Salamander development guidelines:
+This specification follows RedSalamander development guidelines:
 
 - **C++23 Standard**: Use modern C++ features in implementation
 - **RAII Patterns**: All resources managed with RAII (COM objects via wil::com_ptr)

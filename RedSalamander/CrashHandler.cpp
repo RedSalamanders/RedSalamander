@@ -82,15 +82,15 @@ std::atomic<bool> g_installed{false};
     wchar_t fileName[128]{};
     constexpr size_t fileNameMax = (sizeof(fileName) / sizeof(fileName[0])) - 1;
     const auto r                 = std::format_to_n(fileName,
-                                    fileNameMax,
-                                    L"RedSalamander-{:04}{:02}{:02}-{:02}{:02}{:02}-p{}.dmp",
-                                    static_cast<unsigned>(st.wYear),
-                                    static_cast<unsigned>(st.wMonth),
-                                    static_cast<unsigned>(st.wDay),
-                                    static_cast<unsigned>(st.wHour),
-                                    static_cast<unsigned>(st.wMinute),
-                                    static_cast<unsigned>(st.wSecond),
-                                    static_cast<unsigned long>(pid));
+                                                    fileNameMax,
+                                                    L"RedSalamander-{:04}{:02}{:02}-{:02}{:02}{:02}-p{}.dmp",
+                                                    static_cast<unsigned>(st.wYear),
+                                                    static_cast<unsigned>(st.wMonth),
+                                                    static_cast<unsigned>(st.wDay),
+                                                    static_cast<unsigned>(st.wHour),
+                                                    static_cast<unsigned>(st.wMinute),
+                                                    static_cast<unsigned>(st.wSecond),
+                                                    static_cast<unsigned long>(pid));
     const size_t written         = (r.size < fileNameMax) ? r.size : fileNameMax;
     fileName[written]            = L'\0';
 

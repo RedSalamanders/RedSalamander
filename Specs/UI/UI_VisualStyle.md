@@ -54,11 +54,18 @@ NavigationView reflects the **focused pane** (not only whether NavigationView it
   - Gap between dots: `2 DIP`.
   - Alignment: centered within the splitter rectangle (both axes).
   - Color: slightly higher contrast than the splitter fill (derive from `AppTheme.menu.separator` blended toward `AppTheme.menu.text`; prefer `AppTheme.menu.text` in High Contrast mode).
-- **Hit target**: purely visual; the full splitter rect remains the draggable region.
+- **Arrow affordances**:
+  - Restored split: top navigation-height segment maximizes/focuses the left pane and shows a compact right chevron; bottom segment maximizes/focuses the right pane and shows a compact left chevron.
+  - The chevron direction is the splitter movement direction needed to create the target maximized state, not a label for the pane side.
+  - Maximized split: either click target maximizes/focuses the hidden pane instead of restoring the current pane, and both chevrons point in the direction the splitter will move to switch sides.
+  - Chevron color matches the grip-dot color exactly and chevron size stays close to the grip scale, not the menu text scale.
+  - Both targets use the same subtle hover backplate and hand cursor.
+- **Hit target**: the non-arrow splitter region remains draggable; the arrow segments are click targets.
 
 ## Implementation Touchpoints (Code)
 
-- `RedSalamander/FolderWindow.cpp`: `FolderWindow::OnPaint()` (splitter fill + grip).
+- `RedSalamander/FolderWindow.Layout.cpp`: `FolderWindow::OnPaint()` (splitter fill, arrow affordances, and grip).
+- `RedSalamander/FolderWindow.Interaction.cpp`: splitter drag, cursor, hover, double-click reset, and arrow click handling.
 - `RedSalamander/FolderView.cpp`: `FolderView::DrawItem()` (selection/hover fill + focus border).
 - `RedSalamanderMonitor/ColorTextView.cpp`: `ColorTextView::DrawSelection()` (selection highlight).
 - `RedSalamander/NavigationView.cpp`: focus ring drawing in `Render*Section()` paths.
@@ -89,17 +96,19 @@ Windows common controls do not automatically inherit dark-mode styling in all ca
   - `LISTVIEW` header (`ListView_GetHeader(hwndListView)`)
 - **Dark combobox/listbox backgrounds**: for dropdowns that still paint with a light background, handle `WM_CTLCOLORLISTBOX` / `WM_CTLCOLOREDIT` / `WM_CTLCOLORSTATIC` and return a theme brush + `SetTextColor/SetBkColor` (skip this in high contrast).
 
-## Themed Dialog Buttons (Owner-Draw)
+## Themed Dialog Buttons
 
 Standard dialog push buttons (`OK`, `Cancel`, `Create`, etc.) MUST be theme-aware so they do not render as light-mode controls on dark dialogs.
 
-- In non-high-contrast themes, dialogs SHOULD enable owner-draw for push buttons (via `ThemedControls::EnableOwnerDrawButton`) and handle `WM_DRAWITEM` by calling `ThemedControls::DrawThemedPushButton`.
+- Migrated dialogs SHOULD use `RedSalamander::DxUi::Button` hosted by `RedSalamander::DxUi::WindowHost` so button fill, focus, hover, pressed, primary, and accessibility behavior come from the shared DxUi path.
+- Legacy Win32 dialogs that have not migrated yet MAY keep native buttons, but must still apply the current dialog theme and avoid reintroducing retired `ThemedControls` owner-draw helpers.
 - In high-contrast themes, dialogs MUST NOT force owner-draw; the system must remain in full control of colors.
 
 ## Themed Dialog Inputs (Edit/Combo Frames)
 
 Win32 `EDIT` / `COMBOBOX` controls frequently render mismatched borders in dark-themed dialogs. In non-high-contrast themes, dialogs SHOULD use the shared framed-input pattern:
 
+- Migrated dialogs SHOULD prefer `DxUi::TextField` and `DxUi::ComboBox` on a `DxUi::WindowHost` where practical.
 - Apply `SetWindowTheme` to inputs (`DarkMode_Explorer` / `Explorer`) and forward `WM_THEMECHANGED` so scrollbars and non-client details update.
 - Remove 3D borders (`WS_EX_CLIENTEDGE` / `WS_BORDER`) and add text padding via `EM_SETMARGINS` (`6 DIP` left/right).
 - Create a sibling `Static` frame window behind the input and install it via `ThemedInputFrames::InstallFrame` (input inset inside the frame by `2 DIP`).

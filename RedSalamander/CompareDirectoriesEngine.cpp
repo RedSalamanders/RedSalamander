@@ -100,6 +100,25 @@ struct SideEntry
     return (item.leftFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0 || (item.rightFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
 }
 
+template <typename T> void QueueCompareCleanup(std::unique_ptr<T> cleanup, std::wstring_view label) noexcept
+{
+    if (! cleanup)
+    {
+        return;
+    }
+
+    if (TrySubmitUniqueToThreadpool(cleanup))
+    {
+        return;
+    }
+
+    const DWORD lastError = GetLastError();
+    static_cast<void>(cleanup.release());
+    Debug::Warning(L"CompareDirectories: {} scheduling failed (gle=0x{:08X}); abandoning deferred cleanup to keep teardown non-blocking.",
+                   label,
+                   static_cast<unsigned long>(lastError));
+}
+
 [[nodiscard]] std::wstring_view TrimWhitespace(std::wstring_view text) noexcept
 {
     while (! text.empty() && std::iswspace(static_cast<wint_t>(text.front())) != 0)
@@ -877,7 +896,7 @@ CompareDirectoriesPerfStats CompareDirectoriesSession::GetPerfStats() const noex
     return stats;
 }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 void CompareDirectoriesSession::SetDecisionCacheBudgetBytesForSelfTest(uint64_t budgetBytes) noexcept
 {
     std::lock_guard guard(_mutex);
@@ -916,9 +935,9 @@ std::optional<std::filesystem::path> CompareDirectoriesSession::TryMakeRelative(
                                                                                   NavigationLocation::LeadingSlashPolicy::Ensure,
                                                                                   NavigationLocation::TrailingSlashPolicy::Trim);
         const std::wstring absNorm  = NavigationLocation::NormalizePluginPathText(absoluteFolder.native(),
-                                                                                 NavigationLocation::EmptyPathPolicy::Root,
-                                                                                 NavigationLocation::LeadingSlashPolicy::Ensure,
-                                                                                 NavigationLocation::TrailingSlashPolicy::Trim);
+                                                                                  NavigationLocation::EmptyPathPolicy::Root,
+                                                                                  NavigationLocation::LeadingSlashPolicy::Ensure,
+                                                                                  NavigationLocation::TrailingSlashPolicy::Trim);
 
         if (absNorm == rootNorm)
         {
@@ -1410,29 +1429,7 @@ void CompareDirectoriesSession::EnsureContentCompareWorkersLocked() noexcept
 
 void CompareDirectoriesSession::ScheduleResetCleanup(std::unique_ptr<ResetCleanup> cleanup) noexcept
 {
-    if (! cleanup)
-    {
-        return;
-    }
-
-    ResetCleanup* raw = cleanup.release();
-    const BOOL ok     = TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept {
-        std::unique_ptr<ResetCleanup> owned(static_cast<ResetCleanup*>(context));
-    }, raw, nullptr);
-
-    if (! ok)
-    {
-        // Never block the caller thread if background cleanup scheduling fails (rare).
-        // Fall back to a detached std::thread, and leak on failure.
-        try
-        {
-            std::thread([raw]() noexcept { std::unique_ptr<ResetCleanup> owned(static_cast<ResetCleanup*>(raw)); }).detach();
-        }
-        catch (const std::system_error& ex)
-        {
-            Debug::Error(L"CompareDirectories: reset-cleanup fallback thread creation failed: {}", ex.code().value());
-        }
-    }
+    QueueCompareCleanup(std::move(cleanup), L"reset cleanup");
 }
 
 void CompareDirectoriesSession::ResetCompareStateLocked(ResetCleanup& outCleanup) noexcept
@@ -3832,6 +3829,19 @@ public:
     HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override
     {
         return _baseFs ? _baseFs->GetCapabilities(jsonUtf8) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
+                                               FileSystemOperation operationType,
+                                               FileSystemTransferEndpoint endpoint,
+                                               FileSystemTransferHints* hints) noexcept override
+    {
+        return _baseFs ? _baseFs->GetTransferHints(path, operationType, endpoint, hints) : E_POINTER;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override
+    {
+        return _baseFs ? _baseFs->GetStorageCharacteristics(path, characteristics) : E_POINTER;
     }
 
 private:

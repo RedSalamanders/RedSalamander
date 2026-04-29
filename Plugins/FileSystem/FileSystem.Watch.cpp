@@ -46,6 +46,19 @@ FileSystemDirectoryChangeAction MapDirectoryWatchAction(DWORD action) noexcept
         default: return FILESYSTEM_DIR_CHANGE_UNKNOWN;
     }
 }
+// Shared validity token for callback teardown safety.
+// Invalidated before cleanup so in-flight callbacks skip host invocation.
+struct CallbackGuard
+{
+    CallbackGuard()                                = default;
+    CallbackGuard(const CallbackGuard&)            = delete;
+    CallbackGuard(CallbackGuard&&)                 = delete;
+    CallbackGuard& operator=(const CallbackGuard&) = delete;
+    CallbackGuard& operator=(CallbackGuard&&)      = delete;
+
+    std::atomic<bool> valid{true};
+};
+
 } // namespace
 
 class FileSystem::DirectoryWatch final
@@ -56,6 +69,7 @@ public:
           _extendedPath(std::move(extendedPath)),
           _callback(callback),
           _cookie(cookie),
+          _callbackGuard(std::make_shared<CallbackGuard>()),
           _activeBuffer(kDefaultWatchBufferBytes),
           _filter(kDefaultWatchFilter)
     {
@@ -91,27 +105,59 @@ public:
         }
 
         _stopping.store(false, std::memory_order_release);
+        _callbackGuard->valid.store(true, std::memory_order_release);
 #ifdef _DEBUG
         _dead.store(false, std::memory_order_release);
 #endif
 
-        _directory.reset(::CreateFileW(_extendedPath.c_str(),
-                                       FILE_LIST_DIRECTORY,
-                                       FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                       nullptr,
-                                       OPEN_EXISTING,
-                                       FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
-                                       nullptr));
-        if (! _directory)
+        // Open the directory handle — this IS the path validation.
+        // No separate existence check that could race with deletion (TOCTOU).
+        // Retry on transient sharing/locking errors that may resolve quickly.
+        constexpr int kMaxOpenRetries = 3;
+        constexpr DWORD kRetryDelayMs = 50;
+        DWORD lastOpenError           = 0;
+
+        for (int attempt = 0;; ++attempt)
         {
-            const DWORD lastError = Debug::ErrorWithLastError(L"FileSystem: Failed to open directory handle for '{}'", _watchedPath);
-            return HRESULT_FROM_WIN32(lastError);
+            _directory.reset(::CreateFileW(_extendedPath.c_str(),
+                                           FILE_LIST_DIRECTORY,
+                                           FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                           nullptr,
+                                           OPEN_EXISTING,
+                                           FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OVERLAPPED,
+                                           nullptr));
+            if (_directory)
+            {
+                break;
+            }
+
+            lastOpenError = ::GetLastError();
+
+            if (attempt < kMaxOpenRetries &&
+                (lastOpenError == ERROR_SHARING_VIOLATION || lastOpenError == ERROR_LOCK_VIOLATION || lastOpenError == ERROR_PATH_BUSY))
+            {
+                ::Sleep(kRetryDelayMs);
+                continue;
+            }
+
+            Debug::Error(L"FileSystem: Failed to open directory handle for '{}' (err={})", _watchedPath, lastOpenError);
+            return HRESULT_FROM_WIN32(lastOpenError);
+        }
+
+        // Pin the module so the DLL cannot be unloaded while threadpool callbacks are active.
+        _modulePin = AcquireModuleReferenceFromAddress(&kFileSystemModuleAnchor);
+        if (! _modulePin)
+        {
+            Debug::Error(L"FileSystem: Failed to pin module for directory watch '{}'", _watchedPath);
+            _directory.reset();
+            return E_FAIL;
         }
 
         _tpIo.reset(::CreateThreadpoolIo(_directory.get(), &DirectoryWatch::IoCallback, this, nullptr));
         if (! _tpIo)
         {
             const DWORD lastError = Debug::ErrorWithLastError(L"FileSystem: Failed to create thread pool I/O for '{}'", _watchedPath);
+            _modulePin.reset();
             _directory.reset();
             return HRESULT_FROM_WIN32(lastError);
         }
@@ -121,6 +167,7 @@ public:
         {
             const DWORD lastError = Debug::ErrorWithLastError(L"FileSystem: Failed to create thread pool work for '{}'", _watchedPath);
             _tpIo.reset();
+            _modulePin.reset();
             _directory.reset();
             return HRESULT_FROM_WIN32(lastError);
         }
@@ -131,6 +178,7 @@ public:
             Debug::Warning(L"FileSystem: Failed to start directory watch for '{}' (hr=0x{:08X})", _watchedPath, static_cast<unsigned long>(hr));
             _tpWork.reset();
             _tpIo.reset();
+            _modulePin.reset();
             _directory.reset();
             std::memset(&_overlapped, 0, sizeof(_overlapped));
             _running.store(false, std::memory_order_release);
@@ -160,6 +208,9 @@ public:
             return;
         }
 
+        // Invalidate the callback guard BEFORE any cleanup — prevents in-flight
+        // callbacks from invoking the host after teardown begins.
+        _callbackGuard->valid.store(false, std::memory_order_release);
         _stopping.store(true, std::memory_order_release);
 
         if (_directory)
@@ -193,6 +244,7 @@ public:
 
         _tpWork.reset();
         _tpIo.reset();
+        _modulePin.reset();
         _directory.reset();
         std::memset(&_overlapped, 0, sizeof(_overlapped));
         _running.store(false, std::memory_order_release);
@@ -395,6 +447,11 @@ private:
             return;
         }
 
+        if (! _callbackGuard->valid.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
         if (! _callback)
         {
             return;
@@ -423,6 +480,11 @@ private:
 #endif
 
         if (_stopping.load(std::memory_order_acquire))
+        {
+            return;
+        }
+
+        if (! _callbackGuard->valid.load(std::memory_order_acquire))
         {
             return;
         }
@@ -662,10 +724,12 @@ private:
 
     IFileSystemDirectoryWatchCallback* _callback = nullptr;
     void* _cookie                                = nullptr;
+    std::shared_ptr<CallbackGuard> _callbackGuard;
 
     wil::unique_handle _directory;
     wil::unique_any<PTP_IO, decltype(&::CloseThreadpoolIo), ::CloseThreadpoolIo> _tpIo;
     wil::unique_any<PTP_WORK, decltype(&::CloseThreadpoolWork), ::CloseThreadpoolWork> _tpWork;
+    wil::unique_hmodule _modulePin; // Keeps DLL loaded while threadpool callbacks are active.
     std::vector<std::byte> _activeBuffer;
     std::vector<std::vector<std::byte>> _freeBuffers;
     std::deque<PendingEvent> _pendingEvents;
@@ -703,11 +767,7 @@ FileSystem::FileSystem()
     _metaData.author      = kPluginAuthor;
     _metaData.version     = kPluginVersion;
 
-    {
-        std::lock_guard lock(_stateMutex);
-        _configurationJson = "{}";
-        UpdateCapabilitiesJson();
-    }
+    static_cast<void>(SetConfiguration(nullptr));
 
     _searchIndexRepository = std::make_shared<LocalSearchIndexCore::Repository>();
 }
@@ -764,14 +824,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::WatchDirectory(const wchar_t* path, IFileS
         return E_INVALIDARG;
     }
 
-    {
-        std::lock_guard lock(_watchMutex);
-        if (_directoryWatches.contains(watchKey))
-        {
-            return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
-        }
-    }
-
+    // Create and start the watch first — CreateFileW validates the path atomically.
+    // No separate existence check that could race with deletion (TOCTOU).
     auto watch       = std::make_unique<DirectoryWatch>(watchedPathText, watchKey, callback, cookie);
     const HRESULT hr = watch->Start();
     if (FAILED(hr))
@@ -779,23 +833,21 @@ HRESULT STDMETHODCALLTYPE FileSystem::WatchDirectory(const wchar_t* path, IFileS
         return hr;
     }
 
-    bool inserted = false;
+    // Single lock acquisition for atomic check-and-insert, eliminating the TOCTOU
+    // window between the old separate contains() check and the emplace.
     {
         std::lock_guard lock(_watchMutex);
-        const auto insertResult = _directoryWatches.emplace(watchKey, std::move(watch));
-        inserted                = insertResult.second;
-    }
-
-    if (! inserted)
-    {
-        if (watch)
+        auto [it, inserted] = _directoryWatches.try_emplace(watchKey, std::move(watch));
+        if (inserted)
         {
-            watch->Stop();
+            return S_OK;
         }
-        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
     }
 
-    return S_OK;
+    // Another thread registered this path concurrently.
+    // try_emplace did not consume watch when the key already exists.
+    watch->Stop();
+    return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem::UnwatchDirectory(const wchar_t* path) noexcept

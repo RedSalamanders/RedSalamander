@@ -359,12 +359,21 @@ public:
         }
         _bufferCapacity = kBufferBytes;
 
+        // Pin the module so the DLL cannot be unloaded while the worker thread is running.
+        _modulePin = AcquireModuleReferenceFromAddress(&kFileSystemCurlModuleAnchor);
+        if (! _modulePin)
+        {
+            Debug::Error(L"FileSystemCurl: Failed to pin module for CurlStreamingReader");
+            return E_FAIL;
+        }
+
         try
         {
             _worker = std::jthread([this](std::stop_token stopToken) noexcept { WorkerMain(stopToken); });
         }
         catch (const std::system_error&)
         {
+            // Module pin released via RAII if thread creation fails.
             return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
         }
 
@@ -801,6 +810,7 @@ private:
     bool _eof         = false;
     HRESULT _workerHr = S_OK;
 
+    wil::unique_hmodule _modulePin;
     std::jthread _worker;
 };
 
@@ -829,12 +839,21 @@ public:
         }
         _bufferCapacity = kBufferBytes;
 
+        // Pin the module so the DLL cannot be unloaded while the worker thread is running.
+        _modulePin = AcquireModuleReferenceFromAddress(&kFileSystemCurlModuleAnchor);
+        if (! _modulePin)
+        {
+            Debug::Error(L"FileSystemCurl: Failed to pin module for CurlStreamingWriter");
+            return E_FAIL;
+        }
+
         try
         {
             _worker = std::jthread([this](std::stop_token stopToken) noexcept { WorkerMain(stopToken); });
         }
         catch (const std::system_error&)
         {
+            // Module pin released via RAII if thread creation fails.
             return HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY);
         }
 
@@ -1179,6 +1198,7 @@ private:
     bool _committed      = false;
     HRESULT _workerHr    = S_OK;
 
+    wil::unique_hmodule _modulePin;
     std::jthread _worker;
 };
 } // namespace

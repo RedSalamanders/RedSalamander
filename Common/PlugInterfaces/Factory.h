@@ -33,20 +33,38 @@ extern "C"
     } FactoryOptions;
 #pragma warning(pop)
 
-    PLUGFACTORY_API HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, void** result);
+    // Required creation entry point:
+    //
+    // - A single DLL may implement one or more logical plugins for the same interface type.
+    // - The host will call RedSalamanderEnumeratePlugins to get the list of PluginMetaData entries.
+    // - The host will then call RedSalamanderCreate with the desired plugin id (metaData[i].id).
+    // - For single-plugin DLLs, pluginId may be nullptr or empty.
+    //
+    // Ownership / lifetime:
+    // - The returned object follows normal COM ownership rules.
+    // - `host` is caller-owned and remains valid for the lifetime of the created plugin instance.
+    PLUGFACTORY_API
+    HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result);
 
-    // Optional multi-plugin support:
+    // Optional multi-plugin discovery support:
     //
     // - A single DLL may implement multiple logical plugins for the same interface type.
-    // - The host will call RedSalamanderEnumeratePlugins to get the list of PluginMetaData entries.
-    // - The host will then call RedSalamanderCreateEx with the desired plugin id (metaData[i].id).
-    //
-    // If these exports are missing, the host falls back to RedSalamanderCreate.
+    // - The host calls RedSalamanderEnumeratePlugins to discover PluginMetaData entries before creation.
     //
     // Ownership / lifetime:
     // - The returned PluginMetaData array and all strings are owned by the DLL and remain valid
     //   until the DLL is unloaded. Callers MUST NOT free them.
+    // - Because PluginMetaData stores raw wchar_t* fields, plugin DLLs MUST bind those fields only
+    //   after the backing string storage lives in its final static/object lifetime; temporary or
+    //   lambda-local std::wstring storage is not allowed.
     PLUGFACTORY_API HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count);
-    PLUGFACTORY_API
-    HRESULT __stdcall RedSalamanderCreateEx(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result);
+
+    // Optional static configuration-schema support:
+    //
+    // - Lets hosts fetch JSON schema text without constructing a live plugin instance.
+    // - Useful for startup/discovery and settings export paths where only static schema
+    //   metadata is needed.
+    // - For single-plugin DLLs, pluginId may be nullptr or empty.
+    // - The returned JSON string is owned by the DLL and remains valid until unload.
+    PLUGFACTORY_API HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8);
 }

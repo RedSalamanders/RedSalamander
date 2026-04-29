@@ -1024,14 +1024,14 @@ HRESULT DecodeJpegToBgraTurboJpegScaled(
 
     constexpr int flags = TJFLAG_FASTDCT | TJFLAG_FASTUPSAMPLE;
     const int rc        = tjDecompress2(handle.get(),
-                                 reinterpret_cast<const unsigned char*>(data),
-                                 static_cast<unsigned long>(sizeBytes),
-                                 outBgra.data(),
-                                 scaled.width,
-                                 0,
-                                 scaled.height,
-                                 TJPF_BGRA,
-                                 flags);
+                                        reinterpret_cast<const unsigned char*>(data),
+                                        static_cast<unsigned long>(sizeBytes),
+                                        outBgra.data(),
+                                        scaled.width,
+                                        0,
+                                        scaled.height,
+                                        TJPF_BGRA,
+                                        flags);
     if (rc != 0)
     {
         outBgra.clear();
@@ -2353,17 +2353,17 @@ void ViewerImgRaw::StartAsyncOpen(HWND hwnd, std::wstring_view path, bool update
 
     ctx->moduleKeepAlive = AcquireModuleReferenceFromAddress(&kViewerImgRawModuleAnchor);
     ctx->work            = [this,
-                 fileSystem,
-                 hwnd,
-                 requestId,
-                 path = pathCopy,
-                 updateOtherFiles,
-                 cfgSignature,
-                 label       = labelCopy,
-                 sidecarPath = sidecarPathCopy,
-                 desiredMode,
-                 decodeCfg,
-                 decodeRawOnly]() mutable
+                            fileSystem,
+                            hwnd,
+                            requestId,
+                            path = pathCopy,
+                            updateOtherFiles,
+                            cfgSignature,
+                            label       = labelCopy,
+                            sidecarPath = sidecarPathCopy,
+                            desiredMode,
+                            decodeCfg,
+                            decodeRawOnly]() mutable
     {
         auto releaseSelf = wil::scope_exit([&] { Release(); });
 

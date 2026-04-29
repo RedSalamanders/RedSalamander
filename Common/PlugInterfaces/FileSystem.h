@@ -73,6 +73,71 @@ struct FileSystemOptions
     uint64_t bandwidthLimitBytesPerSecond;
 };
 
+enum FileSystemTransferEndpoint : uint32_t
+{
+    FILESYSTEM_TRANSFER_SOURCE_READ       = 1,
+    FILESYSTEM_TRANSFER_DESTINATION_WRITE = 2,
+};
+
+enum FileSystemTransferLatencyClass : uint32_t
+{
+    FILESYSTEM_TRANSFER_LATENCY_UNKNOWN = 0,
+    FILESYSTEM_TRANSFER_LATENCY_LOCAL   = 1,
+    FILESYSTEM_TRANSFER_LATENCY_LAN     = 2,
+    FILESYSTEM_TRANSFER_LATENCY_WAN     = 3,
+    FILESYSTEM_TRANSFER_LATENCY_CLOUD   = 4,
+};
+
+enum FileSystemTransferHintFlags : uint32_t
+{
+    FILESYSTEM_TRANSFER_HINT_NONE                  = 0,
+    FILESYSTEM_TRANSFER_HINT_PREFERS_LARGE_BUFFERS = 0x1,
+    FILESYSTEM_TRANSFER_HINT_PREFERS_SEQUENTIAL_IO = 0x2,
+    FILESYSTEM_TRANSFER_HINT_HIGH_METADATA_COST    = 0x4,
+};
+
+struct FileSystemTransferHints
+{
+    uint32_t sizeBytes; // sizeof(FileSystemTransferHints)
+
+    uint32_t latencyClass;              // FileSystemTransferLatencyClass
+    uint32_t flags;                     // FileSystemTransferHintFlags
+    uint32_t preferredBufferBytes;      // e.g. 2 MiB, 4 MiB, 8 MiB
+    uint32_t preferredProgressPeriodMs; // e.g. 100..250ms
+};
+
+enum FileSystemStorageKind : uint32_t
+{
+    FILESYSTEM_STORAGE_UNKNOWN       = 0,
+    FILESYSTEM_STORAGE_HDD           = 1,
+    FILESYSTEM_STORAGE_SSD           = 2,
+    FILESYSTEM_STORAGE_NVME          = 3,
+    FILESYSTEM_STORAGE_NETWORK_SHARE = 4,
+    FILESYSTEM_STORAGE_CLOUD         = 5,
+    FILESYSTEM_STORAGE_VIRTUAL       = 6,
+    FILESYSTEM_STORAGE_MEMORY        = 7,
+};
+
+enum FileSystemStorageFlags : uint32_t
+{
+    FILESYSTEM_STORAGE_FLAG_NONE                  = 0,
+    FILESYSTEM_STORAGE_FLAG_ROTATIONAL            = 0x1,
+    FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY          = 0x2,
+    FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO = 0x4,
+    FILESYSTEM_STORAGE_FLAG_SUPPORTS_DEEP_QUEUE   = 0x8,
+};
+
+struct FileSystemStorageCharacteristics
+{
+    uint32_t sizeBytes; // sizeof(FileSystemStorageCharacteristics)
+
+    uint32_t storageKind; // FileSystemStorageKind
+    uint32_t flags;       // FileSystemStorageFlags
+    uint32_t queueDepthHint;
+    uint32_t preferredCopyMoveConcurrency;
+    uint32_t preferredDeleteConcurrency;
+};
+
 struct FileSystemRenamePair
 {
     uint32_t sizeBytes; // sizeof(FileSystemRenamePair)
@@ -142,11 +207,13 @@ enum FileSystemSearchMatchSource : uint32_t
 
 enum FileSystemSearchWarningFlags : uint32_t
 {
-    FILESYSTEM_SEARCH_WARNING_NONE                   = 0,
+    FILESYSTEM_SEARCH_WARNING_NONE                  = 0,
     FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX     = 0x1,
     FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_CONTENT   = 0x2,
     FILESYSTEM_SEARCH_WARNING_ACCESS_DENIED_SKIPPED = 0x4,
     FILESYSTEM_SEARCH_WARNING_OVERFLOW              = 0x8,
+    FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE   = 0x10,
+    FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED        = 0x20,
 };
 
 enum FileSystemSearchPhase : uint32_t
@@ -164,16 +231,16 @@ struct FileSystemSearchQuery
 {
     uint32_t sizeBytes; // Must equal sizeof(FileSystemSearchQuery)
 
-    const wchar_t* rootPath;         // Required, NUL-terminated plugin path used as the search root.
-    const wchar_t* namePattern;      // Required unless nameMode == FILESYSTEM_SEARCH_NAME_DISABLED.
-    const wchar_t* contentPattern;   // Required unless contentMode == FILESYSTEM_SEARCH_CONTENT_DISABLED.
-    FileSystemSearchFlags flags;     // Include/recurse/matching options and backend hints.
-    FileSystemSearchNameMode nameMode;        // Wildcard, literal substring, regex, or disabled.
-    FileSystemSearchContentMode contentMode;  // Text literal, text regex, or disabled.
-    uint64_t maxResults;             // 0 = unlimited.
-    uint64_t maxContentBytesPerFile; // 0 = plugin default (64 MiB in the current built-in file plugin).
-    uint32_t maxSnippetCharacters;   // 0 = plugin default (160 UTF-16 code units in the current built-in file plugin).
-    uint32_t reserved;               // Must be 0 for v1 callers.
+    const wchar_t* rootPath;                 // Required, NUL-terminated plugin path used as the search root.
+    const wchar_t* namePattern;              // Required unless nameMode == FILESYSTEM_SEARCH_NAME_DISABLED.
+    const wchar_t* contentPattern;           // Required unless contentMode == FILESYSTEM_SEARCH_CONTENT_DISABLED.
+    FileSystemSearchFlags flags;             // Include/recurse/matching options and backend hints.
+    FileSystemSearchNameMode nameMode;       // Wildcard, literal substring, regex, or disabled.
+    FileSystemSearchContentMode contentMode; // Text literal, text regex, or disabled.
+    uint64_t maxResults;                     // 0 = unlimited.
+    uint64_t maxContentBytesPerFile;         // 0 = plugin default (64 MiB in the current built-in file plugin).
+    uint32_t maxSnippetCharacters;           // 0 = plugin default (160 UTF-16 code units in the current built-in file plugin).
+    uint32_t reserved;                       // Must be 0 for normal v1 callers; built-in host extensions use FILESYSTEM_SEARCH_HOST_EXTENSIONS_V1.
 };
 
 // Match payload delivered through IFileSystemSearchCallback::FileSystemSearchMatch.
@@ -219,6 +286,35 @@ struct FileSystemSearchProgress
     uint64_t matchedEntries;         // Number of matches emitted so far.
     const wchar_t* currentPath;      // Optional current path; may be nullptr for final completion updates.
     unsigned long currentPathSize;   // Size in bytes, excluding the trailing NUL.
+};
+
+// Internal host-extension payloads for the built-in local file-system search path.
+// These are opt-in and do not change the FileSystemSearchProgress ABI.
+inline constexpr uint32_t FILESYSTEM_SEARCH_HOST_EXTENSIONS_V1 = 0x52534631u; // "RSF1"
+
+struct FileSystemSearchServiceStatus
+{
+    uint32_t sizeBytes; // Must equal sizeof(FileSystemSearchServiceStatus)
+
+    uint32_t storeState;
+    uint32_t syncPhase;
+    uint32_t queryExecutionMode;
+    uint32_t fallbackReason;
+    uint64_t completedRoots;
+    uint64_t totalRoots;
+    const wchar_t* activeRoot;    // Optional UTF-16 path; may be nullptr.
+    unsigned long activeRootSize; // Size in bytes, excluding the trailing NUL.
+};
+
+using FileSystemSearchServiceStatusCallbackFn = HRESULT(STDMETHODCALLTYPE*)(const FileSystemSearchServiceStatus* status, void* cookie) noexcept;
+
+struct FileSystemSearchHostExtensions
+{
+    uint32_t sizeBytes; // Must equal sizeof(FileSystemSearchHostExtensions)
+    uint32_t version;   // FILESYSTEM_SEARCH_HOST_EXTENSIONS_V1
+    void* callbackCookie;
+    FileSystemSearchServiceStatusCallbackFn serviceStatusCallback;
+    void* serviceStatusCookie;
 };
 #pragma warning(pop)
 
@@ -389,6 +485,19 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
     //   If "concurrency" is absent, host per-item concurrency falls back to 1.
     // - Implementations SHOULD return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) when unsupported.
     virtual HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept = 0;
+
+    // Transfer hints for cross-filesystem bridge buffering and progress cadence.
+    // - path is interpreted in the plugin's own path space.
+    // - operationType is the top-level file operation (copy/move).
+    // - endpoint identifies whether the host is reading from the source side or writing to the destination side.
+    // - Caller must initialize hints->sizeBytes before calling.
+    virtual HRESULT STDMETHODCALLTYPE GetTransferHints(
+        const wchar_t* path, FileSystemOperation operationType, FileSystemTransferEndpoint endpoint, FileSystemTransferHints* hints) noexcept = 0;
+
+    // Storage classification used by host-side auto-concurrency and diagnostics.
+    // - path is interpreted in the plugin's own path space.
+    // - Caller must initialize characteristics->sizeBytes before calling.
+    virtual HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept = 0;
 };
 
 // Minimal Win32-like file reader for filesystem plugins.

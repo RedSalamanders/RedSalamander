@@ -1010,7 +1010,8 @@ void DirectoryInfoCache::PostImpactLocked(const std::shared_ptr<Entry>& entry, c
         return;
     }
 
-    if (impact.kind == DirectoryImpact::Kind::RefreshCurrentFolder && entry->refreshPosted)
+    const bool hasRefreshRenameHint = ! impact.renamedFromDisplayName.empty() && ! impact.renamedToDisplayName.empty();
+    if (impact.kind == DirectoryImpact::Kind::RefreshCurrentFolder && entry->refreshPosted && ! hasRefreshRenameHint)
     {
         return;
     }
@@ -1204,7 +1205,10 @@ wil::com_ptr<IFileSystem> DirectoryInfoCache::ResolveProviderLocked(const Contex
     return ctxIt->second.providers.begin()->second;
 }
 
-void DirectoryInfoCache::NotifyFolderContentsChangedLocked(const ContextKey& context, const std::wstring& normalizedFolder) noexcept
+void DirectoryInfoCache::NotifyFolderContentsChangedLocked(const ContextKey& context,
+                                                           const std::wstring& normalizedFolder,
+                                                           std::wstring_view renamedFromDisplayName,
+                                                           std::wstring_view renamedToDisplayName) noexcept
 {
     if (normalizedFolder.empty())
     {
@@ -1223,7 +1227,11 @@ void DirectoryInfoCache::NotifyFolderContentsChangedLocked(const ContextKey& con
     }
 
     MarkDirtyLocked(it->second);
-    PostRefreshLocked(it->second);
+    DirectoryImpact impact{};
+    impact.kind = DirectoryImpact::Kind::RefreshCurrentFolder;
+    impact.renamedFromDisplayName.assign(renamedFromDisplayName);
+    impact.renamedToDisplayName.assign(renamedToDisplayName);
+    PostImpactLocked(it->second, impact);
 }
 
 void DirectoryInfoCache::MarkSubtreeDirtyLocked(const ContextKey& context, const std::wstring& normalizedRootPath) noexcept
@@ -1345,8 +1353,18 @@ void DirectoryInfoCache::NotifyPathMovedLocked(const ContextKey& context,
                                                const std::wstring& normalizedSourcePath,
                                                const std::wstring& normalizedDestinationPath) noexcept
 {
-    NotifyFolderContentsChangedLocked(context, ParentNormalizedPath(normalizedSourcePath, context.isFilePlugin));
-    NotifyFolderContentsChangedLocked(context, ParentNormalizedPath(normalizedDestinationPath, context.isFilePlugin));
+    const std::wstring sourceParent      = ParentNormalizedPath(normalizedSourcePath, context.isFilePlugin);
+    const std::wstring destinationParent = ParentNormalizedPath(normalizedDestinationPath, context.isFilePlugin);
+    if (! sourceParent.empty() && ! destinationParent.empty() && EqualsNoCase(sourceParent, destinationParent))
+    {
+        NotifyFolderContentsChangedLocked(
+            context, sourceParent, LeafNameNormalizedPath(normalizedSourcePath), LeafNameNormalizedPath(normalizedDestinationPath));
+    }
+    else
+    {
+        NotifyFolderContentsChangedLocked(context, sourceParent);
+        NotifyFolderContentsChangedLocked(context, destinationParent);
+    }
     MarkSubtreeDirtyLocked(context, normalizedSourcePath);
 
     const std::wstring sourceKey = MakeCaseInsensitivePathKey(normalizedSourcePath);

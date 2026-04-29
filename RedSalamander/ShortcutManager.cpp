@@ -7,6 +7,51 @@
 
 namespace
 {
+[[nodiscard]] int CountModifierBits(uint32_t modifiers) noexcept
+{
+    int count = 0;
+    while (modifiers != 0u)
+    {
+        count += static_cast<int>(modifiers & 1u);
+        modifiers >>= 1u;
+    }
+    return count;
+}
+
+[[nodiscard]] int ShortcutReverseLookupVkPriority(uint32_t vk) noexcept
+{
+    switch (vk)
+    {
+        case VK_INSERT:
+        case VK_DELETE:
+        case VK_RETURN:
+        case VK_BACK:
+        case VK_SPACE: return 0;
+        default: break;
+    }
+
+    if (vk >= VK_F1 && vk <= VK_F24)
+    {
+        return 1;
+    }
+    if ((vk >= static_cast<uint32_t>('0') && vk <= static_cast<uint32_t>('9')) || (vk >= static_cast<uint32_t>('A') && vk <= static_cast<uint32_t>('Z')))
+    {
+        return 2;
+    }
+
+    return 1;
+}
+
+[[nodiscard]] bool PreferShortcutReverseLookupKey(uint32_t candidateKey, uint32_t currentKey) noexcept
+{
+    const uint32_t candidateModifiers = (candidateKey >> 8) & 0x7u;
+    const uint32_t currentModifiers   = (currentKey >> 8) & 0x7u;
+
+    const auto candidateRank = std::tuple{CountModifierBits(candidateModifiers), ShortcutReverseLookupVkPriority(candidateKey & 0xFFu), candidateKey};
+    const auto currentRank   = std::tuple{CountModifierBits(currentModifiers), ShortcutReverseLookupVkPriority(currentKey & 0xFFu), currentKey};
+    return candidateRank < currentRank;
+}
+
 void LoadBindings(const std::vector<Common::Settings::ShortcutBinding>& bindings,
                   std::unordered_map<uint32_t, std::wstring>& outMap,
                   std::unordered_map<std::wstring, uint32_t>& outReverseMap,
@@ -29,7 +74,11 @@ void LoadBindings(const std::vector<Common::Settings::ShortcutBinding>& bindings
             continue;
         }
         const std::wstring_view canonicalCommandId = CanonicalizeCommandId(binding.commandId);
-        outReverseMap[std::wstring(canonicalCommandId)] = key;
+        const auto [reverseIt, reverseInserted]    = outReverseMap.try_emplace(std::wstring(canonicalCommandId), key);
+        if (! reverseInserted && PreferShortcutReverseLookupKey(key, reverseIt->second))
+        {
+            reverseIt->second = key;
+        }
     }
     std::sort(outConflicts.begin(), outConflicts.end());
     outConflicts.erase(std::unique(outConflicts.begin(), outConflicts.end()), outConflicts.end());
@@ -124,4 +173,3 @@ std::optional<ShortcutManager::ShortcutChord> ShortcutManager::TryGetShortcutFor
 
     return std::nullopt;
 }
-
