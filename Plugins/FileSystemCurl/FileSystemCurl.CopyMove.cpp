@@ -13,6 +13,9 @@ using namespace FileSystemCurlInternal;
 
 namespace FileSystemCurlInternal
 {
+// Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded while worker threads are running.
+const int kFileSystemCurlModuleAnchor = 0;
+
 class SharedCopyMoveJobScheduler final
 {
 public:
@@ -196,12 +199,25 @@ private:
         _workers.reserve(workerCount);
         for (unsigned int i = 0; i < workerCount; ++i)
         {
+            // Pin the module so the DLL cannot be unloaded while worker threads are running.
+            wil::unique_hmodule modulePin = AcquireModuleReferenceFromAddress(&kFileSystemCurlModuleAnchor);
+            if (! modulePin)
+            {
+                Debug::Error(L"FileSystemCurl: Failed to pin module for job scheduler worker thread {}", i);
+                break;
+            }
+
             try
             {
-                _workers.emplace_back([this, i](std::stop_token stopToken) noexcept { workerMain(stopToken, static_cast<uint64_t>(i)); });
+                _workers.emplace_back([this, i, pin = std::move(modulePin)](std::stop_token stopToken) noexcept
+                {
+                    static_cast<void>(pin); // prevent [[maybe_unused]] — released on thread exit
+                    workerMain(stopToken, static_cast<uint64_t>(i));
+                });
             }
             catch (const std::system_error&)
             {
+                // Module pin released via RAII if thread creation fails.
                 break;
             }
         }
@@ -583,6 +599,13 @@ ConnectionConcurrencyLimiter& GetConnectionConcurrencyLimiter() noexcept
     return limiter;
 }
 
+[[nodiscard]] HRESULT DeleteDirectoryRecursive(const ConnectionInfo& conn,
+                                               std::wstring_view directoryRemotePath,
+                                               std::wstring_view directoryFullPath,
+                                               FileSystemFlags flags,
+                                               ConnectionConcurrencyLimiter::Kind kind,
+                                               FileOperationProgress& progress) noexcept;
+
 [[nodiscard]] HRESULT RemoteDeleteFileWithPermit(const ConnectionInfo& conn,
                                                  std::wstring_view remotePath,
                                                  FileOperationProgress& progress,
@@ -806,8 +829,45 @@ private:
     return true;
 }
 
-[[nodiscard]] HRESULT EnsureOverwriteTargetForRename(const ConnectionInfo& conn, std::wstring_view destinationPath, bool allowOverwrite) noexcept
+[[nodiscard]] HRESULT GenerateRemoteSiblingPath(const ConnectionInfo& conn,
+                                                std::wstring_view destinationPath,
+                                                std::wstring_view purposeTag,
+                                                std::wstring& siblingPathOut) noexcept
 {
+    siblingPathOut.clear();
+
+    static std::atomic<uint64_t> sequence{0};
+
+    const std::wstring parent = ParentPath(destinationPath);
+    const uint64_t seed       = (GetTickCount64() << 8u) ^ sequence.fetch_add(1u, std::memory_order_acq_rel);
+
+    for (unsigned int attempt = 0; attempt < 32u; ++attempt)
+    {
+        const std::wstring candidate = JoinPluginPath(parent, std::format(L".redsalamander-{}-{:016X}", purposeTag, seed + attempt));
+
+        FilesInformationCurl::Entry ignored{};
+        const HRESULT existsHr = GetEntryInfo(conn, candidate, ignored);
+        if (existsHr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+        {
+            siblingPathOut = candidate;
+            return S_OK;
+        }
+        if (FAILED(existsHr))
+        {
+            return existsHr;
+        }
+    }
+
+    return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
+}
+
+[[nodiscard]] HRESULT PrepareOverwriteTargetForRename(const ConnectionInfo& conn,
+                                                      std::wstring_view destinationPath,
+                                                      bool allowOverwrite,
+                                                      std::wstring& backupPathOut) noexcept
+{
+    backupPathOut.clear();
+
     FilesInformationCurl::Entry existing{};
     const HRESULT existsHr = GetEntryInfo(conn, destinationPath, existing);
     if (FAILED(existsHr))
@@ -825,7 +885,157 @@ private:
         return HRESULT_FROM_WIN32(ERROR_FILE_EXISTS);
     }
 
-    return RemoteDeleteFile(conn, destinationPath);
+    HRESULT hr = GenerateRemoteSiblingPath(conn, destinationPath, L"rollback", backupPathOut);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = RemoteRename(conn, destinationPath, backupPathOut);
+    if (FAILED(hr))
+    {
+        backupPathOut.clear();
+        return hr;
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT RestoreOverwriteTargetAfterFailure(const ConnectionInfo& conn, std::wstring_view destinationPath, std::wstring_view backupPath) noexcept
+{
+    if (backupPath.empty())
+    {
+        return S_OK;
+    }
+
+    FilesInformationCurl::Entry existing{};
+    const HRESULT existsHr = GetEntryInfo(conn, destinationPath, existing);
+    if (SUCCEEDED(existsHr))
+    {
+        if ((existing.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
+        {
+            return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+        }
+
+        const HRESULT deleteHr = RemoteDeleteFile(conn, destinationPath);
+        if (FAILED(deleteHr))
+        {
+            return deleteHr;
+        }
+    }
+    else if (existsHr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+    {
+        return existsHr;
+    }
+
+    return RemoteRename(conn, backupPath, destinationPath);
+}
+
+[[nodiscard]] HRESULT FinalizeOverwriteTarget(const ConnectionInfo& conn, std::wstring_view backupPath) noexcept
+{
+    if (backupPath.empty())
+    {
+        return S_OK;
+    }
+
+    return RemoteDeleteFile(conn, backupPath);
+}
+
+[[nodiscard]] HRESULT RenameWithOverwriteRollback(const ConnectionInfo& conn,
+                                                  std::wstring_view sourcePath,
+                                                  std::wstring_view destinationPath,
+                                                  bool allowOverwrite) noexcept
+{
+    std::wstring backupPath;
+    HRESULT hr = PrepareOverwriteTargetForRename(conn, destinationPath, allowOverwrite, backupPath);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = RemoteRename(conn, sourcePath, destinationPath);
+    if (FAILED(hr))
+    {
+        const HRESULT restoreHr = RestoreOverwriteTargetAfterFailure(conn, destinationPath, backupPath);
+        return FAILED(restoreHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
+    }
+
+    return FinalizeOverwriteTarget(conn, backupPath);
+}
+
+[[nodiscard]] HRESULT RollbackMovedFileDestination(const ConnectionInfo& conn,
+                                                   std::wstring_view destinationPath,
+                                                   std::wstring_view backupPath,
+                                                   FileOperationProgress& progress,
+                                                   ConnectionConcurrencyLimiter::Kind kind) noexcept
+{
+    const HRESULT deleteHr = RemoteDeleteFileWithPermit(conn, destinationPath, progress, kind);
+    if (FAILED(deleteHr) && deleteHr != HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND))
+    {
+        return deleteHr;
+    }
+
+    if (backupPath.empty())
+    {
+        return S_OK;
+    }
+
+    return RemoteRename(conn, backupPath, destinationPath);
+}
+
+[[nodiscard]] HRESULT QueryPathExists(const ConnectionInfo& conn, std::wstring_view path, bool& existsOut) noexcept
+{
+    existsOut = false;
+
+    FilesInformationCurl::Entry existing{};
+    const HRESULT hr = GetEntryInfo(conn, path, existing);
+    if (SUCCEEDED(hr))
+    {
+        existsOut = true;
+        return S_OK;
+    }
+
+    return hr == HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND) ? S_OK : hr;
+}
+
+[[nodiscard]] HRESULT TryRollbackCopiedDirectory(const ConnectionInfo& destinationConn,
+                                                 std::wstring_view destinationRemotePath,
+                                                 std::wstring_view destinationDisplayPath,
+                                                 FileOperationProgress& progress) noexcept
+{
+    return DeleteDirectoryRecursive(
+        destinationConn, destinationRemotePath, destinationDisplayPath, FILESYSTEM_FLAG_RECURSIVE, ConnectionConcurrencyLimiter::Kind::CopyMove, progress);
+}
+
+[[nodiscard]] HRESULT PromoteStagedFileToDestination(const ConnectionInfo& destinationConn,
+                                                     std::wstring_view stagedRemotePath,
+                                                     std::wstring_view destinationRemotePath,
+                                                     bool allowOverwrite,
+                                                     std::wstring* backupPathOut) noexcept
+{
+    std::wstring backupPath;
+    HRESULT hr = PrepareOverwriteTargetForRename(destinationConn, destinationRemotePath, allowOverwrite, backupPath);
+    if (FAILED(hr))
+    {
+        static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
+        return hr;
+    }
+
+    hr = RemoteRename(destinationConn, stagedRemotePath, destinationRemotePath);
+    if (FAILED(hr))
+    {
+        static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
+        const HRESULT restoreHr = RestoreOverwriteTargetAfterFailure(destinationConn, destinationRemotePath, backupPath);
+        return FAILED(restoreHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
+    }
+
+    if (backupPathOut)
+    {
+        *backupPathOut = std::move(backupPath);
+        return S_OK;
+    }
+
+    return FinalizeOverwriteTarget(destinationConn, backupPath);
 }
 
 [[nodiscard]] HRESULT CopyFileViaTemp(const ConnectionInfo& sourceConn,
@@ -837,7 +1047,8 @@ private:
                                       FileSystemFlags flags,
                                       FileOperationProgress& progress,
                                       uint64_t expectedSizeBytes,
-                                      std::atomic<uint64_t>* concurrentOverallBytes) noexcept
+                                      std::atomic<uint64_t>* concurrentOverallBytes,
+                                      std::wstring* backupPathOut = nullptr) noexcept
 {
     HRESULT hr = progress.ReportProgress(expectedSizeBytes, 0, sourceFullPath, destinationFullPath);
     if (FAILED(hr))
@@ -846,12 +1057,6 @@ private:
     }
 
     const bool allowOverwrite = HasFlag(flags, FILESYSTEM_FLAG_ALLOW_OVERWRITE);
-
-    hr = EnsureOverwriteTargetFile(destinationConn, destinationRemotePath, allowOverwrite);
-    if (FAILED(hr))
-    {
-        return hr;
-    }
 
     hr = progress.CheckCancel();
     if (FAILED(hr))
@@ -947,7 +1152,21 @@ private:
         }
     }
 
-    hr = CurlUploadFromFile(destinationConn, destinationRemotePath, tempFile.get(), fileSize, nullptr, &uploadCtx);
+    std::wstring stagedRemotePath;
+    hr = GenerateRemoteSiblingPath(destinationConn, destinationRemotePath, L"upload", stagedRemotePath);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = CurlUploadFromFile(destinationConn, stagedRemotePath, tempFile.get(), fileSize, nullptr, &uploadCtx);
+    if (FAILED(hr))
+    {
+        static_cast<void>(RemoteDeleteFile(destinationConn, stagedRemotePath));
+        return hr;
+    }
+
+    hr = PromoteStagedFileToDestination(destinationConn, stagedRemotePath, destinationRemotePath, allowOverwrite, backupPathOut);
     if (FAILED(hr))
     {
         return hr;
@@ -1822,7 +2041,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
         }
         else
         {
-            hr = EnsureDirectoryExists(destinationResolved.connection, destinationResolved.remotePath);
+            bool destinationExisted = false;
+            hr                      = QueryPathExists(destinationResolved.connection, destinationResolved.remotePath, destinationExisted);
             if (SUCCEEDED(hr))
             {
                 hr = CopyDirectoryRecursive(sourceResolved.connection,
@@ -1835,6 +2055,15 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
                                             requestedConcurrency,
                                             progress,
                                             nullptr);
+                if (FAILED(hr) && ! destinationExisted)
+                {
+                    const HRESULT rollbackHr =
+                        TryRollbackCopiedDirectory(destinationResolved.connection, destinationResolved.remotePath, destinationDisplay, progress);
+                    if (FAILED(rollbackHr))
+                    {
+                        hr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+                    }
+                }
             }
         }
     }
@@ -1929,11 +2158,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
         const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
         if (SUCCEEDED(hr) && ! isSelfRename)
         {
-            hr = EnsureOverwriteTargetForRename(sourceResolved.connection, destinationResolved.remotePath, allowOverwrite);
+            hr = RenameWithOverwriteRollback(sourceResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath, allowOverwrite);
         }
-        if (SUCCEEDED(hr))
+        else if (SUCCEEDED(hr))
         {
-            hr = RemoteRename(sourceResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath);
+            hr = S_OK;
         }
     }
     else
@@ -1950,29 +2179,57 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                 }
                 else
                 {
-                    hr = CopyDirectoryRecursive(sourceResolved.connection,
-                                                EnsureTrailingSlash(sourceResolved.remotePath),
-                                                EnsureTrailingSlashDisplay(sourceDisplay),
-                                                destinationResolved.connection,
-                                                EnsureTrailingSlash(destinationResolved.remotePath),
-                                                EnsureTrailingSlashDisplay(destinationDisplay),
-                                                flags,
-                                                requestedConcurrency,
-                                                progress,
-                                                nullptr);
+                    bool destinationExisted = false;
+                    hr                      = QueryPathExists(destinationResolved.connection, destinationResolved.remotePath, destinationExisted);
                     if (SUCCEEDED(hr))
                     {
-                        hr = DeleteDirectoryRecursive(sourceResolved.connection,
-                                                      sourceResolved.remotePath,
-                                                      sourceDisplay,
-                                                      FILESYSTEM_FLAG_RECURSIVE,
-                                                      ConnectionConcurrencyLimiter::Kind::CopyMove,
-                                                      progress);
+                        hr = CopyDirectoryRecursive(sourceResolved.connection,
+                                                    EnsureTrailingSlash(sourceResolved.remotePath),
+                                                    EnsureTrailingSlashDisplay(sourceDisplay),
+                                                    destinationResolved.connection,
+                                                    EnsureTrailingSlash(destinationResolved.remotePath),
+                                                    EnsureTrailingSlashDisplay(destinationDisplay),
+                                                    flags,
+                                                    requestedConcurrency,
+                                                    progress,
+                                                    nullptr);
+                        if (FAILED(hr) && ! destinationExisted)
+                        {
+                            const HRESULT rollbackHr =
+                                TryRollbackCopiedDirectory(destinationResolved.connection, destinationResolved.remotePath, destinationDisplay, progress);
+                            if (FAILED(rollbackHr))
+                            {
+                                hr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+                            }
+                        }
+                    }
+                    if (SUCCEEDED(hr))
+                    {
+                        const HRESULT deleteSourceHr = DeleteDirectoryRecursive(sourceResolved.connection,
+                                                                                sourceResolved.remotePath,
+                                                                                sourceDisplay,
+                                                                                FILESYSTEM_FLAG_RECURSIVE,
+                                                                                ConnectionConcurrencyLimiter::Kind::CopyMove,
+                                                                                progress);
+                        if (FAILED(deleteSourceHr))
+                        {
+                            if (! destinationExisted)
+                            {
+                                const HRESULT rollbackHr =
+                                    TryRollbackCopiedDirectory(destinationResolved.connection, destinationResolved.remotePath, destinationDisplay, progress);
+                                hr = FAILED(rollbackHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : deleteSourceHr;
+                            }
+                            else
+                            {
+                                hr = deleteSourceHr;
+                            }
+                        }
                     }
                 }
             }
             else
             {
+                std::wstring destinationBackupPath;
                 hr = CopyFileViaTemp(sourceResolved.connection,
                                      sourceResolved.remotePath,
                                      sourceDisplay,
@@ -1982,11 +2239,25 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
                                      flags,
                                      progress,
                                      sourceInfo.sizeBytes,
-                                     nullptr);
+                                     nullptr,
+                                     &destinationBackupPath);
                 if (SUCCEEDED(hr))
                 {
-                    hr = RemoteDeleteFileWithPermit(
+                    const HRESULT deleteSourceHr = RemoteDeleteFileWithPermit(
                         sourceResolved.connection, sourceResolved.remotePath, progress, ConnectionConcurrencyLimiter::Kind::CopyMove);
+                    if (FAILED(deleteSourceHr))
+                    {
+                        const HRESULT rollbackHr = RollbackMovedFileDestination(destinationResolved.connection,
+                                                                                destinationResolved.remotePath,
+                                                                                destinationBackupPath,
+                                                                                progress,
+                                                                                ConnectionConcurrencyLimiter::Kind::CopyMove);
+                        hr                       = FAILED(rollbackHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : deleteSourceHr;
+                    }
+                    else
+                    {
+                        hr = FinalizeOverwriteTarget(destinationResolved.connection, destinationBackupPath);
+                    }
                 }
             }
         }
@@ -2053,10 +2324,10 @@ FileSystemCurl::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fil
             if (HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
             {
                 const unsigned int concurrency = std::clamp(resolved.connection.effectiveDeleteMaxConcurrency, 1u, 8u);
-                hr                             = (concurrency > 1u)
-                                                     ? DeleteDirectoryRecursiveParallel(
+                hr = (concurrency > 1u)
+                         ? DeleteDirectoryRecursiveParallel(
                                resolved.connection, resolved.remotePath, displayPath, flags, ConnectionConcurrencyLimiter::Kind::Delete, concurrency, progress)
-                                                     : DeleteDirectoryRecursive(
+                         : DeleteDirectoryRecursive(
                                resolved.connection, resolved.remotePath, displayPath, flags, ConnectionConcurrencyLimiter::Kind::Delete, progress);
             }
             else
@@ -2149,11 +2420,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
         const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
         if (SUCCEEDED(hr) && ! isSelfRename)
         {
-            hr = EnsureOverwriteTargetForRename(sourceResolved.connection, destinationResolved.remotePath, allowOverwrite);
+            hr = RenameWithOverwriteRollback(sourceResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath, allowOverwrite);
         }
-        if (SUCCEEDED(hr))
+        else if (SUCCEEDED(hr))
         {
-            hr = RemoteRename(sourceResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath);
+            hr = S_OK;
         }
     }
 
@@ -2362,17 +2633,35 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
                 }
                 else
                 {
+                    bool destinationExisted = false;
+                    itemHr                  = QueryPathExists(destinationResolved.connection, task.destinationRemotePath, destinationExisted);
+                    if (FAILED(itemHr))
+                    {
+                        // Keep the original failure for this item; no directory copy has started yet.
+                    }
                     const unsigned int directoryConcurrency = (concurrency <= 1u) ? requestedConcurrency : 1u;
-                    itemHr                                  = CopyDirectoryRecursive(task.sourceConn,
-                                                    EnsureTrailingSlash(task.sourceRemotePath),
-                                                    EnsureTrailingSlashDisplay(task.sourceDisplayPath),
-                                                    destinationResolved.connection,
-                                                    EnsureTrailingSlash(task.destinationRemotePath),
-                                                    EnsureTrailingSlashDisplay(task.destinationDisplayPath),
-                                                    flags,
-                                                    directoryConcurrency,
-                                                    progress,
-                                                    &overallBytes);
+                    if (SUCCEEDED(itemHr))
+                    {
+                        itemHr = CopyDirectoryRecursive(task.sourceConn,
+                                                        EnsureTrailingSlash(task.sourceRemotePath),
+                                                        EnsureTrailingSlashDisplay(task.sourceDisplayPath),
+                                                        destinationResolved.connection,
+                                                        EnsureTrailingSlash(task.destinationRemotePath),
+                                                        EnsureTrailingSlashDisplay(task.destinationDisplayPath),
+                                                        flags,
+                                                        directoryConcurrency,
+                                                        progress,
+                                                        &overallBytes);
+                        if (FAILED(itemHr) && ! destinationExisted)
+                        {
+                            const HRESULT rollbackHr =
+                                TryRollbackCopiedDirectory(destinationResolved.connection, task.destinationRemotePath, task.destinationDisplayPath, progress);
+                            if (FAILED(rollbackHr))
+                            {
+                                itemHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+                            }
+                        }
+                    }
                 }
             }
             else
@@ -2660,11 +2949,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
                 const bool isSelfRename = EqualsInsensitive(task.sourceRemotePath, task.destinationRemotePath);
                 if (! isSelfRename)
                 {
-                    itemHr = EnsureOverwriteTargetForRename(destinationResolved.connection, task.destinationRemotePath, allowOverwrite);
+                    itemHr = RenameWithOverwriteRollback(destinationResolved.connection, task.sourceRemotePath, task.destinationRemotePath, allowOverwrite);
                 }
-                if (SUCCEEDED(itemHr))
+                else
                 {
-                    itemHr = RemoteRename(destinationResolved.connection, task.sourceRemotePath, task.destinationRemotePath);
+                    itemHr = S_OK;
                 }
             }
             else if (task.isDirectory)
@@ -2675,30 +2964,58 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
                 }
                 else
                 {
+                    bool destinationExisted                 = false;
+                    itemHr                                  = QueryPathExists(destinationResolved.connection, task.destinationRemotePath, destinationExisted);
                     const unsigned int directoryConcurrency = (concurrency <= 1u) ? requestedConcurrency : 1u;
-                    itemHr                                  = CopyDirectoryRecursive(task.sourceConn,
-                                                    EnsureTrailingSlash(task.sourceRemotePath),
-                                                    EnsureTrailingSlashDisplay(task.sourceDisplayPath),
-                                                    destinationResolved.connection,
-                                                    EnsureTrailingSlash(task.destinationRemotePath),
-                                                    EnsureTrailingSlashDisplay(task.destinationDisplayPath),
-                                                    flags,
-                                                    directoryConcurrency,
-                                                    progress,
-                                                    &overallBytes);
                     if (SUCCEEDED(itemHr))
                     {
-                        itemHr = DeleteDirectoryRecursive(task.sourceConn,
-                                                          task.sourceRemotePath,
-                                                          task.sourceDisplayPath,
-                                                          FILESYSTEM_FLAG_RECURSIVE,
-                                                          ConnectionConcurrencyLimiter::Kind::CopyMove,
-                                                          progress);
+                        itemHr = CopyDirectoryRecursive(task.sourceConn,
+                                                        EnsureTrailingSlash(task.sourceRemotePath),
+                                                        EnsureTrailingSlashDisplay(task.sourceDisplayPath),
+                                                        destinationResolved.connection,
+                                                        EnsureTrailingSlash(task.destinationRemotePath),
+                                                        EnsureTrailingSlashDisplay(task.destinationDisplayPath),
+                                                        flags,
+                                                        directoryConcurrency,
+                                                        progress,
+                                                        &overallBytes);
+                        if (FAILED(itemHr) && ! destinationExisted)
+                        {
+                            const HRESULT rollbackHr =
+                                TryRollbackCopiedDirectory(destinationResolved.connection, task.destinationRemotePath, task.destinationDisplayPath, progress);
+                            if (FAILED(rollbackHr))
+                            {
+                                itemHr = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
+                            }
+                        }
+                    }
+                    if (SUCCEEDED(itemHr))
+                    {
+                        const HRESULT deleteSourceHr = DeleteDirectoryRecursive(task.sourceConn,
+                                                                                task.sourceRemotePath,
+                                                                                task.sourceDisplayPath,
+                                                                                FILESYSTEM_FLAG_RECURSIVE,
+                                                                                ConnectionConcurrencyLimiter::Kind::CopyMove,
+                                                                                progress);
+                        if (FAILED(deleteSourceHr))
+                        {
+                            if (! destinationExisted)
+                            {
+                                const HRESULT rollbackHr = TryRollbackCopiedDirectory(
+                                    destinationResolved.connection, task.destinationRemotePath, task.destinationDisplayPath, progress);
+                                itemHr = FAILED(rollbackHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : deleteSourceHr;
+                            }
+                            else
+                            {
+                                itemHr = deleteSourceHr;
+                            }
+                        }
                     }
                 }
             }
             else
             {
+                std::wstring destinationBackupPath;
                 itemHr = CopyFileViaTemp(task.sourceConn,
                                          task.sourceRemotePath,
                                          task.sourceDisplayPath,
@@ -2708,10 +3025,25 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
                                          flags,
                                          progress,
                                          task.expectedSizeBytes,
-                                         &overallBytes);
+                                         &overallBytes,
+                                         &destinationBackupPath);
                 if (SUCCEEDED(itemHr))
                 {
-                    itemHr = RemoteDeleteFileWithPermit(task.sourceConn, task.sourceRemotePath, progress, ConnectionConcurrencyLimiter::Kind::CopyMove);
+                    const HRESULT deleteSourceHr =
+                        RemoteDeleteFileWithPermit(task.sourceConn, task.sourceRemotePath, progress, ConnectionConcurrencyLimiter::Kind::CopyMove);
+                    if (FAILED(deleteSourceHr))
+                    {
+                        const HRESULT rollbackHr = RollbackMovedFileDestination(destinationResolved.connection,
+                                                                                task.destinationRemotePath,
+                                                                                destinationBackupPath,
+                                                                                progress,
+                                                                                ConnectionConcurrencyLimiter::Kind::CopyMove);
+                        itemHr                   = FAILED(rollbackHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : deleteSourceHr;
+                    }
+                    else
+                    {
+                        itemHr = FinalizeOverwriteTarget(destinationResolved.connection, destinationBackupPath);
+                    }
                 }
             }
         }
@@ -3186,11 +3518,12 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
                                 const bool isSelfRename = EqualsInsensitive(sourceResolved.remotePath, destinationResolved.remotePath);
                                 if (! isSelfRename)
                                 {
-                                    itemHr = EnsureOverwriteTargetForRename(destinationResolved.connection, destinationResolved.remotePath, allowOverwrite);
+                                    itemHr = RenameWithOverwriteRollback(
+                                        destinationResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath, allowOverwrite);
                                 }
-                                if (SUCCEEDED(itemHr))
+                                else
                                 {
-                                    itemHr = RemoteRename(destinationResolved.connection, sourceResolved.remotePath, destinationResolved.remotePath);
+                                    itemHr = S_OK;
                                 }
                             }
                         }

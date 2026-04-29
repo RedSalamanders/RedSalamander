@@ -2,7 +2,7 @@
 #
 # The Windows file dialogs and shell property providers can trigger an AddressSanitizer
 # heap-buffer-overflow report in SID comparison code on some systems. This is external
-# to Red Salamander and is suppressed to keep ASan usable for app-level debugging.
+# to RedSalamander and is suppressed to keep ASan usable for app-level debugging.
 
 heap-buffer-overflow:CAceList::DoesAceListHasMoreThanOneSidForAllow
 heap-buffer-overflow:CSmbShareEngine::GetItemSharingStatus

@@ -1,0 +1,83 @@
+name: Publish to Winget
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 7.0.183)'
+        required: true
+        type: string
+
+jobs:
+  publish-winget:
+    runs-on: windows-latest
+    permissions:
+      contents: read
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        shell: pwsh
+        run: |
+          if ("${{ github.event_name }}" -eq "workflow_dispatch") {
+            $version = "${{ github.event.inputs.version }}"
+          } else {
+            $version = "${{ github.event.release.tag_name }}".TrimStart('v')
+          }
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "Version: $version"
+
+      - name: Download release assets
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          $msiUrl = "https://github.com/${{ github.repository }}/releases/download/v$version/RedSalamander-$version-x64.msi"
+          $zipUrl = "https://github.com/${{ github.repository }}/releases/download/v$version/RedSalamander-$version-x64-Portable.zip"
+          
+          Write-Host "Downloading MSI from $msiUrl"
+          Invoke-WebRequest -Uri $msiUrl -OutFile "RedSalamander.msi"
+          
+          Write-Host "Downloading ZIP from $zipUrl"
+          Invoke-WebRequest -Uri $zipUrl -OutFile "RedSalamander.zip"
+          
+          Write-Host "Downloaded files:"
+          Get-ChildItem *.msi, *.zip | ForEach-Object { Write-Host "  $($_.Name) - $($_.Length) bytes" }
+
+      - name: Install winget-create
+        shell: pwsh
+        run: |
+          Write-Host "Installing winget-create..."
+          winget install --id Microsoft.WingetCreate --silent --accept-source-agreements --accept-package-agreements
+
+      - name: Submit to Winget
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if (-not $env:WINGET_TOKEN) {
+            Write-Error "WINGET_TOKEN secret is not set. Please add it to repository secrets."
+            exit 1
+          }
+          
+          $version = "${{ steps.version.outputs.version }}"
+          
+          Write-Host "Submitting version $version to winget..."
+          wingetcreate update RedSalamanders.RedSalamander `
+            --version $version `
+            --urls "https://github.com/${{ github.repository }}/releases/download/v$version/RedSalamander-$version-x64.msi|x64" `
+                   "https://github.com/${{ github.repository }}/releases/download/v$version/RedSalamander-$version-x64-Portable.zip|x64|portable" `
+            --submit `
+            --token $env:WINGET_TOKEN
+
+      - name: Summary
+        if: success()
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version }}"
+          Write-Host "✓ Successfully submitted RedSalamander $version to winget!" -ForegroundColor Green
+          Write-Host "The winget community repository maintainers will review the PR."

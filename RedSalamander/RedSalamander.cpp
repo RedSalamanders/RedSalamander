@@ -10,14 +10,18 @@
 #include <format>
 #include <limits>
 #include <memory>
+#include <mutex>
 #include <optional>
+#include <span>
 #include <string>
 #include <system_error>
 #include <unordered_map>
 #include <vector>
 
 #include "AppTheme.h"
+#include "DxUi/DxUi.FocusRestore.h"
 #include "FluentIcons.h"
+#include "LocalizationManager.h"
 #include "MaskSyntax.h"
 #include "NavigationLocation.h"
 #include "SettingsStore.h"
@@ -31,6 +35,7 @@
 #pragma warning(pop)
 
 #include <shlobj_core.h>
+#include <strsafe.h>
 #include <winnetwk.h>
 
 #pragma comment(lib, "Mpr.lib")
@@ -45,10 +50,12 @@
 
 #include "CommandRegistry.h"
 #include "CompareDirectoriesWindow.h"
-#include "ConnectionManagerDialog.h"
+#include "ConnectionCredentialPromptDialog.h"
+#include "ConnectionManagerWindow.h"
 #include "CrashHandler.h"
 #include "CrashQuarantine.h"
 #include "DirectoryInfoCache.h"
+#include "DxUiThemePalette.h"
 #include "FileSystemPluginManager.h"
 #include "FindFilesWindow.h"
 #include "FolderWindow.h"
@@ -72,7 +79,7 @@
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 #include "CommandDispatch.Debug.h"
 #include "Commands.SelfTest.h"
 #include "CompareDirectoriesEngine.SelfTest.h"
@@ -92,18 +99,798 @@ Common::Settings::Settings g_settings;
 
 namespace
 {
-constexpr wchar_t kAppId[]                         = L"RedSalamander";
-constexpr wchar_t kMainWindowId[]                  = L"MainWindow";
-constexpr wchar_t kPreferencesWindowId[]           = L"PreferencesWindow";
-constexpr wchar_t kConnectionManagerWindowId[]     = L"ConnectionManagerWindow";
-constexpr wchar_t kShortcutsWindowId[]             = L"ShortcutsWindow";
-constexpr wchar_t kFindFilesWindowId[]             = L"FindFilesWindow";
-constexpr wchar_t kItemPropertiesWindowId[]        = L"ItemPropertiesWindow";
-constexpr wchar_t kItemPropertiesWindowClassName[] = L"RedSalamander.ItemPropertiesWindow";
-constexpr wchar_t kLeftPaneSlot[]                  = L"left";
-constexpr wchar_t kRightPaneSlot[]                 = L"right";
+constexpr wchar_t kAppId[]                           = L"RedSalamander";
+constexpr wchar_t kMainWindowId[]                    = L"MainWindow";
+constexpr wchar_t kPreferencesWindowId[]             = L"PreferencesWindow";
+constexpr wchar_t kConnectionManagerWindowId[]       = L"ConnectionManagerWindow";
+constexpr wchar_t kShortcutsWindowId[]               = L"ShortcutsWindow";
+constexpr wchar_t kFindFilesWindowId[]               = L"FindFilesWindow";
+constexpr wchar_t kItemPropertiesWindowId[]          = L"ItemPropertiesWindow";
+constexpr wchar_t kItemPropertiesWindowClassName[]   = L"RedSalamander.ItemPropertiesWindow";
+constexpr wchar_t kAboutDialogWindowClassName[]      = L"RedSalamander.AboutWindow";
+constexpr wchar_t kFatalErrorDialogWindowClassName[] = L"RedSalamander.FatalErrorWindow";
+constexpr wchar_t kLeftPaneSlot[]                    = L"left";
+constexpr wchar_t kRightPaneSlot[]                   = L"right";
+#ifdef ENABLE_TESTS
+constexpr UINT kFatalErrorDialogDebugGetSnapshotMessage   = WM_APP + 0x71;
+constexpr UINT kFatalErrorDialogDebugScrollByWheelMessage = WM_APP + 0x72;
+std::mutex g_debugConnectionManagerConnectMutex;
+bool g_debugConnectionManagerConnectSeen    = false;
+uint8_t g_debugConnectionManagerConnectPane = 0u;
+std::wstring g_debugConnectionManagerConnectName;
+#endif
 
-#ifdef _DEBUG
+[[nodiscard]] HWND NormalizeOwnedWindow(HWND ownerWindow) noexcept
+{
+    return (ownerWindow && IsWindow(ownerWindow) != FALSE) ? ownerWindow : nullptr;
+}
+AppTheme ResolveConfiguredTheme() noexcept;
+
+void CenterWindowOnOwner(HWND window, HWND owner) noexcept
+{
+    if (! window || IsWindow(window) == FALSE || ! owner || IsWindow(owner) == FALSE)
+    {
+        return;
+    }
+
+    RECT ownerRect{};
+    RECT windowRect{};
+    if (GetWindowRect(owner, &ownerRect) == FALSE || GetWindowRect(window, &windowRect) == FALSE)
+    {
+        return;
+    }
+
+    const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
+    const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
+    SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
+#ifdef ENABLE_TESTS
+BOOL CALLBACK CountVisibleOwnedDialogChildWindowsProc(HWND hwnd, LPARAM lParam) noexcept
+{
+    auto* count = reinterpret_cast<size_t*>(lParam);
+    if (! count)
+    {
+        return FALSE;
+    }
+
+    if (IsWindowVisible(hwnd) != FALSE)
+    {
+        ++(*count);
+    }
+
+    return TRUE;
+}
+
+[[nodiscard]] size_t CountVisibleOwnedDialogChildWindows(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return 0u;
+    }
+
+    size_t count = 0u;
+    EnumChildWindows(hwnd, CountVisibleOwnedDialogChildWindowsProc, reinterpret_cast<LPARAM>(&count));
+    return count;
+}
+
+[[nodiscard]] uint32_t PackArgb(const D2D1_COLOR_F& color) noexcept
+{
+    const auto toByte = [](float value) noexcept -> uint32_t { return static_cast<uint32_t>(std::clamp(std::lround(value * 255.0f), 0l, 255l)); };
+
+    return (toByte(color.a) << 24u) | (toByte(color.r) << 16u) | (toByte(color.g) << 8u) | toByte(color.b);
+}
+#endif
+
+class AboutDialogWindow final
+{
+public:
+    AboutDialogWindow(const AboutDialogWindow&)            = delete;
+    AboutDialogWindow& operator=(const AboutDialogWindow&) = delete;
+    AboutDialogWindow(AboutDialogWindow&&)                 = delete;
+    AboutDialogWindow& operator=(AboutDialogWindow&&)      = delete;
+
+    AboutDialogWindow(HWND ownerWindow, const AppTheme& theme) noexcept : _ownerWindow(NormalizeOwnedWindow(ownerWindow)), _theme(theme)
+    {
+    }
+
+    [[nodiscard]] HRESULT ShowModal() noexcept
+    {
+        if (const HWND existing = FindWindowW(kAboutDialogWindowClassName, nullptr); existing && IsWindow(existing) != FALSE)
+        {
+            ShowWindow(existing, IsIconic(existing) ? SW_RESTORE : SW_SHOW);
+            SetForegroundWindow(existing);
+            return S_FALSE;
+        }
+
+        const HRESULT classHr = EnsureWindowClass();
+        if (FAILED(classHr))
+        {
+            return classHr;
+        }
+
+        const DWORD style        = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        const DWORD exStyle      = WS_EX_DLGMODALFRAME;
+        const UINT dpi           = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
+        const int clientWidthPx  = MulDiv(420, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
+        const int clientHeightPx = MulDiv(170, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
+
+        RECT bounds{0, 0, clientWidthPx, clientHeightPx};
+        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        const std::wstring caption = LoadStringResource(nullptr, IDS_ABOUT_WINDOW_CAPTION);
+        const HWND hwnd            = CreateWindowExW(exStyle,
+                                                     kAboutDialogWindowClassName,
+                                                     caption.c_str(),
+                                                     style,
+                                                     CW_USEDEFAULT,
+                                                     CW_USEDEFAULT,
+                                                     bounds.right - bounds.left,
+                                                     bounds.bottom - bounds.top,
+                                                     nullptr,
+                                                     nullptr,
+                                                     g_hInstance,
+                                                     this);
+        if (! hwnd)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        if (! _hWnd)
+        {
+            _hWnd.reset(hwnd);
+        }
+
+        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(_dxHost.PrimeForShow());
+        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+        UpdateWindow(_hWnd.get());
+        SetForegroundWindow(_hWnd.get());
+
+        MSG msg{};
+        while (! _done)
+        {
+            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
+            if (getMessageResult == -1)
+            {
+                return HRESULT_FROM_WIN32(GetLastError());
+            }
+            if (getMessageResult == 0)
+            {
+                _done   = true;
+                _result = S_FALSE;
+                PostQuitMessage(static_cast<int>(msg.wParam));
+                break;
+            }
+
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+
+        return _result;
+    }
+
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        if (message == WM_NCCREATE)
+        {
+            auto* cs   = reinterpret_cast<CREATESTRUCTW*>(lParam);
+            auto* self = static_cast<AboutDialogWindow*>(cs ? cs->lpCreateParams : nullptr);
+            if (! self)
+            {
+                return FALSE;
+            }
+
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            if (! self->_hWnd)
+            {
+                self->_hWnd.reset(hwnd);
+            }
+            return TRUE;
+        }
+
+        auto* self = reinterpret_cast<AboutDialogWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        if (! self)
+        {
+            return DefWindowProcW(hwnd, message, wParam, lParam);
+        }
+
+        bool handled     = false;
+        LRESULT dxResult = 0;
+        if (message != WM_CREATE)
+        {
+            dxResult = self->_dxHost.HandleMessage(hwnd, message, wParam, lParam, handled);
+        }
+        if (handled)
+        {
+            if (message == WM_NCDESTROY)
+            {
+                self->_dxHost.Detach();
+                if (self->_hWnd.get() == hwnd)
+                {
+                    self->_hWnd.release();
+                }
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                if (! self->_done)
+                {
+                    self->_done   = true;
+                    self->_result = S_FALSE;
+                }
+            }
+            if (message == WM_SIZE || message == WM_DPICHANGED)
+            {
+                self->Layout();
+            }
+            return dxResult;
+        }
+
+        switch (message)
+        {
+            case WM_CREATE: return self->OnCreate(hwnd) ? 0 : -1;
+            case WM_SIZE: self->Layout(); return 0;
+            case WM_DPICHANGED:
+            {
+                const auto* suggested = reinterpret_cast<const RECT*>(lParam);
+                if (suggested)
+                {
+                    SetWindowPos(hwnd,
+                                 nullptr,
+                                 suggested->left,
+                                 suggested->top,
+                                 suggested->right - suggested->left,
+                                 suggested->bottom - suggested->top,
+                                 SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                self->Layout();
+                return 0;
+            }
+            case WM_ERASEBKGND: return 1;
+            case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, self->_theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
+            case WM_CLOSE: self->Close(); return 0;
+            case WM_NCDESTROY:
+                self->_dxHost.Detach();
+                if (self->_hWnd.get() == hwnd)
+                {
+                    self->_hWnd.release();
+                }
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                if (! self->_done)
+                {
+                    self->_done   = true;
+                    self->_result = S_FALSE;
+                }
+                break;
+        }
+
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+private:
+    [[nodiscard]] static HRESULT EnsureWindowClass() noexcept
+    {
+        static ATOM atom = 0;
+        if (atom != 0)
+        {
+            return S_OK;
+        }
+
+        WNDCLASSEXW wc{};
+        wc.cbSize        = sizeof(wc);
+        wc.lpfnWndProc   = AboutDialogWindow::WndProc;
+        wc.hInstance     = g_hInstance;
+        wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kAboutDialogWindowClassName;
+        wc.style         = CS_DBLCLKS;
+
+        atom = RegisterClassExW(&wc);
+        return atom != 0 ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    [[nodiscard]] bool OnCreate(HWND hwnd) noexcept
+    {
+        if (! _dxHost.Attach(hwnd))
+        {
+            return false;
+        }
+
+        BuildUi();
+        ApplyTheme();
+        Layout();
+        _dxHost.SetDefaultButton(_okButton);
+        _dxHost.SetCancelButton(_okButton);
+        _dxHost.SetFocusControl(_okButton);
+        return true;
+    }
+
+    void BuildUi() noexcept
+    {
+        if (_root)
+        {
+            return;
+        }
+
+        using namespace RedSalamander::DxUi;
+
+        _rootStorage = std::make_unique<Panel>();
+        _root        = _rootStorage.get();
+
+        _titleLabel = _root->AddChild<Label>(L"RedSalamander");
+        _titleLabel->SetFontRole(FontRole::Header);
+        _titleLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        _versionLabel = _root->AddChild<Label>(std::wstring(REDSALAMANDER_TEXT_VERSION));
+        _versionLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        _copyrightLabel = _root->AddChild<Label>(VERSINFO_COPYRIGHT);
+        _copyrightLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        _okButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_OK));
+        _okButton->SetPrimary(true);
+        _okButton->SetMnemonic(L'O');
+        _okButton->SetOnClick([this] { Close(); });
+
+        _dxHost.SetRoot(std::move(_rootStorage));
+    }
+
+    void ApplyTheme() noexcept
+    {
+        _dxHost.SetTheme(MakeAppThemeDxPalette(_theme));
+        if (_hWnd)
+        {
+            ApplyTitleBarTheme(_hWnd.get(), _theme, GetActiveWindow() == _hWnd.get());
+        }
+    }
+
+    void Layout() noexcept
+    {
+        if (! _root)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F bounds = _dxHost.GetClientBoundsDip();
+        _root->SetBounds(bounds);
+
+        const float left         = 24.0f;
+        const float right        = bounds.right - 24.0f;
+        const float contentWidth = (std::max)(0.0f, right - left);
+
+        _titleLabel->SetBounds(D2D1::RectF(left, 22.0f, left + contentWidth, 50.0f));
+        _versionLabel->SetBounds(D2D1::RectF(left, 62.0f, left + contentWidth, 84.0f));
+        _copyrightLabel->SetBounds(D2D1::RectF(left, 88.0f, left + contentWidth, 110.0f));
+
+        const float buttonWidth  = 92.0f;
+        const float buttonHeight = 32.0f;
+        const float buttonRight  = bounds.right - 24.0f;
+        const float buttonTop    = bounds.bottom - 24.0f - buttonHeight;
+        _okButton->SetBounds(D2D1::RectF(buttonRight - buttonWidth, buttonTop, buttonRight, buttonTop + buttonHeight));
+    }
+
+    void Close() noexcept
+    {
+        if (_done)
+        {
+            return;
+        }
+
+        _done   = true;
+        _result = S_OK;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            DestroyWindow(_hWnd.get());
+        }
+    }
+
+private:
+    HWND _ownerWindow = nullptr;
+    AppTheme _theme{};
+    wil::unique_hwnd _hWnd;
+    RedSalamander::DxUi::WindowHost _dxHost;
+    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
+    RedSalamander::DxUi::Panel* _root           = nullptr;
+    RedSalamander::DxUi::Label* _titleLabel     = nullptr;
+    RedSalamander::DxUi::Label* _versionLabel   = nullptr;
+    RedSalamander::DxUi::Label* _copyrightLabel = nullptr;
+    RedSalamander::DxUi::Button* _okButton      = nullptr;
+    bool _done                                  = false;
+    HRESULT _result                             = S_FALSE;
+};
+
+[[nodiscard]] HRESULT ShowAboutDialog(HWND ownerWindow, const AppTheme& theme) noexcept
+{
+    AboutDialogWindow dialog(ownerWindow, theme);
+    return dialog.ShowModal();
+}
+
+class FatalErrorDialogWindow final
+{
+public:
+    FatalErrorDialogWindow(HWND ownerWindow, const AppTheme& theme, std::wstring caption, std::wstring message) noexcept
+        : _ownerWindow(NormalizeOwnedWindow(ownerWindow)),
+          _theme(theme),
+          _caption(std::move(caption)),
+          _message(std::move(message))
+    {
+    }
+
+    FatalErrorDialogWindow(const FatalErrorDialogWindow&)            = delete;
+    FatalErrorDialogWindow& operator=(const FatalErrorDialogWindow&) = delete;
+    FatalErrorDialogWindow(FatalErrorDialogWindow&&)                 = delete;
+    FatalErrorDialogWindow& operator=(FatalErrorDialogWindow&&)      = delete;
+
+    [[nodiscard]] HRESULT ShowModal() noexcept
+    {
+        const HRESULT classHr = EnsureWindowClass();
+        if (FAILED(classHr))
+        {
+            return classHr;
+        }
+
+        const DWORD style        = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        const DWORD exStyle      = WS_EX_DLGMODALFRAME;
+        const UINT dpi           = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
+        const int clientWidthPx  = MulDiv(480, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
+        const int clientHeightPx = MulDiv(220, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
+
+        RECT bounds{0, 0, clientWidthPx, clientHeightPx};
+        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+
+        const bool restoreOwnerEnabled = _ownerWindow && IsWindow(_ownerWindow) != FALSE && IsWindowEnabled(_ownerWindow) != FALSE;
+        if (restoreOwnerEnabled)
+        {
+            EnableWindow(_ownerWindow, FALSE);
+        }
+        const auto restoreOwner = wil::scope_exit([this, restoreOwnerEnabled]() noexcept
+        {
+            if (restoreOwnerEnabled && _ownerWindow && IsWindow(_ownerWindow) != FALSE)
+            {
+                EnableWindow(_ownerWindow, TRUE);
+                SetActiveWindow(_ownerWindow);
+            }
+        });
+
+        const std::wstring caption = _caption.empty() ? LoadStringResource(nullptr, IDS_APP_TITLE) : _caption;
+        const HWND hwnd            = CreateWindowExW(exStyle,
+                                                     kFatalErrorDialogWindowClassName,
+                                                     caption.c_str(),
+                                                     style,
+                                                     CW_USEDEFAULT,
+                                                     CW_USEDEFAULT,
+                                                     bounds.right - bounds.left,
+                                                     bounds.bottom - bounds.top,
+                                                     _ownerWindow,
+                                                     nullptr,
+                                                     g_hInstance,
+                                                     this);
+        if (! hwnd)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        if (! _hWnd)
+        {
+            _hWnd.reset(hwnd);
+        }
+
+        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(_dxHost.PrimeForShow());
+        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+        UpdateWindow(_hWnd.get());
+        SetForegroundWindow(_hWnd.get());
+
+        MSG msg{};
+        while (! _done)
+        {
+            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
+            if (getMessageResult == -1)
+            {
+                return HRESULT_FROM_WIN32(GetLastError());
+            }
+            if (getMessageResult == 0)
+            {
+                _done   = true;
+                _result = S_FALSE;
+                PostQuitMessage(static_cast<int>(msg.wParam));
+                break;
+            }
+
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+
+        return _result;
+    }
+
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        if (message == WM_NCCREATE)
+        {
+            auto* cs   = reinterpret_cast<CREATESTRUCTW*>(lParam);
+            auto* self = static_cast<FatalErrorDialogWindow*>(cs ? cs->lpCreateParams : nullptr);
+            if (! self)
+            {
+                return FALSE;
+            }
+
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            if (! self->_hWnd)
+            {
+                self->_hWnd.reset(hwnd);
+            }
+        }
+
+        auto* self = reinterpret_cast<FatalErrorDialogWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        if (! self)
+        {
+            return DefWindowProcW(hwnd, message, wParam, lParam);
+        }
+
+        bool handled     = false;
+        LRESULT dxResult = 0;
+        if (message != WM_CREATE)
+        {
+            dxResult = self->_dxHost.HandleMessage(hwnd, message, wParam, lParam, handled);
+        }
+        if (handled)
+        {
+            if (message == WM_NCDESTROY)
+            {
+                self->_dxHost.Detach();
+                if (self->_hWnd.get() == hwnd)
+                {
+                    self->_hWnd.release();
+                }
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                if (! self->_done)
+                {
+                    self->_done   = true;
+                    self->_result = S_FALSE;
+                }
+            }
+            if (message == WM_SIZE || message == WM_DPICHANGED)
+            {
+                self->Layout();
+            }
+            return dxResult;
+        }
+
+        switch (message)
+        {
+            case WM_CREATE: return self->OnCreate(hwnd) ? 0 : -1;
+#ifdef ENABLE_TESTS
+            case kFatalErrorDialogDebugGetSnapshotMessage:
+            {
+                auto* snapshot = reinterpret_cast<FatalErrorDialogDebugSnapshot*>(lParam);
+                return (snapshot && self->DebugGetSnapshot(*snapshot)) ? TRUE : FALSE;
+            }
+            case kFatalErrorDialogDebugScrollByWheelMessage: return self->DebugScrollByWheelDetents(static_cast<int>(wParam)) ? TRUE : FALSE;
+#endif
+            case WM_SIZE: self->Layout(); return 0;
+            case WM_DPICHANGED:
+            {
+                const auto* suggested = reinterpret_cast<const RECT*>(lParam);
+                if (suggested)
+                {
+                    SetWindowPos(hwnd,
+                                 nullptr,
+                                 suggested->left,
+                                 suggested->top,
+                                 suggested->right - suggested->left,
+                                 suggested->bottom - suggested->top,
+                                 SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                self->Layout();
+                return 0;
+            }
+            case WM_ERASEBKGND: return 1;
+            case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, self->_theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
+            case WM_CLOSE: self->Close(); return 0;
+            case WM_NCDESTROY:
+                self->_dxHost.Detach();
+                if (self->_hWnd.get() == hwnd)
+                {
+                    self->_hWnd.release();
+                }
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                if (! self->_done)
+                {
+                    self->_done   = true;
+                    self->_result = S_FALSE;
+                }
+                break;
+        }
+
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+private:
+    [[nodiscard]] static HRESULT EnsureWindowClass() noexcept
+    {
+        static ATOM atom = 0;
+        if (atom != 0)
+        {
+            return S_OK;
+        }
+
+        WNDCLASSEXW wc{};
+        wc.cbSize        = sizeof(wc);
+        wc.lpfnWndProc   = FatalErrorDialogWindow::WndProc;
+        wc.hInstance     = g_hInstance;
+        wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kFatalErrorDialogWindowClassName;
+        wc.style         = CS_DBLCLKS;
+
+        atom = RegisterClassExW(&wc);
+        return atom != 0 ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    [[nodiscard]] bool OnCreate(HWND hwnd) noexcept
+    {
+        if (! _dxHost.Attach(hwnd))
+        {
+            return false;
+        }
+
+        BuildUi();
+        ApplyTheme();
+        Layout();
+        _dxHost.SetDefaultButton(_okButton);
+        _dxHost.SetCancelButton(_okButton);
+        _dxHost.SetFocusControl(_okButton);
+        return true;
+    }
+
+    void BuildUi()
+    {
+        if (_root)
+        {
+            return;
+        }
+
+        using namespace RedSalamander::DxUi;
+
+        _rootStorage = std::make_unique<Panel>();
+        _root        = _rootStorage.get();
+
+        _messageField = _root->AddChild<TextField>(_message);
+        _messageField->SetMultiline(true);
+        _messageField->SetReadOnly(true);
+
+        _okButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_OK));
+        _okButton->SetPrimary(true);
+        _okButton->SetMnemonic(L'O');
+        _okButton->SetOnClick([this] { Close(); });
+
+        _dxHost.SetRoot(std::move(_rootStorage));
+    }
+
+    void ApplyTheme() noexcept
+    {
+        _dxHost.SetTheme(MakeAppThemeDxPalette(_theme));
+        if (_hWnd)
+        {
+            ApplyTitleBarTheme(_hWnd.get(), _theme, GetActiveWindow() == _hWnd.get());
+        }
+    }
+
+    void Layout() noexcept
+    {
+        if (! _root)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F bounds = _dxHost.GetClientBoundsDip();
+        _root->SetBounds(bounds);
+
+        const float outerPadding  = 16.0f;
+        const float buttonWidth   = 92.0f;
+        const float buttonHeight  = 32.0f;
+        const float buttonBottom  = bounds.bottom - outerPadding;
+        const float buttonTop     = buttonBottom - buttonHeight;
+        const float buttonRight   = bounds.right - outerPadding;
+        const float contentTop    = outerPadding;
+        const float contentBottom = (std::max)(contentTop, buttonTop - 12.0f);
+
+        _messageField->SetBounds(D2D1::RectF(outerPadding, contentTop, bounds.right - outerPadding, contentBottom));
+        _okButton->SetBounds(D2D1::RectF(buttonRight - buttonWidth, buttonTop, buttonRight, buttonBottom));
+    }
+
+#ifdef ENABLE_TESTS
+    [[nodiscard]] bool DebugGetSnapshot(FatalErrorDialogDebugSnapshot& out) const noexcept
+    {
+        const HWND hwnd             = _hWnd.get();
+        out.usesDxUiHost            = hwnd && ::IsWindow(hwnd) != FALSE;
+        out.visibleChildWindowCount = hwnd ? CountVisibleOwnedDialogChildWindows(hwnd) : 0u;
+        out.themeDark               = _theme.dark;
+        out.themeHighContrast       = _theme.highContrast;
+        out.themeRainbow            = _theme.menu.rainbowMode;
+        RedSalamander::DxUi::TextFieldDebugMultilineState multilineState{};
+        if (_messageField && _messageField->DebugGetMultilineState(_dxHost, multilineState))
+        {
+            out.bodyFirstVisibleLine    = multilineState.firstVisibleLine;
+            out.bodyVisibleLineCount    = multilineState.visibleLineCount;
+            out.bodyTotalLineCount      = multilineState.totalLineCount;
+            out.bodyCanScrollVertically = multilineState.canScrollVertically;
+        }
+        if (_messageField)
+        {
+            const auto bodyStyle = RedSalamander::DxUi::ResolveTextFieldVisualStyle(_dxHost.GetTheme(),
+                                                                                    _messageField->IsEnabled(),
+                                                                                    _messageField->IsHovered(),
+                                                                                    _messageField->HasFocus(),
+                                                                                    _messageField->HasFocus() && _dxHost.IsKeyboardFocusVisible());
+            out.bodyFillArgb     = PackArgb(bodyStyle.fill);
+            out.bodyTextArgb     = PackArgb(bodyStyle.text);
+        }
+        out.renderCount        = _dxHost.DebugGetRenderCount();
+        out.resizeCount        = _dxHost.DebugGetResizeCount();
+        out.resizeFailureCount = _dxHost.DebugGetResizeFailureCount();
+        out.messageText        = _message;
+        return out.usesDxUiHost;
+    }
+
+    [[nodiscard]] bool DebugScrollByWheelDetents(int detents) noexcept
+    {
+        const HWND hwnd = _hWnd.get();
+        if (! hwnd || ::IsWindow(hwnd) == FALSE || ! _messageField)
+        {
+            return false;
+        }
+
+        if (::IsIconic(hwnd))
+        {
+            ::ShowWindow(hwnd, SW_RESTORE);
+        }
+
+        const float wheelDelta = detents > 0 ? static_cast<float>(WHEEL_DELTA) : -static_cast<float>(WHEEL_DELTA);
+        const int stepCount    = detents > 0 ? detents : -detents;
+        for (int remaining = stepCount; remaining > 0; --remaining)
+        {
+            if (! _messageField->OnMouseWheel(_dxHost, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0u))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+#endif
+
+    void Close() noexcept
+    {
+        if (_done)
+        {
+            return;
+        }
+
+        _done   = true;
+        _result = S_OK;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            DestroyWindow(_hWnd.get());
+        }
+    }
+
+private:
+    HWND _ownerWindow = nullptr;
+    AppTheme _theme{};
+    std::wstring _caption;
+    std::wstring _message;
+    wil::unique_hwnd _hWnd;
+    RedSalamander::DxUi::WindowHost _dxHost;
+    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
+    RedSalamander::DxUi::Panel* _root             = nullptr;
+    RedSalamander::DxUi::TextField* _messageField = nullptr;
+    RedSalamander::DxUi::Button* _okButton        = nullptr;
+    bool _done                                    = false;
+    HRESULT _result                               = S_FALSE;
+};
+
+#ifdef ENABLE_TESTS
 bool g_runFileOpsSelfTest            = false;
 bool g_runCompareDirectoriesSelfTest = false;
 bool g_runCommandsSelfTest           = false;
@@ -304,11 +1091,11 @@ void QueueRedSalamanderMonitorLaunch() noexcept
         nullptr,
         nullptr));
 }
-#endif // _DEBUG
+#endif // ENABLE_TESTS
 
 [[nodiscard]] bool IsRunningAnySelfTest() noexcept
 {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     return g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest;
 #else
     return false;
@@ -323,84 +1110,13 @@ constexpr GUID kKnownFolderIdOneDrive = {
     {0xB3, 0xD9, 0x28, 0xDA, 0xA6, 0x48, 0xC0, 0xF6},
 };
 
-struct MainMenuItemData
-{
-    std::wstring text;
-    std::wstring shortcut;
-    bool separator  = false;
-    bool topLevel   = false;
-    bool hasSubMenu = false;
-};
-
-struct FatalErrorDialogState
-{
-    const wchar_t* caption = nullptr;
-    const wchar_t* message = nullptr;
-};
-
-INT_PTR CALLBACK FatalErrorDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
-{
-    auto* state = reinterpret_cast<FatalErrorDialogState*>(GetWindowLongPtrW(dlg, DWLP_USER));
-    switch (msg)
-    {
-        case WM_INITDIALOG:
-        {
-            state = reinterpret_cast<FatalErrorDialogState*>(lp);
-            SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
-
-            if (state)
-            {
-                if (state->caption && state->caption[0] != L'\0')
-                {
-                    SetWindowTextW(dlg, state->caption);
-                }
-
-                if (state->message && state->message[0] != L'\0')
-                {
-                    SetDlgItemTextW(dlg, IDC_FATAL_ERROR_TEXT, state->message);
-                }
-            }
-
-            wchar_t okText[64]{};
-            const int okLength = LoadStringW(GetModuleHandleW(nullptr), IDS_BTN_OK, okText, static_cast<int>(sizeof(okText) / sizeof(okText[0])));
-            if (okLength > 0)
-            {
-                SetDlgItemTextW(dlg, IDOK, okText);
-            }
-
-            return static_cast<INT_PTR>(TRUE);
-        }
-        case WM_COMMAND:
-        {
-            const WORD id = LOWORD(wp);
-            if (id == IDOK || id == IDCANCEL)
-            {
-                EndDialog(dlg, id);
-                return static_cast<INT_PTR>(TRUE);
-            }
-            break;
-        }
-    }
-    return static_cast<INT_PTR>(FALSE);
-}
-
 void ShowFatalErrorDialog(HWND owner, const wchar_t* caption, const wchar_t* message) noexcept
 {
-    FatalErrorDialogState state{};
-    state.caption = caption;
-    state.message = message;
-
-    HINSTANCE instance = g_hInstance ? g_hInstance : GetModuleHandleW(nullptr);
-
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-    DialogBoxParamW(instance, MAKEINTRESOURCEW(IDD_FATAL_ERROR), owner, FatalErrorDialogProc, reinterpret_cast<LPARAM>(&state));
-#pragma warning(pop)
+    const AppTheme theme = ResolveConfiguredTheme();
+    FatalErrorDialogWindow dialog(owner, theme, caption ? std::wstring(caption) : std::wstring(), message ? std::wstring(message) : std::wstring());
+    static_cast<void>(dialog.ShowModal());
 }
 
-MenuTheme g_mainMenuTheme;
-wil::unique_hbrush g_mainMenuBackgroundBrush;
-std::vector<std::unique_ptr<MainMenuItemData>> g_mainMenuItemData;
 HMENU g_mainMenuHandle       = nullptr;
 HMENU g_viewMenu             = nullptr;
 HMENU g_editMenu             = nullptr;
@@ -409,10 +1125,6 @@ HMENU g_viewThemeMenu        = nullptr;
 HMENU g_viewPluginsMenu      = nullptr;
 HMENU g_viewPaneMenu         = nullptr;
 HMENU g_openFileExplorerMenu = nullptr;
-wil::unique_hfont g_mainMenuFont;
-wil::unique_hfont g_mainMenuIconFont;
-UINT g_mainMenuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
-bool g_mainMenuIconFontValid = false;
 
 bool g_menuBarVisible          = true;
 bool g_menuBarTemporarilyShown = false;
@@ -434,16 +1146,49 @@ constexpr UINT kFunctionBarPressedKeyClearDelayMs     = 200u;
 std::optional<uint32_t> g_functionBarPressedKey;
 std::optional<uint32_t> g_functionBarPressedKeyClearPending;
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 #include "SelfTestCommon.h"
 
 constexpr UINT_PTR kFileOpsSelfTestTimerId     = 1002u;
 constexpr UINT kFileOpsSelfTestTimerIntervalMs = 50u;
+constexpr UINT kCommandsSelfTestStartMessage   = WM_APP + 0x6A;
+constexpr wchar_t kSelfTestRunMutexName[]      = L"Local\\RedSalamander_SelfTestRun";
 int g_selfTestExitCode                         = 0;
 SelfTest::SelfTestOptions g_selfTestOptions{};
 SelfTest::SelfTestRunResult g_selfTestRunResult{};
 std::optional<std::chrono::time_point<std::chrono::steady_clock>> g_selfTestRunStart{};
 bool g_selfTestRunFinalized = false;
+wil::unique_handle g_selfTestRunMutex;
+std::vector<std::wstring> g_fileOpsSelfTestRunFilters;
+std::vector<std::wstring> g_fileOpsSelfTestExpectedCases;
+size_t g_fileOpsSelfTestRunIndex = 0;
+SelfTest::SelfTestSuiteResult g_fileOpsSelfTestAggregateResult{};
+bool g_fileOpsSelfTestStartPending = false;
+
+[[nodiscard]] bool TryAcquireSelfTestRunMutex() noexcept
+{
+    if (g_selfTestRunMutex)
+    {
+        return true;
+    }
+
+    SetLastError(ERROR_SUCCESS);
+    wil::unique_handle mutex(::CreateMutexW(nullptr, FALSE, kSelfTestRunMutexName));
+    if (! mutex)
+    {
+        Debug::ErrorWithLastError(L"CreateMutexW failed for the self-test run guard.");
+        return false;
+    }
+
+    if (GetLastError() == ERROR_ALREADY_EXISTS)
+    {
+        Debug::Error(L"Another RedSalamander self-test run is already active. Refusing to start a parallel self-test instance.");
+        return false;
+    }
+
+    g_selfTestRunMutex = std::move(mutex);
+    return true;
+}
 
 [[nodiscard]] std::wstring GetSelfTestUtcIso8601() noexcept
 {
@@ -503,13 +1248,139 @@ void FinalizeSelfTestRun() noexcept
 
     const std::filesystem::path runJsonPath = SelfTest::SelfTestRoot() / L"last_run" / L"results.json";
     SelfTest::WriteRunJson(g_selfTestRunResult, runJsonPath);
-    SelfTest::TryArchiveLastRunToRepo(GetSelfTestArchiveArea(), g_selfTestExitCode, g_selfTestRunResult.durationMs);
+    SelfTest::TryArchiveLastRunToRepo(GetSelfTestArchiveArea(), g_selfTestExitCode, g_selfTestRunResult.durationMs, &g_selfTestRunResult);
+    g_selfTestRunMutex.reset();
     g_selfTestRunFinalized = true;
 }
 
 void TraceSelfTestExitCode(std::wstring_view source, int exitCode) noexcept
 {
     SelfTest::AppendSelfTestTrace(std::format(L"{}: exit_code={}", source, exitCode));
+}
+
+void MergeFileOpsCase(SelfTest::SelfTestCaseResult& target, const SelfTest::SelfTestCaseResult& source) noexcept
+{
+    target.durationMs += source.durationMs;
+
+    if (target.status == SelfTest::SelfTestCaseResult::Status::failed || source.status == SelfTest::SelfTestCaseResult::Status::failed)
+    {
+        target.status = SelfTest::SelfTestCaseResult::Status::failed;
+        if (source.status == SelfTest::SelfTestCaseResult::Status::failed && ! source.reason.empty())
+        {
+            target.reason = source.reason;
+        }
+        else if (target.reason.empty())
+        {
+            target.reason = source.reason;
+        }
+        return;
+    }
+
+    if (target.status == SelfTest::SelfTestCaseResult::Status::passed || source.status == SelfTest::SelfTestCaseResult::Status::passed)
+    {
+        target.status = SelfTest::SelfTestCaseResult::Status::passed;
+        target.reason.clear();
+        return;
+    }
+
+    target.status = SelfTest::SelfTestCaseResult::Status::skipped;
+    if (source.status == SelfTest::SelfTestCaseResult::Status::skipped && ! source.reason.empty())
+    {
+        target.reason = source.reason;
+    }
+}
+
+void MergeFileOpsSuite(SelfTest::SelfTestSuiteResult& aggregate, const SelfTest::SelfTestSuiteResult& current) noexcept
+{
+    aggregate.suite = SelfTest::SelfTestSuite::FileOperations;
+    aggregate.durationMs += current.durationMs;
+    if (aggregate.failureMessage.empty() && ! current.failureMessage.empty())
+    {
+        aggregate.failureMessage = current.failureMessage;
+    }
+
+    for (const auto& item : current.cases)
+    {
+        const auto it = std::find_if(
+            aggregate.cases.begin(), aggregate.cases.end(), [&](const SelfTest::SelfTestCaseResult& existing) noexcept { return existing.name == item.name; });
+        if (it == aggregate.cases.end())
+        {
+            aggregate.cases.push_back(item);
+            continue;
+        }
+
+        MergeFileOpsCase(*it, item);
+    }
+}
+
+void FinalizeFileOpsAggregateResult(SelfTest::SelfTestSuiteResult& aggregate, const std::vector<std::wstring>& expectedCases, bool stoppedEarly) noexcept
+{
+    std::vector<SelfTest::SelfTestCaseResult> orderedCases;
+    orderedCases.reserve(expectedCases.size());
+
+    for (const std::wstring& expectedName : expectedCases)
+    {
+        const auto it = std::find_if(
+            aggregate.cases.begin(), aggregate.cases.end(), [&](const SelfTest::SelfTestCaseResult& item) noexcept { return item.name == expectedName; });
+        if (it != aggregate.cases.end())
+        {
+            orderedCases.push_back(*it);
+            continue;
+        }
+
+        SelfTest::SelfTestCaseResult skipped{};
+        skipped.name       = expectedName;
+        skipped.status     = SelfTest::SelfTestCaseResult::Status::skipped;
+        skipped.durationMs = 0;
+        skipped.reason     = stoppedEarly ? L"not executed (suite stopped early)" : L"not executed";
+        orderedCases.push_back(std::move(skipped));
+    }
+
+    aggregate.cases   = std::move(orderedCases);
+    aggregate.passed  = 0;
+    aggregate.failed  = 0;
+    aggregate.skipped = 0;
+    aggregate.failureMessage.clear();
+
+    for (const auto& item : aggregate.cases)
+    {
+        switch (item.status)
+        {
+            case SelfTest::SelfTestCaseResult::Status::passed: ++aggregate.passed; break;
+            case SelfTest::SelfTestCaseResult::Status::failed:
+                ++aggregate.failed;
+                if (aggregate.failureMessage.empty() && ! item.reason.empty())
+                {
+                    aggregate.failureMessage = item.reason;
+                }
+                break;
+            case SelfTest::SelfTestCaseResult::Status::skipped: ++aggregate.skipped; break;
+        }
+    }
+}
+
+SelfTest::SelfTestOptions MakeFileOpsRunOptions(std::wstring_view runFilter)
+{
+    SelfTest::SelfTestOptions options = g_selfTestOptions;
+    options.caseFilter                = std::wstring(runFilter);
+    return options;
+}
+
+void StartNextFileOpsSelfTestRun(HWND hWnd) noexcept
+{
+    if (g_fileOpsSelfTestRunIndex >= g_fileOpsSelfTestRunFilters.size())
+    {
+        return;
+    }
+
+    const std::wstring& runFilter = g_fileOpsSelfTestRunFilters[g_fileOpsSelfTestRunIndex];
+    SelfTest::AppendSuiteTrace(
+        SelfTest::SelfTestSuite::FileOperations,
+        std::format(L"FileOpsSelfTest: family {}/{} -> {}", g_fileOpsSelfTestRunIndex + 1, g_fileOpsSelfTestRunFilters.size(), runFilter));
+    SelfTest::AppendSelfTestTrace(
+        std::format(L"FileOpsSelfTest: family {}/{} -> {}", g_fileOpsSelfTestRunIndex + 1, g_fileOpsSelfTestRunFilters.size(), runFilter));
+    FileOperationsSelfTest::Start(hWnd, MakeFileOpsRunOptions(runFilter));
+    ++g_fileOpsSelfTestRunIndex;
 }
 
 void ResetSelfTestRunState() noexcept
@@ -523,11 +1394,52 @@ void ResetSelfTestRunState() noexcept
     g_selfTestRunResult.failFast     = g_selfTestOptions.failFast;
     g_selfTestRunResult.timeoutScale = g_selfTestOptions.timeoutScale;
     g_selfTestRunResult.caseFilter   = g_selfTestOptions.caseFilter;
+    g_fileOpsSelfTestRunFilters.clear();
+    g_fileOpsSelfTestExpectedCases.clear();
+    g_fileOpsSelfTestRunIndex        = 0;
+    g_fileOpsSelfTestAggregateResult = {};
+    g_fileOpsSelfTestStartPending    = false;
 }
 
 void RecordSelfTestSuite(SelfTest::SelfTestSuiteResult result) noexcept
 {
     g_selfTestRunResult.suites.push_back(std::move(result));
+}
+
+LRESULT RunCommandsSelfTestAndRequestShutdown(HWND hWnd) noexcept
+{
+    SplashScreen::IfExistSetText(L"Launching commands-selftest...");
+    SelfTest::SelfTestSuiteResult commandsResult;
+    Debug::Info(L"CommandsSelfTest: running");
+    SelfTest::InitSelfTestRun(g_selfTestOptions);
+    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: begin");
+    SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: begin");
+    SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: calling CommandsSelfTest::Run");
+    g_selfTestExitCode |= CommandsSelfTest::Run(hWnd, g_selfTestOptions, &commandsResult) ? 0 : 1;
+    RecordSelfTestSuite(commandsResult);
+    if (g_selfTestExitCode != 0)
+    {
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: FAIL");
+        SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: FAIL");
+        if (! commandsResult.failureMessage.empty())
+        {
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, commandsResult.failureMessage);
+            SelfTest::AppendSelfTestTrace(commandsResult.failureMessage);
+        }
+    }
+    else
+    {
+        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: PASS");
+        SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: PASS");
+    }
+    TraceSelfTestExitCode(L"CommandsSelfTest: end", g_selfTestExitCode);
+    SplashScreen::CloseIfExist();
+    if (PostMessageW(hWnd, WM_CLOSE, 0, 0) == 0)
+    {
+        FinalizeSelfTestRun();
+        PostQuitMessage(g_selfTestExitCode);
+    }
+    return 0;
 }
 #endif
 
@@ -543,6 +1455,26 @@ HMENU g_rightGoToMenu    = nullptr;
 
 constexpr UINT kHistoryMenuMaxItems = 50u;
 
+static void ResetMenuHandleCache() noexcept
+{
+    g_mainMenuHandle       = nullptr;
+    g_viewMenu             = nullptr;
+    g_editMenu             = nullptr;
+    g_editAdvancedMenu     = nullptr;
+    g_viewThemeMenu        = nullptr;
+    g_viewPluginsMenu      = nullptr;
+    g_viewPaneMenu         = nullptr;
+    g_openFileExplorerMenu = nullptr;
+    g_leftPaneMenu         = nullptr;
+    g_leftSortMenu         = nullptr;
+    g_leftDisplayMenu      = nullptr;
+    g_leftGoToMenu         = nullptr;
+    g_rightPaneMenu        = nullptr;
+    g_rightSortMenu        = nullptr;
+    g_rightDisplayMenu     = nullptr;
+    g_rightGoToMenu        = nullptr;
+}
+
 struct NavigatePathMenuTarget
 {
     FolderWindow::Pane pane = FolderWindow::Pane::Left;
@@ -550,58 +1482,6 @@ struct NavigatePathMenuTarget
 };
 
 std::unordered_map<UINT, NavigatePathMenuTarget> g_navigatePathMenuTargets;
-
-[[nodiscard]] bool IsHistoryGoToMenuId(UINT itemId) noexcept
-{
-    return (itemId >= IDM_LEFT_HISTORY_BASE && itemId < IDM_LEFT_HISTORY_BASE + kHistoryMenuMaxItems) ||
-           (itemId >= IDM_RIGHT_HISTORY_BASE && itemId < IDM_RIGHT_HISTORY_BASE + kHistoryMenuMaxItems);
-}
-
-[[nodiscard]] bool GoToHistoryMenuItemHasActiveFilter(UINT itemId) noexcept
-{
-    if (! IsHistoryGoToMenuId(itemId))
-    {
-        return false;
-    }
-
-    const auto itTarget = g_navigatePathMenuTargets.find(itemId);
-    if (itTarget == g_navigatePathMenuTargets.end())
-    {
-        return false;
-    }
-
-    const std::filesystem::path& displayPath = itTarget->second.path;
-    if (displayPath.empty() || ! g_settings.folders.has_value())
-    {
-        return false;
-    }
-
-    const auto& filters = g_settings.folders->historyFilters;
-    if (filters.empty())
-    {
-        return false;
-    }
-
-    const std::wstring_view displayText = displayPath.native();
-    const auto itFilter                 = std::find_if(filters.begin(),
-                                       filters.end(),
-                                       [&](const Common::Settings::FolderHistoryFilterState& state) noexcept
-    {
-        if (state.path.empty() || state.text.empty() || ! state.enabled)
-        {
-            return false;
-        }
-
-        return OrdinalString::EqualsNoCasePath(state.path, displayText);
-    });
-    if (itFilter == filters.end())
-    {
-        return false;
-    }
-
-    const MaskSyntax::WildcardMask mask = MaskSyntax::ParseWildcardMask(itFilter->text);
-    return ! mask.includePatterns.empty() || ! mask.excludePatterns.empty();
-}
 
 constexpr UINT kCustomThemeMenuIdFirst = 32800u;
 constexpr UINT kCustomThemeMenuIdLast  = 32999u;
@@ -627,8 +1507,6 @@ std::filesystem::path GetThemesDirectory()
     }
     return std::filesystem::path(modulePath.get()).parent_path() / L"Themes";
 }
-
-void ApplyMainMenuTheme(HWND hWnd, const MenuTheme& theme);
 
 void CancelFunctionBarPressedKeyClearTimer(HWND hwnd) noexcept
 {
@@ -660,7 +1538,7 @@ void ScheduleFunctionBarPressedKeyClear(HWND hwnd, uint32_t vk) noexcept
 
 LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
 {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     if (timerId == kFileOpsSelfTestTimerId)
     {
         static std::atomic<bool> tickInProgress{false};
@@ -670,25 +1548,46 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
         }
         const auto clearTickInProgress = wil::scope_exit([&] { tickInProgress.store(false, std::memory_order_release); });
 
+        if (g_fileOpsSelfTestStartPending && ! FileOperationsSelfTest::IsRunning())
+        {
+            g_fileOpsSelfTestStartPending = false;
+            StartNextFileOpsSelfTestRun(hWnd);
+            return 0;
+        }
+
         const bool done = FileOperationsSelfTest::Tick(hWnd);
         if (done)
         {
+            const bool currentRunFailed                          = FileOperationsSelfTest::DidFail();
+            const SelfTest::SelfTestSuiteResult currentRunResult = FileOperationsSelfTest::GetSuiteResult();
+            MergeFileOpsSuite(g_fileOpsSelfTestAggregateResult, currentRunResult);
+            g_selfTestExitCode |= currentRunFailed ? 1 : 0;
+
+            const bool hasMoreRuns = g_fileOpsSelfTestRunIndex < g_fileOpsSelfTestRunFilters.size();
+            const bool stopEarly   = currentRunFailed && g_selfTestOptions.failFast;
+            if (hasMoreRuns && ! stopEarly)
+            {
+                g_fileOpsSelfTestStartPending = true;
+                return 0;
+            }
+
             KillTimer(hWnd, kFileOpsSelfTestTimerId);
-            const bool fileOpsFailed = FileOperationsSelfTest::DidFail();
+            FinalizeFileOpsAggregateResult(g_fileOpsSelfTestAggregateResult, g_fileOpsSelfTestExpectedCases, stopEarly);
+
+            const bool fileOpsFailed = g_fileOpsSelfTestAggregateResult.failed != 0;
             g_selfTestExitCode |= fileOpsFailed ? 1 : 0;
-            const SelfTest::SelfTestSuiteResult fileOpsResult = FileOperationsSelfTest::GetSuiteResult();
-            RecordSelfTestSuite(fileOpsResult);
+            RecordSelfTestSuite(g_fileOpsSelfTestAggregateResult);
             if (SelfTest::GetSelfTestOptions().writeJsonSummary)
             {
                 const std::filesystem::path jsonPath = SelfTest::GetSuiteArtifactPath(SelfTest::SelfTestSuite::FileOperations, L"results.json");
-                SelfTest::WriteSuiteJson(fileOpsResult, jsonPath);
+                SelfTest::WriteSuiteJson(g_fileOpsSelfTestAggregateResult, jsonPath);
             }
 
             if (fileOpsFailed)
             {
                 SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, L"FileOpsSelfTest: FAIL");
                 SelfTest::AppendSelfTestTrace(L"FileOpsSelfTest: FAIL");
-                const std::wstring_view message = FileOperationsSelfTest::FailureMessage();
+                const std::wstring_view message = g_fileOpsSelfTestAggregateResult.failureMessage;
                 if (! message.empty())
                 {
                     SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, message);
@@ -1017,6 +1916,14 @@ void ApplyThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstring,
     applyD2D(L"fileOps.scrollbarTrack", theme.fileOperations.scrollbarTrack);
     applyD2D(L"fileOps.scrollbarThumb", theme.fileOperations.scrollbarThumb);
 
+    applyD2D(L"viewer.diff.addedBackground", theme.viewerDiff.addedBackground);
+    applyD2D(L"viewer.diff.removedBackground", theme.viewerDiff.removedBackground);
+    applyD2D(L"viewer.diff.contextBackground", theme.viewerDiff.contextBackground);
+    applyD2D(L"viewer.diff.headerBackground", theme.viewerDiff.headerBackground);
+    applyD2D(L"viewer.diff.bannerBackground", theme.viewerDiff.bannerBackground);
+    applyD2D(L"viewer.diff.placeholderBackground", theme.viewerDiff.placeholderBackground);
+    applyD2D(L"viewer.diff.divider", theme.viewerDiff.divider);
+
     if (! FindColorOverride(colors, L"folderView.itemBackgroundSelectedInactive"))
     {
         if (const auto argb = FindColorOverride(colors, L"folderView.itemBackgroundSelected"))
@@ -1082,6 +1989,8 @@ AppTheme ResolveConfiguredTheme() noexcept
         ApplyThemeOverrides(theme, *overrides);
     }
 
+    SettingsHotReload::ApplyUiPreferencesToTheme(g_settings, theme);
+
     return theme;
 }
 
@@ -1093,6 +2002,20 @@ std::optional<std::filesystem::path> GetDefaultFolder() noexcept
         return std::filesystem::path(folderPath.get());
     }
     return std::nullopt;
+}
+
+Localization::LanguagePreference GetLanguagePreferenceFromSettings(const Common::Settings::Settings& settings)
+{
+    Localization::LanguagePreference preference;
+    if (! settings.ui || settings.ui->language.empty() || settings.ui->language == L"system")
+    {
+        preference.kind = Localization::LanguagePreferenceKind::System;
+        return preference;
+    }
+
+    preference.kind    = Localization::LanguagePreferenceKind::Culture;
+    preference.culture = settings.ui->language;
+    return preference;
 }
 
 void CaptureRuntimeSettings(Common::Settings::Settings& settings, HWND hWnd) noexcept
@@ -1286,28 +2209,6 @@ void SaveAppSettings(HWND hWnd) noexcept
 
     const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kAppId);
     DBGOUT_ERROR(L"SaveSettings failed (hr=0x{:08X}) path={}\n", static_cast<unsigned long>(saveHr), settingsPath.wstring());
-}
-
-void EnsureMainMenuFont(HWND hWnd) noexcept
-{
-    const UINT dpi = hWnd ? GetDpiForWindow(hWnd) : USER_DEFAULT_SCREEN_DPI;
-    g_mainMenuFont = CreateMenuFontForDpi(dpi);
-
-    if (dpi != g_mainMenuIconFontDpi || ! g_mainMenuIconFont)
-    {
-        g_mainMenuIconFont      = FluentIcons::CreateFontForDpi(dpi, FluentIcons::kDefaultSizeDip);
-        g_mainMenuIconFontDpi   = dpi;
-        g_mainMenuIconFontValid = false;
-
-        if (g_mainMenuIconFont)
-        {
-            auto hdc = wil::GetDC(hWnd);
-            if (hdc)
-            {
-                g_mainMenuIconFontValid = FluentIcons::FontHasGlyph(hdc.get(), g_mainMenuIconFont.get(), FluentIcons::kChevronRightSmall);
-            }
-        }
-    }
 }
 
 void UpdateThemeMenuChecks() noexcept
@@ -2118,17 +3019,66 @@ void UpdatePaneMenuChecks() noexcept
 
 void ShowSortMenuPopup(HWND hWnd, FolderWindow::Pane pane, POINT screenPoint) noexcept
 {
+    const auto loadLabel = [](UINT stringId, std::wstring_view fallback) noexcept -> std::wstring
+    {
+        std::wstring text = LoadStringResource(nullptr, stringId);
+        if (text.empty())
+        {
+            text.assign(fallback);
+        }
+        return text;
+    };
+
     EnsureMenuHandles(hWnd);
     UpdatePaneMenuChecks();
 
-    HMENU menu = pane == FolderWindow::Pane::Left ? g_leftSortMenu : g_rightSortMenu;
-    if (! menu)
+    const bool isLeft = pane == FolderWindow::Pane::Left;
+    const UINT idName = isLeft ? IDM_LEFT_SORT_NAME : IDM_RIGHT_SORT_NAME;
+    const UINT idExt  = isLeft ? IDM_LEFT_SORT_EXTENSION : IDM_RIGHT_SORT_EXTENSION;
+    const UINT idTime = isLeft ? IDM_LEFT_SORT_TIME : IDM_RIGHT_SORT_TIME;
+    const UINT idSize = isLeft ? IDM_LEFT_SORT_SIZE : IDM_RIGHT_SORT_SIZE;
+    const UINT idAttr = isLeft ? IDM_LEFT_SORT_ATTRIBUTES : IDM_RIGHT_SORT_ATTRIBUTES;
+    const UINT idNone = isLeft ? IDM_LEFT_SORT_NONE : IDM_RIGHT_SORT_NONE;
+
+    UINT checkedId = idNone;
+    switch (g_folderWindow.GetSortBy(pane))
     {
-        return;
+        case FolderView::SortBy::Name: checkedId = idName; break;
+        case FolderView::SortBy::Extension: checkedId = idExt; break;
+        case FolderView::SortBy::Time: checkedId = idTime; break;
+        case FolderView::SortBy::Size: checkedId = idSize; break;
+        case FolderView::SortBy::Attributes: checkedId = idAttr; break;
+        case FolderView::SortBy::None: checkedId = idNone; break;
     }
 
-    ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
-    TrackPopupMenu(menu, TPM_RIGHTALIGN | TPM_BOTTOMALIGN | TPM_RIGHTBUTTON, screenPoint.x, screenPoint.y, static_cast<int>(0u), hWnd, nullptr);
+    auto makeRadioItem = [&](UINT commandId, UINT stringId, std::wstring_view fallback) noexcept
+    {
+        RedSalamander::DxUi::MenuFlyoutItem item{};
+        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+        item.text      = loadLabel(stringId, fallback);
+        item.commandId = static_cast<int>(commandId);
+        item.checked   = commandId == checkedId;
+        return item;
+    };
+
+    const std::array<RedSalamander::DxUi::MenuFlyoutItem, 6> items{
+        makeRadioItem(idNone, IDS_PREFS_PANES_SORT_NONE, L"None"),
+        makeRadioItem(idName, IDS_PREFS_PANES_SORT_NAME, L"Name"),
+        makeRadioItem(idExt, IDS_PREFS_PANES_SORT_EXTENSION, L"Extension"),
+        makeRadioItem(idTime, IDS_PREFS_PANES_SORT_TIME, L"Time"),
+        makeRadioItem(idSize, IDS_PREFS_PANES_SORT_SIZE, L"Size"),
+        makeRadioItem(idAttr, IDS_PREFS_PANES_SORT_ATTRIBUTES, L"Attributes"),
+    };
+
+    RedSalamander::DxUi::ContextMenuSessionCallbacks callbacks{};
+    callbacks.rootHorizontalAlignment = RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End;
+    callbacks.rootVerticalPlacement   = RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Above;
+
+    if (const auto result = RedSalamander::DxUi::ContextMenu::Show(hWnd, screenPoint, items, MakeAppThemeDxPalette(ResolveConfiguredTheme()), callbacks);
+        result.has_value())
+    {
+        PostMessageW(hWnd, WM_COMMAND, MAKEWPARAM(static_cast<WORD>(result.value()), 0), 0);
+    }
 }
 
 void AppendEmptyMenuItem(HMENU menu) noexcept
@@ -2347,14 +3297,12 @@ void OnInitMenuPopup(HWND hWnd, HMENU menu)
     if (menu == g_viewPluginsMenu)
     {
         RebuildPluginsMenuDynamicItems(hWnd);
-        ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
         return;
     }
 
     if (menu == g_openFileExplorerMenu)
     {
         UpdateOpenFileExplorerMenuStockFolders(menu);
-        ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
         return;
     }
 
@@ -2369,8 +3317,6 @@ void OnInitMenuPopup(HWND hWnd, HMENU menu)
     RebuildGoToMenuDynamicItems(FolderWindow::Pane::Left, g_leftGoToMenu, IDM_LEFT_HOT_PATHS, IDM_LEFT_HOT_PATH_BASE, IDM_LEFT_HISTORY_BASE);
     RebuildGoToMenuDynamicItems(FolderWindow::Pane::Right, g_rightGoToMenu, IDM_RIGHT_HOT_PATHS, IDM_RIGHT_HOT_PATH_BASE, IDM_RIGHT_HISTORY_BASE);
     UpdatePaneMenuChecks();
-
-    ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
 }
 
 void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shortcut)
@@ -2385,6 +3331,55 @@ void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shor
 
     text.assign(raw.substr(0, tabPos));
     shortcut.assign(raw.substr(tabPos + 1));
+}
+
+[[nodiscard]] std::wstring StripMenuMnemonicMarkers(std::wstring_view text)
+{
+    std::wstring result;
+    result.reserve(text.size());
+
+    for (size_t index = 0; index < text.size(); ++index)
+    {
+        if (text[index] != L'&')
+        {
+            result.push_back(text[index]);
+            continue;
+        }
+
+        if ((index + 1u) < text.size() && text[index + 1u] == L'&')
+        {
+            result.push_back(L'&');
+            ++index;
+        }
+    }
+
+    return result;
+}
+
+[[nodiscard]] wchar_t FindMenuMnemonic(std::wstring_view text) noexcept
+{
+    for (size_t index = 0; index < text.size(); ++index)
+    {
+        if (text[index] != L'&')
+        {
+            continue;
+        }
+
+        if ((index + 1u) >= text.size())
+        {
+            break;
+        }
+
+        if (text[index + 1u] == L'&')
+        {
+            ++index;
+            continue;
+        }
+
+        return static_cast<wchar_t>(std::towupper(static_cast<wint_t>(text[index + 1u])));
+    }
+
+    return L'\0';
 }
 
 [[nodiscard]] std::wstring VkToMenuShortcutText(uint32_t vk) noexcept
@@ -2579,738 +3574,851 @@ void SplitMenuText(std::wstring_view raw, std::wstring& text, std::wstring& shor
     return std::nullopt;
 }
 
-void UpdateThemedMenuShortcutsRecursive(HMENU menu) noexcept
+[[nodiscard]] bool TryGetMenuItemPresentationText(HMENU menu, UINT position, std::wstring& outText, std::wstring& outShortcut) noexcept
 {
+    outText.clear();
+    outShortcut.clear();
+
+    std::array<wchar_t, 512> buffer{};
+    const int length = GetMenuStringW(menu, position, buffer.data(), static_cast<int>(buffer.size()), MF_BYPOSITION);
+    if (length <= 0)
+    {
+        return false;
+    }
+
+    SplitMenuText(std::wstring_view(buffer.data(), static_cast<size_t>(length)), outText, outShortcut);
+    return true;
+}
+
+[[nodiscard]] std::optional<std::wstring> TryGetDynamicMenuShortcutText(UINT menuCommandId) noexcept
+{
+    if (const std::optional<std::wstring_view> commandIdOpt = TryGetCommandIdForMenuShortcut(menuCommandId); commandIdOpt.has_value())
+    {
+        return TryGetShortcutTextForCommandId(commandIdOpt.value());
+    }
+
+    if ((menuCommandId >= IDM_LEFT_HOT_PATH_BASE && menuCommandId < (IDM_LEFT_HOT_PATH_BASE + 10u)) ||
+        (menuCommandId >= IDM_RIGHT_HOT_PATH_BASE && menuCommandId < (IDM_RIGHT_HOT_PATH_BASE + 10u)))
+    {
+        const UINT base    = (menuCommandId >= IDM_RIGHT_HOT_PATH_BASE) ? IDM_RIGHT_HOT_PATH_BASE : IDM_LEFT_HOT_PATH_BASE;
+        const UINT slotIdx = menuCommandId - base;
+
+        const wchar_t digitChar = (slotIdx < 9u) ? static_cast<wchar_t>(L'1' + slotIdx) : L'0';
+        std::wstring commandId  = L"cmd/pane/hotPath/";
+        commandId.push_back(digitChar);
+        return TryGetShortcutTextForCommandId(commandId);
+    }
+
+    return std::nullopt;
+}
+
+[[nodiscard]] std::vector<RedSalamander::DxUi::MenuFlyoutItem> ConvertHMenuToDxFlyoutItems(HMENU menu) noexcept
+{
+    using RedSalamander::DxUi::MenuFlyoutItem;
+    using RedSalamander::DxUi::MenuItemKind;
+
+    std::vector<MenuFlyoutItem> items;
     if (! menu)
     {
-        return;
+        return items;
     }
 
     const int itemCount = GetMenuItemCount(menu);
     if (itemCount <= 0)
     {
-        return;
+        return items;
     }
 
-    for (UINT pos = 0; pos < static_cast<UINT>(itemCount); ++pos)
+    items.reserve(static_cast<size_t>(itemCount));
+    for (UINT position = 0; position < static_cast<UINT>(itemCount); ++position)
     {
         MENUITEMINFOW itemInfo{};
         itemInfo.cbSize = sizeof(itemInfo);
-        itemInfo.fMask  = MIIM_FTYPE | MIIM_ID | MIIM_DATA | MIIM_SUBMENU;
-        if (! GetMenuItemInfoW(menu, pos, TRUE, &itemInfo))
+        itemInfo.fMask  = MIIM_FTYPE | MIIM_ID | MIIM_STATE | MIIM_SUBMENU;
+        if (! GetMenuItemInfoW(menu, position, TRUE, &itemInfo))
         {
             continue;
         }
 
-        if ((itemInfo.fType & MFT_SEPARATOR) == 0)
+        MenuFlyoutItem item{};
+        if ((itemInfo.fType & MFT_SEPARATOR) != 0)
         {
-            auto* data = reinterpret_cast<MainMenuItemData*>(itemInfo.dwItemData);
-            if (data)
-            {
-                data->shortcut.clear();
+            item.kind = MenuItemKind::Separator;
+            items.push_back(std::move(item));
+            continue;
+        }
 
-                const std::optional<std::wstring_view> commandIdOpt = TryGetCommandIdForMenuShortcut(itemInfo.wID);
-                if (commandIdOpt.has_value())
-                {
-                    if (const std::optional<std::wstring> shortcutOpt = TryGetShortcutTextForCommandId(commandIdOpt.value()))
-                    {
-                        data->shortcut = shortcutOpt.value();
-                    }
-                }
-                else if ((itemInfo.wID >= IDM_LEFT_HOT_PATH_BASE && itemInfo.wID < (IDM_LEFT_HOT_PATH_BASE + 10u)) ||
-                         (itemInfo.wID >= IDM_RIGHT_HOT_PATH_BASE && itemInfo.wID < (IDM_RIGHT_HOT_PATH_BASE + 10u)))
-                {
-                    const UINT base    = (itemInfo.wID >= IDM_RIGHT_HOT_PATH_BASE) ? IDM_RIGHT_HOT_PATH_BASE : IDM_LEFT_HOT_PATH_BASE;
-                    const UINT slotIdx = itemInfo.wID - base;
+        std::wstring text;
+        std::wstring shortcut;
+        if (TryGetMenuItemPresentationText(menu, position, text, shortcut))
+        {
+            item.text            = StripMenuMnemonicMarkers(text);
+            item.acceleratorText = shortcut;
+        }
 
-                    const wchar_t digitChar = (slotIdx < 9u) ? static_cast<wchar_t>(L'1' + slotIdx) : L'0';
-                    std::wstring commandId  = L"cmd/pane/hotPath/";
-                    commandId.push_back(digitChar);
-                    if (const std::optional<std::wstring> shortcutOpt = TryGetShortcutTextForCommandId(commandId))
-                    {
-                        data->shortcut = shortcutOpt.value();
-                    }
-                }
-            }
+        item.commandId = static_cast<int>(itemInfo.wID);
+        item.enabled   = (itemInfo.fState & MFS_GRAYED) == 0;
+        item.checked   = (itemInfo.fState & MFS_CHECKED) != 0;
+
+        if ((itemInfo.fType & MFT_RADIOCHECK) != 0)
+        {
+            item.kind = MenuItemKind::Radio;
+        }
+        else if (item.checked)
+        {
+            item.kind = MenuItemKind::Toggle;
+        }
+
+        if (const std::optional<std::wstring> shortcutText = TryGetDynamicMenuShortcutText(itemInfo.wID); shortcutText.has_value())
+        {
+            item.acceleratorText = shortcutText.value();
+        }
+
+        if (const wchar_t iconGlyph = GetMainMenuCommandIconGlyph(itemInfo.wID); iconGlyph != 0)
+        {
+            item.iconGlyph.assign(1u, iconGlyph);
         }
 
         if (itemInfo.hSubMenu)
         {
-            UpdateThemedMenuShortcutsRecursive(itemInfo.hSubMenu);
+            item.children = ConvertHMenuToDxFlyoutItems(itemInfo.hSubMenu);
         }
+
+        items.push_back(std::move(item));
     }
+
+    return items;
 }
 
-void PrepareThemedMenuRecursive(HMENU menu, bool topLevel, std::vector<std::unique_ptr<MainMenuItemData>>& itemData)
+[[nodiscard]] std::vector<RedSalamander::DxUi::MenuBarItem> BuildDxMenuBarItems(HMENU menu) noexcept
 {
+    std::vector<RedSalamander::DxUi::MenuBarItem> items;
     if (! menu)
     {
-        return;
+        return items;
     }
-
-    MENUINFO menuInfo{};
-    menuInfo.cbSize  = sizeof(menuInfo);
-    menuInfo.fMask   = MIM_BACKGROUND;
-    menuInfo.hbrBack = g_mainMenuBackgroundBrush.get();
-    SetMenuInfo(menu, &menuInfo);
 
     const int itemCount = GetMenuItemCount(menu);
-    if (itemCount < 0)
+    if (itemCount <= 0)
     {
-        Debug::ErrorWithLastError(L"GetMenuItemCount failed");
-        return;
+        return items;
     }
 
-    for (UINT pos = 0; pos < static_cast<UINT>(itemCount); ++pos)
+    items.reserve(static_cast<size_t>(itemCount));
+    for (UINT position = 0; position < static_cast<UINT>(itemCount); ++position)
     {
         MENUITEMINFOW itemInfo{};
         itemInfo.cbSize = sizeof(itemInfo);
         itemInfo.fMask  = MIIM_FTYPE | MIIM_STATE | MIIM_SUBMENU;
-        if (! GetMenuItemInfoW(menu, pos, TRUE, &itemInfo))
+        if (! GetMenuItemInfoW(menu, position, TRUE, &itemInfo))
         {
             continue;
         }
 
-        auto data        = std::make_unique<MainMenuItemData>();
-        data->separator  = (itemInfo.fType & MFT_SEPARATOR) != 0;
-        data->topLevel   = topLevel;
-        data->hasSubMenu = itemInfo.hSubMenu != nullptr;
-
-        if (! data->separator)
+        if ((itemInfo.fType & MFT_SEPARATOR) != 0 || itemInfo.hSubMenu == nullptr)
         {
-            std::array<wchar_t, 512> buffer{};
-            const int length = GetMenuStringW(menu, static_cast<UINT>(pos), buffer.data(), static_cast<int>(buffer.size()), MF_BYPOSITION);
-            if (length > 0)
-            {
-                const std::wstring_view raw(buffer.data(), static_cast<size_t>(length));
-                SplitMenuText(raw, data->text, data->shortcut);
-            }
+            continue;
         }
 
-        itemData.push_back(std::move(data));
-
-        MENUITEMINFOW ownerDrawInfo{};
-        ownerDrawInfo.cbSize     = sizeof(ownerDrawInfo);
-        ownerDrawInfo.fMask      = MIIM_FTYPE | MIIM_DATA | MIIM_STATE;
-        ownerDrawInfo.fType      = itemInfo.fType | MFT_OWNERDRAW;
-        ownerDrawInfo.fState     = itemInfo.fState;
-        ownerDrawInfo.dwItemData = reinterpret_cast<ULONG_PTR>(itemData.back().get());
-        SetMenuItemInfoW(menu, pos, TRUE, &ownerDrawInfo);
-
-        if (itemInfo.hSubMenu)
+        std::wstring text;
+        std::wstring shortcut;
+        if (! TryGetMenuItemPresentationText(menu, position, text, shortcut) || text.empty())
         {
-            PrepareThemedMenuRecursive(itemInfo.hSubMenu, false, itemData);
+            continue;
         }
+
+        RedSalamander::DxUi::MenuBarItem item{};
+        item.text           = StripMenuMnemonicMarkers(text);
+        item.mnemonic       = FindMenuMnemonic(text);
+        item.enabled        = (itemInfo.fState & MFS_GRAYED) == 0;
+        item.rightJustified = (itemInfo.fType & MFT_RIGHTJUSTIFY) != 0;
+        item.sourceIndex    = static_cast<size_t>(position);
+        items.push_back(std::move(item));
     }
+
+    return items;
 }
 
-void ApplyMainMenuTheme(HWND hWnd, const MenuTheme& theme)
+class MainMenuBarHost final
 {
-    HMENU attached = hWnd ? GetMenu(hWnd) : nullptr;
-    HMENU menu     = attached ? attached : g_mainMenuHandle;
-    if (! menu)
+public:
+    MainMenuBarHost()                                  = default;
+    MainMenuBarHost(const MainMenuBarHost&)            = delete;
+    MainMenuBarHost& operator=(const MainMenuBarHost&) = delete;
+    MainMenuBarHost(MainMenuBarHost&&)                 = delete;
+    MainMenuBarHost& operator=(MainMenuBarHost&&)      = delete;
+
+    [[nodiscard]] bool EnsureCreated(HWND ownerWindow) noexcept
     {
-        return;
-    }
-
-    EnsureMainMenuFont(hWnd);
-
-    g_mainMenuTheme = theme;
-    g_mainMenuBackgroundBrush.reset(CreateSolidBrush(g_mainMenuTheme.background));
-
-    std::vector<std::unique_ptr<MainMenuItemData>> newData;
-    PrepareThemedMenuRecursive(menu, true, newData);
-    g_mainMenuItemData = std::move(newData);
-    UpdateThemedMenuShortcutsRecursive(menu);
-
-    if (attached)
-    {
-        DrawMenuBar(hWnd);
-    }
-}
-
-void OnMeasureMainMenuItem(HWND hWnd, MEASUREITEMSTRUCT* mis)
-{
-    if (! mis || mis->CtlType != ODT_MENU)
-    {
-        return;
-    }
-
-    const auto* data = reinterpret_cast<const MainMenuItemData*>(mis->itemData);
-    if (! data)
-    {
-        return;
-    }
-
-    const UINT dpi = GetDpiForWindow(hWnd);
-
-    if (data->separator)
-    {
-        mis->itemWidth  = 1;
-        mis->itemHeight = static_cast<UINT>(MulDiv(10, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-        return;
-    }
-
-    const UINT heightDip = data->topLevel ? 20u : 24u;
-    mis->itemHeight      = static_cast<UINT>(MulDiv(static_cast<int>(heightDip), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-
-    auto hdc = wil::GetDC(hWnd);
-    if (! hdc)
-    {
-        mis->itemWidth = 120;
-        return;
-    }
-
-    HFONT fontToUse = g_mainMenuFont ? g_mainMenuFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-
-    SIZE textSize{};
-    if (! data->text.empty())
-    {
-        GetTextExtentPoint32W(hdc.get(), data->text.c_str(), static_cast<int>(data->text.size()), &textSize);
-    }
-
-    SIZE shortcutSize{};
-    if (! data->shortcut.empty())
-    {
-        GetTextExtentPoint32W(hdc.get(), data->shortcut.c_str(), static_cast<int>(data->shortcut.size()), &shortcutSize);
-    }
-
-    const int dpiInt         = static_cast<int>(dpi);
-    const int paddingX       = MulDiv(5, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    const int shortcutGap    = MulDiv(20, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    const int checkAreaWidth = [&]() noexcept -> int
-    {
-        if (data->topLevel)
+        if (! ownerWindow || IsWindow(ownerWindow) == FALSE)
         {
-            return 0;
+            return false;
         }
 
-        const bool isSortItem = (mis->itemID >= static_cast<UINT>(IDM_LEFT_SORT_NAME) && mis->itemID <= static_cast<UINT>(IDM_LEFT_SORT_NONE)) ||
-                                (mis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && mis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE));
-        const bool isHistoryItem = IsHistoryGoToMenuId(mis->itemID);
-        if (isSortItem || isHistoryItem)
+        _ownerWindow = ownerWindow;
+        if (_hwnd && IsWindow(_hwnd.get()) != FALSE)
         {
-            return MulDiv(32, dpiInt, USER_DEFAULT_SCREEN_DPI);
+            return true;
         }
 
-        return MulDiv(20, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    }();
-
-    int width = paddingX + checkAreaWidth + textSize.cx + paddingX;
-    if (! data->shortcut.empty())
-    {
-        width += shortcutGap + shortcutSize.cx;
-    }
-
-    mis->itemWidth = static_cast<UINT>(std::max(width, 60));
-}
-
-// AlphaBlend replacement (software, premultiplied or straight alpha)
-[[nodiscard]] BOOL BlitAlphaBlend(HDC hdcDest,
-                                  int xoriginDest,
-                                  int yoriginDest,
-                                  int wDest,
-                                  int hDest,
-                                  HDC hdcSrc,
-                                  int xoriginSrc,
-                                  int yoriginSrc,
-                                  int wSrc,
-                                  int hSrc,
-                                  BLENDFUNCTION ftn) noexcept
-{
-    if (! hdcDest || ! hdcSrc || wDest <= 0 || hDest <= 0 || wSrc <= 0 || hSrc <= 0)
-    {
-        return TRUE;
-    }
-    if (ftn.BlendOp != AC_SRC_OVER)
-    {
-        return FALSE;
-    }
-
-    const bool useSrcAlpha     = (ftn.AlphaFormat & AC_SRC_ALPHA) != 0;
-    const uint32_t globalAlpha = ftn.SourceConstantAlpha;
-
-    BITMAPINFO bmi{};
-    bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-    bmi.bmiHeader.biWidth       = wDest;
-    bmi.bmiHeader.biHeight      = -hDest; // top-down
-    bmi.bmiHeader.biPlanes      = 1;
-    bmi.bmiHeader.biBitCount    = 32;
-    bmi.bmiHeader.biCompression = BI_RGB;
-
-    void* destBits = nullptr;
-    wil::unique_hbitmap destDib(CreateDIBSection(hdcDest, &bmi, DIB_RGB_COLORS, &destBits, nullptr, 0));
-    if (! destDib || ! destBits)
-    {
-        return FALSE;
-    }
-
-    wil::unique_hdc destMem(CreateCompatibleDC(hdcDest));
-    if (! destMem)
-    {
-        return FALSE;
-    }
-    auto oldDestBmp = wil::SelectObject(destMem.get(), destDib.get());
-    if (! BitBlt(destMem.get(), 0, 0, wDest, hDest, hdcDest, xoriginDest, yoriginDest, SRCCOPY))
-    {
-        return FALSE;
-    }
-
-    void* srcBits = nullptr;
-    BITMAPINFO srcBmi{};
-    srcBmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-    srcBmi.bmiHeader.biWidth       = wSrc;
-    srcBmi.bmiHeader.biHeight      = -hSrc;
-    srcBmi.bmiHeader.biPlanes      = 1;
-    srcBmi.bmiHeader.biBitCount    = 32;
-    srcBmi.bmiHeader.biCompression = BI_RGB;
-
-    wil::unique_hbitmap srcDib(CreateDIBSection(hdcSrc, &srcBmi, DIB_RGB_COLORS, &srcBits, nullptr, 0));
-    if (! srcDib || ! srcBits)
-    {
-        return FALSE;
-    }
-
-    wil::unique_hdc srcMem(CreateCompatibleDC(hdcSrc));
-    if (! srcMem)
-    {
-        return FALSE;
-    }
-    auto oldSrcBmp = wil::SelectObject(srcMem.get(), srcDib.get());
-    if (! BitBlt(srcMem.get(), 0, 0, wSrc, hSrc, hdcSrc, xoriginSrc, yoriginSrc, SRCCOPY))
-    {
-        return FALSE;
-    }
-
-    auto* dst = static_cast<uint32_t*>(destBits);
-    auto* src = static_cast<uint32_t*>(srcBits);
-
-    for (int y = 0; y < hDest; ++y)
-    {
-        const size_t rowOffset = static_cast<size_t>(y) * static_cast<size_t>(wDest);
-        for (int x = 0; x < wDest; ++x)
+        HINSTANCE instance = GetModuleHandleW(nullptr);
+        if (! EnsureWindowClass(instance))
         {
-            const uint32_t s    = src[rowOffset + static_cast<size_t>(x)];
-            const uint8_t srcA  = static_cast<uint8_t>(s >> 24);
-            uint32_t alpha      = useSrcAlpha ? srcA : 255u;
-            alpha               = (alpha * globalAlpha + 127u) / 255u;
-            const uint32_t invA = 255u - alpha;
+            return false;
+        }
 
-            if (alpha == 0)
+        HWND hwnd = CreateWindowExW(0, kWindowClassName, L"", WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 1, 1, ownerWindow, nullptr, instance, this);
+        if (! hwnd)
+        {
+            return false;
+        }
+
+        _hwnd.reset(hwnd);
+        if (! _host.Attach(hwnd))
+        {
+            _hwnd.reset();
+            return false;
+        }
+
+        _host.SetOnEscape([this]() noexcept
+        {
+            if (g_menuBarTemporarilyShown && ! g_menuBarVisible)
             {
-                continue;
+                DismissTemporaryBar();
             }
-            if (alpha == 255)
-            {
-                dst[rowOffset + static_cast<size_t>(x)] = s | 0xFF000000u;
-                continue;
-            }
+            static_cast<void>(g_folderWindow.TryRestoreActivePaneFolderViewFocus());
+            return true;
+        });
 
-            const uint8_t srcB = static_cast<uint8_t>(s);
-            const uint8_t srcG = static_cast<uint8_t>(s >> 8);
-            const uint8_t srcR = static_cast<uint8_t>(s >> 16);
+        auto menuBar = std::make_unique<RedSalamander::DxUi::MenuBar>();
+        _menuBar     = menuBar.get();
+        _host.SetRoot(std::move(menuBar));
+        _host.SetTheme(MakeAppThemeDxPalette(_theme));
+        SyncMenuModel();
+        return true;
+    }
 
-            const uint32_t d   = dst[rowOffset + static_cast<size_t>(x)];
-            const uint8_t dstB = static_cast<uint8_t>(d);
-            const uint8_t dstG = static_cast<uint8_t>(d >> 8);
-            const uint8_t dstR = static_cast<uint8_t>(d >> 16);
+    void Destroy() noexcept
+    {
+        _host.Detach();
+        _menuBar = nullptr;
+        _hwnd.reset();
+        _ownerWindow      = nullptr;
+        _focusRestoreHwnd = nullptr;
+    }
 
-            const uint8_t outB = static_cast<uint8_t>((static_cast<uint32_t>(srcB) * alpha + static_cast<uint32_t>(dstB) * invA + 127u) / 255u);
-            const uint8_t outG = static_cast<uint8_t>((static_cast<uint32_t>(srcG) * alpha + static_cast<uint32_t>(dstG) * invA + 127u) / 255u);
-            const uint8_t outR = static_cast<uint8_t>((static_cast<uint32_t>(srcR) * alpha + static_cast<uint32_t>(dstR) * invA + 127u) / 255u);
-
-            dst[rowOffset + static_cast<size_t>(x)] = (static_cast<uint32_t>(outR) << 16) | (static_cast<uint32_t>(outG) << 8) | outB | 0xFF000000u;
+    void SetTheme(const AppTheme& theme) noexcept
+    {
+        _theme = theme;
+        if (_hwnd && IsWindow(_hwnd.get()) != FALSE)
+        {
+            _host.SetTheme(MakeAppThemeDxPalette(_theme));
+            UpdateLayout();
         }
     }
 
-    return BitBlt(hdcDest, xoriginDest, yoriginDest, wDest, hDest, destMem.get(), 0, 0, SRCCOPY) != 0;
-}
-
-void OnDrawMainMenuItem(DRAWITEMSTRUCT* dis)
-{
-    if (! dis || dis->CtlType != ODT_MENU || ! dis->hDC)
+    void SyncMenuModel() noexcept
     {
-        return;
-    }
-
-    const auto* data = reinterpret_cast<const MainMenuItemData*>(dis->itemData);
-    if (! data)
-    {
-        return;
-    }
-
-    const bool selected = (dis->itemState & ODS_SELECTED) != 0;
-    const bool disabled = (dis->itemState & ODS_DISABLED) != 0;
-    const bool checked  = (dis->itemState & ODS_CHECKED) != 0;
-
-    COLORREF bgColor = selected ? g_mainMenuTheme.selectionBg : g_mainMenuTheme.background;
-
-    COLORREF textColor     = selected ? g_mainMenuTheme.selectionText : g_mainMenuTheme.text;
-    COLORREF shortcutColor = selected ? g_mainMenuTheme.shortcutTextSel : g_mainMenuTheme.shortcutText;
-
-    if (disabled)
-    {
-        textColor     = g_mainMenuTheme.disabledText;
-        shortcutColor = g_mainMenuTheme.disabledText;
-    }
-
-    if (selected && g_mainMenuTheme.rainbowMode && ! disabled && ! data->separator && ! data->text.empty())
-    {
-        bgColor = RainbowMenuSelectionColor(data->text, g_mainMenuTheme.darkBase);
-
-        const COLORREF contrastText = ChooseContrastingTextColor(bgColor);
-        textColor                   = contrastText;
-        shortcutColor               = contrastText;
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(bgColor));
-    RECT itemRect = dis->rcItem;
-    if (! data->topLevel)
-    {
-        const HWND menuHwnd = WindowFromDC(dis->hDC);
-        if (menuHwnd)
+        if (! _menuBar)
         {
-            RECT menuClient{};
-            if (GetClientRect(menuHwnd, &menuClient))
-            {
-                itemRect.right = menuClient.right;
-            }
-        }
-    }
-    wil::unique_any<HRGN, decltype(&::DeleteObject), ::DeleteObject> clipRgn(CreateRectRgnIndirect(&itemRect));
-    if (clipRgn)
-    {
-        SelectClipRgn(dis->hDC, clipRgn.get());
-    }
-    FillRect(dis->hDC, &itemRect, bgBrush.get());
-
-    const int dpi                   = GetDeviceCaps(dis->hDC, LOGPIXELSX);
-    const int paddingX              = MulDiv(5, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int subMenuArrowAreaWidth = MulDiv(18, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int checkAreaWidth        = [&]() noexcept -> int
-    {
-        if (data->topLevel)
-        {
-            return 0;
+            return;
         }
 
-        const bool isSortItem = (dis->itemID >= static_cast<UINT>(IDM_LEFT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_LEFT_SORT_NONE)) ||
-                                (dis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE));
-        const bool isHistoryItem = IsHistoryGoToMenuId(dis->itemID);
-        if (isSortItem || isHistoryItem)
-        {
-            return MulDiv(32, dpi, USER_DEFAULT_SCREEN_DPI);
-        }
-
-        return MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
-    }();
-
-    if (data->separator)
-    {
-        const int y = (dis->rcItem.top + dis->rcItem.bottom) / 2;
-        wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> pen(CreatePen(PS_SOLID, 1, g_mainMenuTheme.separator));
-        auto oldPen = wil::SelectObject(dis->hDC, pen.get());
-
-        MoveToEx(dis->hDC, dis->rcItem.left + paddingX, y, nullptr);
-        LineTo(dis->hDC, itemRect.right - paddingX, y);
-        return;
+        EnsureMenuHandles(_ownerWindow);
+        _menuBar->SetItems(BuildDxMenuBarItems(g_mainMenuHandle));
+        _menuBar->SetOnOpenItem([this](size_t index, POINT screenPoint, bool keyboardInvocation) { OpenPopup(index, screenPoint, keyboardInvocation); });
+        UpdateSelectedIndexSnapshot();
     }
 
-    if (checkAreaWidth > 0)
+    void UpdateLayout() noexcept
     {
-        RECT checkRect = dis->rcItem;
-        checkRect.left += paddingX;
-        checkRect.right = checkRect.left + checkAreaWidth;
-
-        const bool isLeftSort  = dis->itemID >= static_cast<UINT>(IDM_LEFT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_LEFT_SORT_NONE);
-        const bool isRightSort = dis->itemID >= static_cast<UINT>(IDM_RIGHT_SORT_NAME) && dis->itemID <= static_cast<UINT>(IDM_RIGHT_SORT_NONE);
-
-        const HBITMAP bitmap = [&]() noexcept -> HBITMAP
+        if (! _ownerWindow || ! _hwnd || IsWindow(_hwnd.get()) == FALSE)
         {
-            const auto it = g_mainMenuIconBitmaps.find(dis->itemID);
-            if (it == g_mainMenuIconBitmaps.end() || ! it->second)
-            {
-                return nullptr;
-            }
-            return it->second.get();
-        }();
+            return;
+        }
 
-        const bool isSortItem = isLeftSort || isRightSort;
-
-        if (! isSortItem && GoToHistoryMenuItemHasActiveFilter(dis->itemID) && g_mainMenuIconFontValid && g_mainMenuIconFont)
+        RECT client{};
+        if (! GetClientRect(_ownerWindow, &client))
         {
-            SetBkMode(dis->hDC, TRANSPARENT);
-            SetTextColor(dis->hDC, textColor);
+            return;
+        }
 
-            RECT filterRect    = checkRect;
-            RECT checkMarkRect = checkRect;
+        const bool visible = ShouldShow();
+        const int width    = client.right - client.left;
+        const int height   = visible ? GetVisibleHeightPx() : 0;
+        MoveWindow(_hwnd.get(), client.left, client.top, width, height, TRUE);
+        ShowWindow(_hwnd.get(), visible ? SW_SHOWNA : SW_HIDE);
+        SyncMenuModel();
+    }
 
-            const LONG width = std::max(0L, checkRect.right - checkRect.left);
-            const LONG half  = width / 2;
-            const LONG gap   = std::max(1L, static_cast<LONG>(MulDiv(1, dpi, USER_DEFAULT_SCREEN_DPI)));
-            const LONG split = checkRect.left + half;
+    [[nodiscard]] int GetVisibleHeightPx() const noexcept
+    {
+        const UINT dpi      = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : USER_DEFAULT_SCREEN_DPI;
+        const int heightDip = _theme.compactMode ? 26 : 32;
+        return MulDiv(heightDip, static_cast<int>(dpi == 0u ? USER_DEFAULT_SCREEN_DPI : dpi), USER_DEFAULT_SCREEN_DPI);
+    }
 
-            filterRect.right   = std::max(filterRect.left, split - gap);
-            checkMarkRect.left = std::min(checkMarkRect.right, split + gap);
+    [[nodiscard]] bool FocusFirstItem() noexcept
+    {
+        if (! _menuBar || ! _hwnd || IsWindow(_hwnd.get()) == FALSE)
+        {
+            return false;
+        }
 
+        const auto items = _menuBar->GetItems();
+        if (items.empty())
+        {
+            return false;
+        }
+
+        CaptureFocusRestoreTarget();
+        _menuBar->SetSelectedIndex(0u);
+        UpdateSelectedIndexSnapshot();
+        SetFocus(_hwnd.get());
+        _host.SetFocusControl(_menuBar);
+        return true;
+    }
+
+    [[nodiscard]] bool ActivateMnemonic(wchar_t mnemonic) noexcept
+    {
+        if (! _menuBar || ! _hwnd || IsWindow(_hwnd.get()) == FALSE)
+        {
+            return false;
+        }
+
+        CaptureFocusRestoreTarget();
+        SetFocus(_hwnd.get());
+        const bool activated = _menuBar->ActivateMnemonic(_host, mnemonic);
+        UpdateSelectedIndexSnapshot();
+        return activated;
+    }
+
+    [[nodiscard]] HWND GetHwnd() const noexcept
+    {
+        return _hwnd.get();
+    }
+
+    [[nodiscard]] std::optional<size_t> GetSelectedIndex() const noexcept
+    {
+        const int selectedIndex = _selectedIndexSnapshot.load(std::memory_order_acquire);
+        return selectedIndex >= 0 ? std::optional<size_t>{static_cast<size_t>(selectedIndex)} : std::nullopt;
+    }
+
+    [[nodiscard]] size_t GetVisualHighlightCount() const noexcept
+    {
+        const int highlightCount = _visualHighlightCountSnapshot.load(std::memory_order_acquire);
+        return highlightCount > 0 ? static_cast<size_t>(highlightCount) : 0u;
+    }
+
+    [[nodiscard]] uint64_t GetRenderCount() const noexcept
+    {
+#if defined(ENABLE_TESTS)
+        return _host.DebugGetRenderCount();
+#else
+        return 0u;
+#endif
+    }
+
+    [[nodiscard]] bool GetItemLabel(size_t index, std::wstring& outText) const noexcept
+    {
+        outText.clear();
+        if (! _menuBar)
+        {
+            return false;
+        }
+
+        const std::span<const RedSalamander::DxUi::MenuBarItem> items = _menuBar->GetItems();
+        if (index >= items.size())
+        {
+            return false;
+        }
+
+        outText.assign(items[index].text);
+        return true;
+    }
+
+    [[nodiscard]] bool GetItemSourceIndex(size_t index, size_t& outSourceIndex) const noexcept
+    {
+        outSourceIndex = 0u;
+        if (! _menuBar)
+        {
+            return false;
+        }
+
+        const std::span<const RedSalamander::DxUi::MenuBarItem> items = _menuBar->GetItems();
+        if (index >= items.size())
+        {
+            return false;
+        }
+
+        outSourceIndex = items[index].sourceIndex;
+        return true;
+    }
+
+    [[nodiscard]] bool GetItemScreenRect(size_t index, RECT& rectPx) const noexcept
+    {
+        return _menuBar && _hwnd && IsWindow(_hwnd.get()) != FALSE && _menuBar->TryGetItemScreenRect(_host, index, rectPx);
+    }
+
+    [[nodiscard]] bool HitTestItemScreenPoint(POINT screenPoint, size_t& outIndex) const noexcept
+    {
+        outIndex                             = 0u;
+        const std::optional<size_t> hitIndex = HitTestScreenPoint(screenPoint);
+        if (! hitIndex.has_value())
+        {
+            return false;
+        }
+
+        outIndex = hitIndex.value();
+        return true;
+    }
+
+private:
+    static constexpr wchar_t kWindowClassName[] = L"RedSalamander.DxMainMenuBar";
+
+    [[nodiscard]] bool EnsureWindowClass(HINSTANCE instance) noexcept
+    {
+        static ATOM atom = 0;
+        if (atom != 0)
+        {
+            return true;
+        }
+
+        WNDCLASSEXW windowClass{};
+        windowClass.cbSize        = sizeof(windowClass);
+        windowClass.style         = CS_HREDRAW | CS_VREDRAW;
+        windowClass.lpfnWndProc   = &MainMenuBarHost::WndProc;
+        windowClass.hInstance     = instance;
+        windowClass.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+        windowClass.hbrBackground = nullptr;
+        windowClass.lpszClassName = kWindowClassName;
+        atom                      = RegisterClassExW(&windowClass);
+        return atom != 0;
+    }
+
+    [[nodiscard]] bool ShouldShow() const noexcept
+    {
+        return g_menuBarVisible || g_menuBarTemporarilyShown;
+    }
+
+    void CaptureFocusRestoreTarget() noexcept
+    {
+        RedSalamander::DxUi::CaptureFocusRestoreTarget(_ownerWindow, _hwnd.get(), _focusRestoreHwnd);
+    }
+
+    [[nodiscard]] bool RestoreCapturedFocus() noexcept
+    {
+        return RedSalamander::DxUi::RestoreCapturedFocus(_focusRestoreHwnd);
+    }
+
+    [[nodiscard]] std::optional<size_t> HitTestScreenPoint(POINT screenPoint) const noexcept
+    {
+        if (! _menuBar || ! _hwnd || IsWindow(_hwnd.get()) == FALSE)
+        {
+            return std::nullopt;
+        }
+
+        const std::optional<RedSalamander::DxUi::PointDip> pointDip = _host.ScreenPointToDipPoint(screenPoint);
+        if (! pointDip.has_value())
+        {
+            return std::nullopt;
+        }
+
+        return _menuBar->HitTestPoint(_host, pointDip.value());
+    }
+
+    [[nodiscard]] std::optional<size_t> ResolveRawMenuIndex(size_t visualIndex) const noexcept
+    {
+        if (! _menuBar)
+        {
+            return std::nullopt;
+        }
+
+        const auto items = _menuBar->GetItems();
+        if (visualIndex >= items.size())
+        {
+            return std::nullopt;
+        }
+
+        const size_t sourceIndex = items[visualIndex].sourceIndex;
+        return sourceIndex == static_cast<size_t>(-1) ? std::optional<size_t>{visualIndex} : std::optional<size_t>{sourceIndex};
+    }
+
+    [[nodiscard]] std::optional<POINT> GetItemAnchorScreenPoint(size_t index) const noexcept
+    {
+        RECT itemRectPx{};
+        if (! GetItemScreenRect(index, itemRectPx))
+        {
+            return std::nullopt;
+        }
+
+        return POINT{itemRectPx.left, itemRectPx.bottom};
+    }
+
+    [[nodiscard]] std::optional<size_t> FindNextEnabledItem(size_t currentIndex, bool forward) const noexcept
+    {
+        if (! _menuBar)
+        {
+            return std::nullopt;
+        }
+
+        const auto items = _menuBar->GetItems();
+        if (items.empty() || currentIndex >= items.size())
+        {
+            return std::nullopt;
+        }
+
+        for (size_t step = 1u; step <= items.size(); ++step)
+        {
+            const size_t nextIndex = forward ? ((currentIndex + step) % items.size()) : ((currentIndex + items.size() - (step % items.size())) % items.size());
+            if (items[nextIndex].enabled)
             {
-                const wchar_t glyph = FluentIcons::kFilter;
-                wchar_t glyphText[2]{glyph, 0};
-                auto oldIconFont = wil::SelectObject(dis->hDC, g_mainMenuIconFont.get());
-                DrawTextW(dis->hDC, glyphText, 1, &filterRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            }
-
-            if (checked)
-            {
-                const wchar_t glyph = FluentIcons::kCheckMark;
-                wchar_t glyphText[2]{glyph, 0};
-                auto oldIconFont = wil::SelectObject(dis->hDC, g_mainMenuIconFont.get());
-                DrawTextW(dis->hDC, glyphText, 1, &checkMarkRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                return nextIndex;
             }
         }
-        else if (bitmap && ! checked && ! isSortItem)
-        {
-            wil::unique_hdc memDC(CreateCompatibleDC(dis->hDC));
-            if (memDC)
-            {
-                auto oldBmp = wil::SelectObject(memDC.get(), bitmap);
 
-                BITMAP bitmapInfo{};
-                if (GetObjectW(bitmap, sizeof(bitmapInfo), &bitmapInfo) == sizeof(bitmapInfo))
+        return std::nullopt;
+    }
+
+    [[nodiscard]] std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest> BuildRootSwitchRequest(size_t index) noexcept
+    {
+        if (! _ownerWindow || ! g_mainMenuHandle || ! _menuBar)
+        {
+            return std::nullopt;
+        }
+
+        const std::optional<size_t> rawIndex = ResolveRawMenuIndex(index);
+        if (! rawIndex.has_value())
+        {
+            return std::nullopt;
+        }
+
+        const HMENU popupMenu = GetSubMenu(g_mainMenuHandle, static_cast<int>(rawIndex.value()));
+        if (! popupMenu)
+        {
+            return std::nullopt;
+        }
+
+        OnInitMenuPopup(_ownerWindow, popupMenu);
+        SyncMenuModel();
+        _menuBar->SetSelectedIndex(index);
+        UpdateSelectedIndexSnapshot();
+
+        const std::optional<POINT> screenPoint = GetItemAnchorScreenPoint(index);
+        if (! screenPoint.has_value())
+        {
+            return std::nullopt;
+        }
+
+        RedSalamander::DxUi::ContextMenuRootSwitchRequest request{};
+        request.screenPoint = screenPoint.value();
+        request.items       = ConvertHMenuToDxFlyoutItems(popupMenu);
+        if (request.items.empty())
+        {
+            return std::nullopt;
+        }
+        return request;
+    }
+
+    void OpenPopup(size_t index, POINT screenPoint, bool keyboardInvocation) noexcept
+    {
+        if (! _ownerWindow || ! g_mainMenuHandle || ! _menuBar)
+        {
+            return;
+        }
+
+        CaptureFocusRestoreTarget();
+        const std::optional<size_t> rawIndex = ResolveRawMenuIndex(index);
+        if (! rawIndex.has_value())
+        {
+            return;
+        }
+
+        const HMENU popupMenu = GetSubMenu(g_mainMenuHandle, static_cast<int>(rawIndex.value()));
+        if (! popupMenu)
+        {
+            return;
+        }
+
+        OnInitMenuPopup(_ownerWindow, popupMenu);
+        SyncMenuModel();
+        _menuBar->SetSelectedIndex(index);
+        UpdateSelectedIndexSnapshot();
+
+        const auto flyoutItems = ConvertHMenuToDxFlyoutItems(popupMenu);
+        RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+        sessionCallbacks.focusFirstNavigableItem = keyboardInvocation;
+
+        size_t activeIndex                     = index;
+        sessionCallbacks.switchRootFromPointer = [this,
+                                                  &activeIndex](POINT hoverScreenPoint) -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
+        {
+            const std::optional<size_t> hitIndex = HitTestScreenPoint(hoverScreenPoint);
+            if (! hitIndex.has_value() || hitIndex.value() == activeIndex || ! _menuBar)
+            {
+                return std::nullopt;
+            }
+
+            const auto items = _menuBar->GetItems();
+            if (hitIndex.value() >= items.size() || ! items[hitIndex.value()].enabled)
+            {
+                return std::nullopt;
+            }
+
+            if (auto request = BuildRootSwitchRequest(hitIndex.value()); request.has_value())
+            {
+                activeIndex = hitIndex.value();
+                return request;
+            }
+
+            return std::nullopt;
+        };
+        sessionCallbacks.switchRootFromDirection = [this, &activeIndex](bool forward) -> std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest>
+        {
+            const std::optional<size_t> nextIndex = FindNextEnabledItem(activeIndex, forward);
+            if (! nextIndex.has_value() || nextIndex.value() == activeIndex)
+            {
+                return std::nullopt;
+            }
+
+            if (auto request = BuildRootSwitchRequest(nextIndex.value()); request.has_value())
+            {
+                activeIndex = nextIndex.value();
+                return request;
+            }
+
+            return std::nullopt;
+        };
+
+        const auto result = RedSalamander::DxUi::ContextMenu::Show(_ownerWindow, screenPoint, flyoutItems, MakeAppThemeDxPalette(_theme), sessionCallbacks);
+
+        SyncMenuModel();
+        if (g_menuBarTemporarilyShown && ! g_menuBarVisible)
+        {
+            DismissTemporaryBar();
+        }
+        else
+        {
+            static_cast<void>(RestoreCapturedFocus());
+        }
+
+        if (result.has_value())
+        {
+            PostMessageW(_ownerWindow, WM_COMMAND, MAKEWPARAM(static_cast<WORD>(result.value()), 0), 0);
+        }
+    }
+
+    void DismissTemporaryBar() noexcept
+    {
+        if (! g_menuBarTemporarilyShown || g_menuBarVisible || ! _ownerWindow)
+        {
+            return;
+        }
+
+        g_menuBarTemporarilyShown = false;
+        const bool restored       = RestoreCapturedFocus();
+        SendMessageW(_ownerWindow, WM_SIZE, 0, 0);
+        if (! restored)
+        {
+            if (const HWND folderWindow = g_hFolderWindow.load(std::memory_order_acquire); folderWindow && IsWindow(folderWindow) != FALSE)
+            {
+                SetFocus(folderWindow);
+            }
+            else if (IsWindow(_ownerWindow) != FALSE)
+            {
+                SetFocus(_ownerWindow);
+            }
+        }
+        UpdateSelectedIndexSnapshot();
+    }
+
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        auto* self = reinterpret_cast<MainMenuBarHost*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        if (message == WM_NCCREATE)
+        {
+            const auto* createStruct = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+            self                     = createStruct ? static_cast<MainMenuBarHost*>(createStruct->lpCreateParams) : nullptr;
+            if (self)
+            {
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            }
+        }
+
+        if (self)
+        {
+            bool handled         = false;
+            const LRESULT result = self->_host.HandleMessage(hwnd, message, wParam, lParam, handled);
+            if (handled)
+            {
+                if (message == WM_NCDESTROY)
                 {
-                    const int destWidth  = std::min(bitmapInfo.bmWidth, checkRect.right - checkRect.left);
-                    const int destHeight = std::min(bitmapInfo.bmHeight, dis->rcItem.bottom - dis->rcItem.top);
-                    const int destX      = checkRect.left + ((checkRect.right - checkRect.left) - destWidth) / 2;
-                    const int destY      = dis->rcItem.top + ((dis->rcItem.bottom - dis->rcItem.top) - destHeight) / 2;
-
-                    BLENDFUNCTION blend{};
-                    blend.BlendOp             = AC_SRC_OVER;
-                    blend.SourceConstantAlpha = static_cast<BYTE>(disabled ? 160 : 255);
-                    blend.AlphaFormat         = AC_SRC_ALPHA;
-
-                    auto res = BlitAlphaBlend(dis->hDC, destX, destY, destWidth, destHeight, memDC.get(), 0, 0, destWidth, destHeight, blend);
-                    if (! res)
-                    {
-                        // Fallback to BitBlt if alpha blending fails.
-                        static_cast<void>(BitBlt(dis->hDC, destX, destY, destWidth, destHeight, memDC.get(), 0, 0, SRCCOPY));
-                    }
-                }
-            }
-        }
-        else if (! checked && ! isSortItem && g_mainMenuIconFontValid && g_mainMenuIconFont)
-        {
-            const wchar_t glyph = GetMainMenuCommandIconGlyph(dis->itemID);
-
-            if (glyph != 0)
-            {
-                SetBkMode(dis->hDC, TRANSPARENT);
-                SetTextColor(dis->hDC, textColor);
-
-                wchar_t glyphText[2]{glyph, 0};
-                auto oldIconFont = wil::SelectObject(dis->hDC, g_mainMenuIconFont.get());
-                DrawTextW(dis->hDC, glyphText, 1, &checkRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-            }
-        }
-        else if (checked || isSortItem)
-        {
-            SetBkMode(dis->hDC, TRANSPARENT);
-            SetTextColor(dis->hDC, textColor);
-            HFONT fontToUse = g_mainMenuFont ? g_mainMenuFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-            auto oldFont    = wil::SelectObject(dis->hDC, fontToUse);
-
-            if (isSortItem)
-            {
-                const FolderWindow::Pane pane   = isLeftSort ? FolderWindow::Pane::Left : FolderWindow::Pane::Right;
-                const UINT baseId               = isLeftSort ? static_cast<UINT>(IDM_LEFT_SORT_NAME) : static_cast<UINT>(IDM_RIGHT_SORT_NAME);
-                const UINT offset               = dis->itemID - baseId;
-                const FolderView::SortBy sortBy = static_cast<FolderView::SortBy>(offset);
-
-                FolderView::SortDirection direction = FolderView::SortDirection::Ascending;
-                switch (sortBy)
-                {
-                    case FolderView::SortBy::Time:
-                    case FolderView::SortBy::Size: direction = FolderView::SortDirection::Descending; break;
-                    case FolderView::SortBy::Name:
-                    case FolderView::SortBy::Extension:
-                    case FolderView::SortBy::Attributes:
-                    case FolderView::SortBy::None: direction = FolderView::SortDirection::Ascending; break;
-                }
-
-                if (checked)
-                {
-                    direction = g_folderWindow.GetSortDirection(pane);
-                }
-
-                const bool useFluentIcons = g_mainMenuIconFontValid && g_mainMenuIconFont;
-
-                wchar_t glyph = 0;
-                if (useFluentIcons)
-                {
-                    switch (sortBy)
-                    {
-                        case FolderView::SortBy::Name: glyph = FluentIcons::kFont; break;
-                        case FolderView::SortBy::Extension: glyph = FluentIcons::kDocument; break;
-                        case FolderView::SortBy::Time: glyph = FluentIcons::kCalendar; break;
-                        case FolderView::SortBy::Size: glyph = FluentIcons::kHardDrive; break;
-                        case FolderView::SortBy::Attributes: glyph = FluentIcons::kTag; break;
-                        case FolderView::SortBy::None: glyph = 0; break;
-                    }
+                    self->_menuBar = nullptr;
+                    self->_selectedIndexSnapshot.store(-1, std::memory_order_release);
+                    self->_visualHighlightCountSnapshot.store(0, std::memory_order_release);
+                    self->_focusRestoreHwnd = nullptr;
                 }
                 else
                 {
-                    switch (sortBy)
-                    {
-                        case FolderView::SortBy::Name: glyph = L'\u2263'; break;
-                        case FolderView::SortBy::Extension: glyph = L'\u24D4'; break;
-                        case FolderView::SortBy::Time: glyph = L'\u23F1'; break;
-                        case FolderView::SortBy::Size: glyph = direction == FolderView::SortDirection::Ascending ? L'\u25F0' : L'\u25F2'; break;
-                        case FolderView::SortBy::Attributes: glyph = L'\u24B6'; break;
-                        case FolderView::SortBy::None: glyph = 0; break;
-                    }
+                    self->UpdateSelectedIndexSnapshot();
                 }
-
-                RECT iconRect = checkRect;
-
-                const bool showArrow = checked && sortBy != FolderView::SortBy::None;
-                if (showArrow)
+                if (message == WM_KILLFOCUS && g_menuBarTemporarilyShown && ! g_menuBarVisible)
                 {
-                    RECT arrowRect       = checkRect;
-                    const LONG width     = std::max(0L, checkRect.right - checkRect.left);
-                    const LONG arrowArea = std::clamp(static_cast<LONG>(MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI)), 0L, width);
-                    const LONG split     = checkRect.left + arrowArea;
-                    const LONG gap       = std::max(1L, static_cast<LONG>(MulDiv(1, dpi, USER_DEFAULT_SCREEN_DPI)));
-
-                    arrowRect.right = std::max(arrowRect.left, split - gap);
-                    iconRect.left   = std::min(iconRect.right, split + gap);
-
-                    const wchar_t arrow = direction == FolderView::SortDirection::Ascending ? L'\u2191' : L'\u2193';
-                    wchar_t arrowText[2]{arrow, 0};
-
-                    const HFONT arrowFont = fontToUse;
-                    auto oldArrowFont     = wil::SelectObject(dis->hDC, arrowFont);
-                    DrawTextW(dis->hDC, arrowText, 1, &arrowRect, DT_RIGHT | DT_VCENTER | DT_SINGLELINE);
+                    self->DismissTemporaryBar();
+                    return 0;
                 }
-
-                if (glyph != 0)
-                {
-                    wchar_t glyphText[2]{glyph, 0};
-
-                    const HFONT glyphFont = useFluentIcons ? g_mainMenuIconFont.get() : fontToUse;
-                    auto oldGlyphFont     = wil::SelectObject(dis->hDC, glyphFont);
-                    const UINT iconAlign  = showArrow ? DT_LEFT : DT_CENTER;
-                    DrawTextW(dis->hDC, glyphText, 1, &iconRect, iconAlign | DT_VCENTER | DT_SINGLELINE);
-                }
+                return result;
             }
-            else if (checked)
-            {
-                const bool useFluentIcons = g_mainMenuIconFontValid && g_mainMenuIconFont;
-                const wchar_t glyph       = useFluentIcons ? FluentIcons::kCheckMark : FluentIcons::kFallbackCheckMark;
-                wchar_t glyphText[2]{glyph, 0};
 
-                const HFONT glyphFont = useFluentIcons ? g_mainMenuIconFont.get() : fontToUse;
-                auto oldGlyphFont     = wil::SelectObject(dis->hDC, glyphFont);
-                DrawTextW(dis->hDC, glyphText, 1, &checkRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            if (message == WM_KILLFOCUS && g_menuBarTemporarilyShown && ! g_menuBarVisible)
+            {
+                self->DismissTemporaryBar();
+                return 0;
+            }
+            if (message == WM_NCDESTROY)
+            {
+                self->_menuBar = nullptr;
+                self->_selectedIndexSnapshot.store(-1, std::memory_order_release);
+                self->_visualHighlightCountSnapshot.store(0, std::memory_order_release);
+                self->_focusRestoreHwnd = nullptr;
             }
         }
+
+        return DefWindowProcW(hwnd, message, wParam, lParam);
     }
 
-    RECT textRect = itemRect;
-    textRect.left += paddingX + checkAreaWidth;
-    textRect.right -= paddingX;
-    if (data->hasSubMenu && ! data->topLevel)
+    void UpdateSelectedIndexSnapshot() noexcept
     {
-        textRect.right = std::max(textRect.left, textRect.right - subMenuArrowAreaWidth);
+        if (! _menuBar)
+        {
+            _selectedIndexSnapshot.store(-1, std::memory_order_release);
+            _visualHighlightCountSnapshot.store(0, std::memory_order_release);
+            return;
+        }
+
+        const std::optional<size_t> selectedIndex = _menuBar->GetSelectedIndex();
+        _selectedIndexSnapshot.store(selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1, std::memory_order_release);
+        _visualHighlightCountSnapshot.store(static_cast<int>(_menuBar->GetVisualHighlightCount()), std::memory_order_release);
     }
 
-    SetBkMode(dis->hDC, TRANSPARENT);
-    HFONT fontToUse = g_mainMenuFont ? g_mainMenuFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(dis->hDC, fontToUse);
+    HWND _ownerWindow = nullptr;
+    wil::unique_hwnd _hwnd;
+    AppTheme _theme{};
+    RedSalamander::DxUi::WindowHost _host;
+    RedSalamander::DxUi::MenuBar* _menuBar = nullptr;
+    std::atomic<int> _selectedIndexSnapshot{-1};
+    std::atomic<int> _visualHighlightCountSnapshot{0};
+    HWND _focusRestoreHwnd = nullptr;
+};
 
-    const UINT drawFlags = DT_VCENTER | DT_SINGLELINE | DT_HIDEPREFIX;
+MainMenuBarHost g_mainMenuBarHost;
 
-    if (! data->shortcut.empty())
-    {
-        SIZE shortcutSize{};
-        GetTextExtentPoint32W(dis->hDC, data->shortcut.c_str(), static_cast<int>(data->shortcut.size()), &shortcutSize);
-
-        RECT shortcutRect = textRect;
-        shortcutRect.left = std::max(textRect.left, textRect.right - shortcutSize.cx);
-
-        RECT mainTextRect  = textRect;
-        mainTextRect.right = std::max(mainTextRect.left, shortcutRect.left - MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI));
-
-        SetTextColor(dis->hDC, shortcutColor);
-        DrawTextW(dis->hDC, data->shortcut.c_str(), static_cast<int>(data->shortcut.size()), &shortcutRect, DT_RIGHT | drawFlags);
-
-        SetTextColor(dis->hDC, textColor);
-        DrawTextW(dis->hDC, data->text.c_str(), static_cast<int>(data->text.size()), &mainTextRect, DT_LEFT | drawFlags);
-    }
-    else
-    {
-        SetTextColor(dis->hDC, textColor);
-        DrawTextW(dis->hDC, data->text.c_str(), static_cast<int>(data->text.size()), &textRect, DT_LEFT | drawFlags);
-    }
-
-    if (data->hasSubMenu && ! data->topLevel)
-    {
-        RECT arrowRect = itemRect;
-        arrowRect.right -= paddingX;
-        arrowRect.left = std::max(arrowRect.left, arrowRect.right - subMenuArrowAreaWidth);
-
-        const wchar_t glyph = g_mainMenuIconFontValid ? FluentIcons::kChevronRightSmall : FluentIcons::kFallbackChevronRight;
-        wchar_t glyphText[2]{glyph, 0};
-
-        HFONT iconFont   = (g_mainMenuIconFontValid && g_mainMenuIconFont) ? g_mainMenuIconFont.get() : fontToUse;
-        auto oldIconFont = wil::SelectObject(dis->hDC, iconFont);
-
-        SetTextColor(dis->hDC, shortcutColor);
-        DrawTextW(dis->hDC, glyphText, 1, &arrowRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-        const int arrowExcludeWidth = std::max(subMenuArrowAreaWidth, GetSystemMetricsForDpi(SM_CXMENUCHECK, static_cast<UINT>(dpi)));
-        RECT arrowExcludeRect       = itemRect;
-        arrowExcludeRect.left       = std::max(arrowExcludeRect.left, arrowExcludeRect.right - arrowExcludeWidth);
-        ExcludeClipRect(dis->hDC, arrowExcludeRect.left, arrowExcludeRect.top, arrowExcludeRect.right, arrowExcludeRect.bottom);
-    }
-}
-
-LRESULT OnMeasureItem(HWND hWnd, WPARAM wParam, LPARAM lParam)
+[[nodiscard]] bool ReloadLocalizedMainMenu(HWND hWnd, bool syncMenuBar) noexcept
 {
-    auto* mis = reinterpret_cast<MEASUREITEMSTRUCT*>(lParam);
-    if (mis && mis->CtlType == ODT_MENU)
+    wil::unique_hmenu newMenu(Localization::LoadMenuResource(GetModuleHandleW(nullptr), IDC_REDSALAMANDER));
+    if (! newMenu)
     {
-        OnMeasureMainMenuItem(hWnd, mis);
-        return TRUE;
+        Debug::Warning(L"Failed to load localized main menu resource.");
+        return false;
     }
 
-    return DefWindowProcW(hWnd, WM_MEASUREITEM, wParam, lParam);
-}
-
-LRESULT OnDrawItem(HWND hWnd, WPARAM wParam, LPARAM lParam)
-{
-    auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
-    if (dis && dis->CtlType == ODT_MENU)
+    wil::unique_hmenu oldMenu;
+    if (g_mainMenuHandle && g_mainMenuHandle != newMenu.get())
     {
-        OnDrawMainMenuItem(dis);
-        return TRUE;
+        if (GetMenu(hWnd) == g_mainMenuHandle)
+        {
+            SetMenu(hWnd, nullptr);
+            DrawMenuBar(hWnd);
+        }
+        oldMenu.reset(g_mainMenuHandle);
     }
 
-    return DefWindowProcW(hWnd, WM_DRAWITEM, wParam, lParam);
+    ResetMenuHandleCache();
+    g_mainMenuHandle = newMenu.release();
+    EnsureMenuHandles(hWnd);
+    RebuildThemeMenuDynamicItems(hWnd);
+    RebuildPluginsMenuDynamicItems(hWnd);
+
+    if (syncMenuBar)
+    {
+        g_mainMenuBarHost.SyncMenuModel();
+    }
+
+    return true;
 }
 
 } // namespace
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 [[nodiscard]] wchar_t DebugGetMainMenuIconGlyph(UINT menuCommandId) noexcept
 {
     return GetMainMenuCommandIconGlyph(menuCommandId);
+}
+
+[[nodiscard]] HMENU DebugGetMainMenuModelHandle() noexcept
+{
+    return g_mainMenuHandle;
+}
+
+[[nodiscard]] bool DebugIsMainMenuBarSurfaceVisible(HWND mainWindow) noexcept
+{
+    const HWND menuBar = FindWindowExW(mainWindow, nullptr, L"RedSalamander.DxMainMenuBar", nullptr);
+    return menuBar && IsWindowVisible(menuBar) != FALSE;
+}
+
+[[nodiscard]] int DebugGetMainMenuBarSelectedIndex() noexcept
+{
+    const std::optional<size_t> selectedIndex = g_mainMenuBarHost.GetSelectedIndex();
+    return selectedIndex.has_value() ? static_cast<int>(selectedIndex.value()) : -1;
+}
+
+[[nodiscard]] int DebugGetMainMenuBarVisualHighlightCount() noexcept
+{
+    return static_cast<int>(g_mainMenuBarHost.GetVisualHighlightCount());
+}
+
+[[nodiscard]] uint64_t DebugGetMainMenuBarRenderCount() noexcept
+{
+    return g_mainMenuBarHost.GetRenderCount();
+}
+
+[[nodiscard]] bool DebugGetMainMenuBarItemLabel(size_t index, std::wstring& outText) noexcept
+{
+    return g_mainMenuBarHost.GetItemLabel(index, outText);
+}
+
+[[nodiscard]] bool DebugGetMainMenuBarItemSourceIndex(size_t index, size_t& outSourceIndex) noexcept
+{
+    return g_mainMenuBarHost.GetItemSourceIndex(index, outSourceIndex);
+}
+
+[[nodiscard]] bool DebugGetMainMenuBarItemScreenRect(HWND mainWindow, size_t index, RECT& rectPx) noexcept
+{
+    const HWND menuBar = FindWindowExW(mainWindow, nullptr, L"RedSalamander.DxMainMenuBar", nullptr);
+    if (! menuBar || IsWindowVisible(menuBar) == FALSE)
+    {
+        return false;
+    }
+
+    return g_mainMenuBarHost.GetItemScreenRect(index, rectPx);
+}
+
+[[nodiscard]] bool DebugHitTestMainMenuBarScreenPoint(HWND mainWindow, POINT screenPoint, size_t& outIndex) noexcept
+{
+    outIndex           = 0u;
+    const HWND menuBar = FindWindowExW(mainWindow, nullptr, L"RedSalamander.DxMainMenuBar", nullptr);
+    if (! menuBar || IsWindowVisible(menuBar) == FALSE)
+    {
+        return false;
+    }
+
+    return g_mainMenuBarHost.HitTestItemScreenPoint(screenPoint, outIndex);
 }
 #endif
 
 // Forward declarations of functions included in this code module:
 std::optional<HWND> InitInstance(HINSTANCE, int);
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
-INT_PTR CALLBACK About(HWND, UINT, WPARAM, LPARAM);
 static void AdjustLayout(HWND hWnd);
 
 namespace
@@ -3937,6 +5045,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
         {
             const AppTheme theme = ResolveConfiguredTheme();
             static_cast<void>(ShowPreferencesDialogHotPaths(ownerWindow, kAppId, g_settings, theme));
+            g_folderWindow.ResyncNavigationShellFromFolderView(g_folderWindow.GetActivePane());
         }
         return true;
     }
@@ -3945,6 +5054,7 @@ void ShowCommandNotImplementedMessage(HWND ownerWindow, std::wstring_view comman
     {
         const AppTheme theme = ResolveConfiguredTheme();
         static_cast<void>(ShowPreferencesDialogHotPaths(ownerWindow, kAppId, g_settings, theme));
+        g_folderWindow.ResyncNavigationShellFromFolderView(g_folderWindow.GetActivePane());
         return true;
     }
 
@@ -4049,6 +5159,32 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
     }
 
     return DispatchShortcutCommand(ownerWindow, commandOpt.value());
+}
+
+[[nodiscard]] bool TryReclaimMainFolderViewFocusOnEscape(HWND ownerWindow, const MSG& msg) noexcept
+{
+    if (msg.message != WM_KEYDOWN && msg.message != WM_SYSKEYDOWN)
+    {
+        return false;
+    }
+    if (msg.wParam != static_cast<WPARAM>(VK_ESCAPE))
+    {
+        return false;
+    }
+    if (! ownerWindow || ! IsWindowEnabled(ownerWindow))
+    {
+        return false;
+    }
+    if (! g_hFolderWindow.load(std::memory_order_acquire) || g_folderWindow.GetFocusedFolderViewHwnd() != nullptr)
+    {
+        return false;
+    }
+    if (g_folderWindow.IsFocusInNavigationView())
+    {
+        return false;
+    }
+
+    return g_folderWindow.TryRestoreActivePaneFolderViewFocus();
 }
 
 [[nodiscard]] bool IsCompareDirectoriesWindowMessageRoot(HWND root) noexcept
@@ -4255,24 +5391,111 @@ LRESULT OnFunctionBarInvoke(HWND ownerWindow, WPARAM wParam, LPARAM lParam) noex
                      reinterpret_cast<LPARAM>(&state));
     return state.dismissed;
 }
+
+#if defined(RS_ASAN_DEBUG_BUILD)
+constexpr std::wstring_view kRedSalamanderBuildFlavor = L"ASan Debug";
+#elif defined(_DEBUG)
+constexpr std::wstring_view kRedSalamanderBuildFlavor = L"Debug";
+#else
+constexpr std::wstring_view kRedSalamanderBuildFlavor = L"Release";
+#endif
+
+[[nodiscard]] constexpr bool IsRedSalamanderDiagnosticsEnabledByDefault() noexcept
+{
+#if defined(_DEBUG) || defined(RS_ASAN_DEBUG_BUILD)
+    return true;
+#else
+    return false;
+#endif
+}
+
+constexpr wchar_t kRedSalamanderHelpText[] =
+    L"RedSalamander\r\n"
+    L"\r\n"
+    L"Usage:\r\n"
+    L"  RedSalamander.exe [options]\r\n"
+    L"\r\n"
+    L"Options:\r\n"
+    L"  -h, --help, /?                 Show this help.\r\n"
+    L"  --crash-test                    Trigger crash handler test.\r\n"
+    L"  --etw                           Enable RedSalamander Info/Perf/Debug ETW diagnostics in Release; Debug and ASan Debug enable them by default.\r\n"
+    L"  --perf                          Write RedSalamander perf metrics to the default JSONL path in Release; Debug and ASan Debug enable it by default.\r\n"
+    L"  --perf=PATH                     Write RedSalamander perf metrics to a custom JSONL path.\r\n"
+#ifdef ENABLE_TESTS
+    L"  --selftest                      Run all debug self-test suites and exit.\r\n"
+    L"  --compare-selftest              Run CompareDirectories self-test suite.\r\n"
+    L"  --commands-selftest             Run Commands self-test suite.\r\n"
+    L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
+    L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
+    L"  --selftest-case=NAME            Run the exact matching self-test case, or a case-prefix family when NAME ends in '_'.\r\n"
+    L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by N (default 1.0).\r\n"
+#endif
+    L"\r\n";
+
+[[nodiscard]] constexpr std::wstring_view GetRedSalamanderHelpText() noexcept
+{
+    return kRedSalamanderHelpText;
+}
+
+[[nodiscard]] std::wstring GetLocalTimestampForFileName() noexcept
+{
+    SYSTEMTIME st{};
+    ::GetLocalTime(&st);
+    return std::format(L"{0:04}-{1:02}-{2:02}_{3:02}{4:02}{5:02}", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+}
+
+[[nodiscard]] std::filesystem::path GetDefaultPerfJsonlPath(std::wstring_view appName) noexcept
+{
+    std::filesystem::path root;
+    wil::unique_cotaskmem_string localAppData;
+    if (SUCCEEDED(::SHGetKnownFolderPath(FOLDERID_LocalAppData, KF_FLAG_CREATE, nullptr, &localAppData)) && localAppData)
+    {
+        root = localAppData.get();
+    }
+    else
+    {
+        std::error_code ec;
+        root = std::filesystem::temp_directory_path(ec);
+        if (ec)
+        {
+            root = L".";
+        }
+    }
+
+    std::wstring fileName(appName);
+    fileName.push_back(L'_');
+    fileName.append(GetLocalTimestampForFileName());
+    fileName.append(L".jsonl");
+
+    return root / L"RedSalamander" / L"Perf" / fileName;
+}
 } // namespace
 
-#ifdef _DEBUG
+[[nodiscard]] bool DispatchShortcutCommandFromWindow(HWND ownerWindow, std::wstring_view commandId) noexcept
+{
+    return DispatchShortcutCommand(ownerWindow, commandId);
+}
+
+#ifdef ENABLE_TESTS
 bool DebugDispatchShortcutCommand(HWND ownerWindow, std::wstring_view commandId) noexcept
 {
     return DispatchShortcutCommand(ownerWindow, commandId);
 }
-#endif // _DEBUG
+
+std::wstring_view DebugGetRedSalamanderHelpText() noexcept
+{
+    return GetRedSalamanderHelpText();
+}
+
+bool DebugIsRedSalamanderDiagnosticsEnabledByDefault() noexcept
+{
+    return IsRedSalamanderDiagnosticsEnabledByDefault();
+}
+#endif // ENABLE_TESTS
 
 // Separate function with C++ objects (cannot use __try/__except)
 static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 {
-    std::optional<Debug::Perf::Scope> startupPerf;
-    startupPerf.emplace(L"App.Startup.UntilMessageLoop");
-    startupPerf->SetDetail(kAppId);
-
-    StartupMetrics::Initialize();
-
     const auto hasArg = [](PCWSTR needle) noexcept -> bool
     {
         if (! needle || needle[0] == L'\0')
@@ -4303,6 +5526,61 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
         return false;
     };
+
+    const auto getArgValue = [](PCWSTR prefix, std::wstring& value) noexcept -> bool
+    {
+        if (! prefix || prefix[0] == L'\0')
+        {
+            return false;
+        }
+
+        int argc = 0;
+        wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
+        if (! argv || argc <= 1)
+        {
+            return false;
+        }
+
+        const size_t prefixLen = wcslen(prefix);
+        if (prefixLen == 0)
+        {
+            return false;
+        }
+
+        for (int i = 1; i < argc; ++i)
+        {
+            const wchar_t* arg = argv.get()[i];
+            if (! arg)
+            {
+                continue;
+            }
+
+            if (_wcsnicmp(arg, prefix, prefixLen) != 0)
+            {
+                continue;
+            }
+
+            value = arg + prefixLen;
+            return true;
+        }
+
+        return false;
+    };
+
+    if (hasArg(L"--etw"))
+    {
+        Debug::detail::SetRuntimeMonitorDiagnosticsEnabled(true);
+        static_cast<void>(::SetEnvironmentVariableW(L"REDSALAMANDER_DIAGNOSTICS_ETW", L"1"));
+    }
+
+    std::wstring perfJsonlPath;
+    const bool customPerfPath = getArgValue(L"--perf=", perfJsonlPath);
+    if (customPerfPath || hasArg(L"--perf") || IsRedSalamanderDiagnosticsEnabledByDefault())
+    {
+        const std::filesystem::path perfPath =
+            (customPerfPath && ! perfJsonlPath.empty()) ? std::filesystem::path(perfJsonlPath) : GetDefaultPerfJsonlPath(L"RedSalamander");
+        Debug::Perf::ConfigureJsonlOutput(perfPath, L"RedSalamander", kRedSalamanderBuildFlavor);
+    }
 
     const auto writeHelpText = [](std::wstring_view text) -> void
     {
@@ -4368,79 +5646,37 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     if (hasArg(L"--help") || hasArg(L"-h") || hasArg(L"/?"))
     {
-        constexpr wchar_t kHelpText[] = L"RedSalamander\r\n"
-                                        L"\r\n"
-                                        L"Usage:\r\n"
-                                        L"  RedSalamander.exe [options]\r\n"
-                                        L"\r\n"
-                                        L"Options:\r\n"
-                                        L"  -h, --help, /?                 Show this help.\r\n"
-                                        L"  --crash-test                    Trigger crash handler test.\r\n"
-#ifdef _DEBUG
-                                        L"  --selftest                      Run all debug self-test suites and exit.\r\n"
-                                        L"  --compare-selftest              Run CompareDirectories self-test suite.\r\n"
-                                        L"  --commands-selftest             Run Commands self-test suite.\r\n"
-                                        L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
-                                        L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
-                                        L"  --selftest-case=NAME            Run only the exact matching self-test case.\r\n"
-                                        L"  --selftest-timeout-multiplier=N Multiply self-test timeouts by N (default 1.0).\r\n"
-#endif
-                                        L"\r\n";
-
-        writeHelpText(kHelpText);
+        writeHelpText(GetRedSalamanderHelpText());
         return 0;
     }
 
-#ifdef _DEBUG
+    std::optional<Debug::Perf::Scope> startupPerf;
+    startupPerf.emplace(L"App.Startup.UntilMessageLoop");
+    startupPerf->SetDetail(kAppId);
+
+    StartupMetrics::Initialize();
+
+#ifdef ENABLE_TESTS
     QueueRedSalamanderMonitorLaunch();
 #endif
-
-    const auto getArgValue = [](PCWSTR prefix, std::wstring& value) noexcept -> bool
-    {
-        if (! prefix || prefix[0] == L'\0')
-        {
-            return false;
-        }
-
-        int argc = 0;
-        wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
-        if (! argv || argc <= 1)
-        {
-            return false;
-        }
-
-        const size_t prefixLen = wcslen(prefix);
-        if (prefixLen == 0)
-        {
-            return false;
-        }
-
-        for (int i = 1; i < argc; ++i)
-        {
-            const wchar_t* arg = argv.get()[i];
-            if (! arg)
-            {
-                continue;
-            }
-
-            if (_wcsnicmp(arg, prefix, prefixLen) != 0)
-            {
-                continue;
-            }
-
-            value = arg + prefixLen;
-            return true;
-        }
-
-        return false;
-    };
 
     if (hasArg(L"--crash-test"))
     {
         CrashHandler::TriggerCrashTest();
     }
 
-#ifdef _DEBUG
+#ifndef ENABLE_TESTS
+    std::wstring unsupportedSelfTestArg;
+    if (hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest") ||
+        hasArg(L"--selftest-fail-fast") || getArgValue(L"--selftest-case=", unsupportedSelfTestArg) ||
+        getArgValue(L"--selftest-timeout-multiplier=", unsupportedSelfTestArg))
+    {
+        Debug::Error(L"Self-test command-line arguments require ENABLE_TESTS.");
+        return 2;
+    }
+#endif
+
+#ifdef ENABLE_TESTS
     g_selfTestOptions                  = SelfTest::GetSelfTestOptions();
     g_selfTestOptions.failFast         = hasArg(L"--selftest-fail-fast");
     g_selfTestOptions.timeoutScale     = 1.0;
@@ -4464,9 +5700,6 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     {
         g_selfTestOptions.caseFilter = std::move(caseFilterArg);
     }
-
-    SelfTest::GetSelfTestOptions() = g_selfTestOptions;
-    SelfTest::InitSelfTestRun(g_selfTestOptions);
 
     if (hasArg(L"--selftest"))
     {
@@ -4494,9 +5727,15 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
+        if (! TryAcquireSelfTestRunMutex())
+        {
+            return 3;
+        }
+
         SelfTest::GetSelfTestOptions() = g_selfTestOptions;
         SelfTest::RotateSelfTestRuns();
         ResetSelfTestRunState();
+        SelfTest::InitSelfTestRun(g_selfTestOptions);
     }
 #endif
 
@@ -4532,6 +5771,11 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     const auto shutdownProcessSingletons = wil::scope_exit([]
     {
+        // The splash screen owns a WindowHost on a worker UI thread. Close and join it
+        // before the global DxUi host sweep so teardown cannot race across threads.
+        SplashScreen::CloseIfExist();
+        RedSalamander::DxUi::ShutdownAllWindowHostsForProcessExit();
+
         if (IsRunningAnySelfTest())
         {
             return;
@@ -4564,6 +5808,11 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         settingsHr = Common::Settings::LoadSettings(kAppId, g_settings);
         perf.SetHr(settingsHr);
     }
+    if (SUCCEEDED(settingsHr))
+    {
+        Localization::RegisterResourceOwner(kAppId, GetModuleHandleW(nullptr));
+        Localization::ApplyLanguagePreference(GetLanguagePreferenceFromSettings(g_settings));
+    }
     if (settingsHr == S_OK)
     {
         std::wstring_view themeId = g_settings.theme.currentThemeId;
@@ -4584,13 +5833,15 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 
     CrashQuarantine::OfferPluginDisableIfPreviousCrashDetected(g_settings);
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     const bool runHeadlessCompareSelfTest = g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest && ! g_runCommandsSelfTest;
+    const bool anySelfTest                = g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest;
 #else
     const bool runHeadlessCompareSelfTest = false;
+    const bool anySelfTest                = false;
 #endif
 
-    const bool showSplash      = ! runHeadlessCompareSelfTest && (! g_settings.startup.has_value() || g_settings.startup->showSplash);
+    const bool showSplash      = ! anySelfTest && ! runHeadlessCompareSelfTest && (! g_settings.startup.has_value() || g_settings.startup->showSplash);
     const auto setSplashStatus = [&](std::wstring_view status) noexcept
     {
         if (showSplash)
@@ -4668,7 +5919,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         DirectoryInfoCache::GetInstance().ApplySettings(g_settings);
     }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     if (runHeadlessCompareSelfTest)
     {
         SelfTest::SelfTestSuiteResult compareResult;
@@ -4712,7 +5963,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         {
             setSplashStatus(L"Creating main window...");
         }
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
         {
             SelfTest::AppendSelfTestTrace(L"RunApplication: InitInstance begin");
@@ -4722,6 +5973,12 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         hWnd = InitInstance(hInstance, nCmdShow);
         perf.SetHr(hWnd.has_value() ? S_OK : E_FAIL);
     }
+#ifdef ENABLE_TESTS
+    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+    {
+        SelfTest::AppendSelfTestTrace(hWnd.has_value() ? L"RunApplication: InitInstance returned hwnd" : L"RunApplication: InitInstance returned null");
+    }
+#endif
     if (! hWnd)
     {
         startupPerf->SetHr(E_FAIL);
@@ -4734,17 +5991,17 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         {
             setSplashStatus(L"Loading menu accelerators...");
         }
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
         {
             SelfTest::AppendSelfTestTrace(L"RunApplication: LoadAccelerators begin");
         }
 #endif
         Debug::Perf::Scope perf(L"App.Startup.LoadAccelerators");
-        hAccelTable.reset(LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_REDSALAMANDER)));
+        hAccelTable.reset(Localization::LoadAcceleratorsResource(hInstance, MAKEINTRESOURCEW(IDC_REDSALAMANDER)));
         perf.SetHr(hAccelTable ? S_OK : E_FAIL);
     }
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
         SelfTest::AppendSelfTestTrace(L"RunApplication: entering message loop");
@@ -4792,7 +6049,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             }
         }
 
-        if (! g_menuBarVisible && g_mainMenuHandle)
+        if (g_mainMenuHandle)
         {
             if (isMainWindowMessage)
             {
@@ -4803,22 +6060,40 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
                 }
                 else if (altDown)
                 {
-                    if ((msg.message == WM_SYSKEYDOWN || msg.message == WM_SYSCHAR || msg.message == WM_KEYDOWN || msg.message == WM_CHAR) &&
-                        msg.wParam != VK_MENU)
+                    if (msg.message == WM_SYSCHAR && msg.wParam != VK_MENU)
+                    {
+                        altUsed = true;
+
+                        EnsureMenuHandles(*hWnd);
+                        UpdatePaneMenuChecks();
+                        if (! g_menuBarVisible)
+                        {
+                            g_menuBarTemporarilyShown = true;
+                            AdjustLayout(*hWnd);
+                        }
+                        if (g_mainMenuBarHost.ActivateMnemonic(static_cast<wchar_t>(msg.wParam)))
+                        {
+                            altDown = false;
+                            altUsed = false;
+                            continue;
+                        }
+                    }
+                    else if ((msg.message == WM_SYSKEYDOWN || msg.message == WM_KEYDOWN || msg.message == WM_CHAR) && msg.wParam != VK_MENU)
                     {
                         altUsed = true;
                     }
                     else if ((msg.message == WM_SYSKEYUP || msg.message == WM_KEYUP) && msg.wParam == VK_MENU)
                     {
-                        if (! altUsed && GetMenu(*hWnd) == nullptr)
+                        if (! altUsed)
                         {
-                            SetMenu(*hWnd, g_mainMenuHandle);
-                            g_menuBarTemporarilyShown = true;
-                            ApplyMainMenuTheme(*hWnd, g_mainMenuTheme);
                             EnsureMenuHandles(*hWnd);
                             UpdatePaneMenuChecks();
+                            if (! g_menuBarVisible)
+                            {
+                                g_menuBarTemporarilyShown = true;
+                            }
                             AdjustLayout(*hWnd);
-                            SendMessageW(*hWnd, WM_SYSCOMMAND, SC_KEYMENU, 0);
+                            static_cast<void>(g_mainMenuBarHost.FocusFirstItem());
 
                             altDown = false;
                             altUsed = false;
@@ -4898,6 +6173,11 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             }
         }
 
+        if (isMainWindowMessage && ! editFocused && TryReclaimMainFolderViewFocusOnEscape(*hWnd, msg))
+        {
+            continue;
+        }
+
         if (isMainWindowMessage && ! editFocused)
         {
             if (TryHandleShortcutKeyDown(*hWnd, msg))
@@ -4931,7 +6211,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     }
 
     const int exitCode = static_cast<int>(msg.wParam);
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
         SelfTest::AppendSelfTestTrace(std::format(L"RunApplication: message loop exit={}", exitCode));
@@ -4978,7 +6258,24 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTA
         // Handle all exceptions including SEH exceptions
         const DWORD exceptionCode    = GetExceptionCode();
         const wchar_t* exceptionName = exception::GetExceptionName(exceptionCode);
-
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            wchar_t exceptionTrace[160]{};
+            if (SUCCEEDED(StringCchPrintfW(exceptionTrace,
+                                           std::size(exceptionTrace),
+                                           L"wWinMain: unhandled exception code=0x%08X name=%s",
+                                           static_cast<unsigned>(exceptionCode),
+                                           exceptionName ? exceptionName : L"unknown")))
+            {
+                SelfTest::AppendSelfTestTrace(exceptionTrace);
+            }
+            else
+            {
+                SelfTest::AppendSelfTestTrace(L"wWinMain: unhandled exception");
+            }
+        }
+#endif
         wchar_t errorMsg[512]{};
         BuildFatalExceptionMessage(hInstance, exceptionName, exceptionCode, errorMsg, std::size(errorMsg));
         OutputDebugStringW(errorMsg);
@@ -4996,6 +6293,13 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
     g_hInstance = hInstance; // Store instance handle in our global variable
 
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"InitInstance: begin");
+    }
+#endif
+
     std::wstring szWindowClass(MAX_LOADSTRING, L'\0');
     LoadStringW(hInstance, IDC_REDSALAMANDER, szWindowClass.data(), MAX_LOADSTRING);
 
@@ -5009,7 +6313,7 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
     wcex.hIcon         = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_REDSALAMANDER));
     wcex.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszMenuName  = MAKEINTRESOURCEW(IDC_REDSALAMANDER);
+    wcex.lpszMenuName  = nullptr;
     wcex.lpszClassName = szWindowClass.c_str();
     wcex.hIconSm       = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
@@ -5023,8 +6327,20 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
     if (! atom)
     {
         Debug::ErrorWithLastError(L"RegisterClassExW failed");
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            SelfTest::AppendSelfTestTrace(std::format(L"InitInstance: RegisterClassExW failed gle={}", GetLastError()));
+        }
+#endif
         return std::nullopt;
     }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"InitInstance: RegisterClassExW ok");
+    }
+#endif
 
     std::wstring szTitle(MAX_LOADSTRING, L'\0');
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle.data(), MAX_LOADSTRING);
@@ -5050,8 +6366,20 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
     if (! hWnd)
     {
         Debug::ErrorWithLastError(L"CreateWindowW failed");
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            SelfTest::AppendSelfTestTrace(std::format(L"InitInstance: CreateWindowW failed gle={}", GetLastError()));
+        }
+#endif
         return std::nullopt;
     }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(std::format(L"InitInstance: CreateWindowW ok hwnd=0x{:X}", reinterpret_cast<uintptr_t>(hWnd.get())));
+    }
+#endif
 
     StartupMetrics::MarkFirstWindowCreated(kMainWindowId);
 
@@ -5084,16 +6412,66 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
             }
         }
     }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"InitInstance: window placement restored");
+    }
+#endif
 
-    SplashScreen::SetOwner(hWnd.get());
+    if (SplashScreen::Exist())
+    {
+        SplashScreen::SetOwner(hWnd.get());
+    }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"InitInstance: splash owner set");
+    }
+#endif
 
     {
         Debug::Perf::Scope perf(L"App.Startup.InitInstance.ShowUpdateWindow");
         perf.SetValue0(static_cast<uint64_t>(showCmd));
 
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            SelfTest::AppendSelfTestTrace(L"InitInstance: ShowWindow begin");
+        }
+#endif
         ShowWindow(hWnd.get(), showCmd);
-        UpdateWindow(hWnd.get());
+        g_mainMenuBarHost.UpdateLayout();
+        if (const HWND menuBarWindow = g_mainMenuBarHost.GetHwnd(); menuBarWindow && IsWindowVisible(menuBarWindow) != FALSE)
+        {
+            RedrawWindow(menuBarWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ERASE);
+        }
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            SelfTest::AppendSelfTestTrace(L"InitInstance: ShowWindow ok");
+            SelfTest::AppendSelfTestTrace(L"InitInstance: UpdateWindow begin");
+        }
+#endif
+#ifdef ENABLE_TESTS
+        if (! IsRunningAnySelfTest())
+#endif
+        {
+            UpdateWindow(hWnd.get());
+        }
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            SelfTest::AppendSelfTestTrace(L"InitInstance: UpdateWindow skipped for selftest");
+        }
+#endif
     }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"InitInstance: ShowWindow/UpdateWindow ok");
+    }
+#endif
     static_cast<void>(PostMessageW(hWnd.get(), WndMsg::kAppStartupInputReady, 0, 0));
 
     {
@@ -5103,7 +6481,7 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
         perf.SetHr(queued ? S_OK : E_FAIL);
     }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     DBGOUT_INFO(L"RedSalamander started, version {}\n", VERSINFO_VERSION);
 
     int argc = 0;
@@ -5127,7 +6505,7 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
 static void AdjustLayout(HWND hWnd)
 {
     const HWND folderWindow = g_hFolderWindow.load(std::memory_order_acquire);
-    if (! hWnd || ! folderWindow)
+    if (! hWnd)
     {
         return;
     }
@@ -5140,7 +6518,15 @@ static void AdjustLayout(HWND hWnd)
 
     const int width  = client.right - client.left;
     const int height = client.bottom - client.top;
-    MoveWindow(folderWindow, client.left, client.top, width, height, TRUE);
+    g_mainMenuBarHost.UpdateLayout();
+
+    if (! folderWindow)
+    {
+        return;
+    }
+
+    const int menuBarHeight = (g_menuBarVisible || g_menuBarTemporarilyShown) ? g_mainMenuBarHost.GetVisibleHeightPx() : 0;
+    MoveWindow(folderWindow, client.left, client.top + menuBarHeight, width, (std::max)(0, height - menuBarHeight), TRUE);
 }
 
 static void ApplyAppTheme(HWND hWnd)
@@ -5148,6 +6534,7 @@ static void ApplyAppTheme(HWND hWnd)
     const AppTheme theme    = ResolveConfiguredTheme();
     const bool windowActive = GetActiveWindow() == hWnd;
     ApplyTitleBarTheme(hWnd, theme, windowActive);
+    ApplyWindowBackdropTheme(hWnd, theme, WindowBackdropTarget::Primary);
 
     MessageBoxTheme messageBoxTheme{};
     messageBoxTheme.enabled      = true;
@@ -5163,11 +6550,17 @@ static void ApplyAppTheme(HWND hWnd)
     }
 
     UpdateShortcutsWindowTheme(theme);
+    UpdateConnectionManagerWindowsTheme(theme);
+    UpdateConnectionCredentialPromptWindowsTheme(theme);
     UpdateCompareDirectoriesWindowsTheme(theme);
     UpdateFindFilesWindowsTheme(theme);
+    UpdatePreferencesWindowsTheme(theme);
+    UpdatePluginConfigurationWindowsTheme(theme);
 
     UpdateThemeMenuChecks();
-    ApplyMainMenuTheme(hWnd, theme.menu);
+    g_mainMenuBarHost.SetTheme(theme);
+    g_mainMenuBarHost.SyncMenuModel();
+    SendMessageW(hWnd, WM_SIZE, 0, 0);
     RedrawWindow(hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME | RDW_ERASE | RDW_ALLCHILDREN);
 
     if (const HWND prefs = GetPreferencesDialogHandle(); prefs && IsWindow(prefs))
@@ -5189,9 +6582,13 @@ void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
         return;
     }
 
+    Localization::ApplyLanguagePreference(GetLanguagePreferenceFromSettings(g_settings));
     UpdateThemeModeFromCurrentSettings();
-    EnsureMenuHandles(hWnd);
-    RebuildThemeMenuDynamicItems(hWnd);
+    if (! ReloadLocalizedMainMenu(hWnd, true))
+    {
+        EnsureMenuHandles(hWnd);
+        RebuildThemeMenuDynamicItems(hWnd);
+    }
     ApplyAppTheme(hWnd);
 
     const Common::Settings::MainMenuState menu = g_settings.mainMenu.value_or(Common::Settings::MainMenuState{});
@@ -5200,21 +6597,6 @@ void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
     {
         g_menuBarVisible          = menu.menuBarVisible;
         g_menuBarTemporarilyShown = false;
-
-        if (g_menuBarVisible)
-        {
-            if (g_mainMenuHandle)
-            {
-                SetMenu(hWnd, g_mainMenuHandle);
-                ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
-                DrawMenuBar(hWnd);
-            }
-        }
-        else
-        {
-            SetMenu(hWnd, nullptr);
-            DrawMenuBar(hWnd);
-        }
     }
 
     if (menu.functionBarVisible != g_functionBarVisible)
@@ -5224,6 +6606,7 @@ void ApplyCurrentSettingsToRunningApp(HWND hWnd) noexcept
     }
 
     UpdatePaneMenuChecks();
+    g_mainMenuBarHost.SyncMenuModel();
     AdjustLayout(hWnd);
 
     DirectoryInfoCache::GetInstance().ApplySettings(g_settings);
@@ -5382,8 +6765,13 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
 {
     Debug::Perf::Scope wmCreatePerf(L"App.Startup.MainWindow.WM_CREATE");
     wmCreatePerf.SetDetail(kMainWindowId);
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: begin");
+    }
+#endif
 
-    g_mainMenuHandle     = GetMenu(hWnd);
     g_menuBarVisible     = true;
     g_functionBarVisible = true;
     if (g_settings.mainMenu.has_value())
@@ -5396,16 +6784,26 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
     {
         Debug::Perf::Scope perf(L"App.Startup.MainWindow.Menus");
         perf.SetDetail(kMainWindowId);
-        EnsureMenuHandles(hWnd);
-        RebuildThemeMenuDynamicItems(hWnd);
-        RebuildPluginsMenuDynamicItems(hWnd);
+        static_cast<void>(ReloadLocalizedMainMenu(hWnd, false));
     }
 
-    if (! g_menuBarVisible)
+    if (g_mainMenuHandle)
     {
         SetMenu(hWnd, nullptr);
         DrawMenuBar(hWnd);
     }
+
+    const AppTheme initialTheme = ResolveConfiguredTheme();
+    g_mainMenuBarHost.SetTheme(initialTheme);
+    if (! g_mainMenuBarHost.EnsureCreated(hWnd))
+    {
+        const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        const std::wstring message = L"Failed to create the DxUI main menu bar surface.";
+        ShowFatalErrorDialog(hWnd, caption.c_str(), message.c_str());
+        wmCreatePerf.SetHr(E_FAIL);
+        return -1;
+    }
+    g_mainMenuBarHost.SyncMenuModel();
 
     {
         Debug::Perf::Scope perf(L"App.Startup.FolderWindow.Create");
@@ -5420,14 +6818,50 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         const std::wstring message = LoadStringResource(nullptr, IDS_MSG_FAILED_CREATE_FOLDERWINDOW);
         ShowFatalErrorDialog(hWnd, caption.c_str(), message.c_str());
         wmCreatePerf.SetHr(E_FAIL);
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: folder window create failed");
+        }
+#endif
         return -1;
     }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: folder window created");
+    }
+#endif
 
     g_folderWindow.SetSettings(&g_settings);
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: folder settings pointer set");
+    }
+#endif
     g_folderWindow.SetShortcutManager(&g_shortcutManager);
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: shortcut manager set");
+    }
+#endif
     g_folderWindow.SetFunctionBarVisible(g_functionBarVisible);
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: function bar visibility set");
+    }
+#endif
 
     AdjustLayout(hWnd);
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: layout adjusted");
+    }
+#endif
 
     g_folderWindow.SetShowSortMenuCallback([hWnd](FolderWindow::Pane pane, POINT screenPoint) { ShowSortMenuPopup(hWnd, pane, screenPoint); });
 
@@ -5436,6 +6870,12 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         perf.SetDetail(kMainWindowId);
         ApplyAppTheme(hWnd);
     }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: theme applied");
+    }
+#endif
 
     const std::filesystem::path safeDefault = GetDefaultFolder().value_or(std::filesystem::path(L"C:\\"));
 
@@ -5450,7 +6890,13 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
     bool showSystemFiles      = true;
     std::vector<std::filesystem::path> folderHistory;
 
-    if (g_settings.folders)
+#ifdef ENABLE_TESTS
+    const bool useDeterministicSelfTestPaneStartup = IsRunningAnySelfTest();
+#else
+    const bool useDeterministicSelfTestPaneStartup = false;
+#endif
+
+    if (! useDeterministicSelfTestPaneStartup && g_settings.folders)
     {
         const auto& folders = *g_settings.folders;
         splitRatio          = folders.layout.splitRatio;
@@ -5499,6 +6945,12 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
     g_folderWindow.SetFolderHistoryMax(folderHistoryMax);
     g_folderWindow.SetShowHiddenFiles(showHiddenFiles);
     g_folderWindow.SetShowSystemFiles(showSystemFiles);
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: base folder settings applied");
+    }
+#endif
 
     auto applyPane = [&](FolderWindow::Pane pane, const Common::Settings::FolderPane* settingsPane)
     {
@@ -5506,7 +6958,7 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
 
         std::filesystem::path current = safeDefault;
 
-        if (settingsPane && ! settingsPane->current.empty())
+        if (! useDeterministicSelfTestPaneStartup && settingsPane && ! settingsPane->current.empty())
         {
             current = settingsPane->current;
         }
@@ -5515,7 +6967,7 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         FolderView::SortBy sortBy               = FolderView::SortBy::Name;
         FolderView::SortDirection sortDirection = FolderView::SortDirection::Ascending;
         bool statusBarVisible                   = true;
-        if (settingsPane)
+        if (! useDeterministicSelfTestPaneStartup && settingsPane)
         {
             displayMode      = DisplayModeFromSettings(settingsPane->view.display);
             sortBy           = SortByFromSettings(settingsPane->view.sortBy);
@@ -5534,6 +6986,13 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
             callPerf.SetValue0(statusBarVisible ? 1u : 0u);
             g_folderWindow.SetStatusBarVisible(pane, statusBarVisible);
         }
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            SelfTest::AppendSelfTestTrace(pane == FolderWindow::Pane::Left ? L"OnMainWindowCreate: left status bar set"
+                                                                           : L"OnMainWindowCreate: right status bar set");
+        }
+#endif
         {
             Debug::Perf::Scope callPerf(pane == FolderWindow::Pane::Left ? L"App.Startup.ApplyPane.Left.SetSort" : L"App.Startup.ApplyPane.Right.SetSort");
             callPerf.SetDetail(current.native());
@@ -5541,6 +7000,12 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
             callPerf.SetValue1(static_cast<uint64_t>(sortDirection));
             g_folderWindow.SetSort(pane, sortBy, sortDirection);
         }
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            SelfTest::AppendSelfTestTrace(pane == FolderWindow::Pane::Left ? L"OnMainWindowCreate: left sort set" : L"OnMainWindowCreate: right sort set");
+        }
+#endif
         {
             Debug::Perf::Scope callPerf(pane == FolderWindow::Pane::Left ? L"App.Startup.ApplyPane.Left.SetDisplayMode"
                                                                          : L"App.Startup.ApplyPane.Right.SetDisplayMode");
@@ -5548,32 +7013,75 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
             callPerf.SetValue0(static_cast<uint64_t>(displayMode));
             g_folderWindow.SetDisplayMode(pane, displayMode);
         }
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            SelfTest::AppendSelfTestTrace(pane == FolderWindow::Pane::Left ? L"OnMainWindowCreate: left display mode set"
+                                                                           : L"OnMainWindowCreate: right display mode set");
+        }
+#endif
         {
             Debug::Perf::Scope callPerf(pane == FolderWindow::Pane::Left ? L"App.Startup.ApplyPane.Left.SetFolderPath"
                                                                          : L"App.Startup.ApplyPane.Right.SetFolderPath");
             callPerf.SetDetail(current.native());
-            g_folderWindow.SetFolderPath(pane, current);
+            if (! useDeterministicSelfTestPaneStartup)
+            {
+                g_folderWindow.SetFolderPath(pane, current);
+            }
         }
+#ifdef ENABLE_TESTS
+        if (IsRunningAnySelfTest())
+        {
+            if (useDeterministicSelfTestPaneStartup)
+            {
+                SelfTest::AppendSelfTestTrace(pane == FolderWindow::Pane::Left ? L"OnMainWindowCreate: left folder path skipped for selftest"
+                                                                               : L"OnMainWindowCreate: right folder path skipped for selftest");
+            }
+            else
+            {
+                SelfTest::AppendSelfTestTrace(pane == FolderWindow::Pane::Left ? L"OnMainWindowCreate: left folder path set"
+                                                                               : L"OnMainWindowCreate: right folder path set");
+            }
+        }
+#endif
     };
 
     applyPane(FolderWindow::Pane::Left, leftSettings);
     applyPane(FolderWindow::Pane::Right, rightSettings);
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: pane settings applied");
+    }
+#endif
 
-    if (! folderHistory.empty())
+    if (! useDeterministicSelfTestPaneStartup && ! folderHistory.empty())
     {
         Debug::Perf::Scope perf(L"App.Startup.FolderHistory.Set");
         perf.SetDetail(kMainWindowId);
         perf.SetValue0(folderHistory.size());
         g_folderWindow.SetFolderHistory(folderHistory);
     }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: folder history processed");
+    }
+#endif
 
-    const HRESULT hotReloadHr = SettingsHotReload::Start(hWnd, kAppId);
+    const HRESULT hotReloadHr = useDeterministicSelfTestPaneStartup ? S_FALSE : SettingsHotReload::Start(hWnd, kAppId);
     if (FAILED(hotReloadHr))
     {
         Debug::Warning(L"SettingsHotReload::Start failed (hr=0x{:08X})", static_cast<unsigned long>(hotReloadHr));
     }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(std::format(L"OnMainWindowCreate: hot reload start hr=0x{:08X}", static_cast<unsigned>(hotReloadHr)));
+    }
+#endif
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     if (g_runCompareDirectoriesSelfTest)
     {
         SplashScreen::IfExistSetText(L"Launching compare-selftest...");
@@ -5602,33 +7110,18 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         TraceSelfTestExitCode(L"CompareSelfTest: end", g_selfTestExitCode);
     }
 
-    if (g_runCommandsSelfTest)
+    const bool deferCommandsSelfTest = g_runCommandsSelfTest && ! g_runCompareDirectoriesSelfTest && ! g_runFileOpsSelfTest;
+
+    if (g_runCommandsSelfTest && ! deferCommandsSelfTest)
     {
-        SplashScreen::IfExistSetText(L"Launching commands-selftest...");
-        SelfTest::SelfTestSuiteResult commandsResult;
-        Debug::Info(L"CommandsSelfTest: running");
-        SelfTest::InitSelfTestRun(g_selfTestOptions);
-        SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: begin");
-        SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: begin");
-        g_selfTestExitCode |= CommandsSelfTest::Run(hWnd, g_selfTestOptions, &commandsResult) ? 0 : 1;
-        RecordSelfTestSuite(commandsResult);
-        if (g_selfTestExitCode != 0)
-        {
-            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: FAIL");
-            SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: FAIL");
-            if (! commandsResult.failureMessage.empty())
-            {
-                SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, commandsResult.failureMessage);
-                SelfTest::AppendSelfTestTrace(commandsResult.failureMessage);
-            }
-        }
-        else
-        {
-            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands, L"CommandsSelfTest: PASS");
-            SelfTest::AppendSelfTestTrace(L"CommandsSelfTest: PASS");
-        }
-        TraceSelfTestExitCode(L"CommandsSelfTest: end", g_selfTestExitCode);
+        static_cast<void>(RunCommandsSelfTestAndRequestShutdown(hWnd));
     }
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: command selftest dispatch processed");
+    }
+#endif
 
     if (g_runFileOpsSelfTest)
     {
@@ -5636,7 +7129,33 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         Debug::Info(L"FileOpsSelfTest: scheduling");
         SelfTest::InitSelfTestRun(g_selfTestOptions);
         SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, L"FileOpsSelfTest: scheduling");
-        FileOperationsSelfTest::Start(hWnd, g_selfTestOptions);
+        g_fileOpsSelfTestRunFilters            = FileOperationsSelfTest::BuildRunFilters(g_selfTestOptions);
+        g_fileOpsSelfTestExpectedCases         = FileOperationsSelfTest::BuildExpectedCaseNames(g_selfTestOptions);
+        g_fileOpsSelfTestRunIndex              = 0;
+        g_fileOpsSelfTestAggregateResult       = {};
+        g_fileOpsSelfTestAggregateResult.suite = SelfTest::SelfTestSuite::FileOperations;
+
+        if (g_fileOpsSelfTestRunFilters.empty() || g_fileOpsSelfTestExpectedCases.empty())
+        {
+            const std::wstring message = std::format(L"FileOpsSelfTest: unknown case/family filter '{}'.", g_selfTestOptions.caseFilter);
+            Debug::Error(L"{}", message);
+            SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::FileOperations, message);
+            SelfTest::AppendSelfTestTrace(message);
+
+            SelfTest::SelfTestSuiteResult failure{};
+            failure.suite          = SelfTest::SelfTestSuite::FileOperations;
+            failure.failed         = 1;
+            failure.failureMessage = message;
+            RecordSelfTestSuite(std::move(failure));
+
+            g_selfTestExitCode |= 1;
+            TraceSelfTestExitCode(L"FileOpsSelfTest: scheduling failed", g_selfTestExitCode);
+            FinalizeSelfTestRun();
+            PostQuitMessage(g_selfTestExitCode);
+            return 0;
+        }
+
+        StartNextFileOpsSelfTestRun(hWnd);
         if (SetTimer(hWnd, kFileOpsSelfTestTimerId, kFileOpsSelfTestTimerIntervalMs, nullptr) == 0)
         {
             const HRESULT hr     = HRESULT_FROM_WIN32(GetLastError());
@@ -5658,7 +7177,16 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
         }
     }
 
-    if ((g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) && ! g_runFileOpsSelfTest)
+    if (deferCommandsSelfTest)
+    {
+        SplashScreen::IfExistSetText(L"Scheduling commands-selftest...");
+        if (PostMessageW(hWnd, kCommandsSelfTestStartMessage, 0, 0) == 0)
+        {
+            FinalizeSelfTestRun();
+            PostQuitMessage(g_selfTestExitCode);
+        }
+    }
+    else if ((g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) && ! g_runFileOpsSelfTest)
     {
         // Selftests may exit before the app reaches its normal "input ready" phase.
         // Close the splash and route shutdown through WM_CLOSE/WM_DESTROY so graphics resources are torn down
@@ -5672,6 +7200,12 @@ LRESULT OnMainWindowCreate(HWND hWnd, [[maybe_unused]] const CREATESTRUCTW* crea
 #endif
 
     wmCreatePerf.SetHr(S_OK);
+#ifdef ENABLE_TESTS
+    if (IsRunningAnySelfTest())
+    {
+        SelfTest::AppendSelfTestTrace(L"OnMainWindowCreate: success");
+    }
+#endif
     return 0;
 }
 
@@ -5785,11 +7319,11 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
     switch (wmId)
     {
         case IDM_ABOUT:
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-            DialogBox(g_hInstance, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-#pragma warning(pop)
+        {
+            const AppTheme theme = ResolveConfiguredTheme();
+            static_cast<void>(ShowAboutDialog(hWnd, theme));
             break;
+        }
         case IDM_FILE_PREFERENCES:
         {
             const AppTheme theme = ResolveConfiguredTheme();
@@ -5833,22 +7367,8 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             g_menuBarVisible          = ! g_menuBarVisible;
             g_menuBarTemporarilyShown = false;
 
-            if (g_menuBarVisible)
-            {
-                if (g_mainMenuHandle)
-                {
-                    SetMenu(hWnd, g_mainMenuHandle);
-                    ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
-                    DrawMenuBar(hWnd);
-                }
-            }
-            else
-            {
-                SetMenu(hWnd, nullptr);
-                DrawMenuBar(hWnd);
-            }
-
             UpdatePaneMenuChecks();
+            g_mainMenuBarHost.SyncMenuModel();
             AdjustLayout(hWnd);
             break;
         }
@@ -6075,7 +7595,20 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         {
             g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
             const AppTheme theme = ResolveConfiguredTheme();
+#ifdef ENABLE_TESTS
+            if (const auto beforePath = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left); beforePath.has_value())
+            {
+                SelfTest::AppendSelfTestTrace(std::format(L"IDM_LEFT_HOT_PATHS before='{}'", beforePath->wstring()));
+            }
+#endif
             static_cast<void>(ShowPreferencesDialogHotPaths(hWnd, kAppId, g_settings, theme));
+            g_folderWindow.ResyncNavigationShellFromFolderView(FolderWindow::Pane::Left);
+#ifdef ENABLE_TESTS
+            if (const auto afterPath = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left); afterPath.has_value())
+            {
+                SelfTest::AppendSelfTestTrace(std::format(L"IDM_LEFT_HOT_PATHS after='{}'", afterPath->wstring()));
+            }
+#endif
             break;
         }
         case IDM_LEFT_ZOOM_PANEL: g_folderWindow.ToggleZoomPanel(FolderWindow::Pane::Left); break;
@@ -6094,6 +7627,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             g_folderWindow.SetActivePane(FolderWindow::Pane::Right);
             const AppTheme theme = ResolveConfiguredTheme();
             static_cast<void>(ShowPreferencesDialogHotPaths(hWnd, kAppId, g_settings, theme));
+            g_folderWindow.ResyncNavigationShellFromFolderView(FolderWindow::Pane::Right);
             break;
         }
         case IDM_RIGHT_ZOOM_PANEL: g_folderWindow.ToggleZoomPanel(FolderWindow::Pane::Right); break;
@@ -6122,8 +7656,20 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             static_cast<void>(SendCommandToFolderView(pane, IDM_FOLDERVIEW_CONTEXT_DELETE));
             break;
         }
+        case IDM_PANE_CLIPBOARD_CUT:
+        {
+            if (g_folderWindow.TryHandleNavigationEditClipboardCommand(id))
+            {
+                break;
+            }
+            break;
+        }
         case IDM_PANE_CLIPBOARD_COPY:
         {
+            if (g_folderWindow.TryHandleNavigationEditClipboardCommand(id))
+            {
+                break;
+            }
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.SetActivePane(pane);
             static_cast<void>(SendCommandToFolderView(pane, IDM_FOLDERVIEW_CONTEXT_COPY));
@@ -6155,6 +7701,10 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_PANE_SELECTION_SELECT_ALL:
         {
+            if (g_folderWindow.TryHandleNavigationEditClipboardCommand(id))
+            {
+                break;
+            }
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.SetActivePane(pane);
             static_cast<void>(SendCommandToFolderView(pane, IDM_FOLDERVIEW_CONTEXT_SELECT_ALL));
@@ -6189,6 +7739,18 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.CommandSelectionRestore(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_SELECT_SAME_NAME:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionSelectSameName(pane);
+            break;
+        }
+        case IDM_PANE_SELECTION_UNSELECT_SAME_NAME:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandSelectionUnselectSameName(pane);
             break;
         }
         case IDM_PANE_SELECTION_INVERT:
@@ -6241,6 +7803,10 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_PANE_CLIPBOARD_PASTE:
         {
+            if (g_folderWindow.TryHandleNavigationEditClipboardCommand(id))
+            {
+                break;
+            }
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
             g_folderWindow.SetActivePane(pane);
             static_cast<void>(SendCommandToFolderView(pane, IDM_FOLDERVIEW_CONTEXT_PASTE));
@@ -6476,7 +8042,7 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_PANE_CONNECTION_MANAGER:
         {
-            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            const FolderWindow::Pane pane = g_folderWindow.GetActivePane();
             const AppTheme theme          = ResolveConfiguredTheme();
 
             static_cast<void>(ShowConnectionManagerWindow(hWnd, kAppId, g_settings, theme, {}, static_cast<uint8_t>(pane)));
@@ -6920,14 +8486,27 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
 
 LRESULT OnMainWindowSysCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-    if ((wParam & 0xFFF0u) == SC_KEYMENU && lParam == 0 && ! g_menuBarVisible && GetMenu(hWnd) == nullptr && g_mainMenuHandle)
+    if ((wParam & 0xFFF0u) == SC_KEYMENU && g_mainMenuHandle)
     {
-        SetMenu(hWnd, g_mainMenuHandle);
-        g_menuBarTemporarilyShown = true;
-        ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
         EnsureMenuHandles(hWnd);
         UpdatePaneMenuChecks();
+        if (! g_menuBarVisible)
+        {
+            g_menuBarTemporarilyShown = true;
+        }
         AdjustLayout(hWnd);
+        if (lParam != 0)
+        {
+            if (! g_mainMenuBarHost.ActivateMnemonic(static_cast<wchar_t>(lParam)))
+            {
+                static_cast<void>(g_mainMenuBarHost.FocusFirstItem());
+            }
+        }
+        else
+        {
+            static_cast<void>(g_mainMenuBarHost.FocusFirstItem());
+        }
+        return 0;
     }
     return DefWindowProcW(hWnd, WM_SYSCOMMAND, wParam, lParam);
 }
@@ -6965,8 +8544,6 @@ LRESULT OnMainWindowExitMenuLoop(HWND hWnd, [[maybe_unused]] BOOL isTrackPopupMe
     if (g_menuBarTemporarilyShown && ! g_menuBarVisible)
     {
         g_menuBarTemporarilyShown = false;
-        SetMenu(hWnd, nullptr);
-        DrawMenuBar(hWnd);
         AdjustLayout(hWnd);
     }
 
@@ -7002,7 +8579,12 @@ LRESULT OnMainWindowPaint(HWND hWnd)
 LRESULT OnMainWindowStartupInputReady([[maybe_unused]] HWND hWnd)
 {
     StartupMetrics::MarkInputReady(kMainWindowId);
-    SplashScreen::CloseIfExist();
+#ifdef ENABLE_TESTS
+    if (! IsRunningAnySelfTest())
+#endif
+    {
+        SplashScreen::RequestCloseIfExist();
+    }
     CrashHandler::ShowPreviousCrashUiIfPresent(hWnd);
     return 0;
 }
@@ -7021,7 +8603,6 @@ LRESULT OnMainWindowDpiChanged(HWND hWnd, UINT newDpi, const RECT* prcNew)
         SetWindowPos(hWnd, nullptr, prcNew->left, prcNew->top, prcNew->right - prcNew->left, prcNew->bottom - prcNew->top, SWP_NOZORDER | SWP_NOACTIVATE);
     }
 
-    ApplyMainMenuTheme(hWnd, g_mainMenuTheme);
     AdjustLayout(hWnd);
     return 0;
 }
@@ -7053,6 +8634,15 @@ LRESULT OnMainWindowConnectionManagerConnect([[maybe_unused]] HWND hWnd, WPARAM 
         return 0;
     }
 
+#ifdef ENABLE_TESTS
+    {
+        const std::scoped_lock lock(g_debugConnectionManagerConnectMutex);
+        g_debugConnectionManagerConnectSeen = true;
+        g_debugConnectionManagerConnectPane = static_cast<uint8_t>(wParam == 1u ? 1u : 0u);
+        g_debugConnectionManagerConnectName = *name;
+    }
+#endif
+
     const FolderWindow::Pane pane = (wParam == 1u) ? FolderWindow::Pane::Right : FolderWindow::Pane::Left;
     g_folderWindow.SetActivePane(pane);
 
@@ -7071,6 +8661,7 @@ struct ShutdownCloseWindowSnapshotContext final
 
 constexpr std::wstring_view kInternalWindowClassPrefix = L"RedSalamander.";
 constexpr UINT kShutdownCloseTimeoutMs                 = 1000;
+constexpr UINT kFinalizeMainWindowCloseMessage         = WM_APP + 0x47;
 
 BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
 {
@@ -7154,7 +8745,7 @@ BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
 
 LRESULT OnMainWindowClose(HWND hWnd)
 {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
         if (! DestroyWindow(hWnd))
@@ -7174,10 +8765,12 @@ LRESULT OnMainWindowClose(HWND hWnd)
     // The D2D debug layer breaks on shutdown if any D2D objects are still alive at DLL unload time.
     if (! CloseUnownedTopLevelRedSalamanderWindowsForShutdown(hWnd))
     {
-        return 0;
+        Debug::Warning(L"Shutdown: proceeding while one or more internal top-level windows are still closing.");
     }
 
-    DestroyWindow(hWnd);
+    // Post the final destroy so any auxiliary windows that just received WM_CLOSE can process their own
+    // posted teardown before the main window posts WM_QUIT.
+    static_cast<void>(PostMessageW(hWnd, kFinalizeMainWindowCloseMessage, 0, 0));
     return 0;
 }
 
@@ -7185,7 +8778,7 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
 {
     SettingsHotReload::Stop();
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
     {
         g_folderWindow.CloseAllViewers();
@@ -7208,7 +8801,7 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
     SaveAppSettings(hWnd);
     SessionState::Clear();
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     ShutdownSelfTestMonitor();
     TraceSelfTestExitCode(L"OnMainWindowDestroy: PostQuitMessage",
                           (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
@@ -7220,23 +8813,82 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
     return 0;
 }
 
-INT_PTR OnAboutDialogCommand(HWND hDlg, WORD commandId) noexcept
-{
-    if (commandId == IDOK || commandId == IDCANCEL)
-    {
-        EndDialog(hDlg, commandId);
-        return static_cast<INT_PTR>(TRUE);
-    }
-    return static_cast<INT_PTR>(FALSE);
-}
 } // namespace
 
+HWND GetAboutDialogHandle() noexcept
+{
+    const HWND hwnd = FindWindowW(kAboutDialogWindowClassName, nullptr);
+    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
+}
+
+HWND GetFatalErrorDialogHandle() noexcept
+{
+    const HWND hwnd = FindWindowW(kFatalErrorDialogWindowClassName, nullptr);
+    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
+}
+
+#ifdef ENABLE_TESTS
+void DebugResetConnectionManagerConnectNavigation() noexcept
+{
+    const std::scoped_lock lock(g_debugConnectionManagerConnectMutex);
+    g_debugConnectionManagerConnectSeen = false;
+    g_debugConnectionManagerConnectPane = 0u;
+    g_debugConnectionManagerConnectName.clear();
+}
+
+bool DebugGetConnectionManagerConnectNavigation(uint8_t& outPane, std::wstring& outName) noexcept
+{
+    const std::scoped_lock lock(g_debugConnectionManagerConnectMutex);
+    if (! g_debugConnectionManagerConnectSeen)
+    {
+        return false;
+    }
+
+    outPane = g_debugConnectionManagerConnectPane;
+    outName = g_debugConnectionManagerConnectName;
+    return true;
+}
+
+void DebugShowFatalErrorDialog(HWND ownerWindow, const wchar_t* caption, const wchar_t* message) noexcept
+{
+    ShowFatalErrorDialog(ownerWindow, caption, message);
+}
+
+bool DebugGetFatalErrorDialogSnapshot(FatalErrorDialogDebugSnapshot& out) noexcept
+{
+    if (const HWND hwnd = GetFatalErrorDialogHandle(); hwnd && IsWindow(hwnd) != FALSE)
+    {
+        return SendMessageW(hwnd, kFatalErrorDialogDebugGetSnapshotMessage, 0, reinterpret_cast<LPARAM>(&out)) != FALSE;
+    }
+
+    out = {};
+    return false;
+}
+
+bool DebugScrollFatalErrorDialogByWheelDetents(int detents) noexcept
+{
+    if (detents == 0)
+    {
+        return true;
+    }
+
+    if (const HWND hwnd = GetFatalErrorDialogHandle(); hwnd && IsWindow(hwnd) != FALSE)
+    {
+        return SendMessageW(hwnd, kFatalErrorDialogDebugScrollByWheelMessage, static_cast<WPARAM>(detents), 0) != FALSE;
+    }
+
+    return false;
+}
+#endif
 // Processes messages for the main window.
 LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     switch (message)
     {
         case WM_CREATE: InitPostedPayloadWindow(hWnd); return OnMainWindowCreate(hWnd, reinterpret_cast<const CREATESTRUCTW*>(lParam));
+#ifdef ENABLE_TESTS
+        case kCommandsSelfTestStartMessage: return RunCommandsSelfTestAndRequestShutdown(hWnd);
+#endif
         case WM_COMMAND: return OnMainWindowCommand(hWnd, LOWORD(wParam), HIWORD(wParam), reinterpret_cast<HWND>(lParam));
         case WndMsg::kFunctionBarInvoke: return OnFunctionBarInvoke(hWnd, wParam, lParam);
         case WndMsg::kSettingsApplied: return OnMainWindowSettingsApplied(hWnd);
@@ -7254,8 +8906,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             return DefWindowProcW(hWnd, message, wParam, lParam);
         case WM_SYSCOMMAND: return OnMainWindowSysCommand(hWnd, wParam, lParam);
         case WM_INITMENUPOPUP: OnInitMenuPopup(hWnd, reinterpret_cast<HMENU>(wParam)); return 0;
-        case WM_MEASUREITEM: return OnMeasureItem(hWnd, wParam, lParam);
-        case WM_DRAWITEM: return OnDrawItem(hWnd, wParam, lParam);
         case WM_ACTIVATE: return OnMainWindowActivate(hWnd, LOWORD(wParam));
         case WM_EXITMENULOOP: return OnMainWindowExitMenuLoop(hWnd, static_cast<BOOL>(wParam));
         case WM_SETFOCUS: return OnMainWindowSetFocus(hWnd);
@@ -7273,6 +8923,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
             return DefWindowProcW(hWnd, message, wParam, lParam);
+        case kFinalizeMainWindowCloseMessage:
+            if (IsWindow(hWnd) != FALSE)
+            {
+                DestroyWindow(hWnd);
+            }
+            return 0;
         case WM_CLOSE: return OnMainWindowClose(hWnd);
         case WM_SETTINGCHANGE:
         case WM_THEMECHANGED:
@@ -7281,16 +8937,4 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_DESTROY: return OnMainWindowDestroy(hWnd);
         default: return DefWindowProcW(hWnd, message, wParam, lParam);
     }
-}
-
-// Message handler for about box.
-INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, [[maybe_unused]] LPARAM lParam)
-{
-    switch (message)
-    {
-        case WM_INITDIALOG: return static_cast<INT_PTR>(TRUE);
-
-        case WM_COMMAND: return OnAboutDialogCommand(hDlg, LOWORD(wParam));
-    }
-    return static_cast<INT_PTR>(FALSE);
 }

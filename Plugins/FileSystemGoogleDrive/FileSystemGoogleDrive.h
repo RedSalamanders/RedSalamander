@@ -5,6 +5,7 @@
 #include <windows.h>
 
 #include <atomic>
+#include <condition_variable>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -89,6 +90,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetConfiguration(const char* configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetConfiguration(const char** configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE SomethingToSave(BOOL* pSomethingToSave) noexcept override;
+    [[nodiscard]] static const char* StaticConfigurationSchema() noexcept;
 
     HRESULT STDMETHODCALLTYPE GetMenuItems(const NavigationMenuItem** items, unsigned int* count) noexcept override;
     HRESULT STDMETHODCALLTYPE ExecuteMenuCommand(unsigned int commandId) noexcept override;
@@ -158,6 +160,11 @@ public:
                                           void* cookie                     = nullptr) noexcept override;
 
     HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
+                                               FileSystemOperation operationType,
+                                               FileSystemTransferEndpoint endpoint,
+                                               FileSystemTransferHints* hints) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
 
     struct Settings
     {
@@ -184,9 +191,18 @@ private:
         unsigned int commandId = 0;
     };
 
+    struct NavigationMenuCallbackSnapshot
+    {
+        INavigationMenuCallback* callback = nullptr;
+        void* cookie                      = nullptr;
+        uint64_t generation               = 0;
+    };
+
     HRESULT SetConfigurationImpl(const char* configurationJsonUtf8);
     HRESULT ReadDirectoryInfoImpl(const wchar_t* path, IFilesInformation** ppFilesInformation);
     HRESULT GetDriveInfoImpl(const wchar_t* path, DriveInfo* info);
+    [[nodiscard]] bool TryCaptureNavigationMenuCallback(NavigationMenuCallbackSnapshot& snapshot) noexcept;
+    HRESULT InvokeNavigationMenuCallback(const NavigationMenuCallbackSnapshot& snapshot, const wchar_t* path) noexcept;
 
     HRESULT ResolveConnection(const wchar_t* path, bool acquireSecrets, ResolvedConnection& outConnection);
     HRESULT GetAccessToken(const ResolvedConnection& connection, std::wstring& accessToken);
@@ -203,10 +219,14 @@ private:
 
     std::mutex _stateMutex;
     Settings _settings{};
-    std::string _configurationJson = "{}";
+    std::string _configurationJsonStorage[2] = {"{}", "{}"}; // Double-buffer to keep old pointer valid
+    size_t _configurationJsonIndex           = 0;
 
     INavigationMenuCallback* _navigationMenuCallback = nullptr;
     void* _navigationMenuCallbackCookie              = nullptr;
+    uint64_t _navigationMenuCallbackGeneration       = 0;
+    size_t _navigationMenuCallbacksInFlight          = 0;
+    std::condition_variable _navigationMenuDrainCv;
     std::vector<MenuEntry> _menuEntries;
     std::vector<NavigationMenuItem> _menuEntryView;
 
@@ -223,3 +243,5 @@ private:
     std::mutex _tokenMutex;
     std::unordered_map<std::wstring, AccessTokenCacheEntry> _accessTokensByConnectionKey;
 };
+
+[[nodiscard]] const char* GetFileSystemGoogleDriveStaticConfigurationSchema() noexcept;

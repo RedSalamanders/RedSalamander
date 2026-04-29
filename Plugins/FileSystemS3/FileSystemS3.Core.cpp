@@ -422,12 +422,10 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::UnwatchDirectory(const wchar_t* path) no
         registration->active.store(false, std::memory_order_release);
     }
 
-    const DWORD currentThreadId = GetCurrentThreadId();
-    const unsigned int targetInFlight =
-        registration->callbackThreadId.load(std::memory_order_acquire) == currentThreadId ? 1u : 0u;
+    const DWORD currentThreadId       = GetCurrentThreadId();
+    const unsigned int targetInFlight = registration->callbackThreadId.load(std::memory_order_acquire) == currentThreadId ? 1u : 0u;
     std::unique_lock drainLock(registration->drainMutex);
-    registration->drainCv.wait(
-        drainLock, [&]() noexcept { return registration->inFlight.load(std::memory_order_acquire) <= targetInFlight; });
+    registration->drainCv.wait(drainLock, [&]() noexcept { return registration->inFlight.load(std::memory_order_acquire) <= targetInFlight; });
     return S_OK;
 }
 
@@ -449,8 +447,18 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetConfigurationSchema(const char** sche
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = (_mode == FileSystemS3Mode::S3) ? kSchemaJsonS3 : kSchemaJsonS3Table;
+    *schemaJsonUtf8 = StaticConfigurationSchema(_mode);
     return S_OK;
+}
+
+const char* GetFileSystemS3StaticConfigurationSchema(FileSystemS3Mode mode) noexcept
+{
+    return FileSystemS3::StaticConfigurationSchema(mode);
+}
+
+const char* FileSystemS3::StaticConfigurationSchema(FileSystemS3Mode mode) noexcept
+{
+    return (mode == FileSystemS3Mode::S3) ? kSchemaJsonS3 : kSchemaJsonS3Table;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemS3::GetCapabilities(const char** jsonUtf8) noexcept
@@ -461,5 +469,47 @@ HRESULT STDMETHODCALLTYPE FileSystemS3::GetCapabilities(const char** jsonUtf8) n
     }
 
     *jsonUtf8 = (_mode == FileSystemS3Mode::S3) ? kCapabilitiesJsonS3 : kCapabilitiesJsonS3Table;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemS3::GetTransferHints([[maybe_unused]] const wchar_t* path,
+                                                         [[maybe_unused]] FileSystemOperation operationType,
+                                                         [[maybe_unused]] FileSystemTransferEndpoint endpoint,
+                                                         FileSystemTransferHints* hints) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || hints == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (hints->sizeBytes < sizeof(FileSystemTransferHints))
+    {
+        return E_INVALIDARG;
+    }
+
+    hints->latencyClass = FILESYSTEM_TRANSFER_LATENCY_CLOUD;
+    hints->flags =
+        FILESYSTEM_TRANSFER_HINT_PREFERS_LARGE_BUFFERS | FILESYSTEM_TRANSFER_HINT_PREFERS_SEQUENTIAL_IO | FILESYSTEM_TRANSFER_HINT_HIGH_METADATA_COST;
+    hints->preferredBufferBytes      = 8u * 1024u * 1024u;
+    hints->preferredProgressPeriodMs = 200u;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemS3::GetStorageCharacteristics([[maybe_unused]] const wchar_t* path,
+                                                                  FileSystemStorageCharacteristics* characteristics) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || characteristics == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (characteristics->sizeBytes < sizeof(FileSystemStorageCharacteristics))
+    {
+        return E_INVALIDARG;
+    }
+
+    characteristics->storageKind = FILESYSTEM_STORAGE_CLOUD;
+    characteristics->flags = FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY | FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO | FILESYSTEM_STORAGE_FLAG_SUPPORTS_DEEP_QUEUE;
+    characteristics->queueDepthHint               = 8u;
+    characteristics->preferredCopyMoveConcurrency = 8u;
+    characteristics->preferredDeleteConcurrency   = 8u;
     return S_OK;
 }

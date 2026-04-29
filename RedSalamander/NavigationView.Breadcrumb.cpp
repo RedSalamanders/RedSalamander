@@ -62,51 +62,7 @@ void NavigationView::RenderPathSection()
         _d2dContext->FillRectangle(section2Rect, _backgroundBrushD2D.get());
     }
 
-    if (_editMode)
-    {
-        const auto chrome           = ComputeEditChromeRects(_sectionPathRect, _dpi);
-        const D2D1_RECT_F closeRect = D2D1::RectF(static_cast<float>(chrome.closeRect.left),
-                                                  static_cast<float>(chrome.closeRect.top),
-                                                  static_cast<float>(chrome.closeRect.right),
-                                                  static_cast<float>(chrome.closeRect.bottom));
-
-        const D2D1_RECT_F underlineRect = D2D1::RectF(static_cast<float>(chrome.underlineRect.left),
-                                                      static_cast<float>(chrome.underlineRect.top),
-                                                      static_cast<float>(chrome.underlineRect.right),
-                                                      static_cast<float>(chrome.underlineRect.bottom));
-
-        if (_accentBrush)
-        {
-            _d2dContext->FillRectangle(underlineRect, _accentBrush.get());
-        }
-
-        const float hoverInset        = DipsToPixels(kBreadcrumbHoverInsetDip, _dpi);
-        const float hoverCornerRadius = DipsToPixels(kBreadcrumbHoverCornerRadiusDip, _dpi);
-
-        if (_editCloseHovered && _hoverBrush)
-        {
-            const D2D1_RECT_F hoverRect = InsetRectF(closeRect, hoverInset, hoverInset);
-            _d2dContext->FillRoundedRectangle(RoundedRect(hoverRect, hoverCornerRadius), _hoverBrush.get());
-        }
-
-        ID2D1SolidColorBrush* closeBrush = _textBrush.get();
-        if (closeBrush)
-        {
-            const float iconStroke = std::max(1.0f, DipsToPixels(kEditCloseIconStrokeDip, _dpi));
-
-            const float closeWidth  = std::max(0.0f, closeRect.right - closeRect.left);
-            const float closeHeight = std::max(0.0f, closeRect.bottom - closeRect.top);
-            const float maxHalf     = std::min(closeWidth, closeHeight) * 0.5f;
-            const float iconHalf    = std::min(DipsToPixels(kEditCloseIconHalfDip, _dpi), maxHalf);
-
-            const float cx = (closeRect.left + closeRect.right) * 0.5f;
-            const float cy = (closeRect.top + closeRect.bottom) * 0.5f;
-
-            _d2dContext->DrawLine(D2D1::Point2F(cx - iconHalf, cy - iconHalf), D2D1::Point2F(cx + iconHalf, cy + iconHalf), closeBrush, iconStroke);
-            _d2dContext->DrawLine(D2D1::Point2F(cx - iconHalf, cy + iconHalf), D2D1::Point2F(cx + iconHalf, cy - iconHalf), closeBrush, iconStroke);
-        }
-    }
-    else
+    if (! _editMode)
     {
         RenderBreadcrumbs();
     }

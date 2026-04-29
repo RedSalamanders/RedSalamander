@@ -19,6 +19,14 @@
     Build MSIX package after a successful build (Release only)
 .PARAMETER Msi
     Build MSI package after a successful build (Release only, requires WiX Toolset)
+.PARAMETER BuildNumber
+    Override the build number shared by all modules in the current build invocation.
+    Required for local official release builds. In CI, GITHUB_RUN_NUMBER is used automatically.
+.PARAMETER OfficialRelease
+    Stamp binaries as an official release build (no local beta Debug/Release suffix in displayed versions).
+    Official release mode requires -BuildNumber or a CI environment with GITHUB_RUN_NUMBER.
+.PARAMETER MonitorDiagnostics
+    Deprecated. Diagnostics are enabled at runtime with --etw and perf JSONL with --perf.
 .EXAMPLE
     .\build.ps1
     Builds entire solution in Debug configuration
@@ -37,6 +45,9 @@
 .EXAMPLE
     .\build.ps1 -Msi
     Builds entire solution in Release and produces an MSI installer
+.EXAMPLE
+    .\build.ps1 -Configuration Release -BuildNumber 183 -OfficialRelease
+    Builds an official release-stamped binary set using CI/release build number 183
 #>
 
 [CmdletBinding()]
@@ -62,10 +73,117 @@ param(
     [switch]$Msix,
 
     [Parameter(HelpMessage = "Build MSI package after build (Release only, requires WiX Toolset)")]
-    [switch]$Msi
+    [switch]$Msi,
+
+    [Parameter(HelpMessage = "Build ZIP package after build (Release only)")]
+    [switch]$Zip,
+
+    [Parameter(HelpMessage = "Generate winget manifest after build (Release only)")]
+    [switch]$GenerateWingetManifest,
+
+    [Parameter(HelpMessage = "Override the build number (required for local official release builds)")]
+    [int]$BuildNumber = 0,
+
+    [Parameter(HelpMessage = "Stamp binaries as an official release build (requires -BuildNumber or CI)")]
+    [switch]$OfficialRelease,
+
+    [Parameter(HelpMessage = "Deprecated; use the runtime --etw flag instead")]
+    [switch]$MonitorDiagnostics
 )
 
 $ErrorActionPreference = "Stop"
+$BuildProjectSelectionScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\BuildProjectSelection.ps1"
+$MSBuildInvocationScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\MSBuildInvocation.ps1"
+$ProcessStreamingScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\ProcessStreaming.ps1"
+if (-not (Test-Path $BuildProjectSelectionScript)) {
+    Write-Error "Build project selection helper not found: $BuildProjectSelectionScript"
+    exit 1
+}
+if (-not (Test-Path $MSBuildInvocationScript)) {
+    Write-Error "MSBuild invocation helper not found: $MSBuildInvocationScript"
+    exit 1
+}
+if (-not (Test-Path $ProcessStreamingScript)) {
+    Write-Error "Process streaming helper not found: $ProcessStreamingScript"
+    exit 1
+}
+
+. $BuildProjectSelectionScript
+. $MSBuildInvocationScript
+. $ProcessStreamingScript
+
+function Test-InteractiveTerminal {
+    try {
+        $canReadWindowTitle = $true
+        if ($null -ne $Host -and $null -ne $Host.UI -and $null -ne $Host.UI.RawUI) {
+            try {
+                $null = $Host.UI.RawUI.WindowTitle
+            }
+            catch {
+                $canReadWindowTitle = $false
+            }
+        }
+
+        return Test-RSInteractiveTerminal `
+            -IsOutputRedirected ([Console]::IsOutputRedirected) `
+            -IsErrorRedirected ([Console]::IsErrorRedirected) `
+            -HasRawUi ($null -ne $Host -and $null -ne $Host.UI -and $null -ne $Host.UI.RawUI) `
+            -CanReadWindowTitle $canReadWindowTitle
+    }
+    catch {
+        Write-Verbose "Interactive terminal detection failed: $($_.Exception.Message)"
+        return $false
+    }
+}
+
+function New-ProcessLogPath {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Prefix
+    )
+
+    $safePrefix = if ([string]::IsNullOrWhiteSpace($Prefix)) {
+        "process"
+    }
+    else {
+        ($Prefix -replace '[^A-Za-z0-9._-]', '_')
+    }
+
+    $logDir = Join-Path $PSScriptRoot ".build\logs"
+    [void](New-Item -ItemType Directory -Path $logDir -Force)
+
+    $timestamp = Get-Date -Format "yyyyMMdd_HHmmss_fff"
+    return Join-Path $logDir "$safePrefix-$timestamp.log"
+}
+
+$script:UseInteractiveTerminal = Test-InteractiveTerminal
+$script:LastProcessLogPath = $null
+
+function Write-BuildBanner {
+    $art = @(
+        '   ____          _ ____        _                                _           ',
+        '  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ ',
+        '  | |_) / _ \/ _` \___ \ / _` | |/ _` | ''_ ` _ \ / _` | ''_ \ / _` |/ _ \ ''__|',
+        '  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   ',
+        '  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   '
+    )
+
+    if ($script:UseInteractiveTerminal) {
+        $colors = @("DarkCyan", "Cyan", "Green", "Yellow", "Magenta")
+        for ($i = 0; $i -lt $art.Count; ++$i) {
+            Write-Host $art[$i] -ForegroundColor $colors[$i]
+        }
+        Write-Host "                     Build, package, and validate with confidence" -ForegroundColor DarkGray
+    }
+    else {
+        foreach ($line in $art) {
+            Write-Host $line
+        }
+        Write-Host "                     Build, package, and validate with confidence"
+    }
+
+    Write-Host ""
+}
 
 # Validate packaging options early so we fail fast before attempting a build.
 if ($Msix -and $Msi) {
@@ -73,14 +191,14 @@ if ($Msix -and $Msi) {
     exit 1
 }
 
-if (($Msix -or $Msi) -and $ProjectName) {
+if (($Msix -or $Msi -or $Zip) -and $ProjectName) {
     Write-Error "Packaging requires building the full solution. Remove -ProjectName."
     exit 1
 }
 
-$packageMode = if ($Msix) { "MSIX" } elseif ($Msi) { "MSI" } else { "None" }
+$packageMode = if ($Msix) { "MSIX" } elseif ($Msi) { "MSI" } elseif ($Zip) { "ZIP" } else { "None" }
 
-if ($Msix -or $Msi) {
+if ($Msix -or $Msi -or $Zip) {
     if (-not $PSBoundParameters.ContainsKey("Configuration")) {
         $Configuration = "Release"
     } elseif ($Configuration -ne "Release") {
@@ -89,12 +207,16 @@ if ($Msix -or $Msi) {
     }
 }
 
+if ($GenerateWingetManifest -and $Configuration -ne "Release") {
+    Write-Error "Winget manifest generation requires -Configuration Release."
+    exit 1
+}
+
 # Script constants
 $SolutionFile = Join-Path -Path $PSScriptRoot -ChildPath "RedSalamander.sln"
+$VersioningScript = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Versioning.ps1"
 
-Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "RedSalamander Build Script" -ForegroundColor Cyan
-Write-Host "========================================" -ForegroundColor Cyan
+Write-BuildBanner
 
 # Validate solution file exists
 if (-not (Test-Path $SolutionFile)) {
@@ -102,34 +224,27 @@ if (-not (Test-Path $SolutionFile)) {
     exit 1
 }
 
+if (-not (Test-Path $VersioningScript)) {
+    Write-Error "Version helper script not found: $VersioningScript"
+    exit 1
+}
+
+. $VersioningScript
+
 $SolutionFullPath = (Resolve-Path $SolutionFile).Path
 $SolutionDir = (Split-Path -Parent $SolutionFullPath)
 $SolutionDirWithSlash = $SolutionDir.TrimEnd('\') + '\'
+$versionState = Use-RSVersionStateLock -RepoRoot $SolutionDir -ScriptBlock {
+    $context = Get-RSVersionContext -RepoRoot $SolutionDir -Configuration $Configuration -Platform $Platform -BuildNumber $BuildNumber -OfficialRelease:$OfficialRelease
+    $statePath = Save-RSVersionContext -RepoRoot $SolutionDir -VersionContext $context
 
-function Resolve-ProjectFileFromSolution {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$SolutionPath,
-
-        [Parameter(Mandatory = $true)]
-        [string]$ProjectName
-    )
-
-    $solutionText = Get-Content -Path $SolutionPath -Raw
-    $pattern = 'Project\("\{[0-9A-Fa-f-]+\}"\)\s*=\s*"' + [Regex]::Escape($ProjectName) + '",\s*"([^"]+)"'
-    $match = [Regex]::Match($solutionText, $pattern)
-    if (-not $match.Success) {
-        throw "Project '$ProjectName' not found in solution '$SolutionPath'."
+    [pscustomobject]@{
+        Context = $context
+        StatePath = $statePath
     }
-
-    $relativePath = $match.Groups[1].Value
-    $projectPath = Join-Path -Path (Split-Path -Parent $SolutionPath) -ChildPath $relativePath
-    if (-not (Test-Path $projectPath)) {
-        throw "Project file not found: $projectPath"
-    }
-
-    return (Resolve-Path $projectPath).Path
 }
+$versionContext = $versionState.Context
+$versionStatePath = $versionState.StatePath
 
 # Function to find MSBuild
 function Find-MSBuild {
@@ -151,7 +266,7 @@ function Find-MSBuild {
             }
 
             # VS 2026 MSBuild should report major version 18.
-            if (($fileMajor -ne $null) -and ($fileMajor -ge 18) -and ($candidatePath -match '\\Microsoft Visual Studio\\')) {
+            if (($null -ne $fileMajor) -and ($fileMajor -ge 18) -and ($candidatePath -match '\\Microsoft Visual Studio\\')) {
                 return @{
                     Path = $candidatePath
                     Version = "MSBuild $fileMajor (PATH)"
@@ -363,6 +478,56 @@ function Resolve-UapTargetPlatformVersion {
     return $selected
 }
 
+function Invoke-MSBuild {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$MSBuildPath,
+
+        [Parameter(Mandatory = $true)]
+        [string[]]$Arguments,
+
+        [string]$WorkingDirectory = $PSScriptRoot
+    )
+
+    $effectiveArguments = @($Arguments)
+    $hasNodeReuseSetting = $effectiveArguments | Where-Object {
+        $_ -match '^(?i)/(nr|noder[e]?use):'
+    }
+    if (-not $hasNodeReuseSetting) {
+        # Disable MSBuild node reuse for script-driven builds. Reused build nodes can keep
+        # helper processes alive across invocations and make the outer script report a tool
+        # failure even when the actual compile/link work succeeded.
+        $effectiveArguments += "/nr:false"
+    }
+
+    $logPath = New-ProcessLogPath -Prefix 'msbuild'
+    $script:LastProcessLogPath = $logPath
+    $invocationPlan = Get-RSMSBuildInvocationPlan -UseInteractiveTerminal $script:UseInteractiveTerminal -LogPath $logPath
+    if ($invocationPlan.UseDirectConsole) {
+        # Preserve MSBuild's native color and message ordering in interactive terminals while still writing a file log.
+        & $MSBuildPath @effectiveArguments @($invocationPlan.AdditionalArguments)
+        $exitCode = if ($null -ne $LASTEXITCODE) { $LASTEXITCODE } else { 0 }
+    }
+    else {
+        $exitCode = Invoke-RSStreamingProcess `
+            -FilePath $MSBuildPath `
+            -Arguments $effectiveArguments `
+            -WorkingDirectory $WorkingDirectory `
+            -LogPath $logPath `
+            -OutputLineCallback {
+            param(
+                [string]$Line,
+                [bool]$IsError
+            )
+
+                Write-RSMSBuildStreamingLine -Line $Line -IsError $IsError
+            }
+    }
+    Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
+    $global:LASTEXITCODE = $exitCode
+    return $exitCode
+}
+
 # Find MSBuild
 $msbuildInfo = Find-MSBuild
 
@@ -407,23 +572,33 @@ Write-Host "  Solution:      $SolutionFile"
 Write-Host "  Target:        $(if ($ProjectName) { $ProjectName } else { 'All Projects' })"
 Write-Host "  Configuration: $Configuration"
 Write-Host "  Platform:      $Platform"
-Write-Host "  Action:        $buildTarget"
-Write-Host "  Package:       $packageMode"
-Write-Host ""
+Write-Host "  Version:       $($versionContext.DisplayVersion)" -ForegroundColor Gray
+Write-Host "  Build number:  $($versionContext.BuildNumber)" -ForegroundColor Gray
+Write-Host "  Version state: $versionStatePath" -ForegroundColor Gray
+    Write-Host "  Action:        $buildTarget"
+    Write-Host "  Package:       $packageMode"
+    Write-Host "  Monitor diag:  Runtime flag (--etw)"
+    Write-Host ""
 
 $buildInput = $SolutionFile
+$resolvedProjectPath = $null
+$buildProjectDirectly = $false
+$projectCleanTarget = 'Clean'
 if ($ProjectName) {
-    # Validate the project name early and build the solution target so solution-level
-    # project dependencies (notably plugin DLLs) are honored for targeted builds.
-    $null = Resolve-ProjectFileFromSolution -SolutionPath $SolutionFullPath -ProjectName $ProjectName
+    $buildSelection = Get-RSBuildSelection `
+        -SolutionPath $SolutionFullPath `
+        -SolutionDir $SolutionDir `
+        -ProjectName $ProjectName `
+        -Rebuild:$Rebuild
+
+    $resolvedProjectPath = $buildSelection.ResolvedProjectPath
+    $buildInput = $buildSelection.BuildInput
+    $buildProjectDirectly = $buildSelection.BuildProjectDirectly
+    $projectCleanTarget = $buildSelection.CleanTarget
 }
 
 $msbuildTarget = if ($ProjectName) {
-    if ($Rebuild) {
-        "{0}:Rebuild" -f $ProjectName
-    } else {
-        $ProjectName
-    }
+    $buildSelection.MSBuildTarget
 } elseif ($Rebuild) {
     "Rebuild"
 } else {
@@ -442,6 +617,13 @@ $buildParams = @(
 )
 
 $buildParams += "/p:SolutionDir=$SolutionDirWithSlash"
+$buildParams += "/p:RSVersionBuildNumber=$($versionContext.BuildNumber)"
+if ($OfficialRelease) {
+    $buildParams += "/p:RSVersionOfficialRelease=true"
+}
+if ($MonitorDiagnostics) {
+    Write-Warning "-MonitorDiagnostics is deprecated; launch RedSalamander or RedSalamanderMonitor with --etw instead."
+}
 
 $cleanParams = $null
 if ($Clean) {
@@ -454,9 +636,20 @@ if ($Clean) {
         "/nologo"
     )
     if ($ProjectName) {
-        $cleanParams[1] = "/t:{0}:Clean" -f $ProjectName
+        if ($buildProjectDirectly) {
+            $cleanParams[0] = $buildInput
+        } else {
+            $cleanParams[1] = "/t:$projectCleanTarget"
+        }
     }
     $cleanParams += "/p:SolutionDir=$SolutionDirWithSlash"
+    $cleanParams += "/p:RSVersionBuildNumber=$($versionContext.BuildNumber)"
+    if ($OfficialRelease) {
+        $cleanParams += "/p:RSVersionOfficialRelease=true"
+    }
+    if ($MonitorDiagnostics) {
+        Write-Warning "-MonitorDiagnostics is deprecated; launch RedSalamander or RedSalamanderMonitor with --etw instead."
+    }
 }
 
 # Start build
@@ -519,7 +712,7 @@ try {
     # Execute clean if requested
     if ($Clean) {
         Write-Host "Cleaning..." -ForegroundColor Yellow
-        & $msbuildPath $cleanParams
+        $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $cleanParams -WorkingDirectory $SolutionDir
         
         if ($LASTEXITCODE -ne 0) {
             Write-Host "Clean failed, continuing with build..." -ForegroundColor Yellow
@@ -527,7 +720,7 @@ try {
         Write-Host "Building..." -ForegroundColor Yellow
     }
     
-    & $msbuildPath $buildParams
+    $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $buildParams -WorkingDirectory $SolutionDir
     
     if ($LASTEXITCODE -ne 0) {
         $stopwatch.Stop()
@@ -550,13 +743,47 @@ try {
     
     # Show output paths
     if ($ProjectName) {
+        $isLanguageResourceProject = $false
+        if ($resolvedProjectPath) {
+            $normalizedProjectPath = $resolvedProjectPath.Replace('/', '\')
+            $isLanguageResourceProject = $normalizedProjectPath -match '\\Lang\\[^\\]+\\[^\\]+\.vcxproj$'
+        }
+
+        if ($isLanguageResourceProject) {
+            $languageOutput = ".build\\$Platform\\$Configuration\\Lang\\$ProjectName.dll"
+            if (-not (Test-Path $languageOutput)) {
+                Write-Host ""
+                Write-Host "========================================" -ForegroundColor Red
+                Write-Host "Language Resource Output Validation Failed!" -ForegroundColor Red
+                Write-Host "Expected: $languageOutput" -ForegroundColor Red
+                Write-Host "========================================" -ForegroundColor Red
+                exit 1
+            }
+
+            $fileSize = (Get-Item $languageOutput).Length
+            $fileSizeMB = [math]::Round($fileSize / 1MB, 2)
+            Write-Host "Output: $languageOutput ($fileSizeMB MB)" -ForegroundColor Cyan
+            Write-Host "Language resource output validated in Lang folder." -ForegroundColor Cyan
+        }
+
         # Show specific project output
-        $outputCandidates = @(
-            ".build\\$Platform\\$Configuration\\$ProjectName.exe",
-            ".build\\$Platform\\$Configuration\\$ProjectName.dll",
-            ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.exe",
-            ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.dll"
-        )
+        $outputCandidates = if ($isLanguageResourceProject) {
+            @()
+        } elseif ($resolvedProjectPath -and $resolvedProjectPath -like '*\Plugins\*') {
+            @(
+                ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.exe",
+                ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.dll",
+                ".build\\$Platform\\$Configuration\\$ProjectName.exe",
+                ".build\\$Platform\\$Configuration\\$ProjectName.dll"
+            )
+        } else {
+            @(
+                ".build\\$Platform\\$Configuration\\$ProjectName.exe",
+                ".build\\$Platform\\$Configuration\\$ProjectName.dll",
+                ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.exe",
+                ".build\\$Platform\\$Configuration\\Plugins\\$ProjectName.dll"
+            )
+        }
 
         foreach ($candidate in $outputCandidates) {
             if (Test-Path $candidate) {
@@ -629,7 +856,7 @@ try {
             "/nologo"
         )
 
-        & $msbuildPath $msixParams
+        $null = Invoke-MSBuild -MSBuildPath $msbuildPath -Arguments $msixParams -WorkingDirectory $SolutionDir
 
         if ($LASTEXITCODE -ne 0) {
             $msixStopwatch.Stop()
@@ -681,7 +908,12 @@ try {
         $msiStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
         try {
-            & $msiScript -Configuration $Configuration -Platform $Platform
+            $msiArgs = @(
+                "-Configuration", $Configuration,
+                "-Platform", $Platform,
+                "-BuildNumber", "$($versionContext.BuildNumber)"
+            )
+            & $msiScript @msiArgs
         }
         catch {
             $msiStopwatch.Stop()
@@ -702,7 +934,12 @@ try {
         $msiSymbolsStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
         try {
-            & $msiSymbolsScript -Configuration $Configuration -Platform $Platform
+            $msiSymbolsArgs = @(
+                "-Configuration", $Configuration,
+                "-Platform", $Platform,
+                "-BuildNumber", "$($versionContext.BuildNumber)"
+            )
+            & $msiSymbolsScript @msiSymbolsArgs
         }
         catch {
             $msiSymbolsStopwatch.Stop()
@@ -733,6 +970,95 @@ try {
                 $fileSizeMB = [math]::Round($msiFile.Length / 1MB, 2)
                 Write-Host "Output: $relativePath ($fileSizeMB MB)" -ForegroundColor Cyan
             }
+        }
+    }
+
+    if ($Zip) {
+        $zipScript = Join-Path -Path $SolutionDir -ChildPath "Installer\\zip\\build-zip.ps1"
+        if (-not (Test-Path $zipScript)) {
+            Write-Error "ZIP build script not found: $zipScript"
+            exit 1
+        }
+
+        Write-Host ""
+        Write-Host "Building ZIP package..." -ForegroundColor Yellow
+        $zipStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+
+        try {
+            $zipArgs = @(
+                "-Configuration", $Configuration,
+                "-Platform", $Platform,
+                "-BuildNumber", "$($versionContext.BuildNumber)"
+            )
+            & $zipScript @zipArgs
+        }
+        catch {
+            $zipStopwatch.Stop()
+            Write-Host ""
+            Write-Host "========================================" -ForegroundColor Red
+            Write-Host "ZIP Packaging Failed!" -ForegroundColor Red
+            Write-Host "Error: $_" -ForegroundColor Red
+            Write-Host "Packaging time: $($zipStopwatch.Elapsed.ToString('mm\:ss'))" -ForegroundColor Red
+            Write-Host "========================================" -ForegroundColor Red
+            exit 1
+        }
+
+        $zipStopwatch.Stop()
+        Write-Host "ZIP packaging completed successfully! ($($zipStopwatch.Elapsed.ToString('mm\:ss')))" -ForegroundColor Green
+
+        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
+        if (Test-Path $appPackagesDir) {
+            $zipFiles = Get-ChildItem -Path $appPackagesDir -Filter *.zip -Recurse -ErrorAction SilentlyContinue |
+                Sort-Object -Property LastWriteTime -Descending |
+                Select-Object -First 5
+
+            foreach ($zipFile in $zipFiles) {
+                $relativePath = if ($zipFile.FullName.StartsWith($SolutionDirWithSlash, [System.StringComparison]::OrdinalIgnoreCase)) {
+                    $zipFile.FullName.Substring($SolutionDirWithSlash.Length)
+                } else {
+                    $zipFile.FullName
+                }
+                $fileSizeMB = [math]::Round($zipFile.Length / 1MB, 2)
+                Write-Host "Output: $relativePath ($fileSizeMB MB)" -ForegroundColor Cyan
+            }
+        }
+    }
+
+    if ($GenerateWingetManifest) {
+        $wingetScript = Join-Path -Path $SolutionDir -ChildPath "Installer\\winget\\generate-manifest.ps1"
+        if (-not (Test-Path $wingetScript)) {
+            Write-Error "Winget manifest generation script not found: $wingetScript"
+            exit 1
+        }
+
+        Write-Host ""
+        Write-Host "Generating winget manifest..." -ForegroundColor Yellow
+
+        $appPackagesDir = Join-Path -Path $SolutionDir -ChildPath ".build\\AppPackages"
+        $MsiPath = Get-ChildItem -Path $appPackagesDir -Filter "RedSalamander-*.msi" -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -notlike "*Symbols*" } |
+            Sort-Object -Property LastWriteTime -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+        
+        $ZipPath = Get-ChildItem -Path $appPackagesDir -Filter "RedSalamander-*-Portable.zip" -Recurse -ErrorAction SilentlyContinue |
+            Sort-Object -Property LastWriteTime -Descending |
+            Select-Object -First 1 -ExpandProperty FullName
+
+        try {
+            $wingetParams = @{}
+            $wingetParams['BuildNumber'] = $versionContext.BuildNumber
+            if ($MsiPath) { $wingetParams['MsiPath'] = $MsiPath }
+            if ($ZipPath) { $wingetParams['ZipPath'] = $ZipPath }
+            
+            & $wingetScript @wingetParams
+        }
+        catch {
+            Write-Host ""
+            Write-Host "========================================" -ForegroundColor Red
+            Write-Host "Winget Manifest Generation Failed!" -ForegroundColor Red
+            Write-Host "Error: $_" -ForegroundColor Red
+            Write-Host "========================================" -ForegroundColor Red
+            exit 1
         }
     }
     

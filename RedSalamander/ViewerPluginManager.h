@@ -53,7 +53,7 @@ public:
         std::filesystem::path path;
 
         // When non-empty, this DLL exposes multiple logical plugins and this is the
-        // plugin id to request via RedSalamanderCreateEx().
+        // plugin id to request via RedSalamanderCreate().
         std::wstring factoryPluginId;
 
         bool loadable = false;
@@ -68,8 +68,7 @@ public:
         std::wstring version;
 
         wil::unique_hmodule module;
-        FARPROC createFactory   = nullptr;
-        FARPROC createFactoryEx = nullptr;
+        FARPROC createFactory = nullptr;
     };
 
     static ViewerPluginManager& GetInstance() noexcept;

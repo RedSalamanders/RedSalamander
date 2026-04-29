@@ -18,18 +18,18 @@
 
 #include <curl/curl.h>
 
+#include "FileSystemGoogleDriveResources.h"
 #include "Helpers.h"
 #include "resource.h"
-#include "FileSystemGoogleDriveResources.h"
 
 extern HINSTANCE g_hInstance;
 
 namespace
 {
-constexpr wchar_t kPluginId[]          = L"builtin/file-system-gdrive";
-constexpr wchar_t kPluginShortId[]     = L"gdrive";
-constexpr wchar_t kPluginAuthor[]      = L"RedSalamander";
-constexpr wchar_t kPluginVersion[]     = L"0.1";
+constexpr wchar_t kPluginId[]      = L"builtin/file-system-gdrive";
+constexpr wchar_t kPluginShortId[] = L"gdrive";
+constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
+constexpr wchar_t kPluginVersion[] = VERSINFO_PLUGIN_VERSION;
 
 [[nodiscard]] const wchar_t* LocalizedPluginName() noexcept
 {
@@ -1008,8 +1008,18 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetConfigurationSchema(const ch
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = kSchemaJson;
+    *schemaJsonUtf8 = StaticConfigurationSchema();
     return S_OK;
+}
+
+const char* GetFileSystemGoogleDriveStaticConfigurationSchema() noexcept
+{
+    return FileSystemGoogleDrive::StaticConfigurationSchema();
+}
+
+const char* FileSystemGoogleDrive::StaticConfigurationSchema() noexcept
+{
+    return kSchemaJson;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::SetConfiguration(const char* configurationJsonUtf8) noexcept
@@ -1025,7 +1035,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetConfiguration(const char** c
     }
 
     std::scoped_lock lock(_stateMutex);
-    *configurationJsonUtf8 = _configurationJson.c_str();
+    *configurationJsonUtf8 = _configurationJsonStorage[_configurationJsonIndex].c_str();
     return S_OK;
 }
 
@@ -1037,7 +1047,8 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::SomethingToSave(BOOL* pSomethin
     }
 
     std::scoped_lock lock(_stateMutex);
-    *pSomethingToSave = (! _configurationJson.empty() && _configurationJson != "{}") ? TRUE : FALSE;
+    const auto& config = _configurationJsonStorage[_configurationJsonIndex];
+    *pSomethingToSave  = (! config.empty() && config != "{}") ? TRUE : FALSE;
     return S_OK;
 }
 
@@ -1109,15 +1120,8 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::ExecuteMenuCommand(unsigned int
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
 
-        INavigationMenuCallback* callback = nullptr;
-        void* cookie                      = nullptr;
-        {
-            std::scoped_lock lock(_stateMutex);
-            callback = _navigationMenuCallback;
-            cookie   = _navigationMenuCallbackCookie;
-        }
-
-        if (! callback)
+        NavigationMenuCallbackSnapshot callbackSnapshot{};
+        if (! TryCaptureNavigationMenuCallback(callbackSnapshot))
         {
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
@@ -1145,16 +1149,62 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::ExecuteMenuCommand(unsigned int
         }
 
         const std::wstring targetPath = std::format(L"/@conn:{}/", connectionName.get());
-        return callback->NavigationMenuRequestNavigate(targetPath.c_str(), cookie);
+        return InvokeNavigationMenuCallback(callbackSnapshot, targetPath.c_str());
     });
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::SetCallback(INavigationMenuCallback* callback, void* cookie) noexcept
 {
-    std::scoped_lock lock(_stateMutex);
+    std::unique_lock lock(_stateMutex);
+    ++_navigationMenuCallbackGeneration;
     _navigationMenuCallback       = callback;
     _navigationMenuCallbackCookie = callback ? cookie : nullptr;
+    if (! callback)
+    {
+        _navigationMenuDrainCv.wait(lock, [this]() noexcept { return _navigationMenuCallbacksInFlight == 0; });
+    }
     return S_OK;
+}
+
+bool FileSystemGoogleDrive::TryCaptureNavigationMenuCallback(NavigationMenuCallbackSnapshot& snapshot) noexcept
+{
+    std::scoped_lock lock(_stateMutex);
+    if (! _navigationMenuCallback)
+    {
+        snapshot = {};
+        return false;
+    }
+
+    snapshot.callback   = _navigationMenuCallback;
+    snapshot.cookie     = _navigationMenuCallbackCookie;
+    snapshot.generation = _navigationMenuCallbackGeneration;
+    return true;
+}
+
+HRESULT FileSystemGoogleDrive::InvokeNavigationMenuCallback(const NavigationMenuCallbackSnapshot& snapshot, const wchar_t* path) noexcept
+{
+    INavigationMenuCallback* callback = nullptr;
+    void* cookie                      = nullptr;
+    {
+        std::unique_lock lock(_stateMutex);
+        if (_navigationMenuCallbackGeneration != snapshot.generation || _navigationMenuCallback != snapshot.callback)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        ++_navigationMenuCallbacksInFlight;
+        callback = snapshot.callback;
+        cookie   = snapshot.cookie;
+    }
+
+    const HRESULT callbackHr = callback->NavigationMenuRequestNavigate(path, cookie);
+
+    {
+        std::scoped_lock lock(_stateMutex);
+        --_navigationMenuCallbacksInFlight;
+    }
+    _navigationMenuDrainCv.notify_all();
+    return callbackHr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetDriveInfo(const wchar_t* path, DriveInfo* info) noexcept
@@ -1273,6 +1323,48 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetCapabilities(const char** js
     return S_OK;
 }
 
+HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetTransferHints([[maybe_unused]] const wchar_t* path,
+                                                                  [[maybe_unused]] FileSystemOperation operationType,
+                                                                  [[maybe_unused]] FileSystemTransferEndpoint endpoint,
+                                                                  FileSystemTransferHints* hints) noexcept
+{
+    if (! path || path[0] == L'\0' || ! hints)
+    {
+        return E_INVALIDARG;
+    }
+    if (hints->sizeBytes < sizeof(FileSystemTransferHints))
+    {
+        return E_INVALIDARG;
+    }
+
+    hints->latencyClass = FILESYSTEM_TRANSFER_LATENCY_CLOUD;
+    hints->flags =
+        FILESYSTEM_TRANSFER_HINT_PREFERS_LARGE_BUFFERS | FILESYSTEM_TRANSFER_HINT_PREFERS_SEQUENTIAL_IO | FILESYSTEM_TRANSFER_HINT_HIGH_METADATA_COST;
+    hints->preferredBufferBytes      = 8u * 1024u * 1024u;
+    hints->preferredProgressPeriodMs = 200u;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::GetStorageCharacteristics([[maybe_unused]] const wchar_t* path,
+                                                                           FileSystemStorageCharacteristics* characteristics) noexcept
+{
+    if (! path || path[0] == L'\0' || ! characteristics)
+    {
+        return E_INVALIDARG;
+    }
+    if (characteristics->sizeBytes < sizeof(FileSystemStorageCharacteristics))
+    {
+        return E_INVALIDARG;
+    }
+
+    characteristics->storageKind = FILESYSTEM_STORAGE_CLOUD;
+    characteristics->flags = FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY | FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO | FILESYSTEM_STORAGE_FLAG_SUPPORTS_DEEP_QUEUE;
+    characteristics->queueDepthHint               = 8u;
+    characteristics->preferredCopyMoveConcurrency = 8u;
+    characteristics->preferredDeleteConcurrency   = 8u;
+    return S_OK;
+}
+
 HRESULT FileSystemGoogleDrive::SetConfigurationImpl(const char* configurationJsonUtf8)
 {
     Settings newSettings{};
@@ -1310,8 +1402,11 @@ HRESULT FileSystemGoogleDrive::SetConfigurationImpl(const char* configurationJso
 
     {
         std::scoped_lock lock(_stateMutex);
-        _settings          = std::move(newSettings);
-        _configurationJson = std::move(configuration);
+        _settings = std::move(newSettings);
+        // Write to the inactive buffer and then flip the index atomically
+        const size_t nextIndex               = 1 - _configurationJsonIndex;
+        _configurationJsonStorage[nextIndex] = std::move(configuration);
+        _configurationJsonIndex              = nextIndex;
     }
 
     {

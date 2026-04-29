@@ -2,7 +2,7 @@
 name: win32-wndproc
 description: Win32 window procedure and message handling patterns. Use when implementing WndProc, handling Windows messages like WM_PAINT WM_SIZE WM_NOTIFY WM_COMMAND, or creating message handler methods.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 
@@ -16,6 +16,7 @@ metadata:
 - Put all logic in handler methods
 - Custom `WM_APP` / `WM_USER` message IDs must be declared in `Common/WindowMessages.h` (namespace `WndMsg`)
 - `catch (...)` is FORBIDDEN; if catching is mandatory at a callback boundary, catch only explicitly named exception types and add a short comment explaining why.
+- Child/custom windows with DPI-sensitive layout or chrome should handle `WM_DPICHANGED_AFTERPARENT`, not just top-level `WM_DPICHANGED`.
 
 ## Window Procedure Pattern
 
@@ -53,6 +54,7 @@ LRESULT OnNotify(int controlId, NMHDR* nmhdr);
 LRESULT OnCommand(WORD commandId, WORD notifyCode, HWND controlHwnd);
 LRESULT OnDestroy();
 LRESULT OnDpiChanged(WORD dpi, RECT* newRect);
+LRESULT OnDpiChangedAfterParent(UINT dpi);
 LRESULT OnMouseMove(int x, int y, WPARAM keys);
 ```
 

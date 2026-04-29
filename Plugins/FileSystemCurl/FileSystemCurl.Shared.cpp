@@ -2245,6 +2245,14 @@ struct CurlListParseContext final
         return _fallbackNamesUtf8;
     }
 
+    void Reset() noexcept
+    {
+        _pending.clear();
+        _anyParsed = false;
+        _fallbackNamesUtf8.clear();
+        _outEntries->clear();
+    }
+
 private:
     std::string _pending;
     std::vector<FilesInformationCurl::Entry>* _outEntries = nullptr;
@@ -2616,6 +2624,36 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
     return remote.empty() ? std::string("/") : remote;
 }
 
+namespace
+{
+[[nodiscard]] bool IsCurlTransientTransferError(CURLcode code) noexcept
+{
+    return code == CURLE_OPERATION_TIMEDOUT || code == CURLE_RECV_ERROR || code == CURLE_SEND_ERROR || code == CURLE_GOT_NOTHING ||
+           code == CURLE_COULDNT_CONNECT || code == CURLE_PARTIAL_FILE;
+}
+
+[[nodiscard]] unsigned long CurlRetryDelayMs(unsigned int retryIndex) noexcept
+{
+    // retryIndex is 1 for the first retry.
+    constexpr unsigned long kBaseDelayMs = 200;
+    constexpr unsigned long kMaxDelayMs  = 2000;
+
+    unsigned long delay = kBaseDelayMs;
+    for (unsigned int i = 1; i < retryIndex; ++i)
+    {
+        if (delay >= kMaxDelayMs / 4u)
+        {
+            delay = kMaxDelayMs;
+            break;
+        }
+        delay *= 4u;
+    }
+
+    return delay;
+}
+
+} // namespace
+
 [[nodiscard]] HRESULT CurlPerformList(const ConnectionInfo& conn, std::wstring_view pluginPath, std::string& outListing) noexcept
 {
     outListing.clear();
@@ -2638,47 +2676,70 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
         return E_INVALIDARG;
     }
 
-    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToString);
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &outListing);
-    curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
-
+    constexpr unsigned int kMaxAttempts = 3u;
     char errorBuffer[CURL_ERROR_SIZE]{};
-    curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
+    CURLcode code = CURLE_FAILED_INIT;
 
-    ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
-
-    const CURLcode code = curl_easy_perform(curl.get());
-    if (code != CURLE_OK)
+    for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
     {
-        long responseCode = 0;
-        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &responseCode);
-
-        Debug::Error(L"curl list failed protocol={} url='{}' user='{}' connProfile={} conn='{}' id='{}' authMode='{}' savePassword={} requireHello={} "
-                     L"passwordPresent={} sshKeyPresent={} sshPassphrasePresent={} knownHostsPresent={} responseCode={} curlCode={} ({}) error='{}'",
-                     ProtocolToDisplay(conn.protocol),
-                     Utf16FromUtf8(url),
-                     Utf16FromUtf8(conn.user),
-                     conn.fromConnectionManagerProfile ? 1 : 0,
-                     conn.connectionName.empty() ? L"(none)" : conn.connectionName,
-                     conn.connectionId,
-                     conn.connectionAuthMode,
-                     conn.connectionSavePassword ? 1 : 0,
-                     conn.connectionRequireHello ? 1 : 0,
-                     conn.password.empty() ? 0 : 1,
-                     conn.sshPrivateKey.empty() ? 0 : 1,
-                     conn.sshKeyPassphrase.empty() ? 0 : 1,
-                     conn.sshKnownHosts.empty() ? 0 : 1,
-                     responseCode,
-                     static_cast<unsigned long>(code),
-                     Utf16FromUtf8(curl_easy_strerror(code)),
-                     Utf16FromUtf8(errorBuffer));
-
-        if (conn.protocol == Protocol::Ftp && responseCode == 530 && conn.password.empty() && ! conn.user.empty() && conn.user != "anonymous")
+        if (attempt > 0)
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
+            outListing.clear();
+            curl_easy_reset(curl.get());
         }
+
+        curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToString);
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &outListing);
+        curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
+
+        errorBuffer[0] = '\0';
+        curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
+
+        ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
+
+        code = curl_easy_perform(curl.get());
+        if (code == CURLE_OK)
+        {
+            return S_OK;
+        }
+
+        if (attempt + 1u >= kMaxAttempts || ! IsCurlTransientTransferError(code))
+        {
+            break;
+        }
+
+        Sleep(CurlRetryDelayMs(attempt + 1u));
     }
+
+    long responseCode = 0;
+    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &responseCode);
+
+    Debug::Error(L"curl list failed protocol={} url='{}' user='{}' connProfile={} conn='{}' id='{}' authMode='{}' savePassword={} requireHello={} "
+                 L"passwordPresent={} sshKeyPresent={} sshPassphrasePresent={} knownHostsPresent={} responseCode={} curlCode={} ({}) error='{}'",
+                 ProtocolToDisplay(conn.protocol),
+                 Utf16FromUtf8(url),
+                 Utf16FromUtf8(conn.user),
+                 conn.fromConnectionManagerProfile ? 1 : 0,
+                 conn.connectionName.empty() ? L"(none)" : conn.connectionName,
+                 conn.connectionId,
+                 conn.connectionAuthMode,
+                 conn.connectionSavePassword ? 1 : 0,
+                 conn.connectionRequireHello ? 1 : 0,
+                 conn.password.empty() ? 0 : 1,
+                 conn.sshPrivateKey.empty() ? 0 : 1,
+                 conn.sshKeyPassphrase.empty() ? 0 : 1,
+                 conn.sshKnownHosts.empty() ? 0 : 1,
+                 responseCode,
+                 static_cast<unsigned long>(code),
+                 Utf16FromUtf8(curl_easy_strerror(code)),
+                 Utf16FromUtf8(errorBuffer));
+
+    if (conn.protocol == Protocol::Ftp && responseCode == 530 && conn.password.empty() && ! conn.user.empty() && conn.user != "anonymous")
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
+    }
+
     return HResultFromCurl(code);
 }
 
@@ -2708,74 +2769,91 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
 
     CurlListParseContext parse(outEntries);
 
-    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToListParser);
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &parse);
-    curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
-
+    constexpr unsigned int kMaxAttempts = 3u;
     char errorBuffer[CURL_ERROR_SIZE]{};
-    curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
+    CURLcode code = CURLE_FAILED_INIT;
 
-    ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
-
-    const CURLcode code = curl_easy_perform(curl.get());
-    if (code != CURLE_OK)
+    for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
     {
-        long responseCode = 0;
-        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &responseCode);
-
-        Debug::Error(L"curl list failed protocol={} url='{}' user='{}' connProfile={} conn='{}' id='{}' authMode='{}' savePassword={} requireHello={} "
-                     L"passwordPresent={} sshKeyPresent={} sshPassphrasePresent={} knownHostsPresent={} responseCode={} curlCode={} ({}) error='{}'",
-                     ProtocolToDisplay(conn.protocol),
-                     Utf16FromUtf8(url),
-                     Utf16FromUtf8(conn.user),
-                     conn.fromConnectionManagerProfile ? 1 : 0,
-                     conn.connectionName.empty() ? L"(none)" : conn.connectionName,
-                     conn.connectionId,
-                     conn.connectionAuthMode,
-                     conn.connectionSavePassword ? 1 : 0,
-                     conn.connectionRequireHello ? 1 : 0,
-                     conn.password.empty() ? 0 : 1,
-                     conn.sshPrivateKey.empty() ? 0 : 1,
-                     conn.sshKeyPassphrase.empty() ? 0 : 1,
-                     conn.sshKnownHosts.empty() ? 0 : 1,
-                     responseCode,
-                     static_cast<unsigned long>(code),
-                     Utf16FromUtf8(curl_easy_strerror(code)),
-                     Utf16FromUtf8(errorBuffer));
-
-        if (conn.protocol == Protocol::Ftp && responseCode == 530 && conn.password.empty() && ! conn.user.empty() && conn.user != "anonymous")
+        if (attempt > 0)
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
+            parse.Reset();
+            curl_easy_reset(curl.get());
         }
-    }
 
-    hr = HResultFromCurl(code);
-    if (FAILED(hr))
-    {
-        outEntries.clear();
-        return hr;
-    }
+        curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToListParser);
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &parse);
+        curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
 
-    parse.FinalizePendingLine();
+        errorBuffer[0] = '\0';
+        curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
 
-    if (parse.HasFallbackNames())
-    {
-        const auto& names = parse.GetFallbackNamesUtf8();
-        outEntries.reserve(names.size());
-        for (const std::string& nameUtf8 : names)
+        ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
+
+        code = curl_easy_perform(curl.get());
+        if (code == CURLE_OK)
         {
-            FilesInformationCurl::Entry entry{};
-            entry.name       = Utf16FromUtf8(nameUtf8);
-            entry.attributes = FILE_ATTRIBUTE_NORMAL;
-            if (! entry.name.empty())
+            parse.FinalizePendingLine();
+
+            if (parse.HasFallbackNames())
             {
-                outEntries.push_back(std::move(entry));
+                const auto& names = parse.GetFallbackNamesUtf8();
+                outEntries.reserve(names.size());
+                for (const std::string& nameUtf8 : names)
+                {
+                    FilesInformationCurl::Entry entry{};
+                    entry.name       = Utf16FromUtf8(nameUtf8);
+                    entry.attributes = FILE_ATTRIBUTE_NORMAL;
+                    if (! entry.name.empty())
+                    {
+                        outEntries.push_back(std::move(entry));
+                    }
+                }
             }
+
+            return S_OK;
         }
+
+        if (attempt + 1u >= kMaxAttempts || ! IsCurlTransientTransferError(code))
+        {
+            break;
+        }
+
+        Sleep(CurlRetryDelayMs(attempt + 1u));
     }
 
-    return S_OK;
+    outEntries.clear();
+
+    long responseCode = 0;
+    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &responseCode);
+
+    Debug::Error(L"curl list failed protocol={} url='{}' user='{}' connProfile={} conn='{}' id='{}' authMode='{}' savePassword={} requireHello={} "
+                 L"passwordPresent={} sshKeyPresent={} sshPassphrasePresent={} knownHostsPresent={} responseCode={} curlCode={} ({}) error='{}'",
+                 ProtocolToDisplay(conn.protocol),
+                 Utf16FromUtf8(url),
+                 Utf16FromUtf8(conn.user),
+                 conn.fromConnectionManagerProfile ? 1 : 0,
+                 conn.connectionName.empty() ? L"(none)" : conn.connectionName,
+                 conn.connectionId,
+                 conn.connectionAuthMode,
+                 conn.connectionSavePassword ? 1 : 0,
+                 conn.connectionRequireHello ? 1 : 0,
+                 conn.password.empty() ? 0 : 1,
+                 conn.sshPrivateKey.empty() ? 0 : 1,
+                 conn.sshKeyPassphrase.empty() ? 0 : 1,
+                 conn.sshKnownHosts.empty() ? 0 : 1,
+                 responseCode,
+                 static_cast<unsigned long>(code),
+                 Utf16FromUtf8(curl_easy_strerror(code)),
+                 Utf16FromUtf8(errorBuffer));
+
+    if (conn.protocol == Protocol::Ftp && responseCode == 530 && conn.password.empty() && ! conn.user.empty() && conn.user != "anonymous")
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
+    }
+
+    return HResultFromCurl(code);
 }
 
 [[nodiscard]] HRESULT CurlPerformQuote(const ConnectionInfo& conn, const std::vector<std::string>& commands) noexcept
@@ -2805,12 +2883,6 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
 
     std::string sink;
 
-    curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToString);
-    curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &sink);
-    curl_easy_setopt(curl.get(), CURLOPT_DIRLISTONLY, 1L);
-    curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
-
     unique_curl_slist list;
     for (const auto& cmd : commands)
     {
@@ -2823,75 +2895,77 @@ int CurlXferInfo(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t
         list.reset(appended);
     }
 
-    curl_easy_setopt(curl.get(), CURLOPT_QUOTE, list.get());
-
+    constexpr unsigned int kMaxAttempts = 3u;
     char errorBuffer[CURL_ERROR_SIZE]{};
-    curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
+    CURLcode code = CURLE_FAILED_INIT;
 
-    ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
-
-    const CURLcode code = curl_easy_perform(curl.get());
-    if (code != CURLE_OK)
+    for (unsigned int attempt = 0; attempt < kMaxAttempts; ++attempt)
     {
-        long responseCode = 0;
-        curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &responseCode);
-
-        Debug::Error(L"curl quote failed protocol={} url='{}' user='{}' connProfile={} conn='{}' id='{}' authMode='{}' savePassword={} requireHello={} "
-                     L"passwordPresent={} sshKeyPresent={} sshPassphrasePresent={} knownHostsPresent={} responseCode={} curlCode={} ({}) error='{}'",
-                     ProtocolToDisplay(conn.protocol),
-                     Utf16FromUtf8(url),
-                     Utf16FromUtf8(conn.user),
-                     conn.fromConnectionManagerProfile ? 1 : 0,
-                     conn.connectionName.empty() ? L"(none)" : conn.connectionName,
-                     conn.connectionId,
-                     conn.connectionAuthMode,
-                     conn.connectionSavePassword ? 1 : 0,
-                     conn.connectionRequireHello ? 1 : 0,
-                     conn.password.empty() ? 0 : 1,
-                     conn.sshPrivateKey.empty() ? 0 : 1,
-                     conn.sshKeyPassphrase.empty() ? 0 : 1,
-                     conn.sshKnownHosts.empty() ? 0 : 1,
-                     responseCode,
-                     static_cast<unsigned long>(code),
-                     Utf16FromUtf8(curl_easy_strerror(code)),
-                     Utf16FromUtf8(errorBuffer));
-
-        if (conn.protocol == Protocol::Ftp && responseCode == 530 && conn.password.empty() && ! conn.user.empty() && conn.user != "anonymous")
+        if (attempt > 0)
         {
-            return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
+            sink.clear();
+            curl_easy_reset(curl.get());
         }
+
+        curl_easy_setopt(curl.get(), CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEFUNCTION, CurlWriteToString);
+        curl_easy_setopt(curl.get(), CURLOPT_WRITEDATA, &sink);
+        curl_easy_setopt(curl.get(), CURLOPT_DIRLISTONLY, 1L);
+        curl_easy_setopt(curl.get(), CURLOPT_FAILONERROR, 1L);
+        curl_easy_setopt(curl.get(), CURLOPT_QUOTE, list.get());
+
+        errorBuffer[0] = '\0';
+        curl_easy_setopt(curl.get(), CURLOPT_ERRORBUFFER, errorBuffer);
+
+        ApplyCommonCurlOptions(curl.get(), conn, nullptr, false);
+
+        code = curl_easy_perform(curl.get());
+        if (code == CURLE_OK)
+        {
+            return S_OK;
+        }
+
+        if (attempt + 1u >= kMaxAttempts || ! IsCurlTransientTransferError(code))
+        {
+            break;
+        }
+
+        Sleep(CurlRetryDelayMs(attempt + 1u));
     }
+
+    long responseCode = 0;
+    curl_easy_getinfo(curl.get(), CURLINFO_RESPONSE_CODE, &responseCode);
+
+    Debug::Error(L"curl quote failed protocol={} url='{}' user='{}' connProfile={} conn='{}' id='{}' authMode='{}' savePassword={} requireHello={} "
+                 L"passwordPresent={} sshKeyPresent={} sshPassphrasePresent={} knownHostsPresent={} responseCode={} curlCode={} ({}) error='{}'",
+                 ProtocolToDisplay(conn.protocol),
+                 Utf16FromUtf8(url),
+                 Utf16FromUtf8(conn.user),
+                 conn.fromConnectionManagerProfile ? 1 : 0,
+                 conn.connectionName.empty() ? L"(none)" : conn.connectionName,
+                 conn.connectionId,
+                 conn.connectionAuthMode,
+                 conn.connectionSavePassword ? 1 : 0,
+                 conn.connectionRequireHello ? 1 : 0,
+                 conn.password.empty() ? 0 : 1,
+                 conn.sshPrivateKey.empty() ? 0 : 1,
+                 conn.sshKeyPassphrase.empty() ? 0 : 1,
+                 conn.sshKnownHosts.empty() ? 0 : 1,
+                 responseCode,
+                 static_cast<unsigned long>(code),
+                 Utf16FromUtf8(curl_easy_strerror(code)),
+                 Utf16FromUtf8(errorBuffer));
+
+    if (conn.protocol == Protocol::Ftp && responseCode == 530 && conn.password.empty() && ! conn.user.empty() && conn.user != "anonymous")
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_PASSWORD);
+    }
+
     return HResultFromCurl(code);
 }
 
 namespace
 {
-[[nodiscard]] bool IsCurlTransientTransferError(CURLcode code) noexcept
-{
-    return code == CURLE_OPERATION_TIMEDOUT || code == CURLE_RECV_ERROR || code == CURLE_SEND_ERROR || code == CURLE_GOT_NOTHING ||
-           code == CURLE_COULDNT_CONNECT;
-}
-
-[[nodiscard]] unsigned long CurlRetryDelayMs(unsigned int retryIndex) noexcept
-{
-    // retryIndex is 1 for the first retry.
-    constexpr unsigned long kBaseDelayMs = 200;
-    constexpr unsigned long kMaxDelayMs  = 2000;
-
-    unsigned long delay = kBaseDelayMs;
-    for (unsigned int i = 1; i < retryIndex; ++i)
-    {
-        if (delay >= kMaxDelayMs / 4u)
-        {
-            delay = kMaxDelayMs;
-            break;
-        }
-        delay *= 4u;
-    }
-
-    return delay;
-}
-
 [[nodiscard]] HRESULT SleepWithCancelCheck(unsigned long totalMs, TransferProgressContext* progressCtx) noexcept
 {
     if (totalMs == 0)
@@ -3607,12 +3681,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::UnwatchDirectory(const wchar_t* path) 
         return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
     }
 
-    const DWORD currentThreadId = GetCurrentThreadId();
-    const unsigned int targetInFlight =
-        registration->callbackThreadId.load(std::memory_order_acquire) == currentThreadId ? 1u : 0u;
+    const DWORD currentThreadId       = GetCurrentThreadId();
+    const unsigned int targetInFlight = registration->callbackThreadId.load(std::memory_order_acquire) == currentThreadId ? 1u : 0u;
     std::unique_lock drainLock(registration->drainMutex);
-    registration->drainCv.wait(
-        drainLock, [&]() noexcept { return registration->inFlight.load(std::memory_order_acquire) <= targetInFlight; });
+    registration->drainCv.wait(drainLock, [&]() noexcept { return registration->inFlight.load(std::memory_order_acquire) <= targetInFlight; });
     return S_OK;
 }
 
@@ -3634,14 +3706,26 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetConfigurationSchema(const char** sc
         return E_POINTER;
     }
 
-    switch (_protocol)
-    {
-        case FileSystemCurlProtocol::Ftp: *schemaJsonUtf8 = kSchemaJsonFtp; break;
-        case FileSystemCurlProtocol::Sftp: *schemaJsonUtf8 = kSchemaJsonSftp; break;
-        case FileSystemCurlProtocol::Scp: *schemaJsonUtf8 = kSchemaJsonScp; break;
-        case FileSystemCurlProtocol::Imap: *schemaJsonUtf8 = kSchemaJsonImap; break;
-    }
+    *schemaJsonUtf8 = StaticConfigurationSchema(_protocol);
     return S_OK;
+}
+
+const char* GetFileSystemCurlStaticConfigurationSchema(FileSystemCurlProtocol protocol) noexcept
+{
+    return FileSystemCurl::StaticConfigurationSchema(protocol);
+}
+
+const char* FileSystemCurl::StaticConfigurationSchema(FileSystemCurlProtocol protocol) noexcept
+{
+    switch (protocol)
+    {
+        case FileSystemCurlProtocol::Ftp: return kSchemaJsonFtp;
+        case FileSystemCurlProtocol::Sftp: return kSchemaJsonSftp;
+        case FileSystemCurlProtocol::Scp: return kSchemaJsonScp;
+        case FileSystemCurlProtocol::Imap: return kSchemaJsonImap;
+    }
+
+    return nullptr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemCurl::SetConfiguration(const char* configurationJsonUtf8) noexcept
@@ -4061,5 +4145,47 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetCapabilities(const char** jsonUtf8)
     }
 
     *jsonUtf8 = _capabilitiesJson.c_str();
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemCurl::GetTransferHints([[maybe_unused]] const wchar_t* path,
+                                                           [[maybe_unused]] FileSystemOperation operationType,
+                                                           [[maybe_unused]] FileSystemTransferEndpoint endpoint,
+                                                           FileSystemTransferHints* hints) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || hints == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (hints->sizeBytes < sizeof(FileSystemTransferHints))
+    {
+        return E_INVALIDARG;
+    }
+
+    hints->latencyClass = (_protocol == FileSystemCurlProtocol::Imap) ? FILESYSTEM_TRANSFER_LATENCY_WAN : FILESYSTEM_TRANSFER_LATENCY_CLOUD;
+    hints->flags =
+        FILESYSTEM_TRANSFER_HINT_PREFERS_LARGE_BUFFERS | FILESYSTEM_TRANSFER_HINT_PREFERS_SEQUENTIAL_IO | FILESYSTEM_TRANSFER_HINT_HIGH_METADATA_COST;
+    hints->preferredBufferBytes      = 8u * 1024u * 1024u;
+    hints->preferredProgressPeriodMs = 200u;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemCurl::GetStorageCharacteristics([[maybe_unused]] const wchar_t* path,
+                                                                    FileSystemStorageCharacteristics* characteristics) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || characteristics == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (characteristics->sizeBytes < sizeof(FileSystemStorageCharacteristics))
+    {
+        return E_INVALIDARG;
+    }
+
+    characteristics->storageKind = FILESYSTEM_STORAGE_CLOUD;
+    characteristics->flags = FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY | FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO | FILESYSTEM_STORAGE_FLAG_SUPPORTS_DEEP_QUEUE;
+    characteristics->queueDepthHint               = 8u;
+    characteristics->preferredCopyMoveConcurrency = 8u;
+    characteristics->preferredDeleteConcurrency   = 8u;
     return S_OK;
 }

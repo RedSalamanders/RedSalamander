@@ -9,10 +9,12 @@
 #include <charconv>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cwctype>
 #include <filesystem>
 #include <format>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -21,7 +23,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <commctrl.h>
 #include <commdlg.h>
 #include <uxtheme.h>
 
@@ -43,160 +44,1308 @@
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutText.h"
-#include "ThemedControls.h"
+#include "UiMetrics.h"
+#include "WindowMessages.h"
 #include "resource.h"
 
-bool KeyboardPane::EnsureCreated(HWND pageHost) noexcept
+[[nodiscard]] uint32_t GetCurrentModifierMask() noexcept;
+void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk, uint32_t modifiers) noexcept;
+[[nodiscard]] std::optional<size_t> TryGetSelectedKeyboardRowIndex(const PreferencesDialogState& state) noexcept;
+[[nodiscard]] bool PrefsKeyboardCaptureWantsAllKeys(const PreferencesDialogState* state) noexcept;
+[[nodiscard]] bool PrefsHandleKeyboardCaptureMessage(HWND hostHwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+
+namespace
 {
-    return PrefsPaneHost::EnsureCreated(pageHost, _hWnd);
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::ComboBox;
+using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::FontRole;
+using RedSalamander::DxUi::Grid;
+using RedSalamander::DxUi::GridCellData;
+using RedSalamander::DxUi::GridColumnDesc;
+using RedSalamander::DxUi::GridSelectionMode;
+using RedSalamander::DxUi::IDxGridModel;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::TextField;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::WindowHost;
+
+#ifdef ENABLE_TESTS
+enum class DebugKeyboardBrowseResultKind
+{
+    Path,
+    Cancel,
+};
+
+struct DebugKeyboardBrowseResult
+{
+    DebugKeyboardBrowseResultKind kind = DebugKeyboardBrowseResultKind::Path;
+    std::filesystem::path path{};
+};
+
+std::mutex g_debugKeyboardBrowseResultMutex;
+std::optional<DebugKeyboardBrowseResult> g_debugNextKeyboardBrowseResult;
+#endif
+
+// Scope combo item data values: index 0 = All (data=2), index 1 = FunctionBar (data=0), index 2 = FolderView (data=1)
+constexpr size_t kScopeComboIndexAll         = 0u;
+constexpr size_t kScopeComboIndexFunctionBar = 1u;
+constexpr size_t kScopeComboIndexFolderView  = 2u;
+
+[[nodiscard]] const std::wstring& GetKeyboardConflictMark() noexcept
+{
+    static const std::wstring text = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_CONFLICT_MARK);
+    return text;
 }
 
-void KeyboardPane::ResizeToHostClient(HWND pageHost) noexcept
+[[nodiscard]] const std::wstring& GetKeyboardUnassignedText() noexcept
 {
-    PrefsPaneHost::ResizeToHostClient(pageHost, _hWnd.get());
+    static const std::wstring text = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_UNASSIGNED);
+    return text;
 }
 
-void KeyboardPane::Show(bool visible) noexcept
+[[nodiscard]] const std::wstring& GetKeyboardSearchLabelText() noexcept
 {
-    PrefsPaneHost::Show(_hWnd.get(), visible);
+    static const std::wstring text = LoadStringResource(nullptr, IDS_PREFS_COMMON_SEARCH);
+    return text;
 }
 
-bool KeyboardPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT commandId, UINT notifyCode, HWND /*hwndCtl*/) noexcept
+[[nodiscard]] const std::wstring& GetKeyboardScopeLabelText() noexcept
 {
-    switch (commandId)
+    static const std::wstring text = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_LABEL_SCOPE);
+    return text;
+}
+
+void LogKeyboardDxState(const wchar_t* reason,
+                        HWND pageHostWindow,
+                        HWND hostWindow,
+                        const WindowHost* host,
+                        const Panel* pageContentRoot,
+                        const void* dxState,
+                        bool rebuildOnShow) noexcept
+{
+    size_t wrapperChildren = 0u;
+    if (pageContentRoot)
     {
-        case IDC_PREFS_KEYBOARD_SEARCH_EDIT:
-            if (notifyCode == EN_CHANGE)
-            {
-                Refresh(host, state);
-                return true;
-            }
-            break;
-        case IDC_PREFS_KEYBOARD_SCOPE_COMBO:
-            if (notifyCode == CBN_SELCHANGE)
-            {
-                Refresh(host, state);
-                return true;
-            }
-            break;
-        case IDC_PREFS_KEYBOARD_ASSIGN:
-            if (notifyCode == BN_CLICKED)
-            {
-                if (state.keyboardCaptureActive)
-                {
-                    if (state.keyboardCapturePendingVk.has_value())
-                    {
-                        CommitCapturedShortcut(host, state);
-                    }
-                    else
-                    {
-                        EndCapture(host, state);
-                    }
-                }
-                else
-                {
-                    BeginCapture(host, state);
-                }
-                return true;
-            }
-            break;
-        case IDC_PREFS_KEYBOARD_REMOVE:
-            if (notifyCode == BN_CLICKED)
-            {
-                if (state.keyboardCaptureActive)
-                {
-                    SwapCapturedShortcut(host, state);
-                }
-                else
-                {
-                    RemoveSelectedShortcut(host, state);
-                }
-                return true;
-            }
-            break;
-        case IDC_PREFS_KEYBOARD_RESET:
-            if (notifyCode == BN_CLICKED)
-            {
-                ResetShortcutsToDefaults(host, state);
-                return true;
-            }
-            break;
-        case IDC_PREFS_KEYBOARD_IMPORT:
-            if (notifyCode == BN_CLICKED)
-            {
-                ImportShortcuts(host, state);
-                return true;
-            }
-            break;
-        case IDC_PREFS_KEYBOARD_EXPORT:
-            if (notifyCode == BN_CLICKED)
-            {
-                ExportShortcuts(host, state);
-                return true;
-            }
-            break;
+        wrapperChildren = pageContentRoot->GetChildren().size();
     }
 
-    return false;
+    Debug::Info(L"Preferences.Keyboard: reason={} pageHostWindow={:#x} hostWindow={:#x} dxHost={} root={} dxState={} wrapperChildren={} focus={} bridge={} "
+                L"dx={}x{} renderCount={} resizeCount={} resizeFailures={} rebuildOnShow={}",
+                reason ? reason : L"(null)",
+                reinterpret_cast<uintptr_t>(pageHostWindow),
+                reinterpret_cast<uintptr_t>(hostWindow),
+                static_cast<const void*>(host),
+                static_cast<const void*>(pageContentRoot),
+                dxState,
+                wrapperChildren,
+                host ? static_cast<const void*>(host->GetFocusControl()) : nullptr,
+                (host && host->HasActiveTextInputBridge()) ? L"true" : L"false",
+                GetDxHostDebugWidthPx(host),
+                GetDxHostDebugHeightPx(host),
+                GetDxHostDebugRenderCount(host),
+                GetDxHostDebugResizeCount(host),
+                GetDxHostDebugResizeFailureCount(host),
+                rebuildOnShow ? L"true" : L"false");
 }
 
-bool KeyboardPane::HandleNotify(HWND host, PreferencesDialogState& state, NMHDR* hdr, LRESULT& outResult) noexcept
+void SetKeyboardHintText(PreferencesDialogState& state, std::wstring text) noexcept
 {
-    if (! hdr || ! state.keyboardList || hdr->hwndFrom != state.keyboardList.get())
+    state.keyboardHintText = std::move(text);
+}
+
+constexpr int kKeyboardListColumnCommand  = 0;
+constexpr int kKeyboardListColumnShortcut = 1;
+constexpr int kKeyboardListColumnScope    = 2;
+
+[[nodiscard]] std::wstring_view GetShortcutScopeDisplayName(ShortcutScope scope) noexcept;
+
+void StoreKeyboardRetainedSelection(PreferencesDialogState& state, const KeyboardShortcutRow& row) noexcept
+{
+    state.keyboardSelectedScope        = row.scope;
+    state.keyboardSelectedCommandId    = row.commandId;
+    state.keyboardSelectedBindingIndex = row.bindingIndex;
+}
+
+[[nodiscard]] bool MatchesRetainedKeyboardSelection(const PreferencesDialogState& state, const KeyboardShortcutRow& row) noexcept
+{
+    return ! state.keyboardSelectedCommandId.empty() && row.scope == state.keyboardSelectedScope && row.commandId == state.keyboardSelectedCommandId &&
+           row.bindingIndex == state.keyboardSelectedBindingIndex;
+}
+
+struct KeyboardGridRow
+{
+    uint64_t stableId = 0u;
+    std::wstring commandText;
+    std::wstring chordText;
+    std::wstring scopeText;
+    std::wstring tooltipText;
+    bool hasConflict = false;
+};
+
+class KeyboardGridModel final : public IDxGridModel
+{
+public:
+    KeyboardGridModel()
+    {
+        _columns = {
+            {L"command", LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_COL_COMMAND), 280.0f, 160.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"shortcut",
+             LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_COL_SHORTCUT),
+             170.0f,
+             120.0f,
+             RedSalamander::DxUi::GridColumnKind::Text,
+             false,
+             false},
+            {L"scope", LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_COL_SCOPE), 110.0f, 90.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+        };
+    }
+
+    void SetRows(std::vector<KeyboardGridRow> rows)
+    {
+        _rows = std::move(rows);
+        _rowIndexByStableId.clear();
+        _rowIndexByStableId.reserve(_rows.size());
+        for (size_t rowIndex = 0u; rowIndex < _rows.size(); ++rowIndex)
+        {
+            _rowIndexByStableId[_rows[rowIndex].stableId] = rowIndex;
+        }
+    }
+
+    [[nodiscard]] const std::vector<KeyboardGridRow>& GetRows() const noexcept
+    {
+        return _rows;
+    }
+
+    [[nodiscard]] uint64_t GetStableRowId(size_t rowIndex) const noexcept
+    {
+        return rowIndex < _rows.size() ? _rows[rowIndex].stableId : 0u;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+    {
+        const auto it = _rowIndexByStableId.find(rowId);
+        if (it == _rowIndexByStableId.end())
+        {
+            return std::nullopt;
+        }
+
+        return it->second;
+    }
+
+    [[nodiscard]] size_t GetRowCount() const noexcept override
+    {
+        return _rows.size();
+    }
+
+    [[nodiscard]] size_t GetColumnCount() const noexcept override
+    {
+        return _columns.size();
+    }
+
+    [[nodiscard]] GridColumnDesc GetColumn(size_t columnIndex) const override
+    {
+        return _columns.at(columnIndex);
+    }
+
+    void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
+    {
+        outCell = {};
+        if (rowIndex >= _rows.size() || columnIndex >= _columns.size())
+        {
+            return;
+        }
+
+        const KeyboardGridRow& row = _rows[rowIndex];
+        switch (columnIndex)
+        {
+            case kKeyboardListColumnCommand:
+                outCell.kind        = row.hasConflict ? RedSalamander::DxUi::GridCellKind::IconText : RedSalamander::DxUi::GridCellKind::Text;
+                outCell.iconText    = row.hasConflict ? GetKeyboardConflictMark() : std::wstring{};
+                outCell.text        = row.commandText;
+                outCell.tooltipText = row.tooltipText;
+                outCell.multiline   = true;
+                break;
+            case kKeyboardListColumnShortcut:
+                outCell.text          = row.chordText.empty() ? GetKeyboardUnassignedText() : row.chordText;
+                outCell.textAlignment = DWRITE_TEXT_ALIGNMENT_TRAILING;
+                outCell.tooltipText   = row.tooltipText;
+                break;
+            case kKeyboardListColumnScope:
+                outCell.text        = row.scopeText;
+                outCell.tooltipText = row.tooltipText;
+                break;
+        }
+    }
+
+private:
+    std::vector<GridColumnDesc> _columns;
+    std::vector<KeyboardGridRow> _rows;
+    std::unordered_map<uint64_t, size_t> _rowIndexByStableId;
+};
+
+struct KeyboardDxPage
+{
+    KeyboardDxPage()                                 = default;
+    KeyboardDxPage(const KeyboardDxPage&)            = delete;
+    KeyboardDxPage& operator=(const KeyboardDxPage&) = delete;
+    KeyboardDxPage(KeyboardDxPage&&)                 = delete;
+    KeyboardDxPage& operator=(KeyboardDxPage&&)      = delete;
+
+    Label* searchLabel    = nullptr;
+    TextField* searchEdit = nullptr;
+    Label* scopeLabel     = nullptr;
+    ComboBox* scopeCombo  = nullptr;
+    Grid* listControl     = nullptr;
+    std::unique_ptr<IDxGridModel> listModelStorage;
+    KeyboardGridModel* listModel = nullptr;
+    Label* hint                  = nullptr;
+    Button* assign               = nullptr;
+    Button* remove               = nullptr;
+    Button* reset                = nullptr;
+    Button* importButton         = nullptr;
+    Button* exportButton         = nullptr;
+
+    void Detach() noexcept
+    {
+        searchLabel = nullptr;
+        searchEdit  = nullptr;
+        scopeLabel  = nullptr;
+        scopeCombo  = nullptr;
+        listControl = nullptr;
+        listModelStorage.reset();
+        listModel    = nullptr;
+        hint         = nullptr;
+        assign       = nullptr;
+        remove       = nullptr;
+        reset        = nullptr;
+        importButton = nullptr;
+        exportButton = nullptr;
+    }
+};
+} // namespace
+
+bool PrefsKeyboardCaptureWantsAllKeys(const PreferencesDialogState* state) noexcept
+{
+    return state && state->currentCategory == PrefCategory::Keyboard && state->keyboardCaptureActive;
+}
+
+bool PrefsHandleKeyboardCaptureMessage(HWND hostHwnd, UINT msg, WPARAM wp, LPARAM /*lp*/) noexcept
+{
+    auto* state = PrefsUi::GetDialogState(hostHwnd);
+    if (! PrefsKeyboardCaptureWantsAllKeys(state))
     {
         return false;
     }
 
-    switch (hdr->code)
+    switch (msg)
     {
-        case NM_CUSTOMDRAW: outResult = CDRF_DODEFAULT; return true;
-        case NM_SETFOCUS:
-            PrefsPaneHost::EnsureControlVisible(host, state, state.keyboardList.get());
-            InvalidateRect(state.keyboardList.get(), nullptr, FALSE);
-            outResult = 0;
-            return true;
-        case NM_KILLFOCUS:
-            InvalidateRect(state.keyboardList.get(), nullptr, FALSE);
-            outResult = 0;
-            return true;
-        case LVN_ITEMCHANGED:
-            KeyboardPane::UpdateButtons(host, state);
-            KeyboardPane::UpdateHint(host, state);
-            outResult = 0;
-            return true;
-        case LVN_GETINFOTIP:
+        case WM_SYSKEYDOWN:
+        case WM_KEYDOWN: ApplyCapturedShortcut(hostHwnd, *state, static_cast<uint32_t>(wp), GetCurrentModifierMask()); return true;
+        case WM_SYSCHAR:
+        case WM_CHAR: return true;
+        default: return false;
+    }
+}
+
+struct KeyboardPane::DxState
+{
+    DxState()                          = default;
+    DxState(const DxState&)            = delete;
+    DxState& operator=(const DxState&) = delete;
+    DxState(DxState&&)                 = delete;
+    DxState& operator=(DxState&&)      = delete;
+
+    KeyboardDxPage page;
+
+    void Detach() noexcept
+    {
+        page.Detach();
+    }
+};
+
+KeyboardPane::KeyboardPane() = default;
+
+KeyboardPane::~KeyboardPane()
+{
+    DetachDxHosts();
+}
+
+std::optional<ShortcutScope> KeyboardPane::GetScopeFilter() const noexcept
+{
+    if (! _dxState || ! _dxState->page.scopeCombo)
+    {
+        return std::nullopt;
+    }
+
+    const auto selectedIndex = _dxState->page.scopeCombo->GetSelectedIndex();
+    if (! selectedIndex.has_value())
+    {
+        return std::nullopt;
+    }
+
+    if (selectedIndex.value() == kScopeComboIndexFunctionBar)
+    {
+        return ShortcutScope::FunctionBar;
+    }
+    if (selectedIndex.value() == kScopeComboIndexFolderView)
+    {
+        return ShortcutScope::FolderView;
+    }
+    return std::nullopt;
+}
+
+std::optional<size_t> KeyboardPane::TryGetSelectedRowIndex() const noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _dxState->page.listModel)
+    {
+        return std::nullopt;
+    }
+
+    const auto selectedRowIds = _dxState->page.listControl->GetSelectionModel().GetOrderedSelection();
+    if (selectedRowIds.empty())
+    {
+        return std::nullopt;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    const auto it    = std::find_if(rows.begin(), rows.end(), [&](const KeyboardGridRow& row) noexcept { return row.stableId == selectedRowIds.front(); });
+    if (it == rows.end())
+    {
+        return std::nullopt;
+    }
+
+    return static_cast<size_t>(std::distance(rows.begin(), it));
+}
+
+void KeyboardPane::OnVisibilityChanged(bool visible) noexcept
+{
+    if (! visible)
+    {
+        if (_pageHostDx)
         {
-            auto* tip = reinterpret_cast<NMLVGETINFOTIPW*>(hdr);
-            if (! tip || ! tip->pszText || tip->cchTextMax <= 0)
+            _pageHostDx->ResetInteractionState();
+        }
+    }
+}
+
+void KeyboardPane::Destroy(PreferencesDialogState& state) noexcept
+{
+    DetachDxHosts();
+    state.keyboardPaneOwner     = nullptr;
+    state.keyboardCaptureActive = false;
+    state.keyboardCaptureCommandId.clear();
+    state.keyboardCaptureBindingIndex.reset();
+    state.keyboardCapturePendingVk.reset();
+    state.keyboardCapturePendingModifiers = 0;
+    state.keyboardCaptureConflictCommandId.clear();
+    state.keyboardCaptureConflictBindingIndex.reset();
+    state.keyboardCaptureConflictMultiple = false;
+    state.keyboardRows.clear();
+    state.keyboardHintText.clear();
+    _pageHost        = nullptr;
+    _pageHostDx      = nullptr;
+    _pageContentRoot = nullptr;
+}
+
+void KeyboardPane::OnKeyboardAssignClicked(HWND host, PreferencesDialogState& state) noexcept
+{
+    if (state.keyboardCaptureActive)
+    {
+        if (state.keyboardCapturePendingVk.has_value())
+        {
+            CommitCapturedShortcut(host, state);
+        }
+        else
+        {
+            EndCapture(host, state);
+        }
+    }
+    else
+    {
+        BeginCapture(host, state);
+    }
+}
+
+void KeyboardPane::OnKeyboardRemoveClicked(HWND host, PreferencesDialogState& state) noexcept
+{
+    if (state.keyboardCaptureActive)
+    {
+        SwapCapturedShortcut(host, state);
+    }
+    else
+    {
+        RemoveSelectedShortcut(host, state);
+    }
+}
+
+void KeyboardPane::OnKeyboardResetClicked(HWND host, PreferencesDialogState& state) noexcept
+{
+    ResetShortcutsToDefaults(host, state);
+}
+
+void KeyboardPane::OnKeyboardImportClicked(HWND host, PreferencesDialogState& state) noexcept
+{
+    ImportShortcuts(host, state);
+}
+
+void KeyboardPane::OnKeyboardExportClicked(HWND host, PreferencesDialogState& state) noexcept
+{
+    ExportShortcuts(host, state);
+}
+
+bool KeyboardPane::HandleDeferredAction(HWND host, PreferencesDialogState& state, PreferencesDeferredActionKind action) noexcept
+{
+    _hostWindow = host;
+    _state      = &state;
+
+    if (! _dxState)
+    {
+        return false;
+    }
+
+#pragma warning(suppress : 4061) // Not all enum values handled explicitly -- intentional; this pane only handles its own actions.
+    switch (action)
+    {
+        case PreferencesDeferredActionKind::KeyboardSearchChanged:
+        case PreferencesDeferredActionKind::KeyboardScopeChanged: Refresh(host, state); return true;
+        case PreferencesDeferredActionKind::KeyboardAssign: OnKeyboardAssignClicked(host, state); return true;
+        case PreferencesDeferredActionKind::KeyboardRemove: OnKeyboardRemoveClicked(host, state); return true;
+        case PreferencesDeferredActionKind::KeyboardReset: OnKeyboardResetClicked(host, state); return true;
+        case PreferencesDeferredActionKind::KeyboardImport: OnKeyboardImportClicked(host, state); return true;
+        case PreferencesDeferredActionKind::KeyboardExport: OnKeyboardExportClicked(host, state); return true;
+        case PreferencesDeferredActionKind::ViewersSearchChanged:
+        case PreferencesDeferredActionKind::ThemesThemeChanged:
+        case PreferencesDeferredActionKind::ThemesBaseChanged:
+        case PreferencesDeferredActionKind::ThemesNameBlur:
+        case PreferencesDeferredActionKind::ThemesSearchChanged:
+        case PreferencesDeferredActionKind::PluginsSearchChanged:
+        case PreferencesDeferredActionKind::PluginsConfigure:
+        case PreferencesDeferredActionKind::PluginsTest:
+        case PreferencesDeferredActionKind::PluginsTestAll:
+        case PreferencesDeferredActionKind::FileOperationsBandwidthPresetChanged:
+        case PreferencesDeferredActionKind::CompareDirectoriesIgnoreToggleChanged: return false;
+        default: return false;
+    }
+}
+
+bool KeyboardPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexcept
+{
+    state.keyboardPaneOwner = this;
+    _pageHostDx             = state.pageHostDxHost;
+    _pageContentRoot        = state.pageHostDxContentRootControl;
+    if (! _pageHostDx || ! _pageContentRoot)
+    {
+        Debug::Error(L"Preferences.Keyboard: Shared page-host DX surface is unavailable; DxUi controls cannot be created.");
+        return false;
+    }
+
+    if (! _rebuildDxOnNextShow && _dxState && PrefsUi::HasRetainedDxChildren(_pageContentRoot) && _dxState->page.listControl)
+    {
+        _state      = &state;
+        _hostWindow = parent;
+        ApplyDxTheme(state);
+        SyncDxControlsFromState(state);
+        LogKeyboardDxState(
+            L"ensure-dxhosts-reuse", _pageHost, _hostWindow, _pageHostDx, dynamic_cast<const Panel*>(_pageContentRoot), _dxState.get(), _rebuildDxOnNextShow);
+        return true;
+    }
+
+    auto dxState = std::make_unique<DxState>();
+    _pageHostDx->ResetInteractionState();
+    _pageContentRoot->ClearChildren();
+
+    dxState->page.searchLabel  = _pageContentRoot->AddChild<Label>();
+    dxState->page.searchEdit   = _pageContentRoot->AddChild<TextField>();
+    dxState->page.scopeLabel   = _pageContentRoot->AddChild<Label>();
+    dxState->page.scopeCombo   = _pageContentRoot->AddChild<ComboBox>();
+    dxState->page.listControl  = _pageContentRoot->AddChild<Grid>();
+    dxState->page.hint         = _pageContentRoot->AddChild<Label>();
+    dxState->page.assign       = _pageContentRoot->AddChild<Button>();
+    dxState->page.remove       = _pageContentRoot->AddChild<Button>();
+    dxState->page.reset        = _pageContentRoot->AddChild<Button>();
+    dxState->page.importButton = _pageContentRoot->AddChild<Button>();
+    dxState->page.exportButton = _pageContentRoot->AddChild<Button>();
+
+    dxState->page.hint->SetFontRole(FontRole::Small);
+    dxState->page.hint->SetMultiline(true);
+    dxState->page.scopeCombo->SetVariant(ComboBoxVariant::Window);
+    dxState->page.listControl->SetDelegate(this);
+    dxState->page.listControl->SetSelectionMode(GridSelectionMode::Single);
+    dxState->page.listControl->SetHeaderHeightDip(30.0f);
+    dxState->page.listControl->SetRowHeightDip(48.0f);
+
+    auto model              = std::make_unique<KeyboardGridModel>();
+    dxState->page.listModel = model.get();
+    dxState->page.listControl->SetModel(dxState->page.listModel);
+    dxState->page.listModelStorage = std::move(model);
+
+    dxState->page.searchEdit->SetOnTextChanged([this, parent](std::wstring_view text) noexcept
+    {
+        if (_state)
+        {
+            _state->keyboardSearchText.assign(text);
+        }
+        if (_syncingDxInputs || ! parent || IsWindow(parent) == FALSE)
+        {
+            return;
+        }
+
+        static_cast<void>(PrefsUi::PostDeferredAction(parent, PreferencesDeferredActionKind::KeyboardSearchChanged));
+    });
+
+    dxState->page.scopeCombo->SetOnSelectionChanged([this, parent](size_t /*index*/) noexcept
+    {
+        if (_syncingDxInputs || ! _state || ! parent || IsWindow(parent) == FALSE)
+        {
+            return;
+        }
+
+        static_cast<void>(PrefsUi::PostDeferredAction(parent, PreferencesDeferredActionKind::KeyboardScopeChanged));
+    });
+
+    dxState->page.assign->SetOnClick([this]() noexcept
+    {
+        if (! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::KeyboardAssign));
+    });
+
+    dxState->page.remove->SetOnClick([this]() noexcept
+    {
+        if (! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::KeyboardRemove));
+    });
+
+    dxState->page.reset->SetOnClick([this]() noexcept
+    {
+        if (! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::KeyboardReset));
+    });
+
+    dxState->page.importButton->SetOnClick([this]() noexcept
+    {
+        if (! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::KeyboardImport));
+    });
+
+    dxState->page.exportButton->SetOnClick([this]() noexcept
+    {
+        if (! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::KeyboardExport));
+    });
+
+    // Populate scope combo with items directly
+    {
+        const std::wstring allText = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_SCOPE_ALL);
+        std::vector<ComboBox::Item> scopeItems;
+        scopeItems.reserve(3u);
+        scopeItems.push_back(ComboBox::Item{std::wstring(allText), std::wstring(allText)});
+        scopeItems.push_back(ComboBox::Item{std::wstring(GetShortcutScopeDisplayName(ShortcutScope::FunctionBar)),
+                                            std::wstring(GetShortcutScopeDisplayName(ShortcutScope::FunctionBar))});
+        scopeItems.push_back(ComboBox::Item{std::wstring(GetShortcutScopeDisplayName(ShortcutScope::FolderView)),
+                                            std::wstring(GetShortcutScopeDisplayName(ShortcutScope::FolderView))});
+        dxState->page.scopeCombo->SetItems(std::move(scopeItems));
+        dxState->page.scopeCombo->SetSelectedIndex(kScopeComboIndexAll);
+    }
+
+    _dxState             = std::move(dxState);
+    _rebuildDxOnNextShow = false;
+    _state               = &state;
+    _hostWindow          = parent;
+    ApplyDxTheme(state);
+    SyncDxControlsFromState(state);
+    LogKeyboardDxState(
+        L"ensure-dxhosts-create", _pageHost, _hostWindow, _pageHostDx, dynamic_cast<const Panel*>(_pageContentRoot), _dxState.get(), _rebuildDxOnNextShow);
+    return true;
+}
+
+void KeyboardPane::DetachDxHosts() noexcept
+{
+    if (_pageContentRoot && _pageHostDx && _pageHost && IsWindow(_pageHost) != FALSE)
+    {
+        _pageHostDx->ResetInteractionState();
+        _pageContentRoot->ClearChildren();
+    }
+    _pageHostDx      = nullptr;
+    _pageContentRoot = nullptr;
+
+    if (_dxState)
+    {
+        _dxState->Detach();
+        _dxState.reset();
+    }
+
+    _syncingDxInputs     = false;
+    _syncingDxSelection  = false;
+    _rebuildDxOnNextShow = false;
+    _state               = nullptr;
+    _hostWindow          = nullptr;
+}
+
+void KeyboardPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return;
+    }
+
+    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    _pageHostDx->SetTheme(palette);
+}
+
+void KeyboardPane::SyncDxControlsFromState(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState)
+    {
+        return;
+    }
+
+    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    KeyboardDxPage& page       = _dxState->page;
+    page.searchLabel->SetText(GetKeyboardSearchLabelText());
+    page.searchLabel->SetMnemonicTarget(page.searchEdit);
+    page.scopeLabel->SetText(GetKeyboardScopeLabelText());
+    page.scopeLabel->SetMnemonicTarget(page.scopeCombo);
+    page.hint->SetText(state.keyboardHintText);
+    page.hint->SetTextColor(std::optional<D2D1_COLOR_F>(palette.subduedText));
+
+    _syncingDxInputs = true;
+
+    if (page.searchEdit->GetText() != state.keyboardSearchText)
+    {
+        // Preserve the live bridge-owned edit session during real typing; only
+        // rewrite the DX field when the state actually diverges.
+        page.searchEdit->SetText(state.keyboardSearchText);
+    }
+    page.searchEdit->SetEnabled(! state.keyboardCaptureActive);
+
+    if (page.scopeCombo)
+    {
+        page.scopeCombo->SetEnabled(! state.keyboardCaptureActive);
+    }
+
+    if (page.listControl && page.listModel)
+    {
+        std::vector<KeyboardGridRow> rows;
+        rows.reserve(state.keyboardRows.size());
+        std::optional<uint64_t> selectedStableId;
+        for (size_t i = 0; i < state.keyboardRows.size(); ++i)
+        {
+            const KeyboardShortcutRow& legacyRow = state.keyboardRows[i];
+            KeyboardGridRow row;
+            row.stableId    = static_cast<uint64_t>(i + 1u);
+            row.scopeText   = std::wstring(GetShortcutScopeDisplayName(legacyRow.scope));
+            row.tooltipText = legacyRow.commandId;
+            row.hasConflict = legacyRow.hasConflict;
+            row.chordText   = legacyRow.chordText;
+
+            std::wstring description;
+            if (! legacyRow.commandId.empty())
             {
-                outResult = 0;
-                return true;
+                if (const std::optional<unsigned int> descId = TryGetCommandDescriptionStringId(legacyRow.commandId); descId.has_value())
+                {
+                    description = LoadStringResource(nullptr, descId.value());
+                }
             }
 
-            LVITEMW item{};
-            item.mask  = LVIF_PARAM;
-            item.iItem = tip->iItem;
-            if (! ListView_GetItem(state.keyboardList.get(), &item))
+            row.commandText = legacyRow.commandDisplayName;
+            if (! description.empty())
             {
-                outResult = 0;
-                return true;
+                row.commandText.append(L"\n");
+                row.commandText.append(description);
             }
 
-            const size_t rowIndex = static_cast<size_t>(item.lParam);
-            if (rowIndex >= state.keyboardRows.size())
+            if (! selectedStableId.has_value() && MatchesRetainedKeyboardSelection(state, legacyRow))
             {
-                outResult = 0;
-                return true;
+                selectedStableId = row.stableId;
             }
 
-            const KeyboardShortcutRow& row = state.keyboardRows[rowIndex];
-            wcsncpy_s(tip->pszText, static_cast<size_t>(tip->cchTextMax), row.commandId.c_str(), _TRUNCATE);
-            outResult = 0;
+            rows.push_back(std::move(row));
+        }
+
+        page.listModel->SetRows(std::move(rows));
+        _syncingDxSelection = true;
+        if (selectedStableId.has_value())
+        {
+            page.listControl->GetSelectionModel().SetSingle(selectedStableId.value());
+        }
+        else
+        {
+            page.listControl->GetSelectionModel().Clear();
+        }
+        _syncingDxSelection = false;
+        page.listControl->NotifyDataChanged();
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+    }
+
+    _syncingDxInputs = false;
+}
+
+void KeyboardPane::LayoutDxPage(HWND host,
+                                const PreferencesDialogState& state,
+                                int x,
+                                int& y,
+                                int width,
+                                int margin,
+                                int gapY,
+                                int sectionY,
+                                const PreferencesTypographyContext& typography) noexcept
+{
+    if (! host || ! _dxState || ! _pageHostDx || ! _pageContentRoot)
+    {
+        return;
+    }
+
+    if (! _pageHost)
+    {
+        return;
+    }
+
+    ApplyDxTheme(state);
+    SyncDxControlsFromState(state);
+
+    using namespace PrefsLayoutConstants;
+
+    Debug::Perf::Scope layoutPerf(L"preferences.ui.keyboard_layout_us");
+    layoutPerf.SetValue0(static_cast<uint64_t>(std::max(0, width)));
+    layoutPerf.SetValue1(static_cast<uint64_t>(typography.dpi));
+
+    const UINT dpi        = std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI);
+    const auto pxToDip    = [dpi](const int pixels) noexcept { return (static_cast<float>(pixels) * 96.0f) / static_cast<float>(dpi); };
+    const int rowHeight   = std::max(1, UiMetrics::ScaleDip(dpi, kRowHeightDip));
+    const int labelHeight = std::max(1, UiMetrics::ScaleDip(dpi, kTitleHeightDip));
+    const int gapX        = UiMetrics::ScaleDip(dpi, kToggleGapXDip);
+
+    RECT hostClient{};
+    GetClientRect(host, &hostClient);
+    const int hostBottom        = std::max(0l, hostClient.bottom - hostClient.top);
+    const int hostContentBottom = std::max(0, hostBottom - margin);
+
+    KeyboardDxPage& page = _dxState->page;
+    int localY           = y;
+
+    const int searchLabelWidth = std::min(width, UiMetrics::ScaleDip(dpi, 52));
+    const int scopeLabelWidth  = std::min(width, UiMetrics::ScaleDip(dpi, 48));
+    int scopeComboWidth        = UiMetrics::ScaleDip(dpi, 120);
+    scopeComboWidth            = std::max(scopeComboWidth, UiMetrics::ScaleDip(dpi, kMinEditWidthDip));
+    scopeComboWidth            = std::min(scopeComboWidth, std::min(width, UiMetrics::ScaleDip(dpi, kMaxEditWidthDip)));
+    const int searchEditWidth  = std::max(0, width - searchLabelWidth - gapX - scopeLabelWidth - gapX - scopeComboWidth - gapX);
+
+    if (page.searchLabel)
+    {
+        page.searchLabel->SetBounds(D2D1::RectF(pxToDip(x),
+                                                pxToDip(localY + (rowHeight - labelHeight) / 2),
+                                                pxToDip(x + searchLabelWidth),
+                                                pxToDip(localY + (rowHeight - labelHeight) / 2 + labelHeight)));
+    }
+    if (page.searchEdit)
+    {
+        const int left = x + searchLabelWidth + gapX;
+        page.searchEdit->SetBounds(D2D1::RectF(pxToDip(left), pxToDip(localY), pxToDip(left + searchEditWidth), pxToDip(localY + rowHeight)));
+    }
+    if (page.scopeLabel)
+    {
+        const int left = x + searchLabelWidth + gapX + searchEditWidth + gapX;
+        page.scopeLabel->SetBounds(D2D1::RectF(pxToDip(left),
+                                               pxToDip(localY + (rowHeight - labelHeight) / 2),
+                                               pxToDip(left + scopeLabelWidth),
+                                               pxToDip(localY + (rowHeight - labelHeight) / 2 + labelHeight)));
+    }
+    if (page.scopeCombo)
+    {
+        const int left = x + searchLabelWidth + gapX + searchEditWidth + gapX + scopeLabelWidth + gapX;
+        page.scopeCombo->SetBounds(D2D1::RectF(pxToDip(left), pxToDip(localY), pxToDip(left + scopeComboWidth), pxToDip(localY + rowHeight)));
+    }
+
+    localY += rowHeight + sectionY;
+
+    int hintHeight = std::max(1, UiMetrics::ScaleDip(dpi, 44));
+    if (! state.keyboardHintText.empty())
+    {
+        hintHeight = std::max(hintHeight, PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, width, state.keyboardHintText));
+    }
+
+    const int buttonHeight = std::max(1, UiMetrics::ScaleDip(dpi, 26));
+    const int buttonsTop   = std::max(localY, hostContentBottom - buttonHeight);
+    const int hintTop      = std::max(localY, buttonsTop - gapY - hintHeight);
+    const int listTop      = localY;
+    const int listBottom   = std::max(listTop, hintTop - gapY);
+    const int listHeight   = std::max(0, listBottom - listTop);
+
+    if (page.listControl)
+    {
+        page.listControl->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(listTop), pxToDip(x + width), pxToDip(listTop + listHeight)));
+    }
+    if (page.hint)
+    {
+        page.hint->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(hintTop), pxToDip(x + width), pxToDip(hintTop + hintHeight)));
+    }
+
+    const int buttonGapX  = gapX;
+    const int assignWidth = std::min(width, UiMetrics::ScaleDip(dpi, 90));
+    const int removeWidth = std::min(width, UiMetrics::ScaleDip(dpi, 80));
+    const int resetWidth  = std::min(width, UiMetrics::ScaleDip(dpi, 140));
+    const int importWidth = std::min(width, UiMetrics::ScaleDip(dpi, 90));
+    const int exportWidth = std::min(width, UiMetrics::ScaleDip(dpi, 90));
+
+    int leftButtonsX = x;
+    if (page.assign)
+    {
+        page.assign->SetBounds(
+            D2D1::RectF(pxToDip(leftButtonsX), pxToDip(buttonsTop), pxToDip(leftButtonsX + assignWidth), pxToDip(buttonsTop + buttonHeight)));
+        leftButtonsX += assignWidth + buttonGapX;
+    }
+    if (page.remove)
+    {
+        page.remove->SetBounds(
+            D2D1::RectF(pxToDip(leftButtonsX), pxToDip(buttonsTop), pxToDip(leftButtonsX + removeWidth), pxToDip(buttonsTop + buttonHeight)));
+        leftButtonsX += removeWidth + buttonGapX;
+    }
+    if (page.reset)
+    {
+        page.reset->SetBounds(D2D1::RectF(pxToDip(leftButtonsX), pxToDip(buttonsTop), pxToDip(leftButtonsX + resetWidth), pxToDip(buttonsTop + buttonHeight)));
+    }
+
+    int rightButtonsX = x + width;
+    if (page.exportButton)
+    {
+        rightButtonsX -= exportWidth;
+        page.exportButton->SetBounds(
+            D2D1::RectF(pxToDip(rightButtonsX), pxToDip(buttonsTop), pxToDip(rightButtonsX + exportWidth), pxToDip(buttonsTop + buttonHeight)));
+        rightButtonsX -= buttonGapX;
+    }
+    if (page.importButton)
+    {
+        rightButtonsX -= importWidth;
+        page.importButton->SetBounds(
+            D2D1::RectF(pxToDip(rightButtonsX), pxToDip(buttonsTop), pxToDip(rightButtonsX + importWidth), pxToDip(buttonsTop + buttonHeight)));
+    }
+
+    _pageHostDx->Invalidate();
+    y = hostContentBottom;
+}
+
+#ifdef ENABLE_TESTS
+bool KeyboardPane::DebugApplyCapturedShortcut(HWND host, PreferencesDialogState& state, const uint32_t vk, const uint32_t modifiers) noexcept
+{
+    if (! host || IsWindow(host) == FALSE || state.currentCategory != PrefCategory::Keyboard || ! state.keyboardCaptureActive)
+    {
+        return false;
+    }
+
+    ApplyCapturedShortcut(host, state, vk, modifiers);
+    return true;
+}
+
+size_t KeyboardPane::DebugListRowCount() const noexcept
+{
+    if (! _dxState || ! _dxState->page.listModel)
+    {
+        return 0u;
+    }
+
+    return _dxState->page.listModel->GetRowCount();
+}
+
+RedSalamander::DxUi::GridVisibleWorkMetrics KeyboardPane::DebugListVisibleWorkMetrics() const noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl)
+    {
+        return {};
+    }
+
+    return _dxState->page.listControl->GetVisibleWorkMetrics();
+}
+
+uint64_t KeyboardPane::DebugListRenderCount() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return 0u;
+    }
+
+#ifdef ENABLE_TESTS
+    return _pageHostDx->DebugGetRenderCount();
+#else
+    return 0u;
+#endif
+}
+
+uint64_t KeyboardPane::DebugListResizeCount() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return 0u;
+    }
+
+#ifdef ENABLE_TESTS
+    return _pageHostDx->DebugGetResizeCount();
+#else
+    return 0u;
+#endif
+}
+
+uint64_t KeyboardPane::DebugListResizeFailureCount() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return 0u;
+    }
+
+#ifdef ENABLE_TESTS
+    return _pageHostDx->DebugGetResizeFailureCount();
+#else
+    return 0u;
+#endif
+}
+
+PreferencesKeyboardDebugFocusTarget KeyboardPane::DebugGetFocusTarget() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return PreferencesKeyboardDebugFocusTarget::None;
+    }
+
+    RedSalamander::DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
+    if (! focusedControl)
+    {
+        return PreferencesKeyboardDebugFocusTarget::None;
+    }
+
+    if (focusedControl == _dxState->page.searchEdit)
+    {
+        return PreferencesKeyboardDebugFocusTarget::SearchField;
+    }
+    if (focusedControl == _dxState->page.scopeCombo)
+    {
+        return PreferencesKeyboardDebugFocusTarget::ScopeCombo;
+    }
+    if (focusedControl == _dxState->page.listControl)
+    {
+        return PreferencesKeyboardDebugFocusTarget::ShortcutsGrid;
+    }
+    if (focusedControl == _dxState->page.assign)
+    {
+        return PreferencesKeyboardDebugFocusTarget::AssignButton;
+    }
+    if (focusedControl == _dxState->page.remove)
+    {
+        return PreferencesKeyboardDebugFocusTarget::RemoveButton;
+    }
+    if (focusedControl == _dxState->page.reset)
+    {
+        return PreferencesKeyboardDebugFocusTarget::ResetButton;
+    }
+    if (focusedControl == _dxState->page.importButton)
+    {
+        return PreferencesKeyboardDebugFocusTarget::ImportButton;
+    }
+    if (focusedControl == _dxState->page.exportButton)
+    {
+        return PreferencesKeyboardDebugFocusTarget::ExportButton;
+    }
+
+    return PreferencesKeyboardDebugFocusTarget::None;
+}
+
+bool KeyboardPane::DebugGetSnapshot(PreferencesKeyboardDebugSnapshot& out) const noexcept
+{
+    out = {};
+    if (! _state)
+    {
+        return false;
+    }
+
+    out.currentCategory       = _state->currentCategory;
+    out.keyboardListRowCount  = DebugListRowCount();
+    out.keyboardSearchText    = _state->keyboardSearchText;
+    out.keyboardCaptureActive = _state->keyboardCaptureActive;
+    if (const auto rowIndexOpt = TryGetSelectedRowIndex(); rowIndexOpt.has_value() && rowIndexOpt.value() < _state->keyboardRows.size())
+    {
+        const KeyboardShortcutRow& row    = _state->keyboardRows[rowIndexOpt.value()];
+        out.keyboardSelectedCommandIdText = row.commandId;
+        out.keyboardSelectedChordText     = row.chordText.empty() ? GetKeyboardUnassignedText() : row.chordText;
+    }
+
+    return true;
+}
+
+bool KeyboardPane::DebugGetListHeaderClientRect(const size_t columnIndex, RECT& outRect) const noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _dxState->page.listModel || ! _pageHostDx || columnIndex >= _dxState->page.listModel->GetColumnCount())
+    {
+        return false;
+    }
+
+    const auto headerRect = _dxState->page.listControl->GetVisibleColumnHeaderRect(columnIndex);
+    if (! headerRect.has_value())
+    {
+        return false;
+    }
+
+    outRect.left   = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->left)));
+    outRect.top    = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->top)));
+    outRect.right  = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->right)));
+    outRect.bottom = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->bottom)));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
+}
+
+bool KeyboardPane::DebugGetListRowClientRect(const size_t rowIndex, RECT& outRect) const noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    const auto rowRect = _dxState->page.listControl->GetVisibleRowRect(rowIndex);
+    if (! rowRect.has_value())
+    {
+        return false;
+    }
+
+    outRect.left   = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->left)));
+    outRect.top    = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->top)));
+    outRect.right  = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->right)));
+    outRect.bottom = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->bottom)));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
+}
+
+bool KeyboardPane::DebugHitTestListClientPoint(
+    const POINT clientPoint, uint32_t& outZone, size_t& outColumnIndex, bool& outHeaderResize, bool& outHostHitsList) const noexcept
+{
+    outZone         = 0u;
+    outColumnIndex  = 0u;
+    outHeaderResize = false;
+    outHostHitsList = false;
+    if (! _dxState || ! _dxState->page.listControl || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    const D2D1_POINT_2F pointDip =
+        D2D1::Point2F(_pageHostDx->PixelsToDip(static_cast<float>(clientPoint.x)), _pageHostDx->PixelsToDip(static_cast<float>(clientPoint.y)));
+    outHostHitsList = _pageHostDx->DebugHitTestControl(pointDip) == _dxState->page.listControl;
+    RedSalamander::DxUi::Grid::GridDebugHitInfo hit{};
+    if (! _dxState->page.listControl->DebugHitTestPoint(RedSalamander::DxUi::MakePointDip(pointDip), hit))
+    {
+        return false;
+    }
+
+    outZone         = hit.zone;
+    outColumnIndex  = hit.columnIndex;
+    outHeaderResize = hit.isHeaderResize;
+    return true;
+}
+
+bool KeyboardPane::DebugGetListPointerState(PreferencesGridPointerDebugState& outState) const noexcept
+{
+    outState = {};
+    if (! _dxState || ! _dxState->page.listControl)
+    {
+        return false;
+    }
+
+    const RedSalamander::DxUi::Grid::GridDebugPointerState gridState = _dxState->page.listControl->DebugGetPointerState();
+    outState.headerResizeDownCount                                   = gridState.headerResizeDownCount;
+    outState.resizeMoveCount                                         = gridState.resizeMoveCount;
+    outState.resizeActive                                            = gridState.resizeActive;
+    outState.lastResizeDeltaDip                                      = gridState.lastResizeDeltaDip;
+    outState.lastResizeWidthDip                                      = gridState.lastResizeWidthDip;
+    return true;
+}
+
+bool KeyboardPane::DebugFindListRowByCommandId(std::wstring_view commandId, size_t& outRowIndex) const noexcept
+{
+    outRowIndex = 0u;
+    if (! _dxState || ! _dxState->page.listModel || commandId.empty())
+    {
+        return false;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    for (size_t rowIndex = 0; rowIndex < rows.size(); ++rowIndex)
+    {
+        if (rows[rowIndex].tooltipText == commandId)
+        {
+            outRowIndex = rowIndex;
             return true;
         }
     }
 
     return false;
+}
+
+bool KeyboardPane::DebugGetVisibleRowChordByCommandId(std::wstring_view commandId, std::wstring& outChordText) const noexcept
+{
+    outChordText.clear();
+    if (! _state || commandId.empty())
+    {
+        return false;
+    }
+
+    for (const auto& row : _state->keyboardRows)
+    {
+        if (row.commandId == commandId)
+        {
+            outChordText = row.chordText.empty() ? GetKeyboardUnassignedText() : row.chordText;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool KeyboardPane::DebugSelectListRow(const size_t rowIndex) noexcept
+{
+    if (! _dxState || ! _dxState->page.listControl || ! _dxState->page.listModel)
+    {
+        return false;
+    }
+
+    const auto& rows = _dxState->page.listModel->GetRows();
+    if (rowIndex >= rows.size())
+    {
+        return false;
+    }
+
+    _dxState->page.listControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
+    OnGridSelectionChanged(*_dxState->page.listControl);
+    if (_pageHostDx)
+    {
+        _pageHostDx->Invalidate();
+    }
+    return true;
+}
+
+bool KeyboardPane::DebugSetSearchText(std::wstring_view text) noexcept
+{
+    if (! _state)
+    {
+        return false;
+    }
+
+    _state->keyboardSearchText.assign(text);
+    if (_dxState && _dxState->page.searchEdit)
+    {
+        _dxState->page.searchEdit->SetText(std::wstring(text));
+    }
+
+    // TextField::SetText does not fire the OnTextChanged callback, so the
+    // normal callback → deferred action → Refresh chain is not triggered.
+    // Follow the live path here instead of forcing a synchronous refresh so
+    // test search changes exercise the same host routing as real typing.
+    if (_hostWindow && IsWindow(_hostWindow) != FALSE)
+    {
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::KeyboardSearchChanged));
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+        return true;
+    }
+
+    return false;
+}
+
+bool KeyboardPane::DebugSetFunctionBarScope() noexcept
+{
+    if (! _dxState || ! _dxState->page.scopeCombo)
+    {
+        return false;
+    }
+
+    const std::optional<size_t> functionBarIndex = kScopeComboIndexFunctionBar;
+    if (_dxState->page.scopeCombo->GetSelectedIndex() == functionBarIndex)
+    {
+        return true;
+    }
+
+    _dxState->page.scopeCombo->SetSelectedIndex(functionBarIndex);
+
+    if (_hostWindow && IsWindow(_hostWindow) != FALSE)
+    {
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::KeyboardScopeChanged));
+        if (_pageHostDx)
+        {
+            _pageHostDx->Invalidate();
+        }
+        return true;
+    }
+
+    return false;
+}
+
+bool KeyboardPane::DebugFocusSearchField() noexcept
+{
+    if (! _dxState || ! _dxState->page.searchEdit || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(_dxState->page.searchEdit);
+    return true;
+}
+
+bool KeyboardPane::DebugScrollListByWheelDetents(const int detents) noexcept
+{
+    if (detents == 0 || ! _dxState || ! _dxState->page.listControl || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(_dxState->page.listControl);
+
+    const int direction = detents < 0 ? -1 : 1;
+    const int steps     = std::abs(detents);
+    for (int index = 0; index < steps; ++index)
+    {
+        const float wheelDelta = static_cast<float>(direction * WHEEL_DELTA);
+        _dxState->page.listControl->OnMouseWheel(*_pageHostDx, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0u);
+    }
+
+    return true;
+}
+#endif
+
+void KeyboardPane::OnGridSelectionChanged(Grid& sender)
+{
+    if (! _dxState || ! _hostWindow || _syncingDxSelection)
+    {
+        return;
+    }
+
+    auto* state = PrefsUi::GetDialogState(_hostWindow);
+    if (! state || ! _dxState->page.listControl || ! _dxState->page.listModel || &sender != _dxState->page.listControl)
+    {
+        return;
+    }
+
+    if (const auto rowIndexOpt = TryGetSelectedRowIndex(); rowIndexOpt.has_value() && rowIndexOpt.value() < state->keyboardRows.size())
+    {
+        StoreKeyboardRetainedSelection(*state, state->keyboardRows[rowIndexOpt.value()]);
+    }
+
+    UpdateButtons(_hostWindow, *state);
+    UpdateHint(_hostWindow, *state);
 }
 
 namespace
@@ -498,33 +1647,14 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 }
 } // namespace
 
-constexpr int kKeyboardListColumnCommand  = 0;
-constexpr int kKeyboardListColumnShortcut = 1;
-constexpr int kKeyboardListColumnScope    = 2;
-
 [[nodiscard]] std::optional<ShortcutScope> GetKeyboardScopeFilter(const PreferencesDialogState& state) noexcept
 {
-    if (! state.keyboardScopeCombo)
+    if (! state.keyboardPaneOwner)
     {
         return std::nullopt;
     }
 
-    const LRESULT sel = SendMessageW(state.keyboardScopeCombo.get(), CB_GETCURSEL, 0, 0);
-    if (sel == CB_ERR)
-    {
-        return std::nullopt;
-    }
-
-    const LRESULT data = SendMessageW(state.keyboardScopeCombo.get(), CB_GETITEMDATA, static_cast<WPARAM>(sel), 0);
-    if (data == 0)
-    {
-        return ShortcutScope::FunctionBar;
-    }
-    if (data == 1)
-    {
-        return ShortcutScope::FolderView;
-    }
-    return std::nullopt;
+    return state.keyboardPaneOwner->GetScopeFilter();
 }
 
 [[nodiscard]] bool IsConflictChord(uint32_t chordKey, const std::vector<uint32_t>& conflicts) noexcept
@@ -532,552 +1662,44 @@ constexpr int kKeyboardListColumnScope    = 2;
     return std::binary_search(conflicts.begin(), conflicts.end(), chordKey);
 }
 
-void EnsureKeyboardListColumns(HWND list, UINT dpi) noexcept
-{
-    if (! list)
-    {
-        return;
-    }
-
-    const HWND header  = ListView_GetHeader(list);
-    const int existing = header ? Header_GetItemCount(header) : 0;
-    if (existing > 0)
-    {
-        return;
-    }
-
-    struct ColumnDef
-    {
-        UINT textId  = 0;
-        int widthDip = 0;
-    };
-
-    const std::array<ColumnDef, 3> columns = {
-        ColumnDef{IDS_PREFS_KEYBOARD_COL_COMMAND, 220},
-        ColumnDef{IDS_PREFS_KEYBOARD_COL_SHORTCUT, 170},
-        ColumnDef{IDS_PREFS_KEYBOARD_COL_SCOPE, 110},
-    };
-
-    for (size_t i = 0; i < columns.size(); ++i)
-    {
-        const ColumnDef& def    = columns[i];
-        const std::wstring text = LoadStringResource(nullptr, def.textId);
-        LVCOLUMNW col{};
-        col.mask    = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
-        col.fmt     = LVCFMT_LEFT;
-        col.pszText = const_cast<wchar_t*>(text.empty() ? L"" : text.c_str());
-        col.cx      = std::max(0, ThemedControls::ScaleDip(dpi, def.widthDip));
-        ListView_InsertColumn(list, static_cast<int>(i), &col);
-    }
-}
-
-void KeyboardPane::UpdateListColumnWidths(HWND list, UINT dpi) noexcept
-{
-    if (! list)
-    {
-        return;
-    }
-
-    RECT rc{};
-    GetClientRect(list, &rc);
-    const int totalWidth = std::max(0l, rc.right - rc.left);
-
-    const int scopeWidth    = std::max(0, ThemedControls::ScaleDip(dpi, 110));
-    const int shortcutWidth = std::max(0, ThemedControls::ScaleDip(dpi, 170));
-
-    const int commandWidth = std::max(0, totalWidth - scopeWidth - shortcutWidth - ThemedControls::ScaleDip(dpi, 4));
-    ListView_SetColumnWidth(list, kKeyboardListColumnCommand, std::max(commandWidth, ThemedControls::ScaleDip(dpi, 140)));
-    ListView_SetColumnWidth(list, kKeyboardListColumnShortcut, shortcutWidth);
-    ListView_SetColumnWidth(list, kKeyboardListColumnScope, scopeWidth);
-}
-
-void KeyboardPane::LayoutControls(
-    HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept
+void KeyboardPane::LayoutPage(HWND host,
+                              PreferencesDialogState& state,
+                              int x,
+                              int& y,
+                              int width,
+                              int margin,
+                              int gapY,
+                              int sectionY,
+                              const PreferencesTypographyContext& typography) noexcept
 {
     if (! host)
     {
         return;
     }
 
-    using namespace PrefsLayoutConstants;
-
-    const UINT dpi = GetDpiForWindow(host);
-
-    const int rowHeight   = std::max(1, ThemedControls::ScaleDip(dpi, kRowHeightDip));
-    const int labelHeight = std::max(1, ThemedControls::ScaleDip(dpi, kTitleHeightDip));
-    const int gapX        = ThemedControls::ScaleDip(dpi, kToggleGapXDip);
-
-    const int searchLabelWidth = std::min(width, ThemedControls::ScaleDip(dpi, 52));
-    const int scopeLabelWidth  = std::min(width, ThemedControls::ScaleDip(dpi, 48));
-
-    int scopeComboWidth = state.keyboardScopeCombo ? ThemedControls::MeasureComboBoxPreferredWidth(state.keyboardScopeCombo.get(), dpi) : 0;
-    scopeComboWidth     = std::max(scopeComboWidth, ThemedControls::ScaleDip(dpi, kMinEditWidthDip));
-    scopeComboWidth     = std::min(scopeComboWidth, std::min(width, ThemedControls::ScaleDip(dpi, kMaxEditWidthDip)));
-
-    const int searchEditWidth = std::max(0, width - searchLabelWidth - gapX - scopeLabelWidth - gapX - scopeComboWidth - gapX);
-
-    if (state.keyboardSearchLabel)
+    if (state.keyboardPaneOwner && state.keyboardPaneOwner->EnsureDxHosts(host, state))
     {
-        SetWindowPos(
-            state.keyboardSearchLabel.get(), nullptr, x, y + (rowHeight - labelHeight) / 2, searchLabelWidth, labelHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardSearchLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-    const int searchEditX        = x + searchLabelWidth + gapX;
-    const int searchFramePadding = (state.keyboardSearchFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-    if (state.keyboardSearchFrame)
-    {
-        SetWindowPos(state.keyboardSearchFrame.get(), nullptr, searchEditX, y, searchEditWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    if (state.keyboardSearchEdit)
-    {
-        SetWindowPos(state.keyboardSearchEdit.get(),
-                     nullptr,
-                     searchEditX + searchFramePadding,
-                     y + searchFramePadding,
-                     std::max(1, searchEditWidth - 2 * searchFramePadding),
-                     std::max(1, rowHeight - 2 * searchFramePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardSearchEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        state.keyboardPaneOwner->LayoutDxPage(host, state, x, y, width, margin, gapY, sectionY, typography);
+        return;
     }
 
-    const int scopeLabelX = x + searchLabelWidth + gapX + searchEditWidth + gapX;
-    if (state.keyboardScopeLabel)
-    {
-        SetWindowPos(state.keyboardScopeLabel.get(),
-                     nullptr,
-                     scopeLabelX,
-                     y + (rowHeight - labelHeight) / 2,
-                     scopeLabelWidth,
-                     labelHeight,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardScopeLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-    const int scopeComboX  = scopeLabelX + scopeLabelWidth + gapX;
-    const int framePadding = (state.keyboardScopeFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-    if (state.keyboardScopeFrame)
-    {
-        SetWindowPos(state.keyboardScopeFrame.get(), nullptr, scopeComboX, y, scopeComboWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    if (state.keyboardScopeCombo)
-    {
-        SetWindowPos(state.keyboardScopeCombo.get(),
-                     nullptr,
-                     scopeComboX + framePadding,
-                     y + framePadding,
-                     std::max(1, scopeComboWidth - 2 * framePadding),
-                     std::max(1, rowHeight - 2 * framePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardScopeCombo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        ThemedControls::EnsureComboBoxDroppedWidth(state.keyboardScopeCombo.get(), dpi);
-    }
-
-    y += rowHeight + sectionY;
-
-    RECT hostClient{};
-    GetClientRect(host, &hostClient);
-    const int hostBottom        = std::max(0l, hostClient.bottom - hostClient.top);
-    const int hostContentBottom = std::max(0, hostBottom - margin);
-
-    const int buttonHeight = std::max(1, ThemedControls::ScaleDip(dpi, 26));
-    const int buttonsTop   = std::max(y, hostContentBottom - buttonHeight);
-
-    int hintHeight = std::max(1, ThemedControls::ScaleDip(dpi, 44));
-    if (state.keyboardHint)
-    {
-        const std::wstring hintText = PrefsUi::GetWindowTextString(state.keyboardHint);
-        if (! hintText.empty())
-        {
-            hintHeight = std::max(hintHeight, PrefsUi::MeasureStaticTextHeight(host, dialogFont, width, hintText));
-        }
-    }
-    const int hintTop = std::max(y, buttonsTop - gapY - hintHeight);
-
-    const int listTop    = y;
-    const int listBottom = std::max(listTop, hintTop - gapY);
-    const int listHeight = std::max(0, listBottom - listTop);
-
-    if (state.keyboardList)
-    {
-        SetWindowPos(state.keyboardList.get(), nullptr, x, listTop, width, listHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardList.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        KeyboardPane::UpdateListColumnWidths(state.keyboardList.get(), dpi);
-    }
-
-    if (state.keyboardHint)
-    {
-        SetWindowPos(state.keyboardHint.get(), nullptr, x, hintTop, width, hintHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardHint.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-
-    const int buttonGapX  = gapX;
-    const int assignWidth = std::min(width, ThemedControls::ScaleDip(dpi, 90));
-    const int removeWidth = std::min(width, ThemedControls::ScaleDip(dpi, 80));
-    const int resetWidth  = std::min(width, ThemedControls::ScaleDip(dpi, 140));
-    const int importWidth = std::min(width, ThemedControls::ScaleDip(dpi, 90));
-    const int exportWidth = std::min(width, ThemedControls::ScaleDip(dpi, 90));
-
-    int leftButtonsX = x;
-    if (state.keyboardAssign)
-    {
-        SetWindowPos(state.keyboardAssign.get(), nullptr, leftButtonsX, buttonsTop, assignWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardAssign.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        leftButtonsX += assignWidth + buttonGapX;
-    }
-    if (state.keyboardRemove)
-    {
-        SetWindowPos(state.keyboardRemove.get(), nullptr, leftButtonsX, buttonsTop, removeWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardRemove.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        leftButtonsX += removeWidth + buttonGapX;
-    }
-    if (state.keyboardReset)
-    {
-        SetWindowPos(state.keyboardReset.get(), nullptr, leftButtonsX, buttonsTop, resetWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardReset.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-
-    const int rightEdge = x + width;
-    int rightButtonsX   = rightEdge;
-    if (state.keyboardExport)
-    {
-        rightButtonsX -= exportWidth;
-        SetWindowPos(state.keyboardExport.get(), nullptr, rightButtonsX, buttonsTop, exportWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardExport.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        rightButtonsX -= buttonGapX;
-    }
-    if (state.keyboardImport)
-    {
-        rightButtonsX -= importWidth;
-        SetWindowPos(state.keyboardImport.get(), nullptr, rightButtonsX, buttonsTop, importWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.keyboardImport.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-}
-
-namespace
-{
-[[nodiscard]] int GetKeyboardListRowHeightPx(HWND list, HDC hdc) noexcept
-{
-    if (! list)
-    {
-        return 36;
-    }
-
-    const UINT dpi     = GetDpiForWindow(list);
-    const int paddingY = std::max(1, ThemedControls::ScaleDip(dpi, 3));
-    const int lineGap  = std::max(0, ThemedControls::ScaleDip(dpi, 1));
-
-    if (! hdc)
-    {
-        return std::max(1, ThemedControls::ScaleDip(dpi, 36));
-    }
-
-    TEXTMETRICW tm{};
-    if (! GetTextMetricsW(hdc, &tm))
-    {
-        return std::max(1, ThemedControls::ScaleDip(dpi, 36));
-    }
-
-    const int lineHeight = std::max(1, static_cast<int>(tm.tmHeight + tm.tmExternalLeading));
-    return (paddingY * 2) + (lineHeight * 2) + lineGap;
-}
-} // namespace
-
-LRESULT KeyboardPane::OnMeasureList(MEASUREITEMSTRUCT* mis, PreferencesDialogState& state) noexcept
-{
-    if (! mis || mis->CtlType != ODT_LISTVIEW || mis->CtlID != static_cast<UINT>(IDC_PREFS_KEYBOARD_LIST))
-    {
-        return 0;
-    }
-
-    if (! state.keyboardList)
-    {
-        return 0;
-    }
-
-    wil::unique_hdc_window hdc(GetDC(state.keyboardList.get()));
-    if (! hdc)
-    {
-        mis->itemHeight = 36u;
-        return 1;
-    }
-
-    const HFONT font = reinterpret_cast<HFONT>(SendMessageW(state.keyboardList.get(), WM_GETFONT, 0, 0));
-    if (font)
-    {
-        [[maybe_unused]] auto oldFont = wil::SelectObject(hdc.get(), font);
-        mis->itemHeight               = static_cast<UINT>(std::max(1, GetKeyboardListRowHeightPx(state.keyboardList.get(), hdc.get())));
-        return 1;
-    }
-
-    mis->itemHeight = 36u;
-    return 1;
-}
-
-LRESULT KeyboardPane::OnDrawList(DRAWITEMSTRUCT* dis, PreferencesDialogState& state) noexcept
-{
-    if (! dis || dis->CtlType != ODT_LISTVIEW || dis->CtlID != static_cast<UINT>(IDC_PREFS_KEYBOARD_LIST))
-    {
-        return 0;
-    }
-
-    if (! state.keyboardList || ! dis->hDC)
-    {
-        return 1;
-    }
-
-    const int itemIndex = static_cast<int>(dis->itemID);
-    if (itemIndex < 0)
-    {
-        return 1;
-    }
-
-    LVITEMW item{};
-    item.mask  = LVIF_PARAM;
-    item.iItem = itemIndex;
-    if (ListView_GetItem(state.keyboardList.get(), &item) == FALSE)
-    {
-        return 1;
-    }
-
-    const size_t rowIndex = static_cast<size_t>(item.lParam);
-    if (rowIndex >= state.keyboardRows.size())
-    {
-        return 1;
-    }
-
-    const KeyboardShortcutRow& row = state.keyboardRows[rowIndex];
-
-    RECT rc = dis->rcItem;
-    if (rc.right <= rc.left || rc.bottom <= rc.top)
-    {
-        return 1;
-    }
-
-    const bool selected    = (dis->itemState & ODS_SELECTED) != 0;
-    const bool focused     = (dis->itemState & ODS_FOCUS) != 0;
-    const bool listFocused = GetFocus() == state.keyboardList.get();
-
-    const HWND root         = GetAncestor(state.keyboardList.get(), GA_ROOT);
-    const bool windowActive = root && GetActiveWindow() == root;
-
-    const std::wstring_view seed = ! row.commandDisplayName.empty() ? std::wstring_view(row.commandDisplayName) : std::wstring_view(row.commandId);
-
-    COLORREF bg        = state.theme.systemHighContrast ? GetSysColor(COLOR_WINDOW) : state.theme.windowBackground;
-    COLORREF textColor = state.theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : state.theme.menu.text;
-
-    if (selected)
-    {
-        COLORREF selBg = state.theme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : state.theme.menu.selectionBg;
-        if (! state.theme.highContrast && state.theme.menu.rainbowMode && ! seed.empty())
-        {
-            selBg = RainbowMenuSelectionColor(seed, state.theme.menu.darkBase);
-        }
-
-        COLORREF selText = state.theme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHTTEXT) : state.theme.menu.selectionText;
-        if (! state.theme.highContrast && state.theme.menu.rainbowMode)
-        {
-            selText = ChooseContrastingTextColor(selBg);
-        }
-
-        if (windowActive && listFocused)
-        {
-            bg        = selBg;
-            textColor = selText;
-        }
-        else if (! state.theme.highContrast)
-        {
-            const int denom = state.theme.menu.darkBase ? 2 : 3;
-            bg              = ThemedControls::BlendColor(state.theme.windowBackground, selBg, 1, denom);
-            textColor       = ChooseContrastingTextColor(bg);
-        }
-        else
-        {
-            bg        = selBg;
-            textColor = selText;
-        }
-    }
-    else if (! state.theme.highContrast && ((itemIndex % 2) == 1))
-    {
-        const COLORREF tint =
-            (state.theme.menu.rainbowMode && ! seed.empty()) ? RainbowMenuSelectionColor(seed, state.theme.menu.darkBase) : state.theme.menu.selectionBg;
-        const int denom = state.theme.menu.darkBase ? 6 : 8;
-        bg              = ThemedControls::BlendColor(bg, tint, 1, denom);
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(bg));
-    if (bgBrush)
-    {
-        FillRect(dis->hDC, &rc, bgBrush.get());
-    }
-
-    if (! state.theme.highContrast && textColor == bg)
-    {
-        textColor = ChooseContrastingTextColor(bg);
-    }
-
-    COLORREF descColor = textColor;
-    if (! state.theme.highContrast)
-    {
-        descColor = ThemedControls::BlendColor(textColor, bg, 1, 3);
-        if (descColor == bg)
-        {
-            descColor = textColor;
-        }
-    }
-
-    const UINT dpi     = GetDpiForWindow(state.keyboardList.get());
-    const int paddingX = ThemedControls::ScaleDip(dpi, 8);
-    const int paddingY = std::max(1, ThemedControls::ScaleDip(dpi, 3));
-    const int lineGap  = std::max(0, ThemedControls::ScaleDip(dpi, 1));
-
-    const int commandColW  = std::max(0, ListView_GetColumnWidth(state.keyboardList.get(), 0));
-    const int shortcutColW = std::max(0, ListView_GetColumnWidth(state.keyboardList.get(), 1));
-
-    RECT commandRect  = rc;
-    commandRect.right = std::min(rc.right, rc.left + commandColW);
-
-    RECT shortcutRect  = rc;
-    shortcutRect.left  = commandRect.right;
-    shortcutRect.right = std::min(rc.right, shortcutRect.left + shortcutColW);
-
-    RECT scopeRect = rc;
-    scopeRect.left = shortcutRect.right;
-
-    HFONT fontToUse = reinterpret_cast<HFONT>(SendMessageW(state.keyboardList.get(), WM_GETFONT, 0, 0));
-    if (! fontToUse)
-    {
-        fontToUse = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    }
-    [[maybe_unused]] auto oldFont = wil::SelectObject(dis->hDC, fontToUse);
-
-    SetBkMode(dis->hDC, TRANSPARENT);
-
-    int iconOffsetX = 0;
-    if (row.hasConflict && state.keyboardImageList)
-    {
-        const int iconSize = std::max(1, ThemedControls::ScaleDip(dpi, 16));
-        const int iconX    = commandRect.left + paddingX;
-        const int iconY    = commandRect.top + std::max(0, (static_cast<int>(commandRect.bottom - commandRect.top) - iconSize) / 2);
-        ImageList_Draw(state.keyboardImageList.get(), 0, dis->hDC, iconX, iconY, ILD_NORMAL);
-        iconOffsetX = iconSize + ThemedControls::ScaleDip(dpi, 6);
-    }
-
-    RECT textRect   = commandRect;
-    textRect.left   = std::min(textRect.right, textRect.left + paddingX + iconOffsetX);
-    textRect.right  = std::max(textRect.left, textRect.right - paddingX);
-    textRect.top    = std::min(textRect.bottom, textRect.top + paddingY);
-    textRect.bottom = std::max(textRect.top, textRect.bottom - paddingY);
-
-    TEXTMETRICW tm{};
-    GetTextMetricsW(dis->hDC, &tm);
-    const int lineHeight = std::max(1, static_cast<int>(tm.tmHeight + tm.tmExternalLeading));
-
-    RECT nameRect   = textRect;
-    nameRect.bottom = std::min(textRect.bottom, nameRect.top + lineHeight);
-
-    RECT descRect = textRect;
-    descRect.top  = std::min(textRect.bottom, nameRect.bottom + lineGap);
-
-    SetTextColor(dis->hDC, textColor);
-    DrawTextW(dis->hDC,
-              row.commandDisplayName.c_str(),
-              static_cast<int>(row.commandDisplayName.size()),
-              &nameRect,
-              DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
-
-    std::wstring description;
-    if (! row.commandId.empty())
-    {
-        if (const std::optional<unsigned int> descId = TryGetCommandDescriptionStringId(row.commandId); descId.has_value())
-        {
-            description = LoadStringResource(nullptr, descId.value());
-        }
-    }
-    if (! description.empty())
-    {
-        SetTextColor(dis->hDC, descColor);
-        DrawTextW(dis->hDC, description.c_str(), static_cast<int>(description.size()), &descRect, DT_LEFT | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
-    }
-
-    const std::wstring_view scopeText = GetShortcutScopeDisplayName(row.scope);
-
-    RECT shortcutTextRect  = shortcutRect;
-    shortcutTextRect.left  = std::min(shortcutTextRect.right, shortcutTextRect.left + paddingX);
-    shortcutTextRect.right = std::max(shortcutTextRect.left, shortcutTextRect.right - paddingX);
-
-    RECT scopeTextRect  = scopeRect;
-    scopeTextRect.left  = std::min(scopeTextRect.right, scopeTextRect.left + paddingX);
-    scopeTextRect.right = std::max(scopeTextRect.left, scopeTextRect.right - paddingX);
-
-    const std::wstring_view chordText = row.chordText.empty() ? std::wstring_view(L"Unassigned") : std::wstring_view(row.chordText);
-    const COLORREF chordColor         = (row.chordText.empty() && ! state.theme.highContrast) ? descColor : textColor;
-
-    SetTextColor(dis->hDC, chordColor);
-    DrawTextW(dis->hDC,
-              chordText.data(),
-              static_cast<int>(chordText.size()),
-              &shortcutTextRect,
-              DT_RIGHT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
-
-    SetTextColor(dis->hDC, textColor);
-    DrawTextW(
-        dis->hDC, scopeText.data(), static_cast<int>(scopeText.size()), &scopeTextRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
-
-    if (focused)
-    {
-        RECT focusRc = rc;
-        InflateRect(&focusRc,
-                    -ThemedControls::ScaleDip(dpi, PrefsLayoutConstants::kFramePaddingDip),
-                    -ThemedControls::ScaleDip(dpi, PrefsLayoutConstants::kFramePaddingDip));
-
-        COLORREF focusTint = state.theme.menu.selectionBg;
-        if (! state.theme.highContrast && state.theme.menu.rainbowMode && ! seed.empty())
-        {
-            focusTint = RainbowMenuSelectionColor(seed, state.theme.menu.darkBase);
-        }
-
-        const int weight          = (windowActive && listFocused) ? (state.theme.dark ? 70 : 55) : (state.theme.dark ? 55 : 40);
-        const COLORREF focusColor = state.theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : ThemedControls::BlendColor(bg, focusTint, weight, 255);
-
-        wil::unique_hpen focusPen(CreatePen(PS_SOLID, 1, focusColor));
-        if (focusPen)
-        {
-            [[maybe_unused]] auto oldBrush2 = wil::SelectObject(dis->hDC, GetStockObject(NULL_BRUSH));
-            [[maybe_unused]] auto oldPen2   = wil::SelectObject(dis->hDC, focusPen.get());
-            Rectangle(dis->hDC, focusRc.left, focusRc.top, focusRc.right, focusRc.bottom);
-        }
-    }
-
-    return 1;
+    Debug::Error(L"Preferences.Keyboard: DxUi surface initialization failed; page will not render correctly.");
 }
 
 [[nodiscard]] std::optional<size_t> TryGetSelectedKeyboardRowIndex(const PreferencesDialogState& state) noexcept
 {
-    if (! state.keyboardList)
+    if (! state.keyboardPaneOwner)
     {
         return std::nullopt;
     }
 
-    const int selected = ListView_GetNextItem(state.keyboardList.get(), -1, LVNI_SELECTED);
-    if (selected < 0)
+    const auto rowIndexOpt = state.keyboardPaneOwner->TryGetSelectedRowIndex();
+    if (! rowIndexOpt.has_value() || rowIndexOpt.value() >= state.keyboardRows.size())
     {
         return std::nullopt;
     }
 
-    LVITEMW item{};
-    item.mask  = LVIF_PARAM;
-    item.iItem = selected;
-    if (! ListView_GetItem(state.keyboardList.get(), &item))
-    {
-        return std::nullopt;
-    }
-
-    const size_t index = static_cast<size_t>(item.lParam);
-    if (index >= state.keyboardRows.size())
-    {
-        return std::nullopt;
-    }
-
-    return index;
+    return rowIndexOpt;
 }
 
 [[nodiscard]] bool IsSwapAvailable(const PreferencesDialogState& state) noexcept
@@ -1114,10 +1736,19 @@ LRESULT KeyboardPane::OnDrawList(DRAWITEMSTRUCT* dis, PreferencesDialogState& st
 
 void KeyboardPane::UpdateHint(HWND host, PreferencesDialogState& state) noexcept
 {
-    if (! state.keyboardHint)
+    const auto finalizeHint = [&]() noexcept
     {
-        return;
-    }
+        if (state.keyboardPaneOwner)
+        {
+            state.keyboardPaneOwner->SyncDxControlsFromState(state);
+        }
+        if (host)
+        {
+            RECT rc{};
+            GetClientRect(host, &rc);
+            PostMessageW(host, WM_SIZE, SIZE_RESTORED, MAKELPARAM(std::max(0l, rc.right - rc.left), std::max(0l, rc.bottom - rc.top)));
+        }
+    };
 
     if (state.keyboardCaptureActive)
     {
@@ -1166,22 +1797,16 @@ void KeyboardPane::UpdateHint(HWND host, PreferencesDialogState& state) noexcept
             text = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_HINT_PRESS_SHORTCUT);
         }
 
-        SetWindowTextW(state.keyboardHint.get(), text.c_str());
-        if (host)
-        {
-            PostMessageW(host, WM_SIZE, 0, 0);
-        }
+        SetKeyboardHintText(state, std::move(text));
+        finalizeHint();
         return;
     }
 
     const std::optional<size_t> rowIndexOpt = TryGetSelectedKeyboardRowIndex(state);
     if (! rowIndexOpt.has_value())
     {
-        SetWindowTextW(state.keyboardHint.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_HINT_SELECT_COMMAND).c_str());
-        if (host)
-        {
-            PostMessageW(host, WM_SIZE, 0, 0);
-        }
+        SetKeyboardHintText(state, LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_HINT_SELECT_COMMAND));
+        finalizeHint();
         return;
     }
 
@@ -1194,21 +1819,15 @@ void KeyboardPane::UpdateHint(HWND host, PreferencesDialogState& state) noexcept
 
     if (! description.empty())
     {
-        SetWindowTextW(state.keyboardHint.get(), description.c_str());
-        if (host)
-        {
-            PostMessageW(host, WM_SIZE, 0, 0);
-        }
+        SetKeyboardHintText(state, std::move(description));
+        finalizeHint();
         return;
     }
 
     if (! row.commandId.empty())
     {
-        SetWindowTextW(state.keyboardHint.get(), row.commandId.c_str());
-        if (host)
-        {
-            PostMessageW(host, WM_SIZE, 0, 0);
-        }
+        SetKeyboardHintText(state, row.commandId);
+        finalizeHint();
     }
 }
 
@@ -1220,16 +1839,24 @@ void KeyboardPane::UpdateButtons(HWND host, PreferencesDialogState& state) noexc
     const bool hasSelection                 = rowIndexOpt.has_value();
     const bool hasBindingSelection          = hasSelection && state.keyboardRows[rowIndexOpt.value()].bindingIndex.has_value();
 
-    if (state.keyboardSearchEdit)
+    auto* pane = state.keyboardPaneOwner;
+    if (! pane || ! pane->_dxState)
     {
-        EnableWindow(state.keyboardSearchEdit.get(), state.keyboardCaptureActive ? FALSE : TRUE);
-    }
-    if (state.keyboardScopeCombo)
-    {
-        EnableWindow(state.keyboardScopeCombo.get(), state.keyboardCaptureActive ? FALSE : TRUE);
+        return;
     }
 
-    if (state.keyboardAssign)
+    KeyboardDxPage& page = pane->_dxState->page;
+
+    if (page.searchEdit)
+    {
+        page.searchEdit->SetEnabled(! state.keyboardCaptureActive);
+    }
+    if (page.scopeCombo)
+    {
+        page.scopeCombo->SetEnabled(! state.keyboardCaptureActive);
+    }
+
+    if (page.assign)
     {
         if (state.keyboardCaptureActive)
         {
@@ -1239,263 +1866,132 @@ void KeyboardPane::UpdateButtons(HWND host, PreferencesDialogState& state) noexc
             {
                 labelId = state.keyboardCaptureConflictCommandId.empty() ? IDS_PREFS_KEYBOARD_BUTTON_ASSIGN : IDS_PREFS_KEYBOARD_BUTTON_REPLACE;
             }
-            SetWindowTextW(state.keyboardAssign.get(), LoadStringResource(nullptr, labelId).c_str());
-            EnableWindow(state.keyboardAssign.get(), TRUE);
+            page.assign->SetText(LoadStringResource(nullptr, labelId));
+            page.assign->SetEnabled(true);
         }
         else
         {
-            SetWindowTextW(state.keyboardAssign.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_ASSIGN_ELLIPSIS).c_str());
-            EnableWindow(state.keyboardAssign.get(), hasSelection ? TRUE : FALSE);
+            page.assign->SetText(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_ASSIGN_ELLIPSIS));
+            page.assign->SetEnabled(hasSelection);
         }
     }
-    if (state.keyboardRemove)
+    if (page.remove)
     {
         if (state.keyboardCaptureActive)
         {
             if (IsSwapAvailable(state))
             {
-                SetWindowTextW(state.keyboardRemove.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_SWAP).c_str());
-                EnableWindow(state.keyboardRemove.get(), TRUE);
+                page.remove->SetText(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_SWAP));
+                page.remove->SetEnabled(true);
             }
             else
             {
-                SetWindowTextW(state.keyboardRemove.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_REMOVE).c_str());
-                EnableWindow(state.keyboardRemove.get(), FALSE);
+                page.remove->SetText(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_REMOVE));
+                page.remove->SetEnabled(false);
             }
         }
         else
         {
-            SetWindowTextW(state.keyboardRemove.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_REMOVE).c_str());
-            EnableWindow(state.keyboardRemove.get(), hasBindingSelection ? TRUE : FALSE);
+            page.remove->SetText(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_REMOVE));
+            page.remove->SetEnabled(hasBindingSelection);
         }
     }
-    if (state.keyboardReset)
+    if (page.reset)
     {
-        EnableWindow(state.keyboardReset.get(), state.keyboardCaptureActive ? FALSE : TRUE);
+        page.reset->SetText(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_RESET_DEFAULTS));
+        page.reset->SetEnabled(! state.keyboardCaptureActive);
     }
-    if (state.keyboardImport)
+    if (page.importButton)
     {
-        EnableWindow(state.keyboardImport.get(), state.keyboardCaptureActive ? FALSE : TRUE);
+        page.importButton->SetText(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_IMPORT));
+        page.importButton->SetEnabled(! state.keyboardCaptureActive);
     }
-    if (state.keyboardExport)
+    if (page.exportButton)
     {
-        EnableWindow(state.keyboardExport.get(), state.keyboardCaptureActive ? FALSE : TRUE);
+        page.exportButton->SetText(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_EXPORT));
+        page.exportButton->SetEnabled(! state.keyboardCaptureActive);
+    }
+
+    if (pane->_pageHostDx)
+    {
+        pane->_pageHostDx->Invalidate();
     }
 }
 
-void KeyboardPane::CreateControls(HWND parent, PreferencesDialogState& state) noexcept
+void KeyboardPane::InitializePage(HWND parent, PreferencesDialogState& state) noexcept
 {
     if (! parent)
     {
         return;
     }
 
-    const DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
-    const DWORD wrapStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-    const bool customButtons    = ! state.theme.systemHighContrast;
-    const DWORD listExStyle     = state.theme.systemHighContrast ? WS_EX_CLIENTEDGE : 0;
+    _pageHost               = parent;
+    state.keyboardPaneOwner = this;
 
-    state.keyboardSearchLabel.reset(CreateWindowExW(0,
-                                                    L"Static",
-                                                    LoadStringResource(nullptr, IDS_PREFS_COMMON_SEARCH).c_str(),
-                                                    baseStaticStyle,
-                                                    0,
-                                                    0,
-                                                    10,
-                                                    10,
-                                                    parent,
-                                                    nullptr,
-                                                    GetModuleHandleW(nullptr),
-                                                    nullptr));
+    SetKeyboardHintText(state, LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_HINT_SELECT_COMMAND));
 
-    PrefsInput::CreateFramedEditBox(state,
-                                    parent,
-                                    state.keyboardSearchFrame,
-                                    state.keyboardSearchEdit,
-                                    IDC_PREFS_KEYBOARD_SEARCH_EDIT,
-                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.keyboardSearchEdit)
-    {
-        SendMessageW(state.keyboardSearchEdit.get(), EM_SETLIMITTEXT, 128, 0);
-    }
-
-    state.keyboardScopeLabel.reset(CreateWindowExW(0,
-                                                   L"Static",
-                                                   LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_LABEL_SCOPE).c_str(),
-                                                   baseStaticStyle,
-                                                   0,
-                                                   0,
-                                                   10,
-                                                   10,
-                                                   parent,
-                                                   nullptr,
-                                                   GetModuleHandleW(nullptr),
-                                                   nullptr));
-    PrefsInput::CreateFramedComboBox(state, parent, state.keyboardScopeFrame, state.keyboardScopeCombo, IDC_PREFS_KEYBOARD_SCOPE_COMBO);
-
-    state.keyboardList.reset(CreateWindowExW(listExStyle,
-                                             WC_LISTVIEWW,
-                                             L"",
-                                             WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_OWNERDRAWFIXED,
-                                             0,
-                                             0,
-                                             10,
-                                             10,
-                                             parent,
-                                             reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_KEYBOARD_LIST)),
-                                             GetModuleHandleW(nullptr),
-                                             nullptr));
-
-    state.keyboardHint.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
-
-    const DWORD actionButtonStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | (customButtons ? BS_OWNERDRAW : 0U);
-    state.keyboardAssign.reset(CreateWindowExW(0,
-                                               L"Button",
-                                               LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_ASSIGN_ELLIPSIS).c_str(),
-                                               actionButtonStyle,
-                                               0,
-                                               0,
-                                               10,
-                                               10,
-                                               parent,
-                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_KEYBOARD_ASSIGN)),
-                                               GetModuleHandleW(nullptr),
-                                               nullptr));
-    state.keyboardRemove.reset(CreateWindowExW(0,
-                                               L"Button",
-                                               LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_REMOVE).c_str(),
-                                               actionButtonStyle,
-                                               0,
-                                               0,
-                                               10,
-                                               10,
-                                               parent,
-                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_KEYBOARD_REMOVE)),
-                                               GetModuleHandleW(nullptr),
-                                               nullptr));
-    state.keyboardReset.reset(CreateWindowExW(0,
-                                              L"Button",
-                                              LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_RESET_DEFAULTS).c_str(),
-                                              actionButtonStyle,
-                                              0,
-                                              0,
-                                              10,
-                                              10,
-                                              parent,
-                                              reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_KEYBOARD_RESET)),
-                                              GetModuleHandleW(nullptr),
-                                              nullptr));
-    state.keyboardImport.reset(CreateWindowExW(0,
-                                               L"Button",
-                                               LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_IMPORT).c_str(),
-                                               actionButtonStyle,
-                                               0,
-                                               0,
-                                               10,
-                                               10,
-                                               parent,
-                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_KEYBOARD_IMPORT)),
-                                               GetModuleHandleW(nullptr),
-                                               nullptr));
-    state.keyboardExport.reset(CreateWindowExW(0,
-                                               L"Button",
-                                               LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_EXPORT).c_str(),
-                                               actionButtonStyle,
-                                               0,
-                                               0,
-                                               10,
-                                               10,
-                                               parent,
-                                               reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_KEYBOARD_EXPORT)),
-                                               GetModuleHandleW(nullptr),
-                                               nullptr));
-
-    if (state.keyboardScopeCombo)
-    {
-        const std::wstring allText                                     = LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_SCOPE_ALL);
-        const std::array<std::pair<std::wstring_view, int>, 3> options = {
-            std::pair<std::wstring_view, int>{allText, 2},
-            std::pair<std::wstring_view, int>{GetShortcutScopeDisplayName(ShortcutScope::FunctionBar), 0},
-            std::pair<std::wstring_view, int>{GetShortcutScopeDisplayName(ShortcutScope::FolderView), 1},
-        };
-
-        for (const auto& option : options)
-        {
-            const LRESULT index = SendMessageW(state.keyboardScopeCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(option.first.data()));
-            if (index != CB_ERR && index != CB_ERRSPACE)
-            {
-                SendMessageW(state.keyboardScopeCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(index), static_cast<LPARAM>(option.second));
-            }
-        }
-
-        SendMessageW(state.keyboardScopeCombo.get(), CB_SETCURSEL, 0, 0);
-        ThemedControls::ApplyThemeToComboBox(state.keyboardScopeCombo, state.theme);
-        PrefsUi::InvalidateComboBox(state.keyboardScopeCombo);
-    }
-
-    if (state.keyboardList)
-    {
-        ListView_SetExtendedListViewStyle(state.keyboardList.get(), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP | LVS_EX_INFOTIP);
-        ListView_SetBkColor(state.keyboardList.get(), state.theme.windowBackground);
-        ListView_SetTextBkColor(state.keyboardList.get(), state.theme.windowBackground);
-        ListView_SetTextColor(state.keyboardList.get(), state.theme.menu.text);
-
-        if (! state.theme.systemHighContrast)
-        {
-            const bool darkBackground = ChooseContrastingTextColor(state.theme.windowBackground) == RGB(255, 255, 255);
-            const wchar_t* listTheme  = darkBackground ? L"DarkMode_Explorer" : L"Explorer";
-            SetWindowTheme(state.keyboardList.get(), listTheme, nullptr);
-            if (const HWND header = ListView_GetHeader(state.keyboardList.get()))
-            {
-                SetWindowTheme(header, listTheme, nullptr);
-                InvalidateRect(header, nullptr, TRUE);
-            }
-            if (const HWND tooltips = ListView_GetToolTips(state.keyboardList.get()))
-            {
-                SetWindowTheme(tooltips, listTheme, nullptr);
-            }
-        }
-        else
-        {
-            SetWindowTheme(state.keyboardList.get(), L"", nullptr);
-        }
-
-        ThemedControls::EnsureListViewHeaderThemed(state.keyboardList, state.theme);
-
-        state.keyboardImageList.reset(ImageList_Create(16, 16, ILC_COLOR32 | ILC_MASK, 1, 1));
-        if (state.keyboardImageList)
-        {
-            wil::unique_hicon warnIcon(static_cast<HICON>(LoadImageW(nullptr, IDI_WARNING, IMAGE_ICON, 16, 16, 0)));
-            if (warnIcon)
-            {
-                ImageList_AddIcon(state.keyboardImageList.get(), warnIcon.get());
-            }
-        }
-        ListView_SetImageList(state.keyboardList.get(), state.keyboardImageList.get(), LVSIL_SMALL);
-
-        SetWindowSubclass(state.keyboardList.get(), KeyboardListSubclassProc, 2u, reinterpret_cast<DWORD_PTR>(&state));
-    }
-}
-
-void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
-{
-    if (! host || ! state.keyboardList)
+    if (state.currentCategory != PrefCategory::Keyboard)
     {
         return;
     }
 
-    const UINT dpi = GetDpiForWindow(host);
-    EnsureKeyboardListColumns(state.keyboardList.get(), dpi);
+    if (! EnsureDxHosts(parent, state))
+    {
+        Debug::Error(L"Preferences.Keyboard: Failed to initialize DxUi hosts in CreateControls.");
+        DetachDxHosts();
+        return;
+    }
+
+    Refresh(parent, state);
+}
+
+void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
+{
+    if (! host)
+    {
+        return;
+    }
+
+    auto* const pane = state.keyboardPaneOwner;
+
+    if (pane)
+    {
+        pane->_hostWindow = host;
+        pane->_state      = &state;
+    }
+
+    if (pane && state.currentCategory == PrefCategory::Keyboard)
+    {
+        const HWND parent = pane->_pageHost ? pane->_pageHost : host;
+        if (! pane->EnsureDxHosts(parent, state))
+        {
+            Debug::Error(L"Preferences.Keyboard: Failed to ensure DxUi hosts during Refresh.");
+        }
+        else
+        {
+            LogKeyboardDxState(L"refresh-ensure",
+                               pane->_pageHost,
+                               pane->_hostWindow,
+                               pane->_pageHostDx,
+                               dynamic_cast<const Panel*>(pane->_pageContentRoot),
+                               pane->_dxState.get(),
+                               pane->_rebuildDxOnNextShow);
+        }
+    }
 
     std::vector<KeyboardShortcutRow> rows;
 
     if (! EnsureWorkingShortcuts(state))
     {
-        SetWindowTextW(state.keyboardHint.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_LOAD).c_str());
+        SetKeyboardHintText(state, LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_LOAD));
+        if (state.keyboardPaneOwner)
+        {
+            state.keyboardPaneOwner->SyncDxControlsFromState(state);
+        }
         return;
     }
 
-    const std::wstring loweredSearch               = ToLowerCopy(PrefsUi::GetWindowTextString(state.keyboardSearchEdit));
+    const std::wstring loweredSearch               = ToLowerCopy(state.keyboardSearchText);
     const std::optional<ShortcutScope> scopeFilter = GetKeyboardScopeFilter(state);
 
     const Common::Settings::ShortcutsSettings& shortcuts = state.workingSettings.shortcuts.value();
@@ -1639,7 +2135,7 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
                 row.scope              = scope;
                 row.commandId          = command.id;
                 row.commandDisplayName = command.displayName;
-                row.chordText          = L"Unassigned";
+                row.chordText          = GetKeyboardUnassignedText();
                 row.placeholder        = true;
                 row.hasConflict        = false;
                 if (matchesSearch(row))
@@ -1681,33 +2177,19 @@ void KeyboardPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
 
     state.keyboardRows = std::move(rows);
 
-    ListView_DeleteAllItems(state.keyboardList.get());
-    UpdateListColumnWidths(state.keyboardList.get(), dpi);
-
-    for (size_t i = 0; i < state.keyboardRows.size(); ++i)
-    {
-        const auto& row                   = state.keyboardRows[i];
-        const std::wstring_view scopeText = GetShortcutScopeDisplayName(row.scope);
-
-        LVITEMW item{};
-        item.mask    = LVIF_TEXT | LVIF_PARAM | LVIF_IMAGE;
-        item.iItem   = static_cast<int>(i);
-        item.pszText = const_cast<wchar_t*>(row.commandDisplayName.c_str());
-        item.lParam  = static_cast<LPARAM>(i);
-        item.iImage  = row.hasConflict ? 0 : I_IMAGENONE;
-
-        const int inserted = ListView_InsertItem(state.keyboardList.get(), &item);
-        if (inserted < 0)
-        {
-            continue;
-        }
-
-        ListView_SetItemText(state.keyboardList.get(), inserted, kKeyboardListColumnShortcut, const_cast<wchar_t*>(row.chordText.c_str()));
-        ListView_SetItemText(state.keyboardList.get(), inserted, kKeyboardListColumnScope, const_cast<wchar_t*>(scopeText.data()));
-    }
-
     UpdateButtons(host, state);
     UpdateHint(host, state);
+    if (state.keyboardPaneOwner)
+    {
+        state.keyboardPaneOwner->SyncDxControlsFromState(state);
+        LogKeyboardDxState(L"refresh-complete",
+                           state.keyboardPaneOwner->_pageHost,
+                           state.keyboardPaneOwner->_hostWindow,
+                           state.keyboardPaneOwner->_pageHostDx,
+                           dynamic_cast<const Panel*>(state.keyboardPaneOwner->_pageContentRoot),
+                           state.keyboardPaneOwner->_dxState.get(),
+                           state.keyboardPaneOwner->_rebuildDxOnNextShow);
+    }
 }
 
 void KeyboardPane::EndCapture(HWND host, PreferencesDialogState& state) noexcept
@@ -1760,9 +2242,9 @@ void KeyboardPane::BeginCapture(HWND host, PreferencesDialogState& state) noexce
 
     UpdateButtons(host, state);
     UpdateHint(host, state);
-    if (state.keyboardList)
+    if (state.keyboardPaneOwner && state.keyboardPaneOwner->_pageHostDx && state.pageHostWindow)
     {
-        SetFocus(state.keyboardList.get());
+        SetFocus(state.pageHostWindow);
     }
 }
 
@@ -1847,7 +2329,11 @@ void ApplyCapturedShortcut(HWND host, PreferencesDialogState& state, uint32_t vk
 
     if (! EnsureWorkingShortcuts(state))
     {
-        SetWindowTextW(state.keyboardHint.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_UPDATE).c_str());
+        SetKeyboardHintText(state, LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_UPDATE));
+        if (state.keyboardPaneOwner)
+        {
+            state.keyboardPaneOwner->SyncDxControlsFromState(state);
+        }
         return;
     }
 
@@ -1926,7 +2412,11 @@ void KeyboardPane::CommitCapturedShortcut(HWND host, PreferencesDialogState& sta
 
     if (! EnsureWorkingShortcuts(state))
     {
-        SetWindowTextW(state.keyboardHint.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_UPDATE).c_str());
+        SetKeyboardHintText(state, LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_UPDATE));
+        if (state.keyboardPaneOwner)
+        {
+            state.keyboardPaneOwner->SyncDxControlsFromState(state);
+        }
         return;
     }
 
@@ -2026,7 +2516,11 @@ void KeyboardPane::SwapCapturedShortcut(HWND host, PreferencesDialogState& state
 
     if (! EnsureWorkingShortcuts(state))
     {
-        SetWindowTextW(state.keyboardHint.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_UPDATE).c_str());
+        SetKeyboardHintText(state, LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_UPDATE));
+        if (state.keyboardPaneOwner)
+        {
+            state.keyboardPaneOwner->SyncDxControlsFromState(state);
+        }
         return;
     }
 
@@ -2090,7 +2584,11 @@ void KeyboardPane::RemoveSelectedShortcut(HWND host, PreferencesDialogState& sta
 
     if (! EnsureWorkingShortcuts(state))
     {
-        SetWindowTextW(state.keyboardHint.get(), LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_UPDATE).c_str());
+        SetKeyboardHintText(state, LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_OOM_UPDATE));
+        if (state.keyboardPaneOwner)
+        {
+            state.keyboardPaneOwner->SyncDxControlsFromState(state);
+        }
         return;
     }
 
@@ -2134,6 +2632,24 @@ void KeyboardPane::ResetShortcutsToDefaults(HWND host, PreferencesDialogState& s
 {
     outPath.clear();
 
+#ifdef ENABLE_TESTS
+    {
+        std::scoped_lock lock(g_debugKeyboardBrowseResultMutex);
+        if (g_debugNextKeyboardBrowseResult.has_value())
+        {
+            const DebugKeyboardBrowseResult result = *g_debugNextKeyboardBrowseResult;
+            g_debugNextKeyboardBrowseResult.reset();
+            if (result.kind == DebugKeyboardBrowseResultKind::Cancel)
+            {
+                return false;
+            }
+
+            outPath = result.path;
+            return ! outPath.empty();
+        }
+    }
+#endif
+
     std::array<wchar_t, 1024> buffer{};
     buffer[0] = L'\0';
 
@@ -2158,6 +2674,28 @@ void KeyboardPane::ResetShortcutsToDefaults(HWND host, PreferencesDialogState& s
     outPath = std::filesystem::path(buffer.data());
     return ! outPath.empty();
 }
+
+#ifdef ENABLE_TESTS
+bool DebugSetPreferencesKeyboardNextBrowsePathImpl(const std::wstring_view path) noexcept
+{
+    std::scoped_lock lock(g_debugKeyboardBrowseResultMutex);
+    if (path.empty())
+    {
+        g_debugNextKeyboardBrowseResult.reset();
+        return true;
+    }
+
+    g_debugNextKeyboardBrowseResult = DebugKeyboardBrowseResult{.kind = DebugKeyboardBrowseResultKind::Path, .path = std::filesystem::path(path)};
+    return true;
+}
+
+bool DebugCancelPreferencesKeyboardNextBrowseImpl() noexcept
+{
+    std::scoped_lock lock(g_debugKeyboardBrowseResultMutex);
+    g_debugNextKeyboardBrowseResult = DebugKeyboardBrowseResult{.kind = DebugKeyboardBrowseResultKind::Cancel};
+    return true;
+}
+#endif
 
 [[nodiscard]] bool BuildShortcutsExportJson(const Common::Settings::ShortcutsSettings& shortcuts, std::string& outJson) noexcept
 {
@@ -2559,39 +3097,14 @@ void KeyboardPane::ImportShortcuts(HWND host, PreferencesDialogState& state) noe
     Refresh(host, state);
 }
 
-LRESULT CALLBACK KeyboardListSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) noexcept
+#ifdef ENABLE_TESTS
+bool DebugSetPreferencesKeyboardNextBrowsePath(const std::wstring_view path) noexcept
 {
-    auto* state = reinterpret_cast<PreferencesDialogState*>(dwRefData);
-    if (! state)
-    {
-        return DefSubclassProc(hwnd, msg, wp, lp);
-    }
-
-    switch (msg)
-    {
-        case WM_GETDLGCODE:
-            if (state->keyboardCaptureActive)
-            {
-                return DefSubclassProc(hwnd, msg, wp, lp) | DLGC_WANTALLKEYS;
-            }
-            break;
-        case WM_SYSKEYDOWN:
-        case WM_KEYDOWN:
-            if (state->keyboardCaptureActive)
-            {
-                ApplyCapturedShortcut(GetParent(hwnd), *state, static_cast<uint32_t>(wp), GetCurrentModifierMask());
-                return 0;
-            }
-            break;
-        case WM_SYSCHAR:
-        case WM_CHAR:
-            if (state->keyboardCaptureActive)
-            {
-                return 0;
-            }
-            break;
-        case WM_NCDESTROY: RemoveWindowSubclass(hwnd, KeyboardListSubclassProc, uIdSubclass); break;
-    }
-
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return DebugSetPreferencesKeyboardNextBrowsePathImpl(path);
 }
+
+bool DebugCancelPreferencesKeyboardNextBrowse() noexcept
+{
+    return DebugCancelPreferencesKeyboardNextBrowseImpl();
+}
+#endif

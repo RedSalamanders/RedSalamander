@@ -77,6 +77,25 @@ using NormalizedBinding = std::tuple<uint32_t, uint32_t, std::wstring>;
     std::sort(result.begin(), result.end());
     return result;
 }
+
+[[nodiscard]] bool GridLayoutEqual(const std::vector<Common::Settings::GridColumnLayoutEntry>& lhs,
+                                   const std::vector<Common::Settings::GridColumnLayoutEntry>& rhs)
+{
+    if (lhs.size() != rhs.size())
+    {
+        return false;
+    }
+
+    for (size_t index = 0u; index < lhs.size(); ++index)
+    {
+        if (lhs[index].columnId != rhs[index].columnId || lhs[index].displayIndex != rhs[index].displayIndex || lhs[index].widthDip != rhs[index].widthDip)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
 } // namespace
 
 Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
@@ -221,7 +240,10 @@ bool ShortcutDefaults::AreShortcutsDefault(const Common::Settings::ShortcutsSett
 {
     const Common::Settings::ShortcutsSettings defaults = CreateDefaultShortcuts();
     return NormalizeBindings(shortcuts.functionBar) == NormalizeBindings(defaults.functionBar) &&
-           NormalizeBindings(shortcuts.folderView) == NormalizeBindings(defaults.folderView);
+           NormalizeBindings(shortcuts.folderView) == NormalizeBindings(defaults.folderView) &&
+           shortcuts.functionBarCollapsed == defaults.functionBarCollapsed && shortcuts.folderViewCollapsed == defaults.folderViewCollapsed &&
+           shortcuts.sortColumnId == defaults.sortColumnId && shortcuts.sortDescending == defaults.sortDescending &&
+           GridLayoutEqual(shortcuts.gridLayout, defaults.gridLayout);
 }
 
 void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& settings)

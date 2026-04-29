@@ -561,6 +561,29 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
     result->directoryCount = 0;
     result->status         = S_OK;
 
+    auto checkCancellation = [&]() -> bool
+    {
+        if (callback == nullptr)
+        {
+            return true;
+        }
+
+        BOOL cancel            = FALSE;
+        const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
+        if (FAILED(cancelHr))
+        {
+            result->status = cancelHr;
+            return false;
+        }
+        if (cancel)
+        {
+            result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+            return false;
+        }
+
+        return true;
+    };
+
     // Verify path is a directory.
     const DWORD attrs = ::GetFileAttributesW(path);
     if (attrs == INVALID_FILE_ATTRIBUTES)
@@ -592,16 +615,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
                 return result->status;
             }
 
-            BOOL cancel            = FALSE;
-            const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
-            if (FAILED(cancelHr))
+            if (! checkCancellation())
             {
-                result->status = cancelHr;
-                return result->status;
-            }
-            if (cancel)
-            {
-                result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
                 return result->status;
             }
 
@@ -609,6 +624,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
             if (FAILED(finalProgressHr))
             {
                 result->status = finalProgressHr;
+                return result->status;
+            }
+
+            if (! checkCancellation())
+            {
                 return result->status;
             }
         }
@@ -631,12 +651,6 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
     uint64_t scannedEntries    = 0;
     ULONGLONG lastProgressTime = ::GetTickCount64();
 
-#ifdef _DEBUG
-    const unsigned int delayMs = _directorySizeDelayMs;
-#else
-    const unsigned int delayMs = 0u;
-#endif
-
     auto maybeReportProgress = [&](const wchar_t* currentPath) -> bool
     {
         if (callback == nullptr)
@@ -658,21 +672,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
                 result->status = progressHr;
                 return false;
             }
-
-            BOOL cancel            = FALSE;
-            const HRESULT cancelHr = callback->DirectorySizeShouldCancel(&cancel, cookie);
-            if (FAILED(cancelHr))
-            {
-                result->status = cancelHr;
-                return false;
-            }
-            if (cancel)
-            {
-                result->status = HRESULT_FROM_WIN32(ERROR_CANCELLED);
-                return false;
-            }
         }
-        return true;
+        return checkCancellation();
     };
 
     struct DirectoryFrame final
@@ -748,6 +749,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
     };
 
     pushDirectory(std::wstring(path));
+    if (! checkCancellation())
+    {
+        return result->status;
+    }
 
     while (! stack.empty())
     {
@@ -777,10 +782,24 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         }
 
         ++scannedEntries;
-        if (delayMs > 0u)
+
+        if (! checkCancellation())
         {
-            ::Sleep(delayMs);
+            return result->status;
         }
+
+        // In debug builds, optionally introduce a small delay to allow testing of progress reporting
+        // and cancellation logic on large directories.
+#ifdef _DEBUG
+        if (_directorySizeDelayMs > 0u)
+        {
+            ::Sleep(_directorySizeDelayMs);
+            if (! checkCancellation())
+            {
+                return result->status;
+            }
+        }
+#endif
 
         const bool isDirectory    = (currentData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
         const bool isReparsePoint = (currentData.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
@@ -833,6 +852,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetDirectorySize(
         if (FAILED(progressHr))
         {
             result->status = progressHr;
+        }
+        else
+        {
+            static_cast<void>(checkCancellation());
         }
     }
 

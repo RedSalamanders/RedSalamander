@@ -18,8 +18,39 @@
 
 #include "PlugInterfaces/Viewer.h"
 #include "ViewerSpace.h"
+#include "resource.h"
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, void** result)
+extern HINSTANCE g_hInstance;
+
+namespace
+{
+[[nodiscard]] const PluginMetaData& GetPluginMetaData() noexcept
+{
+    static const std::wstring name        = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_NAME);
+    static const std::wstring description = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_DESCRIPTION);
+    static const PluginMetaData metaData  = {
+        .id          = L"builtin/viewer-space",
+        .shortId     = L"viewspace",
+        .name        = name.c_str(),
+        .description = description.c_str(),
+        .author      = nullptr,
+        .version     = VERSINFO_PLUGIN_VERSION,
+    };
+    return metaData;
+}
+
+[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
+{
+    if (! pluginId.empty() && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
+    {
+        return nullptr;
+    }
+
+    return GetViewerSpaceStaticConfigurationSchema();
+}
+} // namespace
+
+HRESULT CreatePluginInstance(REFIID riid, IHost* host, void** result)
 {
     if (result == nullptr)
     {
@@ -44,4 +75,67 @@ extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptio
     }
 
     return E_NOINTERFACE;
+}
+
+extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
+{
+    if (! metaData || ! count)
+    {
+        return E_POINTER;
+    }
+
+    *metaData = nullptr;
+    *count    = 0;
+    if (riid != __uuidof(IViewer))
+    {
+        return E_NOINTERFACE;
+    }
+
+    *metaData = &GetPluginMetaData();
+    *count    = 1;
+    return S_OK;
+}
+
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* host, const wchar_t* pluginId, void** result)
+{
+    if (! result)
+    {
+        return E_POINTER;
+    }
+
+    *result = nullptr;
+    if (riid != __uuidof(IViewer))
+    {
+        return E_NOINTERFACE;
+    }
+    if (pluginId && pluginId[0] != L'\0' && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
+    return CreatePluginInstance(riid, host, result);
+}
+
+extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
+{
+    if (! schemaJsonUtf8)
+    {
+        return E_POINTER;
+    }
+
+    *schemaJsonUtf8 = nullptr;
+    if (riid != __uuidof(IViewer))
+    {
+        return E_NOINTERFACE;
+    }
+
+    const std::wstring_view requestedId = pluginId ? std::wstring_view(pluginId) : std::wstring_view{};
+    const char* schema                  = GetPluginSchema(requestedId);
+    if (! schema)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
+    *schemaJsonUtf8 = schema;
+    return S_OK;
 }

@@ -1,4 +1,19 @@
-# Connection Manager Specification (Host-Owned, Themed, Secure Credentials)
+# Connection Manager Specification (Host-Managed, Themed, Secure Credentials)
+
+## Implementation status
+
+The Connection Manager is implemented as a **single-canvas DxUi top-level window** (`RedSalamander/ConnectionManagerWindow.{h,cpp}`). It registers one `WS_OVERLAPPEDWINDOW` HWND, attaches a single `DxUi::WindowHost`, and renders the entire list/editor/footer chrome through one DxUi widget tree (no per-widget host HWNDs, no Win32 dialog template). The synchronous `ShowConnectionManagerDialog` entry point is a façade that runs a private nested message pump over the same modeless window with the owner disabled, so plugin-host callers (`HostServices.cpp:1419`) keep their `S_OK`/`S_FALSE` ABI.
+
+Migration record: `Specs/Plans/Done/UI_ConnectionManagerSingleCanvasPlan.md`.
+
+## Single-Canvas Connection Manager Window Contract
+
+- The live implementation is `RedSalamander/ConnectionManagerWindow.{h,cpp}`. `ConnectionManagerDialog.h` and `ConnectionManagerDialog.cpp` are retired and must not be reintroduced.
+- `ShowConnectionManagerWindow(...)` is the normal application entry point. It is modeless, single-instance, and posts `WndMsg::kConnectionManagerConnect` to the owner with a copied connection-name payload and the requested target pane after Connect validates and saves.
+- `ShowConnectionManagerDialog(...)` is a synchronous facade over the same single-canvas window for host-service callers that require the existing `S_OK` / `S_FALSE` result contract.
+- The Connection Manager window and connection credential prompts MUST apply the persisted `ui.windowBackdrop` setting through the shared window chrome/backdrop helper path with tool-window target semantics. High contrast or unsupported OS state MUST resolve to no system backdrop, and activation handling MUST keep title-bar active/inactive state correct without changing the persisted backdrop policy.
+- Profile names are trimmed before save and must be non-empty, unique case-insensitively, and not reserved for Quick Connect. A saved name must resolve to exactly one persisted profile.
+- The settings hot-reload contract matches Preferences: clean windows reload from disk automatically, dirty windows prompt before reloading, and stale save-producing actions prompt before overwriting disk state.
 
 ## Overview
 
@@ -8,9 +23,10 @@ Some virtual file system plugins (FTP / FTPS / SFTP / SCP / IMAP / Google Drive 
 - optional **authentication material** (user/password, SSH key + passphrase, known_hosts),
 - and optional **persistence** of those secrets.
 
-This spec defines a **host-owned Connection Manager** that:
+This spec defines a **host-managed Connection Manager** that:
 
 - presents a consistent, themed dialog (host UI owns rendering),
+- opens its long-lived tool window using the independent top-level contract from `Specs/UI/UI_TopLevelToolWindows.md`,
 - stores non-secret connection attributes in the Settings Store,
 - stores secrets in Windows Credential Manager and gates access with **Windows Hello** (when available),
 - provides a stable navigation contract so plugins do **not** require secrets in URIs.
@@ -227,6 +243,8 @@ If an FTP server rejects anonymous login, the plugin may ask the host to prompt 
 
 Layout (using RedSalamander theming):
 
+- Windowing: the command-surface Connection Manager window is modeless and independent from the main window. It may use the invoking window only for initial placement or context, not ownership.
+
 - Left pane: connection list
   - `<Quick Connect>` is always the first row.
   - All other visible connections are sorted alphabetically by display name (case-insensitive).
@@ -267,6 +285,7 @@ Layout (using RedSalamander theming):
   - `Connect` (OK): saves config, resolves selected/edited connection, and closes dialog
   - `Close`: saves config and closes dialog (no navigation)
   - `Cancel`: closes without saving changes (no navigation)
+- System close/title-bar close (`WM_CLOSE`) follows `Cancel`: it closes without saving changes (no navigation).
 
 Connect-time secret behavior:
 

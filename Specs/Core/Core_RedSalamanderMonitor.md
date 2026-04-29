@@ -247,7 +247,7 @@ void Clear();                                      // Clear all content
 
 **Filtering:**
 ```cpp
-void SetFilterMask(uint32_t mask);                // Set type filter (5-bit mask)
+void SetFilterMask(uint32_t mask);                // Set type filter (6-bit mask)
 size_t GetVisibleLineCount() const;               // Count of visible lines
 size_t GetTotalLineCount() const;                 // Count of all lines (filtered + unfiltered)
 ```
@@ -364,18 +364,20 @@ bool IsLineVisible(size_t sourceIndex) const;     // Check if source line is vis
 RedSalamanderMonitor implements a high-performance type-based filtering system using bit masks and a **VisibleLine Index Pattern** for efficient filtered line access:
 
 **Type-Based Filtering**:
-- 5-bit filter mask controls visibility by `InfoParam::Type`:
+- 6-bit filter mask controls visibility by `InfoParam::Type`:
   - Bit 0: Text messages (0x01)
   - Bit 1: Error messages (0x02) 
   - Bit 2: Warning messages (0x04)
   - Bit 3: Info messages (0x08)
-  - Bit 4: Debug messages (0x10)
-- Default mask: `0x1F` (all types visible)
+  - Bit 4: Perf messages (0x10)
+  - Bit 5: Debug messages (0x20)
+- Default mask: `0x3F` (all types visible)
 - Example masks:
   - Errors only: `0x02`
   - Errors + Warnings: `0x06`
   - Errors + Warnings + Info: `0x0E`
-  - All types: `0x1F`
+  - Errors + Perf + Debug: `0x32`
+  - All types: `0x3F`
 
 **Architecture - VisibleLine Index Pattern**:
 - **No sentinel values** - clean separation between visible and source line spaces
@@ -393,7 +395,7 @@ struct VisibleLine {
     UINT32 displayRowStart;  // First display row for this visible line
 };
 
-uint32_t _filterMask;                // 5-bit visibility mask
+uint32_t _filterMask;                // 6-bit visibility mask
 std::vector<Line> _lines;            // Source lines (all lines, unfiltered)
 std::vector<VisibleLine> _visibleLines; // Computed view (visible lines only)
 ```
@@ -538,11 +540,16 @@ for (size_t visIdx = startVisIdx; visIdx <= endVisIdx; ++visIdx) {
 
 ### Communication (ETW/TraceLogging Only)
 - Uses TraceLogging provider to emit structured events for every debug message (type, pid, tid, filetime, payload).
+- `RedSalamander.exe` Debug and ASan Debug builds emit Info/Perf/Debug ETW diagnostics and write JSONL perf capture to the default path by default; Release builds require `--etw` for ETW and use `--perf` for the default JSONL path or `--perf=PATH` for a custom path.
+- Normal Debug and Release builds of `RedSalamanderMonitor` do not emit their own Info/Perf/debug-style ETW diagnostics unless launched with `--etw`. Error and warning diagnostics remain eligible for ETW visibility.
+- Normal Debug and Release builds of `RedSalamanderMonitor` must keep its own display quiet: no startup/sample status text, and ETW events whose process id matches the monitor process are filtered out. Launching with `--etw` may display the monitor's own startup status and self-originated ETW events. Explicit JSONL perf capture uses `--perf` for the default path or `--perf=PATH` for a custom path.
 - Debug-build call tracing and indentation: `TRACER`/`TRACER_CTX` adjust per-thread indentation and (by default) only log the Exiting message; use `TRACER_INOUT`/`TRACER_INOUT_CTX` to log Entering+Exiting 
 - ETW-only architecture with counters tracking writes and failures.
 - ETW events batched via `WM_APP_ETW_BATCH` message from the EtwListener worker thread for optimal UI performance.
 - No window discovery dependency - applications emit ETW events regardless of consumer presence.
 - Monitor surfaces ETW statistics in UI/status bar, logging write failures when they occur.
+- Default Debug / ASan Debug builds of `RedSalamanderMonitor` MUST NOT enable `ENABLE_TESTS` automatically. Monitor-specific test hooks are opt-in only, otherwise the monitor can surface its own test/perf ETW chatter and pollute the default live display.
+- Invalid/dirty rectangle visualization MUST be opt-in only. Default Debug builds must not paint invalid rectangles in color; rebuilding with `RS_MONITOR_SHOW_INVALID_RECTS` enables that visual diagnostic. All brushes, palette state, and paint overlays for this diagnostic must stay behind the `RS_MONITOR_INVALID_RECT_VISUALIZATION_ENABLED` contract.
 
 ### UX and robustness
 - Cache toolbar PNG per-DPI bucket; show status indicators for transport mode, active filters, pause state, and drop counts.
@@ -559,7 +566,7 @@ for (size_t visIdx = startVisIdx; visIdx <= endVisIdx; ++visIdx) {
   - **Filter with scroll position**: Apply filters at various scroll positions (top, middle, bottom), verify scroll position clamps correctly
   - **Heavy filtering**: Filter to show only 1% of messages (e.g., errors only), verify dense display with no gaps
   - **Filter during batch append**: Toggle filters while processing large ETW batches, verify content height syncs
-  - **All filter combinations**: Test all 32 possible 5-bit filter masks (0x00 through 0x1F), verify correct visibility
+  - **All filter combinations**: Test all 64 possible 6-bit filter masks (0x00 through 0x3F), verify correct visibility
   - **Line number synchronization**: Verify line numbers match actual document positions throughout filtering changes
   - **Selection persistence**: Maintain selection across filter changes (if selection includes filtered lines)
 - Filter-under-load: enable regex include/exclude and severity filters while appending 50k lines; ensure navigation and copy respect filters.

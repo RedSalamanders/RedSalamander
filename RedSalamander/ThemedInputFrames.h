@@ -18,9 +18,11 @@ struct FrameStyle
 };
 
 void InstallFrame(HWND frame, HWND input, FrameStyle* style) noexcept;
+void InstallControl(HWND input, HWND frame = nullptr) noexcept;
 
 void InvalidateComboBox(HWND combo) noexcept;
 
-LRESULT CALLBACK InputControlSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
-LRESULT CALLBACK InputFrameSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept;
+LRESULT HandleInputControlMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, HWND frame, bool& handled) noexcept;
+LRESULT HandleInputFrameMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, FrameStyle* style, bool& handled) noexcept;
+
 } // namespace ThemedInputFrames

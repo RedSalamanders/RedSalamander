@@ -1,5 +1,7 @@
 #include "ViewerSpace.h"
 
+#include "LocalizationManager.h"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -24,11 +26,16 @@
 #include <yyjson.h>
 #pragma warning(pop)
 
+#include "DxUi/DxUi.Typography.h"
+#include "DxUi/DxUi.h"
 #include "FluentIcons.h"
 #include "Helpers.h"
+#include "WindowMessages.h"
 #include "resource.h"
 
 extern HINSTANCE g_hInstance;
+
+namespace Typography = RedSalamander::DxUi::Typography;
 
 namespace
 {
@@ -63,36 +70,155 @@ constexpr double kAnimationDurationSeconds = 0.18;
 
 constexpr size_t kMaxLayoutItems = 600;
 
-wil::unique_hfont g_viewerSpaceMenuIconFont;
-UINT g_viewerSpaceMenuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
-bool g_viewerSpaceMenuIconFontValid = false;
-
-[[nodiscard]] bool EnsureViewerSpaceMenuIconFont(HDC hdc, UINT dpi) noexcept
+[[nodiscard]] size_t CountOwnerDrawMenuItems(HMENU menu) noexcept
 {
-    if (! hdc)
+    if (! menu)
     {
-        return false;
+        return 0u;
     }
 
-    if (dpi == 0)
+    const int itemCount = GetMenuItemCount(menu);
+    if (itemCount <= 0)
     {
-        dpi = USER_DEFAULT_SCREEN_DPI;
+        return 0u;
     }
 
-    if (dpi != g_viewerSpaceMenuIconFontDpi || ! g_viewerSpaceMenuIconFont)
+    size_t ownerDrawCount = 0u;
+    for (UINT position = 0; position < static_cast<UINT>(itemCount); ++position)
     {
-        g_viewerSpaceMenuIconFont      = FluentIcons::CreateFontForDpi(dpi, FluentIcons::kDefaultSizeDip);
-        g_viewerSpaceMenuIconFontDpi   = dpi;
-        g_viewerSpaceMenuIconFontValid = false;
-
-        if (g_viewerSpaceMenuIconFont)
+        MENUITEMINFOW itemInfo{};
+        itemInfo.cbSize = sizeof(itemInfo);
+        itemInfo.fMask  = MIIM_FTYPE | MIIM_SUBMENU;
+        if (GetMenuItemInfoW(menu, position, TRUE, &itemInfo) == 0)
         {
-            g_viewerSpaceMenuIconFontValid = FluentIcons::FontHasGlyph(hdc, g_viewerSpaceMenuIconFont.get(), FluentIcons::kChevronRightSmall) &&
-                                             FluentIcons::FontHasGlyph(hdc, g_viewerSpaceMenuIconFont.get(), FluentIcons::kCheckMark);
+            continue;
+        }
+
+        if ((itemInfo.fType & MFT_OWNERDRAW) != 0)
+        {
+            ++ownerDrawCount;
+        }
+
+        if (itemInfo.hSubMenu)
+        {
+            ownerDrawCount += CountOwnerDrawMenuItems(itemInfo.hSubMenu);
         }
     }
 
-    return g_viewerSpaceMenuIconFontValid;
+    return ownerDrawCount;
+}
+
+[[nodiscard]] std::wstring StripMenuMnemonicMarkers(std::wstring_view text)
+{
+    std::wstring result;
+    result.reserve(text.size());
+
+    for (size_t index = 0; index < text.size(); ++index)
+    {
+        if (text[index] != L'&')
+        {
+            result.push_back(text[index]);
+            continue;
+        }
+
+        if ((index + 1u) < text.size() && text[index + 1u] == L'&')
+        {
+            result.push_back(L'&');
+            ++index;
+        }
+    }
+
+    return result;
+}
+
+[[nodiscard]] std::wstring GetViewerSpaceContextMenuIconGlyph(UINT commandId) noexcept
+{
+    switch (commandId)
+    {
+        case kCmdFolderViewContextOpen: return std::wstring(1u, FluentIcons::kOpenFile);
+        case kCmdFolderViewContextCopy: return std::wstring(1u, FluentIcons::kCopy);
+        case kCmdFolderViewContextPaste: return std::wstring(1u, FluentIcons::kPaste);
+        case kCmdFolderViewContextDelete: return std::wstring(1u, FluentIcons::kDelete);
+        case kCmdFolderViewContextRename: return std::wstring(1u, FluentIcons::kRename);
+        case kCmdFolderViewContextProperties: return std::wstring(1u, FluentIcons::kInfo);
+        default: return {};
+    }
+}
+
+[[nodiscard]] std::vector<RedSalamander::DxUi::MenuFlyoutItem> ConvertHMenuToDxFlyoutItems(HMENU menu) noexcept
+{
+    using RedSalamander::DxUi::MenuFlyoutItem;
+    using RedSalamander::DxUi::MenuItemKind;
+
+    std::vector<MenuFlyoutItem> items;
+    if (! menu)
+    {
+        return items;
+    }
+
+    const int itemCount = GetMenuItemCount(menu);
+    if (itemCount <= 0)
+    {
+        return items;
+    }
+
+    items.reserve(static_cast<size_t>(itemCount));
+    for (UINT position = 0; position < static_cast<UINT>(itemCount); ++position)
+    {
+        MENUITEMINFOW itemInfo{};
+        itemInfo.cbSize = sizeof(itemInfo);
+        itemInfo.fMask  = MIIM_FTYPE | MIIM_ID | MIIM_STATE | MIIM_SUBMENU;
+        if (! GetMenuItemInfoW(menu, position, TRUE, &itemInfo))
+        {
+            continue;
+        }
+
+        MenuFlyoutItem item{};
+        if ((itemInfo.fType & MFT_SEPARATOR) != 0)
+        {
+            item.kind = MenuItemKind::Separator;
+            items.push_back(std::move(item));
+            continue;
+        }
+
+        std::array<wchar_t, 512> buffer{};
+        const int textLength = GetMenuStringW(menu, position, buffer.data(), static_cast<int>(buffer.size()), MF_BYPOSITION);
+        if (textLength > 0)
+        {
+            std::wstring_view fullText(buffer.data(), static_cast<size_t>(textLength));
+            const size_t tabPos               = fullText.find(L'\t');
+            const std::wstring_view labelText = tabPos == std::wstring_view::npos ? fullText : fullText.substr(0, tabPos);
+            item.text                         = StripMenuMnemonicMarkers(labelText);
+            if (tabPos != std::wstring_view::npos && (tabPos + 1u) < fullText.size())
+            {
+                item.acceleratorText.assign(fullText.substr(tabPos + 1u));
+            }
+        }
+
+        item.commandId = static_cast<int>(itemInfo.wID);
+        item.enabled   = (itemInfo.fState & MFS_GRAYED) == 0;
+        item.checked   = (itemInfo.fState & MFS_CHECKED) != 0;
+
+        if ((itemInfo.fType & MFT_RADIOCHECK) != 0)
+        {
+            item.kind = MenuItemKind::Radio;
+        }
+        else if (item.checked)
+        {
+            item.kind = MenuItemKind::Toggle;
+        }
+
+        item.iconGlyph = GetViewerSpaceContextMenuIconGlyph(itemInfo.wID);
+
+        if (itemInfo.hSubMenu)
+        {
+            item.children = ConvertHMenuToDxFlyoutItems(itemInfo.hSubMenu);
+        }
+
+        items.push_back(std::move(item));
+    }
+
+    return items;
 }
 
 struct ViewerSpaceClassBackgroundBrushState
@@ -231,6 +357,11 @@ constexpr char kViewerSpaceSchemaJson[] = R"json({
     ]
 })json";
 
+[[nodiscard]] const char* GetViewerSpaceStaticConfigurationSchemaImpl() noexcept
+{
+    return kViewerSpaceSchemaJson;
+}
+
 std::atomic_uint32_t g_maxConcurrentScansPerVolume{1};
 std::atomic_bool g_cacheEnabled{true};
 std::atomic_uint32_t g_cacheTtlSeconds{60};
@@ -294,54 +425,6 @@ COLORREF ChooseContrastingTextColor(COLORREF background) noexcept
 }
 
 D2D1::ColorF ColorFFromHsv(double hue01, double saturation, double value, float alpha) noexcept;
-
-uint32_t StableHash32(std::wstring_view text) noexcept
-{
-    uint32_t hash = 2166136261u;
-    for (wchar_t ch : text)
-    {
-        hash ^= static_cast<uint32_t>(ch);
-        hash *= 16777619u;
-    }
-    return hash;
-}
-
-COLORREF RainbowMenuSelectionColor(std::wstring_view seed, bool darkBase) noexcept
-{
-    const uint32_t hash    = StableHash32(seed);
-    const double hue01     = static_cast<double>(hash % 360u) / 360.0;
-    const float saturation = 0.90f;
-    const float value      = darkBase ? 0.82f : 0.92f;
-    const D2D1::ColorF c   = ColorFFromHsv(hue01, saturation, value, 1.0f);
-
-    const auto toByte = [](float v01) noexcept -> BYTE
-    {
-        const float scaled = std::clamp(v01 * 255.0f, 0.0f, 255.0f);
-        return static_cast<BYTE>(std::lround(scaled));
-    };
-
-    return RGB(toByte(c.r), toByte(c.g), toByte(c.b));
-}
-
-wil::unique_hfont CreateMenuFontForDpi(UINT dpi) noexcept
-{
-    NONCLIENTMETRICSW metrics{};
-    metrics.cbSize = sizeof(metrics);
-    if (! SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, metrics.cbSize, &metrics, 0))
-    {
-        return {};
-    }
-
-    const UINT systemDpi = GetDpiForSystem();
-    const UINT baseDpi   = systemDpi != 0 ? systemDpi : USER_DEFAULT_SCREEN_DPI;
-    if (dpi != 0 && dpi != baseDpi)
-    {
-        metrics.lfMenuFont.lfHeight = MulDiv(metrics.lfMenuFont.lfHeight, static_cast<int>(dpi), static_cast<int>(baseDpi));
-        metrics.lfMenuFont.lfWidth  = MulDiv(metrics.lfMenuFont.lfWidth, static_cast<int>(dpi), static_cast<int>(baseDpi));
-    }
-
-    return wil::unique_hfont(CreateFontIndirectW(&metrics.lfMenuFont));
-}
 
 bool IsAsciiAlpha(wchar_t ch) noexcept
 {
@@ -1457,6 +1540,11 @@ ScanResultCache& GetScanResultCache() noexcept
 
 } // namespace
 
+const char* GetViewerSpaceStaticConfigurationSchema() noexcept
+{
+    return GetViewerSpaceStaticConfigurationSchemaImpl();
+}
+
 ViewerSpace::ViewerSpace()
 {
     _metaId                      = L"builtin/viewer-space";
@@ -1471,7 +1559,7 @@ ViewerSpace::ViewerSpace()
     _metaData.name        = _metaName.empty() ? nullptr : _metaName.c_str();
     _metaData.description = _metaDescription.empty() ? nullptr : _metaDescription.c_str();
     _metaData.author      = nullptr;
-    _metaData.version     = nullptr;
+    _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     static_cast<void>(SetConfiguration(nullptr));
 }
@@ -1546,7 +1634,7 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::GetMetaData(const PluginMetaData** metaDa
     _metaData.name        = _metaName.empty() ? nullptr : _metaName.c_str();
     _metaData.description = _metaDescription.empty() ? nullptr : _metaDescription.c_str();
     _metaData.author      = nullptr;
-    _metaData.version     = nullptr;
+    _metaData.version     = VERSINFO_PLUGIN_VERSION;
 
     *metaData = &_metaData;
     return S_OK;
@@ -1559,7 +1647,7 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::GetConfigurationSchema(const char** schem
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = kViewerSpaceSchemaJson;
+    *schemaJsonUtf8 = GetViewerSpaceStaticConfigurationSchema();
     return S_OK;
 }
 
@@ -1714,7 +1802,7 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::SomethingToSave(BOOL* pSomethingToSave) n
 
     const bool isDefault = _config.topFilesPerDirectory == 96u && _config.scanThreads == 1u && _config.maxConcurrentScansPerVolume == 1u &&
                            _config.cacheEnabled && _config.cacheTtlSeconds == 60u && _config.cacheMaxEntries == 1u;
-    *pSomethingToSave = isDefault ? FALSE : TRUE;
+    *pSomethingToSave    = isDefault ? FALSE : TRUE;
     return S_OK;
 }
 
@@ -1775,15 +1863,40 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     switch (msg)
     {
+#ifdef ENABLE_TESTS
+        case WndMsg::kViewerDebugGetNativeMenuModelSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerNativeMenuModelDebugSnapshot*>(lp);
+            if (! snapshot)
+            {
+                return FALSE;
+            }
+
+            *snapshot                    = {};
+            snapshot->hasHiddenMenuModel = _menuHandle != nullptr;
+            snapshot->ownerDrawItemCount = CountOwnerDrawMenuItems(_menuHandle.get());
+            return TRUE;
+        }
+#endif
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_DESTROY: OnDestroy(); return 0;
         case WM_SIZE: OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp))); return 0;
         case WM_PAINT: OnPaint(); return 0;
         case WM_ERASEBKGND: return _allowEraseBkgnd ? DefWindowProcW(hwnd, msg, wp, lp) : 1;
-        case WM_CLOSE: DestroyWindow(hwnd); return 0;
+        case WM_CLOSE: static_cast<void>(Close()); return 0;
         case WM_COMMAND: OnCommand(hwnd, LOWORD(wp)); return 0;
-        case WM_MEASUREITEM: return OnMeasureItem(hwnd, reinterpret_cast<MEASUREITEMSTRUCT*>(lp));
-        case WM_DRAWITEM: return OnDrawItem(reinterpret_cast<DRAWITEMSTRUCT*>(lp));
+        case WM_SYSKEYDOWN:
+            if ((wp == VK_F10 || wp == VK_MENU) && _menuBarHost.FocusFirstItem())
+            {
+                return 0;
+            }
+            break;
+        case WM_SYSCHAR:
+            if (wp >= 0x20u && _menuBarHost.ActivateMnemonic(static_cast<wchar_t>(wp)))
+            {
+                return 0;
+            }
+            break;
         case WM_KEYDOWN:
         {
             const bool alt = (GetKeyState(VK_MENU) & 0x8000) != 0;
@@ -1836,48 +1949,29 @@ void ViewerSpace::OnCreate(HWND hwnd)
 {
     _allowEraseBkgnd = true;
     _dpi             = static_cast<float>(GetDpiForWindow(hwnd));
+
+    if (! _menuHandle)
+    {
+        _menuHandle.reset(GetMenu(hwnd));
+    }
+    if (_menuHandle)
+    {
+        _menuBarHost.SetTheme(_hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme) : RedSalamander::DxUi::MakeDefaultThemePalette(false));
+        _menuBarHost.SetRefreshMenuStateCallback([this, hwnd] { UpdateMenuState(hwnd, false); });
+        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
+    }
+
     SetTimer(hwnd, kTimerAnimationId, kAnimationIntervalMs, nullptr);
     ApplyThemeToWindow(hwnd);
     ApplyPendingViewerSpaceClassBackgroundBrush(hwnd);
     EnsureTooltip(hwnd);
     UpdateMenuState(hwnd);
+    _menuBarHost.UpdateLayout();
 }
 
 void ViewerSpace::OnNcActivate(HWND hwnd, bool windowActive) noexcept
 {
     ApplyTitleBarTheme(hwnd, windowActive);
-}
-
-LRESULT ViewerSpace::OnMeasureItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept
-{
-    if (! measure)
-    {
-        return FALSE;
-    }
-
-    if (measure->CtlType == ODT_MENU)
-    {
-        OnMeasureMenuItem(hwnd, measure);
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-LRESULT ViewerSpace::OnDrawItem(DRAWITEMSTRUCT* draw) noexcept
-{
-    if (! draw)
-    {
-        return FALSE;
-    }
-
-    if (draw->CtlType == ODT_MENU)
-    {
-        OnDrawMenuItem(draw);
-        return TRUE;
-    }
-
-    return FALSE;
 }
 
 void ViewerSpace::OnDestroy()
@@ -1891,13 +1985,18 @@ void ViewerSpace::OnDestroy()
     _fileSystemShortId.clear();
     _fileSystemIsWin32 = true;
 
-    IViewerCallback* callback = _callback;
-    void* cookie              = _callbackCookie;
-    if (callback)
+    RegistrationCallbackState<IViewerCallback>::Snapshot callbackSnapshot{};
+    if (_callbackState.TryCapture(callbackSnapshot))
     {
-        AddRef();
-        static_cast<void>(callback->ViewerClosed(cookie));
-        Release();
+        IViewerCallback* callback = nullptr;
+        void* cookie              = nullptr;
+        if (_callbackState.TryEnter(callbackSnapshot, callback, cookie))
+        {
+            auto finishCallback = wil::scope_exit([&]() noexcept { _callbackState.FinishInvoke(); });
+            AddRef();
+            static_cast<void>(callback->ViewerClosed(cookie));
+            Release();
+        }
     }
 }
 
@@ -1911,6 +2010,7 @@ void ViewerSpace::OnSize(UINT width, UINT height) noexcept
         _renderTarget->Resize(D2D1::SizeU(width, height));
     }
 
+    _menuBarHost.UpdateLayout();
     _layoutDirty = true;
     InvalidateRect(_hWnd.get(), nullptr, FALSE);
 }
@@ -1951,8 +2051,9 @@ void ViewerSpace::OnPaint()
 
     _renderTarget->Clear(bg);
 
-    const float headerHeight   = kHeaderHeightDip;
-    const D2D1_RECT_F headerRc = D2D1::RectF(0.0f, 0.0f, DipFromPx(_clientSize.cx), headerHeight);
+    const float headerTopDip    = GetHeaderTopDip();
+    const float headerBottomDip = GetHeaderBottomDip();
+    const D2D1_RECT_F headerRc  = D2D1::RectF(0.0f, headerTopDip, DipFromPx(_clientSize.cx), headerBottomDip);
 
     const bool scanActive = _overallState == ScanState::Queued || _overallState == ScanState::Scanning;
 
@@ -2047,10 +2148,10 @@ void ViewerSpace::OnPaint()
         const std::wstring& status = _headerStatusText;
 
         const float buttonSide           = kHeaderButtonWidthDip;
-        const D2D1_RECT_F upButtonRc     = D2D1::RectF(0.0f, 0.0f, buttonSide, headerHeight);
+        const D2D1_RECT_F upButtonRc     = D2D1::RectF(0.0f, headerTopDip, buttonSide, headerBottomDip);
         const bool showCancel            = scanActive;
-        const D2D1_RECT_F cancelButtonRc = showCancel ? D2D1::RectF(headerRc.right - buttonSide, 0.0f, headerRc.right, headerHeight)
-                                                      : D2D1::RectF(headerRc.right, 0.0f, headerRc.right, headerHeight);
+        const D2D1_RECT_F cancelButtonRc = showCancel ? D2D1::RectF(headerRc.right - buttonSide, headerTopDip, headerRc.right, headerBottomDip)
+                                                      : D2D1::RectF(headerRc.right, headerTopDip, headerRc.right, headerBottomDip);
         const bool canNavigateUp         = CanNavigateUp();
 
         if (_brushBackground)
@@ -2101,8 +2202,8 @@ void ViewerSpace::OnPaint()
             pathText = _metaName;
         }
 
-        const float contentTop    = 4.0f;
-        const float contentBottom = headerHeight - 10.0f;
+        const float contentTop    = headerTopDip + 4.0f;
+        const float contentBottom = headerBottomDip - 10.0f;
         D2D1_RECT_F contentRc     = headerRc;
         contentRc.left += buttonSide + kPaddingDip;
         contentRc.right -= (showCancel ? buttonSide : 0.0f) + kPaddingDip;
@@ -2217,11 +2318,11 @@ void ViewerSpace::OnPaint()
         }
     }
 
-    const D2D1_RECT_F treemapRc                                = D2D1::RectF(0.0f, headerHeight, DipFromPx(_clientSize.cx), DipFromPx(_clientSize.cy));
+    const D2D1_RECT_F treemapRc                                = D2D1::RectF(0.0f, headerBottomDip, DipFromPx(_clientSize.cx), DipFromPx(_clientSize.cy));
     const D2D1_RECT_F treemapLayoutRc                          = D2D1::RectF(kPaddingDip,
-                                                    kHeaderHeightDip + kPaddingDip,
-                                                    std::max(kPaddingDip, treemapRc.right - kPaddingDip),
-                                                    std::max(kHeaderHeightDip + kPaddingDip, treemapRc.bottom - kPaddingDip));
+                                                                             headerBottomDip + kPaddingDip,
+                                                                             std::max(kPaddingDip, treemapRc.right - kPaddingDip),
+                                                                             std::max(headerBottomDip + kPaddingDip, treemapRc.bottom - kPaddingDip));
     const float treemapLayoutAreaDip2                          = RectArea(treemapLayoutRc);
     static constexpr float kLargeTileAreaFractionWhileScanning = 0.10f;
     static constexpr float kLargeTileAreaFractionIdle          = 0.10f;
@@ -2583,7 +2684,7 @@ void ViewerSpace::OnPaint()
         const bool expanded        = isRealDirectory && item.labelHeightDip > 0.0f;
         const bool isOtherBucket   = nodeRef.isSynthetic;
         const bool incomplete      = isRealDirectory && (nodeRef.scanState == ScanState::NotStarted || nodeRef.scanState == ScanState::Queued ||
-                                                    nodeRef.scanState == ScanState::Scanning);
+                                                         nodeRef.scanState == ScanState::Scanning);
 
         const float areaFraction   = (treemapLayoutAreaDip2 > 1.0f) ? (area / treemapLayoutAreaDip2) : 0.0f;
         const bool wantsTallHeader = incomplete && areaFraction >= largeTileAreaFractionThreshold;
@@ -3109,9 +3210,9 @@ void ViewerSpace::OnPaint()
         if (! drewSpinner)
         {
             const D2D1_RECT_F spinnerHostRc = D2D1::RectF(kPaddingDip,
-                                                          kHeaderHeightDip + kPaddingDip,
+                                                          headerBottomDip + kPaddingDip,
                                                           std::max(kPaddingDip, treemapRc.right - kPaddingDip),
-                                                          std::max(kHeaderHeightDip + kPaddingDip, treemapRc.bottom - kPaddingDip));
+                                                          std::max(headerBottomDip + kPaddingDip, treemapRc.bottom - kPaddingDip));
 
             const float hostW    = std::max(0.0f, spinnerHostRc.right - spinnerHostRc.left);
             const float hostH    = std::max(0.0f, spinnerHostRc.bottom - spinnerHostRc.top);
@@ -3222,13 +3323,13 @@ void ViewerSpace::OnPaint()
     }
 }
 
-void ViewerSpace::OnCommand(HWND hwnd, UINT commandId) noexcept
+void ViewerSpace::OnCommand([[maybe_unused]] HWND hwnd, UINT commandId) noexcept
 {
     switch (commandId)
     {
         case IDM_VIEWERSPACE_FILE_REFRESH: RefreshCurrent(); break;
         case IDM_VIEWERSPACE_NAV_UP: NavigateUp(); break;
-        case IDM_VIEWERSPACE_FILE_EXIT: DestroyWindow(hwnd); break;
+        case IDM_VIEWERSPACE_FILE_EXIT: static_cast<void>(Close()); break;
     }
 }
 
@@ -3242,10 +3343,7 @@ void ViewerSpace::OnKeyDown(WPARAM vk, bool alt) noexcept
             return;
         }
 
-        if (_hWnd)
-        {
-            _hWnd.reset();
-        }
+        static_cast<void>(Close());
         return;
     }
 
@@ -3279,11 +3377,13 @@ void ViewerSpace::OnMouseMove(int x, int y) noexcept
         _trackingMouse = true;
     }
 
-    const float xDip = DipFromPx(x);
-    const float yDip = DipFromPx(y);
+    const float xDip         = DipFromPx(x);
+    const float yDip         = DipFromPx(y);
+    const float headerTop    = GetHeaderTopDip();
+    const float headerBottom = GetHeaderBottomDip();
 
     HeaderHit newHeaderHit = HeaderHit::None;
-    if (yDip <= kHeaderHeightDip)
+    if (yDip >= headerTop && yDip <= headerBottom)
     {
         if (xDip <= kHeaderButtonWidthDip && CanNavigateUp())
         {
@@ -3310,7 +3410,7 @@ void ViewerSpace::OnMouseMove(int x, int y) noexcept
     }
 
     uint32_t tooltipNodeId = 0;
-    if (yDip >= kHeaderHeightDip)
+    if (yDip >= headerBottom)
     {
         for (size_t i = _drawItems.size(); i-- > 0;)
         {
@@ -3396,9 +3496,11 @@ void ViewerSpace::OnMouseLeave() noexcept
 
 void ViewerSpace::OnLButtonDown(int x, int y) noexcept
 {
-    const float xDip = DipFromPx(x);
-    const float yDip = DipFromPx(y);
-    if (yDip <= kHeaderHeightDip)
+    const float xDip         = DipFromPx(x);
+    const float yDip         = DipFromPx(y);
+    const float headerTop    = GetHeaderTopDip();
+    const float headerBottom = GetHeaderBottomDip();
+    if (yDip >= headerTop && yDip <= headerBottom)
     {
         if (xDip <= kHeaderButtonWidthDip && CanNavigateUp())
         {
@@ -3438,9 +3540,11 @@ void ViewerSpace::OnLButtonDown(int x, int y) noexcept
 
 void ViewerSpace::OnLButtonDblClk(int x, int y) noexcept
 {
-    const float xDip = DipFromPx(x);
-    const float yDip = DipFromPx(y);
-    if (yDip <= kHeaderHeightDip)
+    const float xDip         = DipFromPx(x);
+    const float yDip         = DipFromPx(y);
+    const float headerTop    = GetHeaderTopDip();
+    const float headerBottom = GetHeaderBottomDip();
+    if (yDip >= headerTop && yDip <= headerBottom)
     {
         OnLButtonDown(x, y);
         return;
@@ -3604,18 +3708,13 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     const std::wstring zoomInText  = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_CONTEXT_ZOOM_IN);
     const std::wstring zoomOutText = LoadStringResource(g_hInstance, IDS_VIEWERSPACE_CONTEXT_ZOOM_OUT);
 
-    HMENU rootMenu = LoadMenuW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(kHostFolderViewContextMenuResourceId));
+    HMENU rootMenu = Localization::LoadMenuResource(GetModuleHandleW(nullptr), kHostFolderViewContextMenuResourceId);
     if (! rootMenu)
     {
         return;
     }
 
-    const size_t previousMenuThemeItemCount = _menuThemeItems.size();
-    auto menuCleanup                        = wil::scope_exit([&, previousMenuThemeItemCount]
-    {
-        DestroyMenu(rootMenu);
-        _menuThemeItems.resize(previousMenuThemeItemCount);
-    });
+    auto menuCleanup = wil::scope_exit([&]() noexcept { DestroyMenu(rootMenu); });
 
     HMENU menu = GetSubMenu(rootMenu, 0);
     if (! menu)
@@ -3778,41 +3877,22 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
     enableFolderCmd(kCmdFolderViewContextProperties, canExecuteLeafCmds);
     enableFolderCmd(kCmdFolderViewContextPaste, canExecutePaste);
 
-    if (_hasTheme)
-    {
-        const COLORREF background = ColorRefFromArgb(_theme.backgroundArgb);
-        if (! _menuBackgroundBrush)
-        {
-            _menuBackgroundBrush.reset(CreateSolidBrush(background));
-        }
-
-        if (_menuBackgroundBrush)
-        {
-            MENUINFO mi{};
-            mi.cbSize  = sizeof(mi);
-            mi.fMask   = MIM_BACKGROUND | MIM_APPLYTOSUBMENUS;
-            mi.hbrBack = _menuBackgroundBrush.get();
-            SetMenuInfo(menu, &mi);
-        }
-
-        if (! _menuFont)
-        {
-            const UINT dpi = GetDpiForWindow(hwnd);
-            _menuFont      = CreateMenuFontForDpi(dpi);
-        }
-
-        PrepareMenuTheme(menu, false, _menuThemeItems);
-    }
-
-    SetForegroundWindow(hwnd);
-    const UINT commandId = static_cast<UINT>(
-        TrackPopupMenuEx(menu, static_cast<UINT>(TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD), screenPt.x, screenPt.y, hwnd, nullptr));
-    PostMessageW(hwnd, WM_NULL, 0, 0);
-
-    if (commandId == 0)
+    const auto popupItems = ConvertHMenuToDxFlyoutItems(menu);
+    if (popupItems.empty())
     {
         return;
     }
+
+    const auto result = RedSalamander::DxUi::ContextMenu::Show(hwnd,
+                                                               screenPt,
+                                                               popupItems,
+                                                               _hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme)
+                                                                         : RedSalamander::DxUi::MakeDefaultThemePalette(false));
+    if (! result.has_value())
+    {
+        return;
+    }
+    const UINT commandId = static_cast<UINT>(result.value());
 
     if (commandId == kCmdTreemapContextZoomIn)
     {
@@ -3879,6 +3959,8 @@ void ViewerSpace::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 
 LRESULT ViewerSpace::OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
 {
+    _menuBarHost.Detach();
+    _menuHandle.reset();
     _hWnd.release();
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
 
@@ -4104,16 +4186,14 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
         return false;
     }
 
-    HRESULT textHr = _dwriteFactory->CreateTextFormat(
-        L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"", _textFormat.put());
+    HRESULT textHr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(12.0f), _textFormat.put());
     if (SUCCEEDED(textHr))
     {
         _textFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
         _textFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
     }
 
-    textHr = _dwriteFactory->CreateTextFormat(
-        L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 13.0f, L"", _headerFormat.put());
+    textHr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(13.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _headerFormat.put());
     if (SUCCEEDED(textHr))
     {
         _headerFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -4121,8 +4201,8 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
         _headerFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     }
 
-    textHr = _dwriteFactory->CreateTextFormat(
-        L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 13.0f, L"", _headerStatusFormatRight.put());
+    textHr =
+        Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(13.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _headerStatusFormatRight.put());
     if (SUCCEEDED(textHr))
     {
         _headerStatusFormatRight->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -4130,8 +4210,7 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
         _headerStatusFormatRight->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
     }
 
-    textHr = _dwriteFactory->CreateTextFormat(
-        L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 11.0f, L"", _headerInfoFormat.put());
+    textHr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(11.0f), _headerInfoFormat.put());
     if (SUCCEEDED(textHr))
     {
         _headerInfoFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -4139,8 +4218,7 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
         _headerInfoFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     }
 
-    textHr = _dwriteFactory->CreateTextFormat(
-        L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 11.0f, L"", _headerInfoFormatRight.put());
+    textHr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(11.0f), _headerInfoFormatRight.put());
     if (SUCCEEDED(textHr))
     {
         _headerInfoFormatRight->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -4148,8 +4226,7 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
         _headerInfoFormatRight->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
     }
 
-    textHr = _dwriteFactory->CreateTextFormat(
-        L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 18.0f, L"", _headerIconFormat.put());
+    textHr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(18.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _headerIconFormat.put());
     if (SUCCEEDED(textHr))
     {
         _headerIconFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -4157,8 +4234,7 @@ bool ViewerSpace::EnsureDirect2D(HWND hwnd) noexcept
         _headerIconFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     }
 
-    textHr = _dwriteFactory->CreateTextFormat(
-        L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 18.0f, L"", _watermarkFormat.put());
+    textHr = Typography::CreateTextFormat(_dwriteFactory.get(), Typography::MakeUiTextSpec(18.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _watermarkFormat.put());
     if (SUCCEEDED(textHr))
     {
         _watermarkFormat->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
@@ -4312,326 +4388,15 @@ void ViewerSpace::UpdateWindowTitle(HWND hwnd) noexcept
 
 void ViewerSpace::ApplyMenuTheme(HWND hwnd) noexcept
 {
-    if (! _hasTheme)
+    static_cast<void>(hwnd);
+    _menuBarHost.SetTheme(_hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme) : RedSalamander::DxUi::MakeDefaultThemePalette(false));
+    if (_menuBarHost.GetHwnd())
     {
-        return;
+        _menuBarHost.SyncMenuModel();
     }
-
-    HMENU menu = hwnd ? GetMenu(hwnd) : nullptr;
-    if (! menu)
+    else if (hwnd)
     {
-        return;
-    }
-
-    const COLORREF background = ColorRefFromArgb(_theme.backgroundArgb);
-    _menuBackgroundBrush.reset(CreateSolidBrush(background));
-    if (_menuBackgroundBrush)
-    {
-        MENUINFO mi{};
-        mi.cbSize  = sizeof(mi);
-        mi.fMask   = MIM_BACKGROUND | MIM_APPLYTOSUBMENUS;
-        mi.hbrBack = _menuBackgroundBrush.get();
-        SetMenuInfo(menu, &mi);
-    }
-
-    const UINT dpi = GetDpiForWindow(hwnd);
-    _menuFont      = CreateMenuFontForDpi(dpi);
-
-    _menuThemeItems.clear();
-    PrepareMenuTheme(menu, true, _menuThemeItems);
-    DrawMenuBar(hwnd);
-}
-
-void ViewerSpace::PrepareMenuTheme(HMENU menu, bool topLevel, std::vector<MenuItemData>& outItems) noexcept
-{
-    const int count = GetMenuItemCount(menu);
-    if (count < 0)
-    {
-        return;
-    }
-
-    for (UINT pos = 0; pos < static_cast<UINT>(count); ++pos)
-    {
-        MENUITEMINFOW info{};
-        info.cbSize = sizeof(info);
-
-        wchar_t textBuf[256]{};
-        info.fMask      = MIIM_FTYPE | MIIM_STATE | MIIM_STRING | MIIM_SUBMENU;
-        info.dwTypeData = textBuf;
-        info.cch        = static_cast<UINT>(std::size(textBuf) - 1);
-        if (GetMenuItemInfoW(menu, pos, TRUE, &info) == 0)
-        {
-            continue;
-        }
-
-        MenuItemData data{};
-        data.separator  = (info.fType & MFT_SEPARATOR) != 0;
-        data.topLevel   = topLevel;
-        data.hasSubMenu = info.hSubMenu != nullptr;
-
-        if (! data.separator)
-        {
-            std::wstring text = textBuf;
-            const size_t tab  = text.find(L'\t');
-            if (tab != std::wstring::npos)
-            {
-                data.shortcut = text.substr(tab + 1);
-                text.resize(tab);
-            }
-            data.text = std::move(text);
-        }
-
-        const size_t index = outItems.size();
-        outItems.push_back(std::move(data));
-
-        MENUITEMINFOW ownerDraw{};
-        ownerDraw.cbSize     = sizeof(ownerDraw);
-        ownerDraw.fMask      = MIIM_FTYPE | MIIM_DATA | MIIM_STATE;
-        ownerDraw.fType      = info.fType | MFT_OWNERDRAW;
-        ownerDraw.fState     = info.fState;
-        ownerDraw.dwItemData = static_cast<ULONG_PTR>(index);
-        SetMenuItemInfoW(menu, pos, TRUE, &ownerDraw);
-
-        if (info.hSubMenu)
-        {
-            PrepareMenuTheme(info.hSubMenu, false, outItems);
-        }
-    }
-}
-
-void ViewerSpace::OnMeasureMenuItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept
-{
-    if (! measure || measure->CtlType != ODT_MENU)
-    {
-        return;
-    }
-
-    const size_t index = static_cast<size_t>(measure->itemData);
-    if (index >= _menuThemeItems.size())
-    {
-        return;
-    }
-
-    const MenuItemData& data = _menuThemeItems[index];
-    const UINT dpi           = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
-
-    if (data.separator)
-    {
-        measure->itemWidth  = 1;
-        measure->itemHeight = static_cast<UINT>(MulDiv(10, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-        return;
-    }
-
-    const UINT heightDip = data.topLevel ? 20u : 24u;
-    measure->itemHeight  = static_cast<UINT>(MulDiv(static_cast<int>(heightDip), static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI));
-
-    auto hdc = wil::GetDC(hwnd);
-    if (! hdc)
-    {
-        measure->itemWidth = 120;
-        return;
-    }
-
-    HFONT fontToUse = _menuFont ? _menuFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(hdc.get(), fontToUse);
-    static_cast<void>(oldFont);
-
-    SIZE textSize{};
-    if (! data.text.empty())
-    {
-        GetTextExtentPoint32W(hdc.get(), data.text.c_str(), static_cast<int>(data.text.size()), &textSize);
-    }
-
-    SIZE shortcutSize{};
-    if (! data.shortcut.empty())
-    {
-        GetTextExtentPoint32W(hdc.get(), data.shortcut.c_str(), static_cast<int>(data.shortcut.size()), &shortcutSize);
-    }
-
-    const int dpiInt           = static_cast<int>(dpi);
-    const int paddingX         = MulDiv(5, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    const int shortcutGap      = MulDiv(20, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    const int subMenuAreaWidth = data.hasSubMenu && ! data.topLevel ? MulDiv(18, dpiInt, USER_DEFAULT_SCREEN_DPI) : 0;
-    const int checkAreaWidth   = data.topLevel ? 0 : MulDiv(20, dpiInt, USER_DEFAULT_SCREEN_DPI);
-    const int checkGap         = data.topLevel ? 0 : MulDiv(4, dpiInt, USER_DEFAULT_SCREEN_DPI);
-
-    int width = paddingX + checkAreaWidth + checkGap + textSize.cx + paddingX;
-    if (! data.shortcut.empty())
-    {
-        width += shortcutGap + shortcutSize.cx;
-    }
-    width += subMenuAreaWidth;
-
-    measure->itemWidth = static_cast<UINT>(std::max(width, 60));
-}
-
-void ViewerSpace::OnDrawMenuItem(DRAWITEMSTRUCT* draw) noexcept
-{
-    if (! draw || draw->CtlType != ODT_MENU || ! draw->hDC)
-    {
-        return;
-    }
-
-    const size_t index = static_cast<size_t>(draw->itemData);
-    if (index >= _menuThemeItems.size())
-    {
-        return;
-    }
-
-    const MenuItemData& data = _menuThemeItems[index];
-    const bool selected      = (draw->itemState & ODS_SELECTED) != 0;
-    const bool disabled      = (draw->itemState & ODS_DISABLED) != 0;
-    const bool checked       = (draw->itemState & ODS_CHECKED) != 0;
-
-    const bool rainbowMode = _hasTheme && _theme.rainbowMode != FALSE;
-    const bool darkBase    = _hasTheme && _theme.darkBase != FALSE;
-
-    const COLORREF bg             = _hasTheme ? ColorRefFromArgb(_theme.backgroundArgb) : GetSysColor(COLOR_MENU);
-    const COLORREF fg             = _hasTheme ? ColorRefFromArgb(_theme.textArgb) : GetSysColor(COLOR_MENUTEXT);
-    const COLORREF selBg          = _hasTheme ? ColorRefFromArgb(_theme.selectionBackgroundArgb) : GetSysColor(COLOR_HIGHLIGHT);
-    const COLORREF selFg          = _hasTheme ? ColorRefFromArgb(_theme.selectionTextArgb) : GetSysColor(COLOR_HIGHLIGHTTEXT);
-    const COLORREF disabledFg     = _hasTheme ? BlendColor(bg, fg, 120u) : GetSysColor(COLOR_GRAYTEXT);
-    const COLORREF separatorColor = _hasTheme ? BlendColor(bg, fg, 80u) : GetSysColor(COLOR_3DSHADOW);
-    const COLORREF shortcutFg     = _hasTheme ? BlendColor(bg, fg, 140u) : GetSysColor(COLOR_GRAYTEXT);
-
-    COLORREF fillColor     = selected ? selBg : bg;
-    COLORREF textColor     = selected ? selFg : fg;
-    COLORREF shortcutColor = selected ? selFg : shortcutFg;
-    if (disabled)
-    {
-        textColor     = disabledFg;
-        shortcutColor = disabledFg;
-    }
-
-    if (selected && rainbowMode && ! disabled && ! data.separator && ! data.text.empty())
-    {
-        fillColor               = RainbowMenuSelectionColor(data.text, darkBase);
-        const COLORREF contrast = ChooseContrastingTextColor(fillColor);
-        textColor               = contrast;
-        shortcutColor           = contrast;
-    }
-
-    RECT itemRect = draw->rcItem;
-    if (! data.topLevel)
-    {
-        const HWND menuHwnd = WindowFromDC(draw->hDC);
-        if (menuHwnd)
-        {
-            RECT menuClient{};
-            if (GetClientRect(menuHwnd, &menuClient))
-            {
-                itemRect.right = menuClient.right;
-            }
-        }
-    }
-
-    wil::unique_any<HRGN, decltype(&::DeleteObject), ::DeleteObject> clipRgn(CreateRectRgnIndirect(&itemRect));
-    if (clipRgn)
-    {
-        SelectClipRgn(draw->hDC, clipRgn.get());
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(fillColor));
-    FillRect(draw->hDC, &itemRect, bgBrush.get());
-
-    const int dpi            = GetDeviceCaps(draw->hDC, LOGPIXELSX);
-    const bool iconFontValid = EnsureViewerSpaceMenuIconFont(draw->hDC, static_cast<UINT>(dpi));
-    const int paddingX       = MulDiv(5, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int checkAreaWidth = data.topLevel ? 0 : MulDiv(20, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int checkGap       = data.topLevel ? 0 : MulDiv(4, dpi, USER_DEFAULT_SCREEN_DPI);
-    const int arrowAreaWidth = data.hasSubMenu && ! data.topLevel ? MulDiv(18, dpi, USER_DEFAULT_SCREEN_DPI) : 0;
-
-    if (data.separator)
-    {
-        const int y = (draw->rcItem.top + draw->rcItem.bottom) / 2;
-        wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> pen(CreatePen(PS_SOLID, 1, separatorColor));
-        auto oldPen = wil::SelectObject(draw->hDC, pen.get());
-        static_cast<void>(oldPen);
-        MoveToEx(draw->hDC, draw->rcItem.left + paddingX, y, nullptr);
-        LineTo(draw->hDC, itemRect.right - paddingX, y);
-        return;
-    }
-
-    HFONT fontToUse = _menuFont ? _menuFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    auto oldFont    = wil::SelectObject(draw->hDC, fontToUse);
-    static_cast<void>(oldFont);
-
-    SetBkMode(draw->hDC, TRANSPARENT);
-
-    if (checked && checkAreaWidth > 0)
-    {
-        RECT checkRect = draw->rcItem;
-        checkRect.left += paddingX;
-        checkRect.right     = checkRect.left + checkAreaWidth;
-        const bool useIcons = iconFontValid && g_viewerSpaceMenuIconFont;
-        const wchar_t glyph = useIcons ? FluentIcons::kCheckMark : FluentIcons::kFallbackCheckMark;
-        wchar_t glyphText[2]{glyph, 0};
-
-        SetTextColor(draw->hDC, textColor);
-        HFONT glyphFont  = useIcons ? g_viewerSpaceMenuIconFont.get() : fontToUse;
-        auto oldIconFont = wil::SelectObject(draw->hDC, glyphFont);
-        DrawTextW(draw->hDC, glyphText, 1, &checkRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    }
-
-    RECT textRect = itemRect;
-    textRect.left += paddingX + checkAreaWidth + checkGap;
-    textRect.right -= paddingX;
-
-    if (arrowAreaWidth > 0)
-    {
-        textRect.right = std::max(textRect.left, textRect.right - arrowAreaWidth);
-    }
-
-    const UINT drawFlags = DT_VCENTER | DT_SINGLELINE | DT_HIDEPREFIX;
-
-    if (! data.shortcut.empty())
-    {
-        SIZE shortcutSize{};
-        GetTextExtentPoint32W(draw->hDC, data.shortcut.c_str(), static_cast<int>(data.shortcut.size()), &shortcutSize);
-
-        RECT shortcutRect = textRect;
-        shortcutRect.left = std::max(textRect.left, textRect.right - shortcutSize.cx);
-
-        RECT mainTextRect  = textRect;
-        mainTextRect.right = std::max(mainTextRect.left, shortcutRect.left - MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI));
-
-        SetTextColor(draw->hDC, shortcutColor);
-        DrawTextW(draw->hDC, data.shortcut.c_str(), static_cast<int>(data.shortcut.size()), &shortcutRect, DT_RIGHT | drawFlags);
-
-        SetTextColor(draw->hDC, textColor);
-        if (! data.text.empty())
-        {
-            DrawTextW(draw->hDC, data.text.c_str(), static_cast<int>(data.text.size()), &mainTextRect, DT_LEFT | drawFlags);
-        }
-    }
-    else
-    {
-        SetTextColor(draw->hDC, textColor);
-        if (! data.text.empty())
-        {
-            DrawTextW(draw->hDC, data.text.c_str(), static_cast<int>(data.text.size()), &textRect, DT_LEFT | drawFlags);
-        }
-    }
-
-    if (arrowAreaWidth > 0)
-    {
-        RECT arrowRect = itemRect;
-        arrowRect.right -= paddingX;
-        arrowRect.left = std::max(arrowRect.left, arrowRect.right - arrowAreaWidth);
-
-        const bool useIcons = iconFontValid && g_viewerSpaceMenuIconFont;
-        const wchar_t glyph = useIcons ? FluentIcons::kChevronRightSmall : FluentIcons::kFallbackChevronRight;
-        wchar_t glyphText[2]{glyph, 0};
-
-        SetTextColor(draw->hDC, shortcutColor);
-        HFONT arrowFont  = useIcons ? g_viewerSpaceMenuIconFont.get() : fontToUse;
-        auto oldIconFont = wil::SelectObject(draw->hDC, arrowFont);
-        DrawTextW(draw->hDC, glyphText, 1, &arrowRect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-
-        const int arrowExcludeWidth = std::max(arrowAreaWidth, GetSystemMetricsForDpi(SM_CXMENUCHECK, static_cast<UINT>(dpi)));
-        RECT arrowExcludeRect       = itemRect;
-        arrowExcludeRect.left       = std::max(arrowExcludeRect.left, arrowExcludeRect.right - arrowExcludeWidth);
-        ExcludeClipRect(draw->hDC, arrowExcludeRect.left, arrowExcludeRect.top, arrowExcludeRect.right, arrowExcludeRect.bottom);
+        DrawMenuBar(hwnd);
     }
 }
 
@@ -6501,10 +6266,9 @@ void ViewerSpace::RebuildLayout() noexcept
     constexpr float kMinExpandChildAreaDip2 = 110.0f * 80.0f;
     constexpr float kMinExpandChildSideDip  = 60.0f;
 
-    const D2D1_RECT_F rc     = D2D1::RectF(kPaddingDip,
-                                       kHeaderHeightDip + kPaddingDip,
-                                       std::max(kPaddingDip, width - kPaddingDip),
-                                       std::max(kHeaderHeightDip + kPaddingDip, height - kPaddingDip));
+    const float headerBottomDip = GetHeaderBottomDip();
+    const D2D1_RECT_F rc        = D2D1::RectF(
+        kPaddingDip, headerBottomDip + kPaddingDip, std::max(kPaddingDip, width - kPaddingDip), std::max(headerBottomDip + kPaddingDip, height - kPaddingDip));
     const float viewAreaDip2 = RectArea(rc);
 
     struct Item final
@@ -7181,7 +6945,7 @@ void ViewerSpace::RebuildLayout() noexcept
 
 std::optional<uint32_t> ViewerSpace::HitTestTreemap(float xDip, float yDip) const noexcept
 {
-    if (yDip < kHeaderHeightDip)
+    if (yDip < GetHeaderBottomDip())
     {
         return std::nullopt;
     }
@@ -7257,9 +7021,9 @@ bool ViewerSpace::CanNavigateUp() const noexcept
     return _scanRootParentPath.has_value();
 }
 
-void ViewerSpace::UpdateMenuState(HWND hwnd) noexcept
+void ViewerSpace::UpdateMenuState(HWND hwnd, bool syncDxMenuBar) noexcept
 {
-    HMENU menu = hwnd ? GetMenu(hwnd) : nullptr;
+    HMENU menu = _menuHandle ? _menuHandle.get() : (hwnd ? GetMenu(hwnd) : nullptr);
     if (! menu)
     {
         return;
@@ -7267,7 +7031,35 @@ void ViewerSpace::UpdateMenuState(HWND hwnd) noexcept
 
     const UINT state = CanNavigateUp() ? MF_ENABLED : MF_GRAYED;
     EnableMenuItem(menu, IDM_VIEWERSPACE_NAV_UP, MF_BYCOMMAND | state);
-    DrawMenuBar(hwnd);
+    if (syncDxMenuBar && _menuBarHost.GetHwnd())
+    {
+        _menuBarHost.SyncMenuModel();
+    }
+    else if (hwnd)
+    {
+        DrawMenuBar(hwnd);
+    }
+}
+
+float ViewerSpace::GetMenuBarHeightDip() const noexcept
+{
+    if (! _menuBarHost.GetHwnd())
+    {
+        return 0.0f;
+    }
+
+    const float dpi = _dpi > 0.0f ? _dpi : static_cast<float>(USER_DEFAULT_SCREEN_DPI);
+    return static_cast<float>(_menuBarHost.GetVisibleHeightPx()) * static_cast<float>(USER_DEFAULT_SCREEN_DPI) / dpi;
+}
+
+float ViewerSpace::GetHeaderTopDip() const noexcept
+{
+    return GetMenuBarHeightDip();
+}
+
+float ViewerSpace::GetHeaderBottomDip() const noexcept
+{
+    return GetHeaderTopDip() + kHeaderHeightDip;
 }
 
 void ViewerSpace::NavigateUp() noexcept
@@ -7393,7 +7185,7 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) no
             h = std::max(1L, ownerRc.bottom - ownerRc.top);
         }
 
-        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(LoadMenuW(g_hInstance, MAKEINTRESOURCEW(IDR_VIEWERSPACE_MENU)));
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERSPACE_MENU));
         HWND window = CreateWindowExW(
             0, kClassName, _metaName.empty() ? L"" : _metaName.c_str(), WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr, menu.get(), g_hInstance, this);
         if (! window)
@@ -7421,13 +7213,15 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::Open(const ViewerOpenContext* context) no
 
 HRESULT STDMETHODCALLTYPE ViewerSpace::Close() noexcept
 {
+    AddRef();
+    const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
     return S_OK;
 }
 
 HRESULT STDMETHODCALLTYPE ViewerSpace::SetTheme(const ViewerTheme* theme) noexcept
 {
-    if (theme == nullptr || theme->version != 2)
+    if (theme == nullptr || theme->version < 2u || theme->version > 4u)
     {
         return E_INVALIDARG;
     }
@@ -7454,7 +7248,6 @@ HRESULT STDMETHODCALLTYPE ViewerSpace::SetTheme(const ViewerTheme* theme) noexce
 
 HRESULT STDMETHODCALLTYPE ViewerSpace::SetCallback(IViewerCallback* callback, void* cookie) noexcept
 {
-    _callback       = callback;
-    _callbackCookie = cookie;
+    _callbackState.Set(callback, cookie);
     return S_OK;
 }

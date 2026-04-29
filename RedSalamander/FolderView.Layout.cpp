@@ -74,6 +74,42 @@ void FolderView::LayoutItems()
 
     if (_items.empty() || clientWidthDip <= 0.0f)
     {
+        if (_items.empty())
+        {
+            _tileWidthDip   = 0.0f;
+            _tileHeightDip  = 0.0f;
+            _labelHeightDip = 0.0f;
+
+            if (clientWidthDip > 0.0f)
+            {
+                std::wstring parentRowLabel = LoadStringResource(nullptr, IDS_EMPTY_FOLDER_PARENT_ROW);
+                if (parentRowLabel.empty())
+                {
+                    parentRowLabel = LoadStringResource(nullptr, IDS_EMPTY_FOLDER_TITLE);
+                }
+
+                const bool includeDetailsLine  = _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed;
+                const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed && static_cast<bool>(_metadataTextProvider);
+                const FolderViewEmptyStateLayout::PlaceholderItemMetrics metrics =
+                    FolderViewEmptyStateLayout::ResolvePlaceholderItemMetrics(FolderViewEmptyStateLayout::PlaceholderItemMetricsInput{
+                        .clientWidthDip          = clientWidthDip,
+                        .clientHeightDip         = clientHeightDip,
+                        .iconSizeDip             = _iconSizeDip,
+                        .estimatedCharWidthDip   = _estimatedCharWidthDip,
+                        .estimatedLabelHeightDip = _estimatedLabelHeightDip,
+                        .detailsLineHeightDip    = _detailsLineHeightDip > 0.0f ? _detailsLineHeightDip : _estimatedDetailsHeightDip,
+                        .metadataLineHeightDip   = _metadataLineHeightDip > 0.0f ? _metadataLineHeightDip : _estimatedMetadataHeightDip,
+                        .titleLength             = parentRowLabel.size(),
+                        .includeDetailsLine      = includeDetailsLine,
+                        .includeMetadataLine     = includeMetadataLine,
+                    });
+
+                _tileWidthDip   = metrics.tileWidthDip;
+                _tileHeightDip  = metrics.tileHeightDip;
+                _labelHeightDip = metrics.labelHeightDip;
+            }
+        }
+
         _columns          = 1;
         _rowsPerColumn    = 0;
         _contentHeight    = std::max(clientHeightDip, 0.0f);
@@ -247,10 +283,11 @@ void FolderView::LayoutItems()
         _tileHeightDip = std::max(_iconSizeDip, maxLabelHeight) + kLabelVerticalPaddingDip * 2.0f;
     }
 
-    const float columnStride = _tileWidthDip + kColumnSpacingDip;
-    const float rowStride    = _tileHeightDip + kRowSpacingDip;
+    const float rowSpacingDip = GetFolderViewRowSpacingDip(_appTheme);
+    const float columnStride  = _tileWidthDip + kColumnSpacingDip;
+    const float rowStride     = _tileHeightDip + rowSpacingDip;
 
-    const int maxRowsPerColumn = std::max(1, static_cast<int>(std::floor((clientHeightDip + kRowSpacingDip) / rowStride)));
+    const int maxRowsPerColumn = std::max(1, static_cast<int>(std::floor((clientHeightDip + rowSpacingDip) / rowStride)));
     _rowsPerColumn             = std::max(1, maxRowsPerColumn);
     const int requiredColumns  = std::max(1, static_cast<int>(std::ceil(static_cast<float>(_items.size()) / static_cast<float>(_rowsPerColumn))));
     _columns                   = requiredColumns;
@@ -288,7 +325,7 @@ void FolderView::LayoutItems()
     for (int column = 0; column < static_cast<int>(_columnCounts.size()) && index < _items.size(); ++column)
     {
         const int itemsInColumn = _columnCounts[static_cast<size_t>(column)];
-        float y                 = kRowSpacingDip;
+        float y                 = rowSpacingDip;
         for (int row = 0; row < itemsInColumn && index < _items.size(); ++row, ++index)
         {
             auto& item  = _items[index];
@@ -554,8 +591,9 @@ std::pair<size_t, size_t> FolderView::GetVisibleItemRange() const
         return {0, _items.size()};
     }
 
-    const float columnStride = _tileWidthDip + kColumnSpacingDip;
-    const float rowStride    = _tileHeightDip + kRowSpacingDip;
+    const float rowSpacingDip = GetFolderViewRowSpacingDip(_appTheme);
+    const float columnStride  = _tileWidthDip + kColumnSpacingDip;
+    const float rowStride     = _tileHeightDip + rowSpacingDip;
 
     if (columnStride <= 0.0f || rowStride <= 0.0f)
     {
@@ -1016,15 +1054,16 @@ std::optional<size_t> FolderView::HitTest(POINT clientPt) const
         return std::nullopt;
     }
 
-    const float columnStride = _tileWidthDip + kColumnSpacingDip;
-    const float rowStride    = _tileHeightDip + kRowSpacingDip;
+    const float rowSpacingDip = GetFolderViewRowSpacingDip(_appTheme);
+    const float columnStride  = _tileWidthDip + kColumnSpacingDip;
+    const float rowStride     = _tileHeightDip + rowSpacingDip;
     if (columnStride <= 0.0f || rowStride <= 0.0f)
     {
         return std::nullopt;
     }
 
     const float firstColumnLeft = kColumnSpacingDip;
-    const float firstRowTop     = kRowSpacingDip;
+    const float firstRowTop     = rowSpacingDip;
     if (x < firstColumnLeft || y < firstRowTop)
     {
         return std::nullopt;

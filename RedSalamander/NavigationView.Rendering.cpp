@@ -1,5 +1,6 @@
 #include "NavigationViewInternal.h"
 
+#include "DxUi/DxUi.Typography.h"
 #include <windowsx.h>
 
 #include <commctrl.h>
@@ -33,6 +34,11 @@ NavigationViewSharedDeviceResources& GetNavigationViewSharedDeviceResources() no
 }
 
 std::mutex g_navigationViewSharedDeviceResourcesMutex;
+
+[[nodiscard]] bool NavigationPresentRequiresResourceDiscard(HRESULT hr) noexcept
+{
+    return hr == D2DERR_RECREATE_TARGET || hr == DXGI_ERROR_DEVICE_REMOVED || hr == DXGI_ERROR_DEVICE_RESET || hr == DXGI_ERROR_INVALID_CALL;
+}
 
 [[nodiscard]] bool EnsureNavigationViewSharedDeviceResources(NavigationViewSharedDeviceResources& resources) noexcept
 {
@@ -147,8 +153,8 @@ void NavigationView::EnsureD2DResources()
 
     if (! _pathFormat)
     {
-        hr = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, breadcrumbSize, L"", &_pathFormat);
+        hr = RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(breadcrumbSize), _pathFormat.put(), L"");
         if (SUCCEEDED(hr))
         {
             _pathFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -158,14 +164,8 @@ void NavigationView::EnsureD2DResources()
 
     if (! _separatorFormat)
     {
-        hr = _dwriteFactory->CreateTextFormat(FluentIcons::kFontFamily.data(),
-                                              nullptr,
-                                              DWRITE_FONT_WEIGHT_NORMAL,
-                                              DWRITE_FONT_STYLE_NORMAL,
-                                              DWRITE_FONT_STRETCH_NORMAL,
-                                              separatorSize,
-                                              L"",
-                                              &_separatorFormat);
+        hr = RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiIconSpec(separatorSize), _separatorFormat.put(), L"");
         if (SUCCEEDED(hr))
         {
             _dwriteFluentIconsValid   = true;
@@ -174,8 +174,8 @@ void NavigationView::EnsureD2DResources()
         }
         else
         {
-            hr = _dwriteFactory->CreateTextFormat(
-                L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, separatorSize, L"", &_separatorFormat);
+            hr = RedSalamander::DxUi::Typography::CreateTextFormat(
+                _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(separatorSize), _separatorFormat.put(), L"");
             if (SUCCEEDED(hr))
             {
                 _dwriteFluentIconsValid   = false;
@@ -957,7 +957,7 @@ void NavigationView::Present(std::optional<RECT*> dirtyRect)
         {
             Debug::Error(L"[NavigationView] Present failed (hr=0x{:08X})", static_cast<unsigned long>(hr));
         }
-        if (hr == D2DERR_RECREATE_TARGET)
+        if (NavigationPresentRequiresResourceDiscard(hr))
         {
             Debug::Info(L"[NavigationView] Recreating D2D resources");
             DiscardD2DResources();
@@ -977,7 +977,7 @@ void NavigationView::Present(std::optional<RECT*> dirtyRect)
     {
         Debug::Error(L"[NavigationView] Present1 failed (hr=0x{:08X})", static_cast<unsigned long>(hr));
     }
-    if (hr == D2DERR_RECREATE_TARGET)
+    if (NavigationPresentRequiresResourceDiscard(hr))
     {
         Debug::Info(L"[NavigationView] Recreating D2D resources");
         DiscardD2DResources();

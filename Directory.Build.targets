@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project>
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj'">
+    <RSVersioningEnabled Condition="'$(RSVersioningEnabled)'=='' and '$(RSIsFirstPartyProject)'=='true' and ('$(ConfigurationType)'=='Application' or '$(ConfigurationType)'=='DynamicLibrary')">true</RSVersioningEnabled>
+    <RSVersioningEnabled Condition="'$(RSVersioningEnabled)'==''">false</RSVersioningEnabled>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RSVersioningEnabled)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
+    <RSVersionBuildNumber Condition="'$(RSVersionBuildNumber)'==''">0</RSVersionBuildNumber>
+    <RSVersionFileDescription Condition="'$(RSVersionFileDescription)'==''">$(MSBuildProjectName)</RSVersionFileDescription>
+    <RSVersionInternalName Condition="'$(RSVersionInternalName)'==''">$(TargetName)</RSVersionInternalName>
+    <RSVersionOriginalFilename Condition="'$(RSVersionOriginalFilename)'==''">$(TargetFileName)</RSVersionOriginalFilename>
+    <RSVersionOverrideHeader>$(IntDir)RSVersionOverrides.h</RSVersionOverrideHeader>
+    <RSResolveVersionScript>$(SolutionDir)Tools\ResolveVersionForMsbuild.ps1</RSResolveVersionScript>
+    <RSVersionRepoRoot Condition="'$(SolutionDir)'!=''">$([System.String]::Copy('$(SolutionDir)').TrimEnd('\'))</RSVersionRepoRoot>
+    <RSVersionRepoRoot Condition="'$(RSVersionRepoRoot)'==''">$([System.String]::Copy('$(MSBuildThisFileDirectory)').TrimEnd('\'))</RSVersionRepoRoot>
+    <RSVersionOfficialReleaseArg Condition="'$(RSVersionOfficialRelease)'=='true'">-OfficialRelease</RSVersionOfficialReleaseArg>
+
+    <RSVersionFileDescription Condition="'$(MSBuildProjectName)'=='RedSalamander'">RedSalamander, File Manager</RSVersionFileDescription>
+    <RSVersionFileDescription Condition="'$(MSBuildProjectName)'=='RedSalamanderMonitor'">RedSalamander Monitor</RSVersionFileDescription>
+    <RSVersionFileDescription Condition="'$(MSBuildProjectName)'=='RedSalamanderSearchService'">RedSalamander Search Service</RSVersionFileDescription>
+    <RSVersionFileDescription Condition="'$(MSBuildProjectName)'=='Common'">RedSalamander Common Runtime</RSVersionFileDescription>
+
+    <RSVersionPlatformDefine Condition="'$(Platform)'=='x64'">RSV_PLATFORM_X64=1;</RSVersionPlatformDefine>
+    <RSVersionPlatformDefine Condition="'$(Platform)'=='ARM64'">RSV_PLATFORM_ARM64=1;</RSVersionPlatformDefine>
+
+    <RSVersionConfigurationDefine Condition="'$(Configuration)'=='Debug'">RSV_CFG_DEBUG=1;</RSVersionConfigurationDefine>
+    <RSVersionConfigurationDefine Condition="'$(Configuration)'=='Release'">RSV_CFG_RELEASE=1;</RSVersionConfigurationDefine>
+    <RSVersionConfigurationDefine Condition="'$(Configuration)'=='ASan Debug'">RSV_CFG_ASAN_DEBUG=1;</RSVersionConfigurationDefine>
+
+    <RSVersionOfficialReleaseDefine Condition="'$(RSVersionOfficialRelease)'=='true'">RSV_OFFICIAL_RELEASE=1;</RSVersionOfficialReleaseDefine>
+    <RSVersionFileTypeDefine Condition="'$(ConfigurationType)'=='DynamicLibrary'">RS_VERSION_FILETYPE=VFT_DLL;</RSVersionFileTypeDefine>
+    <RSVersionFileTypeDefine Condition="'$(ConfigurationType)'!='DynamicLibrary'">RS_VERSION_FILETYPE=VFT_APP;</RSVersionFileTypeDefine>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup Condition="'$(RSVersioningEnabled)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
+    <ClCompile>
+      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(RSVersionPlatformDefine)$(RSVersionConfigurationDefine)$(RSVersionOfficialReleaseDefine)RS_VERSION_USE_OVERRIDES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(IntDir);$(SolutionDir)Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>$(RSVersionPlatformDefine)$(RSVersionConfigurationDefine)$(RSVersionOfficialReleaseDefine)$(RSVersionFileTypeDefine)RS_VERSION_USE_OVERRIDES=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+
+  <ItemGroup Condition="'$(RSVersioningEnabled)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and ('$(ConfigurationType)'=='Application' or '$(ConfigurationType)'=='DynamicLibrary')">
+    <ResourceCompile Include="$(SolutionDir)Common\VersionInfo.rc">
+      <ExcludedFromBuild>false</ExcludedFromBuild>
+    </ResourceCompile>
+  </ItemGroup>
+
+  <Target Name="RSWriteVersionOverrideHeader"
+          DependsOnTargets="RSResolveVersionBuildNumber"
+          BeforeTargets="ClCompile;ResourceCompile"
+          Condition="'$(RSVersioningEnabled)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and ('$(ConfigurationType)'=='Application' or '$(ConfigurationType)'=='DynamicLibrary')">
+    <WriteLinesToFile
+      File="$(RSVersionOverrideHeader)"
+      Overwrite="true"
+      Lines="#define VERSINFO_BUILDNUMBER $(RSVersionBuildNumber)&#x0D;&#x0A;#define RS_VERSION_FILEDESCRIPTION L&quot;$(RSVersionFileDescription)&quot;&#x0D;&#x0A;#define RS_VERSION_INTERNALNAME L&quot;$(RSVersionInternalName)&quot;&#x0D;&#x0A;#define RS_VERSION_ORIGINALFILENAME L&quot;$(RSVersionOriginalFilename)&quot;" />
+  </Target>
+
+  <Target Name="RSResolveVersionBuildNumber"
+          BeforeTargets="ClCompile;ResourceCompile"
+          Condition="'$(RSVersioningEnabled)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(RSVersionBuildNumber)'=='0' and Exists('$(RSResolveVersionScript)')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(RSResolveVersionScript)&quot; -RepoRoot &quot;$(RSVersionRepoRoot)&quot; -Configuration &quot;$(Configuration)&quot; -Platform &quot;$(Platform)&quot; $(RSVersionOfficialReleaseArg)"
+          ConsoleToMsBuild="true"
+          StandardOutputImportance="Low">
+      <Output TaskParameter="ConsoleOutput" ItemName="RSResolvedVersionBuildNumberLines" />
+    </Exec>
+    <PropertyGroup>
+      <RSVersionBuildNumber>$([System.String]::Copy('%(RSResolvedVersionBuildNumberLines.Identity)').Trim())</RSVersionBuildNumber>
+    </PropertyGroup>
+  </Target>
+
+  <PropertyGroup Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(EnableASAN)'=='true' and '$(ConfigurationType)'=='Application'">
+    <RSAsanRuntimeFileName Condition="'$(Platform)'=='x64'">clang_rt.asan_dynamic-x86_64.dll</RSAsanRuntimeFileName>
+    <RSAsanRuntimeFileName Condition="'$(Platform)'=='ARM64'">clang_rt.asan_dynamic-aarch64.dll</RSAsanRuntimeFileName>
+
+    <RSAsanRuntimeSourcePath Condition="'$(RSAsanRuntimeSourcePath)'=='' and '$(RSAsanRuntimeFileName)'!='' and Exists('$(VCToolsInstallDir)bin\Hostx64\$(Platform)\$(RSAsanRuntimeFileName)')">$(VCToolsInstallDir)bin\Hostx64\$(Platform)\$(RSAsanRuntimeFileName)</RSAsanRuntimeSourcePath>
+    <RSAsanRuntimeSourcePath Condition="'$(RSAsanRuntimeSourcePath)'=='' and '$(RSAsanRuntimeFileName)'!='' and Exists('$(VCToolsInstallDir)bin\HostArm64\$(Platform)\$(RSAsanRuntimeFileName)')">$(VCToolsInstallDir)bin\HostArm64\$(Platform)\$(RSAsanRuntimeFileName)</RSAsanRuntimeSourcePath>
+    <RSAsanRuntimeSourcePath Condition="'$(RSAsanRuntimeSourcePath)'=='' and '$(RSAsanRuntimeFileName)'!='' and Exists('$(VCToolsInstallDir)bin\Hostx86\$(Platform)\$(RSAsanRuntimeFileName)')">$(VCToolsInstallDir)bin\Hostx86\$(Platform)\$(RSAsanRuntimeFileName)</RSAsanRuntimeSourcePath>
+  </PropertyGroup>
+
+  <Target Name="RSCopyAsanRuntime"
+          AfterTargets="Build"
+          Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(EnableASAN)'=='true' and '$(ConfigurationType)'=='Application' and '$(RSAsanRuntimeSourcePath)'!=''">
+    <Copy SourceFiles="$(RSAsanRuntimeSourcePath)"
+          DestinationFolder="$(TargetDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="RSWarnMissingAsanRuntime"
+          AfterTargets="Build"
+          Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(EnableASAN)'=='true' and '$(ConfigurationType)'=='Application' and '$(RSAsanRuntimeFileName)'!='' and '$(RSAsanRuntimeSourcePath)'==''">
+    <Warning Text="AddressSanitizer runtime '$(RSAsanRuntimeFileName)' was not found under '$(VCToolsInstallDir)bin'. ASan executables in '$(TargetDir)' may fail to launch until the runtime DLL is available on PATH." />
+  </Target>
+</Project>

@@ -4,8 +4,12 @@
 
 #include <algorithm>
 #include <array>
+#include <cwchar>
+#include <cwctype>
+#include <string>
 
-#include "ThemedControls.h"
+#include "D2DHdcPaint.h"
+#include "UiMetrics.h"
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -14,10 +18,68 @@
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
 
-#include <commctrl.h>
-
 namespace
 {
+constexpr wchar_t kInputFrameOriginalWndProcProp[]   = L"RS.ThemedInputFrameOriginalWndProc";
+constexpr wchar_t kInputControlOriginalWndProcProp[] = L"RS.ThemedInputControlOriginalWndProc";
+constexpr wchar_t kInputFrameStyleProp[]             = L"RS.ThemedInputFrameStyle";
+constexpr wchar_t kInputControlFrameProp[]           = L"RS.ThemedInputControlFrame";
+constexpr wchar_t kCtrlBackspaceCharProp[]           = L"Win32UiCtrlBackspaceChar";
+
+[[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
+{
+    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, propName);
+}
+
+bool InstallWndProcHook(HWND hwnd, const wchar_t* propName, WNDPROC newProc) noexcept
+{
+    if (! hwnd || ! propName || ! newProc)
+    {
+        return false;
+    }
+
+    if (GetStoredWndProc(hwnd, propName))
+    {
+        return true;
+    }
+
+    const auto original = reinterpret_cast<WNDPROC>(GetWindowLongPtrW(hwnd, GWLP_WNDPROC));
+    if (! original)
+    {
+        return false;
+    }
+
+    if (! RedSalamander::Win32Callback::SetPropNoThrow(hwnd, propName, reinterpret_cast<HANDLE>(original)))
+    {
+        return false;
+    }
+
+    static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(newProc)));
+    return true;
+}
+
+void RestoreWndProcHook(HWND hwnd, const wchar_t* propName) noexcept
+{
+    const auto original = GetStoredWndProc(hwnd, propName);
+    if (! original)
+    {
+        return;
+    }
+
+    static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(original)));
+    RemovePropW(hwnd, propName);
+}
+
+[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* propName, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    const auto original = GetStoredWndProc(hwnd, propName);
+    if (! original)
+    {
+        return DefWindowProcW(hwnd, msg, wp, lp);
+    }
+    return RedSalamander::Win32Callback::CallWindowProcNoThrow(original, hwnd, msg, wp, lp);
+}
+
 [[nodiscard]] bool IsComboBoxWindow(HWND hwnd) noexcept
 {
     if (! hwnd)
@@ -32,7 +94,149 @@ namespace
         return false;
     }
 
-    return _wcsicmp(className.data(), L"ComboBox") == 0 || ThemedControls::IsModernComboBox(hwnd);
+    return _wcsicmp(className.data(), L"ComboBox") == 0;
+}
+
+[[nodiscard]] bool IsEditWindow(HWND hwnd) noexcept
+{
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    std::array<wchar_t, 16> className{};
+    const int length = GetClassNameW(hwnd, className.data(), static_cast<int>(className.size()));
+    if (length <= 0)
+    {
+        return false;
+    }
+
+    return _wcsicmp(className.data(), L"Edit") == 0;
+}
+
+[[nodiscard]] bool IsWordCharacter(wchar_t ch) noexcept
+{
+    return std::iswalnum(static_cast<wint_t>(ch)) != 0 || ch == L'_';
+}
+
+[[nodiscard]] bool IsPathSeparator(wchar_t ch) noexcept
+{
+    return ch == L'\\' || ch == L'/';
+}
+
+[[nodiscard]] bool HandleEditCtrlBackspaceKeyDown(HWND edit, WPARAM key) noexcept
+{
+    if (! edit)
+    {
+        return false;
+    }
+
+    RemovePropW(edit, kCtrlBackspaceCharProp);
+
+    if (! IsEditWindow(edit) || key != VK_BACK)
+    {
+        return false;
+    }
+
+    const LONG_PTR style = GetWindowLongPtrW(edit, GWL_STYLE);
+    if ((style & ES_READONLY) != 0)
+    {
+        return false;
+    }
+
+    const bool ctrlDown = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
+    const bool altDown  = (GetKeyState(VK_MENU) & 0x8000) != 0;
+    if (! ctrlDown || altDown)
+    {
+        return false;
+    }
+
+    DWORD selectionStart = 0;
+    DWORD selectionEnd   = 0;
+    SendMessageW(edit, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd));
+
+    if (selectionStart != selectionEnd)
+    {
+        SendMessageW(edit, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(L""));
+        SetPropW(edit, kCtrlBackspaceCharProp, reinterpret_cast<HANDLE>(1));
+        return true;
+    }
+
+    const int length = GetWindowTextLengthW(edit);
+    std::wstring text;
+    text.resize(static_cast<size_t>(std::max(0, length)) + 1u);
+    GetWindowTextW(edit, text.data(), static_cast<int>(text.size()));
+    text.resize(wcsnlen(text.c_str(), text.size()));
+
+    const size_t caret = std::min(static_cast<size_t>(selectionEnd), text.size());
+    if (caret == 0u)
+    {
+        SetPropW(edit, kCtrlBackspaceCharProp, reinterpret_cast<HANDLE>(1));
+        return true;
+    }
+
+    size_t eraseFrom = caret;
+    while (eraseFrom > 0u && std::iswspace(static_cast<wint_t>(text[eraseFrom - 1u])) != 0)
+    {
+        --eraseFrom;
+    }
+
+    if (eraseFrom > 0u)
+    {
+        const wchar_t previous = text[eraseFrom - 1u];
+        if (IsPathSeparator(previous))
+        {
+            while (eraseFrom > 0u && IsPathSeparator(text[eraseFrom - 1u]))
+            {
+                --eraseFrom;
+            }
+        }
+        else if (IsWordCharacter(previous))
+        {
+            while (eraseFrom > 0u && IsWordCharacter(text[eraseFrom - 1u]))
+            {
+                --eraseFrom;
+            }
+        }
+        else
+        {
+            while (eraseFrom > 0u)
+            {
+                const wchar_t current = text[eraseFrom - 1u];
+                if (std::iswspace(static_cast<wint_t>(current)) != 0 || IsPathSeparator(current) || IsWordCharacter(current))
+                {
+                    break;
+                }
+                --eraseFrom;
+            }
+        }
+    }
+
+    if (eraseFrom == caret)
+    {
+        eraseFrom = caret > 0u ? (caret - 1u) : 0u;
+    }
+
+    SendMessageW(edit, EM_SETSEL, static_cast<WPARAM>(eraseFrom), static_cast<LPARAM>(caret));
+    SendMessageW(edit, EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(L""));
+    SetPropW(edit, kCtrlBackspaceCharProp, reinterpret_cast<HANDLE>(1));
+    return true;
+}
+
+[[nodiscard]] bool HandleEditCtrlBackspaceChar(HWND edit, WPARAM key) noexcept
+{
+    if (! IsEditWindow(edit) || key != 0x7Fu)
+    {
+        return false;
+    }
+
+    if (! GetPropW(edit, kCtrlBackspaceCharProp))
+    {
+        return false;
+    }
+
+    RemovePropW(edit, kCtrlBackspaceCharProp);
+    return true;
 }
 
 void TryApplyRoundedComboRegion(HWND combo, UINT dpi) noexcept
@@ -57,7 +261,7 @@ void TryApplyRoundedComboRegion(HWND combo, UINT dpi) noexcept
     }
 
     const int inset  = 1;
-    const int baseR  = ThemedControls::ScaleDip(dpi, 4);
+    const int baseR  = UiMetrics::ScaleDip(dpi, 4);
     const int radius = std::max(1, baseR - 2);
     const int right  = std::max(inset + 1, width - inset);
     const int bottom = std::max(inset + 1, height - inset);
@@ -89,6 +293,9 @@ void TryApplyRoundedComboRegion(HWND combo, UINT dpi) noexcept
 
 namespace ThemedInputFrames
 {
+LRESULT CALLBACK InputControlWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+LRESULT CALLBACK InputFrameWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+
 void InstallFrame(HWND frame, HWND input, FrameStyle* style) noexcept
 {
     if (! frame || ! input || ! style)
@@ -97,12 +304,29 @@ void InstallFrame(HWND frame, HWND input, FrameStyle* style) noexcept
     }
 
     SetWindowLongPtrW(frame, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(input));
+    SetPropW(frame, kInputFrameStyleProp, reinterpret_cast<HANDLE>(style));
+    SetPropW(input, kInputControlFrameProp, reinterpret_cast<HANDLE>(frame));
+    InstallWndProcHook(frame, kInputFrameOriginalWndProcProp, InputFrameWndProc);
+    InstallWndProcHook(input, kInputControlOriginalWndProcProp, InputControlWndProc);
+}
 
-#pragma warning(push)
-#pragma warning(disable : 5039) // passing potentially-throwing callback to extern "C" Win32 API under -EHc
-    SetWindowSubclass(frame, InputFrameSubclassProc, 1u, reinterpret_cast<DWORD_PTR>(style));
-    SetWindowSubclass(input, InputControlSubclassProc, 1u, reinterpret_cast<DWORD_PTR>(frame));
-#pragma warning(pop)
+void InstallControl(HWND input, HWND frame) noexcept
+{
+    if (! input)
+    {
+        return;
+    }
+
+    if (frame)
+    {
+        SetPropW(input, kInputControlFrameProp, reinterpret_cast<HANDLE>(frame));
+    }
+    else
+    {
+        RemovePropW(input, kInputControlFrameProp);
+    }
+
+    InstallWndProcHook(input, kInputControlOriginalWndProcProp, InputControlWndProc);
 }
 
 void InvalidateComboBox(HWND combo) noexcept
@@ -122,10 +346,8 @@ void InvalidateComboBox(HWND combo) noexcept
     }
 }
 
-LRESULT CALLBACK InputControlSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR /*subclassId*/, DWORD_PTR refData) noexcept
+LRESULT HandleInputControlMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, HWND frame, bool& handled) noexcept
 {
-    HWND frame = reinterpret_cast<HWND>(refData);
-
     switch (msg)
     {
         case WM_LBUTTONDOWN:
@@ -167,17 +389,19 @@ LRESULT CALLBACK InputControlSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
                 break;
             }
 
-            if (SendMessageW(hwnd, CB_GETDROPPEDSTATE, 0, 0) != 0)
+            if (IsComboBoxWindow(hwnd) && SendMessageW(hwnd, CB_GETDROPPEDSTATE, 0, 0) != 0)
             {
                 break;
             }
 
+            handled = true;
             SendMessageW(target, msg, wp, lp);
             return 0;
         }
         case WM_CHAR:
-            if (ThemedControls::HandleEditCtrlBackspaceChar(hwnd, wp))
+            if (HandleEditCtrlBackspaceChar(hwnd, wp))
             {
+                handled = true;
                 return 0;
             }
             break;
@@ -217,27 +441,34 @@ LRESULT CALLBACK InputControlSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
             {
                 InvalidateRect(frame, nullptr, TRUE);
             }
-            if (ThemedControls::HandleEditCtrlBackspaceKeyDown(hwnd, wp))
+            if (HandleEditCtrlBackspaceKeyDown(hwnd, wp))
             {
+                handled = true;
                 return 0;
             }
             break;
+        case WM_NCDESTROY:
+            RemovePropW(hwnd, L"FocusViaMouse");
+            RemovePropW(hwnd, kInputControlFrameProp);
+            RestoreWndProcHook(hwnd, kInputControlOriginalWndProcProp);
+            break;
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    handled = false;
+    return 0;
 }
 
-LRESULT CALLBACK InputFrameSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR /*subclassId*/, DWORD_PTR refData) noexcept
+LRESULT HandleInputFrameMessage(HWND hwnd, UINT msg, [[maybe_unused]] WPARAM wp, [[maybe_unused]] LPARAM lp, FrameStyle* style, bool& handled) noexcept
 {
-    auto* style = reinterpret_cast<FrameStyle*>(refData);
     if (! style || ! style->theme)
     {
-        return DefSubclassProc(hwnd, msg, wp, lp);
+        handled = false;
+        return 0;
     }
 
     switch (msg)
     {
-        case WM_ERASEBKGND: return 1;
+        case WM_ERASEBKGND: handled = true; return 1;
         case WM_LBUTTONDOWN:
         {
             HWND input = reinterpret_cast<HWND>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
@@ -246,6 +477,7 @@ LRESULT CALLBACK InputFrameSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
                 SetPropW(input, L"FocusViaMouse", reinterpret_cast<HANDLE>(1));
                 SetFocus(input);
             }
+            handled = true;
             return 0;
         }
         case WM_PAINT:
@@ -298,7 +530,7 @@ LRESULT CALLBACK InputFrameSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             }
 
             const UINT dpi           = GetDpiForWindow(hwnd);
-            const int cornerDiameter = ThemedControls::ScaleDip(dpi, 8);
+            const int cornerDiameter = UiMetrics::ScaleDip(dpi, 8);
             const int cornerInset    = std::max(1, cornerDiameter / 2);
 
             HWND input              = reinterpret_cast<HWND>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
@@ -308,11 +540,11 @@ LRESULT CALLBACK InputFrameSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 
             const bool isCombo = IsComboBoxWindow(input);
 
-            const COLORREF surface = ThemedControls::GetControlSurfaceColor(*style->theme);
-            COLORREF border        = ThemedControls::BlendColor(surface, style->theme->menu.text, style->theme->dark ? 60 : 40, 255);
+            const COLORREF surface = UiMetrics::GetControlSurfaceColor(*style->theme);
+            COLORREF border        = UiMetrics::BlendColor(surface, style->theme->menu.text, style->theme->dark ? 60 : 40, 255);
             if (isCombo && hasFocus && enabled && ! style->theme->highContrast)
             {
-                border = ThemedControls::BlendColor(surface, style->theme->menu.text, style->theme->dark ? 110 : 80, 255);
+                border = UiMetrics::BlendColor(surface, style->theme->menu.text, style->theme->dark ? 110 : 80, 255);
             }
 
             COLORREF fill = enabled ? style->inputBackgroundColor : style->inputDisabledBackgroundColor;
@@ -321,14 +553,11 @@ LRESULT CALLBACK InputFrameSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
                 fill = style->inputFocusedBackgroundColor;
             }
 
-            wil::unique_hbrush brush(CreateSolidBrush(fill));
-            wil::unique_hpen pen(CreatePen(PS_SOLID, 1, border));
-            if (brush && pen)
+            D2DHdcPaint::Session framePaint;
+            const bool framePaintReady = framePaint.Begin(hdc.get(), rc);
+            if (framePaintReady)
             {
-                [[maybe_unused]] auto oldBrush = wil::SelectObject(hdc.get(), brush.get());
-                [[maybe_unused]] auto oldPen   = wil::SelectObject(hdc.get(), pen.get());
-
-                RoundRect(hdc.get(), rc.left, rc.top, rc.right, rc.bottom, cornerDiameter, cornerDiameter);
+                framePaint.FillRoundedRectangle(rc, static_cast<float>(cornerDiameter), fill, border);
             }
 
             if (hasFocus && enabled && ! style->theme->highContrast)
@@ -336,44 +565,76 @@ LRESULT CALLBACK InputFrameSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
                 if (isCombo)
                 {
                     RECT bar            = rc;
-                    const int barInsetX = std::max(1, ThemedControls::ScaleDip(dpi, 8));
-                    const int barInsetY = std::max(1, ThemedControls::ScaleDip(dpi, 6));
-                    const int barWidth  = std::max(1, ThemedControls::ScaleDip(dpi, 3));
+                    const int barInsetX = std::max(1, UiMetrics::ScaleDip(dpi, 8));
+                    const int barInsetY = std::max(1, UiMetrics::ScaleDip(dpi, 6));
+                    const int barWidth  = std::max(1, UiMetrics::ScaleDip(dpi, 3));
                     bar.left            = std::min(bar.right, bar.left + barInsetX);
                     bar.right           = std::min(bar.right, bar.left + barWidth);
                     bar.top             = std::min(bar.bottom, bar.top + barInsetY);
                     bar.bottom          = std::max(bar.top, bar.bottom - barInsetY);
 
-                    wil::unique_hbrush accentBrush(CreateSolidBrush(style->theme->menu.selectionBg));
-                    if (accentBrush)
+                    if (framePaintReady)
                     {
-                        [[maybe_unused]] auto oldBrush = wil::SelectObject(hdc.get(), accentBrush.get());
-                        [[maybe_unused]] auto oldPen   = wil::SelectObject(hdc.get(), GetStockObject(NULL_PEN));
-                        const int barRadius            = ThemedControls::ScaleDip(dpi, 4);
-                        RoundRect(hdc.get(), bar.left, bar.top, bar.right, bar.bottom, barRadius, barRadius);
+                        const int barRadius = UiMetrics::ScaleDip(dpi, 4);
+                        framePaint.FillRoundedRectangle(bar, static_cast<float>(barRadius), style->theme->menu.selectionBg, style->theme->menu.selectionBg);
                     }
                 }
                 else
                 {
-                    const int underline = std::max(1, ThemedControls::ScaleDip(dpi, 1));
+                    const int underline = std::max(1, UiMetrics::ScaleDip(dpi, 1));
                     RECT line{};
                     line.left   = rc.left + cornerInset;
                     line.right  = rc.right - cornerInset;
                     line.top    = rc.bottom - underline;
                     line.bottom = rc.bottom;
 
-                    wil::unique_hbrush accentBrush(CreateSolidBrush(style->theme->menu.selectionBg));
-                    if (accentBrush)
+                    if (framePaintReady)
                     {
-                        FillRect(hdc.get(), &line, accentBrush.get());
+                        framePaint.FillRectangle(line, style->theme->menu.selectionBg);
+                    }
+                    else
+                    {
+                        wil::unique_hbrush accentBrush(CreateSolidBrush(style->theme->menu.selectionBg));
+                        if (accentBrush)
+                        {
+                            FillRect(hdc.get(), &line, accentBrush.get());
+                        }
                     }
                 }
             }
 
+            handled = true;
             return 0;
         }
+        case WM_NCDESTROY:
+            RemovePropW(hwnd, kInputFrameStyleProp);
+            RestoreWndProcHook(hwnd, kInputFrameOriginalWndProcProp);
+            break;
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    handled = false;
+    return 0;
+}
+
+LRESULT CALLBACK InputControlWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    bool handled      = false;
+    const auto result = HandleInputControlMessage(hwnd, msg, wp, lp, reinterpret_cast<HWND>(GetPropW(hwnd, kInputControlFrameProp)), handled);
+    if (handled)
+    {
+        return result;
+    }
+    return CallStoredWndProc(hwnd, kInputControlOriginalWndProcProp, msg, wp, lp);
+}
+
+LRESULT CALLBACK InputFrameWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    bool handled      = false;
+    const auto result = HandleInputFrameMessage(hwnd, msg, wp, lp, reinterpret_cast<FrameStyle*>(GetPropW(hwnd, kInputFrameStyleProp)), handled);
+    if (handled)
+    {
+        return result;
+    }
+    return CallStoredWndProc(hwnd, kInputFrameOriginalWndProcProp, msg, wp, lp);
 }
 } // namespace ThemedInputFrames

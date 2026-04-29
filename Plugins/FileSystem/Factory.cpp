@@ -2,17 +2,9 @@
 #define NOMINMAX
 #include <windows.h>
 
-#include <algorithm>
-#include <atomic>
-#include <cstddef>
-#include <cstring>
-#include <cwchar>
-#include <format>
-#include <memory>
 #include <new>
 #include <string>
 #include <string_view>
-#include <vector>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182) // WIL headers: deleted copy/move and unused inline Helpers
@@ -24,31 +16,118 @@
 #include "PlugInterfaces/Factory.h"
 
 #define REDSAL_DEFINE_TRACE_PROVIDER
+#include "FileSystemResources.h"
 #include "Helpers.h"
 
 #include "FileSystem.h"
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* /*host*/, void** result)
+extern HINSTANCE g_hInstance;
+
+namespace
 {
-    if (result == nullptr)
+[[nodiscard]] const PluginMetaData& GetPluginMetaData() noexcept
+{
+    static const std::wstring name        = LoadStringResource(g_hInstance, IDS_FILESYSTEM_NAME);
+    static const std::wstring description = LoadStringResource(g_hInstance, IDS_FILESYSTEM_DESCRIPTION);
+    static const PluginMetaData metaData  = {
+        .id          = L"builtin/file-system",
+        .shortId     = L"file",
+        .name        = name.c_str(),
+        .description = description.c_str(),
+        .author      = L"RedSalamander",
+        .version     = VERSINFO_PLUGIN_VERSION,
+    };
+    return metaData;
+}
+
+[[nodiscard]] const char* GetPluginSchema(std::wstring_view pluginId) noexcept
+{
+    if (! pluginId.empty() && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
+    {
+        return nullptr;
+    }
+
+    return GetFileSystemStaticConfigurationSchema();
+}
+
+HRESULT CreatePluginInstance(REFIID riid, void** result)
+{
+    if (riid != __uuidof(IFileSystem))
+    {
+        return E_NOINTERFACE;
+    }
+
+    auto* instance = new (std::nothrow) FileSystem();
+    if (! instance)
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    const HRESULT hr = instance->QueryInterface(riid, result);
+    instance->Release();
+    return hr;
+}
+} // namespace
+
+extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
+{
+    if (! metaData || ! count)
+    {
+        return E_POINTER;
+    }
+
+    *metaData = nullptr;
+    *count    = 0;
+    if (riid != __uuidof(IFileSystem))
+    {
+        return E_NOINTERFACE;
+    }
+
+    *metaData = &GetPluginMetaData();
+    *count    = 1;
+    return S_OK;
+}
+
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* /*factoryOptions*/, IHost* /*host*/, const wchar_t* pluginId, void** result)
+{
+    if (! result)
     {
         return E_POINTER;
     }
 
     *result = nullptr;
-
-    if (riid == __uuidof(IFileSystem))
+    if (riid != __uuidof(IFileSystem))
     {
-        auto* instance = new (std::nothrow) FileSystem();
-        if (instance == nullptr)
-        {
-            return E_OUTOFMEMORY;
-        }
-
-        HRESULT hr = instance->QueryInterface(riid, result);
-        instance->Release();
-        return hr;
+        return E_NOINTERFACE;
+    }
+    if (pluginId && pluginId[0] != L'\0' && ! OrdinalString::EqualsNoCase(pluginId, GetPluginMetaData().id))
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
-    return E_NOINTERFACE;
+    return CreatePluginInstance(riid, result);
+}
+
+extern "C" HRESULT __stdcall RedSalamanderGetConfigurationSchema(REFIID riid, const wchar_t* pluginId, const char** schemaJsonUtf8)
+{
+    if (! schemaJsonUtf8)
+    {
+        return E_POINTER;
+    }
+
+    *schemaJsonUtf8 = nullptr;
+    if (riid != __uuidof(IFileSystem))
+    {
+        return E_NOINTERFACE;
+    }
+
+    const std::wstring_view requestedId = pluginId ? std::wstring_view(pluginId) : std::wstring_view{};
+    const char* schema                  = GetPluginSchema(requestedId);
+    if (! schema)
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
+    *schemaJsonUtf8 = schema;
+    return S_OK;
 }

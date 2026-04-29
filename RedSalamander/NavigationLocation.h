@@ -210,6 +210,102 @@ enum class TrailingSlashPolicy
     return true;
 }
 
+[[nodiscard]] inline std::wstring TrimUserTypedLocationText(std::wstring_view text) noexcept
+{
+    const auto isSpace = [](wchar_t ch) noexcept { return std::iswspace(static_cast<wint_t>(ch)) != 0; };
+
+    while (! text.empty() && isSpace(text.front()))
+    {
+        text.remove_prefix(1u);
+    }
+
+    while (! text.empty() && isSpace(text.back()))
+    {
+        text.remove_suffix(1u);
+    }
+
+    if (text.size() >= 2u && text.front() == L'"' && text.back() == L'"')
+    {
+        text.remove_prefix(1u);
+        text.remove_suffix(1u);
+
+        while (! text.empty() && isSpace(text.front()))
+        {
+            text.remove_prefix(1u);
+        }
+
+        while (! text.empty() && isSpace(text.back()))
+        {
+            text.remove_suffix(1u);
+        }
+    }
+
+    return std::wstring(text);
+}
+
+[[nodiscard]] inline std::wstring ExpandEnvironmentVariablesInLocationText(std::wstring_view text) noexcept
+{
+    if (text.empty() || text.find(L'%') == std::wstring_view::npos)
+    {
+        return std::wstring(text);
+    }
+
+    std::wstring input(text);
+    const DWORD needed = ExpandEnvironmentStringsW(input.c_str(), nullptr, 0);
+    if (needed == 0)
+    {
+        return input;
+    }
+
+    const size_t neededChars = static_cast<size_t>(needed);
+    if (neededChars > input.max_size())
+    {
+        return input;
+    }
+
+    std::wstring expanded;
+    expanded.resize(neededChars);
+
+    const DWORD written = ExpandEnvironmentStringsW(input.c_str(), expanded.data(), needed);
+    if (written == 0 || written > needed)
+    {
+        return input;
+    }
+
+    expanded.resize(written > 0u ? (static_cast<size_t>(written) - 1u) : 0u);
+    return expanded;
+}
+
+[[nodiscard]] inline std::wstring NormalizeUserTypedLocationText(std::wstring_view rawText) noexcept
+{
+    std::wstring normalized = TrimUserTypedLocationText(rawText);
+    if (normalized.find(L'%') == std::wstring::npos)
+    {
+        return normalized;
+    }
+
+    std::wstring_view prefix;
+    std::wstring_view remainder;
+    if (! TryParsePluginPrefix(normalized, prefix, remainder))
+    {
+        return ExpandEnvironmentVariablesInLocationText(normalized);
+    }
+
+    if (! IsFilePluginShortId(prefix))
+    {
+        return normalized;
+    }
+
+    std::wstring expandedRemainder = ExpandEnvironmentVariablesInLocationText(remainder);
+
+    std::wstring expanded;
+    expanded.reserve(prefix.size() + 1u + expandedRemainder.size());
+    expanded.append(prefix);
+    expanded.push_back(L':');
+    expanded.append(expandedRemainder);
+    return expanded;
+}
+
 [[nodiscard]] inline std::wstring NormalizePluginPathText(std::wstring_view rawPath,
                                                           EmptyPathPolicy emptyPolicy        = EmptyPathPolicy::Root,
                                                           LeadingSlashPolicy leadingPolicy   = LeadingSlashPolicy::Ensure,

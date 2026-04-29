@@ -24,4 +24,6 @@ struct CommandInfo
 
 [[nodiscard]] std::optional<unsigned int> TryGetCommandDisplayNameStringId(std::wstring_view commandId) noexcept;
 
+[[nodiscard]] std::optional<unsigned int> TryGetCommandShortDisplayNameStringId(std::wstring_view commandId) noexcept;
+
 [[nodiscard]] std::optional<unsigned int> TryGetCommandDescriptionStringId(std::wstring_view commandId) noexcept;

@@ -29,16 +29,21 @@
     <AppxBundle>Never</AppxBundle>
     <AppxBundlePlatforms>x64</AppxBundlePlatforms>
     <AppxPackageDir>$(MSBuildThisFileDirectory)..\..\.build\AppPackages\</AppxPackageDir>
-    <AppxPackageSigningEnabled>false</AppxPackageSigningEnabled>
+    <AppxPackageSigningEnabled>True</AppxPackageSigningEnabled>
     <AppxSymbolPackageEnabled>false</AppxSymbolPackageEnabled>
     <IncludeSymbolsInPackage>false</IncludeSymbolsInPackage>
     <UapAppxPackageBuildMode>SideLoadOnly</UapAppxPackageBuildMode>
+    <PackageCertificateThumbprint>9A50A699AD909A67786A38496058CBAA359EFBCF</PackageCertificateThumbprint>
+    <PackageCertificateKeyFile>RedSalamanderInstaller_TemporaryKey.pfx</PackageCertificateKeyFile>
   </PropertyGroup>
   <ItemGroup>
-    <AppxManifest Include="Package.appxmanifest" />
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
   </ItemGroup>
   <ItemGroup>
     <Content Include="Assets\**\*" />
+    <None Include="RedSalamanderInstaller_TemporaryKey.pfx" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\.build\$(Platform)\$(Configuration)\RedSalamander.exe">

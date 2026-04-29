@@ -2,7 +2,7 @@
 name: localization
 description: Localization and resource management for Windows RC files. Use when adding user-facing strings, creating menus, working with STRINGTABLE, or using LoadStringResource and FormatStringResource helpers.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 
@@ -34,7 +34,7 @@ MessageBoxResource(_hWnd, IDS_ERROR_MSG, IDS_ERROR_TITLE, MB_OK | MB_ICONERROR);
 ```rc
 STRINGTABLE
 BEGIN
-    IDS_APP_TITLE       "Red Salamander"
+    IDS_APP_TITLE       "RedSalamander"
     IDS_FILE_COUNT      "{0} files selected"
     IDS_ERROR_MESSAGE   "An error occurred: {0} in {1}"
 END

@@ -10,9 +10,9 @@
 #include <utility>
 
 #include "FileSystemDummy.h"
+#include "FileSystemDummyResources.h"
 #include "Helpers.h"
 #include "PlugInterfaces/Host.h"
-#include "FileSystemDummyResources.h"
 
 #pragma warning(push)
 // WIL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
@@ -147,15 +147,25 @@ std::uint8_t GenerateDummyByte(DummyFillKind kind, std::uint64_t seed, uint64_t 
     return static_cast<std::uint8_t>('a' + (pick % 26u));
 }
 
+void SleepChunkLatency(unsigned long latencyMilliseconds) noexcept
+{
+    if (latencyMilliseconds > 0)
+    {
+        ::Sleep(latencyMilliseconds);
+    }
+}
+
 class DummyGeneratedFileReader final : public IFileReader
 {
 public:
-    DummyGeneratedFileReader(std::string prefix, std::string suffix, uint64_t bodyBytes, std::uint64_t seed, DummyFillKind fillKind) noexcept
+    DummyGeneratedFileReader(
+        std::string prefix, std::string suffix, uint64_t bodyBytes, std::uint64_t seed, DummyFillKind fillKind, unsigned long chunkLatencyMilliseconds) noexcept
         : _prefix(std::move(prefix)),
           _suffix(std::move(suffix)),
           _bodyBytes(bodyBytes),
           _seed(seed),
-          _fillKind(fillKind)
+          _fillKind(fillKind),
+          _chunkLatencyMilliseconds(chunkLatencyMilliseconds)
     {
     }
 
@@ -271,6 +281,7 @@ public:
         const uint64_t remaining = totalSize - _positionBytes;
         const unsigned long take = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
+        SleepChunkLatency(_chunkLatencyMilliseconds);
         auto* out = static_cast<std::uint8_t*>(buffer);
 
         const uint64_t prefixBytes = static_cast<uint64_t>(_prefix.size());
@@ -337,16 +348,19 @@ private:
     std::atomic_ulong _refCount{1};
     std::string _prefix;
     std::string _suffix;
-    uint64_t _bodyBytes     = 0;
-    std::uint64_t _seed     = 0;
-    DummyFillKind _fillKind = DummyFillKind::PlainText;
-    uint64_t _positionBytes = 0;
+    uint64_t _bodyBytes                     = 0;
+    std::uint64_t _seed                     = 0;
+    DummyFillKind _fillKind                 = DummyFillKind::PlainText;
+    unsigned long _chunkLatencyMilliseconds = 0;
+    uint64_t _positionBytes                 = 0;
 };
 
 class DummyBufferFileReader final : public IFileReader
 {
 public:
-    explicit DummyBufferFileReader(std::vector<std::byte> buffer) noexcept : _buffer(std::move(buffer))
+    explicit DummyBufferFileReader(std::vector<std::byte> buffer, unsigned long chunkLatencyMilliseconds) noexcept
+        : _buffer(std::move(buffer)),
+          _chunkLatencyMilliseconds(chunkLatencyMilliseconds)
     {
     }
 
@@ -462,6 +476,7 @@ public:
         const uint64_t remaining = totalSize - _positionBytes;
         const unsigned long take = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
+        SleepChunkLatency(_chunkLatencyMilliseconds);
         memcpy(buffer, _buffer.data() + static_cast<size_t>(_positionBytes), take);
         _positionBytes += static_cast<uint64_t>(take);
         *bytesRead = take;
@@ -473,13 +488,16 @@ private:
 
     std::atomic_ulong _refCount{1};
     std::vector<std::byte> _buffer;
-    uint64_t _positionBytes = 0;
+    unsigned long _chunkLatencyMilliseconds = 0;
+    uint64_t _positionBytes                 = 0;
 };
 
 class DummySharedBufferFileReader final : public IFileReader
 {
 public:
-    explicit DummySharedBufferFileReader(std::shared_ptr<std::vector<std::byte>> buffer) noexcept : _buffer(std::move(buffer))
+    explicit DummySharedBufferFileReader(std::shared_ptr<std::vector<std::byte>> buffer, unsigned long chunkLatencyMilliseconds) noexcept
+        : _buffer(std::move(buffer)),
+          _chunkLatencyMilliseconds(chunkLatencyMilliseconds)
     {
     }
 
@@ -611,6 +629,7 @@ public:
         const uint64_t remaining = totalSize - _positionBytes;
         const unsigned long take = (remaining > static_cast<uint64_t>(bytesToRead)) ? bytesToRead : static_cast<unsigned long>(remaining);
 
+        SleepChunkLatency(_chunkLatencyMilliseconds);
         memcpy(buffer, _buffer->data() + static_cast<size_t>(_positionBytes), take);
         _positionBytes += static_cast<uint64_t>(take);
         *bytesRead = take;
@@ -622,17 +641,19 @@ private:
 
     std::atomic_ulong _refCount{1};
     std::shared_ptr<std::vector<std::byte>> _buffer;
-    uint64_t _positionBytes = 0;
+    unsigned long _chunkLatencyMilliseconds = 0;
+    uint64_t _positionBytes                 = 0;
 };
 
 class DummyFileWriter final : public IFileWriter
 {
 public:
-    DummyFileWriter(FileSystemDummy& owner, std::filesystem::path normalizedPath, FileSystemFlags flags) noexcept
+    DummyFileWriter(FileSystemDummy& owner, std::filesystem::path normalizedPath, FileSystemFlags flags, unsigned long chunkLatencyMilliseconds) noexcept
         : _refCount(1),
           _owner(&owner),
           _path(std::move(normalizedPath)),
-          _flags(flags)
+          _flags(flags),
+          _chunkLatencyMilliseconds(chunkLatencyMilliseconds)
     {
         _owner->AddRef();
     }
@@ -725,6 +746,7 @@ public:
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
 
+        SleepChunkLatency(_chunkLatencyMilliseconds);
         out->resize(oldSize + add);
 
         memcpy(out->data() + oldSize, buffer, bytesToWrite);
@@ -784,8 +806,9 @@ private:
     std::atomic_ulong _refCount{1};
     FileSystemDummy* _owner = nullptr;
     std::filesystem::path _path;
-    FileSystemFlags _flags = FILESYSTEM_FLAG_NONE;
-    bool _committed        = false;
+    FileSystemFlags _flags                  = FILESYSTEM_FLAG_NONE;
+    unsigned long _chunkLatencyMilliseconds = 0;
+    bool _committed                         = false;
     std::shared_ptr<std::vector<std::byte>> _buffer;
 };
 
@@ -1480,10 +1503,10 @@ DummyTextTemplate BuildDummyTextTemplate(DummyFileKind kind, const DummyFileSnap
     {
         result.fillKind = DummyFillKind::PlainText;
         result.prefix   = std::format("FileSystemDummy generated file\r\nName: {}\r\nSizeBytes: {}\r\nSeed: {:016X}\r\nCreated: {}\r\n\r\n",
-                                    nameUtf8,
-                                    fileSizeValue,
-                                    seedValue,
-                                    createdValue);
+                                      nameUtf8,
+                                      fileSizeValue,
+                                      seedValue,
+                                      createdValue);
         result.suffix   = "\r\n";
     }
 
@@ -2893,8 +2916,18 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetConfigurationSchema(const char** s
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = kSchemaJson;
+    *schemaJsonUtf8 = StaticConfigurationSchema();
     return S_OK;
+}
+
+const char* GetFileSystemDummyStaticConfigurationSchema() noexcept
+{
+    return FileSystemDummy::StaticConfigurationSchema();
+}
+
+const char* FileSystemDummy::StaticConfigurationSchema() noexcept
+{
+    return kSchemaJson;
 }
 
 // Iteratively free all DummyNode trees to avoid stack overflow on deeply-nested trees
@@ -2937,12 +2970,13 @@ void FileSystemDummy::ClearRootsIteratively() noexcept
 
 HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configurationJsonUtf8) noexcept
 {
-    unsigned long maxChildrenPerDirectory    = 42;
-    unsigned long maxDepth                   = 10;
-    unsigned int seed                        = 42;
-    unsigned long latencyMilliseconds        = 0;
-    std::wstring virtualSpeedLimitText       = L"0";
-    uint64_t virtualSpeedLimitBytesPerSecond = 0;
+    unsigned long maxChildrenPerDirectory        = 42;
+    unsigned long maxDepth                       = 10;
+    unsigned int seed                            = 42;
+    unsigned long latencyMilliseconds            = 0;
+    unsigned long streamChunkLatencyMilliseconds = 0;
+    std::wstring virtualSpeedLimitText           = L"0";
+    uint64_t virtualSpeedLimitBytesPerSecond     = 0;
 
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
@@ -2996,6 +3030,16 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
                     }
                 }
 
+                yyjson_val* streamChunkLatencyVal = yyjson_obj_get(root, "streamChunkLatencyMs");
+                if (streamChunkLatencyVal && yyjson_is_int(streamChunkLatencyVal))
+                {
+                    const int64_t value = yyjson_get_int(streamChunkLatencyVal);
+                    if (value >= 0)
+                    {
+                        streamChunkLatencyMilliseconds = static_cast<unsigned long>(std::min<int64_t>(value, 1000));
+                    }
+                }
+
                 yyjson_val* virtualSpeedVal = yyjson_obj_get(root, "virtualSpeedLimit");
                 if (virtualSpeedVal && yyjson_is_str(virtualSpeedVal))
                 {
@@ -3021,11 +3065,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
 
     const std::string speedLimitTextUtf8 = Utf8FromUtf16(EscapeJsonString(virtualSpeedLimitText));
     const std::string newConfigJson =
-        std::format("{{\"maxChildrenPerDirectory\":{},\"maxDepth\":{},\"seed\":{},\"latencyMs\":{},\"virtualSpeedLimit\":\"{}\"}}",
+        std::format("{{\"maxChildrenPerDirectory\":{},\"maxDepth\":{},\"seed\":{},\"latencyMs\":{},\"streamChunkLatencyMs\":{},\"virtualSpeedLimit\":\"{}\"}}",
                     maxChildrenPerDirectory,
                     maxDepth,
                     seed,
                     latencyMilliseconds,
+                    streamChunkLatencyMilliseconds,
                     speedLimitTextUtf8);
 
     {
@@ -3034,11 +3079,12 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SetConfiguration(const char* configur
         const bool structureChanged =
             _configurationJson.empty() || _maxChildrenPerDirectory != maxChildrenPerDirectory || _maxDepth != maxDepth || _seed != seed;
 
-        _maxChildrenPerDirectory = maxChildrenPerDirectory;
-        _maxDepth                = maxDepth;
-        _seed                    = seed;
-        _latencyMilliseconds     = latencyMilliseconds;
-        _virtualSpeedLimitText   = std::move(virtualSpeedLimitText);
+        _maxChildrenPerDirectory        = maxChildrenPerDirectory;
+        _maxDepth                       = maxDepth;
+        _seed                           = seed;
+        _latencyMilliseconds            = latencyMilliseconds;
+        _streamChunkLatencyMilliseconds = streamChunkLatencyMilliseconds;
+        _virtualSpeedLimitText          = std::move(virtualSpeedLimitText);
         _virtualSpeedLimitBytesPerSecond.store(virtualSpeedLimitBytesPerSecond, std::memory_order_release);
         _configurationJson = newConfigJson;
 
@@ -3078,7 +3124,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::SomethingToSave(BOOL* pSomethingToSav
     std::scoped_lock lock(_mutex);
     const bool isDefault = _maxChildrenPerDirectory == 42 && _maxDepth == 10 && _seed == 42 && _latencyMilliseconds == 0 &&
                            _virtualSpeedLimitBytesPerSecond.load(std::memory_order_acquire) == 0;
-    *pSomethingToSave = isDefault ? FALSE : TRUE;
+    *pSomethingToSave    = isDefault ? FALSE : TRUE;
     return S_OK;
 }
 
@@ -4765,6 +4811,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileReader(const wchar_t* path,
     }
 
     DummyFileSnapshot snapshot{};
+    unsigned long streamChunkLatencyMilliseconds = 0;
 
     {
         std::scoped_lock lock(_mutex);
@@ -4784,19 +4831,20 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileReader(const wchar_t* path,
             return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
         }
 
-        snapshot.name                = node->name;
-        snapshot.attributes          = node->attributes;
-        snapshot.sizeBytes           = node->sizeBytes;
-        snapshot.creationTime        = node->creationTime;
-        snapshot.generationSeed      = node->generationSeed;
-        snapshot.materializedContent = node->materializedContent;
+        snapshot.name                  = node->name;
+        snapshot.attributes            = node->attributes;
+        snapshot.sizeBytes             = node->sizeBytes;
+        snapshot.creationTime          = node->creationTime;
+        snapshot.generationSeed        = node->generationSeed;
+        snapshot.materializedContent   = node->materializedContent;
+        streamChunkLatencyMilliseconds = _streamChunkLatencyMilliseconds;
     }
 
     SimulateLatency(1);
 
     if (snapshot.materializedContent)
     {
-        auto* impl = new (std::nothrow) DummySharedBufferFileReader(std::move(snapshot.materializedContent));
+        auto* impl = new (std::nothrow) DummySharedBufferFileReader(std::move(snapshot.materializedContent), streamChunkLatencyMilliseconds);
         if (! impl)
         {
             return E_OUTOFMEMORY;
@@ -4817,7 +4865,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileReader(const wchar_t* path,
         std::vector<std::byte> png = GenerateDummyPng(contentSeed, snapshot.sizeBytes);
         if (! png.empty())
         {
-            created = new (std::nothrow) DummyBufferFileReader(std::move(png));
+            created = new (std::nothrow) DummyBufferFileReader(std::move(png), streamChunkLatencyMilliseconds);
         }
     }
     else if (fileKind == DummyFileKind::Jpeg)
@@ -4825,7 +4873,7 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileReader(const wchar_t* path,
         std::vector<std::byte> jpeg = GenerateDummyJpeg(contentSeed, snapshot.sizeBytes);
         if (! jpeg.empty())
         {
-            created = new (std::nothrow) DummyBufferFileReader(std::move(jpeg));
+            created = new (std::nothrow) DummyBufferFileReader(std::move(jpeg), streamChunkLatencyMilliseconds);
         }
     }
 
@@ -4835,12 +4883,13 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileReader(const wchar_t* path,
 
         if (fileKind == DummyFileKind::Binary || fileKind == DummyFileKind::Zip || fileKind == DummyFileKind::Png || fileKind == DummyFileKind::Jpeg)
         {
-            created = new (std::nothrow) DummyGeneratedFileReader({}, {}, snapshot.sizeBytes, fillSeed, DummyFillKind::Binary);
+            created = new (std::nothrow) DummyGeneratedFileReader({}, {}, snapshot.sizeBytes, fillSeed, DummyFillKind::Binary, streamChunkLatencyMilliseconds);
         }
         else
         {
             DummyTextTemplate templ = BuildDummyTextTemplate(fileKind, snapshot, seed);
-            created = new (std::nothrow) DummyGeneratedFileReader(std::move(templ.prefix), std::move(templ.suffix), templ.bodyBytes, fillSeed, templ.fillKind);
+            created                 = new (std::nothrow) DummyGeneratedFileReader(
+                std::move(templ.prefix), std::move(templ.suffix), templ.bodyBytes, fillSeed, templ.fillKind, streamChunkLatencyMilliseconds);
         }
     }
 
@@ -4912,7 +4961,13 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CreateFileWriter(const wchar_t* path,
         }
     }
 
-    auto* created = new (std::nothrow) DummyFileWriter(*this, normalized, flags);
+    unsigned long streamChunkLatencyMilliseconds = 0;
+    {
+        std::scoped_lock lock(_mutex);
+        streamChunkLatencyMilliseconds = _streamChunkLatencyMilliseconds;
+    }
+
+    auto* created = new (std::nothrow) DummyFileWriter(*this, normalized, flags, streamChunkLatencyMilliseconds);
     if (! created)
     {
         return E_OUTOFMEMORY;
@@ -5044,6 +5099,65 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::GetCapabilities(const char** jsonUtf8
     }
 
     *jsonUtf8 = kCapabilitiesJson;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemDummy::GetTransferHints([[maybe_unused]] const wchar_t* path,
+                                                            [[maybe_unused]] FileSystemOperation operationType,
+                                                            [[maybe_unused]] FileSystemTransferEndpoint endpoint,
+                                                            FileSystemTransferHints* hints) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || hints == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (hints->sizeBytes < sizeof(FileSystemTransferHints))
+    {
+        return E_INVALIDARG;
+    }
+
+    hints->latencyClass              = FILESYSTEM_TRANSFER_LATENCY_LOCAL;
+    hints->flags                     = FILESYSTEM_TRANSFER_HINT_PREFERS_SEQUENTIAL_IO;
+    hints->preferredBufferBytes      = 2u * 1024u * 1024u;
+    hints->preferredProgressPeriodMs = 200u;
+
+    const unsigned long simulatedLatencyMs = (std::max)(_latencyMilliseconds, _streamChunkLatencyMilliseconds);
+    if (simulatedLatencyMs >= 20u)
+    {
+        hints->latencyClass = FILESYSTEM_TRANSFER_LATENCY_CLOUD;
+        hints->flags |= FILESYSTEM_TRANSFER_HINT_PREFERS_LARGE_BUFFERS | FILESYSTEM_TRANSFER_HINT_HIGH_METADATA_COST;
+        hints->preferredBufferBytes = 8u * 1024u * 1024u;
+    }
+
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemDummy::GetStorageCharacteristics([[maybe_unused]] const wchar_t* path,
+                                                                     FileSystemStorageCharacteristics* characteristics) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || characteristics == nullptr)
+    {
+        return E_INVALIDARG;
+    }
+    if (characteristics->sizeBytes < sizeof(FileSystemStorageCharacteristics))
+    {
+        return E_INVALIDARG;
+    }
+
+    characteristics->storageKind                  = FILESYSTEM_STORAGE_VIRTUAL;
+    characteristics->flags                        = FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO;
+    characteristics->queueDepthHint               = 4u;
+    characteristics->preferredCopyMoveConcurrency = 4u;
+    characteristics->preferredDeleteConcurrency   = 8u;
+
+    const unsigned long simulatedLatencyMs = (std::max)(_latencyMilliseconds, _streamChunkLatencyMilliseconds);
+    if (simulatedLatencyMs >= 20u)
+    {
+        characteristics->flags |= FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY | FILESYSTEM_STORAGE_FLAG_SUPPORTS_DEEP_QUEUE;
+        characteristics->queueDepthHint               = 8u;
+        characteristics->preferredCopyMoveConcurrency = 8u;
+    }
+
     return S_OK;
 }
 

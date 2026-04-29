@@ -46,4 +46,3 @@ private:
     std::vector<uint32_t> _functionBarConflicts;
     std::vector<uint32_t> _folderViewConflicts;
 };
-

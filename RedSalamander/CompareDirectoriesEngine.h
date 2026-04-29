@@ -179,12 +179,12 @@ class CompareDirectoriesSession final : public std::enable_shared_from_this<Comp
 {
 public:
     using ScanProgressCallback    = std::function<void(const std::filesystem::path& relativeFolder,
-                                                    std::wstring_view currentEntryName,
-                                                    uint64_t scannedFolders,
-                                                    uint64_t scannedEntries,
-                                                    uint32_t activeScans,
-                                                    uint64_t contentCandidateFileCount,
-                                                    uint64_t contentCandidateTotalBytes)>;
+                                                       std::wstring_view currentEntryName,
+                                                       uint64_t scannedFolders,
+                                                       uint64_t scannedEntries,
+                                                       uint32_t activeScans,
+                                                       uint64_t contentCandidateFileCount,
+                                                       uint64_t contentCandidateTotalBytes)>;
     using ContentProgressCallback = std::function<void(uint32_t workerIndex,
                                                        const std::filesystem::path& relativeFolder,
                                                        std::wstring_view entryName,
@@ -258,7 +258,7 @@ public:
     [[nodiscard]] uint64_t GetUiVersion() const noexcept;
     [[nodiscard]] CompareDirectoriesPerfStats GetPerfStats() const noexcept;
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     // Selftest hook: allows exercising eviction logic without allocating hundreds of MB.
     // No production code should rely on this.
     void SetDecisionCacheBudgetBytesForSelfTest(uint64_t budgetBytes) noexcept;

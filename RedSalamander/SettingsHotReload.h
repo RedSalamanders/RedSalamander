@@ -72,6 +72,7 @@ HRESULT PromptStaleSaveConflict(HWND targetWindow, std::wstring_view editorName,
 
 void ShowInvalidReloadAlert(const std::filesystem::path& settingsPath) noexcept;
 void ClearInvalidReloadAlert() noexcept;
+void ApplyUiPreferencesToTheme(const Common::Settings::Settings& settings, AppTheme& theme) noexcept;
 [[nodiscard]] AppTheme ResolveDialogThemeFromSettings(const Common::Settings::Settings& settings) noexcept;
 
 [[nodiscard]] Common::Settings::Settings MergeDiskSettingsWithRuntimeSession(const Common::Settings::Settings& diskSettings,

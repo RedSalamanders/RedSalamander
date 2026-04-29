@@ -2,7 +2,7 @@
 name: error-handling
 description: Error handling patterns for Windows APIs and HRESULT. Use when handling errors, logging with Debug class, implementing error propagation, or dealing with Win32 API failures.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 

@@ -1,8 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
-#include <windows.h>
 
 #include <bcrypt.h>
 
@@ -29,9 +29,9 @@
 #include <yyjson.h>
 #pragma warning(pop)
 
+#include "FileSystemMicrosoftDriveResources.h"
 #include "Helpers.h"
 #include "resource.h"
-#include "FileSystemMicrosoftDriveResources.h"
 
 extern HINSTANCE g_hInstance;
 
@@ -42,10 +42,10 @@ constexpr uint64_t kAuthTimeoutMs             = 5ull * 60ull * 1'000ull;
 constexpr uint64_t kGraphSimpleUploadMaxBytes = 250ull * 1024ull * 1024ull;
 constexpr uint64_t kGraphChunkAlignmentBytes  = 320ull * 1024ull;
 
-constexpr std::wstring_view kGraphBaseUrl         = L"https://graph.microsoft.com/v1.0";
-constexpr std::wstring_view kAuthHost             = L"login.microsoftonline.com";
-constexpr std::wstring_view kLoopbackPath         = L"/redsalamander/oauth2";
-constexpr std::wstring_view kDefaultAuthUserAgent = L"RedSalamander Microsoft Drive/0.1";
+constexpr std::wstring_view kGraphBaseUrl                   = L"https://graph.microsoft.com/v1.0";
+constexpr std::wstring_view kAuthHost                       = L"login.microsoftonline.com";
+constexpr std::wstring_view kLoopbackPath                   = L"/redsalamander/oauth2";
+constexpr std::wstring_view kDefaultAuthUserAgent           = L"RedSalamander Microsoft Drive/0.1";
 constexpr std::wstring_view kDefaultOAuthPageSummarySuccess = L"Your Microsoft account is linked. Return to RedSalamander to keep browsing.";
 constexpr std::wstring_view kDefaultOAuthPageSummaryFailure = L"Microsoft sign-in did not finish in this browser tab. Return to RedSalamander and try again.";
 constexpr std::wstring_view kDefaultOAuthPageFunSuccess     = L"sparkles|Cloud handshake complete. Your files are ready to roam.";
@@ -442,9 +442,9 @@ struct AuthPageMessageVariant
 
 [[nodiscard]] std::string LoadAuthPageSummaryHtml(bool success) noexcept
 {
-    const std::wstring value = LoadStringResourceOrFallback(
-        success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_SUCCESS : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_FAILURE,
-        success ? kDefaultOAuthPageSummarySuccess : kDefaultOAuthPageSummaryFailure);
+    const std::wstring value = LoadStringResourceOrFallback(success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_SUCCESS
+                                                                    : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_FAILURE,
+                                                            success ? kDefaultOAuthPageSummarySuccess : kDefaultOAuthPageSummaryFailure);
 
     const std::wstring_view summary = TrimAuthPageTextPart(value);
     const size_t delimiter          = summary.find(L". ");
@@ -516,15 +516,15 @@ struct AuthPageMessageVariant
 [[nodiscard]] std::string BuildAuthResultHttpResponse(bool success) noexcept
 {
     const std::string appTitle = HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE, L"RedSalamander"));
-    const std::string brandKicker = HtmlEscapeUtf8(
-        LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BRAND_KICKER, L"Microsoft Drive connection"));
-    const std::string title = HtmlEscapeUtf8(LoadStringResourceOrFallback(
-        success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE,
-        success ? L"Connection complete" : L"Connection interrupted"));
-    const std::string summaryHtml = LoadAuthPageSummaryHtml(success);
+    const std::string brandKicker =
+        HtmlEscapeUtf8(LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BRAND_KICKER, L"Microsoft Drive connection"));
+    const std::string title = HtmlEscapeUtf8(
+        LoadStringResourceOrFallback(success ? IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS : IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE,
+                                     success ? L"Connection complete" : L"Connection interrupted"));
+    const std::string summaryHtml           = LoadAuthPageSummaryHtml(success);
     const AuthPageMessageVariant funMessage = LoadAuthPageMessageVariant(success);
-    const std::string illustration = BuildAuthPageIllustration(success);
-    const std::string footer = HtmlEscapeUtf8(
+    const std::string illustration          = BuildAuthPageIllustration(success);
+    const std::string footer                = HtmlEscapeUtf8(
         LoadStringResourceOrFallback(IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT, L"You can close this tab and go back to RedSalamander."));
 
     std::string html;
@@ -538,13 +538,12 @@ struct AuthPageMessageVariant
                 "html,body{min-height:100%;margin:0;}"
                 "body{display:grid;place-items:center;padding:clamp(18px,4vw,34px);overflow:auto;color:#201913;"
                 "font-family:\"Segoe UI Variable Display\",\"Segoe UI Variable Text\",\"Aptos\",\"Segoe UI\",system-ui,sans-serif;");
-    html.append(success
-                    ? "background:radial-gradient(circle at 11% 16%,rgba(255,205,132,.60) 0,rgba(255,205,132,.22) 28%,transparent 52%),"
-                      "radial-gradient(circle at 88% 80%,rgba(231,90,57,.16) 0,rgba(231,90,57,0) 32%,transparent 48%),"
-                      "linear-gradient(155deg,#fffaf4 0%,#f6eee2 52%,#f7f5ef 100%);"
-                    : "background:radial-gradient(circle at 11% 16%,rgba(255,180,146,.60) 0,rgba(255,180,146,.24) 28%,transparent 52%),"
-                      "radial-gradient(circle at 88% 80%,rgba(188,47,44,.18) 0,rgba(188,47,44,0) 30%,transparent 48%),"
-                      "linear-gradient(155deg,#fff8f4 0%,#f7ece4 52%,#f7f3ef 100%);");
+    html.append(success ? "background:radial-gradient(circle at 11% 16%,rgba(255,205,132,.60) 0,rgba(255,205,132,.22) 28%,transparent 52%),"
+                          "radial-gradient(circle at 88% 80%,rgba(231,90,57,.16) 0,rgba(231,90,57,0) 32%,transparent 48%),"
+                          "linear-gradient(155deg,#fffaf4 0%,#f6eee2 52%,#f7f5ef 100%);"
+                        : "background:radial-gradient(circle at 11% 16%,rgba(255,180,146,.60) 0,rgba(255,180,146,.24) 28%,transparent 52%),"
+                          "radial-gradient(circle at 88% 80%,rgba(188,47,44,.18) 0,rgba(188,47,44,0) 30%,transparent 48%),"
+                          "linear-gradient(155deg,#fff8f4 0%,#f7ece4 52%,#f7f3ef 100%);");
     html.append("}"
                 "body::before,body::after{content:\"\";position:fixed;pointer-events:none;border-radius:999px;filter:blur(12px);opacity:.72;}"
                 "body::before{width:34vmax;height:34vmax;top:-11vmax;right:-9vmax;background:rgba(255,214,164,.24);}"
@@ -556,30 +555,37 @@ struct AuthPageMessageVariant
                 ".hero{display:grid;grid-template-columns:220px minmax(0,1fr);column-gap:4px;align-items:start;}"
                 ".art{position:relative;min-height:220px;display:grid;place-items:start end;overflow:visible;}"
                 ".art::before{content:\"\";position:absolute;inset:36px 0 auto auto;width:190px;height:190px;border-radius:999px;"
-                "background:radial-gradient(circle at 34% 28%,rgba(255,226,165,.34) 0,rgba(255,226,165,.16) 30%,rgba(235,110,44,.10) 58%,transparent 76%);filter:blur(16px);}"
+                "background:radial-gradient(circle at 34% 28%,rgba(255,226,165,.34) 0,rgba(255,226,165,.16) 30%,rgba(235,110,44,.10) 58%,transparent "
+                "76%);filter:blur(16px);}"
                 ".art svg{position:relative;display:block;width:min(100%,212px);height:auto;filter:drop-shadow(0 18px 34px rgba(125,68,28,.18));}"
                 ".copy{min-width:0;padding-top:6px;display:flex;flex-direction:column;margin-left:-34px;}"
                 ".masthead{margin-bottom:18px;}"
                 ".masthead-kicker{font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase;color:#86614a;}"
                 ".masthead-title{margin-top:2px;font-size:clamp(36px,5.2vw,60px);line-height:.90;font-weight:900;letter-spacing:-.06em;color:#23180f;}"
                 ".flow{display:flex;flex-direction:column;width:min(100%,42rem);margin-left:auto;}");
-    html.append(success
-                    ? ".note{background:linear-gradient(135deg,rgba(255,248,238,.94) 0%,rgba(255,243,225,.92) 54%,rgba(255,229,185,.90) 100%);border:1px solid rgba(232,143,72,.22);}"
-                      ".note::before{background:radial-gradient(circle at 100% 0%,rgba(255,208,117,.42) 0,rgba(255,208,117,0) 42%),radial-gradient(circle at 0% 100%,rgba(231,90,57,.14) 0,rgba(231,90,57,0) 38%);}"
-                      ".footer-mark{color:#bf5623;background:rgba(255,247,238,.86);}"
-                    : ".note{background:linear-gradient(135deg,rgba(255,244,239,.94) 0%,rgba(255,234,225,.92) 54%,rgba(255,221,193,.88) 100%);border:1px solid rgba(220,95,78,.22);}"
-                      ".note::before{background:radial-gradient(circle at 100% 0%,rgba(255,196,113,.38) 0,rgba(255,196,113,0) 42%),radial-gradient(circle at 0% 100%,rgba(220,95,78,.16) 0,rgba(220,95,78,0) 38%);}"
-                      ".footer-mark{color:#bf4d35;background:rgba(255,244,239,.88);}");
-    html.append(".title{margin:6px 0 10px;font-size:clamp(30px,4vw,46px);line-height:1.02;font-weight:850;letter-spacing:-.05em;color:#23180f;max-width:none;white-space:nowrap;}"
+    html.append(success ? ".note{background:linear-gradient(135deg,rgba(255,248,238,.94) 0%,rgba(255,243,225,.92) 54%,rgba(255,229,185,.90) 100%);border:1px "
+                          "solid rgba(232,143,72,.22);}"
+                          ".note::before{background:radial-gradient(circle at 100% 0%,rgba(255,208,117,.42) 0,rgba(255,208,117,0) 42%),radial-gradient(circle "
+                          "at 0% 100%,rgba(231,90,57,.14) 0,rgba(231,90,57,0) 38%);}"
+                          ".footer-mark{color:#bf5623;background:rgba(255,247,238,.86);}"
+                        : ".note{background:linear-gradient(135deg,rgba(255,244,239,.94) 0%,rgba(255,234,225,.92) 54%,rgba(255,221,193,.88) 100%);border:1px "
+                          "solid rgba(220,95,78,.22);}"
+                          ".note::before{background:radial-gradient(circle at 100% 0%,rgba(255,196,113,.38) 0,rgba(255,196,113,0) 42%),radial-gradient(circle "
+                          "at 0% 100%,rgba(220,95,78,.16) 0,rgba(220,95,78,0) 38%);}"
+                          ".footer-mark{color:#bf4d35;background:rgba(255,244,239,.88);}");
+    html.append(".title{margin:6px 0 "
+                "10px;font-size:clamp(30px,4vw,46px);line-height:1.02;font-weight:850;letter-spacing:-.05em;color:#23180f;max-width:none;white-space:nowrap;}"
                 ".summary{margin:0;width:100%;max-width:34rem;font-size:18px;line-height:1.75;color:#5d4c3f;}"
                 ".summary br{display:block;content:\"\";margin-top:.15em;}"
-                ".note{position:relative;display:grid;grid-template-columns:auto minmax(0,1fr);gap:20px;align-items:center;width:100%;margin-top:22px;padding:20px 26px;border-radius:30px;"
+                ".note{position:relative;display:grid;grid-template-columns:auto "
+                "minmax(0,1fr);gap:20px;align-items:center;width:100%;margin-top:22px;padding:20px 26px;border-radius:30px;"
                 "overflow:hidden;box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 18px 36px rgba(88,62,38,.08);}"
                 ".note::before{content:\"\";position:absolute;inset:0;pointer-events:none;}"
                 ".note>*{position:relative;z-index:1;}"
                 ".note-emoji{display:grid;place-items:center;width:72px;height:72px;border-radius:22px;font-size:40px;line-height:1;"
                 "font-family:\"Segoe UI Emoji\",\"Apple Color Emoji\",\"Noto Color Emoji\",\"Segoe UI Symbol\",sans-serif;"
-                "background:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,245,232,.86) 100%);border:1px solid rgba(126,85,45,.10);box-shadow:0 12px 24px rgba(110,71,34,.10);}"
+                "background:linear-gradient(180deg,rgba(255,255,255,.96) 0%,rgba(255,245,232,.86) 100%);border:1px solid rgba(126,85,45,.10);box-shadow:0 12px "
+                "24px rgba(110,71,34,.10);}"
                 ".note-text{margin:0;font-size:18px;line-height:1.5;font-weight:800;color:#35261b;}"
                 ".footer{display:flex;align-items:center;gap:10px;margin-top:24px;padding-top:18px;border-top:1px solid rgba(82,64,43,.10);"
                 "font-size:13px;font-weight:600;color:#7c6b5e;}"
@@ -1634,11 +1640,11 @@ void SecureClear(std::wstring& text) noexcept
         std::once_flag initOnce;
         wil::unique_winhttp_hinternet session;
 
-        SessionState() = default;
-        SessionState(const SessionState&) = delete;
+        SessionState()                               = default;
+        SessionState(const SessionState&)            = delete;
         SessionState& operator=(const SessionState&) = delete;
-        SessionState(SessionState&&) = delete;
-        SessionState& operator=(SessionState&&) = delete;
+        SessionState(SessionState&&)                 = delete;
+        SessionState& operator=(SessionState&&)      = delete;
     };
 
     static SessionState state;
@@ -3227,6 +3233,20 @@ void SecureClear(std::wstring& text) noexcept
     return (response.statusCode >= 200u && response.statusCode < 300u) ? S_OK : HresultFromGraphError(response.statusCode, response.body);
 }
 
+[[nodiscard]] bool IsNotFoundStatus(HRESULT hr) noexcept;
+
+[[nodiscard]] HRESULT DeleteItemById(FileSystemMicrosoftDrive& fs, const DriveContext& context, std::wstring_view itemId) noexcept
+{
+    HttpResponse response{};
+    HRESULT hr = SendGraphJsonRequest(fs, context, L"DELETE", BuildGraphItemByIdUrl(context, itemId), {}, {}, false, response);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    return response.statusCode == 204u ? S_OK : HresultFromGraphError(response.statusCode, response.body);
+}
+
 [[nodiscard]] HRESULT DeleteItemByPath(FileSystemMicrosoftDrive& fs, const DriveContext& context, std::wstring_view drivePath) noexcept
 {
     ItemMetadata item{};
@@ -3236,14 +3256,100 @@ void SecureClear(std::wstring& text) noexcept
         return hr;
     }
 
-    HttpResponse response{};
-    hr = SendGraphJsonRequest(fs, context, L"DELETE", BuildGraphItemByIdUrl(context, item.id), {}, {}, false, response);
+    return DeleteItemById(fs, context, item.id);
+}
+
+[[nodiscard]] HRESULT MoveItemById(FileSystemMicrosoftDrive& fs,
+                                   const DriveContext& context,
+                                   std::wstring_view itemId,
+                                   std::wstring_view newName,
+                                   std::wstring_view parentId,
+                                   bool includeParent) noexcept
+{
+    std::string bodyUtf8;
+    HRESULT hr = BuildJsonBodyForMoveRename(newName, parentId, includeParent, bodyUtf8);
     if (FAILED(hr))
     {
         return hr;
     }
 
-    return response.statusCode == 204u ? S_OK : HresultFromGraphError(response.statusCode, response.body);
+    HttpResponse response{};
+    hr = SendGraphJsonRequest(fs, context, L"PATCH", BuildGraphItemByIdUrl(context, itemId), bodyUtf8, {}, false, response);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    return (response.statusCode >= 200u && response.statusCode < 300u) ? S_OK : HresultFromGraphError(response.statusCode, response.body);
+}
+
+[[nodiscard]] HRESULT BuildRollbackLeafName(std::wstring& leafOut) noexcept
+{
+    std::array<std::byte, 8> bytes{};
+    HRESULT hr = GenerateRandomBytes(bytes);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    leafOut = L".redsalamander-rollback-";
+    for (const std::byte value : bytes)
+    {
+        leafOut.append(std::format(L"{:02x}", std::to_integer<unsigned int>(value)));
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT PrepareOverwriteBackup(FileSystemMicrosoftDrive& fs,
+                                             const DriveContext& context,
+                                             const ItemMetadata& existingDestination,
+                                             std::wstring_view destinationParentPath,
+                                             std::wstring& backupItemIdOut) noexcept
+{
+    backupItemIdOut.clear();
+
+    if (existingDestination.isFolder)
+    {
+        return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
+    }
+
+    for (unsigned int attempt = 0; attempt < 16u; ++attempt)
+    {
+        std::wstring backupLeaf;
+        HRESULT hr = BuildRollbackLeafName(backupLeaf);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+        if (attempt != 0u)
+        {
+            backupLeaf.append(std::format(L"-{}", attempt));
+        }
+
+        const std::wstring backupPath = JoinPath(destinationParentPath, backupLeaf);
+        ItemMetadata existingBackup{};
+        hr = GetItemMetadata(fs, context, backupPath, false, existingBackup);
+        if (SUCCEEDED(hr))
+        {
+            continue;
+        }
+        if (! IsNotFoundStatus(hr))
+        {
+            return hr;
+        }
+
+        hr = MoveItemById(fs, context, existingDestination.id, backupLeaf, {}, false);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
+
+        backupItemIdOut = existingDestination.id;
+        return S_OK;
+    }
+
+    return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
 }
 
 [[nodiscard]] HRESULT MoveOrRenameItem(FileSystemMicrosoftDrive& fs,
@@ -3259,14 +3365,35 @@ void SecureClear(std::wstring& text) noexcept
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
+    const std::wstring normalizedSource      = TrimTrailingSlashPreserveRoot(NormalizePluginPath(sourcePath));
+    const std::wstring normalizedDestination = TrimTrailingSlashPreserveRoot(NormalizePluginPath(destinationPath));
+    if (OrdinalString::EqualsNoCase(normalizedSource, normalizedDestination))
+    {
+        return S_OK;
+    }
+
     ItemMetadata sourceItem{};
-    HRESULT hr = GetItemMetadata(fs, sourceContext, sourcePath, false, sourceItem);
+    HRESULT hr = GetItemMetadata(fs, sourceContext, normalizedSource, false, sourceItem);
     if (FAILED(hr))
     {
         return hr;
     }
 
-    const std::wstring normalizedDestination = TrimTrailingSlashPreserveRoot(NormalizePluginPath(destinationPath));
+    std::wstring sourceParentPath;
+    std::wstring sourceLeafName;
+    hr = SplitParentAndLeaf(normalizedSource, sourceParentPath, sourceLeafName);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    ItemMetadata sourceParent{};
+    hr = EnsureParentMetadata(fs, sourceContext, sourceParentPath, sourceParent);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
     std::wstring destinationParentPath;
     std::wstring destinationName;
     hr = SplitParentAndLeaf(normalizedDestination, destinationParentPath, destinationName);
@@ -3275,17 +3402,30 @@ void SecureClear(std::wstring& text) noexcept
         return hr;
     }
 
-    if ((flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0)
+    std::wstring backupItemId;
+    ItemMetadata existingDestination{};
+    hr = GetItemMetadata(fs, destinationContext, normalizedDestination, false, existingDestination);
+    if (SUCCEEDED(hr))
     {
-        ItemMetadata existing{};
-        if (SUCCEEDED(GetItemMetadata(fs, destinationContext, normalizedDestination, false, existing)))
+        if (OrdinalString::EqualsNoCase(existingDestination.id, sourceItem.id))
+        {
+            return S_OK;
+        }
+
+        if ((flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0)
         {
             return HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS);
         }
+
+        hr = PrepareOverwriteBackup(fs, destinationContext, existingDestination, destinationParentPath, backupItemId);
+        if (FAILED(hr))
+        {
+            return hr;
+        }
     }
-    else
+    else if (! IsNotFoundStatus(hr))
     {
-        static_cast<void>(DeleteItemByPath(fs, destinationContext, normalizedDestination));
+        return hr;
     }
 
     ItemMetadata destinationParent{};
@@ -3295,22 +3435,28 @@ void SecureClear(std::wstring& text) noexcept
         return hr;
     }
 
-    const bool includeParent = ! OrdinalString::EqualsNoCase(destinationParent.id, sourceItem.id);
-    std::string bodyUtf8;
-    hr = BuildJsonBodyForMoveRename(destinationName, destinationParent.id, includeParent, bodyUtf8);
+    const bool includeParent = ! OrdinalString::EqualsNoCase(destinationParent.id, sourceParent.id);
+    hr                       = MoveItemById(fs, sourceContext, sourceItem.id, destinationName, destinationParent.id, includeParent);
     if (FAILED(hr))
     {
+        if (! backupItemId.empty())
+        {
+            const HRESULT restoreHr = MoveItemById(fs, destinationContext, backupItemId, destinationName, {}, false);
+            return FAILED(restoreHr) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : hr;
+        }
         return hr;
     }
 
-    HttpResponse response{};
-    hr = SendGraphJsonRequest(fs, sourceContext, L"PATCH", BuildGraphItemByIdUrl(sourceContext, sourceItem.id), bodyUtf8, {}, false, response);
-    if (FAILED(hr))
+    if (! backupItemId.empty())
     {
-        return hr;
+        const HRESULT cleanupHr = DeleteItemById(fs, destinationContext, backupItemId);
+        if (FAILED(cleanupHr))
+        {
+            return cleanupHr;
+        }
     }
 
-    return (response.statusCode >= 200u && response.statusCode < 300u) ? S_OK : HresultFromGraphError(response.statusCode, response.body);
+    return S_OK;
 }
 
 [[nodiscard]] uint64_t ComputeUploadChunkSizeBytes(const FileSystemMicrosoftDrive::Settings& settings) noexcept
@@ -3383,7 +3529,6 @@ public:
           _downloadUrl(std::move(downloadUrl)),
           _settings(fileSystem.SnapshotSettings())
     {
-        _fileSystem->AddRef();
     }
 
     MicrosoftDriveRangedFileReader(const MicrosoftDriveRangedFileReader&)            = delete;
@@ -3519,13 +3664,7 @@ public:
     }
 
 private:
-    ~MicrosoftDriveRangedFileReader()
-    {
-        if (_fileSystem)
-        {
-            _fileSystem->Release();
-        }
-    }
+    ~MicrosoftDriveRangedFileReader() = default;
 
     [[nodiscard]] HRESULT RefreshDownloadUrl() noexcept
     {
@@ -3641,7 +3780,7 @@ private:
     }
 
     std::atomic_ulong _refCount{1};
-    FileSystemMicrosoftDrive* _fileSystem = nullptr;
+    wil::com_ptr<FileSystemMicrosoftDrive> _fileSystem;
     DriveContext _context;
     std::wstring _drivePath;
     uint64_t _position    = 0;
@@ -3661,7 +3800,6 @@ public:
           _flags(flags),
           _tempFile(std::move(tempFile))
     {
-        _fileSystem->AddRef();
     }
 
     MicrosoftDriveFileWriter(const MicrosoftDriveFileWriter&)            = delete;
@@ -3753,19 +3891,13 @@ public:
     HRESULT STDMETHODCALLTYPE Commit() noexcept override;
 
 private:
-    ~MicrosoftDriveFileWriter()
-    {
-        if (_fileSystem)
-        {
-            _fileSystem->Release();
-        }
-    }
+    ~MicrosoftDriveFileWriter() = default;
 
     [[nodiscard]] HRESULT UploadSimple(const DriveContext& context, std::wstring_view drivePath, uint64_t fileSize, bool allowOverwrite) noexcept;
     [[nodiscard]] HRESULT UploadWithSession(const DriveContext& context, std::wstring_view drivePath, uint64_t fileSize, bool allowOverwrite) noexcept;
 
     std::atomic_ulong _refCount{1};
-    FileSystemMicrosoftDrive* _fileSystem = nullptr;
+    wil::com_ptr<FileSystemMicrosoftDrive> _fileSystem;
     std::wstring _destinationPath;
     FileSystemFlags _flags = FILESYSTEM_FLAG_NONE;
     wil::unique_hfile _tempFile;
@@ -3804,9 +3936,10 @@ FileSystemMicrosoftDrive::FileSystemMicrosoftDrive(FileSystemMicrosoftDriveMode 
     _metaData.author  = kPluginAuthor;
     _metaData.version = kPluginVersion;
 
-    _configurationJson = "{}";
-    _propertiesJson    = "{}";
-    _driveFileSystem   = _metaData.shortId ? _metaData.shortId : L"";
+    _configurationJsonStorage[0] = "{}";
+    _configurationJsonStorage[1] = "{}";
+    _propertiesJson              = "{}";
+    _driveFileSystem             = _metaData.shortId ? _metaData.shortId : L"";
 
     if (host)
     {
@@ -3911,8 +4044,19 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::GetConfigurationSchema(const
         return E_POINTER;
     }
 
-    *schemaJsonUtf8 = kSchemaJson;
+    *schemaJsonUtf8 = StaticConfigurationSchema(_mode);
     return S_OK;
+}
+
+const char* GetFileSystemMicrosoftDriveStaticConfigurationSchema(FileSystemMicrosoftDriveMode mode) noexcept
+{
+    return FileSystemMicrosoftDrive::StaticConfigurationSchema(mode);
+}
+
+const char* FileSystemMicrosoftDrive::StaticConfigurationSchema(FileSystemMicrosoftDriveMode mode) noexcept
+{
+    static_cast<void>(mode);
+    return kSchemaJson;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::SetConfiguration(const char* configurationJsonUtf8) noexcept
@@ -3927,18 +4071,23 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::SetConfiguration(const char*
     _driveCacheByConnectionName.clear();
     _settings = {};
 
+    // Write new configuration to the inactive buffer
+    const size_t nextIndex = 1 - _configurationJsonIndex;
     if (! configurationJsonUtf8 || configurationJsonUtf8[0] == '\0')
     {
-        _configurationJson = "{}";
+        _configurationJsonStorage[nextIndex] = "{}";
+        _configurationJsonIndex              = nextIndex;
         return S_OK;
     }
 
-    _configurationJson = configurationJsonUtf8;
+    _configurationJsonStorage[nextIndex] = configurationJsonUtf8;
 
     yyjson_read_err err{};
-    yyjson_doc* doc = yyjson_read_opts(_configurationJson.data(), _configurationJson.size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err);
+    yyjson_doc* doc = yyjson_read_opts(
+        _configurationJsonStorage[nextIndex].data(), _configurationJsonStorage[nextIndex].size(), YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM, nullptr, &err);
     if (! doc)
     {
+        _configurationJsonIndex = nextIndex;
         return S_OK;
     }
     auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
@@ -3946,6 +4095,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::SetConfiguration(const char*
     yyjson_val* root = yyjson_doc_get_root(doc);
     if (! root || ! yyjson_is_obj(root))
     {
+        _configurationJsonIndex = nextIndex;
         return S_OK;
     }
 
@@ -3974,6 +4124,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::SetConfiguration(const char*
         _settings.uploadChunkMiB = static_cast<uint32_t>(std::min<uint64_t>(value.value(), 32ull));
     }
 
+    _configurationJsonIndex = nextIndex;
     return S_OK;
 }
 
@@ -3985,7 +4136,7 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::GetConfiguration(const char*
     }
 
     std::lock_guard lock(_stateMutex);
-    *configurationJsonUtf8 = _configurationJson.c_str();
+    *configurationJsonUtf8 = _configurationJsonStorage[_configurationJsonIndex].c_str();
     return S_OK;
 }
 
@@ -3997,7 +4148,8 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::SomethingToSave(BOOL* pSomet
     }
 
     std::lock_guard lock(_stateMutex);
-    *pSomethingToSave = (! _configurationJson.empty() && _configurationJson != "{}") ? TRUE : FALSE;
+    const auto& config = _configurationJsonStorage[_configurationJsonIndex];
+    *pSomethingToSave  = (! config.empty() && config != "{}") ? TRUE : FALSE;
     return S_OK;
 }
 
@@ -4039,10 +4191,56 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::ExecuteMenuCommand([[maybe_u
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::SetCallback(INavigationMenuCallback* callback, void* cookie) noexcept
 {
-    std::lock_guard lock(_stateMutex);
+    std::unique_lock lock(_stateMutex);
+    ++_navigationMenuCallbackGeneration;
     _navigationMenuCallback = callback;
     _navigationMenuCookie   = callback ? cookie : nullptr;
+    if (! callback)
+    {
+        _navigationMenuDrainCv.wait(lock, [this]() noexcept { return _navigationMenuCallbacksInFlight == 0; });
+    }
     return S_OK;
+}
+
+bool FileSystemMicrosoftDrive::TryCaptureNavigationMenuCallback(NavigationMenuCallbackSnapshot& snapshot) noexcept
+{
+    std::scoped_lock lock(_stateMutex);
+    if (! _navigationMenuCallback)
+    {
+        snapshot = {};
+        return false;
+    }
+
+    snapshot.callback   = _navigationMenuCallback;
+    snapshot.cookie     = _navigationMenuCookie;
+    snapshot.generation = _navigationMenuCallbackGeneration;
+    return true;
+}
+
+HRESULT FileSystemMicrosoftDrive::InvokeNavigationMenuCallback(const NavigationMenuCallbackSnapshot& snapshot, const wchar_t* path) noexcept
+{
+    INavigationMenuCallback* callback = nullptr;
+    void* cookie                      = nullptr;
+    {
+        std::unique_lock lock(_stateMutex);
+        if (_navigationMenuCallbackGeneration != snapshot.generation || _navigationMenuCallback != snapshot.callback)
+        {
+            return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        ++_navigationMenuCallbacksInFlight;
+        callback = snapshot.callback;
+        cookie   = snapshot.cookie;
+    }
+
+    const HRESULT callbackHr = callback->NavigationMenuRequestNavigate(path, cookie);
+
+    {
+        std::scoped_lock lock(_stateMutex);
+        --_navigationMenuCallbacksInFlight;
+    }
+    _navigationMenuDrainCv.notify_all();
+    return callbackHr;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::GetDriveInfo(const wchar_t* path, DriveInfo* info) noexcept
@@ -4320,7 +4518,9 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::CopyItems(const wchar_t* con
     }
 
     const std::wstring destinationRoot = CanonicalizeInputPath(destinationFolder);
+    const bool continueOnError         = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
     HRESULT firstFailure               = S_OK;
+    bool hadFailure                    = false;
     for (unsigned long i = 0; i < count; ++i)
     {
         bool cancelled = false;
@@ -4332,6 +4532,26 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::CopyItems(const wchar_t* con
         if (cancelled)
         {
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        if (! sourcePaths[i] || sourcePaths[i][0] == L'\0')
+        {
+            hr                       = E_INVALIDARG;
+            const HRESULT callbackHr = ReportItemResult(callback, FILESYSTEM_COPY, count, i + 1u, i, sourcePaths[i], destinationFolder, hr, options, cookie);
+            if (FAILED(callbackHr))
+            {
+                return callbackHr;
+            }
+            hadFailure = true;
+            if (SUCCEEDED(firstFailure))
+            {
+                firstFailure = hr;
+            }
+            if (! continueOnError)
+            {
+                return hr;
+            }
+            continue;
         }
 
         std::wstring parentPath;
@@ -4359,14 +4579,15 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::CopyItems(const wchar_t* con
         if (FAILED(hr) && SUCCEEDED(firstFailure))
         {
             firstFailure = hr;
-            if ((flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) == 0)
+            hadFailure   = true;
+            if (! continueOnError)
             {
                 return hr;
             }
         }
     }
 
-    return firstFailure;
+    return (hadFailure && continueOnError) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItems(const wchar_t* const* sourcePaths,
@@ -4383,7 +4604,9 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItems(const wchar_t* con
     }
 
     const std::wstring destinationRoot = CanonicalizeInputPath(destinationFolder);
+    const bool continueOnError         = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
     HRESULT firstFailure               = S_OK;
+    bool hadFailure                    = false;
     for (unsigned long i = 0; i < count; ++i)
     {
         bool cancelled = false;
@@ -4395,6 +4618,26 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItems(const wchar_t* con
         if (cancelled)
         {
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        if (! sourcePaths[i] || sourcePaths[i][0] == L'\0')
+        {
+            hr                       = E_INVALIDARG;
+            const HRESULT callbackHr = ReportItemResult(callback, FILESYSTEM_MOVE, count, i + 1u, i, sourcePaths[i], destinationFolder, hr, options, cookie);
+            if (FAILED(callbackHr))
+            {
+                return callbackHr;
+            }
+            hadFailure = true;
+            if (SUCCEEDED(firstFailure))
+            {
+                firstFailure = hr;
+            }
+            if (! continueOnError)
+            {
+                return hr;
+            }
+            continue;
         }
 
         std::wstring parentPath;
@@ -4422,14 +4665,15 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::MoveItems(const wchar_t* con
         if (FAILED(hr) && SUCCEEDED(firstFailure))
         {
             firstFailure = hr;
-            if ((flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) == 0)
+            hadFailure   = true;
+            if (! continueOnError)
             {
                 return hr;
             }
         }
     }
 
-    return firstFailure;
+    return (hadFailure && continueOnError) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItems(const wchar_t* const* paths,
@@ -4444,7 +4688,9 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItems(const wchar_t* c
         return E_POINTER;
     }
 
-    HRESULT firstFailure = S_OK;
+    const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
+    HRESULT firstFailure       = S_OK;
+    bool hadFailure            = false;
     for (unsigned long i = 0; i < count; ++i)
     {
         bool cancelled = false;
@@ -4458,6 +4704,26 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItems(const wchar_t* c
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
         }
 
+        if (! paths[i] || paths[i][0] == L'\0')
+        {
+            hr                       = E_INVALIDARG;
+            const HRESULT callbackHr = ReportItemResult(callback, FILESYSTEM_DELETE, count, i + 1u, i, paths[i], nullptr, hr, options, cookie);
+            if (FAILED(callbackHr))
+            {
+                return callbackHr;
+            }
+            hadFailure = true;
+            if (SUCCEEDED(firstFailure))
+            {
+                firstFailure = hr;
+            }
+            if (! continueOnError)
+            {
+                return hr;
+            }
+            continue;
+        }
+
         hr                       = DeleteItem(paths[i], flags, options, nullptr, nullptr);
         const HRESULT callbackHr = ReportItemResult(callback, FILESYSTEM_DELETE, count, i + 1u, i, paths[i], nullptr, hr, options, cookie);
         if (FAILED(callbackHr))
@@ -4467,14 +4733,15 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::DeleteItems(const wchar_t* c
         if (FAILED(hr) && SUCCEEDED(firstFailure))
         {
             firstFailure = hr;
-            if ((flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) == 0)
+            hadFailure   = true;
+            if (! continueOnError)
             {
                 return hr;
             }
         }
     }
 
-    return firstFailure;
+    return (hadFailure && continueOnError) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItems(const FileSystemRenamePair* items,
@@ -4489,7 +4756,17 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItems(const FileSystem
         return E_POINTER;
     }
 
-    HRESULT firstFailure = S_OK;
+    for (unsigned long i = 0; i < count; ++i)
+    {
+        if (items[i].sizeBytes != sizeof(FileSystemRenamePair))
+        {
+            return E_INVALIDARG;
+        }
+    }
+
+    const bool continueOnError = (flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) != 0;
+    HRESULT firstFailure       = S_OK;
+    bool hadFailure            = false;
     for (unsigned long i = 0; i < count; ++i)
     {
         bool cancelled = false;
@@ -4501,6 +4778,26 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItems(const FileSystem
         if (cancelled)
         {
             return HRESULT_FROM_WIN32(ERROR_CANCELLED);
+        }
+
+        if (! items[i].sourcePath || items[i].sourcePath[0] == L'\0' || ! items[i].newName || items[i].newName[0] == L'\0')
+        {
+            hr                       = E_INVALIDARG;
+            const HRESULT callbackHr = ReportItemResult(callback, FILESYSTEM_RENAME, count, i + 1u, i, items[i].sourcePath, nullptr, hr, options, cookie);
+            if (FAILED(callbackHr))
+            {
+                return callbackHr;
+            }
+            hadFailure = true;
+            if (SUCCEEDED(firstFailure))
+            {
+                firstFailure = hr;
+            }
+            if (! continueOnError)
+            {
+                return hr;
+            }
+            continue;
         }
 
         std::wstring parentPath;
@@ -4537,14 +4834,15 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::RenameItems(const FileSystem
         if (FAILED(hr) && SUCCEEDED(firstFailure))
         {
             firstFailure = hr;
-            if ((flags & FILESYSTEM_FLAG_CONTINUE_ON_ERROR) == 0)
+            hadFailure   = true;
+            if (! continueOnError)
             {
                 return hr;
             }
         }
     }
 
-    return firstFailure;
+    return (hadFailure && continueOnError) ? HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY) : firstFailure;
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::GetCapabilities(const char** jsonUtf8) noexcept
@@ -4555,6 +4853,48 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::GetCapabilities(const char**
     }
 
     *jsonUtf8 = kCapabilitiesJson;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::GetTransferHints([[maybe_unused]] const wchar_t* path,
+                                                                     [[maybe_unused]] FileSystemOperation operationType,
+                                                                     [[maybe_unused]] FileSystemTransferEndpoint endpoint,
+                                                                     FileSystemTransferHints* hints) noexcept
+{
+    if (! path || path[0] == L'\0' || ! hints)
+    {
+        return E_INVALIDARG;
+    }
+    if (hints->sizeBytes < sizeof(FileSystemTransferHints))
+    {
+        return E_INVALIDARG;
+    }
+
+    hints->latencyClass = FILESYSTEM_TRANSFER_LATENCY_CLOUD;
+    hints->flags =
+        FILESYSTEM_TRANSFER_HINT_PREFERS_LARGE_BUFFERS | FILESYSTEM_TRANSFER_HINT_PREFERS_SEQUENTIAL_IO | FILESYSTEM_TRANSFER_HINT_HIGH_METADATA_COST;
+    hints->preferredBufferBytes      = 8u * 1024u * 1024u;
+    hints->preferredProgressPeriodMs = 200u;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::GetStorageCharacteristics([[maybe_unused]] const wchar_t* path,
+                                                                              FileSystemStorageCharacteristics* characteristics) noexcept
+{
+    if (! path || path[0] == L'\0' || ! characteristics)
+    {
+        return E_INVALIDARG;
+    }
+    if (characteristics->sizeBytes < sizeof(FileSystemStorageCharacteristics))
+    {
+        return E_INVALIDARG;
+    }
+
+    characteristics->storageKind = FILESYSTEM_STORAGE_CLOUD;
+    characteristics->flags = FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY | FILESYSTEM_STORAGE_FLAG_PREFERS_SEQUENTIAL_IO | FILESYSTEM_STORAGE_FLAG_SUPPORTS_DEEP_QUEUE;
+    characteristics->queueDepthHint               = 8u;
+    characteristics->preferredCopyMoveConcurrency = 8u;
+    characteristics->preferredDeleteConcurrency   = 8u;
     return S_OK;
 }
 

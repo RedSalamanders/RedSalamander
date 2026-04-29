@@ -1,19 +1,26 @@
 ---
 name: compiler-warnings
-description: Compiler warning policy and suppression patterns for MSVC /W4. Use when fixing warnings, adding pragma suppressions, or dealing with C4365, C5219, C4625, C4626 and other compiler diagnostics.
+description: Compiler warning policy and suppression patterns for MSVC /Wall. Use when fixing warnings, adding pragma suppressions, or dealing with C4365, C5219, C4625, C4626 and other compiler diagnostics.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 
 # Compiler Warnings Policy
 
-**Objective: Zero warnings** (except C4702 unreachable code)
+**Objective: zero actionable warnings under `/Wall`**.
 
 ## Critical Rule
 
-**NO GLOBAL `/wd` SUPPRESSIONS** in vcxproj files.
-Fix warnings locally with `#pragma warning(push/disable/pop)`.
+Production/runtime projects should fix warnings at the root cause or suppress locally with `#pragma warning(push/disable/pop)` and a rationale.
+
+New project-wide suppressions require:
+- rationale,
+- owner,
+- expiry/review task,
+- narrowest possible scope.
+
+Test projects may carry broader project-local suppressions only when they intentionally aggregate SDK/WIL/STL/product-source-heavy translation units, and the project file documents the exception.
 
 ## Acceptable Global Suppressions
 
@@ -79,6 +86,8 @@ for (size_t i = 0u; i < count; ++i) { }
 #pragma warning(disable: 4625) // Copy constructor deleted
 ```
 
+For project-file suppressions, include XML comments for owner, rationale, expiry/review, and scope. `C5039` callback exception-spec warnings are production-sensitive: fix or locally justify them at the callback boundary instead of hiding them at project scope.
+
 ## Additional Fix Patterns
 
 ```cpp
@@ -95,7 +104,7 @@ void Process(T value) {
 ## Build Configuration
 
 - Support Debug and Release configurations
-- Enable `/W4` for all projects
+- Enable `/Wall` (`EnableAllWarnings`) for first-party projects
 - Use static analysis tools (PVS-Studio, Clang-Tidy)
 - Configure proper optimization flags for Release
 

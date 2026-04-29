@@ -1,9 +1,12 @@
 #include "Framework.h"
 
+#include "D2DHdcPaint.h"
+#include "DxUi/DxUi.Typography.h"
 #include "Preferences.Advanced.h"
 #include "Preferences.CompareDirectories.h"
 #include "Preferences.Dialog.h"
 #include "Preferences.Editors.h"
+#include "Preferences.FileOperations.h"
 #include "Preferences.General.h"
 #include "Preferences.HotPaths.h"
 #include "Preferences.Internal.h"
@@ -13,10 +16,12 @@
 #include "Preferences.Plugins.h"
 #include "Preferences.Themes.h"
 #include "Preferences.Viewers.h"
+#include "Preferences.h"
 
 #include <algorithm>
 #include <array>
 #include <charconv>
+#include <cmath>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -36,7 +41,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include <commctrl.h>
 #include <uxtheme.h>
 #include <windowsx.h>
 
@@ -48,6 +52,9 @@
 #pragma warning(pop)
 
 #include "CommandRegistry.h"
+#include "DxUi/DxUi.Win32Hooks.h"
+#include "DxUi/DxUi.h"
+#include "FluentIcons.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "SettingsHotReload.h"
@@ -55,13 +62,153 @@
 #include "ShortcutDefaults.h"
 #include "ShortcutManager.h"
 #include "ShortcutText.h"
-#include "ThemedControls.h"
+#include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
 #include "resource.h"
+#ifdef ENABLE_TESTS
+#include "SelfTestCommon.h"
+#endif
 
 namespace
 {
+constexpr UINT kPrefsDeferredCloseMessage                   = WM_APP + 0x43u;
+thread_local bool g_preferencesWheelMessageForwarded        = false;
+constexpr wchar_t kPrefsWheelRouteOriginalWndProcProp[]     = L"RedSalamander.Preferences.WheelRouteOriginalWndProc";
+constexpr wchar_t kPrefsDxCategoryHostOriginalWndProcProp[] = L"RedSalamander.Preferences.DxCategoryHostOriginalWndProc";
+constexpr wchar_t kPrefsDxCategoryHostStateProp[]           = L"RedSalamander.Preferences.DxCategoryHostState";
+constexpr wchar_t kPrefsDxShellHostOriginalWndProcProp[]    = L"RedSalamander.Preferences.DxShellHostOriginalWndProc";
+constexpr wchar_t kPrefsDxShellHostProp[]                   = L"RedSalamander.Preferences.DxShellHost";
+constexpr wchar_t kPrefsDxDiagnosticsProp[]                 = L"RedSalamander.Preferences.DxDiagnostics";
+
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::CallStoredWndProc;
+using RedSalamander::DxUi::Control;
+using RedSalamander::DxUi::FontRole;
+using RedSalamander::DxUi::GetStoredWndProc;
+using RedSalamander::DxUi::IDxTreeDelegate;
+using RedSalamander::DxUi::IDxTreeModel;
+using RedSalamander::DxUi::InstallWndProcHook;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::Tree;
+using RedSalamander::DxUi::TreeItemData;
+using RedSalamander::DxUi::WindowHost;
+
+[[maybe_unused]] [[nodiscard]] uint32_t PackColorArgb(const D2D1_COLOR_F& color) noexcept
+{
+    const auto pack = [](const float value) noexcept -> uint8_t
+    {
+        const float scaled = std::clamp(value, 0.0f, 1.0f) * 255.0f;
+        return static_cast<uint8_t>(std::lround(scaled));
+    };
+
+    return (static_cast<uint32_t>(pack(color.a)) << 24u) | (static_cast<uint32_t>(pack(color.r)) << 16u) | (static_cast<uint32_t>(pack(color.g)) << 8u) |
+           static_cast<uint32_t>(pack(color.b));
+}
+
+void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory category) noexcept;
+void RefreshActivePreferencesPage(HWND host, PreferencesDialogState& state) noexcept;
+void RebindActivePreferencesPage(HWND dlg, PreferencesDialogState& state) noexcept;
+bool RequestPreferencesDialogClose(HWND dlg) noexcept;
+bool HandleDeferredPaneAction(HWND dlg, PreferencesDialogState& state, PreferencesDeferredActionPayload&& payload) noexcept;
+struct PreferencesPageHostSurfaceControl;
+LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+void InstallWheelRoutingHooks(HWND dlg) noexcept;
+[[nodiscard]] PreferencesDialogState* GetState(HWND dlg) noexcept;
+void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp) noexcept;
+
+[[nodiscard]] const wchar_t* GetPrefCategoryDebugName(PrefCategory category) noexcept;
+void SyncPreferencesPageHostDxSize(HWND host, PreferencesDialogState& state, const wchar_t* reason) noexcept;
+void LogPreferencesPageHostState(HWND host, const PreferencesDialogState& state, const wchar_t* reason) noexcept;
+[[nodiscard]] bool IsPreferencesDxDiagnosticsEnabled(HWND hwnd) noexcept;
+
+struct CategoryInfo
+{
+    PrefCategory id{};
+    UINT labelId{};
+    UINT descriptionId{};
+};
+
+struct ScopedWindowRedrawBlock final
+{
+    explicit ScopedWindowRedrawBlock(HWND hwnd) noexcept : _hwnd(hwnd)
+    {
+        if (_hwnd)
+        {
+            const auto currentCount = reinterpret_cast<ULONG_PTR>(GetPropW(_hwnd, PrefsUi::kPrefsTreeRedrawBlockProp));
+            SetPropW(_hwnd, PrefsUi::kPrefsTreeRedrawBlockProp, reinterpret_cast<HANDLE>(currentCount + 1u));
+            SendMessageW(_hwnd, WM_SETREDRAW, FALSE, 0);
+        }
+    }
+
+    ScopedWindowRedrawBlock(const ScopedWindowRedrawBlock&)            = delete;
+    ScopedWindowRedrawBlock& operator=(const ScopedWindowRedrawBlock&) = delete;
+
+    ~ScopedWindowRedrawBlock()
+    {
+        Enable();
+    }
+
+    void Enable() noexcept
+    {
+        if (! _hwnd)
+        {
+            return;
+        }
+
+        const HWND hwnd         = _hwnd;
+        _hwnd                   = nullptr;
+        const auto currentCount = reinterpret_cast<ULONG_PTR>(GetPropW(hwnd, PrefsUi::kPrefsTreeRedrawBlockProp));
+        bool enableRedraw       = false;
+        if (currentCount <= 1u)
+        {
+            RemovePropW(hwnd, PrefsUi::kPrefsTreeRedrawBlockProp);
+            enableRedraw = true;
+        }
+        else
+        {
+            SetPropW(hwnd, PrefsUi::kPrefsTreeRedrawBlockProp, reinterpret_cast<HANDLE>(currentCount - 1u));
+        }
+
+        if (enableRedraw)
+        {
+            SendMessageW(hwnd, WM_SETREDRAW, TRUE, 0);
+        }
+    }
+
+    void EnableAndRedraw(const UINT flags) noexcept
+    {
+        if (! _hwnd)
+        {
+            return;
+        }
+
+        const HWND hwnd = _hwnd;
+        Enable();
+        RedrawWindow(hwnd, nullptr, nullptr, flags);
+    }
+
+private:
+    HWND _hwnd = nullptr;
+};
+
+constexpr std::array<CategoryInfo, 12> kCategories = {{
+    {PrefCategory::General, IDS_PREFS_CAT_GENERAL, IDS_PREFS_CAT_GENERAL_DESC},
+    {PrefCategory::Panes, IDS_PREFS_CAT_PANES, IDS_PREFS_CAT_PANES_DESC},
+    {PrefCategory::Viewers, IDS_PREFS_CAT_VIEWERS, IDS_PREFS_CAT_VIEWERS_DESC},
+    {PrefCategory::Editors, IDS_PREFS_CAT_EDITORS, IDS_PREFS_CAT_EDITORS_DESC},
+    {PrefCategory::Keyboard, IDS_PREFS_CAT_KEYBOARD, IDS_PREFS_CAT_KEYBOARD_DESC},
+    {PrefCategory::Mouse, IDS_PREFS_CAT_MOUSE, IDS_PREFS_CAT_MOUSE_DESC},
+    {PrefCategory::Themes, IDS_PREFS_CAT_THEMES, IDS_PREFS_CAT_THEMES_DESC},
+    {PrefCategory::Plugins, IDS_PREFS_CAT_PLUGINS, IDS_PREFS_CAT_PLUGINS_DESC},
+    {PrefCategory::FileOperations, IDS_PREFS_CAT_FILE_OPERATIONS, IDS_PREFS_CAT_FILE_OPERATIONS_DESC},
+    {PrefCategory::CompareDirectories, IDS_PREFS_CAT_COMPARE_DIRECTORIES, IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC},
+    {PrefCategory::HotPaths, IDS_PREFS_CAT_HOT_PATHS, IDS_PREFS_CAT_HOT_PATHS_DESC},
+    {PrefCategory::Advanced, IDS_PREFS_CAT_ADVANCED, IDS_PREFS_CAT_ADVANCED_DESC},
+}};
+
 struct PreferencesDialogHost final : PreferencesDialogState
 {
     PreferencesDialogHost()                                        = default;
@@ -76,33 +223,533 @@ struct PreferencesDialogHost final : PreferencesDialogState
     MousePane _mousePane;
     ThemesPane _themesPane;
     PluginsPane _pluginsPane;
+    FileOperationsPane _fileOperationsPane;
     CompareDirectoriesPane _compareDirectoriesPane;
     HotPathsPane _hotPathsPane;
     AdvancedPane _advancedPane;
+    WindowHost _categoryTreeHost;
+    Tree* _categoryTreeControl = nullptr;
+    WindowHost _shellHost;
+    WindowHost _pageHostHost;
+    Panel* _pageHostRootControl                                = nullptr;
+    Panel* _pageHostContentRootControl                         = nullptr;
+    PreferencesPageHostSurfaceControl* _pageHostSurfaceControl = nullptr;
+    Panel* _pageHostEmptyStatePanel                            = nullptr;
+    Label* _pageHostEmptyStateIconControl                      = nullptr;
+    Label* _pageHostEmptyStateTitleControl                     = nullptr;
+    Label* _pageHostEmptyStateBodyControl                      = nullptr;
+    Label* _pageHostEmptyStateCaptionControl                   = nullptr;
+    HWND _shellHostHwnd                                        = nullptr;
+    Label* _pageTitleControl                                   = nullptr;
+    Label* _pageDescriptionControl                             = nullptr;
+    Button* _okButtonControl                                   = nullptr;
+    Button* _cancelButtonControl                               = nullptr;
+    Button* _applyButtonControl                                = nullptr;
+    Button* _resetAllButtonControl                             = nullptr;
+
+    struct PreferencesCategoryTreeModel final : IDxTreeModel
+    {
+        void Rebuild() noexcept
+        {
+            _visibleItems.clear();
+            _pluginItems.clear();
+            _visibleItems.reserve(kCategories.size());
+
+            for (const CategoryInfo& category : kCategories)
+            {
+                TreeItemData item{};
+                item.id   = EncodeCategoryNodeId(category.id);
+                item.text = LoadStringResource(nullptr, category.labelId);
+                if (item.text.empty())
+                {
+                    item.text = L"?";
+                }
+                if (category.id == PrefCategory::Plugins)
+                {
+                    std::vector<PrefsPluginListItem> plugins;
+                    PrefsPlugins::BuildListItems(plugins);
+                    _pluginItems     = std::move(plugins);
+                    item.hasChildren = ! _pluginItems.empty();
+                    item.expanded    = _pluginsExpanded;
+                    item.badgeTone   = RedSalamander::DxUi::AdornmentTone::Info;
+                    if (! _pluginItems.empty())
+                    {
+                        item.badgeText = std::format(L"{}", _pluginItems.size());
+                    }
+                }
+                _visibleItems.push_back(std::move(item));
+
+                if (category.id == PrefCategory::Plugins && _pluginsExpanded)
+                {
+                    for (const PrefsPluginListItem& plugin : _pluginItems)
+                    {
+                        const std::wstring_view displayName = PrefsPlugins::GetDisplayName(plugin);
+                        if (displayName.empty())
+                        {
+                            continue;
+                        }
+
+                        TreeItemData child{};
+                        child.id        = EncodePluginNodeId(plugin.type, plugin.index);
+                        child.parentId  = EncodeCategoryNodeId(PrefCategory::Plugins);
+                        child.text      = std::wstring(displayName);
+                        child.depth     = 1u;
+                        child.badgeTone = RedSalamander::DxUi::AdornmentTone::Accent;
+                        _visibleItems.push_back(std::move(child));
+                    }
+                }
+            }
+        }
+
+        void SetPluginsExpanded(const bool expanded) noexcept
+        {
+            _pluginsExpanded = expanded;
+        }
+
+        [[nodiscard]] bool IsPluginsExpanded() const noexcept
+        {
+            return _pluginsExpanded;
+        }
+
+        [[nodiscard]] size_t GetPluginItemCount() const noexcept
+        {
+            return _pluginItems.size();
+        }
+
+        [[nodiscard]] size_t GetVisibleItemCount() const noexcept override
+        {
+            return _visibleItems.size();
+        }
+
+        void GetVisibleItem(const size_t visibleIndex, TreeItemData& outItem) const override
+        {
+            outItem = {};
+            if (visibleIndex >= _visibleItems.size())
+            {
+                return;
+            }
+            outItem = _visibleItems[visibleIndex];
+        }
+
+        [[nodiscard]] static constexpr uint64_t EncodeCategoryNodeId(const PrefCategory category) noexcept
+        {
+            return 0x1000ull + static_cast<uint64_t>(category);
+        }
+
+        [[nodiscard]] static constexpr uint64_t EncodePluginNodeId(const PrefsPluginType type, const size_t index) noexcept
+        {
+            return (1ull << 63u) | (static_cast<uint64_t>(type) << 48u) | static_cast<uint64_t>(index);
+        }
+
+        [[nodiscard]] static bool TryDecodePluginNodeId(const uint64_t nodeId, PrefsPluginListItem& outItem) noexcept
+        {
+            if ((nodeId & (1ull << 63u)) == 0u)
+            {
+                return false;
+            }
+
+            outItem.type  = static_cast<PrefsPluginType>((nodeId >> 48u) & 0x7FFFu);
+            outItem.index = static_cast<size_t>(nodeId & 0x0000FFFFFFFFFFFFull);
+            return true;
+        }
+
+        [[nodiscard]] static std::optional<PrefCategory> TryDecodeCategoryNodeId(const uint64_t nodeId) noexcept
+        {
+            if (nodeId < 0x1000ull || (nodeId & (1ull << 63u)) != 0u)
+            {
+                return std::nullopt;
+            }
+
+            const auto category = static_cast<PrefCategory>(nodeId - 0x1000ull);
+            for (const CategoryInfo& info : kCategories)
+            {
+                if (info.id == category)
+                {
+                    return category;
+                }
+            }
+            return std::nullopt;
+        }
+
+    private:
+        bool _pluginsExpanded = true;
+        std::vector<TreeItemData> _visibleItems;
+        std::vector<PrefsPluginListItem> _pluginItems;
+    } _categoryTreeModel;
+
+    struct PreferencesCategoryTreeDelegate final : IDxTreeDelegate
+    {
+        void Attach(HWND dialog, PreferencesDialogState* state, PreferencesCategoryTreeModel* model, Tree* tree) noexcept
+        {
+            _dialog = dialog;
+            _state  = state;
+            _model  = model;
+            _tree   = tree;
+        }
+
+        void OnTreeSelectionChanged(const uint64_t itemId) override
+        {
+            if (! _dialog || ! _state || ! _model)
+            {
+                Debug::Warning(L"Preferences: OnTreeSelectionChanged ignored (null dialog/state/model)");
+                return;
+            }
+
+            PrefsPluginListItem pluginItem{};
+            if (PreferencesCategoryTreeModel::TryDecodePluginNodeId(itemId, pluginItem))
+            {
+                _state->pluginsSelectedPlugin = pluginItem;
+                _state->pluginsSelectedPluginId.assign(PrefsPlugins::GetId(pluginItem));
+                _state->pluginsRetainedSelectedPluginId.assign(PrefsPlugins::GetId(pluginItem));
+                _state->pluginsDetailsActive = true;
+                UpdatePageText(_dialog, *_state, PrefCategory::Plugins);
+                return;
+            }
+
+            if (const std::optional<PrefCategory> category = PreferencesCategoryTreeModel::TryDecodeCategoryNodeId(itemId))
+            {
+                _state->pluginsSelectedPlugin.reset();
+                _state->pluginsSelectedPluginId.clear();
+                _state->pluginsRetainedSelectedPluginId.clear();
+                _state->pluginsDetailsActive = false;
+                UpdatePageText(_dialog, *_state, category.value());
+            }
+            else
+            {
+                Debug::Warning(L"Preferences: OnTreeSelectionChanged with unknown itemId={:#x}", itemId);
+            }
+        }
+
+        void OnTreeToggleExpanded(const uint64_t itemId, const bool expanded) override
+        {
+            if (! _state || ! _model || ! _tree || itemId != PreferencesCategoryTreeModel::EncodeCategoryNodeId(PrefCategory::Plugins))
+            {
+                return;
+            }
+
+            _model->SetPluginsExpanded(expanded);
+            if (! expanded)
+            {
+                _state->pluginsSelectedPlugin.reset();
+                _state->pluginsSelectedPluginId.clear();
+                _state->pluginsRetainedSelectedPluginId.clear();
+                _state->pluginsDetailsActive = false;
+                _tree->SetSelectedItemId(itemId);
+            }
+            _model->Rebuild();
+            _tree->NotifyDataChanged();
+            if (_dialog && _state)
+            {
+                UpdatePageText(_dialog, *_state, PrefCategory::Plugins);
+            }
+        }
+
+    private:
+        HWND _dialog                         = nullptr;
+        PreferencesDialogState* _state       = nullptr;
+        PreferencesCategoryTreeModel* _model = nullptr;
+        Tree* _tree                          = nullptr;
+    } _categoryTreeDelegate;
 };
 
-constexpr UINT_PTR kPrefsWheelRouteSubclassId = 2u;
-constexpr wchar_t kPrefsPageHostClassName[]   = L"RedSalamanderPrefsPageHost";
-constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
+constexpr wchar_t kPrefsPageHostClassName[]    = L"RedSalamanderPrefsPageHost";
+constexpr wchar_t kPrefsDxShellHostClassName[] = L"RedSalamanderPrefsDxShellHost";
+constexpr wchar_t kPreferencesWindowId[]       = L"PreferencesWindow";
 
-[[nodiscard]] HWND GetActivePrefsPaneWindow(const PreferencesDialogState& state) noexcept
+struct PreferencesPageHostSurfaceControl final : RedSalamander::DxUi::Control
 {
-    const auto& hostState = static_cast<const PreferencesDialogHost&>(state);
+    explicit PreferencesPageHostSurfaceControl(const PreferencesDialogState* state) noexcept : _state(state)
+    {
+    }
 
+    void Paint(WindowHost& host) const override
+    {
+        auto* dc = host.GetDeviceContext();
+        if (! dc || ! _state)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F bounds = GetBounds();
+        if (auto* backgroundBrush = host.GetSolidBrush(ColorFromCOLORREF(_state->theme.windowBackground)))
+        {
+            dc->FillRectangle(bounds, backgroundBrush);
+        }
+
+        if (_state->theme.systemHighContrast || _state->pageSettingCards.empty())
+        {
+            return;
+        }
+
+        const COLORREF surfaceColor = UiMetrics::GetControlSurfaceColor(_state->theme);
+        const COLORREF borderColor  = UiMetrics::BlendColor(surfaceColor, _state->theme.menu.text, _state->theme.dark ? 40 : 30, 255);
+        auto* fillBrush             = host.GetSolidBrush(ColorFromCOLORREF(surfaceColor));
+        auto* borderBrush           = host.GetSolidBrush(ColorFromCOLORREF(borderColor));
+        if (! fillBrush || ! borderBrush)
+        {
+            return;
+        }
+
+        const float scrollDip     = host.PixelsToDip(static_cast<float>(_state->pageScrollY));
+        constexpr float radiusDip = 6.0f;
+        for (const RECT& baseCard : _state->pageSettingCards)
+        {
+            D2D1_RECT_F card = D2D1::RectF(host.PixelsToDip(static_cast<float>(baseCard.left)),
+                                           host.PixelsToDip(static_cast<float>(baseCard.top)) - scrollDip,
+                                           host.PixelsToDip(static_cast<float>(baseCard.right)),
+                                           host.PixelsToDip(static_cast<float>(baseCard.bottom)) - scrollDip);
+            if (card.right <= card.left || card.bottom <= card.top)
+            {
+                continue;
+            }
+            if (card.bottom <= bounds.top || card.top >= bounds.bottom)
+            {
+                continue;
+            }
+
+            const D2D1_ROUNDED_RECT rounded = D2D1::RoundedRect(card, radiusDip, radiusDip);
+            dc->FillRoundedRectangle(&rounded, fillBrush);
+            dc->DrawRoundedRectangle(&rounded, borderBrush, 1.0f);
+        }
+    }
+
+protected:
+    [[nodiscard]] RedSalamander::DxUi::Control* HitTest(D2D1_POINT_2F /*point*/) override
+    {
+        return nullptr;
+    }
+
+    [[nodiscard]] const RedSalamander::DxUi::Control* HitTest(D2D1_POINT_2F /*point*/) const override
+    {
+        return nullptr;
+    }
+
+private:
+    const PreferencesDialogState* _state = nullptr;
+};
+
+[[nodiscard]] const wchar_t* GetPrefCategoryDebugName(const PrefCategory category) noexcept
+{
+    switch (category)
+    {
+        case PrefCategory::General: return L"General";
+        case PrefCategory::Panes: return L"Panes";
+        case PrefCategory::Viewers: return L"Viewers";
+        case PrefCategory::Editors: return L"Editors";
+        case PrefCategory::Keyboard: return L"Keyboard";
+        case PrefCategory::Mouse: return L"Mouse";
+        case PrefCategory::Themes: return L"Themes";
+        case PrefCategory::Plugins: return L"Plugins";
+        case PrefCategory::FileOperations: return L"FileOperations";
+        case PrefCategory::CompareDirectories: return L"CompareDirectories";
+        case PrefCategory::HotPaths: return L"HotPaths";
+        case PrefCategory::Advanced: return L"Advanced";
+        default: return L"Unknown";
+    }
+}
+
+[[nodiscard]] bool IsPreferencesDxDiagnosticsEnabled(HWND hwnd) noexcept
+{
+    return hwnd && GetPropW(hwnd, kPrefsDxDiagnosticsProp) != nullptr;
+}
+
+[[nodiscard]] PreferencesEmptyStateSpec GetCurrentPreferencesSharedEmptyState(const PreferencesDialogState& state) noexcept
+{
     switch (state.currentCategory)
     {
-        case PrefCategory::General: return hostState._generalPane.Hwnd();
-        case PrefCategory::Panes: return hostState._panesPane.Hwnd();
-        case PrefCategory::Viewers: return hostState._viewersPane.Hwnd();
-        case PrefCategory::Editors: return hostState._editorsPane.Hwnd();
-        case PrefCategory::Keyboard: return hostState._keyboardPane.Hwnd();
-        case PrefCategory::Mouse: return hostState._mousePane.Hwnd();
-        case PrefCategory::Themes: return hostState._themesPane.Hwnd();
-        case PrefCategory::Plugins: return hostState._pluginsPane.Hwnd();
-        case PrefCategory::CompareDirectories: return hostState._compareDirectoriesPane.Hwnd();
-        case PrefCategory::HotPaths: return hostState._hotPathsPane.Hwnd();
-        case PrefCategory::Advanced: return hostState._advancedPane.Hwnd();
-        default: return nullptr;
+        case PrefCategory::Editors:
+            return PreferencesEmptyStateSpec{
+                .iconGlyph         = FluentIcons::kOpenFile,
+                .fallbackIconGlyph = FluentIcons::kFallbackChevronRight,
+                .title             = LoadStringResource(nullptr, IDS_PREFS_EDITORS_EMPTY_TITLE),
+                .body              = LoadStringResource(nullptr, IDS_PREFS_EDITORS_EMPTY_BODY),
+                .caption           = LoadStringResource(nullptr, IDS_PREFS_EDITORS_EMPTY_CAPTION),
+            };
+        case PrefCategory::Mouse:
+            return PreferencesEmptyStateSpec{
+                .iconGlyph         = FluentIcons::kPreview,
+                .fallbackIconGlyph = FluentIcons::kFallbackChevronRight,
+                .title             = LoadStringResource(nullptr, IDS_PREFS_MOUSE_EMPTY_TITLE),
+                .body              = LoadStringResource(nullptr, IDS_PREFS_MOUSE_EMPTY_BODY),
+                .caption           = LoadStringResource(nullptr, IDS_PREFS_MOUSE_EMPTY_CAPTION),
+            };
+        case PrefCategory::General:
+        case PrefCategory::Panes:
+        case PrefCategory::Viewers:
+        case PrefCategory::Keyboard:
+        case PrefCategory::Themes:
+        case PrefCategory::Plugins:
+        case PrefCategory::Advanced:
+        case PrefCategory::CompareDirectories:
+        case PrefCategory::HotPaths:
+        case PrefCategory::FileOperations: return {};
+        default: return {};
+    }
+}
+
+[[nodiscard]] std::wstring GetEmptyStateIconText(const WindowHost* host, const PreferencesEmptyStateSpec& spec) noexcept
+{
+    const bool useFluentIcon = host && host->HasFluentIconFont() && spec.iconGlyph != L'\0';
+    const wchar_t glyph      = useFluentIcon ? spec.iconGlyph : spec.fallbackIconGlyph;
+    return (glyph == L'\0') ? std::wstring{} : std::wstring(1, glyph);
+}
+
+void ApplySharedEmptyStatePalette(PreferencesDialogState& state, const PreferencesEmptyStateSpec* spec = nullptr) noexcept
+{
+    auto& hostState = static_cast<PreferencesDialogHost&>(state);
+    if (! hostState._pageHostEmptyStateIconControl || ! hostState._pageHostEmptyStateTitleControl || ! hostState._pageHostEmptyStateBodyControl ||
+        ! hostState._pageHostEmptyStateCaptionControl)
+    {
+        return;
+    }
+
+    const ThemePalette palette = PrefsUi::MakeDxPalette(state.theme);
+    D2D1_COLOR_F iconColor     = palette.subduedText;
+    iconColor.a                = state.theme.dark ? 0.28f : 0.20f;
+
+    if (spec)
+    {
+        switch (spec->tone)
+        {
+            case PreferencesEmptyStateSpec::Tone::Accent:
+            case PreferencesEmptyStateSpec::Tone::Warning:
+            case PreferencesEmptyStateSpec::Tone::Error:
+            case PreferencesEmptyStateSpec::Tone::Info:
+                iconColor   = palette.accent;
+                iconColor.a = state.theme.dark ? 0.96f : 0.92f;
+                break;
+            case PreferencesEmptyStateSpec::Tone::Neutral:
+            default: break;
+        }
+    }
+
+    D2D1_COLOR_F bodyColor = palette.subduedText;
+    bodyColor.a            = state.theme.dark ? 0.96f : 0.90f;
+
+    D2D1_COLOR_F captionColor = palette.subduedText;
+    captionColor.a            = state.theme.dark ? 0.72f : 0.76f;
+
+    hostState._pageHostEmptyStateIconControl->SetTextColor(iconColor);
+    hostState._pageHostEmptyStateTitleControl->SetTextColor(palette.text);
+    hostState._pageHostEmptyStateBodyControl->SetTextColor(bodyColor);
+    hostState._pageHostEmptyStateCaptionControl->SetTextColor(captionColor);
+}
+
+[[nodiscard]] HWND GetActivePreferencesPageRootWindow(const PreferencesDialogState& state) noexcept
+{
+    return (state.pageHostWindow && IsWindow(state.pageHostWindow) != FALSE) ? state.pageHostWindow : nullptr;
+}
+
+void InitializePreferencesPageControls(const PrefCategory category, PreferencesDialogState& state) noexcept
+{
+    UNREFERENCED_PARAMETER(category);
+    UNREFERENCED_PARAMETER(state);
+}
+
+[[nodiscard]] bool EnsurePreferencesPageInitialized(HWND pageHostWindow, PreferencesDialogState& state, const PrefCategory category) noexcept
+{
+    if (! pageHostWindow)
+    {
+        return false;
+    }
+
+    auto& hostState               = static_cast<PreferencesDialogHost&>(state);
+    const size_t catIndex         = PrefCategoryIndex(category);
+    const bool needsFirstTimeInit = ! state.paneFirstCreateDone[catIndex];
+
+    auto ensurePage = [&](auto& pane) noexcept
+    {
+        // Create a per-pane wrapper Panel so controls survive across switches.
+        if (! state.paneWrapperPanels[catIndex] && hostState._pageHostContentRootControl)
+        {
+            auto* wrapper = hostState._pageHostContentRootControl->AddChild<Panel>();
+            wrapper->SetBounds(hostState._pageHostContentRootControl->GetBounds());
+            state.paneWrapperPanels[catIndex] = wrapper;
+        }
+
+        // Show only the active wrapper — hide all others.
+        for (size_t i = 0; i < kPrefCategoryCount; ++i)
+        {
+            if (state.paneWrapperPanels[i])
+            {
+                state.paneWrapperPanels[i]->SetVisible(i == catIndex);
+            }
+        }
+
+        if (state.pageHostDxHost)
+        {
+            state.pageHostDxHost->ResetInteractionState();
+        }
+
+        // Redirect shared content root to the active wrapper so pane EnsureDxHosts
+        // stores it as _pageContentRoot, enabling per-pane control caching/reuse.
+        state.pageHostDxContentRootControl = state.paneWrapperPanels[catIndex];
+
+        if (needsFirstTimeInit)
+        {
+            pane.InitializePage(pageHostWindow, state);
+            InitializePreferencesPageControls(category, state);
+            InstallWheelRoutingHooks(pageHostWindow);
+            state.paneFirstCreateDone[catIndex] = true;
+        }
+        return true;
+    };
+
+    switch (category)
+    {
+        case PrefCategory::General: return ensurePage(hostState._generalPane);
+        case PrefCategory::Panes: return ensurePage(hostState._panesPane);
+        case PrefCategory::Viewers: return ensurePage(hostState._viewersPane);
+        case PrefCategory::Editors: return ensurePage(hostState._editorsPane);
+        case PrefCategory::Keyboard: return ensurePage(hostState._keyboardPane);
+        case PrefCategory::Mouse: return ensurePage(hostState._mousePane);
+        case PrefCategory::Themes: return ensurePage(hostState._themesPane);
+        case PrefCategory::Plugins: return ensurePage(hostState._pluginsPane);
+        case PrefCategory::FileOperations: return ensurePage(hostState._fileOperationsPane);
+        case PrefCategory::CompareDirectories: return ensurePage(hostState._compareDirectoriesPane);
+        case PrefCategory::HotPaths: return ensurePage(hostState._hotPathsPane);
+        case PrefCategory::Advanced: return ensurePage(hostState._advancedPane);
+        default: return false;
+    }
+}
+
+[[nodiscard]] bool EnsureActivePreferencesPageInitialized(HWND pageHostWindow, PreferencesDialogState& state) noexcept
+{
+    return EnsurePreferencesPageInitialized(pageHostWindow, state, state.currentCategory);
+}
+
+void ResetPreferencesSharedPageSurface(PreferencesDialogState& state) noexcept
+{
+    if (state.pageHostDxHost)
+    {
+        state.pageHostDxHost->ResetInteractionState();
+    }
+    if (state.pageHostDxContentRootControl)
+    {
+        state.pageHostDxContentRootControl->ClearChildren();
+    }
+    PrefsUi::HideSharedPageEmptyState(state);
+
+    state.pageSettingCards.clear();
+    state.pageHostDirectContentBottomPx = 0;
+}
+
+void DestroyInactivePreferencesPageState(PreferencesDialogState& state, const PrefCategory category) noexcept
+{
+    // Don't destroy panes — preserve DxUI state and pane data (keyboard rows,
+    // theme items, etc.) for fast reactivation.  EnsureDxHosts will recreate
+    // shared-root controls when the pane is next activated.
+    // Only cancel keyboard capture when leaving the Keyboard pane.
+    if (category == PrefCategory::Keyboard)
+    {
+        state.keyboardCaptureActive = false;
+        state.keyboardCaptureCommandId.clear();
+        state.keyboardCaptureBindingIndex.reset();
+        state.keyboardCapturePendingVk.reset();
+        state.keyboardCapturePendingModifiers = 0;
+        state.keyboardCaptureConflictCommandId.clear();
+        state.keyboardCaptureConflictBindingIndex.reset();
+        state.keyboardCaptureConflictMultiple = false;
     }
 }
 
@@ -119,7 +766,7 @@ constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
     WNDCLASSEXW wc{};
     wc.cbSize        = sizeof(wc);
     wc.style         = CS_DBLCLKS;
-    wc.lpfnWndProc   = DefWindowProcW;
+    wc.lpfnWndProc   = PreferencesPageHostWindowProc;
     wc.hInstance     = instance;
     wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
     wc.lpszClassName = kPrefsPageHostClassName;
@@ -128,7 +775,29 @@ constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
     return atom != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
 }
 
-[[nodiscard]] HWND FindWheelTargetFromPoint(HWND root, POINT ptScreen) noexcept
+[[nodiscard]] bool EnsurePrefsDxShellHostClassRegistered() noexcept
+{
+    const HINSTANCE instance = GetModuleHandleW(nullptr);
+    WNDCLASSEXW existing{};
+    existing.cbSize = sizeof(existing);
+    if (GetClassInfoExW(instance, kPrefsDxShellHostClassName, &existing) != 0)
+    {
+        return true;
+    }
+
+    WNDCLASSEXW wc{};
+    wc.cbSize        = sizeof(wc);
+    wc.style         = CS_DBLCLKS;
+    wc.lpfnWndProc   = DefWindowProcW;
+    wc.hInstance     = instance;
+    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+    wc.lpszClassName = kPrefsDxShellHostClassName;
+
+    const ATOM atom = RegisterClassExW(&wc);
+    return atom != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
+}
+
+[[nodiscard]] HWND FindWheelTargetFromPoint(HWND root, const PreferencesDialogState& state, POINT ptScreen) noexcept
 {
     if (! root)
     {
@@ -143,6 +812,11 @@ constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
 
     while (target && target != root)
     {
+        if (target == state.categoryTreeWindow || target == state.pageHostWindow)
+        {
+            return target;
+        }
+
         const LONG_PTR style = GetWindowLongPtrW(target, GWL_STYLE);
         if ((style & WS_VSCROLL) != 0)
         {
@@ -206,7 +880,7 @@ constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
     }
 
     const UINT dpi     = GetDpiForWindow(host);
-    const int lineStep = std::max(1, ThemedControls::ScaleDip(dpi, 24));
+    const int lineStep = std::max(1, UiMetrics::ScaleDip(dpi, 24));
 
     int scrollDelta = 0;
     if (linesPerNotch == WHEEL_PAGESCROLL)
@@ -223,7 +897,7 @@ constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
     }
 
     const int newPos = state.pageScrollY - scrollDelta;
-    PrefsPaneHost::ScrollTo(host, state, newPos);
+    PrefsPageHost::ScrollTo(host, state, newPos);
     return true;
 }
 
@@ -255,10 +929,10 @@ constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
         return bgDiff >= minBgDiff && normalDiff >= minNormalDiff;
     };
 
-    auto blended = ThemedControls::BlendColor(background, normal, state.theme.dark ? 140 : 90, 255);
+    auto blended = UiMetrics::BlendColor(background, normal, state.theme.dark ? 140 : 90, 255);
     if (std::abs(ColorLuma(blended) - ColorLuma(background)) < minBgDiff)
     {
-        blended = ThemedControls::BlendColor(background, normal, state.theme.dark ? 170 : 120, 255);
+        blended = UiMetrics::BlendColor(background, normal, state.theme.dark ? 170 : 120, 255);
     }
 
     if (isReadableAndDim(candidate))
@@ -274,47 +948,34 @@ constexpr wchar_t kPreferencesWindowId[]      = L"PreferencesWindow";
     return blended;
 }
 
-[[nodiscard]] const PrefsPluginConfigFieldControls* FindPluginDetailsToggleControls(const PreferencesDialogState& state, HWND toggle) noexcept
+LRESULT CALLBACK PreferencesWheelRouteWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    if (! toggle)
-    {
-        return nullptr;
-    }
-
-    for (const PrefsPluginConfigFieldControls& controls : state.pluginsDetailsConfigFields)
-    {
-        if (controls.toggle.get() == toggle)
-        {
-            return &controls;
-        }
-    }
-
-    return nullptr;
-}
-
-LRESULT CALLBACK PreferencesWheelRouteSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR uIdSubclass, DWORD_PTR refData) noexcept
-{
-    auto* state = reinterpret_cast<PreferencesDialogState*>(refData);
-    if (! state)
-    {
-        return DefSubclassProc(hwnd, msg, wp, lp);
-    }
-
     switch (msg)
     {
         case WM_MOUSEWHEEL:
         {
+            if (g_preferencesWheelMessageForwarded)
+            {
+                return CallStoredWndProc(hwnd, kPrefsWheelRouteOriginalWndProcProp, msg, wp, lp);
+            }
+
             const HWND dlg = GetAncestor(hwnd, GA_ROOT);
             if (! dlg)
             {
                 return 0;
             }
 
+            auto* state = GetState(dlg);
+            if (! state)
+            {
+                return CallStoredWndProc(hwnd, kPrefsWheelRouteOriginalWndProcProp, msg, wp, lp);
+            }
+
             POINT ptScreen{};
             ptScreen.x = GET_X_LPARAM(lp);
             ptScreen.y = GET_Y_LPARAM(lp);
 
-            HWND target = FindWheelTargetFromPoint(dlg, ptScreen);
+            HWND target = FindWheelTargetFromPoint(dlg, *state, ptScreen);
             if (! target)
             {
                 // Don't scroll the dialog when the user is wheeling outside it.
@@ -326,43 +987,37 @@ LRESULT CALLBACK PreferencesWheelRouteSubclassProc(HWND hwnd, UINT msg, WPARAM w
                 break;
             }
 
+            const bool previousForwardedState  = g_preferencesWheelMessageForwarded;
+            g_preferencesWheelMessageForwarded = true;
             SendMessageW(target, msg, wp, lp);
+            g_preferencesWheelMessageForwarded = previousForwardedState;
             return 0;
         }
         case WM_NCDESTROY:
         {
-            RemoveWindowSubclass(hwnd, PreferencesWheelRouteSubclassProc, uIdSubclass);
+            RemovePropW(hwnd, kPrefsWheelRouteOriginalWndProcProp);
             break;
         }
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return CallStoredWndProc(hwnd, kPrefsWheelRouteOriginalWndProcProp, msg, wp, lp);
 }
 
-void InstallWheelRoutingSubclasses(HWND dlg, PreferencesDialogState& state) noexcept
+void InstallWheelRoutingHooks(HWND dlg) noexcept
 {
     if (! dlg)
     {
         return;
     }
 
-    const auto setSubclass = [](HWND hwnd, LPARAM lParam) noexcept -> BOOL
+    const auto installHook = [](HWND hwnd, LPARAM) noexcept -> BOOL
     {
-        auto* state = reinterpret_cast<PreferencesDialogState*>(lParam);
-        if (! state)
-        {
-            return TRUE;
-        }
-
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        SetWindowSubclass(hwnd, PreferencesWheelRouteSubclassProc, kPrefsWheelRouteSubclassId, reinterpret_cast<DWORD_PTR>(state));
-#pragma warning(pop)
+        static_cast<void>(InstallWndProcHook(hwnd, kPrefsWheelRouteOriginalWndProcProp, PreferencesWheelRouteWndProc));
         return TRUE;
     };
 
-    static_cast<void>(setSubclass(dlg, reinterpret_cast<LPARAM>(&state)));
-    EnumChildWindows(dlg, setSubclass, reinterpret_cast<LPARAM>(&state));
+    static_cast<void>(installHook(dlg, 0));
+    EnumChildWindows(dlg, installHook, 0);
 }
 
 void PaintPageHostBackgroundAndCards(HDC hdc, HWND host, const PreferencesDialogState& state) noexcept
@@ -375,8 +1030,15 @@ void PaintPageHostBackgroundAndCards(HDC hdc, HWND host, const PreferencesDialog
     RECT rc{};
     GetClientRect(host, &rc);
 
-    HBRUSH brush = state.backgroundBrush ? state.backgroundBrush.get() : reinterpret_cast<HBRUSH>(GetStockObject(NULL_BRUSH));
-    FillRect(hdc, &rc, brush);
+    D2DHdcPaint::Session paint;
+    if (! paint.Begin(hdc, rc))
+    {
+        HBRUSH brush = state.backgroundBrush ? state.backgroundBrush.get() : reinterpret_cast<HBRUSH>(GetStockObject(NULL_BRUSH));
+        FillRect(hdc, &rc, brush);
+        return;
+    }
+
+    paint.FillRectangle(rc, state.theme.windowBackground);
 
     if (state.theme.systemHighContrast || state.pageSettingCards.empty())
     {
@@ -384,19 +1046,9 @@ void PaintPageHostBackgroundAndCards(HDC hdc, HWND host, const PreferencesDialog
     }
 
     const UINT dpi         = GetDpiForWindow(host);
-    const int radius       = ThemedControls::ScaleDip(dpi, 6);
-    const COLORREF surface = ThemedControls::GetControlSurfaceColor(state.theme);
-    const COLORREF border  = ThemedControls::BlendColor(surface, state.theme.menu.text, state.theme.dark ? 40 : 30, 255);
-
-    wil::unique_hbrush cardBrush(CreateSolidBrush(surface));
-    wil::unique_hpen cardPen(CreatePen(PS_SOLID, 1, border));
-    if (! cardBrush || ! cardPen)
-    {
-        return;
-    }
-
-    [[maybe_unused]] auto oldBrush = wil::SelectObject(hdc, cardBrush.get());
-    [[maybe_unused]] auto oldPen   = wil::SelectObject(hdc, cardPen.get());
+    const float radius     = static_cast<float>(UiMetrics::ScaleDip(dpi, 6));
+    const COLORREF surface = UiMetrics::GetControlSurfaceColor(state.theme);
+    const COLORREF border  = UiMetrics::BlendColor(surface, state.theme.menu.text, state.theme.dark ? 40 : 30, 255);
 
     for (const RECT& baseCard : state.pageSettingCards)
     {
@@ -410,32 +1062,27 @@ void PaintPageHostBackgroundAndCards(HDC hdc, HWND host, const PreferencesDialog
         {
             continue;
         }
-        RoundRect(hdc, card.left, card.top, card.right, card.bottom, radius, radius);
+        paint.FillRoundedRectangle(card, radius, surface, border);
     }
 }
 
-struct CategoryInfo
-{
-    PrefCategory id{};
-    UINT labelId{};
-    UINT descriptionId{};
-};
-
-constexpr std::array<CategoryInfo, 11> kCategories = {{
-    {PrefCategory::General, IDS_PREFS_CAT_GENERAL, IDS_PREFS_CAT_GENERAL_DESC},
-    {PrefCategory::Panes, IDS_PREFS_CAT_PANES, IDS_PREFS_CAT_PANES_DESC},
-    {PrefCategory::Viewers, IDS_PREFS_CAT_VIEWERS, IDS_PREFS_CAT_VIEWERS_DESC},
-    {PrefCategory::Editors, IDS_PREFS_CAT_EDITORS, IDS_PREFS_CAT_EDITORS_DESC},
-    {PrefCategory::Keyboard, IDS_PREFS_CAT_KEYBOARD, IDS_PREFS_CAT_KEYBOARD_DESC},
-    {PrefCategory::Mouse, IDS_PREFS_CAT_MOUSE, IDS_PREFS_CAT_MOUSE_DESC},
-    {PrefCategory::Themes, IDS_PREFS_CAT_THEMES, IDS_PREFS_CAT_THEMES_DESC},
-    {PrefCategory::Plugins, IDS_PREFS_CAT_PLUGINS, IDS_PREFS_CAT_PLUGINS_DESC},
-    {PrefCategory::CompareDirectories, IDS_PREFS_CAT_COMPARE_DIRECTORIES, IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC},
-    {PrefCategory::HotPaths, IDS_PREFS_CAT_HOT_PATHS, IDS_PREFS_CAT_HOT_PATHS_DESC},
-    {PrefCategory::Advanced, IDS_PREFS_CAT_ADVANCED, IDS_PREFS_CAT_ADVANCED_DESC},
-}};
-
 wil::unique_hwnd g_preferencesDialog;
+
+bool RequestPreferencesDialogClose(HWND dlg) noexcept
+{
+    if (! dlg)
+    {
+        return false;
+    }
+
+    if (PostMessageW(dlg, kPrefsDeferredCloseMessage, 0, 0) == 0)
+    {
+        static_cast<void>(Debug::ErrorWithLastError(L"Preferences: PostMessageW failed for deferred close"));
+        return false;
+    }
+
+    return true;
+}
 
 [[nodiscard]] const CategoryInfo* FindCategoryInfo(PrefCategory id) noexcept
 {
@@ -459,6 +1106,421 @@ void SetState(HWND dlg, PreferencesDialogState* state) noexcept
     SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
 }
 
+void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return;
+    }
+
+    if (const auto originalWndProc = GetStoredWndProc(hwnd, originalWndProcProp))
+    {
+        RemovePropW(hwnd, originalWndProcProp);
+        static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(originalWndProc)));
+    }
+}
+
+[[maybe_unused]] [[nodiscard]] size_t CountVisibleChildWindows(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return 0u;
+    }
+
+    struct VisibleChildCounter
+    {
+        size_t count = 0u;
+    } counter{};
+
+    static_cast<void>(EnumChildWindows(hwnd,
+                                       [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto& counterRef = *reinterpret_cast<VisibleChildCounter*>(lParam);
+        if (PrefsUi::IsActuallyVisibleChildWindow(child))
+        {
+            ++counterRef.count;
+        }
+        return TRUE;
+    },
+                                       reinterpret_cast<LPARAM>(&counter)));
+
+    return counter.count;
+}
+
+[[maybe_unused]] [[nodiscard]] size_t CountVisibleChildWindowsByClass(HWND hwnd, const wchar_t* className) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! className || *className == L'\0')
+    {
+        return 0u;
+    }
+
+    struct VisibleClassCounter
+    {
+        const wchar_t* className = nullptr;
+        size_t count             = 0u;
+    } counter{className, 0u};
+
+    static_cast<void>(EnumChildWindows(hwnd,
+                                       [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto& counterRef = *reinterpret_cast<VisibleClassCounter*>(lParam);
+        if (! PrefsUi::IsActuallyVisibleChildWindow(child))
+        {
+            return TRUE;
+        }
+
+        std::array<wchar_t, 64> actualClassName{};
+        if (GetClassNameW(child, actualClassName.data(), static_cast<int>(actualClassName.size())) > 0 &&
+            _wcsicmp(actualClassName.data(), counterRef.className) == 0)
+        {
+            ++counterRef.count;
+        }
+        return TRUE;
+    },
+                                       reinterpret_cast<LPARAM>(&counter)));
+
+    return counter.count;
+}
+
+LRESULT CALLBACK PreferencesDxCategoryHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    auto* state = reinterpret_cast<PreferencesDialogState*>(GetPropW(hwnd, kPrefsDxCategoryHostStateProp));
+    if (! state)
+    {
+        return CallStoredWndProc(hwnd, kPrefsDxCategoryHostOriginalWndProcProp, msg, wp, lp);
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+
+    if (msg == WM_GETDLGCODE)
+    {
+        return CallStoredWndProc(hwnd, kPrefsDxCategoryHostOriginalWndProcProp, msg, wp, lp) | DLGC_WANTARROWS | DLGC_WANTCHARS | DLGC_WANTALLKEYS;
+    }
+
+    if (msg == WM_NCDESTROY)
+    {
+        const auto originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kPrefsDxCategoryHostOriginalWndProcProp);
+        RemovePropW(hwnd, kPrefsDxCategoryHostStateProp);
+        RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kPrefsDxCategoryHostOriginalWndProcProp, PreferencesDxCategoryHostWndProc);
+        hostState._categoryTreeHost.ReleaseMouseCapture();
+        hostState._categoryTreeControl = nullptr;
+        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    bool handled           = false;
+    const LRESULT dxResult = hostState._categoryTreeHost.HandleMessage(hwnd, msg, wp, lp, handled);
+    if (handled)
+    {
+        return dxResult;
+    }
+
+    return CallStoredWndProc(hwnd, kPrefsDxCategoryHostOriginalWndProcProp, msg, wp, lp);
+}
+
+LRESULT CALLBACK PreferencesDxShellHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    auto* host = reinterpret_cast<WindowHost*>(GetPropW(hwnd, kPrefsDxShellHostProp));
+    if (! host)
+    {
+        return CallStoredWndProc(hwnd, kPrefsDxShellHostOriginalWndProcProp, msg, wp, lp);
+    }
+
+    if (msg == WM_GETDLGCODE)
+    {
+        return CallStoredWndProc(hwnd, kPrefsDxShellHostOriginalWndProcProp, msg, wp, lp) | DLGC_WANTARROWS | DLGC_WANTCHARS | DLGC_WANTALLKEYS;
+    }
+
+    if (msg == WM_NCDESTROY)
+    {
+        const auto originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kPrefsDxShellHostOriginalWndProcProp);
+        RemovePropW(hwnd, kPrefsDxShellHostProp);
+        RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kPrefsDxShellHostOriginalWndProcProp, PreferencesDxShellHostWndProc);
+        host->ReleaseMouseCapture();
+        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    bool handled           = false;
+    const LRESULT dxResult = host->HandleMessage(hwnd, msg, wp, lp, handled);
+    if (handled)
+    {
+        return dxResult;
+    }
+
+    return CallStoredWndProc(hwnd, kPrefsDxShellHostOriginalWndProcProp, msg, wp, lp);
+}
+
+void UpdateDxShellText(PreferencesDialogHost& hostState, std::wstring_view title, std::wstring_view description) noexcept
+{
+    if (hostState._pageTitleControl)
+    {
+        hostState._pageTitleControl->SetText(std::wstring(title));
+    }
+
+    if (hostState._pageDescriptionControl)
+    {
+        hostState._pageDescriptionControl->SetText(std::wstring(description));
+    }
+
+    hostState._shellHost.Invalidate();
+}
+
+void UpdateDxShellButtons(HWND dlg, PreferencesDialogHost& hostState, const PreferencesDialogState& state) noexcept
+{
+    UNREFERENCED_PARAMETER(dlg);
+
+    if (hostState._okButtonControl)
+    {
+        hostState._okButtonControl->SetText(LoadStringResource(nullptr, IDS_BTN_OK));
+        hostState._okButtonControl->SetMnemonic(L'O');
+        hostState._okButtonControl->SetPrimary(true);
+    }
+    if (hostState._cancelButtonControl)
+    {
+        hostState._cancelButtonControl->SetText(LoadStringResource(nullptr, IDS_BTN_CANCEL));
+        hostState._cancelButtonControl->SetMnemonic(L'C');
+    }
+    if (hostState._applyButtonControl)
+    {
+        hostState._applyButtonControl->SetText(LoadStringResource(nullptr, IDS_BTN_APPLY));
+        hostState._applyButtonControl->SetMnemonic(L'A');
+        hostState._applyButtonControl->SetEnabled(state.dirty);
+    }
+    if (hostState._resetAllButtonControl)
+    {
+        hostState._resetAllButtonControl->SetText(LoadStringResource(nullptr, IDS_PREFS_BUTTON_RESET_ALL));
+        hostState._resetAllButtonControl->SetMnemonic(L'R');
+    }
+
+    hostState._shellHost.Invalidate();
+}
+
+void ApplyDxShellTheme(PreferencesDialogHost& hostState, const AppTheme& theme) noexcept
+{
+    const ThemePalette palette = PrefsUi::MakeDxPalette(theme);
+    hostState._shellHost.SetTheme(palette);
+}
+
+[[nodiscard]] HWND CreatePreferencesShellHostWindow(HWND dlg, bool tabStop) noexcept
+{
+    if (! EnsurePrefsDxShellHostClassRegistered())
+    {
+        Debug::ErrorWithLastError(L"Preferences: failed to register DX shell host class.");
+        return nullptr;
+    }
+
+    const DWORD style = WS_CHILD | SS_NOTIFY | (tabStop ? WS_TABSTOP : 0u);
+    return CreateWindowExW(0, kPrefsDxShellHostClassName, L"", style, 0, 0, 10, 10, dlg, nullptr, GetModuleHandleW(nullptr), nullptr);
+}
+
+[[nodiscard]] bool AttachPreferencesShellHost(HWND dlg, PreferencesDialogHost& hostState) noexcept
+{
+    if (! hostState._shellHostHwnd || ! hostState._shellHost.Attach(hostState._shellHostHwnd))
+    {
+        return false;
+    }
+
+    SetPropW(hostState._shellHostHwnd, kPrefsDxShellHostProp, &hostState._shellHost);
+    if (! InstallWndProcHook(hostState._shellHostHwnd, kPrefsDxShellHostOriginalWndProcProp, PreferencesDxShellHostWndProc))
+    {
+        Debug::ErrorWithLastError(L"Preferences: failed to install DX shell host window proc hook.");
+        RemovePropW(hostState._shellHostHwnd, kPrefsDxShellHostProp);
+        hostState._shellHost.Detach();
+        return false;
+    }
+
+    auto root = std::make_unique<RedSalamander::DxUi::Panel>();
+
+    auto* title = root->AddChild<Label>();
+    title->SetMultiline(false);
+    title->SetFontRole(FontRole::Title);
+
+    auto* description = root->AddChild<Label>();
+    description->SetMultiline(true);
+    description->SetFontRole(FontRole::Body);
+
+    const auto addButton = [&](const UINT commandId, const bool primary) noexcept
+    {
+        auto* button = root->AddChild<Button>();
+        button->SetPrimary(primary);
+        button->SetOnClick([dlg, commandId]
+        {
+            if (dlg && IsWindow(dlg) != FALSE)
+            {
+                PostMessageW(dlg, WM_COMMAND, MAKEWPARAM(commandId, 0), 0);
+            }
+        });
+        return button;
+    };
+
+    hostState._pageTitleControl       = title;
+    hostState._pageDescriptionControl = description;
+    hostState._resetAllButtonControl  = addButton(IDC_PREFS_RESET_ALL, false);
+    hostState._okButtonControl        = addButton(IDOK, true);
+    hostState._cancelButtonControl    = addButton(IDCANCEL, false);
+    hostState._applyButtonControl     = addButton(IDC_PREFS_APPLY, false);
+
+    hostState._shellHost.SetRoot(std::move(root));
+    hostState._shellHost.SetDefaultButton(hostState._okButtonControl);
+    hostState._shellHost.SetCancelButton(hostState._cancelButtonControl);
+    hostState._shellHost.SetOnTabBoundary([dlg, shellHostHwnd = hostState._shellHostHwnd](const bool reverse) noexcept
+    {
+        if (! dlg || IsWindow(dlg) == FALSE || ! shellHostHwnd || IsWindow(shellHostHwnd) == FALSE)
+        {
+            return false;
+        }
+
+        if (HWND target = GetNextDlgTabItem(dlg, shellHostHwnd, reverse ? TRUE : FALSE); target && target != shellHostHwnd)
+        {
+            SetFocus(target);
+            return true;
+        }
+
+        return false;
+    });
+    return true;
+}
+
+void ApplyPreferencesShellRegion(HWND hwnd, const int width, const int height, const int headerHeight, const int footerTop, const int footerHeight) noexcept
+{
+    if (! hwnd || width <= 0 || height <= 0)
+    {
+        return;
+    }
+
+    auto makeRegion = [&](const int left, const int top, const int right, const int bottom) noexcept -> wil::unique_hrgn
+    { return wil::unique_hrgn(CreateRectRgn(std::max(0, left), std::max(0, top), std::max(std::max(0, left), right), std::max(std::max(0, top), bottom))); };
+
+    wil::unique_hrgn combined = makeRegion(0, 0, 0, 0);
+    if (! combined)
+    {
+        return;
+    }
+
+    if (headerHeight > 0)
+    {
+        if (auto headerRgn = makeRegion(0, 0, width, std::min(height, headerHeight)); headerRgn)
+        {
+            static_cast<void>(CombineRgn(combined.get(), combined.get(), headerRgn.get(), RGN_OR));
+        }
+    }
+
+    if (footerHeight > 0 && footerTop < height)
+    {
+        if (auto footerRgn = makeRegion(0, footerTop, width, std::min(height, footerTop + footerHeight)); footerRgn)
+        {
+            static_cast<void>(CombineRgn(combined.get(), combined.get(), footerRgn.get(), RGN_OR));
+        }
+    }
+
+    static_cast<void>(SetWindowRgn(hwnd, combined.release(), TRUE));
+}
+
+void CreatePreferencesShellHosts(HWND dlg, PreferencesDialogHost& hostState) noexcept
+{
+    hostState._shellHostHwnd = CreatePreferencesShellHostWindow(dlg, true);
+
+    if (! AttachPreferencesShellHost(dlg, hostState))
+    {
+        Debug::Error(L"Preferences: failed to initialize DX shell hosts.");
+        return;
+    }
+
+    UpdateDxShellButtons(dlg, hostState, hostState);
+    ApplyDxShellTheme(hostState, hostState.theme);
+
+    const auto hideWindow = [](HWND hwnd) noexcept
+    {
+        if (hwnd)
+        {
+            ShowWindow(hwnd, SW_HIDE);
+        }
+    };
+
+    hideWindow(GetDlgItem(dlg, IDOK));
+    hideWindow(GetDlgItem(dlg, IDCANCEL));
+    hideWindow(GetDlgItem(dlg, IDC_PREFS_APPLY));
+}
+
+void AttachPreferencesPageHostDxSurface(PreferencesDialogHost& hostState) noexcept
+{
+    hostState.pageHostUsesDxUi                  = false;
+    hostState._pageHostRootControl              = nullptr;
+    hostState._pageHostContentRootControl       = nullptr;
+    hostState._pageHostSurfaceControl           = nullptr;
+    hostState._pageHostEmptyStatePanel          = nullptr;
+    hostState._pageHostEmptyStateIconControl    = nullptr;
+    hostState._pageHostEmptyStateTitleControl   = nullptr;
+    hostState._pageHostEmptyStateBodyControl    = nullptr;
+    hostState._pageHostEmptyStateCaptionControl = nullptr;
+    hostState.pageHostDxHost                    = nullptr;
+    hostState.pageHostDxRootControl             = nullptr;
+    hostState.pageHostDxContentRootControl      = nullptr;
+    hostState.pageHostDxNoteControl             = nullptr;
+    if (! hostState.pageHostWindow)
+    {
+        return;
+    }
+
+    if (hostState._pageHostHost.GetHwnd() != hostState.pageHostWindow)
+    {
+        hostState._pageHostHost.Detach();
+        if (! hostState._pageHostHost.Attach(hostState.pageHostWindow))
+        {
+            Debug::Error(L"Preferences: failed to attach DxUi host for page host surface.");
+            return;
+        }
+    }
+
+    hostState._pageHostHost.SetTheme(PrefsUi::MakeDxPalette(hostState.theme));
+    auto root               = std::make_unique<Panel>();
+    auto* rawRoot           = root.get();
+    auto* surface           = rawRoot->AddChild<PreferencesPageHostSurfaceControl>(&hostState);
+    auto* contentRoot       = rawRoot->AddChild<Panel>();
+    auto* emptyStatePanel   = rawRoot->AddChild<Panel>();
+    auto* emptyStateIcon    = rawRoot->AddChild<Label>();
+    auto* emptyStateTitle   = rawRoot->AddChild<Label>();
+    auto* emptyStateBody    = rawRoot->AddChild<Label>();
+    auto* emptyStateCaption = rawRoot->AddChild<Label>();
+
+    emptyStatePanel->SetVisible(false);
+
+    emptyStateIcon->SetMultiline(false);
+    emptyStateIcon->SetFontRole(FontRole::HeroIcon);
+    emptyStateIcon->SetAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    emptyStateIcon->SetVisible(false);
+
+    emptyStateTitle->SetMultiline(true);
+    emptyStateTitle->SetFontRole(FontRole::Title);
+    emptyStateTitle->SetAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    emptyStateTitle->SetVisible(false);
+
+    emptyStateBody->SetMultiline(true);
+    emptyStateBody->SetFontRole(FontRole::Body);
+    emptyStateBody->SetAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    emptyStateBody->SetVisible(false);
+
+    emptyStateCaption->SetMultiline(true);
+    emptyStateCaption->SetFontRole(FontRole::Small);
+    emptyStateCaption->SetAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    emptyStateCaption->SetVisible(false);
+
+    hostState._pageHostRootControl              = rawRoot;
+    hostState._pageHostContentRootControl       = contentRoot;
+    hostState._pageHostSurfaceControl           = surface;
+    hostState._pageHostEmptyStatePanel          = emptyStatePanel;
+    hostState._pageHostEmptyStateIconControl    = emptyStateIcon;
+    hostState._pageHostEmptyStateTitleControl   = emptyStateTitle;
+    hostState._pageHostEmptyStateBodyControl    = emptyStateBody;
+    hostState._pageHostEmptyStateCaptionControl = emptyStateCaption;
+    hostState.pageHostDxHost                    = &hostState._pageHostHost;
+    hostState.pageHostDxRootControl             = rawRoot;
+    hostState.pageHostDxContentRootControl      = contentRoot;
+    hostState.pageHostDxNoteControl             = emptyStatePanel;
+    hostState._pageHostHost.SetRoot(std::move(root));
+    hostState.pageHostUsesDxUi = true;
+    ApplySharedEmptyStatePalette(hostState);
+}
+
 void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& title, const std::wstring& message) noexcept
 {
     if (! dlg || message.empty())
@@ -480,72 +1542,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     static_cast<void>(HostShowAlert(request));
 }
 
-[[nodiscard]] HFONT GetDialogFont(HWND hwnd) noexcept
-{
-    HFONT font = hwnd ? reinterpret_cast<HFONT>(SendMessageW(hwnd, WM_GETFONT, 0, 0)) : nullptr;
-    if (! font)
-    {
-        font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    }
-    return font;
-}
-
-BOOL CALLBACK SetDialogChildFontProc(HWND child, LPARAM fontParam) noexcept
-{
-    const HFONT font = reinterpret_cast<HFONT>(fontParam);
-    if (font)
-    {
-        SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
-    }
-    return TRUE;
-}
-
-void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
-{
-    if (! baseFont)
-    {
-        baseFont = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    }
-
-    if (! state.italicFont)
-    {
-        LOGFONTW lf{};
-        if (GetObjectW(baseFont, sizeof(lf), &lf) == sizeof(lf))
-        {
-            lf.lfItalic = TRUE;
-            state.italicFont.reset(CreateFontIndirectW(&lf));
-        }
-    }
-
-    if (! state.boldFont)
-    {
-        LOGFONTW lf{};
-        if (GetObjectW(baseFont, sizeof(lf), &lf) == sizeof(lf))
-        {
-            lf.lfWeight = FW_SEMIBOLD;
-            state.boldFont.reset(CreateFontIndirectW(&lf));
-        }
-    }
-
-    if (! state.titleFont)
-    {
-        LOGFONTW lf{};
-        if (GetObjectW(baseFont, sizeof(lf), &lf) == sizeof(lf))
-        {
-            lf.lfWeight = FW_SEMIBOLD;
-            if (lf.lfHeight != 0)
-            {
-                lf.lfHeight *= 2;
-            }
-            else
-            {
-                lf.lfHeight = -24;
-            }
-            state.titleFont.reset(CreateFontIndirectW(&lf));
-        }
-    }
-}
-
 [[nodiscard]] Common::Settings::MainMenuState GetMainMenu(const Common::Settings::Settings& settings) noexcept
 {
     if (settings.mainMenu.has_value())
@@ -561,6 +1557,16 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
     if (settings.startup.has_value())
     {
         return settings.startup.value();
+    }
+    return kDefaults;
+}
+
+[[nodiscard]] const Common::Settings::UiSettings& GetUiSettingsOrDefault(const Common::Settings::Settings& settings) noexcept
+{
+    static const Common::Settings::UiSettings kDefaults{};
+    if (settings.ui.has_value())
+    {
+        return settings.ui.value();
     }
     return kDefaults;
 }
@@ -859,6 +1865,14 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
             return true;
         }
     }
+    {
+        const auto& baselineUi = GetUiSettingsOrDefault(state.baselineSettings);
+        const auto& workingUi  = GetUiSettingsOrDefault(state.workingSettings);
+        if (baselineUi != workingUi)
+        {
+            return true;
+        }
+    }
     if (! AreEquivalentShortcuts(state.baselineSettings.shortcuts, state.workingSettings.shortcuts))
     {
         return true;
@@ -897,6 +1911,10 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
         const auto& baselineFileOperations = GetFileOperationsSettingsOrDefault(state.baselineSettings);
         const auto& workingFileOperations  = GetFileOperationsSettingsOrDefault(state.workingSettings);
         if (baselineFileOperations.autoDismissSuccess != workingFileOperations.autoDismissSuccess ||
+            baselineFileOperations.preCalcEnabled != workingFileOperations.preCalcEnabled ||
+            baselineFileOperations.preCalcMaxWorkers != workingFileOperations.preCalcMaxWorkers ||
+            baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
+            baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||
             baselineFileOperations.maxDiagnosticsLogFiles != workingFileOperations.maxDiagnosticsLogFiles ||
             baselineFileOperations.diagnosticsInfoEnabled != workingFileOperations.diagnosticsInfoEnabled ||
             baselineFileOperations.diagnosticsDebugEnabled != workingFileOperations.diagnosticsDebugEnabled ||
@@ -943,12 +1961,24 @@ void EnsureFonts(PreferencesDialogState& state, HFONT baseFont) noexcept
 void UpdateApplyButton(HWND dlg, const PreferencesDialogState& state) noexcept
 {
     HWND apply = dlg ? GetDlgItem(dlg, IDC_PREFS_APPLY) : nullptr;
-    if (! apply)
+    if (apply)
     {
-        return;
+        EnableWindow(apply, state.dirty ? TRUE : FALSE);
     }
 
-    EnableWindow(apply, state.dirty ? TRUE : FALSE);
+    if (dlg)
+    {
+        auto* mutableState = GetState(dlg);
+        if (mutableState)
+        {
+            auto& hostState = static_cast<PreferencesDialogHost&>(*mutableState);
+            if (hostState._applyButtonControl)
+            {
+                hostState._applyButtonControl->SetEnabled(state.dirty);
+                hostState._shellHost.Invalidate();
+            }
+        }
+    }
 }
 
 } // namespace
@@ -957,6 +1987,147 @@ void SetDirty(HWND dlg, PreferencesDialogState& state) noexcept
 {
     state.dirty = IsDirty(state);
     UpdateApplyButton(dlg, state);
+}
+
+void PrefsUi::HideSharedPageEmptyState(PreferencesDialogState& state) noexcept
+{
+    auto& hostState = static_cast<PreferencesDialogHost&>(state);
+    if (hostState._pageHostEmptyStatePanel)
+    {
+        hostState._pageHostEmptyStatePanel->SetVisible(false);
+        hostState._pageHostEmptyStatePanel->SetBounds(D2D1::RectF());
+    }
+
+    if (hostState._pageHostEmptyStateIconControl)
+    {
+        hostState._pageHostEmptyStateIconControl->SetText(L"");
+        hostState._pageHostEmptyStateIconControl->SetBounds(D2D1::RectF());
+    }
+    if (hostState._pageHostEmptyStateTitleControl)
+    {
+        hostState._pageHostEmptyStateTitleControl->SetText(L"");
+        hostState._pageHostEmptyStateTitleControl->SetBounds(D2D1::RectF());
+    }
+    if (hostState._pageHostEmptyStateBodyControl)
+    {
+        hostState._pageHostEmptyStateBodyControl->SetText(L"");
+        hostState._pageHostEmptyStateBodyControl->SetBounds(D2D1::RectF());
+    }
+    if (hostState._pageHostEmptyStateCaptionControl)
+    {
+        hostState._pageHostEmptyStateCaptionControl->SetText(L"");
+        hostState._pageHostEmptyStateCaptionControl->SetBounds(D2D1::RectF());
+    }
+}
+
+int PrefsUi::ShowSharedPageEmptyState(HWND host,
+                                      PreferencesDialogState& state,
+                                      const PreferencesEmptyStateSpec& spec,
+                                      int x,
+                                      int y,
+                                      int width,
+                                      const PreferencesTypographyContext& typography) noexcept
+{
+    auto& hostState = static_cast<PreferencesDialogHost&>(state);
+    if (! host || width <= 0 || ! hostState._pageHostEmptyStatePanel || ! hostState._pageHostEmptyStateIconControl ||
+        ! hostState._pageHostEmptyStateTitleControl || ! hostState._pageHostEmptyStateBodyControl || ! hostState._pageHostEmptyStateCaptionControl)
+    {
+        return 0;
+    }
+
+    const UINT dpi              = std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI);
+    const int cardPaddingX      = UiMetrics::ScaleDip(dpi, 20);
+    const int cardPaddingTop    = UiMetrics::ScaleDip(dpi, 18);
+    const int cardPaddingBottom = UiMetrics::ScaleDip(dpi, 18);
+    const int iconHeight        = UiMetrics::ScaleDip(dpi, 72);
+    const int gapIconTitle      = UiMetrics::ScaleDip(dpi, 8);
+    const int gapTitleBody      = UiMetrics::ScaleDip(dpi, 6);
+    const int gapBodyCaption    = UiMetrics::ScaleDip(dpi, 8);
+    const int textWidth         = std::max(0, width - 2 * cardPaddingX);
+
+    const int titleHeight   = spec.title.empty() ? 0 : PrefsUi::MeasureWrappedTextHeightPx(typography, typography.title, textWidth, spec.title);
+    const int bodyHeight    = spec.body.empty() ? 0 : PrefsUi::MeasureWrappedTextHeightPx(typography, typography.body, textWidth, spec.body);
+    const int captionHeight = spec.caption.empty() ? 0 : PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, spec.caption);
+
+    int contentHeight = iconHeight;
+    if (titleHeight > 0)
+    {
+        contentHeight += gapIconTitle + titleHeight;
+    }
+    if (bodyHeight > 0)
+    {
+        contentHeight += gapTitleBody + bodyHeight;
+    }
+    if (captionHeight > 0)
+    {
+        contentHeight += gapBodyCaption + captionHeight;
+    }
+
+    const int cardHeight = cardPaddingTop + contentHeight + cardPaddingBottom;
+    const auto pxToDip   = [dpi](const int value) noexcept { return (static_cast<float>(value) * 96.0f) / static_cast<float>((std::max)(1u, dpi)); };
+
+    ApplySharedEmptyStatePalette(state, &spec);
+
+    const std::wstring iconText = GetEmptyStateIconText(state.pageHostDxHost, spec);
+    hostState._pageHostEmptyStatePanel->SetVisible(true);
+    hostState._pageHostEmptyStatePanel->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(y), pxToDip(x + width), pxToDip(y + cardHeight)));
+
+    int currentY = y + cardPaddingTop;
+
+    hostState._pageHostEmptyStateIconControl->SetText(iconText);
+    hostState._pageHostEmptyStateIconControl->SetVisible(! iconText.empty());
+    hostState._pageHostEmptyStateIconControl->SetBounds(
+        D2D1::RectF(pxToDip(x + cardPaddingX), pxToDip(currentY), pxToDip(x + width - cardPaddingX), pxToDip(currentY + iconHeight)));
+    currentY += iconHeight;
+
+    if (titleHeight > 0)
+    {
+        currentY += gapIconTitle;
+        hostState._pageHostEmptyStateTitleControl->SetText(spec.title);
+        hostState._pageHostEmptyStateTitleControl->SetVisible(true);
+        hostState._pageHostEmptyStateTitleControl->SetBounds(
+            D2D1::RectF(pxToDip(x + cardPaddingX), pxToDip(currentY), pxToDip(x + width - cardPaddingX), pxToDip(currentY + titleHeight)));
+        currentY += titleHeight;
+    }
+    else
+    {
+        hostState._pageHostEmptyStateTitleControl->SetVisible(false);
+        hostState._pageHostEmptyStateTitleControl->SetBounds(D2D1::RectF());
+        hostState._pageHostEmptyStateTitleControl->SetText(L"");
+    }
+
+    if (bodyHeight > 0)
+    {
+        currentY += gapTitleBody;
+        hostState._pageHostEmptyStateBodyControl->SetText(spec.body);
+        hostState._pageHostEmptyStateBodyControl->SetVisible(true);
+        hostState._pageHostEmptyStateBodyControl->SetBounds(
+            D2D1::RectF(pxToDip(x + cardPaddingX), pxToDip(currentY), pxToDip(x + width - cardPaddingX), pxToDip(currentY + bodyHeight)));
+        currentY += bodyHeight;
+    }
+    else
+    {
+        hostState._pageHostEmptyStateBodyControl->SetVisible(false);
+        hostState._pageHostEmptyStateBodyControl->SetBounds(D2D1::RectF());
+        hostState._pageHostEmptyStateBodyControl->SetText(L"");
+    }
+
+    if (captionHeight > 0)
+    {
+        currentY += gapBodyCaption;
+        hostState._pageHostEmptyStateCaptionControl->SetText(spec.caption);
+        hostState._pageHostEmptyStateCaptionControl->SetVisible(true);
+        hostState._pageHostEmptyStateCaptionControl->SetBounds(
+            D2D1::RectF(pxToDip(x + cardPaddingX), pxToDip(currentY), pxToDip(x + width - cardPaddingX), pxToDip(currentY + captionHeight)));
+    }
+    else
+    {
+        hostState._pageHostEmptyStateCaptionControl->SetVisible(false);
+        hostState._pageHostEmptyStateCaptionControl->SetBounds(D2D1::RectF());
+        hostState._pageHostEmptyStateCaptionControl->SetText(L"");
+    }
+
+    return cardHeight;
 }
 
 namespace
@@ -994,6 +2165,14 @@ namespace
             merged.startup = workingStartup;
         }
     }
+    {
+        const auto& baselineUi = GetUiSettingsOrDefault(state.baselineSettings);
+        const auto& workingUi  = GetUiSettingsOrDefault(state.workingSettings);
+        if (baselineUi != workingUi)
+        {
+            merged.ui = workingUi;
+        }
+    }
 
     if (! AreEquivalentShortcuts(state.baselineSettings.shortcuts, state.workingSettings.shortcuts))
     {
@@ -1008,11 +2187,15 @@ namespace
         const PrefsFolders::FolderPanePreferences left  = PrefsFolders::GetFolderPanePreferences(state.workingSettings, PrefsFolders::kLeftPaneSlot);
         const PrefsFolders::FolderPanePreferences right = PrefsFolders::GetFolderPanePreferences(state.workingSettings, PrefsFolders::kRightPaneSlot);
         const uint32_t historyMax                       = PrefsFolders::GetFolderHistoryMax(state.workingSettings);
+        const bool showHiddenFiles                      = PrefsFolders::GetFolderShowHiddenFiles(state.workingSettings);
+        const bool showSystemFiles                      = PrefsFolders::GetFolderShowSystemFiles(state.workingSettings);
 
         auto* folders = PrefsFolders::EnsureWorkingFoldersSettings(merged);
         if (folders)
         {
-            folders->historyMax = historyMax;
+            folders->historyMax      = historyMax;
+            folders->showHiddenFiles = showHiddenFiles;
+            folders->showSystemFiles = showSystemFiles;
 
             if (auto* pane = PrefsFolders::EnsureWorkingFolderPane(merged, PrefsFolders::kLeftPaneSlot))
             {
@@ -1057,6 +2240,10 @@ namespace
         const auto& baselineFileOperations = GetFileOperationsSettingsOrDefault(state.baselineSettings);
         const auto& workingFileOperations  = GetFileOperationsSettingsOrDefault(state.workingSettings);
         if (baselineFileOperations.autoDismissSuccess != workingFileOperations.autoDismissSuccess ||
+            baselineFileOperations.preCalcEnabled != workingFileOperations.preCalcEnabled ||
+            baselineFileOperations.preCalcMaxWorkers != workingFileOperations.preCalcMaxWorkers ||
+            baselineFileOperations.defaultBandwidthLimitBytesPerSecond != workingFileOperations.defaultBandwidthLimitBytesPerSecond ||
+            baselineFileOperations.crossFsBridgeBufferSizeKB != workingFileOperations.crossFsBridgeBufferSizeKB ||
             baselineFileOperations.maxDiagnosticsLogFiles != workingFileOperations.maxDiagnosticsLogFiles ||
             baselineFileOperations.diagnosticsInfoEnabled != workingFileOperations.diagnosticsInfoEnabled ||
             baselineFileOperations.diagnosticsDebugEnabled != workingFileOperations.diagnosticsDebugEnabled ||
@@ -1115,9 +2302,10 @@ namespace
     return S_OK;
 }
 
-void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noexcept;
+void RefreshPreferencesDialogThemeImpl(HWND dlg, PreferencesDialogState& state) noexcept;
 void PopulateCategoryTree(HWND dlg, PreferencesDialogState& state) noexcept;
 void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory category) noexcept;
+void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcept;
 
 void ReloadPreferencesDialogFromDisk(HWND dlg, PreferencesDialogState& state) noexcept
 {
@@ -1132,9 +2320,144 @@ void ReloadPreferencesDialogFromDisk(HWND dlg, PreferencesDialogState& state) no
     state.workingSettings         = *state.settings;
 
     PopulateCategoryTree(dlg, state);
-    RefreshPreferencesDialogTheme(dlg, state);
+    RefreshPreferencesDialogThemeImpl(dlg, state);
     UpdatePageText(dlg, state, state.currentCategory);
     SetDirty(dlg, state);
+}
+
+void ResetAllPreferencesToDefaults(HWND dlg, PreferencesDialogState& state) noexcept
+{
+    if (! dlg)
+    {
+        return;
+    }
+
+    const auto& hostState      = static_cast<PreferencesDialogHost&>(state);
+    const std::wstring title   = LoadStringResource(nullptr, IDS_PREFS_BUTTON_RESET_ALL);
+    const std::wstring message = LoadStringResource(nullptr, IDS_PREFS_RESET_ALL_CONFIRM);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences reset-all: begin");
+#endif
+
+    HostPromptRequest request{};
+    request.version       = 1u;
+    request.sizeBytes     = sizeof(request);
+    request.scope         = HOST_ALERT_SCOPE_WINDOW;
+    request.severity      = HOST_ALERT_WARNING;
+    request.buttons       = HOST_PROMPT_BUTTONS_YES_NO;
+    request.targetWindow  = (state.pageHostWindow && IsWindow(state.pageHostWindow) != FALSE)
+                                ? state.pageHostWindow
+                                : ((hostState._shellHostHwnd && IsWindow(hostState._shellHostHwnd) != FALSE) ? hostState._shellHostHwnd : dlg);
+    request.title         = title.c_str();
+    request.message       = message.c_str();
+    request.defaultResult = HOST_PROMPT_RESULT_NO;
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences reset-all: prompt request prepared");
+#endif
+
+    Debug::Info(L"Preferences: reset-all prompt begin target={:#x} pageHost={:#x} shellHost={:#x}",
+                reinterpret_cast<uintptr_t>(request.targetWindow),
+                reinterpret_cast<uintptr_t>(state.pageHostWindow),
+                reinterpret_cast<uintptr_t>(hostState._shellHostHwnd));
+
+    HostPromptResult promptResult = HOST_PROMPT_RESULT_NONE;
+    const HRESULT hrPrompt        = HostShowPrompt(request, nullptr, &promptResult);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(
+        L"Preferences reset-all: prompt completed hr=0x{:08X} result={}", static_cast<unsigned int>(hrPrompt), static_cast<unsigned int>(promptResult)));
+#endif
+    Debug::Info(L"Preferences: reset-all prompt end hr=0x{:08X} result={}", static_cast<unsigned int>(hrPrompt), static_cast<unsigned int>(promptResult));
+    if (FAILED(hrPrompt))
+    {
+        Debug::Warning(L"Preferences: reset-all confirmation prompt failed; hr=0x{:08X}.", static_cast<unsigned int>(hrPrompt));
+        return;
+    }
+
+    if (promptResult != HOST_PROMPT_RESULT_YES)
+    {
+        return;
+    }
+
+    // Reset all working settings to defaults.
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences reset-all: resetting working settings");
+#endif
+    state.workingSettings = Common::Settings::Settings{};
+
+    // Shortcuts require explicit default initialization via the factory.
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences reset-all: restoring default shortcuts");
+#endif
+    state.workingSettings.shortcuts.emplace(ShortcutDefaults::CreateDefaultShortcuts());
+
+    // Clear cached pane-local UI state that may reference old values.
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences reset-all: clearing cached pane-local state");
+#endif
+    state.viewersSelectedExtensionText.clear();
+    state.pluginsSelectedCustomPathText.clear();
+    state.keyboardCaptureActive = false;
+    state.keyboardCaptureCommandId.clear();
+    state.keyboardCaptureBindingIndex.reset();
+    state.keyboardCapturePendingVk.reset();
+    state.keyboardCapturePendingModifiers = 0;
+    state.keyboardCaptureConflictCommandId.clear();
+    state.keyboardCaptureConflictBindingIndex.reset();
+    state.keyboardCaptureConflictMultiple = false;
+
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences reset-all: SetDirty");
+#endif
+    SetDirty(dlg, state);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences reset-all: RefreshPreferencesDialogTheme");
+#endif
+    RefreshPreferencesDialogThemeImpl(dlg, state);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences reset-all: RebindActivePreferencesPage");
+#endif
+    RebindActivePreferencesPage(dlg, state);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences reset-all: complete");
+#endif
+}
+
+void RebindActivePreferencesPage(HWND dlg, PreferencesDialogState& state) noexcept
+{
+    if (! dlg)
+    {
+        return;
+    }
+
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences rebind: begin");
+#endif
+    ResetPreferencesSharedPageSurface(state);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences rebind: shared page surface reset");
+#endif
+    if (state.pageHostWindow)
+    {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"Preferences rebind: ensuring active page initialized");
+#endif
+        static_cast<void>(EnsureActivePreferencesPageInitialized(state.pageHostWindow, state));
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"Preferences rebind: refreshing active page");
+#endif
+        RefreshActivePreferencesPage(state.pageHostWindow, state);
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"Preferences rebind: laying out page host");
+#endif
+        LayoutPreferencesPageHost(state.pageHostWindow, state);
+    }
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences rebind: updating page text");
+#endif
+    UpdatePageText(dlg, state, state.currentCategory);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences rebind: complete");
+#endif
 }
 
 [[nodiscard]] bool ResolvePreferencesStaleSaveConflict(HWND dlg, PreferencesDialogState& state) noexcept
@@ -1170,7 +2493,7 @@ void ReloadPreferencesDialogFromDisk(HWND dlg, PreferencesDialogState& state) no
 INT_PTR OnSettingsReloadedFromDisk(HWND dlg, PreferencesDialogState& state) noexcept
 {
     state.previewApplied = false;
-    RefreshPreferencesDialogTheme(dlg, state);
+    RefreshPreferencesDialogThemeImpl(dlg, state);
 
     if (state.dirty)
     {
@@ -1230,29 +2553,65 @@ void CommitAndApply(HWND dlg, PreferencesDialogState& state) noexcept
         PostMessageW(state.owner, WndMsg::kPluginsChanged, 0, 0);
     }
 
-    RefreshPreferencesDialogTheme(dlg, state);
+    RefreshPreferencesDialogThemeImpl(dlg, state);
 }
 
 void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept;
 void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcept;
 
-void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noexcept
+void RefreshPreferencesDialogThemeImpl(HWND dlg, PreferencesDialogState& state) noexcept
 {
     if (! dlg || ! state.settings)
     {
         return;
     }
 
-    ApplyThemeToPreferencesDialog(dlg, state, ResolveThemeFromSettingsForDialog(*state.settings));
-    LayoutPreferencesDialog(dlg, state);
-    if (state.pageHost)
-    {
-        LayoutPreferencesPageHost(state.pageHost, state);
-        RedrawWindow(state.pageHost, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
-    }
-    RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
-}
+    auto& hostState = static_cast<PreferencesDialogHost&>(state);
+    ApplyWindowChromeTheme(dlg, state.theme, WindowBackdropTarget::Tool, GetActiveWindow() == dlg);
 
+    // No ScopedWindowRedrawBlock — see comment in UpdatePageText.
+    if (state.categoryTreeUsesDxUi)
+    {
+        hostState._categoryTreeHost.SetTheme(PrefsUi::MakeDxPalette(state.theme));
+    }
+    ApplyDxShellTheme(hostState, state.theme);
+    UpdateDxShellButtons(dlg, hostState, state);
+
+    // Update page title/description for current category.
+    {
+        const CategoryInfo* info = FindCategoryInfo(state.currentCategory);
+        std::wstring title       = info ? LoadStringResource(nullptr, info->labelId) : std::wstring{};
+        std::wstring description = info ? LoadStringResource(nullptr, info->descriptionId) : std::wstring{};
+        UpdateDxShellText(hostState, title, description);
+    }
+
+    if (state.pageHostUsesDxUi)
+    {
+        hostState._pageHostHost.SetTheme(PrefsUi::MakeDxPalette(state.theme));
+    }
+
+    // Set pageHostIgnoreSize BEFORE creating pane controls so that any WM_SIZE
+    // messages generated during EnsureCreated / CreateControls do not trigger
+    // LayoutPreferencesPageHost with partially-initialized state.
+    state.pageHostIgnoreSize = true;
+    const auto clearIgnore   = wil::scope_exit([&]() noexcept { state.pageHostIgnoreSize = false; });
+
+    if (state.pageHostWindow)
+    {
+        static_cast<void>(EnsureActivePreferencesPageInitialized(state.pageHostWindow, state));
+        RefreshActivePreferencesPage(state.pageHostWindow, state);
+    }
+
+    LayoutPreferencesDialog(dlg, state);
+
+    if (state.pageHostWindow)
+    {
+        LayoutPreferencesPageHost(state.pageHostWindow, state);
+    }
+
+    // Force a single synchronous repaint — see comment in UpdatePageText.
+    RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+}
 [[nodiscard]] int MeasurePageHostContentHeightPx(HWND host, const PreferencesDialogState& state) noexcept
 {
     if (! host)
@@ -1260,46 +2619,24 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
         return 0;
     }
 
-    const auto& hostState                 = static_cast<const PreferencesDialogHost&>(state);
-    const std::array<HWND, 9> paneWindows = {
-        hostState._generalPane.Hwnd(),
-        hostState._panesPane.Hwnd(),
-        hostState._viewersPane.Hwnd(),
-        hostState._editorsPane.Hwnd(),
-        hostState._keyboardPane.Hwnd(),
-        hostState._mousePane.Hwnd(),
-        hostState._themesPane.Hwnd(),
-        hostState._pluginsPane.Hwnd(),
-        hostState._advancedPane.Hwnd(),
-    };
-
-    const auto isPaneWindow = [&](HWND hwnd) noexcept
+    const HWND paneRoot = GetActivePreferencesPageRootWindow(state);
+    if (! paneRoot || IsWindow(paneRoot) == FALSE)
     {
-        for (HWND pane : paneWindows)
-        {
-            if (pane && pane == hwnd)
-            {
-                return true;
-            }
-        }
-        return false;
-    };
+        return 0;
+    }
 
     int maxBottomPx = 0;
 
-    HWND current = GetWindow(host, GW_CHILD);
+    HWND current = (paneRoot == host) ? GetWindow(paneRoot, GW_CHILD) : paneRoot;
     while (current)
     {
-        if (IsWindowVisible(current))
+        if (PrefsUi::IsActuallyVisibleChildWindow(current))
         {
-            if (! isPaneWindow(current))
+            RECT rc{};
+            if (GetWindowRect(current, &rc))
             {
-                RECT rc{};
-                if (GetWindowRect(current, &rc))
-                {
-                    MapWindowPoints(nullptr, host, reinterpret_cast<POINT*>(&rc), 2);
-                    maxBottomPx = std::max(maxBottomPx, static_cast<int>(rc.bottom));
-                }
+                MapWindowPoints(nullptr, host, reinterpret_cast<POINT*>(&rc), 2);
+                maxBottomPx = std::max(maxBottomPx, static_cast<int>(rc.bottom));
             }
         }
 
@@ -1313,14 +2650,14 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
         while (current)
         {
             next = GetWindow(current, GW_HWNDNEXT);
-            if (next)
+            if (next && GetParent(next) == GetParent(current))
             {
                 current = next;
                 break;
             }
 
             current = GetParent(current);
-            if (! current || current == host)
+            if (! current || current == paneRoot)
             {
                 current = nullptr;
                 break;
@@ -1328,7 +2665,34 @@ void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noex
         }
     }
 
-    return std::max(0, maxBottomPx);
+    const auto measureDxBranchBottomPx =
+        [dpi = GetDpiForWindow(host)](const RedSalamander::DxUi::Control* control, bool includeSelf, const auto& self) noexcept -> int
+    {
+        if (! control || ! control->IsVisible() || dpi == 0u)
+        {
+            return 0;
+        }
+
+        int maxBottom = 0;
+        if (includeSelf)
+        {
+            const D2D1_RECT_F bounds = control->GetBounds();
+            maxBottom                = static_cast<int>(std::lround((bounds.bottom * static_cast<float>(dpi)) / 96.0f));
+        }
+        if (const auto* panel = dynamic_cast<const Panel*>(control))
+        {
+            for (const auto& child : panel->GetChildren())
+            {
+                maxBottom = std::max(maxBottom, self(child.get(), true, self));
+            }
+        }
+        return maxBottom;
+    };
+
+    const int directDxBottomPx = std::max(measureDxBranchBottomPx(state.pageHostDxContentRootControl, false, measureDxBranchBottomPx),
+                                          measureDxBranchBottomPx(state.pageHostDxNoteControl, true, measureDxBranchBottomPx));
+
+    return std::max({0, maxBottomPx, state.pageHostDirectContentBottomPx, directDxBottomPx});
 }
 
 void UpdatePageHostScrollInfo(HWND host, PreferencesDialogState& state) noexcept
@@ -1340,25 +2704,24 @@ void UpdatePageHostScrollInfo(HWND host, PreferencesDialogState& state) noexcept
 
     RECT client{};
     GetClientRect(host, &client);
-    const int clientWidth  = std::max(0l, client.right - client.left);
     const int clientHeight = std::max(0l, client.bottom - client.top);
 
     const UINT dpi          = GetDpiForWindow(host);
-    const int paddingBottom = ThemedControls::ScaleDip(dpi, 12);
+    const int paddingBottom = UiMetrics::ScaleDip(dpi, 12);
     int contentHeight       = MeasurePageHostContentHeightPx(host, state);
     for (const RECT& card : state.pageSettingCards)
     {
         contentHeight = std::max(contentHeight, static_cast<int>(card.bottom));
     }
-    contentHeight = std::max(0, contentHeight + paddingBottom);
-
-    // The page host scrolls its child "pane" window(s). Those panes must be tall enough to contain
-    // all laid-out controls; otherwise controls below the pane's client rect get clipped and appear
-    // as "blank cards" after scrolling.
-    if (const HWND pane = GetActivePrefsPaneWindow(state); pane && IsWindow(pane))
+    contentHeight        = std::max(0, contentHeight);
+    const int overflowPx = std::max(0, contentHeight - clientHeight);
+    if (overflowPx > paddingBottom)
     {
-        const int desiredHeight = std::max(clientHeight, contentHeight);
-        SetWindowPos(pane, nullptr, 0, 0, clientWidth, desiredHeight, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        contentHeight += paddingBottom;
+    }
+    else if (overflowPx > 0)
+    {
+        contentHeight = clientHeight;
     }
 
     const int maxScroll     = std::max(0, contentHeight - clientHeight);
@@ -1386,7 +2749,9 @@ void UpdatePageHostScrollInfo(HWND host, PreferencesDialogState& state) noexcept
         SetWindowLongPtrW(host, GWL_STYLE, styleWanted);
         SetWindowPos(host, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
         SendMessageW(host, WM_THEMECHANGED, 0, 0);
-        RedrawWindow(host, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
+        // Avoid RDW_UPDATENOW — this runs inside ScopedWindowRedrawBlock which
+        // already defers painting.  Synchronous paint here added 500ms+ per switch.
+        RedrawWindow(host, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME);
     }
 
     SCROLLINFO si{};
@@ -1406,8 +2771,10 @@ void ApplyPageHostScrollFromLayout(HWND host, const PreferencesDialogState& stat
         return;
     }
 
-    PrefsPaneHost::ApplyScrollDelta(host, -state.pageScrollY);
-    RedrawWindow(host, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
+    PrefsPageHost::ApplyScrollDelta(host, -state.pageScrollY);
+    // Avoid RDW_UPDATENOW — caller (UpdatePageText) already manages redraw
+    // blocks and will coalesce invalidations into a single WM_PAINT pass.
+    RedrawWindow(host, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME);
 }
 
 void FinalizePreferencesPageHostLayout(HWND host, PreferencesDialogState& state, int margin, int layoutWidth) noexcept
@@ -1439,6 +2806,70 @@ void FinalizePreferencesPageHostLayout(HWND host, PreferencesDialogState& state,
     state.pageHostRelayoutInProgress = false;
 }
 
+void SyncPreferencesPageHostDxSize(HWND host, PreferencesDialogState& state, const wchar_t* reason) noexcept
+{
+    if (! host || ! state.pageHostUsesDxUi)
+    {
+        return;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(state);
+    RECT rc{};
+    GetClientRect(host, &rc);
+    const int widthPx  = std::max(0l, rc.right - rc.left);
+    const int heightPx = std::max(0l, rc.bottom - rc.top);
+    bool handled       = false;
+    hostState._pageHostHost.HandleMessage(host, WM_SIZE, SIZE_RESTORED, MAKELPARAM(widthPx, heightPx), handled);
+
+    Debug::Info(
+        L"Preferences: synced page-host DxUi size reason={} category={} client={}x{} dx={}x{} handled={} renderCount={} resizeCount={} resizeFailures={}",
+        reason ? reason : L"(null)",
+        GetPrefCategoryDebugName(state.currentCategory),
+        widthPx,
+        heightPx,
+        GetDxHostDebugWidthPx(hostState._pageHostHost),
+        GetDxHostDebugHeightPx(hostState._pageHostHost),
+        handled ? L"true" : L"false",
+        GetDxHostDebugRenderCount(hostState._pageHostHost),
+        GetDxHostDebugResizeCount(hostState._pageHostHost),
+        GetDxHostDebugResizeFailureCount(hostState._pageHostHost));
+}
+
+void LogPreferencesPageHostState(HWND host, const PreferencesDialogState& state, const wchar_t* reason) noexcept
+{
+    if (! host)
+    {
+        return;
+    }
+
+    RECT rc{};
+    GetClientRect(host, &rc);
+    const int widthPx  = std::max(0l, rc.right - rc.left);
+    const int heightPx = std::max(0l, rc.bottom - rc.top);
+
+    const auto& hostState  = static_cast<const PreferencesDialogHost&>(state);
+    size_t wrapperChildren = 0u;
+    if (const auto* wrapperPanel = dynamic_cast<const Panel*>(state.pageHostDxContentRootControl))
+    {
+        wrapperChildren = wrapperPanel->GetChildren().size();
+    }
+
+    Debug::Info(
+        L"Preferences: page-host state reason={} category={} client={}x{} scroll={}/{} dx={}x{} focus={} bridge={} wrapperChildren={} pageHostUsesDxUi={}",
+        reason ? reason : L"(null)",
+        GetPrefCategoryDebugName(state.currentCategory),
+        widthPx,
+        heightPx,
+        state.pageScrollY,
+        state.pageScrollMaxY,
+        GetDxHostDebugWidthPx(hostState._pageHostHost),
+        GetDxHostDebugHeightPx(hostState._pageHostHost),
+        static_cast<const void*>(hostState._pageHostHost.GetFocusControl()),
+        hostState._pageHostHost.HasActiveTextInputBridge() ? L"true" : L"false",
+        wrapperChildren,
+        state.pageHostUsesDxUi ? L"true" : L"false");
+}
+
 [[nodiscard]] HWND FindFirstOrLastTabStopChild(HWND host, bool forward) noexcept
 {
     if (! host)
@@ -1462,7 +2893,7 @@ void FinalizePreferencesPageHostLayout(HWND host, PreferencesDialogState& state,
     HWND item = start;
     do
     {
-        if (IsChild(host, item) && IsWindowVisible(item) && IsWindowEnabled(item))
+        if (IsChild(host, item) && PrefsUi::IsActuallyVisibleChildWindow(item) && IsWindowEnabled(item))
         {
             const LONG_PTR style = GetWindowLongPtrW(item, GWL_STYLE);
             if ((style & WS_TABSTOP) != 0)
@@ -1484,11 +2915,14 @@ void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept
         return;
     }
 
-    HWND list   = state.categoryTree ? state.categoryTree : GetDlgItem(dlg, IDC_PREFS_CATEGORY_LIST);
-    HWND host   = state.pageHost ? state.pageHost : GetDlgItem(dlg, IDC_PREFS_PAGE_HOST);
-    HWND ok     = GetDlgItem(dlg, IDOK);
-    HWND cancel = GetDlgItem(dlg, IDCANCEL);
-    HWND apply  = GetDlgItem(dlg, IDC_PREFS_APPLY);
+    auto& hostState = static_cast<PreferencesDialogHost&>(state);
+
+    HWND list     = state.categoryTreeWindow ? state.categoryTreeWindow : GetDlgItem(dlg, IDC_PREFS_CATEGORY_LIST);
+    HWND host     = state.pageHostWindow ? state.pageHostWindow : GetDlgItem(dlg, IDC_PREFS_PAGE_HOST);
+    HWND ok       = GetDlgItem(dlg, IDOK);
+    HWND cancel   = GetDlgItem(dlg, IDCANCEL);
+    HWND apply    = GetDlgItem(dlg, IDC_PREFS_APPLY);
+    HWND resetAll = GetDlgItem(dlg, IDC_PREFS_RESET_ALL);
     if (! list || ! host || ! ok || ! cancel || ! apply)
     {
         return;
@@ -1498,8 +2932,8 @@ void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept
     GetClientRect(dlg, &client);
 
     const UINT dpi   = GetDpiForWindow(dlg);
-    const int margin = ThemedControls::ScaleDip(dpi, 8);
-    const int gapX   = ThemedControls::ScaleDip(dpi, 8);
+    const int margin = UiMetrics::ScaleDip(dpi, 8);
+    const int gapX   = UiMetrics::ScaleDip(dpi, 8);
 
     RECT okRect{};
     RECT cancelRect{};
@@ -1516,11 +2950,13 @@ void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept
     const int cancelWidthDesired = std::max(0l, cancelRect.right - cancelRect.left);
     const int applyWidthDesired  = std::max(0l, applyRect.right - applyRect.left);
 
-    const int buttonHeight =
-        std::max({std::max(0l, okRect.bottom - okRect.top), std::max(0l, cancelRect.bottom - cancelRect.top), std::max(0l, applyRect.bottom - applyRect.top)});
+    const int measuredButtonHeight = static_cast<int>(std::max(
+        {0l, std::max(0l, okRect.bottom - okRect.top), std::max(0l, cancelRect.bottom - cancelRect.top), std::max(0l, applyRect.bottom - applyRect.top)}));
+    const int buttonHeight         = std::max(UiMetrics::ScaleDip(dpi, 26), measuredButtonHeight);
 
-    const int buttonPadX = ThemedControls::ScaleDip(dpi, 12);
-    const int minGapX    = ThemedControls::ScaleDip(dpi, 4);
+    const int buttonPadX                               = UiMetrics::ScaleDip(dpi, 12);
+    const int minGapX                                  = UiMetrics::ScaleDip(dpi, 4);
+    const PreferencesTypographyContext shellTypography = PrefsUi::MakeTypographyContext(dlg);
 
     const auto measureButtonMinWidth = [&](HWND button) noexcept
     {
@@ -1529,20 +2965,15 @@ void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept
             return 0;
         }
 
-        HFONT font = reinterpret_cast<HFONT>(SendMessageW(button, WM_GETFONT, 0, 0));
-        if (! font)
-        {
-            font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        }
-
         const std::wstring text = PrefsUi::GetWindowTextString(button);
-        const int textW         = ThemedControls::MeasureTextWidth(button, font, text);
-        return std::max(ThemedControls::ScaleDip(dpi, 60), textW + 2 * buttonPadX);
+        const int textW         = PrefsUi::MeasureSingleLineTextWidthPx(shellTypography, shellTypography.body, text);
+        return std::max(UiMetrics::ScaleDip(dpi, 60), textW + 2 * buttonPadX);
     };
 
-    const int okWidthMin     = measureButtonMinWidth(ok);
-    const int cancelWidthMin = measureButtonMinWidth(cancel);
-    const int applyWidthMin  = measureButtonMinWidth(apply);
+    const int okWidthMin       = measureButtonMinWidth(ok);
+    const int cancelWidthMin   = measureButtonMinWidth(cancel);
+    const int applyWidthMin    = measureButtonMinWidth(apply);
+    const int resetAllWidthMin = resetAll ? measureButtonMinWidth(resetAll) : 0;
 
     const int clientWidth         = std::max(0l, client.right - client.left);
     const int groupAvailableWidth = std::max(0, clientWidth - 2 * margin);
@@ -1609,15 +3040,20 @@ void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept
     const int okLeft     = cancelLeft - gapUsed - okWidth;
     const int buttonsTop = std::max(0, static_cast<int>(client.bottom) - margin - buttonHeight);
 
-    const UINT moveFlags = SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS;
+    // Reset All button is left-aligned, independent of the right-aligned OK/Cancel/Apply group.
+    const int resetAllLeft  = margin;
+    const int resetAllWidth = resetAllWidthMin;
+
+    const UINT moveFlags       = SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS;
+    const UINT dxShowMoveFlags = moveFlags | SWP_SHOWWINDOW;
 
     const int contentTop    = margin;
     const int contentBottom = std::max(contentTop, buttonsTop - margin);
     const int contentHeight = std::max(0, contentBottom - contentTop);
 
-    const int listDesiredWidth = state.categoryListWidthPx > 0 ? state.categoryListWidthPx : ThemedControls::ScaleDip(dpi, 120);
-    const int listMinWidth     = ThemedControls::ScaleDip(dpi, 72);
-    const int hostMinWidth     = ThemedControls::ScaleDip(dpi, 140);
+    const int listDesiredWidth = state.categoryListWidthPx > 0 ? state.categoryListWidthPx : UiMetrics::ScaleDip(dpi, 120);
+    const int listMinWidth     = UiMetrics::ScaleDip(dpi, 72);
+    const int hostMinWidth     = UiMetrics::ScaleDip(dpi, 140);
 
     const int availableForList = std::max(0, groupAvailableWidth - gapX - hostMinWidth);
     const int listMaxWidth     = std::max(listMinWidth, availableForList);
@@ -1626,71 +3062,116 @@ void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept
     const int hostLeft  = std::max(0, margin + listWidth + gapX);
     const int hostWidth = std::max(0, static_cast<int>(client.right) - margin - hostLeft);
 
-    const HFONT dialogFont = GetDialogFont(dlg);
-    EnsureFonts(state, dialogFont);
-    const HFONT titleFont = state.titleFont ? state.titleFont.get() : (state.boldFont ? state.boldFont.get() : dialogFont);
-
-    const int headerMargin   = ThemedControls::ScaleDip(dpi, 12);
-    const int headerGapY     = ThemedControls::ScaleDip(dpi, 6);
-    const int headerSectionY = ThemedControls::ScaleDip(dpi, 14);
+    const int headerMargin   = UiMetrics::ScaleDip(dpi, 12);
+    const int headerGapY     = UiMetrics::ScaleDip(dpi, 6);
+    const int headerSectionY = UiMetrics::ScaleDip(dpi, 14);
 
     const int headerX     = hostLeft + headerMargin;
     const int headerY     = contentTop + headerMargin;
     const int headerWidth = std::max(0, hostWidth - 2 * headerMargin);
 
-    int headerContentY = headerY;
-    int titleTop       = 0;
-    int titleHeight    = 0;
-    int descTop        = 0;
-    int descHeightPx   = 0;
-    if (state.pageTitle)
+    int headerContentY           = headerY;
+    int titleTop                 = 0;
+    int titleHeight              = 0;
+    int descTop                  = 0;
+    int descHeightPx             = 0;
+    const std::wstring titleText = hostState._pageTitleControl ? std::wstring(hostState._pageTitleControl->GetText()) : std::wstring{};
+    if (! titleText.empty())
     {
-        const std::wstring titleText  = PrefsUi::GetWindowTextString(state.pageTitle);
         titleTop                      = headerContentY;
-        const int measuredTitleHeight = PrefsUi::MeasureStaticTextHeight(dlg, titleFont, headerWidth, titleText);
-        titleHeight                   = std::max(ThemedControls::ScaleDip(dpi, 40), std::max(0, measuredTitleHeight));
-        SendMessageW(state.pageTitle, WM_SETFONT, reinterpret_cast<WPARAM>(titleFont), TRUE);
+        const int measuredTitleHeight = PrefsUi::MeasureWrappedTextHeightPx(shellTypography, shellTypography.title, headerWidth, titleText);
+        titleHeight                   = std::max(UiMetrics::ScaleDip(dpi, 40), std::max(0, measuredTitleHeight));
         headerContentY += titleHeight + headerGapY;
     }
 
-    if (state.pageDescription)
+    const std::wstring descText = hostState._pageDescriptionControl ? std::wstring(hostState._pageDescriptionControl->GetText()) : std::wstring{};
+    if (! descText.empty())
     {
-        const std::wstring desc      = PrefsUi::GetWindowTextString(state.pageDescription);
         descTop                      = headerContentY;
-        const int measuredDescHeight = PrefsUi::MeasureStaticTextHeight(dlg, dialogFont, headerWidth, desc);
+        const int measuredDescHeight = PrefsUi::MeasureWrappedTextHeightPx(shellTypography, shellTypography.body, headerWidth, descText);
         descHeightPx                 = std::max(0, measuredDescHeight);
-        SendMessageW(state.pageDescription, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
         headerContentY += descHeightPx + headerSectionY;
     }
 
     const int hostTop    = std::clamp(headerContentY - headerMargin, contentTop, contentBottom);
     const int hostHeight = std::max(0, contentBottom - hostTop);
 
-    bool moved = false;
-    if (HDWP hdwp = BeginDeferWindowPos(8))
+    const auto needsWindowMove = [&](HWND hwnd, int left, int top, int width, int height, UINT flags) noexcept
     {
-        auto deferWindow = [&](HWND hwnd, int left, int top, int width, int height) noexcept
+        if (! hwnd || IsWindow(hwnd) == FALSE)
+        {
+            return false;
+        }
+
+        RECT windowRect{};
+        if (! GetWindowRect(hwnd, &windowRect))
+        {
+            return true;
+        }
+
+        POINT corners[2] = {
+            {windowRect.left, windowRect.top},
+            {windowRect.right, windowRect.bottom},
+        };
+
+        if (const HWND parent = GetParent(hwnd); parent && IsWindow(parent) != FALSE)
+        {
+            MapWindowPoints(nullptr, parent, corners, 2);
+        }
+
+        const int currentWidth  = corners[1].x - corners[0].x;
+        const int currentHeight = corners[1].y - corners[0].y;
+        const bool sameRect     = corners[0].x == left && corners[0].y == top && currentWidth == width && currentHeight == height;
+
+        if (! sameRect)
+        {
+            return true;
+        }
+
+        const bool visible = PrefsUi::IsActuallyVisibleChildWindow(hwnd);
+        if ((flags & SWP_SHOWWINDOW) != 0u && ! visible)
+        {
+            return true;
+        }
+        if ((flags & SWP_HIDEWINDOW) != 0u && visible)
+        {
+            return true;
+        }
+
+        return false;
+    };
+
+    bool moved = false;
+    if (HDWP hdwp = BeginDeferWindowPos(13))
+    {
+        auto deferWindow = [&](HWND hwnd, int left, int top, int width, int height, const UINT flags) noexcept
         {
             if (! hwnd || ! hdwp)
             {
                 return;
             }
-            hdwp = DeferWindowPos(hdwp, hwnd, nullptr, left, top, width, height, moveFlags);
+            if (! needsWindowMove(hwnd, left, top, width, height, flags))
+            {
+                return;
+            }
+            hdwp = DeferWindowPos(hdwp, hwnd, nullptr, left, top, width, height, flags);
         };
 
-        deferWindow(apply, applyLeft, buttonsTop, applyWidth, buttonHeight);
-        deferWindow(cancel, cancelLeft, buttonsTop, cancelWidth, buttonHeight);
-        deferWindow(ok, okLeft, buttonsTop, okWidth, buttonHeight);
-        deferWindow(list, margin, contentTop, listWidth, contentHeight);
-        if (state.pageTitle)
+        deferWindow(apply, applyLeft, buttonsTop, applyWidth, buttonHeight, moveFlags);
+        deferWindow(cancel, cancelLeft, buttonsTop, cancelWidth, buttonHeight, moveFlags);
+        deferWindow(ok, okLeft, buttonsTop, okWidth, buttonHeight, moveFlags);
+        if (resetAll)
         {
-            deferWindow(state.pageTitle, headerX, titleTop, headerWidth, titleHeight);
+            deferWindow(resetAll, resetAllLeft, buttonsTop, resetAllWidth, buttonHeight, moveFlags);
         }
-        if (state.pageDescription)
+        deferWindow(list, margin, contentTop, listWidth, contentHeight, moveFlags);
+        if (hostState._shellHostHwnd)
         {
-            deferWindow(state.pageDescription, headerX, descTop, headerWidth, descHeightPx);
+            const int shellWidth  = hostWidth;
+            const int shellHeight = std::max(0, static_cast<int>(client.bottom) - contentTop);
+            deferWindow(hostState._shellHostHwnd, hostLeft, contentTop, shellWidth, shellHeight, dxShowMoveFlags);
         }
-        deferWindow(host, hostLeft, hostTop, hostWidth, hostHeight);
+        deferWindow(host, hostLeft, hostTop, hostWidth, hostHeight, moveFlags);
 
         if (hdwp && EndDeferWindowPos(hdwp))
         {
@@ -1700,19 +3181,107 @@ void LayoutPreferencesDialog(HWND dlg, PreferencesDialogState& state) noexcept
 
     if (! moved)
     {
-        SetWindowPos(apply, nullptr, applyLeft, buttonsTop, applyWidth, buttonHeight, moveFlags);
-        SetWindowPos(cancel, nullptr, cancelLeft, buttonsTop, cancelWidth, buttonHeight, moveFlags);
-        SetWindowPos(ok, nullptr, okLeft, buttonsTop, okWidth, buttonHeight, moveFlags);
-        SetWindowPos(list, nullptr, margin, contentTop, listWidth, contentHeight, moveFlags);
-        if (state.pageTitle)
+        if (needsWindowMove(apply, applyLeft, buttonsTop, applyWidth, buttonHeight, moveFlags))
         {
-            SetWindowPos(state.pageTitle, nullptr, headerX, titleTop, headerWidth, titleHeight, moveFlags);
+            SetWindowPos(apply, nullptr, applyLeft, buttonsTop, applyWidth, buttonHeight, moveFlags);
         }
-        if (state.pageDescription)
+        if (needsWindowMove(cancel, cancelLeft, buttonsTop, cancelWidth, buttonHeight, moveFlags))
         {
-            SetWindowPos(state.pageDescription, nullptr, headerX, descTop, headerWidth, descHeightPx, moveFlags);
+            SetWindowPos(cancel, nullptr, cancelLeft, buttonsTop, cancelWidth, buttonHeight, moveFlags);
         }
-        SetWindowPos(host, nullptr, hostLeft, hostTop, hostWidth, hostHeight, moveFlags);
+        if (needsWindowMove(ok, okLeft, buttonsTop, okWidth, buttonHeight, moveFlags))
+        {
+            SetWindowPos(ok, nullptr, okLeft, buttonsTop, okWidth, buttonHeight, moveFlags);
+        }
+        if (resetAll && needsWindowMove(resetAll, resetAllLeft, buttonsTop, resetAllWidth, buttonHeight, moveFlags))
+        {
+            SetWindowPos(resetAll, nullptr, resetAllLeft, buttonsTop, resetAllWidth, buttonHeight, moveFlags);
+        }
+        if (needsWindowMove(list, margin, contentTop, listWidth, contentHeight, moveFlags))
+        {
+            SetWindowPos(list, nullptr, margin, contentTop, listWidth, contentHeight, moveFlags);
+        }
+        if (hostState._shellHostHwnd)
+        {
+            const int shellWidth  = hostWidth;
+            const int shellHeight = std::max(0, static_cast<int>(client.bottom) - contentTop);
+            if (needsWindowMove(hostState._shellHostHwnd, hostLeft, contentTop, shellWidth, shellHeight, dxShowMoveFlags))
+            {
+                SetWindowPos(hostState._shellHostHwnd, nullptr, hostLeft, contentTop, shellWidth, shellHeight, dxShowMoveFlags);
+            }
+        }
+        if (needsWindowMove(host, hostLeft, hostTop, hostWidth, hostHeight, moveFlags))
+        {
+            SetWindowPos(host, nullptr, hostLeft, hostTop, hostWidth, hostHeight, moveFlags);
+        }
+    }
+
+    if (hostState._shellHostHwnd)
+    {
+        const int shellWidth        = hostWidth;
+        const int shellHeight       = std::max(0, static_cast<int>(client.bottom) - contentTop);
+        const int localHeaderHeight = std::max(0, hostTop - contentTop);
+        const int localFooterTop    = std::max(0, buttonsTop - contentTop);
+
+        const int footerPad = UiMetrics::ScaleDip(dpi, 10);
+        const int footerTop = std::max(0, localFooterTop - footerPad);
+        ApplyPreferencesShellRegion(hostState._shellHostHwnd,
+                                    shellWidth,
+                                    shellHeight,
+                                    localHeaderHeight,
+                                    footerTop,
+                                    std::max(0, std::min(shellHeight - footerTop, buttonHeight + (2 * footerPad))));
+
+        // Shell host DxUi controls expect DIP coordinates, not raw pixels.
+        const auto shellToDip = [&](float px) noexcept { return hostState._shellHost.PixelsToDip(px); };
+
+        if (hostState._pageTitleControl)
+        {
+            hostState._pageTitleControl->SetBounds(D2D1::RectF(shellToDip(static_cast<float>(headerX - hostLeft)),
+                                                               shellToDip(static_cast<float>(titleTop - contentTop)),
+                                                               shellToDip(static_cast<float>(headerX - hostLeft + headerWidth)),
+                                                               shellToDip(static_cast<float>(titleTop - contentTop + titleHeight))));
+        }
+        if (hostState._pageDescriptionControl)
+        {
+            hostState._pageDescriptionControl->SetBounds(D2D1::RectF(shellToDip(static_cast<float>(headerX - hostLeft)),
+                                                                     shellToDip(static_cast<float>(descTop - contentTop)),
+                                                                     shellToDip(static_cast<float>(headerX - hostLeft + headerWidth)),
+                                                                     shellToDip(static_cast<float>(descTop - contentTop + descHeightPx))));
+        }
+        if (hostState._okButtonControl)
+        {
+            hostState._okButtonControl->SetVisible(true);
+            hostState._okButtonControl->SetBounds(D2D1::RectF(shellToDip(static_cast<float>(okLeft - hostLeft)),
+                                                              shellToDip(static_cast<float>(buttonsTop - contentTop)),
+                                                              shellToDip(static_cast<float>(okLeft - hostLeft + okWidth)),
+                                                              shellToDip(static_cast<float>(buttonsTop - contentTop + buttonHeight))));
+        }
+        if (hostState._cancelButtonControl)
+        {
+            hostState._cancelButtonControl->SetVisible(true);
+            hostState._cancelButtonControl->SetBounds(D2D1::RectF(shellToDip(static_cast<float>(cancelLeft - hostLeft)),
+                                                                  shellToDip(static_cast<float>(buttonsTop - contentTop)),
+                                                                  shellToDip(static_cast<float>(cancelLeft - hostLeft + cancelWidth)),
+                                                                  shellToDip(static_cast<float>(buttonsTop - contentTop + buttonHeight))));
+        }
+        if (hostState._applyButtonControl)
+        {
+            hostState._applyButtonControl->SetVisible(true);
+            hostState._applyButtonControl->SetBounds(D2D1::RectF(shellToDip(static_cast<float>(applyLeft - hostLeft)),
+                                                                 shellToDip(static_cast<float>(buttonsTop - contentTop)),
+                                                                 shellToDip(static_cast<float>(applyLeft - hostLeft + applyWidth)),
+                                                                 shellToDip(static_cast<float>(buttonsTop - contentTop + buttonHeight))));
+        }
+        if (hostState._resetAllButtonControl && resetAll)
+        {
+            hostState._resetAllButtonControl->SetVisible(true);
+            hostState._resetAllButtonControl->SetBounds(D2D1::RectF(shellToDip(static_cast<float>(resetAllLeft - hostLeft)),
+                                                                    shellToDip(static_cast<float>(buttonsTop - contentTop)),
+                                                                    shellToDip(static_cast<float>(resetAllLeft - hostLeft + resetAllWidth)),
+                                                                    shellToDip(static_cast<float>(buttonsTop - contentTop + buttonHeight))));
+        }
+        hostState._shellHost.Invalidate();
     }
 }
 
@@ -1723,49 +3292,82 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
         return;
     }
 
+    // NOTE: EnsureActivePreferencesPageInitialized is NOT called here.
+    // It is already called by UpdatePageText (line 3686) before layout.
+    // Calling it again doubled the cost of CreateControls on every switch.
+
     RECT client{};
     GetClientRect(host, &client);
 
     auto& hostState = static_cast<PreferencesDialogHost&>(state);
-    hostState._generalPane.ResizeToHostClient(host);
-    hostState._panesPane.ResizeToHostClient(host);
-    hostState._viewersPane.ResizeToHostClient(host);
-    hostState._editorsPane.ResizeToHostClient(host);
-    hostState._keyboardPane.ResizeToHostClient(host);
-    hostState._mousePane.ResizeToHostClient(host);
-    hostState._themesPane.ResizeToHostClient(host);
-    hostState._pluginsPane.ResizeToHostClient(host);
-    hostState._compareDirectoriesPane.ResizeToHostClient(host);
-    hostState._hotPathsPane.ResizeToHostClient(host);
-    hostState._advancedPane.ResizeToHostClient(host);
 
     const UINT dpi     = GetDpiForWindow(host);
-    const int margin   = ThemedControls::ScaleDip(dpi, 12);
-    const int gapY     = ThemedControls::ScaleDip(dpi, 6);
-    const int sectionY = ThemedControls::ScaleDip(dpi, 14);
+    const int margin   = UiMetrics::ScaleDip(dpi, 12);
+    const int gapY     = UiMetrics::ScaleDip(dpi, 6);
+    const int sectionY = UiMetrics::ScaleDip(dpi, 14);
 
     const int width = std::max(0l, client.right - client.left - 2 * margin);
     int x           = margin;
     int y           = margin;
 
-    const HWND dlg         = GetParent(host);
-    const HFONT dialogFont = GetDialogFont(dlg ? dlg : host);
-    EnsureFonts(state, dialogFont);
+    const PreferencesTypographyContext pageTypography = PrefsUi::MakeTypographyContext(host);
+    state.pageHostDirectContentBottomPx               = 0;
 
-    const bool showGeneral            = state.currentCategory == PrefCategory::General;
-    const bool showPanes              = state.currentCategory == PrefCategory::Panes;
-    const bool showViewers            = state.currentCategory == PrefCategory::Viewers;
-    const bool showEditors            = state.currentCategory == PrefCategory::Editors;
-    const bool showKeyboard           = state.currentCategory == PrefCategory::Keyboard;
-    const bool showMouse              = state.currentCategory == PrefCategory::Mouse;
-    const bool showThemes             = state.currentCategory == PrefCategory::Themes;
-    const bool showPlugins            = state.currentCategory == PrefCategory::Plugins;
-    const bool showCompareDirectories = state.currentCategory == PrefCategory::CompareDirectories;
-    const bool showHotPaths           = state.currentCategory == PrefCategory::HotPaths;
-    const bool showAdvanced           = state.currentCategory == PrefCategory::Advanced;
-    const bool panesUseTwoStateCombo  = state.theme.systemHighContrast;
+    // Page host DxUi controls expect DIP coordinates, not raw pixels.
+    const auto pageToDip      = [&](float px) noexcept { return hostState._pageHostHost.PixelsToDip(px); };
+    const float pageWidthDip  = pageToDip(static_cast<float>(std::max(0l, client.right - client.left)));
+    const float pageHeightDip = pageToDip(static_cast<float>(std::max(0l, client.bottom - client.top)));
+
+    if (hostState._pageHostRootControl)
+    {
+        hostState._pageHostRootControl->SetBounds(D2D1::RectF(0.0f, 0.0f, pageWidthDip, pageHeightDip));
+    }
+    if (hostState._pageHostSurfaceControl)
+    {
+        hostState._pageHostSurfaceControl->SetBounds(D2D1::RectF(0.0f, 0.0f, pageWidthDip, pageHeightDip));
+    }
+    if (hostState._pageHostContentRootControl)
+    {
+        hostState._pageHostContentRootControl->SetBounds(D2D1::RectF(0.0f, 0.0f, pageWidthDip, pageHeightDip));
+    }
+    for (auto* wrapper : state.paneWrapperPanels)
+    {
+        if (wrapper)
+        {
+            wrapper->SetBounds(D2D1::RectF(0.0f, 0.0f, pageWidthDip, pageHeightDip));
+        }
+    }
+    PrefsUi::HideSharedPageEmptyState(state);
+
+    const bool showGeneral              = state.currentCategory == PrefCategory::General;
+    const bool showPanes                = state.currentCategory == PrefCategory::Panes;
+    const bool showViewers              = state.currentCategory == PrefCategory::Viewers;
+    const bool showEditors              = state.currentCategory == PrefCategory::Editors;
+    const bool showKeyboard             = state.currentCategory == PrefCategory::Keyboard;
+    const bool showMouse                = state.currentCategory == PrefCategory::Mouse;
+    const bool showThemes               = state.currentCategory == PrefCategory::Themes;
+    const bool showPlugins              = state.currentCategory == PrefCategory::Plugins;
+    const bool showFileOperations       = state.currentCategory == PrefCategory::FileOperations;
+    const bool showCompareDirectories   = state.currentCategory == PrefCategory::CompareDirectories;
+    const bool showHotPaths             = state.currentCategory == PrefCategory::HotPaths;
+    const bool showAdvanced             = state.currentCategory == PrefCategory::Advanced;
+    const bool notePageSkipsHostTabStop = showEditors || showMouse;
+
+    if (host)
+    {
+        const LONG_PTR style        = GetWindowLongPtrW(host, GWL_STYLE);
+        const LONG_PTR desiredStyle = notePageSkipsHostTabStop ? (style & ~static_cast<LONG_PTR>(WS_TABSTOP)) : (style | static_cast<LONG_PTR>(WS_TABSTOP));
+        if (desiredStyle != style)
+        {
+            SetWindowLongPtrW(host, GWL_STYLE, desiredStyle);
+            SetWindowPos(host, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        }
+    }
 
     state.pageSettingCards.clear();
+
+    // Win32 title/description/buttons are hidden by CreatePreferencesShellHosts;
+    // DxUi replacements are always active — no runtime visibility toggling needed.
 
     auto setVisible = [&](const auto& hwndLike, bool visible) noexcept
     {
@@ -1785,327 +3387,124 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
         }
     };
 
-    setVisible(hostState._generalPane.Hwnd(), showGeneral);
-    setVisible(state.menuBarLabel, showGeneral);
-    setVisible(state.menuBarToggle, showGeneral);
-    setVisible(state.menuBarDescription, showGeneral);
-    setVisible(state.functionBarLabel, showGeneral);
-    setVisible(state.functionBarToggle, showGeneral);
-    setVisible(state.functionBarDescription, showGeneral);
-    setVisible(hostState._panesPane.Hwnd(), showPanes);
-    setVisible(state.panesLeftHeader, showPanes);
-    setVisible(state.panesLeftDisplayLabel, showPanes);
-    setVisible(state.panesLeftDisplayFrame, showPanes && panesUseTwoStateCombo);
-    setVisible(state.panesLeftDisplayCombo, showPanes && panesUseTwoStateCombo);
-    setVisible(state.panesLeftDisplayToggle, showPanes && ! panesUseTwoStateCombo);
-    setVisible(state.panesLeftSortByLabel, showPanes);
-    setVisible(state.panesLeftSortByFrame, showPanes);
-    setVisible(state.panesLeftSortByCombo, showPanes);
-    setVisible(state.panesLeftSortDirLabel, showPanes);
-    setVisible(state.panesLeftSortDirFrame, showPanes && panesUseTwoStateCombo);
-    setVisible(state.panesLeftSortDirCombo, showPanes && panesUseTwoStateCombo);
-    setVisible(state.panesLeftSortDirToggle, showPanes && ! panesUseTwoStateCombo);
-    setVisible(state.panesLeftStatusBarLabel, showPanes);
-    setVisible(state.panesLeftStatusBarToggle, showPanes);
-    setVisible(state.panesLeftStatusBarDescription, showPanes);
-    setVisible(state.panesRightHeader, showPanes);
-    setVisible(state.panesRightDisplayLabel, showPanes);
-    setVisible(state.panesRightDisplayFrame, showPanes && panesUseTwoStateCombo);
-    setVisible(state.panesRightDisplayCombo, showPanes && panesUseTwoStateCombo);
-    setVisible(state.panesRightDisplayToggle, showPanes && ! panesUseTwoStateCombo);
-    setVisible(state.panesRightSortByLabel, showPanes);
-    setVisible(state.panesRightSortByFrame, showPanes);
-    setVisible(state.panesRightSortByCombo, showPanes);
-    setVisible(state.panesRightSortDirLabel, showPanes);
-    setVisible(state.panesRightSortDirFrame, showPanes && panesUseTwoStateCombo);
-    setVisible(state.panesRightSortDirCombo, showPanes && panesUseTwoStateCombo);
-    setVisible(state.panesRightSortDirToggle, showPanes && ! panesUseTwoStateCombo);
-    setVisible(state.panesRightStatusBarLabel, showPanes);
-    setVisible(state.panesRightStatusBarToggle, showPanes);
-    setVisible(state.panesRightStatusBarDescription, showPanes);
-    setVisible(state.panesGeneralHeader, showPanes);
-    setVisible(state.panesShowHiddenFilesLabel, showPanes);
-    setVisible(state.panesShowHiddenFilesToggle, showPanes);
-    setVisible(state.panesShowSystemFilesLabel, showPanes);
-    setVisible(state.panesShowSystemFilesToggle, showPanes);
-    setVisible(state.panesHistoryLabel, showPanes);
-    setVisible(state.panesHistoryFrame, showPanes);
-    setVisible(state.panesHistoryEdit, showPanes);
-    setVisible(state.panesHistoryDescription, showPanes);
-    setVisible(hostState._viewersPane.Hwnd(), showViewers);
-    setVisible(state.viewersSearchLabel, showViewers);
-    setVisible(state.viewersSearchFrame, showViewers);
-    setVisible(state.viewersSearchEdit, showViewers);
-    setVisible(state.viewersList, showViewers);
-    setVisible(state.viewersExtensionLabel, showViewers);
-    setVisible(state.viewersExtensionFrame, showViewers);
-    setVisible(state.viewersExtensionEdit, showViewers);
-    setVisible(state.viewersViewerLabel, showViewers);
-    setVisible(state.viewersViewerFrame, showViewers);
-    setVisible(state.viewersViewerCombo, showViewers);
-    setVisible(state.viewersSaveButton, showViewers);
-    setVisible(state.viewersRemoveButton, showViewers);
-    setVisible(state.viewersResetButton, showViewers);
-    setVisible(state.viewersHint, showViewers);
-    setVisible(hostState._editorsPane.Hwnd(), showEditors);
-    setVisible(state.editorsNote, showEditors);
-    setVisible(hostState._keyboardPane.Hwnd(), showKeyboard);
-    setVisible(state.keyboardSearchLabel, showKeyboard);
-    setVisible(state.keyboardSearchFrame, showKeyboard);
-    setVisible(state.keyboardSearchEdit, showKeyboard);
-    setVisible(state.keyboardScopeLabel, showKeyboard);
-    setVisible(state.keyboardScopeFrame, showKeyboard);
-    setVisible(state.keyboardScopeCombo, showKeyboard);
-    setVisible(state.keyboardList, showKeyboard);
-    setVisible(state.keyboardHint, showKeyboard);
-    setVisible(state.keyboardAssign, showKeyboard);
-    setVisible(state.keyboardRemove, showKeyboard);
-    setVisible(state.keyboardReset, showKeyboard);
-    setVisible(state.keyboardImport, showKeyboard);
-    setVisible(state.keyboardExport, showKeyboard);
-    setVisible(hostState._mousePane.Hwnd(), showMouse);
-    setVisible(state.mouseNote, showMouse);
-    setVisible(hostState._themesPane.Hwnd(), showThemes);
-    setVisible(state.themesThemeLabel, showThemes);
-    setVisible(state.themesThemeFrame, showThemes);
-    setVisible(state.themesThemeCombo, showThemes);
-    setVisible(state.themesNameLabel, showThemes);
-    setVisible(state.themesNameFrame, showThemes);
-    setVisible(state.themesNameEdit, showThemes);
-    setVisible(state.themesBaseLabel, showThemes);
-    setVisible(state.themesBaseFrame, showThemes);
-    setVisible(state.themesBaseCombo, showThemes);
-    setVisible(state.themesSearchLabel, showThemes);
-    setVisible(state.themesSearchFrame, showThemes);
-    setVisible(state.themesSearchEdit, showThemes);
-    setVisible(state.themesColorsList, showThemes);
-    setVisible(state.themesKeyLabel, showThemes);
-    setVisible(state.themesKeyFrame, showThemes);
-    setVisible(state.themesKeyEdit, showThemes);
-    setVisible(state.themesColorLabel, showThemes);
-    setVisible(state.themesColorSwatch, showThemes);
-    setVisible(state.themesColorFrame, showThemes);
-    setVisible(state.themesColorEdit, showThemes);
-    setVisible(state.themesPickColor, showThemes);
-    setVisible(state.themesSetOverride, showThemes);
-    setVisible(state.themesRemoveOverride, showThemes);
-    setVisible(state.themesLoadFromFile, showThemes);
-    setVisible(state.themesDuplicateTheme, showThemes);
-    setVisible(state.themesSaveTheme, showThemes);
-    setVisible(state.themesApplyTemporarily, showThemes);
-    setVisible(state.themesNote, showThemes);
-    const bool showPluginsDetails = showPlugins && state.pluginsSelectedPlugin.has_value();
-    const bool showPluginsList    = showPlugins && ! showPluginsDetails;
-    setVisible(state.pluginsNote, showPluginsList);
-    setVisible(state.pluginsList, showPluginsList);
-    setVisible(state.pluginsDetailsHint, showPluginsDetails);
-    setVisible(state.pluginsDetailsIdLabel, showPluginsDetails);
-    setVisible(state.pluginsDetailsConfigLabel, showPluginsDetails);
-    setVisible(state.pluginsDetailsConfigError, showPluginsDetails);
-    setVisible(state.pluginsDetailsConfigFrame, showPluginsDetails);
-    setVisible(state.pluginsDetailsConfigEdit, showPluginsDetails);
-    setVisible(hostState._pluginsPane.Hwnd(), showPlugins);
-    setVisible(hostState._compareDirectoriesPane.Hwnd(), showCompareDirectories);
-    setVisible(state.advancedCompareDirectoriesHeader, showCompareDirectories);
-    setVisible(state.advancedCompareSizeLabel, showCompareDirectories);
-    setVisible(state.advancedCompareSizeToggle, showCompareDirectories);
-    setVisible(state.advancedCompareSizeDescription, showCompareDirectories);
-    setVisible(state.advancedCompareDateTimeLabel, showCompareDirectories);
-    setVisible(state.advancedCompareDateTimeToggle, showCompareDirectories);
-    setVisible(state.advancedCompareDateTimeDescription, showCompareDirectories);
-    setVisible(state.advancedCompareAttributesLabel, showCompareDirectories);
-    setVisible(state.advancedCompareAttributesToggle, showCompareDirectories);
-    setVisible(state.advancedCompareAttributesDescription, showCompareDirectories);
-    setVisible(state.advancedCompareContentLabel, showCompareDirectories);
-    setVisible(state.advancedCompareContentToggle, showCompareDirectories);
-    setVisible(state.advancedCompareContentDescription, showCompareDirectories);
-    setVisible(state.advancedCompareContentWorkersLabel, showCompareDirectories);
-    setVisible(state.advancedCompareContentWorkersFrame, showCompareDirectories);
-    setVisible(state.advancedCompareContentWorkersCombo, showCompareDirectories);
-    setVisible(state.advancedCompareContentWorkersDescription, showCompareDirectories);
-    setVisible(state.advancedCompareSubdirectoriesLabel, showCompareDirectories);
-    setVisible(state.advancedCompareSubdirectoriesToggle, showCompareDirectories);
-    setVisible(state.advancedCompareSubdirectoriesDescription, showCompareDirectories);
-    setVisible(state.advancedCompareSubdirectoryAttributesLabel, showCompareDirectories);
-    setVisible(state.advancedCompareSubdirectoryAttributesToggle, showCompareDirectories);
-    setVisible(state.advancedCompareSubdirectoryAttributesDescription, showCompareDirectories);
-    setVisible(state.advancedCompareSelectSubdirsOnlyInOnePaneLabel, showCompareDirectories);
-    setVisible(state.advancedCompareSelectSubdirsOnlyInOnePaneToggle, showCompareDirectories);
-    setVisible(state.advancedCompareSelectSubdirsOnlyInOnePaneDescription, showCompareDirectories);
-    setVisible(state.advancedCompareKeepIdenticalLabel, showCompareDirectories);
-    setVisible(state.advancedCompareKeepIdenticalToggle, showCompareDirectories);
-    setVisible(state.advancedCompareKeepIdenticalDescription, showCompareDirectories);
-    setVisible(state.advancedCompareShowIdenticalLabel, showCompareDirectories);
-    setVisible(state.advancedCompareShowIdenticalToggle, showCompareDirectories);
-    setVisible(state.advancedCompareShowIdenticalDescription, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreFilesLabel, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreFilesToggle, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreFilesDescription, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreFilesPatternsLabel, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreFilesPatternsFrame, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreFilesPatternsEdit, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreDirectoriesLabel, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreDirectoriesToggle, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreDirectoriesDescription, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreDirectoriesPatternsLabel, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreDirectoriesPatternsFrame, showCompareDirectories);
-    setVisible(state.advancedCompareIgnoreDirectoriesPatternsEdit, showCompareDirectories);
-    setVisible(hostState._hotPathsPane.Hwnd(), showHotPaths);
-    for (const auto& slotCtl : state.hotPathSlotControls)
-    {
-        setVisible(slotCtl.header, showHotPaths);
-        setVisible(slotCtl.pathLabel, showHotPaths);
-        setVisible(slotCtl.pathFrame, showHotPaths);
-        setVisible(slotCtl.pathEdit, showHotPaths);
-        setVisible(slotCtl.browseButton, showHotPaths);
-        setVisible(slotCtl.labelLabel, showHotPaths);
-        setVisible(slotCtl.labelFrame, showHotPaths);
-        setVisible(slotCtl.labelEdit, showHotPaths);
-        setVisible(slotCtl.showInMenuLabel, showHotPaths);
-        setVisible(slotCtl.showInMenuToggle, showHotPaths);
-        setVisible(slotCtl.showInMenuDescription, showHotPaths);
-    }
-    setVisible(state.hotPathOpenPrefsOnAssignLabel, showHotPaths);
-    setVisible(state.hotPathOpenPrefsOnAssignToggle, showHotPaths);
-    setVisible(state.hotPathOpenPrefsOnAssignDescription, showHotPaths);
-    setVisible(hostState._advancedPane.Hwnd(), showAdvanced);
-    setVisible(state.advancedConnectionsHelloHeader, showAdvanced);
-    setVisible(state.advancedConnectionsBypassHelloLabel, showAdvanced);
-    setVisible(state.advancedConnectionsBypassHelloToggle, showAdvanced);
-    setVisible(state.advancedConnectionsBypassHelloDescription, showAdvanced);
-    setVisible(state.advancedConnectionsAllowInsecureTlsAutomationLabel, showAdvanced);
-    setVisible(state.advancedConnectionsAllowInsecureTlsAutomationToggle, showAdvanced);
-    setVisible(state.advancedConnectionsAllowInsecureTlsAutomationDescription, showAdvanced);
-    setVisible(state.advancedConnectionsHelloTimeoutLabel, showAdvanced);
-    setVisible(state.advancedConnectionsHelloTimeoutFrame, showAdvanced);
-    setVisible(state.advancedConnectionsHelloTimeoutEdit, showAdvanced);
-    setVisible(state.advancedConnectionsHelloTimeoutDescription, showAdvanced);
-    setVisible(state.advancedMonitorHeader, showAdvanced);
-    setVisible(state.advancedMonitorToolbarLabel, showAdvanced);
-    setVisible(state.advancedMonitorToolbarToggle, showAdvanced);
-    setVisible(state.advancedMonitorToolbarDescription, showAdvanced);
-    setVisible(state.advancedMonitorLineNumbersLabel, showAdvanced);
-    setVisible(state.advancedMonitorLineNumbersToggle, showAdvanced);
-    setVisible(state.advancedMonitorLineNumbersDescription, showAdvanced);
-    setVisible(state.advancedMonitorAlwaysOnTopLabel, showAdvanced);
-    setVisible(state.advancedMonitorAlwaysOnTopToggle, showAdvanced);
-    setVisible(state.advancedMonitorAlwaysOnTopDescription, showAdvanced);
-    setVisible(state.advancedMonitorShowIdsLabel, showAdvanced);
-    setVisible(state.advancedMonitorShowIdsToggle, showAdvanced);
-    setVisible(state.advancedMonitorShowIdsDescription, showAdvanced);
-    setVisible(state.advancedMonitorAutoScrollLabel, showAdvanced);
-    setVisible(state.advancedMonitorAutoScrollToggle, showAdvanced);
-    setVisible(state.advancedMonitorAutoScrollDescription, showAdvanced);
-    setVisible(state.advancedMonitorFilterPresetLabel, showAdvanced);
-    setVisible(state.advancedMonitorFilterPresetFrame, showAdvanced);
-    setVisible(state.advancedMonitorFilterPresetCombo, showAdvanced);
-    setVisible(state.advancedMonitorFilterPresetDescription, showAdvanced);
-    setVisible(state.advancedMonitorFilterMaskLabel, showAdvanced);
-    setVisible(state.advancedMonitorFilterMaskFrame, showAdvanced);
-    setVisible(state.advancedMonitorFilterMaskEdit, showAdvanced);
-    setVisible(state.advancedMonitorFilterMaskDescription, showAdvanced);
-    setVisible(state.advancedMonitorFilterTextLabel, showAdvanced);
-    setVisible(state.advancedMonitorFilterTextToggle, showAdvanced);
-    setVisible(state.advancedMonitorFilterTextDescription, showAdvanced);
-    setVisible(state.advancedMonitorFilterErrorLabel, showAdvanced);
-    setVisible(state.advancedMonitorFilterErrorToggle, showAdvanced);
-    setVisible(state.advancedMonitorFilterErrorDescription, showAdvanced);
-    setVisible(state.advancedMonitorFilterWarningLabel, showAdvanced);
-    setVisible(state.advancedMonitorFilterWarningToggle, showAdvanced);
-    setVisible(state.advancedMonitorFilterWarningDescription, showAdvanced);
-    setVisible(state.advancedMonitorFilterInfoLabel, showAdvanced);
-    setVisible(state.advancedMonitorFilterInfoToggle, showAdvanced);
-    setVisible(state.advancedMonitorFilterInfoDescription, showAdvanced);
-    setVisible(state.advancedMonitorFilterDebugLabel, showAdvanced);
-    setVisible(state.advancedMonitorFilterDebugToggle, showAdvanced);
-    setVisible(state.advancedMonitorFilterDebugDescription, showAdvanced);
-    setVisible(state.advancedCacheHeader, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMaxBytesLabel, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMaxBytesFrame, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMaxBytesEdit, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMaxBytesDescription, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMaxWatchersLabel, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMaxWatchersFrame, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMaxWatchersEdit, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMaxWatchersDescription, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMruWatchedLabel, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMruWatchedFrame, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMruWatchedEdit, showAdvanced);
-    setVisible(state.advancedCacheDirectoryInfoMruWatchedDescription, showAdvanced);
+    hostState._generalPane.OnVisibilityChanged(showGeneral);
+    hostState._panesPane.OnVisibilityChanged(showPanes);
+    hostState._viewersPane.OnVisibilityChanged(showViewers);
+    hostState._editorsPane.OnVisibilityChanged(showEditors);
+    hostState._keyboardPane.OnVisibilityChanged(showKeyboard);
+    hostState._mousePane.OnVisibilityChanged(showMouse);
+    hostState._themesPane.OnVisibilityChanged(showThemes);
+    hostState._pluginsPane.OnVisibilityChanged(showPlugins);
+    hostState._fileOperationsPane.OnVisibilityChanged(showFileOperations);
+    hostState._compareDirectoriesPane.OnVisibilityChanged(showCompareDirectories);
+    hostState._hotPathsPane.OnVisibilityChanged(showHotPaths);
+    hostState._advancedPane.OnVisibilityChanged(showAdvanced);
 
     if (showPanes)
     {
-        PanesPane::LayoutControls(host, state, x, y, width, margin, gapY, sectionY, dialogFont);
+        const PreferencesTypographyContext typography = PrefsUi::MakeTypographyContext(host);
+        hostState._panesPane.LayoutPage(host, state, x, y, width, margin, gapY, sectionY, typography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showViewers)
     {
-        ViewersPane::LayoutControls(host, state, x, y, width, margin, gapY, dialogFont);
+        const PreferencesTypographyContext typography = PrefsUi::MakeTypographyContext(host);
+        hostState._viewersPane.LayoutPage(host, state, x, y, width, margin, gapY, typography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showEditors)
     {
-        EditorsPane::LayoutControls(host, state, x, y, width, margin, gapY, sectionY, dialogFont);
+        static_cast<PreferencesDialogHost&>(state)._editorsPane.LayoutPage(host, state, x, y, width, margin, gapY, sectionY, pageTypography);
+        const PreferencesEmptyStateSpec spec = GetCurrentPreferencesSharedEmptyState(state);
+        if (! spec.title.empty() || ! spec.body.empty() || ! spec.caption.empty())
+        {
+            const int cardHeight = PrefsUi::ShowSharedPageEmptyState(host, state, spec, x, margin, width, pageTypography);
+            if (cardHeight > 0)
+            {
+                RECT card{x, margin, x + width, margin + cardHeight};
+                PrefsUi::TryPushCard(state.pageSettingCards, card);
+                state.pageHostDirectContentBottomPx = (std::max)(state.pageHostDirectContentBottomPx, static_cast<int>(card.bottom));
+            }
+        }
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showMouse)
     {
-        MousePane::LayoutControls(host, state, x, y, width, margin, gapY, sectionY, dialogFont);
+        static_cast<PreferencesDialogHost&>(state)._mousePane.LayoutPage(host, state, x, y, width, margin, gapY, sectionY, pageTypography);
+        const PreferencesEmptyStateSpec spec = GetCurrentPreferencesSharedEmptyState(state);
+        if (! spec.title.empty() || ! spec.body.empty() || ! spec.caption.empty())
+        {
+            const int cardHeight = PrefsUi::ShowSharedPageEmptyState(host, state, spec, x, margin, width, pageTypography);
+            if (cardHeight > 0)
+            {
+                RECT card{x, margin, x + width, margin + cardHeight};
+                PrefsUi::TryPushCard(state.pageSettingCards, card);
+                state.pageHostDirectContentBottomPx = (std::max)(state.pageHostDirectContentBottomPx, static_cast<int>(card.bottom));
+            }
+        }
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showThemes)
     {
-        ThemesPane::LayoutControls(host, state, x, y, width, margin, gapY, sectionY, dialogFont);
+        hostState._themesPane.LayoutPage(host, state, x, y, width, margin, gapY, sectionY, pageTypography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showPlugins)
     {
-        PluginsPane::LayoutControls(host, state, x, y, width, margin, gapY, sectionY, dialogFont);
+        hostState._pluginsPane.LayoutPage(host, state, x, y, width, margin, gapY, sectionY, pageTypography);
+        FinalizePreferencesPageHostLayout(host, state, margin, width);
+        return;
+    }
+
+    if (showFileOperations)
+    {
+        hostState._fileOperationsPane.LayoutPage(host, state, x, y, width, margin, gapY, pageTypography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showCompareDirectories)
     {
-        CompareDirectoriesPane::LayoutControls(host, state, x, y, width, margin, gapY, dialogFont);
+        hostState._compareDirectoriesPane.LayoutPage(host, state, x, y, width, margin, gapY, pageTypography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showHotPaths)
     {
-        HotPathsPane::LayoutControls(host, state, x, y, width, margin, gapY, dialogFont);
+        hostState._hotPathsPane.LayoutPage(host, state, x, y, width, margin, gapY, pageTypography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showAdvanced)
     {
-        AdvancedPane::LayoutControls(host, state, x, y, width, margin, gapY, dialogFont);
+        hostState._advancedPane.LayoutPage(host, state, x, y, width, margin, gapY, pageTypography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showKeyboard)
     {
-        KeyboardPane::LayoutControls(host, state, x, y, width, margin, gapY, sectionY, dialogFont);
+        KeyboardPane::LayoutPage(host, state, x, y, width, margin, gapY, sectionY, pageTypography);
         FinalizePreferencesPageHostLayout(host, state, margin, width);
         return;
     }
 
     if (showGeneral)
     {
-        GeneralPane::LayoutControls(host, state, x, y, width, dialogFont);
+        const PreferencesTypographyContext typography = PrefsUi::MakeTypographyContext(host);
+        static_cast<PreferencesDialogHost&>(state)._generalPane.LayoutPage(host, state, x, y, width, typography);
     }
 
     FinalizePreferencesPageHostLayout(host, state, margin, width);
@@ -2113,37 +3512,110 @@ void LayoutPreferencesPageHost(HWND host, PreferencesDialogState& state) noexcep
 
 void RefreshAdvancedPage(HWND host, PreferencesDialogState& state) noexcept
 {
-    AdvancedPane::Refresh(host, state);
+    static_cast<PreferencesDialogHost&>(state)._advancedPane.Refresh(host, state);
+}
+
+void RefreshActivePreferencesPage(HWND host, PreferencesDialogState& state) noexcept
+{
+    if (! host)
+    {
+        return;
+    }
+
+    switch (state.currentCategory)
+    {
+        case PrefCategory::General: static_cast<PreferencesDialogHost&>(state)._generalPane.Refresh(host, state); break;
+        case PrefCategory::Keyboard: KeyboardPane::Refresh(host, state); break;
+        case PrefCategory::Panes: static_cast<PreferencesDialogHost&>(state)._panesPane.Refresh(host, state); break;
+        case PrefCategory::Viewers: static_cast<PreferencesDialogHost&>(state)._viewersPane.Refresh(host, state); break;
+        case PrefCategory::Themes: static_cast<PreferencesDialogHost&>(state)._themesPane.Refresh(host, state); break;
+        case PrefCategory::Plugins: static_cast<PreferencesDialogHost&>(state)._pluginsPane.Refresh(host, state); break;
+        case PrefCategory::FileOperations: static_cast<PreferencesDialogHost&>(state)._fileOperationsPane.Refresh(host, state); break;
+        case PrefCategory::CompareDirectories: static_cast<PreferencesDialogHost&>(state)._compareDirectoriesPane.Refresh(host, state); break;
+        case PrefCategory::HotPaths: static_cast<PreferencesDialogHost&>(state)._hotPathsPane.Refresh(host, state); break;
+        case PrefCategory::Advanced: RefreshAdvancedPage(host, state); break;
+        case PrefCategory::Editors:
+        case PrefCategory::Mouse: break;
+    }
 }
 
 void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory category) noexcept
 {
-    const bool categoryChanged = state.currentCategory != category;
-    state.currentCategory      = category;
-
-    const bool resetScroll = categoryChanged || category == PrefCategory::Plugins;
-    if (resetScroll)
+    if (state.updatingPageText)
     {
-        state.pageScrollY             = 0;
-        state.pageScrollMaxY          = 0;
-        state.pageWheelDeltaRemainder = 0;
+        Debug::Warning(
+            L"Preferences: re-entrant UpdatePageText blocked (current={}, requested={})", static_cast<int>(state.currentCategory), static_cast<int>(category));
+        return;
     }
+    state.updatingPageText = true;
+    const auto clearGuard  = wil::scope_exit([&]() noexcept { state.updatingPageText = false; });
+
+    const PrefCategory previousCategory = state.currentCategory;
+    const bool categoryChanged          = previousCategory != category;
+    if (categoryChanged)
+    {
+        state.retainedPageScrollYByCategory[PrefCategoryIndex(previousCategory)] = state.pageScrollY;
+    }
+    state.currentCategory = category;
+    if (categoryChanged)
+    {
+        state.pageScrollY = std::max(0, state.retainedPageScrollYByCategory[PrefCategoryIndex(category)]);
+    }
+    state.pageScrollMaxY          = 0;
+    state.pageWheelDeltaRemainder = 0;
 
     const CategoryInfo* info = FindCategoryInfo(category);
     std::wstring title       = info ? LoadStringResource(nullptr, info->labelId) : std::wstring{};
     std::wstring description = info ? LoadStringResource(nullptr, info->descriptionId) : std::wstring{};
 
-    if (category == PrefCategory::Plugins && state.pluginsSelectedPlugin.has_value())
+    if (category == PrefCategory::Plugins)
     {
-        const std::wstring_view pluginName = PrefsPlugins::GetDisplayName(state.pluginsSelectedPlugin.value());
-        if (! pluginName.empty())
+        std::optional<PrefsPluginListItem> selectedPlugin;
+        if (! state.pluginsSelectedPluginId.empty())
         {
-            title = std::wstring(pluginName);
+            selectedPlugin = PrefsPlugins::FindItemById(state.pluginsSelectedPluginId);
+            if (selectedPlugin.has_value())
+            {
+                state.pluginsSelectedPlugin = selectedPlugin;
+                state.pluginsRetainedSelectedPluginId.assign(state.pluginsSelectedPluginId);
+            }
+            else
+            {
+                state.pluginsSelectedPlugin.reset();
+                state.pluginsSelectedPluginId.clear();
+                state.pluginsDetailsActive = false;
+            }
         }
-        const std::wstring_view pluginDescription = PrefsPlugins::GetDescription(state.pluginsSelectedPlugin.value());
-        if (! pluginDescription.empty())
+        else if (state.pluginsSelectedPlugin.has_value())
         {
-            description = std::wstring(pluginDescription);
+            selectedPlugin                   = state.pluginsSelectedPlugin;
+            const std::wstring_view pluginId = PrefsPlugins::GetId(state.pluginsSelectedPlugin.value());
+            if (! pluginId.empty())
+            {
+                state.pluginsSelectedPluginId.assign(pluginId);
+                state.pluginsRetainedSelectedPluginId.assign(pluginId);
+            }
+            else
+            {
+                selectedPlugin.reset();
+                state.pluginsSelectedPlugin.reset();
+                state.pluginsDetailsActive = false;
+            }
+        }
+
+        if (state.pluginsDetailsActive && selectedPlugin.has_value())
+        {
+            const std::wstring_view pluginName = PrefsPlugins::GetDisplayName(selectedPlugin.value());
+            if (! pluginName.empty())
+            {
+                title = std::wstring(pluginName);
+            }
+
+            const std::wstring_view pluginDescription = PrefsPlugins::GetDescription(selectedPlugin.value());
+            if (! pluginDescription.empty())
+            {
+                description = std::wstring(pluginDescription);
+            }
         }
     }
     if (title.empty())
@@ -2151,13 +3623,49 @@ void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory catego
         title = LoadStringResource(nullptr, IDS_PREFS_CAPTION);
     }
 
-    if (state.pageTitle)
+    auto& hostState = static_cast<PreferencesDialogHost&>(state);
+
+    // No ScopedWindowRedrawBlock on the dialog.  WM_SETREDRAW FALSE/TRUE
+    // toggles WS_VISIBLE, causing the DWM to clear the composition surface.
+    // Between WM_SETREDRAW TRUE and the first Present1/GDI-BitBlt, the
+    // compositor shows a blank white frame — the "white flash" bug.
+    //
+    // This is safe because WM_PAINT is a low-priority message: it's only
+    // dispatched when the message loop has no other messages.  Since we're
+    // executing inside a message handler (tree selection change), all the
+    // InvalidateRect calls below accumulate silently and are coalesced into
+    // a single paint after this function returns and the final
+    // RedrawWindow(RDW_UPDATENOW) forces synchronous painting.
+
+    UpdateDxShellText(hostState, title, description);
+
+    if (categoryChanged)
     {
-        SetWindowTextW(state.pageTitle, title.c_str());
+        DestroyInactivePreferencesPageState(state, previousCategory);
+
+        // Reset per-pane layout state only — wrapper panels and their controls persist.
+        if (state.pageHostDxHost)
+        {
+            state.pageHostDxHost->ResetInteractionState();
+        }
+        state.pageSettingCards.clear();
+        state.pageHostDirectContentBottomPx = 0;
     }
-    if (state.pageDescription)
+
+    // Set pageHostIgnoreSize BEFORE creating pane controls so that any WM_SIZE
+    // messages generated during EnsureCreated / CreateControls do not trigger
+    // LayoutPreferencesPageHost with partially-initialized state.
+    state.pageHostIgnoreSize = true;
+    const auto clearIgnore   = wil::scope_exit([&]() noexcept { state.pageHostIgnoreSize = false; });
+
+    if (state.pageHostWindow)
     {
-        SetWindowTextW(state.pageDescription, description.c_str());
+        static_cast<void>(EnsureActivePreferencesPageInitialized(state.pageHostWindow, state));
+    }
+
+    if (state.pageHostWindow)
+    {
+        RefreshActivePreferencesPage(state.pageHostWindow, state);
     }
 
     if (dlg)
@@ -2165,132 +3673,137 @@ void UpdatePageText(HWND dlg, PreferencesDialogState& state, PrefCategory catego
         LayoutPreferencesDialog(dlg, state);
     }
 
-    if (state.pageHost)
+    if (state.pageHostWindow)
     {
-        LayoutPreferencesPageHost(state.pageHost, state);
-        RedrawWindow(state.pageHost, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
+        LayoutPreferencesPageHost(state.pageHostWindow, state);
     }
 
-    if (category == PrefCategory::General && state.pageHost)
+    // After layout, forward the actual page host size to the DxUi host.
+    // LayoutPreferencesDialog may have resized the page host window, but
+    // WM_SIZE was blocked by pageHostIgnoreSize.  Without this explicit
+    // sync the DxUi swap chain keeps the stale template-size dimensions
+    // from Attach(), so the D2D render is clipped or stretched.
+    if (state.pageHostWindow && state.pageHostUsesDxUi)
     {
-        GeneralPane::Refresh(state.pageHost, state);
+        SyncPreferencesPageHostDxSize(state.pageHostWindow, state, L"page-switch");
     }
 
-    if (category == PrefCategory::Keyboard && state.pageHost)
+    if (state.pageHostWindow)
     {
-        KeyboardPane::Refresh(state.pageHost, state);
-    }
-    if (category == PrefCategory::Panes && state.pageHost)
-    {
-        PanesPane::Refresh(state.pageHost, state);
-    }
-    if (category == PrefCategory::Viewers && state.pageHost)
-    {
-        ViewersPane::Refresh(state.pageHost, state);
-    }
-    if (category == PrefCategory::Themes && state.pageHost)
-    {
-        ThemesPane::Refresh(state.pageHost, state);
-    }
-    if (category == PrefCategory::Plugins && state.pageHost)
-    {
-        PluginsPane::Refresh(state.pageHost, state);
-    }
-    if (category == PrefCategory::CompareDirectories && state.pageHost)
-    {
-        CompareDirectoriesPane::Refresh(state.pageHost, state);
-    }
-    if (category == PrefCategory::HotPaths && state.pageHost)
-    {
-        HotPathsPane::Refresh(state.pageHost, state);
-    }
-    if (category == PrefCategory::Advanced && state.pageHost)
-    {
-        RefreshAdvancedPage(state.pageHost, state);
+        LogPreferencesPageHostState(state.pageHostWindow, state, L"page-switch");
     }
 
-    if (dlg && state.categoryTree)
-    {
-        InvalidateRect(state.categoryTree, nullptr, FALSE);
-    }
+    // Force a single synchronous repaint of the dialog and all children.
+    // All intermediate InvalidateRect calls during the update phase are
+    // coalesced into this one paint pass — no intermediate frames.
+    RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
 }
 
 void PopulateCategoryTree(HWND dlg, PreferencesDialogState& state) noexcept
 {
-    state.categoryTree = GetDlgItem(dlg, IDC_PREFS_CATEGORY_LIST);
-    if (! state.categoryTree)
+    auto& hostState          = static_cast<PreferencesDialogHost&>(state);
+    state.categoryTreeWindow = GetDlgItem(dlg, IDC_PREFS_CATEGORY_LIST);
+    if (! state.categoryTreeWindow)
     {
         return;
     }
 
-    TreeView_DeleteAllItems(state.categoryTree);
-    state.categoryTreeItems.fill(nullptr);
-    state.pluginsTreeRoot = nullptr;
-
-    const UINT dpi         = GetDpiForWindow(dlg);
-    const int itemHeightPx = std::max(1, ThemedControls::ScaleDip(dpi, 24));
-    SendMessageW(state.categoryTree, TVM_SETITEMHEIGHT, static_cast<WPARAM>(itemHeightPx), 0);
-    SendMessageW(state.categoryTree, TVM_SETEXTENDEDSTYLE, TVS_EX_DOUBLEBUFFER, TVS_EX_DOUBLEBUFFER);
+    state.categoryTreeUsesDxUi = true;
 
     RECT rc{};
-    if (GetWindowRect(state.categoryTree, &rc))
+    if (GetWindowRect(state.categoryTreeWindow, &rc))
     {
         state.categoryListWidthPx = std::max(0l, rc.right - rc.left);
     }
 
-    for (const auto& c : kCategories)
+    if (hostState._categoryTreeHost.GetHwnd() != state.categoryTreeWindow)
     {
-        std::wstring label = LoadStringResource(nullptr, c.labelId);
-        if (label.empty())
+        hostState._categoryTreeHost.Detach();
+        if (! hostState._categoryTreeHost.Attach(state.categoryTreeWindow))
         {
-            label = L"?";
+            Debug::Error(L"Preferences: failed to attach DxUi host for category tree.");
+            state.categoryTreeUsesDxUi = false;
+            return;
         }
 
-        TVINSERTSTRUCTW ins{};
-        ins.hParent      = TVI_ROOT;
-        ins.hInsertAfter = TVI_LAST;
-        ins.item.mask    = TVIF_TEXT | TVIF_PARAM;
-        ins.item.pszText = label.data();
-        ins.item.lParam  = static_cast<LPARAM>(c.id);
+        RestoreWndProcHook(state.categoryTreeWindow, kPrefsDxCategoryHostOriginalWndProcProp);
+        SetPropW(state.categoryTreeWindow, kPrefsDxCategoryHostStateProp, &state);
+        if (! InstallWndProcHook(state.categoryTreeWindow, kPrefsDxCategoryHostOriginalWndProcProp, PreferencesDxCategoryHostWndProc))
+        {
+            Debug::ErrorWithLastError(L"Preferences: failed to install category tree host window proc hook.");
+            RemovePropW(state.categoryTreeWindow, kPrefsDxCategoryHostStateProp);
+            hostState._categoryTreeHost.Detach();
+            state.categoryTreeUsesDxUi = false;
+            return;
+        }
 
-        const HTREEITEM inserted = reinterpret_cast<HTREEITEM>(SendMessageW(state.categoryTree, TVM_INSERTITEMW, 0, reinterpret_cast<LPARAM>(&ins)));
-        const size_t index       = static_cast<size_t>(c.id);
-        if (index < state.categoryTreeItems.size())
-        {
-            state.categoryTreeItems[index] = inserted;
-        }
-        if (c.id == PrefCategory::Plugins)
-        {
-            state.pluginsTreeRoot = inserted;
-        }
+        auto tree                      = std::make_unique<Tree>();
+        hostState._categoryTreeControl = tree.get();
+        hostState._categoryTreeControl->SetModel(&hostState._categoryTreeModel);
+        hostState._categoryTreeControl->SetDelegate(&hostState._categoryTreeDelegate);
+        hostState._categoryTreeControl->SetRowHeightDip(24.0f);
+        hostState._categoryTreeControl->SetIndentDip(14.0f);
+        hostState._categoryTreeHost.SetRoot(std::move(tree));
     }
 
-    if (state.pluginsTreeRoot)
+    const LONG_PTR categoryHostStyle = GetWindowLongPtrW(state.categoryTreeWindow, GWL_STYLE);
+    if ((categoryHostStyle & SS_NOTIFY) == 0)
     {
-        std::vector<PrefsPluginListItem> plugins;
-        PrefsPlugins::BuildListItems(plugins);
-        for (const PrefsPluginListItem& plugin : plugins)
+        SetWindowLongPtrW(state.categoryTreeWindow, GWL_STYLE, categoryHostStyle | SS_NOTIFY);
+    }
+
+    hostState._categoryTreeDelegate.Attach(dlg, &state, &hostState._categoryTreeModel, hostState._categoryTreeControl);
+    hostState._categoryTreeModel.Rebuild();
+    hostState._categoryTreeHost.SetTheme(PrefsUi::MakeDxPalette(state.theme));
+    hostState._categoryTreeHost.SetOnTabBoundary([dlg, categoryHost = state.categoryTreeWindow, hostStatePtr = &hostState](const bool reverse) noexcept
+    {
+        if (! dlg || IsWindow(dlg) == FALSE || ! categoryHost || IsWindow(categoryHost) == FALSE)
         {
-            const std::wstring_view displayName = PrefsPlugins::GetDisplayName(plugin);
-            if (displayName.empty())
+            return false;
+        }
+
+        if (HWND target = GetNextDlgTabItem(dlg, categoryHost, reverse ? TRUE : FALSE); target && target != categoryHost)
+        {
+            if (reverse && hostStatePtr && target == hostStatePtr->_shellHostHwnd)
             {
-                continue;
+                if (hostStatePtr->_applyButtonControl && hostStatePtr->_applyButtonControl->IsEnabled())
+                {
+                    hostStatePtr->_shellHost.SetFocusControl(hostStatePtr->_applyButtonControl);
+                }
+                else if (hostStatePtr->_cancelButtonControl && hostStatePtr->_cancelButtonControl->IsEnabled())
+                {
+                    hostStatePtr->_shellHost.SetFocusControl(hostStatePtr->_cancelButtonControl);
+                }
+                else if (hostStatePtr->_okButtonControl && hostStatePtr->_okButtonControl->IsEnabled())
+                {
+                    hostStatePtr->_shellHost.SetFocusControl(hostStatePtr->_okButtonControl);
+                }
+                else if (hostStatePtr->_resetAllButtonControl && hostStatePtr->_resetAllButtonControl->IsEnabled())
+                {
+                    hostStatePtr->_shellHost.SetFocusControl(hostStatePtr->_resetAllButtonControl);
+                }
             }
 
-            std::wstring label(displayName);
-            TVINSERTSTRUCTW child{};
-            child.hParent      = state.pluginsTreeRoot;
-            child.hInsertAfter = TVI_LAST;
-            child.item.mask    = TVIF_TEXT | TVIF_PARAM;
-            child.item.pszText = label.data();
-            child.item.lParam  = PrefsNavTree::EncodePluginData(plugin.type, plugin.index);
-            static_cast<void>(SendMessageW(state.categoryTree, TVM_INSERTITEMW, 0, reinterpret_cast<LPARAM>(&child)));
+            SetFocus(target);
+            return true;
         }
-    }
 
-    if (state.pluginsTreeRoot)
+        return false;
+    });
+    if (hostState._categoryTreeControl)
     {
-        TreeView_Expand(state.categoryTree, state.pluginsTreeRoot, TVE_EXPAND);
+        std::optional<uint64_t> selectedItemId;
+        if (state.pluginsSelectedPlugin.has_value())
+        {
+            selectedItemId =
+                PreferencesDialogHost::PreferencesCategoryTreeModel::EncodePluginNodeId(state.pluginsSelectedPlugin->type, state.pluginsSelectedPlugin->index);
+        }
+        else
+        {
+            selectedItemId = PreferencesDialogHost::PreferencesCategoryTreeModel::EncodeCategoryNodeId(state.currentCategory);
+        }
+        hostState._categoryTreeControl->SetSelectedItemId(selectedItemId);
+        hostState._categoryTreeControl->NotifyDataChanged();
     }
 }
 
@@ -2298,230 +3811,146 @@ void SelectCategory(HWND dlg, PreferencesDialogState& state, PrefCategory catego
 {
     state.initialCategory = category;
     state.pluginsSelectedPlugin.reset();
+    state.pluginsSelectedPluginId.clear();
+    state.pluginsDetailsActive = false;
 
-    if (! dlg || ! state.categoryTree)
+    if (! dlg || ! state.categoryTreeWindow)
     {
         return;
     }
 
-    const size_t index = static_cast<size_t>(category);
-    if (index >= state.categoryTreeItems.size())
+    if (state.categoryTreeUsesDxUi)
     {
+        auto& hostState = static_cast<PreferencesDialogHost&>(state);
+        if (hostState._categoryTreeControl)
+        {
+            hostState._categoryTreeControl->SetSelectedItemId(PreferencesDialogHost::PreferencesCategoryTreeModel::EncodeCategoryNodeId(category));
+            hostState._categoryTreeControl->NotifyDataChanged();
+        }
+        UpdatePageText(dlg, state, category);
         return;
     }
-
-    const HTREEITEM item = state.categoryTreeItems[index];
-    if (! item)
-    {
-        return;
-    }
-
-    TreeView_SelectItem(state.categoryTree, item);
-    TreeView_EnsureVisible(state.categoryTree, item);
 }
 
 void CreatePageControls(HWND dlg, PreferencesDialogState& state) noexcept
 {
-    state.pageHost = GetDlgItem(dlg, IDC_PREFS_PAGE_HOST);
-    if (! state.pageHost)
+    state.pageHostWindow = GetDlgItem(dlg, IDC_PREFS_PAGE_HOST);
+    if (! state.pageHostWindow)
     {
         return;
     }
 
-    LONG_PTR exStyle = GetWindowLongPtrW(state.pageHost, GWL_EXSTYLE);
+    InitPostedPayloadWindow(state.pageHostWindow);
+
+    LONG_PTR exStyle = GetWindowLongPtrW(state.pageHostWindow, GWL_EXSTYLE);
     if ((exStyle & WS_EX_CONTROLPARENT) == 0)
     {
         exStyle |= WS_EX_CONTROLPARENT;
-        SetWindowLongPtrW(state.pageHost, GWL_EXSTYLE, exStyle);
+        SetWindowLongPtrW(state.pageHostWindow, GWL_EXSTYLE, exStyle);
     }
 
-    LONG_PTR style    = GetWindowLongPtrW(state.pageHost, GWL_STYLE);
+    LONG_PTR style    = GetWindowLongPtrW(state.pageHostWindow, GWL_STYLE);
     LONG_PTR newStyle = style;
     // Prevent the host from painting over its pane windows (avoids "blank until hover" artifacts).
     // Each pane paints its own themed background/cards.
     newStyle |= WS_CLIPCHILDREN;
     newStyle &= ~WS_HSCROLL;
     newStyle &= ~WS_VSCROLL;
+    SetPropW(state.pageHostWindow, kPrefsDxDiagnosticsProp, reinterpret_cast<HANDLE>(1));
     if (newStyle != style)
     {
-        SetWindowLongPtrW(state.pageHost, GWL_STYLE, newStyle);
-        SetWindowPos(state.pageHost, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+        SetWindowLongPtrW(state.pageHostWindow, GWL_STYLE, newStyle);
+        SetWindowPos(state.pageHostWindow, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
     }
 
     auto& hostState = static_cast<PreferencesDialogHost&>(state);
-    static_cast<void>(hostState._generalPane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._panesPane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._viewersPane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._editorsPane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._keyboardPane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._mousePane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._themesPane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._pluginsPane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._compareDirectoriesPane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._hotPathsPane.EnsureCreated(state.pageHost));
-    static_cast<void>(hostState._advancedPane.EnsureCreated(state.pageHost));
+    AttachPreferencesPageHostDxSurface(hostState);
 
-    const HWND generalParent  = hostState._generalPane.Hwnd() ? hostState._generalPane.Hwnd() : state.pageHost;
-    const HWND panesParent    = hostState._panesPane.Hwnd() ? hostState._panesPane.Hwnd() : state.pageHost;
-    const HWND viewersParent  = hostState._viewersPane.Hwnd() ? hostState._viewersPane.Hwnd() : state.pageHost;
-    const HWND editorsParent  = hostState._editorsPane.Hwnd() ? hostState._editorsPane.Hwnd() : state.pageHost;
-    const HWND keyboardParent = hostState._keyboardPane.Hwnd() ? hostState._keyboardPane.Hwnd() : state.pageHost;
-    const HWND mouseParent    = hostState._mousePane.Hwnd() ? hostState._mousePane.Hwnd() : state.pageHost;
-    const HWND themesParent   = hostState._themesPane.Hwnd() ? hostState._themesPane.Hwnd() : state.pageHost;
-    const HWND pluginsParent  = hostState._pluginsPane.Hwnd() ? hostState._pluginsPane.Hwnd() : state.pageHost;
-    const HWND compareParent  = hostState._compareDirectoriesPane.Hwnd() ? hostState._compareDirectoriesPane.Hwnd() : state.pageHost;
-    const HWND hotPathsParent = hostState._hotPathsPane.Hwnd() ? hostState._hotPathsPane.Hwnd() : state.pageHost;
-    const HWND advancedParent = hostState._advancedPane.Hwnd() ? hostState._advancedPane.Hwnd() : state.pageHost;
+    CreatePreferencesShellHosts(dlg, hostState);
 
-    const DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
-    const DWORD wrapStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-
-    state.pageTitle = CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, dlg, nullptr, GetModuleHandleW(nullptr), nullptr);
-
-    state.pageDescription = CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, dlg, nullptr, GetModuleHandleW(nullptr), nullptr);
-
-    const HFONT dialogFont = GetDialogFont(dlg);
-    EnsureFonts(state, dialogFont);
-
-    GeneralPane::CreateControls(generalParent, state);
-
-    PanesPane::CreateControls(panesParent, state);
-
-    auto populateEnumCombo = [&](const auto& comboLike, std::span<const std::pair<UINT, LPARAM>> options) noexcept
-    {
-        HWND combo = nullptr;
-        if constexpr (requires { comboLike.get(); })
-        {
-            combo = comboLike.get();
-        }
-        else
-        {
-            combo = comboLike;
-        }
-
-        if (! combo)
-        {
-            return;
-        }
-
-        SendMessageW(combo, CB_RESETCONTENT, 0, 0);
-        for (const auto& option : options)
-        {
-            const std::wstring text = LoadStringResource(nullptr, option.first);
-            const LRESULT index     = SendMessageW(combo, CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(text.c_str()));
-            if (index != CB_ERR && index != CB_ERRSPACE)
-            {
-                SendMessageW(combo, CB_SETITEMDATA, static_cast<WPARAM>(index), option.second);
-            }
-        }
-
-        if (SendMessageW(combo, CB_GETCOUNT, 0, 0) > 0)
-        {
-            SendMessageW(combo, CB_SETCURSEL, 0, 0);
-            PrefsUi::InvalidateComboBox(combo);
-        }
-
-        ThemedControls::ApplyThemeToComboBox(combo, state.theme);
-    };
-
-    const std::array<std::pair<UINT, LPARAM>, 2> displayOptions = {
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_OPTION_BRIEF, static_cast<LPARAM>(Common::Settings::FolderDisplayMode::Brief)},
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_OPTION_DETAILED, static_cast<LPARAM>(Common::Settings::FolderDisplayMode::Detailed)},
-    };
-    populateEnumCombo(state.panesLeftDisplayCombo, displayOptions);
-    populateEnumCombo(state.panesRightDisplayCombo, displayOptions);
-
-    const std::array<std::pair<UINT, LPARAM>, 6> sortByOptions = {
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_SORT_NAME, static_cast<LPARAM>(Common::Settings::FolderSortBy::Name)},
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_SORT_EXTENSION, static_cast<LPARAM>(Common::Settings::FolderSortBy::Extension)},
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_SORT_TIME, static_cast<LPARAM>(Common::Settings::FolderSortBy::Time)},
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_SORT_SIZE, static_cast<LPARAM>(Common::Settings::FolderSortBy::Size)},
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_SORT_ATTRIBUTES, static_cast<LPARAM>(Common::Settings::FolderSortBy::Attributes)},
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_SORT_NONE, static_cast<LPARAM>(Common::Settings::FolderSortBy::None)},
-    };
-    populateEnumCombo(state.panesLeftSortByCombo, sortByOptions);
-    populateEnumCombo(state.panesRightSortByCombo, sortByOptions);
-
-    const std::array<std::pair<UINT, LPARAM>, 2> sortDirOptions = {
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_OPTION_ASCENDING, static_cast<LPARAM>(Common::Settings::FolderSortDirection::Ascending)},
-        std::pair<UINT, LPARAM>{IDS_PREFS_PANES_OPTION_DESCENDING, static_cast<LPARAM>(Common::Settings::FolderSortDirection::Descending)},
-    };
-    populateEnumCombo(state.panesLeftSortDirCombo, sortDirOptions);
-    populateEnumCombo(state.panesRightSortDirCombo, sortDirOptions);
-
-    INITCOMMONCONTROLSEX icc{};
-    icc.dwSize = sizeof(icc);
-    icc.dwICC  = ICC_LISTVIEW_CLASSES;
-    InitCommonControlsEx(&icc);
-
-    // Viewers page (Phase 5).
-    ViewersPane::CreateControls(viewersParent, state);
-    // Editors page (placeholder).
-    EditorsPane::CreateControls(editorsParent, state);
-    // Keyboard page (Phase 5).
-    KeyboardPane::CreateControls(keyboardParent, state);
-    // Mouse page (placeholder).
-    MousePane::CreateControls(mouseParent, state);
-
-    // Themes page (Phase 4).
-    ThemesPane::CreateControls(themesParent, state);
-
-    // Plugins page (Phase 6 starter).
-    PluginsPane::CreateControls(pluginsParent, state);
-
-    // Compare Directories page.
-    CompareDirectoriesPane::CreateControls(compareParent, state);
-
-    // Hot Paths page.
-    HotPathsPane::CreateControls(hotPathsParent, state);
-
-    // Advanced page (Phase 6 starter).
-    AdvancedPane::CreateControls(advancedParent, state);
-
-    if (state.themesThemeCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.themesThemeCombo, state.theme);
-    }
-    if (state.themesBaseCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.themesBaseCombo, state.theme);
-    }
-
-    if (state.themesColorsList)
-    {
-        ListView_SetExtendedListViewStyle(state.themesColorsList.get(), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP);
-        ListView_SetBkColor(state.themesColorsList.get(), state.theme.windowBackground);
-        ListView_SetTextBkColor(state.themesColorsList.get(), state.theme.windowBackground);
-        ListView_SetTextColor(state.themesColorsList.get(), state.theme.menu.text);
-
-        if (! state.theme.systemHighContrast)
-        {
-            const bool darkBackground = ChooseContrastingTextColor(state.theme.windowBackground) == RGB(255, 255, 255);
-            const wchar_t* listTheme  = darkBackground ? L"DarkMode_Explorer" : L"Explorer";
-            SetWindowTheme(state.themesColorsList.get(), listTheme, nullptr);
-            if (const HWND header = ListView_GetHeader(state.themesColorsList.get()))
-            {
-                SetWindowTheme(header, listTheme, nullptr);
-                InvalidateRect(header, nullptr, TRUE);
-            }
-        }
-        else
-        {
-            SetWindowTheme(state.themesColorsList.get(), L"", nullptr);
-        }
-
-        ThemedControls::EnsureListViewHeaderThemed(state.themesColorsList.get(), state.theme);
-    }
-
-    LayoutPreferencesPageHost(state.pageHost, state);
+    static_cast<void>(EnsureActivePreferencesPageInitialized(state.pageHostWindow, state));
+    LayoutPreferencesPageHost(state.pageHostWindow, state);
 }
 
-LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR uIdSubclass, DWORD_PTR dwRefData) noexcept
+LRESULT CALLBACK PreferencesPageHostWindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    auto* state = reinterpret_cast<PreferencesDialogState*>(dwRefData);
+    auto* state = reinterpret_cast<PreferencesDialogState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     if (! state)
     {
-        return DefSubclassProc(hwnd, msg, wp, lp);
+        return DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+
+    if (state->pageHostUsesDxUi)
+    {
+        switch (msg)
+        {
+            case WM_NCHITTEST:
+            case WM_NCCALCSIZE:
+            case WM_NCPAINT:
+            case WM_NCLBUTTONDOWN:
+            case WM_NCLBUTTONUP:
+            case WM_NCLBUTTONDBLCLK:
+            case WM_NCMOUSEMOVE: break;
+            case WM_SIZE:
+                if (state->pageHostIgnoreSize)
+                {
+                    if (IsPreferencesDxDiagnosticsEnabled(hwnd))
+                    {
+                        Debug::Info(L"Preferences: skipped forwarding ignored WM_SIZE to page-host DxUi hwnd={:#x} category={} lp=0x{:08X}",
+                                    reinterpret_cast<uintptr_t>(hwnd),
+                                    GetPrefCategoryDebugName(state->currentCategory),
+                                    static_cast<unsigned long>(lp));
+                    }
+                    break;
+                }
+                [[fallthrough]];
+            default:
+            {
+                if (msg == WM_NCDESTROY)
+                {
+                    hostState._pageHostHost.ReleaseMouseCapture();
+                    state->pageHostUsesDxUi             = false;
+                    state->pageHostDxHost               = nullptr;
+                    state->pageHostDxRootControl        = nullptr;
+                    state->pageHostDxContentRootControl = nullptr;
+                    state->pageHostDxNoteControl        = nullptr;
+                    return 0;
+                }
+
+                bool handled           = false;
+                const LRESULT dxResult = hostState._pageHostHost.HandleMessage(hwnd, msg, wp, lp, handled);
+                if (handled)
+                {
+                    return dxResult;
+                }
+                break;
+            }
+        }
+    }
+
+    if (IsPreferencesDxDiagnosticsEnabled(hwnd))
+    {
+        switch (msg)
+        {
+            case WM_MOUSEACTIVATE:
+            case WM_LBUTTONDOWN:
+            case WM_LBUTTONUP:
+            case WM_RBUTTONDOWN:
+            case WM_RBUTTONUP:
+            case WM_MOUSEWHEEL:
+            case WM_SETFOCUS:
+            case WM_KILLFOCUS:
+                Debug::Info(L"Preferences: page-host wndproc msg=0x{:04X} hwnd={:#x} category={} focus={:#x} pageHostFocus={:#x}",
+                            msg,
+                            reinterpret_cast<uintptr_t>(hwnd),
+                            GetPrefCategoryDebugName(state->currentCategory),
+                            reinterpret_cast<uintptr_t>(GetFocus()),
+                            reinterpret_cast<uintptr_t>(state->pageHostWindow));
+                break;
+            default: break;
+        }
     }
 
     switch (msg)
@@ -2530,7 +3959,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
         {
             // The page host is a custom control and uses WS_VSCROLL dynamically; ensure standard non-client
             // hit-testing is used so the scrollbar receives mouse interactions.
-            return DefSubclassProc(hwnd, msg, wp, lp);
+            return DefWindowProcW(hwnd, msg, wp, lp);
         }
         case WM_NCCALCSIZE:
         case WM_NCPAINT:
@@ -2541,7 +3970,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
         {
             // Ensure standard non-client handling runs (scrollbar sizing/painting/tracking) even though the
             // host uses custom client painting.
-            return DefSubclassProc(hwnd, msg, wp, lp);
+            return DefWindowProcW(hwnd, msg, wp, lp);
         }
         case WM_ERASEBKGND: return 1;
         case WM_SETFOCUS:
@@ -2551,6 +3980,19 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
             {
                 SetFocus(target);
                 return 0;
+            }
+
+            // Note-only pages share the page host but do not expose tab-stop children.
+            // When the host is reached through dialog tab traversal, skip the inert host
+            // and continue to the next dialog-level focus target.
+            if (HWND dlg = GetParent(hwnd))
+            {
+                const BOOL previous = forward ? FALSE : TRUE;
+                if (HWND target = GetNextDlgTabItem(dlg, hwnd, previous); target && target != hwnd)
+                {
+                    SetFocus(target);
+                    return 0;
+                }
             }
             break;
         }
@@ -2563,29 +4005,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 return 0;
             }
 
-            RECT client{};
-            GetClientRect(hwnd, &client);
-            const int width  = std::max(0l, client.right - client.left);
-            const int height = std::max(0l, client.bottom - client.top);
-
-            wil::unique_hdc memDc;
-            wil::unique_hbitmap memBmp;
-            if (width > 0 && height > 0)
-            {
-                memDc.reset(CreateCompatibleDC(hdc.get()));
-                memBmp.reset(CreateCompatibleBitmap(hdc.get(), width, height));
-            }
-
-            if (memDc && memBmp)
-            {
-                [[maybe_unused]] auto oldBmp = wil::SelectObject(memDc.get(), memBmp.get());
-                PaintPageHostBackgroundAndCards(memDc.get(), hwnd, *state);
-                BitBlt(hdc.get(), 0, 0, width, height, memDc.get(), 0, 0, SRCCOPY);
-            }
-            else
-            {
-                PaintPageHostBackgroundAndCards(hdc.get(), hwnd, *state);
-            }
+            PaintPageHostBackgroundAndCards(hdc.get(), hwnd, *state);
 
             return 0;
         }
@@ -2600,24 +4020,35 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
             PaintPageHostBackgroundAndCards(hdc, hwnd, *state);
             return 0;
         }
-        case WndMsg::kPreferencesApplyComboThemeDeferred:
+        case WndMsg::kPreferencesSelectPluginDetails:
         {
-            const HWND combo = reinterpret_cast<HWND>(wp);
-            if (! combo || ! IsWindow(combo))
+            const PrefsPluginType pluginType = static_cast<PrefsPluginType>(wp);
+            const size_t pluginIndex         = static_cast<size_t>(lp);
+            const PrefsPluginListItem pluginItem{pluginType, pluginIndex};
+            const std::optional<PrefsPluginListItem> resolved = PrefsPlugins::FindItemById(PrefsPlugins::GetId(pluginItem));
+            const PrefsPluginListItem effectiveItem           = resolved.has_value() ? resolved.value() : pluginItem;
+            const std::wstring_view pluginId                  = PrefsPlugins::GetId(effectiveItem);
+            if (pluginId.empty())
             {
                 return 0;
             }
 
-            const UINT comboNotify = static_cast<UINT>(lp);
-            if (comboNotify == CBN_DROPDOWN)
+            state->initialCategory       = PrefCategory::Plugins;
+            state->currentCategory       = PrefCategory::Plugins;
+            state->pluginsSelectedPlugin = effectiveItem;
+            state->pluginsSelectedPluginId.assign(pluginId);
+            state->pluginsRetainedSelectedPluginId.assign(pluginId);
+            state->pluginsDetailsActive = true;
+
+            auto& dialogHostState = static_cast<PreferencesDialogHost&>(*state);
+            if (dialogHostState._categoryTreeControl)
             {
-                ThemedControls::ApplyThemeToComboBoxDropDown(combo, state->theme);
+                dialogHostState._categoryTreeControl->SetSelectedItemId(
+                    PreferencesDialogHost::PreferencesCategoryTreeModel::EncodePluginNodeId(effectiveItem.type, effectiveItem.index));
+                dialogHostState._categoryTreeControl->NotifyDataChanged();
             }
-            else
-            {
-                ThemedControls::ApplyThemeToComboBox(combo, state->theme);
-            }
-            ThemedControls::EnsureComboBoxDroppedWidth(combo, GetDpiForWindow(combo));
+
+            UpdatePageText(hwnd, *state, PrefCategory::Plugins);
             return 0;
         }
         case WM_CTLCOLORSTATIC:
@@ -2640,7 +4071,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 {
                     std::array<wchar_t, 32> className{};
                     const int len = GetClassNameW(parent, className.data(), static_cast<int>(className.size()));
-                    if (len > 0 && (_wcsicmp(className.data(), L"ComboBox") == 0 || ThemedControls::IsModernComboBox(parent)))
+                    if (len > 0 && _wcsicmp(className.data(), L"ComboBox") == 0)
                     {
                         const bool comboEnabled   = IsWindowEnabled(parent) != FALSE;
                         const bool focused        = comboEnabled && (GetFocus() == parent || SendMessageW(parent, CB_GETDROPPEDSTATE, 0, 0) != 0);
@@ -2856,29 +4287,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
             }
             return reinterpret_cast<LRESULT>(brush);
         }
-        case WM_MEASUREITEM:
-        {
-            auto* mis = reinterpret_cast<MEASUREITEMSTRUCT*>(lp);
-            if (mis)
-            {
-                const LRESULT handled = KeyboardPane::OnMeasureList(mis, *state);
-                if (handled != 0)
-                {
-                    return handled;
-                }
-                const LRESULT handledViewers = ViewersPane::OnMeasureList(mis, *state);
-                if (handledViewers != 0)
-                {
-                    return handledViewers;
-                }
-                const LRESULT handledThemes = ThemesPane::OnMeasureColorsList(mis, *state);
-                if (handledThemes != 0)
-                {
-                    return handledThemes;
-                }
-            }
-            break;
-        }
+        case WM_MEASUREITEM: break;
         case WM_DRAWITEM:
         {
             auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
@@ -2895,138 +4304,23 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 }
             }
 
-            if (dis->CtlType == ODT_LISTVIEW && dis->CtlID == static_cast<UINT>(IDC_PREFS_KEYBOARD_LIST))
-            {
-                const LRESULT handled = KeyboardPane::OnDrawList(dis, *state);
-                if (handled != 0)
-                {
-                    return handled;
-                }
-                break;
-            }
-            if (dis->CtlType == ODT_LISTVIEW && dis->CtlID == static_cast<UINT>(IDC_PREFS_VIEWERS_LIST))
-            {
-                const LRESULT handled = ViewersPane::OnDrawList(dis, *state);
-                if (handled != 0)
-                {
-                    return handled;
-                }
-                break;
-            }
-            if (dis->CtlType == ODT_LISTVIEW && dis->CtlID == static_cast<UINT>(IDC_PREFS_THEMES_COLORS_LIST))
-            {
-                const LRESULT handled = ThemesPane::OnDrawColorsList(dis, *state);
-                if (handled != 0)
-                {
-                    return handled;
-                }
-                break;
-            }
-
-            if (dis->CtlType != ODT_BUTTON)
-            {
-                break;
-            }
-
-            if (! dis->hwndItem || ! IsWindow(dis->hwndItem))
-            {
-                break;
-            }
-
-            const LONG_PTR style = GetWindowLongPtrW(dis->hwndItem, GWL_STYLE);
-            if ((style & BS_TYPEMASK) != BS_OWNERDRAW)
-            {
-                break;
-            }
-
-            if (const auto* pluginControls = FindPluginDetailsToggleControls(*state, dis->hwndItem))
-            {
-                const bool toggledOn   = GetWindowLongPtrW(dis->hwndItem, GWLP_USERDATA) != 0;
-                const COLORREF surface = ThemedControls::GetControlSurfaceColor(state->theme);
-                const HFONT boldFont   = state->boldFont ? state->boldFont.get() : nullptr;
-
-                const std::wstring onText  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
-                const std::wstring offText = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
-                std::wstring_view onLabel  = onText;
-                std::wstring_view offLabel = offText;
-
-                if (pluginControls->field.type == PrefsPluginConfigFieldType::Option && pluginControls->field.choices.size() >= 2)
-                {
-                    const auto& choices   = pluginControls->field.choices;
-                    const size_t onIndex  = std::min(pluginControls->toggleOnChoiceIndex, choices.size() - 1);
-                    const size_t offIndex = std::min(pluginControls->toggleOffChoiceIndex, choices.size() - 1);
-
-                    onLabel  = choices[onIndex].label.empty() ? std::wstring_view(choices[onIndex].value) : std::wstring_view(choices[onIndex].label);
-                    offLabel = choices[offIndex].label.empty() ? std::wstring_view(choices[offIndex].value) : std::wstring_view(choices[offIndex].label);
-                }
-
-                ThemedControls::DrawThemedSwitchToggle(*dis, state->theme, surface, boldFont, onLabel, offLabel, toggledOn);
-                return TRUE;
-            }
-
-            if (dis->CtlID == IDC_PREFS_GENERAL_MENUBAR_TOGGLE || dis->CtlID == IDC_PREFS_GENERAL_FUNCTIONBAR_TOGGLE ||
-                dis->CtlID == IDC_PREFS_GENERAL_SPLASH_TOGGLE || dis->CtlID == IDC_PREFS_PANES_LEFT_STATUSBAR_TOGGLE ||
-                dis->CtlID == IDC_PREFS_PANES_RIGHT_STATUSBAR_TOGGLE || dis->CtlID == IDC_PREFS_PANES_SHOW_HIDDEN_TOGGLE ||
-                dis->CtlID == IDC_PREFS_PANES_SHOW_SYSTEM_TOGGLE || dis->CtlID == IDC_PREFS_ADV_CONNECTIONS_BYPASS_HELLO_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_MONITOR_TOOLBAR_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_LINE_NUMBERS_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_MONITOR_ALWAYS_ON_TOP_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_SHOW_IDS_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_MONITOR_AUTO_SCROLL_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_TEXT_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_ERROR_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_WARNING_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_INFO_TOGGLE || dis->CtlID == IDC_PREFS_ADV_MONITOR_FILTER_DEBUG_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_FILEOPS_DIAG_INFO_TOGGLE || dis->CtlID == IDC_PREFS_ADV_FILEOPS_DIAG_DEBUG_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE ||
-                dis->CtlID == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || dis->CtlID == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE ||
-                dis->CtlID == IDC_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN ||
-                (dis->CtlID >= static_cast<UINT>(IDC_PREFS_HOT_PATHS_SHOW_IN_MENU_BASE) &&
-                 dis->CtlID < static_cast<UINT>(IDC_PREFS_HOT_PATHS_SHOW_IN_MENU_BASE + 10)))
-            {
-                const bool toggledOn        = GetWindowLongPtrW(dis->hwndItem, GWLP_USERDATA) != 0;
-                const COLORREF surface      = ThemedControls::GetControlSurfaceColor(state->theme);
-                const HFONT boldFont        = state->boldFont ? state->boldFont.get() : nullptr;
-                const std::wstring onLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
-                const std::wstring offLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
-                ThemedControls::DrawThemedSwitchToggle(*dis, state->theme, surface, boldFont, onLabel, offLabel, toggledOn);
-                return TRUE;
-            }
-
-            if (dis->CtlID == IDC_PREFS_PANES_LEFT_DISPLAY_TOGGLE || dis->CtlID == IDC_PREFS_PANES_RIGHT_DISPLAY_TOGGLE)
-            {
-                const bool toggledOn             = GetWindowLongPtrW(dis->hwndItem, GWLP_USERDATA) != 0;
-                const COLORREF surface           = ThemedControls::GetControlSurfaceColor(state->theme);
-                const HFONT boldFont             = state->boldFont ? state->boldFont.get() : nullptr;
-                const std::wstring briefLabel    = LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_BRIEF);
-                const std::wstring detailedLabel = LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_DETAILED);
-                ThemedControls::DrawThemedSwitchToggle(*dis, state->theme, surface, boldFont, briefLabel, detailedLabel, toggledOn);
-                return TRUE;
-            }
-
-            if (dis->CtlID == IDC_PREFS_PANES_LEFT_SORTDIR_TOGGLE || dis->CtlID == IDC_PREFS_PANES_RIGHT_SORTDIR_TOGGLE)
-            {
-                const bool toggledOn         = GetWindowLongPtrW(dis->hwndItem, GWLP_USERDATA) != 0;
-                const COLORREF surface       = ThemedControls::GetControlSurfaceColor(state->theme);
-                const HFONT boldFont         = state->boldFont ? state->boldFont.get() : nullptr;
-                const std::wstring ascLabel  = LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_ASCENDING);
-                const std::wstring descLabel = LoadStringResource(nullptr, IDS_PREFS_PANES_OPTION_DESCENDING);
-                ThemedControls::DrawThemedSwitchToggle(*dis, state->theme, surface, boldFont, ascLabel, descLabel, toggledOn);
-                return TRUE;
-            }
-
-            ThemedControls::DrawThemedPushButton(*dis, state->theme);
-            return TRUE;
+            break;
         }
+        case WndMsg::kPreferencesDeferredPaneAction:
+            if (auto payload = TakeMessagePayload<PreferencesDeferredActionPayload>(lp))
+            {
+                return HandleDeferredPaneAction(hwnd, *state, std::move(*payload)) ? 0 : FALSE;
+            }
+            return FALSE;
         case WM_COMMAND:
         {
-            const UINT controlId = LOWORD(wp);
-            const UINT notify    = HIWORD(wp);
+            const UINT notify = HIWORD(wp);
             if (notify == BN_SETFOCUS || notify == EN_SETFOCUS || notify == CBN_SETFOCUS)
             {
                 HWND control = reinterpret_cast<HWND>(lp);
                 if (control)
                 {
-                    PrefsPaneHost::EnsureControlVisible(hwnd, *state, control);
+                    PrefsPageHost::EnsureControlVisible(hwnd, *state, control);
                     InvalidateRect(control, nullptr, TRUE);
                 }
             }
@@ -3037,77 +4331,6 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 {
                     InvalidateRect(control, nullptr, TRUE);
                 }
-            }
-
-            if (notify == CBN_DROPDOWN || notify == CBN_CLOSEUP)
-            {
-                HWND combo = reinterpret_cast<HWND>(lp);
-                if (combo)
-                {
-                    PostMessageW(hwnd, WndMsg::kPreferencesApplyComboThemeDeferred, reinterpret_cast<WPARAM>(combo), static_cast<LPARAM>(notify));
-                }
-            }
-
-            if (KeyboardPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
-            {
-                return 0;
-            }
-
-            if (ViewersPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
-            {
-                return 0;
-            }
-
-            if (ThemesPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
-            {
-                return 0;
-            }
-
-            if (CompareDirectoriesPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
-            {
-                return 0;
-            }
-
-            if (HotPathsPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
-            {
-                return 0;
-            }
-
-            if (AdvancedPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
-            {
-                return 0;
-            }
-
-            if (PanesPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
-            {
-                return 0;
-            }
-
-            if (GeneralPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
-            {
-                return 0;
-            }
-
-            if (PluginsPane::HandleCommand(hwnd, *state, controlId, notify, reinterpret_cast<HWND>(lp)))
-            {
-                return 0;
-            }
-
-            break;
-        }
-        case WM_NOTIFY:
-        {
-            auto* hdr = reinterpret_cast<NMHDR*>(lp);
-            if (! hdr)
-            {
-                break;
-            }
-
-            LRESULT result = 0;
-            if (ThemesPane::HandleNotify(hwnd, *state, hdr, result) || ViewersPane::HandleNotify(hwnd, *state, hdr, result) ||
-                KeyboardPane::HandleNotify(hwnd, *state, hdr, result) || PluginsPane::HandleNotify(hwnd, *state, hdr, result))
-            {
-                return result;
             }
 
             break;
@@ -3129,7 +4352,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
 
             int newPos         = state->pageScrollY;
             const UINT dpi     = GetDpiForWindow(hwnd);
-            const int lineStep = std::max(1, ThemedControls::ScaleDip(dpi, 24));
+            const int lineStep = std::max(1, UiMetrics::ScaleDip(dpi, 24));
 
             switch (LOWORD(wp))
             {
@@ -3144,7 +4367,7 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
                 default: break;
             }
 
-            PrefsPaneHost::ScrollTo(hwnd, *state, newPos);
+            PrefsPageHost::ScrollTo(hwnd, *state, newPos);
             return 0;
         }
         case WM_MOUSEWHEEL:
@@ -3164,24 +4387,52 @@ LRESULT CALLBACK PreferencesPageHostSubclassProc(HWND hwnd, UINT msg, WPARAM wp,
         {
             if (state->pageHostIgnoreSize)
             {
-                return DefSubclassProc(hwnd, msg, wp, lp);
+                return DefWindowProcW(hwnd, msg, wp, lp);
             }
 
-            const LRESULT result = DefSubclassProc(hwnd, msg, wp, lp);
-            SendMessageW(hwnd, WM_SETREDRAW, FALSE, 0);
+            // Suppress intermediate repaints while repositioning child
+            // windows during layout.  This is safe for DxUI children
+            // because the WindowHost no longer discards its swap chain
+            // on WM_SHOWWINDOW FALSE (triggered by WM_SETREDRAW FALSE).
+            ScopedWindowRedrawBlock pageHostRedraw(hwnd);
+            const LRESULT result = DefWindowProcW(hwnd, msg, wp, lp);
+            if (state->pageHostUsesDxUi)
+            {
+                bool handled = false;
+                static_cast<void>(hostState._pageHostHost.HandleMessage(hwnd, msg, wp, lp, handled));
+            }
             LayoutPreferencesPageHost(hwnd, *state);
-            SendMessageW(hwnd, WM_SETREDRAW, TRUE, 0);
-            RedrawWindow(hwnd, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
+            if (state->pageHostUsesDxUi)
+            {
+                RECT rc{};
+                GetClientRect(hwnd, &rc);
+                bool handled = false;
+                static_cast<void>(hostState._pageHostHost.HandleMessage(
+                    hwnd, WM_SIZE, SIZE_RESTORED, MAKELPARAM(std::max(0l, rc.right - rc.left), std::max(0l, rc.bottom - rc.top)), handled));
+            }
+            LogPreferencesPageHostState(hwnd, *state, L"pagehost-wm-size");
+            pageHostRedraw.EnableAndRedraw(RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
             return result;
         }
         case WM_NCDESTROY:
         {
-            RemoveWindowSubclass(hwnd, PreferencesPageHostSubclassProc, uIdSubclass);
+            static_cast<void>(DrainPostedPayloadsForWindow(hwnd));
+            if (state->pageHostUsesDxUi)
+            {
+                hostState._pageHostHost.Detach();
+                state->pageHostUsesDxUi             = false;
+                state->pageHostDxHost               = nullptr;
+                state->pageHostDxRootControl        = nullptr;
+                state->pageHostDxContentRootControl = nullptr;
+                state->pageHostDxNoteControl        = nullptr;
+            }
+            RemovePropW(hwnd, kPrefsDxDiagnosticsProp);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
             break;
         }
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
 INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
@@ -3192,6 +4443,7 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
     }
 
     SetState(dlg, state);
+    InitPostedPayloadWindow(dlg);
     SettingsHotReload::RegisterParticipant(dlg);
 
     SetWindowTextW(dlg, LoadStringResource(nullptr, IDS_PREFS_CAPTION).c_str());
@@ -3208,15 +4460,14 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
         SetWindowTextW(apply, LoadStringResource(nullptr, IDS_BTN_APPLY).c_str());
     }
 
-    ApplyTitleBarTheme(dlg, state->theme, GetActiveWindow() == dlg);
+    ApplyWindowChromeTheme(dlg, state->theme, WindowBackdropTarget::Tool, GetActiveWindow() == dlg);
 
     state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
-    state->cardBackgroundColor = ThemedControls::GetControlSurfaceColor(state->theme);
+    state->cardBackgroundColor = UiMetrics::GetControlSurfaceColor(state->theme);
 
-    state->inputBackgroundColor = ThemedControls::BlendColor(state->cardBackgroundColor, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
-    state->inputFocusedBackgroundColor = ThemedControls::BlendColor(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
-    state->inputDisabledBackgroundColor =
-        ThemedControls::BlendColor(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
+    state->inputBackgroundColor         = UiMetrics::BlendColor(state->cardBackgroundColor, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
+    state->inputFocusedBackgroundColor  = UiMetrics::BlendColor(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
+    state->inputDisabledBackgroundColor = UiMetrics::BlendColor(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
     state->cardBrush.reset();
     state->inputBrush.reset();
     state->inputFocusedBrush.reset();
@@ -3250,23 +4501,18 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
 
         if (ok && cancel && apply)
         {
-            const UINT dpi       = GetDpiForWindow(dlg);
-            const int margin     = ThemedControls::ScaleDip(dpi, 8);
-            const int gapX       = ThemedControls::ScaleDip(dpi, 8);
-            const int minGapX    = ThemedControls::ScaleDip(dpi, 4);
-            const int buttonPadX = ThemedControls::ScaleDip(dpi, 12);
+            const UINT dpi                                     = GetDpiForWindow(dlg);
+            const int margin                                   = UiMetrics::ScaleDip(dpi, 8);
+            const int gapX                                     = UiMetrics::ScaleDip(dpi, 8);
+            const int minGapX                                  = UiMetrics::ScaleDip(dpi, 4);
+            const int buttonPadX                               = UiMetrics::ScaleDip(dpi, 12);
+            const PreferencesTypographyContext shellTypography = PrefsUi::MakeTypographyContext(dlg);
 
             const auto measureButtonMinWidth = [&](HWND button) noexcept
             {
-                HFONT font = reinterpret_cast<HFONT>(SendMessageW(button, WM_GETFONT, 0, 0));
-                if (! font)
-                {
-                    font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-                }
-
                 const std::wstring text = PrefsUi::GetWindowTextString(button);
-                const int textW         = ThemedControls::MeasureTextWidth(button, font, text);
-                return std::max(ThemedControls::ScaleDip(dpi, 60), textW + 2 * buttonPadX);
+                const int textW         = PrefsUi::MeasureSingleLineTextWidthPx(shellTypography, shellTypography.body, text);
+                return std::max(UiMetrics::ScaleDip(dpi, 60), textW + 2 * buttonPadX);
             };
 
             const int okMin     = measureButtonMinWidth(ok);
@@ -3275,8 +4521,8 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
 
             const int minButtonsClientWidth = std::max(0, (2 * margin) + okMin + cancelMin + applyMin + (2 * minGapX));
 
-            const int listMinWidth          = ThemedControls::ScaleDip(dpi, 72);
-            const int hostMinWidth          = ThemedControls::ScaleDip(dpi, 140);
+            const int listMinWidth          = UiMetrics::ScaleDip(dpi, 72);
+            const int hostMinWidth          = UiMetrics::ScaleDip(dpi, 140);
             const int minContentClientWidth = std::max(0, (2 * margin) + listMinWidth + gapX + hostMinWidth);
 
             const int minClientWidth = std::max(minButtonsClientWidth, minContentClientWidth);
@@ -3295,44 +4541,48 @@ INT_PTR OnInitDialog(HWND dlg, PreferencesDialogState* state)
             int buttonHeight       = std::max({okHeight, cancelHeight, applyHeight});
             if (buttonHeight <= 0)
             {
-                buttonHeight = ThemedControls::ScaleDip(dpi, 26);
+                buttonHeight = UiMetrics::ScaleDip(dpi, 26);
             }
 
             // Content area = left list + page host (scrolls vertically). Keep the minimum height small enough
             // to allow the user to shrink the dialog while still keeping the buttons reachable.
-            const int minContentClientHeight = ThemedControls::ScaleDip(dpi, 160);
+            const int minContentClientHeight = UiMetrics::ScaleDip(dpi, 160);
             const int minClientHeight        = std::max(0, minContentClientHeight + buttonHeight + 3 * margin);
             state->minTrackSizePx.cy         = std::max(0, minClientHeight + nonClientHeight);
         }
     }
 
-    INITCOMMONCONTROLSEX icc{};
-    icc.dwSize = sizeof(icc);
-    icc.dwICC  = ICC_TREEVIEW_CLASSES;
-    InitCommonControlsEx(&icc);
-
     PopulateCategoryTree(dlg, *state);
-
-    if (! state->theme.systemHighContrast)
-    {
-        ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
-        ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
-        ThemedControls::EnableOwnerDrawButton(dlg, IDC_PREFS_APPLY);
-    }
 
     UpdateApplyButton(dlg, *state);
 
     CreatePageControls(dlg, *state);
     ApplyThemeToPreferencesDialog(dlg, *state, state->theme);
 
-    if (state->pageHost)
+    // DxUi shell chrome (title label + button bar) needs more vertical space than the
+    // original Win32 statics. Grow the dialog once to accommodate and update min size.
     {
-        SetWindowSubclass(state->pageHost, PreferencesPageHostSubclassProc, 1u, reinterpret_cast<DWORD_PTR>(state));
+        auto& hostInit = static_cast<PreferencesDialogHost&>(*state);
+        if (hostInit._shellHostHwnd)
+        {
+            const UINT initDpi      = GetDpiForWindow(dlg);
+            const int chromeExtraPx = UiMetrics::ScaleDip(initDpi, 50);
+            RECT wr{};
+            if (GetWindowRect(dlg, &wr))
+            {
+                const int newH = std::max(0l, wr.bottom - wr.top) + chromeExtraPx;
+                SetWindowPos(dlg, nullptr, 0, 0, wr.right - wr.left, newH, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+                state->minTrackSizePx.cy += chromeExtraPx;
+            }
+        }
     }
 
-    InstallWheelRoutingSubclasses(dlg, *state);
+    if (state->pageHostWindow)
+    {
+        SetWindowLongPtrW(state->pageHostWindow, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
+    }
 
-    LayoutPreferencesDialog(dlg, *state);
+    InstallWheelRoutingHooks(dlg);
 
     SelectCategory(dlg, *state, state->initialCategory);
     return TRUE;
@@ -3383,7 +4633,7 @@ INT_PTR OnCtlColorListBox(PreferencesDialogState* state, HDC hdc, HWND listBox)
         return FALSE;
     }
 
-    const bool isCategoryTree = listBox && state->categoryTree && listBox == state->categoryTree;
+    const bool isCategoryTree = listBox && state->categoryTreeWindow && listBox == state->categoryTreeWindow;
     const bool useInputBrush  = ! isCategoryTree && state->inputBrush && ! state->theme.systemHighContrast;
 
     const COLORREF background = useInputBrush ? state->inputBackgroundColor : state->theme.windowBackground;
@@ -3411,14 +4661,14 @@ INT_PTR OnCommand(HWND dlg, PreferencesDialogState* state, UINT commandId, [[may
                     return TRUE;
                 }
             }
-            g_preferencesDialog.reset();
-            return TRUE;
+            return RequestPreferencesDialogClose(dlg) ? TRUE : FALSE;
         case IDC_PREFS_APPLY:
             if (state->dirty)
             {
                 CommitAndApply(dlg, *state);
             }
             return TRUE;
+        case IDC_PREFS_RESET_ALL: ResetAllPreferencesToDefaults(dlg, *state); return TRUE;
         case IDCANCEL:
             if (state->previewApplied && state->settings)
             {
@@ -3431,11 +4681,67 @@ INT_PTR OnCommand(HWND dlg, PreferencesDialogState* state, UINT commandId, [[may
                     PostMessageW(state->owner, WndMsg::kSettingsApplied, 0, 0);
                 }
             }
-            g_preferencesDialog.reset();
-            return TRUE;
+            return RequestPreferencesDialogClose(dlg) ? TRUE : FALSE;
     }
 
     return FALSE;
+}
+
+bool HandleDeferredPaneAction(HWND dlg, PreferencesDialogState& state, PreferencesDeferredActionPayload&& payload) noexcept
+{
+    auto& hostState = static_cast<PreferencesDialogHost&>(state);
+    const HWND host = (state.pageHostWindow && IsWindow(state.pageHostWindow) != FALSE) ? state.pageHostWindow : dlg;
+
+    switch (payload.kind)
+    {
+        case PreferencesDeferredActionKind::ViewersSearchChanged: return hostState._viewersPane.HandleDeferredAction(host, state, payload.kind);
+        case PreferencesDeferredActionKind::KeyboardSearchChanged:
+        case PreferencesDeferredActionKind::KeyboardScopeChanged:
+        case PreferencesDeferredActionKind::KeyboardAssign:
+        case PreferencesDeferredActionKind::KeyboardRemove:
+        case PreferencesDeferredActionKind::KeyboardReset:
+        case PreferencesDeferredActionKind::KeyboardImport:
+        case PreferencesDeferredActionKind::KeyboardExport: return hostState._keyboardPane.HandleDeferredAction(host, state, payload.kind);
+        case PreferencesDeferredActionKind::ThemesThemeChanged:
+        case PreferencesDeferredActionKind::ThemesBaseChanged:
+        case PreferencesDeferredActionKind::ThemesNameBlur:
+        case PreferencesDeferredActionKind::ThemesSearchChanged: return hostState._themesPane.HandleDeferredAction(host, state, payload.kind);
+        case PreferencesDeferredActionKind::PluginsSearchChanged:
+        case PreferencesDeferredActionKind::PluginsConfigure:
+        case PreferencesDeferredActionKind::PluginsTest:
+        case PreferencesDeferredActionKind::PluginsTestAll:
+        {
+            const bool handled = hostState._pluginsPane.HandleDeferredAction(host, state, payload.kind);
+            if (handled && host)
+            {
+                LayoutPreferencesPageHost(host, state);
+                InvalidateRect(host, nullptr, FALSE);
+            }
+            return handled;
+        }
+        case PreferencesDeferredActionKind::FileOperationsBandwidthPresetChanged:
+        {
+            const bool handled = hostState._fileOperationsPane.HandleDeferredAction(host, state, payload.kind);
+            if (handled && host)
+            {
+                LayoutPreferencesPageHost(host, state);
+                InvalidateRect(host, nullptr, FALSE);
+                hostState._fileOperationsPane.PostLayoutFocusCustomBandwidthEdit();
+            }
+            return handled;
+        }
+        case PreferencesDeferredActionKind::CompareDirectoriesIgnoreToggleChanged:
+        {
+            const bool handled = hostState._compareDirectoriesPane.HandleDeferredAction(host, state, payload.kind);
+            if (handled && host)
+            {
+                LayoutPreferencesPageHost(host, state);
+                InvalidateRect(host, nullptr, FALSE);
+            }
+            return handled;
+        }
+        default: return false;
+    }
 }
 
 INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp) noexcept
@@ -3445,7 +4751,20 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     switch (msg)
     {
         case WM_INITDIALOG: return OnInitDialog(dlg, reinterpret_cast<PreferencesDialogState*>(lp));
-        case WM_CLOSE: return OnCommand(dlg, state, IDOK, 0, nullptr);
+        case WM_CLOSE: return OnCommand(dlg, state, IDCANCEL, 0, nullptr);
+        case kPrefsDeferredCloseMessage:
+            if (g_preferencesDialog.get() == dlg)
+            {
+                g_preferencesDialog.reset();
+                return TRUE;
+            }
+            return FALSE;
+        case WndMsg::kPreferencesDeferredPaneAction:
+            if (auto payload = TakeMessagePayload<PreferencesDeferredActionPayload>(lp))
+            {
+                return state ? (HandleDeferredPaneAction(dlg, *state, std::move(*payload)) ? TRUE : FALSE) : FALSE;
+            }
+            return FALSE;
         case WM_ERASEBKGND:
             if (state && state->backgroundBrush && wp)
             {
@@ -3460,170 +4779,17 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         case WM_CTLCOLORDLG: return OnCtlColorDialog(state);
         case WM_CTLCOLORSTATIC: return OnCtlColorStatic(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
         case WM_CTLCOLORLISTBOX: return OnCtlColorListBox(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
-        case WM_NOTIFY:
-        {
-            if (! state)
-            {
-                break;
-            }
-
-            auto* hdr = reinterpret_cast<NMHDR*>(lp);
-            if (! hdr)
-            {
-                break;
-            }
-
-            if (! state->categoryTree || hdr->hwndFrom != state->categoryTree)
-            {
-                break;
-            }
-
-            if (hdr->code == TVN_SELCHANGEDW)
-            {
-                auto* nmtv = reinterpret_cast<NMTREEVIEWW*>(lp);
-                if (! nmtv || ! nmtv->itemNew.hItem)
-                {
-                    return TRUE;
-                }
-
-                TVITEMW item{};
-                item.mask  = TVIF_PARAM;
-                item.hItem = nmtv->itemNew.hItem;
-                if (! TreeView_GetItem(state->categoryTree, &item))
-                {
-                    return TRUE;
-                }
-
-                PrefsPluginListItem pluginItem{};
-                if (PrefsNavTree::TryDecodePluginData(item.lParam, pluginItem))
-                {
-                    state->pluginsSelectedPlugin = pluginItem;
-                    UpdatePageText(dlg, *state, PrefCategory::Plugins);
-                    return TRUE;
-                }
-
-                state->pluginsSelectedPlugin.reset();
-                const auto category = static_cast<PrefCategory>(item.lParam);
-                UpdatePageText(dlg, *state, category);
-                return TRUE;
-            }
-
-            if (hdr->code == NM_CUSTOMDRAW)
-            {
-                auto* cd = reinterpret_cast<NMTVCUSTOMDRAW*>(lp);
-                if (! cd)
-                {
-                    break;
-                }
-
-                switch (cd->nmcd.dwDrawStage)
-                {
-                    case CDDS_PREPAINT: return CDRF_NOTIFYITEMDRAW;
-                    case CDDS_ITEMPREPAINT:
-                    {
-                        const bool selected    = (cd->nmcd.uItemState & CDIS_SELECTED) != 0;
-                        const bool disabled    = (cd->nmcd.uItemState & CDIS_DISABLED) != 0;
-                        const bool treeFocused = GetFocus() == state->categoryTree;
-
-                        const HWND root         = GetAncestor(state->categoryTree, GA_ROOT);
-                        const bool windowActive = root && GetActiveWindow() == root;
-
-                        COLORREF bg   = state->theme.systemHighContrast ? GetSysColor(COLOR_WINDOW) : state->theme.windowBackground;
-                        COLORREF text = state->theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT)
-                                                                        : (disabled ? state->theme.menu.disabledText : state->theme.menu.text);
-
-                        if (selected)
-                        {
-                            COLORREF selBg = state->theme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : state->theme.menu.selectionBg;
-                            std::array<wchar_t, 128> itemText{};
-                            if (! state->theme.highContrast && state->theme.menu.rainbowMode)
-                            {
-                                TVITEMW tvi{};
-                                tvi.mask       = TVIF_TEXT;
-                                tvi.hItem      = reinterpret_cast<HTREEITEM>(cd->nmcd.dwItemSpec);
-                                tvi.pszText    = itemText.data();
-                                tvi.cchTextMax = static_cast<int>(itemText.size());
-                                if (TreeView_GetItem(state->categoryTree, &tvi))
-                                {
-                                    const std::wstring_view seed(itemText.data());
-                                    if (! seed.empty())
-                                    {
-                                        selBg = RainbowMenuSelectionColor(seed, state->theme.menu.darkBase);
-                                    }
-                                }
-                            }
-
-                            COLORREF selText = state->theme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHTTEXT) : state->theme.menu.selectionText;
-                            if (! state->theme.highContrast && state->theme.menu.rainbowMode)
-                            {
-                                selText = ChooseContrastingTextColor(selBg);
-                            }
-
-                            if (windowActive && treeFocused)
-                            {
-                                bg   = selBg;
-                                text = selText;
-                            }
-                            else if (! state->theme.highContrast)
-                            {
-                                const int denom = state->theme.menu.darkBase ? 2 : 3;
-                                bg              = ThemedControls::BlendColor(state->theme.windowBackground, selBg, 1, denom);
-                                text            = ChooseContrastingTextColor(bg);
-                            }
-                            else
-                            {
-                                bg   = selBg;
-                                text = selText;
-                            }
-                        }
-
-                        cd->clrTextBk = bg;
-                        cd->clrText   = text;
-                        return CDRF_DODEFAULT;
-                    }
-                }
-            }
-
-            break;
-        }
         case WM_ACTIVATE:
             if (state)
             {
-                if (state->categoryTree)
+                if (state->categoryTreeWindow)
                 {
-                    InvalidateRect(state->categoryTree, nullptr, FALSE);
+                    InvalidateRect(state->categoryTreeWindow, nullptr, FALSE);
                 }
-                if (state->pageHost)
+                if (state->pageHostWindow)
                 {
-                    RedrawWindow(state->pageHost, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
+                    RedrawWindow(state->pageHostWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
                 }
-
-                const auto invalidateList = [&](const auto& listLike) noexcept
-                {
-                    HWND list = nullptr;
-                    if constexpr (requires { listLike.get(); })
-                    {
-                        list = listLike.get();
-                    }
-                    else
-                    {
-                        list = listLike;
-                    }
-
-                    if (! list)
-                    {
-                        return;
-                    }
-                    InvalidateRect(list, nullptr, FALSE);
-                    if (const HWND header = ListView_GetHeader(list))
-                    {
-                        InvalidateRect(header, nullptr, TRUE);
-                    }
-                };
-
-                invalidateList(state->keyboardList);
-                invalidateList(state->viewersList);
-                invalidateList(state->themesColorsList);
             }
             return FALSE;
         case WM_NCACTIVATE:
@@ -3681,7 +4847,6 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         case WM_DPICHANGED:
             if (state)
             {
-                const UINT dpi              = static_cast<UINT>(HIWORD(wp));
                 const RECT* const suggested = reinterpret_cast<const RECT*>(lp);
                 if (suggested)
                 {
@@ -3690,30 +4855,12 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                     SetWindowPos(dlg, nullptr, suggested->left, suggested->top, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
                 }
 
-                state->uiFont   = CreateMenuFontForDpi(dpi);
-                HFONT fontToUse = state->uiFont.get();
-                if (! fontToUse)
-                {
-                    fontToUse = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-                }
-
-                SendMessageW(dlg, WM_SETFONT, reinterpret_cast<WPARAM>(fontToUse), TRUE);
-                EnumChildWindows(dlg, SetDialogChildFontProc, reinterpret_cast<LPARAM>(fontToUse));
-
-                state->italicFont.reset();
-                state->boldFont.reset();
-                state->titleFont.reset();
-
-                if (state->categoryTree)
-                {
-                    const int itemHeightPx = std::max(1, ThemedControls::ScaleDip(dpi, 24));
-                    SendMessageW(state->categoryTree, TVM_SETITEMHEIGHT, static_cast<WPARAM>(itemHeightPx), 0);
-                }
-
                 LayoutPreferencesDialog(dlg, *state);
-                if (state->pageHost)
+                if (state->pageHostWindow)
                 {
-                    LayoutPreferencesPageHost(state->pageHost, *state);
+                    LayoutPreferencesPageHost(state->pageHostWindow, *state);
+                    SyncPreferencesPageHostDxSize(state->pageHostWindow, *state, L"dialog-dpi-changed");
+                    LogPreferencesPageHostState(state->pageHostWindow, *state, L"dialog-dpi-changed");
                 }
                 RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
             }
@@ -3722,6 +4869,12 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
             if (state)
             {
                 LayoutPreferencesDialog(dlg, *state);
+                if (state->pageHostWindow)
+                {
+                    LayoutPreferencesPageHost(state->pageHostWindow, *state);
+                    SyncPreferencesPageHostDxSize(state->pageHostWindow, *state, L"dialog-wm-size");
+                    LogPreferencesPageHostState(state->pageHostWindow, *state, L"dialog-wm-size");
+                }
                 InvalidateRect(dlg, nullptr, TRUE);
             }
             return TRUE;
@@ -3737,45 +4890,32 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         case WM_SYSCOLORCHANGE:
             if (state)
             {
-                RefreshPreferencesDialogTheme(dlg, *state);
+                RefreshPreferencesDialogThemeImpl(dlg, *state);
             }
             return TRUE;
         case WM_EXITSIZEMOVE:
             if (state)
             {
                 LayoutPreferencesDialog(dlg, *state);
+                if (state->pageHostWindow)
+                {
+                    LayoutPreferencesPageHost(state->pageHostWindow, *state);
+                    SyncPreferencesPageHostDxSize(state->pageHostWindow, *state, L"dialog-exitsizemove");
+                    LogPreferencesPageHostState(state->pageHostWindow, *state, L"dialog-exitsizemove");
+                }
                 RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW);
             }
             return TRUE;
-        case WM_DRAWITEM:
-        {
-            if (! state)
-            {
-                break;
-            }
-
-            auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lp);
-            if (! dis)
-            {
-                break;
-            }
-
-            if (dis->CtlType == ODT_BUTTON)
-            {
-                ThemedControls::DrawThemedPushButton(*dis, state->theme);
-                return TRUE;
-            }
-
-            break;
-        }
         case WM_COMMAND: return OnCommand(dlg, state, LOWORD(wp), HIWORD(wp), reinterpret_cast<HWND>(lp));
         case WM_NCDESTROY:
         {
             if (state)
             {
+                const HWND restoreOwner = (state->owner && IsWindow(state->owner) != FALSE) ? state->owner : nullptr;
                 std::unique_ptr<PreferencesDialogHost> stateOwner;
                 stateOwner.reset(static_cast<PreferencesDialogHost*>(state));
                 SettingsHotReload::UnregisterParticipant(dlg);
+                auto& hostState = static_cast<PreferencesDialogHost&>(*state);
 
                 if (state->settings)
                 {
@@ -3789,16 +4929,47 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                     }
                 }
 
-                if (state->pageHost)
+                if (state->pageHostWindow)
                 {
-                    RemoveWindowSubclass(state->pageHost, PreferencesPageHostSubclassProc, 1u);
+                    if (state->pageHostUsesDxUi)
+                    {
+                        hostState._pageHostHost.Detach();
+                        state->pageHostUsesDxUi             = false;
+                        state->pageHostDxHost               = nullptr;
+                        state->pageHostDxRootControl        = nullptr;
+                        state->pageHostDxContentRootControl = nullptr;
+                        state->pageHostDxNoteControl        = nullptr;
+                    }
+                    SetWindowLongPtrW(state->pageHostWindow, GWLP_USERDATA, 0);
                 }
 
-                RemoveWindowSubclass(dlg, PreferencesWheelRouteSubclassProc, kPrefsWheelRouteSubclassId);
+                if (hostState._shellHostHwnd && IsWindow(hostState._shellHostHwnd) != FALSE)
+                {
+                    RestoreWndProcHook(hostState._shellHostHwnd, kPrefsDxShellHostOriginalWndProcProp);
+                    RemovePropW(hostState._shellHostHwnd, kPrefsDxShellHostProp);
+                    RemovePropW(hostState._shellHostHwnd, kPrefsDxShellHostOriginalWndProcProp);
+                }
+                hostState._shellHost.Detach();
+                hostState._shellHostHwnd = nullptr;
+
+                if (state->categoryTreeUsesDxUi)
+                {
+                    if (state->categoryTreeWindow && IsWindow(state->categoryTreeWindow) != FALSE)
+                    {
+                        RestoreWndProcHook(state->categoryTreeWindow, kPrefsDxCategoryHostOriginalWndProcProp);
+                        RemovePropW(state->categoryTreeWindow, kPrefsDxCategoryHostStateProp);
+                        RemovePropW(state->categoryTreeWindow, kPrefsDxCategoryHostOriginalWndProcProp);
+                    }
+                    hostState._categoryTreeHost.Detach();
+                    hostState._categoryTreeControl = nullptr;
+                    state->categoryTreeUsesDxUi    = false;
+                }
+
+                RestoreWndProcHook(dlg, kPrefsWheelRouteOriginalWndProcProp);
                 EnumChildWindows(dlg,
                                  [](HWND child, LPARAM) noexcept -> BOOL
                 {
-                    RemoveWindowSubclass(child, PreferencesWheelRouteSubclassProc, kPrefsWheelRouteSubclassId);
+                    RestoreWndProcHook(child, kPrefsWheelRouteOriginalWndProcProp);
                     return TRUE;
                 },
                                  0);
@@ -3808,7 +4979,15 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                 {
                     g_preferencesDialog.release();
                 }
+
+                if (restoreOwner)
+                {
+                    static_cast<void>(SetActiveWindow(restoreOwner));
+                    static_cast<void>(SetForegroundWindow(restoreOwner));
+                    static_cast<void>(SetFocus(restoreOwner));
+                }
             }
+            static_cast<void>(DrainPostedPayloadsForWindow(dlg));
             return FALSE;
         }
     }
@@ -3816,6 +4995,11 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
     return FALSE;
 }
 } // namespace
+
+void RefreshPreferencesDialogTheme(HWND dlg, PreferencesDialogState& state) noexcept
+{
+    RefreshPreferencesDialogThemeImpl(dlg, state);
+}
 
 [[nodiscard]] bool PreferencesDialog::Show(
     HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme, PrefCategory initialCategory) noexcept
@@ -3849,11 +5033,7 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
                     effectiveOwner = nullptr;
                 }
 
-                if (state->owner != effectiveOwner)
-                {
-                    state->owner = effectiveOwner;
-                    SetWindowLongPtrW(existing, GWLP_HWNDPARENT, reinterpret_cast<LONG_PTR>(effectiveOwner));
-                }
+                state->owner = effectiveOwner;
                 SelectCategory(existing, *state, initialCategory);
             }
             return true;
@@ -3894,14 +5074,10 @@ INT_PTR CALLBACK PreferencesDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp)
         state->workingSettings.mainMenu = Common::Settings::MainMenuState{};
     }
 
-    // Load schema fields for UI generation
-    const std::wstring schemaPath = std::wstring(appId) + L".settings.schema.json";
-    state->schemaFields           = SettingsSchemaParser::LoadAndParseSettingsSchema(schemaPath);
-
     SetDirty(nullptr, *state);
 
-    const HWND dlg = CreateDialogParamW(
-        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_PREFERENCES), effectiveOwner, PreferencesDialogProc, reinterpret_cast<LPARAM>(state));
+    const HWND dlg = RedSalamander::Win32Callback::CreateDialogParamResourceNoThrow(
+        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_PREFERENCES), nullptr, PreferencesDialogProc, reinterpret_cast<LPARAM>(state));
 
     if (! dlg)
     {
@@ -3924,3 +5100,1750 @@ HWND PreferencesDialog::GetHandle() noexcept
     }
     return nullptr;
 }
+
+void UpdatePreferencesWindowsTheme(const AppTheme& theme) noexcept
+{
+    const HWND dlg = PreferencesDialog::GetHandle();
+    if (! dlg)
+    {
+        return;
+    }
+
+    if (auto* state = GetState(dlg))
+    {
+        state->theme = theme;
+        RefreshPreferencesDialogTheme(dlg, *state);
+        InvalidateRect(dlg, nullptr, FALSE);
+    }
+}
+
+#ifdef ENABLE_TESTS
+bool PreferencesDialog::DebugGetSnapshot(::PreferencesDebugSnapshot& out) noexcept
+{
+    out = {};
+
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    out.categoryTreeUsesDxUiHost      = state->categoryTreeUsesDxUi;
+    out.shellUsesDxUiHost             = true;
+    out.pageHostUsesDxUiHost          = state->pageHostUsesDxUi;
+    out.categoryTreeFocused           = state->categoryTreeWindow && GetFocus() == state->categoryTreeWindow;
+    out.pluginItemSelected            = state->pluginsSelectedPlugin.has_value();
+    out.pluginsDetailsActive          = state->pluginsDetailsActive;
+    out.currentCategory               = state->currentCategory;
+    out.visibleChildWindowCount       = CountVisibleChildWindows(dlg);
+    out.visibleLegacyTreeViewCount    = CountVisibleChildWindowsByClass(dlg, L"SysTreeView32");
+    out.currentPageCardCount          = state->pageSettingCards.size();
+    out.visibleLegacyShellStaticCount = 0u;
+    out.visibleLegacyFooterButtonCount =
+        ((GetDlgItem(dlg, IDOK) && PrefsUi::IsActuallyVisibleChildWindow(GetDlgItem(dlg, IDOK))) ? 1u : 0u) +
+        ((GetDlgItem(dlg, IDCANCEL) && PrefsUi::IsActuallyVisibleChildWindow(GetDlgItem(dlg, IDCANCEL))) ? 1u : 0u) +
+        ((GetDlgItem(dlg, IDC_PREFS_APPLY) && PrefsUi::IsActuallyVisibleChildWindow(GetDlgItem(dlg, IDC_PREFS_APPLY))) ? 1u : 0u);
+    if (state->pageHostWindow)
+    {
+        out.pageHostShowsVerticalScroll = state->pageScrollMaxY > 0;
+    }
+    out.pageScrollY    = state->pageScrollY;
+    out.pageScrollMaxY = state->pageScrollMaxY;
+
+    if (state->categoryTreeUsesDxUi)
+    {
+        const auto& hostState                   = static_cast<const PreferencesDialogHost&>(*state);
+        out.categoryTreeDxHostRenderCount       = GetDxHostDebugRenderCount(hostState._categoryTreeHost);
+        out.categoryTreeDxHostHasResizeFailures = GetDxHostDebugResizeFailureCount(hostState._categoryTreeHost) != 0u;
+        if (hostState._categoryTreeControl)
+        {
+            const auto treeScrollbarState        = hostState._categoryTreeControl->DebugGetScrollbarVisualState(hostState._categoryTreeHost.GetTheme());
+            out.categoryTreeHasVerticalScrollbar = treeScrollbarState.hasVerticalScrollbar;
+            out.categoryTreeFirstVisibleIndex    = hostState._categoryTreeControl->DebugGetFirstVisibleIndex();
+            if (const auto selectedVisibleIndex = hostState._categoryTreeControl->DebugGetSelectedVisibleIndex())
+            {
+                out.categoryTreeHasSelectedItem      = true;
+                out.categoryTreeSelectedVisibleIndex = selectedVisibleIndex.value();
+            }
+            out.categoryTreeVerticalScrollDip = hostState._categoryTreeControl->DebugGetVerticalScrollDip();
+        }
+        out.pageHostDxHostRenderCount = GetDxHostDebugRenderCount(hostState._pageHostHost);
+        out.createdPaneWindowCount    = 0u;
+        out.visiblePaneWindowCount    = 0u;
+        out.generalPaneVisible        = state->currentCategory == PrefCategory::General;
+        out.pluginsPaneVisible        = state->currentCategory == PrefCategory::Plugins;
+        if (hostState._pageTitleControl)
+        {
+            out.pageTitle = std::wstring(hostState._pageTitleControl->GetText());
+        }
+        if (hostState._pageDescriptionControl)
+        {
+            out.pageDescription = std::wstring(hostState._pageDescriptionControl->GetText());
+        }
+
+        const auto accumulateShellHost = [&](HWND hwnd, const WindowHost& dxHost) noexcept
+        {
+            if (! hwnd || ! PrefsUi::IsActuallyVisibleChildWindow(hwnd))
+            {
+                return;
+            }
+            if (GetDxHostDebugRenderCount(dxHost) != 0u)
+            {
+                ++out.visibleShellRenderedDxHostCount;
+            }
+            if (GetDxHostDebugResizeFailureCount(dxHost) != 0u)
+            {
+                ++out.shellDxHostResizeFailureCount;
+            }
+        };
+
+        accumulateShellHost(hostState._shellHostHwnd, hostState._shellHost);
+
+        const auto getCurrentPageWindow = [&]() noexcept -> HWND { return GetActivePreferencesPageRootWindow(*state); };
+
+        const HWND currentPageWindow = getCurrentPageWindow();
+        const bool currentPageUsesSharedHost =
+            currentPageWindow && state->pageHostWindow && currentPageWindow == state->pageHostWindow && IsWindow(currentPageWindow) != FALSE;
+
+        if (currentPageUsesSharedHost)
+        {
+            out.visibleCurrentPageChildWindowCount  = PrefsUi::IsActuallyVisibleChildWindow(currentPageWindow) ? 1u : 0u;
+            out.currentPageRenderedDxHostCount      = GetDxHostDebugRenderCount(hostState._pageHostHost) != 0u ? 1u : 0u;
+            out.currentPageDxHostResizeFailureCount = GetDxHostDebugResizeFailureCount(hostState._pageHostHost) != 0u ? 1u : 0u;
+            out.currentPageDxHostRenderCountTotal   = GetDxHostDebugRenderCount(hostState._pageHostHost);
+        }
+        else
+        {
+            if (! PrefsDxHost::TryGetDirectHostMetrics(
+                    currentPageWindow, out.visibleCurrentPageChildWindowCount, out.currentPageDxHostResizeFailureCount, out.currentPageDxHostRenderCountTotal))
+            {
+                if (currentPageWindow && state->pageHostWindow && currentPageWindow != state->pageHostWindow &&
+                    PrefsUi::IsActuallyVisibleChildWindow(currentPageWindow))
+                {
+                    out.visibleCurrentPageChildWindowCount  = 1u;
+                    out.currentPageDxHostResizeFailureCount = 0u;
+                    out.currentPageDxHostRenderCountTotal   = 1u;
+                }
+                else
+                {
+                    out.visibleCurrentPageChildWindowCount  = CountVisibleChildWindows(currentPageWindow);
+                    out.currentPageDxHostResizeFailureCount = PrefsDxHost::CountVisibleHostsWithResizeFailures(currentPageWindow);
+                    out.currentPageDxHostRenderCountTotal   = PrefsDxHost::SumVisibleRenderedHostRenderCounts(currentPageWindow);
+                }
+            }
+            out.currentPageRenderedDxHostCount = out.currentPageDxHostRenderCountTotal != 0u ? 1u : 0u;
+        }
+        out.pluginsExpanded                   = hostState._categoryTreeModel.IsPluginsExpanded();
+        out.pluginsTreeChildCount             = hostState._categoryTreeModel.GetPluginItemCount();
+        out.themesListRowCount                = hostState._themesPane.DebugListRowCount();
+        const auto themesListMetrics          = hostState._themesPane.DebugListVisibleWorkMetrics();
+        out.themesListVisibleRowCount         = static_cast<size_t>(themesListMetrics.visibleRowCount);
+        out.themesListVisibleColumnCount      = static_cast<size_t>(themesListMetrics.visibleColumnCount);
+        out.themesListVisibleCellCount        = static_cast<size_t>(themesListMetrics.visibleCellCount);
+        out.themesListHasVerticalScrollbar    = themesListMetrics.hasVerticalScrollbar;
+        out.themesListVerticalScrollDip       = themesListMetrics.verticalScrollDip;
+        out.themesListRenderCount             = hostState._themesPane.DebugListRenderCount();
+        out.themesListResizeCount             = hostState._themesPane.DebugListResizeCount();
+        out.themesListResizeFailureCount      = hostState._themesPane.DebugListResizeFailureCount();
+        out.themesSearchText                  = state->themesSearchText;
+        out.themesSelectedThemeIdText         = state->workingSettings.theme.currentThemeId;
+        out.themesSelectedColorKeyText        = state->themesSelectedColorKey;
+        out.themesColorText                   = state->themesColorText;
+        out.themesSelectedColorOverrideActive = false;
+        out.generalFocusTarget                = hostState._generalPane.DebugGetFocusTarget();
+        out.generalUsesDxUiTypographyContext  = hostState._generalPane.DebugUsesDxUiTypographyContext();
+        out.generalUsesDxUiTypographyMetrics  = hostState._generalPane.DebugUsesDxUiTypographyMetrics();
+        out.panesFocusTarget                  = hostState._panesPane.DebugGetFocusTarget();
+        out.panesUsesDxUiTypographyContext    = hostState._panesPane.DebugUsesDxUiTypographyContext();
+        out.panesUsesDxUiTypographyMetrics    = hostState._panesPane.DebugUsesDxUiTypographyMetrics();
+        out.viewersUsesDxUiTypographyContext  = hostState._viewersPane.DebugUsesDxUiTypographyContext();
+        out.viewersUsesDxUiTypographyMetrics  = hostState._viewersPane.DebugUsesDxUiTypographyMetrics();
+        out.hotPathsFocusTarget               = hostState._hotPathsPane.DebugGetFocusTarget();
+        out.advancedFocusTarget               = hostState._advancedPane.DebugGetFocusTarget();
+        out.fileOperationsFocusTarget         = hostState._fileOperationsPane.DebugGetFocusTarget();
+        out.compareDirectoriesFocusTarget     = hostState._compareDirectoriesPane.DebugGetFocusTarget();
+        out.themesFocusTarget                 = hostState._themesPane.DebugGetFocusTarget();
+        if (const auto* focusControl = hostState._shellHost.GetFocusControl(); focusControl != nullptr)
+        {
+            if (focusControl == hostState._resetAllButtonControl)
+            {
+                out.shellFocusTarget = PreferencesShellDebugFocusTarget::ResetAllButton;
+            }
+            else if (focusControl == hostState._okButtonControl)
+            {
+                out.shellFocusTarget = PreferencesShellDebugFocusTarget::OkButton;
+            }
+            else if (focusControl == hostState._cancelButtonControl)
+            {
+                out.shellFocusTarget = PreferencesShellDebugFocusTarget::CancelButton;
+            }
+            else if (focusControl == hostState._applyButtonControl)
+            {
+                out.shellFocusTarget = PreferencesShellDebugFocusTarget::ApplyButton;
+            }
+        }
+        const ThemePalette palette = PrefsUi::MakeDxPalette(state->theme);
+        out.previewApplied         = state->previewApplied;
+        out.themeDark              = state->theme.dark;
+        out.themeHighContrast      = state->theme.highContrast;
+        out.themeRainbow           = state->theme.menu.rainbowMode;
+        out.themeCompactMode       = state->theme.compactMode;
+        out.themeReducedMotion     = palette.reducedMotion;
+        out.generalUiLanguage      = GetUiSettingsOrDefault(state->workingSettings).language;
+        if (out.generalUiLanguage.empty())
+        {
+            out.generalUiLanguage = L"system";
+        }
+        out.themeOverlayBackgroundArgb = PackColorArgb(palette.overlayBackground);
+        out.themePrimaryBackdrop       = state->theme.primaryWindowBackdrop;
+        out.themeToolBackdrop          = state->theme.toolWindowBackdrop;
+        static_cast<void>(hostState._generalPane.DebugGetCompactModeToggleHeightDip(out.generalCompactToggleHeightDip));
+        if (! state->themesSelectedColorKey.empty())
+        {
+            for (const auto& def : state->workingSettings.theme.themes)
+            {
+                if (def.id == state->workingSettings.theme.currentThemeId)
+                {
+                    out.themesSelectedColorOverrideActive = def.colors.contains(state->themesSelectedColorKey);
+                    break;
+                }
+            }
+        }
+        out.viewersListRowCount                        = hostState._viewersPane.DebugListRowCount();
+        const auto viewersListMetrics                  = hostState._viewersPane.DebugListVisibleWorkMetrics();
+        out.viewersListVisibleRowCount                 = static_cast<size_t>(viewersListMetrics.visibleRowCount);
+        out.viewersListVisibleColumnCount              = static_cast<size_t>(viewersListMetrics.visibleColumnCount);
+        out.viewersListVisibleCellCount                = static_cast<size_t>(viewersListMetrics.visibleCellCount);
+        out.viewersListHasVerticalScrollbar            = viewersListMetrics.hasVerticalScrollbar;
+        out.viewersListVerticalScrollDip               = viewersListMetrics.verticalScrollDip;
+        out.viewersListRenderCount                     = hostState._viewersPane.DebugListRenderCount();
+        out.viewersListResizeCount                     = hostState._viewersPane.DebugListResizeCount();
+        out.viewersListResizeFailureCount              = hostState._viewersPane.DebugListResizeFailureCount();
+        out.viewersSearchText                          = state->viewersSearchText;
+        out.viewersSelectedExtensionText               = state->viewersSelectedExtensionText;
+        out.viewersFocusTarget                         = hostState._viewersPane.DebugGetFocusTarget();
+        out.keyboardListRowCount                       = hostState._keyboardPane.DebugListRowCount();
+        const auto keyboardListMetrics                 = hostState._keyboardPane.DebugListVisibleWorkMetrics();
+        out.keyboardListVisibleRowCount                = static_cast<size_t>(keyboardListMetrics.visibleRowCount);
+        out.keyboardListVisibleColumnCount             = static_cast<size_t>(keyboardListMetrics.visibleColumnCount);
+        out.keyboardListVisibleCellCount               = static_cast<size_t>(keyboardListMetrics.visibleCellCount);
+        out.keyboardListHasVerticalScrollbar           = keyboardListMetrics.hasVerticalScrollbar;
+        out.keyboardListVerticalScrollDip              = keyboardListMetrics.verticalScrollDip;
+        out.keyboardListRenderCount                    = hostState._keyboardPane.DebugListRenderCount();
+        out.keyboardListResizeCount                    = hostState._keyboardPane.DebugListResizeCount();
+        out.keyboardListResizeFailureCount             = hostState._keyboardPane.DebugListResizeFailureCount();
+        out.keyboardSearchText                         = state->keyboardSearchText;
+        out.keyboardHintText                           = state->keyboardHintText;
+        out.keyboardFocusTarget                        = hostState._keyboardPane.DebugGetFocusTarget();
+        out.keyboardCaptureActive                      = state->keyboardCaptureActive;
+        out.pluginsMainListRowCount                    = hostState._pluginsPane.DebugMainListRowCount();
+        const auto pluginsMainListMetrics              = hostState._pluginsPane.DebugMainListVisibleWorkMetrics();
+        out.pluginsMainListVisibleRowCount             = static_cast<size_t>(pluginsMainListMetrics.visibleRowCount);
+        out.pluginsMainListVisibleColumnCount          = static_cast<size_t>(pluginsMainListMetrics.visibleColumnCount);
+        out.pluginsMainListVisibleCellCount            = static_cast<size_t>(pluginsMainListMetrics.visibleCellCount);
+        out.pluginsMainListHasVerticalScrollbar        = pluginsMainListMetrics.hasVerticalScrollbar;
+        out.pluginsMainListVerticalScrollDip           = pluginsMainListMetrics.verticalScrollDip;
+        out.pluginsMainListRenderCount                 = hostState._pluginsPane.DebugMainListRenderCount();
+        out.pluginsMainListResizeCount                 = hostState._pluginsPane.DebugMainListResizeCount();
+        out.pluginsMainListResizeFailureCount          = hostState._pluginsPane.DebugMainListResizeFailureCount();
+        out.pluginsCustomPathsListRowCount             = hostState._pluginsPane.DebugCustomPathsListRowCount();
+        const auto pluginsCustomPathsListMetrics       = hostState._pluginsPane.DebugCustomPathsListVisibleWorkMetrics();
+        out.pluginsCustomPathsListVisibleRowCount      = static_cast<size_t>(pluginsCustomPathsListMetrics.visibleRowCount);
+        out.pluginsCustomPathsListVisibleColumnCount   = static_cast<size_t>(pluginsCustomPathsListMetrics.visibleColumnCount);
+        out.pluginsCustomPathsListVisibleCellCount     = static_cast<size_t>(pluginsCustomPathsListMetrics.visibleCellCount);
+        out.pluginsCustomPathsListHasVerticalScrollbar = pluginsCustomPathsListMetrics.hasVerticalScrollbar;
+        out.pluginsCustomPathsListVerticalScrollDip    = pluginsCustomPathsListMetrics.verticalScrollDip;
+        out.pluginsCustomPathsListRenderCount          = hostState._pluginsPane.DebugCustomPathsListRenderCount();
+        out.pluginsCustomPathsListResizeCount          = hostState._pluginsPane.DebugCustomPathsListResizeCount();
+        out.pluginsCustomPathsListResizeFailureCount   = hostState._pluginsPane.DebugCustomPathsListResizeFailureCount();
+        out.pluginsCustomPathsEmptyPlaceholderVisible =
+            state->currentCategory == PrefCategory::Plugins && ! state->pluginsDetailsActive && state->workingSettings.plugins.customPluginPaths.empty();
+        out.pluginsSearchText                  = state->pluginsSearchText;
+        out.pluginsSelectedPluginIdText        = state->pluginsSelectedPluginId;
+        out.pluginsSelectedCustomPathText      = state->pluginsSelectedCustomPathText;
+        out.pluginsStatusTitleText             = state->pluginsStatusTitleText;
+        out.pluginsStatusBodyText              = state->pluginsStatusBodyText;
+        out.pluginsDetailsConfigErrorText      = state->pluginsDetailsConfigErrorText;
+        out.pluginsDetailsConfigEmptyStateText = state->pluginsDetailsConfigEmptyStateText;
+        out.pluginsDetailsConfigFieldCount     = state->pluginsDetailsConfigFields.size();
+        out.pluginsDetailsVisibleConfigFieldCount =
+            static_cast<size_t>(std::count_if(state->pluginsDetailsConfigFields.begin(),
+                                              state->pluginsDetailsConfigFields.end(),
+                                              [](const PrefsPluginConfigFieldControls& controls) noexcept { return ! controls.field.uiHidden; }));
+        if (const auto* configPanel = state->pluginsDetailsConfigDxPanel)
+        {
+            out.pluginsDetailsConfigDxPanelVisible = configPanel->IsVisible();
+            out.pluginsDetailsConfigDxChildCount   = configPanel->GetChildren().size();
+        }
+        out.pluginsFocusTarget = hostState._pluginsPane.DebugGetFocusTarget();
+    }
+
+    return true;
+}
+
+bool PreferencesDialog::DebugGetKeyboardSnapshot(::PreferencesKeyboardDebugSnapshot& out) noexcept
+{
+    out = {};
+
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state || ! state->categoryTreeUsesDxUi)
+    {
+        return false;
+    }
+
+    const auto& hostState = static_cast<const PreferencesDialogHost&>(*state);
+    if (! hostState._keyboardPane.DebugGetSnapshot(out))
+    {
+        return false;
+    }
+
+    out.currentCategory = state->currentCategory;
+    return true;
+}
+
+bool PreferencesDialog::DebugSelectCategory(const PrefCategory category) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    SelectCategory(dlg, *state, category);
+
+    PreferencesDebugSnapshot snapshot{};
+    return DebugGetSnapshot(snapshot) && snapshot.currentCategory == category;
+}
+
+bool PreferencesDialog::DebugSelectPluginsTreeChild(const size_t childIndex) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    if (! hostState._categoryTreeControl)
+    {
+        return false;
+    }
+
+    hostState._categoryTreeModel.SetPluginsExpanded(true);
+    hostState._categoryTreeModel.Rebuild();
+    hostState._categoryTreeControl->NotifyDataChanged();
+
+    size_t matchedPluginChildCount = 0u;
+    const size_t visibleItemCount  = hostState._categoryTreeModel.GetVisibleItemCount();
+    for (size_t visibleIndex = 0u; visibleIndex < visibleItemCount; ++visibleIndex)
+    {
+        TreeItemData item{};
+        hostState._categoryTreeModel.GetVisibleItem(visibleIndex, item);
+
+        PrefsPluginListItem pluginItem{};
+        if (! PreferencesDialogHost::PreferencesCategoryTreeModel::TryDecodePluginNodeId(item.id, pluginItem))
+        {
+            continue;
+        }
+
+        if (matchedPluginChildCount != childIndex)
+        {
+            ++matchedPluginChildCount;
+            continue;
+        }
+
+        if (! hostState._categoryTreeControl->RequestSelectVisibleItem(visibleIndex))
+        {
+            return false;
+        }
+
+        PreferencesDebugSnapshot snapshot{};
+        return DebugGetSnapshot(snapshot) && snapshot.currentCategory == PrefCategory::Plugins && snapshot.pluginItemSelected;
+    }
+
+    return false;
+}
+
+namespace
+{
+[[nodiscard]] HWND GetDebugActivePageKeyboardInputHost(PreferencesDialogState& state) noexcept
+{
+    const HWND currentPageRoot = GetActivePreferencesPageRootWindow(state);
+    const bool usesSharedHost  = currentPageRoot && state.pageHostWindow && currentPageRoot == state.pageHostWindow && IsWindow(currentPageRoot) != FALSE;
+    if (usesSharedHost)
+    {
+        auto& hostState   = static_cast<PreferencesDialogHost&>(state);
+        const HWND dxHost = hostState._pageHostHost.GetHwnd();
+        return (dxHost && PrefsUi::IsActuallyVisibleChildWindow(dxHost)) ? dxHost : nullptr;
+    }
+
+    return (currentPageRoot && PrefsUi::IsActuallyVisibleChildWindow(currentPageRoot)) ? currentPageRoot : nullptr;
+}
+} // namespace
+
+HWND PreferencesDialog::DebugGetActivePageHandle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return nullptr;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return nullptr;
+    }
+
+    const HWND pane = GetActivePreferencesPageRootWindow(*state);
+    return (pane && PrefsUi::IsActuallyVisibleChildWindow(pane)) ? pane : nullptr;
+}
+
+HWND PreferencesDialog::DebugGetActivePageDxHostHandle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return nullptr;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return nullptr;
+    }
+
+    return GetDebugActivePageKeyboardInputHost(*state);
+}
+
+bool PreferencesDialog::DebugCaptureKeyboardShortcut(const uint32_t vk, const uint32_t modifiers) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state || ! state->categoryTreeUsesDxUi || state->currentCategory != PrefCategory::Keyboard)
+    {
+        return false;
+    }
+
+    const HWND host = GetDebugActivePageKeyboardInputHost(*state);
+    return KeyboardPane::DebugApplyCapturedShortcut(host, *state, vk, modifiers);
+}
+
+HWND PreferencesDialog::DebugGetShellHostHandle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return nullptr;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return nullptr;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return (hostState._shellHostHwnd && PrefsUi::IsActuallyVisibleChildWindow(hostState._shellHostHwnd)) ? hostState._shellHostHwnd : nullptr;
+}
+
+bool PreferencesDialog::DebugScrollCategoryTreeByWheelDetents(const int detents) noexcept
+{
+    if (detents == 0)
+    {
+        return false;
+    }
+
+    const int direction = detents < 0 ? -1 : 1;
+    const int steps     = std::abs(detents);
+    for (int index = 0; index < steps; ++index)
+    {
+        if (! DebugScrollCategoryTreeByWheelDelta(direction * WHEEL_DELTA))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool PreferencesDialog::DebugScrollCategoryTreeByWheelDelta(const int wheelDelta) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg || wheelDelta == 0)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state || ! state->categoryTreeUsesDxUi)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    if (! hostState._categoryTreeControl)
+    {
+        return false;
+    }
+
+    hostState._categoryTreeHost.SetFocusControl(hostState._categoryTreeControl);
+
+    const D2D1_RECT_F hitBounds = hostState._categoryTreeControl->GetHitBounds();
+    if (hitBounds.right <= hitBounds.left || hitBounds.bottom <= hitBounds.top)
+    {
+        return false;
+    }
+
+    const D2D1_POINT_2F point = D2D1::Point2F((hitBounds.left + hitBounds.right) * 0.5f, (hitBounds.top + hitBounds.bottom) * 0.5f);
+    return hostState._categoryTreeControl->OnMouseWheel(hostState._categoryTreeHost, point, static_cast<float>(wheelDelta), 0u);
+}
+
+bool PreferencesDialog::DebugSelectPluginsMainListRow(const size_t rowIndex) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugSelectMainListRow(rowIndex);
+}
+
+bool PreferencesDialog::DebugClickPluginsMainListRow(const size_t rowIndex) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugClickMainListRow(rowIndex);
+}
+
+bool PreferencesDialog::DebugFindToggleablePluginsMainListRow(size_t& outRowIndex, bool& outEnabled) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugFindToggleableMainListRow(outRowIndex, outEnabled);
+}
+
+bool PreferencesDialog::DebugFindLoadablePluginsMainListRow(size_t& outRowIndex) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugFindLoadableMainListRow(outRowIndex);
+}
+
+bool PreferencesDialog::DebugTogglePluginsMainListCheckbox(const size_t rowIndex) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugToggleMainListCheckbox(rowIndex);
+}
+
+bool PreferencesDialog::DebugGetPluginsMainListRowEnabled(const size_t rowIndex, bool& outEnabled) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugGetMainListRowEnabled(rowIndex, outEnabled);
+}
+
+bool PreferencesDialog::DebugGetPluginsMainListCheckboxClientRect(const size_t rowIndex, RECT& outRect) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugGetMainListCheckboxClientRect(rowIndex, outRect);
+}
+
+bool PreferencesDialog::DebugGetPluginsMainListHeaderClientRect(const size_t columnIndex, RECT& outRect) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugGetMainListHeaderClientRect(columnIndex, outRect);
+}
+
+bool PreferencesDialog::DebugSelectPluginsCustomPathsListRow(const size_t rowIndex) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugSelectCustomPathsListRow(rowIndex);
+}
+
+bool PreferencesDialog::DebugClearPluginsCustomPaths() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugClearCustomPaths();
+}
+
+bool PreferencesDialog::DebugGetPluginsCustomPathsListHeaderClientRect(const size_t columnIndex, RECT& outRect) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugGetCustomPathsListHeaderClientRect(columnIndex, outRect);
+}
+
+bool PreferencesDialog::DebugFocusPluginsSearchField() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugFocusSearchField();
+}
+
+bool PreferencesDialog::DebugFocusPluginsMainList() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg || IsWindow(dlg) == FALSE)
+    {
+        return false;
+    }
+
+    auto* state = PrefsUi::GetDialogState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugFocusMainList();
+}
+
+bool PreferencesDialog::DebugSelectKeyboardListRow(const size_t rowIndex) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugSelectListRow(rowIndex);
+}
+
+bool PreferencesDialog::DebugFindKeyboardListRowByCommandId(std::wstring_view commandId, size_t& outRowIndex) noexcept
+{
+    outRowIndex = 0u;
+
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state || ! state->categoryTreeUsesDxUi)
+    {
+        return false;
+    }
+
+    const auto& hostState = static_cast<const PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugFindListRowByCommandId(commandId, outRowIndex);
+}
+
+bool PreferencesDialog::DebugGetKeyboardVisibleRowChordByCommandId(std::wstring_view commandId, std::wstring& outChordText) noexcept
+{
+    outChordText.clear();
+
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state || ! state->categoryTreeUsesDxUi)
+    {
+        return false;
+    }
+
+    const auto& hostState = static_cast<const PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugGetVisibleRowChordByCommandId(commandId, outChordText);
+}
+
+bool PreferencesDialog::DebugGetKeyboardListRowClientRect(const size_t rowIndex, RECT& outRect) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugGetListRowClientRect(rowIndex, outRect);
+}
+
+bool PreferencesDialog::DebugGetKeyboardListHeaderClientRect(const size_t columnIndex, RECT& outRect) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugGetListHeaderClientRect(columnIndex, outRect);
+}
+
+bool PreferencesDialog::DebugHitTestKeyboardListClientPoint(
+    const POINT clientPoint, uint32_t& outZone, size_t& outColumnIndex, bool& outHeaderResize, bool& outHostHitsList) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugHitTestListClientPoint(clientPoint, outZone, outColumnIndex, outHeaderResize, outHostHitsList);
+}
+
+bool PreferencesDialog::DebugGetKeyboardListPointerState(::PreferencesGridPointerDebugState& outState) noexcept
+{
+    outState       = {};
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugGetListPointerState(outState);
+}
+
+bool PreferencesDialog::DebugSelectViewersListRow(const size_t rowIndex) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._viewersPane.DebugSelectListRow(rowIndex);
+}
+
+bool PreferencesDialog::DebugGetViewersListRowClientRect(const size_t rowIndex, RECT& outRect) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._viewersPane.DebugGetListRowClientRect(rowIndex, outRect);
+}
+
+bool PreferencesDialog::DebugGetViewersListHeaderClientRect(const size_t columnIndex, RECT& outRect) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._viewersPane.DebugGetListHeaderClientRect(columnIndex, outRect);
+}
+
+bool PreferencesDialog::DebugSelectThemesListRow(const size_t rowIndex) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._themesPane.DebugSelectListRow(rowIndex);
+}
+
+bool PreferencesDialog::DebugGetThemesListRowClientRect(const size_t rowIndex, RECT& outRect) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._themesPane.DebugGetListRowClientRect(rowIndex, outRect);
+}
+
+bool PreferencesDialog::DebugGetThemesListHeaderClientRect(const size_t columnIndex, RECT& outRect) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._themesPane.DebugGetListHeaderClientRect(columnIndex, outRect);
+}
+
+bool PreferencesDialog::DebugSetPluginsSearchText(std::wstring_view text) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugSetSearchText(text);
+}
+
+bool PreferencesDialog::DebugSetViewersSearchText(std::wstring_view text) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._viewersPane.DebugSetSearchText(text);
+}
+
+bool PreferencesDialog::DebugSetKeyboardSearchText(std::wstring_view text) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugSetSearchText(text);
+}
+
+bool PreferencesDialog::DebugSetKeyboardFunctionBarScope() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugSetFunctionBarScope();
+}
+
+bool PreferencesDialog::DebugFocusViewersSearchField() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._viewersPane.DebugFocusSearchField();
+}
+
+bool PreferencesDialog::DebugFocusKeyboardSearchField() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugFocusSearchField();
+}
+
+bool PreferencesDialog::DebugSetThemesSearchText(std::wstring_view text) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._themesPane.DebugSetSearchText(text);
+}
+
+bool PreferencesDialog::DebugFocusGeneralMenuBarToggle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._generalPane.DebugFocusMenuBarToggle();
+}
+
+bool PreferencesDialog::DebugGetGeneralMenuBarToggleChecked(bool& outChecked) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._generalPane.DebugGetMenuBarToggleChecked(outChecked);
+}
+
+bool PreferencesDialog::DebugSetGeneralCompactMode(bool checked) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._generalPane.DebugSetCompactMode(checked);
+}
+
+bool PreferencesDialog::DebugSelectGeneralLanguage(std::wstring_view displayText) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._generalPane.DebugSelectLanguageByText(displayText);
+}
+
+bool PreferencesDialog::DebugSelectGeneralReducedMotion(std::wstring_view displayText) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._generalPane.DebugSelectReducedMotionByText(displayText);
+}
+
+bool PreferencesDialog::DebugSelectGeneralWindowBackdrop(std::wstring_view displayText) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._generalPane.DebugSelectWindowBackdropByText(displayText);
+}
+
+bool PreferencesDialog::DebugFocusPanesLeftDisplayToggle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._panesPane.DebugFocusLeftDisplayToggle();
+}
+
+bool PreferencesDialog::DebugSelectPanesLeftDisplay(std::wstring_view displayText) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._panesPane.DebugSelectLeftDisplayByText(displayText);
+}
+
+bool PreferencesDialog::DebugFocusPanesLeftStatusBarToggle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._panesPane.DebugFocusLeftStatusBarToggle();
+}
+
+bool PreferencesDialog::DebugGetPanesLeftStatusBarToggleChecked(bool& outChecked) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._panesPane.DebugGetLeftStatusBarToggleChecked(outChecked);
+}
+
+bool PreferencesDialog::DebugFocusHotPathsFirstPathField() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._hotPathsPane.DebugFocusFirstPathField();
+}
+
+bool PreferencesDialog::DebugGetHotPathsFirstPathText(std::wstring& outText) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._hotPathsPane.DebugGetFirstPathText(outText);
+}
+
+bool PreferencesDialog::DebugSetHotPathsFirstPathText(std::wstring_view text) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._hotPathsPane.DebugSetFirstPathText(text);
+}
+
+bool PreferencesDialog::DebugFocusHotPathsOpenPrefsToggle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._hotPathsPane.DebugFocusOpenPrefsToggle();
+}
+
+bool PreferencesDialog::DebugGetHotPathsOpenPrefsToggleChecked(bool& outChecked) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._hotPathsPane.DebugGetOpenPrefsToggleChecked(outChecked);
+}
+
+bool PreferencesDialog::DebugFocusAdvancedBypassHelloToggle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._advancedPane.DebugFocusBypassHelloToggle();
+}
+
+bool PreferencesDialog::DebugSelectAdvancedFilterPreset(std::wstring_view displayText) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._advancedPane.DebugSelectFilterPresetByText(displayText);
+}
+
+bool PreferencesDialog::DebugSelectFileOperationsBandwidthPreset(std::wstring_view displayText) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState     = static_cast<PreferencesDialogHost&>(*state);
+    const bool selected = hostState._fileOperationsPane.DebugSelectBandwidthPresetByText(displayText);
+    if (selected && state->pageHostWindow && IsWindow(state->pageHostWindow) != FALSE)
+    {
+        LayoutPreferencesPageHost(state->pageHostWindow, *state);
+        InvalidateRect(state->pageHostWindow, nullptr, FALSE);
+        hostState._fileOperationsPane.PostLayoutFocusCustomBandwidthEdit();
+    }
+
+    return selected;
+}
+
+bool PreferencesDialog::DebugFocusFileOperationsPreCalcEnabledToggle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._fileOperationsPane.DebugFocusPreCalcEnabledToggle();
+}
+
+bool PreferencesDialog::DebugGetFileOperationsPreCalcEnabledToggleChecked(bool& outChecked) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._fileOperationsPane.DebugGetPreCalcEnabledToggleChecked(outChecked);
+}
+
+bool PreferencesDialog::DebugSelectCompareDirectoriesContentWorkers(std::wstring_view displayText) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._compareDirectoriesPane.DebugSelectContentWorkersByText(displayText);
+}
+
+bool PreferencesDialog::DebugSetFileOperationsBridgeBufferText(std::wstring_view text) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._fileOperationsPane.DebugSetBridgeBufferText(text);
+}
+
+bool PreferencesDialog::DebugCancelDialog() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    return RequestPreferencesDialogClose(dlg);
+}
+
+bool PreferencesDialog::DebugResetAllToDefaults(const bool confirm) noexcept
+{
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"Preferences debug reset-all: begin confirm={}", static_cast<int>(confirm)));
+#endif
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    if (! confirm)
+    {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"Preferences debug reset-all: no-op cancel path");
+#endif
+        return true;
+    }
+
+    const bool autoAcceptPromptsBefore = HostGetAutoAcceptPrompts();
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"Preferences debug reset-all: auto-accept before={}", static_cast<int>(autoAcceptPromptsBefore)));
+#endif
+    HostSetAutoAcceptPrompts(true);
+    const auto restoreAutoAcceptPrompts = wil::scope_exit([&]() noexcept { HostSetAutoAcceptPrompts(autoAcceptPromptsBefore); });
+
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences debug reset-all: calling ResetAllPreferencesToDefaults");
+#endif
+    ResetAllPreferencesToDefaults(dlg, *state);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"Preferences debug reset-all: returned from ResetAllPreferencesToDefaults");
+#endif
+    return true;
+}
+
+bool PreferencesDialog::DebugFocusCompareDirectoriesSubdirectoriesToggle() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._compareDirectoriesPane.DebugFocusCompareSubdirectoriesToggle();
+}
+
+bool PreferencesDialog::DebugFocusCompareDirectoriesTarget(const PreferencesCompareDirectoriesDebugFocusTarget target) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._compareDirectoriesPane.DebugFocusTarget(target);
+}
+
+bool PreferencesDialog::DebugGetCompareDirectoriesToggleChecked(const PreferencesCompareDirectoriesDebugFocusTarget target, bool& outChecked) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._compareDirectoriesPane.DebugGetToggleChecked(target, outChecked);
+}
+
+bool PreferencesDialog::DebugFocusThemesSearchField() noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._themesPane.DebugFocusSearchField();
+}
+
+bool PreferencesDialog::DebugScrollPluginsMainListByWheelDetents(const int detents) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugScrollMainListByWheelDetents(detents);
+}
+
+bool PreferencesDialog::DebugScrollPluginsCustomPathsListByWheelDetents(const int detents) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._pluginsPane.DebugScrollCustomPathsListByWheelDetents(detents);
+}
+
+bool PreferencesDialog::DebugScrollKeyboardListByWheelDetents(const int detents) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._keyboardPane.DebugScrollListByWheelDetents(detents);
+}
+
+bool PreferencesDialog::DebugScrollViewersListByWheelDetents(const int detents) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._viewersPane.DebugScrollListByWheelDetents(detents);
+}
+
+bool PreferencesDialog::DebugScrollThemesListByWheelDetents(const int detents) noexcept
+{
+    const HWND dlg = GetHandle();
+    if (! dlg)
+    {
+        return false;
+    }
+
+    auto* state = GetState(dlg);
+    if (! state)
+    {
+        return false;
+    }
+
+    auto& hostState = static_cast<PreferencesDialogHost&>(*state);
+    return hostState._themesPane.DebugScrollListByWheelDetents(detents);
+}
+#endif

@@ -12,307 +12,153 @@
 #include <limits>
 #include <string>
 
-#include <commctrl.h>
 #include <uxtheme.h>
 
 #include "FileSystemPluginManager.h"
-#include "ThemedControls.h"
-#include "ThemedInputFrames.h"
+#include "UiMetrics.h"
 #include "ViewerPluginManager.h"
+#include "WindowMessages.h"
 
 namespace
 {
-constexpr UINT_PTR kPrefsPaneForwardSubclassId  = 1u;
-constexpr UINT_PTR kPrefsCenteredEditSubclassId = 3u;
+constexpr wchar_t kPrefsDxHostProp[]                = L"RedSalamander.Preferences.DxHost";
+constexpr wchar_t kPrefsDxHostOriginalWndProcProp[] = L"RedSalamander.Preferences.DxHostOriginalWndProc";
 
-void CenterMultilineEditTextVertically(HWND edit) noexcept
+[[maybe_unused]] [[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
 {
-    ThemedControls::CenterEditTextVertically(edit);
+    return RedSalamander::Win32Callback::GetStoredWndProc(hwnd, propName);
 }
 
-LRESULT CALLBACK PrefsCenteredEditSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR uIdSubclass, DWORD_PTR /*refData*/) noexcept
+[[nodiscard]] bool InstallWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, WNDPROC hookWndProc) noexcept
 {
-    switch (msg)
+    return RedSalamander::Win32Callback::InstallWndProcHook(hwnd, originalWndProcProp, hookWndProc);
+}
+
+void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
     {
-        case WM_SIZE:
-        case WM_SETFONT: CenterMultilineEditTextVertically(hwnd); break;
-        case WM_CHAR:
+        return;
+    }
+
+    RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, originalWndProcProp);
+}
+
+[[nodiscard]] LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    return RedSalamander::Win32Callback::CallStoredWndProc(hwnd, originalWndProcProp, msg, wp, lp);
+}
+
+void OffsetDxControlBranch(RedSalamander::DxUi::Control* control, float dyDip) noexcept
+{
+    if (! control || dyDip == 0.0f)
+    {
+        return;
+    }
+
+    const D2D1_RECT_F bounds = control->GetBounds();
+    control->SetBounds(D2D1::RectF(bounds.left, bounds.top + dyDip, bounds.right, bounds.bottom + dyDip));
+
+    if (auto* panel = dynamic_cast<RedSalamander::DxUi::Panel*>(control))
+    {
+        for (const auto& child : panel->GetChildren())
         {
-            if (wp == L'\r' || wp == L'\n')
-            {
-                return 0;
-            }
-
-            const LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
-            if ((style & ES_NUMBER) != 0)
-            {
-                if (wp < 0x20 || wp == 0x7F) // allow control chars (backspace, etc)
-                {
-                    break;
-                }
-
-                if (wp < L'0' || wp > L'9')
-                {
-                    return 0;
-                }
-            }
-            break;
+            OffsetDxControlBranch(child.get(), dyDip);
         }
-        case WM_PASTE:
+    }
+}
+
+// Offset only the children of a panel container without moving the container
+// itself.  This keeps the container's hit-test bounds covering the full visible
+// area while the content inside scrolls.
+void OffsetDxPanelChildren(RedSalamander::DxUi::Control* container, float dyDip) noexcept
+{
+    if (! container || dyDip == 0.0f)
+    {
+        return;
+    }
+
+    auto* panel = dynamic_cast<RedSalamander::DxUi::Panel*>(container);
+    if (! panel)
+    {
+        return;
+    }
+
+    for (const auto& child : panel->GetChildren())
+    {
+        OffsetDxControlBranch(child.get(), dyDip);
+    }
+}
+
+void ApplyAncestorRedrawSuppression(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return;
+    }
+
+    for (HWND ancestor = hwnd; ancestor; ancestor = GetParent(ancestor))
+    {
+        const auto redrawBlockCount = reinterpret_cast<ULONG_PTR>(GetPropW(ancestor, PrefsUi::kPrefsTreeRedrawBlockProp));
+        if (redrawBlockCount != 0u)
         {
-            const LRESULT result = DefSubclassProc(hwnd, msg, wp, lp);
-
-            const int length = GetWindowTextLengthW(hwnd);
-            if (length <= 0)
-            {
-                CenterMultilineEditTextVertically(hwnd);
-                return result;
-            }
-
-            std::wstring buffer;
-            buffer.resize(static_cast<size_t>(length) + 1u);
-            GetWindowTextW(hwnd, buffer.data(), length + 1);
-            buffer.resize(static_cast<size_t>(length));
-
-            buffer.erase(std::remove(buffer.begin(), buffer.end(), L'\r'), buffer.end());
-            buffer.erase(std::remove(buffer.begin(), buffer.end(), L'\n'), buffer.end());
-            buffer.erase(std::remove(buffer.begin(), buffer.end(), L'\t'), buffer.end());
-
-            SetWindowTextW(hwnd, buffer.c_str());
-            CenterMultilineEditTextVertically(hwnd);
-            return result;
-        }
-        case WM_NCDESTROY:
-        {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-            RemoveWindowSubclass(hwnd, PrefsCenteredEditSubclassProc, uIdSubclass);
-#pragma warning(pop)
+            SendMessageW(hwnd, WM_SETREDRAW, FALSE, 0);
             break;
         }
     }
-
-    return DefSubclassProc(hwnd, msg, wp, lp);
 }
 
-LRESULT CALLBACK PrefsPaneForwardSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR uIdSubclass, DWORD_PTR /*dwRefData*/) noexcept
+LRESULT CALLBACK PrefsDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    const HWND pageHost = GetParent(hwnd);
-
-    switch (msg)
+    auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(hwnd, kPrefsDxHostProp));
+    if (! host)
     {
-        case WM_ERASEBKGND: return 1;
-        case WM_PRINTCLIENT:
-        {
-            const HDC hdc = reinterpret_cast<HDC>(wp);
-            if (! hdc || ! pageHost)
-            {
-                break;
-            }
-
-            const HWND dlg = GetParent(pageHost);
-            auto* state    = dlg ? reinterpret_cast<PreferencesDialogState*>(GetWindowLongPtrW(dlg, DWLP_USER)) : nullptr;
-            if (! state)
-            {
-                break;
-            }
-
-            RECT rc{};
-            GetClientRect(hwnd, &rc);
-
-            HBRUSH brush = state->backgroundBrush ? state->backgroundBrush.get() : reinterpret_cast<HBRUSH>(GetStockObject(NULL_BRUSH));
-            FillRect(hdc, &rc, brush);
-
-            if (! state->theme.systemHighContrast && ! state->pageSettingCards.empty())
-            {
-                const UINT dpi         = GetDpiForWindow(hwnd);
-                const int radius       = ThemedControls::ScaleDip(dpi, 6);
-                const COLORREF surface = ThemedControls::GetControlSurfaceColor(state->theme);
-                const COLORREF border  = ThemedControls::BlendColor(surface, state->theme.menu.text, state->theme.dark ? 40 : 30, 255);
-
-                wil::unique_hbrush cardBrush(CreateSolidBrush(surface));
-                wil::unique_hpen cardPen(CreatePen(PS_SOLID, 1, border));
-                if (cardBrush && cardPen)
-                {
-                    [[maybe_unused]] auto oldBrush = wil::SelectObject(hdc, cardBrush.get());
-                    [[maybe_unused]] auto oldPen   = wil::SelectObject(hdc, cardPen.get());
-
-                    for (const RECT& card : state->pageSettingCards)
-                    {
-                        RoundRect(hdc, card.left, card.top, card.right, card.bottom, radius, radius);
-                    }
-                }
-            }
-
-            return 0;
-        }
-        case WM_PAINT:
-        {
-            PAINTSTRUCT ps{};
-            wil::unique_hdc_paint hdc = wil::BeginPaint(hwnd, &ps);
-            if (! hdc || ! pageHost)
-            {
-                return 0;
-            }
-
-            const HWND dlg = GetParent(pageHost);
-            auto* state    = dlg ? reinterpret_cast<PreferencesDialogState*>(GetWindowLongPtrW(dlg, DWLP_USER)) : nullptr;
-            if (! state)
-            {
-                return 0;
-            }
-
-            RECT rc{};
-            GetClientRect(hwnd, &rc);
-
-            HBRUSH brush = state->backgroundBrush ? state->backgroundBrush.get() : reinterpret_cast<HBRUSH>(GetStockObject(NULL_BRUSH));
-            FillRect(hdc.get(), &rc, brush);
-
-            if (! state->theme.systemHighContrast && ! state->pageSettingCards.empty())
-            {
-                const UINT dpi         = GetDpiForWindow(hwnd);
-                const int radius       = ThemedControls::ScaleDip(dpi, 6);
-                const COLORREF surface = ThemedControls::GetControlSurfaceColor(state->theme);
-                const COLORREF border  = ThemedControls::BlendColor(surface, state->theme.menu.text, state->theme.dark ? 40 : 30, 255);
-
-                wil::unique_hbrush cardBrush(CreateSolidBrush(surface));
-                wil::unique_hpen cardPen(CreatePen(PS_SOLID, 1, border));
-                if (cardBrush && cardPen)
-                {
-                    [[maybe_unused]] auto oldBrush = wil::SelectObject(hdc.get(), cardBrush.get());
-                    [[maybe_unused]] auto oldPen   = wil::SelectObject(hdc.get(), cardPen.get());
-
-                    for (const RECT& card : state->pageSettingCards)
-                    {
-                        RoundRect(hdc.get(), card.left, card.top, card.right, card.bottom, radius, radius);
-                    }
-                }
-            }
-
-            return 0;
-        }
-        case WM_COMMAND:
-        case WM_NOTIFY:
-        case WM_DRAWITEM:
-        case WM_MEASUREITEM:
-        case WM_COMPAREITEM:
-        case WM_DELETEITEM:
-        case WM_VKEYTOITEM:
-        case WM_CHARTOITEM:
-        case WM_CTLCOLORSTATIC:
-        case WM_CTLCOLOREDIT:
-        case WM_CTLCOLORLISTBOX:
-        case WM_CTLCOLORBTN:
-            if (pageHost)
-            {
-                return SendMessageW(pageHost, msg, wp, lp);
-            }
-            break;
-        case WM_NCDESTROY:
-        {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-            RemoveWindowSubclass(hwnd, PrefsPaneForwardSubclassProc, uIdSubclass);
-#pragma warning(pop)
-            break;
-        }
+        return CallStoredWndProc(hwnd, kPrefsDxHostOriginalWndProcProp, msg, wp, lp);
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
-}
-
-LRESULT CALLBACK PrefsInputControlSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept
-{
-    return ThemedInputFrames::InputControlSubclassProc(hwnd, msg, wp, lp, subclassId, refData);
-}
-
-LRESULT CALLBACK PrefsInputFrameSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept
-{
-    auto* state = reinterpret_cast<PreferencesDialogState*>(refData);
-    if (! state)
+    if (msg == WM_GETDLGCODE)
     {
-        return DefSubclassProc(hwnd, msg, wp, lp);
+        LRESULT dlgCode = CallStoredWndProc(hwnd, kPrefsDxHostOriginalWndProcProp, msg, wp, lp) | DLGC_WANTARROWS | DLGC_WANTCHARS;
+        if (PrefsKeyboardCaptureWantsAllKeys(PrefsUi::GetDialogState(hwnd)))
+        {
+            dlgCode |= DLGC_WANTALLKEYS;
+        }
+        return dlgCode;
     }
 
-    ThemedInputFrames::FrameStyle frameStyle{};
-    frameStyle.theme                        = &state->theme;
-    frameStyle.backdropBrush                = state->cardBrush ? state->cardBrush.get() : state->backgroundBrush.get();
-    frameStyle.inputBackgroundColor         = state->inputBackgroundColor;
-    frameStyle.inputFocusedBackgroundColor  = state->inputFocusedBackgroundColor;
-    frameStyle.inputDisabledBackgroundColor = state->inputDisabledBackgroundColor;
+    if (PrefsHandleKeyboardCaptureMessage(hwnd, msg, wp, lp))
+    {
+        return 0;
+    }
 
-    return ThemedInputFrames::InputFrameSubclassProc(hwnd, msg, wp, lp, subclassId, reinterpret_cast<DWORD_PTR>(&frameStyle));
+    if (msg == WM_NCDESTROY)
+    {
+        const auto originalWndProc = RedSalamander::Win32Callback::GetStoredWndProc(hwnd, kPrefsDxHostOriginalWndProcProp);
+        RemovePropW(hwnd, kPrefsDxHostProp);
+        RedSalamander::Win32Callback::RestoreWndProcHook(hwnd, kPrefsDxHostOriginalWndProcProp, PrefsDxHostWndProc);
+        host->ReleaseMouseCapture();
+        return originalWndProc ? RedSalamander::Win32Callback::CallWindowProcNoThrow(originalWndProc, hwnd, msg, wp, lp) : DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    bool handled           = false;
+    const LRESULT dxResult = host->HandleMessage(hwnd, msg, wp, lp, handled);
+
+    return handled ? dxResult : CallStoredWndProc(hwnd, kPrefsDxHostOriginalWndProcProp, msg, wp, lp);
 }
+
 } // namespace
 
-namespace PrefsPaneHost
+namespace PrefsPageHost
 {
-[[nodiscard]] bool EnsureCreated(HWND pageHost, wil::unique_hwnd& paneHwnd) noexcept
+void ApplyScrollDelta(HWND pageHostWindow, int dy) noexcept
 {
-    if (paneHwnd && IsWindow(paneHwnd.get()))
-    {
-        return true;
-    }
-
-    paneHwnd.reset();
-    if (! pageHost)
-    {
-        return false;
-    }
-
-    constexpr DWORD style   = WS_CHILD | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
-    constexpr DWORD exStyle = WS_EX_CONTROLPARENT;
-
-    paneHwnd.reset(CreateWindowExW(exStyle, L"Static", L"", style, 0, 0, 10, 10, pageHost, nullptr, GetModuleHandleW(nullptr), nullptr));
-
-    if (paneHwnd)
-    {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        SetWindowSubclass(paneHwnd.get(), PrefsPaneForwardSubclassProc, kPrefsPaneForwardSubclassId, 0);
-#pragma warning(pop)
-    }
-
-    return paneHwnd != nullptr;
-}
-
-void ResizeToHostClient(HWND pageHost, HWND paneHwnd) noexcept
-{
-    if (! paneHwnd || ! pageHost)
-    {
-        return;
-    }
-
-    RECT rc{};
-    if (! GetClientRect(pageHost, &rc))
-    {
-        return;
-    }
-
-    const int width  = std::max(0l, rc.right - rc.left);
-    const int height = std::max(0l, rc.bottom - rc.top);
-    SetWindowPos(paneHwnd, nullptr, 0, 0, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
-}
-
-void Show(HWND paneHwnd, bool visible) noexcept
-{
-    if (! paneHwnd)
-    {
-        return;
-    }
-
-    ShowWindow(paneHwnd, visible ? SW_SHOW : SW_HIDE);
-}
-
-void ApplyScrollDelta(HWND pageHost, int dy) noexcept
-{
-    if (! pageHost || dy == 0)
+    if (! pageHostWindow || dy == 0)
     {
         return;
     }
 
     int childCount = 0;
-    for (HWND child = GetWindow(pageHost, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
+    for (HWND child = GetWindow(pageHostWindow, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
     {
         ++childCount;
     }
@@ -320,27 +166,27 @@ void ApplyScrollDelta(HWND pageHost, int dy) noexcept
     HDWP hdwp = BeginDeferWindowPos(std::max(1, childCount));
     if (! hdwp)
     {
-        for (HWND child = GetWindow(pageHost, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
+        for (HWND child = GetWindow(pageHostWindow, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
         {
             RECT rc{};
             if (! GetWindowRect(child, &rc))
             {
                 continue;
             }
-            MapWindowPoints(nullptr, pageHost, reinterpret_cast<POINT*>(&rc), 2);
+            MapWindowPoints(nullptr, pageHostWindow, reinterpret_cast<POINT*>(&rc), 2);
             SetWindowPos(child, nullptr, rc.left, rc.top + dy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
         }
         return;
     }
 
-    for (HWND child = GetWindow(pageHost, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
+    for (HWND child = GetWindow(pageHostWindow, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
     {
         RECT rc{};
         if (! GetWindowRect(child, &rc))
         {
             continue;
         }
-        MapWindowPoints(nullptr, pageHost, reinterpret_cast<POINT*>(&rc), 2);
+        MapWindowPoints(nullptr, pageHostWindow, reinterpret_cast<POINT*>(&rc), 2);
         hdwp = DeferWindowPos(hdwp, child, nullptr, rc.left, rc.top + dy, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOCOPYBITS);
         if (! hdwp)
         {
@@ -352,11 +198,27 @@ void ApplyScrollDelta(HWND pageHost, int dy) noexcept
     {
         static_cast<void>(EndDeferWindowPos(hdwp));
     }
+
+    PreferencesDialogState* state = reinterpret_cast<PreferencesDialogState*>(GetWindowLongPtrW(pageHostWindow, GWLP_USERDATA));
+    if (! state || ! state->pageHostUsesDxUi)
+    {
+        return;
+    }
+
+    const UINT dpi = GetDpiForWindow(pageHostWindow);
+    if (dpi == 0u)
+    {
+        return;
+    }
+
+    const float dyDip = (static_cast<float>(dy) * 96.0f) / static_cast<float>(dpi);
+    OffsetDxPanelChildren(state->pageHostDxContentRootControl, dyDip);
+    OffsetDxPanelChildren(state->pageHostDxNoteControl, dyDip);
 }
 
-void ScrollTo(HWND pageHost, PreferencesDialogState& state, int newScrollY) noexcept
+void ScrollTo(HWND pageHostWindow, PreferencesDialogState& state, int newScrollY) noexcept
 {
-    if (! pageHost)
+    if (! pageHostWindow)
     {
         return;
     }
@@ -374,16 +236,17 @@ void ScrollTo(HWND pageHost, PreferencesDialogState& state, int newScrollY) noex
     si.cbSize = sizeof(si);
     si.fMask  = SIF_POS;
     si.nPos   = state.pageScrollY;
-    SetScrollInfo(pageHost, SB_VERT, &si, TRUE);
+    SetScrollInfo(pageHostWindow, SB_VERT, &si, TRUE);
 
     const int dy = oldScrollY - state.pageScrollY;
-    ApplyScrollDelta(pageHost, dy);
-    RedrawWindow(pageHost, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
+    ApplyScrollDelta(pageHostWindow, dy);
+    // Avoid RDW_UPDATENOW — let Windows coalesce into a single WM_PAINT.
+    RedrawWindow(pageHostWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME);
 }
 
-void EnsureControlVisible(HWND pageHost, PreferencesDialogState& state, HWND control) noexcept
+void EnsureControlVisible(HWND pageHostWindow, PreferencesDialogState& state, HWND control) noexcept
 {
-    if (! pageHost || ! control || state.pageScrollMaxY <= 0)
+    if (! pageHostWindow || ! control || state.pageScrollMaxY <= 0)
     {
         return;
     }
@@ -394,13 +257,13 @@ void EnsureControlVisible(HWND pageHost, PreferencesDialogState& state, HWND con
         return;
     }
 
-    MapWindowPoints(nullptr, pageHost, reinterpret_cast<POINT*>(&rc), 2);
+    MapWindowPoints(nullptr, pageHostWindow, reinterpret_cast<POINT*>(&rc), 2);
 
     RECT client{};
-    GetClientRect(pageHost, &client);
+    GetClientRect(pageHostWindow, &client);
 
-    const UINT dpi          = GetDpiForWindow(pageHost);
-    const int padY          = ThemedControls::ScaleDip(dpi, 10);
+    const UINT dpi          = GetDpiForWindow(pageHostWindow);
+    const int padY          = UiMetrics::ScaleDip(dpi, 10);
     const int desiredTop    = client.top + padY;
     const int desiredBottom = client.bottom - padY;
 
@@ -414,180 +277,9 @@ void EnsureControlVisible(HWND pageHost, PreferencesDialogState& state, HWND con
         newScrollY = state.pageScrollY + (rc.bottom - desiredBottom);
     }
 
-    ScrollTo(pageHost, state, newScrollY);
+    ScrollTo(pageHostWindow, state, newScrollY);
 }
-} // namespace PrefsPaneHost
-
-namespace PrefsInput
-{
-void CreateFramedComboBox(PreferencesDialogState& state, HWND parent, HWND& outFrame, HWND& outCombo, int controlId) noexcept
-{
-    const bool customFrames = ! state.theme.systemHighContrast;
-    outFrame                = nullptr;
-    outCombo                = nullptr;
-
-    if (customFrames)
-    {
-        constexpr DWORD frameStyle = WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;
-        outFrame                   = CreateWindowExW(0, L"Static", L"", frameStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr);
-
-        if (outFrame)
-        {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-            SetWindowSubclass(outFrame, PrefsInputFrameSubclassProc, 1u, reinterpret_cast<DWORD_PTR>(&state));
-#pragma warning(pop)
-        }
-    }
-
-    if (customFrames)
-    {
-        outCombo = ThemedControls::CreateModernComboBox(parent, controlId, &state.theme);
-    }
-    else
-    {
-        outCombo = CreateWindowExW(WS_EX_CLIENTEDGE,
-                                   L"ComboBox",
-                                   L"",
-                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | CBS_DROPDOWNLIST | WS_VSCROLL,
-                                   0,
-                                   0,
-                                   10,
-                                   10,
-                                   parent,
-                                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(controlId)),
-                                   GetModuleHandleW(nullptr),
-                                   nullptr);
-    }
-
-    if (outFrame && outCombo)
-    {
-        SetWindowLongPtrW(outFrame, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(outCombo));
-    }
-
-    if (outCombo)
-    {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        SetWindowSubclass(outCombo, PrefsInputControlSubclassProc, 1u, reinterpret_cast<DWORD_PTR>(outFrame));
-#pragma warning(pop)
-    }
-}
-
-void CreateFramedComboBox(PreferencesDialogState& state, HWND parent, wil::unique_hwnd& outFrame, wil::unique_hwnd& outCombo, int controlId) noexcept
-{
-    HWND frame = nullptr;
-    HWND combo = nullptr;
-    CreateFramedComboBox(state, parent, frame, combo, controlId);
-    outFrame.reset(frame);
-    outCombo.reset(combo);
-}
-
-void CreateFramedEditBox(PreferencesDialogState& state, HWND parent, HWND& outFrame, HWND& outEdit, int controlId, DWORD style) noexcept
-{
-    const bool customFrames = ! state.theme.systemHighContrast;
-    outFrame                = nullptr;
-    outEdit                 = nullptr;
-
-    if (customFrames)
-    {
-        constexpr DWORD frameStyle = WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS;
-        outFrame                   = CreateWindowExW(0, L"Static", L"", frameStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr);
-
-        if (outFrame)
-        {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-            SetWindowSubclass(outFrame, PrefsInputFrameSubclassProc, 1u, reinterpret_cast<DWORD_PTR>(&state));
-#pragma warning(pop)
-        }
-    }
-
-    const bool wantsCentering = (style & ES_MULTILINE) == 0;
-    DWORD editStyle           = style;
-    if (wantsCentering)
-    {
-        editStyle |= ES_MULTILINE;
-        editStyle &= ~ES_WANTRETURN;
-    }
-
-    const DWORD editExStyle = customFrames ? 0 : WS_EX_CLIENTEDGE;
-    outEdit                 = CreateWindowExW(editExStyle,
-                              L"Edit",
-                              L"",
-                              editStyle,
-                              0,
-                              0,
-                              10,
-                              10,
-                              parent,
-                              reinterpret_cast<HMENU>(static_cast<INT_PTR>(controlId)),
-                              GetModuleHandleW(nullptr),
-                              nullptr);
-
-    if (outEdit)
-    {
-        // Ensure edit controls render with consistent dark/light text colors.
-        const wchar_t* themeName = (state.theme.highContrast || state.theme.systemHighContrast) ? L"" : (state.theme.dark ? L"DarkMode_Explorer" : L"Explorer");
-        SetWindowTheme(outEdit, themeName, nullptr);
-        SendMessageW(outEdit, WM_THEMECHANGED, 0, 0);
-    }
-
-    if (outFrame && outEdit)
-    {
-        SetWindowLongPtrW(outFrame, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(outEdit));
-    }
-
-    if (outEdit)
-    {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        SetWindowSubclass(outEdit, PrefsInputControlSubclassProc, 1u, reinterpret_cast<DWORD_PTR>(outFrame));
-#pragma warning(pop)
-
-        const UINT dpi       = GetDpiForWindow(outEdit);
-        const int textMargin = ThemedControls::ScaleDip(dpi, 6);
-        SendMessageW(outEdit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(textMargin, textMargin));
-
-        if (wantsCentering)
-        {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-            SetWindowSubclass(outEdit, PrefsCenteredEditSubclassProc, kPrefsCenteredEditSubclassId, 0);
-#pragma warning(pop)
-            CenterMultilineEditTextVertically(outEdit);
-        }
-    }
-}
-
-void CreateFramedEditBox(PreferencesDialogState& state, HWND parent, wil::unique_hwnd& outFrame, wil::unique_hwnd& outEdit, int controlId, DWORD style) noexcept
-{
-    HWND frame = nullptr;
-    HWND edit  = nullptr;
-    CreateFramedEditBox(state, parent, frame, edit, controlId, style);
-    outFrame.reset(frame);
-    outEdit.reset(edit);
-}
-
-void EnableMouseWheelForwarding(HWND control) noexcept
-{
-    if (! control)
-    {
-        return;
-    }
-
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-    constexpr UINT_PTR kPrefsMouseWheelForwardSubclassId = 2u;
-    SetWindowSubclass(control, PrefsInputControlSubclassProc, kPrefsMouseWheelForwardSubclassId, 0);
-#pragma warning(pop)
-}
-
-void EnableMouseWheelForwarding(const wil::unique_hwnd& control) noexcept
-{
-    EnableMouseWheelForwarding(control.get());
-}
-} // namespace PrefsInput
+} // namespace PrefsPageHost
 
 namespace PrefsPlugins
 {
@@ -598,11 +290,7 @@ namespace PrefsPlugins
         return 0;
     }
 
-    const int compare = CompareStringOrdinal(left.data(),
-                                             static_cast<int>(left.size()),
-                                             right.data(),
-                                             static_cast<int>(right.size()),
-                                             TRUE);
+    const int compare = CompareStringOrdinal(left.data(), static_cast<int>(left.size()), right.data(), static_cast<int>(right.size()), TRUE);
     if (compare == CSTR_LESS_THAN)
     {
         return -1;
@@ -672,6 +360,34 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
 
         return a.index < b.index;
     });
+}
+
+[[nodiscard]] std::optional<PrefsPluginListItem> FindItemById(std::wstring_view pluginId) noexcept
+{
+    if (pluginId.empty())
+    {
+        return std::nullopt;
+    }
+
+    const auto& fsPlugins = FileSystemPluginManager::GetInstance().GetPlugins();
+    for (size_t i = 0; i < fsPlugins.size(); ++i)
+    {
+        if (CompareTextNoCase(fsPlugins[i].id, pluginId) == 0)
+        {
+            return PrefsPluginListItem{PrefsPluginType::FileSystem, i};
+        }
+    }
+
+    const auto& viewerPlugins = ViewerPluginManager::GetInstance().GetPlugins();
+    for (size_t i = 0; i < viewerPlugins.size(); ++i)
+    {
+        if (CompareTextNoCase(viewerPlugins[i].id, pluginId) == 0)
+        {
+            return PrefsPluginListItem{PrefsPluginType::Viewer, i};
+        }
+    }
+
+    return std::nullopt;
 }
 
 [[nodiscard]] std::wstring_view GetId(const PrefsPluginListItem& item) noexcept
@@ -783,32 +499,84 @@ void BuildListItems(std::vector<PrefsPluginListItem>& out) noexcept
 
 namespace PrefsUi
 {
-int MeasureStaticTextHeight(HWND referenceWindow, HFONT font, int width, std::wstring_view text) noexcept
+PreferencesTypographyContext MakeTypographyContext(HWND hwnd) noexcept
 {
-    if (! referenceWindow || ! font || width <= 0 || text.empty() || text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    using RedSalamander::DxUi::FontRole;
+    using RedSalamander::DxUi::Typography::GetDxUiTypographySpec;
+
+    const UINT dpi = hwnd ? GetDpiForWindow(hwnd) : USER_DEFAULT_SCREEN_DPI;
+    return PreferencesTypographyContext{
+        .dpi     = (std::max<UINT>)(dpi, USER_DEFAULT_SCREEN_DPI),
+        .body    = GetDxUiTypographySpec(FontRole::Body),
+        .caption = GetDxUiTypographySpec(FontRole::Small),
+        .title   = GetDxUiTypographySpec(FontRole::Title),
+        .strong  = GetDxUiTypographySpec(FontRole::BodyStrong),
+    };
+}
+
+int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography,
+                                 const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                                 std::wstring_view text) noexcept
+{
+    using namespace RedSalamander::DxUi::Typography;
+
+    IDWriteFactory* factory = GetSharedMeasurementFactory();
+    if (! factory)
     {
         return 0;
     }
 
-    auto hdc = wil::GetDC(referenceWindow);
-    if (! hdc)
+    wil::com_ptr<IDWriteTextFormat> format;
+    if (FAILED(CreateTextFormat(factory, spec, format.put())) || ! format)
+    {
+        return 0;
+    }
+    static_cast<void>(format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP));
+    return MeasureSingleLineTextMetrics(factory, format.get(), typography.dpi, text).widthPx;
+}
+
+int MeasureWrappedTextHeightPx(const PreferencesTypographyContext& typography,
+                               const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                               int width,
+                               std::wstring_view text) noexcept
+{
+    using namespace RedSalamander::DxUi::Typography;
+
+    if (width <= 0 || text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<UINT32>::max)()))
     {
         return 0;
     }
 
-    [[maybe_unused]] auto oldFont = wil::SelectObject(hdc.get(), font);
+    IDWriteFactory* factory = GetSharedMeasurementFactory();
+    if (! factory)
+    {
+        return 0;
+    }
 
-    RECT rc{};
-    rc.left   = 0;
-    rc.top    = 0;
-    rc.right  = width;
-    rc.bottom = 0;
+    wil::com_ptr<IDWriteTextFormat> format;
+    if (FAILED(CreateTextFormat(factory, spec, format.put())) || ! format)
+    {
+        return 0;
+    }
+    static_cast<void>(format->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP));
+    static_cast<void>(format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR));
+    static_cast<void>(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
 
-    DrawTextW(hdc.get(), text.data(), static_cast<int>(text.size()), &rc, DT_LEFT | DT_WORDBREAK | DT_NOPREFIX | DT_CALCRECT);
+    const float layoutWidthDip = (std::max)(1.0f, (static_cast<float>(width) * 96.0f) / static_cast<float>(typography.dpi));
+    wil::com_ptr<IDWriteTextLayout> layout;
+    if (FAILED(factory->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), format.get(), layoutWidthDip, 4096.0f, layout.put())) || ! layout)
+    {
+        return 0;
+    }
 
-    const UINT dpi     = GetDpiForWindow(referenceWindow);
-    const int paddingY = ThemedControls::ScaleDip(dpi, 6);
-    return static_cast<int>(std::max(0l, rc.bottom - rc.top) + std::max(1, paddingY));
+    DWRITE_TEXT_METRICS metrics{};
+    if (FAILED(layout->GetMetrics(&metrics)))
+    {
+        return 0;
+    }
+
+    const int paddingY = UiMetrics::ScaleDip(typography.dpi, 6);
+    return DipExtentToPixels(metrics.height, typography.dpi) + std::max(1, paddingY);
 }
 
 std::wstring_view TrimWhitespace(std::wstring_view text) noexcept
@@ -855,109 +623,37 @@ void InvalidateComboBox(HWND combo) noexcept
     }
 }
 
-void SelectComboItemByData(HWND combo, LPARAM data) noexcept
+PreferencesDialogState* GetDialogState(HWND childOrDialog) noexcept
 {
-    if (! combo)
+    if (! childOrDialog)
     {
-        return;
+        return nullptr;
     }
 
-    const LRESULT count = SendMessageW(combo, CB_GETCOUNT, 0, 0);
-    if (count == CB_ERR)
+    HWND dlg = GetAncestor(childOrDialog, GA_ROOT);
+    if (! dlg)
     {
-        return;
+        dlg = childOrDialog;
     }
 
-    for (LRESULT index = 0; index < count; ++index)
+    if (! dlg || IsWindow(dlg) == FALSE)
     {
-        const LRESULT itemData = SendMessageW(combo, CB_GETITEMDATA, static_cast<WPARAM>(index), 0);
-        if (itemData != CB_ERR && itemData == data)
-        {
-            SendMessageW(combo, CB_SETCURSEL, static_cast<WPARAM>(index), 0);
-            InvalidateComboBox(combo);
-            return;
-        }
+        return nullptr;
     }
+
+    return reinterpret_cast<PreferencesDialogState*>(GetWindowLongPtrW(dlg, DWLP_USER));
 }
 
-std::optional<LPARAM> TryGetSelectedComboItemData(HWND combo) noexcept
+bool PostDeferredAction(HWND hwnd, PreferencesDeferredActionKind kind) noexcept
 {
-    if (! combo)
-    {
-        return std::nullopt;
-    }
-
-    const LRESULT sel = SendMessageW(combo, CB_GETCURSEL, 0, 0);
-    if (sel == CB_ERR)
-    {
-        return std::nullopt;
-    }
-
-    const LRESULT data = SendMessageW(combo, CB_GETITEMDATA, static_cast<WPARAM>(sel), 0);
-    if (data == CB_ERR)
-    {
-        return std::nullopt;
-    }
-
-    return static_cast<LPARAM>(data);
-}
-
-void SetTwoStateToggleState(HWND toggle, bool highContrast, bool toggledOn) noexcept
-{
-    if (! toggle)
-    {
-        return;
-    }
-
-    const LONG_PTR style = GetWindowLongPtrW(toggle, GWL_STYLE);
-    const UINT type      = static_cast<UINT>(style & BS_TYPEMASK);
-    bool useBmCheck      = highContrast;
-    if (type == BS_OWNERDRAW)
-    {
-        useBmCheck = false;
-    }
-    else if (type == BS_CHECKBOX || type == BS_AUTOCHECKBOX || type == BS_3STATE || type == BS_AUTO3STATE || type == BS_RADIOBUTTON ||
-             type == BS_AUTORADIOBUTTON)
-    {
-        useBmCheck = true;
-    }
-
-    if (useBmCheck)
-    {
-        SendMessageW(toggle, BM_SETCHECK, toggledOn ? BST_CHECKED : BST_UNCHECKED, 0);
-        return;
-    }
-
-    SetWindowLongPtrW(toggle, GWLP_USERDATA, toggledOn ? 1 : 0);
-    InvalidateRect(toggle, nullptr, TRUE);
-}
-
-bool GetTwoStateToggleState(HWND toggle, bool highContrast) noexcept
-{
-    if (! toggle)
+    if (! hwnd || IsWindow(hwnd) == FALSE)
     {
         return false;
     }
 
-    const LONG_PTR style = GetWindowLongPtrW(toggle, GWL_STYLE);
-    const UINT type      = static_cast<UINT>(style & BS_TYPEMASK);
-    bool useBmCheck      = highContrast;
-    if (type == BS_OWNERDRAW)
-    {
-        useBmCheck = false;
-    }
-    else if (type == BS_CHECKBOX || type == BS_AUTOCHECKBOX || type == BS_3STATE || type == BS_AUTO3STATE || type == BS_RADIOBUTTON ||
-             type == BS_AUTORADIOBUTTON)
-    {
-        useBmCheck = true;
-    }
-
-    if (useBmCheck)
-    {
-        return SendMessageW(toggle, BM_GETCHECK, 0, 0) == BST_CHECKED;
-    }
-
-    return GetWindowLongPtrW(toggle, GWLP_USERDATA) != 0;
+    auto payload  = std::make_unique<PreferencesDeferredActionPayload>();
+    payload->kind = kind;
+    return PostMessagePayload(hwnd, WndMsg::kPreferencesDeferredPaneAction, 0, std::move(payload));
 }
 
 std::optional<uint32_t> TryParseUInt32(std::wstring_view text) noexcept
@@ -1038,241 +734,25 @@ bool EqualsNoCase(std::wstring_view a, std::wstring_view b) noexcept
 
 namespace PrefsUi
 {
-
-// Schema-driven UI helper functions
-[[nodiscard]] HWND CreateSchemaToggle(HWND parent,
-                                      const SettingsSchemaParser::SettingField& field,
-                                      PreferencesDialogState& state,
-                                      int x,
-                                      int& y,
-                                      int width,
-                                      int margin,
-                                      int gapY,
-                                      HFONT font) noexcept
+bool IsActuallyVisibleChildWindow(HWND hwnd) noexcept
 {
-    const UINT dpi         = GetDpiForWindow(parent);
-    const int rowHeight    = ThemedControls::ScaleDip(dpi, 32);
-    const int toggleWidth  = ThemedControls::ScaleDip(dpi, 40);
-    const int toggleHeight = ThemedControls::ScaleDip(dpi, 20);
-
-    // Create label
-    const int labelHeight = ThemedControls::ScaleDip(dpi, 20);
-    HWND label            = CreateWindowExW(0,
-                                 L"STATIC",
-                                 field.title.c_str(),
-                                 WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE,
-                                 x + margin,
-                                 y,
-                                 width - margin - toggleWidth - ThemedControls::ScaleDip(dpi, 12),
-                                 labelHeight,
-                                 parent,
-                                 nullptr,
-                                 GetModuleHandleW(nullptr),
-                                 nullptr);
-
-    if (label && font)
+    if (! hwnd || IsWindowVisible(hwnd) == FALSE)
     {
-        SendMessageW(label, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
+        return false;
     }
 
-    // Create toggle button (will be owner-drawn)
-    HWND toggle = CreateWindowExW(0,
-                                  L"BUTTON",
-                                  L"",
-                                  WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                                  x + width - toggleWidth - margin,
-                                  y + (rowHeight - toggleHeight) / 2,
-                                  toggleWidth,
-                                  toggleHeight,
-                                  parent,
-                                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(10000 + state.schemaFields.size())), // Unique ID
-                                  GetModuleHandleW(nullptr),
-                                  nullptr);
-
-    if (toggle && font)
+    // DxUi text bridges stay WS_VISIBLE for IME routing, but an empty region keeps them off-screen.
+    wil::unique_hrgn region(CreateRectRgn(0, 0, 0, 0));
+    if (region)
     {
-        SendMessageW(toggle, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
-    }
-
-    y += rowHeight + gapY;
-    return toggle;
-}
-
-[[nodiscard]] HWND CreateSchemaEdit(HWND parent,
-                                    const SettingsSchemaParser::SettingField& field,
-                                    PreferencesDialogState& state,
-                                    int x,
-                                    int& y,
-                                    int width,
-                                    int margin,
-                                    int gapY,
-                                    HFONT font) noexcept
-{
-    const UINT dpi        = GetDpiForWindow(parent);
-    const int labelHeight = ThemedControls::ScaleDip(dpi, 20);
-    const int rowSpacing  = ThemedControls::ScaleDip(dpi, 4);
-
-    // Create label
-    HWND label = CreateWindowExW(0,
-                                 L"STATIC",
-                                 field.title.c_str(),
-                                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                                 x + margin,
-                                 y,
-                                 width - margin * 2,
-                                 labelHeight,
-                                 parent,
-                                 nullptr,
-                                 GetModuleHandleW(nullptr),
-                                 nullptr);
-
-    if (label && font)
-    {
-        SendMessageW(label, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
-    }
-
-    y += labelHeight + rowSpacing;
-
-    // Create framed edit control using existing helper for consistent styling
-    HWND frame = nullptr;
-    HWND edit  = nullptr;
-    PrefsInput::CreateFramedEditBox(
-        state, parent, frame, edit, 10000 + static_cast<int>(state.schemaFields.size()), WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_LEFT | ES_AUTOHSCROLL);
-
-    if (edit)
-    {
-        if (font)
+        const int rgnType = GetWindowRgn(hwnd, region.get());
+        if (rgnType == NULLREGION)
         {
-            SendMessageW(edit, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
+            return false;
         }
-
-        // Set initial value
-        SetWindowTextW(edit, field.defaultValue.c_str());
     }
 
-    const int editHeight = ThemedControls::ScaleDip(dpi, 28);
-    y += editHeight + gapY;
-    return edit;
-}
-
-[[nodiscard]] HWND CreateSchemaNumber(HWND parent,
-                                      const SettingsSchemaParser::SettingField& field,
-                                      PreferencesDialogState& state,
-                                      int x,
-                                      int& y,
-                                      int width,
-                                      int margin,
-                                      int gapY,
-                                      HFONT font) noexcept
-{
-    const UINT dpi        = GetDpiForWindow(parent);
-    const int labelHeight = ThemedControls::ScaleDip(dpi, 20);
-    const int rowSpacing  = ThemedControls::ScaleDip(dpi, 4);
-
-    // Create label
-    HWND label = CreateWindowExW(0,
-                                 L"STATIC",
-                                 field.title.c_str(),
-                                 WS_CHILD | WS_VISIBLE | SS_LEFT,
-                                 x + margin,
-                                 y,
-                                 width - margin * 2,
-                                 labelHeight,
-                                 parent,
-                                 nullptr,
-                                 GetModuleHandleW(nullptr),
-                                 nullptr);
-
-    if (label && font)
-    {
-        SendMessageW(label, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
-    }
-
-    y += labelHeight + rowSpacing;
-
-    // Create framed number edit control using existing helper
-    HWND frame = nullptr;
-    HWND edit  = nullptr;
-    PrefsInput::CreateFramedEditBox(state,
-                                    parent,
-                                    frame,
-                                    edit,
-                                    10000 + static_cast<int>(state.schemaFields.size()),
-                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_LEFT | ES_AUTOHSCROLL | ES_NUMBER);
-
-    if (edit)
-    {
-        if (font)
-        {
-            SendMessageW(edit, WM_SETFONT, reinterpret_cast<WPARAM>(font), FALSE);
-        }
-
-        // Set initial value
-        SetWindowTextW(edit, field.defaultValue.c_str());
-    }
-
-    const int editHeight = ThemedControls::ScaleDip(dpi, 28);
-    y += editHeight + gapY;
-    return edit;
-}
-
-[[nodiscard]] HWND CreateSchemaControl(HWND parent,
-                                       const SettingsSchemaParser::SettingField& field,
-                                       PreferencesDialogState& state,
-                                       int x,
-                                       int& y,
-                                       int width,
-                                       int margin,
-                                       int gapY,
-                                       HFONT font) noexcept
-{
-    // Route to appropriate control type
-    if (field.controlType == L"toggle")
-    {
-        return CreateSchemaToggle(parent, field, state, x, y, width, margin, gapY, font);
-    }
-    else if (field.controlType == L"number")
-    {
-        return CreateSchemaNumber(parent, field, state, x, y, width, margin, gapY, font);
-    }
-    else if (field.controlType == L"edit")
-    {
-        return CreateSchemaEdit(parent, field, state, x, y, width, margin, gapY, font);
-    }
-
-    // Default to edit
-    return CreateSchemaEdit(parent, field, state, x, y, width, margin, gapY, font);
-}
-
-void PositionControl(HWND hwnd, int x, int y, int width, int height) noexcept
-{
-    if (hwnd)
-    {
-        SetWindowPos(hwnd, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-}
-
-void PositionAndSetFont(HWND hwnd, HFONT font, int x, int y, int width, int height) noexcept
-{
-    if (hwnd)
-    {
-        SetWindowPos(hwnd, nullptr, x, y, width, height, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(hwnd, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
-    }
-}
-
-void SetControlText(HWND hwnd, std::wstring_view text) noexcept
-{
-    if (hwnd && ! text.empty())
-    {
-        SetWindowTextW(hwnd, text.data());
-    }
-}
-
-int CalculateCardHeight(int rowHeight, int titleHeight, int cardPaddingY, int cardGapY, int descHeight) noexcept
-{
-    const int contentHeight = std::max(0, titleHeight + (descHeight > 0 ? (cardGapY + descHeight) : 0));
-    return std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
+    return true;
 }
 
 void TryPushCard(std::vector<RECT>& cards, const RECT& card) noexcept
@@ -1281,6 +761,171 @@ void TryPushCard(std::vector<RECT>& cards, const RECT& card) noexcept
 }
 
 } // namespace PrefsUi
+
+namespace PrefsDxHost
+{
+bool Attach(HWND hwnd, RedSalamander::DxUi::WindowHost& host) noexcept
+{
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    static_cast<void>(RedSalamander::Win32Callback::SetPropNoThrow(hwnd, kPrefsDxHostProp, &host));
+    const bool attached = InstallWndProcHook(hwnd, kPrefsDxHostOriginalWndProcProp, PrefsDxHostWndProc);
+    if (! attached)
+    {
+        RemovePropW(hwnd, kPrefsDxHostProp);
+        return false;
+    }
+
+    ApplyAncestorRedrawSuppression(hwnd);
+    return true;
+}
+
+void ResetOwnedHostWindow(wil::unique_hwnd& hwnd) noexcept
+{
+    if (! hwnd)
+    {
+        return;
+    }
+
+    if (IsWindow(hwnd.get()) == FALSE)
+    {
+        static_cast<void>(hwnd.release());
+        return;
+    }
+
+    if (auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(hwnd.get(), kPrefsDxHostProp)))
+    {
+        host->Detach();
+    }
+
+    RemovePropW(hwnd.get(), kPrefsDxHostProp);
+    RestoreWndProcHook(hwnd.get(), kPrefsDxHostOriginalWndProcProp);
+    hwnd.reset();
+}
+
+#ifdef ENABLE_TESTS
+size_t CountVisibleRenderedHosts(HWND parent) noexcept
+{
+    if (! parent)
+    {
+        return 0u;
+    }
+
+    size_t count = 0u;
+    for (HWND child = GetWindow(parent, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
+    {
+        if (! PrefsUi::IsActuallyVisibleChildWindow(child))
+        {
+            continue;
+        }
+
+        auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(child, kPrefsDxHostProp));
+        if (! host)
+        {
+            continue;
+        }
+
+        if (host->DebugGetRenderCount() != 0u)
+        {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+size_t CountVisibleHostsWithResizeFailures(HWND parent) noexcept
+{
+    if (! parent)
+    {
+        return 0u;
+    }
+
+    size_t count = 0u;
+    for (HWND child = GetWindow(parent, GW_CHILD); child; child = GetWindow(child, GW_HWNDNEXT))
+    {
+        if (! PrefsUi::IsActuallyVisibleChildWindow(child))
+        {
+            continue;
+        }
+
+        auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(child, kPrefsDxHostProp));
+        if (! host)
+        {
+            continue;
+        }
+
+        if (host->DebugGetResizeFailureCount() != 0u)
+        {
+            ++count;
+        }
+    }
+
+    return count;
+}
+
+uint64_t SumVisibleRenderedHostRenderCounts(HWND parent) noexcept
+{
+    if (! parent)
+    {
+        return 0u;
+    }
+
+    struct VisibleRenderCountAccumulator
+    {
+        uint64_t total = 0u;
+    } accumulator{};
+
+    EnumChildWindows(parent,
+                     [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto& accumulatorRef = *reinterpret_cast<VisibleRenderCountAccumulator*>(lParam);
+        if (! PrefsUi::IsActuallyVisibleChildWindow(child))
+        {
+            return TRUE;
+        }
+
+        auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(child, kPrefsDxHostProp));
+        if (! host)
+        {
+            return TRUE;
+        }
+
+        accumulatorRef.total += host->DebugGetRenderCount();
+        return TRUE;
+    },
+                     reinterpret_cast<LPARAM>(&accumulator));
+
+    return accumulator.total;
+}
+
+bool TryGetDirectHostMetrics(HWND hwnd, size_t& visibleHostCount, size_t& resizeFailureCount, uint64_t& renderCountTotal) noexcept
+{
+    visibleHostCount   = 0u;
+    resizeFailureCount = 0u;
+    renderCountTotal   = 0u;
+
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! PrefsUi::IsActuallyVisibleChildWindow(hwnd))
+    {
+        return false;
+    }
+
+    auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetPropW(hwnd, kPrefsDxHostProp));
+    if (! host)
+    {
+        return false;
+    }
+
+    visibleHostCount   = 1u;
+    resizeFailureCount = host->DebugGetResizeFailureCount() != 0u ? 1u : 0u;
+    renderCountTotal   = host->DebugGetRenderCount();
+    return true;
+}
+#endif
+} // namespace PrefsDxHost
 
 namespace PrefsFile
 {
@@ -1335,193 +980,6 @@ bool TryWriteFileFromString(const std::filesystem::path& path, std::string_view 
     return static_cast<bool>(file);
 }
 } // namespace PrefsFile
-
-namespace PrefsListView
-{
-int GetSingleLineRowHeightPx(HWND list, HDC hdc) noexcept
-{
-    if (! list)
-    {
-        return 26;
-    }
-
-    const UINT dpi      = GetDpiForWindow(list);
-    const int minHeight = std::max(1, ThemedControls::ScaleDip(dpi, 26));
-    const int paddingY  = std::max(1, ThemedControls::ScaleDip(dpi, 3));
-
-    if (! hdc)
-    {
-        return minHeight;
-    }
-
-    TEXTMETRICW tm{};
-    if (! GetTextMetricsW(hdc, &tm))
-    {
-        return minHeight;
-    }
-
-    const int lineHeight = std::max(1, static_cast<int>(tm.tmHeight + tm.tmExternalLeading));
-    return std::max(minHeight, (paddingY * 2) + lineHeight);
-}
-
-LRESULT DrawThemedTwoColumnListRow(DRAWITEMSTRUCT* dis, PreferencesDialogState& state, HWND list, UINT expectedCtlId, bool secondColumnRightAlign) noexcept
-{
-    if (! dis || dis->CtlType != ODT_LISTVIEW || dis->CtlID != expectedCtlId)
-    {
-        return 0;
-    }
-
-    if (! list || ! dis->hDC)
-    {
-        return 1;
-    }
-
-    const int itemIndex = static_cast<int>(dis->itemID);
-    if (itemIndex < 0)
-    {
-        return 1;
-    }
-
-    RECT rc = dis->rcItem;
-    if (rc.right <= rc.left || rc.bottom <= rc.top)
-    {
-        return 1;
-    }
-
-    wchar_t seedText[256]{};
-    ListView_GetItemText(list, itemIndex, 0, seedText, static_cast<int>(std::size(seedText)));
-    const std::wstring_view seed = std::wstring_view(seedText, std::wcslen(seedText));
-
-    const bool selected    = (dis->itemState & ODS_SELECTED) != 0;
-    const bool focused     = (dis->itemState & ODS_FOCUS) != 0;
-    const bool listFocused = GetFocus() == list;
-
-    const HWND root         = GetAncestor(list, GA_ROOT);
-    const bool windowActive = root && GetActiveWindow() == root;
-
-    const bool systemHighContrast = state.theme.systemHighContrast;
-    COLORREF bg                   = systemHighContrast ? GetSysColor(COLOR_WINDOW) : state.theme.windowBackground;
-    COLORREF textColor            = systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : state.theme.menu.text;
-
-    if (selected)
-    {
-        COLORREF selBg = systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : state.theme.menu.selectionBg;
-        if (! state.theme.highContrast && state.theme.menu.rainbowMode && ! seed.empty())
-        {
-            selBg = RainbowMenuSelectionColor(seed, state.theme.menu.darkBase);
-        }
-
-        COLORREF selText = systemHighContrast ? GetSysColor(COLOR_HIGHLIGHTTEXT) : state.theme.menu.selectionText;
-        if (! state.theme.highContrast && state.theme.menu.rainbowMode)
-        {
-            selText = ChooseContrastingTextColor(selBg);
-        }
-
-        if (windowActive && listFocused)
-        {
-            bg        = selBg;
-            textColor = selText;
-        }
-        else if (! state.theme.highContrast)
-        {
-            const int denom = state.theme.menu.darkBase ? 2 : 3;
-            bg              = ThemedControls::BlendColor(state.theme.windowBackground, selBg, 1, denom);
-            textColor       = ChooseContrastingTextColor(bg);
-        }
-        else
-        {
-            bg        = selBg;
-            textColor = selText;
-        }
-    }
-    else if (! state.theme.highContrast && ((itemIndex % 2) == 1))
-    {
-        const COLORREF tint =
-            (state.theme.menu.rainbowMode && ! seed.empty()) ? RainbowMenuSelectionColor(seed, state.theme.menu.darkBase) : state.theme.menu.selectionBg;
-        const int denom = state.theme.menu.darkBase ? 6 : 8;
-        bg              = ThemedControls::BlendColor(bg, tint, 1, denom);
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(bg));
-    if (bgBrush)
-    {
-        FillRect(dis->hDC, &rc, bgBrush.get());
-    }
-
-    if (! state.theme.highContrast && textColor == bg)
-    {
-        textColor = ChooseContrastingTextColor(bg);
-    }
-
-    const UINT dpi     = GetDpiForWindow(list);
-    const int paddingX = ThemedControls::ScaleDip(dpi, 8);
-
-    const int col0W = std::max(0, ListView_GetColumnWidth(list, 0));
-    const int col1W = std::max(0, ListView_GetColumnWidth(list, 1));
-
-    RECT col0Rect  = rc;
-    col0Rect.right = std::min(rc.right, rc.left + col0W);
-
-    RECT col1Rect  = rc;
-    col1Rect.left  = col0Rect.right;
-    col1Rect.right = (col1W > 0) ? std::min(rc.right, col1Rect.left + col1W) : rc.right;
-
-    wchar_t text0[256]{};
-    ListView_GetItemText(list, itemIndex, 0, text0, static_cast<int>(std::size(text0)));
-    wchar_t text1[512]{};
-    ListView_GetItemText(list, itemIndex, 1, text1, static_cast<int>(std::size(text1)));
-
-    HFONT fontToUse = reinterpret_cast<HFONT>(SendMessageW(list, WM_GETFONT, 0, 0));
-    if (! fontToUse)
-    {
-        fontToUse = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    }
-    [[maybe_unused]] auto oldFont = wil::SelectObject(dis->hDC, fontToUse);
-
-    SetBkMode(dis->hDC, TRANSPARENT);
-    SetTextColor(dis->hDC, textColor);
-
-    RECT textRect0  = col0Rect;
-    textRect0.left  = std::min(textRect0.right, textRect0.left + paddingX);
-    textRect0.right = std::max(textRect0.left, textRect0.right - paddingX);
-
-    DrawTextW(dis->hDC, text0, static_cast<int>(std::wcslen(text0)), &textRect0, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
-
-    RECT textRect1  = col1Rect;
-    textRect1.left  = std::min(textRect1.right, textRect1.left + paddingX);
-    textRect1.right = std::max(textRect1.left, textRect1.right - paddingX);
-
-    UINT flags = DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX;
-    flags |= secondColumnRightAlign ? DT_RIGHT : DT_LEFT;
-
-    DrawTextW(dis->hDC, text1, static_cast<int>(std::wcslen(text1)), &textRect1, flags);
-
-    if (focused)
-    {
-        RECT focusRc = rc;
-        InflateRect(&focusRc, -ThemedControls::ScaleDip(dpi, 2), -ThemedControls::ScaleDip(dpi, 2));
-
-        COLORREF focusTint = state.theme.menu.selectionBg;
-        if (! state.theme.highContrast && state.theme.menu.rainbowMode && ! seed.empty())
-        {
-            focusTint = RainbowMenuSelectionColor(seed, state.theme.menu.darkBase);
-        }
-
-        const int weight          = (windowActive && listFocused) ? (state.theme.dark ? 70 : 55) : (state.theme.dark ? 55 : 40);
-        const COLORREF focusColor = systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : ThemedControls::BlendColor(bg, focusTint, weight, 255);
-
-        wil::unique_hpen focusPen(CreatePen(PS_SOLID, 1, focusColor));
-        if (focusPen)
-        {
-            [[maybe_unused]] auto oldBrush2 = wil::SelectObject(dis->hDC, GetStockObject(NULL_BRUSH));
-            [[maybe_unused]] auto oldPen2   = wil::SelectObject(dis->hDC, focusPen.get());
-            Rectangle(dis->hDC, focusRc.left, focusRc.top, focusRc.right, focusRc.bottom);
-        }
-    }
-
-    return 1;
-}
-} // namespace PrefsListView
 
 namespace PrefsFolders
 {
@@ -1896,12 +1354,14 @@ void MaybeResetWorkingFileOperationsSettingsIfEmpty(Common::Settings::Settings& 
 
     const Common::Settings::FileOperationsSettings defaults{};
     const auto& fileOperations = settings.fileOperations.value();
-    const bool hasNonDefault   = fileOperations.autoDismissSuccess != defaults.autoDismissSuccess ||
-                               fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles ||
-                               fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
-                               fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
-                               fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
-                               fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
+    const bool hasNonDefault =
+        fileOperations.autoDismissSuccess != defaults.autoDismissSuccess || fileOperations.preCalcEnabled != defaults.preCalcEnabled ||
+        fileOperations.preCalcMaxWorkers != defaults.preCalcMaxWorkers || fileOperations.crossFsBridgeBufferSizeKB != defaults.crossFsBridgeBufferSizeKB ||
+        fileOperations.defaultBandwidthLimitBytesPerSecond != defaults.defaultBandwidthLimitBytesPerSecond ||
+        fileOperations.maxDiagnosticsLogFiles != defaults.maxDiagnosticsLogFiles || fileOperations.diagnosticsInfoEnabled != defaults.diagnosticsInfoEnabled ||
+        fileOperations.diagnosticsDebugEnabled != defaults.diagnosticsDebugEnabled || fileOperations.maxIssueReportFiles.has_value() ||
+        fileOperations.maxDiagnosticsInMemory.has_value() || fileOperations.maxDiagnosticsPerFlush.has_value() ||
+        fileOperations.diagnosticsFlushIntervalMs.has_value() || fileOperations.diagnosticsCleanupIntervalMs.has_value();
 
     if (! hasNonDefault)
     {

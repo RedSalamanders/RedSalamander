@@ -2,7 +2,7 @@
 name: direct2d-rendering
 description: Direct2D and DirectWrite graphics rendering patterns for Windows. Use when implementing 2D graphics, text rendering, hardware-accelerated drawing, handling device loss, or working with ID2D1DeviceContext.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 
@@ -71,6 +71,13 @@ void OnDpiChanged(UINT dpi)
 }
 ```
 
+In this repo, DPI handling for retained DirectX UI should follow one shared invalidation path:
+
+- top-level hosts handle `WM_DPICHANGED`,
+- child or hybrid windows with DPI-sensitive chrome also handle `WM_DPICHANGED_AFTERPARENT`,
+- the handler refreshes D2D DPI, invalidates cached text/layout/popup metrics, reapplies layout, and repaints,
+- popup surfaces and other retained overlays should recompute geometry instead of requiring close/reopen after a DPI transition.
+
 ## Text Rendering (ColorTextView)
 
 - Use `IDWriteTextLayout` for complex text scenarios
@@ -86,6 +93,14 @@ void OnDpiChanged(UINT dpi)
 - **Memory**: Monitor usage, implement cleanup strategies
 - **Rendering**: Use offscreen rendering and dirty region updates
 - **Measurements**: Profile performance-critical paths
+
+For rendering-path changes in this repo, profiling is not a post-hoc suggestion. New rendering work or rendering optimizations should:
+
+1. name the user-visible scenario,
+2. add or reuse instrumentation,
+3. use deterministic selftest coverage where practical,
+4. archive validation runs under `Specs/TestRuns/`,
+5. if the work closes a plan, move that plan to `Specs/Plans/Done/` and merge the lasting rendering contract into the authoritative spec.
 
 ## Device Loss Handling
 

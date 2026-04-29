@@ -1,12 +1,17 @@
 #include "FolderWindow.FileOperations.Popup.h"
 
+#include "DxUi/DxUi.Typography.h"
+#include "DxUi/DxUi.h"
+#include "DxUiThemePalette.h"
 #include "FluentIcons.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
 #include "WindowMaximizeBehavior.h"
 
+#include <algorithm>
 #include <array>
+#include <chrono>
 #include <cmath>
 #include <d2d1.h>
 #include <dwrite.h>
@@ -18,40 +23,31 @@ namespace
 {
 constexpr wchar_t kFileOperationsPopupClassName[] = L"RedSalamander.FileOperationsPopup";
 
-constexpr UINT_PTR kFileOperationsPopupTimerId     = 1;
-constexpr UINT kFileOperationsPopupTimerIntervalMs = 100;
-constexpr ULONGLONG kRateSampleBucketMs            = 100ull;
+constexpr UINT_PTR kFileOperationsPopupTimerId                     = 1;
+constexpr UINT kFileOperationsPopupTimerIntervalMs                 = 100;
+constexpr ULONGLONG kRateSampleBucketMs                            = 100ull;
+constexpr UINT kFileOperationsPopupDeferredSpeedLimitPromptMessage = WM_APP + 0x71;
+constexpr wchar_t kFileOperationsSpeedLimitPromptClassName[]       = L"RedSalamander.FileOperations.SpeedLimitPrompt";
+constexpr std::wstring_view kEllipsisText                          = L"\u2026";
 
-constexpr std::wstring_view kEllipsisText = L"\u2026";
+#ifdef ENABLE_TESTS
+constexpr UINT kFileOperationsSpeedLimitPromptDebugMessage = WM_APP + 0x73;
 
-struct SpeedLimitDialogState
+[[nodiscard]] bool IsActuallyVisibleChildWindow(HWND hwnd) noexcept
 {
-    SpeedLimitDialogState() = default;
+    return hwnd && IsWindow(hwnd) != FALSE && IsWindowVisible(hwnd) != FALSE && (GetWindowLongPtrW(hwnd, GWL_STYLE) & WS_CHILD) != 0;
+}
+#endif
 
-    SpeedLimitDialogState& operator=(SpeedLimitDialogState&) = delete;
-    SpeedLimitDialogState(SpeedLimitDialogState&)            = delete;
-
-    uint64_t initialLimitBytesPerSecond = 0;
-    uint64_t resultLimitBytesPerSecond  = 0;
-    AppTheme theme{};
-    wil::unique_hbrush backgroundBrush;
-    std::wstring hintText;
-    bool showingValidationError = false;
-};
-INT_PTR CALLBACK SpeedLimitDialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
-
-COLORREF ColorRefFromColorF(const D2D1::ColorF& color) noexcept
+[[nodiscard]] uint64_t PerfNowUs() noexcept
 {
-    const auto toByte = [](float v) noexcept
-    {
-        const float clamped = std::clamp(v, 0.0f, 1.0f);
-        const float scaled  = (clamped * 255.0f) + 0.5f;
-        const int asInt     = static_cast<int>(scaled);
-        const int bounded   = std::clamp(asInt, 0, 255);
-        return static_cast<BYTE>(bounded);
-    };
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now().time_since_epoch()).count());
+}
 
-    return RGB(toByte(color.r), toByte(color.g), toByte(color.b));
+[[nodiscard]] uint64_t PerfElapsedUs(uint64_t startUs) noexcept
+{
+    const uint64_t nowUs = PerfNowUs();
+    return (nowUs >= startUs) ? (nowUs - startUs) : 0u;
 }
 
 float DipsToPixels(float dip, UINT dpi) noexcept
@@ -62,6 +58,110 @@ float DipsToPixels(float dip, UINT dpi) noexcept
 int DipsToPixels(int dip, UINT dpi) noexcept
 {
     return MulDiv(dip, static_cast<int>(dpi), USER_DEFAULT_SCREEN_DPI);
+}
+
+float PixelsToDips(float px, UINT dpi) noexcept
+{
+    if (dpi == 0)
+    {
+        return px;
+    }
+    return px * (static_cast<float>(USER_DEFAULT_SCREEN_DPI) / static_cast<float>(dpi));
+}
+
+D2D1_RECT_F RectPixelsToDips(const RECT& rc, UINT dpi) noexcept
+{
+    return D2D1::RectF(PixelsToDips(static_cast<float>(rc.left), dpi),
+                       PixelsToDips(static_cast<float>(rc.top), dpi),
+                       PixelsToDips(static_cast<float>(rc.right), dpi),
+                       PixelsToDips(static_cast<float>(rc.bottom), dpi));
+}
+
+[[nodiscard]] bool DirectWriteFormatHasGlyph(IDWriteFactory* factory, IDWriteTextFormat* format, wchar_t glyph) noexcept
+{
+    if (! factory || ! format || glyph == 0)
+    {
+        return false;
+    }
+
+    const UINT32 familyLength = format->GetFontFamilyNameLength();
+    if (familyLength == 0)
+    {
+        return false;
+    }
+
+    std::wstring familyName(familyLength + 1u, L'\0');
+    if (FAILED(format->GetFontFamilyName(familyName.data(), familyLength + 1u)))
+    {
+        return false;
+    }
+    familyName.resize(familyLength);
+
+    wil::com_ptr<IDWriteFontCollection> collection;
+    if (FAILED(factory->GetSystemFontCollection(collection.addressof(), FALSE)) || ! collection)
+    {
+        return false;
+    }
+
+    UINT32 familyIndex = 0;
+    BOOL familyExists  = FALSE;
+    if (FAILED(collection->FindFamilyName(familyName.c_str(), &familyIndex, &familyExists)) || familyExists == FALSE)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IDWriteFontFamily> fontFamily;
+    if (FAILED(collection->GetFontFamily(familyIndex, fontFamily.addressof())) || ! fontFamily)
+    {
+        return false;
+    }
+
+    wil::com_ptr<IDWriteFont> font;
+    if (FAILED(fontFamily->GetFirstMatchingFont(format->GetFontWeight(), format->GetFontStretch(), format->GetFontStyle(), font.addressof())) || ! font)
+    {
+        return false;
+    }
+
+    BOOL hasGlyph = FALSE;
+    if (FAILED(font->HasCharacter(static_cast<UINT32>(glyph), &hasGlyph)))
+    {
+        return false;
+    }
+    return hasGlyph != FALSE;
+}
+
+void CenterWindowOnOwnerWindow(HWND hwnd, HWND ownerWindow) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE || ! ownerWindow || IsWindow(ownerWindow) == FALSE)
+    {
+        return;
+    }
+
+    RECT windowRect{};
+    RECT ownerRect{};
+    if (GetWindowRect(hwnd, &windowRect) == FALSE || GetWindowRect(ownerWindow, &ownerRect) == FALSE)
+    {
+        return;
+    }
+
+    HMONITOR monitor = MonitorFromWindow(ownerWindow, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO mi{};
+    mi.cbSize = sizeof(mi);
+    if (GetMonitorInfoW(monitor, &mi) == FALSE)
+    {
+        return;
+    }
+
+    const LONG width     = windowRect.right - windowRect.left;
+    const LONG height    = windowRect.bottom - windowRect.top;
+    const LONG centeredX = ownerRect.left + ((ownerRect.right - ownerRect.left - width) / 2);
+    const LONG centeredY = ownerRect.top + ((ownerRect.bottom - ownerRect.top - height) / 2);
+    const LONG maxX      = std::max(mi.rcWork.left, mi.rcWork.right - width);
+    const LONG maxY      = std::max(mi.rcWork.top, mi.rcWork.bottom - height);
+    const int x          = std::clamp(centeredX, mi.rcWork.left, maxX);
+    const int y          = std::clamp(centeredY, mi.rcWork.top, maxY);
+
+    SetWindowPos(hwnd, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
 bool IsRectFullyVisible(const RECT& rect) noexcept
@@ -226,7 +326,7 @@ bool TryParseThroughputText(std::wstring_view text, uint64_t& outBytesPerSecond)
             continue;
         }
 
-        if (ch == L'.' && ! sawDecimal)
+        if ((ch == L'.' || ch == L',') && ! sawDecimal)
         {
             sawDecimal = true;
             continue;
@@ -301,6 +401,488 @@ bool TryParseThroughputText(std::wstring_view text, uint64_t& outBytesPerSecond)
 
     outBytesPerSecond = static_cast<uint64_t>(result + 0.5);
     return true;
+}
+
+class FileOperationsSpeedLimitPromptWindow final
+{
+public:
+    FileOperationsSpeedLimitPromptWindow(HWND ownerWindow, const AppTheme& theme, uint64_t initialLimitBytesPerSecond) noexcept
+        : _ownerWindow(ownerWindow && IsWindow(ownerWindow) != FALSE ? ownerWindow : nullptr),
+          _theme(theme),
+          _initialLimitBytesPerSecond(initialLimitBytesPerSecond)
+    {
+    }
+
+    FileOperationsSpeedLimitPromptWindow(const FileOperationsSpeedLimitPromptWindow&)            = delete;
+    FileOperationsSpeedLimitPromptWindow& operator=(const FileOperationsSpeedLimitPromptWindow&) = delete;
+    FileOperationsSpeedLimitPromptWindow(FileOperationsSpeedLimitPromptWindow&&)                 = delete;
+    FileOperationsSpeedLimitPromptWindow& operator=(FileOperationsSpeedLimitPromptWindow&&)      = delete;
+
+    [[nodiscard]] std::optional<uint64_t> ShowModal() noexcept
+    {
+        const HRESULT classHr = EnsureWindowClass();
+        if (FAILED(classHr))
+        {
+            return std::nullopt;
+        }
+
+        const DWORD style   = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        const DWORD exStyle = WS_EX_DLGMODALFRAME;
+        const UINT dpi      = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
+
+        RECT bounds{0, 0, DipsToPixels(440, dpi), DipsToPixels(212, dpi)};
+        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
+        {
+            return std::nullopt;
+        }
+
+        const HWND hwnd = CreateWindowExW(exStyle,
+                                          kFileOperationsSpeedLimitPromptClassName,
+                                          LoadStringResource(nullptr, IDS_CAPTION_FILEOP_SPEED_LIMIT_CUSTOM).c_str(),
+                                          style,
+                                          CW_USEDEFAULT,
+                                          CW_USEDEFAULT,
+                                          bounds.right - bounds.left,
+                                          bounds.bottom - bounds.top,
+                                          _ownerWindow,
+                                          nullptr,
+                                          GetModuleHandleW(nullptr),
+                                          this);
+        if (! hwnd)
+        {
+            return std::nullopt;
+        }
+
+        if (! _hWnd)
+        {
+            _hWnd.reset(hwnd);
+        }
+
+        if (_ownerWindow && IsWindow(_ownerWindow) != FALSE)
+        {
+            CenterWindowOnOwnerWindow(_hWnd.get(), _ownerWindow);
+        }
+
+        static_cast<void>(_dxHost.PrimeForShow());
+        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+        UpdateWindow(_hWnd.get());
+        SetForegroundWindow(_hWnd.get());
+
+        MSG msg{};
+        while (! _done)
+        {
+            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
+            if (getMessageResult == -1)
+            {
+                _result.reset();
+                _done = true;
+                break;
+            }
+            if (getMessageResult == 0)
+            {
+                _result.reset();
+                _done = true;
+                PostQuitMessage(static_cast<int>(msg.wParam));
+                break;
+            }
+
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+
+        return _result;
+    }
+
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        auto* self = reinterpret_cast<FileOperationsSpeedLimitPromptWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        if (message == WM_NCCREATE)
+        {
+            const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+            self               = create ? reinterpret_cast<FileOperationsSpeedLimitPromptWindow*>(create->lpCreateParams) : nullptr;
+            if (! self)
+            {
+                return FALSE;
+            }
+
+            self->_hWnd.reset(hwnd);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+        }
+
+        if (! self)
+        {
+            return DefWindowProcW(hwnd, message, wParam, lParam);
+        }
+
+        return self->WindowProc(hwnd, message, wParam, lParam);
+    }
+
+#ifdef ENABLE_TESTS
+public:
+    enum class DebugCommand : uintptr_t
+    {
+        GetSnapshot,
+        SetText,
+        Confirm,
+        Cancel,
+    };
+#endif
+
+private:
+    [[nodiscard]] static HRESULT EnsureWindowClass() noexcept
+    {
+        static ATOM atom = 0;
+        if (atom != 0)
+        {
+            return S_OK;
+        }
+
+        WNDCLASSEXW wc{};
+        wc.cbSize        = sizeof(wc);
+        wc.lpfnWndProc   = FileOperationsSpeedLimitPromptWindow::WndProc;
+        wc.hInstance     = GetModuleHandleW(nullptr);
+        wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kFileOperationsSpeedLimitPromptClassName;
+        wc.style         = CS_DBLCLKS;
+
+        atom = RegisterClassExW(&wc);
+        if (atom != 0)
+        {
+            return S_OK;
+        }
+
+        const DWORD lastError = GetLastError();
+        if (lastError == ERROR_CLASS_ALREADY_EXISTS)
+        {
+            atom = 1;
+            return S_OK;
+        }
+
+        return HRESULT_FROM_WIN32(lastError);
+    }
+
+    [[nodiscard]] bool OnCreate(HWND hwnd) noexcept
+    {
+        if (! _dxHost.Attach(hwnd))
+        {
+            return false;
+        }
+
+        BuildUi();
+        ApplyTheme();
+        Layout();
+        _dxHost.SetFocusControl(_field);
+        _dxHost.SetDefaultButton(_okButton);
+        _dxHost.SetCancelButton(_cancelButton);
+        return true;
+    }
+
+    void BuildUi()
+    {
+        if (_root != nullptr)
+        {
+            return;
+        }
+
+        using namespace RedSalamander::DxUi;
+
+        _rootStorage = std::make_unique<Panel>();
+        _root        = _rootStorage.get();
+
+        _label = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_PROMPT_LABEL));
+        _label->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        _field = _root->AddChild<TextField>(_initialLimitBytesPerSecond == 0 ? L"0" : FormatBytesCompact(_initialLimitBytesPerSecond));
+        _field->SetOnTextChanged([this](std::wstring_view) { ClearValidation(); });
+
+        _hintLabel = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_PROMPT_HINT));
+        _hintLabel->SetMultiline(true);
+        _hintLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        _hintLabel->SetFontRole(FontRole::Small);
+
+        _okButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_OK));
+        _okButton->SetPrimary(true);
+        _okButton->SetOnClick([this] { Confirm(); });
+
+        _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
+        _cancelButton->SetOnClick([this] { Cancel(); });
+
+        _dxHost.SetRoot(std::move(_rootStorage));
+    }
+
+    void ApplyTheme() noexcept
+    {
+        _palette = MakeAppThemeDxPalette(_theme, _theme.windowBackground);
+        _dxHost.SetTheme(_palette);
+        UpdateHintVisuals();
+        if (_hWnd)
+        {
+            ApplyWindowChromeTheme(_hWnd.get(), _theme, WindowBackdropTarget::Tool, GetActiveWindow() == _hWnd.get());
+        }
+    }
+
+    void Layout() noexcept
+    {
+        if (! _root)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
+        _root->SetBounds(client);
+
+        constexpr float kMarginDip       = 16.0f;
+        constexpr float kGapDip          = 10.0f;
+        constexpr float kFieldHeightDip  = 32.0f;
+        constexpr float kButtonHeightDip = 34.0f;
+        constexpr float kButtonWidthDip  = 96.0f;
+        constexpr float kLabelHeightDip  = 24.0f;
+        constexpr float kHintHeightDip   = 46.0f;
+
+        const float left  = client.left + kMarginDip;
+        const float right = client.right - kMarginDip;
+        float y           = client.top + kMarginDip;
+
+        _label->SetBounds(D2D1::RectF(left, y, right, y + kLabelHeightDip));
+        y += kLabelHeightDip + 4.0f;
+
+        _field->SetBounds(D2D1::RectF(left, y, right, y + kFieldHeightDip));
+        y += kFieldHeightDip + kGapDip;
+
+        _hintLabel->SetBounds(D2D1::RectF(left, y, right, y + kHintHeightDip));
+
+        const float buttonsTop = client.bottom - kMarginDip - kButtonHeightDip;
+        const float cancelLeft = right - kButtonWidthDip;
+        const float okLeft     = cancelLeft - 8.0f - kButtonWidthDip;
+        _okButton->SetBounds(D2D1::RectF(okLeft, buttonsTop, okLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+        _cancelButton->SetBounds(D2D1::RectF(cancelLeft, buttonsTop, cancelLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+    }
+
+    void ClearValidation() noexcept
+    {
+        if (! _showingValidationError)
+        {
+            return;
+        }
+
+        _showingValidationError = false;
+        _validationText.clear();
+        UpdateHintVisuals();
+        _dxHost.Invalidate();
+    }
+
+    void ShowValidation(UINT messageId) noexcept
+    {
+        _showingValidationError = true;
+        _validationText         = LoadStringResource(nullptr, messageId);
+        UpdateHintVisuals();
+        _dxHost.Invalidate();
+        MessageBeep(MB_ICONWARNING);
+    }
+
+    void UpdateHintVisuals() noexcept
+    {
+        if (! _hintLabel)
+        {
+            return;
+        }
+
+        _hintLabel->SetText(_showingValidationError ? _validationText : LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_PROMPT_HINT));
+        _hintLabel->SetTextColor(_showingValidationError ? _palette.errorText : _palette.disabledText);
+    }
+
+    void Confirm() noexcept
+    {
+        ClearValidation();
+
+        const std::wstring text = _field ? std::wstring(_field->GetText()) : std::wstring{};
+        uint64_t parsed         = 0;
+        if (! TryParseThroughputText(text, parsed))
+        {
+            ShowValidation(IDS_MSG_FILEOP_SPEED_LIMIT_INVALID);
+            _dxHost.SetFocusControl(_field);
+            return;
+        }
+
+        _result = parsed;
+        _done   = true;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            _hWnd.reset();
+        }
+    }
+
+    void Cancel() noexcept
+    {
+        _result.reset();
+        _done = true;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            _hWnd.reset();
+        }
+    }
+
+#ifdef ENABLE_TESTS
+    LRESULT OnDebugCommand(DebugCommand command, LPARAM payload) noexcept
+    {
+        switch (command)
+        {
+            case DebugCommand::GetSnapshot:
+            {
+                auto* snapshot = reinterpret_cast<FileOperationsSpeedLimitPromptDebugSnapshot*>(payload);
+                if (! snapshot)
+                {
+                    return FALSE;
+                }
+
+                snapshot->usesDxUiHost            = _dxHost.GetRoot() == _root;
+                snapshot->visibleChildWindowCount = 0u;
+                if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+                {
+                    EnumChildWindows(_hWnd.get(),
+                                     [](HWND child, LPARAM cookie) noexcept -> BOOL
+                    {
+                        if (! IsActuallyVisibleChildWindow(child))
+                        {
+                            return TRUE;
+                        }
+
+                        auto* count = reinterpret_cast<size_t*>(cookie);
+                        if (count)
+                        {
+                            *count += 1u;
+                        }
+                        return TRUE;
+                    },
+                                     reinterpret_cast<LPARAM>(&snapshot->visibleChildWindowCount));
+                }
+                snapshot->initialLimitBytesPerSecond = _initialLimitBytesPerSecond;
+                snapshot->text                       = _field ? std::wstring(_field->GetText()) : std::wstring{};
+                snapshot->hintText       = _showingValidationError ? std::wstring{} : LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_PROMPT_HINT);
+                snapshot->validationText = _validationText;
+                return TRUE;
+            }
+            case DebugCommand::SetText:
+            {
+                auto* text = reinterpret_cast<const std::wstring*>(payload);
+                if (! text || ! _field)
+                {
+                    return FALSE;
+                }
+
+                _field->SetTextAndNotify(*text);
+                ClearValidation();
+                _dxHost.SetFocusControl(_field);
+                _dxHost.SyncTextInputBridge(_field);
+                _dxHost.Invalidate();
+                return TRUE;
+            }
+            case DebugCommand::Confirm: Confirm(); return TRUE;
+            case DebugCommand::Cancel: Cancel(); return TRUE;
+        }
+
+        return FALSE;
+    }
+#endif
+
+    LRESULT WindowProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        bool dxHandled   = false;
+        LRESULT dxResult = 0;
+        if (message != WM_CREATE)
+        {
+            dxResult = _dxHost.HandleMessage(hwnd, message, wParam, lParam, dxHandled);
+        }
+        if (dxHandled)
+        {
+            if (message == WM_SIZE || message == WM_DPICHANGED)
+            {
+                Layout();
+            }
+            if (message == WM_NCDESTROY)
+            {
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                _dxHost.Detach();
+                if (_hWnd.get() == hwnd)
+                {
+                    static_cast<void>(_hWnd.release());
+                }
+                if (! _done)
+                {
+                    _result.reset();
+                    _done = true;
+                }
+            }
+            return dxResult;
+        }
+
+        switch (message)
+        {
+            case WM_CREATE: return OnCreate(hwnd) ? 0 : -1;
+            case WM_SIZE: Layout(); return 0;
+            case WM_DPICHANGED:
+            {
+                if (const auto* suggested = reinterpret_cast<const RECT*>(lParam))
+                {
+                    SetWindowPos(hwnd,
+                                 nullptr,
+                                 suggested->left,
+                                 suggested->top,
+                                 suggested->right - suggested->left,
+                                 suggested->bottom - suggested->top,
+                                 SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                ApplyTheme();
+                Layout();
+                return 0;
+            }
+            case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, _theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
+            case WM_ERASEBKGND: return 1;
+            case WM_CLOSE: Cancel(); return 0;
+#ifdef ENABLE_TESTS
+            case kFileOperationsSpeedLimitPromptDebugMessage: return OnDebugCommand(static_cast<DebugCommand>(wParam), lParam);
+#endif
+            case WM_NCDESTROY:
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                _dxHost.Detach();
+                if (_hWnd.get() == hwnd)
+                {
+                    static_cast<void>(_hWnd.release());
+                }
+                if (! _done)
+                {
+                    _result.reset();
+                    _done = true;
+                }
+                return 0;
+        }
+
+        return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
+
+    HWND _ownerWindow = nullptr;
+    AppTheme _theme{};
+    uint64_t _initialLimitBytesPerSecond = 0;
+    wil::unique_hwnd _hWnd;
+    RedSalamander::DxUi::WindowHost _dxHost;
+    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
+    RedSalamander::DxUi::Panel* _root = nullptr;
+    RedSalamander::DxUi::ThemePalette _palette{};
+    RedSalamander::DxUi::Label* _label         = nullptr;
+    RedSalamander::DxUi::TextField* _field     = nullptr;
+    RedSalamander::DxUi::Label* _hintLabel     = nullptr;
+    RedSalamander::DxUi::Button* _okButton     = nullptr;
+    RedSalamander::DxUi::Button* _cancelButton = nullptr;
+    std::wstring _validationText;
+    bool _showingValidationError = false;
+    bool _done                   = false;
+    std::optional<uint64_t> _result;
+};
+
+[[nodiscard]] std::optional<uint64_t> ShowCustomSpeedLimitPrompt(HWND ownerWindow, const AppTheme& theme, uint64_t initialLimitBytesPerSecond) noexcept
+{
+    FileOperationsSpeedLimitPromptWindow window(ownerWindow, theme, initialLimitBytesPerSecond);
+    return window.ShowModal();
 }
 
 bool PointInRectF(const D2D1_RECT_F& rc, float x, float y) noexcept
@@ -476,22 +1058,61 @@ bool IsRateSamplingBlocked(const FileOperationsPopupInternal::RateSnapshot& task
     return task.paused || task.queuePaused || task.waitingInQueue;
 }
 
-void AppendRateSample(FileOperationsPopupInternal::RateHistory& history, float sample, float hue, bool itemRate) noexcept
+[[nodiscard]] double ClampFiniteNonNegative(double value) noexcept
 {
-    history.samples[history.writeIndex] = sample;
+    return std::isfinite(value) && value > 0.0 ? value : 0.0;
+}
+
+[[nodiscard]] double SmoothFileOperationValue(double previousValue, double sampleValue, ULONGLONG elapsedMs, double tauMs, double maxAlpha) noexcept
+{
+    previousValue = ClampFiniteNonNegative(previousValue);
+    sampleValue   = ClampFiniteNonNegative(sampleValue);
+    if (previousValue <= 0.0 || elapsedMs == 0)
+    {
+        return sampleValue;
+    }
+
+    const double elapsed = static_cast<double>(elapsedMs);
+    const double alpha   = std::clamp(1.0 - std::exp(-elapsed / tauMs), 0.02, maxAlpha);
+    return previousValue + (sampleValue - previousValue) * alpha;
+}
+
+[[nodiscard]] double SmoothRateForDisplay(double previousRate, double sampleRate, ULONGLONG elapsedMs) noexcept
+{
+    constexpr double kRateSmoothingTauMs = 1200.0;
+    constexpr double kRateMaxAlpha       = 0.35;
+    return SmoothFileOperationValue(previousRate, sampleRate, elapsedMs, kRateSmoothingTauMs, kRateMaxAlpha);
+}
+
+[[nodiscard]] double SmoothEtaSecondsForDisplay(double previousEtaSeconds, double sampleEtaSeconds, ULONGLONG elapsedMs) noexcept
+{
+    constexpr double kEtaSmoothingTauMs = 1500.0;
+    constexpr double kEtaMaxAlpha       = 0.45;
+    return SmoothFileOperationValue(previousEtaSeconds, sampleEtaSeconds, elapsedMs, kEtaSmoothingTauMs, kEtaMaxAlpha);
+}
+
+[[nodiscard]] double DecayRateForCallbackSilence(double smoothedRate, ULONGLONG silenceMs) noexcept
+{
+    constexpr ULONGLONG kRateSilenceHoldMs = 600ull;
+    constexpr double kRateSilenceDecayMs   = 900.0;
+
+    smoothedRate = ClampFiniteNonNegative(smoothedRate);
+    if (smoothedRate <= 0.0 || silenceMs <= kRateSilenceHoldMs)
+    {
+        return smoothedRate;
+    }
+
+    const double decayMs = static_cast<double>(silenceMs - kRateSilenceHoldMs);
+    return smoothedRate * std::exp(-decayMs / kRateSilenceDecayMs);
+}
+
+void AppendRateSample(FileOperationsPopupInternal::RateHistory& history, double sample, float hue) noexcept
+{
+    const double clampedSample          = ClampFiniteNonNegative(sample);
+    history.samples[history.writeIndex] = static_cast<float>(std::min<double>(clampedSample, std::numeric_limits<float>::max()));
     history.hues[history.writeIndex]    = hue;
     history.writeIndex                  = (history.writeIndex + 1u) % FileOperationsPopupInternal::RateHistory::kMaxSamples;
     history.count                       = std::min(FileOperationsPopupInternal::RateHistory::kMaxSamples, history.count + 1u);
-
-    float& smoothed = itemRate ? history.smoothedItemsPerSec : history.smoothedBytesPerSec;
-    if (smoothed <= 0.0f)
-    {
-        smoothed = sample;
-    }
-    else
-    {
-        smoothed = smoothed * 0.85f + sample * 0.15f;
-    }
 }
 
 void ResetPendingRateSample(FileOperationsPopupInternal::RateHistory& history) noexcept
@@ -501,11 +1122,10 @@ void ResetPendingRateSample(FileOperationsPopupInternal::RateHistory& history) n
     history.pendingHue              = -1.0f;
 }
 
-void AppendResampledRateSamples(FileOperationsPopupInternal::RateHistory& history, ULONGLONG elapsedMs, float sample, float hue, bool itemRate) noexcept
+void AppendResampledRateSamples(FileOperationsPopupInternal::RateHistory& history, ULONGLONG elapsedMs, double sample, float hue) noexcept
 {
-    const ULONGLONG maxResampleMs =
-        static_cast<ULONGLONG>(FileOperationsPopupInternal::RateHistory::kMaxSamples) * kRateSampleBucketMs;
-    ULONGLONG remainingMs = (std::min)(elapsedMs, maxResampleMs);
+    const ULONGLONG maxResampleMs = static_cast<ULONGLONG>(FileOperationsPopupInternal::RateHistory::kMaxSamples) * kRateSampleBucketMs;
+    ULONGLONG remainingMs         = (std::min)(elapsedMs, maxResampleMs);
     while (remainingMs > 0)
     {
         const ULONGLONG bucketRemainingMs = kRateSampleBucketMs - history.pendingBucketMs;
@@ -524,9 +1144,9 @@ void AppendResampledRateSamples(FileOperationsPopupInternal::RateHistory& histor
             continue;
         }
 
-        const float bucketHue    = history.pendingHue >= 0.0f ? history.pendingHue : hue;
-        const float bucketSample = static_cast<float>(history.pendingWeightedSampleMs / static_cast<double>(kRateSampleBucketMs));
-        AppendRateSample(history, bucketSample, bucketHue, itemRate);
+        const float bucketHue     = history.pendingHue >= 0.0f ? history.pendingHue : hue;
+        const double bucketSample = history.pendingWeightedSampleMs / static_cast<double>(kRateSampleBucketMs);
+        AppendRateSample(history, bucketSample, bucketHue);
         ResetPendingRateSample(history);
     }
 }
@@ -643,6 +1263,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::CleanupCollapsedTask
 void FileOperationsPopupInternal::FileOperationsPopupState::DiscardDeviceResources() noexcept
 {
     _target.reset();
+    _captionGlyphTarget.reset();
 
     _bgBrush.reset();
     _textBrush.reset();
@@ -666,6 +1287,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DiscardDeviceResourc
     _buttonBgBrush.reset();
     _buttonHoverBrush.reset();
     _buttonPressedBrush.reset();
+    _captionGlyphBrush.reset();
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::EnsureFactories() noexcept
@@ -701,103 +1323,62 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureTextFormats() 
         return;
     }
 
-    const wchar_t* fontName = L"Segoe UI";
-
     if (! _headerFormat)
     {
-        _dwriteFactory->CreateTextFormat(fontName,
-                                         nullptr,
-                                         DWRITE_FONT_WEIGHT_SEMI_BOLD,
-                                         DWRITE_FONT_STYLE_NORMAL,
-                                         DWRITE_FONT_STRETCH_NORMAL,
-                                         DipsToPixels(12.0f, _dpi),
-                                         L"",
-                                         _headerFormat.put());
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(),
+            RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(12.0f, _dpi), DWRITE_FONT_WEIGHT_SEMI_BOLD),
+            _headerFormat.put(),
+            L""));
     }
 
     if (! _bodyFormat)
     {
-        _dwriteFactory->CreateTextFormat(fontName,
-                                         nullptr,
-                                         DWRITE_FONT_WEIGHT_NORMAL,
-                                         DWRITE_FONT_STYLE_NORMAL,
-                                         DWRITE_FONT_STRETCH_NORMAL,
-                                         DipsToPixels(12.0f, _dpi),
-                                         L"",
-                                         _bodyFormat.put());
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(12.0f, _dpi)), _bodyFormat.put(), L""));
     }
 
     if (! _smallFormat)
     {
-        _dwriteFactory->CreateTextFormat(fontName,
-                                         nullptr,
-                                         DWRITE_FONT_WEIGHT_NORMAL,
-                                         DWRITE_FONT_STYLE_NORMAL,
-                                         DWRITE_FONT_STRETCH_NORMAL,
-                                         DipsToPixels(11.0f, _dpi),
-                                         L"",
-                                         _smallFormat.put());
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(11.0f, _dpi)), _smallFormat.put(), L""));
     }
 
     if (! _buttonFormat)
     {
-        _dwriteFactory->CreateTextFormat(fontName,
-                                         nullptr,
-                                         DWRITE_FONT_WEIGHT_NORMAL,
-                                         DWRITE_FONT_STYLE_NORMAL,
-                                         DWRITE_FONT_STRETCH_NORMAL,
-                                         DipsToPixels(12.0f, _dpi),
-                                         L"",
-                                         _buttonFormat.put());
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(12.0f, _dpi)), _buttonFormat.put(), L""));
     }
 
     if (! _buttonSmallFormat)
     {
-        _dwriteFactory->CreateTextFormat(fontName,
-                                         nullptr,
-                                         DWRITE_FONT_WEIGHT_NORMAL,
-                                         DWRITE_FONT_STYLE_NORMAL,
-                                         DWRITE_FONT_STRETCH_NORMAL,
-                                         DipsToPixels(11.0f, _dpi),
-                                         L"",
-                                         _buttonSmallFormat.put());
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(11.0f, _dpi)), _buttonSmallFormat.put(), L""));
     }
 
     if (! _graphOverlayFormat)
     {
-        _dwriteFactory->CreateTextFormat(fontName,
-                                         nullptr,
-                                         DWRITE_FONT_WEIGHT_SEMI_BOLD,
-                                         DWRITE_FONT_STYLE_NORMAL,
-                                         DWRITE_FONT_STRETCH_NORMAL,
-                                         DipsToPixels(14.0f, _dpi),
-                                         L"",
-                                         _graphOverlayFormat.put());
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(),
+            RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(14.0f, _dpi), DWRITE_FONT_WEIGHT_SEMI_BOLD),
+            _graphOverlayFormat.put(),
+            L""));
     }
 
     if (! _statusIconFallbackFormat)
     {
-        _dwriteFactory->CreateTextFormat(fontName,
-                                         nullptr,
-                                         DWRITE_FONT_WEIGHT_SEMI_BOLD,
-                                         DWRITE_FONT_STYLE_NORMAL,
-                                         DWRITE_FONT_STRETCH_NORMAL,
-                                         DipsToPixels(14.0f, _dpi),
-                                         L"",
-                                         _statusIconFallbackFormat.put());
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(),
+            RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(14.0f, _dpi), DWRITE_FONT_WEIGHT_SEMI_BOLD),
+            _statusIconFallbackFormat.put(),
+            L""));
     }
 
     if (! _statusIconFormat)
     {
         // Optional: Segoe Fluent Icons. If missing, fallback format draws standard Unicode glyphs.
-        const HRESULT hr = _dwriteFactory->CreateTextFormat(FluentIcons::kFontFamily.data(),
-                                                            nullptr,
-                                                            DWRITE_FONT_WEIGHT_NORMAL,
-                                                            DWRITE_FONT_STYLE_NORMAL,
-                                                            DWRITE_FONT_STRETCH_NORMAL,
-                                                            DipsToPixels(14.0f, _dpi),
-                                                            L"",
-                                                            _statusIconFormat.put());
+        const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiIconSpec(DipsToPixels(14.0f, _dpi)), _statusIconFormat.put(), L"");
         if (FAILED(hr))
         {
             _statusIconFormat.reset();
@@ -837,6 +1418,55 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureTextFormats() 
     configureButtonFormat(_statusIconFallbackFormat.get());
 }
 
+void FileOperationsPopupInternal::FileOperationsPopupState::EnsureCaptionGlyphTextFormats(UINT dpi) noexcept
+{
+    if (! _dwriteFactory)
+    {
+        return;
+    }
+
+    if (_captionGlyphDpi != dpi)
+    {
+        _captionGlyphDpi = dpi;
+        _captionGlyphFormat.reset();
+        _captionGlyphFallbackFormat.reset();
+    }
+
+    if (! _captionGlyphFallbackFormat)
+    {
+        const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(20.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _captionGlyphFallbackFormat.put(), L"");
+        if (FAILED(hr))
+        {
+            _captionGlyphFallbackFormat.reset();
+        }
+    }
+
+    if (! _captionGlyphFormat)
+    {
+        const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiIconSpec(20.0f), _captionGlyphFormat.put(), L"");
+        if (FAILED(hr))
+        {
+            _captionGlyphFormat.reset();
+        }
+    }
+
+    auto configure = [](IDWriteTextFormat* format) noexcept
+    {
+        if (! format)
+        {
+            return;
+        }
+        format->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+        format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        format->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+    };
+
+    configure(_captionGlyphFormat.get());
+    configure(_captionGlyphFallbackFormat.get());
+}
+
 void FileOperationsPopupInternal::FileOperationsPopupState::EnsureTarget(HWND hwnd) noexcept
 {
     EnsureFactories();
@@ -873,6 +1503,43 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureTarget(HWND hw
 
     rt->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
     _target = std::move(rt);
+}
+
+bool FileOperationsPopupInternal::FileOperationsPopupState::EnsureCaptionGlyphTarget(UINT dpi) noexcept
+{
+    EnsureFactories();
+    EnsureCaptionGlyphTextFormats(dpi);
+    if (! _d2dFactory)
+    {
+        return false;
+    }
+
+    if (! _captionGlyphTarget)
+    {
+        const D2D1_RENDER_TARGET_PROPERTIES props = D2D1::RenderTargetProperties();
+        const HRESULT hr                          = _d2dFactory->CreateDCRenderTarget(&props, _captionGlyphTarget.addressof());
+        if (FAILED(hr) || ! _captionGlyphTarget)
+        {
+            _captionGlyphTarget.reset();
+            return false;
+        }
+
+        _captionGlyphTarget->SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_CLEARTYPE);
+    }
+
+    _captionGlyphTarget->SetDpi(static_cast<float>(dpi), static_cast<float>(dpi));
+
+    if (! _captionGlyphBrush)
+    {
+        const HRESULT hr = _captionGlyphTarget->CreateSolidColorBrush(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f), _captionGlyphBrush.addressof());
+        if (FAILED(hr))
+        {
+            _captionGlyphBrush.reset();
+            return false;
+        }
+    }
+
+    return _captionGlyphTarget && _captionGlyphBrush;
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noexcept
@@ -1168,21 +1835,26 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         activeTaskIds[snap.taskId] = true;
         snap.operation             = task->GetOperation();
 
+        snap.totalItems         = task->_publishedProgressTotalItems.load(std::memory_order_acquire);
+        snap.completedItems     = task->_publishedProgressCompletedItems.load(std::memory_order_acquire);
+        snap.totalBytes         = task->_publishedProgressTotalBytes.load(std::memory_order_acquire);
+        snap.completedBytes     = task->_publishedProgressCompletedBytes.load(std::memory_order_acquire);
+        snap.itemTotalBytes     = task->_publishedProgressItemTotalBytes.load(std::memory_order_acquire);
+        snap.itemCompletedBytes = task->_publishedProgressItemCompletedBytes.load(std::memory_order_acquire);
+        snap.completedFiles     = task->_publishedCompletedTopLevelFiles.load(std::memory_order_acquire);
+        snap.completedFolders   = task->_publishedCompletedTopLevelFolders.load(std::memory_order_acquire);
+
         {
-            std::scoped_lock lock(task->_progressMutex);
-            snap.totalItems               = task->_progressTotalItems;
-            snap.completedItems           = task->_progressCompletedItems;
-            snap.totalBytes               = task->_progressTotalBytes;
-            snap.completedBytes           = task->_progressCompletedBytes;
-            snap.itemTotalBytes           = task->_progressItemTotalBytes;
-            snap.itemCompletedBytes       = task->_progressItemCompletedBytes;
-            snap.completedFiles           = task->_completedTopLevelFiles;
-            snap.completedFolders         = task->_completedTopLevelFolders;
-            snap.currentSourcePath        = task->_progressSourcePath;
-            snap.currentDestinationPath   = task->_progressDestinationPath;
+            std::scoped_lock lock(task->_progressPathMutex);
+            snap.currentSourcePath = ! task->_lastProgressCallbackSourcePath.empty() ? task->_lastProgressCallbackSourcePath : task->_progressSourcePath;
+            snap.currentDestinationPath =
+                ! task->_lastProgressCallbackDestinationPath.empty() ? task->_lastProgressCallbackDestinationPath : task->_progressDestinationPath;
             snap.hasProgressCallbacks     = task->_lastProgressCallbackTick != 0;
             snap.lastProgressCallbackTick = task->_lastProgressCallbackTick;
+        }
 
+        {
+            std::scoped_lock lock(task->_inFlightFilesMutex);
             snap.inFlightFileCount = std::min(task->_inFlightFileCount, snap.inFlightFiles.size());
             for (size_t i = 0; i < snap.inFlightFileCount; ++i)
             {
@@ -1238,8 +1910,13 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.destinationPane    = task->GetDestinationPane();
         snap.operationStartTick = task->_operationStartTick.load(std::memory_order_acquire);
 
-        snap.desiredSpeedLimitBytesPerSecond   = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
-        snap.effectiveSpeedLimitBytesPerSecond = task->_effectiveSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+        snap.desiredSpeedLimitBytesPerSecond       = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+        snap.effectiveSpeedLimitBytesPerSecond     = task->_effectiveSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+        snap.autoConcurrencyUsed                   = task->_autoConcurrencyUsed.load(std::memory_order_acquire);
+        snap.autoConcurrencyStorageKind            = task->_autoConcurrencyStorageKind.load(std::memory_order_acquire);
+        snap.autoConcurrencyDestinationStorageKind = task->_autoConcurrencyDestinationStorageKind.load(std::memory_order_acquire);
+        snap.autoTunedConcurrency                  = task->_autoTunedConcurrency.load(std::memory_order_acquire);
+        snap.effectiveConcurrencyBudget            = task->_effectiveConcurrencyBudget.load(std::memory_order_acquire);
 
         // Pre-calculation state
         snap.preCalcInProgress     = task->_preCalcInProgress.load(std::memory_order_acquire);
@@ -1285,27 +1962,32 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         }
 
         TaskSnapshot snap{};
-        snap.taskId                   = completed.taskId;
-        snap.operation                = completed.operation;
-        snap.totalItems               = completed.totalItems;
-        snap.completedItems           = completed.completedItems;
-        snap.totalBytes               = completed.totalBytes;
-        snap.completedBytes           = completed.completedBytes;
-        snap.completedFiles           = completed.completedFiles;
-        snap.completedFolders         = completed.completedFolders;
-        snap.currentSourcePath        = completed.sourcePath;
-        snap.currentDestinationPath   = completed.destinationPath;
-        snap.destinationFolder        = completed.destinationFolder;
-        snap.destinationPane          = completed.destinationPane;
-        snap.started                  = true;
-        snap.finished                 = true;
-        snap.resultHr                 = completed.resultHr;
-        snap.warningCount             = completed.warningCount;
-        snap.errorCount               = completed.errorCount;
-        snap.lastDiagnosticMessage    = completed.lastDiagnosticMessage;
-        snap.preCalcSkipped           = completed.preCalcSkipped;
-        snap.hasProgressCallbacks     = completed.lastProgressCallbackTick != 0;
-        snap.lastProgressCallbackTick = completed.lastProgressCallbackTick;
+        snap.taskId                                = completed.taskId;
+        snap.operation                             = completed.operation;
+        snap.totalItems                            = completed.totalItems;
+        snap.completedItems                        = completed.completedItems;
+        snap.totalBytes                            = completed.totalBytes;
+        snap.completedBytes                        = completed.completedBytes;
+        snap.completedFiles                        = completed.completedFiles;
+        snap.completedFolders                      = completed.completedFolders;
+        snap.currentSourcePath                     = completed.sourcePath;
+        snap.currentDestinationPath                = completed.destinationPath;
+        snap.destinationFolder                     = completed.destinationFolder;
+        snap.destinationPane                       = completed.destinationPane;
+        snap.started                               = true;
+        snap.finished                              = true;
+        snap.autoConcurrencyUsed                   = completed.autoConcurrencyUsed;
+        snap.autoConcurrencyStorageKind            = completed.autoConcurrencyStorageKind;
+        snap.autoConcurrencyDestinationStorageKind = completed.autoConcurrencyDestinationStorageKind;
+        snap.autoTunedConcurrency                  = completed.autoTunedConcurrency;
+        snap.effectiveConcurrencyBudget            = completed.effectiveConcurrencyBudget;
+        snap.resultHr                              = completed.resultHr;
+        snap.warningCount                          = completed.warningCount;
+        snap.errorCount                            = completed.errorCount;
+        snap.lastDiagnosticMessage                 = completed.lastDiagnosticMessage;
+        snap.preCalcSkipped                        = completed.preCalcSkipped;
+        snap.hasProgressCallbacks                  = completed.lastProgressCallbackTick != 0;
+        snap.lastProgressCallbackTick              = completed.lastProgressCallbackTick;
 
         if (snap.totalItems > 0)
         {
@@ -1350,11 +2032,13 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.operation             = task->GetOperation();
         activeTaskIds[snap.taskId] = true;
 
+        snap.completedItems = task->_publishedProgressCompletedItems.load(std::memory_order_acquire);
+        snap.totalBytes     = task->_publishedProgressTotalBytes.load(std::memory_order_acquire);
+        snap.completedBytes = task->_publishedProgressCompletedBytes.load(std::memory_order_acquire);
+
         {
-            std::scoped_lock lock(task->_progressMutex);
-            snap.completedItems           = task->_progressCompletedItems;
-            snap.completedBytes           = task->_progressCompletedBytes;
-            snap.currentSourcePath        = task->_progressSourcePath;
+            std::scoped_lock lock(task->_progressPathMutex);
+            snap.currentSourcePath        = ! task->_lastProgressCallbackSourcePath.empty() ? task->_lastProgressCallbackSourcePath : task->_progressSourcePath;
             snap.lastProgressCallbackTick = task->_lastProgressCallbackTick;
         }
 
@@ -1379,10 +2063,12 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.taskId                   = completed.taskId;
         snap.operation                = completed.operation;
         snap.completedItems           = completed.completedItems;
+        snap.totalBytes               = completed.totalBytes;
         snap.completedBytes           = completed.completedBytes;
         snap.currentSourcePath        = completed.sourcePath;
         snap.lastProgressCallbackTick = completed.lastProgressCallbackTick;
         snap.started                  = true;
+        snap.finished                 = true;
 
         result.push_back(std::move(snap));
     }
@@ -1392,10 +2078,18 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 
 void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexcept
 {
+    const bool capturePerf                   = Debug::Perf::IsCaptureEnabled();
+    const uint64_t perfStartUs               = capturePerf ? PerfNowUs() : 0u;
+    const ULONGLONG nowTick                  = GetTickCount64();
     const std::vector<RateSnapshot> snapshot = BuildRateSnapshot();
 
     std::unordered_map<uint64_t, bool> seen;
     seen.reserve(snapshot.size());
+
+    uint64_t maxCallbackSilenceMs = 0;
+    uint64_t maxDisplayGapMs      = 0;
+    uint64_t silentTaskCount      = 0;
+    uint64_t updatedTaskCount     = 0;
 
     for (const RateSnapshot& task : snapshot)
     {
@@ -1403,6 +2097,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
 
         RateHistory& history = _rates[task.taskId];
         const bool blocked   = IsRateSamplingBlocked(task);
+        const bool itemRate  = task.operation == FILESYSTEM_DELETE;
 
         if (! history.initialized)
         {
@@ -1410,6 +2105,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
             history.lastBytes                = task.completedBytes;
             history.lastItems                = task.completedItems;
             history.lastProgressCallbackTick = task.lastProgressCallbackTick;
+            history.lastDisplaySampleTick    = nowTick;
             history.lastStateChangeTick      = task.progressStateChangeTick;
             continue;
         }
@@ -1419,8 +2115,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
 
         if (task.progressStateChangeTick > history.lastStateChangeTick)
         {
-            history.lastStateChangeTick = task.progressStateChangeTick;
-            history.resumeTick          = blocked ? 0 : task.progressStateChangeTick;
+            history.lastStateChangeTick   = task.progressStateChangeTick;
+            history.resumeTick            = blocked ? 0 : task.progressStateChangeTick;
+            history.lastDisplaySampleTick = nowTick;
             ResetPendingRateSample(history);
 
             if (blocked)
@@ -1428,6 +2125,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
                 history.lastBytes                = task.completedBytes;
                 history.lastItems                = task.completedItems;
                 history.lastProgressCallbackTick = task.lastProgressCallbackTick;
+                history.hasSmoothedEta           = false;
                 continue;
             }
         }
@@ -1438,53 +2136,114 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
             history.lastBytes                = task.completedBytes;
             history.lastItems                = task.completedItems;
             history.lastProgressCallbackTick = task.lastProgressCallbackTick;
+            history.lastDisplaySampleTick    = nowTick;
+            history.hasSmoothedEta           = false;
             continue;
         }
 
-        if (task.lastProgressCallbackTick == 0 || task.lastProgressCallbackTick <= history.lastProgressCallbackTick)
-        {
-            continue;
-        }
+        const bool hasNewProgressInput = task.lastProgressCallbackTick != 0 && task.lastProgressCallbackTick > history.lastProgressCallbackTick;
+        const float hue                = RateSampleHue(task.currentSourcePath);
+        ULONGLONG smoothingElapsedMs   = kFileOperationsPopupTimerIntervalMs;
 
-        ULONGLONG baselineTick = history.lastProgressCallbackTick;
-        if (baselineTick == 0 || baselineTick > task.lastProgressCallbackTick)
+        if (hasNewProgressInput)
         {
-            baselineTick = task.lastProgressCallbackTick;
-        }
-        if (history.resumeTick > baselineTick && history.resumeTick <= task.lastProgressCallbackTick)
-        {
-            baselineTick = history.resumeTick;
-        }
-
-        const ULONGLONG elapsedMs = std::max<ULONGLONG>(1ull, task.lastProgressCallbackTick - baselineTick);
-        const double dtSec        = static_cast<double>(elapsedMs) / 1000.0;
-        const float hue           = RateSampleHue(task.currentSourcePath);
-
-        if (task.operation == FILESYSTEM_DELETE)
-        {
-            const unsigned long deltaItems = task.completedItems - history.lastItems;
-            if (deltaItems > 0 && dtSec > 0.0)
+            ULONGLONG baselineTick = history.lastProgressCallbackTick;
+            if (baselineTick == 0 || baselineTick > task.lastProgressCallbackTick)
             {
-                const float instItemsPerSec = static_cast<float>(static_cast<double>(deltaItems) / dtSec);
-                AppendResampledRateSamples(history, elapsedMs, instItemsPerSec, hue, true);
+                baselineTick = task.lastProgressCallbackTick;
+            }
+            if (history.resumeTick > baselineTick && history.resumeTick <= task.lastProgressCallbackTick)
+            {
+                baselineTick = history.resumeTick;
             }
 
-            history.lastItems = task.completedItems;
-        }
-        else
-        {
-            const uint64_t deltaBytes = task.completedBytes - history.lastBytes;
-            if (deltaBytes > 0 && dtSec > 0.0)
+            const ULONGLONG elapsedMs = std::max<ULONGLONG>(1ull, task.lastProgressCallbackTick - baselineTick);
+            const double dtSec        = static_cast<double>(elapsedMs) / 1000.0;
+            smoothingElapsedMs        = elapsedMs;
+
+            if (itemRate)
             {
-                const float instBytesPerSec = static_cast<float>(static_cast<double>(deltaBytes) / dtSec);
-                AppendResampledRateSamples(history, elapsedMs, instBytesPerSec, hue, false);
+                const unsigned long deltaItems = task.completedItems - history.lastItems;
+                if (deltaItems > 0 && dtSec > 0.0)
+                {
+                    const double instItemsPerSec = static_cast<double>(deltaItems) / dtSec;
+                    history.smoothedItemsPerSec  = SmoothRateForDisplay(history.smoothedItemsPerSec, instItemsPerSec, elapsedMs);
+                    history.displayedItemsPerSec = history.smoothedItemsPerSec;
+                    ++updatedTaskCount;
+                }
+
+                history.lastItems = task.completedItems;
+            }
+            else
+            {
+                const uint64_t deltaBytes = task.completedBytes - history.lastBytes;
+                if (deltaBytes > 0 && dtSec > 0.0)
+                {
+                    const double instBytesPerSec = static_cast<double>(deltaBytes) / dtSec;
+                    history.smoothedBytesPerSec  = SmoothRateForDisplay(history.smoothedBytesPerSec, instBytesPerSec, elapsedMs);
+                    history.displayedBytesPerSec = history.smoothedBytesPerSec;
+                    ++updatedTaskCount;
+                }
+
+                history.lastBytes = task.completedBytes;
             }
 
-            history.lastBytes = task.completedBytes;
+            history.lastProgressCallbackTick = task.lastProgressCallbackTick;
+            history.resumeTick               = 0;
+        }
+        else if (! task.finished && task.lastProgressCallbackTick != 0 && nowTick >= task.lastProgressCallbackTick)
+        {
+            const ULONGLONG silenceMs = nowTick - task.lastProgressCallbackTick;
+            maxCallbackSilenceMs      = std::max<uint64_t>(maxCallbackSilenceMs, silenceMs);
+            if (silenceMs > 0)
+            {
+                ++silentTaskCount;
+            }
+
+            if (itemRate)
+            {
+                history.displayedItemsPerSec = DecayRateForCallbackSilence(history.smoothedItemsPerSec, silenceMs);
+            }
+            else
+            {
+                history.displayedBytesPerSec = DecayRateForCallbackSilence(history.smoothedBytesPerSec, silenceMs);
+            }
         }
 
-        history.lastProgressCallbackTick = task.lastProgressCallbackTick;
-        history.resumeTick               = 0;
+        if (! itemRate && task.totalBytes > 0 && task.completedBytes <= task.totalBytes && history.displayedBytesPerSec > 0.0)
+        {
+            const uint64_t remainingBytes = task.totalBytes - task.completedBytes;
+            const double rawEtaSeconds    = static_cast<double>(remainingBytes) / history.displayedBytesPerSec;
+            history.smoothedEtaSeconds =
+                history.hasSmoothedEta ? SmoothEtaSecondsForDisplay(history.smoothedEtaSeconds, rawEtaSeconds, smoothingElapsedMs) : rawEtaSeconds;
+            history.hasSmoothedEta = true;
+        }
+        else if (! itemRate)
+        {
+            history.hasSmoothedEta = false;
+        }
+
+        if (! task.finished)
+        {
+            if (history.lastDisplaySampleTick == 0 || history.lastDisplaySampleTick > nowTick)
+            {
+                history.lastDisplaySampleTick = nowTick;
+            }
+            else
+            {
+                const ULONGLONG displayElapsedMs = nowTick - history.lastDisplaySampleTick;
+                if (displayElapsedMs > 0)
+                {
+                    maxDisplayGapMs            = std::max<uint64_t>(maxDisplayGapMs, displayElapsedMs);
+                    const double displaySample = itemRate ? history.displayedItemsPerSec : history.displayedBytesPerSec;
+                    if (displaySample > 0.0 || history.count > 0)
+                    {
+                        AppendResampledRateSamples(history, displayElapsedMs, displaySample, hue);
+                    }
+                    history.lastDisplaySampleTick = nowTick;
+                }
+            }
+        }
     }
 
     for (auto it = _rates.begin(); it != _rates.end();)
@@ -1496,6 +2255,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
             continue;
         }
         ++it;
+    }
+
+    if (capturePerf)
+    {
+        const std::wstring detail = std::format(L"tasks={} updated={} silent={} rates={}", snapshot.size(), updatedTaskCount, silentTaskCount, _rates.size());
+        Debug::Perf::Emit(L"FileOps.Popup.Rate.UpdateUs", detail, PerfElapsedUs(perfStartUs), snapshot.size(), _rates.size(), S_OK);
+        Debug::Perf::Emit(L"FileOps.Popup.Rate.MaxCallbackSilenceMs", detail, maxCallbackSilenceMs, silentTaskCount, snapshot.size(), S_OK);
+        Debug::Perf::Emit(L"FileOps.Popup.Rate.MaxDisplayGapMs", detail, maxDisplayGapMs, snapshot.size(), _rates.size(), S_OK);
     }
 }
 
@@ -2166,7 +2933,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
         return;
     }
 
+    const bool capturePerf                   = Debug::Perf::IsCaptureEnabled();
+    const uint64_t renderStartedUs           = capturePerf ? PerfNowUs() : 0u;
+    const uint64_t snapshotStartedUs         = capturePerf ? PerfNowUs() : 0u;
     const std::vector<TaskSnapshot> snapshot = BuildSnapshot();
+    const uint64_t snapshotUs                = capturePerf ? PerfElapsedUs(snapshotStartedUs) : 0u;
     CleanupCollapsedTasks(snapshot);
     UpdateCaptionStatus(hwnd, snapshot);
 
@@ -2184,6 +2955,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
     const float baseLineH      = DipsToPixels(18.0f, _dpi);
     const float fromToGapY     = DipsToPixels(4.0f, _dpi);
 
+    const uint64_t cardLayoutStartedUs = capturePerf ? PerfNowUs() : 0u;
     std::vector<float> cardHeights;
     cardHeights.reserve(snapshot.size());
     for (const TaskSnapshot& task : snapshot)
@@ -2255,6 +3027,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
         }
         cardHeights.push_back(h);
     }
+    const uint64_t cardLayoutUs = capturePerf ? PerfElapsedUs(cardLayoutStartedUs) : 0u;
 
     const size_t taskCount = snapshot.size();
     if (taskCount == 0)
@@ -2272,9 +3045,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
     }
 
     // Auto-resize window to fit content (limited to screen height)
+    const uint64_t autoResizeStartedUs = capturePerf ? PerfNowUs() : 0u;
     AutoResizeWindow(hwnd, _contentHeight, taskCount);
+    const uint64_t autoResizeUs = capturePerf ? PerfElapsedUs(autoResizeStartedUs) : 0u;
 
-    bool scrollReady = false;
+    const uint64_t scrollLayoutStartedUs = capturePerf ? PerfNowUs() : 0u;
+    bool scrollReady                     = false;
     for (int pass = 0; pass < 2; ++pass)
     {
         RECT clientRc{};
@@ -2330,10 +3106,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
         UpdateScrollBar(hwnd, viewH, _contentHeight);
         _scrollY = static_cast<float>(_scrollPos);
     }
+    const uint64_t scrollLayoutUs = capturePerf ? PerfElapsedUs(scrollLayoutStartedUs) : 0u;
 
     _buttons.clear();
 
-    HRESULT hrEndDraw = S_OK;
+    HRESULT hrEndDraw            = S_OK;
+    const uint64_t drawStartedUs = capturePerf ? PerfNowUs() : 0u;
     {
         _target->BeginDraw();
         auto endDraw = wil::scope_exit([&] { hrEndDraw = _target->EndDraw(); });
@@ -2362,9 +3140,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
         const float footerGap  = DipsToPixels(10.0f, _dpi);
         PopupButton autoDismissBtn{};
         autoDismissBtn.bounds   = D2D1::RectF(_footerQueueModeRect.right + footerGap,
-                                            _footerQueueModeRect.top,
-                                            _footerQueueModeRect.right + footerGap + (footerBtnW * 1.7f),
-                                            _footerQueueModeRect.bottom);
+                                              _footerQueueModeRect.top,
+                                              _footerQueueModeRect.right + footerGap + (footerBtnW * 1.7f),
+                                              _footerQueueModeRect.bottom);
         autoDismissBtn.hit.kind = PopupHitTest::Kind::FooterAutoDismissSuccess;
         _buttons.push_back(autoDismissBtn);
 
@@ -2514,14 +3292,15 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             default: break;
                         }
 
-                        const bool useFluentFormat = _statusIconFormat != nullptr && fluentGlyph != 0;
-                        const wchar_t glyph        = useFluentFormat ? fluentGlyph : fallback;
-                        IDWriteTextFormat* format  = useFluentFormat ? _statusIconFormat.get() : _statusIconFallbackFormat.get();
+                        const bool useFluentFormat =
+                            _statusIconFormat != nullptr && DirectWriteFormatHasGlyph(_dwriteFactory.get(), _statusIconFormat.get(), fluentGlyph);
+                        const wchar_t glyph       = useFluentFormat ? fluentGlyph : fallback;
+                        IDWriteTextFormat* format = useFluentFormat ? _statusIconFormat.get() : _statusIconFallbackFormat.get();
 
                         if (format && brush && glyph != 0 && iconRc.right > iconRc.left)
                         {
                             const wchar_t text[2]{glyph, 0};
-                            _target->DrawTextW(text, 1u, format, iconRc, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            _target->DrawText(text, 1u, format, iconRc, brush, D2D1_DRAW_TEXT_OPTIONS_CLIP);
                             headerLeft = std::min(headerRight, iconRc.right + iconGap);
                         }
                     }
@@ -2907,14 +3686,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             {
                                 hasTotal = info.contentTotalBytes > 0 && info.contentCompletedBytes <= info.contentTotalBytes;
                                 frac     = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.contentCompletedBytes) /
-                                                                             static_cast<double>(info.contentTotalBytes)))
+                                                                                 static_cast<double>(info.contentTotalBytes)))
                                                     : 0.0f;
                             }
                             else if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase)
                             {
                                 hasTotal = info.changeCasePlannedRenames > 0 && info.changeCaseCompletedRenames <= info.changeCasePlannedRenames;
                                 frac     = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.changeCaseCompletedRenames) /
-                                                                             static_cast<double>(info.changeCasePlannedRenames)))
+                                                                                 static_cast<double>(info.changeCasePlannedRenames)))
                                                     : 0.0f;
                             }
 
@@ -3366,7 +4145,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     }
                     else
                     {
-                        const double itemsPerSec     = history ? static_cast<double>(history->smoothedItemsPerSec) : 0.0;
+                        const double itemsPerSec     = history ? history->displayedItemsPerSec : 0.0;
                         const std::wstring speedText = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_ITEMS, itemsPerSec);
                         const D2D1_RECT_F speedRc    = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
                         _target->DrawTextW(speedText.data(), static_cast<UINT32>(speedText.size()), _bodyFormat.get(), speedRc, _subTextBrush.get());
@@ -3416,7 +4195,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
                     }
 
-                    const double bytesPerSec          = history ? static_cast<double>(history->smoothedBytesPerSec) : 0.0;
+                    const double bytesPerSec          = history ? history->displayedBytesPerSec : 0.0;
                     const uint64_t bytesPerSecRounded = bytesPerSec > 0.0 ? static_cast<uint64_t>(bytesPerSec + 0.5) : 0ull;
                     const std::wstring bytesText      = FormatBytesCompact(bytesPerSecRounded);
                     const std::wstring speedText      = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_BYTES, bytesText);
@@ -3435,16 +4214,25 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         textY += lineH;
                     }
 
-                    if (task.totalBytes > 0 && bytesPerSec > 0.0 && task.completedBytes <= task.totalBytes)
+                    if (task.totalBytes > 0 && history && history->hasSmoothedEta && history->smoothedEtaSeconds > 0.0 &&
+                        task.completedBytes <= task.totalBytes)
                     {
-                        const uint64_t remainingBytes = task.totalBytes - task.completedBytes;
-                        const double secondsD         = static_cast<double>(remainingBytes) / bytesPerSec;
-                        const uint64_t seconds        = secondsD > 0.0 ? static_cast<uint64_t>(std::ceil(secondsD)) : 0u;
-                        const std::wstring etaText    = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, FormatDurationHms(seconds));
-                        const D2D1_RECT_F etaRc       = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
+                        const uint64_t seconds     = static_cast<uint64_t>(std::ceil(history->smoothedEtaSeconds));
+                        const std::wstring etaText = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ETA, FormatDurationHms(seconds));
+                        const D2D1_RECT_F etaRc    = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
                         _target->DrawTextW(etaText.data(), static_cast<UINT32>(etaText.size()), _bodyFormat.get(), etaRc, _subTextBrush.get());
                         textY += lineH;
                     }
+                }
+
+                if (task.autoConcurrencyUsed && task.autoTunedConcurrency > 0u)
+                {
+                    const std::wstring autoConcurrencyText =
+                        FormatStringResource(nullptr, IDS_FMT_FILEOPS_AUTO_CONCURRENCY, task.autoTunedConcurrency, task.effectiveConcurrencyBudget);
+                    const D2D1_RECT_F autoConcurrencyRc = D2D1::RectF(textX, textY, textX + textMaxW, textY + lineH);
+                    _target->DrawTextW(
+                        autoConcurrencyText.data(), static_cast<UINT32>(autoConcurrencyText.size()), _bodyFormat.get(), autoConcurrencyRc, _subTextBrush.get());
+                    textY += lineH;
                 }
 
                 const float labelWDesired   = DipsToPixels(56.0f, _dpi);
@@ -3566,9 +4354,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             _target->FillRoundedRectangle(D2D1::RoundedRect(miniBarRc, radiusTrack, radiusTrack), _progressBgBrush.get());
 
                             const bool hasTotal = fileTotalBytes > 0;
-                            const float frac    = hasTotal && fileCompletedBytes <= fileTotalBytes
-                                                      ? Clamp01(static_cast<float>(static_cast<double>(fileCompletedBytes) / static_cast<double>(fileTotalBytes)))
-                                                      : 0.0f;
+                            const float frac = hasTotal && fileCompletedBytes <= fileTotalBytes
+                                                   ? Clamp01(static_cast<float>(static_cast<double>(fileCompletedBytes) / static_cast<double>(fileTotalBytes)))
+                                                   : 0.0f;
 
                             if (theme.menu.rainbowMode)
                             {
@@ -4178,6 +4966,27 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
 
         _target->PopAxisAlignedClip();
     }
+    const uint64_t drawUs = capturePerf ? PerfElapsedUs(drawStartedUs) : 0u;
+
+    if (capturePerf)
+    {
+        uint64_t informationalTaskCount = 0u;
+        for (const TaskSnapshot& task : snapshot)
+        {
+            if (task.kind == TaskSnapshot::Kind::Informational)
+            {
+                ++informationalTaskCount;
+            }
+        }
+
+        Debug::Perf::Emit(L"FileOps.Popup.Render.BuildSnapshotUs", L"", snapshotUs, informationalTaskCount, static_cast<uint64_t>(taskCount), S_OK);
+        Debug::Perf::Emit(L"FileOps.Popup.Render.CardLayoutUs", L"", cardLayoutUs, informationalTaskCount, static_cast<uint64_t>(taskCount), S_OK);
+        Debug::Perf::Emit(L"FileOps.Popup.Render.AutoResizeUs", L"", autoResizeUs, informationalTaskCount, static_cast<uint64_t>(taskCount), S_OK);
+        Debug::Perf::Emit(L"FileOps.Popup.Render.ScrollLayoutUs", L"", scrollLayoutUs, informationalTaskCount, static_cast<uint64_t>(taskCount), S_OK);
+        Debug::Perf::Emit(L"FileOps.Popup.Render.DrawUs", L"", drawUs, informationalTaskCount, static_cast<uint64_t>(taskCount), hrEndDraw);
+        Debug::Perf::Emit(
+            L"FileOps.Popup.Render.TotalUs", L"", PerfElapsedUs(renderStartedUs), informationalTaskCount, static_cast<uint64_t>(taskCount), hrEndDraw);
+    }
 
     if (hrEndDraw == D2DERR_RECREATE_TARGET)
     {
@@ -4258,7 +5067,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateCaptionStatus(
     }
 }
 
-void FileOperationsPopupInternal::FileOperationsPopupState::PaintCaptionStatusGlyph(HWND hwnd) const noexcept
+void FileOperationsPopupInternal::FileOperationsPopupState::PaintCaptionStatusGlyph(HWND hwnd) noexcept
 {
     if (! hwnd)
     {
@@ -4282,12 +5091,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PaintCaptionStatusGl
 
     const AppTheme& theme = folderWindow->GetTheme();
     if (theme.highContrast)
-    {
-        return;
-    }
-
-    wil::unique_hdc_window hdc(GetWindowDC(hwnd));
-    if (! hdc)
     {
         return;
     }
@@ -4360,46 +5163,72 @@ void FileOperationsPopupInternal::FileOperationsPopupState::PaintCaptionStatusGl
     }
 
     RECT iconRc{iconLeft, iconTop, iconRight, iconTop + iconSize};
+    RECT targetRc{0, 0, windowW, nonClientTopH};
 
     wchar_t fluentGlyph = 0;
     wchar_t fallback    = 0;
-    COLORREF color      = theme.menu.text;
+    D2D1::ColorF color  = ColorFromCOLORREF(theme.menu.text);
 
     switch (_captionStatus)
     {
         case CaptionStatus::Ok:
             fluentGlyph = FluentIcons::kCheckMark;
             fallback    = FluentIcons::kFallbackCheckMark;
-            color       = ColorToCOLORREF(theme.accent);
+            color       = theme.accent;
             break;
         case CaptionStatus::Warning:
             fluentGlyph = FluentIcons::kWarning;
             fallback    = FluentIcons::kFallbackWarning;
-            color       = ColorToCOLORREF(theme.folderView.warningText);
+            color       = theme.folderView.warningText;
             break;
         case CaptionStatus::Error:
             fluentGlyph = FluentIcons::kError;
             fallback    = FluentIcons::kFallbackError;
-            color       = ColorToCOLORREF(theme.folderView.errorText);
+            color       = theme.folderView.errorText;
             break;
         case CaptionStatus::None:
         default: return;
     }
 
-    const int sizeDip         = 20;
-    auto iconFont             = FluentIcons::CreateFontForDpi(dpi, sizeDip);
-    const bool useFluentGlyph = iconFont && FluentIcons::FontHasGlyph(hdc.get(), iconFont.get(), fluentGlyph);
+    if (! EnsureCaptionGlyphTarget(dpi))
+    {
+        return;
+    }
 
-    const wchar_t glyph = useFluentGlyph ? fluentGlyph : fallback;
-    wchar_t glyphText[2]{glyph, 0};
+    const bool useFluentGlyph = _captionGlyphFormat != nullptr && DirectWriteFormatHasGlyph(_dwriteFactory.get(), _captionGlyphFormat.get(), fluentGlyph);
+    IDWriteTextFormat* format = useFluentGlyph ? _captionGlyphFormat.get() : _captionGlyphFallbackFormat.get();
+    const wchar_t glyph       = useFluentGlyph ? fluentGlyph : fallback;
+    if (! format || glyph == 0)
+    {
+        return;
+    }
 
-    HFONT fontToUse = useFluentGlyph ? iconFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    wil::unique_hdc_window hdc(GetWindowDC(hwnd));
+    if (! hdc)
+    {
+        return;
+    }
 
-    SetBkMode(hdc.get(), TRANSPARENT);
-    SetTextColor(hdc.get(), color);
+    const HRESULT bindHr = _captionGlyphTarget->BindDC(hdc.get(), &targetRc);
+    if (FAILED(bindHr))
+    {
+        _captionGlyphBrush.reset();
+        _captionGlyphTarget.reset();
+        return;
+    }
 
-    auto oldFont = wil::SelectObject(hdc.get(), fontToUse);
-    DrawTextW(hdc.get(), glyphText, 1, &iconRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    _captionGlyphBrush->SetColor(color);
+    const D2D1_RECT_F glyphRc = RectPixelsToDips(iconRc, dpi);
+    const wchar_t glyphText[2]{glyph, 0};
+
+    _captionGlyphTarget->BeginDraw();
+    _captionGlyphTarget->DrawText(glyphText, 1u, format, glyphRc, _captionGlyphBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP, DWRITE_MEASURING_MODE_NATURAL);
+    const HRESULT endHr = _captionGlyphTarget->EndDraw();
+    if (endHr == D2DERR_RECREATE_TARGET)
+    {
+        _captionGlyphBrush.reset();
+        _captionGlyphTarget.reset();
+    }
 }
 
 PopupHitTest FileOperationsPopupInternal::FileOperationsPopupState::HitTest(float x, float y) const noexcept
@@ -4470,7 +5299,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::ConfirmCancelAll(HWN
 
 void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(HWND hwnd, uint64_t taskId) noexcept
 {
-    if (! hwnd || ! fileOps)
+    if (! hwnd || ! fileOps || ! folderWindow)
     {
         return;
     }
@@ -4494,17 +5323,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
 
     const uint64_t currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
-    HMENU menu       = CreatePopupMenu();
-    auto menuCleanup = wil::scope_exit([&]
-    {
-        if (menu)
-            DestroyMenu(menu);
-    });
-    if (! menu)
-    {
-        return;
-    }
-
     constexpr UINT kCmdUnlimited  = 1u;
     constexpr UINT kCmdCustom     = 2u;
     constexpr UINT kCmdPresetBase = 10u;
@@ -4518,33 +5336,49 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         1ull * 1024ull * 1024ull * 1024ull,
     }};
 
-    const std::wstring unlimitedText = LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED);
-    const UINT unlimitedFlags        = static_cast<UINT>(MF_STRING) | (currentLimit == 0 ? static_cast<UINT>(MF_CHECKED) : 0u);
-    AppendMenuW(menu, unlimitedFlags, static_cast<UINT_PTR>(kCmdUnlimited), unlimitedText.c_str());
-    AppendMenuW(menu, static_cast<UINT>(MF_SEPARATOR), 0u, nullptr);
+    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    items.reserve(kPresets.size() + 4u);
+
+    auto appendRadioItem = [&](UINT commandId, std::wstring text, bool checked) noexcept
+    {
+        RedSalamander::DxUi::MenuFlyoutItem item{};
+        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+        item.text      = std::move(text);
+        item.commandId = static_cast<int>(commandId);
+        item.checked   = checked;
+        items.push_back(std::move(item));
+    };
+
+    appendRadioItem(kCmdUnlimited, LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED), currentLimit == 0);
+
+    RedSalamander::DxUi::MenuFlyoutItem separator{};
+    separator.kind = RedSalamander::DxUi::MenuItemKind::Separator;
+    items.push_back(separator);
 
     for (size_t i = 0; i < kPresets.size(); ++i)
     {
         const uint64_t bytesPerSecond = kPresets[i];
-        const std::wstring label      = FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES, FormatBytesCompact(bytesPerSecond));
-        const UINT cmd                = kCmdPresetBase + static_cast<UINT>(i);
-        const UINT flags              = static_cast<UINT>(MF_STRING) | (currentLimit == bytesPerSecond ? static_cast<UINT>(MF_CHECKED) : 0u);
-        AppendMenuW(menu, flags, static_cast<UINT_PTR>(cmd), label.c_str());
+        appendRadioItem(kCmdPresetBase + static_cast<UINT>(i),
+                        FormatStringResource(nullptr, IDS_FMT_FILEOP_SPEED_LIMIT_MENU_BYTES, FormatBytesCompact(bytesPerSecond)),
+                        currentLimit == bytesPerSecond);
     }
 
-    AppendMenuW(menu, static_cast<UINT>(MF_SEPARATOR), 0u, nullptr);
-    const std::wstring customText = LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM);
-    AppendMenuW(menu, static_cast<UINT>(MF_STRING), static_cast<UINT_PTR>(kCmdCustom), customText.c_str());
+    items.push_back(separator);
+
+    RedSalamander::DxUi::MenuFlyoutItem customItem{};
+    customItem.text      = LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM);
+    customItem.commandId = static_cast<int>(kCmdCustom);
+    items.push_back(std::move(customItem));
 
     POINT pt{};
     GetCursorPos(&pt);
 
-    const UINT chosen = static_cast<UINT>(
-        TrackPopupMenuEx(menu, static_cast<UINT>(TPM_RETURNCMD | TPM_RIGHTBUTTON), static_cast<int>(pt.x), static_cast<int>(pt.y), hwnd, nullptr));
-    if (chosen == 0)
+    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()));
+    if (! chosenOpt.has_value())
     {
         return;
     }
+    const UINT chosen = static_cast<UINT>(chosenOpt.value());
 
     uint64_t newLimit = currentLimit;
     if (chosen == kCmdUnlimited)
@@ -4558,25 +5392,52 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
     }
     else if (chosen == kCmdCustom)
     {
-        SpeedLimitDialogState dlgState{};
-        dlgState.initialLimitBytesPerSecond = currentLimit;
-        dlgState.resultLimitBytesPerSecond  = currentLimit;
-        dlgState.theme                      = folderWindow->GetTheme();
-
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-        const INT_PTR result = DialogBoxParamW(
-            GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_FILEOP_SPEED_LIMIT_CUSTOM), hwnd, SpeedLimitDialogProc, reinterpret_cast<LPARAM>(&dlgState));
-#pragma warning(pop)
-        if (result != IDOK)
+        const auto promptResult = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), currentLimit);
+        if (! promptResult.has_value())
         {
             return;
         }
 
-        newLimit = dlgState.resultLimitBytesPerSecond;
+        newLimit = promptResult.value();
     }
 
     task->SetDesiredSpeedLimit(newLimit);
+}
+
+bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimitPromptForTask(HWND hwnd, uint64_t requestedTaskId) noexcept
+{
+    if (! fileOps || ! folderWindow)
+    {
+        return false;
+    }
+
+    FolderWindow::FileOperationState::Task* task = requestedTaskId != 0 ? fileOps->FindTask(requestedTaskId) : nullptr;
+    if (! task)
+    {
+        const std::vector<TaskSnapshot> snapshot = BuildSnapshot();
+        const auto isActiveFileOperation         = [](const TaskSnapshot& candidate) noexcept
+        { return candidate.kind == TaskSnapshot::Kind::FileOperation && ! candidate.finished && candidate.taskId != 0; };
+
+        const auto activeIt = std::find_if(snapshot.begin(), snapshot.end(), isActiveFileOperation);
+        if (activeIt != snapshot.end())
+        {
+            task = fileOps->FindTask(activeIt->taskId);
+        }
+    }
+
+    if (! task)
+    {
+        return false;
+    }
+
+    const uint64_t currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    const auto promptResult     = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), currentLimit);
+    if (promptResult.has_value())
+    {
+        task->SetDesiredSpeedLimit(promptResult.value());
+    }
+    Invalidate(hwnd);
+    return true;
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(HWND hwnd, uint64_t taskId) noexcept
@@ -4618,26 +5479,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
     const std::optional<std::filesystem::path> otherPanelPath = folderWindow->GetCurrentPluginPath(destinationPane);
     const std::vector<std::filesystem::path> history          = folderWindow->GetFolderHistory(destinationPane);
 
-    HMENU menu       = CreatePopupMenu();
-    auto menuCleanup = wil::scope_exit([&]
-    {
-        if (menu)
-            DestroyMenu(menu);
-    });
-    if (! menu)
-    {
-        return;
-    }
-
     constexpr UINT kCmdOtherPanel  = 1u;
     constexpr UINT kCmdHistoryBase = 10u;
 
     const std::filesystem::path currentDestination = task->GetDestinationFolder();
-    const std::wstring otherPanelText              = LoadStringResource(nullptr, IDS_FILEOP_DEST_OTHER_PANEL);
-    const bool otherPanelSelected                  = otherPanelPath.has_value() && otherPanelPath.value() == currentDestination;
-    const UINT otherFlags                          = static_cast<UINT>(MF_STRING) | (otherPanelSelected ? static_cast<UINT>(MF_CHECKED) : 0u);
-    AppendMenuW(menu, otherFlags, static_cast<UINT_PTR>(kCmdOtherPanel), otherPanelText.c_str());
-    AppendMenuW(menu, static_cast<UINT>(MF_SEPARATOR), 0u, nullptr);
 
     NavigationLocation::Location destinationLocation;
     const std::optional<std::filesystem::path> displayDestination = folderWindow->GetCurrentPath(destinationPane);
@@ -4699,23 +5544,42 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
         entries.push_back(std::move(entry));
     }
 
+    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    items.reserve(entries.size() + 2u);
+
+    RedSalamander::DxUi::MenuFlyoutItem otherPanelItem{};
+    otherPanelItem.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+    otherPanelItem.text      = LoadStringResource(nullptr, IDS_FILEOP_DEST_OTHER_PANEL);
+    otherPanelItem.commandId = static_cast<int>(kCmdOtherPanel);
+    otherPanelItem.checked   = otherPanelPath.has_value() && otherPanelPath.value() == currentDestination;
+    items.push_back(std::move(otherPanelItem));
+
+    if (! entries.empty())
+    {
+        RedSalamander::DxUi::MenuFlyoutItem separator{};
+        separator.kind = RedSalamander::DxUi::MenuItemKind::Separator;
+        items.push_back(separator);
+    }
+
     for (size_t i = 0; i < entries.size(); ++i)
     {
-        const UINT cmd           = kCmdHistoryBase + static_cast<UINT>(i);
-        const std::wstring label = entries[i].label;
-        const UINT flags         = static_cast<UINT>(MF_STRING) | (entries[i].folder == currentDestination ? static_cast<UINT>(MF_CHECKED) : 0u);
-        AppendMenuW(menu, flags, static_cast<UINT_PTR>(cmd), label.c_str());
+        RedSalamander::DxUi::MenuFlyoutItem item{};
+        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+        item.text      = entries[i].label;
+        item.commandId = static_cast<int>(kCmdHistoryBase + static_cast<UINT>(i));
+        item.checked   = entries[i].folder == currentDestination;
+        items.push_back(std::move(item));
     }
 
     POINT pt{};
     GetCursorPos(&pt);
 
-    const UINT chosen = static_cast<UINT>(
-        TrackPopupMenuEx(menu, static_cast<UINT>(TPM_RETURNCMD | TPM_RIGHTBUTTON), static_cast<int>(pt.x), static_cast<int>(pt.y), hwnd, nullptr));
-    if (chosen == 0)
+    const auto chosenOpt = RedSalamander::DxUi::ContextMenu::Show(hwnd, pt, items, MakeAppThemeDxPalette(folderWindow->GetTheme()));
+    if (! chosenOpt.has_value())
     {
         return;
     }
+    const UINT chosen = static_cast<UINT>(chosenOpt.value());
 
     if (chosen == kCmdOtherPanel)
     {
@@ -4739,7 +5603,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnCreate(HWND hwn
 
     if (folderWindow && hostLifetime.lock())
     {
-        ApplyTitleBarTheme(hwnd, folderWindow->GetTheme(), GetActiveWindow() == hwnd);
+        ApplyWindowChromeTheme(hwnd, folderWindow->GetTheme(), WindowBackdropTarget::Tool, GetActiveWindow() == hwnd);
     }
     ApplyScrollBarTheme(hwnd);
     ShowScrollBar(hwnd, SB_VERT, FALSE);
@@ -4765,7 +5629,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnThemeChanged(HW
 
     if (folderWindow && hostLifetime.lock())
     {
-        ApplyTitleBarTheme(hwnd, folderWindow->GetTheme(), GetActiveWindow() == hwnd);
+        ApplyWindowChromeTheme(hwnd, folderWindow->GetTheme(), WindowBackdropTarget::Tool, GetActiveWindow() == hwnd);
     }
     ApplyScrollBarTheme(hwnd);
 
@@ -4791,11 +5655,19 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcDestroy(HWND 
     _buttonFormat.reset();
     _buttonSmallFormat.reset();
     _graphOverlayFormat.reset();
+    _statusIconFormat.reset();
+    _statusIconFallbackFormat.reset();
+    _captionGlyphFormat.reset();
+    _captionGlyphFallbackFormat.reset();
     _dwriteFactory.reset();
     _d2dFactory.reset();
 
     SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-    delete this;
+    _deletePending = true;
+    if (_dispatchDepth == 0u)
+    {
+        delete this;
+    }
     return 0;
 }
 
@@ -4824,6 +5696,11 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnDpiChanged(HWND
     _buttonFormat.reset();
     _buttonSmallFormat.reset();
     _graphOverlayFormat.reset();
+    _statusIconFormat.reset();
+    _statusIconFallbackFormat.reset();
+    _captionGlyphFormat.reset();
+    _captionGlyphFallbackFormat.reset();
+    _captionGlyphDpi = 0;
 
     if (_target)
     {
@@ -5021,9 +5898,9 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLButtonUp(HWND 
 
     const PopupHitTest released = HitTest(static_cast<float>(pt.x), static_cast<float>(pt.y));
     const bool activated        = _pressedHit.kind != PopupHitTest::Kind::None && _pressedHit.kind == released.kind && _pressedHit.taskId == released.taskId &&
-                           _pressedHit.data == released.data;
-    const PopupHitTest hit = _pressedHit;
-    _pressedHit            = {};
+                                  _pressedHit.data == released.data;
+    const PopupHitTest hit      = _pressedHit;
+    _pressedHit                 = {};
 
     if (! activated)
     {
@@ -5214,7 +6091,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnActivatedHit(HW
     return 0;
 }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(HWND hwnd, const PopupSelfTestInvoke* payload) noexcept
 {
     if (! payload)
@@ -5222,7 +6099,59 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnSelfTestInvoke(
         return 0;
     }
 
+    if (payload->kind == PopupHitTest::Kind::TaskSpeedLimit && payload->data == 1u)
+    {
+        return ShowCustomSpeedLimitPromptForTask(hwnd, payload->taskId) ? 1 : 0;
+    }
+
     return OnActivatedHit(hwnd, PopupHitTest{payload->kind, payload->taskId, payload->data});
+}
+
+LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnTaskSnapshotRequest(const PopupTaskSnapshotRequest* request) const noexcept
+{
+    if (! request)
+    {
+        return 0;
+    }
+
+    PopupTaskSnapshotRequest& mutableRequest = *const_cast<PopupTaskSnapshotRequest*>(request);
+    mutableRequest.found                     = false;
+
+    const std::vector<TaskSnapshot> snapshot = BuildSnapshot();
+    auto it = mutableRequest.taskId == 0
+                  ? std::find_if(snapshot.begin(),
+                                 snapshot.end(),
+                                 [](const TaskSnapshot& task) noexcept { return task.kind == TaskSnapshot::Kind::FileOperation && ! task.finished; })
+                  : std::find_if(snapshot.begin(), snapshot.end(), [&mutableRequest](const TaskSnapshot& task) noexcept {
+        return task.taskId == mutableRequest.taskId;
+    });
+    if (mutableRequest.taskId == 0 && it == snapshot.end())
+    {
+        it = std::find_if(snapshot.begin(), snapshot.end(), [](const TaskSnapshot& task) noexcept { return task.kind == TaskSnapshot::Kind::FileOperation; });
+    }
+    if (it == snapshot.end())
+    {
+        return 0;
+    }
+
+    mutableRequest.snapshot = *it;
+    mutableRequest.found    = true;
+    return 1;
+}
+
+LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnCaptionGlyphSnapshotRequest(CaptionGlyphDebugSnapshot* snapshot) const noexcept
+{
+    if (! snapshot)
+    {
+        return 0;
+    }
+
+    const bool highContrast                 = folderWindow && folderWindow->GetTheme().highContrast;
+    snapshot->statusVisible                 = _captionStatus != CaptionStatus::None && ! highContrast;
+    snapshot->highContrastSuppressed        = _captionStatus != CaptionStatus::None && highContrast;
+    snapshot->usesDirectWriteGlyphRendering = true;
+    snapshot->usesGdiTextFallback           = false;
+    return 1;
 }
 #endif
 
@@ -5265,13 +6194,21 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnClose(HWND hwnd
 
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcPaint(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
 {
-    const LRESULT result = DefWindowProcW(hwnd, WM_NCPAINT, wParam, lParam);
+    const bool capturePerf   = Debug::Perf::IsCaptureEnabled();
+    const uint64_t startedUs = capturePerf ? PerfNowUs() : 0u;
+    const LRESULT result     = DefWindowProcW(hwnd, WM_NCPAINT, wParam, lParam);
     PaintCaptionStatusGlyph(hwnd);
+    if (capturePerf)
+    {
+        Debug::Perf::Emit(L"FileOps.Popup.WmNcPaintUs", L"", PerfElapsedUs(startedUs), 0u, 0u, result >= 0 ? S_OK : E_FAIL);
+    }
     return result;
 }
 
 LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcActivate(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
 {
+    const bool capturePerf   = Debug::Perf::IsCaptureEnabled();
+    const uint64_t startedUs = capturePerf ? PerfNowUs() : 0u;
     if (folderWindow && hostLifetime.lock())
     {
         ApplyTitleBarTheme(hwnd, folderWindow->GetTheme(), wParam != FALSE);
@@ -5279,6 +6216,10 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnNcActivate(HWND
 
     const LRESULT result = DefWindowProcW(hwnd, WM_NCACTIVATE, wParam, lParam);
     PaintCaptionStatusGlyph(hwnd);
+    if (capturePerf)
+    {
+        Debug::Perf::Emit(L"FileOps.Popup.WmNcActivateUs", L"", PerfElapsedUs(startedUs), wParam != FALSE ? 1u : 0u, 0u, result >= 0 ? S_OK : E_FAIL);
+    }
     return result;
 }
 
@@ -5291,7 +6232,17 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::WndProc(HWND hwnd
         case WM_NCACTIVATE: return OnNcActivate(hwnd, wp, lp);
         case WM_NCPAINT: return OnNcPaint(hwnd, wp, lp);
         case WM_ERASEBKGND: return 1;
-        case WM_PAINT: Render(hwnd); return 0;
+        case WM_PAINT:
+        {
+            const bool capturePerf   = Debug::Perf::IsCaptureEnabled();
+            const uint64_t startedUs = capturePerf ? PerfNowUs() : 0u;
+            Render(hwnd);
+            if (capturePerf)
+            {
+                Debug::Perf::Emit(L"FileOps.Popup.WmPaintUs", L"", PerfElapsedUs(startedUs), 0u, 0u, S_OK);
+            }
+            return 0;
+        }
         case WM_SIZE: return OnSize(hwnd, LOWORD(lp), HIWORD(lp));
         case WM_MOVE: return OnMove(hwnd);
         case WM_GETMINMAXINFO: return OnGetMinMaxInfo(hwnd, reinterpret_cast<MINMAXINFO*>(lp));
@@ -5304,6 +6255,10 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::WndProc(HWND hwnd
         case WM_LBUTTONDOWN: return OnLButtonDown(hwnd, {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)});
         case WM_LBUTTONUP: return OnLButtonUp(hwnd, {GET_X_LPARAM(lp), GET_Y_LPARAM(lp)});
         case WM_MOUSEWHEEL: return OnMouseWheel(hwnd, GET_WHEEL_DELTA_WPARAM(wp));
+        case kFileOperationsPopupDeferredSpeedLimitPromptMessage:
+        {
+            return ShowCustomSpeedLimitPromptForTask(hwnd, static_cast<uint64_t>(lp)) ? 1 : 0;
+        }
         case WM_DPICHANGED:
         {
             const auto* suggested = reinterpret_cast<const RECT*>(lp);
@@ -5312,8 +6267,10 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::WndProc(HWND hwnd
         case WM_THEMECHANGED:
         case WM_SYSCOLORCHANGE: return OnThemeChanged(hwnd);
         case WM_CLOSE: return OnClose(hwnd);
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         case WndMsg::kFileOpsPopupSelfTestInvoke: return OnSelfTestInvoke(hwnd, reinterpret_cast<const PopupSelfTestInvoke*>(lp));
+        case WndMsg::kFileOpsPopupSelfTestSnapshot: return OnTaskSnapshotRequest(reinterpret_cast<const PopupTaskSnapshotRequest*>(lp));
+        case WndMsg::kFileOpsPopupCaptionGlyphSnapshot: return OnCaptionGlyphSnapshotRequest(reinterpret_cast<CaptionGlyphDebugSnapshot*>(lp));
 #endif
     }
 
@@ -5322,211 +6279,6 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::WndProc(HWND hwnd
 
 namespace
 {
-
-std::wstring ReadDialogItemText(HWND dlg, int controlId)
-{
-    const HWND control = GetDlgItem(dlg, controlId);
-    if (! control)
-    {
-        return {};
-    }
-
-    const int length = GetWindowTextLengthW(control);
-    if (length <= 0)
-    {
-        return {};
-    }
-
-    std::wstring text;
-    text.resize(static_cast<size_t>(length) + 1u);
-    GetWindowTextW(control, text.data(), length + 1);
-    text.resize(static_cast<size_t>(length));
-    return text;
-}
-
-void RestoreSpeedLimitDialogHint(HWND hwnd, SpeedLimitDialogState* state) noexcept
-{
-    if (! hwnd || ! state)
-    {
-        return;
-    }
-
-    const HWND message = GetDlgItem(hwnd, IDC_FILEOP_SPEED_LIMIT_CUSTOM_VALIDATION);
-    if (! message)
-    {
-        return;
-    }
-
-    SetWindowTextW(message, state->hintText.c_str());
-    state->showingValidationError = false;
-    InvalidateRect(message, nullptr, TRUE);
-}
-
-void ShowSpeedLimitDialogValidationError(HWND hwnd, SpeedLimitDialogState* state, UINT messageId) noexcept
-{
-    if (! hwnd || ! state)
-    {
-        return;
-    }
-
-    const HWND message = GetDlgItem(hwnd, IDC_FILEOP_SPEED_LIMIT_CUSTOM_VALIDATION);
-    if (! message)
-    {
-        return;
-    }
-
-    const std::wstring text = LoadStringResource(nullptr, messageId);
-    SetWindowTextW(message, text.c_str());
-    state->showingValidationError = true;
-    InvalidateRect(message, nullptr, TRUE);
-}
-
-void FocusSpeedLimitDialogEdit(HWND hwnd) noexcept
-{
-    const HWND edit = hwnd ? GetDlgItem(hwnd, IDC_FILEOP_SPEED_LIMIT_CUSTOM_EDIT) : nullptr;
-    if (! edit)
-    {
-        return;
-    }
-
-    SetFocus(edit);
-    SendMessageW(edit, EM_SETSEL, 0, -1);
-}
-
-INT_PTR OnSpeedLimitDialogInit(HWND hwnd, SpeedLimitDialogState* state)
-{
-    SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(state));
-
-    if (state)
-    {
-        ApplyTitleBarTheme(hwnd, state->theme, GetActiveWindow() == hwnd);
-        state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
-        state->hintText = ReadDialogItemText(hwnd, IDC_FILEOP_SPEED_LIMIT_CUSTOM_VALIDATION);
-        RestoreSpeedLimitDialogHint(hwnd, state);
-
-        std::wstring text = L"0";
-        if (state->initialLimitBytesPerSecond != 0)
-        {
-            text = FormatBytesCompact(state->initialLimitBytesPerSecond);
-        }
-        SetDlgItemTextW(hwnd, IDC_FILEOP_SPEED_LIMIT_CUSTOM_EDIT, text.c_str());
-    }
-
-    return TRUE;
-}
-
-INT_PTR OnSpeedLimitDialogCtlColorDialog(SpeedLimitDialogState* state) noexcept
-{
-    if (! state || ! state->backgroundBrush)
-    {
-        return FALSE;
-    }
-
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
-}
-
-INT_PTR OnSpeedLimitDialogCtlColorStatic(SpeedLimitDialogState* state, HDC hdc, HWND control) noexcept
-{
-    if (! state || ! state->backgroundBrush)
-    {
-        return FALSE;
-    }
-
-    COLORREF textColor = state->theme.menu.text;
-    if (control)
-    {
-        const int controlId = GetDlgCtrlID(control);
-        if (controlId == IDC_FILEOP_SPEED_LIMIT_CUSTOM_VALIDATION)
-        {
-            textColor = state->showingValidationError ? ColorRefFromColorF(state->theme.folderView.errorText) : state->theme.menu.disabledText;
-        }
-    }
-
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, textColor);
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
-}
-
-INT_PTR OnSpeedLimitDialogCtlColorEdit(SpeedLimitDialogState* state, HDC hdc) noexcept
-{
-    if (! state || ! state->backgroundBrush)
-    {
-        return FALSE;
-    }
-
-    SetBkColor(hdc, state->theme.windowBackground);
-    SetTextColor(hdc, state->theme.menu.text);
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
-}
-
-INT_PTR OnSpeedLimitDialogCommand(HWND hwnd, SpeedLimitDialogState* state, UINT commandId, UINT notifyCode) noexcept
-{
-    if (commandId == IDC_FILEOP_SPEED_LIMIT_CUSTOM_EDIT && notifyCode == EN_CHANGE)
-    {
-        if (state && state->showingValidationError)
-        {
-            RestoreSpeedLimitDialogHint(hwnd, state);
-        }
-        return TRUE;
-    }
-
-    if (commandId == IDOK)
-    {
-        if (! state)
-        {
-            EndDialog(hwnd, IDCANCEL);
-            return TRUE;
-        }
-
-        RestoreSpeedLimitDialogHint(hwnd, state);
-
-        const std::wstring text = ReadDialogItemText(hwnd, IDC_FILEOP_SPEED_LIMIT_CUSTOM_EDIT);
-
-        uint64_t parsed = 0;
-        if (! TryParseThroughputText(std::wstring_view(text), parsed))
-        {
-            MessageBeep(MB_ICONERROR);
-            ShowSpeedLimitDialogValidationError(hwnd, state, IDS_MSG_FILEOP_SPEED_LIMIT_INVALID);
-            FocusSpeedLimitDialogEdit(hwnd);
-            return TRUE;
-        }
-
-        state->resultLimitBytesPerSecond = parsed;
-        EndDialog(hwnd, IDOK);
-        return TRUE;
-    }
-
-    if (commandId == IDCANCEL)
-    {
-        EndDialog(hwnd, IDCANCEL);
-        return TRUE;
-    }
-
-    return FALSE;
-}
-
-INT_PTR CALLBACK SpeedLimitDialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
-{
-    auto* state = reinterpret_cast<SpeedLimitDialogState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-
-    switch (msg)
-    {
-        case WM_INITDIALOG: return OnSpeedLimitDialogInit(hwnd, reinterpret_cast<SpeedLimitDialogState*>(lp));
-        case WM_CTLCOLORDLG: return OnSpeedLimitDialogCtlColorDialog(state);
-        case WM_CTLCOLORSTATIC: return OnSpeedLimitDialogCtlColorStatic(state, reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
-        case WM_CTLCOLOREDIT: return OnSpeedLimitDialogCtlColorEdit(state, reinterpret_cast<HDC>(wp));
-        case WM_NCACTIVATE:
-            if (state)
-            {
-                ApplyTitleBarTheme(hwnd, state->theme, wp != FALSE);
-            }
-            return FALSE;
-        case WM_COMMAND: return OnSpeedLimitDialogCommand(hwnd, state, LOWORD(wp), HIWORD(wp));
-    }
-
-    return FALSE;
-}
-
 } // namespace
 
 LRESULT CALLBACK FileOperationsPopupInternal::FileOperationsPopupState::WndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
@@ -5544,12 +6296,25 @@ LRESULT CALLBACK FileOperationsPopupInternal::FileOperationsPopupState::WndProcT
         state = reinterpret_cast<FileOperationsPopupState*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     }
 
-    if (state)
+    if (! state)
     {
-        return state->WndProc(hwnd, msg, wp, lp);
+        return DefWindowProcW(hwnd, msg, wp, lp);
     }
 
-    return DefWindowProcW(hwnd, msg, wp, lp);
+    ++state->_dispatchDepth;
+    const auto finishDispatch = wil::scope_exit([state]() noexcept
+    {
+        if (state->_dispatchDepth > 0u)
+        {
+            --state->_dispatchDepth;
+        }
+        if (state->_dispatchDepth == 0u && state->_deletePending)
+        {
+            delete state;
+        }
+    });
+
+    return state->WndProc(hwnd, msg, wp, lp);
 }
 
 HWND FileOperationsPopup::Create(FolderWindow::FileOperationState* fileOps,
@@ -5689,3 +6454,166 @@ HWND FileOperationsPopup::Create(FolderWindow::FileOperationState* fileOps,
 
     return popup;
 }
+
+#ifdef ENABLE_TESTS
+HWND FindFileOperationsDebugWindowForCurrentProcess(const wchar_t* className) noexcept
+{
+    if (! className || *className == L'\0')
+    {
+        return nullptr;
+    }
+
+    struct SearchState
+    {
+        DWORD processId          = 0;
+        const wchar_t* className = nullptr;
+        HWND hwnd                = nullptr;
+    } state{GetCurrentProcessId(), className, nullptr};
+
+    EnumWindows(
+        [](HWND hwnd, LPARAM lParam) noexcept -> BOOL
+    {
+        auto* state = reinterpret_cast<SearchState*>(lParam);
+        if (! state || ! hwnd || IsWindow(hwnd) == FALSE || IsWindowVisible(hwnd) == FALSE)
+        {
+            return TRUE;
+        }
+
+        DWORD processId = 0;
+        GetWindowThreadProcessId(hwnd, &processId);
+        if (processId != state->processId)
+        {
+            return TRUE;
+        }
+
+        wchar_t windowClass[128]{};
+        if (GetClassNameW(hwnd, windowClass, static_cast<int>(std::size(windowClass))) == 0)
+        {
+            return TRUE;
+        }
+
+        if (wcscmp(windowClass, state->className) != 0)
+        {
+            return TRUE;
+        }
+
+        state->hwnd = hwnd;
+        return FALSE;
+    },
+        reinterpret_cast<LPARAM>(&state));
+
+    return state.hwnd;
+}
+
+bool DebugInvokeFileOperationsPopup(HWND popup, const FileOperationsPopupInternal::PopupSelfTestInvoke& invoke) noexcept
+{
+    // Keep the selftest invoke synchronous: the stack payload must remain live while
+    // the popup opens any modal test surface.
+    return popup && IsWindow(popup) != FALSE && SendMessageW(popup, WndMsg::kFileOpsPopupSelfTestInvoke, 0, reinterpret_cast<LPARAM>(&invoke)) != 0;
+}
+
+bool DebugGetFileOperationsPopupTaskSnapshot(HWND popup, uint64_t taskId, FileOperationsPopupInternal::TaskSnapshot& out) noexcept
+{
+    if (! popup || IsWindow(popup) == FALSE)
+    {
+        return false;
+    }
+
+    FileOperationsPopupInternal::PopupTaskSnapshotRequest request{};
+    request.taskId = taskId;
+    const bool ok  = SendMessageW(popup, WndMsg::kFileOpsPopupSelfTestSnapshot, 0, reinterpret_cast<LPARAM>(&request)) != FALSE;
+    if (ok && request.found)
+    {
+        out = std::move(request.snapshot);
+    }
+    return ok && request.found;
+}
+
+bool DebugGetFileOperationsPopupCaptionGlyphSnapshot(HWND popup, FileOperationsPopupInternal::CaptionGlyphDebugSnapshot& out) noexcept
+{
+    if (! popup || IsWindow(popup) == FALSE)
+    {
+        return false;
+    }
+
+    FileOperationsPopupInternal::CaptionGlyphDebugSnapshot snapshot{};
+    const bool ok = SendMessageW(popup, WndMsg::kFileOpsPopupCaptionGlyphSnapshot, 0, reinterpret_cast<LPARAM>(&snapshot)) != FALSE;
+    if (ok)
+    {
+        out = snapshot;
+    }
+    return ok;
+}
+
+double DebugSmoothRateForDisplay(double previousRate, double sampleRate, ULONGLONG elapsedMs) noexcept
+{
+    return SmoothRateForDisplay(previousRate, sampleRate, elapsedMs);
+}
+
+double DebugDecayRateForCallbackSilence(double smoothedRate, ULONGLONG silenceMs) noexcept
+{
+    return DecayRateForCallbackSilence(smoothedRate, silenceMs);
+}
+
+double DebugSmoothEtaSecondsForDisplay(double previousEtaSeconds, double sampleEtaSeconds, ULONGLONG elapsedMs) noexcept
+{
+    return SmoothEtaSecondsForDisplay(previousEtaSeconds, sampleEtaSeconds, elapsedMs);
+}
+
+HWND GetFileOperationsSpeedLimitPromptHandle() noexcept
+{
+    const HWND hwnd = FindFileOperationsDebugWindowForCurrentProcess(kFileOperationsSpeedLimitPromptClassName);
+    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
+}
+
+bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitPromptDebugSnapshot& out) noexcept
+{
+    const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    auto snapshot = std::make_unique<FileOperationsSpeedLimitPromptDebugSnapshot>();
+    const bool ok = SendMessageW(hwnd,
+                                 kFileOperationsSpeedLimitPromptDebugMessage,
+                                 static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::GetSnapshot),
+                                 reinterpret_cast<LPARAM>(snapshot.get())) != FALSE;
+    if (ok)
+    {
+        out = std::move(*snapshot);
+    }
+    return ok;
+}
+
+bool DebugSetFileOperationsSpeedLimitPromptText(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    auto payload = std::make_unique<std::wstring>(text);
+    return SendMessageW(hwnd,
+                        kFileOperationsSpeedLimitPromptDebugMessage,
+                        static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::SetText),
+                        reinterpret_cast<LPARAM>(payload.get())) != FALSE;
+}
+
+bool DebugConfirmFileOperationsSpeedLimitPrompt() noexcept
+{
+    const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+    return hwnd &&
+           SendMessageW(
+               hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::Confirm), 0) != FALSE;
+}
+
+bool DebugCancelFileOperationsSpeedLimitPrompt() noexcept
+{
+    const HWND hwnd = GetFileOperationsSpeedLimitPromptHandle();
+    return hwnd &&
+           SendMessageW(
+               hwnd, kFileOperationsSpeedLimitPromptDebugMessage, static_cast<WPARAM>(FileOperationsSpeedLimitPromptWindow::DebugCommand::Cancel), 0) != FALSE;
+}
+#endif

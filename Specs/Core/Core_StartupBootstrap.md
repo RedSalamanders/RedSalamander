@@ -9,7 +9,7 @@
 
 ## ETW Startup Metrics
 
-RedSalamander emits one-time startup milestone events via `Debug::Perf::Emit()`:
+RedSalamander records one-time startup milestone events via `Debug::Perf::Emit()`. Debug and ASan Debug builds emit Info/Perf/Debug ETW diagnostics and write JSONL perf capture to the default path by default. Release builds keep ETW traffic quiet unless launched with `--etw`; Release JSONL perf capture is explicitly enabled with `--perf` for the default path or `--perf=PATH` for a custom path (or by selftest/perf harness configuration). `RedSalamanderMonitor` self diagnostics use the same runtime `--etw`, `--perf`, and `--perf=PATH` switches.
 
 - `App.Startup.Metric.TimeToFirstWindow`  
   First successful main window creation (`CreateWindowW` returns an `HWND`).
@@ -97,6 +97,8 @@ To capture startup ETW events during development, RedSalamander debug builds:
 - Attempt to launch `RedSalamanderMonitor.exe` asynchronously as early as possible.
 - Avoid launching if the monitor instance mutex exists:
   - `Local\\RedSalamanderMonitor_Instance`
+- Release startup ETW capture is opt-in: launch `RedSalamander.exe --etw`. Debug and ASan Debug enable it by default.
+- Release startup JSONL perf capture is opt-in: launch `RedSalamander.exe --perf` or `RedSalamander.exe --perf=PATH`. Debug and ASan Debug write the default JSONL path by default.
 
 Implementation:
 

@@ -1,5 +1,7 @@
 #include "FolderViewInternal.h"
 
+#include "FolderViewIncrementalSearch.h"
+
 #include <cwctype>
 #include <limits>
 
@@ -671,7 +673,7 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
 
     if (_items.empty())
     {
-        if (key == VK_BACK)
+        if (key == VK_BACK || key == VK_RETURN)
         {
             NavigateUp();
         }
@@ -885,6 +887,13 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift)
             ExitIncrementalSearch();
             ActivateFocusedItem();
             break;
+        case VK_APPS:
+            ExitIncrementalSearch();
+            if (_hWnd)
+            {
+                OnContextMenuMessage(_hWnd.get(), MAKELPARAM(-1, -1));
+            }
+            break;
         case VK_DELETE:
             ExitIncrementalSearch();
             CommandDelete();
@@ -942,13 +951,7 @@ void FolderView::OnCharMessage(wchar_t character)
     const auto invalidIndex = static_cast<size_t>(-1);
     const bool hasFocus     = _focusedIndex != invalidIndex && _focusedIndex < _items.size();
 
-    if (hasFocus && FindIncrementalSearchMatchOffset(_items[_focusedIndex].displayName).has_value())
-    {
-        UpdateIncrementalSearchHighlightForFocusedItem();
-        return;
-    }
-
-    auto findMatchIndex = [&](size_t startIndex, bool forward) -> std::optional<size_t>
+    auto findContainsMatchIndex = [&](size_t startIndex, bool forward) -> std::optional<size_t>
     {
         const size_t itemCount = _items.size();
         if (itemCount == 0)
@@ -982,11 +985,31 @@ void FolderView::OnCharMessage(wchar_t character)
         startIndex = (_focusedIndex + 1) % _items.size();
     }
 
-    const std::optional<size_t> matchIndex = findMatchIndex(startIndex, true);
-    if (matchIndex.has_value())
+    if (hasFocus && FolderViewIncrementalSearch::StartsWithNoCase(_items[_focusedIndex].displayName, _incrementalSearch.query))
     {
-        FocusItem(matchIndex.value(), true);
-        _anchorIndex = matchIndex.value();
+        UpdateIncrementalSearchHighlightForFocusedItem();
+        return;
+    }
+
+    const std::optional<size_t> prefixMatchIndex = FindNextIncrementalSearchPrefixMatch(startIndex, true);
+    if (prefixMatchIndex.has_value())
+    {
+        FocusItem(prefixMatchIndex.value(), true);
+        _anchorIndex = prefixMatchIndex.value();
+        return;
+    }
+
+    if (hasFocus && FindIncrementalSearchMatchOffset(_items[_focusedIndex].displayName).has_value())
+    {
+        UpdateIncrementalSearchHighlightForFocusedItem();
+        return;
+    }
+
+    const std::optional<size_t> containsMatchIndex = findContainsMatchIndex(startIndex, true);
+    if (containsMatchIndex.has_value())
+    {
+        FocusItem(containsMatchIndex.value(), true);
+        _anchorIndex = containsMatchIndex.value();
         return;
     }
 
@@ -1069,6 +1092,27 @@ void FolderView::HandleIncrementalSearchBackspace()
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
     }
 
+    if (! _items.empty())
+    {
+        const auto invalidIndex = static_cast<size_t>(-1);
+        const bool hasFocus     = _focusedIndex != invalidIndex && _focusedIndex < _items.size();
+
+        if (hasFocus && FolderViewIncrementalSearch::StartsWithNoCase(_items[_focusedIndex].displayName, _incrementalSearch.query))
+        {
+            UpdateIncrementalSearchHighlightForFocusedItem();
+            return;
+        }
+
+        const size_t startIndex                      = hasFocus ? ((_focusedIndex + 1u) % _items.size()) : 0u;
+        const std::optional<size_t> prefixMatchIndex = FindNextIncrementalSearchPrefixMatch(startIndex, true);
+        if (prefixMatchIndex.has_value())
+        {
+            FocusItem(prefixMatchIndex.value(), true);
+            _anchorIndex = prefixMatchIndex.value();
+            return;
+        }
+    }
+
     UpdateIncrementalSearchHighlightForFocusedItem();
     if (_incrementalSearch.highlightedIndex != static_cast<size_t>(-1))
     {
@@ -1105,6 +1149,14 @@ void FolderView::HandleIncrementalSearchNavigate(bool forward)
     else
     {
         startIndex = (_focusedIndex + _items.size() - 1) % _items.size();
+    }
+
+    const std::optional<size_t> prefixMatchIndex = FindNextIncrementalSearchPrefixMatch(startIndex, forward);
+    if (prefixMatchIndex.has_value())
+    {
+        FocusItem(prefixMatchIndex.value(), true);
+        _anchorIndex = prefixMatchIndex.value();
+        return;
     }
 
     const size_t itemCount = _items.size();
@@ -1306,34 +1358,17 @@ std::optional<UINT32> FolderView::FindIncrementalSearchMatchOffset(std::wstring_
         return std::nullopt;
     }
 
-    const std::wstring_view query = _incrementalSearch.query;
-    if (query.empty() || displayName.size() < query.size())
-    {
-        return std::nullopt;
-    }
+    return FolderViewIncrementalSearch::FindContainsOffsetNoCase(displayName, _incrementalSearch.query);
+}
 
-    if (query.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
-    {
-        return std::nullopt;
-    }
+std::wstring_view FolderView::GetIncrementalSearchDisplayName(size_t index) const noexcept
+{
+    return index < _items.size() ? _items[index].displayName : std::wstring_view{};
+}
 
-    const size_t querySize         = query.size();
-    const size_t lastStartPosition = displayName.size() - query.size();
-    for (size_t startPosition = 0; startPosition <= lastStartPosition; ++startPosition)
-    {
-        const std::wstring_view window(displayName.data() + startPosition, querySize);
-        if (! OrdinalString::EqualsNoCase(window, query))
-        {
-            continue;
-        }
+std::optional<size_t> FolderView::FindNextIncrementalSearchPrefixMatch(size_t startIndex, bool forward) const noexcept
+{
+    const auto displayNameAt = [this](size_t index) noexcept -> std::wstring_view { return GetIncrementalSearchDisplayName(index); };
 
-        if (startPosition > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
-        {
-            return std::nullopt;
-        }
-
-        return static_cast<UINT32>(startPosition);
-    }
-
-    return std::nullopt;
+    return FolderViewIncrementalSearch::FindNextPrefixMatchIndex(_items.size(), startIndex, forward, displayNameAt, _incrementalSearch.query);
 }

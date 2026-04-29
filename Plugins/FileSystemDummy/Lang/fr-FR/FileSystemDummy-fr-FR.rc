@@ -1,0 +1,11 @@
+#pragma code_page(65001)
+#include "../../FileSystemDummyResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMDUMMY_NAME "Système de fichiers factice"
+    IDS_FILESYSTEMDUMMY_DESCRIPTION "Système de fichiers factice déterministe en mémoire pour les tests."
+END

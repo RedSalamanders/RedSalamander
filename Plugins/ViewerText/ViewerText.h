@@ -11,6 +11,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #pragma warning(push)
@@ -20,6 +21,9 @@
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
 
+#include "DxUi/DxUi.h"
+#include "DxUi/DxUiNativeMenuInterop.h"
+#include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
@@ -30,11 +34,39 @@ struct ID2D1HwndRenderTarget;
 struct ID2D1SolidColorBrush;
 struct IDWriteFactory;
 struct IDWriteTextFormat;
+struct ParsedDiffDocument;
+struct DiffReferenceCache;
+
+[[nodiscard]] const char* GetViewerTextStaticConfigurationSchema() noexcept;
 
 class ViewerText final : public IViewer, public IInformations
 {
 public:
     static constexpr size_t kHexBytesPerLine = 16;
+
+    enum class HexByteColorMode : uint8_t
+    {
+        Off,
+        LeadingNibble,
+    };
+
+    enum class DiffDefaultLayout : uint8_t
+    {
+        SideBySide,
+        Inline,
+    };
+
+    enum class DiffContextMode : uint8_t
+    {
+        HunksOnly,
+        FullFileWhenAvailable,
+    };
+
+    enum class DiffAutoOpenMode : uint8_t
+    {
+        Parsed,
+        RawText,
+    };
 
     ViewerText();
     ~ViewerText();
@@ -60,23 +92,19 @@ public:
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
     HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
+    LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
 
 private:
     struct ViewerTextConfig
     {
-        uint32_t textBufferMiB = 16;
-        uint32_t hexBufferMiB  = 8;
-        bool showLineNumbers   = false;
-        bool wrapText          = true;
-    };
-
-    struct MenuItemData
-    {
-        std::wstring text;
-        std::wstring shortcut;
-        bool separator  = false;
-        bool topLevel   = false;
-        bool hasSubMenu = false;
+        uint32_t textBufferMiB              = 16;
+        uint32_t hexBufferMiB               = 8;
+        bool showLineNumbers                = false;
+        bool wrapText                       = true;
+        HexByteColorMode hexByteColorMode   = HexByteColorMode::LeadingNibble;
+        DiffDefaultLayout diffDefaultLayout = DiffDefaultLayout::SideBySide;
+        DiffContextMode diffContextMode     = DiffContextMode::HunksOnly;
+        DiffAutoOpenMode diffAutoOpenMode   = DiffAutoOpenMode::Parsed;
     };
 
     struct ByteSpan
@@ -97,6 +125,19 @@ private:
         Hex,
     };
 
+    enum class DocumentKind : uint8_t
+    {
+        PlainText,
+        Diff,
+    };
+
+    enum class DiffPresentationMode : uint8_t
+    {
+        RawText,
+        Inline,
+        SideBySide,
+    };
+
 public:
     enum class FileEncoding : uint8_t
     {
@@ -106,6 +147,104 @@ public:
         Utf32LE,
         Utf32BE,
         Unknown,
+    };
+
+public:
+    struct DiffTextVariant
+    {
+        enum class PlaceholderBandPlacement : uint8_t
+        {
+            FullRow,
+            LeftPane,
+            RightPane,
+        };
+
+        enum class SemanticRowKind : uint8_t
+        {
+            None,
+            Context,
+            Added,
+            Removed,
+            FileHeader,
+            HunkHeader,
+            HiddenContextBanner,
+            Placeholder,
+        };
+
+        struct SectionNavigationEntry
+        {
+            std::wstring label;
+            uint32_t startLogicalLine = 0u;
+        };
+
+        struct HunkNavigationEntry
+        {
+            std::wstring label;
+            uint32_t startLogicalLine = 0u;
+            size_t sectionIndex       = 0u;
+        };
+
+        struct PlaceholderBandEntry
+        {
+            uint32_t logicalLine               = 0u;
+            PlaceholderBandPlacement placement = PlaceholderBandPlacement::FullRow;
+        };
+
+        struct LogicalRowStyleEntry
+        {
+            SemanticRowKind fullRow   = SemanticRowKind::None;
+            SemanticRowKind leftPane  = SemanticRowKind::None;
+            SemanticRowKind rightPane = SemanticRowKind::None;
+        };
+
+        struct LogicalRowRenderEntry
+        {
+            uint32_t fullMarkerIndex  = std::numeric_limits<uint32_t>::max();
+            uint32_t leftMarkerIndex  = std::numeric_limits<uint32_t>::max();
+            uint32_t rightMarkerIndex = std::numeric_limits<uint32_t>::max();
+            bool leftPaneAbsent       = false;
+            bool rightPaneAbsent      = false;
+            bool clickableBanner      = false;
+        };
+
+        struct SideBySidePaneLayoutEntry
+        {
+            bool splitRow             = false;
+            uint32_t leftTextColumns  = 0u;
+            uint32_t separatorColumns = 0u;
+            uint32_t rightTextColumns = 0u;
+        };
+
+        std::wstring text;
+        bool hasExpandedContext                  = false;
+        bool hasPlaceholderRows                  = false;
+        bool referencedFilesResolved             = false;
+        size_t fileSectionCount                  = 0u;
+        size_t styledRowCount                    = 0u;
+        size_t contextRowCount                   = 0u;
+        size_t addedRowCount                     = 0u;
+        size_t removedRowCount                   = 0u;
+        size_t headerRowCount                    = 0u;
+        size_t bannerRowCount                    = 0u;
+        size_t placeholderRowCount               = 0u;
+        size_t placeholderBandCount              = 0u;
+        size_t deferredContextRowCount           = 0u;
+        uint32_t hydratedLogicalLineStart        = 0u;
+        uint32_t hydratedLogicalLineEndExclusive = 0u;
+        uint32_t builtLogicalLineCount           = 0u;
+        bool hasExpandableTail                   = false;
+        std::vector<SectionNavigationEntry> sectionNavigation;
+        std::vector<HunkNavigationEntry> hunkNavigation;
+        std::vector<PlaceholderBandEntry> placeholderBands;
+        std::vector<LogicalRowStyleEntry> logicalRowStyles;
+        std::vector<LogicalRowRenderEntry> logicalRowRenderInfo;
+        std::vector<SideBySidePaneLayoutEntry> logicalRowPaneLayouts;
+    };
+
+    struct StreamedDiffSectionEntry
+    {
+        std::wstring label;
+        uint64_t startOffset = 0u;
     };
 
 private:
@@ -130,6 +269,19 @@ private:
         bool detectedCodePageIsGuess      = false;
 
         std::wstring statusMessage;
+
+        DocumentKind documentKind            = DocumentKind::PlainText;
+        bool diffParsedAvailable             = false;
+        DiffPresentationMode initialDiffMode = DiffPresentationMode::RawText;
+        std::shared_ptr<ParsedDiffDocument> parsedDiffDocument;
+        DiffTextVariant diffInlineHunksOnly;
+        DiffTextVariant diffInlineExpanded;
+        DiffTextVariant diffSideBySideHunksOnly;
+        DiffTextVariant diffSideBySideExpanded;
+        std::vector<StreamedDiffSectionEntry> streamedDiffSections;
+#ifdef _DEBUG
+        uint64_t diffParseCount = 0u;
+#endif
 
         uint64_t textStreamSkipBytes   = 0;
         uint64_t textStreamStartOffset = 0;
@@ -208,6 +360,7 @@ private:
     LRESULT OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept;
     LRESULT OnTextViewMouseMove(HWND hwnd, POINT pt) noexcept;
     LRESULT OnTextViewLButtonUp(HWND hwnd) noexcept;
+    LRESULT OnTextViewSetCursor(HWND hwnd, LPARAM lParam) noexcept;
     LRESULT OnTextViewKeyDown(HWND hwnd, WPARAM vk, LPARAM lParam) noexcept;
     LRESULT OnTextViewSetFocus(HWND hwnd) noexcept;
     LRESULT OnTextViewKillFocus(HWND hwnd) noexcept;
@@ -224,8 +377,6 @@ private:
     LRESULT OnHexViewKillFocus(HWND hwnd) noexcept;
     void OnCommand(HWND hwnd, UINT commandId, UINT notifyCode, HWND control) noexcept;
     LRESULT OnNotify(const NMHDR* header);
-    LRESULT OnMeasureItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept;
-    LRESULT OnDrawItem(DRAWITEMSTRUCT* draw) noexcept;
     LRESULT OnCtlColor(UINT msg, HDC hdc, HWND control) noexcept;
     void OnMouseMove(int x, int y) noexcept;
     void OnMouseLeave() noexcept;
@@ -234,20 +385,40 @@ private:
     bool OnSetCursor(HWND hwnd, LPARAM lParam) noexcept;
     void OnNcActivate(bool windowActive) noexcept;
     LRESULT OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
-
     void Layout(HWND hwnd) noexcept;
     void RefreshFileCombo(HWND hwnd) noexcept;
     void SyncFileComboSelection() noexcept;
-    void OnMeasureFileComboItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept;
-    void OnDrawFileComboItem(DRAWITEMSTRUCT* draw) noexcept;
-    void UpdateMenuChecks(HWND hwnd) noexcept;
+    void UpdateMenuChecks(HWND hwnd, bool syncDxMenuBar = true) noexcept;
     void ApplyTheme(HWND hwnd) noexcept;
     void ApplyTitleBarTheme(bool windowActive) noexcept;
     void UpdateStatusText(HWND hwnd) noexcept;
+    void RefreshConfigurationJson() noexcept;
 
     void SetViewMode(HWND hwnd, ViewMode mode) noexcept;
     void SetWrap(HWND hwnd, bool wrap) noexcept;
     void SetShowLineNumbers(HWND hwnd, bool showLineNumbers) noexcept;
+    void SetHexByteColorMode(HWND hwnd, HexByteColorMode mode) noexcept;
+    void SetDiffPresentation(HWND hwnd, DiffPresentationMode mode) noexcept;
+    void SetDiffContextMode(HWND hwnd, DiffContextMode mode) noexcept;
+    void ResetDiffState() noexcept;
+    [[nodiscard]] bool EnsureDiffVariantBuilt(DiffPresentationMode presentation, DiffContextMode contextMode) noexcept;
+    [[nodiscard]] bool EnsureCurrentDiffVariantBuilt() noexcept;
+    void ApplyCurrentTextPresentation(HWND hwnd, bool preserveViewport = false) noexcept;
+    [[nodiscard]] const DiffTextVariant* CurrentDiffVariant() const noexcept;
+    [[nodiscard]] bool UseDiffSectionFileCombo() const noexcept;
+    [[nodiscard]] size_t ActiveFileComboEntryCount() const noexcept;
+    [[nodiscard]] size_t CurrentDiffSectionIndex() const noexcept;
+    [[nodiscard]] size_t CurrentDiffHunkIndex() const noexcept;
+    [[nodiscard]] std::optional<std::pair<uint32_t, uint32_t>> ComputeVisibleDiffHydrationLogicalRange(HWND hwnd) const noexcept;
+    [[nodiscard]] bool EnsureVisibleDiffViewportHydrated(HWND hwnd) noexcept;
+    void ScrollTextViewportToLogicalLine(HWND hwnd, uint32_t targetLogicalLine) noexcept;
+    void ScrollToDiffSection(HWND hwnd, size_t sectionIndex) noexcept;
+    void ScrollToDiffHunk(HWND hwnd, size_t hunkIndex) noexcept;
+    [[nodiscard]] bool NavigateDiffHunk(HWND hwnd, bool previous) noexcept;
+    [[nodiscard]] bool ShowTextLineNumbersInCurrentPresentation() const noexcept;
+    [[nodiscard]] bool HasParsedDiffPresentation() const noexcept;
+    [[nodiscard]] bool HasPaneLocalSideBySideVisualLayout() const noexcept;
+    [[nodiscard]] DiffPresentationMode PreferredParsedDiffPresentation() const noexcept;
 
     void CommandOpen(HWND hwnd);
     void CommandSaveAs(HWND hwnd);
@@ -295,7 +466,11 @@ private:
     void UpdateTextStreamTotalLineCountAfterLoad() noexcept;
     void RebuildTextLineIndex() noexcept;
     void RebuildTextVisualLines(HWND hwnd) noexcept;
+    void RefreshTextHorizontalViewport(HWND hwnd) noexcept;
     void UpdateTextViewScrollBars(HWND hwnd) noexcept;
+    [[nodiscard]] bool FindTextVisualLineForIndex(size_t index, uint32_t& visualLineOut) const noexcept;
+    [[nodiscard]] bool GetTextVisualLineSegment(
+        uint32_t visualLine, uint32_t& logicalLineOut, uint32_t& segmentStartOut, uint32_t& segmentEndOut, bool preferRightPane) const noexcept;
     bool TryNavigateTextStream(HWND hwnd, bool backward) noexcept;
     uint64_t TextStreamChunkBytes() const noexcept;
     uint64_t AlignTextStreamOffset(uint64_t offset) const noexcept;
@@ -311,7 +486,8 @@ private:
                        std::wstring& outAscii,
                        std::array<ByteSpan, kHexBytesPerLine>& hexSpans,
                        std::array<ByteSpan, kHexBytesPerLine>& textSpans,
-                       size_t& validBytes) noexcept;
+                       size_t& validBytes,
+                       std::array<uint8_t, kHexBytesPerLine>* outByteValues = nullptr) noexcept;
     void EnsureHexLineCache(int item) noexcept;
     size_t ReadHexBytes(uint64_t offset, uint8_t* dest, size_t destSize) noexcept;
     HRESULT RefillHexCache(uint64_t offset) noexcept;
@@ -346,9 +522,6 @@ private:
     bool EnsureDirect2D(HWND hwnd) noexcept;
     void DiscardDirect2D() noexcept;
     void ApplyMenuTheme(HWND hwnd) noexcept;
-    void PrepareMenuTheme(HMENU menu, bool topLevel, std::vector<MenuItemData>& outItems) noexcept;
-    void OnMeasureMenuItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept;
-    void OnDrawMenuItem(DRAWITEMSTRUCT* draw) noexcept;
 
     bool EnsureTextViewDirect2D(HWND hwnd) noexcept;
     void DiscardTextViewDirect2D() noexcept;
@@ -370,8 +543,7 @@ private:
     std::string _configurationJson;
     ViewerTextConfig _config;
 
-    IViewerCallback* _callback = nullptr;
-    void* _callbackCookie      = nullptr;
+    RegistrationCallbackState<IViewerCallback> _callbackState;
 
     ViewerTheme _theme{};
     bool _hasTheme                = false;
@@ -382,9 +554,14 @@ private:
     wil::unique_hmodule _msftEditModule;
 
     wil::unique_hwnd _hWnd;
+    wil::unique_hmenu _menuHandle;
+    RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hEdit;
     wil::unique_hwnd _hHex;
-    wil::unique_hwnd _hFileCombo;
+    wil::unique_hwnd _hFileComboHost;
+    RedSalamander::DxUi::WindowHost _fileComboHost;
+    RedSalamander::DxUi::ComboBox* _fileComboControl = nullptr;
+    bool _fileComboHostPreExpandPopup                = false;
 
     wil::unique_hicon _windowIconSmall;
     wil::unique_hicon _windowIconBig;
@@ -392,8 +569,6 @@ private:
     wil::unique_hbrush _backgroundBrush;
     wil::unique_hbrush _headerBrush;
     wil::unique_hbrush _statusBrush;
-    wil::unique_hfont _uiFont;
-    wil::unique_hfont _monoFont;
 
     wil::com_ptr<ID2D1Factory> _d2dFactory;
     wil::com_ptr<IDWriteFactory> _dwriteFactory;
@@ -425,9 +600,6 @@ private:
     COLORREF _uiHeaderBg   = RGB(255, 255, 255);
     COLORREF _uiStatusBg   = RGB(255, 255, 255);
 
-    HWND _hFileComboList = nullptr;
-    HWND _hFileComboItem = nullptr;
-
     RECT _modeButtonRect{};
     bool _modeButtonHot      = false;
     bool _modeButtonPressed  = false;
@@ -437,11 +609,14 @@ private:
     RECT _contentRect{};
     RECT _statusRect{};
 
-    ViewMode _viewMode           = ViewMode::Text;
-    bool _wrap                   = true;
-    HexColumnMode _hexColumnMode = HexColumnMode::Byte;
-    HexOffsetMode _hexOffsetMode = HexOffsetMode::Hex;
-    HexTextMode _hexTextMode     = HexTextMode::Ansi;
+    ViewMode _viewMode                               = ViewMode::Text;
+    DocumentKind _documentKind                       = DocumentKind::PlainText;
+    DiffPresentationMode _diffPresentation           = DiffPresentationMode::RawText;
+    DiffPresentationMode _lastParsedDiffPresentation = DiffPresentationMode::SideBySide;
+    bool _wrap                                       = true;
+    HexColumnMode _hexColumnMode                     = HexColumnMode::Byte;
+    HexOffsetMode _hexOffsetMode                     = HexOffsetMode::Hex;
+    HexTextMode _hexTextMode                         = HexTextMode::Ansi;
 
     std::filesystem::path _currentPath;
     uint64_t _fileSize     = 0;
@@ -455,6 +630,8 @@ private:
     std::vector<std::filesystem::path> _otherFiles;
     size_t _otherIndex     = 0;
     bool _syncingFileCombo = false;
+    std::optional<size_t> _lastSyncedFileComboIndex;
+    bool _lastSyncedFileComboUsesDiffSections = false;
     std::vector<std::filesystem::path> _selection;
     std::wstring _searchQuery;
     std::vector<size_t> _searchMatchStarts;
@@ -472,19 +649,48 @@ private:
     wil::com_ptr<IHostAlerts> _hostAlerts;
 
     std::wstring _textBuffer;
+    std::wstring _diffRawTextBuffer;
+    struct TextViewHitTestResult
+    {
+        size_t bufferIndex   = 0u;
+        uint32_t logicalLine = 0u;
+    };
+    struct TextVisualLineLayoutEntry
+    {
+        uint32_t logicalLine         = 0u;
+        uint32_t segmentStartIndex   = 0u;
+        uint32_t segmentEndIndex     = 0u;
+        bool splitPanes              = false;
+        uint32_t leftStartIndex      = 0u;
+        uint32_t leftEndIndex        = 0u;
+        uint32_t rightStartIndex     = 0u;
+        uint32_t rightEndIndex       = 0u;
+        uint32_t separatorStartIndex = 0u;
+        uint32_t separatorEndIndex   = 0u;
+        uint32_t leftPaneColumns     = 0u;
+        uint32_t rightPaneColumns    = 0u;
+        uint32_t separatorColumns    = 0u;
+    };
     std::vector<uint32_t> _textLineStarts;
     std::vector<uint32_t> _textLineEnds;
     std::vector<uint32_t> _textVisualLineStarts;
     std::vector<uint32_t> _textVisualLineLogical;
-    uint32_t _textTopVisualLine = 0;
-    uint32_t _textLeftColumn    = 0;
-    uint32_t _textMaxLineLength = 0;
-    uint32_t _textWrapColumns   = 0;
-    size_t _textCaretIndex      = 0;
-    size_t _textSelAnchor       = 0;
-    size_t _textSelActive       = 0;
-    size_t _textPreferredColumn = 0;
-    bool _textSelecting         = false;
+    std::vector<TextVisualLineLayoutEntry> _textVisualLineLayouts;
+    [[nodiscard]] std::optional<TextViewHitTestResult> HitTestTextView(HWND hwnd, POINT pt) const noexcept;
+    [[nodiscard]] bool IsClickableHiddenDiffBannerLogicalLine(uint32_t logicalLine) const noexcept;
+    [[nodiscard]] bool DebugClickTextLogicalLine(HWND hwnd, uint32_t logicalLine) noexcept;
+    uint32_t _textTopVisualLine              = 0;
+    uint32_t _textLeftColumn                 = 0;
+    uint32_t _textMaxLineLength              = 0;
+    uint32_t _textWrapColumns                = 0;
+    uint32_t _textSideBySideLeftPaneColumns  = 0u;
+    uint32_t _textSideBySideRightPaneColumns = 0u;
+    uint32_t _textSideBySideSeparatorColumns = 0u;
+    size_t _textCaretIndex                   = 0;
+    size_t _textSelAnchor                    = 0;
+    size_t _textSelActive                    = 0;
+    size_t _textPreferredColumn              = 0;
+    bool _textSelecting                      = false;
 
     bool _textStreamActive          = false;
     uint64_t _textStreamSkipBytes   = 0;
@@ -520,5 +726,39 @@ private:
     std::array<ByteSpan, kHexBytesPerLine> _hexLineCacheHexSpans{};
     std::array<ByteSpan, kHexBytesPerLine> _hexLineCacheTextSpans{};
 
-    std::vector<MenuItemData> _menuThemeItems;
+    DiffTextVariant _diffInlineHunksOnly;
+    DiffTextVariant _diffInlineExpanded;
+    DiffTextVariant _diffSideBySideHunksOnly;
+    DiffTextVariant _diffSideBySideExpanded;
+    std::shared_ptr<ParsedDiffDocument> _parsedDiffDocument;
+    std::shared_ptr<DiffReferenceCache> _diffReferenceCache;
+    std::vector<StreamedDiffSectionEntry> _diffStreamSections;
+    std::optional<size_t> _diffExpandedSectionIndex;
+    bool _diffInlineExpandedBuilt     = false;
+    bool _diffSideBySideExpandedBuilt = false;
+    bool _diffParsedAvailable         = false;
+
+#ifdef _DEBUG
+    uint64_t _debugTextRenderCount           = 0u;
+    uint64_t _debugTextLastPaintUs           = 0u;
+    size_t _debugTextVisibleRowCount         = 0u;
+    size_t _debugTextVisibleStyledRowCount   = 0u;
+    size_t _debugTextVisibleContextRowCount  = 0u;
+    size_t _debugTextVisibleAddedRowCount    = 0u;
+    size_t _debugTextVisibleRemovedRowCount  = 0u;
+    size_t _debugTextVisibleHeaderRowCount   = 0u;
+    size_t _debugTextVisibleBannerRowCount   = 0u;
+    size_t _debugTextVisibleGapHatchCount    = 0u;
+    size_t _debugTextVisibleSplitRowCount    = 0u;
+    uint32_t _debugDiffMarkerArgb            = 0u;
+    uint32_t _debugDiffGapHatchArgb          = 0u;
+    bool _debugDiffContextUsesBaseBackground = false;
+    uint64_t _debugHexRenderCount            = 0u;
+    size_t _debugHexVisibleRowCount          = 0u;
+    size_t _debugHexVisibleByteCount         = 0u;
+    size_t _debugHexColorizedByteCount       = 0u;
+    size_t _debugHexUniqueColorBucketCount   = 0u;
+    bool _debugHexHighContrastFallback       = false;
+    uint64_t _debugDiffParseCount            = 0u;
+#endif
 };

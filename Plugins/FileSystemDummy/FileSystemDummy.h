@@ -88,6 +88,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetConfiguration(const char* configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetConfiguration(const char** configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE SomethingToSave(BOOL* pSomethingToSave) noexcept override;
+    [[nodiscard]] static const char* StaticConfigurationSchema() noexcept;
 
     HRESULT STDMETHODCALLTYPE GetMenuItems(const NavigationMenuItem** items, unsigned int* count) noexcept override;
     HRESULT STDMETHODCALLTYPE ExecuteMenuCommand(unsigned int commandId) noexcept override;
@@ -164,6 +165,11 @@ public:
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
 
     HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
+                                               FileSystemOperation operationType,
+                                               FileSystemTransferEndpoint endpoint,
+                                               FileSystemTransferHints* hints) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
 
     // Internal helper used by IFileWriter implementations.
     HRESULT
@@ -200,10 +206,10 @@ private:
 
     ~FileSystemDummy();
 
-    static constexpr wchar_t kPluginId[]          = L"builtin/file-system-dummy";
-    static constexpr wchar_t kPluginShortId[]     = L"fk";
-    static constexpr wchar_t kPluginAuthor[]      = L"RedSalamander";
-    static constexpr wchar_t kPluginVersion[]     = L"1.0";
+    static constexpr wchar_t kPluginId[]      = L"builtin/file-system-dummy";
+    static constexpr wchar_t kPluginShortId[] = L"fk";
+    static constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
+    static constexpr wchar_t kPluginVersion[] = VERSINFO_PLUGIN_VERSION;
 
     static constexpr char kSchemaJson[] = R"json({
 	    "version":1,
@@ -281,11 +287,12 @@ private:
 
     PluginMetaData _metaData{};
     inline static std::string _configurationJson;
-    inline static unsigned long _maxChildrenPerDirectory = 42;
-    inline static unsigned long _maxDepth                = 10;
-    inline static unsigned int _seed                     = 42;
-    inline static unsigned long _latencyMilliseconds     = 0;
-    inline static std::wstring _virtualSpeedLimitText    = L"0";
+    inline static unsigned long _maxChildrenPerDirectory        = 42;
+    inline static unsigned long _maxDepth                       = 10;
+    inline static unsigned int _seed                            = 42;
+    inline static unsigned long _latencyMilliseconds            = 0;
+    inline static unsigned long _streamChunkLatencyMilliseconds = 0;
+    inline static std::wstring _virtualSpeedLimitText           = L"0";
     inline static std::atomic<uint64_t> _virtualSpeedLimitBytesPerSecond{0};
 
     mutable std::mutex _propertiesMutex;
@@ -378,3 +385,5 @@ private:
     inline static std::condition_variable _watchCv;
     inline static std::vector<std::shared_ptr<DirectoryWatchRegistration>> _directoryWatches;
 };
+
+[[nodiscard]] const char* GetFileSystemDummyStaticConfigurationSchema() noexcept;

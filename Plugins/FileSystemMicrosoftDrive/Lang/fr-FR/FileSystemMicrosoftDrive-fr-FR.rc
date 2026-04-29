@@ -1,0 +1,48 @@
+#pragma code_page(65001)
+#include "../../FileSystemMicrosoftDriveResources.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_NAME "OneDrive personnel"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_PERSONAL_DESCRIPTION "Stockage Microsoft OneDrive personnel via Microsoft Graph."
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_NAME "OneDrive Entreprise"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ONEDRIVE_BUSINESS_DESCRIPTION "Stockage Microsoft OneDrive Entreprise via Microsoft Graph."
+    IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_NAME "SharePoint"
+    IDS_FILESYSTEMMICROSOFTDRIVE_SHAREPOINT_DESCRIPTION "Bibliothèques de documents Microsoft SharePoint via Microsoft Graph."
+    IDS_FILESYSTEMMICROSOFTDRIVE_NAME "Microsoft Drive"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_TITLE_SIGNIN_CONFIG_REQUIRED "La connexion ne peut pas démarrer"
+    IDS_FILESYSTEMMICROSOFTDRIVE_ALERT_MSG_MISSING_CLIENT_ID_FMT "{0} nécessite un ID client Microsoft Graph avant de pouvoir lancer la connexion dans le navigateur.\r\n\r\nModifiez le JSON des paramètres et restaurez la valeur avancée 'clientId' pour '{0}'."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_APP_TITLE "RedSalamander"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_SUCCESS "Connexion terminée"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS "sparkles|Connexion au cloud terminée. Vos fichiers sont prêts."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_TITLE_FAILURE "Connexion interrompue"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE "warning|La connexion a été interrompue. Revenez dans l’application pour réessayer."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FOOTER_HINT "Vous pouvez fermer cet onglet et revenir dans RedSalamander."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_2 "party|Microsoft a autorisé l’accès. RedSalamander peut continuer."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_3 "rocket|La connexion s’est déroulée correctement. Revenez dans l’application pour continuer."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_4 "compass|Le chemin est prêt. RedSalamander sait où aller ensuite."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_5 "cloud|L’accès au cloud est prêt. La suite se passe dans l’application."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_6 "glowstar|Tout est prêt. Vous pouvez continuer."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_7 "check|Connexion sécurisée. RedSalamander est prêt à parcourir vos fichiers."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_8 "fire|La connexion a réussi. Vous pouvez poursuivre."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_9 "rainbow|Tout est prêt côté Microsoft. Revenez dans RedSalamander."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_SUCCESS_10 "wave|Le passage par le navigateur est terminé. RedSalamander vous attend."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_2 "rain|Une étape a échoué. RedSalamander peut relancer la connexion."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_3 "repair|Cette connexion nécessite une nouvelle tentative. Réessayez."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_4 "detour|Le navigateur n’a pas terminé l’étape prévue. Revenez dans l’application et relancez la connexion."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_5 "anchor|Le rappel ne s’est pas terminé correctement. RedSalamander peut réessayer."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_6 "flash|Quelque chose a interrompu la dernière étape. Une nouvelle tentative devrait aider."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_7 "umbrella|Aucun changement n’a été appliqué. Revenez dans l’application et réessayez la connexion."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_8 "map|Le retour depuis Microsoft est incomplet. Relancez la connexion."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_9 "tools|Cette connexion nécessite une correction rapide. RedSalamander est prêt lorsque vous l’êtes."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BODY_FAILURE_10 "retry|Presque terminé. Revenez dans RedSalamander et relancez une tentative."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_STATUS_SUCCESS "Connexion Microsoft terminée"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_STATUS_FAILURE "Connexion Microsoft interrompue"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_SUCCESS "Votre compte Microsoft est lié. Revenez dans RedSalamander pour continuer à parcourir vos fichiers."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_SUMMARY_FAILURE "La connexion Microsoft ne s’est pas terminée dans cet onglet. Revenez dans RedSalamander et réessayez."
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_FUN_LABEL "Signal RedSalamander"
+    IDS_FILESYSTEMMICROSOFTDRIVE_OAUTH_PAGE_BRAND_KICKER "Connexion Microsoft Drive"
+END

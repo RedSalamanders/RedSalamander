@@ -384,6 +384,56 @@ void FolderView::SelectSameExtension()
     UpdateIncrementalSearchHighlightForFocusedItem();
 }
 
+void FolderView::SelectSameName()
+{
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex == invalidIndex || _focusedIndex >= _items.size())
+    {
+        return;
+    }
+
+    const FolderItem& focused = _items[_focusedIndex];
+    if (focused.isDirectory)
+    {
+        return;
+    }
+
+    const std::wstring_view nameWithoutExtension = focused.GetNameWithoutExtension();
+
+    bool changed = false;
+    for (auto& item : _items)
+    {
+        if (item.isDirectory)
+        {
+            continue;
+        }
+
+        if (! OrdinalString::EqualsNoCase(item.GetNameWithoutExtension(), nameWithoutExtension))
+        {
+            continue;
+        }
+
+        if (! item.selected)
+        {
+            item.selected = true;
+            changed       = true;
+        }
+    }
+
+    if (! changed)
+    {
+        return;
+    }
+
+    RecomputeSelectionStats();
+    NotifySelectionChanged();
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+    UpdateIncrementalSearchHighlightForFocusedItem();
+}
+
 void FolderView::UnselectSameExtension()
 {
     const auto invalidIndex = static_cast<size_t>(-1);
@@ -409,6 +459,53 @@ void FolderView::UnselectSameExtension()
         }
 
         if (! OrdinalString::EqualsNoCase(item.GetExtension(), extension))
+        {
+            continue;
+        }
+
+        item.selected = false;
+        changed       = true;
+    }
+
+    if (! changed)
+    {
+        return;
+    }
+
+    RecomputeSelectionStats();
+    NotifySelectionChanged();
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+    UpdateIncrementalSearchHighlightForFocusedItem();
+}
+
+void FolderView::UnselectSameName()
+{
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex == invalidIndex || _focusedIndex >= _items.size())
+    {
+        return;
+    }
+
+    const FolderItem& focused = _items[_focusedIndex];
+    if (focused.isDirectory)
+    {
+        return;
+    }
+
+    const std::wstring_view nameWithoutExtension = focused.GetNameWithoutExtension();
+
+    bool changed = false;
+    for (auto& item : _items)
+    {
+        if (item.isDirectory || ! item.selected)
+        {
+            continue;
+        }
+
+        if (! OrdinalString::EqualsNoCase(item.GetNameWithoutExtension(), nameWithoutExtension))
         {
             continue;
         }
@@ -594,14 +691,40 @@ void FolderView::NotifySelectionChanged() const noexcept
     }
 }
 
+std::optional<FolderView::SelectionStats::SelectedItemDetails> FolderView::GetFocusedItemDetails() const noexcept
+{
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex == invalidIndex || _focusedIndex >= _items.size())
+    {
+        return std::nullopt;
+    }
+
+    const FolderItem& item = _items[_focusedIndex];
+    SelectionStats::SelectedItemDetails details{};
+    details.isDirectory    = item.isDirectory;
+    details.sizeBytes      = item.sizeBytes;
+    details.lastWriteTime  = item.lastWriteTime;
+    details.fileAttributes = item.fileAttributes;
+    return details;
+}
+
+void FolderView::NotifyFocusedItemChanged() const noexcept
+{
+    if (_focusedItemChangedCallback)
+    {
+        _focusedItemChangedCallback();
+    }
+}
+
 void FolderView::FocusItem(size_t index, bool ensureVisible)
 {
     if (index >= _items.size())
         return;
 
-    const auto invalidIndex = static_cast<size_t>(-1);
-    const int marginPx      = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
-    auto invalidateItem     = [&](size_t itemIndex) noexcept
+    const auto invalidIndex           = static_cast<size_t>(-1);
+    const size_t previousFocusedIndex = _focusedIndex;
+    const int marginPx                = std::max(1, PxFromDip(kFocusStrokeThicknessDip));
+    auto invalidateItem               = [&](size_t itemIndex) noexcept
     {
         if (itemIndex == invalidIndex || itemIndex >= _items.size())
         {
@@ -628,6 +751,10 @@ void FolderView::FocusItem(size_t index, bool ensureVisible)
     }
     UpdateIncrementalSearchHighlightForFocusedItem();
     RememberFocusedItemForDisplayedFolder();
+    if (previousFocusedIndex != _focusedIndex)
+    {
+        NotifyFocusedItemChanged();
+    }
 }
 
 [[nodiscard]] bool FolderView::GoToPreviousSelectedName()
@@ -927,7 +1054,7 @@ std::vector<std::filesystem::path> FolderView::GetSelectedDirectoryPaths() const
     return paths;
 }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 std::wstring_view FolderView::DebugGetFocusedDisplayName() const noexcept
 {
     const auto invalidIndex = static_cast<size_t>(-1);
@@ -960,6 +1087,19 @@ bool FolderView::DebugHasItemDisplayName(std::wstring_view displayName) const no
 size_t FolderView::DebugGetItemCount() const noexcept
 {
     return _items.size();
+}
+
+size_t FolderView::DebugGetBitmapIconCount() const noexcept
+{
+    size_t count = 0;
+    for (const auto& item : _items)
+    {
+        if (item.icon)
+        {
+            ++count;
+        }
+    }
+    return count;
 }
 
 bool FolderView::DebugIsItemSelectedByDisplayName(std::wstring_view displayName) const noexcept
@@ -997,6 +1137,18 @@ size_t FolderView::DebugGetSelectedItemCount() const noexcept
 bool FolderView::DebugIsEmptyFolderStateActive() const noexcept
 {
     return CanShowEmptyFolderState() && _emptyFolderState.has_value();
+}
+
+FolderView::DebugEmptyFolderItemMetrics FolderView::DebugGetEmptyFolderItemMetrics() const noexcept
+{
+    return DebugEmptyFolderItemMetrics{
+        .active          = CanShowEmptyFolderState() && _emptyFolderState.has_value(),
+        .clientWidthDip  = DipFromPx(_clientSize.cx),
+        .clientHeightDip = DipFromPx(_clientSize.cy),
+        .tileWidthDip    = _tileWidthDip,
+        .tileHeightDip   = _tileHeightDip,
+        .labelHeightDip  = _labelHeightDip,
+    };
 }
 
 FolderView::FilterWatermarkVisualMode FolderView::DebugGetFilterWatermarkVisualMode() const noexcept

@@ -13,37 +13,151 @@
     <RSBuildRoot>$(SolutionDir).build\</RSBuildRoot>
 
     <!-- Avoid affecting msbuild invocations under any vcpkg install/build tree. -->
-    <RSIsVcpkgTree Condition="$([System.String]::Copy('$(MSBuildProjectDirectory)').ToLowerInvariant().Contains('\\vcpkg_installed\\'))">true</RSIsVcpkgTree>
-    <RSIsVcpkgTree Condition="$([System.String]::Copy('$(MSBuildProjectDirectory)').ToLowerInvariant().EndsWith('\\vcpkg_installed'))">true</RSIsVcpkgTree>
+    <RSNormalizedProjectDirectory>$([System.String]::Copy('$(MSBuildProjectDirectory)').Replace('/','\').ToLowerInvariant())</RSNormalizedProjectDirectory>
+    <RSIsVcpkgTree Condition="$([System.String]::Copy('$(RSNormalizedProjectDirectory)').Contains('\\vcpkg_installed\\'))">true</RSIsVcpkgTree>
+    <RSIsVcpkgTree Condition="$([System.String]::Copy('$(RSNormalizedProjectDirectory)').EndsWith('\\vcpkg_installed'))">true</RSIsVcpkgTree>
     <RSIsVcpkgTree Condition="'$(RSIsVcpkgTree)'==''">false</RSIsVcpkgTree>
 
+    <!-- First-party projects live in the repo checkout, but never under .build\. -->
+    <RSProjectDirFromRepo>$([MSBuild]::MakeRelative($(MSBuildThisFileDirectory), $(MSBuildProjectDirectory)))</RSProjectDirFromRepo>
+    <RSProjectDirFromRepoLower>$([System.String]::Copy('$(RSProjectDirFromRepo)').Replace('/','\').ToLowerInvariant())</RSProjectDirFromRepoLower>
+    <RSProjectIsOutsideRepo>$([System.String]::Copy('$(RSProjectDirFromRepoLower)').StartsWith('..\\'))</RSProjectIsOutsideRepo>
+    <RSProjectIsBuildTree>$([System.String]::Copy('$(RSProjectDirFromRepoLower)').StartsWith('.build\\'))</RSProjectIsBuildTree>
+    <RSIsFirstPartyProject Condition="'$(RSProjectDirFromRepoLower)'!='' and '$(RSProjectIsOutsideRepo)'!='True' and '$(RSProjectIsBuildTree)'!='True'">true</RSIsFirstPartyProject>
+    <RSIsFirstPartyProject Condition="'$(RSIsFirstPartyProject)'==''">false</RSIsFirstPartyProject>
+
     <!-- vcpkg manifest mode: keep installs under .build\ too -->
-    <VcpkgManifestRoot Condition="'$(RSIsVcpkgTree)'!='true' and '$(VcpkgManifestRoot)'==''">$(SolutionDir)</VcpkgManifestRoot>
-    <VcpkgInstalledDir Condition="'$(RSIsVcpkgTree)'!='true'">$(RSBuildRoot)vcpkg_installed\</VcpkgInstalledDir>
+    <VcpkgManifestRoot Condition="'$(RSIsFirstPartyProject)'=='true' and '$(VcpkgManifestRoot)'==''">$(SolutionDir)</VcpkgManifestRoot>
+    <VcpkgInstalledDir Condition="'$(RSIsFirstPartyProject)'=='true'">$(RSBuildRoot)vcpkg_installed\</VcpkgInstalledDir>
 
     <!-- Map VS platform to vcpkg triplet (used in ExternalIncludePath / manual copy steps) -->
-    <RSVcpkgTriplet Condition="'$(RSIsVcpkgTree)'!='true' and '$(Platform)'=='x64'">x64-windows</RSVcpkgTriplet>
-    <RSVcpkgTriplet Condition="'$(RSIsVcpkgTree)'!='true' and '$(Platform)'=='ARM64'">arm64-windows</RSVcpkgTriplet>
-    <RSVcpkgTriplet Condition="'$(RSIsVcpkgTree)'!='true' and '$(RSVcpkgTriplet)'=='' and '$(VCPKG_DEFAULT_TRIPLET)'!=''">$(VCPKG_DEFAULT_TRIPLET)</RSVcpkgTriplet>
-    <RSVcpkgTriplet Condition="'$(RSIsVcpkgTree)'!='true' and '$(RSVcpkgTriplet)'==''">x64-windows</RSVcpkgTriplet>
+    <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Platform)'=='x64'">x64-windows</RSVcpkgTriplet>
+    <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Platform)'=='ARM64'">arm64-windows</RSVcpkgTriplet>
+    <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSVcpkgTriplet)'=='' and '$(VCPKG_DEFAULT_TRIPLET)'!=''">$(VCPKG_DEFAULT_TRIPLET)</RSVcpkgTriplet>
+    <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSVcpkgTriplet)'==''">x64-windows</RSVcpkgTriplet>
+
+    <!--
+      ASan Debug needs vcpkg dependencies built with /fsanitize=address so the MSVC STL
+      emits matching annotate_optional/annotate_string/annotate_vector tokens. The
+      x64-windows-asan / arm64-windows-asan overlay triplets under
+      vcpkg-overlay-triplets/ provide that. Override RSVcpkgTriplet (used for
+      ExternalIncludePath) and VcpkgTriplet (read by vcpkg's MSBuild integration).
+    -->
+    <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='ASan Debug' and '$(Platform)'=='x64'">x64-windows-asan</RSVcpkgTriplet>
+    <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='ASan Debug' and '$(Platform)'=='ARM64'">arm64-windows-asan</RSVcpkgTriplet>
+    <VcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='ASan Debug' and '$(Platform)'=='x64'">x64-windows-asan</VcpkgTriplet>
+    <VcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='ASan Debug' and '$(Platform)'=='ARM64'">arm64-windows-asan</VcpkgTriplet>
   </PropertyGroup>
 
   <PropertyGroup>
     <RSProjectRelativeDir>$([MSBuild]::MakeRelative($(SolutionDir), $(MSBuildProjectDirectory)))</RSProjectRelativeDir>
     <RSProjectRelativeDir Condition="'$(RSProjectRelativeDir)'==''">$(MSBuildProjectName)</RSProjectRelativeDir>
 
-    <!-- Plugins are loaded from a dedicated Plugins\ directory in the output folder -->
     <RSOutSubdir />
-    <RSOutSubdir Condition="$([System.String]::Copy('$(MSBuildProjectDirectory)').ToLowerInvariant().Contains('\\plugins\\'))">Plugins\</RSOutSubdir>
+    <RSOutSubdir Condition="'$(RSOutSubdir)'=='' and $([System.String]::Copy('$(MSBuildProjectDirectory)').ToLowerInvariant().Contains('\plugins\'))">Plugins\</RSOutSubdir>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(RSIsVcpkgTree)'!='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true'">
+    <RSDefaultEnableTests Condition="'$(RSDefaultEnableTests)'==''">true</RSDefaultEnableTests>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <RSBuildEnableTests Condition="'$(RSBuildEnableTests)'==''">false</RSBuildEnableTests>
+    <RSBuildTestDefinitions Condition="'$(RSBuildEnableTests)'=='true'">ENABLE_TESTS;</RSBuildTestDefinitions>
+    <RSUseVcpkgManifest Condition="'$(RSUseVcpkgManifest)'==''">true</RSUseVcpkgManifest>
+    <RSUseVcpkgManifest Condition="'$(IsLanguageResourceProject)'=='true'">false</RSUseVcpkgManifest>
+    <VcpkgEnabled Condition="'$(IsLanguageResourceProject)'=='true'">false</VcpkgEnabled>
+    <VcpkgEnableManifest Condition="'$(RSUseVcpkgManifest)'=='true'">true</VcpkgEnableManifest>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
     <OutDir>$(RSBuildRoot)$(Platform)\$(Configuration)\$(RSOutSubdir)</OutDir>
     <IntDir>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntDir>
   </PropertyGroup>
 
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(IsLanguageResourceProject)'=='true'">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <TargetName>$(ResourceOwnerName)-$(ResourceCulture)</TargetName>
+    <OutDir>$(RSBuildRoot)$(Platform)\$(Configuration)\Lang\</OutDir>
+    <IntDir>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntDir>
+    <RSVersionFileDescription>$(ResourceOwnerName) $(ResourceCulture) resources</RSVersionFileDescription>
+    <RSVersionInternalName>$(TargetName)</RSVersionInternalName>
+    <RSVersionOriginalFilename>$(TargetName).dll</RSVersionOriginalFilename>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
+    <ClCompile>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
+      <WarningLevel>EnableAllWarnings</WarningLevel>
+      <SDLCheck>true</SDLCheck>
+      <ConformanceMode>true</ConformanceMode>
+      <LanguageStandard>stdcpplatest</LanguageStandard>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup
+    Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and ('$(MSBuildProjectName)'=='RedSalamander' or '$(MSBuildProjectName)'=='RedSalamanderMonitor' or '$(MSBuildProjectName)'=='LocalizationTests')">
+    <ClCompile>
+      <PreprocessorDefinitions>REDSAL_USE_COMMON_LOCALIZATION;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(IsLanguageResourceProject)'=='true'">
+    <Link>
+      <NoEntryPoint>true</NoEntryPoint>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>false</GenerateDebugInformation>
+    </Link>
+    <ResourceCompile>
+      <PreprocessorDefinitions>$(ResourceCultureDefine);%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+
+  <!--
+    RedSalamanderMonitor self diagnostics are runtime opt-in in both Debug and Release so the monitor
+    can listen to RedSalamander without adding its own Info/Perf/debug chatter. RedSalamander.exe
+    still enables diagnostics in Debug by default; Release enables ETW/JSONL capture with its command
+    line switches. Use the runtime ETW/perf switches when launching the monitor to enable its own diagnostics.
+  -->
+  <ItemDefinitionGroup
+    Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and ('$(MSBuildProjectName)'=='RedSalamanderMonitor' or '$(MSBuildProjectName)'=='MonitorTest')">
+    <ClCompile>
+      <PreprocessorDefinitions>RS_DIAGNOSTICS_RUNTIME_OPT_IN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>RS_DIAGNOSTICS_RUNTIME_OPT_IN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(Configuration)'=='ASan Debug'">
+    <ClCompile>
+      <PreprocessorDefinitions>RS_ASAN_DEBUG_BUILD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>RS_ASAN_DEBUG_BUILD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <!--
+    ENABLE_TESTS is the single gate for test-only hooks and selftest plumbing.
+    Debug/ASan Debug opt in by default for first-party projects unless the project
+    explicitly sets RSDefaultEnableTests=false. Release builds must request test
+    hooks explicitly in the specific test-facing project that needs them.
+  -->
+  <ItemDefinitionGroup
+    Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSDefaultEnableTests)'=='true' and ('$(Configuration)'=='Debug' or '$(Configuration)'=='ASan Debug')">
+    <ClCompile>
+      <PreprocessorDefinitions>ENABLE_TESTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ResourceCompile>
+      <PreprocessorDefinitions>ENABLE_TESTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+
   <!-- Desktop Bridge packaging project (wapproj) -->
-  <PropertyGroup Condition="'$(RSIsVcpkgTree)'!='true' and '$(MSBuildProjectExtension)'=='.wapproj'">
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.wapproj'">
     <BaseIntermediateOutputPath>$(RSBuildRoot)Intermediate\</BaseIntermediateOutputPath>
     <IntermediateOutputPath>$(RSBuildRoot)Intermediate\$(Platform)\$(Configuration)\$(RSProjectRelativeDir)\</IntermediateOutputPath>
     <BaseOutputPath>$(RSBuildRoot)Intermediate\</BaseOutputPath>

@@ -181,7 +181,7 @@ Watcher rules:
 - `RedSalamanderMonitor.exe` does not participate in this hot-reload flow.
 
 Merge policy after a valid external reload:
-- Disk is authoritative for persisted user-editable sections such as `theme`, `plugins`, `connections`, `extensions`, `shortcuts`, `cache`, `fileOperations`, `compareDirectories`, `hotPaths`, `monitor`, `mainMenu`, `startup`, `search`, and folder preference fields.
+- Disk is authoritative for persisted user-editable sections such as `theme`, `ui`, `plugins`, `connections`, `extensions`, `shortcuts`, `cache`, `fileOperations`, `compareDirectories`, `hotPaths`, `monitor`, `mainMenu`, `startup`, `search`, and folder preference fields.
 - Runtime session state is preserved for already-open windows and current pane navigation.
 - Preserved runtime window placements are the placements of currently open modeless/top-level windows already running in the process.
 - Preserved folder session fields are:
@@ -207,6 +207,7 @@ The root JSON object may contain (depending on the application):
 - `windows` (object): per-window placement records
 - `theme` (object): current theme + custom themes
 - `plugins` (object): plugin discovery + per-plugin configuration
+- `ui` (object): app-wide DxUI density, motion, and backdrop preferences
 - `mainMenu` (object): RedSalamander main window menu bar state
 - `cache` (object): cache configuration (directory enumeration cache, etc.)
 - `folders` (object): multi-pane folder state (current folder + global folder history)
@@ -245,7 +246,10 @@ Built-in plugin configuration keys are documented in their respective plugin spe
 - `builtin/file-system-gdrive`: `Specs/FileSystem/FileSystem_GoogleDrive.md`
 - `builtin/viewer-imgraw`: `Specs/Plugins/Plugins_ViewerImgRaw.md`
 - `builtin/viewer-space`: `Specs/Plugins/Plugins_ViewerSpace.md`
+- `builtin/viewer-text`: `Specs/Plugins/Plugins_ViewerText.md`
 - `builtin/viewer-web`, `builtin/viewer-json`, `builtin/viewer-markdown`: `Specs/Plugins/Plugins_ViewerWeb.md`
+
+Current built-in ViewerText configuration includes text/hex defaults plus diff defaults (`diffDefaultLayout`, `diffContextMode`, `diffAutoOpenMode`) persisted under `plugins.configurationByPluginId["builtin/viewer-text"]`.
 
 
 ## Extensions (v11)
@@ -263,7 +267,7 @@ Notes:
 - To disable auto-mount behavior, set `openWithFileSystemByExtension` to `{}`.
 - The host uses `openWithViewerByExtension` when pressing `F3` (View): a matching entry opens the file in the associated viewer plugin window.
 - If no association is found (or the mapped plugin is missing/disabled), the host falls back to `builtin/viewer-text` (Text/Hex auto-detection).
-- Default mappings include `.txt`, `.log`, `.xml`, `.ini`, `.cfg`, `.csv` → `builtin/viewer-text`.
+- Default mappings include `.txt`, `.log`, `.xml`, `.ini`, `.cfg`, `.csv`, `.diff`, `.patch`, `.rej` → `builtin/viewer-text`.
 - Default mappings include `.md` → `builtin/viewer-markdown`, `.json`/`.json5`/`.jsonl`/`.ndjson` → `builtin/viewer-json`, `.html`/`.htm`/`.pdf` → `builtin/viewer-web` (with fallback to `builtin/viewer-text` when the plugin is missing/disabled).
 - Default mappings include common image formats supported by baseline WIC codecs (e.g. `.png`, `.jpg`, `.gif`, `.tif`, `.bmp`, `.jxr`) → `builtin/viewer-imgraw`.
 - Default mappings include common RAW photo extensions (e.g. `.cr2`, `.cr3`, `.nef`, `.arw`, `.dng`, `.raf`, `.rw2`, `.orf`, `.pef`, `.sr2`, `.srw`, `.x3f`) → `builtin/viewer-imgraw`.
@@ -277,6 +281,11 @@ Shortcut bindings live under:
 Structure:
 - `functionBar` (array): Function Bar bindings (typically `F1`..`F12` with modifiers)
 - `folderView` (array): FolderView bindings (key chords that apply when a FolderView has focus)
+- `functionBarCollapsed` (bool, optional): persisted collapsed state for the Function Bar shortcuts group
+- `folderViewCollapsed` (bool, optional): persisted collapsed state for the Folder View shortcuts group
+- `sortColumnId` (string, optional): stable logical column ID used for the persisted `ShortcutsWindow` grid sort
+- `sortDescending` (bool, optional): persisted sort direction for `sortColumnId`
+- `gridLayout` (array, optional): visible `ShortcutsWindow` grid column layout entries, keyed by stable column ID, display index, and width in DIPs
 
 Each binding entry:
 - `vk` (string): stable key name (examples: `F1`, `Backspace`, `Tab`, `Enter`, `Space`, `PageUp`, `PageDown`, `Home`, `End`, `Left`, `Right`, `Up`, `Down`, `Insert`, `Delete`, `A`, `0`, `VK_1B`)
@@ -288,6 +297,7 @@ Each binding entry:
 Notes:
 - Command IDs are stable; UI display names are localized resource strings. No user-facing command names are hard-coded in C++.
 - If a binding references a command that is not implemented, invoking it shows a localized “not yet implemented” message box and does nothing else (see `Specs/UI/UI_CommandMenuKeyboard.md`).
+- The `ShortcutsWindow` selected row and live search text are transient UI state, not persisted settings fields. Reopen restores persisted group collapse, logical sort, and visible column layout, then selects a valid row from the restored grid.
 
 ## Window Placement
 
@@ -465,6 +475,23 @@ Color keys are dot-separated identifiers. Unknown keys are ignored.
 - `fileOps.scrollbarTrack`
 - `fileOps.scrollbarThumb`
 
+**ViewerText diff surfaces**
+- `viewer.diff.addedBackground`
+- `viewer.diff.removedBackground`
+- `viewer.diff.contextBackground`
+- `viewer.diff.headerBackground`
+- `viewer.diff.bannerBackground`
+- `viewer.diff.placeholderBackground`
+- `viewer.diff.divider`
+
+These `viewer.diff.*` keys are semantic app-theme tokens used by `builtin/viewer-text`
+for parsed diff rendering across light, dark, built-in `builtin/rainbow` / `ThemeMode::Rainbow`,
+custom JSON5 themes, and high-contrast themes.
+They are part of the app theme contract and must not be stored inside
+`settings.plugins.configurationByPluginId["builtin/viewer-text"]`.
+ViewerText must not introduce separate persisted diff visual-style keys for row coloring,
+banner presentation, or active hunk/section state.
+
 This list is the initial contract; additional keys may be added over time.
 
 ### Theme color key maintenance (mandatory)
@@ -492,7 +519,35 @@ Color keys for the monitor text view. These map to `ColorTextView::Theme`.
 - `monitor.textView.metaError`
 - `monitor.textView.metaWarning`
 - `monitor.textView.metaInfo`
+- `monitor.textView.metaPerf`
 - `monitor.textView.metaDebug`
+
+## File Operations Settings
+
+Host-owned File Operations settings live under:
+
+- `fileOperations`
+
+These keys are the global defaults edited by `Preferences -> File Operations`. Plugin-specific knobs such as concurrency, recycle-bin batching, and search walkers are not stored here; they remain in each plugin's own configuration payload.
+
+### Stored data
+
+- `fileOperations.autoDismissSuccess`: whether completed successful/cancelled task cards auto-dismiss from the File Operations popup (bool, default: `false`).
+- `fileOperations.preCalcEnabled`: whether copy, move, and permanent delete tasks run the recursive pre-calculation pass when that operation type supports it (bool, default: `true`).
+- `fileOperations.preCalcMaxWorkers`: maximum worker count for the host-side pre-calculation tree walk (integer, `1..8`, default: `4`).
+- `fileOperations.crossFsBridgeBufferSizeKB`: default per-buffer size for host-driven cross-filesystem bridge copies (integer, `512..16384`, default: `4096`). Two buffers are allocated per active bridged file transfer.
+- `fileOperations.defaultBandwidthLimitBytesPerSecond`: default speed limit applied to newly created copy/move tasks when the caller did not already specify one (integer, `>= 0`, default: `0`; `0` means unlimited).
+
+### UI ownership
+
+- `Preferences -> File Operations` edits only the host-owned `fileOperations.*` defaults above.
+- `Preferences -> Plugins -> File System` owns plugin-specific file-operation settings such as:
+  - `concurrencyMode`
+  - `copyMoveMaxConcurrency`
+  - `deleteMaxConcurrency`
+  - `deleteRecycleBinMaxConcurrency`
+  - `recycleBinBatchSize`
+  - `searchMaxDirectoryWalkers`
 
 ## Folders (multi-pane)
 
@@ -582,6 +637,28 @@ Behavior:
 - When `menuBarVisible` is `false`, pressing **Alt** (alone) temporarily shows the menu bar for interaction; it hides again when the menu loop exits.
 - `functionBarVisible` is toggled by `View → Function Bar` and takes effect immediately.
 
+## DxUI Customization State
+
+These settings persist the app-wide DxUI customization values edited in `Preferences -> General -> DxUI`.
+
+Settings live under:
+- `ui`
+
+Keys:
+- `compactMode` (bool, default: `false`): whether supported DxUI surfaces use compact density instead of standard density.
+- `language` (string, default: `"system"`): application language preference. `"system"` follows the Windows preferred UI language list; concrete values are BCP-style language tags such as `"fr"` or `"fr-FR"`.
+- `reducedMotion` (string, default: `"system"`): `"system" | "on" | "off"`.
+- `windowBackdrop` (string, default: `"default"`): `"default" | "none" | "mica" | "micaAlt" | "acrylic"`.
+
+Behavior:
+- `compactMode` is the persisted app-wide default for supported DxUI density-aware surfaces such as Preferences pages, menu bars, popup menus / flyouts, combo boxes, Monitor chrome, and shared grid/list surfaces that opt into the shared density contract.
+- `language` drives runtime localization resource lookup for registered application, monitor, and plugin resource owners. Missing, empty, or invalid values fall back to `"system"`.
+- Saving omits `language` when it is the default `"system"` and writes the concrete culture tag for non-default selections.
+- `reducedMotion` overrides the OS reduced-motion preference for DxUI animation behavior when set to `"on"` or `"off"`. `"system"` follows the OS setting.
+- `windowBackdrop` stores the requested DWM backdrop policy for supported top-level windows. Unsupported environments, failed DWM application, and high-contrast mode fall back to `None`.
+- When a supported top-level window uses a non-`None` backdrop, its title-bar caption/border/text colors fall back to the DWM system defaults instead of forcing an app-specific title-bar color.
+- Preferences previews these values live through `workingSettings`, but only `Apply` / `OK` persist them to the settings store.
+
 ## Compare Directories Defaults
 
 Defaults for the Compare Directories feature live under:
@@ -609,6 +686,8 @@ Keys map to `Common::Settings::ConnectionsSettings`:
 
 Notes:
 - Secrets are not written to the Settings Store JSON; they are stored in Windows Credential Manager (WinCred) or cached in memory for the current app run.
+- Connection Manager `Close` and `Connect` commands must first commit pending profile edits into `settings.connections`, update/delete any staged WinCred secrets, and call `SettingsHotReload::SaveSettingsAndSchema(...)`. `Connect` may then return `S_OK` only after the selected connection name is resolvable from the updated runtime settings.
+- Quick Connect remains memory-only: it may be shown and edited in the Connection Manager, but the Settings Store writer excludes its fixed `00000000-0000-0000-0000-000000000001` profile from disk JSON and stores any Quick Connect secrets only in the current process.
 - Some connection profiles are intentionally hostless. Today that includes S3 / S3 Table (`host = auto region`) and Google Drive (`host` omitted entirely).
 
 ## Hot Paths
@@ -644,7 +723,7 @@ These settings persist the state of checkable menu items and filter state.
 - `monitor.menu.alwaysOnTop` (bool)
 - `monitor.menu.showIds` (bool)
 - `monitor.menu.autoScroll` (bool)
-- `monitor.filter.mask` (integer, 0-31)
+- `monitor.filter.mask` (integer, 0-63)
 - `monitor.filter.preset` (string): `"custom" | "errorsOnly" | "errorsWarnings" | "allTypes"`
 
 ### Defaults (v1)
@@ -668,7 +747,7 @@ These settings persist the state of checkable menu items and filter state.
 
 ```json
 {
-  "schemaVersion": 10,
+  "schemaVersion": 11,
   "windows": {
     "MainWindow": {
       "state": "maximized",

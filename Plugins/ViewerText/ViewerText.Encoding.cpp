@@ -184,7 +184,7 @@ void ViewerText::CommandCycleDisplayEncoding(HWND hwnd, bool backward) noexcept
         return;
     }
 
-    HMENU menu = GetMenu(hwnd);
+    HMENU menu = _menuHandle ? _menuHandle.get() : GetMenu(hwnd);
     if (! menu)
     {
         return;

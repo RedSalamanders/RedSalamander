@@ -2,6 +2,22 @@
 
 Last updated: 2026-03-07
 
+Status: WIP - read-only directory-listing milestone landed; file IO, write operations, and remote validation remain.
+
+## Closeout audit (`2026-04-25`)
+
+Current code and spec evidence show the plugin project, OAuth/Connection Manager groundwork, directory enumeration, Drive metadata, and the authoritative spec in `Specs/FileSystem/FileSystem_GoogleDrive.md` are present. The plan cannot move to Done because the current plugin still reports mutating capabilities as unsupported, and `CopyItems`, `MoveItems`, `DeleteItems`, file streams, and upload/export paths return `ERROR_NOT_SUPPORTED`.
+
+Remaining closeout checklist:
+
+- [x] Plugin project and solution wiring exist under `Plugins/FileSystemGoogleDrive/`.
+- [x] OAuth2/PKCE connection profile groundwork and refresh-token secret retrieval exist.
+- [x] Directory enumeration and drive-info milestone are documented in `Specs/FileSystem/FileSystem_GoogleDrive.md`.
+- [ ] Implement or explicitly defer file download/read streams, including native Google Docs export behavior.
+- [ ] Implement or explicitly defer upload/overwrite/create-directory/rename/move/delete/server-side copy.
+- [ ] Finish shortcut and duplicate-name path semantics for the host's segment-based virtual filesystem contract.
+- [ ] Add deterministic local selftests plus gated remote Drive validation and archive the evidence.
+
 ## Goal
 
 Add a new remote filesystem plugin, `FileSystemGoogleDrive`, that:

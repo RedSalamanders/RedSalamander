@@ -6,6 +6,35 @@ Index every file on an NTFS volume in seconds using the USN change journal, then
 
 **Key insight:** never walk the directory tree. Read the MFT directly via `FSCTL_ENUM_USN_DATA`, then keep it updated via `FSCTL_READ_USN_JOURNAL`.
 
+## Current Product Requirements
+
+- The Windows search service must keep Debug and Release stores separate by default:
+  - Debug: `%ProgramData%\RedSalamander\SearchIndex.Debug`
+  - Release: `%ProgramData%\RedSalamander\SearchIndex`
+- That split-store requirement is behavioral, not just nominal: a default Debug SQLite startup must use only `SearchIndex.Debug` on disk and must not create or mutate `SearchIndex`, and vice versa for Release.
+- If the active build's default SQLite store already exists at its default ProgramData root, startup must reuse that store in place instead of migrating it or creating the sibling build root.
+- Service startup must accept status and query requests before startup warm-up, rebuild, repair, or SQLite mirroring completes.
+- SQLite bootstrap or inspection failure at startup must be fail-open: the service stays queryable, status requests still succeed, and the first query falls back to the live filesystem instead of aborting process startup.
+- Query execution must choose the fastest no-wait path per request:
+  - direct SQLite only when the configured store is valid and current for the requested root,
+  - already-ready in-memory index only when the root is already current without warming,
+  - live filesystem scan fallback otherwise.
+- If a direct SQLite query fails after already emitting early hits, the request must restart on the live filesystem path and suppress duplicates instead of returning a partial hard failure.
+- Freshness must be proven at query start. Missing, invalid, stale, or cutover-blocked indexed state must fall back to live filesystem search instead of blocking.
+- Case-insensitive local path and filename matching must follow Windows ordinal filesystem behavior: invariant case folding, still accent-sensitive, and still normalization-sensitive when the filesystem itself keeps composed and decomposed names distinct.
+- Pre-query status polling must derive `storeState`, `syncPhase`, and `fallbackReason` from persistent-store inspection and startup warm-up state when no query has yet populated repository runtime status.
+- The healthy-service degraded path must be surfaced separately from transport failure:
+  - `FILESYSTEM_SEARCH_WARNING_DEGRADED_NO_INDEX` for live-search fallback on a healthy backend,
+  - `FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE` when the service transport itself is unavailable.
+- Both the Find window and the foreground service TUI must expose database readiness and synchronization progress while searches are active.
+- Host-extension status relays into the Find window must normalize the same degraded execution-mode inference as broker-polled status so active searches do not momentarily report placeholder `search unknown` text when warm-up or cutover state already requires live fallback.
+- Redirected foreground-mode output is also a diagnostics surface, so its log lines must carry the active database state, synchronization state, and query execution mode whenever the interactive dashboard is unavailable.
+- Host-side self-tests must verify the Find window backend diagnostics line separately from the combined running-status sentence so service DB or sync state and warning semantics remain regression-tested.
+- Compare self-tests must cover at least two broken-store fixtures:
+  - a corrupt SQLite file that yields `StoreInvalid` before the first query and still falls back live,
+  - an inspectable but unqueryable SQLite volume that yields `SqliteFailure` at query time and still falls back live.
+- Compare self-tests must also cover a mid-query SQLite fault after the first emitted hit and prove that the restarted live scan stays duplicate-free.
+
 ## File System Compatibility
 
 | Capability | NTFS | ReFS | FAT/exFAT |

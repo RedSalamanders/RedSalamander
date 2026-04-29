@@ -41,11 +41,78 @@
 struct IFileSystem;
 struct IFileSystemIO;
 struct IDriveInfo;
+struct NavigationDxTextHost;
 
 namespace Common::Settings
 {
 struct Settings;
 }
+
+#ifdef ENABLE_TESTS
+enum class NavigationViewDebugFocusTarget : uint8_t
+{
+    None,
+    MenuRegion,
+    PathRegion,
+    HistoryRegion,
+    DiskInfoRegion,
+    HistoryDropdown,
+    PathEdit,
+    FullPathPopupEdit,
+};
+
+enum class NavigationViewDebugDropdownKind : uint8_t
+{
+    None,
+    Menu,
+    Drive,
+    History,
+    DiskInfo,
+    Siblings,
+};
+
+struct NavigationViewDebugSnapshot
+{
+    NavigationViewDebugFocusTarget focusTarget   = NavigationViewDebugFocusTarget::None;
+    NavigationViewDebugDropdownKind dropdownKind = NavigationViewDebugDropdownKind::None;
+    UINT dpi                                     = USER_DEFAULT_SCREEN_DPI;
+    bool editMode                                = false;
+    bool historyDropdownVisible                  = false;
+    bool editSuggestPopupVisible                 = false;
+    bool fullPathPopupVisible                    = false;
+    bool fullPathPopupEditMode                   = false;
+    bool pathEllipsisVisible                     = false;
+    bool showMenuSection                         = false;
+    bool showDiskInfoSection                     = false;
+    bool menuIconBitmapLoaded                    = false;
+    size_t visibleChildWindowCount               = 0u;
+    size_t historyCount                          = 0u;
+    size_t historyDropdownItemCount              = 0u;
+    size_t editSuggestItemCount                  = 0u;
+    int historyDropdownSelectedIndex             = -1;
+    int editSuggestSelectedIndex                 = -1;
+    SIZE editSuggestPopupClientSize              = {};
+    SIZE fullPathPopupClientSize                 = {};
+    RECT menuRegionRect                          = {};
+    RECT pathRegionRect                          = {};
+    RECT historyRegionRect                       = {};
+    RECT diskInfoRegionRect                      = {};
+    RECT pathEllipsisRect                        = {};
+    RECT pathAncestorSegmentRect                 = {};
+    bool pathAncestorSegmentVisible              = false;
+    RECT fullPathPopupAncestorSegmentRect        = {};
+    bool fullPathPopupAncestorSegmentVisible     = false;
+    HWND currentEditHostHwnd                     = nullptr;
+    HWND currentEditBridgeHwnd                   = nullptr;
+    size_t currentEditSelectionStart             = 0u;
+    size_t currentEditSelectionEnd               = 0u;
+    bool currentEditHasSelection                 = false;
+    std::wstring currentPathText;
+    std::wstring pathAncestorTargetText;
+    std::wstring fullPathPopupAncestorTargetText;
+    std::wstring currentEditText;
+};
+#endif
 
 class NavigationView : public INavigationMenuCallback
 {
@@ -91,6 +158,7 @@ public:
     void SetFocusRegion(FocusRegion region);
     void FocusAddressBar();
     void OpenChangeDirectoryFromCommand();
+    [[nodiscard]] bool TryHandleEditClipboardCommand(UINT commandId) noexcept;
     void OpenHistoryDropdownFromKeyboard();
     void OpenDriveMenuFromCommand();
 
@@ -116,13 +184,19 @@ public:
     // Constants (public for layout calculations)
     static constexpr int kHeight = 24; // DIP at 96 DPI
 
+#ifdef ENABLE_TESTS
+    [[nodiscard]] bool DebugGetSnapshot(NavigationViewDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugFocusRegion(FocusRegion region) noexcept;
+#endif
+
 private:
-    static constexpr wchar_t kClassName[]                 = L"RedSalamander.NavigationView";
-    static constexpr wchar_t kFullPathPopupClassName[]    = L"RedSalamander.FullPathPopup";
-    static constexpr wchar_t kEditSuggestPopupClassName[] = L"RedSalamander.EditSuggestPopup";
-    static constexpr int kDriveSectionWidth               = 28; // Menu button
-    static constexpr int kDiskInfoSectionWidth            = 70; // Disk info
-    static constexpr int kHistoryButtonWidth              = 24; // History dropdown
+    static constexpr wchar_t kClassName[]              = L"RedSalamander.NavigationView";
+    static constexpr wchar_t kDxHostClassName[]        = L"RedSalamander.NavigationView.DxHost";
+    static constexpr wchar_t kFullPathPopupClassName[] = L"RedSalamander.FullPathPopup";
+    static constexpr wchar_t kSuggestPopupClassName[]  = L"RedSalamander.SuggestPopup";
+    static constexpr int kDriveSectionWidth            = 28; // Menu button
+    static constexpr int kDiskInfoSectionWidth         = 70; // Disk info
+    static constexpr int kHistoryButtonWidth           = 24; // History dropdown
 
     void RequestPathChange(const std::filesystem::path& path);
     std::filesystem::path ToPluginPath(const std::filesystem::path& displayPath) const;
@@ -162,6 +236,8 @@ private:
 
     static LRESULT CALLBACK WndProcThunk(HWND hWindow, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+    static ATOM RegisterDxHostWndClass(HINSTANCE instance);
+    static LRESULT CALLBACK DxHostWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
     static ATOM RegisterFullPathPopupWndClass(HINSTANCE instance);
     static LRESULT CALLBACK FullPathPopupWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -169,7 +245,6 @@ private:
 
     static ATOM RegisterEditSuggestPopupWndClass(HINSTANCE instance);
     static LRESULT CALLBACK EditSuggestPopupWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
-    static LRESULT OnEditSubclassNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp, UINT_PTR subclassId) noexcept;
     LRESULT EditSuggestPopupWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
     // Message handlers
@@ -179,8 +254,6 @@ private:
     void OnPaint();
     void OnSize(UINT width, UINT height);
     void OnCommand(UINT id, HWND hwndCtl, UINT codeNotify);
-    void OnDrawItem(DRAWITEMSTRUCT* dis);
-    void OnMeasureItem(MEASUREITEMSTRUCT* mis);
     LRESULT OnCtlColorEdit(HDC hdc, HWND hwndControl);
     void OnLButtonDown(POINT pt);
     void OnLButtonDblClk(POINT pt);
@@ -230,8 +303,7 @@ private:
     RECT _sectionHistoryRect  = {}; // History dropdown button
     RECT _sectionDiskInfoRect = {}; // Disk info
 
-    // Child controls (Win32)
-    wil::unique_hwnd _pathEdit; // Section Path: Edit control (edit mode only)
+    std::unique_ptr<NavigationDxTextHost> _pathEdit;
 
     // Direct2D rendering for all sections
     void EnsureD2DResources();
@@ -251,24 +323,21 @@ private:
     void GetBreadcrumbTextLayoutAndWidth(std::wstring_view text, float height, wil::com_ptr<IDWriteTextLayout>& layout, float& width) noexcept;
 
     // Menus
-    void ShowMenuDropdown();
-    void ShowFileSystemDriveMenuDropdown();
-    void ShowHistoryDropdown();
-    void ShowDiskInfoDropdown();
+    void ShowMenuDropdown(bool ignoreInitialLeftButtonUp = false);
+    void ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButtonUp = false);
+    void ShowHistoryDropdown(bool ignoreInitialLeftButtonUp = false);
+    void ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp = false);
     void ShowSiblingsDropdown(size_t segmentIndex);
     void RequestFullPathPopup(const D2D1_RECT_F& anchorBounds);
     void ShowFullPathPopup();
+    void UpdateFullPathPopupWindow();
     void ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t separatorIndex);
     void CloseFullPathPopup();
     void EnsureFullPathPopupD2DResources();
     void DiscardFullPathPopupD2DResources();
     void BuildFullPathPopupLayout(float clientWidth);
     void RenderFullPathPopup();
-    void PrepareThemedMenu(HMENU menu);
-    void ClearThemedMenuState();
-    int TrackThemedPopupMenuReturnCmd(HMENU menu, UINT flags, const POINT& screenPoint, HWND ownerWindow);
     bool TryGetSiblingFolders(const std::filesystem::path& parentPath, std::vector<std::filesystem::path>& siblings);
-    void BuildSiblingFoldersMenu(HMENU menu, const std::vector<std::filesystem::path>& siblings, const std::filesystem::path& currentPath);
 
     void EnsureSiblingPrefetchWorker();
     void QueueSiblingPrefetchForPath(const std::filesystem::path& displayPath);
@@ -280,11 +349,14 @@ private:
     void ExitEditMode(bool accept);
     void EnterFullPathPopupEditMode();
     void ExitFullPathPopupEditMode(bool accept);
+    void UpdatePathEditHostLayout() noexcept;
+    void UpdateFullPathPopupEditHostLayout() noexcept;
+    void ApplyDxEditHostThemes() noexcept;
     bool ValidatePath(const std::wstring& pathStr);
     bool HandleEditSubclassKeyDown(HWND editHwnd, WPARAM key);
     bool HandleEditSubclassChar(HWND editHwnd, WPARAM key);
     bool HandleEditSubclassPaste(HWND editHwnd);
-    static LRESULT CALLBACK EditSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData);
+    static LRESULT CALLBACK EditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
     // Edit autosuggest
     void UpdateEditSuggest();
@@ -330,7 +402,6 @@ private:
     bool _diskInfoHovered               = false; // Track if Section 3 is hovered
     int _hoveredSegmentIndex            = -1;    // Track which segment is hovered (-1 = none)
     int _hoveredSeparatorIndex          = -1;    // Track which separator is hovered (-1 = none)
-    bool _editCloseHovered              = false;
     HWND _suppressCtrlBackspaceCharHwnd = nullptr;
 
     struct EditSuggestItem
@@ -411,17 +482,18 @@ private:
     POINT _pendingFullPathPopupAnchor    = {};
 
     wil::unique_hwnd _fullPathPopup;
-    wil::unique_hwnd _fullPathPopupEdit;
-    bool _fullPathPopupEditMode                       = false;
-    bool _fullPathPopupTrackingMouse                  = false;
-    int _fullPathPopupActiveSeparatorIndex            = -1;
-    int _fullPathPopupMenuOpenForSeparator            = -1;
-    int _fullPathPopupPendingSeparatorMenuSwitchIndex = -1;
-    int _fullPathPopupHoveredSegmentIndex             = -1;
-    int _fullPathPopupHoveredSeparatorIndex           = -1;
-    float _fullPathPopupScrollY                       = 0.0f;
-    float _fullPathPopupContentHeight                 = 0.0f;
-    SIZE _fullPathPopupClientSize                     = {0, 0};
+    std::unique_ptr<NavigationDxTextHost> _fullPathPopupEdit;
+    bool _fullPathPopupEditMode                         = false;
+    bool _restoreFolderViewFocusAfterFullPathPopupClose = false;
+    bool _fullPathPopupTrackingMouse                    = false;
+    int _fullPathPopupActiveSeparatorIndex              = -1;
+    int _fullPathPopupMenuOpenForSeparator              = -1;
+    int _fullPathPopupPendingSeparatorMenuSwitchIndex   = -1;
+    int _fullPathPopupHoveredSegmentIndex               = -1;
+    int _fullPathPopupHoveredSeparatorIndex             = -1;
+    float _fullPathPopupScrollY                         = 0.0f;
+    float _fullPathPopupContentHeight                   = 0.0f;
+    SIZE _fullPathPopupClientSize                       = {0, 0};
     std::vector<PathSegment> _fullPathPopupSegments;
     std::vector<BreadcrumbSeparator> _fullPathPopupSeparators;
     UINT_PTR _fullPathPopupHoverTimer = 0;
@@ -529,28 +601,11 @@ private:
     bool _showMenuSection     = false;
     bool _showDiskInfoSection = false;
 
-    struct MenuItemData
-    {
-        std::wstring text;
-        std::wstring shortcut;
-        HBITMAP bitmap         = nullptr;
-        wchar_t glyph          = 0;
-        bool separator         = false;
-        bool header            = false;
-        bool hasSubMenu        = false;
-        bool useMiddleEllipsis = false;
-    };
-
-    std::vector<std::unique_ptr<MenuItemData>> _menuItemData;
-    wil::unique_hbrush _menuBackgroundBrush;
-    int _themedMenuMaxWidthPx           = 0;
-    bool _themedMenuUseMiddleEllipsis   = false;
-    bool _themedMenuUseEditSuggestStyle = false;
-
     enum class MenuActionType : uint8_t
     {
         NavigatePath,
         Command,
+        WindowCommand,
     };
 
     struct MenuAction
@@ -567,34 +622,28 @@ private:
     bool ExecuteNavigationMenuAction(UINT menuId);
     bool ExecuteDriveMenuAction(UINT menuId);
 
-    // GDI resources (Sections 1 & 3) - managed with WIL
-    wil::unique_hfont _pathFont; // For Edit control
+    // Native brush still backs the HWND paint background until the remaining view chrome is fully DxUi owned.
     wil::unique_hbrush _backgroundBrush;
-    wil::unique_hbrush _borderBrush;
-    wil::unique_any<HPEN, decltype(&::DeleteObject), ::DeleteObject> _borderPen;
 
     void UpdateEffectiveTheme() noexcept;
 
     NavigationViewTheme _baseTheme;
     NavigationViewTheme _theme;
-    MenuTheme _menuTheme;
     AppTheme _appTheme;
 
     enum class ModernDropdownKind : uint8_t
     {
         None,
+        Menu,
+        Drive,
         History,
+        DiskInfo,
         Siblings,
     };
 
     ModernDropdownKind _navDropdownKind = ModernDropdownKind::None;
     std::vector<std::filesystem::path> _navDropdownPaths;
-    wil::unique_hwnd _navDropdownCombo;
-    wil::unique_hfont _menuFont;
-    UINT _menuFontDpi = USER_DEFAULT_SCREEN_DPI;
-    wil::unique_hfont _menuIconFont;
-    UINT _menuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
-    bool _menuIconFontValid = false;
+    int _navDropdownSelectedIndex = -1;
 
     bool _paneFocused = false;
 
@@ -646,7 +695,8 @@ private:
         ID_DRIVE_MENU_BASE = 500,
         ID_DRIVE_MENU_MAX  = 599,
 
-        ID_SIBLING_BASE       = 600, // 600-699 for sibling folders
-        ID_NAV_DROPDOWN_COMBO = 700,
+        ID_SIBLING_BASE = 600, // 600-699 for sibling folders
+        ID_HISTORY_BASE = 700, // 700-799 for history dropdown entries
+        ID_HISTORY_MAX  = 799,
     };
 };

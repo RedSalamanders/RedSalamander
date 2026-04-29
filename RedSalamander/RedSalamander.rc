@@ -56,7 +56,6 @@ IDI_WSL_FEDORA          PNG                     "res\\wsl_fedora.png"
 
 IDI_WSL_LINUX_GENERIC   PNG                     "res\\wsl_linux_black.png"
 
-
 /////////////////////////////////////////////////////////////////////////////
 //
 // Menu
@@ -117,7 +116,7 @@ BEGIN
             MENUITEM "&Root Directory",                    IDM_LEFT_GO_TO_ROOT_DIRECTORY,MFT_STRING,MFS_ENABLED
             MENUITEM "Path from &Other Panel",       IDM_LEFT_GO_TO_PATH_FROM_OTHER_PANE,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Hot &Paths... [todo]",      IDM_LEFT_HOT_PATHS,MFT_STRING,MFS_ENABLED
+            MENUITEM "Hot &Paths...",      IDM_LEFT_HOT_PATHS,MFT_STRING,MFS_ENABLED
             MENUITEM "(Empty)",                      0,MFT_STRING,MFS_GRAYED
             MENUITEM MFT_SEPARATOR
             MENUITEM "(Empty)",                      0,MFT_STRING,MFS_GRAYED
@@ -239,8 +238,8 @@ BEGIN
             MENUITEM "Select Same E&xtensions",       IDM_PANE_SELECTION_SELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM "Unselect Same Extensions",      IDM_PANE_SELECTION_UNSELECT_SAME_EXTENSION,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
-            MENUITEM "Select Same &Names [todo]",            IDM_PANE_SELECTION_SELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
-            MENUITEM "Unselect Same Names [todo]",           IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "Select Same &Names",                   IDM_PANE_SELECTION_SELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
+            MENUITEM "Unselect Same Names",                  IDM_PANE_SELECTION_UNSELECT_SAME_NAME,MFT_STRING,MFS_ENABLED
             MENUITEM MFT_SEPARATOR
             MENUITEM "&Hide Selected Names",          IDM_PANE_SELECTION_HIDE_SELECTED_NAMES,MFT_STRING,MFS_ENABLED
             MENUITEM "Hide Unselected Names",         IDM_PANE_SELECTION_HIDE_UNSELECTED_NAMES,MFT_STRING,MFS_ENABLED
@@ -441,99 +440,25 @@ END
 // Dialog
 //
 
-IDD_ABOUTBOX DIALOGEX 0, 0, 170, 62
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION "About RedSalamander"
-FONT 8, "MS Shell Dlg", 0, 0, 0x1
-BEGIN
-    ICON            IDI_REDSALAMANDER,IDC_STATIC,14,14,21,20
-    LTEXT           "RedSalamander, Version 1.0",IDC_STATIC,42,14,114,8,SS_NOPREFIX
-    LTEXT           "Copyright (c) 2025",IDC_STATIC,42,26,114,8
-    DEFPUSHBUTTON   "OK",IDOK,113,41,50,14,WS_GROUP
-END
-
-IDD_SPLASH DIALOGEX 58, 50, 299, 94
-STYLE DS_SETFONT | DS_SHELLFONT | WS_POPUP
-EXSTYLE WS_EX_TOOLWINDOW
-FONT 9, "Segoe UI"
-BEGIN
-    LTEXT           "",IDC_SPLASH_REDSALAMANDER,8,7,143,41
-    LTEXT           "",IDC_SPLASH_VERSION,8,60,237,8
-    LTEXT           "",IDC_SPLASH_COPYRIGHT,8,73,237,8
-    LTEXT           "",IDC_SPLASH_STATUS,8,83,237,8
-END
-
 IDD_PREFERENCES DIALOGEX 0, 0, 500, 340
 STYLE DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_CLIPCHILDREN | DS_SHELLFONT
 CAPTION "Preferences"
 FONT 9, "Segoe UI"
 BEGIN
-    CONTROL         "",IDC_PREFS_CATEGORY_LIST,"SysTreeView32",WS_CHILD | WS_VISIBLE | WS_TABSTOP | WS_VSCROLL | TVS_HASBUTTONS | TVS_FULLROWSELECT | TVS_SHOWSELALWAYS | TVS_NOHSCROLL | TVS_DISABLEDRAGDROP,8,8,120,308
+    CONTROL         "",IDC_PREFS_CATEGORY_LIST,"Static",WS_CHILD | WS_VISIBLE | WS_TABSTOP | SS_NOTIFY,8,8,120,308
     CONTROL         "",IDC_PREFS_PAGE_HOST,"RedSalamanderPrefsPageHost",WS_CHILD | WS_VISIBLE | WS_TABSTOP,136,8,356,308
     DEFPUSHBUTTON   "OK",IDOK,318,324,54,14
     PUSHBUTTON      "Cancel",IDCANCEL,376,324,54,14
     PUSHBUTTON      "Apply",IDC_PREFS_APPLY,434,324,54,14
 END
 
-IDD_CONNECTION_MANAGER DIALOGEX 0, 0, 520, 300
-STYLE DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_CLIPCHILDREN | DS_SHELLFONT
-CAPTION "Connections"
-FONT 9, "Segoe UI"
-BEGIN
-    LTEXT           "",IDC_CONNECTION_LIST_TITLE,8,8,140,14
-    CONTROL         "",IDC_CONNECTION_LIST,"SysListView32",WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS,8,24,140,184
-    PUSHBUTTON      "",IDC_CONNECTION_NEW,8,212,46,14
-    PUSHBUTTON      "",IDC_CONNECTION_RENAME,56,212,48,14
-    PUSHBUTTON      "",IDC_CONNECTION_REMOVE,106,212,42,14
-    LTEXT           "",IDC_CONNECTION_SECTION_CONNECTION,160,8,120,8
-    LTEXT           "",IDC_CONNECTION_LABEL_NAME,160,24,54,8
-    EDITTEXT        IDC_CONNECTION_NAME,220,22,292,14,ES_AUTOHSCROLL
-    LTEXT           "",IDC_CONNECTION_LABEL_PROTOCOL,160,44,54,8
-    COMBOBOX        IDC_CONNECTION_PROTOCOL,220,42,140,90,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
-    LTEXT           "",IDC_CONNECTION_LABEL_HOST,160,66,54,8
-    EDITTEXT        IDC_CONNECTION_HOST,220,64,200,14,ES_AUTOHSCROLL
-    LTEXT           "",IDC_CONNECTION_LABEL_PORT,428,66,26,8
-    EDITTEXT        IDC_CONNECTION_PORT,458,64,54,14,ES_AUTOHSCROLL
-    LTEXT           "",IDC_CONNECTION_LABEL_INITIAL_PATH,160,88,54,8
-    EDITTEXT        IDC_CONNECTION_INITIAL_PATH,220,86,292,14,ES_AUTOHSCROLL
-    LTEXT           "",IDC_CONNECTION_LABEL_COPYMOVE_CONCURRENCY,160,106,140,8
-    EDITTEXT        IDC_CONNECTION_COPYMOVE_CONCURRENCY,220,104,292,14,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "",IDC_CONNECTION_LABEL_DELETE_CONCURRENCY,160,126,140,8
-    EDITTEXT        IDC_CONNECTION_DELETE_CONCURRENCY,220,124,292,14,ES_AUTOHSCROLL | ES_NUMBER
-    LTEXT           "",IDC_CONNECTION_SECTION_AUTH,160,108,120,8
-    LTEXT           "",IDC_CONNECTION_LABEL_ANONYMOUS,160,124,120,8
-    PUSHBUTTON      "",IDC_CONNECTION_ANONYMOUS,464,120,48,14
-    LTEXT           "",IDC_CONNECTION_LABEL_USER,160,144,54,8
-    EDITTEXT        IDC_CONNECTION_USER,220,142,200,14,ES_AUTOHSCROLL
-    LTEXT           "",IDC_CONNECTION_LABEL_SECRET,160,166,54,8
-    EDITTEXT        IDC_CONNECTION_PASSWORD,220,164,200,14,ES_AUTOHSCROLL | ES_PASSWORD
-    PUSHBUTTON      "",IDC_CONNECTION_SHOW_SECRET,424,164,38,14
-    LTEXT           "",IDC_CONNECTION_LABEL_SAVE_PASSWORD,160,186,120,8
-    PUSHBUTTON      "",IDC_CONNECTION_SAVE_PASSWORD,464,182,48,14
-    LTEXT           "",IDC_CONNECTION_LABEL_REQUIRE_HELLO,160,206,140,8
-    PUSHBUTTON      "",IDC_CONNECTION_REQUIRE_HELLO,464,202,48,14
-    LTEXT           "",IDC_CONNECTION_LABEL_IGNORE_SSL_TRUST,160,206,140,8
-    PUSHBUTTON      "",IDC_CONNECTION_IGNORE_SSL_TRUST,464,202,48,14
-    LTEXT           "",IDC_CONNECTION_SECTION_SSH,160,224,120,8
-    LTEXT           "",IDC_CONNECTION_LABEL_SSH_PRIVATEKEY,160,240,54,8
-    EDITTEXT        IDC_CONNECTION_SSH_PRIVATEKEY,220,238,252,14,ES_AUTOHSCROLL
-    PUSHBUTTON      "...",IDC_CONNECTION_SSH_PRIVATEKEY_BROWSE,476,238,28,14
-    LTEXT           "",IDC_CONNECTION_LABEL_SSH_KNOWNHOSTS,160,260,54,8
-    EDITTEXT        IDC_CONNECTION_SSH_KNOWNHOSTS,220,258,252,14,ES_AUTOHSCROLL
-    PUSHBUTTON      "...",IDC_CONNECTION_SSH_KNOWNHOSTS_BROWSE,476,258,28,14
-    LTEXT           "",IDC_CONNECTION_SECTION_S3,160,224,120,8
-    LTEXT           "",IDC_CONNECTION_LABEL_S3_ENDPOINT_OVERRIDE,160,240,54,8
-    EDITTEXT        IDC_CONNECTION_S3_ENDPOINT_OVERRIDE,220,238,292,14,ES_AUTOHSCROLL
-    LTEXT           "",IDC_CONNECTION_LABEL_S3_USE_HTTPS,160,186,140,8
-    PUSHBUTTON      "",IDC_CONNECTION_S3_USE_HTTPS,464,182,48,14
-    LTEXT           "",IDC_CONNECTION_LABEL_S3_VERIFY_TLS,160,206,140,8
-    PUSHBUTTON      "",IDC_CONNECTION_S3_VERIFY_TLS,464,202,48,14
-    LTEXT           "",IDC_CONNECTION_LABEL_S3_USE_VIRTUAL_ADDRESSING,160,166,140,8
-    PUSHBUTTON      "",IDC_CONNECTION_S3_USE_VIRTUAL_ADDRESSING,464,162,48,14
-    DEFPUSHBUTTON   "",IDOK,378,280,62,14
-    PUSHBUTTON      "",IDC_CONNECTION_CLOSE,413,280,62,14
-    PUSHBUTTON      "",IDCANCEL,448,280,62,14
-END
+// IDD_CONNECTION_MANAGER deleted (Phase 12). The Connection Manager runs as a
+// single-canvas DxUi top-level window (`ConnectionManagerWindow.{h,cpp}`); see
+// `Specs/Plans/Done/UI_ConnectionManagerSingleCanvasPlan.md`. The
+// `IDC_CONNECTION_*` ids that survive in `resource.h` (`IDC_CONNECTION_NEW`,
+// `IDC_CONNECTION_RENAME`, `IDC_CONNECTION_REMOVE`, `IDC_CONNECTION_CLOSE`)
+// are kept because the new `WindowImpl::DebugGetCommandButton` switch maps
+// them to logical command buttons in the test surface.
 
 IDD_CONNECTION_CRED_PROMPT DIALOGEX 0, 0, 300, 150
 STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_SHELLFONT
@@ -549,15 +474,6 @@ BEGIN
     LTEXT           "",IDC_CONNECTION_CRED_PROMPT_VALIDATION,10,106,280,22,SS_NOPREFIX
     DEFPUSHBUTTON   "",IDOK,190,132,48,14
     PUSHBUTTON      "",IDCANCEL,242,132,48,14
-END
-
-IDD_FATAL_ERROR DIALOGEX 0, 0, 360, 160
-STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
-CAPTION ""
-FONT 8, "MS Shell Dlg", 400, 0, 0x1
-BEGIN
-    CONTROL         "",IDC_FATAL_ERROR_TEXT,"Edit",WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,7,7,346,128
-    DEFPUSHBUTTON   "",IDOK,303,142,50,14,WS_GROUP
 END
 
 IDD_COMPARE_DIRECTORIES_OPTIONS DIALOGEX 0, 0, 360, 276
@@ -586,11 +502,6 @@ BEGIN
         BOTTOMMARGIN, 55
     END
 
-    IDD_SPLASH, DIALOG
-    BEGIN
-        LEFTMARGIN, 7
-        TOPMARGIN, 7
-    END
 END
 #endif    // APSTUDIO_INVOKED
 
@@ -652,16 +563,24 @@ BEGIN
     IDS_PREFS_CAT_VIEWERS_DESC "File extension to viewer mapping."
     IDS_PREFS_CAT_EDITORS   "Editors"
     IDS_PREFS_CAT_EDITORS_DESC "File extension to editor mapping."
-    IDS_PREFS_EDITORS_PLACEHOLDER "Editor preferences are not implemented yet."
+    IDS_PREFS_EDITORS_PLACEHOLDER "External editor configuration is planned for a future version."
+    IDS_PREFS_EDITORS_EMPTY_TITLE "No editor settings yet"
+    IDS_PREFS_EDITORS_EMPTY_BODY "External editor configuration is planned for a future version."
+    IDS_PREFS_EDITORS_EMPTY_CAPTION "When this page arrives, it will live here with the same card layout as the rest of Preferences."
     IDS_PREFS_CAT_KEYBOARD  "Keyboard"
     IDS_PREFS_CAT_KEYBOARD_DESC "Keyboard shortcuts."
     IDS_PREFS_CAT_MOUSE     "Mouse"
     IDS_PREFS_CAT_MOUSE_DESC "Mouse shortcuts."
-    IDS_PREFS_MOUSE_PLACEHOLDER "Mouse preferences are not implemented yet."
+    IDS_PREFS_MOUSE_PLACEHOLDER "Mouse gesture configuration is planned for a future version."
+    IDS_PREFS_MOUSE_EMPTY_TITLE "No mouse settings yet"
+    IDS_PREFS_MOUSE_EMPTY_BODY "Mouse gesture configuration is planned for a future version."
+    IDS_PREFS_MOUSE_EMPTY_CAPTION "The current mouse behavior still uses the standard built-in defaults."
     IDS_PREFS_CAT_THEMES    "Themes"
     IDS_PREFS_CAT_THEMES_DESC "Select and edit themes."
     IDS_PREFS_CAT_PLUGINS   "Plugins"
     IDS_PREFS_CAT_PLUGINS_DESC "Manage plugins."
+    IDS_PREFS_CAT_FILE_OPERATIONS "File Operations"
+    IDS_PREFS_CAT_FILE_OPERATIONS_DESC "Host-wide file operation defaults."
     IDS_PREFS_CAT_COMPARE_DIRECTORIES "Compare Directories"
     IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC "Default options for Compare Directories."
     IDS_PREFS_CAT_HOT_PATHS "Hot Paths"
@@ -673,6 +592,7 @@ BEGIN
     IDS_PREFS_COMMON_SEARCH "Search"
     IDS_PREFS_COMMON_ON     "On"
     IDS_PREFS_COMMON_OFF    "Off"
+    IDS_BTN_HISTORY         "History"
     IDS_CAPTION_CONNECTIONS "Connections"
     IDS_COMPARE_DIRECTORIES_TITLE "Compare Directories"
     IDS_COMPARE_OPTIONS_SECTION_COMPARE "Compare files with same name by"
@@ -706,6 +626,10 @@ BEGIN
     IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC "Wildcards, separated by ';'."
     IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_TITLE "Keep identical items"
     IDS_COMPARE_OPTIONS_KEEP_IDENTICAL_DESC "Retain identical entries so you can toggle 'Show Identical Items' without rescanning. Uses more memory on very large trees."
+    IDS_FOLDERVIEW_RENAME_CAPTION "Rename"
+    IDS_FOLDERVIEW_RENAME_LABEL "New name:"
+    IDS_ABOUT_WINDOW_CAPTION "About RedSalamander"
+    IDS_ABOUT_COPYRIGHT "Copyright (c) 2026 RedSalamander Authors"
     IDS_FMT_COMPARE_SCAN_STATUS "Scanning: {0} ({1} folders, {2} entries)"
     IDS_FMT_COMPARE_CONTENT_STATUS "Comparing: {0} ({1} / {2})"
     IDS_FMT_COMPARE_CONTENT_STATUS_UNKNOWN "Comparing: {0} ({1} read)"
@@ -803,11 +727,14 @@ BEGIN
     IDS_CONNECTIONS_ERR_SELECT_CONNECTION "Select a connection."
     IDS_CONNECTIONS_ERR_CREATE_ID "Failed to create connection id."
     IDS_CONNECTIONS_DEFAULT_NEW_NAME "New connection"
+    IDS_CONNECTIONS_FILE_FILTER_ALL_FILES "All Files (*.*)\0*.*\0"
     IDS_CONNECTIONS_ERR_NAME_REQUIRED "Connection name is required."
     IDS_CONNECTIONS_ERR_HOST_REQUIRED "Host is required."
     IDS_CONNECTIONS_ERR_PROTOCOL_REQUIRED "Protocol is required."
     IDS_CONNECTIONS_ERR_USER_REQUIRED "User is required (or enable ""Anonymous login"")."
     IDS_CONNECTIONS_ERR_NAME_UNIQUE "Connection names must be unique."
+    IDS_CONNECTIONS_ERR_NAME_RESERVED "The name ""{0}"" is reserved. Choose another name."
+    IDS_CONNECTIONS_ERR_CONNECT_NOTIFY_FAILED "The selected connection could not be opened because the main window was not available."
     IDS_CONNECTIONS_ERR_PASSPHRASE_REQUIRED_TO_SAVE "Passphrase is required to save (or uncheck ""Save password"")."
     IDS_CONNECTIONS_ERR_PASSWORD_REQUIRED_TO_SAVE "Password is required to save."
     IDS_CONNECTIONS_ERR_PASSWORD_SAVE_REQUIRED "Password-based connections require a password (saved or entered at connect time)."
@@ -822,6 +749,27 @@ BEGIN
     IDS_PREFS_GENERAL_CHECK_SHOW_MENU_BAR "Show menu bar"
     IDS_PREFS_GENERAL_CHECK_SHOW_FUNCTION_BAR "Show function bar"
     IDS_PREFS_GENERAL_CHECK_SHOW_SPLASH_SCREEN "Show splash screen"
+    IDS_PREFS_GENERAL_SECTION_DISPLAY "Display"
+    IDS_PREFS_GENERAL_SECTION_DXUI "DxUI"
+    IDS_PREFS_GENERAL_SECTION_STARTUP "Startup"
+    IDS_PREFS_GENERAL_LABEL_LANGUAGE "Language"
+    IDS_PREFS_GENERAL_DESC_LANGUAGE "Choose the application language. System Language follows Windows display language preferences."
+    IDS_PREFS_GENERAL_OPTION_LANGUAGE_SYSTEM "System Language"
+    IDS_PREFS_GENERAL_OPTION_LANGUAGE_ENGLISH "English"
+    IDS_PREFS_GENERAL_LABEL_COMPACT_MODE "Compact mode"
+    IDS_PREFS_GENERAL_DESC_COMPACT_MODE "Use denser DxUI spacing for menus, popup lists, and Preferences cards."
+    IDS_PREFS_GENERAL_LABEL_REDUCED_MOTION "Animations"
+    IDS_PREFS_GENERAL_DESC_REDUCED_MOTION "Choose whether DxUI animations follow the system preference or stay forced on or off."
+    IDS_PREFS_GENERAL_OPTION_REDUCED_MOTION_SYSTEM "System"
+    IDS_PREFS_GENERAL_OPTION_REDUCED_MOTION_ON "On"
+    IDS_PREFS_GENERAL_OPTION_REDUCED_MOTION_OFF "Off"
+    IDS_PREFS_GENERAL_LABEL_WINDOW_BACKDROP "Window backdrop"
+    IDS_PREFS_GENERAL_DESC_WINDOW_BACKDROP "Choose the DWM system backdrop policy for supported app windows."
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_DEFAULT "Default"
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_NONE "None"
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_MICA "Mica"
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_MICA_ALT "Mica Alt"
+    IDS_PREFS_GENERAL_OPTION_WINDOW_BACKDROP_ACRYLIC "Acrylic"
     IDS_CRASH_DETECTED_TITLE "Previous crash detected"
     IDS_CRASH_DETECTED_MESSAGE "A crash dump from a previous run was found.\r\n\r\nOpen the crash folder?"
     IDS_CRASH_DETECTED_MESSAGE_FMT "A crash dump from a previous run was written to:\r\n{}\r\n\r\nOpen the crash folder?"
@@ -835,7 +783,9 @@ BEGIN
     IDS_PREFS_PANES_HEADER_LEFT "Left pane"
     IDS_PREFS_PANES_HEADER_RIGHT "Right pane"
     IDS_PREFS_PANES_LABEL_DISPLAY "Display"
+    IDS_PREFS_PANES_DESC_DISPLAY "Choose whether each pane shows a compact or detailed file list."
     IDS_PREFS_PANES_LABEL_SORT_BY "Sort by"
+    IDS_PREFS_PANES_DESC_SORT "Choose the sort field and its direction together."
     IDS_PREFS_PANES_LABEL_DIRECTION "Direction"
     IDS_PREFS_PANES_LABEL_STATUS_BAR "Status bar"
     IDS_PREFS_PANES_DESC_STATUS_BAR "Show or hide the status bar."
@@ -846,6 +796,8 @@ BEGIN
     IDS_PREFS_PANES_OPTION_DETAILED "Detailed"
     IDS_PREFS_PANES_OPTION_ASCENDING "Ascending"
     IDS_PREFS_PANES_OPTION_DESCENDING "Descending"
+    IDS_PREFS_PANES_OPTION_HIDE "Hide"
+    IDS_PREFS_PANES_OPTION_SHOW "Show"
     IDS_PREFS_PANES_SORT_NAME "Name"
     IDS_PREFS_PANES_SORT_EXTENSION "Extension"
     IDS_PREFS_PANES_SORT_TIME "Time"
@@ -888,6 +840,8 @@ BEGIN
     IDS_PREFS_KEYBOARD_BUTTON_ASSIGN "Assign"
     IDS_PREFS_KEYBOARD_BUTTON_REPLACE "Replace"
     IDS_PREFS_KEYBOARD_BUTTON_CANCEL "Cancel"
+    IDS_PREFS_KEYBOARD_CONFLICT_MARK "!"
+    IDS_PREFS_KEYBOARD_UNASSIGNED "Unassigned"
     IDS_PREFS_KEYBOARD_OOM_LOAD "Out of memory while loading shortcuts."
     IDS_PREFS_KEYBOARD_OOM_BUILD_LIST "Out of memory while building the shortcuts list."
     IDS_PREFS_KEYBOARD_OOM_UPDATE "Out of memory while updating shortcuts."
@@ -1004,7 +958,7 @@ BEGIN
     IDS_PREFS_ADV_CHECK_SHOW_IDS "Show ids"
     IDS_PREFS_ADV_CHECK_AUTO_SCROLL "Auto scroll"
     IDS_PREFS_ADV_LABEL_FILTER_MASK "Filter mask"
-    IDS_PREFS_ADV_DESC_FILTER_MASK "Bitmask of enabled message types (0..31)."
+    IDS_PREFS_ADV_DESC_FILTER_MASK "Bitmask of enabled message types (0..63)."
     IDS_PREFS_ADV_LABEL_FILTER_TEXT "Text"
     IDS_PREFS_ADV_DESC_FILTER_TEXT "Show text messages."
     IDS_PREFS_ADV_LABEL_FILTER_ERROR "Error"
@@ -1013,12 +967,15 @@ BEGIN
     IDS_PREFS_ADV_DESC_FILTER_WARNING "Show warning messages."
     IDS_PREFS_ADV_LABEL_FILTER_INFO "Info"
     IDS_PREFS_ADV_DESC_FILTER_INFO "Show informational messages."
+    IDS_PREFS_ADV_LABEL_FILTER_PERF "Perf"
+    IDS_PREFS_ADV_DESC_FILTER_PERF "Show performance messages."
     IDS_PREFS_ADV_LABEL_FILTER_DEBUG "Debug"
     IDS_PREFS_ADV_DESC_FILTER_DEBUG "Show debug messages."
     IDS_PREFS_ADV_CHECK_FILTER_TEXT "Text"
     IDS_PREFS_ADV_CHECK_FILTER_ERROR "Error"
     IDS_PREFS_ADV_CHECK_FILTER_WARNING "Warning"
     IDS_PREFS_ADV_CHECK_FILTER_INFO "Info"
+    IDS_PREFS_ADV_CHECK_FILTER_PERF "Perf"
     IDS_PREFS_ADV_CHECK_FILTER_DEBUG "Debug"
     IDS_PREFS_ADV_HEADER_CACHE "Cache"
     IDS_PREFS_ADV_LABEL_CACHE_DIR_MAX_BYTES "Max bytes"
@@ -1045,6 +1002,7 @@ BEGIN
     IDS_PREFS_PLUGINS_CUSTOM_PATHS_ADD_ELLIPSIS "Add..."
     IDS_PREFS_PLUGINS_CUSTOM_PATHS_REMOVE "Remove"
     IDS_PREFS_PLUGINS_CUSTOM_PATHS_INVALID "Select a DLL file."
+    IDS_PREFS_PLUGINS_CUSTOM_PATHS_EMPTY "No custom plugin DLLs added yet. Use Add... to add plugin DLL paths."
     IDS_PREFS_PLUGINS_CONFIGURE_ELLIPSIS "Configure..."
     IDS_PREFS_PLUGINS_CONFIGURE_OPEN_FAILED_FMT "Failed to open configuration for:\r\n\r\n{}\r\n\r\nError: 0x{:08X}"
     IDS_PREFS_PLUGINS_DETAILS_HINT "Select 'Plugins' in the navigation tree to return to the plugin list."
@@ -1053,11 +1011,16 @@ BEGIN
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE "Configuration is not available for this plugin."
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_DEFAULT "No configuration is stored for this plugin (using defaults)."
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS "Browse..."
-    IDS_PREFS_PLUGINS_DETAILS_SCHEMA_UNAVAILABLE "Configuration editor is not available for this plugin."
-    IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NOT_LOADABLE "This plugin is not currently loadable. Configuration editor is unavailable."
-    IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS "This plugin does not expose configurable settings."
+    IDS_PREFS_PLUGINS_DETAILS_SCHEMA_UNAVAILABLE "🧩\r\nThis plugin does not provide a configuration editor."
+    IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NOT_LOADABLE "🚧\r\nThis plugin is not loadable right now, so its configuration editor is unavailable."
+    IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS "This plugin does not expose any configurable settings."
+    IDS_PREFS_PLUGINS_EMPTY_TITLE "Nothing to configure"
+    IDS_PREFS_PLUGINS_EMPTY_BODY "{0} does not expose any configurable settings."
+    IDS_PREFS_PLUGINS_EMPTY_CAPTION "It is ready to use as-is."
     IDS_BTN_TEST "Test"
     IDS_BTN_TEST_ALL "Test All"
+    IDS_PREFS_BUTTON_RESET_ALL "Reset All to Defaults"
+    IDS_PREFS_RESET_ALL_CONFIRM "Reset all preferences to their default values?\r\n\r\nThis cannot be undone."
 END
 
 STRINGTABLE
@@ -1070,8 +1033,15 @@ BEGIN
     IDS_MENU_CHANGE_DRIVE   "Change &Drive"
     IDS_MENU_CONNECTIONS "Connections"
     IDS_MENU_CONNECTIONS_ELLIPSIS "Connections Manager..."
-    IDS_FATAL_ERROR_CAPTION "Red Salamander - Fatal Error"
-    IDS_FATAL_EXCEPTION_FMT "Fatal Exception in Red Salamander\r\n\r\nException: {0} (0x{1:08X})\r\n\r\nThe application will now terminate."
+    IDS_MENU_GO_TO         "Go to"
+    IDS_MENU_GO_TO_BACK    "Back"
+    IDS_MENU_GO_TO_FORWARD "Forward"
+    IDS_MENU_GO_TO_PARENT_DIRECTORY "Parent Directory"
+    IDS_MENU_GO_TO_ROOT_DIRECTORY "Root Directory"
+    IDS_MENU_GO_TO_PATH_FROM_OTHER_PANEL "Path from Other Panel"
+    IDS_MENU_GO_TO_HOT_PATHS "Hot Paths..."
+    IDS_FATAL_ERROR_CAPTION "RedSalamander - Fatal Error"
+    IDS_FATAL_EXCEPTION_FMT "Fatal Exception in RedSalamander\r\n\r\nException: {0} (0x{1:08X})\r\n\r\nThe application will now terminate."
     IDS_MENU_NAV_DESKTOP    "Desktop"
     IDS_MENU_NAV_DOCUMENTS  "Documents"
     IDS_MENU_NAV_DOWNLOADS  "Downloads"
@@ -1146,6 +1116,8 @@ BEGIN
     IDS_FMT_PLUGIN_TEST_ALL_RESULT   "Plugin test results:\r\n\r\nOK: {:L}\r\nFailed: {:L}"
     IDS_MSG_PLUGIN_TEST_OK           "Plugin test succeeded."
     IDS_MSG_PLUGIN_TEST_FAILED       "Plugin test failed."
+    IDS_FMT_PLUGIN_TEST_FAILED_NAMED "Plugin test failed: {0}"
+    IDS_FMT_PLUGIN_TEST_ALL_RESULT_WITH_FAILURES "Plugin test results:\r\n\r\nOK: {0:L}\r\nFailed: {1:L}\r\n\r\nFailed plugins:\r\n{2}"
     IDS_PLUGIN_COLUMN_NAME           "Plugin"
     IDS_PLUGIN_COLUMN_SHORT_ID       "Short Id"
     IDS_PLUGIN_COLUMN_TYPE           "Type"
@@ -1220,6 +1192,7 @@ BEGIN
     IDS_MSG_SELECTION_RESTORE_FILTER_NOTE                "Some items may be hidden by the current filter."
     IDS_FMT_COPY_PATH_AND_FILE_NAME_COPIED               "Copied {0:L} item{1} to clipboard."
     IDS_EMPTY_FOLDER_TITLE                               "Empty folder"
+    IDS_EMPTY_FOLDER_PARENT_ROW                          "Go to parent"
     IDS_EMPTY_FOLDER_FUN_1                               "😌\r\nNothing to see here. Yet."
     IDS_EMPTY_FOLDER_FUN_2                               "🧹\r\nAll clean. This folder is spotless."
     IDS_EMPTY_FOLDER_FUN_3                               "🦄\r\nMagic space available. Add something fun."
@@ -1231,6 +1204,9 @@ BEGIN
     IDS_EMPTY_FOLDER_FUN_9                               "🐾\r\nNo tracks. Nobody's been here."
     IDS_EMPTY_FOLDER_FUN_10                              "🗃️\r\nAn empty shelf, waiting for treasures."
     IDS_NEW_FOLDER_DEFAULT_NAME                          "New folder"
+    IDS_CAPTION_FILEOP_SPEED_LIMIT_CUSTOM                "Custom Speed Limit"
+    IDS_FILEOP_SPEED_LIMIT_PROMPT_LABEL                  "Speed limit (0 = Unlimited):"
+    IDS_FILEOP_SPEED_LIMIT_PROMPT_HINT                   "Examples: 3KB, 4MB, 1GB (/s optional)"
     IDS_MSG_PANE_CREATE_DIR_INVALID_CHARS                "A folder name can't contain any of the following characters:\r\n\\ / : * ? "" < > |"
     IDS_MSG_PANE_CREATE_DIR_EMPTY_NAME                   "A folder name can't be empty."
     IDS_MSG_PANE_CREATE_DIR_DOT_NAME                     "A folder name can't be '.' or '..'."
@@ -1330,6 +1306,7 @@ BEGIN
     IDS_FILEOPS_CHECK_AUTODISMISS_OFF                     "Auto-dismiss success/canceled"
     IDS_FILEOPS_CHECK_AUTODISMISS_ON                      "Auto-dismiss success/canceled"
     IDS_FILEOP_BTN_EXPORT_ISSUES                          "Export issues"
+    IDS_FMT_FILEOPS_AUTO_CONCURRENCY                      "Auto concurrency: resolved {0}, applied {1}"
     IDS_FILEOPS_ISSUES_PANE_TITLE                         "File Operations Failed Items"
     IDS_FILEOPS_ISSUES_COL_TIME                           "Time"
     IDS_FILEOPS_ISSUES_COL_TASK                           "Task"
@@ -1469,7 +1446,134 @@ BEGIN
 		    IDS_CMD_VIEWOPTIONS_TOGGLE_NAVIGATION_BAR              "Toggle Navigation Bar"
 		    IDS_CMD_VIEWOPTIONS_TOGGLE_STATUS_BAR                  "Toggle Status Bar"
 		    IDS_CMD_SELECT_FILE_SYSTEM_PLUGIN                      "Select File System Plugin"
+		    // IDS_CMD_SHORT_* resource ids use IDS_CMD_SHORT_BASE + the matching IDS_CMD_* display id.
+		    // Keep resource ids 20000-21999 reserved for command short labels.
 		    IDS_CMD_SHORTCUTS                                     "Shortcuts"
+		    IDS_CMD_SHORT_ABOUT                                  "About"
+		    IDS_CMD_SHORT_COMPARE                                "Compare"
+		    IDS_CMD_SHORT_EXIT                                   "Exit"
+		    IDS_CMD_SHORT_FULL_SCREEN                            "FullScr"
+		    IDS_CMD_SHORT_OPEN_FILE_EXPLORER_KNOWN_FOLDER        "OpenExplr"
+		    IDS_CMD_SHORT_OPEN_LEFT_DRIVE_MENU                   "LftDrv"
+		    IDS_CMD_SHORT_OPEN_RIGHT_DRIVE_MENU                  "RghtDrv"
+		    IDS_CMD_SHORT_PLUGINS_CONFIGURE                      "CfgPlugin"
+		    IDS_CMD_SHORT_PLUGINS_MANAGE                         "Plugins"
+		    IDS_CMD_SHORT_PLUGINS_TOGGLE_ENABLED                 "PlugOnOff"
+		    IDS_CMD_SHORT_PREFERENCES                            "Prefs"
+		    IDS_CMD_SHORT_REREAD_ASSOCIATIONS                    "RereadAsc"
+		    IDS_CMD_SHORT_SHORTCUTS                              "Shortcuts"
+		    IDS_CMD_SHORT_SWAP_PANES                             "SwapPanes"
+		    IDS_CMD_SHORT_THEME_SELECT                           "Theme"
+		    IDS_CMD_SHORT_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR   "HiContrast"
+		    IDS_CMD_SHORT_TOGGLE_FILEOPS_FAILED_ITEMS            "FailedOps"
+		    IDS_CMD_SHORT_TOGGLE_FUNCTION_BAR                    "FuncBar"
+		    IDS_CMD_SHORT_TOGGLE_MENU_BAR                        "MenuBar"
+		    IDS_CMD_SHORT_VIEW_WIDTH                             "VwWidth"
+		    IDS_CMD_SHORT_ALTERNATE_VIEW                         "AltVw"
+		    IDS_CMD_SHORT_BRING_CURRENT_DIR_TO_COMMAND_LINE      "DirToCmd"
+		    IDS_CMD_SHORT_BRING_FILENAME_TO_COMMAND_LINE         "NameToCmd"
+		    IDS_CMD_SHORT_CALCULATE_DIRECTORY_SIZES              "CalcSize"
+		    IDS_CMD_SHORT_CHANGE_ATTRIBUTES                      "ChgAttr"
+		    IDS_CMD_SHORT_CHANGE_CASE                            "ChgCase"
+		    IDS_CMD_SHORT_CHANGE_DIRECTORY                       "ChgDir"
+		    IDS_CMD_SHORT_CLIPBOARD_COPY                         "ClipCopy"
+		    IDS_CMD_SHORT_CLIPBOARD_CUT                          "ClipCut"
+		    IDS_CMD_SHORT_CLIPBOARD_PASTE                        "ClipPaste"
+		    IDS_CMD_SHORT_CLIPBOARD_PASTE_SHORTCUT               "PasteLnk"
+		    IDS_CMD_SHORT_CONNECT                                "Connect"
+		    IDS_CMD_SHORT_CONNECTIONS                            "Conns"
+		    IDS_CMD_SHORT_CONTEXT_MENU                           "CtxMenu"
+		    IDS_CMD_SHORT_CONTEXT_MENU_CURRENT_DIRECTORY         "DirCtx"
+		    IDS_CMD_SHORT_COPY_NAME_AS_TEXT                      "CopyName"
+		    IDS_CMD_SHORT_COPY_PATH_AND_NAME_AS_TEXT             "CopyPathNm"
+		    IDS_CMD_SHORT_COPY_PATH_AS_TEXT                      "CopyPath"
+		    IDS_CMD_SHORT_COPY                                   "Copy"
+		    IDS_CMD_SHORT_COPY_PATH_AND_FILE_NAME                "CopyUNC"
+		    IDS_CMD_SHORT_MAKE_DIRECTORY                         "MakeDir"
+		    IDS_CMD_SHORT_DELETE                                 "Delete"
+		    IDS_CMD_SHORT_DISCONNECT                             "Disconnect"
+		    IDS_CMD_SHORT_DISPLAY_BRIEF                          "Brief"
+		    IDS_CMD_SHORT_DISPLAY_DETAILED                       "Dtld"
+		    IDS_CMD_SHORT_DISPLAY_EXTRA_DETAILED                 "xtraDtl"
+		    IDS_CMD_SHORT_EDIT                                   "Edit"
+		    IDS_CMD_SHORT_EDIT_NEW                               "EditNew"
+		    IDS_CMD_SHORT_EDIT_WIDTH                             "EditWdth"
+		    IDS_CMD_SHORT_EDIT_WITH                              "EditWith"
+		    IDS_CMD_SHORT_EXECUTE_OPEN                           "ExecOpen"
+		    IDS_CMD_SHORT_FILTER                                 "Filter"
+		    IDS_CMD_SHORT_FIND                                   "Find"
+		    IDS_CMD_SHORT_FOCUS_ADDRESS_BAR                      "AddrBar"
+		    IDS_CMD_SHORT_GO_DRIVE_ROOT                          "DrvRoot"
+		    IDS_CMD_SHORT_GO_ROOT_DIRECTORY                      "RootDir"
+		    IDS_CMD_SHORT_GO_TO_SHORTCUT_OR_LINK_TARGET          "LnkTarget"
+		    IDS_CMD_SHORT_HISTORY_BACK                           "HistBack"
+		    IDS_CMD_SHORT_HISTORY_FORWARD                        "HistFwd"
+		    IDS_CMD_SHORT_HOT_PATH_GO                            "HotPath"
+		    IDS_CMD_SHORT_HOT_PATHS                              "HotPaths"
+		    IDS_CMD_SHORT_LIST_OPENED_FILES                      "OpenFiles"
+		    IDS_CMD_SHORT_LOAD_SELECTION                         "LoadSel"
+		    IDS_CMD_SHORT_MAKE_FILE_LIST                         "FileList"
+		    IDS_CMD_SHORT_MENU                                   "Menu"
+		    IDS_CMD_SHORT_MOVE                                   "Move"
+		    IDS_CMD_SHORT_MOVE_TO_RECYCLE_BIN                    "Recycle"
+		    IDS_CMD_SHORT_NAVIGATE_PATH                          "GoPath"
+		    IDS_CMD_SHORT_NEW_FROM_TEMPLATE                      "NewTmpl"
+		    IDS_CMD_SHORT_OPEN_COMMAND_SHELL                     "CmdShell"
+		    IDS_CMD_SHORT_OPEN_CURRENT_FOLDER                    "OpenDir"
+		    IDS_CMD_SHORT_OPEN_PROPERTIES                        "Props"
+		    IDS_CMD_SHORT_OPEN_SECURITY                          "Security"
+		    IDS_CMD_SHORT_PACK                                   "Pack"
+		    IDS_CMD_SHORT_PERMANENT_DELETE                       "Delete"
+		    IDS_CMD_SHORT_PERMANENT_DELETE_WITH_VALIDATION       "DeleteOk"
+		    IDS_CMD_SHORT_QUICK_SEARCH                           "QuickSrch"
+		    IDS_CMD_SHORT_REFRESH                                "Refresh"
+		    IDS_CMD_SHORT_RENAME                                 "Rename"
+		    IDS_CMD_SHORT_SELECT_CALC_DIR_SIZE_NEXT              "SelSizeNext"
+		    IDS_CMD_SHORT_SELECT_FILE_SYSTEM_PLUGIN              "FSPlugin"
+		    IDS_CMD_SHORT_SELECT_NEXT                            "SelNext"
+		    IDS_CMD_SHORT_SELECTION_GOTO_NEXT_SELECTED_NAME      "NextSel"
+		    IDS_CMD_SHORT_SELECTION_GOTO_PREV_SELECTED_NAME      "PrevSel"
+		    IDS_CMD_SHORT_SELECTION_HIDE_SELECTED_NAMES          "HideSel"
+		    IDS_CMD_SHORT_SELECTION_HIDE_UNSELECTED_NAMES        "HideUnsel"
+		    IDS_CMD_SHORT_SELECTION_INVERT                       "Invert"
+		    IDS_CMD_SHORT_SELECTION_RESTORE                      "Restore"
+		    IDS_CMD_SHORT_SAVE_SELECTION                         "SaveSel"
+		    IDS_CMD_SHORT_SELECTION_SELECT_ALL                   "SelAll"
+		    IDS_CMD_SHORT_SELECTION_SELECT_DIALOG                "Select"
+		    IDS_CMD_SHORT_SELECTION_SELECT_SAME_EXTENSION        "SelExt"
+		    IDS_CMD_SHORT_SELECTION_SELECT_SAME_NAME             "SelName"
+		    IDS_CMD_SHORT_SELECTION_SHOW_HIDDEN_NAMES            "ShowHidden"
+		    IDS_CMD_SHORT_SELECTION_UNSELECT_ALL                 "UnselAll"
+		    IDS_CMD_SHORT_SELECTION_UNSELECT_DIALOG              "Unselect"
+		    IDS_CMD_SHORT_SELECTION_UNSELECT_SAME_EXTENSION      "UnselExt"
+		    IDS_CMD_SHORT_SELECTION_UNSELECT_SAME_NAME           "UnselName"
+		    IDS_CMD_SHORT_SET_HOT_PATH                           "SetHotPath"
+		    IDS_CMD_SHORT_SET_PATH_FROM_OTHER_PANE               "OtherPath"
+		    IDS_CMD_SHORT_SHARES                                 "Shares"
+		    IDS_CMD_SHORT_SHOW_FOLDERS_HISTORY                   "FolderHist"
+		    IDS_CMD_SHORT_SORT_BY_ATTRIBUTES                     "ByAttr"
+		    IDS_CMD_SHORT_SORT_BY_EXTENSION                      "ByExt"
+		    IDS_CMD_SHORT_SORT_BY_NAME                           "ByName"
+		    IDS_CMD_SHORT_SORT_NONE                              "NoSort"
+		    IDS_CMD_SHORT_SORT_BY_SIZE                           "BySize"
+		    IDS_CMD_SHORT_SORT_BY_TIME                           "ByTime"
+		    IDS_CMD_SHORT_SWITCH_PANE_FOCUS                      "SwtchPane"
+		    IDS_CMD_SHORT_UNPACK                                 "Unpack"
+		    IDS_CMD_SHORT_UP_ONE_DIRECTORY                       "UpDir"
+		    IDS_CMD_SHORT_USER_MENU                              "UsrMenu"
+		    IDS_CMD_SHORT_VIEW                                   "View"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_FILE_EXTENSIONS     "Exts"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_FILTER_BAR          "FilterBar"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_HIDDEN_FILES        "Hidden"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_NAVIGATION_BAR      "NavBar"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_PREVIEW_PANE        "Preview"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_STATUS_BAR          "StatusBar"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_SYSTEM_FILES        "System"
+		    IDS_CMD_SHORT_VIEWOPTIONS_TOGGLE_THUMBNAILS          "Thumbs"
+		    IDS_CMD_SHORT_SPACE_VIEW                             "SpaceView"
+		    IDS_CMD_SHORT_VIEW_WITH                              "ViewWith"
+		    IDS_CMD_SHORT_WINDOW_MENU                            "WinMenu"
+		    IDS_CMD_SHORT_ZOOM_PANEL                             "Zoom"
 		    IDS_MOD_CTRL                                          "Ctrl"
 		    IDS_MOD_ALT                                           "Alt"
 		    IDS_MOD_SHIFT                                         "Shift"
@@ -1626,6 +1730,30 @@ BEGIN
     IDS_PREFS_HOT_PATHS_BROWSE_ELLIPSIS               "Browse..."
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN          "Open preferences page when assigning"
     IDS_PREFS_HOT_PATHS_OPEN_PREFS_ON_ASSIGN_DESC     "Open the Hot Paths preferences page after assigning a slot from the panel."
+    IDS_PREFS_FILEOPS_SECTION_PRECALC                 "Pre-calculation"
+    IDS_PREFS_FILEOPS_PRECALC_ENABLED_TITLE           "Enable pre-calculation scan"
+    IDS_PREFS_FILEOPS_PRECALC_ENABLED_DESC            "Scan copy and move selections before starting so totals and ETA are available sooner."
+    IDS_PREFS_FILEOPS_PRECALC_WORKERS_TITLE           "Pre-calculation workers"
+    IDS_PREFS_FILEOPS_PRECALC_WORKERS_DESC            "Number of background workers used for the host pre-calculation tree walk."
+    IDS_PREFS_FILEOPS_SECTION_BANDWIDTH               "Bandwidth"
+    IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_TITLE          "Default speed limit"
+    IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_DESC           "Default per-task speed limit for new copy and move tasks. Select Custom to enter a specific value. Tasks can still override this in the progress popup."
+    IDS_PREFS_FILEOPS_BANDWIDTH_CUSTOM_TITLE          "Custom limit"
+    IDS_PREFS_FILEOPS_BANDWIDTH_CUSTOM_DESC           "Enter a bandwidth value like 128KB, 5MB, or 1GB."
+    IDS_PREFS_FILEOPS_SECTION_ADVANCED                "Advanced"
+    IDS_PREFS_FILEOPS_BRIDGE_BUFFER_TITLE             "Cross-FS bridge buffer (KB)"
+    IDS_PREFS_FILEOPS_BRIDGE_BUFFER_DESC              "Per-buffer size used by the host bridge when copying between different file systems. Two buffers are allocated per active transfer."
+    IDS_PREFS_FILEOPS_PLUGIN_HINT_TITLE               "Plugin-owned settings"
+    IDS_PREFS_FILEOPS_PLUGIN_HINT_DESC                "Per-plugin concurrency, recycle-bin batching, and search walker settings stay under Preferences > Plugins > File System."
+    IDS_PREFS_FILEOPS_BANDWIDTH_UNLIMITED             "Unlimited"
+    IDS_PREFS_FILEOPS_BANDWIDTH_1_MIB                 "1 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_5_MIB                 "5 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_10_MIB                "10 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_50_MIB                "50 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_100_MIB               "100 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_500_MIB               "500 MiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_1_GIB                 "1 GiB/s"
+    IDS_PREFS_FILEOPS_BANDWIDTH_CUSTOM                "Custom"
 END
 
 STRINGTABLE
@@ -1665,7 +1793,7 @@ BEGIN
     IDS_FIND_STATUS_RUNNING_FMT                       "Searching with {0}: {1} folders, {2} files, {3} matches"
     IDS_FIND_STATUS_COMPLETE_FMT                      "Completed with {0}: {1} matches, {2} files scanned"
     IDS_FIND_STATUS_CANCELLED_FMT                     "Cancelled ({0}): {1} matches, {2} files scanned"
-    IDS_FIND_STATUS_FAILED_FMT                        "Search failed (0x{0:08X})"
+    IDS_FIND_STATUS_FAILED_FMT                        "Search failed with {0}: {1} (0x{2:08X})"
     IDS_FIND_BACKEND_UNKNOWN                          "unknown backend"
     IDS_FIND_BACKEND_SCAN                             "scan"
     IDS_FIND_BACKEND_INDEX                            "index"
@@ -1674,6 +1802,18 @@ BEGIN
     IDS_FIND_WARNING_NO_CONTENT                       "content unavailable"
     IDS_FIND_WARNING_ACCESS_DENIED                    "access denied skipped"
     IDS_FIND_WARNING_OVERFLOW                         "result cap reached"
+    IDS_FIND_WARNING_SERVICE_UNAVAILABLE              "service unavailable"
+    IDS_FIND_STATUS_RUNNING_ACTIVE_FMT                "{0} Searching with {1}: {2}, last progress {3} | {4} folders, {5} files, {6} matches"
+    IDS_FIND_STATUS_RUNNING_ACTIVE_PATH_FMT           "{0} Searching with {1}: {2}, last progress {3} | {4} folders, {5} files, {6} matches | {7}"
+    IDS_FIND_STATUS_RUNNING_STALLED_FMT               "{0} Searching with {1}: stalled in {2}, last progress {3} | {4} folders, {5} files, {6} matches"
+    IDS_FIND_STATUS_RUNNING_STALLED_PATH_FMT          "{0} Searching with {1}: stalled in {2}, last progress {3} | {4} folders, {5} files, {6} matches | {7}"
+    IDS_FIND_PHASE_INITIALIZING                       "initializing"
+    IDS_FIND_PHASE_ENUMERATING                        "enumerating"
+    IDS_FIND_PHASE_INDEX_LOOKUP                       "index lookup"
+    IDS_FIND_PHASE_CONTENT_SCAN                       "content scan"
+    IDS_FIND_PHASE_COMPLETED                          "completed"
+    IDS_DXUI_NO_MATCHES                               "No matches"
+    IDS_DXUI_NO_DATA                                  "No data"
     IDS_FIND_ERROR_ROOT_REQUIRED                      "A search root is required."
     IDS_FIND_ERROR_TARGETS_REQUIRED                   "Enable files, directories, or both before searching."
     IDS_FIND_ERROR_CRITERIA_REQUIRED                  "Enter a name pattern or enable content search."

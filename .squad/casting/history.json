@@ -1,0 +1,14 @@
+{
+  "history_version": "1.0",
+  "assignments": [
+    {
+      "assignment_id": "redsalamander-2026-03-21",
+      "universe": "user-specified",
+      "original_proposal": "Alien",
+      "created_at": "2026-03-21T09:35:00Z",
+      "agent_count": 4,
+      "names_allocated": ["Ripley", "Yoko", "Sysadm", "GuineaPig"],
+      "notes": "User kept Ripley from Alien, specified custom names for others"
+    }
+  ]
+}

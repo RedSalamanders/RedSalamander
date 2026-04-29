@@ -1,7 +1,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package
-    Name="Red Salamander"
-    Manufacturer="Red Salamander"
+    Name="RedSalamander"
+    Manufacturer="RedSalamander"
     Language="1033"
     Version="$(var.ProductVersion)"
     UpgradeCode="{27AD7457-B05D-4E42-8954-751725749B9D}"
@@ -32,7 +32,7 @@
       <Directory Id="INSTALLFOLDER" Name="RedSalamander" />
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="ApplicationProgramsFolder" Name="Red Salamander" />
+      <Directory Id="ApplicationProgramsFolder" Name="RedSalamander" />
     </StandardDirectory>
   </Fragment>
 
@@ -54,8 +54,8 @@
         <ServiceInstall
           Id="SearchServiceInstall"
           Name="RedSalamanderSearchService"
-          DisplayName="Red Salamander Search Service"
-          Description="Indexes local file metadata for Red Salamander instant search."
+          DisplayName="RedSalamander Search Service"
+          Description="Indexes local file metadata for RedSalamander instant search."
           Type="ownProcess"
           Start="auto"
           Account="LocalSystem"
@@ -76,15 +76,15 @@
       <Component Id="StartMenuShortcuts" Guid="{104EBC72-CBF3-46D1-A76F-F4F28CFEE63A}" Bitness="always64">
         <Shortcut
           Id="StartMenuShortcut"
-          Name="Red Salamander"
-          Description="Red Salamander file manager"
+          Name="RedSalamander"
+          Description="RedSalamander file manager"
           Target="[INSTALLFOLDER]RedSalamander.exe"
           WorkingDirectory="INSTALLFOLDER" />
 
         <Shortcut
           Id="StartMenuMonitorShortcut"
-          Name="Red Salamander Monitor"
-          Description="Red Salamander monitor"
+          Name="RedSalamander Monitor"
+          Description="RedSalamander monitor"
           Target="[INSTALLFOLDER]RedSalamanderMonitor.exe"
           WorkingDirectory="INSTALLFOLDER" />
 

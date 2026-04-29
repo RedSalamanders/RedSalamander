@@ -18,8 +18,8 @@ Primary files:
   - non-shipping executables (PoC/test `*.exe` other than `RedSalamander.exe` and `RedSalamanderMonitor.exe`)
   - `asan.supp`
 - Create Start Menu shortcuts for:
-  - Red Salamander
-  - Red Salamander Monitor
+  - RedSalamander
+  - RedSalamander Monitor
 
 ## Non-Goals
 

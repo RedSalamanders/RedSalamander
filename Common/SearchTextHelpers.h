@@ -48,9 +48,9 @@ struct TextSearchPattern
 
 struct TextSearchResult
 {
-    bool matched                 = false;
-    uint64_t matchOffset         = 0;
-    uint32_t matchLength         = 0;
+    bool matched         = false;
+    uint64_t matchOffset = 0;
+    uint32_t matchLength = 0;
     std::wstring previewText;
     bool binarySkipped           = false;
     DecodedTextEncoding encoding = DecodedTextEncoding::None;
@@ -65,24 +65,14 @@ using CancelCheck = HRESULT(STDMETHODCALLTYPE*)(void* cookie) noexcept;
 
 [[nodiscard]] std::wstring BuildSnippet(std::wstring_view text, size_t matchPosition, size_t matchLength, uint32_t maxSnippetCharacters) noexcept;
 
-[[nodiscard]] bool FindLiteralWithChunkOverlap(std::wstring_view haystack,
-                                               std::wstring_view needle,
-                                               bool caseSensitive,
-                                               size_t chunkCharacters,
-                                               size_t& outPosition) noexcept;
+[[nodiscard]] bool FindLiteralWithChunkOverlap(
+    std::wstring_view haystack, std::wstring_view needle, bool caseSensitive, size_t chunkCharacters, size_t& outPosition) noexcept;
 
-[[nodiscard]] bool MatchDecodedText(const DecodedTextResult& decoded,
-                                    const TextSearchPattern& pattern,
-                                    uint32_t maxSnippetCharacters,
-                                    bool wantSnippets,
-                                    TextSearchResult& result) noexcept;
+[[nodiscard]] bool MatchDecodedText(
+    const DecodedTextResult& decoded, const TextSearchPattern& pattern, uint32_t maxSnippetCharacters, bool wantSnippets, TextSearchResult& result) noexcept;
 
-HRESULT ReadReaderBytes(IFileReader* reader,
-                        uint64_t maxBytes,
-                        CancelCheck cancelCheck,
-                        void* cancelCookie,
-                        size_t chunkBytes,
-                        std::vector<std::byte>& bytes) noexcept;
+HRESULT ReadReaderBytes(
+    IFileReader* reader, uint64_t maxBytes, CancelCheck cancelCheck, void* cancelCookie, size_t chunkBytes, std::vector<std::byte>& bytes) noexcept;
 
 HRESULT SearchFileReaderText(IFileReader* reader,
                              const TextSearchPattern& pattern,

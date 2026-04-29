@@ -28,6 +28,9 @@
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
 
+#include "DxUi/DxUi.h"
+#include "DxUi/DxUiNativeMenuInterop.h"
+#include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
@@ -39,6 +42,8 @@ struct ID2D1HwndRenderTarget;
 struct ID2D1SolidColorBrush;
 struct IDWriteFactory;
 struct IDWriteTextFormat;
+
+[[nodiscard]] const char* GetViewerImgRawStaticConfigurationSchema() noexcept;
 
 class ViewerImgRaw final : public IViewer, public IInformations
 {
@@ -67,6 +72,7 @@ public:
     HRESULT STDMETHODCALLTYPE Close() noexcept override;
     HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept override;
     HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback* callback, void* cookie) noexcept override;
+    LRESULT HandleFileComboHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
 
 private:
     enum class DisplayMode : uint8_t
@@ -146,16 +152,6 @@ private:
         bool isRaw = false;
     };
 
-    struct MenuItemData
-    {
-        UINT id = 0;
-        std::wstring text;
-        std::wstring shortcut;
-        bool separator  = false;
-        bool topLevel   = false;
-        bool hasSubMenu = false;
-    };
-
     struct AsyncOpenResult
     {
         ViewerImgRaw* viewer = nullptr;
@@ -220,14 +216,8 @@ private:
     void UpdateScrollBars(HWND hwnd) noexcept;
     void ApplyTheme(HWND hwnd) noexcept;
     void ApplyTitleBarTheme(bool windowActive) noexcept;
-    void UpdateMenuChecks(HWND hwnd) noexcept;
+    void UpdateMenuChecks(HWND hwnd, bool syncDxMenuBar = true) noexcept;
     void ApplyMenuTheme(HWND hwnd) noexcept;
-    void UpdateMenuShortcutTextForKeyboardLayout() noexcept;
-    void PrepareMenuTheme(HMENU menu, bool topLevel, std::vector<MenuItemData>& outItems) noexcept;
-    void OnMeasureMenuItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept;
-    void OnDrawMenuItem(DRAWITEMSTRUCT* draw) noexcept;
-    LRESULT OnMeasureItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept;
-    LRESULT OnDrawItem(HWND hwnd, DRAWITEMSTRUCT* draw) noexcept;
 
     void RefreshFileCombo(HWND hwnd) noexcept;
     void SyncFileComboSelection() noexcept;
@@ -274,17 +264,16 @@ private:
 
     // Viewer state
     wil::unique_hwnd _hWnd;
-    wil::unique_hwnd _hFileCombo;
-    HWND _hFileComboList = nullptr;
-    HWND _hFileComboItem = nullptr;
-    wil::unique_hfont _uiFont;
+    wil::unique_hmenu _menuHandle;
+    RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
+    wil::unique_hwnd _hFileComboHost;
+    RedSalamander::DxUi::WindowHost _fileComboHost;
+    RedSalamander::DxUi::ComboBox* _fileComboControl = nullptr;
+    bool _fileComboHostPreExpandPopup                = false;
 
     RECT _headerRect{};
     RECT _contentRect{};
     RECT _statusRect{};
-
-    wil::unique_hbrush _menuHeaderBrush;
-    std::vector<MenuItemData> _menuThemeItems;
 
     wil::com_ptr<IFileSystem> _fileSystem;
     std::wstring _fileSystemName;
@@ -375,8 +364,7 @@ private:
     wil::com_ptr<ID2D1Bitmap> _imageBitmap;
 
     // Callback (weak)
-    IViewerCallback* _callback = nullptr;
-    void* _callbackCookie      = nullptr;
+    RegistrationCallbackState<IViewerCallback> _callbackState;
 };
 
 inline constexpr UINT kAsyncOpenCompleteMessage   = WndMsg::kViewerImgRawAsyncOpenComplete;

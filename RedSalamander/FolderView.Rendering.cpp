@@ -1,8 +1,58 @@
 #include "FolderViewInternal.h"
 
+#include "DxUi/DxUi.Typography.h"
 #include "FluentIcons.h"
+#ifdef ENABLE_TESTS
+#include "SelfTestCommon.h"
+#endif
 
 #include <cmath>
+
+namespace
+{
+[[nodiscard]] uint64_t PerfElapsedUs(const std::chrono::steady_clock::time_point& start) noexcept
+{
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
+}
+
+void PerfEmitCounter(std::wstring_view name, uint64_t value) noexcept
+{
+    Debug::Perf::Emit(name, L"", 0, value, 0, S_OK);
+}
+
+void PerfEmitDuration(std::wstring_view name, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
+{
+    Debug::Perf::Emit(name, L"", durationUs, value0, value1, hr);
+}
+
+[[nodiscard]] D2D1_INTERPOLATION_MODE ResolveFolderViewIconBitmapInterpolation(D2D1_SIZE_U sourcePixelSize, float destinationSizeDip, float dpi) noexcept
+{
+    if (sourcePixelSize.width == 0u || sourcePixelSize.height == 0u || ! (destinationSizeDip > 0.0f))
+    {
+        return D2D1_INTERPOLATION_MODE_LINEAR;
+    }
+
+    const float effectiveDpi = dpi > 1.0f ? dpi : static_cast<float>(USER_DEFAULT_SCREEN_DPI);
+    const float targetPixels = destinationSizeDip * effectiveDpi / static_cast<float>(USER_DEFAULT_SCREEN_DPI);
+    const float sourcePixels = static_cast<float>(std::max(sourcePixelSize.width, sourcePixelSize.height));
+
+    constexpr float kExactPixelTolerance = 0.25f;
+    if (std::abs(sourcePixels - targetPixels) <= kExactPixelTolerance)
+    {
+        return D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR;
+    }
+
+    return D2D1_INTERPOLATION_MODE_LINEAR;
+}
+} // namespace
+
+#ifdef ENABLE_TESTS
+D2D1_INTERPOLATION_MODE DebugResolveFolderViewIconBitmapInterpolation(D2D1_SIZE_U sourcePixelSize, float destinationSizeDip, float dpi) noexcept
+{
+    return ResolveFolderViewIconBitmapInterpolation(sourcePixelSize, destinationSizeDip, dpi);
+}
+#endif
 
 void FolderView::EnsureDeviceIndependentResources()
 {
@@ -25,8 +75,8 @@ void FolderView::EnsureDeviceIndependentResources()
     }
     if (! _labelFormat)
     {
-        const HRESULT hrFormat = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 12.0f, L"en-us", _labelFormat.addressof());
+        const HRESULT hrFormat = RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(12.0f), _labelFormat.addressof(), L"en-us");
         if (! CheckHR(hrFormat, L"IDWriteFactory::CreateTextFormat"))
         {
             return;
@@ -51,8 +101,8 @@ void FolderView::EnsureDeviceIndependentResources()
 
     if (! _detailsFormat)
     {
-        const HRESULT hrFormat = _dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, 10.0f, L"en-us", _detailsFormat.addressof());
+        const HRESULT hrFormat = RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(10.0f), _detailsFormat.addressof(), L"en-us");
         if (! CheckHR(hrFormat, L"IDWriteFactory::CreateTextFormat(details)"))
         {
             return;
@@ -93,14 +143,8 @@ void FolderView::EnsureDeviceIndependentResources()
 
     if (! _filterWatermarkFormat)
     {
-        const HRESULT hrFormat = _dwriteFactory->CreateTextFormat(FluentIcons::kFontFamily.data(),
-                                                                  nullptr,
-                                                                  DWRITE_FONT_WEIGHT_NORMAL,
-                                                                  DWRITE_FONT_STYLE_NORMAL,
-                                                                  DWRITE_FONT_STRETCH_NORMAL,
-                                                                  120.0f,
-                                                                  L"en-us",
-                                                                  _filterWatermarkFormat.addressof());
+        const HRESULT hrFormat = RedSalamander::DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiIconSpec(120.0f), _filterWatermarkFormat.addressof(), L"en-us");
         if (! CheckHR(hrFormat, L"IDWriteFactory::CreateTextFormat(filter watermark)"))
         {
             return;
@@ -232,11 +276,15 @@ void FolderView::RecreateThemeBrushes()
     _filterWatermarkBrush.reset();
     _backgroundWatermarkBrush.reset();
     _textBrush.reset();
+    _textUnfocusedBrush.reset();
     _detailsTextBrush.reset();
+    _detailsTextUnfocusedBrush.reset();
     _metadataTextBrush.reset();
+    _metadataTextUnfocusedBrush.reset();
     _selectionBrush.reset();
     _focusedBackgroundBrush.reset();
     _focusBrush.reset();
+    _emptyFolderFocusCueBrush.reset();
     _incrementalSearchHighlightBrush.reset();
     _incrementalSearchIndicatorBackgroundBrush.reset();
     _incrementalSearchIndicatorBorderBrush.reset();
@@ -255,6 +303,16 @@ void FolderView::RecreateThemeBrushes()
     if (! CheckHR(hrTextBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(text)"))
     {
         return;
+    }
+
+    {
+        D2D1::ColorF textColor             = _theme.textNormal;
+        textColor.a                        = FolderViewVisualState::ResolveNormalTextAlpha(textColor.a, false, false);
+        const HRESULT hrUnfocusedTextBrush = _d2dContext->CreateSolidColorBrush(textColor, _textUnfocusedBrush.addressof());
+        if (! CheckHR(hrUnfocusedTextBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused text)"))
+        {
+            return;
+        }
     }
 
     {
@@ -279,12 +337,32 @@ void FolderView::RecreateThemeBrushes()
         return;
     }
 
+    {
+        D2D1::ColorF unfocusedDetailsColor    = detailsColor;
+        unfocusedDetailsColor.a               = FolderViewVisualState::ResolveNormalTextAlpha(unfocusedDetailsColor.a, false, false);
+        const HRESULT hrUnfocusedDetailsBrush = _d2dContext->CreateSolidColorBrush(unfocusedDetailsColor, _detailsTextUnfocusedBrush.addressof());
+        if (! CheckHR(hrUnfocusedDetailsBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused details text)"))
+        {
+            return;
+        }
+    }
+
     D2D1::ColorF metadataColor    = _theme.textNormal;
     metadataColor.a               = std::clamp(metadataColor.a * kMetadataTextAlpha, 0.0f, 1.0f);
     const HRESULT hrMetadataBrush = _d2dContext->CreateSolidColorBrush(metadataColor, _metadataTextBrush.addressof());
     if (! CheckHR(hrMetadataBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(metadata text)"))
     {
         return;
+    }
+
+    {
+        D2D1::ColorF unfocusedMetadataColor    = metadataColor;
+        unfocusedMetadataColor.a               = FolderViewVisualState::ResolveNormalTextAlpha(unfocusedMetadataColor.a, false, false);
+        const HRESULT hrUnfocusedMetadataBrush = _d2dContext->CreateSolidColorBrush(unfocusedMetadataColor, _metadataTextUnfocusedBrush.addressof());
+        if (! CheckHR(hrUnfocusedMetadataBrush, L"ID2D1DeviceContext::CreateSolidColorBrush(unfocused metadata text)"))
+        {
+            return;
+        }
     }
 
     const HRESULT hrSelBrush = _d2dContext->CreateSolidColorBrush(_theme.itemBackgroundSelected, _selectionBrush.addressof());
@@ -593,9 +671,11 @@ void FolderView::DiscardDeviceResources()
     _filterWatermarkBrush.reset();
     _backgroundWatermarkBrush.reset();
     _textBrush.reset();
+    _textUnfocusedBrush.reset();
     _selectionBrush.reset();
     _focusedBackgroundBrush.reset();
     _focusBrush.reset();
+    _emptyFolderFocusCueBrush.reset();
     _incrementalSearchHighlightBrush.reset();
     _incrementalSearchIndicatorBackgroundBrush.reset();
     _incrementalSearchIndicatorBorderBrush.reset();
@@ -603,6 +683,9 @@ void FolderView::DiscardDeviceResources()
     _incrementalSearchIndicatorShadowBrush.reset();
     _incrementalSearchIndicatorAccentBrush.reset();
     _detailsTextBrush.reset();
+    _detailsTextUnfocusedBrush.reset();
+    _metadataTextBrush.reset();
+    _metadataTextUnfocusedBrush.reset();
 
     _placeholderFolderIcon.reset();
     _placeholderFileIcon.reset();
@@ -612,9 +695,14 @@ void FolderView::DiscardDeviceResources()
     _detailsFormat.reset();
     _filterWatermarkFormat.reset();
     _filterWatermarkLayout.reset();
-    _filterWatermarkLayoutClientSizePx = {};
-    _filterWatermarkLayoutDpi          = 0.0f;
-    _filterWatermarkLayoutFontSizeDip  = 0.0f;
+    _emptyFolderFocusCueLayout.reset();
+    _emptyFolderFocusCueLayoutWidthDip  = 0.0f;
+    _emptyFolderFocusCueLayoutHeightDip = 0.0f;
+    _emptyFolderFocusCueLayoutDpi       = 0.0f;
+    _emptyFolderFocusCueFontSizeDip     = 0.0f;
+    _filterWatermarkLayoutClientSizePx  = {};
+    _filterWatermarkLayoutDpi           = 0.0f;
+    _filterWatermarkLayoutFontSizeDip   = 0.0f;
     _filterWatermarkBadgeLayout.reset();
     _filterWatermarkBadgeLayoutClientSizePx = {};
     _filterWatermarkBadgeLayoutDpi          = 0.0f;
@@ -851,6 +939,9 @@ void FolderView::CreatePlaceholderIcon()
 
 void FolderView::Render(const RECT& invalidRect)
 {
+#ifdef ENABLE_TESTS
+    ++_debugRenderCallCount;
+#endif
     // std::wstring rectInfo = std::format(L"Rect({},{},{},{}) Items:{}", invalidRect.left, invalidRect.top, invalidRect.right, invalidRect.bottom,
     // _items.size()); TRACER_CTX(rectInfo.c_str());
 
@@ -863,6 +954,16 @@ void FolderView::Render(const RECT& invalidRect)
         Debug::Warning(L"FolderView::Render skipped - no valid render target");
         return;
     }
+
+    Debug::Perf::Scope framePerf(L"render.frame_us");
+    framePerf.SetDetail(_itemsFolder.native());
+
+    DrawItemPerfStats drawStats{};
+    uint64_t itemsConsidered   = 0;
+    uint64_t itemsDrawn        = 0;
+    uint64_t layoutCreates     = 0;
+    uint64_t dirtyAreaPx       = 0;
+    const auto beginToEndStart = std::chrono::steady_clock::now();
 
     RECT paintRect = invalidRect;
     if (paintRect.right <= paintRect.left || paintRect.bottom <= paintRect.top)
@@ -877,6 +978,8 @@ void FolderView::Render(const RECT& invalidRect)
     paintRect.top    = std::max<LONG>(0, paintRect.top);
     paintRect.right  = std::min<LONG>(_clientSize.cx, paintRect.right);
     paintRect.bottom = std::min<LONG>(_clientSize.cy, paintRect.bottom);
+    dirtyAreaPx =
+        static_cast<uint64_t>(std::max<LONG>(0, paintRect.right - paintRect.left)) * static_cast<uint64_t>(std::max<LONG>(0, paintRect.bottom - paintRect.top));
 
     D2D1_RECT_F dirtyDip = D2D1::RectF(DipFromPx(paintRect.left), DipFromPx(paintRect.top), DipFromPx(paintRect.right), DipFromPx(paintRect.bottom));
 
@@ -884,14 +987,18 @@ void FolderView::Render(const RECT& invalidRect)
     const uint64_t nowTickMs = GetTickCount64();
     {
         _d2dContext->BeginDraw();
-        auto endDraw = wil::scope_exit([&] { hr = _d2dContext->EndDraw(); });
+        auto endDraw = wil::scope_exit([&]
+        {
+            hr = _d2dContext->EndDraw();
+            PerfEmitDuration(L"render.begin_to_enddraw_us", PerfElapsedUs(beginToEndStart), dirtyAreaPx, itemsDrawn, hr);
+        });
         _d2dContext->SetTransform(D2D1::Matrix3x2F::Identity());
         _d2dContext->PushAxisAlignedClip(dirtyDip, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
         _d2dContext->FillRectangle(dirtyDip, _backgroundBrush.get());
 
         const bool canRenderWatermark = IsNameFilterActive() && ! _appTheme.highContrast && ! _appTheme.systemHighContrast && _dwriteFactory &&
                                         _filterWatermarkFormat && _filterWatermarkBrush;
-        bool drawWatermarkBadge = false;
+        bool drawWatermarkBadge       = false;
         if (canRenderWatermark && _items.empty() && ! _emptyStateMessage.empty())
         {
             bool hasOverlay = false;
@@ -925,6 +1032,7 @@ void FolderView::Render(const RECT& invalidRect)
                                                 _filterWatermarkLayoutClientSizePx.cy != _clientSize.cy || _filterWatermarkLayoutDpi != _dpi;
                 if (needsLayoutRebuild)
                 {
+                    ++layoutCreates;
                     _filterWatermarkLayout.reset();
                     const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(
                         glyphText, 1u, _filterWatermarkFormat.get(), clientWidthDip, clientHeightDip, _filterWatermarkLayout.addressof());
@@ -946,7 +1054,14 @@ void FolderView::Render(const RECT& invalidRect)
                     }
 
                     constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+#ifdef ENABLE_TESTS
+                    SelfTest::AppendSelfTestTrace(std::format(
+                        L"FolderView::Render: before filter watermark draw itemCount={} client={}x{}", _items.size(), _clientSize.cx, _clientSize.cy));
+#endif
                     _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), _filterWatermarkLayout.get(), _filterWatermarkBrush.get(), options);
+#ifdef ENABLE_TESTS
+                    SelfTest::AppendSelfTestTrace(L"FolderView::Render: after filter watermark draw");
+#endif
                 }
             }
         }
@@ -967,6 +1082,7 @@ void FolderView::Render(const RECT& invalidRect)
                                                 _filterWatermarkBadgeLayoutClientSizePx.cy != _clientSize.cy || _filterWatermarkBadgeLayoutDpi != _dpi;
                 if (needsLayoutRebuild)
                 {
+                    ++layoutCreates;
                     _filterWatermarkBadgeLayout.reset();
                     const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(
                         glyphText, 1u, _filterWatermarkFormat.get(), layoutWidthDip, layoutHeightDip, _filterWatermarkBadgeLayout.addressof());
@@ -1012,6 +1128,7 @@ void FolderView::Render(const RECT& invalidRect)
                                             _backgroundWatermarkLayoutText != _backgroundWatermarkMessage;
             if (needsLayoutRebuild)
             {
+                ++layoutCreates;
                 _backgroundWatermarkLayout.reset();
 
                 if (_backgroundWatermarkMessage.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
@@ -1068,15 +1185,28 @@ void FolderView::Render(const RECT& invalidRect)
         const float layoutRight  = dirtyDip.right + _horizontalOffset;
         const float layoutTop    = dirtyDip.top + _scrollOffset;
         const float layoutBottom = dirtyDip.bottom + _scrollOffset;
+#ifdef ENABLE_TESTS
+        if (IsNameFilterActive())
+        {
+            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::Render: before filtered item draw itemCount={} dirty=({},{})->({},{})",
+                                                      _items.size(),
+                                                      static_cast<int>(dirtyDip.left),
+                                                      static_cast<int>(dirtyDip.top),
+                                                      static_cast<int>(dirtyDip.right),
+                                                      static_cast<int>(dirtyDip.bottom)));
+        }
+#endif
 
         auto drawIfVisible = [&](FolderItem& item)
         {
+            ++itemsConsidered;
             const D2D1_RECT_F viewBounds = OffsetRect(item.bounds, -_horizontalOffset, -_scrollOffset);
             if (viewBounds.right < dirtyDip.left || viewBounds.left > dirtyDip.right || viewBounds.bottom < dirtyDip.top || viewBounds.top > dirtyDip.bottom)
             {
                 return;
             }
-            DrawItem(item);
+            ++itemsDrawn;
+            DrawItem(item, &drawStats);
         };
 
         if (_columnCounts.empty())
@@ -1088,8 +1218,9 @@ void FolderView::Render(const RECT& invalidRect)
         }
         else
         {
-            const float columnStride = _tileWidthDip + kColumnSpacingDip;
-            const float rowStride    = _tileHeightDip + kRowSpacingDip;
+            const float rowSpacingDip = GetFolderViewRowSpacingDip(_appTheme);
+            const float columnStride  = _tileWidthDip + kColumnSpacingDip;
+            const float rowStride     = _tileHeightDip + rowSpacingDip;
             if (columnStride <= 0.0f || rowStride <= 0.0f)
             {
                 for (auto& item : _items)
@@ -1100,7 +1231,7 @@ void FolderView::Render(const RECT& invalidRect)
             else
             {
                 const float firstColumnLeft = kColumnSpacingDip;
-                const float firstRowTop     = kRowSpacingDip;
+                const float firstRowTop     = rowSpacingDip;
                 size_t columnBaseIndex      = 0;
                 for (int column = 0; column < static_cast<int>(_columnCounts.size()) && columnBaseIndex < _items.size(); ++column)
                 {
@@ -1169,6 +1300,7 @@ void FolderView::Render(const RECT& invalidRect)
 
                     const UINT32 length = static_cast<UINT32>(message.size());
                     wil::com_ptr<IDWriteTextLayout> layout;
+                    ++layoutCreates;
                     const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(message.data(),
                                                                               length,
                                                                               _detailsFormat ? _detailsFormat.get() : _labelFormat.get(),
@@ -1198,6 +1330,132 @@ void FolderView::Render(const RECT& invalidRect)
                     _d2dContext->DrawTextLayout(D2D1::Point2F(0.0f, 0.0f), layout.get(), brush, options);
                 };
 
+                auto drawEmptyFolderFocusCue = [&]()
+                {
+                    if (! CanShowEmptyFolderState() || ! _emptyFolderState.has_value() || ! _focusBrush)
+                    {
+                        return;
+                    }
+
+                    const float cueLeft   = std::max(0.0f, kColumnSpacingDip);
+                    const float cueTop    = std::max(0.0f, GetFolderViewRowSpacingDip(_appTheme));
+                    const float cueWidth  = std::min(_tileWidthDip, std::max(0.0f, clientWidthDip - cueLeft - kColumnSpacingDip));
+                    const float cueHeight = std::min(std::max(_tileHeightDip, 0.0f), std::max(0.0f, clientHeightDip - cueTop));
+                    if (cueWidth <= 0.0f || cueHeight <= 0.0f)
+                    {
+                        return;
+                    }
+
+                    const D2D1_RECT_F cueBounds              = D2D1::RectF(cueLeft, cueTop, cueLeft + cueWidth, cueTop + cueHeight);
+                    const float maxCornerRadius              = std::min(cueWidth, cueHeight) * 0.5f;
+                    const float cornerRadius                 = std::min(kSelectionCornerRadiusDip, maxCornerRadius);
+                    const D2D1_ROUNDED_RECT cueRoundedBounds = D2D1::RoundedRect(cueBounds, cornerRadius, cornerRadius);
+
+                    if (_paneFocused && _focusedBackgroundBrush)
+                    {
+                        _focusedBackgroundBrush->SetColor(_theme.itemBackgroundFocused);
+                        _d2dContext->FillRoundedRectangle(cueRoundedBounds, _focusedBackgroundBrush.get());
+                    }
+                    else if (_selectionBrush)
+                    {
+                        _selectionBrush->SetColor(_theme.itemBackgroundSelectedInactive);
+                        _d2dContext->FillRoundedRectangle(cueRoundedBounds, _selectionBrush.get());
+                    }
+
+                    const float strokeThickness = _paneFocused ? kFocusStrokeThicknessDip : kFocusStrokeThicknessUnfocusedDip;
+                    const float inset           = strokeThickness * 0.5f;
+                    const D2D1_RECT_F focusBounds =
+                        D2D1::RectF(cueBounds.left + inset, cueBounds.top + inset, cueBounds.right - inset, cueBounds.bottom - inset);
+                    const float focusWidth  = std::max(0.0f, focusBounds.right - focusBounds.left);
+                    const float focusHeight = std::max(0.0f, focusBounds.bottom - focusBounds.top);
+                    if (focusWidth <= 0.0f || focusHeight <= 0.0f)
+                    {
+                        return;
+                    }
+
+                    D2D1::ColorF focusColor = _theme.focusBorder;
+                    if (! _paneFocused)
+                    {
+                        focusColor.a = FolderViewVisualState::ResolveFocusBorderAlpha(focusColor.a, _paneFocused);
+                    }
+                    _focusBrush->SetColor(focusColor);
+
+                    const float maxFocusCornerRadius = std::min(focusWidth, focusHeight) * 0.5f;
+                    const float focusCornerRadius    = std::min(std::max(0.0f, cornerRadius - inset), maxFocusCornerRadius);
+                    _d2dContext->DrawRoundedRectangle(D2D1::RoundedRect(focusBounds, focusCornerRadius, focusCornerRadius), _focusBrush.get(), strokeThickness);
+
+                    const float textPaddingXDip      = kLabelHorizontalPaddingDip;
+                    const float textPaddingYDip      = kLabelVerticalPaddingDip;
+                    const float layoutWidthDip       = std::max(1.0f, cueWidth - (textPaddingXDip * 2.0f));
+                    const float layoutHeightDip      = std::max(1.0f, cueHeight - (textPaddingYDip * 2.0f));
+                    const float cueFontSizeDip       = std::clamp(cueHeight * 0.38f, 11.0f, 15.0f);
+                    const bool needsCueLayoutRebuild = ! _emptyFolderFocusCueLayout || std::fabs(_emptyFolderFocusCueLayoutWidthDip - layoutWidthDip) > 0.5f ||
+                                                       std::fabs(_emptyFolderFocusCueLayoutHeightDip - layoutHeightDip) > 0.5f ||
+                                                       std::fabs(_emptyFolderFocusCueFontSizeDip - cueFontSizeDip) > 0.25f ||
+                                                       _emptyFolderFocusCueLayoutDpi != _dpi;
+                    if (needsCueLayoutRebuild)
+                    {
+                        _emptyFolderFocusCueLayout.reset();
+
+                        std::wstring cueText = LoadStringResource(nullptr, IDS_EMPTY_FOLDER_PARENT_ROW);
+                        if (cueText.empty())
+                        {
+                            cueText = LoadStringResource(nullptr, IDS_EMPTY_FOLDER_TITLE);
+                        }
+                        if (cueText.empty() || cueText.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+                        {
+                            return;
+                        }
+
+                        const UINT32 cueLength = static_cast<UINT32>(cueText.size());
+                        ++layoutCreates;
+                        const HRESULT hrLayout = _dwriteFactory->CreateTextLayout(cueText.data(),
+                                                                                  cueLength,
+                                                                                  _labelFormat ? _labelFormat.get() : _detailsFormat.get(),
+                                                                                  layoutWidthDip,
+                                                                                  layoutHeightDip,
+                                                                                  _emptyFolderFocusCueLayout.addressof());
+                        if (FAILED(hrLayout) || ! _emptyFolderFocusCueLayout)
+                        {
+                            return;
+                        }
+
+                        _emptyFolderFocusCueLayout->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+                        _emptyFolderFocusCueLayout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
+                        _emptyFolderFocusCueLayout->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP);
+                        const DWRITE_TEXT_RANGE cueRange{0, cueLength};
+                        _emptyFolderFocusCueLayout->SetFontSize(cueFontSizeDip, cueRange);
+                        _emptyFolderFocusCueLayoutWidthDip  = layoutWidthDip;
+                        _emptyFolderFocusCueLayoutHeightDip = layoutHeightDip;
+                        _emptyFolderFocusCueFontSizeDip     = cueFontSizeDip;
+                        _emptyFolderFocusCueLayoutDpi       = _dpi;
+                    }
+
+                    D2D1::ColorF cueTextColor = _theme.textNormal;
+                    if (! _paneFocused)
+                    {
+                        cueTextColor.a = FolderViewVisualState::ResolveNormalTextAlpha(cueTextColor.a, false, false);
+                    }
+                    if (! _emptyFolderFocusCueBrush && FAILED(_d2dContext->CreateSolidColorBrush(cueTextColor, _emptyFolderFocusCueBrush.addressof())))
+                    {
+                        return;
+                    }
+
+                    if (! _emptyFolderFocusCueBrush || ! _emptyFolderFocusCueLayout)
+                    {
+                        return;
+                    }
+
+                    _emptyFolderFocusCueBrush->SetColor(cueTextColor);
+                    constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
+                    _d2dContext->DrawTextLayout(D2D1::Point2F(cueLeft + textPaddingXDip, cueTop + textPaddingYDip),
+                                                _emptyFolderFocusCueLayout.get(),
+                                                _emptyFolderFocusCueBrush.get(),
+                                                options);
+                };
+
+                drawEmptyFolderFocusCue();
+
                 if (! _emptyStateMessage.empty())
                 {
                     const bool canDrawNoDifferences = _emptyStateMessageKind == EmptyStateMessageKind::CompareNoDifferences && ! _appTheme.highContrast &&
@@ -1224,6 +1482,7 @@ void FolderView::Render(const RECT& invalidRect)
                             const float messageFontSizeDip = std::clamp(minDimDip * 0.05f, 13.0f, 18.0f);
 
                             const wchar_t iconText[2]{FluentIcons::kLedLight, 0};
+                            ++layoutCreates;
                             const HRESULT hrIconLayout = _dwriteFactory->CreateTextLayout(
                                 iconText, 1u, _filterWatermarkFormat.get(), clientWidthDip, clientHeightDip, _emptyMessageIconLayout.addressof());
                             if (SUCCEEDED(hrIconLayout) && _emptyMessageIconLayout)
@@ -1244,6 +1503,7 @@ void FolderView::Render(const RECT& invalidRect)
                             if (titleLength > 0)
                             {
                                 const float maxTextWidthDip = std::max(1.0f, clientWidthDip - std::clamp(minDimDip * 0.18f, 80.0f, 200.0f));
+                                ++layoutCreates;
                                 const HRESULT hrTitleLayout = _dwriteFactory->CreateTextLayout(title.data(),
                                                                                                titleLength,
                                                                                                _labelFormat ? _labelFormat.get() : _detailsFormat.get(),
@@ -1279,7 +1539,8 @@ void FolderView::Render(const RECT& invalidRect)
                             if (funLength > 0)
                             {
                                 const float maxTextWidthDip = std::max(1.0f, clientWidthDip - std::clamp(minDimDip * 0.18f, 80.0f, 200.0f));
-                                const HRESULT hrFunLayout   = _dwriteFactory->CreateTextLayout(funText.data(),
+                                ++layoutCreates;
+                                const HRESULT hrFunLayout = _dwriteFactory->CreateTextLayout(funText.data(),
                                                                                              funLength,
                                                                                              _labelFormat ? _labelFormat.get() : _detailsFormat.get(),
                                                                                              maxTextWidthDip,
@@ -1391,6 +1652,7 @@ void FolderView::Render(const RECT& invalidRect)
                         const float messageFontSizeDip = std::clamp(minDimDip * 0.05f, 13.0f, 18.0f);
 
                         const wchar_t iconText[2]{FluentIcons::kPreview, 0};
+                        ++layoutCreates;
                         const HRESULT hrIconLayout = _dwriteFactory->CreateTextLayout(
                             iconText, 1u, _filterWatermarkFormat.get(), clientWidthDip, clientHeightDip, _emptyFolderIconLayout.addressof());
                         if (SUCCEEDED(hrIconLayout) && _emptyFolderIconLayout)
@@ -1411,6 +1673,7 @@ void FolderView::Render(const RECT& invalidRect)
                         const UINT32 titleLength = static_cast<UINT32>(std::min<size_t>(title.size(), static_cast<size_t>(std::numeric_limits<UINT32>::max())));
                         if (titleLength > 0)
                         {
+                            ++layoutCreates;
                             const HRESULT hrTitleLayout = _dwriteFactory->CreateTextLayout(title.data(),
                                                                                            titleLength,
                                                                                            _labelFormat ? _labelFormat.get() : _detailsFormat.get(),
@@ -1444,6 +1707,7 @@ void FolderView::Render(const RECT& invalidRect)
                         const UINT32 funLength = static_cast<UINT32>(std::min<size_t>(funText.size(), static_cast<size_t>(std::numeric_limits<UINT32>::max())));
                         if (funLength > 0)
                         {
+                            ++layoutCreates;
                             const HRESULT hrFunLayout = _dwriteFactory->CreateTextLayout(funText.data(),
                                                                                          funLength,
                                                                                          _labelFormat ? _labelFormat.get() : _detailsFormat.get(),
@@ -1530,8 +1794,27 @@ void FolderView::Render(const RECT& invalidRect)
         DrawIncrementalSearchIndicator(nowTickMs);
         DrawErrorOverlay();
 
+#ifdef ENABLE_TESTS
+        if (IsNameFilterActive())
+        {
+            SelfTest::AppendSelfTestTrace(L"FolderView::Render: before PopAxisAlignedClip");
+        }
+#endif
         _d2dContext->PopAxisAlignedClip();
     }
+
+    framePerf.SetValue0(dirtyAreaPx);
+    framePerf.SetValue1(itemsDrawn);
+    PerfEmitCounter(L"render.dirty_rect_area_px", dirtyAreaPx);
+    PerfEmitCounter(L"render.items_considered", itemsConsidered);
+    PerfEmitCounter(L"render.items_drawn", itemsDrawn);
+    PerfEmitCounter(L"render.empty_state_layout_creates", layoutCreates);
+    PerfEmitCounter(L"render.item_has_icon", drawStats.itemHasIcon);
+    PerfEmitCounter(L"render.item_placeholder_icon", drawStats.itemPlaceholderIcon);
+    PerfEmitCounter(L"render.item_textlayout_label", drawStats.itemTextLayoutLabel);
+    PerfEmitCounter(L"render.item_textlayout_details", drawStats.itemTextLayoutDetails);
+    PerfEmitCounter(L"render.item_textlayout_metadata", drawStats.itemTextLayoutMetadata);
+    PerfEmitCounter(L"render.incremental_search_effect_updates", drawStats.incrementalSearchUpdates);
 
     if (FAILED(hr))
     {
@@ -1541,17 +1824,47 @@ void FolderView::Render(const RECT& invalidRect)
     }
     else if (_supportsPresent1 && _swapChain)
     {
+#ifdef ENABLE_TESTS
+        if (IsNameFilterActive())
+        {
+            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::Render: before Present1 itemsDrawn={}", itemsDrawn));
+        }
+#endif
         DXGI_PRESENT_PARAMETERS params{};
-        params.DirtyRectsCount = 1;
-        params.pDirtyRects     = &paintRect;
-        params.pScrollRect     = nullptr;
-        params.pScrollOffset   = nullptr;
-        _swapChain->Present1(1, 0, &params);
+        params.DirtyRectsCount  = 1;
+        params.pDirtyRects      = &paintRect;
+        params.pScrollRect      = nullptr;
+        params.pScrollOffset    = nullptr;
+        const auto presentStart = std::chrono::steady_clock::now();
+        const HRESULT hrPresent = _swapChain->Present1(1, 0, &params);
+        PerfEmitDuration(L"render.present_us", PerfElapsedUs(presentStart), dirtyAreaPx, itemsDrawn, hrPresent);
+#ifdef ENABLE_TESTS
+        if (IsNameFilterActive())
+        {
+            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::Render: after Present1 hr=0x{:08X}", static_cast<unsigned>(hrPresent)));
+        }
+#endif
+        if (FAILED(hrPresent))
+        {
+            ReportError(L"IDXGISwapChain1::Present1", hrPresent);
+            ReleaseSwapChain();
+            EnsureSwapChain();
+            return;
+        }
         ClearErrorOverlay(ErrorOverlayKind::Rendering);
     }
     else if (_swapChainLegacy)
     {
-        _swapChainLegacy->Present(1, 0);
+        const auto presentStart = std::chrono::steady_clock::now();
+        const HRESULT hrPresent = _swapChainLegacy->Present(1, 0);
+        PerfEmitDuration(L"render.present_us", PerfElapsedUs(presentStart), dirtyAreaPx, itemsDrawn, hrPresent);
+        if (FAILED(hrPresent))
+        {
+            ReportError(L"IDXGISwapChain::Present", hrPresent);
+            ReleaseSwapChain();
+            EnsureSwapChain();
+            return;
+        }
         ClearErrorOverlay(ErrorOverlayKind::Rendering);
     }
 }
@@ -1733,11 +2046,52 @@ void FolderView::DrawIncrementalSearchIndicator(uint64_t nowTickMs)
     }
 }
 
-void FolderView::DrawItem(FolderItem& item)
+void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
 {
+    const auto drawStart = std::chrono::steady_clock::now();
+    auto emitPerf        = wil::scope_exit([&] { PerfEmitDuration(L"render.draw_item_us", PerfElapsedUs(drawStart)); });
+#ifdef ENABLE_TESTS
+    if (IsNameFilterActive())
+    {
+        SelfTest::AppendSelfTestTrace(std::format(L"FolderView::DrawItem: begin name='{}' hasIcon={} selected={} focused={}",
+                                                  item.displayName,
+                                                  item.icon ? 1 : 0,
+                                                  item.selected ? 1 : 0,
+                                                  item.focused ? 1 : 0));
+    }
+#endif
+
     // Ensure text layout is created lazily before rendering
     const float labelWidth = std::max(0.0f, _tileWidthDip - (kLabelHorizontalPaddingDip * 2.0f) - _iconSizeDip - kIconTextGapDip);
     EnsureItemTextLayout(item, labelWidth);
+#ifdef ENABLE_TESTS
+    if (IsNameFilterActive())
+    {
+        SelfTest::AppendSelfTestTrace(
+            std::format(L"FolderView::DrawItem: after EnsureItemTextLayout name='{}' hasLabelLayout={} hasDetailsLayout={} hasMetadataLayout={}",
+                        item.displayName,
+                        item.labelLayout ? 1 : 0,
+                        item.detailsLayout ? 1 : 0,
+                        item.metadataLayout ? 1 : 0));
+    }
+#endif
+
+    if (perfStats)
+    {
+        if (item.icon)
+        {
+            ++perfStats->itemHasIcon;
+        }
+        else
+        {
+            ++perfStats->itemPlaceholderIcon;
+        }
+
+        if (item.labelLayout)
+        {
+            ++perfStats->itemTextLayoutLabel;
+        }
+    }
 
     D2D1_RECT_F bounds = OffsetRect(item.bounds, -_horizontalOffset, -_scrollOffset);
 
@@ -1859,7 +2213,7 @@ void FolderView::DrawItem(FolderItem& item)
 
                 if (! _paneFocused)
                 {
-                    focusColor.a = std::clamp(focusColor.a * kFocusBorderOpacityUnfocused, 0.0f, 1.0f);
+                    focusColor.a = FolderViewVisualState::ResolveFocusBorderAlpha(focusColor.a, _paneFocused);
                 }
 
                 _focusBrush->SetColor(focusColor);
@@ -1872,14 +2226,24 @@ void FolderView::DrawItem(FolderItem& item)
     const float contentBottom = bounds.bottom - kLabelVerticalPaddingDip;
     const float contentHeight = std::max(0.0f, contentBottom - contentTop);
 
-    const float iconLeft    = bounds.left + kLabelHorizontalPaddingDip;
-    const float iconTop     = _displayMode == DisplayMode::Brief ? contentTop + std::max(0.0f, (contentHeight - _iconSizeDip) * 0.5f) : contentTop;
-    D2D1_RECT_F iconRect    = D2D1::RectF(iconLeft, iconTop, iconLeft + _iconSizeDip, iconTop + _iconSizeDip);
-    const float iconOpacity = (item.fileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0 ? 0.5f : 1.0f;
+    const float iconLeft = bounds.left + kLabelHorizontalPaddingDip;
+    const float iconTop  = _displayMode == DisplayMode::Brief ? contentTop + std::max(0.0f, (contentHeight - _iconSizeDip) * 0.5f) : contentTop;
+    D2D1_RECT_F iconRect = D2D1::RectF(iconLeft, iconTop, iconLeft + _iconSizeDip, iconTop + _iconSizeDip);
+    float iconOpacity    = (item.fileAttributes & FILE_ATTRIBUTE_HIDDEN) != 0 ? 0.5f : 1.0f;
+    if (! _paneFocused)
+    {
+        iconOpacity = FolderViewVisualState::ResolveNormalIconOpacity(iconOpacity, _paneFocused);
+    }
     if (item.icon)
     {
-        // Render icon with nearest neighbor interpolation for crisp pixel-perfect rendering
-        _d2dContext->DrawBitmap(item.icon.get(), iconRect, iconOpacity, D2D1_INTERPOLATION_MODE_NEAREST_NEIGHBOR);
+#ifdef ENABLE_TESTS
+        if (IsNameFilterActive())
+        {
+            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::DrawItem: before DrawBitmap name='{}'", item.displayName));
+        }
+#endif
+        const D2D1_INTERPOLATION_MODE interpolationMode = ResolveFolderViewIconBitmapInterpolation(item.icon->GetPixelSize(), _iconSizeDip, _dpi);
+        _d2dContext->DrawBitmap(item.icon.get(), iconRect, iconOpacity, interpolationMode);
 
         // Render shortcut overlay if applicable
         if (item.isShortcut && _shortcutOverlayIcon)
@@ -1896,8 +2260,8 @@ void FolderView::DrawItem(FolderItem& item)
         auto& placeholder = item.isDirectory ? _placeholderFolderIcon : _placeholderFileIcon;
         if (placeholder)
         {
-            // Draw placeholder with reduced opacity and linear interpolation
-            _d2dContext->DrawBitmap(placeholder.get(), &iconRect, 0.4f, D2D1_INTERPOLATION_MODE_LINEAR);
+            const float placeholderOpacity = FolderViewVisualState::ResolvePlaceholderIconOpacity(_paneFocused);
+            _d2dContext->DrawBitmap(placeholder.get(), &iconRect, placeholderOpacity, D2D1_INTERPOLATION_MODE_LINEAR);
         }
         else
         {
@@ -1912,7 +2276,7 @@ void FolderView::DrawItem(FolderItem& item)
     const float availableWidth = std::max(0.0f, labelRight - labelLeft);
 
     // Select text brush based on selection state
-    ID2D1SolidColorBrush* textBrush = _textBrush.get();
+    ID2D1SolidColorBrush* textBrush = (! _paneFocused && _textUnfocusedBrush) ? _textUnfocusedBrush.get() : _textBrush.get();
     wil::com_ptr<ID2D1SolidColorBrush> selectedTextBrush;
     if (item.selected)
     {
@@ -2051,6 +2415,10 @@ void FolderView::DrawItem(FolderItem& item)
                 DWRITE_TEXT_RANGE clearRange{};
                 clearRange.startPosition = 0;
                 clearRange.length        = textLength;
+                if (perfStats)
+                {
+                    ++perfStats->incrementalSearchUpdates;
+                }
                 static_cast<void>(item.labelLayout->SetDrawingEffect(nullptr, clearRange));
             }
 
@@ -2072,6 +2440,10 @@ void FolderView::DrawItem(FolderItem& item)
                         {
                             const D2D1::ColorF highlightTextColor = _paneFocused ? _theme.textSelected : _theme.textSelectedInactive;
                             _incrementalSearchHighlightBrush->SetColor(highlightTextColor);
+                            if (perfStats)
+                            {
+                                ++perfStats->incrementalSearchUpdates;
+                            }
                             static_cast<void>(item.labelLayout->SetDrawingEffect(_incrementalSearchHighlightBrush.get(), range));
                         }
                     }
@@ -2093,16 +2465,27 @@ void FolderView::DrawItem(FolderItem& item)
             }
             _d2dContext->DrawTextLayout(origin, item.labelLayout.get(), textBrush, options);
 
-            ID2D1SolidColorBrush* detailsBrush = item.selected ? textBrush : (_detailsTextBrush ? _detailsTextBrush.get() : textBrush);
+            ID2D1SolidColorBrush* detailsBrush =
+                item.selected ? textBrush
+                              : (! _paneFocused && _detailsTextUnfocusedBrush ? _detailsTextUnfocusedBrush.get()
+                                                                              : (_detailsTextBrush ? _detailsTextBrush.get() : textBrush));
 
             const float detailsTop = contentTop + nameHeight + kDetailsGapDip;
             if (item.detailsLayout)
             {
+                if (perfStats)
+                {
+                    ++perfStats->itemTextLayoutDetails;
+                }
                 D2D1_POINT_2F detailsOrigin{labelLeft, detailsTop};
                 _d2dContext->DrawTextLayout(detailsOrigin, item.detailsLayout.get(), detailsBrush, options);
             }
             else if (! item.detailsText.empty() && _detailsFormat)
             {
+                if (perfStats)
+                {
+                    ++perfStats->itemTextLayoutDetails;
+                }
                 D2D1_RECT_F detailsRect = D2D1::RectF(labelLeft, detailsTop, labelLeft + availableWidth, contentBottom);
                 _d2dContext->DrawTextW(
                     item.detailsText.c_str(), static_cast<UINT32>(item.detailsText.length()), _detailsFormat.get(), detailsRect, detailsBrush, options);
@@ -2115,14 +2498,25 @@ void FolderView::DrawItem(FolderItem& item)
                     hasDetails ? (item.detailsMetrics.height > 0.0f ? item.detailsMetrics.height : std::max(0.0f, _detailsLineHeightDip)) : 0.0f;
                 const float metadataTop = hasDetails ? (detailsTop + std::max(0.0f, detailsHeight) + kDetailsGapDip) : detailsTop;
 
-                ID2D1SolidColorBrush* metadataBrush = item.selected ? textBrush : (_metadataTextBrush ? _metadataTextBrush.get() : detailsBrush);
+                ID2D1SolidColorBrush* metadataBrush =
+                    item.selected ? textBrush
+                                  : (! _paneFocused && _metadataTextUnfocusedBrush ? _metadataTextUnfocusedBrush.get()
+                                                                                   : (_metadataTextBrush ? _metadataTextBrush.get() : detailsBrush));
                 if (item.metadataLayout)
                 {
+                    if (perfStats)
+                    {
+                        ++perfStats->itemTextLayoutMetadata;
+                    }
                     D2D1_POINT_2F metadataOrigin{labelLeft, metadataTop};
                     _d2dContext->DrawTextLayout(metadataOrigin, item.metadataLayout.get(), metadataBrush, options);
                 }
                 else if (! item.metadataText.empty() && _detailsFormat)
                 {
+                    if (perfStats)
+                    {
+                        ++perfStats->itemTextLayoutMetadata;
+                    }
                     D2D1_RECT_F metadataRect = D2D1::RectF(labelLeft, metadataTop, labelLeft + availableWidth, contentBottom);
                     _d2dContext->DrawTextW(
                         item.metadataText.c_str(), static_cast<UINT32>(item.metadataText.length()), _detailsFormat.get(), metadataRect, metadataBrush, options);
@@ -2155,7 +2549,10 @@ void FolderView::DrawItem(FolderItem& item)
             constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             _d2dContext->DrawTextW(item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
 
-            ID2D1SolidColorBrush* detailsBrush = item.selected ? textBrush : (_detailsTextBrush ? _detailsTextBrush.get() : textBrush);
+            ID2D1SolidColorBrush* detailsBrush =
+                item.selected ? textBrush
+                              : (! _paneFocused && _detailsTextUnfocusedBrush ? _detailsTextUnfocusedBrush.get()
+                                                                              : (_detailsTextBrush ? _detailsTextBrush.get() : textBrush));
 
             if (! item.detailsText.empty() && _detailsFormat)
             {
@@ -2166,11 +2563,14 @@ void FolderView::DrawItem(FolderItem& item)
 
             if (_displayMode == DisplayMode::ExtraDetailed && ! item.metadataText.empty() && _detailsFormat)
             {
-                const bool hasDetails               = ! item.detailsText.empty();
-                const float detailsBottom           = nameBottom + kDetailsGapDip + (hasDetails ? detailsHeight : 0.0f);
-                const float metadataTop             = hasDetails ? (detailsBottom + kDetailsGapDip) : detailsBottom;
-                ID2D1SolidColorBrush* metadataBrush = item.selected ? textBrush : (_metadataTextBrush ? _metadataTextBrush.get() : detailsBrush);
-                D2D1_RECT_F metadataRect            = D2D1::RectF(labelLeft, metadataTop, labelLeft + availableWidth, contentBottom);
+                const bool hasDetails     = ! item.detailsText.empty();
+                const float detailsBottom = nameBottom + kDetailsGapDip + (hasDetails ? detailsHeight : 0.0f);
+                const float metadataTop   = hasDetails ? (detailsBottom + kDetailsGapDip) : detailsBottom;
+                ID2D1SolidColorBrush* metadataBrush =
+                    item.selected ? textBrush
+                                  : (! _paneFocused && _metadataTextUnfocusedBrush ? _metadataTextUnfocusedBrush.get()
+                                                                                   : (_metadataTextBrush ? _metadataTextBrush.get() : detailsBrush));
+                D2D1_RECT_F metadataRect = D2D1::RectF(labelLeft, metadataTop, labelLeft + availableWidth, contentBottom);
                 _d2dContext->DrawTextW(
                     item.metadataText.c_str(), static_cast<UINT32>(item.metadataText.length()), _detailsFormat.get(), metadataRect, metadataBrush, options);
             }
@@ -2182,6 +2582,12 @@ void FolderView::DrawItem(FolderItem& item)
             _d2dContext->DrawTextW(item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
         }
     }
+#ifdef ENABLE_TESTS
+    if (IsNameFilterActive())
+    {
+        SelfTest::AppendSelfTestTrace(std::format(L"FolderView::DrawItem: end name='{}'", item.displayName));
+    }
+#endif
 }
 
 D2D1_RECT_F FolderView::OffsetRect(const D2D1_RECT_F& rect, float dx, float dy) const

@@ -64,6 +64,28 @@ class AlertOverlay;
 
 // Theme structures and Helpers are defined in AppTheme.h
 
+#ifdef ENABLE_TESTS
+struct FolderViewRenamePromptDebugSnapshot
+{
+    bool usesDxUiHost              = false;
+    size_t visibleChildWindowCount = 0u;
+    std::wstring text;
+    size_t selectionStart = 0u;
+    size_t selectionEnd   = 0u;
+    D2D1_RECT_F textRect{};
+    D2D1_RECT_F selectionPaintRect{};
+    float horizontalScrollDip  = 0.0f;
+    bool hasSelectionPaintRect = false;
+};
+
+[[nodiscard]] HWND GetFolderViewRenamePromptHandle() noexcept;
+[[nodiscard]] bool DebugGetFolderViewRenamePromptSnapshot(FolderViewRenamePromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetFolderViewRenamePromptText(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugConfirmFolderViewRenamePrompt() noexcept;
+[[nodiscard]] bool DebugCancelFolderViewRenamePrompt() noexcept;
+[[nodiscard]] D2D1_INTERPOLATION_MODE DebugResolveFolderViewIconBitmapInterpolation(D2D1_SIZE_U sourcePixelSize, float destinationSizeDip, float dpi) noexcept;
+#endif
+
 class FolderView
 {
 public:
@@ -169,7 +191,7 @@ public:
     {
         _propertiesRequestCallback = std::move(callback);
     }
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     [[nodiscard]] bool DebugHasFileOperationRequestCallback() const noexcept
     {
         return static_cast<bool>(_fileOperationRequestCallback);
@@ -180,13 +202,52 @@ public:
         return _debugForceRefreshCount;
     }
 
+    [[nodiscard]] uint64_t DebugGetWarmRenderingCallCount() const noexcept
+    {
+        return _debugWarmRenderingCallCount;
+    }
+
+    struct DebugWarmPerfSnapshot
+    {
+        uint64_t warmRenderingCalls    = 0;
+        uint64_t deferredInitCalls     = 0;
+        uint64_t renderCalls           = 0;
+        uint64_t queueIconLoadingCalls = 0;
+        uint64_t processIconQueueCalls = 0;
+        uint64_t batchIconUpdateCalls  = 0;
+    };
+
+    [[nodiscard]] DebugWarmPerfSnapshot DebugGetWarmPerfSnapshot() const noexcept
+    {
+        return DebugWarmPerfSnapshot{
+            .warmRenderingCalls    = _debugWarmRenderingCallCount,
+            .deferredInitCalls     = _debugDeferredInitCallCount,
+            .renderCalls           = _debugRenderCallCount,
+            .queueIconLoadingCalls = _debugQueueIconLoadingCallCount,
+            .processIconQueueCalls = _debugProcessIconQueueCallCount,
+            .batchIconUpdateCalls  = _debugBatchIconUpdateCallCount,
+        };
+    }
+
     [[nodiscard]] std::wstring_view DebugGetFocusedDisplayName() const noexcept;
     [[nodiscard]] bool DebugHasItemDisplayName(std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetItemCount() const noexcept;
+    [[nodiscard]] size_t DebugGetBitmapIconCount() const noexcept;
     [[nodiscard]] bool DebugIsItemSelectedByDisplayName(std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetSelectedItemCount() const noexcept;
+    [[nodiscard]] bool DebugWarmRenderingForSelfTest() noexcept;
     [[nodiscard]] bool DebugIsEmptyFolderStateActive() const noexcept;
     [[nodiscard]] std::wstring_view DebugGetEmptyFolderFunMessage() const noexcept;
+    struct DebugEmptyFolderItemMetrics
+    {
+        bool active           = false;
+        float clientWidthDip  = 0.0f;
+        float clientHeightDip = 0.0f;
+        float tileWidthDip    = 0.0f;
+        float tileHeightDip   = 0.0f;
+        float labelHeightDip  = 0.0f;
+    };
+    [[nodiscard]] DebugEmptyFolderItemMetrics DebugGetEmptyFolderItemMetrics() const noexcept;
 
     enum class FilterWatermarkVisualMode : uint8_t
     {
@@ -355,6 +416,13 @@ public:
     {
         _selectionChangedCallback = std::move(callback);
     }
+    [[nodiscard]] std::optional<SelectionStats::SelectedItemDetails> GetFocusedItemDetails() const noexcept;
+
+    using FocusedItemChangedCallback = std::function<void()>;
+    void SetFocusedItemChangedCallback(FocusedItemChangedCallback callback)
+    {
+        _focusedItemChangedCallback = std::move(callback);
+    }
 
     using IncrementalSearchChangedCallback = std::function<void()>;
     void SetIncrementalSearchChangedCallback(IncrementalSearchChangedCallback callback)
@@ -419,6 +487,8 @@ public:
 
     void InvertSelection();
 
+    void SelectSameName();
+    void UnselectSameName();
     void SelectSameExtension();
     void UnselectSameExtension();
 
@@ -451,8 +521,10 @@ private:
 
     struct IconBitmapRequest
     {
-        uint64_t iconLoadBatchId = 0;
-        int iconIndex            = -1;
+        uint64_t iconLoadBatchId       = 0;
+        uint64_t enumerationGeneration = 0;
+        int iconIndex                  = -1;
+        std::chrono::steady_clock::time_point postedAt{};
         std::vector<size_t> itemIndices;
         wil::unique_hicon hIcon = nullptr;
     };
@@ -493,6 +565,11 @@ private:
         [[nodiscard]] std::wstring_view GetExtension() const noexcept
         {
             return extensionOffset > 0 ? displayName.substr(extensionOffset) : std::wstring_view{};
+        }
+
+        [[nodiscard]] std::wstring_view GetNameWithoutExtension() const noexcept
+        {
+            return extensionOffset > 0 ? displayName.substr(0, extensionOffset) : displayName;
         }
     };
 
@@ -562,6 +639,11 @@ private:
     };
 
     std::optional<EmptyFolderState> _emptyFolderState;
+    wil::com_ptr<IDWriteTextLayout> _emptyFolderFocusCueLayout;
+    float _emptyFolderFocusCueLayoutWidthDip  = 0.0f;
+    float _emptyFolderFocusCueLayoutHeightDip = 0.0f;
+    float _emptyFolderFocusCueLayoutDpi       = 0.0f;
+    float _emptyFolderFocusCueFontSizeDip     = 0.0f;
     wil::com_ptr<IDWriteTextLayout> _emptyFolderIconLayout;
     wil::com_ptr<IDWriteTextLayout> _emptyFolderTitleLayout;
     wil::com_ptr<IDWriteTextLayout> _emptyFolderFunLayout;
@@ -572,6 +654,7 @@ private:
     DWRITE_TEXT_METRICS _emptyFolderIconMetrics{};
     DWRITE_TEXT_METRICS _emptyFolderTitleMetrics{};
     DWRITE_TEXT_METRICS _emptyFolderFunMetrics{};
+    wil::com_ptr<ID2D1SolidColorBrush> _emptyFolderFocusCueBrush;
     wil::com_ptr<IFileSystem> _fileSystem;
     const PluginMetaData* _fileSystemMetadata{};
     std::wstring _fileSystemPluginId;
@@ -624,15 +707,6 @@ private:
     const ShortcutManager* _shortcutManager = nullptr;
     wil::unique_hbrush _menuBackgroundBrush;
 
-    struct MenuItemData
-    {
-        std::wstring text;
-        std::wstring shortcut;
-        bool separator  = false;
-        bool header     = false;
-        bool hasSubMenu = false;
-    };
-
     struct EnumerationPayload
     {
         uint64_t generation = 0;
@@ -644,7 +718,6 @@ private:
         std::filesystem::path folder; // Needed to compute full paths on demand
     };
 
-    std::vector<std::unique_ptr<MenuItemData>> _menuItemData;
     wil::com_ptr<ID3D11Device> _d3dDevice;
     wil::com_ptr<ID3D11DeviceContext> _d3dContext;
     wil::com_ptr<IDXGISwapChain1> _swapChain;
@@ -677,16 +750,15 @@ private:
     wil::com_ptr<ID2D1SolidColorBrush> _filterWatermarkBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _backgroundWatermarkBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _textBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _textUnfocusedBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _detailsTextBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _detailsTextUnfocusedBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _metadataTextBrush;
+    wil::com_ptr<ID2D1SolidColorBrush> _metadataTextUnfocusedBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _selectionBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _focusedBackgroundBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _focusBrush;
     wil::com_ptr<ID2D1SolidColorBrush> _incrementalSearchHighlightBrush;
-    wil::unique_hfont _menuFont;
-    wil::unique_hfont _menuIconFont;
-    UINT _menuIconFontDpi   = USER_DEFAULT_SCREEN_DPI;
-    bool _menuIconFontValid = false;
     wil::com_ptr<ID2D1Bitmap> _placeholderFolderIcon; // Folder placeholder (48×48) with Fluent Design
     wil::com_ptr<ID2D1Bitmap> _placeholderFileIcon;   // File placeholder (48×48) with Fluent Design
     wil::com_ptr<ID2D1Bitmap> _shortcutOverlayIcon;   // 16×16 shortcut arrow overlay
@@ -852,6 +924,7 @@ private:
     PropertiesRequestCallback _propertiesRequestCallback;
     NavigationRequestCallback _navigationRequestCallback;
     SelectionChangedCallback _selectionChangedCallback;
+    FocusedItemChangedCallback _focusedItemChangedCallback;
     IncrementalSearchChangedCallback _incrementalSearchChangedCallback;
     SelectionSizeComputationRequestedCallback _selectionSizeComputationRequestedCallback;
     EnumerationCompletedCallback _enumerationCompletedCallback;
@@ -885,10 +958,6 @@ private:
     void OnHScrollMessage(UINT scrollRequest);
     void OnCommandMessage(UINT commandId);
     void OnContextMenu(POINT screenPt);
-    void PrepareThemedMenu(HMENU menu);
-    void ClearThemedMenuState();
-    void OnMeasureItem(MEASUREITEMSTRUCT* mis);
-    void OnDrawItem(DRAWITEMSTRUCT* dis);
 
     void EnsureDeviceIndependentResources();
     void EnsureDeviceResources();
@@ -924,7 +993,16 @@ private:
     void LayoutItems();
     void UpdateScrollMetrics();
     void Render(const RECT& invalidRect);
-    void DrawItem(FolderItem& item);
+    struct DrawItemPerfStats
+    {
+        uint64_t itemHasIcon              = 0;
+        uint64_t itemPlaceholderIcon      = 0;
+        uint64_t itemTextLayoutLabel      = 0;
+        uint64_t itemTextLayoutDetails    = 0;
+        uint64_t itemTextLayoutMetadata   = 0;
+        uint64_t incrementalSearchUpdates = 0;
+    };
+    void DrawItem(FolderItem& item, DrawItemPerfStats* perfStats = nullptr);
     void DrawIncrementalSearchIndicator(uint64_t nowTickMs);
 
     void SelectSingle(size_t index);
@@ -934,6 +1012,7 @@ private:
     void SelectAll();
     void RecomputeSelectionStats() noexcept;
     void NotifySelectionChanged() const noexcept;
+    void NotifyFocusedItemChanged() const noexcept;
     void NotifyIncrementalSearchChanged() const noexcept;
     void FocusItem(size_t index, bool ensureVisible);
     [[nodiscard]] bool GoToSelectedName(bool forward);
@@ -946,6 +1025,8 @@ private:
     void ClearIncrementalSearchHighlight() noexcept;
     void ApplyIncrementalSearchHighlight(size_t itemIndex, const DWRITE_TEXT_RANGE& range) noexcept;
     std::optional<UINT32> FindIncrementalSearchMatchOffset(std::wstring_view displayName) const noexcept;
+    std::optional<size_t> FindNextIncrementalSearchPrefixMatch(size_t startIndex, bool forward) const noexcept;
+    std::wstring_view GetIncrementalSearchDisplayName(size_t index) const noexcept;
     void DeleteSelectedItems();
     void CopySelectionToClipboard();
     void PasteItemsFromClipboard();
@@ -1007,8 +1088,14 @@ private:
     uint64_t _pendingEnumerationGeneration = 0;
     std::atomic<uint64_t> _enumerationGeneration{0};
     ULONGLONG _lastDirectoryCacheRefreshTick = 0;
-#ifdef _DEBUG
-    uint64_t _debugForceRefreshCount = 0;
+#ifdef ENABLE_TESTS
+    uint64_t _debugForceRefreshCount         = 0;
+    uint64_t _debugWarmRenderingCallCount    = 0;
+    uint64_t _debugDeferredInitCallCount     = 0;
+    uint64_t _debugRenderCallCount           = 0;
+    uint64_t _debugQueueIconLoadingCallCount = 0;
+    uint64_t _debugProcessIconQueueCallCount = 0;
+    uint64_t _debugBatchIconUpdateCallCount  = 0;
 #endif
 
     struct PendingExternalCommand final
@@ -1020,14 +1107,24 @@ private:
     };
     std::optional<PendingExternalCommand> _pendingExternalCommandAfterEnumeration;
 
+    struct PendingRefreshSelectionRename final
+    {
+        std::wstring fromDisplayName;
+        std::wstring toDisplayName;
+        bool fromWasSelected = false;
+    };
+    std::vector<PendingRefreshSelectionRename> _pendingRefreshSelectionRenames;
+
     // Icon loading queue (grouped by icon index) - deque for O(1) front removal.
     // Each request is "convert this icon once, then apply to N items".
     struct IconLoadRequest
     {
-        int iconIndex                = -1;
-        bool hasVisibleItems         = false;
-        size_t firstVisibleItemIndex = static_cast<size_t>(-1);
-        unsigned int retryCount      = 0;
+        uint64_t enumerationGeneration = 0;
+        int iconIndex                  = -1;
+        bool hasVisibleItems           = false;
+        size_t firstVisibleItemIndex   = static_cast<size_t>(-1);
+        unsigned int retryCount        = 0;
+        std::chrono::steady_clock::time_point enqueuedAt{};
         std::vector<size_t> itemIndices;
     };
     std::deque<IconLoadRequest> _iconLoadQueue;

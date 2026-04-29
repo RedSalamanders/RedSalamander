@@ -9,12 +9,12 @@
 #include <cerrno>
 #include <cwchar>
 #include <limits>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
-#include <commctrl.h>
 #include <commdlg.h>
 #include <shobjidl.h>
 
@@ -32,13 +32,41 @@
 
 #include "FileSystemPluginManager.h"
 #include "Helpers.h"
-#include "ThemedControls.h"
+#include "UiMetrics.h"
 #include "ViewerPluginManager.h"
 
 #include "resource.h"
 
 namespace
 {
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::Checkbox;
+using RedSalamander::DxUi::ComboBox;
+using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::FontRole;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::TextField;
+using RedSalamander::DxUi::Toggle;
+
+#ifdef ENABLE_TESTS
+std::mutex g_debugPluginConfigurationBrowseResultMutex;
+
+enum class DebugPluginConfigurationBrowseResultKind : uint8_t
+{
+    Path,
+    Cancel,
+};
+
+struct DebugPluginConfigurationBrowseResult
+{
+    DebugPluginConfigurationBrowseResultKind kind = DebugPluginConfigurationBrowseResultKind::Path;
+    std::filesystem::path path;
+};
+
+std::optional<DebugPluginConfigurationBrowseResult> g_debugNextPluginConfigurationBrowseResult;
+#endif
+
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
 {
     if (text.empty() || text.size() > static_cast<size_t>((std::numeric_limits<int>::max)()))
@@ -90,6 +118,24 @@ namespace
 {
     outPath.clear();
 
+#ifdef ENABLE_TESTS
+    {
+        std::scoped_lock lock(g_debugPluginConfigurationBrowseResultMutex);
+        if (g_debugNextPluginConfigurationBrowseResult.has_value())
+        {
+            const DebugPluginConfigurationBrowseResult result = *g_debugNextPluginConfigurationBrowseResult;
+            g_debugNextPluginConfigurationBrowseResult.reset();
+            if (result.kind == DebugPluginConfigurationBrowseResultKind::Cancel)
+            {
+                return false;
+            }
+
+            outPath = result.path;
+            return ! outPath.empty();
+        }
+    }
+#endif
+
     wil::com_ptr<IFileOpenDialog> dialog;
     HRESULT hr = CoCreateInstance(CLSID_FileOpenDialog, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(dialog.put()));
     if (FAILED(hr) || ! dialog)
@@ -123,6 +169,136 @@ namespace
 
     outPath = std::filesystem::path(selectedPath.get());
     return ! outPath.empty();
+}
+
+#ifdef ENABLE_TESTS
+[[nodiscard]] bool DebugSetPluginConfigurationNextBrowsePathImpl(const std::wstring_view path) noexcept
+{
+    std::scoped_lock lock(g_debugPluginConfigurationBrowseResultMutex);
+    if (path.empty())
+    {
+        g_debugNextPluginConfigurationBrowseResult.reset();
+        return true;
+    }
+
+    g_debugNextPluginConfigurationBrowseResult = DebugPluginConfigurationBrowseResult{
+        .kind = DebugPluginConfigurationBrowseResultKind::Path,
+        .path = std::filesystem::path(path),
+    };
+    return true;
+}
+
+[[nodiscard]] bool DebugCancelPluginConfigurationNextBrowseImpl() noexcept
+{
+    std::scoped_lock lock(g_debugPluginConfigurationBrowseResultMutex);
+    g_debugNextPluginConfigurationBrowseResult = DebugPluginConfigurationBrowseResult{
+        .kind = DebugPluginConfigurationBrowseResultKind::Cancel,
+        .path = {},
+    };
+    return true;
+}
+#endif
+
+[[maybe_unused]] [[nodiscard]] std::wstring SanitizeIntegerText(std::wstring_view text, const bool allowNegative) noexcept
+{
+    std::wstring sanitized;
+    sanitized.reserve(text.size());
+
+    bool sawDigit    = false;
+    bool sawSign     = false;
+    const bool allow = allowNegative;
+
+    for (const wchar_t ch : text)
+    {
+        if (ch >= L'0' && ch <= L'9')
+        {
+            sanitized.push_back(ch);
+            sawDigit = true;
+            continue;
+        }
+
+        if (allow && ! sawSign && ! sawDigit && ch == L'-')
+        {
+            sanitized.push_back(ch);
+            sawSign = true;
+        }
+    }
+
+    return sanitized;
+}
+
+void SyncDxStaticText(PrefsPluginConfigFieldControls& controls) noexcept
+{
+    if (controls.dxLabelControl)
+    {
+        controls.dxLabelControl->SetText(controls.field.label);
+    }
+    if (controls.dxDescriptionControl)
+    {
+        controls.dxDescriptionControl->SetText(controls.field.description);
+    }
+}
+
+void SyncDxInteractiveState(PreferencesDialogState& state, PrefsPluginConfigFieldControls& controls) noexcept
+{
+    const bool previousRefreshing = state.refreshingPluginsPage;
+    state.refreshingPluginsPage   = true;
+    const auto restoreRefreshing  = wil::scope_exit([&state, previousRefreshing]() noexcept { state.refreshingPluginsPage = previousRefreshing; });
+
+    if (controls.dxEditControl)
+    {
+        controls.dxEditControl->SetText(controls.retainedText);
+    }
+
+    if (controls.dxToggleControl)
+    {
+        bool checked = controls.retainedToggleValue;
+        if (controls.field.type == PrefsPluginConfigFieldType::Option)
+        {
+            checked = false;
+            for (size_t i = 0; i < controls.field.choices.size(); ++i)
+            {
+                if (controls.field.choices[i].value == controls.retainedOptionValue)
+                {
+                    checked = (i == controls.toggleOnChoiceIndex);
+                    break;
+                }
+            }
+        }
+        controls.dxToggleControl->SetChecked(checked);
+    }
+
+    if (controls.dxComboControl)
+    {
+        std::optional<size_t> selectedIndex;
+        if (! controls.retainedOptionValue.empty())
+        {
+            for (size_t i = 0; i < controls.field.choices.size(); ++i)
+            {
+                if (controls.field.choices[i].value == controls.retainedOptionValue)
+                {
+                    selectedIndex = i;
+                    break;
+                }
+            }
+        }
+
+        controls.dxComboControl->SetSelectedIndex(selectedIndex);
+        if (selectedIndex.has_value() && selectedIndex.value() < controls.field.choices.size())
+        {
+            const auto& choice = controls.field.choices[selectedIndex.value()];
+            controls.dxComboControl->SetText(choice.label.empty() ? choice.value : choice.label);
+        }
+    }
+
+    for (size_t i = 0; i < controls.dxChoiceControls.size() && i < controls.field.choices.size(); ++i)
+    {
+        if (controls.dxChoiceControls[i].checkbox)
+        {
+            const auto it = std::find(controls.retainedSelectionValues.begin(), controls.retainedSelectionValues.end(), controls.field.choices[i].value);
+            controls.dxChoiceControls[i].checkbox->SetChecked(it != controls.retainedSelectionValues.end());
+        }
+    }
 }
 
 PrefsPluginConfigFieldType ParsePluginConfigFieldType(std::string_view type) noexcept
@@ -645,23 +821,92 @@ void ApplyFieldDefaultToControls(const PrefsPluginConfigField& field, PrefsPlugi
 
         out.field.defaultSelection = std::move(values);
     }
+
+    if (out.field.type == PrefsPluginConfigFieldType::Text)
+    {
+        out.retainedText = out.field.defaultText;
+    }
+    else if (out.field.type == PrefsPluginConfigFieldType::Value)
+    {
+        out.retainedText = std::to_wstring(out.field.defaultInt);
+    }
+    else if (out.field.type == PrefsPluginConfigFieldType::Bool)
+    {
+        out.retainedToggleValue = out.field.defaultBool;
+    }
+    else if (out.field.type == PrefsPluginConfigFieldType::Option)
+    {
+        out.retainedOptionValue = out.field.defaultOption;
+    }
+    else if (out.field.type == PrefsPluginConfigFieldType::Selection)
+    {
+        out.retainedSelectionValues = out.field.defaultSelection;
+    }
 }
 } // namespace
 
 namespace
 {
-[[nodiscard]] bool ContainsChoiceValue(const std::vector<std::wstring>& values, std::wstring_view needle) noexcept;
-[[nodiscard]] size_t FindChoiceIndex(const std::vector<PrefsPluginConfigChoice>& choices, std::wstring_view desired) noexcept;
 [[nodiscard]] std::wstring GetPluginConfigurationSchemaErrorText(const PrefsPluginListItem& pluginItem) noexcept;
-[[nodiscard]] PrefsPluginConfigFieldControls* FindFieldForControl(PreferencesDialogState& state, HWND hwnd) noexcept;
 [[nodiscard]] bool CommitEditor(HWND host, PreferencesDialogState& state) noexcept;
 } // namespace
 
 namespace PrefsPluginConfiguration
 {
+void SetDetailsIdText(PreferencesDialogState& state, std::wstring_view text) noexcept
+{
+    const std::wstring updated(text);
+    if (state.pluginsDetailsIdText != updated)
+    {
+        state.pluginsDetailsIdText = updated;
+    }
+}
+
+void SetDetailsConfigErrorText(PreferencesDialogState& state, std::wstring_view text) noexcept
+{
+    const std::wstring updated(text);
+    if (state.pluginsDetailsConfigErrorText != updated)
+    {
+        state.pluginsDetailsConfigErrorText = updated;
+    }
+    state.pluginsDetailsMessageKind = updated.empty() ? PrefsPluginDetailsMessageKind::None : PrefsPluginDetailsMessageKind::Error;
+}
+
+void SetDetailsConfigEmptyStateText(PreferencesDialogState& state, std::wstring_view text) noexcept
+{
+    const std::wstring updated(text);
+    if (state.pluginsDetailsConfigEmptyStateText != updated)
+    {
+        state.pluginsDetailsConfigEmptyStateText = updated;
+    }
+    state.pluginsDetailsMessageKind = updated.empty() ? PrefsPluginDetailsMessageKind::None : PrefsPluginDetailsMessageKind::EmptyState;
+}
+
 void Clear(PreferencesDialogState& state) noexcept
 {
+    if (state.pluginsDetailsConfigDxPanel)
+    {
+        state.pluginsDetailsConfigDxPanel->ClearChildren();
+        state.pluginsDetailsConfigDxPanel->SetVisible(false);
+    }
+
+    for (PrefsPluginConfigFieldControls& controls : state.pluginsDetailsConfigFields)
+    {
+        controls.dxLabelControl        = nullptr;
+        controls.dxDescriptionControl  = nullptr;
+        controls.dxEditControl         = nullptr;
+        controls.dxBrowseButtonControl = nullptr;
+        controls.dxComboControl        = nullptr;
+        controls.dxToggleControl       = nullptr;
+        for (auto& choiceControl : controls.dxChoiceControls)
+        {
+            choiceControl.checkbox = nullptr;
+        }
+        controls.dxChoiceControls.clear();
+    }
     state.pluginsDetailsConfigFields.clear();
+    SetDetailsConfigErrorText(state, L"");
+    SetDetailsConfigEmptyStateText(state, L"");
     state.pluginsDetailsConfigPluginId.clear();
 }
 
@@ -681,22 +926,13 @@ void Clear(PreferencesDialogState& state) noexcept
 
     if (state.pluginsDetailsConfigPluginId == pluginId && ! state.pluginsDetailsConfigFields.empty())
     {
-        const auto isValid = [](HWND hwnd) noexcept { return ! hwnd || IsWindow(hwnd); };
-        bool valid         = true;
+        bool valid = true;
 
         for (const PrefsPluginConfigFieldControls& controls : state.pluginsDetailsConfigFields)
         {
-            valid = valid && isValid(controls.label.get());
-            valid = valid && isValid(controls.description.get());
-            valid = valid && isValid(controls.editFrame.get());
-            valid = valid && isValid(controls.edit.get());
-            valid = valid && isValid(controls.browseButton.get());
-            valid = valid && isValid(controls.comboFrame.get());
-            valid = valid && isValid(controls.combo.get());
-            valid = valid && isValid(controls.toggle.get());
-            for (const auto& button : controls.choiceButtons)
+            for (const auto& choiceControl : controls.dxChoiceControls)
             {
-                valid = valid && isValid(button.get());
+                valid = valid && (choiceControl.checkbox != nullptr);
             }
             if (! valid)
             {
@@ -726,22 +962,14 @@ void Clear(PreferencesDialogState& state) noexcept
 
     if (FAILED(schemaHr))
     {
-        if (state.pluginsDetailsConfigError)
-        {
-            const std::wstring message = GetPluginConfigurationSchemaErrorText(pluginItem);
-            SetWindowTextW(state.pluginsDetailsConfigError.get(), message.c_str());
-        }
+        SetDetailsConfigErrorText(state, GetPluginConfigurationSchemaErrorText(pluginItem));
         return false;
     }
 
     const std::vector<PrefsPluginConfigField> fields = ParsePluginConfigSchema(schemaUtf8);
     if (fields.empty())
     {
-        if (state.pluginsDetailsConfigError)
-        {
-            const std::wstring message = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS);
-            SetWindowTextW(state.pluginsDetailsConfigError.get(), message.c_str());
-        }
+        SetDetailsConfigEmptyStateText(state, LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS));
         return false;
     }
 
@@ -795,16 +1023,21 @@ void Clear(PreferencesDialogState& state) noexcept
         }
     }
 
-    if (state.pluginsDetailsConfigError)
-    {
-        SetWindowTextW(state.pluginsDetailsConfigError.get(), L"");
-    }
+    SetDetailsConfigErrorText(state, L"");
 
     const HWND panel = parent;
+    Panel* dxPanel   = nullptr;
+    if (state.pageHostDxContentRootControl)
+    {
+        if (! state.pluginsDetailsConfigDxPanel)
+        {
+            state.pluginsDetailsConfigDxPanel = state.pageHostDxContentRootControl->AddChild<Panel>();
+        }
 
-    const DWORD baseStaticStyle   = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
-    const DWORD wrapStaticStyle   = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-    const DWORD browseButtonStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON | (state.theme.systemHighContrast ? 0U : BS_OWNERDRAW);
+        dxPanel = state.pluginsDetailsConfigDxPanel;
+        dxPanel->SetVisible(true);
+        dxPanel->ClearChildren();
+    }
 
     state.pluginsDetailsConfigFields.clear();
     state.pluginsDetailsConfigFields.reserve(fields.size());
@@ -820,146 +1053,317 @@ void Clear(PreferencesDialogState& state) noexcept
             continue;
         }
 
-        controls.label.reset(
-            CreateWindowExW(0, L"Static", controls.field.label.c_str(), baseStaticStyle, 0, 0, 10, 10, panel, nullptr, GetModuleHandleW(nullptr), nullptr));
-
-        controls.description.reset(CreateWindowExW(
-            0, L"Static", controls.field.description.c_str(), wrapStaticStyle, 0, 0, 10, 10, panel, nullptr, GetModuleHandleW(nullptr), nullptr));
-
-        if (controls.field.type == PrefsPluginConfigFieldType::Text || controls.field.type == PrefsPluginConfigFieldType::Value)
+        if (! controls.field.uiHidden && dxPanel)
         {
-            DWORD editStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL;
-            if (controls.field.type == PrefsPluginConfigFieldType::Value)
-            {
-                editStyle |= ES_NUMBER;
-            }
+            controls.dxLabelControl = dxPanel->AddChild<Label>();
+            controls.dxLabelControl->SetFontRole(FontRole::Body);
+            controls.dxDescriptionControl = dxPanel->AddChild<Label>();
+            controls.dxDescriptionControl->SetFontRole(FontRole::Small);
+            controls.dxDescriptionControl->SetMultiline(true);
+            SyncDxStaticText(controls);
+        }
 
-            PrefsInput::CreateFramedEditBox(state, panel, controls.editFrame, controls.edit, 0, editStyle);
-            if (controls.edit)
+        if (! controls.field.uiHidden && dxPanel)
+        {
+            if (controls.field.type == PrefsPluginConfigFieldType::Text || controls.field.type == PrefsPluginConfigFieldType::Value)
             {
-                if (controls.field.type == PrefsPluginConfigFieldType::Text)
+                const bool numericOnly = controls.field.type == PrefsPluginConfigFieldType::Value;
+                controls.dxEditControl = dxPanel->AddChild<TextField>();
+                if (controls.dxEditControl)
                 {
-                    SetWindowTextW(controls.edit.get(), controls.field.defaultText.c_str());
-                }
-                else
-                {
-                    const std::wstring text = std::to_wstring(controls.field.defaultInt);
-                    SetWindowTextW(controls.edit.get(), text.c_str());
+                    auto* fieldControl          = controls.dxEditControl;
+                    const std::wstring fieldKey = controls.field.key;
+                    fieldControl->SetOnTextChanged([parent = panel, fieldKey, fieldControl, numericOnly](std::wstring_view text) noexcept
+                    {
+                        if (! parent || ! fieldControl || IsWindow(parent) == FALSE)
+                        {
+                            return;
+                        }
+
+                        auto* state = PrefsUi::GetDialogState(parent);
+                        if (! state || state->refreshingPluginsPage)
+                        {
+                            return;
+                        }
+
+                        std::wstring normalized = numericOnly ? SanitizeIntegerText(text, false) : std::wstring(text);
+                        if (normalized != text)
+                        {
+                            const bool previousRefreshing = state->refreshingPluginsPage;
+                            state->refreshingPluginsPage  = true;
+                            fieldControl->SetText(normalized);
+                            state->refreshingPluginsPage = previousRefreshing;
+                        }
+
+                        auto controls = std::find_if(state->pluginsDetailsConfigFields.begin(),
+                                                     state->pluginsDetailsConfigFields.end(),
+                                                     [&](const PrefsPluginConfigFieldControls& candidate) noexcept { return candidate.field.key == fieldKey; });
+                        if (controls == state->pluginsDetailsConfigFields.end() || controls->retainedText == normalized)
+                        {
+                            return;
+                        }
+
+                        controls->retainedText = std::move(normalized);
+                    });
+                    fieldControl->SetOnBlur([parent = panel]() noexcept
+                    {
+                        auto* state = PrefsUi::GetDialogState(parent);
+                        if (! state || state->refreshingPluginsPage)
+                        {
+                            return;
+                        }
+
+                        static_cast<void>(CommitEditor(parent, *state));
+                    });
+                    fieldControl->SetOnSubmitted([parent = panel]() noexcept
+                    {
+                        auto* state = PrefsUi::GetDialogState(parent);
+                        if (! state || state->refreshingPluginsPage)
+                        {
+                            return;
+                        }
+
+                        static_cast<void>(CommitEditor(parent, *state));
+                    });
                 }
             }
 
             if (controls.field.type == PrefsPluginConfigFieldType::Text && controls.field.browseFolder)
             {
-                const std::wstring label = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS);
-                controls.browseButton.reset(
-                    CreateWindowExW(0, L"Button", label.c_str(), browseButtonStyle, 0, 0, 10, 10, panel, nullptr, GetModuleHandleW(nullptr), nullptr));
-                if (controls.browseButton)
+                const std::wstring label       = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS);
+                controls.dxBrowseButtonControl = dxPanel->AddChild<Button>();
+                if (controls.dxBrowseButtonControl)
                 {
-                    PrefsInput::EnableMouseWheelForwarding(controls.browseButton.get());
-                }
-            }
-        }
-        else if (controls.field.type == PrefsPluginConfigFieldType::Bool)
-        {
-            if (! state.theme.systemHighContrast)
-            {
-                controls.toggle.reset(CreateWindowExW(
-                    0, L"Button", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 10, 10, panel, nullptr, GetModuleHandleW(nullptr), nullptr));
-                if (controls.toggle)
-                {
-                    SetWindowLongPtrW(controls.toggle.get(), GWLP_USERDATA, controls.field.defaultBool ? 1 : 0);
-                    PrefsInput::EnableMouseWheelForwarding(controls.toggle.get());
-                }
-            }
-            else
-            {
-                controls.toggle.reset(CreateWindowExW(
-                    0, L"Button", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX, 0, 0, 10, 10, panel, nullptr, GetModuleHandleW(nullptr), nullptr));
-                if (controls.toggle)
-                {
-                    SendMessageW(controls.toggle.get(), BM_SETCHECK, controls.field.defaultBool ? BST_CHECKED : BST_UNCHECKED, 0);
-                    PrefsInput::EnableMouseWheelForwarding(controls.toggle.get());
-                }
-            }
-        }
-        else if (controls.field.type == PrefsPluginConfigFieldType::Option)
-        {
-            if (! state.theme.systemHighContrast && controls.field.choices.size() == 2)
-            {
-                const size_t notFound = static_cast<size_t>(std::numeric_limits<size_t>::max());
-                size_t defaultIndex   = FindChoiceIndex(controls.field.choices, controls.schemaDefaultOption);
-                if (defaultIndex == notFound)
-                {
-                    defaultIndex = 0;
-                }
-
-                const size_t otherIndex       = defaultIndex == 0 ? 1 : 0;
-                controls.toggleOnChoiceIndex  = defaultIndex;
-                controls.toggleOffChoiceIndex = otherIndex;
-
-                const size_t currentIndex = FindChoiceIndex(controls.field.choices, controls.field.defaultOption);
-                const bool toggledOn      = (currentIndex == defaultIndex) || (currentIndex == notFound);
-
-                controls.toggle.reset(CreateWindowExW(
-                    0, L"Button", L"", WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW, 0, 0, 10, 10, panel, nullptr, GetModuleHandleW(nullptr), nullptr));
-                if (controls.toggle)
-                {
-                    SetWindowLongPtrW(controls.toggle.get(), GWLP_USERDATA, toggledOn ? 1 : 0);
-                    PrefsInput::EnableMouseWheelForwarding(controls.toggle.get());
-                }
-            }
-            else
-            {
-                PrefsInput::CreateFramedComboBox(state, panel, controls.comboFrame, controls.combo, 0);
-                if (controls.combo)
-                {
-                    SendMessageW(controls.combo.get(), CB_RESETCONTENT, 0, 0);
-                    for (const auto& choice : controls.field.choices)
+                    controls.dxBrowseButtonControl->SetText(label);
+                    const std::wstring fieldKey = controls.field.key;
+                    controls.dxBrowseButtonControl->SetOnClick([parent = panel, fieldKey]() noexcept
                     {
-                        const std::wstring_view label = choice.label.empty() ? std::wstring_view(choice.value) : std::wstring_view(choice.label);
-                        SendMessageW(controls.combo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.data()));
-                    }
+                        auto* state = PrefsUi::GetDialogState(parent);
+                        if (! state || state->refreshingPluginsPage || IsWindow(parent) == FALSE)
+                        {
+                            return;
+                        }
 
-                    size_t selectedIndex = FindChoiceIndex(controls.field.choices, controls.field.defaultOption);
-                    if (selectedIndex == static_cast<size_t>(std::numeric_limits<size_t>::max()))
-                    {
-                        selectedIndex = 0;
-                    }
+                        auto controls = std::find_if(state->pluginsDetailsConfigFields.begin(),
+                                                     state->pluginsDetailsConfigFields.end(),
+                                                     [&](const PrefsPluginConfigFieldControls& candidate) noexcept { return candidate.field.key == fieldKey; });
+                        if (controls == state->pluginsDetailsConfigFields.end() || ! controls->field.browseFolder)
+                        {
+                            return;
+                        }
 
-                    SendMessageW(controls.combo.get(), CB_SETCURSEL, static_cast<WPARAM>(selectedIndex), 0);
-                    PrefsUi::InvalidateComboBox(controls.combo.get());
-                    ThemedControls::ApplyThemeToComboBox(controls.combo.get(), state.theme);
-                    ThemedControls::EnsureComboBoxDroppedWidth(controls.combo.get(), GetDpiForWindow(controls.combo.get()));
+                        std::filesystem::path selectedPath;
+                        HWND owner = GetParent(parent);
+                        if (! TryBrowseFolderPath(owner ? owner : parent, selectedPath))
+                        {
+                            return;
+                        }
+
+                        controls->retainedText        = selectedPath.wstring();
+                        const bool previousRefreshing = state->refreshingPluginsPage;
+                        state->refreshingPluginsPage  = true;
+                        if (controls->dxEditControl)
+                        {
+                            controls->dxEditControl->SetText(controls->retainedText);
+                        }
+                        state->refreshingPluginsPage = previousRefreshing;
+                        static_cast<void>(CommitEditor(parent, *state));
+                    });
                 }
+            }
+
+            if (controls.field.type == PrefsPluginConfigFieldType::Option && controls.field.choices.size() >= 2u && ! state.theme.systemHighContrast)
+            {
+                std::wstring uncheckedLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
+                std::wstring checkedLabel   = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
+                const auto& onChoice        = controls.field.choices[std::min(controls.toggleOnChoiceIndex, controls.field.choices.size() - 1u)];
+                const auto& offChoice       = controls.field.choices[std::min(controls.toggleOffChoiceIndex, controls.field.choices.size() - 1u)];
+                checkedLabel                = onChoice.label.empty() ? onChoice.value : onChoice.label;
+                uncheckedLabel              = offChoice.label.empty() ? offChoice.value : offChoice.label;
+
+                controls.dxToggleControl = dxPanel->AddChild<Toggle>();
+                if (controls.dxToggleControl)
+                {
+                    controls.dxToggleControl->SetStateLabels(std::move(uncheckedLabel), std::move(checkedLabel));
+                    const std::wstring fieldKey = controls.field.key;
+                    controls.dxToggleControl->SetOnToggled([parent = panel, fieldKey](bool checked) noexcept
+                    {
+                        auto* state = PrefsUi::GetDialogState(parent);
+                        if (! state || state->refreshingPluginsPage)
+                        {
+                            return;
+                        }
+
+                        auto controls = std::find_if(state->pluginsDetailsConfigFields.begin(),
+                                                     state->pluginsDetailsConfigFields.end(),
+                                                     [&](const PrefsPluginConfigFieldControls& candidate) noexcept { return candidate.field.key == fieldKey; });
+                        if (controls == state->pluginsDetailsConfigFields.end() || controls->field.choices.empty())
+                        {
+                            return;
+                        }
+
+                        const size_t choiceIndex = checked ? controls->toggleOnChoiceIndex : controls->toggleOffChoiceIndex;
+                        if (choiceIndex < controls->field.choices.size())
+                        {
+                            controls->retainedOptionValue = controls->field.choices[choiceIndex].value;
+                            static_cast<void>(CommitEditor(parent, *state));
+                        }
+                    });
+                }
+            }
+            else if (controls.field.type == PrefsPluginConfigFieldType::Option)
+            {
+                std::vector<ComboBox::Item> items;
+                items.reserve(controls.field.choices.size());
+                for (const auto& choice : controls.field.choices)
+                {
+                    const std::wstring_view label = choice.label.empty() ? std::wstring_view(choice.value) : std::wstring_view(choice.label);
+                    items.push_back({std::wstring(label), choice.value});
+                }
+
+                controls.dxComboControl = dxPanel->AddChild<ComboBox>();
+                if (controls.dxComboControl)
+                {
+                    controls.dxComboControl->SetVariant(ComboBoxVariant::Window);
+                    controls.dxComboControl->SetItems(std::move(items));
+                    const std::wstring fieldKey = controls.field.key;
+                    controls.dxComboControl->SetOnSelectionChanged([parent = panel, fieldKey](size_t itemIndex) noexcept
+                    {
+                        if (! parent || IsWindow(parent) == FALSE)
+                        {
+                            return;
+                        }
+
+                        auto* state = PrefsUi::GetDialogState(parent);
+                        if (! state || state->refreshingPluginsPage)
+                        {
+                            return;
+                        }
+
+                        auto controls = std::find_if(state->pluginsDetailsConfigFields.begin(),
+                                                     state->pluginsDetailsConfigFields.end(),
+                                                     [&](const PrefsPluginConfigFieldControls& candidate) noexcept { return candidate.field.key == fieldKey; });
+                        if (controls == state->pluginsDetailsConfigFields.end() || itemIndex >= controls->field.choices.size())
+                        {
+                            return;
+                        }
+
+                        controls->retainedOptionValue = controls->field.choices[itemIndex].value;
+                        static_cast<void>(CommitEditor(parent, *state));
+                    });
+                }
+            }
+
+            if (controls.field.type == PrefsPluginConfigFieldType::Bool)
+            {
+                std::wstring uncheckedLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
+                std::wstring checkedLabel   = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
+
+                controls.dxToggleControl = dxPanel->AddChild<Toggle>();
+                if (controls.dxToggleControl)
+                {
+                    controls.dxToggleControl->SetStateLabels(std::move(uncheckedLabel), std::move(checkedLabel));
+                    const std::wstring fieldKey = controls.field.key;
+                    controls.dxToggleControl->SetOnToggled([parent = panel, fieldKey](bool checked) noexcept
+                    {
+                        auto* state = PrefsUi::GetDialogState(parent);
+                        if (! state || state->refreshingPluginsPage)
+                        {
+                            return;
+                        }
+
+                        auto controls = std::find_if(state->pluginsDetailsConfigFields.begin(),
+                                                     state->pluginsDetailsConfigFields.end(),
+                                                     [&](const PrefsPluginConfigFieldControls& candidate) noexcept { return candidate.field.key == fieldKey; });
+                        if (controls == state->pluginsDetailsConfigFields.end())
+                        {
+                            return;
+                        }
+
+                        controls->retainedToggleValue = checked;
+                        static_cast<void>(CommitEditor(parent, *state));
+                    });
+                }
+            }
+
+            if (controls.field.type == PrefsPluginConfigFieldType::Selection && ! controls.field.choices.empty())
+            {
+                controls.dxChoiceControls.clear();
+                controls.dxChoiceControls.resize(controls.field.choices.size());
+
+                for (size_t i = 0; i < controls.field.choices.size(); ++i)
+                {
+                    const auto& choice      = controls.field.choices[i];
+                    const std::wstring text = choice.label.empty() ? choice.value : choice.label;
+                    auto& dxChoice          = controls.dxChoiceControls[i];
+                    dxChoice.checkbox       = dxPanel->AddChild<Checkbox>();
+                    if (dxChoice.checkbox)
+                    {
+                        dxChoice.checkbox->SetText(text);
+                        const std::wstring fieldKey = controls.field.key;
+                        dxChoice.checkbox->SetOnToggled([parent = panel, fieldKey, choiceValue = choice.value](bool checked) noexcept
+                        {
+                            auto* state = PrefsUi::GetDialogState(parent);
+                            if (! state || state->refreshingPluginsPage)
+                            {
+                                return;
+                            }
+
+                            auto controls =
+                                std::find_if(state->pluginsDetailsConfigFields.begin(),
+                                             state->pluginsDetailsConfigFields.end(),
+                                             [&](const PrefsPluginConfigFieldControls& candidate) noexcept { return candidate.field.key == fieldKey; });
+                            if (controls == state->pluginsDetailsConfigFields.end())
+                            {
+                                return;
+                            }
+
+                            auto& values  = controls->retainedSelectionValues;
+                            const auto it = std::find(values.begin(), values.end(), choiceValue);
+                            if (checked)
+                            {
+                                if (it == values.end())
+                                {
+                                    values.push_back(choiceValue);
+                                }
+                            }
+                            else if (it != values.end())
+                            {
+                                values.erase(it);
+                            }
+
+                            static_cast<void>(CommitEditor(parent, *state));
+                        });
+                    }
+                }
+            }
+
+            SyncDxInteractiveState(state, controls);
+        }
+
+        if (controls.dxLabelControl)
+        {
+            if (controls.dxEditControl)
+            {
+                controls.dxLabelControl->SetMnemonicTarget(controls.dxEditControl);
+            }
+            else if (controls.dxComboControl)
+            {
+                controls.dxLabelControl->SetMnemonicTarget(controls.dxComboControl);
+            }
+            else if (controls.dxToggleControl)
+            {
+                controls.dxLabelControl->SetMnemonicTarget(controls.dxToggleControl);
+            }
+            else if (! controls.dxChoiceControls.empty() && controls.dxChoiceControls.front().checkbox)
+            {
+                controls.dxLabelControl->SetMnemonicTarget(controls.dxChoiceControls.front().checkbox);
             }
         }
-        else if (controls.field.type == PrefsPluginConfigFieldType::Selection)
+
+        if (! controls.field.uiHidden)
         {
-            const std::vector<std::wstring>& selected = controls.field.defaultSelection;
-            controls.choiceButtons.reserve(controls.field.choices.size());
-            for (const auto& choice : controls.field.choices)
-            {
-                const std::wstring_view label = choice.label.empty() ? std::wstring_view(choice.value) : std::wstring_view(choice.label);
-                HWND button                   = CreateWindowExW(0,
-                                              L"Button",
-                                              label.data(),
-                                              WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX,
-                                              0,
-                                              0,
-                                              10,
-                                              10,
-                                              panel,
-                                              nullptr,
-                                              GetModuleHandleW(nullptr),
-                                              nullptr);
-                if (button)
-                {
-                    const bool checked = ContainsChoiceValue(selected, choice.value);
-                    SendMessageW(button, BM_SETCHECK, checked ? BST_CHECKED : BST_UNCHECKED, 0);
-                    PrefsInput::EnableMouseWheelForwarding(button);
-                }
-                controls.choiceButtons.emplace_back(button);
-            }
+            SyncDxStaticText(controls);
         }
 
         state.pluginsDetailsConfigFields.push_back(std::move(controls));
@@ -968,64 +1372,48 @@ void Clear(PreferencesDialogState& state) noexcept
     const bool hasVisibleField = std::any_of(state.pluginsDetailsConfigFields.begin(),
                                              state.pluginsDetailsConfigFields.end(),
                                              [](const PrefsPluginConfigFieldControls& controls) noexcept { return ! controls.field.uiHidden; });
-    if (! hasVisibleField && state.pluginsDetailsConfigError)
+    if (! hasVisibleField)
     {
-        const std::wstring message = LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS);
-        SetWindowTextW(state.pluginsDetailsConfigError.get(), message.c_str());
+        SetDetailsConfigEmptyStateText(state, LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NO_FIELDS));
     }
 
     return hasVisibleField;
 }
 
-void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int width, HFONT dialogFont) noexcept
+void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int width, const PreferencesTypographyContext& typography) noexcept
 {
     if (! host || width <= 0)
     {
         return;
     }
 
-    const UINT dpi = GetDpiForWindow(host);
+    Debug::Perf::Scope layoutPerf(L"preferences.ui.plugin_configuration_layout_us");
+    layoutPerf.SetValue0(static_cast<uint64_t>(std::max(0, width)));
+    layoutPerf.SetValue1(static_cast<uint64_t>(typography.dpi));
 
-    const int rowHeight      = std::max(1, ThemedControls::ScaleDip(dpi, 26));
-    const int titleHeight    = std::max(1, ThemedControls::ScaleDip(dpi, 18));
-    const int optionHeight   = std::max(1, ThemedControls::ScaleDip(dpi, 20));
-    const int minToggleWidth = ThemedControls::ScaleDip(dpi, 90);
+    const UINT dpi = std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI);
 
-    const int cardPaddingX = ThemedControls::ScaleDip(dpi, 12);
-    const int cardPaddingY = ThemedControls::ScaleDip(dpi, 8);
-    const int cardGapY     = ThemedControls::ScaleDip(dpi, 2);
-    const int cardGapX     = ThemedControls::ScaleDip(dpi, 12);
-    const int cardSpacingY = ThemedControls::ScaleDip(dpi, 8);
-    const int innerGapX    = ThemedControls::ScaleDip(dpi, 8);
-    const int buttonPadX   = ThemedControls::ScaleDip(dpi, 12);
+    const int rowHeight      = std::max(1, UiMetrics::ScaleDip(dpi, 26));
+    const int titleHeight    = std::max(1, UiMetrics::ScaleDip(dpi, 18));
+    const int optionHeight   = std::max(1, UiMetrics::ScaleDip(dpi, 20));
+    const int minToggleWidth = UiMetrics::ScaleDip(dpi, 90);
+
+    const int cardPaddingX = UiMetrics::ScaleDip(dpi, 12);
+    const int cardPaddingY = UiMetrics::ScaleDip(dpi, 8);
+    const int cardGapY     = UiMetrics::ScaleDip(dpi, 2);
+    const int cardGapX     = UiMetrics::ScaleDip(dpi, 12);
+    const int cardSpacingY = UiMetrics::ScaleDip(dpi, 8);
+    const int innerGapX    = UiMetrics::ScaleDip(dpi, 8);
+    const int minInfoWidth = UiMetrics::ScaleDip(dpi, 220);
 
     const int maxControlWidth = std::max(0, width - 2 * cardPaddingX);
 
-    const HFONT infoFont = state.italicFont ? state.italicFont.get() : dialogFont;
-
     const auto pushCard = [&](const RECT& card) noexcept { state.pageSettingCards.push_back(card); };
-
-    const auto measureButtonWidth = [&](HWND button, int minWidthDip) noexcept
-    {
-        if (! button)
-        {
-            return 0;
-        }
-
-        HFONT font = reinterpret_cast<HFONT>(SendMessageW(button, WM_GETFONT, 0, 0));
-        if (! font)
-        {
-            font = dialogFont ? dialogFont : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-        }
-
-        const std::wstring text = PrefsUi::GetWindowTextString(button);
-        const int textW         = ThemedControls::MeasureTextWidth(host, font, text);
-        return std::max(ThemedControls::ScaleDip(dpi, minWidthDip), textW + 2 * buttonPadX);
-    };
 
     const std::wstring onLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
     const std::wstring offLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
-
+    const auto pxToDip          = [dpi](const int value) noexcept { return (static_cast<float>(value) * 96.0f) / static_cast<float>(std::max<UINT>(1u, dpi)); };
+    Panel* const dxPanel        = state.pluginsDetailsConfigDxPanel;
     for (PrefsPluginConfigFieldControls& controls : state.pluginsDetailsConfigFields)
     {
         if (controls.field.uiHidden)
@@ -1033,10 +1421,14 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
             continue;
         }
 
+        SyncDxStaticText(controls);
+
+        SyncDxInteractiveState(state, controls);
+
         const bool isSelection = controls.field.type == PrefsPluginConfigFieldType::Selection;
 
-        const std::wstring descText = controls.description ? PrefsUi::GetWindowTextString(controls.description.get()) : std::wstring{};
-        const bool hasDesc          = ! descText.empty();
+        const std::wstring& descText = controls.field.description;
+        const bool hasDesc           = ! descText.empty();
 
         int controlGroupWidth = 0;
         int editWidth         = 0;
@@ -1044,22 +1436,22 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
 
         if (! isSelection)
         {
-            if (controls.edit)
+            if (controls.dxEditControl)
             {
-                const int minEditWidth = ThemedControls::ScaleDip(dpi, 140);
+                const int minEditWidth = UiMetrics::ScaleDip(dpi, 140);
                 int desiredWidth       = minEditWidth;
 
                 if (controls.field.type == PrefsPluginConfigFieldType::Text)
                 {
-                    desiredWidth = ThemedControls::ScaleDip(dpi, controls.field.browseFolder ? 380 : 320);
+                    desiredWidth = UiMetrics::ScaleDip(dpi, controls.field.browseFolder ? 380 : 320);
                 }
 
                 if (controls.field.type == PrefsPluginConfigFieldType::Value)
                 {
-                    desiredWidth = ThemedControls::ScaleDip(dpi, 140);
+                    desiredWidth = UiMetrics::ScaleDip(dpi, 140);
                 }
 
-                browseWidth = controls.browseButton ? measureButtonWidth(controls.browseButton.get(), 90) : 0;
+                browseWidth = controls.dxBrowseButtonControl ? UiMetrics::ScaleDip(dpi, 90) : 0;
                 if (browseWidth > 0)
                 {
                     const int maxBrowseWidth = std::max(0, maxControlWidth - innerGapX - 1);
@@ -1076,16 +1468,16 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
                 }
                 controlGroupWidth = editWidth + browseExtra;
             }
-            else if (controls.combo)
+            else if (controls.dxComboControl)
             {
-                int desiredWidth  = ThemedControls::MeasureComboBoxPreferredWidth(controls.combo.get(), dpi);
-                desiredWidth      = std::max(desiredWidth, ThemedControls::ScaleDip(dpi, 160));
-                desiredWidth      = std::min(desiredWidth, std::min(maxControlWidth, ThemedControls::ScaleDip(dpi, 260)));
+                int desiredWidth  = UiMetrics::ScaleDip(dpi, 220);
+                desiredWidth      = std::max(desiredWidth, UiMetrics::ScaleDip(dpi, 160));
+                desiredWidth      = std::min(desiredWidth, std::min(maxControlWidth, UiMetrics::ScaleDip(dpi, 260)));
                 controlGroupWidth = desiredWidth;
             }
-            else if (controls.toggle)
+            else if (controls.dxToggleControl)
             {
-                int desiredWidth = std::min(maxControlWidth, ThemedControls::ScaleDip(dpi, 180));
+                int desiredWidth = std::min(maxControlWidth, UiMetrics::ScaleDip(dpi, 180));
                 if (! state.theme.systemHighContrast)
                 {
                     std::wstring_view onStateLabel  = onLabel;
@@ -1102,13 +1494,12 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
                             choices[offIndex].label.empty() ? std::wstring_view(choices[offIndex].value) : std::wstring_view(choices[offIndex].label);
                     }
 
-                    const HFONT toggleFont = state.boldFont ? state.boldFont.get() : dialogFont;
-                    const int paddingX     = ThemedControls::ScaleDip(dpi, 6);
-                    const int gapX         = ThemedControls::ScaleDip(dpi, 8);
-                    const int trackWidth   = ThemedControls::ScaleDip(dpi, 34);
+                    const int paddingX   = UiMetrics::ScaleDip(dpi, 6);
+                    const int gapX       = UiMetrics::ScaleDip(dpi, 8);
+                    const int trackWidth = UiMetrics::ScaleDip(dpi, 34);
 
-                    const int onWidth        = ThemedControls::MeasureTextWidth(host, toggleFont, onStateLabel);
-                    const int offWidth       = ThemedControls::MeasureTextWidth(host, toggleFont, offStateLabel);
+                    const int onWidth        = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, onStateLabel);
+                    const int offWidth       = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, offStateLabel);
                     const int stateTextWidth = std::max(onWidth, offWidth);
                     const int measured       = std::max(minToggleWidth, (2 * paddingX) + stateTextWidth + gapX + trackWidth);
                     desiredWidth             = std::min(maxControlWidth, measured);
@@ -1122,18 +1513,33 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
             }
         }
 
+        if (! isSelection && controlGroupWidth > 0)
+        {
+            const int maxControlGroupWidth = std::max(1, maxControlWidth - cardGapX - minInfoWidth);
+            if (controlGroupWidth > maxControlGroupWidth)
+            {
+                controlGroupWidth = maxControlGroupWidth;
+                if (controls.dxEditControl)
+                {
+                    const int browseExtra = (browseWidth > 0) ? (innerGapX + browseWidth) : 0;
+                    editWidth             = std::max(1, controlGroupWidth - browseExtra);
+                    controlGroupWidth     = editWidth + browseExtra;
+                }
+            }
+        }
+
         const int textWidth = std::max(0, width - 2 * cardPaddingX - ((controlGroupWidth > 0) ? (cardGapX + controlGroupWidth) : 0));
 
         int descHeight = 0;
-        if (hasDesc && controls.description)
+        if (hasDesc)
         {
-            descHeight = PrefsUi::MeasureStaticTextHeight(host, infoFont, textWidth, descText);
+            descHeight = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
         }
 
         int cardHeight = 0;
         if (isSelection)
         {
-            const int optionCount   = static_cast<int>(controls.choiceButtons.size());
+            const int optionCount   = static_cast<int>(controls.dxChoiceControls.size());
             const int optionsHeight = std::max(0, optionCount * optionHeight);
 
             int contentHeight = titleHeight;
@@ -1163,86 +1569,82 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
         const int controlX = card.right - cardPaddingX - controlGroupWidth;
         const int controlY = card.top + cardPaddingY;
 
-        if (controls.label)
+        if (controls.dxLabelControl)
         {
-            SetWindowPos(
-                controls.label.get(), nullptr, card.left + cardPaddingX, card.top + cardPaddingY, textWidth, titleHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(controls.label.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            controls.dxLabelControl->SetVisible(true);
+            controls.dxLabelControl->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                                           pxToDip(card.top + cardPaddingY),
+                                                           pxToDip(card.left + cardPaddingX + textWidth),
+                                                           pxToDip(card.top + cardPaddingY + titleHeight)));
         }
 
         if (! isSelection)
         {
-            if (controls.editFrame && controls.edit)
+            if (controls.dxEditControl)
             {
-                const int framePadding = ThemedControls::ScaleDip(dpi, 1);
-                SetWindowPos(controls.editFrame.get(), nullptr, controlX, controlY, editWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(controls.edit.get(),
-                             nullptr,
-                             controlX + framePadding,
-                             controlY + framePadding,
-                             std::max(1, editWidth - 2 * framePadding),
-                             std::max(1, rowHeight - 2 * framePadding),
-                             SWP_NOZORDER | SWP_NOACTIVATE);
-                SendMessageW(controls.edit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+                controls.dxEditControl->SetVisible(true);
+                controls.dxEditControl->SetBounds(
+                    D2D1::RectF(pxToDip(controlX), pxToDip(controlY), pxToDip(controlX + editWidth), pxToDip(controlY + rowHeight)));
             }
 
-            if (controls.browseButton)
+            if (controls.dxBrowseButtonControl)
             {
-                SetWindowPos(
-                    controls.browseButton.get(), nullptr, controlX + editWidth + innerGapX, controlY, browseWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-                SendMessageW(controls.browseButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+                if (browseWidth > 0)
+                {
+                    controls.dxBrowseButtonControl->SetVisible(true);
+                    controls.dxBrowseButtonControl->SetBounds(D2D1::RectF(pxToDip(controlX + editWidth + innerGapX),
+                                                                          pxToDip(controlY),
+                                                                          pxToDip(controlX + editWidth + innerGapX + browseWidth),
+                                                                          pxToDip(controlY + rowHeight)));
+                }
+                else
+                {
+                    controls.dxBrowseButtonControl->SetVisible(false);
+                }
             }
 
-            if (controls.comboFrame && controls.combo)
+            if (controls.dxComboControl)
             {
-                const int framePadding = ThemedControls::ScaleDip(dpi, 1);
-                SetWindowPos(controls.comboFrame.get(), nullptr, controlX, controlY, controlGroupWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-                SetWindowPos(controls.combo.get(),
-                             nullptr,
-                             controlX + framePadding,
-                             controlY + framePadding,
-                             std::max(1, controlGroupWidth - 2 * framePadding),
-                             std::max(1, rowHeight - 2 * framePadding),
-                             SWP_NOZORDER | SWP_NOACTIVATE);
-                SendMessageW(controls.combo.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-                ThemedControls::EnsureComboBoxDroppedWidth(controls.combo.get(), dpi);
+                controls.dxComboControl->SetVisible(true);
+                controls.dxComboControl->SetBounds(
+                    D2D1::RectF(pxToDip(controlX), pxToDip(controlY), pxToDip(controlX + controlGroupWidth), pxToDip(controlY + rowHeight)));
             }
-            else if (controls.toggle)
+            if (controls.dxToggleControl)
             {
-                SetWindowPos(controls.toggle.get(), nullptr, controlX, controlY, controlGroupWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-                SendMessageW(controls.toggle.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+                controls.dxToggleControl->SetVisible(true);
+                controls.dxToggleControl->SetBounds(
+                    D2D1::RectF(pxToDip(controlX), pxToDip(controlY), pxToDip(controlX + controlGroupWidth), pxToDip(controlY + rowHeight)));
             }
         }
         else
         {
             int contentY = card.top + cardPaddingY + titleHeight;
-            if (! controls.choiceButtons.empty())
+            if (! controls.dxChoiceControls.empty())
             {
                 contentY += cardGapY;
             }
 
-            const int optionWidth = std::max(0, width - 2 * cardPaddingX);
-            for (size_t i = 0; i < controls.choiceButtons.size(); ++i)
+            const int optionWidth    = std::max(0, width - 2 * cardPaddingX);
+            const size_t optionCount = controls.dxChoiceControls.size();
+            for (size_t i = 0; i < optionCount; ++i)
             {
-                HWND button = controls.choiceButtons[i].get();
-                if (! button)
-                {
-                    continue;
-                }
-
                 const int buttonY = contentY + static_cast<int>(i) * optionHeight;
-                SetWindowPos(button, nullptr, card.left + cardPaddingX, buttonY, optionWidth, optionHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-                SendMessageW(button, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+                if (controls.dxChoiceControls[i].checkbox)
+                {
+                    controls.dxChoiceControls[i].checkbox->SetVisible(true);
+                    controls.dxChoiceControls[i].checkbox->SetBounds(D2D1::RectF(
+                        pxToDip(card.left + cardPaddingX), pxToDip(buttonY), pxToDip(card.left + cardPaddingX + optionWidth), pxToDip(buttonY + optionHeight)));
+                }
             }
 
-            contentY += static_cast<int>(controls.choiceButtons.size()) * optionHeight;
+            contentY += static_cast<int>(controls.dxChoiceControls.size()) * optionHeight;
             if (hasDesc)
             {
                 contentY += cardGapY;
             }
         }
 
-        if (controls.description)
+        if (controls.dxDescriptionControl)
         {
             if (hasDesc)
             {
@@ -1250,9 +1652,9 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
                 if (isSelection)
                 {
                     descY = card.top + cardPaddingY + titleHeight;
-                    if (! controls.choiceButtons.empty())
+                    if (! controls.dxChoiceControls.empty())
                     {
-                        descY += cardGapY + static_cast<int>(controls.choiceButtons.size()) * optionHeight;
+                        descY += cardGapY + static_cast<int>(controls.dxChoiceControls.size()) * optionHeight;
                     }
                     descY += cardGapY;
                 }
@@ -1261,75 +1663,34 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
                     descY = card.top + cardPaddingY + titleHeight + cardGapY;
                 }
 
-                SetWindowPos(
-                    controls.description.get(), nullptr, card.left + cardPaddingX, descY, textWidth, std::max(0, descHeight), SWP_NOZORDER | SWP_NOACTIVATE);
-                SendMessageW(controls.description.get(), WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
-                ShowWindow(controls.description.get(), SW_SHOW);
+                controls.dxDescriptionControl->SetVisible(true);
+                controls.dxDescriptionControl->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                                                     pxToDip(descY),
+                                                                     pxToDip(card.left + cardPaddingX + textWidth),
+                                                                     pxToDip(descY + std::max(0, descHeight))));
             }
             else
             {
-                ShowWindow(controls.description.get(), SW_HIDE);
+                controls.dxDescriptionControl->SetVisible(false);
             }
         }
 
         y += cardHeight + cardSpacingY;
     }
-}
 
-[[nodiscard]] bool HandleCommand(HWND host, PreferencesDialogState& state, UINT notifyCode, HWND hwndCtl) noexcept
-{
-    if (! host || ! hwndCtl || state.pluginsDetailsConfigFields.empty() || state.pluginsDetailsConfigPluginId.empty())
+    if (dxPanel)
     {
-        return false;
+        RECT client{};
+        GetClientRect(host, &client);
+        dxPanel->SetVisible(true);
+        dxPanel->SetBounds(
+            D2D1::RectF(0.0f, 0.0f, pxToDip((std::max)(static_cast<int>(client.right), x + width)), pxToDip((std::max)(static_cast<int>(client.bottom), y))));
     }
 
-    PrefsPluginConfigFieldControls* controls = FindFieldForControl(state, hwndCtl);
-    if (! controls)
+    if (state.pageHostDxHost)
     {
-        return false;
+        state.pageHostDxHost->Invalidate();
     }
-
-    if (notifyCode == BN_CLICKED)
-    {
-        if (controls->browseButton.get() == hwndCtl && controls->edit && controls->field.browseFolder)
-        {
-            std::filesystem::path selectedPath;
-            HWND owner = GetParent(host);
-            if (! TryBrowseFolderPath(owner ? owner : host, selectedPath))
-            {
-                return true;
-            }
-
-            const std::wstring text = selectedPath.wstring();
-            SetWindowTextW(controls->edit.get(), text.c_str());
-            return CommitEditor(host, state);
-        }
-
-        if (controls->toggle.get() == hwndCtl)
-        {
-            const LONG_PTR style = GetWindowLongPtrW(hwndCtl, GWL_STYLE);
-            if ((style & BS_TYPEMASK) == BS_OWNERDRAW)
-            {
-                const LONG_PTR current = GetWindowLongPtrW(hwndCtl, GWLP_USERDATA);
-                SetWindowLongPtrW(hwndCtl, GWLP_USERDATA, current == 0 ? 1 : 0);
-                InvalidateRect(hwndCtl, nullptr, TRUE);
-            }
-        }
-
-        return CommitEditor(host, state);
-    }
-
-    if (notifyCode == EN_KILLFOCUS && controls->edit.get() == hwndCtl)
-    {
-        return CommitEditor(host, state);
-    }
-
-    if (notifyCode == CBN_SELCHANGE && controls->combo.get() == hwndCtl)
-    {
-        return CommitEditor(host, state);
-    }
-
-    return false;
 }
 } // namespace PrefsPluginConfiguration
 
@@ -1373,19 +1734,7 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
 
         if (c.field.type == PrefsPluginConfigFieldType::Text)
         {
-            std::wstring value = c.field.defaultText;
-            if (c.edit)
-            {
-                const int len = GetWindowTextLengthW(c.edit.get());
-                if (len > 0)
-                {
-                    value.resize(static_cast<size_t>(len) + 1u);
-                    GetWindowTextW(c.edit.get(), value.data(), len + 1);
-                    value.resize(static_cast<size_t>(len));
-                }
-            }
-
-            const std::string utf8 = Utf8FromUtf16(value);
+            const std::string utf8 = Utf8FromUtf16(c.retainedText);
             yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
             if (! val)
             {
@@ -1399,15 +1748,12 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         else if (c.field.type == PrefsPluginConfigFieldType::Value)
         {
             int64_t v = c.field.defaultInt;
-            if (c.edit)
+            if (! c.retainedText.empty())
             {
-                std::array<wchar_t, 64> buffer{};
-                GetWindowTextW(c.edit.get(), buffer.data(), static_cast<int>(buffer.size()));
-
                 wchar_t* end           = nullptr;
                 errno                  = 0;
-                const long long parsed = std::wcstoll(buffer.data(), &end, 10);
-                if (errno == 0 && end != buffer.data())
+                const long long parsed = std::wcstoll(c.retainedText.c_str(), &end, 10);
+                if (errno == 0 && end != c.retainedText.c_str())
                 {
                     v = static_cast<int64_t>(parsed);
                 }
@@ -1434,26 +1780,7 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         }
         else if (c.field.type == PrefsPluginConfigFieldType::Bool)
         {
-            bool v = c.field.defaultBool;
-            if (c.toggle)
-            {
-                const LONG_PTR style = GetWindowLongPtrW(c.toggle.get(), GWL_STYLE);
-                const LONG_PTR type  = style & BS_TYPEMASK;
-                if (type == BS_OWNERDRAW)
-                {
-                    v = GetWindowLongPtrW(c.toggle.get(), GWLP_USERDATA) != 0;
-                }
-                else
-                {
-                    v = SendMessageW(c.toggle.get(), BM_GETCHECK, 0, 0) == BST_CHECKED;
-                }
-            }
-            else if (! c.choiceButtons.empty())
-            {
-                v = SendMessageW(c.choiceButtons.front().get(), BM_GETCHECK, 0, 0) == BST_CHECKED;
-            }
-
-            yyjson_mut_val* val = yyjson_mut_bool(doc, v ? true : false);
+            yyjson_mut_val* val = yyjson_mut_bool(doc, c.retainedToggleValue ? true : false);
             if (! val)
             {
                 return {};
@@ -1465,41 +1792,7 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         }
         else if (c.field.type == PrefsPluginConfigFieldType::Option)
         {
-            std::wstring selected = c.field.defaultOption;
-            if (c.toggle)
-            {
-                const bool isOn    = GetWindowLongPtrW(c.toggle.get(), GWLP_USERDATA) != 0;
-                const size_t index = isOn ? c.toggleOnChoiceIndex : c.toggleOffChoiceIndex;
-                if (index < c.field.choices.size())
-                {
-                    selected = c.field.choices[index].value;
-                }
-            }
-            else if (c.combo)
-            {
-                const LRESULT index = SendMessageW(c.combo.get(), CB_GETCURSEL, 0, 0);
-                if (index >= 0 && index <= static_cast<LRESULT>(std::numeric_limits<int>::max()))
-                {
-                    const size_t choiceIndex = static_cast<size_t>(index);
-                    if (choiceIndex < c.field.choices.size())
-                    {
-                        selected = c.field.choices[choiceIndex].value;
-                    }
-                }
-            }
-            else
-            {
-                for (size_t i = 0; i < c.choiceButtons.size() && i < c.field.choices.size(); ++i)
-                {
-                    if (SendMessageW(c.choiceButtons[i].get(), BM_GETCHECK, 0, 0) == BST_CHECKED)
-                    {
-                        selected = c.field.choices[i].value;
-                        break;
-                    }
-                }
-            }
-
-            const std::string utf8 = Utf8FromUtf16(selected);
+            const std::string utf8 = Utf8FromUtf16(c.retainedOptionValue);
             yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
             if (! val)
             {
@@ -1512,21 +1805,6 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         }
         else if (c.field.type == PrefsPluginConfigFieldType::Selection)
         {
-            std::vector<std::wstring> selectedValues = c.field.defaultSelection;
-            if (! c.choiceButtons.empty())
-            {
-                selectedValues.clear();
-                for (size_t i = 0; i < c.choiceButtons.size() && i < c.field.choices.size(); ++i)
-                {
-                    if (SendMessageW(c.choiceButtons[i].get(), BM_GETCHECK, 0, 0) != BST_CHECKED)
-                    {
-                        continue;
-                    }
-
-                    selectedValues.push_back(c.field.choices[i].value);
-                }
-            }
-
             yyjson_mut_val* arr = yyjson_mut_arr(doc);
             if (! arr)
             {
@@ -1537,7 +1815,7 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
                 return {};
             }
 
-            for (const auto& selectedValue : selectedValues)
+            for (const auto& selectedValue : c.retainedSelectionValues)
             {
                 const std::string utf8 = Utf8FromUtf16(selectedValue);
                 yyjson_mut_val* val    = yyjson_mut_strncpy(doc, utf8.c_str(), utf8.size());
@@ -1566,23 +1844,6 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
     return out;
 }
 
-[[nodiscard]] bool ContainsChoiceValue(const std::vector<std::wstring>& values, std::wstring_view needle) noexcept
-{
-    return std::find(values.begin(), values.end(), needle) != values.end();
-}
-
-[[nodiscard]] size_t FindChoiceIndex(const std::vector<PrefsPluginConfigChoice>& choices, std::wstring_view desired) noexcept
-{
-    for (size_t i = 0; i < choices.size(); ++i)
-    {
-        if (choices[i].value == desired)
-        {
-            return i;
-        }
-    }
-    return static_cast<size_t>(std::numeric_limits<size_t>::max());
-}
-
 [[nodiscard]] std::wstring GetPluginConfigurationSchemaErrorText(const PrefsPluginListItem& pluginItem) noexcept
 {
     if (! PrefsPlugins::IsLoadable(pluginItem))
@@ -1590,32 +1851,6 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
         return LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NOT_LOADABLE);
     }
     return LoadStringResource(nullptr, IDS_PREFS_PLUGINS_DETAILS_SCHEMA_UNAVAILABLE);
-}
-
-[[nodiscard]] PrefsPluginConfigFieldControls* FindFieldForControl(PreferencesDialogState& state, HWND hwnd) noexcept
-{
-    if (! hwnd)
-    {
-        return nullptr;
-    }
-
-    for (PrefsPluginConfigFieldControls& controls : state.pluginsDetailsConfigFields)
-    {
-        if (controls.edit.get() == hwnd || controls.combo.get() == hwnd || controls.toggle.get() == hwnd || controls.browseButton.get() == hwnd)
-        {
-            return &controls;
-        }
-
-        for (const auto& button : controls.choiceButtons)
-        {
-            if (button.get() == hwnd)
-            {
-                return &controls;
-            }
-        }
-    }
-
-    return nullptr;
 }
 
 [[nodiscard]] bool CommitEditor(HWND host, PreferencesDialogState& state) noexcept
@@ -1661,4 +1896,17 @@ std::string BuildConfigurationJson(const std::vector<PrefsPluginConfigFieldContr
 
     return true;
 }
+
 } // namespace
+
+#ifdef ENABLE_TESTS
+bool DebugSetPluginConfigurationNextBrowsePath(const std::wstring_view path) noexcept
+{
+    return DebugSetPluginConfigurationNextBrowsePathImpl(path);
+}
+
+bool DebugCancelPluginConfigurationNextBrowse() noexcept
+{
+    return DebugCancelPluginConfigurationNextBrowseImpl();
+}
+#endif

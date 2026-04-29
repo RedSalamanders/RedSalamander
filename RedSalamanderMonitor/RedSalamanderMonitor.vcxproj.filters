@@ -33,6 +33,12 @@
     <ClInclude Include="ColorTextView.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="InvalidRectVisualization.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MonitorDiagnostics.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="EtwListener.h">
       <Filter>Header Files</Filter>
     </ClInclude>

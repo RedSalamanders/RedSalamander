@@ -1,0 +1,34 @@
+#include "resource.h"
+
+#include <windows.h>
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSQLITE_NAME "SQLite Viewer"
+    IDS_VIEWERSQLITE_DESCRIPTION "Read-only SQLite database viewer with paged table browsing."
+    IDS_VIEWERSQLITE_LABEL_FILE "File:"
+    IDS_VIEWERSQLITE_LABEL_TABLE "Table:"
+    IDS_VIEWERSQLITE_LABEL_QUERY "Query:"
+    IDS_VIEWERSQLITE_BUTTON_RELOAD "Reload"
+    IDS_VIEWERSQLITE_BUTTON_PREVIOUS "Previous"
+    IDS_VIEWERSQLITE_BUTTON_NEXT "Next"
+    IDS_VIEWERSQLITE_BUTTON_RUN_QUERY "Run Query"
+    IDS_VIEWERSQLITE_BUTTON_TABLE_PREVIEW "Table Preview"
+    IDS_VIEWERSQLITE_COLUMN_RESULT "Result"
+    IDS_VIEWERSQLITE_STATUS_READY "Ready."
+    IDS_VIEWERSQLITE_STATUS_LOADING "Opening database..."
+    IDS_VIEWERSQLITE_STATUS_LOADING_ROWS "Loading rows..."
+    IDS_VIEWERSQLITE_STATUS_RUNNING_QUERY "Running query..."
+    IDS_VIEWERSQLITE_STATUS_ENTER_QUERY "Enter a read-only SQL query."
+    IDS_VIEWERSQLITE_STATUS_SELECT_TABLE "Choose a table to preview."
+    IDS_VIEWERSQLITE_STATUS_NO_TABLES "No tables or views were found."
+    IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_FMT "Table {0}: rows {1:L}-{2:L}"
+    IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_MORE_FMT "Table {0}: rows {1:L}-{2:L}+"
+    IDS_VIEWERSQLITE_STATUS_QUERY_FMT "Query returned {0:L} rows."
+    IDS_VIEWERSQLITE_STATUS_QUERY_TRUNCATED_FMT "Query returned {0:L}+ rows (truncated)."
+    IDS_VIEWERSQLITE_ERROR_OPEN_FAILED "Failed to open the SQLite database."
+    IDS_VIEWERSQLITE_ERROR_QUERY_FAILED "Failed to run the SQLite query."
+    IDS_VIEWERSQLITE_ERROR_QUEUE_FAILED "Failed to queue background SQLite work."
+    IDS_VIEWERSQLITE_ERROR_OUT_OF_MEMORY "The SQLite viewer ran out of memory."
+    IDS_VIEWERSQLITE_TITLE_FORMAT "{0} - {1}"
+END

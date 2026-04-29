@@ -34,10 +34,14 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "DxUi/DxUiNativeMenuInterop.h"
+#include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+
+[[nodiscard]] const char* GetViewerSpaceStaticConfigurationSchema() noexcept;
 
 class ViewerSpace final : public IViewer, public IInformations
 {
@@ -83,15 +87,6 @@ private:
         None,
         Up,
         Cancel,
-    };
-
-    struct MenuItemData final
-    {
-        std::wstring text;
-        std::wstring shortcut;
-        bool separator  = false;
-        bool topLevel   = false;
-        bool hasSubMenu = false;
     };
 
     struct Config final
@@ -187,8 +182,6 @@ private:
     void OnLButtonDown(int x, int y) noexcept;
     void OnLButtonDblClk(int x, int y) noexcept;
     void OnContextMenu(HWND hwnd, POINT screenPt) noexcept;
-    LRESULT OnMeasureItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept;
-    LRESULT OnDrawItem(DRAWITEMSTRUCT* draw) noexcept;
     LRESULT OnNotify(WPARAM wp, LPARAM lp) noexcept;
     void OnNcActivate(HWND hwnd, bool windowActive) noexcept;
     LRESULT OnNcDestroy(HWND hwnd, WPARAM wp, LPARAM lp) noexcept;
@@ -200,9 +193,6 @@ private:
     void ApplyTitleBarTheme(HWND hwnd, bool windowActive) noexcept;
     void UpdateWindowTitle(HWND hwnd) noexcept;
     void ApplyMenuTheme(HWND hwnd) noexcept;
-    void PrepareMenuTheme(HMENU menu, bool topLevel, std::vector<MenuItemData>& outItems) noexcept;
-    void OnMeasureMenuItem(HWND hwnd, MEASUREITEMSTRUCT* measure) noexcept;
-    void OnDrawMenuItem(DRAWITEMSTRUCT* draw) noexcept;
     void EnsureTooltip(HWND hwnd) noexcept;
     void ApplyThemeToTooltip() noexcept;
     void UpdateTooltipForHit(uint32_t nodeId) noexcept;
@@ -246,7 +236,10 @@ private:
     void NavigateUp() noexcept;
     void RefreshCurrent() noexcept;
     bool CanNavigateUp() const noexcept;
-    void UpdateMenuState(HWND hwnd) noexcept;
+    void UpdateMenuState(HWND hwnd, bool syncDxMenuBar = true) noexcept;
+    float GetMenuBarHeightDip() const noexcept;
+    float GetHeaderTopDip() const noexcept;
+    float GetHeaderBottomDip() const noexcept;
 
     float DipFromPx(int px) const noexcept;
     int PxFromDip(float dip) const noexcept;
@@ -264,8 +257,7 @@ private:
     std::string _configurationJson;
     Config _config{};
 
-    IViewerCallback* _callback = nullptr;
-    void* _callbackCookie      = nullptr;
+    RegistrationCallbackState<IViewerCallback> _callbackState;
 
     wil::com_ptr<IHostPaneExecute> _hostPaneExecute;
 
@@ -279,9 +271,8 @@ private:
     bool _allowEraseBkgnd = true;
 
     wil::unique_hwnd _hWnd;
-    wil::unique_hbrush _menuBackgroundBrush;
-    wil::unique_hfont _menuFont;
-    std::vector<MenuItemData> _menuThemeItems;
+    wil::unique_hmenu _menuHandle;
+    RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
 
     float _dpi = static_cast<float>(USER_DEFAULT_SCREEN_DPI);
     SIZE _clientSize{};

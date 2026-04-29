@@ -1,8 +1,9 @@
 #include "FolderWindow.h"
 
 #include "AppTheme.h"
+#include "DxUi/DxUi.h"
+#include "DxUiThemePalette.h"
 #include "Resource.h"
-#include "ThemedControls.h"
 #include "WindowMaximizeBehavior.h"
 #include "WindowPlacementPersistence.h"
 
@@ -13,10 +14,6 @@
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182) // WIL headers: deleted copy/move and unused inline Helpers
 #include <wil/resource.h>
 #pragma warning(pop)
-
-#include <CommCtrl.h>
-#include <ShlObj.h>
-#include <Uxtheme.h>
 
 #pragma warning(push)
 #pragma warning(disable : 6297 28182) // yyjson warnings
@@ -189,326 +186,433 @@ struct ItemPropertiesDocument
 }
 
 constexpr wchar_t kItemPropertiesWindowClass[] = L"RedSalamander.ItemPropertiesWindow";
-constexpr int kItemPropertiesListId            = 1001;
-constexpr int kItemPropertiesCloseId           = 1002;
 constexpr wchar_t kItemPropertiesWindowId[]    = L"ItemPropertiesWindow";
 constexpr wchar_t kSettingsAppId[]             = L"RedSalamander";
 
-struct ItemPropertiesWindowState
+[[nodiscard]] std::wstring BuildItemPropertiesText(const ItemPropertiesDocument& doc) noexcept
 {
-    explicit ItemPropertiesWindowState(const AppTheme& themeIn, ItemPropertiesDocument docIn) noexcept : theme(themeIn), doc(std::move(docIn))
+    std::wstring text;
+    if (! doc.title.empty())
     {
+        text.append(doc.title);
+        text.append(L"\r\n\r\n");
     }
 
-    ItemPropertiesWindowState(const ItemPropertiesWindowState&)            = delete;
-    ItemPropertiesWindowState& operator=(const ItemPropertiesWindowState&) = delete;
-    ItemPropertiesWindowState(ItemPropertiesWindowState&&)                 = delete;
-    ItemPropertiesWindowState& operator=(ItemPropertiesWindowState&&)      = delete;
-
-    AppTheme theme;
-    ItemPropertiesDocument doc;
-    Common::Settings::Settings* settings = nullptr;
-    UINT dpi                             = USER_DEFAULT_SCREEN_DPI;
-
-    wil::unique_hwnd list;
-    wil::unique_hwnd closeButton;
-
-    wil::unique_hbrush backgroundBrush;
-};
-
-void SetWindowThemeForMode(HWND hwnd, const AppTheme& theme) noexcept
-{
-    if (theme.highContrast)
+    for (size_t sectionIndex = 0; sectionIndex < doc.sections.size(); ++sectionIndex)
     {
-        ::SetWindowTheme(hwnd, L"", nullptr);
-        return;
-    }
-
-    ::SetWindowTheme(hwnd, theme.dark ? L"DarkMode_Explorer" : L"Explorer", nullptr);
-}
-
-void LayoutItemPropertiesWindow(HWND hwnd, ItemPropertiesWindowState& state) noexcept
-{
-    RECT rc{};
-    if (::GetClientRect(hwnd, &rc) == 0)
-    {
-        return;
-    }
-
-    const int width  = std::max(0l, rc.right - rc.left);
-    const int height = std::max(0l, rc.bottom - rc.top);
-
-    const int margin  = ThemedControls::ScaleDip(state.dpi, 10);
-    const int buttonH = ThemedControls::ScaleDip(state.dpi, 28);
-    const int buttonW = std::max(ThemedControls::ScaleDip(state.dpi, 90), buttonH * 3);
-
-    const int buttonTop  = std::max(margin, height - margin - buttonH);
-    const int buttonLeft = std::max(margin, width - margin - buttonW);
-
-    if (state.closeButton)
-    {
-        ::SetWindowPos(state.closeButton.get(), nullptr, buttonLeft, buttonTop, buttonW, buttonH, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-
-    if (state.list)
-    {
-        const int listTop    = margin;
-        const int listHeight = std::max(0, buttonTop - margin - listTop);
-
-        ::SetWindowPos(state.list.get(), nullptr, margin, listTop, std::max(0, width - margin * 2), listHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-
-        RECT listRc{};
-        if (::GetClientRect(state.list.get(), &listRc) != 0)
+        const auto& section = doc.sections[sectionIndex];
+        if (! section.title.empty())
         {
-            const int listW = std::max(0l, listRc.right - listRc.left);
-
-            const int keyW   = std::clamp(ThemedControls::ScaleDip(state.dpi, 180), 80, std::max(80, listW / 2));
-            const int valueW = std::max(80, listW - keyW - ThemedControls::ScaleDip(state.dpi, 16));
-
-            ListView_SetColumnWidth(state.list.get(), 0, keyW);
-            ListView_SetColumnWidth(state.list.get(), 1, valueW);
+            text.append(section.title);
+            text.append(L"\r\n");
         }
-    }
-}
 
-void PopulateItemPropertiesList(HWND list, const ItemPropertiesDocument& doc) noexcept
-{
-    if (! list)
-    {
-        return;
-    }
-
-    ListView_DeleteAllItems(list);
-
-    // Enable groups (best-effort).
-    ListView_EnableGroupView(list, TRUE);
-
-    int nextGroupId = 1;
-    for (const auto& section : doc.sections)
-    {
-        const std::wstring header = section.title.empty() ? L"" : section.title;
-
-        LVGROUP group{};
-        group.cbSize    = sizeof(group);
-        group.mask      = LVGF_GROUPID | LVGF_HEADER;
-        group.iGroupId  = nextGroupId;
-        group.pszHeader = const_cast<wchar_t*>(header.c_str());
-        ListView_InsertGroup(list, -1, &group);
-
-        int itemIndex = ListView_GetItemCount(list);
         for (const auto& field : section.fields)
         {
-            LVITEM item{};
-            item.mask          = LVIF_TEXT | LVIF_GROUPID;
-            item.iItem         = itemIndex++;
-            item.iSubItem      = 0;
-            item.iGroupId      = nextGroupId;
-            item.pszText       = const_cast<wchar_t*>(field.key.c_str());
-            const int inserted = ListView_InsertItem(list, &item);
-            if (inserted >= 0)
-            {
-                ListView_SetItemText(list, inserted, 1, const_cast<wchar_t*>(field.value.c_str()));
-            }
+            text.append(field.key);
+            text.append(L": ");
+            text.append(field.value);
+            text.append(L"\r\n");
         }
 
-        ++nextGroupId;
+        if (sectionIndex + 1u < doc.sections.size())
+        {
+            text.append(L"\r\n");
+        }
     }
+
+    return text;
 }
 
-LRESULT CALLBACK ItemPropertiesWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) noexcept
+[[nodiscard]] size_t CountItemPropertiesFields(const ItemPropertiesDocument& doc) noexcept
 {
-    auto* state = reinterpret_cast<ItemPropertiesWindowState*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-
-    switch (msg)
+    size_t count = 0u;
+    for (const auto& section : doc.sections)
     {
-        case WM_NCCREATE:
+        count += section.fields.size();
+    }
+    return count;
+}
+
+#ifdef ENABLE_TESTS
+[[nodiscard]] size_t CountVisibleItemPropertiesChildWindows(HWND hwnd) noexcept
+{
+    if (! hwnd || ::IsWindow(hwnd) == FALSE)
+    {
+        return 0u;
+    }
+
+    size_t count = 0u;
+    ::EnumChildWindows(hwnd,
+                       [](HWND child, LPARAM lParam) noexcept -> BOOL
+    {
+        auto& countRef = *reinterpret_cast<size_t*>(lParam);
+        if (::IsWindowVisible(child) != FALSE)
         {
-            const auto* cs = reinterpret_cast<const CREATESTRUCTW*>(lParam);
-            auto* newState = static_cast<ItemPropertiesWindowState*>(cs->lpCreateParams);
-            ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(newState));
-            return TRUE;
+            ++countRef;
         }
-        case WM_CREATE:
+        return TRUE;
+    },
+                       reinterpret_cast<LPARAM>(&count));
+    return count;
+}
+#endif
+
+[[nodiscard]] bool EnsureItemPropertiesWindowClassRegistered() noexcept;
+
+class ItemPropertiesWindow final
+{
+public:
+    ItemPropertiesWindow(Common::Settings::Settings* settings, const AppTheme& theme, ItemPropertiesDocument doc) noexcept
+        : _settings(settings),
+          _theme(theme),
+          _doc(std::move(doc)),
+          _contentText(BuildItemPropertiesText(_doc)),
+          _fieldCount(CountItemPropertiesFields(_doc))
+    {
+    }
+
+    ItemPropertiesWindow(const ItemPropertiesWindow&)            = delete;
+    ItemPropertiesWindow& operator=(const ItemPropertiesWindow&) = delete;
+    ItemPropertiesWindow(ItemPropertiesWindow&&)                 = delete;
+    ItemPropertiesWindow& operator=(ItemPropertiesWindow&&)      = delete;
+
+    [[nodiscard]] HRESULT CreateAndShow(HWND owner) noexcept
+    {
+        if (! EnsureItemPropertiesWindowClassRegistered())
         {
-            if (! state)
-            {
-                return -1;
-            }
-
-            state->dpi = ::GetDpiForWindow(hwnd);
-            state->backgroundBrush.reset(::CreateSolidBrush(state->theme.windowBackground));
-
-            const std::wstring closeText = LoadStringResource(nullptr, IDS_PROPERTIES_BTN_CLOSE);
-            const std::wstring keyText   = LoadStringResource(nullptr, IDS_PROPERTIES_COL_KEY);
-            const std::wstring valueText = LoadStringResource(nullptr, IDS_PROPERTIES_COL_VALUE);
-
-            state->list.reset(::CreateWindowExW(WS_EX_CLIENTEDGE,
-                                                WC_LISTVIEWW,
-                                                L"",
-                                                WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SHOWSELALWAYS,
-                                                0,
-                                                0,
-                                                10,
-                                                10,
-                                                hwnd,
-                                                reinterpret_cast<HMENU>(static_cast<INT_PTR>(kItemPropertiesListId)),
-                                                ::GetModuleHandleW(nullptr),
-                                                nullptr));
-            if (! state->list)
-            {
-                return -1;
-            }
-
-            state->closeButton.reset(::CreateWindowExW(0,
-                                                       L"Button",
-                                                       closeText.c_str(),
-                                                       WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                                                       0,
-                                                       0,
-                                                       10,
-                                                       10,
-                                                       hwnd,
-                                                       reinterpret_cast<HMENU>(static_cast<INT_PTR>(kItemPropertiesCloseId)),
-                                                       ::GetModuleHandleW(nullptr),
-                                                       nullptr));
-            if (! state->closeButton)
-            {
-                return -1;
-            }
-
-            if (! state->theme.highContrast)
-            {
-                ThemedControls::EnableOwnerDrawButton(hwnd, kItemPropertiesCloseId);
-            }
-
-            SetWindowThemeForMode(state->list.get(), state->theme);
-            SetWindowThemeForMode(state->closeButton.get(), state->theme);
-
-            ListView_SetExtendedListViewStyle(state->list.get(), LVS_EX_FULLROWSELECT | LVS_EX_DOUBLEBUFFER | LVS_EX_LABELTIP | LVS_EX_INFOTIP);
-
-            LVCOLUMNW col0{};
-            col0.mask    = LVCF_TEXT | LVCF_WIDTH;
-            col0.pszText = const_cast<wchar_t*>(keyText.c_str());
-            col0.cx      = ThemedControls::ScaleDip(state->dpi, 180);
-            ListView_InsertColumn(state->list.get(), 0, &col0);
-
-            LVCOLUMNW col1{};
-            col1.mask    = LVCF_TEXT | LVCF_WIDTH;
-            col1.pszText = const_cast<wchar_t*>(valueText.c_str());
-            col1.cx      = ThemedControls::ScaleDip(state->dpi, 420);
-            ListView_InsertColumn(state->list.get(), 1, &col1);
-
-            ThemedControls::ApplyThemeToListView(state->list.get(), state->theme);
-            ThemedControls::EnsureListViewHeaderThemed(state->list.get(), state->theme);
-
-            PopulateItemPropertiesList(state->list.get(), state->doc);
-            LayoutItemPropertiesWindow(hwnd, *state);
-
-            ApplyTitleBarTheme(hwnd, state->theme, ::GetActiveWindow() == hwnd);
-            return 0;
+            return HRESULT_FROM_WIN32(::GetLastError());
         }
-        case WM_SIZE:
-        {
-            if (state)
-            {
-                LayoutItemPropertiesWindow(hwnd, *state);
-            }
-            return 0;
-        }
-        case WM_DPICHANGED:
-        {
-            if (state)
-            {
-                state->dpi = static_cast<UINT>(wParam);
-                LayoutItemPropertiesWindow(hwnd, *state);
-            }
 
-            if (const auto* rc = reinterpret_cast<const RECT*>(lParam))
-            {
-                ::SetWindowPos(
-                    hwnd, nullptr, rc->left, rc->top, std::max(0l, rc->right - rc->left), std::max(0l, rc->bottom - rc->top), SWP_NOZORDER | SWP_NOACTIVATE);
-            }
-            return 0;
-        }
-        case WM_ACTIVATE:
+        _ownerWindow        = (owner && ::IsWindow(owner) != FALSE) ? owner : nullptr;
+        _restoreFocusWindow = nullptr;
+        if (_ownerWindow)
         {
-            if (state)
+            const HWND focused = ::GetFocus();
+            if (focused && ::IsWindow(focused) != FALSE && (focused == _ownerWindow || ::IsChild(_ownerWindow, focused) != FALSE))
             {
-                ApplyTitleBarTheme(hwnd, state->theme, wParam != FALSE);
+                _restoreFocusWindow = focused;
             }
-            return 0;
         }
-        case WM_GETMINMAXINFO:
+
+        const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_PROPERTIES);
+        const UINT dpi             = owner ? ::GetDpiForWindow(owner) : USER_DEFAULT_SCREEN_DPI;
+        const int w                = UiMetrics::ScaleDip(dpi, 720);
+        const int h                = UiMetrics::ScaleDip(dpi, 520);
+
+        RECT ownerRc{};
+        if (owner && ::GetWindowRect(owner, &ownerRc) == 0)
         {
-            auto* info = reinterpret_cast<MINMAXINFO*>(lParam);
-            if (info)
+            owner = nullptr;
+        }
+
+        int x = CW_USEDEFAULT;
+        int y = CW_USEDEFAULT;
+        if (owner)
+        {
+            const int ownerW = std::max(0l, ownerRc.right - ownerRc.left);
+            const int ownerH = std::max(0l, ownerRc.bottom - ownerRc.top);
+            x                = ownerRc.left + std::max(0, (ownerW - w) / 2);
+            y                = ownerRc.top + std::max(0, (ownerH - h) / 2);
+        }
+
+        const HWND hwnd = ::CreateWindowExW(0,
+                                            kItemPropertiesWindowClass,
+                                            caption.c_str(),
+                                            WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+                                            x,
+                                            y,
+                                            w,
+                                            h,
+                                            owner,
+                                            nullptr,
+                                            ::GetModuleHandleW(nullptr),
+                                            this);
+        if (! hwnd)
+        {
+            return HRESULT_FROM_WIN32(::GetLastError());
+        }
+
+        const int showCmd = _settings ? WindowPlacementPersistence::Restore(*_settings, kItemPropertiesWindowId, hwnd) : SW_SHOWNORMAL;
+        ::ShowWindow(hwnd, showCmd);
+        return S_OK;
+    }
+
+    [[nodiscard]] HWND GetHwnd() const noexcept
+    {
+        return _hWnd.get();
+    }
+
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        ItemPropertiesWindow* self = reinterpret_cast<ItemPropertiesWindow*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        if (msg == WM_NCCREATE)
+        {
+            const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+            self               = create ? static_cast<ItemPropertiesWindow*>(create->lpCreateParams) : nullptr;
+            ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            if (self)
             {
-                static_cast<void>(WindowMaximizeBehavior::ApplyVerticalMaximize(hwnd, *info));
+                self->_hWnd.reset(hwnd);
             }
-            return 0;
         }
-        case WM_ERASEBKGND:
+
+        if (! self)
         {
-            if (state && state->backgroundBrush)
+            return ::DefWindowProcW(hwnd, msg, wParam, lParam);
+        }
+
+        ++self->_dispatchDepth;
+        const auto finishDispatch = wil::scope_exit([self]() noexcept
+        {
+            if (self->_dispatchDepth > 0u)
+            {
+                --self->_dispatchDepth;
+            }
+            if (self->_dispatchDepth == 0u && self->_deletePending)
+            {
+                delete self;
+            }
+        });
+
+        return self->WindowProc(hwnd, msg, wParam, lParam);
+    }
+
+#ifdef ENABLE_TESTS
+    [[nodiscard]] bool DebugGetSnapshot(ItemPropertiesWindowDebugSnapshot& out) const noexcept
+    {
+        const HWND hwnd             = _hWnd.get();
+        out.usesDxUiHost            = hwnd && ::IsWindow(hwnd) != FALSE;
+        out.visibleChildWindowCount = hwnd ? CountVisibleItemPropertiesChildWindows(hwnd) : 0u;
+        out.sectionCount            = _doc.sections.size();
+        out.fieldCount              = _fieldCount;
+        RedSalamander::DxUi::TextFieldDebugMultilineState multilineState{};
+        if (_body && _body->DebugGetMultilineState(_dxHost, multilineState))
+        {
+            out.bodyFirstVisibleLine    = multilineState.firstVisibleLine;
+            out.bodyVisibleLineCount    = multilineState.visibleLineCount;
+            out.bodyTotalLineCount      = multilineState.totalLineCount;
+            out.bodyCanScrollVertically = multilineState.canScrollVertically;
+        }
+        out.renderCount        = _dxHost.DebugGetRenderCount();
+        out.resizeCount        = _dxHost.DebugGetResizeCount();
+        out.resizeFailureCount = _dxHost.DebugGetResizeFailureCount();
+        out.contentText        = _contentText;
+        return out.usesDxUiHost;
+    }
+
+    [[nodiscard]] bool DebugScrollByWheelDetents(int detents) noexcept
+    {
+        const HWND hwnd = _hWnd.get();
+        if (! hwnd || ::IsWindow(hwnd) == FALSE || ! _body)
+        {
+            return false;
+        }
+
+        if (::IsIconic(hwnd))
+        {
+            ::ShowWindow(hwnd, SW_RESTORE);
+        }
+
+        const float wheelDelta = detents > 0 ? static_cast<float>(WHEEL_DELTA) : -static_cast<float>(WHEEL_DELTA);
+        const int stepCount    = detents > 0 ? detents : -detents;
+        for (int remaining = stepCount; remaining > 0; --remaining)
+        {
+            if (! _body->OnMouseWheel(_dxHost, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0u))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+#endif
+
+private:
+    [[nodiscard]] LRESULT WindowProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        bool handled           = false;
+        const LRESULT dxResult = _dxHost.HandleMessage(hwnd, msg, wParam, lParam, handled);
+        if (msg == WM_NCDESTROY)
+        {
+            OnNcDestroy(hwnd);
+            if (handled)
+            {
+                return dxResult;
+            }
+        }
+        if (handled)
+        {
+            return dxResult;
+        }
+
+        switch (msg)
+        {
+            case WM_CREATE: return OnCreate(hwnd);
+            case WM_SIZE: return 0;
+            case WM_WINDOWPOSCHANGED:
+            {
+                const auto* windowPos = reinterpret_cast<const WINDOWPOS*>(lParam);
+                if (windowPos && (windowPos->flags & SWP_NOSIZE) == 0)
+                {
+                    LayoutControls();
+                }
+                return ::DefWindowProcW(hwnd, msg, wParam, lParam);
+            }
+            case WM_DPICHANGED: return OnDpiChanged(hwnd, wParam, lParam);
+            case WM_ACTIVATE: ApplyTitleBarTheme(hwnd, _theme, wParam != FALSE); return 0;
+            case WM_GETMINMAXINFO:
+            {
+                if (auto* info = reinterpret_cast<MINMAXINFO*>(lParam))
+                {
+                    static_cast<void>(WindowMaximizeBehavior::ApplyVerticalMaximize(hwnd, *info));
+                }
+                return 0;
+            }
+            case WM_ERASEBKGND:
             {
                 RECT rc{};
                 if (::GetClientRect(hwnd, &rc) != 0)
                 {
-                    ::FillRect(reinterpret_cast<HDC>(wParam), &rc, state->backgroundBrush.get());
+                    ::FillRect(reinterpret_cast<HDC>(wParam), &rc, _backgroundBrush.get());
                     return TRUE;
                 }
+                return FALSE;
             }
-            break;
+            case WM_CLOSE: ::DestroyWindow(hwnd); return 0;
         }
-        case WM_DRAWITEM:
-        {
-            if (state)
-            {
-                const auto* dis = reinterpret_cast<const DRAWITEMSTRUCT*>(lParam);
-                if (dis && dis->CtlType == ODT_BUTTON)
-                {
-                    ThemedControls::DrawThemedPushButton(*dis, state->theme);
-                    return TRUE;
-                }
-            }
-            break;
-        }
-        case WM_COMMAND:
-        {
-            if (LOWORD(wParam) == kItemPropertiesCloseId)
-            {
-                ::DestroyWindow(hwnd);
-                return 0;
-            }
-            break;
-        }
-        case WM_CLOSE:
-        {
-            ::DestroyWindow(hwnd);
-            return 0;
-        }
-        case WM_NCDESTROY:
-        {
-            auto* toDelete = state;
-            ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
-            if (toDelete && toDelete->settings)
-            {
-                WindowPlacementPersistence::Save(*toDelete->settings, kItemPropertiesWindowId, hwnd);
 
-                const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kSettingsAppId, *toDelete->settings);
-                if (FAILED(saveHr))
-                {
-                    const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kSettingsAppId);
-                    Debug::Error(L"SaveSettings failed (hr=0x{:08X}) path={}", static_cast<unsigned long>(saveHr), settingsPath.wstring());
-                }
+        return ::DefWindowProcW(hwnd, msg, wParam, lParam);
+    }
+
+    [[nodiscard]] LRESULT OnCreate(HWND hwnd) noexcept
+    {
+        _dpi = ::GetDpiForWindow(hwnd);
+        _backgroundBrush.reset(::CreateSolidBrush(_theme.windowBackground));
+        if (! _dxHost.Attach(hwnd))
+        {
+            Debug::Error(L"ItemProperties: failed to attach DxUi host.");
+            return -1;
+        }
+        _dxHost.SetTheme(MakeAppThemeDxPalette(_theme, _theme.windowBackground));
+        BuildUi();
+        LayoutControls();
+        ApplyWindowChromeTheme(hwnd, _theme, WindowBackdropTarget::Tool, ::GetActiveWindow() == hwnd);
+        return 0;
+    }
+
+    [[nodiscard]] LRESULT OnDpiChanged(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        _dpi = static_cast<UINT>(wParam);
+        LayoutControls();
+        if (const auto* rc = reinterpret_cast<const RECT*>(lParam))
+        {
+            ::SetWindowPos(
+                hwnd, nullptr, rc->left, rc->top, std::max(0l, rc->right - rc->left), std::max(0l, rc->bottom - rc->top), SWP_NOZORDER | SWP_NOACTIVATE);
+        }
+        return 0;
+    }
+
+    void BuildUi()
+    {
+        auto root = std::make_unique<RedSalamander::DxUi::Panel>();
+        _root     = root.get();
+
+        _body = root->AddChild<RedSalamander::DxUi::TextField>(_contentText);
+        _body->SetMultiline(true);
+        _body->SetReadOnly(true);
+
+        _closeButton = root->AddChild<RedSalamander::DxUi::Button>(LoadStringResource(nullptr, IDS_PROPERTIES_BTN_CLOSE));
+        _closeButton->SetPrimary(true);
+        _closeButton->SetMnemonic(L'o');
+        _closeButton->SetOnClick([this]()
+        {
+            if (const HWND hwnd = _hWnd.get(); hwnd && ::IsWindow(hwnd) != FALSE)
+            {
+                ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
             }
-            delete toDelete;
-            return 0;
+        });
+
+        _dxHost.SetRoot(std::move(root));
+        _dxHost.SetDefaultButton(_closeButton);
+        _dxHost.SetCancelButton(_closeButton);
+        // Warm the hidden native text bridge once so the read-only multiline body
+        // exposes readable UIA text even though final keyboard focus stays on Close.
+        _dxHost.SetFocusControl(_body);
+        _dxHost.SetFocusControl(_closeButton);
+    }
+
+    void LayoutControls() noexcept
+    {
+        if (! _root || ! _body || ! _closeButton)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
+        const float margin       = static_cast<float>(UiMetrics::ScaleDip(_dpi, 12));
+        const float buttonH      = static_cast<float>(UiMetrics::ScaleDip(_dpi, 30));
+        const float buttonW      = static_cast<float>((std::max)(UiMetrics::ScaleDip(_dpi, 100), UiMetrics::ScaleDip(_dpi, 92)));
+
+        _root->SetBounds(client);
+
+        const float buttonTop = (std::max)(margin, client.bottom - margin - buttonH);
+        _closeButton->SetBounds(D2D1::RectF(client.right - margin - buttonW, buttonTop, client.right - margin, buttonTop + buttonH));
+        _body->SetBounds(D2D1::RectF(client.left + margin, client.top + margin, client.right - margin, buttonTop - margin));
+        _dxHost.Invalidate();
+    }
+
+    void OnNcDestroy(HWND hwnd) noexcept
+    {
+        ::SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+
+        if (_settings)
+        {
+            WindowPlacementPersistence::Save(*_settings, kItemPropertiesWindowId, hwnd);
+            const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchema(kSettingsAppId, *_settings);
+            if (FAILED(saveHr))
+            {
+                const std::filesystem::path settingsPath = Common::Settings::GetSettingsPath(kSettingsAppId);
+                Debug::Error(L"SaveSettings failed (hr=0x{:08X}) path={}", static_cast<unsigned long>(saveHr), settingsPath.wstring());
+            }
+        }
+
+        if (_ownerWindow && ::IsWindow(_ownerWindow) != FALSE)
+        {
+            static_cast<void>(::SetActiveWindow(_ownerWindow));
+
+            const HWND restoreFocus = (_restoreFocusWindow && ::IsWindow(_restoreFocusWindow) != FALSE &&
+                                       (_restoreFocusWindow == _ownerWindow || ::IsChild(_ownerWindow, _restoreFocusWindow) != FALSE))
+                                          ? _restoreFocusWindow
+                                          : _ownerWindow;
+            static_cast<void>(::SetFocus(restoreFocus));
+        }
+
+        _hWnd.release();
+        _dxHost.Detach();
+        _deletePending = true;
+        if (_dispatchDepth == 0u)
+        {
+            delete this;
         }
     }
 
-    return ::DefWindowProcW(hwnd, msg, wParam, lParam);
-}
+    wil::unique_hwnd _hWnd;
+    HWND _ownerWindow                     = nullptr;
+    HWND _restoreFocusWindow              = nullptr;
+    Common::Settings::Settings* _settings = nullptr;
+    AppTheme _theme{};
+    ItemPropertiesDocument _doc;
+    std::wstring _contentText;
+    size_t _fieldCount    = 0u;
+    size_t _dispatchDepth = 0u;
+    bool _deletePending   = false;
+    UINT _dpi             = USER_DEFAULT_SCREEN_DPI;
+    wil::unique_hbrush _backgroundBrush;
+    RedSalamander::DxUi::WindowHost _dxHost;
+    RedSalamander::DxUi::Panel* _root         = nullptr;
+    RedSalamander::DxUi::TextField* _body     = nullptr;
+    RedSalamander::DxUi::Button* _closeButton = nullptr;
+};
 
 [[nodiscard]] bool EnsureItemPropertiesWindowClassRegistered() noexcept
 {
@@ -516,7 +620,7 @@ LRESULT CALLBACK ItemPropertiesWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
     {
         WNDCLASSEXW wc{};
         wc.cbSize        = sizeof(wc);
-        wc.lpfnWndProc   = ItemPropertiesWndProc;
+        wc.lpfnWndProc   = ItemPropertiesWindow::WndProc;
         wc.hInstance     = ::GetModuleHandleW(nullptr);
         wc.hCursor       = ::LoadCursorW(nullptr, IDC_ARROW);
         wc.hIcon         = ::LoadIconW(wc.hInstance, MAKEINTRESOURCEW(IDI_REDSALAMANDER));
@@ -531,48 +635,18 @@ LRESULT CALLBACK ItemPropertiesWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARA
 
 HRESULT ShowItemPropertiesWindow(HWND owner, Common::Settings::Settings* settings, const AppTheme& theme, ItemPropertiesDocument doc) noexcept
 {
-    if (! EnsureItemPropertiesWindowClassRegistered())
+    auto* window = new (std::nothrow) ItemPropertiesWindow(settings, theme, std::move(doc));
+    if (! window)
     {
-        return HRESULT_FROM_WIN32(::GetLastError());
+        return E_OUTOFMEMORY;
     }
 
-    const std::wstring caption = LoadStringResource(nullptr, IDS_CAPTION_PROPERTIES);
-
-    auto state      = std::make_unique<ItemPropertiesWindowState>(theme, std::move(doc));
-    state->settings = settings;
-    auto* raw       = state.get();
-
-    const UINT dpi = owner ? ::GetDpiForWindow(owner) : USER_DEFAULT_SCREEN_DPI;
-    const int w    = ThemedControls::ScaleDip(dpi, 720);
-    const int h    = ThemedControls::ScaleDip(dpi, 520);
-
-    RECT ownerRc{};
-    if (owner && ::GetWindowRect(owner, &ownerRc) == 0)
+    const HRESULT hr = window->CreateAndShow(owner);
+    if (FAILED(hr))
     {
-        owner = nullptr;
+        delete window;
     }
-
-    int x = CW_USEDEFAULT;
-    int y = CW_USEDEFAULT;
-    if (owner)
-    {
-        const int ownerW = std::max(0l, ownerRc.right - ownerRc.left);
-        const int ownerH = std::max(0l, ownerRc.bottom - ownerRc.top);
-        x                = ownerRc.left + std::max(0, (ownerW - w) / 2);
-        y                = ownerRc.top + std::max(0, (ownerH - h) / 2);
-    }
-
-    HWND hwnd =
-        ::CreateWindowExW(0, kItemPropertiesWindowClass, caption.c_str(), WS_OVERLAPPEDWINDOW, x, y, w, h, nullptr, nullptr, ::GetModuleHandleW(nullptr), raw);
-    if (! hwnd)
-    {
-        return HRESULT_FROM_WIN32(::GetLastError());
-    }
-
-    static_cast<void>(state.release());
-    const int showCmd = settings ? WindowPlacementPersistence::Restore(*settings, kItemPropertiesWindowId, hwnd) : SW_SHOWNORMAL;
-    ShowWindow(hwnd, showCmd);
-    return S_OK;
+    return hr;
 }
 } // namespace
 
@@ -587,13 +661,6 @@ HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesyste
     if (path.empty())
     {
         return E_INVALIDARG;
-    }
-
-    // Win32 filesystem: use the shell property sheet for maximum detail.
-    if (CompareStringOrdinal(state.pluginId.c_str(), -1, L"builtin/file-system", -1, TRUE) == CSTR_EQUAL)
-    {
-        ::SHObjectProperties(_hWnd.get(), SHOP_FILEPATH, path.c_str(), nullptr);
-        return S_OK;
     }
 
     wil::com_ptr<IFileSystemIO> io;
@@ -623,3 +690,35 @@ HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesyste
 
     return ShowItemPropertiesWindow(_hWnd.get(), _settings, _theme, doc.value());
 }
+
+#ifdef ENABLE_TESTS
+HWND GetItemPropertiesWindowHandle() noexcept
+{
+    const HWND hwnd = ::FindWindowW(kItemPropertiesWindowClass, nullptr);
+    return (hwnd && ::IsWindow(hwnd) != FALSE) ? hwnd : nullptr;
+}
+
+bool DebugGetItemPropertiesWindowSnapshot(ItemPropertiesWindowDebugSnapshot& out) noexcept
+{
+    const HWND hwnd = GetItemPropertiesWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    auto* window = reinterpret_cast<ItemPropertiesWindow*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return window ? window->DebugGetSnapshot(out) : false;
+}
+
+bool DebugScrollItemPropertiesWindowByWheelDetents(int detents) noexcept
+{
+    const HWND hwnd = GetItemPropertiesWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    auto* window = reinterpret_cast<ItemPropertiesWindow*>(::GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return window ? window->DebugScrollByWheelDetents(detents) : false;
+}
+#endif

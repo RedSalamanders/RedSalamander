@@ -1,14 +1,35 @@
 #include "Framework.h"
 
 #include "CompareDirectoriesWindow.Internal.h"
+#include "DxUi/DxUi.Typography.h"
+#include "LocalizationManager.h"
 
 namespace CompareDirectoriesWindowInternal
 {
 // UI-thread-only registry for theme refresh.
 std::vector<HWND> g_compareDirectoriesWindows;
 
-using CreateFactoryFunc   = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, void**);
-using CreateFactoryExFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+using CreateFactoryFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+
+constexpr wchar_t kCompareProgressSpinnerStateProp[] = L"RedSalamander.CompareDirectories.ProgressSpinnerState";
+constexpr wchar_t kCompareProgressSpinnerClassName[] = L"RedSalamander.CompareDirectories.ProgressSpinner";
+
+[[nodiscard]] bool EnsureCompareProgressSpinnerWindowClass(HINSTANCE instance) noexcept
+{
+    WNDCLASSW existing{};
+    if (GetClassInfoW(instance, kCompareProgressSpinnerClassName, &existing) != FALSE)
+    {
+        return true;
+    }
+
+    WNDCLASSW wc{};
+    wc.lpfnWndProc   = &CompareProgressSpinnerWndProc;
+    wc.hInstance     = instance;
+    wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+    wc.hbrBackground = nullptr;
+    wc.lpszClassName = kCompareProgressSpinnerClassName;
+    return RegisterClassW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
+}
 
 void LogComparePerfStats(std::wstring_view reason, const std::shared_ptr<CompareDirectoriesSession>& session, HRESULT resultHr) noexcept
 {
@@ -49,6 +70,25 @@ void LogComparePerfStats(std::wstring_view reason, const std::shared_ptr<Compare
                 stats.directoryInfoCache.cacheMisses,
                 stats.directoryInfoCache.enumerations,
                 stats.directoryInfoCache.evictions);
+}
+
+template <typename T> void QueueCompareCleanup(std::unique_ptr<T> cleanup, std::wstring_view label) noexcept
+{
+    if (! cleanup)
+    {
+        return;
+    }
+
+    if (TrySubmitUniqueToThreadpool(cleanup))
+    {
+        return;
+    }
+
+    const DWORD lastError = GetLastError();
+    static_cast<void>(cleanup.release());
+    Debug::Warning(L"CompareDirectories: {} scheduling failed (gle=0x{:08X}); abandoning deferred cleanup to keep UI teardown non-blocking.",
+                   label,
+                   static_cast<unsigned long>(lastError));
 }
 
 struct CreatedFileSystemInstance
@@ -107,8 +147,7 @@ struct CreatedFileSystemInstance
 
 #pragma warning(push)
 #pragma warning(disable : 4191) // unsafe conversion from FARPROC
-    const auto createFactory   = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(module.get(), "RedSalamanderCreate"));
-    const auto createFactoryEx = reinterpret_cast<CreateFactoryExFunc>(GetProcAddress(module.get(), "RedSalamanderCreateEx"));
+    const auto createFactory = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(module.get(), "RedSalamanderCreate"));
 #pragma warning(pop)
     if (! createFactory)
     {
@@ -120,26 +159,18 @@ struct CreatedFileSystemInstance
     options.debugLevel = DEBUG_LEVEL_NONE;
 
     wil::com_ptr<IFileSystem> fileSystem;
-    HRESULT createHr = E_FAIL;
-    if (entry->factoryPluginId.empty())
+    const std::wstring requestedPluginId = entry->factoryPluginId.empty() ? entry->id : entry->factoryPluginId;
+    if (requestedPluginId.empty())
     {
-        createHr = createFactory(__uuidof(IFileSystem), &options, GetHostServices(), fileSystem.put_void());
-    }
-    else if (createFactoryEx)
-    {
-        createHr = createFactoryEx(__uuidof(IFileSystem), &options, GetHostServices(), entry->factoryPluginId.c_str(), fileSystem.put_void());
-    }
-    else
-    {
-        Debug::Error(L"CompareDirectories: Missing export RedSalamanderCreateEx in '{}' for multi-plugin DLL (pluginId={}).", entry->path.wstring(), entry->id);
         return std::nullopt;
     }
+    const HRESULT createHr = createFactory(__uuidof(IFileSystem), &options, GetHostServices(), requestedPluginId.c_str(), fileSystem.put_void());
 
     if (FAILED(createHr) || ! fileSystem)
     {
         Debug::Error(L"CompareDirectories: RedSalamanderCreate failed for '{}' (pluginId={} hr=0x{:08X}).",
                      entry->path.wstring(),
-                     entry->id,
+                     requestedPluginId,
                      static_cast<unsigned long>(createHr));
         return std::nullopt;
     }
@@ -388,6 +419,19 @@ LRESULT CALLBACK CompareDirectoriesWindow::WndProcThunk(HWND hwnd, UINT msg, WPA
         return DefWindowProcW(hwnd, msg, wp, lp);
     }
 
+    ++self->_dispatchDepth;
+    const auto finishDispatch = wil::scope_exit([self]() noexcept
+    {
+        if (self->_dispatchDepth > 0u)
+        {
+            --self->_dispatchDepth;
+        }
+        if (self->_dispatchDepth == 0u && self->_deletePending)
+        {
+            delete self;
+        }
+    });
+
     return self->WndProc(hwnd, msg, wp, lp);
 }
 
@@ -429,8 +473,6 @@ LRESULT CompareDirectoriesWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
                 ApplyTitleBarTheme(_hWnd.get(), _theme, windowActive);
             }
             return 0;
-        case WM_MEASUREITEM: OnMeasureItem(reinterpret_cast<MEASUREITEMSTRUCT*>(lp)); return TRUE;
-        case WM_DRAWITEM: OnDrawItem(reinterpret_cast<DRAWITEMSTRUCT*>(lp)); return TRUE;
         case WM_CTLCOLORSTATIC:
         {
             const LRESULT result = OnCtlColorStatic(reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
@@ -440,6 +482,18 @@ LRESULT CompareDirectoriesWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
             }
             break;
         }
+        case WM_SYSKEYDOWN:
+            if ((wp == VK_F10 || wp == VK_MENU) && _usesDxMenuBar)
+            {
+                return FocusFirstDxMenuBarItem() ? 0 : DefWindowProcW(hwnd, msg, wp, lp);
+            }
+            break;
+        case WM_SYSCHAR:
+            if (_usesDxMenuBar && wp >= 0x20u && ActivateDxMenuBarMnemonic(static_cast<wchar_t>(wp)))
+            {
+                return 0;
+            }
+            break;
         case WM_LBUTTONDOWN: OnLButtonDown({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
         case WM_LBUTTONDBLCLK: OnLButtonDblClk({GET_X_LPARAM(lp), GET_Y_LPARAM(lp)}); return 0;
         case WM_LBUTTONUP: OnLButtonUp(); return 0;
@@ -495,7 +549,7 @@ bool CompareDirectoriesWindow::Create(HWND owner) noexcept
         placementOwner = nullptr;
     }
 
-    wil::unique_hmenu menu(LoadMenuW(instance, MAKEINTRESOURCEW(IDR_COMPARE_DIRECTORIES_MENU)));
+    wil::unique_hmenu menu(Localization::LoadMenuResource(instance, IDR_COMPARE_DIRECTORIES_MENU));
 
     int x = CW_USEDEFAULT;
     int y = CW_USEDEFAULT;
@@ -536,7 +590,7 @@ bool CompareDirectoriesWindow::Create(HWND owner) noexcept
                                    y,
                                    w,
                                    h,
-                                   placementOwner,
+                                   nullptr,
                                    menu.get(),
                                    instance,
                                    this);
@@ -563,13 +617,9 @@ bool CompareDirectoriesWindow::OnCreate(HWND hwnd) noexcept
         _restoreShowCmd = WindowPlacementPersistence::Restore(*_settings, kCompareDirectoriesWindowId, hwnd);
     }
 
-    if (HMENU menu = GetMenu(hwnd))
-    {
-        UpdateViewMenuChecks();
-    }
-
     ApplyTheme();
     CreateChildWindows(hwnd);
+    UpdateViewMenuChecks();
     ApplyTheme();
     Layout();
     ShowOptionsPanel(true);
@@ -615,6 +665,9 @@ void CompareDirectoriesWindow::OnDestroy() noexcept
     _folderWindow.SetPaneDetailsTextProvider(FolderWindow::Pane::Right, {});
     _folderWindow.SetFileOperationCompletedCallback({});
 
+    DetachOptionsDxButtonHosts();
+    DetachOptionsDxStaticHosts();
+    _optionsDxUi.reset();
     _optionsUi = {};
     _optionsCards.clear();
     _optionsScrollOffset = 0;
@@ -622,10 +675,16 @@ void CompareDirectoriesWindow::OnDestroy() noexcept
 
     _optionsDlg.reset();
     _scanProgressText.reset();
+    if (_scanProgressBar && IsWindow(_scanProgressBar.get()) != FALSE)
+    {
+        RemovePropW(_scanProgressBar.get(), kCompareProgressSpinnerStateProp);
+    }
     _scanProgressBar.reset();
     _bannerTitle.reset();
+    DetachDxChromeHosts();
     _bannerOptionsButton.reset();
     _bannerRescanButton.reset();
+    _menuHandle.reset();
 
     if (_session || _fsLeft || _fsRight || _leftBaseFs || _rightBaseFs || _leftBaseModule || _rightBaseModule)
     {
@@ -655,24 +714,7 @@ void CompareDirectoriesWindow::OnDestroy() noexcept
         cleanup->leftModule  = std::move(_leftBaseModule);
         cleanup->rightModule = std::move(_rightBaseModule);
 
-        CompareDestroyCleanup* raw = cleanup.release();
-        const BOOL ok              = TrySubmitThreadpoolCallback([](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept {
-            std::unique_ptr<CompareDestroyCleanup> owned(static_cast<CompareDestroyCleanup*>(context));
-        }, raw, nullptr);
-
-        if (! ok)
-        {
-            // Never block UI teardown if background cleanup scheduling fails (rare).
-            // Fall back to a detached std::thread, and leak on failure.
-            try
-            {
-                std::thread([raw]() noexcept { std::unique_ptr<CompareDestroyCleanup> owned(static_cast<CompareDestroyCleanup*>(raw)); }).detach();
-            }
-            catch (const std::system_error& ex)
-            {
-                Debug::Error(L"CompareDirectories: cleanup fallback thread creation failed: {}", ex.code().value());
-            }
-        }
+        QueueCompareCleanup(std::move(cleanup), L"window destroy cleanup");
     }
 
     _folderWindow.Destroy();
@@ -691,7 +733,11 @@ void CompareDirectoriesWindow::OnNcDestroy() noexcept
         SetWindowLongPtrW(_hWnd.get(), GWLP_USERDATA, 0);
         _hWnd.release();
     }
-    delete this;
+    _deletePending = true;
+    if (_dispatchDepth == 0u)
+    {
+        delete this;
+    }
 }
 
 void CompareDirectoriesWindow::OnSize() noexcept
@@ -1345,42 +1391,15 @@ void CompareDirectoriesWindow::UpdateTheme(const AppTheme& theme) noexcept
 
 void CompareDirectoriesWindow::ApplyTheme() noexcept
 {
-    _uiFont = CreateMenuFontForDpi(_dpi);
-    _uiBoldFont.reset();
-    _uiItalicFont.reset();
-    _bannerTitleFont.reset();
-    if (_uiFont)
-    {
-        LOGFONTW lf{};
-        if (GetObjectW(_uiFont.get(), sizeof(lf), &lf) == sizeof(lf))
-        {
-            LOGFONTW bold = lf;
-            bold.lfWeight = FW_SEMIBOLD;
-            _uiBoldFont.reset(CreateFontIndirectW(&bold));
-
-            LOGFONTW italic = lf;
-            italic.lfItalic = TRUE;
-            _uiItalicFont.reset(CreateFontIndirectW(&italic));
-
-            // Slightly larger banner font for "Compare Folder" title (keep face/DPI scaling consistent).
-            LOGFONTW banner         = bold;
-            const float bannerScale = 1.25f;
-            banner.lfHeight         = static_cast<LONG>(std::lround(static_cast<float>(banner.lfHeight) * bannerScale));
-            _bannerTitleFont.reset(CreateFontIndirectW(&banner));
-        }
-    }
-
     _backgroundBrush.reset(CreateSolidBrush(_theme.windowBackground));
     _menuBackgroundBrush.reset(CreateSolidBrush(_theme.menu.background));
     _optionsBackgroundBrush.reset(CreateSolidBrush(_theme.windowBackground));
 
-    InvalidateSpinnerPens();
-
-    const COLORREF surface = ThemedControls::GetControlSurfaceColor(_theme);
+    const COLORREF surface = UiMetrics::GetControlSurfaceColor(_theme);
     _optionsCardBrush.reset(CreateSolidBrush(surface));
-    _optionsInputBackgroundColor         = ThemedControls::BlendColor(surface, _theme.windowBackground, _theme.dark ? 50 : 30, 255);
-    _optionsInputFocusedBackgroundColor  = ThemedControls::BlendColor(_optionsInputBackgroundColor, _theme.menu.text, _theme.dark ? 20 : 16, 255);
-    _optionsInputDisabledBackgroundColor = ThemedControls::BlendColor(_theme.windowBackground, _optionsInputBackgroundColor, _theme.dark ? 70 : 40, 255);
+    _optionsInputBackgroundColor         = UiMetrics::BlendColor(surface, _theme.windowBackground, _theme.dark ? 50 : 30, 255);
+    _optionsInputFocusedBackgroundColor  = UiMetrics::BlendColor(_optionsInputBackgroundColor, _theme.menu.text, _theme.dark ? 20 : 16, 255);
+    _optionsInputDisabledBackgroundColor = UiMetrics::BlendColor(_theme.windowBackground, _optionsInputBackgroundColor, _theme.dark ? 70 : 40, 255);
     _optionsInputBrush.reset(CreateSolidBrush(_optionsInputBackgroundColor));
     _optionsInputFocusedBrush.reset(CreateSolidBrush(_optionsInputFocusedBackgroundColor));
     _optionsInputDisabledBrush.reset(CreateSolidBrush(_optionsInputDisabledBackgroundColor));
@@ -1391,23 +1410,6 @@ void CompareDirectoriesWindow::ApplyTheme() noexcept
     _optionsFrameStyle.inputFocusedBackgroundColor  = _optionsInputFocusedBackgroundColor;
     _optionsFrameStyle.inputDisabledBackgroundColor = _optionsInputDisabledBackgroundColor;
 
-    if (_bannerTitle)
-    {
-        const HFONT bannerFont = _bannerTitleFont ? _bannerTitleFont.get() : (_uiBoldFont ? _uiBoldFont.get() : _uiFont.get());
-        SendMessageW(_bannerTitle.get(), WM_SETFONT, reinterpret_cast<WPARAM>(bannerFont), TRUE);
-    }
-    if (_bannerOptionsButton)
-    {
-        SendMessageW(_bannerOptionsButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
-    }
-    if (_bannerRescanButton)
-    {
-        SendMessageW(_bannerRescanButton.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
-    }
-    if (_scanProgressText)
-    {
-        SendMessageW(_scanProgressText.get(), WM_SETFONT, reinterpret_cast<WPARAM>(_uiFont.get()), TRUE);
-    }
     if (_scanProgressBar)
     {
         InvalidateRect(_scanProgressBar.get(), nullptr, FALSE);
@@ -1433,12 +1435,14 @@ void CompareDirectoriesWindow::ApplyTheme() noexcept
     }
 
     ApplyOptionsDialogTheme();
+    ApplyDxChromeTheme();
+    SyncDxChrome();
 
     if (_hWnd)
     {
         const bool windowActive = GetActiveWindow() == _hWnd.get();
         ApplyTitleBarTheme(_hWnd.get(), _theme, windowActive);
-        PrepareThemedMenu();
+        ApplyWindowBackdropTheme(_hWnd.get(), _theme, WindowBackdropTarget::Primary);
         RedrawWindow(_hWnd.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN);
     }
 }
@@ -1455,13 +1459,6 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
 {
     FolderView::RegisterWndClass(GetModuleHandleW(nullptr));
 
-    {
-        INITCOMMONCONTROLSEX icc{};
-        icc.dwSize = sizeof(icc);
-        icc.dwICC  = ICC_PROGRESS_CLASS;
-        InitCommonControlsEx(&icc);
-    }
-
     const HINSTANCE instance             = GetModuleHandleW(nullptr);
     const std::wstring bannerTitleText   = LoadStringResource(nullptr, IDS_COMPARE_BANNER_TITLE);
     const std::wstring bannerOptionsText = LoadStringResource(nullptr, IDS_COMPARE_BANNER_OPTIONS_ELLIPSIS);
@@ -1472,7 +1469,7 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
     _bannerOptionsButton.reset(CreateWindowExW(0,
                                                L"Button",
                                                bannerOptionsText.c_str(),
-                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                                               WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                                0,
                                                0,
                                                10,
@@ -1485,7 +1482,7 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
     _bannerRescanButton.reset(CreateWindowExW(0,
                                               L"Button",
                                               bannerRescanText.c_str(),
-                                              WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW,
+                                              WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
                                               0,
                                               0,
                                               10,
@@ -1494,12 +1491,6 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
                                               reinterpret_cast<HMENU>(IDM_COMPARE_RESCAN),
                                               instance,
                                               nullptr));
-
-    if (! _theme.highContrast)
-    {
-        ThemedControls::EnableOwnerDrawButton(hwnd, IDM_COMPARE_OPTIONS);
-        ThemedControls::EnableOwnerDrawButton(hwnd, IDM_COMPARE_RESCAN);
-    }
 
     _scanProgressText.reset(CreateWindowExW(0,
                                             L"Static",
@@ -1513,11 +1504,18 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
                                             reinterpret_cast<HMENU>(kScanProgressTextId),
                                             instance,
                                             nullptr));
-    _scanProgressBar.reset(
-        CreateWindowExW(0, L"Static", nullptr, WS_CHILD, 0, 0, 10, 10, hwnd, reinterpret_cast<HMENU>(kScanProgressBarId), instance, nullptr));
+    if (EnsureCompareProgressSpinnerWindowClass(instance))
+    {
+        _scanProgressBar.reset(CreateWindowExW(
+            0, kCompareProgressSpinnerClassName, nullptr, WS_CHILD, 0, 0, 10, 10, hwnd, reinterpret_cast<HMENU>(kScanProgressBarId), instance, nullptr));
+    }
     if (_scanProgressBar)
     {
-        SetWindowSubclass(_scanProgressBar.get(), CompareProgressSpinnerSubclassProc, kCompareProgressSpinnerSubclassId, reinterpret_cast<DWORD_PTR>(this));
+        if (SetPropW(_scanProgressBar.get(), kCompareProgressSpinnerStateProp, this) == 0)
+        {
+            Debug::ErrorWithLastError(L"CompareDirectories: failed to attach progress spinner host state.");
+            _scanProgressBar.reset();
+        }
     }
 
     if (_scanProgressText)
@@ -1528,6 +1526,8 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
     {
         ShowWindow(_scanProgressBar.get(), SW_HIDE);
     }
+
+    static_cast<void>(EnsureDxChromeHosts());
 
     _folderWindow.Create(hwnd, 0, 0, 10, 10);
     _folderWindow.SetSettings(_settings);
@@ -1595,27 +1595,24 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
 
     _folderWindow.SetFileOperationCompletedCallback([this](const FolderWindow::FileOperationCompletedEvent& e) { OnFolderWindowFileOperationCompleted(e); });
 
-#pragma warning(push)
-    // pointer or reference to potentially throwing function passed to 'extern "C"' function
-#pragma warning(disable : 5039)
-    _optionsDlg.reset(
-        CreateDialogParamW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_COMPARE_DIRECTORIES_OPTIONS), hwnd, OptionsDlgProc, reinterpret_cast<LPARAM>(this)));
-#pragma warning(pop)
+    _optionsDlg.reset(RedSalamander::Win32Callback::CreateDialogParamResourceNoThrow(
+        GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_COMPARE_DIRECTORIES_OPTIONS), hwnd, OptionsDlgProc, reinterpret_cast<LPARAM>(this)));
 
     if (_optionsDlg)
     {
+        static_cast<void>(EnsureOptionsDxButtonHosts());
         ShowWindow(_optionsDlg.get(), SW_HIDE);
         LoadOptionsControlsFromSettings();
         ApplyOptionsDialogTheme();
     }
 }
 
-LRESULT CALLBACK CompareProgressSpinnerSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR subclassId, DWORD_PTR refData) noexcept
+LRESULT CALLBACK CompareProgressSpinnerWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    auto* self = reinterpret_cast<CompareDirectoriesWindow*>(refData);
+    auto* self = reinterpret_cast<CompareDirectoriesWindow*>(GetPropW(hwnd, kCompareProgressSpinnerStateProp));
     if (! self)
     {
-        return DefSubclassProc(hwnd, msg, wp, lp);
+        return DefWindowProcW(hwnd, msg, wp, lp);
     }
 
     switch (msg)
@@ -1633,13 +1630,13 @@ LRESULT CALLBACK CompareProgressSpinnerSubclassProc(HWND hwnd, UINT msg, WPARAM 
         }
         case WM_NCDESTROY:
         {
-            RemoveWindowSubclass(hwnd, CompareProgressSpinnerSubclassProc, subclassId);
-            break;
+            RemovePropW(hwnd, kCompareProgressSpinnerStateProp);
+            return DefWindowProcW(hwnd, msg, wp, lp);
         }
         default: break;
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return DefWindowProcW(hwnd, msg, wp, lp);
 }
 
 void CompareDirectoriesWindow::Layout() noexcept
@@ -1658,68 +1655,166 @@ void CompareDirectoriesWindow::Layout() noexcept
     const int w = std::max(0, static_cast<int>(rc.right - rc.left));
     const int h = std::max(0, static_cast<int>(rc.bottom - rc.top));
 
-    _clientSize = {w, h};
-
+    _clientSize                = {w, h};
     const int dpi              = static_cast<int>(_dpi);
-    const int bannerBaseHeight = std::clamp(MulDiv(42, dpi, USER_DEFAULT_SCREEN_DPI), 0, h);
-    const bool showStatus =
-        (_scanProgressText && IsWindowVisible(_scanProgressText.get()) != 0) || (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0);
-    const int statusHeight  = showStatus ? std::clamp(MulDiv(kScanStatusHeightDip, dpi, USER_DEFAULT_SCREEN_DPI), 0, std::max(0, h - bannerBaseHeight)) : 0;
+    const int menuBarHeight    = _usesDxMenuBar ? std::clamp(GetDxMenuBarVisibleHeightPx(), 0, h) : 0;
+    const int bannerBaseHeight = std::clamp(MulDiv(42, dpi, USER_DEFAULT_SCREEN_DPI), 0, std::max(0, h - menuBarHeight));
+    const bool showStatus      = (_dxScanProgressTextHostHwnd && IsWindowVisible(_dxScanProgressTextHostHwnd.get()) != 0) ||
+                                 (_scanProgressText && IsWindowVisible(_scanProgressText.get()) != 0) ||
+                                 (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0);
+    const int statusHeight =
+        showStatus ? std::clamp(MulDiv(kScanStatusHeightDip, dpi, USER_DEFAULT_SCREEN_DPI), 0, std::max(0, h - menuBarHeight - bannerBaseHeight)) : 0;
     const int bannerHeight  = bannerBaseHeight + statusHeight;
-    const int contentHeight = std::max(0, h - bannerHeight);
+    const int contentHeight = std::max(0, h - menuBarHeight - bannerHeight);
 
     const UINT flags = SWP_NOZORDER | SWP_NOACTIVATE;
 
-    // Banner layout
-    const int bannerPaddingX = std::max(0, MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI));
-    const int bannerPaddingY = std::max(0, MulDiv(6, dpi, USER_DEFAULT_SCREEN_DPI));
-    const int buttonW        = std::max(1, MulDiv(110, dpi, USER_DEFAULT_SCREEN_DPI));
-    const int buttonH        = std::max(1, MulDiv(28, dpi, USER_DEFAULT_SCREEN_DPI));
-    const int buttonGap      = std::max(0, MulDiv(10, dpi, USER_DEFAULT_SCREEN_DPI));
-    const int buttonY        = std::max(0, bannerPaddingY + (std::max(0, bannerHeight - (2 * bannerPaddingY) - buttonH) / 2));
+    {
+        Debug::Perf::Scope bannerLayoutPerf(L"compare.ui.banner_layout_us");
+        bannerLayoutPerf.SetValue0(static_cast<uint64_t>(w));
+        bannerLayoutPerf.SetValue1(static_cast<uint64_t>(h));
 
-    int rightX = std::max(0, w - bannerPaddingX);
-    if (_bannerRescanButton)
-    {
-        rightX = std::max(0, rightX - buttonW);
-        SetWindowPos(_bannerRescanButton.get(), nullptr, rightX, buttonY, buttonW, buttonH, flags);
-        rightX = std::max(0, rightX - buttonGap);
-    }
-    if (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0)
-    {
-        const int spinnerSize = std::clamp(buttonH, 1, std::max(1, bannerHeight));
-        rightX                = std::max(0, rightX - spinnerSize);
-        SetWindowPos(_scanProgressBar.get(), nullptr, rightX, buttonY, spinnerSize, spinnerSize, flags);
-        rightX = std::max(0, rightX - buttonGap);
-    }
-    if (_bannerOptionsButton)
-    {
-        rightX = std::max(0, rightX - buttonW);
-        SetWindowPos(_bannerOptionsButton.get(), nullptr, rightX, buttonY, buttonW, buttonH, flags);
-        rightX = std::max(0, rightX - buttonGap);
-    }
-    if (_bannerTitle)
-    {
-        const int titleW = std::max(0, rightX - bannerPaddingX);
-        SetWindowPos(_bannerTitle.get(), nullptr, bannerPaddingX, 0, titleW, bannerBaseHeight, flags);
+        if (_dxMenuBarHostHwnd)
+        {
+            SetWindowPos(_dxMenuBarHostHwnd.get(), nullptr, 0, 0, w, menuBarHeight, flags);
+            ShowWindow(_dxMenuBarHostHwnd.get(), _usesDxMenuBar ? SW_SHOWNA : SW_HIDE);
+        }
+
+        // Banner layout
+        const int bannerPaddingX = std::max(0, MulDiv(12, dpi, USER_DEFAULT_SCREEN_DPI));
+        const int bannerPaddingY = std::max(0, MulDiv(6, dpi, USER_DEFAULT_SCREEN_DPI));
+        const int buttonW        = std::max(1, MulDiv(110, dpi, USER_DEFAULT_SCREEN_DPI));
+        const int buttonH        = std::max(1, MulDiv(28, dpi, USER_DEFAULT_SCREEN_DPI));
+        const int buttonGap      = std::max(0, MulDiv(10, dpi, USER_DEFAULT_SCREEN_DPI));
+        const int bannerTop      = menuBarHeight;
+        const int buttonY        = std::max(bannerTop, bannerTop + bannerPaddingY + (std::max(0, bannerHeight - (2 * bannerPaddingY) - buttonH) / 2));
+
+        int rightX                    = std::max(0, w - bannerPaddingX);
+        const bool useDxRescanButton  = _usesDxBannerButtons && _dxBannerRescanHostHwnd;
+        const bool useDxOptionsButton = _usesDxBannerButtons && _dxBannerOptionsHostHwnd;
+        if (useDxRescanButton || _bannerRescanButton)
+        {
+            rightX = std::max(0, rightX - buttonW);
+            if (useDxRescanButton)
+            {
+                if (_dxBannerRescanDxButton)
+                {
+                    _dxBannerRescanDxButton->SetBounds(D2D1::RectF(0.0f,
+                                                                   0.0f,
+                                                                   _dxBannerRescanHost.PixelsToDip(static_cast<float>(buttonW)),
+                                                                   _dxBannerRescanHost.PixelsToDip(static_cast<float>(buttonH))));
+                }
+                SetWindowPos(_dxBannerRescanHostHwnd.get(), nullptr, rightX, buttonY, buttonW, buttonH, flags);
+                ShowWindow(_dxBannerRescanHostHwnd.get(), SW_SHOWNA);
+                _dxBannerRescanHost.Invalidate();
+                if (_bannerRescanButton)
+                {
+                    ShowWindow(_bannerRescanButton.get(), SW_HIDE);
+                }
+            }
+            else if (_bannerRescanButton)
+            {
+                SetWindowPos(_bannerRescanButton.get(), nullptr, rightX, buttonY, buttonW, buttonH, flags);
+                ShowWindow(_bannerRescanButton.get(), SW_SHOWNA);
+            }
+            rightX = std::max(0, rightX - buttonGap);
+        }
+        else if (_dxBannerRescanHostHwnd)
+        {
+            ShowWindow(_dxBannerRescanHostHwnd.get(), SW_HIDE);
+        }
+        if (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0)
+        {
+            const int spinnerSize = std::clamp(buttonH, 1, std::max(1, bannerHeight));
+            rightX                = std::max(0, rightX - spinnerSize);
+            SetWindowPos(_scanProgressBar.get(), nullptr, rightX, buttonY, spinnerSize, spinnerSize, flags);
+            rightX = std::max(0, rightX - buttonGap);
+        }
+        if (useDxOptionsButton || _bannerOptionsButton)
+        {
+            rightX = std::max(0, rightX - buttonW);
+            if (useDxOptionsButton)
+            {
+                if (_dxBannerOptionsDxButton)
+                {
+                    _dxBannerOptionsDxButton->SetBounds(D2D1::RectF(0.0f,
+                                                                    0.0f,
+                                                                    _dxBannerOptionsHost.PixelsToDip(static_cast<float>(buttonW)),
+                                                                    _dxBannerOptionsHost.PixelsToDip(static_cast<float>(buttonH))));
+                }
+                SetWindowPos(_dxBannerOptionsHostHwnd.get(), nullptr, rightX, buttonY, buttonW, buttonH, flags);
+                ShowWindow(_dxBannerOptionsHostHwnd.get(), SW_SHOWNA);
+                _dxBannerOptionsHost.Invalidate();
+                if (_bannerOptionsButton)
+                {
+                    ShowWindow(_bannerOptionsButton.get(), SW_HIDE);
+                }
+            }
+            else if (_bannerOptionsButton)
+            {
+                SetWindowPos(_bannerOptionsButton.get(), nullptr, rightX, buttonY, buttonW, buttonH, flags);
+                ShowWindow(_bannerOptionsButton.get(), SW_SHOWNA);
+            }
+            rightX = std::max(0, rightX - buttonGap);
+        }
+        else if (_dxBannerOptionsHostHwnd)
+        {
+            ShowWindow(_dxBannerOptionsHostHwnd.get(), SW_HIDE);
+        }
+        const bool useDxBannerTitle = _usesDxBannerText && _dxBannerTitleHostHwnd && _dxBannerTitleLabel;
+        const int titleW            = std::max(0, rightX - bannerPaddingX);
+        if (useDxBannerTitle)
+        {
+            if (_bannerTitle)
+            {
+                ShowWindow(_bannerTitle.get(), SW_HIDE);
+            }
+            _dxBannerTitleLabel->SetBounds(D2D1::RectF(
+                0.0f, 0.0f, _dxBannerTitleHost.PixelsToDip(static_cast<float>(titleW)), _dxBannerTitleHost.PixelsToDip(static_cast<float>(bannerBaseHeight))));
+            SetWindowPos(_dxBannerTitleHostHwnd.get(), nullptr, bannerPaddingX, bannerTop, titleW, bannerBaseHeight, flags);
+            ShowWindow(_dxBannerTitleHostHwnd.get(), SW_SHOWNA);
+            _dxBannerTitleHost.Invalidate();
+        }
+        else if (_bannerTitle)
+        {
+            SetWindowPos(_bannerTitle.get(), nullptr, bannerPaddingX, bannerTop, titleW, bannerBaseHeight, flags);
+            ShowWindow(_bannerTitle.get(), SW_SHOWNA);
+        }
+        else if (_dxBannerTitleHostHwnd)
+        {
+            ShowWindow(_dxBannerTitleHostHwnd.get(), SW_HIDE);
+        }
+
+        if (showStatus)
+        {
+            const int statusTop = menuBarHeight + bannerBaseHeight;
+            const int paddingX  = std::max(0, MulDiv(kScanStatusPaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI));
+            const int textX     = paddingX;
+            const int textW     = std::max(0, rightX - paddingX);
+
+            if (_usesDxBannerText && _dxScanProgressTextHostHwnd && _dxScanProgressTextLabel && IsWindowVisible(_dxScanProgressTextHostHwnd.get()) != 0)
+            {
+                if (_scanProgressText)
+                {
+                    ShowWindow(_scanProgressText.get(), SW_HIDE);
+                }
+                _dxScanProgressTextLabel->SetBounds(D2D1::RectF(0.0f,
+                                                                0.0f,
+                                                                _dxScanProgressTextHost.PixelsToDip(static_cast<float>(textW)),
+                                                                _dxScanProgressTextHost.PixelsToDip(static_cast<float>(statusHeight))));
+                SetWindowPos(_dxScanProgressTextHostHwnd.get(), nullptr, textX, statusTop, textW, statusHeight, flags);
+                _dxScanProgressTextHost.Invalidate();
+            }
+            else if (_scanProgressText)
+            {
+                SetWindowPos(_scanProgressText.get(), nullptr, textX, statusTop, textW, statusHeight, flags);
+            }
+        }
     }
 
     if (const HWND fw = _folderWindow.GetHwnd())
     {
-        SetWindowPos(fw, nullptr, 0, bannerHeight, w, contentHeight, flags);
-    }
-
-    if (showStatus && _scanProgressText)
-    {
-        const int statusTop = bannerBaseHeight;
-        const int paddingX  = std::max(0, MulDiv(kScanStatusPaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI));
-
-        if (_scanProgressText)
-        {
-            const int textX = paddingX;
-            const int textW = std::max(0, rightX - paddingX);
-            SetWindowPos(_scanProgressText.get(), nullptr, textX, statusTop, textW, statusHeight, flags);
-        }
+        SetWindowPos(fw, nullptr, 0, menuBarHeight + bannerHeight, w, contentHeight, flags);
     }
 
     if (_optionsDlg && IsWindowVisible(_optionsDlg.get()) != 0)
@@ -1730,7 +1825,7 @@ void CompareDirectoriesWindow::Layout() noexcept
         const int dw          = maxDw;
         const int dh          = maxDh;
         const int x           = std::max(0, (w - dw) / 2);
-        const int y           = std::max(bannerHeight, bannerHeight + (contentHeight - dh) / 2);
+        const int y           = std::max(menuBarHeight + bannerHeight, menuBarHeight + bannerHeight + (contentHeight - dh) / 2);
         SetWindowPos(_optionsDlg.get(), nullptr, x, y, dw, dh, SWP_NOZORDER | SWP_NOACTIVATE);
         LayoutOptionsControls();
     }
@@ -2468,15 +2563,27 @@ bool ShowCompareDirectoriesWindow(HWND owner,
 
 HWND GetCompareDirectoriesWindowHandle() noexcept
 {
-    for (HWND hwnd : CompareDirectoriesWindowInternal::g_compareDirectoriesWindows)
+    HWND fallback = nullptr;
+    for (auto it = CompareDirectoriesWindowInternal::g_compareDirectoriesWindows.rbegin();
+         it != CompareDirectoriesWindowInternal::g_compareDirectoriesWindows.rend();
+         ++it)
     {
+        const HWND hwnd = *it;
         if (hwnd && IsWindow(hwnd) != FALSE)
         {
-            return hwnd;
+            if (IsWindowVisible(hwnd) != FALSE)
+            {
+                return hwnd;
+            }
+
+            if (! fallback)
+            {
+                fallback = hwnd;
+            }
         }
     }
 
-    return nullptr;
+    return fallback;
 }
 
 void UpdateCompareDirectoriesWindowsTheme(const AppTheme& theme) noexcept
@@ -2496,3 +2603,223 @@ void UpdateCompareDirectoriesWindowsTheme(const AppTheme& theme) noexcept
         }
     }
 }
+
+#ifdef ENABLE_TESTS
+namespace
+{
+
+[[nodiscard]] CompareDirectoriesWindowInternal::CompareDirectoriesWindow* ResolveCompareDirectoriesWindowForDebug(HWND hwnd) noexcept
+{
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return nullptr;
+    }
+
+    return reinterpret_cast<CompareDirectoriesWindowInternal::CompareDirectoriesWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+}
+
+} // namespace
+
+bool CompareDirectoriesWindowInternal::CompareDirectoriesWindow::DebugGetRunSnapshot(CompareDirectoriesRunDebugSnapshot& out) const noexcept
+{
+    out                           = {};
+    out.windowVisible             = _hWnd && IsWindowVisible(_hWnd.get()) != FALSE;
+    out.optionsDialogVisible      = _optionsDlg && IsWindowVisible(_optionsDlg.get()) != FALSE;
+    out.compareStarted            = _compareStarted;
+    out.compareActive             = _compareActive;
+    out.compareRunPending         = _compareRunPending;
+    out.compareRunSawScanProgress = _compareRunSawScanProgress;
+    out.usesDxUiMenuBar           = _usesDxMenuBar && _dxMenuBarHostHwnd && IsWindowVisible(_dxMenuBarHostHwnd.get()) != FALSE;
+    out.usesDxUiBannerButtons     = _usesDxBannerButtons && _dxBannerOptionsHostHwnd && _dxBannerRescanHostHwnd &&
+                                    IsWindowVisible(_dxBannerOptionsHostHwnd.get()) != FALSE && IsWindowVisible(_dxBannerRescanHostHwnd.get()) != FALSE;
+    out.usesDxUiBannerText     = _usesDxBannerText && _dxBannerTitleHostHwnd && _dxBannerTitleLabel && IsWindowVisible(_dxBannerTitleHostHwnd.get()) != FALSE;
+    out.hasNativeUiFontState   = false;
+    out.nativeMenuAttached     = _hWnd && GetMenu(_hWnd.get()) != nullptr;
+    out.bannerOptionsEnabled   = _usesDxBannerButtons && _dxBannerOptionsDxButton
+                                     ? _dxBannerOptionsDxButton->IsEnabled()
+                                     : (_bannerOptionsButton && IsWindowEnabled(_bannerOptionsButton.get()) != FALSE);
+    out.bannerRescanEnabled    = _usesDxBannerButtons && _dxBannerRescanDxButton ? _dxBannerRescanDxButton->IsEnabled()
+                                                                                 : (_bannerRescanButton && IsWindowEnabled(_bannerRescanButton.get()) != FALSE);
+    out.scanActiveScans        = _progress.scanActiveScans;
+    out.scanFolderCount        = _progress.scanFolderCount;
+    out.scanEntryCount         = _progress.scanEntryCount;
+    out.contentPendingCompares = _progress.contentPendingCompares;
+    out.contentCompletedCompares       = _progress.contentCompletedCompares;
+    out.contentTotalCompares           = _progress.contentTotalCompares;
+    out.dxMenuBarRenderCount           = _usesDxMenuBar ? _dxMenuBarHost.DebugGetRenderCount() : 0u;
+    out.menuBarItemCount               = _dxMenuBar ? _dxMenuBar->GetItems().size() : 0u;
+    out.visibleDxMenuBarHostCount      = (_dxMenuBarHostHwnd && IsWindowVisible(_dxMenuBarHostHwnd.get()) != FALSE) ? 1u : 0u;
+    out.visibleDxBannerButtonHostCount = static_cast<size_t>((_dxBannerOptionsHostHwnd && IsWindowVisible(_dxBannerOptionsHostHwnd.get()) != FALSE) ? 1u : 0u) +
+                                         static_cast<size_t>((_dxBannerRescanHostHwnd && IsWindowVisible(_dxBannerRescanHostHwnd.get()) != FALSE) ? 1u : 0u);
+    out.visibleDxBannerTextHostCount =
+        static_cast<size_t>((_dxBannerTitleHostHwnd && IsWindowVisible(_dxBannerTitleHostHwnd.get()) != FALSE) ? 1u : 0u) +
+        static_cast<size_t>((_dxScanProgressTextHostHwnd && IsWindowVisible(_dxScanProgressTextHostHwnd.get()) != FALSE) ? 1u : 0u);
+    out.visibleLegacyBannerButtonCount = static_cast<size_t>((_bannerOptionsButton && IsWindowVisible(_bannerOptionsButton.get()) != FALSE) ? 1u : 0u) +
+                                         static_cast<size_t>((_bannerRescanButton && IsWindowVisible(_bannerRescanButton.get()) != FALSE) ? 1u : 0u);
+    out.visibleLegacyBannerTextCount   = static_cast<size_t>((_bannerTitle && IsWindowVisible(_bannerTitle.get()) != FALSE) ? 1u : 0u) +
+                                         static_cast<size_t>((_scanProgressText && IsWindowVisible(_scanProgressText.get()) != FALSE) ? 1u : 0u);
+    return true;
+}
+
+bool CompareDirectoriesWindowInternal::CompareDirectoriesWindow::DebugGetMenuBarItemLabel(size_t index, std::wstring& outText) const noexcept
+{
+    outText.clear();
+    if (! _dxMenuBar)
+    {
+        return false;
+    }
+
+    const auto items = _dxMenuBar->GetItems();
+    if (index >= items.size())
+    {
+        return false;
+    }
+
+    outText.assign(items[index].text);
+    return true;
+}
+
+bool CompareDirectoriesWindowInternal::CompareDirectoriesWindow::DebugGetMenuBarItemScreenRect(size_t index, RECT& outRect) const noexcept
+{
+    return _dxMenuBar && _dxMenuBarHostHwnd && IsWindow(_dxMenuBarHostHwnd.get()) != FALSE && _dxMenuBar->TryGetItemScreenRect(_dxMenuBarHost, index, outRect);
+}
+
+bool DebugGetCompareDirectoriesOptionsSnapshot(CompareDirectoriesOptionsDebugSnapshot& out) noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    return DebugGetCompareDirectoriesOptionsSnapshotForWindow(hwnd, out);
+}
+
+bool DebugGetCompareDirectoriesOptionsSnapshotForWindow(HWND compareWindow, CompareDirectoriesOptionsDebugSnapshot& out) noexcept
+{
+    auto* window = ResolveCompareDirectoriesWindowForDebug(compareWindow);
+    return window ? window->DebugGetOptionsSnapshot(out) : false;
+}
+
+bool DebugGetCompareDirectoriesRunSnapshot(CompareDirectoriesRunDebugSnapshot& out) noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    return DebugGetCompareDirectoriesRunSnapshotForWindow(hwnd, out);
+}
+
+bool DebugGetCompareDirectoriesRunSnapshotForWindow(HWND compareWindow, CompareDirectoriesRunDebugSnapshot& out) noexcept
+{
+    auto* window = ResolveCompareDirectoriesWindowForDebug(compareWindow);
+    return window ? window->DebugGetRunSnapshot(out) : false;
+}
+
+bool DebugGetCompareDirectoriesMenuBarItemLabel(size_t index, std::wstring& outText) noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        outText.clear();
+        return false;
+    }
+
+    auto* window = reinterpret_cast<CompareDirectoriesWindowInternal::CompareDirectoriesWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return window ? window->DebugGetMenuBarItemLabel(index, outText) : false;
+}
+
+bool DebugGetCompareDirectoriesMenuBarItemScreenRect(size_t index, RECT& outRect) noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    auto* window = reinterpret_cast<CompareDirectoriesWindowInternal::CompareDirectoriesWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return window ? window->DebugGetMenuBarItemScreenRect(index, outRect) : false;
+}
+
+bool DebugFocusCompareDirectoriesOptionsFirstControl() noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    auto* window = reinterpret_cast<CompareDirectoriesWindowInternal::CompareDirectoriesWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return window ? window->DebugFocusOptionsFirstControl() : false;
+}
+
+bool DebugFocusCompareDirectoriesOptionsTarget(CompareDirectoriesOptionsDebugFocusTarget target) noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    return DebugFocusCompareDirectoriesOptionsTargetForWindow(hwnd, target);
+}
+
+bool DebugFocusCompareDirectoriesOptionsTargetForWindow(HWND compareWindow, CompareDirectoriesOptionsDebugFocusTarget target) noexcept
+{
+    auto* window = ResolveCompareDirectoriesWindowForDebug(compareWindow);
+    return window ? window->DebugFocusOptionsTarget(target) : false;
+}
+
+bool DebugSetCompareDirectoriesOptionsIgnoreFilesEnabled(const bool enabled) noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    auto* window = reinterpret_cast<CompareDirectoriesWindowInternal::CompareDirectoriesWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return window ? window->DebugSetOptionsIgnoreFilesEnabled(enabled) : false;
+}
+
+bool DebugSetCompareDirectoriesOptionsIgnoreDirectoriesEnabled(const bool enabled) noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return false;
+    }
+
+    auto* window = reinterpret_cast<CompareDirectoriesWindowInternal::CompareDirectoriesWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return window ? window->DebugSetOptionsIgnoreDirectoriesEnabled(enabled) : false;
+}
+
+HWND DebugGetCompareDirectoriesOptionsDialogHandle() noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    if (! hwnd || IsWindow(hwnd) == FALSE)
+    {
+        return nullptr;
+    }
+
+    auto* window = reinterpret_cast<CompareDirectoriesWindowInternal::CompareDirectoriesWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return window ? window->DebugGetOptionsDialogHandle() : nullptr;
+}
+
+bool DebugScrollCompareDirectoriesOptionsBodyPages(const int pageDelta) noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    return DebugScrollCompareDirectoriesOptionsBodyPagesForWindow(hwnd, pageDelta);
+}
+
+bool DebugScrollCompareDirectoriesOptionsBodyPagesForWindow(HWND compareWindow, const int pageDelta) noexcept
+{
+    auto* window = ResolveCompareDirectoriesWindowForDebug(compareWindow);
+    return window ? window->DebugScrollOptionsBodyPages(pageDelta) : false;
+}
+
+bool DebugGetCompareDirectoriesOptionsTargetHostAndClientRect(const CompareDirectoriesOptionsDebugFocusTarget target, HWND& outHost, RECT& outRect) noexcept
+{
+    const HWND hwnd = GetCompareDirectoriesWindowHandle();
+    return DebugGetCompareDirectoriesOptionsTargetHostAndClientRectForWindow(hwnd, target, outHost, outRect);
+}
+
+bool DebugGetCompareDirectoriesOptionsTargetHostAndClientRectForWindow(HWND compareWindow,
+                                                                       const CompareDirectoriesOptionsDebugFocusTarget target,
+                                                                       HWND& outHost,
+                                                                       RECT& outRect) noexcept
+{
+    outHost = nullptr;
+    outRect = {};
+
+    auto* window = ResolveCompareDirectoriesWindowForDebug(compareWindow);
+    return window ? window->DebugGetOptionsTargetHostAndClientRect(target, outHost, outRect) : false;
+}
+#endif

@@ -8,8 +8,17 @@
 - Renders **all visible sections** (Drive/Menu, Path/Breadcrumb, History button, Disk Info) with **Direct2D/DirectWrite** to a DXGI swap chain.
 - Startup performance: Direct2D/D3D swap-chain initialization is **deferred until after the first paint** (via `WndMsg::kNavigationViewDeferredInit`) so `WM_CREATE` stays fast; the first paint uses only GDI background/border.
 - Graphics resources: NavigationView instances **share** the process-wide D2D/DWrite/D3D device objects; swap chains and device contexts remain per-window.
-- Uses Win32 for the window procedure and the transient **Edit control** used in edit mode.
-- Uses GDI/owner-draw only for **popup menus** (WM_MEASUREITEM/WM_DRAWITEM) and for simple background/border painting.
+- Uses Win32 for the window procedure and a visible `NavigationDxTextHost` child window in edit mode; text input behavior is delegated to DxUi rather than a visible native `EDIT` surface.
+- Uses DxUi-owned popup windows for the Drive/Menu, History, and Disk Info dropdown surfaces; the older NavigationView `WM_MEASUREITEM` / `WM_DRAWITEM` popup forwarding has been retired, and simple GDI painting remains only for fallback background/border work during pre-D2D startup.
+
+## Typography Contract
+
+- NavigationView visible text must use the shared Windows 11 typography helper.
+- Breadcrumb/path text follows the shared Segoe UI Variable body-text mapping, not a hardcoded `Segoe UI` face.
+- Chevron/history/menu glyphs use `Segoe Fluent Icons` when available, with the shared fallback path only for legacy glyph coverage.
+- Edit-mode path text must flow through `NavigationDxTextHost` and the hidden non-visual DxUi text bridge; NavigationView must not introduce a visible native `EDIT` typography path, direct `CreateFontW(..., L"Segoe UI")` calls, or any new shared-HFONT layout helper.
+- While the address-bar edit host owns Win32 focus, pane-level clipboard/select-all commands (`Ctrl+A`, `Ctrl+C`, `Ctrl+X`, `Ctrl+V`, and the matching menu commands) must be routed to the active DxUi path edit before FolderView selection or clipboard command handling. When no navigation edit host owns focus, the existing FolderView command behavior remains authoritative.
+- Command/selftest coverage for address-bar edit mode and full-path popup edit mode must validate `NavigationViewDebugSnapshot` plus the active DxUi host/bridge HWNDs exposed there, not enumerate descendant native `Edit` / `RICHEDIT50W` windows.
 
 ## Localization
 
@@ -58,11 +67,17 @@ NavigationView participates in a host-wide “location” model with **two diffe
 ✅ **Menu and disk info sourced from active plugins** (December 2025):
 - NavigationView queries `INavigationMenu` and `IDriveInfo` via `QueryInterface` on the active `IFileSystem`.
 - NavigationView registers a **non-COM** `INavigationMenuCallback` via `INavigationMenu::SetCallback(callback, cookie)` so the plugin can request navigation (e.g., from `ExecuteMenuCommand`), and clears it with `SetCallback(nullptr, nullptr)` when switching/unloading.
+- `SetCallback(nullptr, nullptr)` is the synchronous drain point for that registration: once it returns, the plugin must not deliver the previous callback again, and any queued work must self-drop as stale.
 - Menu entries are returned as raw items (`NavigationMenuItem`) with labels, optional icon paths, and optional commands.
 - Drive information is returned as structured data (`DriveInfo`: display name, volume label, file system, total/used/free bytes).
 - Path parameters passed to `IDriveInfo` are **plugin paths** (no `<shortId>:` prefix and no `<instanceContext>|` mount prefix; mount context is configured separately via `IFileSystemInitialize::Initialize` when applicable).
 - Sections are hidden when interfaces are missing or return no data.
 - Icon resolution uses `IconCache::QuerySysIconIndexForPath` against `iconPath`/`path`.
+- The menu/drive button MUST refresh its stock shell bitmap after Direct2D and `IconCache` initialization; the hamburger glyph is only a no-icon fallback, not the normal local-file-system presentation.
+- Tests or diagnostics that assert the stock shell bitmap must first drive the real paint/deferred-init path; before Direct2D and `IconCache` initialization, the hamburger glyph is an allowed startup placeholder.
+- DxUi popup entries SHOULD render the resolved stock shell bitmap icon when an `iconPath`/`path` can be resolved; glyph fallback is reserved for entries that do not resolve to a shell bitmap.
+- Reapplying the current file-system plugin to a pane is a NavigationView shell-model resync, not a pure no-op: it must refresh plugin-provided `INavigationMenu` / `IDriveInfo`, preserve the current canonical path and history, and keep menu and disk sections coherent.
+- FolderWindow path changes and FolderView path-change callbacks must update the NavigationView logical path even when the NavigationView child HWND is not currently available; HWND availability controls invalidation/paint only, not model ownership.
 
 **Files Added/Updated**:
 - `Common/PlugInterfaces/NavigationMenu.h`
@@ -75,7 +90,7 @@ NavigationView participates in a host-wide “location” model with **two diffe
 - **Application Manifest**: Added `exe.manifest` with `PerMonitorV2` DPI awareness
 - **WM_DPICHANGED Handling**: Now properly receives and processes DPI change messages
 - **Icon Size Management**: IconCache adjusted to extract optimal icon sizes for display DPI
-- **Menu Icons**: Fixed to use 96 DPI physical pixels (GDI menus are NOT DPI-aware)
+- **Menu Icons**: Fixed to use 96 DPI physical pixels for any remaining native-menu interop; NavigationView dropdowns themselves use DxUi popups, not GDI menus
 
 **Key Improvements**:
 - **Manifest Settings**: Enabled long path support, UTF-8 code page, segment heap
@@ -125,7 +140,7 @@ else
 
 **State Management**:
 - `_menuButtonHovered`: Timer-based hover tracking (30 FPS polling)
-- `_menuButtonPressed`: Set during TrackPopupMenu, cleared after
+- `_menuButtonPressed`: Set while the drive dropdown session is active, cleared after the popup closes
 - Background colors: Normal RGB(250,250,250), Hover RGB(243,243,243), Pressed RGB(230,230,230)
 
 **Call Sites Updated**:
@@ -160,7 +175,7 @@ else
 ✅ **Comprehensive hover effects across all sections**:
 - **Section 1 (Menu Button)**: Timer-based hover polling with `_menuButtonHovered` state
   - **Implementation**: 30 FPS polling timer (`HOVER_TIMER_ID = 2`) checks cursor position via `GetCursorPos` + `ScreenToClient` + `PtInRect`
-  - **Rationale**: Keeps hover states consistent even during modal menu tracking (`TrackPopupMenu`) and prevents stale highlights
+  - **Rationale**: Keeps hover states consistent while dropdown popup sessions are active and prevents stale highlights
   - **Benefits**: No reliance on `WM_MOUSELEAVE`; explicit clearing when cursor leaves regions
 - **Section 2 (Breadcrumb Segments)**: Direct2D hover backgrounds via timer polling
   - **Coordinate Transform**: Window coordinates converted to Section 2 local space before hit testing
@@ -170,7 +185,7 @@ else
   - **Text Alignment**: Uses full section height with `PARAGRAPH_ALIGNMENT_CENTER`, Y position at 0.0f
 - **Section 3 (History Button)**: Direct2D-rendered region with `_historyButtonHovered` updated by timer
 - **Section 4 (Disk Info)**: Direct2D-rendered region with `_diskInfoHovered` updated by timer (disk text + progress bar)
-- **Popup menus** (Drive/Menu + Disk Info): Win32 owner-draw with `MenuTheme` (`WM_MEASUREITEM`/`WM_DRAWITEM`)
+- **Popup menus** (Drive/Menu + Disk Info): DxUi context-menu popup windows with stock shell bitmap icons, right-aligned disk info values, and the shared popup material treatment
 - **Consistent Colors**: Hover/pressed colors come from `NavigationViewTheme` (e.g., `backgroundHover`, `backgroundPressed`)
 
 ✅ **Hover tracking system** (All sections):
@@ -231,8 +246,8 @@ void OnTimer(UINT_PTR timerId) {
 }
 ```
 **Why Timer Polling (Only During Menus/Edit Mode)?**
-- Hover state remains correct while popup menus are tracking (`TrackPopupMenu` is modal and can disrupt normal mouse message flow)
-- Edit mode uses a child edit control, so hover for the chrome (close button) is easier to keep consistent via polling
+- Hover state remains correct while dropdown popup sessions are active (they temporarily redirect pointer handling away from the owning control)
+- Edit mode uses a child text host window, so hover for the chrome (close button) is easier to keep consistent via polling
 - Outside of those cases, hover is driven by `WM_MOUSEMOVE` / `WM_MOUSELEAVE` to avoid an always-on timer
 
 **Timer Configuration**:
@@ -242,8 +257,8 @@ static constexpr UINT HOVER_CHECK_FPS = 30;
 UINT_PTR _hoverTimer = 0;
 ```
 
-✅ **Owner-drawn popup menus** (MenuTheme):
-- All dropdown menus are `HMENU` popup menus themed via `WM_MEASUREITEM`/`WM_DRAWITEM` using `MenuTheme` colors.
+✅ **DxUi popup dropdowns**:
+- NavigationView dropdowns are composed as DxUi popup windows with shared menu materials, shell bitmap support, and app-rendered rows instead of Win32 owner-draw `HMENU` menus.
 
 ✅ **Coordinate space transformation for Section 2**:
 - **Problem**: Direct2D uses local coordinate space after `SetTransform`, Win32 mouse events use window coordinates
@@ -262,12 +277,12 @@ UINT_PTR _hoverTimer = 0;
 - **State Tracking**: Per-separator angle vectors with linear interpolation
 
 ✅ **Menu switching behavior**:
-- **User Experience**: Clicking different separator while menu is open closes current menu and opens new one
-- **Implementation**: `WM_CANCELMODE` to force menu closure, `PostMessage(WM_USER+100)` to defer new menu opening
-- **Modal Handling**: Works correctly with `TrackPopupMenu`'s blocking behavior
+- **User Experience**: Clicking different separator while a sibling dropdown is open closes the current popup and opens the new one
+- **Implementation**: `WM_CANCELMODE` to request popup closure, plus a deferred reopen message for the next separator
+- **Modal Handling**: Works with the popup session lifecycle used by the sibling dropdown path
 - **State Cleanup**: `WM_EXITMENULOOP` triggers reverse animation and state reset
-- **Implemented**: Hover-based menu switching during `TrackPopupMenu` tracking using timer polling + `WM_CANCELMODE` (no `SetWindowsHookEx`)
-- **Safety**: Hover tracking ignores the cursor while it is over a Win32 menu window (`#32768`) to avoid accidental switches while navigating the menu
+- **Implemented**: Hover-based menu switching during the popup session using timer polling + `WM_CANCELMODE` (no `SetWindowsHookEx`)
+- **Safety**: Hover tracking ignores the cursor while it is over popup content so normal menu navigation does not trigger accidental switches
 - **Isolation**: While the full-path popup window is open, `NavigationView` hover tracking is suspended; the full-path popup runs its own hover polling
 
 **Files Modified**:
@@ -333,14 +348,14 @@ void StopSeparatorAnimation() noexcept;
 
 **Section 3 (History Button)**: Direct2D/DirectWrite
 - Small clickable region rendered with Direct2D (no HWND)
-- Opens history dropdown (popup menu) via `TrackThemedPopupMenuReturnCmd` (`TrackPopupMenu` + `TPM_RETURNCMD`)
+- Opens a DxUi popup surface built from `MenuFlyoutItem` rows. The popup anchors from `_sectionHistoryRect.left/bottom` and uses `ContextMenuRootHorizontalAlignment::End` so the visible body grows leftward into the available path area; if that placement would cross the monitor left edge, the popup falls back to a start-aligned placement.
 
 **Section 4 (Disk Info)**: Direct2D/DirectWrite
 - Disk space text + progress bar rendered with Direct2D
-- Opens disk info dropdown (popup menu) via `TrackThemedPopupMenuReturnCmd` (`TrackPopupMenu` + `TPM_RETURNCMD`)
+- Opens a DxUi popup surface populated from the active pane drive-menu contract.
 
-**Popup Menus**: Win32/GDI owner-draw
-- All dropdowns are Win32 popup menus themed via `MenuTheme` using `WM_MEASUREITEM`/`WM_DRAWITEM`
+**Popup Menus**: DxUi-owned popup windows
+- Drive, history, sibling, and disk-info dropdowns are transient owned DxUi popup windows with app-rendered materials, not Win32 `TrackPopupMenu` loops.
 
 ### Why DirectX for Section 2?
 
@@ -363,7 +378,7 @@ void StopSeparatorAnimation() noexcept;
 ### Component Type
 - **Class**: `NavigationView`
 - **Window Type**: Win32 child window
-- **Rendering**: Direct2D/DirectWrite for all sections (DXGI swap chain); GDI owner-draw for popup menus; Win32 Edit control in edit mode
+- **Rendering**: Direct2D/DirectWrite for all visible sections (DXGI swap chain) plus DxUi-owned popup windows for drive/history/sibling/disk-info dropdowns; `NavigationDxTextHost` in edit mode
 - **Parent**: Main application window (positioned above FolderView)
 
 ### Files
@@ -374,7 +389,7 @@ void StopSeparatorAnimation() noexcept;
   - `RedSalamander/NavigationView.Interaction.cpp` (mouse/keyboard/timers/focus)
   - `RedSalamander/NavigationView.Rendering.cpp` (swapchain/D2D/DWrite resources + sections 1/3/4 rendering)
   - `RedSalamander/NavigationView.Breadcrumb.cpp` (breadcrumb layout/overflow + section 2 rendering/animation)
-  - `RedSalamander/NavigationView.Menus.cpp` (popup menus + owner-draw/theming)
+  - `RedSalamander/NavigationView.Menus.cpp` (DxUi popup construction + menu content adapters)
   - `RedSalamander/NavigationView.Edit.cpp` (edit mode + edit-suggest popup/workers)
   - `RedSalamander/NavigationView.FullPathPopup.cpp` (full-path popup window)
 - **Integration**: Modified `RedSalamander/RedSalamander.cpp`
@@ -504,28 +519,11 @@ _menuIconBitmapD2D = (iconIndex >= 0) ? IconCache::GetInstance().GetIconBitmap(i
 - Network path with no match → Hamburger icon ✅
 
 ### Menu Display (December 2025)
-✅ **Left-aligned with button border**:
-- **Alignment**: Menu left edge aligns with Section 1 button left edge
-- **Implementation**: `TrackThemedPopupMenuReturnCmd(menu, TPM_LEFTALIGN | TPM_TOPALIGN, pt, ...)`
-- **Previous**: Was right-aligned (`TPM_RIGHTALIGN` with `rc.right`), visually inconsistent
-- **Rationale**: Provides consistent visual alignment with button boundary
-
-```cpp
-void ShowMenuDropdown() {
-    HMENU menu = CreatePopupMenu();
-    // ... populate menu ...
-    
-    RECT rc = _sectionDriveRect;
-    POINT pt = {rc.left, rc.bottom};  // Left edge, not right
-    ClientToScreen(_hWnd, &pt);
-    
-    const int selectedId = TrackThemedPopupMenuReturnCmd(menu, TPM_LEFTALIGN | TPM_TOPALIGN, pt, _hWnd);
-    if (selectedId != 0) {
-        // Handle selected menu item.
-    }
-    DestroyMenu(menu);
-}
-```
+✅ **Drive menu popup alignment**:
+- **Alignment**: The visible popup body aligns its left edge to the Section 1 button left edge.
+- **Implementation**: `NavigationView::ShowDriveMenuDropdown()` anchors the popup from `_sectionDriveRect.left/bottom` and shows it through `DxUi::ContextMenu::Show(...)`.
+- **Previous**: The old native popup path right-aligned from `rc.right`, which made the drive surface feel detached from the button boundary.
+- **Rationale**: Keeping the popup anchored to the button edge preserves one stable chrome rhythm across the migrated DxUi dropdowns.
 
 ### Menu Content
 
@@ -544,7 +542,10 @@ void ShowMenuDropdown() {
 Menu content comes from the active file system plugin via `INavigationMenu`.
 NavigationView renders **raw menu entries** and does not enumerate WSL distributions or drives itself.
 
+When the active plugin is `file`, NavigationView injects `Connections...` before `Go to >`, then places `Go to >` as the last named entry immediately above the first drive-root entry in the navigation menu. The `Go to >` submenu mirrors the pane `Go to` menu contract: `Back`, `Forward`, `Parent Directory`, `Root Directory`, `Path from Other Panel`, `Hot Paths...`, then dynamic Hot Path slots and folder history.
+
 When the active plugin is **not** `file`, NavigationView appends a bottom:
+- `Go to >` submenu mirroring the pane `Go to` menu contract: `Back`, `Forward`, `Parent Directory`, `Root Directory`, `Path from Other Panel`, `Hot Paths...`, then dynamic Hot Path slots and folder history.
 - `Connections...` item to open Connection Manager (protocol-filtered when the active plugin supports Connection Manager).
 - `---`
 - `Change Drive >` submenu containing the **standard FileSystem** navigation menu items (drives + known folders), so users can jump back to the Windows file system quickly.
@@ -563,9 +564,10 @@ When the active plugin is **not** `file`, NavigationView appends a bottom:
 [Icon] Music            
 [Icon] Videos           
 ──────────────────────────────
-[Icon] Ubuntu               
-[Icon] Debian               
+[Icon] Ubuntu
+[Icon] Debian
 [Icon] Connections...
+[Icon] Go to >
 ──────────────────────────────  
 [Icon] C:\ Local Disk  156 GB
 [Icon] D:\ Data        1.20 TB
@@ -574,8 +576,10 @@ When the active plugin is **not** `file`, NavigationView appends a bottom:
 
 **Rendering rules**:
 - Order and separators are provided by the plugin.
-- The host may inject additional items (e.g. `Connections...`) while preserving plugin ordering.
+- The host may inject additional items (e.g. `Go to >`, `Connections...`) while preserving plugin ordering.
 - When the host injects the Connections submenu, `<Quick Connect>` stays first and the remaining saved connections are sorted alphabetically by label (case-insensitive).
+- When the host injects `Connections...` and `Go to >` into the navigation/drive dropdown, `Connections...` MUST appear before `Go to >`, and `Go to >` MUST be the last named entry before the first drive row.
+- Host-injected submenu actions MUST reserve action IDs for the plugin-provided drive tail so drive rows remain visible and actionable.
 - `label` is used verbatim for display.
 - If `path` is supplied, selecting the item navigates to that path.
 - If `commandId` is supplied (and no `path`), the host calls `ExecuteMenuCommand`.
@@ -601,6 +605,8 @@ When the active plugin is **not** `file`, NavigationView appends a bottom:
 ✅ **IconCache-mediated icon indices + WIC menu bitmaps**:
 
 NavigationView never calls `SHGetFileInfoW` / `SHGetImageList` directly. It requests system icon indices from `IconCache`, then creates `HBITMAP` menu images via `IconCache`'s WIC pipeline.
+For the DxUi popup path, those resolved menu bitmaps are attached to `DxUi::MenuFlyoutItem` and rendered as bitmap icons rather than being downgraded to fallback glyphs.
+Known-folder quick-access items such as `Desktop`, `Documents`, `Downloads`, `Pictures`, `Music`, `Videos`, and `OneDrive` MUST keep their stock shell bitmap icons even when the plugin exposes logical navigation targets instead of direct filesystem paths.
 
 **Architecture**:
 1. **Plugin-provided icon path or navigation path**: `IconCache::QuerySysIconIndexForPath(path, attributes, useFileAttributes)`
@@ -724,25 +730,19 @@ void EnsureD2DResources() {
     // Separator (›): 80% of bar height for visual prominence
     float separatorSize = barHeight * 0.8f;   // ~19.2pt at 96 DPI, 24pt at 120 DPI
     
-    _dwriteFactory->CreateTextFormat(
-        L"Segoe UI", nullptr,
-        DWRITE_FONT_WEIGHT_NORMAL,
-        DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL,
-        breadcrumbSize,
-        L"",
-        &_pathFormat);
+    RedSalamander::DxUi::Typography::CreateTextFormat(
+        _dwriteFactory.get(),
+        RedSalamander::DxUi::Typography::MakeUiTextSpec(breadcrumbSize),
+        _pathFormat.put(),
+        L"");
     
     _pathFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
     
-    _dwriteFactory->CreateTextFormat(
-        L"Segoe UI", nullptr,
-        DWRITE_FONT_WEIGHT_NORMAL,
-        DWRITE_FONT_STYLE_NORMAL,
-        DWRITE_FONT_STRETCH_NORMAL,
-        separatorSize,
-        L"",
-        &_separatorFormat);
+    RedSalamander::DxUi::Typography::CreateTextFormat(
+        _dwriteFactory.get(),
+        RedSalamander::DxUi::Typography::MakeUiIconSpec(separatorSize),
+        _separatorFormat.put(),
+        L"");
     
     _separatorFormat->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_CENTER);
 }
@@ -986,7 +986,7 @@ For path `C:\Users\aUser\Downloads`:
 - **Normal**: No background
 - **Hover**: `RGB(243, 243, 243)` background (same as segments)
 - **Pressed**: `RGB(230, 230, 230)` background (darker, persists while menu is open)
-- **Active State**: Remains in pressed state during entire TrackPopupMenu call
+- **Active State**: Remains in pressed state for the entire sibling-dropdown session
 - **Implementation**: Hover/pressed backgrounds use the same inset rounded rectangle style as segments (see `Specs/UI/UI_VisualStyle.md`)
 - **Coordinate Transform**: Same as segments (local space)
 - **Hover Cleanup**: Explicitly clears separator hover states when cursor leaves Section 2
@@ -1107,13 +1107,13 @@ void RenderBreadcrumbs() {
 
 **User Interaction**: When a separator sibling-menu is open and the user targets a different separator (click or hover), the current menu closes and the new menu opens.
 
-**Implementation Approach**: Simplified modal menu handling using `WM_CANCELMODE`.
+**Implementation Approach**: Simplified popup-session handling using `WM_CANCELMODE`.
 
 **Why WM_CANCELMODE?**:
-- `TrackPopupMenu` is modal and blocks message processing
-- Cannot check menu state or send `WM_COMMAND` while modal loop is running
-- `WM_CANCELMODE` is the only message that forces `TrackPopupMenu` to exit immediately
-- Cleaner than complex `SetWindowsHookEx` approach with global state
+- The sibling dropdown runs inside a popup/menu session that temporarily owns pointer routing
+- Re-entering that flow directly from the current handler is fragile
+- `WM_CANCELMODE` provides one consistent way to force the active popup to unwind before reopening another one
+- Cleaner than complex `SetWindowsHookEx` approaches with global state
 
 **Flow**:
 1. Separator A menu is open (`_menuOpenForSeparator == A`)
@@ -1122,7 +1122,7 @@ void RenderBreadcrumbs() {
    - Highlight B (hover state) immediately
    - Send `WM_CANCELMODE` to force the current menu to close
    - Post a deferred “open separator menu B” message (e.g. `WM_USER+100`)
-4. `TrackPopupMenu` for separator A exits, `WM_EXITMENULOOP` fires
+4. The popup session for separator A exits and `WM_EXITMENULOOP` fires
 5. `OnExitMenuLoop` clears state and starts reverse rotation animation
 6. Deferred message opens B’s menu; pressed state/animation updates apply to B
 
@@ -1155,11 +1155,11 @@ case WM_USER + 100:
     return 0;
 ```
 
-**Hover Switching (During `TrackPopupMenu`)**:
-- `TrackPopupMenu` redirects mouse messages to the menu window, so `OnMouseMove`/`OnLButtonDown` on the owning control won’t run.
+**Hover Switching (During a Dropdown Session)**:
+- The active sibling dropdown temporarily owns pointer interaction, so `OnMouseMove`/`OnLButtonDown` on the owning control won’t run normally.
 - To support “hover-to-switch” behavior, a 30 FPS timer polls `GetCursorPos()` + hit testing against separator bounds.
 - If the cursor is over a different eligible separator, the same `WM_CANCELMODE` + deferred-open flow is used.
-- While the cursor is over a Win32 menu window (`#32768`), polling ignores hover/switching to avoid accidental menu changes.
+- While the cursor is over popup content, polling ignores hover/switching to avoid accidental menu changes.
 
 **Full-Path Popup Consistency**:
 - The full-path popup breadcrumb window uses the same hover-to-switch logic for its separator sibling menus.
@@ -1224,7 +1224,7 @@ C:\Users\Username\Documents\Projects\RedSalamander
 
 **Edit chrome (visual behavior)**:
 - While `_editMode == true`, `NavigationView` still renders the Path section to draw the underline + close button.
-- The Win32 Edit control is laid out to **exclude** the close button region and the underline strip (so the D2D-drawn chrome is visible).
+- The visible `NavigationDxTextHost` child window is laid out to **exclude** the close button region and the underline strip (so the D2D-drawn chrome is visible).
 
 **Implementation**:
 ```cpp
@@ -1235,7 +1235,7 @@ void EnterEditMode() {
     // Hide Direct2D breadcrumb rendering
     _renderMode = RenderMode::Edit;
     
-    // Create or show Edit control overlay
+    // Create or show DxUi text-host overlay
     const std::filesystem::path& currentPath = _currentEditPath.has_value() ? _currentEditPath.value() : _currentPath.value();
     if (!_pathEdit) {
         int x = static_cast<int>(_sectionPathRect.left);
@@ -1246,27 +1246,18 @@ void EnterEditMode() {
         // Layout leaves space for the edit underline + close button (see UI_VisualStyle).
         RECT editRect = _sectionPathRect;
         
-        _pathEdit = CreateWindowExW(
-            0, L"EDIT", currentPath.c_str(),
-            WS_CHILD | WS_VISIBLE | ES_MULTILINE | ES_AUTOHSCROLL | ES_LEFT,
-            x, y, width, height,
-            _hWnd, (HMENU)ID_PATH_EDIT, _hInstance, nullptr);
-
-        SendMessage(_pathEdit, WM_SETFONT, (WPARAM)_pathFont, TRUE);
-        SubclassEditControl();
-
-        // Use a multiline EDIT so the control can fill the full bar height, then shift the
-        // formatting rect (EM_SETRECTNP) so the single line of text is vertically centered.
-        LayoutSingleLineEditInRect(_pathEdit, editRect);
+        _pathEdit = CreateNavigationDxTextHost(_hWnd, editRect, _pathFont.get());
+        _pathEdit->SetText(currentPath.c_str());
+        LayoutNavigationTextHostInRect(_pathEdit, editRect);
     } else {
-        SetWindowText(_pathEdit, currentPath.c_str());
-        ShowWindow(_pathEdit, SW_SHOW);
-        LayoutSingleLineEditInRect(_pathEdit, editRect);
+        _pathEdit->SetText(currentPath.c_str());
+        _pathEdit->Show();
+        LayoutNavigationTextHostInRect(_pathEdit, editRect);
     }
     
-    // Select all text
-    SendMessage(_pathEdit, EM_SETSEL, 0, -1);
-    SetFocus(_pathEdit);
+    // Select all text and focus the host
+    _pathEdit->SelectAll();
+    _pathEdit->Focus();
 }
 
 void ExitEditMode(bool accept) {
@@ -1274,13 +1265,13 @@ void ExitEditMode(bool accept) {
     _editMode = false;
     
     if (accept) {
-        wchar_t buffer[MAX_PATH];
-        GetWindowText(_pathEdit, buffer, MAX_PATH);
+        const std::wstring rawText = ReadWindowText(_pathEdit);
+        const std::wstring typedText = NavigationLocation::NormalizeUserTypedLocationText(rawText);
         
-        if (ValidatePath(buffer)) {
-            RequestPathChange(std::filesystem::path(buffer));
+        if (ValidatePath(typedText)) {
+            RequestPathChange(std::filesystem::path(typedText));
         } else {
-            const std::wstring message = FormatStringResource(nullptr, IDS_FMT_INVALID_PATH, buffer);
+            const std::wstring message = FormatStringResource(nullptr, IDS_FMT_INVALID_PATH, typedText.c_str());
             const std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_INVALID_PATH);
 
             EDITBALLOONTIP tip{};
@@ -1313,10 +1304,11 @@ void ExitEditMode(bool accept) {
 **Storage**: History is supplied by the host (FolderWindow) via `SetHistory()` and persisted in settings (`folders.history`, bounded by `folders.historyMax`, default `20`, clamped `1..50`).
 
 **Current entry marker (current behavior)**:
-- The current path is marked via `MF_CHECKED` using `wil::compare_string_ordinal(..., /*ignoreCase*/ true)` and rendered as an accent vertical bar (same style as autosuggest).
+- The current path is marked via a checked `MenuFlyoutItem` entry using `wil::compare_string_ordinal(..., /*ignoreCase*/ true)` and rendered as an accent vertical bar (same style as autosuggest).
 
 **Sizing and truncation**:
-- The history popup menu width MUST NOT exceed the main window client width.
+- The history popup uses trailing-edge root alignment, so its visible right edge MUST align with the history button's right edge.
+- The history popup width MUST NOT exceed the remaining work-area width available from that trailing-edge anchor point.
 - If a history entry does not fit, the displayed label MUST use a **middle ellipsis**.
 
 ```cpp
@@ -1324,29 +1316,29 @@ std::deque<std::filesystem::path> _pathHistory; // most recent first
 
 void ShowHistoryDropdown() {
     if (_pathHistory.empty()) return;
-    
-    HMENU menu = CreatePopupMenu();
-    
-    constexpr UINT kCmdHistoryBase = 1u;
-    UINT id = kCmdHistoryBase;
+
+    std::vector<DxUi::MenuFlyoutItem> items;
+    UINT nextId = ID_HISTORY_BASE;
     for (const auto& path : _pathHistory) {
-        UINT flags = MF_STRING;
+        DxUi::MenuFlyoutItem item{};
+        item.kind = DxUi::MenuItemKind::Standard;
+        item.text = path.wstring();
+        item.commandId = static_cast<int>(nextId++);
         if (_currentPath && wil::compare_string_ordinal(path.wstring(), _currentPath.value().wstring(), true) == wistd::weak_ordering::equivalent) {
-            flags |= MF_CHECKED;
+            item.checked = true;
         }
-        AppendMenuW(menu, flags, id++, path.c_str());
+        items.push_back(std::move(item));
     }
-    
-    PrepareThemedMenu(menu);
 
     RECT rc = _sectionHistoryRect;
     POINT pt = {rc.right, rc.bottom};
     ClientToScreen(_hWnd.get(), &pt);
-    
-    const int selectedId = TrackThemedPopupMenuReturnCmd(menu, TPM_RIGHTALIGN | TPM_TOPALIGN, pt, _hWnd.get());
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    sessionCallbacks.rootHorizontalAlignment = DxUi::ContextMenuRootHorizontalAlignment::End;
+    const auto selectedId = DxUi::ContextMenu::Show(GetAncestor(_hWnd.get(), GA_ROOT), pt, items, palette, sessionCallbacks);
 
-    if (selectedId >= static_cast<int>(kCmdHistoryBase)) {
-        const size_t index = static_cast<size_t>(selectedId - static_cast<int>(kCmdHistoryBase));
+    if (selectedId.has_value()) {
+        const size_t index = static_cast<size_t>(*selectedId - ID_HISTORY_BASE);
         if (index < _pathHistory.size()) {
             RequestPathChange(_pathHistory[index]);
         }
@@ -1434,21 +1426,22 @@ void OnMouseMove(POINT pt) {
 
 **Methods:**
 ```cpp
-void EnterEditMode();  // Show edit control, hide breadcrumbs  
-void ExitEditMode();   // Hide edit control, show breadcrumbs
+void EnterEditMode();  // Show edit host, hide breadcrumbs  
+void ExitEditMode();   // Hide edit host, show breadcrumbs
 ```
 
 **Validation:**
 - Check if path exists before navigating
 - Show error message for invalid paths
-- Expand environment variables (%USERPROFILE%, etc.)
+- On accept, trim surrounding whitespace, strip one pair of outer double quotes, and expand environment variables for local / `file:` paths before validation and routing
+- Do not expand local environment variables inside non-`file` plugin prefixes such as `sftp:...`
 
 ## History Navigation
 
 **Purpose:** Quick access to recently visited paths.
 
 **UI Elements:**
-- **History dropdown button** (`_sectionHistoryRect`): Opens a popup menu of recent paths (newest-first, bounded by `folders.historyMax`, default `20`, clamped `1..50`).
+- **History dropdown button** (`_sectionHistoryRect`): Opens a DxUi popup of recent paths (newest-first, bounded by `folders.historyMax`, default `20`, clamped `1..50`).
   - Entries that would restore an active pane filter on navigation show a leading filter icon.
 
 **Keyboard Shortcut (default):**
@@ -1460,7 +1453,7 @@ void ExitEditMode();   // Hide edit control, show breadcrumbs
 - **Type**: Direct2D-rendered region (`_sectionDiskInfoRect`) with manual hit testing (no HWND)
 - **Source**: `IDriveInfo` on the active plugin; section hidden when unsupported. `GetDriveInfo` failures yield empty text + grey bar.
 - **Text Format**: `FormatBytesCompact(_freeBytes)` when free bytes are provided; otherwise `FormatBytesCompact(_totalBytes)` when only total bytes are provided (e.g., archive containers)
-- **Rendering**: Direct2D text + 3px progress bar; dropdown menu is a Win32 popup menu themed via `MenuTheme`
+- **Rendering**: Direct2D text + 3px progress bar; dropdown details are shown in a DxUi popup surface
 - **Cursor**: `IDC_ARROW` (current implementation uses arrow everywhere)
 - **Hover**: Timer-based tracking with `_diskInfoHovered` flag driving `RenderDiskInfoSection()`
 
@@ -1565,59 +1558,48 @@ void ShowDiskInfoDropdown() {
 
     double usedPercent = (_hasTotalBytes && _totalBytes > 0 && hasUsedBytes) ?
         (static_cast<double>(usedBytes) * 100.0 / static_cast<double>(_totalBytes)) : 0.0;
-
-    HMENU menu = CreatePopupMenu();
-
+    const bool hasUsedPercent = _hasTotalBytes && _totalBytes > 0 && hasUsedBytes;
     const std::wstring headerName = _driveDisplayName.empty() ? _currentPluginPath.value().wstring() : _driveDisplayName;
-    AppendMenuW(menu, MF_STRING, 0, FormatStringResource(nullptr, IDS_FMT_DISK_INFO_HEADER, headerName).c_str());
-    AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
-    // Only show lines that are actually provided by the active plugin.
-    if (!_volumeLabel.empty())
-        AppendMenuW(menu, MF_STRING, 0, FormatStringResource(nullptr, IDS_FMT_DISK_VOLUME_LABEL, _volumeLabel).c_str());
-    if (!_fileSystem.empty())
-        AppendMenuW(menu, MF_STRING, 0, FormatStringResource(nullptr, IDS_FMT_DISK_FILE_SYSTEM, _fileSystem).c_str());
-    if (!_volumeLabel.empty() || !_fileSystem.empty())
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    std::vector<DxUi::MenuFlyoutItem> items;
+    items.push_back(DxUi::MenuFlyoutItem{
+        .kind = DxUi::MenuItemKind::Header,
+        .text = FormatStringResource(nullptr, IDS_FMT_DISK_INFO_HEADER, headerName)});
 
-    if (_hasTotalBytes)
-        AppendMenuW(menu, MF_STRING, 0,
-                    FormatStringResource(nullptr, IDS_FMT_DISK_TOTAL_SPACE, FormatBytesCompact(_totalBytes), _totalBytes).c_str());
-    if (hasUsedBytes)
-        AppendMenuW(menu, MF_STRING, 0,
-                    FormatStringResource(nullptr, IDS_FMT_DISK_USED_SPACE, FormatBytesCompact(usedBytes), usedBytes).c_str());
-    if (_hasFreeBytes)
-        AppendMenuW(menu, MF_STRING, 0,
-                    FormatStringResource(nullptr, IDS_FMT_DISK_FREE_SPACE, FormatBytesCompact(_freeBytes), _freeBytes).c_str());
-
-    if (_hasTotalBytes && _totalBytes > 0 && hasUsedBytes)
-    {
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-        AppendMenuW(menu, MF_STRING, 0,
-                    FormatStringResource(nullptr, IDS_FMT_DISK_USED_PERCENT, usedPercent).c_str());
-        AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+    // Only show info lines that are actually provided by the active plugin.
+    appendInfoLine(items, _volumeLabel, IDS_FMT_DISK_VOLUME_LABEL);
+    appendInfoLine(items, _fileSystem, IDS_FMT_DISK_FILE_SYSTEM);
+    appendSizeLine(items, _hasTotalBytes, IDS_FMT_DISK_TOTAL_SPACE, _totalBytes);
+    appendSizeLine(items, hasUsedBytes, IDS_FMT_DISK_USED_SPACE, usedBytes);
+    appendSizeLine(items, _hasFreeBytes, IDS_FMT_DISK_FREE_SPACE, _freeBytes);
+    if (hasUsedPercent) {
+        items.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Info,
+                                             .text = L"Used",
+                                             .acceleratorText = FormatStringResource(nullptr, IDS_FMT_DISK_USED_PERCENT, usedPercent)});
     }
 
-    const std::wstring pathText = _currentPluginPath.value().wstring();
-    const NavigationMenuItem* items = nullptr;
-    unsigned int count = 0;
-    if (SUCCEEDED(_driveInfo->GetDriveMenuItems(pathText.c_str(), &items, &count)) && items && count > 0)
-    {
-        // Append plugin-provided commands using the same rendering rules as INavigationMenu.
-        // NavigationView maps each actionable item to ID_DRIVE_MENU_BASE + index.
-    }
+    // Plugin-provided drive commands are appended after the informational rows and mapped to
+    // ID_DRIVE_MENU_BASE..ID_DRIVE_MENU_MAX for ExecuteDriveMenuAction().
 
     RECT rc  = _sectionDiskInfoRect;
     POINT pt = {rc.right, rc.bottom};
     ClientToScreen(_hWnd.get(), &pt);
 
-    const int selectedId = TrackThemedPopupMenuReturnCmd(menu, TPM_RIGHTALIGN | TPM_TOPALIGN, pt, _hWnd.get());
-    if (selectedId != 0)
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    sessionCallbacks.rootHorizontalAlignment = DxUi::ContextMenuRootHorizontalAlignment::End;
+    const auto selectedId = DxUi::ContextMenu::Show(GetAncestor(_hWnd.get(), GA_ROOT), pt, items, palette, sessionCallbacks);
+    if (selectedId.has_value() && *selectedId != 0)
     {
         // Handle selected drive-menu item (navigate path or ExecuteDriveMenuCommand).
     }
 }
 ```
+
+Additional dropdown rules:
+- Informational disk rows (volume label, file system, total/used/free space) SHOULD render as non-interactive label/value rows, with the value right-aligned when present.
+- The disk info popup MUST anchor to the bottom-right corner of `_sectionDiskInfoRect` and use trailing-edge root alignment so a left-pane disk popup grows back into its own pane instead of spilling into the neighboring pane.
+- Appended drive-menu commands MUST preserve the stock shell icon when the plugin supplies `iconPath`/`path`; the DxUi popup path carries a pre-resolved bitmap icon payload from `IconCache` instead of substituting a generic glyph.
+- Well-known drive commands such as `Properties` / `Cleanup` MAY still use command glyphs when no stock shell icon is available.
 
 ## Class Interface
 
@@ -1658,7 +1640,7 @@ private:
     
     enum class RenderMode {
         Breadcrumb,  // Default: clickable path segments
-        Edit         // Edit mode: Win32 Edit control
+        Edit         // Edit mode: DxUi-backed text host
     };
     
     struct PathSegment {
@@ -1688,23 +1670,22 @@ private:
     
     // Layout
     void CalculateLayout();
-    RECT _section1Rect = {};      // Menu button (GDI)
-    RECT _section2Rect = {};      // Path display (Direct2D)
-    RECT _section3Rect = {};      // Disk info (GDI)
-    RECT _historyButtonRect = {}; // History dropdown button
+    RECT _sectionDriveRect    = {}; // Menu button
+    RECT _sectionPathRect     = {}; // Path display
+    RECT _sectionHistoryRect  = {}; // History dropdown button
+    RECT _sectionDiskInfoRect = {}; // Disk info
     
     // Child controls (Win32)
-    HWND _menuButton = nullptr;   // Section 1: Menu button (GDI)
-    HWND _pathEdit = nullptr;     // Section 2: Edit control (edit mode only)
-    HWND _historyButton = nullptr;// Section 2: History dropdown button
-    HWND _diskStatic = nullptr;   // Section 3: Disk space button (owner-draw)
+    std::unique_ptr<NavigationDxTextHost> _pathEdit; // Section 2 edit host
     
-    // Direct2D rendering for Section 2
-	    void EnsureD2DResources();
-	    void DiscardD2DResources();
-	    void RenderSection2();
-	    void RenderBreadcrumbs();
-	    std::vector<PathSegment> SplitPathComponents(const std::filesystem::path& path);
+    // Direct2D rendering
+    void EnsureD2DResources();
+    void DiscardD2DResources();
+    void RenderDriveSection();
+    void RenderPathSection();
+    void RenderHistorySection();
+    void RenderDiskInfoSection();
+    std::vector<PathSegment> SplitPathComponents(const std::filesystem::path& path);
     
     // Menus
     void ShowMenuDropdown();
@@ -1777,7 +1758,7 @@ private:
     std::vector<float> _separatorTargetAngles;    // Target angle
     
     // GDI resources (Sections 1 & 3)
-    HFONT _pathFont = nullptr;      // For Edit control
+    HFONT _pathFont = nullptr;      // For the edit host text surface
     HFONT _diskFont = nullptr;      // For Section 3
     HBRUSH _backgroundBrush = nullptr;
     HPEN _borderPen = nullptr;
@@ -1933,7 +1914,7 @@ NavigationView must implement internal focus navigation because most interactive
   - **Path** → enter edit mode (select all)
   - **History** → open history dropdown
   - **Disk Info** → open disk info dropdown
-- When the edit control has focus, **Tab / Shift+Tab** must first exit edit mode, then move focus to the next/previous region
+- When the edit host has focus, **Tab / Shift+Tab** must first exit edit mode, then move focus to the next/previous region
 - Explicit child HWNDs spawned by NavigationView (address edit, dropdown combo) take keyboard priority while active; once they close, focus returns to the pane `FolderView` unless another pane child is intentionally focused
 
 ## Theme System
@@ -1962,7 +1943,7 @@ NavigationView must support the shared theme system with **Light**, **Dark**, **
   - Switching System/Light/Dark/Rainbow updates the radio check, but the effective palette remains High Contrast until Windows High Contrast is turned off.
 - Theme changes re-apply to:
   - NavigationView (GDI + Direct2D rendering)
-  - Popup menus (owner-drawn using the menu theme)
+- Dropdown popups (DxUi popup surfaces using the shared menu theme/material rules)
   - FolderView (via FolderWindow propagation)
   - Window titlebar (DWM attributes; best-effort)
 
@@ -2001,10 +1982,10 @@ To determine if the current path is **under** a special folder (not just equal),
 - **Hit-Test Cache**: Pre-calculate segment bounds, update only on layout change
 - **Async Path Validation**: Don't block UI while checking network paths
 
-### Sections 1 & 3 (GDI) Optimization
-- **Static Controls**: Minimal repainting required
-- **Font Caching**: Create fonts once, reuse throughout lifetime
-- **Owner-Draw**: Menu button only redraws on state change (hover/press)
+### Sections 1, 3, and 4 Optimization
+- **Dirty-region redraws**: Repaint only the sections whose hover/pressed state or data changed
+- **Font caching**: Create text formats/layout helpers once, reuse throughout lifetime
+- **Popup reuse principles**: Keep dropdown item preparation cheap and rely on popup-session work only when the user opens a menu
 
 ### Overall Performance
 - **Target**: 60 FPS for smooth hover effects in breadcrumb mode

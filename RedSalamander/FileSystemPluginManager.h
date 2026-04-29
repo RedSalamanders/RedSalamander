@@ -36,8 +36,8 @@ public:
         PluginOrigin origin = PluginOrigin::Embedded;
         std::filesystem::path path;
 
-        // When non-empty, this DLL exposes multiple logical plugins and this is the
-        // plugin id to request via RedSalamanderCreateEx().
+        // Logical plugin id advertised by RedSalamanderEnumeratePlugins and
+        // requested via RedSalamanderCreate().
         std::wstring factoryPluginId;
 
         std::wstring id;

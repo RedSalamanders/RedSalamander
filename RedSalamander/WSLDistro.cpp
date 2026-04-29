@@ -1,7 +1,9 @@
 #include "WSLDistro.h"
+#include "LocalizationManager.h"
 #include "resource.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <optional>
 #include <shlwapi.h>
 
@@ -244,33 +246,15 @@ wil::unique_hicon WSLDistro::LoadDistributionIcon(const std::wstring& distroName
         return {}; // No icon for this distribution
     }
 
-    // Load PNG resource from embedded resources
+    // Load PNG resource from localized resources
     HINSTANCE hInstance = GetModuleHandleW(nullptr);
     if (! hInstance)
     {
         return nullptr;
     }
 
-    HRSRC hResource = FindResourceW(hInstance, MAKEINTRESOURCEW(resourceId), L"PNG");
-    if (! hResource)
-    {
-        return nullptr;
-    }
-
-    DWORD imageSize = SizeofResource(hInstance, hResource);
-    if (imageSize == 0)
-    {
-        return nullptr;
-    }
-
-    HGLOBAL hMemory = LoadResource(hInstance, hResource);
-    if (! hMemory)
-    {
-        return nullptr;
-    }
-
-    BYTE* pImageData = static_cast<BYTE*>(LockResource(hMemory));
-    if (! pImageData)
+    std::vector<std::byte> imageBytes;
+    if (! Localization::LoadResourceBytes(hInstance, MAKEINTRESOURCEW(resourceId), L"PNG", imageBytes))
     {
         return nullptr;
     }
@@ -278,8 +262,8 @@ wil::unique_hicon WSLDistro::LoadDistributionIcon(const std::wstring& distroName
     // CreateIconFromResourceEx automatically handles PNG format and scaling
     // Version 0x00030000 supports PNG format (Windows Vista+)
     // Use iconSize for proper DPI-aware sizing, or 0 for default
-    HICON hIcon = CreateIconFromResourceEx(pImageData,
-                                           imageSize,
+    HICON hIcon = CreateIconFromResourceEx(reinterpret_cast<PBYTE>(imageBytes.data()),
+                                           static_cast<DWORD>(imageBytes.size()),
                                            TRUE,             // fIcon = TRUE (not cursor)
                                            0x00030000,       // dwVersion = 3.0 (supports PNG)
                                            iconSize,         // cxDesired (DPI-aware size)

@@ -28,8 +28,9 @@ void FolderWindow::OnSetFocus()
 void FolderWindow::UpdatePaneFocusStates() noexcept
 {
     const HWND focusedHwnd = GetFocus();
-    const bool inLeftPane = (_leftPane.hFolderView && (focusedHwnd == _leftPane.hFolderView.get() || IsChild(_leftPane.hFolderView.get(), focusedHwnd))) ||
-                            (_leftPane.hNavigationView && (focusedHwnd == _leftPane.hNavigationView.get() || IsChild(_leftPane.hNavigationView.get(), focusedHwnd)));
+    const bool inLeftPane =
+        (_leftPane.hFolderView && (focusedHwnd == _leftPane.hFolderView.get() || IsChild(_leftPane.hFolderView.get(), focusedHwnd))) ||
+        (_leftPane.hNavigationView && (focusedHwnd == _leftPane.hNavigationView.get() || IsChild(_leftPane.hNavigationView.get(), focusedHwnd)));
     const bool inRightPane =
         (_rightPane.hFolderView && (focusedHwnd == _rightPane.hFolderView.get() || IsChild(_rightPane.hFolderView.get(), focusedHwnd))) ||
         (_rightPane.hNavigationView && (focusedHwnd == _rightPane.hNavigationView.get() || IsChild(_rightPane.hNavigationView.get(), focusedHwnd)));
@@ -51,9 +52,9 @@ void FolderWindow::UpdatePaneFocusStates() noexcept
 HWND FolderWindow::GetPanePreferredFocusTarget(Pane pane) const noexcept
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
-    const bool inPane = (state.hFolderView && (_lastFocusedPaneChild == state.hFolderView.get() || IsChild(state.hFolderView.get(), _lastFocusedPaneChild))) ||
-                        (state.hNavigationView &&
-                         (_lastFocusedPaneChild == state.hNavigationView.get() || IsChild(state.hNavigationView.get(), _lastFocusedPaneChild)));
+    const bool inPane =
+        (state.hFolderView && (_lastFocusedPaneChild == state.hFolderView.get() || IsChild(state.hFolderView.get(), _lastFocusedPaneChild))) ||
+        (state.hNavigationView && (_lastFocusedPaneChild == state.hNavigationView.get() || IsChild(state.hNavigationView.get(), _lastFocusedPaneChild)));
     if (_lastFocusedPaneChild && IsWindow(_lastFocusedPaneChild) && inPane)
     {
         return _lastFocusedPaneChild;
@@ -134,10 +135,70 @@ HWND FolderWindow::GetFocusedFolderViewHwnd() const noexcept
     return nullptr;
 }
 
+bool FolderWindow::IsFocusInNavigationView() const noexcept
+{
+    const HWND focused = GetFocus();
+    if (! focused)
+    {
+        return false;
+    }
+
+    return (_leftPane.hNavigationView && (focused == _leftPane.hNavigationView.get() || IsChild(_leftPane.hNavigationView.get(), focused))) ||
+           (_rightPane.hNavigationView && (focused == _rightPane.hNavigationView.get() || IsChild(_rightPane.hNavigationView.get(), focused)));
+}
+
 HWND FolderWindow::GetFolderViewHwnd(Pane pane) const noexcept
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     return state.hFolderView.get();
+}
+
+bool FolderWindow::TryRestoreActivePaneFolderViewFocus() noexcept
+{
+    if (GetFocusedFolderViewHwnd() != nullptr)
+    {
+        return false;
+    }
+
+    FocusPaneFolderView(_activePane);
+    return GetFocusedFolderViewHwnd() != nullptr;
+}
+
+void FolderWindow::RequestRestoreFolderViewFocus(HWND folderView) noexcept
+{
+    Pane pane;
+    if (_leftPane.hFolderView && folderView == _leftPane.hFolderView.get())
+    {
+        pane = Pane::Left;
+    }
+    else if (_rightPane.hFolderView && folderView == _rightPane.hFolderView.get())
+    {
+        pane = Pane::Right;
+    }
+    else
+    {
+        return;
+    }
+
+    SetActivePane(pane);
+    if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+    {
+        if (IsIconic(_hWnd.get()) != FALSE)
+        {
+            ShowWindow(_hWnd.get(), SW_RESTORE);
+        }
+        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        static_cast<void>(SetActiveWindow(_hWnd.get()));
+    }
+
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (state.hNavigationView && IsWindow(state.hNavigationView.get()) != FALSE &&
+        PostMessageW(state.hNavigationView.get(), WndMsg::kNavigationViewRestoreFolderFocus, 0, 0))
+    {
+        return;
+    }
+
+    FocusPaneFolderView(pane);
 }
 
 FolderWindow::Pane FolderWindow::GetPaneFromChild(HWND child) const noexcept
@@ -170,6 +231,14 @@ FolderWindow::Pane FolderWindow::GetPaneFromChild(HWND child) const noexcept
 
 void FolderWindow::OnLButtonDown(POINT pt)
 {
+    const SplitterArrowZone arrowZone = HitTestSplitterArrow(pt);
+    if (arrowZone != SplitterArrowZone::None)
+    {
+        SetHoveredSplitterArrowZone(arrowZone);
+        ToggleZoomPanel(GetSplitterArrowTargetPane(arrowZone));
+        return;
+    }
+
     if (PtInRect(&_splitterRect, pt))
     {
         _draggingSplitter     = true;
@@ -198,7 +267,7 @@ void FolderWindow::OnLButtonDown(POINT pt)
 
 void FolderWindow::OnLButtonDblClk(POINT pt)
 {
-    if (! PtInRect(&_splitterRect, pt))
+    if (HitTestSplitterArrow(pt) != SplitterArrowZone::None || ! PtInRect(&_splitterRect, pt))
     {
         return;
     }
@@ -221,8 +290,16 @@ void FolderWindow::OnMouseMove(POINT pt)
 {
     if (! _draggingSplitter)
     {
+        const SplitterArrowZone arrowZone = HitTestSplitterArrow(pt);
+        SetHoveredSplitterArrowZone(arrowZone);
+        if (arrowZone != SplitterArrowZone::None)
+        {
+            TrackSplitterMouseLeave();
+        }
         return;
     }
+
+    SetHoveredSplitterArrowZone(SplitterArrowZone::None);
 
     const int splitterWidth  = _splitterRect.right - _splitterRect.left;
     const int availableWidth = std::max(0L, _clientSize.cx - splitterWidth);
@@ -248,8 +325,20 @@ void FolderWindow::OnCaptureChanged()
     _draggingSplitter = false;
 }
 
+void FolderWindow::OnMouseLeave()
+{
+    _trackingSplitterMouseLeave = false;
+    SetHoveredSplitterArrowZone(SplitterArrowZone::None);
+}
+
 bool FolderWindow::OnSetCursor(POINT pt)
 {
+    if (HitTestSplitterArrow(pt) != SplitterArrowZone::None)
+    {
+        SetCursor(LoadCursor(nullptr, IDC_HAND));
+        return true;
+    }
+
     if (PtInRect(&_splitterRect, pt))
     {
         SetCursor(LoadCursor(nullptr, IDC_SIZEWE));
@@ -282,3 +371,179 @@ void FolderWindow::OnParentNotify(UINT eventMsg, UINT childId)
         }
     }
 }
+
+RECT FolderWindow::GetSplitterArrowRect(SplitterArrowZone zone) const noexcept
+{
+    if (zone == SplitterArrowZone::None || _splitterRect.right <= _splitterRect.left || _splitterRect.bottom <= _splitterRect.top)
+    {
+        return RECT{};
+    }
+
+    const int dpi            = std::max(1, static_cast<int>(_dpi));
+    const int navHeight      = std::max(1, MulDiv(NavigationView::kHeight, dpi, USER_DEFAULT_SCREEN_DPI));
+    const int splitterHeight = std::max(0L, _splitterRect.bottom - _splitterRect.top);
+    if (splitterHeight <= 0)
+    {
+        return RECT{};
+    }
+
+    const int arrowHeight = std::min(navHeight, splitterHeight);
+    if ((arrowHeight * 2) > splitterHeight)
+    {
+        const LONG midpoint = _splitterRect.top + (splitterHeight / 2);
+        if (zone == SplitterArrowZone::Left)
+        {
+            return RECT{_splitterRect.left, _splitterRect.top, _splitterRect.right, midpoint};
+        }
+
+        return RECT{_splitterRect.left, midpoint, _splitterRect.right, _splitterRect.bottom};
+    }
+
+    if (zone == SplitterArrowZone::Left)
+    {
+        return RECT{_splitterRect.left, _splitterRect.top, _splitterRect.right, _splitterRect.top + arrowHeight};
+    }
+
+    return RECT{_splitterRect.left, _splitterRect.bottom - arrowHeight, _splitterRect.right, _splitterRect.bottom};
+}
+
+FolderWindow::Pane FolderWindow::GetSplitterArrowTargetPane(SplitterArrowZone zone) const noexcept
+{
+    if (_zoomedPane == Pane::Left)
+    {
+        return Pane::Right;
+    }
+
+    if (_zoomedPane == Pane::Right)
+    {
+        return Pane::Left;
+    }
+
+    return zone == SplitterArrowZone::Right ? Pane::Right : Pane::Left;
+}
+
+wchar_t FolderWindow::GetSplitterArrowGlyph(SplitterArrowZone zone) const noexcept
+{
+    return GetSplitterArrowTargetPane(zone) == Pane::Left ? L'>' : L'<';
+}
+
+FolderWindow::SplitterArrowZone FolderWindow::HitTestSplitterArrow(POINT pt) const noexcept
+{
+    const RECT leftArrow = GetSplitterArrowRect(SplitterArrowZone::Left);
+    if (PtInRect(&leftArrow, pt) != FALSE)
+    {
+        return SplitterArrowZone::Left;
+    }
+
+    const RECT rightArrow = GetSplitterArrowRect(SplitterArrowZone::Right);
+    if (PtInRect(&rightArrow, pt) != FALSE)
+    {
+        return SplitterArrowZone::Right;
+    }
+
+    return SplitterArrowZone::None;
+}
+
+void FolderWindow::SetHoveredSplitterArrowZone(SplitterArrowZone zone) noexcept
+{
+    if (_hoveredSplitterArrowZone == zone)
+    {
+        return;
+    }
+
+    const RECT previousRect   = GetSplitterArrowRect(_hoveredSplitterArrowZone);
+    _hoveredSplitterArrowZone = zone;
+    const RECT nextRect       = GetSplitterArrowRect(_hoveredSplitterArrowZone);
+
+    if (_hWnd)
+    {
+        if (previousRect.right > previousRect.left && previousRect.bottom > previousRect.top)
+        {
+            InvalidateRect(_hWnd.get(), &previousRect, FALSE);
+        }
+        if (nextRect.right > nextRect.left && nextRect.bottom > nextRect.top)
+        {
+            InvalidateRect(_hWnd.get(), &nextRect, FALSE);
+        }
+    }
+}
+
+void FolderWindow::TrackSplitterMouseLeave() noexcept
+{
+    if (_trackingSplitterMouseLeave || ! _hWnd)
+    {
+        return;
+    }
+
+    TRACKMOUSEEVENT tme{};
+    tme.cbSize    = sizeof(tme);
+    tme.dwFlags   = TME_LEAVE;
+    tme.hwndTrack = _hWnd.get();
+    if (TrackMouseEvent(&tme) != FALSE)
+    {
+        _trackingSplitterMouseLeave = true;
+    }
+}
+
+#ifdef ENABLE_TESTS
+bool FolderWindow::DebugGetSplitterSnapshot(FolderWindowSplitterDebugSnapshot& out) const noexcept
+{
+    out                      = {};
+    out.splitterRect         = _splitterRect;
+    out.leftArrowRect        = GetSplitterArrowRect(SplitterArrowZone::Left);
+    out.rightArrowRect       = GetSplitterArrowRect(SplitterArrowZone::Right);
+    out.leftArrowTargetPane  = GetSplitterArrowTargetPane(SplitterArrowZone::Left);
+    out.rightArrowTargetPane = GetSplitterArrowTargetPane(SplitterArrowZone::Right);
+    out.leftArrowGlyph       = GetSplitterArrowGlyph(SplitterArrowZone::Left);
+    out.rightArrowGlyph      = GetSplitterArrowGlyph(SplitterArrowZone::Right);
+    out.arrowColor           = GetSplitterArrowColor();
+    out.gripColor            = GetSplitterGripColor();
+    out.arrowChevronSizePx   = GetSplitterArrowChevronSizePx();
+    out.gripDotSizePx        = GetSplitterGripDotSizePx();
+    out.leftArrowCursorHand =
+        HitTestSplitterArrow({out.leftArrowRect.left + ((out.leftArrowRect.right - out.leftArrowRect.left) / 2),
+                              out.leftArrowRect.top + ((out.leftArrowRect.bottom - out.leftArrowRect.top) / 2)}) == SplitterArrowZone::Left;
+    out.rightArrowCursorHand =
+        HitTestSplitterArrow({out.rightArrowRect.left + ((out.rightArrowRect.right - out.rightArrowRect.left) / 2),
+                              out.rightArrowRect.top + ((out.rightArrowRect.bottom - out.rightArrowRect.top) / 2)}) == SplitterArrowZone::Right;
+
+    if (_hoveredSplitterArrowZone == SplitterArrowZone::Left)
+    {
+        out.hoveredArrowPane = Pane::Left;
+    }
+    else if (_hoveredSplitterArrowZone == SplitterArrowZone::Right)
+    {
+        out.hoveredArrowPane = Pane::Right;
+    }
+
+    return true;
+}
+
+bool FolderWindow::DebugHoverSplitterArrow(Pane pane) noexcept
+{
+    const SplitterArrowZone zone = pane == Pane::Left ? SplitterArrowZone::Left : SplitterArrowZone::Right;
+    const RECT arrowRect         = GetSplitterArrowRect(zone);
+    if (arrowRect.right <= arrowRect.left || arrowRect.bottom <= arrowRect.top)
+    {
+        return false;
+    }
+
+    const POINT pt{arrowRect.left + ((arrowRect.right - arrowRect.left) / 2), arrowRect.top + ((arrowRect.bottom - arrowRect.top) / 2)};
+    OnMouseMove(pt);
+    return _hoveredSplitterArrowZone == zone;
+}
+
+bool FolderWindow::DebugClickSplitterArrow(Pane pane) noexcept
+{
+    const SplitterArrowZone zone = pane == Pane::Left ? SplitterArrowZone::Left : SplitterArrowZone::Right;
+    const RECT arrowRect         = GetSplitterArrowRect(zone);
+    if (arrowRect.right <= arrowRect.left || arrowRect.bottom <= arrowRect.top)
+    {
+        return false;
+    }
+
+    const POINT pt{arrowRect.left + ((arrowRect.right - arrowRect.left) / 2), arrowRect.top + ((arrowRect.bottom - arrowRect.top) / 2)};
+    OnLButtonDown(pt);
+    return true;
+}
+#endif

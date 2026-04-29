@@ -1,9 +1,24 @@
 #include "Framework.h"
 
 #include "CompareDirectoriesWindow.Internal.h"
+#include "D2DHdcPaint.h"
 
 namespace CompareDirectoriesWindowInternal
 {
+using SteadyClock                                       = std::chrono::steady_clock;
+constexpr ULONGLONG kCompareTaskCardUpdateMinIntervalMs = 50;
+
+[[nodiscard]] uint64_t ElapsedUsSince(SteadyClock::time_point startedAt) noexcept
+{
+    if (startedAt == SteadyClock::time_point{})
+    {
+        return 0u;
+    }
+
+    const auto elapsed = std::chrono::steady_clock::now() - startedAt;
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
+}
+
 struct ScanProgressPayload
 {
     uint64_t runId                      = 0;
@@ -14,6 +29,7 @@ struct ScanProgressPayload
     uint64_t contentCandidateTotalBytes = 0;
     std::filesystem::path relativeFolder;
     std::wstring entryName;
+    SteadyClock::time_point enqueuedAt{};
 };
 
 struct ContentProgressPayload
@@ -29,6 +45,7 @@ struct ContentProgressPayload
     uint64_t completedContentCompares = 0;
     std::filesystem::path relativeFolder;
     std::wstring entryName;
+    SteadyClock::time_point enqueuedAt{};
 };
 
 [[nodiscard]] std::wstring FormatDurationHmsNoexcept(uint64_t seconds) noexcept
@@ -90,6 +107,7 @@ void CompareDirectoriesWindow::SetSessionCallbacksForRun(uint64_t runId) noexcep
         payload->contentCandidateTotalBytes = contentCandidateTotalBytes;
         payload->relativeFolder             = relativeFolder;
         payload->entryName                  = std::wstring(currentEntryName);
+        payload->enqueuedAt                 = SteadyClock::now();
         static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesScanProgress, 0, std::move(payload)));
     });
 
@@ -121,6 +139,7 @@ void CompareDirectoriesWindow::SetSessionCallbacksForRun(uint64_t runId) noexcep
         payload->completedContentCompares = completedContentCompares;
         payload->relativeFolder           = relativeFolder;
         payload->entryName                = std::wstring(entryName);
+        payload->enqueuedAt               = SteadyClock::now();
         static_cast<void>(PostMessagePayload(hwnd, WndMsg::kCompareDirectoriesContentProgress, 0, std::move(payload)));
     });
 
@@ -264,6 +283,49 @@ LRESULT CompareDirectoriesWindow::OnScanProgress(LPARAM lp) noexcept
         return 0;
     }
 
+    uint64_t drainedPayloadCount = 0u;
+    while (_hWnd)
+    {
+        MSG queuedMessage{};
+        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), 0, 0, PM_NOREMOVE))
+        {
+            break;
+        }
+        if (queuedMessage.message != WndMsg::kCompareDirectoriesScanProgress)
+        {
+            break;
+        }
+        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), WndMsg::kCompareDirectoriesScanProgress, WndMsg::kCompareDirectoriesScanProgress, PM_REMOVE))
+        {
+            break;
+        }
+
+        auto newerPayload = TakeMessagePayload<ScanProgressPayload>(queuedMessage.lParam);
+        if (! newerPayload)
+        {
+            continue;
+        }
+
+        payload = std::move(newerPayload);
+        ++drainedPayloadCount;
+    }
+
+    Debug::Perf::EmitCounter(L"compare.ui.scan_progress_message_count");
+    if (drainedPayloadCount != 0u)
+    {
+        Debug::Perf::EmitCounter(L"compare.ui.scan_progress_messages_coalesced_count");
+        Debug::Perf::EmitCounter(L"compare.ui.scan_progress_messages_drained", drainedPayloadCount);
+    }
+    if (payload->enqueuedAt != SteadyClock::time_point{})
+    {
+        Debug::Perf::Emit(L"compare.ui.scan_progress_to_visible_latency_ms",
+                          L"",
+                          ElapsedUsSince(payload->enqueuedAt),
+                          payload->activeScans,
+                          static_cast<uint64_t>(drainedPayloadCount),
+                          S_OK);
+    }
+
     if (! _compareActive || payload->runId != _compareRunId)
     {
         return 0;
@@ -301,6 +363,49 @@ LRESULT CompareDirectoriesWindow::OnContentProgress(LPARAM lp) noexcept
     if (! payload)
     {
         return 0;
+    }
+
+    uint64_t drainedPayloadCount = 0u;
+    while (_hWnd)
+    {
+        MSG queuedMessage{};
+        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), 0, 0, PM_NOREMOVE))
+        {
+            break;
+        }
+        if (queuedMessage.message != WndMsg::kCompareDirectoriesContentProgress)
+        {
+            break;
+        }
+        if (! ::PeekMessageW(&queuedMessage, _hWnd.get(), WndMsg::kCompareDirectoriesContentProgress, WndMsg::kCompareDirectoriesContentProgress, PM_REMOVE))
+        {
+            break;
+        }
+
+        auto newerPayload = TakeMessagePayload<ContentProgressPayload>(queuedMessage.lParam);
+        if (! newerPayload)
+        {
+            continue;
+        }
+
+        payload = std::move(newerPayload);
+        ++drainedPayloadCount;
+    }
+
+    Debug::Perf::EmitCounter(L"compare.ui.content_progress_message_count");
+    if (drainedPayloadCount != 0u)
+    {
+        Debug::Perf::EmitCounter(L"compare.ui.content_progress_messages_coalesced_count");
+        Debug::Perf::EmitCounter(L"compare.ui.content_progress_messages_drained", drainedPayloadCount);
+    }
+    if (payload->enqueuedAt != SteadyClock::time_point{})
+    {
+        Debug::Perf::Emit(L"compare.ui.content_progress_to_visible_latency_ms",
+                          L"",
+                          ElapsedUsSince(payload->enqueuedAt),
+                          payload->pendingContentCompares,
+                          static_cast<uint64_t>(drainedPayloadCount),
+                          S_OK);
     }
 
     if (! _compareActive || payload->runId != _compareRunId)
@@ -413,15 +518,21 @@ LRESULT CompareDirectoriesWindow::OnContentProgress(LPARAM lp) noexcept
 
 void CompareDirectoriesWindow::UpdateProgressControls() noexcept
 {
-    if (! _scanProgressText && ! _scanProgressBar)
+    Debug::Perf::EmitCounter(L"compare.ui.progress_controls_update_count");
+    const SteadyClock::time_point startedAt = SteadyClock::now();
+
+    if (! _scanProgressText && ! _dxScanProgressTextHostHwnd && ! _scanProgressBar)
     {
         UpdateCompareWatermark();
+        Debug::Perf::Emit(L"compare.ui.progress_controls_update_us", L"", ElapsedUsSince(startedAt), 0u, 0u, S_OK);
         return;
     }
 
-    const bool show = (_compareActive && _compareRunPending) || _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u;
-    const bool wasVisible =
-        (_scanProgressText && IsWindowVisible(_scanProgressText.get()) != 0) || (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0);
+    const bool show              = (_compareActive && _compareRunPending) || _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u;
+    const bool useDxProgressText = _usesDxBannerText && _dxScanProgressTextHostHwnd && _dxScanProgressTextLabel;
+    const bool wasVisible        = (useDxProgressText && IsWindowVisible(_dxScanProgressTextHostHwnd.get()) != 0) ||
+                                   (_scanProgressText && IsWindowVisible(_scanProgressText.get()) != 0) ||
+                                   (_scanProgressBar && IsWindowVisible(_scanProgressBar.get()) != 0);
 
     if (! show)
     {
@@ -433,18 +544,49 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
 
         if (_scanProgressBar)
         {
-            ShowWindow(_scanProgressBar.get(), SW_HIDE);
+            if (_progressControlsVisible || IsWindowVisible(_scanProgressBar.get()) != 0)
+            {
+                ShowWindow(_scanProgressBar.get(), SW_HIDE);
+            }
         }
         if (_scanProgressText)
         {
-            SetWindowTextW(_scanProgressText.get(), L"");
-            ShowWindow(_scanProgressText.get(), SW_HIDE);
+            if (! useDxProgressText && ! _lastProgressMessage.empty())
+            {
+                SetWindowTextW(_scanProgressText.get(), L"");
+                Debug::Perf::EmitCounter(L"compare.ui.progress_controls_text_applied_count");
+            }
+            if (_progressControlsVisible || IsWindowVisible(_scanProgressText.get()) != 0)
+            {
+                ShowWindow(_scanProgressText.get(), SW_HIDE);
+            }
         }
+        if (useDxProgressText)
+        {
+            if (! _lastProgressMessage.empty())
+            {
+                _dxScanProgressTextLabel->SetText(std::wstring{});
+                _dxScanProgressTextHost.Invalidate();
+                Debug::Perf::EmitCounter(L"compare.ui.progress_controls_text_applied_count");
+            }
+            if (_progressControlsVisible || IsWindowVisible(_dxScanProgressTextHostHwnd.get()) != 0)
+            {
+                ShowWindow(_dxScanProgressTextHostHwnd.get(), SW_HIDE);
+            }
+        }
+        _progressControlsVisible = false;
+        _lastProgressMessage.clear();
         if (wasVisible)
         {
+            Debug::Perf::EmitCounter(L"compare.ui.progress_controls_hide_count");
             Layout();
         }
+        else
+        {
+            Debug::Perf::EmitCounter(L"compare.ui.progress_controls_skipped_count");
+        }
         UpdateCompareWatermark();
+        Debug::Perf::Emit(L"compare.ui.progress_controls_update_us", L"", ElapsedUsSince(startedAt), 0u, 0u, S_OK);
         return;
     }
 
@@ -543,19 +685,57 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
         message.append(contentText);
     }
 
-    if (_scanProgressText)
+    bool textApplied = false;
+    if (useDxProgressText)
     {
-        SetWindowTextW(_scanProgressText.get(), message.c_str());
+        if (message != _lastProgressMessage)
+        {
+            _dxScanProgressTextLabel->SetText(message);
+            _lastProgressMessage = message;
+            textApplied          = true;
+            _dxScanProgressTextHost.Invalidate();
+            Debug::Perf::EmitCounter(L"compare.ui.progress_controls_text_applied_count");
+        }
+    }
+    else if (_scanProgressText)
+    {
+        if (message != _lastProgressMessage)
+        {
+            SetWindowTextW(_scanProgressText.get(), message.c_str());
+            _lastProgressMessage = message;
+            textApplied          = true;
+            Debug::Perf::EmitCounter(L"compare.ui.progress_controls_text_applied_count");
+        }
     }
 
-    if (_scanProgressText)
+    bool uiChanged = false;
+    if (useDxProgressText)
+    {
+        if (_scanProgressText && IsWindowVisible(_scanProgressText.get()) != 0)
+        {
+            ShowWindow(_scanProgressText.get(), SW_HIDE);
+        }
+        if (! _progressControlsVisible || IsWindowVisible(_dxScanProgressTextHostHwnd.get()) == 0)
+        {
+            ShowWindow(_dxScanProgressTextHostHwnd.get(), SW_SHOWNA);
+            uiChanged = true;
+        }
+    }
+    else if (_scanProgressText && (! _progressControlsVisible || IsWindowVisible(_scanProgressText.get()) == 0))
     {
         ShowWindow(_scanProgressText.get(), SW_SHOW);
+        uiChanged = true;
     }
-    if (_scanProgressBar)
+    if (_scanProgressBar && (! _progressControlsVisible || IsWindowVisible(_scanProgressBar.get()) == 0))
     {
         ShowWindow(_scanProgressBar.get(), SW_SHOW);
+        Debug::Perf::EmitCounter(L"compare.ui.progress_controls_show_count");
+        uiChanged = true;
+    }
+    if (_scanProgressBar && (! _progressControlsVisible || ! _progressSpinnerTimerActive))
+    {
         InvalidateRect(_scanProgressBar.get(), nullptr, FALSE);
+        Debug::Perf::EmitCounter(L"compare.ui.progress_controls_progressbar_invalidate_count");
     }
     if (! _progressSpinnerTimerActive && _hWnd && _scanProgressBar)
     {
@@ -567,7 +747,13 @@ void CompareDirectoriesWindow::UpdateProgressControls() noexcept
     {
         Layout();
     }
+    else if (! uiChanged && ! textApplied)
+    {
+        Debug::Perf::EmitCounter(L"compare.ui.progress_controls_skipped_count");
+    }
+    _progressControlsVisible = true;
     UpdateCompareWatermark();
+    Debug::Perf::Emit(L"compare.ui.progress_controls_update_us", L"", ElapsedUsSince(startedAt), 0u, 0u, S_OK);
 }
 
 void CompareDirectoriesWindow::OnProgressSpinnerTimer() noexcept
@@ -619,81 +805,6 @@ void CompareDirectoriesWindow::OnProgressSpinnerTimer() noexcept
     }
 }
 
-void CompareDirectoriesWindow::InvalidateSpinnerPens() noexcept
-{
-    _progressSpinnerPenKeyValid = false;
-    for (auto& pen : _progressSpinnerPens)
-    {
-        pen.reset();
-    }
-}
-
-void CompareDirectoriesWindow::EnsureSpinnerPens(COLORREF background, COLORREF accent, bool rainbowSpinner, uint32_t rainbowSeedHash, int stroke) noexcept
-{
-    if (stroke <= 0)
-    {
-        InvalidateSpinnerPens();
-        return;
-    }
-
-    ProgressSpinnerPenKey key{};
-    key.background    = background;
-    key.accent        = accent;
-    key.rainbow       = rainbowSpinner;
-    key.darkBase      = _theme.menu.darkBase;
-    key.seedHash      = rainbowSpinner ? rainbowSeedHash : 0u;
-    key.strokeWidthPx = stroke;
-
-    if (_progressSpinnerPenKeyValid && _progressSpinnerPenKey == key)
-    {
-        bool allValid = true;
-        for (const auto& pen : _progressSpinnerPens)
-        {
-            allValid = allValid && static_cast<bool>(pen);
-        }
-        if (allValid)
-        {
-            return;
-        }
-    }
-
-    _progressSpinnerPenKey      = key;
-    _progressSpinnerPenKeyValid = true;
-    for (auto& pen : _progressSpinnerPens)
-    {
-        pen.reset();
-    }
-
-    float rainbowHue = 0.0f;
-    float rainbowSat = 0.0f;
-    float rainbowVal = 0.0f;
-    if (rainbowSpinner)
-    {
-        rainbowHue = static_cast<float>(rainbowSeedHash % 360u);
-        rainbowSat = key.darkBase ? 0.70f : 0.55f;
-        rainbowVal = key.darkBase ? 0.95f : 0.85f;
-    }
-
-    for (int i = 0; i < kProgressSpinnerSegments; ++i)
-    {
-        const float t     = static_cast<float>(i) / static_cast<float>(kProgressSpinnerSegments);
-        const float alpha = 0.15f + 0.85f * (1.0f - t);
-
-        COLORREF segmentBase = accent;
-        if (rainbowSpinner)
-        {
-            const float hueStep    = 360.0f / static_cast<float>(kProgressSpinnerSegments);
-            const float hueDegrees = rainbowHue + static_cast<float>(i) * hueStep;
-            segmentBase            = ColorToCOLORREF(ColorFromHSV(hueDegrees, rainbowSat, rainbowVal));
-        }
-
-        const int overlayWeight = static_cast<int>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255.0f));
-        const COLORREF color    = ThemedControls::BlendColor(background, segmentBase, overlayWeight, 255);
-
-        _progressSpinnerPens[static_cast<size_t>(i)].reset(CreatePen(PS_SOLID, stroke, color));
-    }
-}
-
 void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) noexcept
 {
     if (! hdc)
@@ -741,8 +852,21 @@ void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) 
 
     constexpr float kPi = 3.14159265358979323846f;
     const float baseRad = (_progressSpinnerAngleDeg - 90.0f) * (kPi / 180.0f);
+    float rainbowHue    = 0.0f;
+    float rainbowSat    = 0.0f;
+    float rainbowVal    = 0.0f;
+    if (rainbowSpinner)
+    {
+        rainbowHue = static_cast<float>(rainbowSeedHash % 360u);
+        rainbowSat = _theme.menu.darkBase ? 0.70f : 0.55f;
+        rainbowVal = _theme.menu.darkBase ? 0.95f : 0.85f;
+    }
 
-    EnsureSpinnerPens(bg, accent, rainbowSpinner, rainbowSeedHash, stroke);
+    D2DHdcPaint::Session paint;
+    if (! paint.Begin(hdc, rc))
+    {
+        return;
+    }
 
     for (int i = 0; i < kProgressSpinnerSegments; ++i)
     {
@@ -756,22 +880,19 @@ void CompareDirectoriesWindow::DrawProgressSpinner(HDC hdc, const RECT& bounds) 
         const int x2 = static_cast<int>(std::lround(cx + c * outerR));
         const int y2 = static_cast<int>(std::lround(cy + s * outerR));
 
-        wil::unique_hpen penFallback;
-        HPEN pen = _progressSpinnerPens[static_cast<size_t>(i)].get();
-        if (! pen)
+        COLORREF segmentBase = accent;
+        if (rainbowSpinner)
         {
-            penFallback.reset(CreatePen(PS_SOLID, stroke, accent));
-            pen = penFallback.get();
+            const float hueStep    = 360.0f / static_cast<float>(kProgressSpinnerSegments);
+            const float hueDegrees = rainbowHue + static_cast<float>(i) * hueStep;
+            segmentBase            = ColorToCOLORREF(ColorFromHSV(hueDegrees, rainbowSat, rainbowVal));
         }
 
-        if (! pen)
-        {
-            continue;
-        }
+        const float alpha       = 0.15f + 0.85f * (1.0f - t);
+        const int overlayWeight = static_cast<int>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255.0f));
+        const COLORREF color    = UiMetrics::BlendColor(bg, segmentBase, overlayWeight, 255);
 
-        [[maybe_unused]] auto oldPen = wil::SelectObject(hdc, pen);
-        MoveToEx(hdc, x1, y1, nullptr);
-        LineTo(hdc, x2, y2);
+        paint.DrawLine(static_cast<float>(x1), static_cast<float>(y1), static_cast<float>(x2), static_cast<float>(y2), color, static_cast<float>(stroke));
     }
 }
 
@@ -822,11 +943,6 @@ void CompareDirectoriesWindow::UpdateCompareWatermark() noexcept
 
 void CompareDirectoriesWindow::UpdateRescanButtonText() noexcept
 {
-    if (! _bannerRescanButton)
-    {
-        return;
-    }
-
     const bool runBusy          = _compareRunPending || _progress.scanActiveScans > 0u || _progress.contentPendingCompares > 0u;
     const bool shouldShowCancel = _compareActive && runBusy;
     if (shouldShowCancel == _bannerRescanIsCancel)
@@ -837,13 +953,35 @@ void CompareDirectoriesWindow::UpdateRescanButtonText() noexcept
     _bannerRescanIsCancel   = shouldShowCancel;
     const UINT textId       = shouldShowCancel ? IDS_COMPARE_BANNER_CANCEL : IDS_COMPARE_BANNER_RESCAN;
     const std::wstring text = LoadStringResource(nullptr, textId);
-    SetWindowTextW(_bannerRescanButton.get(), text.c_str());
+    if (_bannerRescanButton)
+    {
+        SetWindowTextW(_bannerRescanButton.get(), text.c_str());
+    }
+    SyncDxBannerButtons();
     Layout();
-    InvalidateRect(_bannerRescanButton.get(), nullptr, TRUE);
+    if (_bannerRescanButton)
+    {
+        InvalidateRect(_bannerRescanButton.get(), nullptr, TRUE);
+    }
 }
 
 void CompareDirectoriesWindow::UpdateCompareTaskCard(bool finished) noexcept
 {
+    if (! finished && _compareTaskId != 0)
+    {
+        const ULONGLONG nowTick = GetTickCount64();
+        if (_lastCompareTaskCardUpdateTickMs != 0 && nowTick >= _lastCompareTaskCardUpdateTickMs &&
+            (nowTick - _lastCompareTaskCardUpdateTickMs) < kCompareTaskCardUpdateMinIntervalMs)
+        {
+            Debug::Perf::EmitCounter(L"compare.ui.taskcard_update_throttled_count");
+            return;
+        }
+    }
+
+    Debug::Perf::EmitCounter(L"compare.ui.taskcard_update_count");
+    const SteadyClock::time_point startedAt      = SteadyClock::now();
+    const SteadyClock::time_point buildStartedAt = startedAt;
+
     FolderWindow::InformationalTaskUpdate update{};
     update.kind      = FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories;
     update.taskId    = _compareTaskId;
@@ -931,7 +1069,15 @@ void CompareDirectoriesWindow::UpdateCompareTaskCard(bool finished) noexcept
         }
     }
 
-    _compareTaskId = _folderWindow.CreateOrUpdateInformationalTask(update);
+    const uint64_t buildUs = ElapsedUsSince(buildStartedAt);
+    Debug::Perf::Emit(L"compare.ui.taskcard_build_us", L"", buildUs, update.contentPendingCount, update.scanEntryCount, S_OK);
+
+    const SteadyClock::time_point applyStartedAt = SteadyClock::now();
+    _compareTaskId                               = _folderWindow.CreateOrUpdateInformationalTask(update);
+    const uint64_t applyUs                       = ElapsedUsSince(applyStartedAt);
+    _lastCompareTaskCardUpdateTickMs             = GetTickCount64();
+    Debug::Perf::Emit(L"compare.ui.taskcard_apply_us", L"", applyUs, update.contentPendingCount, update.scanEntryCount, S_OK);
+    Debug::Perf::Emit(L"compare.ui.taskcard_update_us", L"", ElapsedUsSince(startedAt), update.contentPendingCount, update.scanEntryCount, S_OK);
 }
 
 void CompareDirectoriesWindow::MaybeCompleteCompareRun() noexcept
@@ -983,11 +1129,13 @@ void CompareDirectoriesWindow::DismissCompareTaskCard() noexcept
 {
     if (_compareTaskId == 0)
     {
+        _lastCompareTaskCardUpdateTickMs = 0;
         return;
     }
 
     _folderWindow.DismissInformationalTask(_compareTaskId);
-    _compareTaskId = 0;
+    _compareTaskId                   = 0;
+    _lastCompareTaskCardUpdateTickMs = 0;
 }
 
 } // namespace CompareDirectoriesWindowInternal

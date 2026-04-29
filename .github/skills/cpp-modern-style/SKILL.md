@@ -1,8 +1,8 @@
 ---
 name: cpp-modern-style
-description: Modern C++23 coding style and conventions for Red Salamander. Use when writing new code, reviewing style, using STL containers, smart pointers, std::format, std::optional, or following naming conventions.
+description: Modern C++23 coding style and conventions for RedSalamander. Use when writing new code, reviewing style, using STL containers, smart pointers, std::format, std::optional, or following naming conventions.
 metadata:
-  author: DualTail
+  author: RedSalamander
   version: "1.0"
 ---
 
@@ -131,6 +131,7 @@ public:
 - Document public APIs with Doxygen-style comments
 - Explain "why" rather than "what"
 - Include performance notes for critical sections
+- For perf-sensitive features or hot-path changes, define the protected scenario and required measurement path in code/docs early rather than after the implementation is complete
 
 ## Patterns to Avoid
 
@@ -144,3 +145,4 @@ public:
 - Blocking UI thread with synchronous operations
 - String concatenation in loops (use `std::format` or reserve capacity)
 - Multiple variable declarations on same line
+- Perf-sensitive feature work with no instrumentation, no deterministic selftest, or no archived evidence

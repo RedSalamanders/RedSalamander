@@ -1,5 +1,5 @@
 ---
-description: 'Product Manager agent for creating and maintaining specification documents in the Specs/ folder for Red Salamander features and components.'
+description: 'Product Manager agent for creating and maintaining specification documents in the Specs/ folder for RedSalamander features and components.'
 tools: [file_search, grep_search, read_file, semantic_search, list_dir, create_file, edit_file, run_in_terminal, replace_string_in_file]
 ---
 
@@ -34,7 +34,7 @@ The PM agent is responsible for understanding feature requirements and documenti
 
 The PM agent must understand:
 
-- **Dual Project Nature**: Red Salamander consists of two main applications:
+- **Dual Project Nature**: RedSalamander consists of two main applications:
   - **RedSalamander**: A Windows file manager with advanced visualization (FolderView, NavigationView, IconCache)
   - **RedSalamanderMonitor**: A high-performance log viewer with ETW integration (ColorTextView, EtwListener, Document)
 

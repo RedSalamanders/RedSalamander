@@ -23,7 +23,7 @@
 #pragma warning(pop)
 
 #include "ConnectionCredentialPromptDialog.h"
-#include "ConnectionManagerDialog.h"
+#include "ConnectionManagerWindow.h"
 #include "ConnectionProfileUtils.h"
 #include "ConnectionSecrets.h"
 #include "FolderWindow.h"
@@ -919,14 +919,14 @@ public:
 
         if (! IsCurrentThreadWindowThread(hostWindow))
         {
-            auto data                  = std::make_unique<PendingOpenViewer>();
-            data->pluginId             = request->pluginId;
-            data->ownerWindow          = request->ownerWindow;
-            data->fileSystem           = request->fileSystem;
-            data->fileSystemName       = request->fileSystemName ? request->fileSystemName : L"";
-            data->focusedPath          = request->focusedPath;
+            auto data                   = std::make_unique<PendingOpenViewer>();
+            data->pluginId              = request->pluginId;
+            data->ownerWindow           = request->ownerWindow;
+            data->fileSystem            = request->fileSystem;
+            data->fileSystemName        = request->fileSystemName ? request->fileSystemName : L"";
+            data->focusedPath           = request->focusedPath;
             data->focusedOtherFileIndex = request->focusedOtherFileIndex;
-            data->viewerFlags          = request->viewerFlags;
+            data->viewerFlags           = request->viewerFlags;
 
             if (request->selectionPaths && request->selectionCount > 0)
             {
@@ -2521,6 +2521,14 @@ HRESULT HostClearAlert(HostAlertScope scope, void* cookie) noexcept
     return alerts->ClearAlert(scope, cookie);
 }
 
+#ifdef ENABLE_TESTS
+namespace
+{
+std::atomic<int> g_testPromptResultOverride{static_cast<int>(HOST_PROMPT_RESULT_NONE)};
+std::atomic<uint64_t> g_testPromptRequestCount{0u};
+} // namespace
+#endif
+
 HRESULT HostShowPrompt(const HostPromptRequest& request, void* cookie, HostPromptResult* result) noexcept
 {
     if (! result)
@@ -2528,7 +2536,15 @@ HRESULT HostShowPrompt(const HostPromptRequest& request, void* cookie, HostPromp
         return E_POINTER;
     }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
+    g_testPromptRequestCount.fetch_add(1u, std::memory_order_acq_rel);
+    const auto testPromptResultOverride = static_cast<HostPromptResult>(g_testPromptResultOverride.load(std::memory_order_acquire));
+    if (testPromptResultOverride != HOST_PROMPT_RESULT_NONE && PromptButtonsSupportResult(request.buttons, testPromptResultOverride))
+    {
+        *result = testPromptResultOverride;
+        return S_OK;
+    }
+
     if (HostGetAutoAcceptPrompts())
     {
         const HostPromptResult accept = DefaultPromptResultForButtons(request.buttons);
@@ -2565,6 +2581,28 @@ bool HostGetAutoAcceptPrompts() noexcept
 {
     return g_autoAcceptPrompts.load(std::memory_order_acquire);
 }
+
+#ifdef ENABLE_TESTS
+void HostSetTestPromptResultOverride(HostPromptResult result) noexcept
+{
+    g_testPromptResultOverride.store(static_cast<int>(result), std::memory_order_release);
+}
+
+void HostClearTestPromptResultOverride() noexcept
+{
+    g_testPromptResultOverride.store(static_cast<int>(HOST_PROMPT_RESULT_NONE), std::memory_order_release);
+}
+
+void HostResetTestPromptRequestCount() noexcept
+{
+    g_testPromptRequestCount.store(0u, std::memory_order_release);
+}
+
+uint64_t HostGetTestPromptRequestCount() noexcept
+{
+    return g_testPromptRequestCount.load(std::memory_order_acquire);
+}
+#endif
 
 bool TryHandleHostServicesWindowMessage(UINT message, WPARAM wParam, LPARAM lParam, LRESULT& result) noexcept
 {

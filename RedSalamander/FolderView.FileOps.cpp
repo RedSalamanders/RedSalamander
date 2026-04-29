@@ -392,15 +392,18 @@ void FolderView::RenameFocusedItem()
     if (! _fileSystem)
         return;
 
-    const auto& item = _items[_focusedIndex];
-    auto prompt      = PromptForRename(_hWnd.get(), std::wstring(item.displayName), item.isDirectory, _appTheme);
+    const auto& item                     = _items[_focusedIndex];
+    const std::wstring originalName      = std::wstring(item.displayName);
+    const bool originalIsDirectory       = item.isDirectory;
+    const std::filesystem::path fullPath = GetItemFullPath(item);
+
+    auto prompt = PromptForRename(_hWnd.get(), originalName, originalIsDirectory, _appTheme);
     if (! prompt || prompt->empty())
         return;
 
-    const std::filesystem::path fullPath = GetItemFullPath(item);
-    std::filesystem::path target         = fullPath.parent_path() / *prompt;
-    const FileSystemFlags flags          = FILESYSTEM_FLAG_NONE;
-    const HRESULT hr                     = _fileSystem->RenameItem(fullPath.c_str(), target.c_str(), flags, nullptr, nullptr, nullptr);
+    std::filesystem::path target = fullPath.parent_path() / *prompt;
+    const FileSystemFlags flags  = FILESYSTEM_FLAG_NONE;
+    const HRESULT hr             = _fileSystem->RenameItem(fullPath.c_str(), target.c_str(), flags, nullptr, nullptr, nullptr);
     if (FAILED(hr))
     {
         ReportError(L"Rename", hr);

@@ -30,8 +30,22 @@ This document defines the canonical **command catalog** (`cmd/*`), the RedSalama
 4. **Focused control handlers**: `FolderView`, `NavigationView` and any edit controls handle remaining messages.
 
 When the **menu loop** is active, pressing `Tab` (or `Shift+Tab`) MUST exit menu mode and return focus to the active pane (or the previously focused pane control).
+When the **menu loop** is active, pressing `Alt` or `F10` MUST exit menu mode and return focus to the active pane (or the previously focused pane control).
 
 When an **edit control** is focused, the host MUST bypass (2) and (3) and MUST NOT execute application-level accelerators or configurable shortcut bindings (text-edit safety).
+
+Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST follow standard Windows directional behavior:
+- Opening a root popup or submenu from the keyboard MUST move the keyboard highlight to the first navigable item in that newly opened popup.
+- `Right` on a highlighted item with a submenu MUST open that submenu and move the keyboard highlight to its first navigable item.
+- `Right` on a highlighted leaf item inside a top-level menu session MUST switch to the next enabled top-level menu and move the keyboard highlight to that popup's first navigable item.
+- `Left` inside a submenu MUST close only the current submenu and restore the highlight to the parent item that opened it.
+- `Left` in the root popup of a top-level menu session MUST switch to the previous enabled top-level menu and move the keyboard highlight to that popup's first navigable item.
+- A stationary mouse pointer MUST NOT steal root switching or highlighted-item ownership from keyboard navigation; pointer-driven root switching and hover takeover require actual mouse movement.
+- Opening a root popup by mouse MUST NOT synthesize a keyboard or hover selection from the checked item; checked, radio, and toggle state MUST be shown only by the item glyph until actual pointer movement or keyboard navigation selects an item.
+- When a submenu is already open and the pointer moves back onto the parent item that opened that submenu, the submenu MUST remain open and any pending child-close timer MUST be canceled.
+- When a submenu is already open and the pointer settles on a different sibling item that does not keep that submenu active, the existing child submenu chain MUST close after the standard cascade hover delay unless a replacement submenu opens instead.
+- Exiting a DxUi top-level menu session without transferring focus to another control MUST restore keyboard focus to the pane/control that owned focus before menu mode started.
+- Pressing `Escape` while a top-level menu bar, menu popup, or pane-owned context menu has keyboard ownership MUST dismiss that transient UI first, then restore keyboard focus to the active pane's `FolderView` unless the chosen command intentionally opens another focus-owning surface.
 
 ### Scope and focus
 
@@ -42,6 +56,8 @@ When an **edit control** is focused, the host MUST bypass (2) and (3) and MUST N
 - While an **edit control** is active (NavigationView address edit, rename edit, dialogs), the edit control owns the keyboard: application-level accelerators and configurable shortcut bindings MUST NOT execute (text-edit safety).
 - Standard text-edit commands remain local to the control, including `Ctrl+Backspace` deleting the previous word/segment instead of invoking any pane/app shortcut.
 - Mouse interaction with passive pane chrome MUST NOT permanently move keyboard focus away from the pane’s `FolderView`; only explicit keyboard entry into `NavigationView`, entering an edit control, or opening a keyboard-owned popup may take focus.
+- `Escape` is the focus-reclaim key for the main file-manager window. If keyboard focus is in main-window chrome or transient menu UI instead of a `FolderView`, the first `Escape` MUST move focus to the active pane's `FolderView` and MUST NOT clear the pane selection. If focus is already inside the `FolderView`, the existing `FolderView` `Escape` behavior applies (for example, cancel incremental search or clear selection).
+- `NavigationView` edit, suggestion, history, drive/menu, and full-path popup states MAY handle `Escape` locally, but their completed cancel/dismiss path MUST end with focus returned to the owning pane's `FolderView`.
 
 ### Command resolution (normative)
 
@@ -510,6 +526,9 @@ Right menu is identical to Left menu, except:
   - For files, the dialog SHOULD select the name without its extension (up to the last `.`).
   - For folders, the dialog SHOULD select the full name.
 - `Enter` commits; `Escape` cancels.
+- While the name field is focused, standard edit navigation and clipboard keys MUST stay local to the field: arrows, Home/End, Backspace/Delete,
+  `Ctrl+Left/Right`, `Ctrl+Backspace/Delete`, `Ctrl+A/C/X/V/Z/Y`, `Ctrl+Insert`, `Shift+Insert`, and `Shift+Delete` MUST edit, select,
+  copy, cut, paste, undo, or redo the proposed name instead of dispatching pane shortcuts.
 - The new name MUST be trimmed; empty input MUST be rejected (warning beep) and the dialog MUST remain open.
 
 #### Change Case (`cmd/pane/changeCase`)
@@ -605,6 +624,8 @@ The application window includes a bottom **Function Bar** to make the current sh
 - Typography (default):
   - Function key glyph text: `7 DIP`
   - Command label text: `11 DIP`
+- The visible Function Bar text surface (key glyphs, command labels, and the optional modifier indicator) MUST render and measure through the shared `DxUi.Typography` / DirectWrite path; do not reintroduce plain GDI `DrawTextW` text paint or `HFONT` text measurement on this surface.
+- Function Bar Direct2D drawing is DPI-aware. The control receives Win32 pixel rectangles, but drawing coordinates, text layout rectangles, rounded glyph radii, and separator stroke widths MUST be converted to DIPs before rendering so enabled chrome is painted correctly at every DPI scale.
 - Modifier behavior:
   - While the user holds `Ctrl`, `Alt`, `Shift`, or their supported combinations, the Function Bar updates to show the bindings for that modifier set.
   - When a function key is pressed, its zone is highlighted.
@@ -687,6 +708,7 @@ Notes:
   - Function Bar shortcuts (F1..F12)
   - Folder view shortcuts (all supported keys)
 - Settings are loaded at application startup; shortcut bindings are restored and applied before the first main window interaction.
+- In the Shortcuts window, clicking the `Key` column MUST sort by semantic key identity rather than the rendered chord text. Ascending order is: function keys (`F1`..`F24`, numeric order), digit keys (`0`..`9`), letter keys (`A`..`Z`), then other keys by localized key display text. Rows with the same base key MUST stay together and compare by displayed modifier phrase alphabetically (unmodified first), then by command text as a stable tie-breaker. Persisted `Key` sort state MUST use the same semantic order when the window is reopened.
 - Editing model (example):
 
 | Command Name              | Key | CTRL | ALT | SHIFT |

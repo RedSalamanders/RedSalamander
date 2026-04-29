@@ -129,6 +129,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetConfiguration(const char* configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetConfiguration(const char** configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE SomethingToSave(BOOL* pSomethingToSave) noexcept override;
+    [[nodiscard]] static const char* StaticConfigurationSchema(FileSystemS3Mode mode) noexcept;
 
     // INavigationMenu
     HRESULT STDMETHODCALLTYPE GetMenuItems(const NavigationMenuItem** items, unsigned int* count) noexcept override;
@@ -201,6 +202,11 @@ public:
                                           void* cookie                     = nullptr) noexcept override;
 
     HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
+                                               FileSystemOperation operationType,
+                                               FileSystemTransferEndpoint endpoint,
+                                               FileSystemTransferHints* hints) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
 
     // IFileSystemIO
     HRESULT STDMETHODCALLTYPE GetAttributes(const wchar_t* path, unsigned long* fileAttributes) noexcept override;
@@ -288,16 +294,16 @@ private:
     static constexpr wchar_t kPluginShortIdS3Table[] = L"s3table";
 
     static constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
-    static constexpr wchar_t kPluginVersion[] = L"0.1";
+    static constexpr wchar_t kPluginVersion[] = VERSINFO_PLUGIN_VERSION;
 
     static constexpr char kCapabilitiesJsonS3[] = R"json(
 {
   "version": 1,
   "operations": {
-    "copy": false,
-    "move": false,
+    "copy": true,
+    "move": true,
     "delete": true,
-    "rename": false,
+    "rename": true,
     "properties": true,
     "read": true,
     "write": true
@@ -308,7 +314,7 @@ private:
     "deleteRecycleBinMax": 1
   },
   "crossFileSystem": {
-    "export": { "copy": ["*"], "move": [] },
+    "export": { "copy": ["*"], "move": ["*"] },
     "import": { "copy": ["*"], "move": ["*"] }
   }
 }
@@ -511,3 +517,5 @@ private:
     friend std::shared_ptr<Aws::S3Crt::S3CrtClient> FileSystemS3Internal::GetS3Client(FileSystemS3& fs,
                                                                                       const FileSystemS3Internal::ResolvedAwsContext& ctx) noexcept;
 };
+
+[[nodiscard]] const char* GetFileSystemS3StaticConfigurationSchema(FileSystemS3Mode mode) noexcept;

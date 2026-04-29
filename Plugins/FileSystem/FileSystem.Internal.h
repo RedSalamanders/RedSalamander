@@ -29,6 +29,10 @@ std::wstring GetPathDirectory(std::wstring_view path);
 PathInfo MakePathInfo(const std::wstring& path);
 PathInfo MakePathInfo(const wchar_t* path);
 
+// Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded
+// while background worker threads or threadpool callbacks are active.
+extern const int kFileSystemModuleAnchor;
+
 // Stops and joins the shared background copy/move worker threads.
 // Intended to be invoked at a host "quiet point" when the last FileSystem instance is being destroyed.
 void ShutdownSharedFileOpsJobScheduler() noexcept;

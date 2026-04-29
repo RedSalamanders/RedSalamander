@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Red Salamander** is a Windows-native file manager and monitoring application written in C++23. It features dual-pane file management, plugin-based virtual file systems, advanced text visualization with Direct2D/DirectWrite rendering, and real-time debugging via ETW (Event Tracing for Windows).
+**RedSalamander** is a Windows-native file manager and monitoring application built in MSVC `stdcpplatest` mode. It features dual-pane file management, plugin-based virtual file systems, advanced text visualization with Direct2D/DirectWrite rendering, and real-time debugging via ETW (Event Tracing for Windows).
 
 ## Build Commands
 
@@ -72,7 +72,7 @@ PoC/                    # Proof-of-concept projects
 Plugins use COM-style interfaces with a factory entry point:
 
 ```cpp
-extern "C" HRESULT RedSalamanderCreate(REFIID riid, const FactoryOptions*, IHost*, void** ppv);
+extern "C" HRESULT RedSalamanderCreate(REFIID riid, const FactoryOptions*, IHost*, const wchar_t* pluginId, void** ppv);
 ```
 
 Key interfaces in `Common/PlugInterfaces/`:

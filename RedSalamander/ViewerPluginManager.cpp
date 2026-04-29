@@ -10,14 +10,15 @@
 
 #include "Helpers.h"
 #include "HostServices.h"
+#include "LocalizationManager.h"
 #include "PlugInterfaces/Factory.h"
 #include "SettingsStore.h"
 
 namespace
 {
-using CreateFactoryFunc    = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, void**);
-using EnumeratePluginsFunc = HRESULT(__stdcall*)(REFIID, const PluginMetaData** metaData, unsigned int* count);
-using CreateFactoryExFunc  = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t* pluginId, void**);
+using CreateFactoryFunc                = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t* pluginId, void**);
+using EnumeratePluginsFunc             = HRESULT(__stdcall*)(REFIID, const PluginMetaData** metaData, unsigned int* count);
+using GetConfigurationSchemaExportFunc = HRESULT(__stdcall*)(REFIID, const wchar_t* pluginId, const char** schemaJsonUtf8);
 
 bool IsDllPath(const std::filesystem::path& path) noexcept
 {
@@ -44,6 +45,17 @@ std::wstring SafeCoalesce(const wchar_t* value) noexcept
 std::string SafeCoalesce(const char* value) noexcept
 {
     return value ? std::string(value) : std::string();
+}
+
+HRESULT RegisterPluginResourceOwner(const std::filesystem::path& path, HINSTANCE module) noexcept
+{
+    const std::wstring ownerName = path.stem().wstring();
+    if (ownerName.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    return Localization::RegisterResourceOwner(ownerName, module);
 }
 
 bool IsValidShortId(std::wstring_view shortId) noexcept
@@ -122,6 +134,21 @@ HRESULT ApplyConfigurationFromSettings(IInformations& infos, std::wstring_view p
 
     return infos.SetConfiguration(configText.empty() ? nullptr : configText.c_str());
 }
+
+[[nodiscard]] const wchar_t* RequestedPluginIdPtr(const ViewerPluginManager::PluginEntry& entry) noexcept
+{
+    if (! entry.factoryPluginId.empty())
+    {
+        return entry.factoryPluginId.c_str();
+    }
+
+    if (! entry.id.empty())
+    {
+        return entry.id.c_str();
+    }
+
+    return nullptr;
+}
 } // namespace
 
 ViewerPluginManager& ViewerPluginManager::GetInstance() noexcept
@@ -192,7 +219,7 @@ HRESULT ViewerPluginManager::CreateViewerInstance(std::wstring_view pluginId, Co
         return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
     }
 
-    if (entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory || (! entry->factoryPluginId.empty() && ! entry->createFactoryEx))
+    if (entry->disabled || ! entry->loadable || ! entry->module || ! entry->createFactory)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
@@ -202,14 +229,11 @@ HRESULT ViewerPluginManager::CreateViewerInstance(std::wstring_view pluginId, Co
 
 #pragma warning(push)
 #pragma warning(disable : 4191) // unsafe conversion from FARPROC
-    const auto createFactory   = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
-    const auto createFactoryEx = reinterpret_cast<CreateFactoryExFunc>(entry->createFactoryEx);
+    const auto createFactory = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
 #pragma warning(pop)
 
     wil::com_ptr<IViewer> viewer;
-    const HRESULT createHr = entry->factoryPluginId.empty()
-                                 ? createFactory(__uuidof(IViewer), &options, GetHostServices(), viewer.put_void())
-                                 : createFactoryEx(__uuidof(IViewer), &options, GetHostServices(), entry->factoryPluginId.c_str(), viewer.put_void());
+    const HRESULT createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), RequestedPluginIdPtr(*entry), viewer.put_void());
     if (FAILED(createHr))
     {
         return createHr;
@@ -334,7 +358,7 @@ HRESULT ViewerPluginManager::GetConfigurationSchema(std::wstring_view pluginId, 
         return hr;
     }
 
-    if (! entry->module || ! entry->createFactory || (! entry->factoryPluginId.empty() && ! entry->createFactoryEx))
+    if (! entry->module || ! entry->createFactory)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
@@ -344,14 +368,25 @@ HRESULT ViewerPluginManager::GetConfigurationSchema(std::wstring_view pluginId, 
 
 #pragma warning(push)
 #pragma warning(disable : 4191) // unsafe conversion from FARPROC
-    const auto createFactory   = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
-    const auto createFactoryEx = reinterpret_cast<CreateFactoryExFunc>(entry->createFactoryEx);
+    const auto getConfigurationSchema =
+        reinterpret_cast<GetConfigurationSchemaExportFunc>(GetProcAddress(entry->module.get(), "RedSalamanderGetConfigurationSchema"));
+    const auto createFactory = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
 #pragma warning(pop)
 
+    if (getConfigurationSchema)
+    {
+        const wchar_t* requestedPluginId = entry->factoryPluginId.empty() ? nullptr : entry->factoryPluginId.c_str();
+        const char* schema               = nullptr;
+        const HRESULT schemaHr           = getConfigurationSchema(__uuidof(IViewer), requestedPluginId, &schema);
+        if (SUCCEEDED(schemaHr))
+        {
+            outSchemaJsonUtf8 = SafeCoalesce(schema);
+            return S_OK;
+        }
+    }
+
     wil::com_ptr<IViewer> viewer;
-    const HRESULT createHr = entry->factoryPluginId.empty()
-                                 ? createFactory(__uuidof(IViewer), &options, GetHostServices(), viewer.put_void())
-                                 : createFactoryEx(__uuidof(IViewer), &options, GetHostServices(), entry->factoryPluginId.c_str(), viewer.put_void());
+    const HRESULT createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), RequestedPluginIdPtr(*entry), viewer.put_void());
     if (FAILED(createHr))
     {
         return createHr;
@@ -391,7 +426,7 @@ HRESULT ViewerPluginManager::GetConfiguration(std::wstring_view pluginId, Common
         return hr;
     }
 
-    if (! entry->module || ! entry->createFactory || (! entry->factoryPluginId.empty() && ! entry->createFactoryEx))
+    if (! entry->module || ! entry->createFactory)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
@@ -401,14 +436,11 @@ HRESULT ViewerPluginManager::GetConfiguration(std::wstring_view pluginId, Common
 
 #pragma warning(push)
 #pragma warning(disable : 4191) // unsafe conversion from FARPROC
-    const auto createFactory   = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
-    const auto createFactoryEx = reinterpret_cast<CreateFactoryExFunc>(entry->createFactoryEx);
+    const auto createFactory = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
 #pragma warning(pop)
 
     wil::com_ptr<IViewer> viewer;
-    const HRESULT createHr = entry->factoryPluginId.empty()
-                                 ? createFactory(__uuidof(IViewer), &options, GetHostServices(), viewer.put_void())
-                                 : createFactoryEx(__uuidof(IViewer), &options, GetHostServices(), entry->factoryPluginId.c_str(), viewer.put_void());
+    const HRESULT createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), RequestedPluginIdPtr(*entry), viewer.put_void());
     if (FAILED(createHr))
     {
         return createHr;
@@ -448,7 +480,7 @@ HRESULT ViewerPluginManager::SetConfiguration(std::wstring_view pluginId, std::s
         return hr;
     }
 
-    if (! entry->module || ! entry->createFactory || (! entry->factoryPluginId.empty() && ! entry->createFactoryEx))
+    if (! entry->module || ! entry->createFactory)
     {
         return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
@@ -458,14 +490,11 @@ HRESULT ViewerPluginManager::SetConfiguration(std::wstring_view pluginId, std::s
 
 #pragma warning(push)
 #pragma warning(disable : 4191) // unsafe conversion from FARPROC
-    const auto createFactory   = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
-    const auto createFactoryEx = reinterpret_cast<CreateFactoryExFunc>(entry->createFactoryEx);
+    const auto createFactory = reinterpret_cast<CreateFactoryFunc>(entry->createFactory);
 #pragma warning(pop)
 
     wil::com_ptr<IViewer> viewer;
-    const HRESULT createHr = entry->factoryPluginId.empty()
-                                 ? createFactory(__uuidof(IViewer), &options, GetHostServices(), viewer.put_void())
-                                 : createFactoryEx(__uuidof(IViewer), &options, GetHostServices(), entry->factoryPluginId.c_str(), viewer.put_void());
+    const HRESULT createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), RequestedPluginIdPtr(*entry), viewer.put_void());
     if (FAILED(createHr))
     {
         return createHr;
@@ -727,7 +756,7 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
                 return;
             }
 
-            if (loadHr == HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND) && entry.loadError.find(L"RedSalamanderCreateEx") == std::wstring::npos)
+            if (loadHr == HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND))
             {
                 // Not a viewer plugin (may be another RedSalamander plugin type).
                 return;
@@ -816,21 +845,32 @@ HRESULT ViewerPluginManager::Discover(Common::Settings::Settings& settings) noex
     };
 
     std::sort(_plugins.begin(), _plugins.end(), byOriginNameId);
+
+    const bool hasLoadablePlugin = std::any_of(_plugins.begin(), _plugins.end(), [](const PluginEntry& entry) { return entry.loadable; });
+    if (! hasLoadablePlugin)
+    {
+        Debug::Error(L"Viewer plugin discovery found zero loadable plugins under '{}'.", (_exeDir / L"Plugins").wstring());
+        return HRESULT_FROM_WIN32(ERROR_NOT_FOUND);
+    }
+
     return S_OK;
 }
 
 HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
 {
-    if (entry.module && entry.createFactory && entry.loadable && (entry.factoryPluginId.empty() || entry.createFactoryEx))
+    if (entry.module && entry.createFactory && entry.loadable)
     {
         return S_OK;
     }
 
     entry.loadable = false;
     entry.loadError.clear();
+    if (entry.module)
+    {
+        Localization::UnregisterResourceOwner(entry.module.get());
+    }
     entry.module.reset();
-    entry.createFactory   = nullptr;
-    entry.createFactoryEx = nullptr;
+    entry.createFactory = nullptr;
 
     if (entry.path.empty())
     {
@@ -846,10 +886,25 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
         return HRESULT_FROM_WIN32(lastError);
     }
 
+    const HRESULT registerHr = RegisterPluginResourceOwner(entry.path, module.get());
+    if (FAILED(registerHr))
+    {
+        entry.loadError = std::format(L"RegisterResourceOwner failed (0x{:08X}).", static_cast<unsigned int>(registerHr));
+        return registerHr;
+    }
+    bool keepResourceOwnerRegistered = false;
+    auto unregisterOnFailure         = wil::scope_exit([&]() noexcept
+    {
+        if (! keepResourceOwnerRegistered)
+        {
+            Localization::UnregisterResourceOwner(module.get());
+        }
+    });
+
 #pragma warning(push)
 #pragma warning(disable : 4191) // unsafe conversion from FARPROC
-    const auto createFactory   = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(module.get(), "RedSalamanderCreate"));
-    const auto createFactoryEx = reinterpret_cast<CreateFactoryExFunc>(GetProcAddress(module.get(), "RedSalamanderCreateEx"));
+    const auto createFactory = reinterpret_cast<CreateFactoryFunc>(GetProcAddress(module.get(), "RedSalamanderCreate"));
+    const auto enumerate     = reinterpret_cast<EnumeratePluginsFunc>(GetProcAddress(module.get(), "RedSalamanderEnumeratePlugins"));
 #pragma warning(pop)
     if (! createFactory)
     {
@@ -862,24 +917,83 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
         return HRESULT_FROM_WIN32(lastError);
     }
 
+    const auto applyMetaData = [&](const PluginMetaData& meta) noexcept
+    {
+        entry.id          = SafeCoalesce(meta.id);
+        entry.shortId     = SafeCoalesce(meta.shortId);
+        entry.name        = SafeCoalesce(meta.name);
+        entry.description = SafeCoalesce(meta.description);
+        entry.author      = SafeCoalesce(meta.author);
+        entry.version     = SafeCoalesce(meta.version);
+    };
+
+    if (enumerate)
+    {
+        const PluginMetaData* metaData = nullptr;
+        unsigned int count             = 0;
+        const HRESULT enumHr           = enumerate(__uuidof(IViewer), &metaData, &count);
+        if (enumHr == E_NOINTERFACE)
+        {
+            return E_NOINTERFACE;
+        }
+        if (SUCCEEDED(enumHr) && metaData != nullptr && count > 0)
+        {
+            const PluginMetaData* selectedMeta = nullptr;
+            if (! entry.factoryPluginId.empty())
+            {
+                for (unsigned int i = 0; i < count; ++i)
+                {
+                    if (EqualsNoCase(SafeCoalesce(metaData[i].id), entry.factoryPluginId))
+                    {
+                        selectedMeta = &metaData[i];
+                        break;
+                    }
+                }
+            }
+            else if (count == 1)
+            {
+                selectedMeta = &metaData[0];
+            }
+
+            if (selectedMeta)
+            {
+                applyMetaData(*selectedMeta);
+
+                if (! entry.factoryPluginId.empty() && ! entry.id.empty() && ! EqualsNoCase(entry.factoryPluginId, entry.id))
+                {
+                    entry.loadError = std::format(L"Plugin id mismatch: requested '{}' but enumerate reported '{}'.", entry.factoryPluginId, entry.id);
+                    return E_FAIL;
+                }
+
+                if (entry.id.empty())
+                {
+                    entry.loadError = L"Plugin id is missing.";
+                    return E_INVALIDARG;
+                }
+
+                if (! IsValidShortId(entry.shortId))
+                {
+                    entry.loadError = std::format(L"Invalid or missing short id '{}'.", entry.shortId);
+                    return E_INVALIDARG;
+                }
+
+                entry.module = std::move(module);
+#pragma warning(push)
+#pragma warning(disable : 4191) // C4191: 'reinterpret_cast': unsafe conversion between function pointer and 'FARPROC'
+                entry.createFactory = reinterpret_cast<FARPROC>(createFactory);
+#pragma warning(pop)
+                entry.loadable              = true;
+                keepResourceOwnerRegistered = true;
+                return S_OK;
+            }
+        }
+    }
+
     FactoryOptions options{};
     options.debugLevel = DEBUG_LEVEL_NONE;
 
     wil::com_ptr<IViewer> viewer;
-    HRESULT createHr = E_FAIL;
-    if (! entry.factoryPluginId.empty())
-    {
-        if (! createFactoryEx)
-        {
-            entry.loadError = L"Missing export RedSalamanderCreateEx for multi-plugin DLL.";
-            return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
-        }
-        createHr = createFactoryEx(__uuidof(IViewer), &options, GetHostServices(), entry.factoryPluginId.c_str(), viewer.put_void());
-    }
-    else
-    {
-        createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), viewer.put_void());
-    }
+    const HRESULT createHr = createFactory(__uuidof(IViewer), &options, GetHostServices(), RequestedPluginIdPtr(entry), viewer.put_void());
     if (createHr == E_NOINTERFACE)
     {
         return E_NOINTERFACE;
@@ -908,12 +1022,7 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
 
     if (meta)
     {
-        entry.id          = SafeCoalesce(meta->id);
-        entry.shortId     = SafeCoalesce(meta->shortId);
-        entry.name        = SafeCoalesce(meta->name);
-        entry.description = SafeCoalesce(meta->description);
-        entry.author      = SafeCoalesce(meta->author);
-        entry.version     = SafeCoalesce(meta->version);
+        applyMetaData(*meta);
     }
 
     if (! entry.factoryPluginId.empty() && ! entry.id.empty() && ! EqualsNoCase(entry.factoryPluginId, entry.id))
@@ -937,16 +1046,19 @@ HRESULT ViewerPluginManager::EnsureLoaded(PluginEntry& entry) noexcept
     entry.module = std::move(module);
 #pragma warning(push)
 #pragma warning(disable : 4191) // C4191: 'reinterpret_cast': unsafe conversion between function pointer and 'FARPROC'
-    entry.createFactory   = reinterpret_cast<FARPROC>(createFactory);
-    entry.createFactoryEx = reinterpret_cast<FARPROC>(createFactoryEx);
+    entry.createFactory = reinterpret_cast<FARPROC>(createFactory);
 #pragma warning(pop)
-    entry.loadable = true;
+    entry.loadable              = true;
+    keepResourceOwnerRegistered = true;
     return S_OK;
 }
 
 void ViewerPluginManager::Unload(PluginEntry& entry) noexcept
 {
+    if (entry.module)
+    {
+        Localization::UnregisterResourceOwner(entry.module.get());
+    }
     entry.module.reset();
-    entry.createFactory   = nullptr;
-    entry.createFactoryEx = nullptr;
+    entry.createFactory = nullptr;
 }

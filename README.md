@@ -5,7 +5,7 @@ RedSalamander is a Windows dual-pane file manager with:
 - A fast DirectX-based folder view
 - A modeless Find Files and Directories workflow with native, indexed, and fallback search backends
 - Virtual file systems (archives, FTP/SFTP/SCP/IMAP, S3, …)
-- Viewer plugins (Text/Hex, Images/RAW, WebView2-based viewers, …)
+- Viewer plugins (Text/Hex, SQLite, Images/RAW, WebView2-based viewers, …)
 - A themed Preferences experience (themes, plugins, shortcuts, associations)
 
 ![RedSalamander main window](Docs/res/main-window.png)
@@ -100,6 +100,31 @@ Use the `build.ps1` PowerShell script for easy building:
 - `-Msix` : Build an MSIX package after a successful Release build
 - `-Msi` : Build an MSI package after a successful Release build
 
+### AddressSanitizer (`ASan Debug`)
+
+Build an ASan-instrumented binary from the console with:
+
+```powershell
+.\build.ps1 -Configuration 'ASan Debug' -ProjectName RedSalamander
+.\build.ps1 -Configuration 'ASan Debug' -ProjectName RedSalamanderSearchService
+```
+
+Outputs land in:
+
+```text
+.build\x64\ASan Debug\
+.build\ARM64\ASan Debug\
+```
+
+Run them directly from the output folder:
+
+```powershell
+.\.build\x64\ASan Debug\RedSalamander.exe
+.\.build\x64\ASan Debug\RedSalamanderSearchService.exe --run-foreground
+```
+
+The build now copies the required `clang_rt.asan_dynamic-*.dll` next to each ASan executable automatically. If you still see a missing ASan runtime DLL, rebuild after updating Visual Studio C++ tools and verify the ASan runtime exists under `$(VCToolsInstallDir)\bin\Host*\`.
+
 #### Visual Studio Build
 
 1. Open `RedSalamander.sln` in Visual Studio 2026
@@ -110,11 +135,11 @@ Use the `build.ps1` PowerShell script for easy building:
 
 The solution contains the following projects:
 
-- **Applications**: `RedSalamander`, `RedSalamanderMonitor`
+- **Applications**: `RedSalamander`, `RedSalamanderMonitor`, `RedSalamanderSearchService`
 - **Installer**: `RedSalamanderInstaller` (MSIX packaging)
 - **Shared library**: `Common`
-- **File-system plugins**: `FileSystem`, `FileSystem7z`, `FileSystemCurl`, `FileSystemS3`, `FileSystemDummy`
-- **Viewer plugins**: `ViewerText`, `ViewerSpace`, `ViewerImgRaw`, `ViewerVLC`, `ViewerPE`, `ViewerWeb`
+- **File-system plugins**: `FileSystem`, `FileSystem7z`, `FileSystemCurl`, `FileSystemS3`, `FileSystemGoogleDrive`, `FileSystemMicrosoftDrive`, `FileSystemDummy`
+- **Viewer plugins**: `ViewerText`, `ViewerSqlite`, `ViewerSpace`, `ViewerImgRaw`, `ViewerVLC`, `ViewerPE`, `ViewerWeb`
 - **PoC projects**: `ls1`, `ls2`, `ls3`, `ls4`, `FlipSequentialDiscard`, `MonitorTest`
 
 ### Output
@@ -189,6 +214,46 @@ Key files:
 - `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\fileops\trace.txt`
 - `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\fileops\results.json`
 - `%LOCALAPPDATA%\RedSalamander\SelfTest\last_run\results.json` (aggregated run summary)
+
+## Search Service (Developer)
+
+`RedSalamanderSearchService.exe` supports terminal-friendly management commands.
+
+Default identities:
+
+- Debug: `RedSalamanderSearchService.Debug` on `\\.\pipe\RedSalamander.SearchService.Debug.v3`
+- Release: `RedSalamanderSearchService` on `\\.\pipe\RedSalamander.SearchService.v3`
+
+Useful commands:
+
+```powershell
+# Show all supported options
+.\.build\x64\Debug\RedSalamanderSearchService.exe --help
+
+# Run in the current terminal
+.\.build\x64\Debug\RedSalamanderSearchService.exe --run-foreground
+
+# Run offline SQLite maintenance
+.\.build\x64\Debug\RedSalamanderSearchService.exe --compact
+
+# Ask a running SQLite-backed service to compact in place
+.\.build\x64\Debug\RedSalamanderSearchService.exe --request-compact
+
+# Register / unregister the Windows service for the current build
+.\.build\x64\Debug\RedSalamanderSearchService.exe --register
+.\.build\x64\Debug\RedSalamanderSearchService.exe --unregister
+```
+
+Notes:
+
+- `--register` and `--unregister` typically require an elevated terminal.
+- `--compact` targets the SQLite store, acquires the single-instance guard, truncates WAL, runs `VACUUM`, and exits with a before/after space summary. Stop any running service instance first.
+- `--request-compact` asks the running service to run live SQLite maintenance in-process and prints the refreshed DB/WAL/free-page state after the request completes.
+- `--run-foreground` now auto-attaches to the parent terminal when needed, prints a startup banner with PID/build/mode details, shows a live status dashboard in a console, and falls back to readable lifecycle log lines when output is redirected.
+- Press `Ctrl+C` to stop foreground mode cleanly.
+- `--pipe-name=...` can target a non-default running service for `--request-compact`, and `--protocol-version=...`, `--max-requests=...`, and `--disconnect-after-batches=...` are intended for foreground-mode development and self-tests.
+- `--storage-root=...`, `--store-backend=...`, and `--sqlite-path=...` can be used with `--run-foreground` or `--compact`.
+- `--storage-root=...` overrides the snapshot/storage root, which is useful for isolated self-tests and local service debugging.
 
 ### MSIX Installer
 
@@ -311,6 +376,12 @@ If you need an external ETW session (e.g. Windows Performance Analyzer), use:
 - `.\clean-etw-trace.ps1`
 
 Note: `RedSalamanderMonitor.exe` has its own built-in ETW listener and does not require an external session for normal use.
+
+Normal Release builds keep Info/Perf/debug-style ETW diagnostics quiet, and RedSalamanderMonitor filters out its own ETW messages. To build a dedicated Release set that emits and displays those diagnostics in RedSalamanderMonitor, use:
+
+```powershell
+.\build.ps1 -Configuration Release -MonitorDiagnostics
+```
 
 ## Additional Documentation
 

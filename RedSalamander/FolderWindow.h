@@ -27,6 +27,91 @@ struct Settings;
 
 class ShortcutManager;
 
+#ifdef ENABLE_TESTS
+struct ItemPropertiesWindowDebugSnapshot
+{
+    bool usesDxUiHost              = false;
+    size_t visibleChildWindowCount = 0u;
+    size_t sectionCount            = 0u;
+    size_t fieldCount              = 0u;
+    size_t bodyFirstVisibleLine    = 0u;
+    size_t bodyVisibleLineCount    = 0u;
+    size_t bodyTotalLineCount      = 0u;
+    bool bodyCanScrollVertically   = false;
+    uint64_t renderCount           = 0u;
+    uint64_t resizeCount           = 0u;
+    uint64_t resizeFailureCount    = 0u;
+    std::wstring contentText;
+};
+
+[[nodiscard]] HWND GetItemPropertiesWindowHandle() noexcept;
+[[nodiscard]] bool DebugGetItemPropertiesWindowSnapshot(ItemPropertiesWindowDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugScrollItemPropertiesWindowByWheelDetents(int detents) noexcept;
+
+struct FolderViewPaneFilterPromptDebugSnapshot
+{
+    bool usesDxUiHost              = false;
+    size_t visibleChildWindowCount = 0u;
+    bool enabled                   = false;
+    std::wstring text;
+};
+
+[[nodiscard]] HWND GetFolderViewPaneFilterPromptHandle() noexcept;
+[[nodiscard]] bool DebugGetFolderViewPaneFilterPromptSnapshot(FolderViewPaneFilterPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetFolderViewPaneFilterPromptEnabled(bool enabled) noexcept;
+[[nodiscard]] bool DebugSetFolderViewPaneFilterPromptText(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugConfirmFolderViewPaneFilterPrompt() noexcept;
+[[nodiscard]] bool DebugCancelFolderViewPaneFilterPrompt() noexcept;
+
+struct FolderViewSelectionMaskPromptDebugSnapshot
+{
+    bool usesDxUiHost              = false;
+    size_t visibleChildWindowCount = 0u;
+    std::wstring title;
+    std::wstring text;
+};
+
+[[nodiscard]] HWND GetFolderViewSelectionMaskPromptHandle() noexcept;
+[[nodiscard]] bool DebugGetFolderViewSelectionMaskPromptSnapshot(FolderViewSelectionMaskPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetFolderViewSelectionMaskPromptText(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugConfirmFolderViewSelectionMaskPrompt() noexcept;
+[[nodiscard]] bool DebugCancelFolderViewSelectionMaskPrompt() noexcept;
+
+struct FolderViewCreateDirectoryPromptDebugSnapshot
+{
+    bool usesDxUiHost              = false;
+    size_t visibleChildWindowCount = 0u;
+    std::wstring createInPath;
+    std::wstring text;
+    std::wstring validationText;
+    bool nameFieldFocused = false;
+    size_t selectionStart = 0u;
+    size_t selectionEnd   = 0u;
+};
+
+[[nodiscard]] HWND GetFolderViewCreateDirectoryPromptHandle() noexcept;
+[[nodiscard]] bool DebugGetFolderViewCreateDirectoryPromptSnapshot(FolderViewCreateDirectoryPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetFolderViewCreateDirectoryPromptText(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugConfirmFolderViewCreateDirectoryPrompt() noexcept;
+[[nodiscard]] bool DebugCancelFolderViewCreateDirectoryPrompt() noexcept;
+
+struct FolderViewChangeCasePromptDebugSnapshot
+{
+    bool usesDxUiHost              = false;
+    size_t visibleChildWindowCount = 0u;
+    bool includeSubdirsEnabled     = false;
+    bool includeSubdirsChecked     = false;
+    size_t styleIndex              = 0u;
+    size_t targetIndex             = 0u;
+};
+
+[[nodiscard]] HWND GetFolderViewChangeCasePromptHandle() noexcept;
+[[nodiscard]] bool DebugGetFolderViewChangeCasePromptSnapshot(FolderViewChangeCasePromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetFolderViewChangeCasePromptSelections(size_t styleIndex, size_t targetIndex, bool includeSubdirs) noexcept;
+[[nodiscard]] bool DebugConfirmFolderViewChangeCasePrompt() noexcept;
+[[nodiscard]] bool DebugCancelFolderViewChangeCasePrompt() noexcept;
+#endif
+
 class FolderWindow
 {
 public:
@@ -70,6 +155,9 @@ public:
     [[maybe_unused]] Pane GetFocusedPane() const noexcept;
     [[nodiscard]] HWND GetFocusedFolderViewHwnd() const noexcept;
     [[nodiscard]] HWND GetFolderViewHwnd(Pane pane) const noexcept;
+    [[nodiscard]] bool IsFocusInNavigationView() const noexcept;
+    [[nodiscard]] bool TryRestoreActivePaneFolderViewFocus() noexcept;
+    void RequestRestoreFolderViewFocus(HWND folderView) noexcept;
 
     HRESULT ExecuteInActivePane(const std::filesystem::path& folderPath,
                                 std::wstring_view focusItemDisplayName,
@@ -111,6 +199,7 @@ public:
     bool IsFileOperationsIssuesPaneVisible() noexcept;
     void CommandCreateDirectory(Pane pane);
     void CommandChangeDirectory(Pane pane);
+    [[nodiscard]] bool TryHandleNavigationEditClipboardCommand(UINT commandId) noexcept;
     void CommandFocusAddressBar(Pane pane);
     void CommandOpenDriveMenu(Pane pane);
     void CommandShowFolderHistory(Pane pane);
@@ -119,6 +208,7 @@ public:
     void CommandSetPathFromOtherPane(Pane pane);
     void CommandHistoryBack(Pane pane);
     void CommandHistoryForward(Pane pane);
+    void ResyncNavigationShellFromFolderView(Pane pane) noexcept;
     [[nodiscard]] bool CanHistoryBack(Pane pane) const noexcept;
     [[nodiscard]] bool CanHistoryForward(Pane pane) const noexcept;
     void CommandRefresh(Pane pane);
@@ -128,6 +218,8 @@ public:
     void CommandSelectionInvert(Pane pane);
     void CommandSelectionSave(Pane pane);
     void CommandSelectionRestore(Pane pane);
+    void CommandSelectionSelectSameName(Pane pane);
+    void CommandSelectionUnselectSameName(Pane pane);
     void CommandSelectionSelectSameExtension(Pane pane);
     void CommandSelectionUnselectSameExtension(Pane pane);
     void CommandSelectionHideSelectedNames(Pane pane);
@@ -165,7 +257,7 @@ public:
     }
     [[nodiscard]] bool HandleViewWidthAdjustKey(uint32_t vk) noexcept;
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     [[nodiscard]] bool DebugIsViewWidthAdjustActive() const noexcept
     {
         return _viewWidthAdjustActive;
@@ -312,7 +404,48 @@ public:
 
     struct FileOperationState;
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
+    struct FolderWindowPaneStatusBarDebugSnapshot
+    {
+        bool visible                      = false;
+        bool usesNativeStatusBarClass     = false;
+        bool usesDirectWriteTextRendering = false;
+        bool hasNativeFont                = false;
+        bool activePane                   = false;
+        bool selectionTextDimmed          = false;
+        float textSizeDip                 = 0.0f;
+        std::wstring className;
+        std::wstring selectionText;
+        std::wstring securityText;
+        std::wstring sortText;
+    };
+
+    struct FolderWindowFunctionBarDebugSnapshot
+    {
+        bool visible                    = false;
+        bool windowVisible              = false;
+        bool usesDirectWriteTextMetrics = false;
+        RECT rect{};
+    };
+
+    struct FolderWindowSplitterDebugSnapshot
+    {
+        RECT splitterRect{};
+        RECT leftArrowRect{};
+        RECT rightArrowRect{};
+        Pane leftArrowTargetPane  = Pane::Left;
+        Pane rightArrowTargetPane = Pane::Right;
+        wchar_t leftArrowGlyph    = L'<';
+        wchar_t rightArrowGlyph   = L'>';
+        COLORREF arrowColor       = 0;
+        COLORREF gripColor        = 0;
+        int arrowChevronSizePx    = 0;
+        int gripDotSizePx         = 0;
+        std::optional<Pane> hoveredArrowPane;
+        bool leftArrowCursorHand  = false;
+        bool rightArrowCursorHand = false;
+    };
+
     // Debug/testing hook: access the file-operations state for automation/self-tests.
     // This will initialize file operations if they are not yet created.
     FileOperationState* DebugGetFileOperationState() noexcept;
@@ -320,14 +453,28 @@ public:
     [[nodiscard]] size_t DebugGetViewerInstanceCount() const noexcept;
     [[nodiscard]] bool DebugHasViewerPluginId(std::wstring_view viewerPluginId) const noexcept;
     [[nodiscard]] uint64_t DebugGetForceRefreshCount(Pane pane) const noexcept;
+    [[nodiscard]] bool DebugGetPaneStatusBarSnapshot(Pane pane, FolderWindowPaneStatusBarDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugClickPaneStatusBarSort(Pane pane) noexcept;
+    [[nodiscard]] bool DebugGetFunctionBarSnapshot(FolderWindowFunctionBarDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugGetSplitterSnapshot(FolderWindowSplitterDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugHoverSplitterArrow(Pane pane) noexcept;
+    [[nodiscard]] bool DebugClickSplitterArrow(Pane pane) noexcept;
 
     [[nodiscard]] std::wstring_view DebugGetFocusedItemDisplayName(Pane pane) const noexcept;
     [[nodiscard]] bool DebugHasItemDisplayName(Pane pane, std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetItemCount(Pane pane) const noexcept;
+    [[nodiscard]] size_t DebugGetPaneBitmapIconCount(Pane pane) const noexcept;
     [[nodiscard]] bool DebugIsItemSelected(Pane pane, std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetSelectedCount(Pane pane) const noexcept;
+    [[nodiscard]] uint64_t DebugGetWarmPaneRenderingCallCount(Pane pane) const noexcept;
+    [[nodiscard]] FolderView::DebugWarmPerfSnapshot DebugGetWarmPanePerfSnapshot(Pane pane) const noexcept;
+    [[nodiscard]] bool DebugWarmPaneRendering(Pane pane) noexcept;
     [[nodiscard]] bool DebugIsEmptyFolderStateActive(Pane pane) const noexcept;
     [[nodiscard]] std::wstring_view DebugGetEmptyFolderFunMessage(Pane pane) const noexcept;
+    [[nodiscard]] FolderView::DebugEmptyFolderItemMetrics DebugGetEmptyFolderItemMetrics(Pane pane) const noexcept;
+    [[nodiscard]] HWND DebugGetNavigationViewHwnd(Pane pane) const noexcept;
+    [[nodiscard]] bool DebugGetNavigationViewSnapshot(Pane pane, NavigationViewDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugFocusNavigationViewRegion(Pane pane, NavigationView::FocusRegion region) noexcept;
     [[nodiscard]] bool DebugFocusItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept;
     [[nodiscard]] FolderView::NameFilterState DebugGetNameFilterState(Pane pane) const;
     [[nodiscard]] bool DebugIsNameFilterActive(Pane pane) const noexcept;
@@ -360,6 +507,13 @@ private:
         UncPathAndName,
     };
 
+    enum class SplitterArrowZone : uint8_t
+    {
+        None,
+        Left,
+        Right,
+    };
+
     struct PaneState;
 
     // Class registration
@@ -380,6 +534,7 @@ private:
     void OnLButtonDblClk(POINT pt);
     void OnLButtonUp();
     void OnMouseMove(POINT pt);
+    void OnMouseLeave();
     void OnCaptureChanged();
     LRESULT OnDrawItem(DRAWITEMSTRUCT* dis);
     LRESULT OnNotify(const NMHDR* header);
@@ -410,6 +565,16 @@ private:
     void FocusPaneFolderView(Pane pane) noexcept;
     void FocusPanePreferredTarget(Pane pane) noexcept;
     [[nodiscard]] HWND GetPanePreferredFocusTarget(Pane pane) const noexcept;
+    [[nodiscard]] RECT GetSplitterArrowRect(SplitterArrowZone zone) const noexcept;
+    [[nodiscard]] Pane GetSplitterArrowTargetPane(SplitterArrowZone zone) const noexcept;
+    [[nodiscard]] wchar_t GetSplitterArrowGlyph(SplitterArrowZone zone) const noexcept;
+    [[nodiscard]] COLORREF GetSplitterGripColor() const noexcept;
+    [[nodiscard]] COLORREF GetSplitterArrowColor() const noexcept;
+    [[nodiscard]] int GetSplitterGripDotSizePx() const noexcept;
+    [[nodiscard]] int GetSplitterArrowChevronSizePx() const noexcept;
+    [[nodiscard]] SplitterArrowZone HitTestSplitterArrow(POINT pt) const noexcept;
+    void SetHoveredSplitterArrowZone(SplitterArrowZone zone) noexcept;
+    void TrackSplitterMouseLeave() noexcept;
     void StartSelectionSizeWorker(Pane pane) noexcept;
     void CancelSelectionSizeComputation(Pane pane) noexcept;
     void RequestSelectionSizeComputation(Pane pane);
@@ -432,6 +597,8 @@ private:
         std::wstring viewerPluginId;
         wil::com_ptr<IViewer> viewer;
         ViewerOpenContext openContext{};
+        bool hasInitialConfigurationJson = false;
+        std::string initialConfigurationJson;
         wil::com_ptr<IFileSystem> fileSystem;
         std::wstring fileSystemName;
         std::wstring focusedPath;
@@ -513,7 +680,7 @@ private:
 
     PaneState _leftPane;
     PaneState _rightPane;
-    Pane _activePane = Pane::Left;
+    Pane _activePane           = Pane::Left;
     HWND _lastFocusedPaneChild = nullptr;
     FunctionBar _functionBar;
     bool _functionBarVisible                = true;
@@ -536,11 +703,14 @@ private:
     float _viewWidthAdjustRestoreRatio = 0.5f;
     std::optional<float> _zoomRestoreSplitRatio;
     std::optional<Pane> _zoomedPane;
-    bool _draggingSplitter    = false;
-    int _splitterDragOffsetPx = 0;
+    bool _draggingSplitter                      = false;
+    int _splitterDragOffsetPx                   = 0;
+    SplitterArrowZone _hoveredSplitterArrowZone = SplitterArrowZone::None;
+    bool _trackingSplitterMouseLeave            = false;
     wil::unique_hbrush _backgroundBrush;
     wil::unique_hbrush _splitterBrush;
     wil::unique_hbrush _splitterGripBrush;
+    wil::unique_hbrush _splitterArrowHoverBrush;
 
     AppTheme _theme;
     uint32_t _statusBarRainbowHueDegrees = 0;

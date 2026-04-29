@@ -787,7 +787,7 @@ void FolderView::DrawErrorOverlay()
 
     const RedSalamander::Ui::AlertModel& current = _alertOverlay->GetModel();
     bool needsModelUpdate                        = current.severity != model.severity || current.title != model.title || current.message != model.message ||
-                            current.closable != model.closable || current.buttons.size() != model.buttons.size();
+                                                   current.closable != model.closable || current.buttons.size() != model.buttons.size();
     if (! needsModelUpdate)
     {
         for (size_t i = 0; i < model.buttons.size(); ++i)

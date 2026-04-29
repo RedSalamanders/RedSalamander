@@ -1,6 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
 #include <algorithm>
+#include <array>
+#include <chrono>
 #include <cstdint>
 #include <cstdio>
 #include <filesystem>
@@ -10,20 +12,24 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
+#include <system_error>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
 #include <Windows.h>
 
+#include <bcrypt.h>
 #include <commctrl.h>
 #include <commdlg.h>
 #include <d2d1.h>
 #include <d2d1helper.h>
 #include <shellapi.h>
 #include <shellscalingapi.h>
+#pragma comment(lib, "Bcrypt.lib")
 #pragma comment(lib, "Comctl32.lib")
 #pragma comment(lib, "Shell32.lib")
 #pragma comment(lib, "Shcore.lib")
@@ -46,35 +52,41 @@
 
 #include "ColorTextView.h"
 #include "Configuration.h"
+#include "DxUi/DxUi.h"
 #include "EtwListener.h"
 #include "ExceptionHelpers.h" // Shared exception handling utilities
+#include "LocalizationManager.h"
+#include "MonitorDiagnostics.h"
 #include "RedSalamanderMonitor.h"
 #include "SettingsStore.h"
+#include "Version.h"
+#include "WindowBackdropPolicy.h"
 #include "resource.h"
 
 // Global Variables:
 // All globals below are accessed exclusively from the UI thread (message loop).
 // The only cross-thread interaction is EtwListener's worker thread calling
 // g_colorView.QueueEtwEvent(), which is thread-safe via atomic HWND + critical section.
-HINSTANCE g_hInstance = NULL;  // current instance
-ColorTextView g_colorView;     // ColorTextView instance for the right panel
-wil::unique_hwnd g_hColorView; // ColorTextView window handle
-wil::unique_hwnd g_hToolbar;   // Toolbar window handle
-wil::unique_hwnd g_hStatusBar; // Status bar window handle
-using unique_himagelist = wil::unique_any<HIMAGELIST, decltype(&ImageList_Destroy), ImageList_Destroy>;
-static unique_himagelist g_toolbarImageList; // Image list backing the toolbar
-bool g_showIds            = true;            // Show Process/Thread IDs in output
-bool g_alwaysOnTop        = false;           // Main window always-on-top flag
-bool g_toolbarVisible     = true;            // Toolbar visibility (menu state)
-bool g_lineNumbersVisible = true;            // Line numbers menu state
-bool g_autoScrollEnabled  = true;            // Auto-scroll menu state
+HINSTANCE g_hInstance = NULL;    // current instance
+HWND g_hMainWindow    = nullptr; // monitor top-level window
+ColorTextView g_colorView;       // ColorTextView instance for the right panel
+wil::unique_hwnd g_hColorView;   // ColorTextView window handle
+wil::unique_hwnd g_hToolbar;     // Toolbar window handle
+wil::unique_hwnd g_hStatusBar;   // Status bar window handle
+RedSalamander::DxUi::WindowHost g_toolbarDxHost;
+RedSalamander::DxUi::WindowHost g_statusDxHost;
+bool g_showIds            = true;  // Show Process/Thread IDs in output
+bool g_alwaysOnTop        = false; // Main window always-on-top flag
+bool g_toolbarVisible     = true;  // Toolbar visibility (menu state)
+bool g_lineNumbersVisible = true;  // Line numbers menu state
+bool g_autoScrollEnabled  = true;  // Auto-scroll menu state
 // Auto-scroll state is now managed by ColorTextView (_autoScrollEnabled member)
 static std::unique_ptr<EtwListener> g_etwListener; // ETW real-time event listener
 Common::Settings::Settings g_settings;
 
-// Filter state: bitmask where bit N corresponds to InfoParam::Type value N (0x1F = all 5 types enabled)
-static uint32_t g_filterMask  = Debug::InfoParam::Type::All; // All types enabled by default
-static int g_lastFilterPreset = -1;                          // -1 = custom, 0 = Errors Only, 1 = Errors+Warnings, 2 = All, 3 = Errors+Debug
+// Filter state: bitmask where each visible message type maps to a dedicated bit.
+static uint32_t g_filterMask  = Debug::InfoParam::Type::All; // All visible types enabled by default
+static int g_lastFilterPreset = -1;                          // -1 = custom, 0 = Errors Only, 1 = Errors+Warnings, 2 = All, 3 = Errors+Perf+Debug
 
 // Status bar update timer
 static constexpr UINT_PTR kStatusBarTimerId      = 100;
@@ -83,8 +95,39 @@ static uint64_t g_lastMessageCount               = 0;   // Track message rate fo
 
 namespace
 {
-constexpr wchar_t kAppId[]    = L"RedSalamanderMonitor";
-constexpr wchar_t kWindowId[] = L"MonitorWindow";
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::StatusStrip;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::Toggle;
+using RedSalamander::DxUi::Toolbar;
+using RedSalamander::DxUi::WindowHost;
+
+constexpr wchar_t kAppId[]                            = L"RedSalamanderMonitor";
+constexpr wchar_t kWindowId[]                         = L"MonitorWindow";
+constexpr wchar_t kDxHostClassName[]                  = L"RedSalamanderMonitor.DxHost";
+constexpr std::wstring_view kMonitorChromeSelfTestArg = L"--chrome-selftest";
+constexpr std::wstring_view kMonitorAreaName          = L"Monitor";
+constexpr std::wstring_view kMonitorScenarioName      = L"monitor.chrome.dxui_toolbar_statusstrip";
+constexpr UINT kMsgRunMonitorChromeSelfTest           = WM_APP + 0x61C;
+
+#if defined(_DEBUG)
+constexpr std::wstring_view kMonitorBuildFlavor = L"Debug";
+#else
+constexpr std::wstring_view kMonitorBuildFlavor = L"Release";
+#endif
+
+constexpr wchar_t kMonitorHelpText[] = L"RedSalamanderMonitor\r\n"
+                                       L"\r\n"
+                                       L"Usage:\r\n"
+                                       L"  RedSalamanderMonitor.exe [options]\r\n"
+                                       L"\r\n"
+                                       L"Options:\r\n"
+                                       L"  -h, --help, /?                 Show this help.\r\n"
+                                       L"  --etw                           Enable RedSalamanderMonitor self Info/Perf/Debug ETW diagnostics.\r\n"
+                                       L"  --perf                          Write RedSalamanderMonitor perf metrics to the default JSONL path.\r\n"
+                                       L"  --perf=PATH                     Write RedSalamanderMonitor perf metrics to a custom JSONL path.\r\n"
+                                       L"\r\n";
 
 HMENU g_viewThemeMenu = nullptr;
 
@@ -94,6 +137,124 @@ constexpr UINT kCustomThemeMenuIdLast  = 33099u;
 std::unordered_map<UINT, std::wstring> g_customThemeMenuIdToThemeId;
 std::unordered_map<std::wstring, UINT> g_customThemeIdToMenuId;
 std::vector<Common::Settings::ThemeDefinition> g_fileThemes;
+
+struct MonitorFilterUiEntry final
+{
+    Debug::InfoParam::Type type;
+    UINT stringId;
+    UINT menuId;
+};
+
+constexpr std::array<MonitorFilterUiEntry, 6> kMonitorFilterEntries = {{
+    {Debug::InfoParam::Type::Text, IDS_FILTER_TYPE_TEXT, IDM_FILTER_TEXT},
+    {Debug::InfoParam::Type::Error, IDS_FILTER_TYPE_ERROR, IDM_FILTER_ERROR},
+    {Debug::InfoParam::Type::Warning, IDS_FILTER_TYPE_WARNING, IDM_FILTER_WARNING},
+    {Debug::InfoParam::Type::Info, IDS_FILTER_TYPE_INFO, IDM_FILTER_INFO},
+    {Debug::InfoParam::Type::Perf, IDS_FILTER_TYPE_PERF, IDM_FILTER_PERF},
+    {Debug::InfoParam::Type::Debug, IDS_FILTER_TYPE_DEBUG, IDM_FILTER_DEBUG},
+}};
+
+constexpr uint32_t kMonitorFilterAllMask        = Debug::InfoParam::Type::All;
+constexpr uint32_t kMonitorPresetErrorsOnlyMask = Debug::FilterBitForType(Debug::InfoParam::Type::Error);
+constexpr uint32_t kMonitorPresetErrorsWarningsMask =
+    Debug::FilterBitForType(Debug::InfoParam::Type::Error) | Debug::FilterBitForType(Debug::InfoParam::Type::Warning);
+constexpr uint32_t kMonitorPresetErrorsPerfDebugMask = Debug::FilterBitForType(Debug::InfoParam::Type::Error) |
+                                                       Debug::FilterBitForType(Debug::InfoParam::Type::Perf) |
+                                                       Debug::FilterBitForType(Debug::InfoParam::Type::Debug);
+
+[[nodiscard]] const MonitorFilterUiEntry* FindMonitorFilterEntry(UINT menuId) noexcept
+{
+    for (const auto& entry : kMonitorFilterEntries)
+    {
+        if (entry.menuId == menuId)
+        {
+            return &entry;
+        }
+    }
+
+    return nullptr;
+}
+
+void SyncMonitorFilterMenuChecks(HMENU menu, uint32_t mask) noexcept
+{
+    if (! menu)
+    {
+        return;
+    }
+
+    const uint32_t clampedMask = mask & kMonitorFilterAllMask;
+    for (const auto& entry : kMonitorFilterEntries)
+    {
+        const uint32_t bit = Debug::FilterBitForType(entry.type);
+        CheckMenuItem(menu, entry.menuId, static_cast<UINT>(MF_BYCOMMAND | ((clampedMask & bit) ? MF_CHECKED : MF_UNCHECKED)));
+    }
+}
+
+Toolbar* g_toolbarRoot         = nullptr;
+Button* g_toolbarNewButton     = nullptr;
+Button* g_toolbarOpenButton    = nullptr;
+Button* g_toolbarSaveButton    = nullptr;
+Button* g_toolbarCopyButton    = nullptr;
+Toggle* g_toolbarShowIdsToggle = nullptr;
+StatusStrip* g_statusStrip     = nullptr;
+struct MonitorChromeSelfTestCheck final
+{
+    std::wstring name;
+    bool passed = false;
+    std::wstring detail;
+};
+
+struct MonitorChromeSelfTestContext final
+{
+    bool enabled   = false;
+    bool completed = false;
+    int exitCode   = 0;
+    std::wstring machineHash;
+    std::wstring runId;
+    std::filesystem::path repoRoot;
+    std::filesystem::path runRoot;
+    std::filesystem::path tracePath;
+    std::filesystem::path resultsPath;
+    std::filesystem::path perfPath;
+    std::vector<MonitorChromeSelfTestCheck> checks;
+};
+
+MonitorChromeSelfTestContext g_monitorChromeSelfTest;
+
+void SyncToolbarState() noexcept;
+void UpdateStatusBar();
+void LayoutToolbarControls() noexcept;
+void AdjustLayout(HWND hWnd);
+
+struct MonitorResolvedTheme final
+{
+    ColorTextView::Theme textView;
+    bool dark         = false;
+    bool highContrast = false;
+    bool rainbow      = false;
+    bool compactMode  = false;
+    std::optional<bool> reducedMotionOverride;
+    Common::Settings::WindowBackdropMode windowBackdrop = Common::Settings::WindowBackdropMode::Default;
+};
+
+struct MonitorChromeMetrics final
+{
+    float toolbarHeightDip         = 42.0f;
+    float statusStripHeightDip     = 24.0f;
+    float toolbarPaddingDip        = 8.0f;
+    float toolbarButtonHeightDip   = 32.0f;
+    float toolbarGapDip            = 6.0f;
+    float toolbarSeparatorWidthDip = 12.0f;
+    float toolbarMinButtonWidthDip = 64.0f;
+    float toolbarMinToggleWidthDip = 108.0f;
+    float toolbarLabelCharWidthDip = 8.0f;
+    float toolbarTextPaddingDip    = 24.0f;
+    float toolbarToggleChromeDip   = 52.0f;
+    float statusAutoWidthDip       = 90.0f;
+    float statusFilterWidthDip     = 220.0f;
+    float statusVisibleWidthDip    = 150.0f;
+    float statusTotalWidthDip      = 150.0f;
+};
 
 struct ModalMessageDialogState
 {
@@ -220,10 +381,8 @@ void ShowModalMessageDialog(HINSTANCE instance, HWND owner, const wchar_t* capti
     state.caption = caption;
     state.message = message;
 
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-    DialogBoxParamW(instance, MAKEINTRESOURCEW(IDD_MODAL_MESSAGE), owner, ModalMessageDialogProc, reinterpret_cast<LPARAM>(&state));
-#pragma warning(pop)
+    static_cast<void>(RedSalamander::Win32Callback::DialogBoxParamResourceNoThrow(
+        instance, MAKEINTRESOURCEW(IDD_MODAL_MESSAGE), owner, ModalMessageDialogProc, reinterpret_cast<LPARAM>(&state)));
 }
 
 bool ShowModalConfirmDialog(HINSTANCE instance, HWND owner, const wchar_t* caption, const wchar_t* message) noexcept
@@ -232,10 +391,8 @@ bool ShowModalConfirmDialog(HINSTANCE instance, HWND owner, const wchar_t* capti
     state.caption = caption;
     state.message = message;
 
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-    const INT_PTR result = DialogBoxParamW(instance, MAKEINTRESOURCEW(IDD_MODAL_CONFIRM), owner, ModalConfirmDialogProc, reinterpret_cast<LPARAM>(&state));
-#pragma warning(pop)
+    const INT_PTR result = RedSalamander::Win32Callback::DialogBoxParamResourceNoThrow(
+        instance, MAKEINTRESOURCEW(IDD_MODAL_CONFIRM), owner, ModalConfirmDialogProc, reinterpret_cast<LPARAM>(&state));
 
     return result == IDYES;
 }
@@ -412,6 +569,512 @@ bool HasCommandLineArg(std::wstring_view arg) noexcept
     return false;
 }
 
+bool TryGetCommandLineArgValue(std::wstring_view prefix, std::wstring& value) noexcept
+{
+    value.clear();
+    if (prefix.empty())
+    {
+        return false;
+    }
+
+    int argc = 0;
+    wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
+    if (! argv || argc <= 1)
+    {
+        return false;
+    }
+
+    for (int i = 1; i < argc; ++i)
+    {
+        const wchar_t* arg = argv.get()[i];
+        if (! arg)
+        {
+            continue;
+        }
+
+        if (wcsncmp(arg, prefix.data(), prefix.size()) != 0)
+        {
+            continue;
+        }
+
+        value = arg + prefix.size();
+        return true;
+    }
+
+    return false;
+}
+
+void WriteMonitorHelpText(HINSTANCE hInstance) noexcept
+{
+    auto tryWrite = [](HANDLE handle, std::wstring_view msg) -> bool
+    {
+        if (! handle || handle == INVALID_HANDLE_VALUE)
+        {
+            return false;
+        }
+
+        DWORD mode = 0;
+        if (GetConsoleMode(handle, &mode) != FALSE)
+        {
+            DWORD written = 0;
+            return WriteConsoleW(handle, msg.data(), static_cast<DWORD>(msg.size()), &written, nullptr) != FALSE;
+        }
+
+        const int bytesNeeded = WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), nullptr, 0, nullptr, nullptr);
+        if (bytesNeeded <= 0)
+        {
+            return false;
+        }
+
+        std::string utf8;
+        utf8.resize(static_cast<size_t>(bytesNeeded));
+        const int converted = WideCharToMultiByte(CP_UTF8, 0, msg.data(), static_cast<int>(msg.size()), utf8.data(), bytesNeeded, nullptr, nullptr);
+        if (converted != bytesNeeded)
+        {
+            return false;
+        }
+
+        DWORD written = 0;
+        return WriteFile(handle, utf8.data(), static_cast<DWORD>(utf8.size()), &written, nullptr) != FALSE;
+    };
+
+    if (tryWrite(GetStdHandle(STD_OUTPUT_HANDLE), kMonitorHelpText))
+    {
+        return;
+    }
+
+    if (AttachConsole(ATTACH_PARENT_PROCESS) == FALSE)
+    {
+        const DWORD err = GetLastError();
+        if (err != ERROR_ACCESS_DENIED)
+        {
+            static_cast<void>(AllocConsole());
+        }
+    }
+
+    wil::unique_handle conout(CreateFileW(L"CONOUT$", GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr));
+    if (conout && tryWrite(conout.get(), kMonitorHelpText))
+    {
+        return;
+    }
+
+    ShowModalMessageDialog(hInstance, nullptr, L"RedSalamanderMonitor Help", kMonitorHelpText);
+}
+
+std::wstring GetEnvironmentVariableString(std::wstring_view name) noexcept
+{
+    if (name.empty())
+    {
+        return {};
+    }
+
+    const DWORD required = ::GetEnvironmentVariableW(name.data(), nullptr, 0);
+    if (required == 0u)
+    {
+        return {};
+    }
+
+    std::wstring value(required, L'\0');
+    const DWORD written = ::GetEnvironmentVariableW(name.data(), value.data(), required);
+    if (written == 0u)
+    {
+        return {};
+    }
+
+    value.resize(written);
+    return value;
+}
+
+bool PathExists(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    std::error_code ec;
+    return std::filesystem::exists(path, ec) && ! ec;
+}
+
+bool EnsureDirectory(const std::filesystem::path& path) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    std::error_code ec;
+    std::filesystem::create_directories(path, ec);
+    return ! ec && PathExists(path);
+}
+
+std::filesystem::path TryFindRepoRoot() noexcept
+{
+    const std::wstring configuredRoot = GetEnvironmentVariableString(L"REDSALAMANDER_REPO_ROOT");
+    if (! configuredRoot.empty())
+    {
+        const std::filesystem::path candidate(configuredRoot);
+        if (PathExists(candidate / L"Specs" / L"TestRuns"))
+        {
+            return candidate;
+        }
+    }
+
+    wil::unique_cotaskmem_string modulePath;
+    if (FAILED(wil::GetModuleFileNameW<wil::unique_cotaskmem_string>(nullptr, modulePath)) || ! modulePath)
+    {
+        return {};
+    }
+
+    std::filesystem::path candidate(modulePath.get());
+    candidate = candidate.parent_path();
+    while (! candidate.empty())
+    {
+        if (PathExists(candidate / L"Specs" / L"TestRuns"))
+        {
+            return candidate;
+        }
+
+        const std::filesystem::path parent = candidate.parent_path();
+        if (parent == candidate)
+        {
+            break;
+        }
+        candidate = parent;
+    }
+
+    return {};
+}
+
+std::string Utf8FromWide(std::wstring_view text) noexcept
+{
+    if (text.empty())
+    {
+        return {};
+    }
+
+    const int required = ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
+    if (required <= 0)
+    {
+        return {};
+    }
+
+    std::string utf8(static_cast<size_t>(required), '\0');
+    const int written =
+        ::WideCharToMultiByte(CP_UTF8, WC_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), utf8.data(), required, nullptr, nullptr);
+    if (written != required)
+    {
+        return {};
+    }
+
+    return utf8;
+}
+
+bool WriteUtf8TextFile(const std::filesystem::path& path, std::string_view text, bool append) noexcept
+{
+    if (path.empty())
+    {
+        return false;
+    }
+
+    if (path.has_parent_path() && ! EnsureDirectory(path.parent_path()))
+    {
+        return false;
+    }
+
+    const DWORD desiredAccess = append ? FILE_APPEND_DATA : GENERIC_WRITE;
+    const DWORD disposition   = append ? OPEN_ALWAYS : CREATE_ALWAYS;
+    wil::unique_handle file(::CreateFileW(path.c_str(), desiredAccess, FILE_SHARE_READ, nullptr, disposition, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (! file)
+    {
+        return false;
+    }
+
+    if (append)
+    {
+        ::SetFilePointer(file.get(), 0, nullptr, FILE_END);
+    }
+
+    DWORD written = 0u;
+    return ::WriteFile(file.get(), text.data(), static_cast<DWORD>(text.size()), &written, nullptr) && written == text.size();
+}
+
+std::string EscapeJsonUtf8(std::string_view text)
+{
+    std::string escaped;
+    escaped.reserve(text.size() + 16u);
+    for (const char rawCh : text)
+    {
+        const auto ch = static_cast<unsigned char>(rawCh);
+        switch (ch)
+        {
+            case '\\': escaped += "\\\\"; break;
+            case '"': escaped += "\\\""; break;
+            case '\r': escaped += "\\r"; break;
+            case '\n': escaped += "\\n"; break;
+            case '\t': escaped += "\\t"; break;
+            default:
+                if (ch < 0x20u)
+                {
+                    escaped += std::format("\\u{:04x}", static_cast<unsigned>(ch));
+                }
+                else
+                {
+                    escaped.push_back(static_cast<char>(ch));
+                }
+                break;
+        }
+    }
+
+    return escaped;
+}
+
+std::string EscapeJsonWide(std::wstring_view text)
+{
+    return EscapeJsonUtf8(Utf8FromWide(text));
+}
+
+void AppendMonitorChromeSelfTestTrace(std::wstring_view message) noexcept
+{
+    if (! g_monitorChromeSelfTest.enabled || g_monitorChromeSelfTest.tracePath.empty())
+    {
+        return;
+    }
+
+    std::wstring line(message);
+    line.append(L"\r\n");
+    WriteUtf8TextFile(g_monitorChromeSelfTest.tracePath, Utf8FromWide(line), true);
+}
+
+void RecordMonitorChromeSelfTestCheck(std::wstring_view name, bool passed, std::wstring_view detail = {}) noexcept
+{
+    if (! g_monitorChromeSelfTest.enabled)
+    {
+        return;
+    }
+
+    g_monitorChromeSelfTest.checks.push_back(MonitorChromeSelfTestCheck{std::wstring(name), passed, std::wstring(detail)});
+    AppendMonitorChromeSelfTestTrace(std::format(L"{}: {}{}", passed ? L"PASS" : L"FAIL", name, detail.empty() ? L"" : std::format(L" ({})", detail)));
+}
+
+std::wstring TryReadRegistryStringValue(HKEY hive, const wchar_t* subKey, const wchar_t* valueName) noexcept
+{
+    if (! hive || ! subKey || ! valueName)
+    {
+        return {};
+    }
+
+    DWORD type            = 0u;
+    DWORD size            = 0u;
+    const LONG sizeStatus = ::RegGetValueW(hive, subKey, valueName, RRF_RT_REG_SZ, &type, nullptr, &size);
+    if (sizeStatus != ERROR_SUCCESS || type != REG_SZ || size < sizeof(wchar_t))
+    {
+        return {};
+    }
+
+    std::wstring value(size / sizeof(wchar_t), L'\0');
+    DWORD readSize        = size;
+    const LONG readStatus = ::RegGetValueW(hive, subKey, valueName, RRF_RT_REG_SZ, nullptr, value.data(), &readSize);
+    if (readStatus != ERROR_SUCCESS || readSize < sizeof(wchar_t))
+    {
+        return {};
+    }
+
+    value.resize((readSize / sizeof(wchar_t)) - 1u);
+    return value;
+}
+
+std::wstring GetComputerNameString() noexcept
+{
+    wchar_t buffer[MAX_COMPUTERNAME_LENGTH + 1]{};
+    DWORD size = static_cast<DWORD>(std::size(buffer));
+    if (! ::GetComputerNameW(buffer, &size) || size == 0u)
+    {
+        return {};
+    }
+
+    return std::wstring(buffer, size);
+}
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626)
+bool TryComputeSha256(std::span<const std::byte> data, std::array<std::byte, 32>& outHash) noexcept
+{
+    BCRYPT_ALG_HANDLE algHandleRaw = nullptr;
+    const NTSTATUS openStatus      = BCryptOpenAlgorithmProvider(&algHandleRaw, BCRYPT_SHA256_ALGORITHM, nullptr, 0);
+    if (! BCRYPT_SUCCESS(openStatus) || ! algHandleRaw)
+    {
+        return false;
+    }
+
+    wil::unique_bcrypt_algorithm closeAlg(algHandleRaw);
+
+    DWORD objLen              = 0u;
+    DWORD hashLen             = 0u;
+    DWORD cb                  = sizeof(DWORD);
+    const NTSTATUS propObject = BCryptGetProperty(closeAlg.get(), BCRYPT_OBJECT_LENGTH, reinterpret_cast<PUCHAR>(&objLen), cb, &cb, 0);
+    const NTSTATUS propHash   = BCryptGetProperty(closeAlg.get(), BCRYPT_HASH_LENGTH, reinterpret_cast<PUCHAR>(&hashLen), cb, &cb, 0);
+    if (! BCRYPT_SUCCESS(propObject) || ! BCRYPT_SUCCESS(propHash) || hashLen != static_cast<DWORD>(outHash.size()))
+    {
+        return false;
+    }
+
+    std::vector<std::byte> hashObject(static_cast<size_t>(objLen));
+    BCRYPT_HASH_HANDLE hashHandleRaw = nullptr;
+    const NTSTATUS createStatus      = BCryptCreateHash(closeAlg.get(), &hashHandleRaw, reinterpret_cast<PUCHAR>(hashObject.data()), objLen, nullptr, 0, 0);
+    if (! BCRYPT_SUCCESS(createStatus) || ! hashHandleRaw)
+    {
+        return false;
+    }
+
+    wil::unique_bcrypt_hash destroyHash(hashHandleRaw);
+    const NTSTATUS hashStatus =
+        BCryptHashData(destroyHash.get(), reinterpret_cast<PUCHAR>(const_cast<std::byte*>(data.data())), static_cast<ULONG>(data.size()), 0);
+    if (! BCRYPT_SUCCESS(hashStatus))
+    {
+        return false;
+    }
+
+    const NTSTATUS finishStatus = BCryptFinishHash(destroyHash.get(), reinterpret_cast<PUCHAR>(outHash.data()), hashLen, 0);
+    return BCRYPT_SUCCESS(finishStatus);
+}
+#pragma warning(pop)
+
+std::wstring GetComputerHashName() noexcept
+{
+    std::wstring seed = TryReadRegistryStringValue(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Cryptography", L"MachineGuid");
+    if (seed.empty())
+    {
+        seed = GetComputerNameString();
+    }
+    if (seed.empty())
+    {
+        return L"unknown";
+    }
+
+    const std::string seedUtf8 = Utf8FromWide(seed);
+    if (seedUtf8.empty())
+    {
+        return L"unknown";
+    }
+
+    std::array<std::byte, 32> hash{};
+    if (! TryComputeSha256(std::as_bytes(std::span(seedUtf8.data(), seedUtf8.size())), hash))
+    {
+        return L"unknown";
+    }
+
+    constexpr wchar_t kHex[] = L"0123456789abcdef";
+    std::wstring out;
+    out.reserve(12u);
+    for (size_t i = 0; i < 6u; ++i)
+    {
+        const uint8_t byte = std::to_integer<uint8_t>(hash[i]);
+        out.push_back(kHex[(byte >> 4) & 0x0Fu]);
+        out.push_back(kHex[byte & 0x0Fu]);
+    }
+    return out;
+}
+
+std::wstring GetTimestampFolderNameLocal() noexcept
+{
+    SYSTEMTIME st{};
+    ::GetLocalTime(&st);
+    return std::format(L"{0:04}-{1:02}-{2:02}_{3:02}{4:02}{5:02}", st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+}
+
+std::filesystem::path GetDefaultMonitorPerfJsonlPath() noexcept
+{
+    const std::filesystem::path repoRoot = TryFindRepoRoot();
+    if (! repoRoot.empty())
+    {
+        return repoRoot / L"Specs" / L"TestRuns" / GetComputerHashName() / L"RedSalamanderMonitor" / GetTimestampFolderNameLocal() / L"perf_metrics.jsonl";
+    }
+
+    std::error_code ec;
+    std::filesystem::path root = std::filesystem::temp_directory_path(ec);
+    if (ec)
+    {
+        root = L".";
+    }
+    return root / L"RedSalamander" / L"Perf" / (std::wstring(kAppId) + L"_" + GetTimestampFolderNameLocal() + L".jsonl");
+}
+
+void FinalizeMonitorChromeSelfTest(bool passed, std::wstring_view summary) noexcept
+{
+    if (! g_monitorChromeSelfTest.enabled || g_monitorChromeSelfTest.completed)
+    {
+        return;
+    }
+
+    g_monitorChromeSelfTest.completed = true;
+    g_monitorChromeSelfTest.exitCode  = passed ? 0 : 1;
+
+    RecordMonitorChromeSelfTestCheck(L"overall", passed, summary);
+
+    std::string json;
+    json += "{\n";
+    json += std::format("  \"scenario\": \"{}\",\n", EscapeJsonWide(kMonitorScenarioName));
+    json += std::format("  \"status\": \"{}\",\n", passed ? "passed" : "failed");
+    json += std::format("  \"summary\": \"{}\",\n", EscapeJsonWide(summary));
+    json += std::format("  \"machineHash\": \"{}\",\n", EscapeJsonWide(g_monitorChromeSelfTest.machineHash));
+    json += std::format("  \"runId\": \"{}\",\n", EscapeJsonWide(g_monitorChromeSelfTest.runId));
+    json += "  \"checks\": [\n";
+    for (size_t index = 0; index < g_monitorChromeSelfTest.checks.size(); ++index)
+    {
+        const auto& check = g_monitorChromeSelfTest.checks[index];
+        json += std::format("    {{\"name\": \"{}\", \"status\": \"{}\", \"detail\": \"{}\"}}{}\n",
+                            EscapeJsonWide(check.name),
+                            check.passed ? "passed" : "failed",
+                            EscapeJsonWide(check.detail),
+                            (index + 1u) == g_monitorChromeSelfTest.checks.size() ? "" : ",");
+    }
+    json += "  ]\n";
+    json += "}\n";
+
+    WriteUtf8TextFile(g_monitorChromeSelfTest.resultsPath, json, false);
+    Debug::Perf::ClearJsonlOutput();
+}
+
+bool InitializeMonitorChromeSelfTestArtifacts() noexcept
+{
+    if (! g_monitorChromeSelfTest.enabled)
+    {
+        return true;
+    }
+
+    g_monitorChromeSelfTest.completed = false;
+    g_monitorChromeSelfTest.exitCode  = 1;
+    g_monitorChromeSelfTest.checks.clear();
+    g_monitorChromeSelfTest.machineHash = GetComputerHashName();
+    g_monitorChromeSelfTest.runId       = GetTimestampFolderNameLocal();
+    g_monitorChromeSelfTest.repoRoot    = TryFindRepoRoot();
+    if (g_monitorChromeSelfTest.repoRoot.empty())
+    {
+        return false;
+    }
+
+    g_monitorChromeSelfTest.runRoot = g_monitorChromeSelfTest.repoRoot / L"Specs" / L"TestRuns" / g_monitorChromeSelfTest.machineHash /
+                                      std::wstring(kMonitorAreaName) / g_monitorChromeSelfTest.runId;
+    if (! EnsureDirectory(g_monitorChromeSelfTest.runRoot))
+    {
+        return false;
+    }
+
+    g_monitorChromeSelfTest.tracePath   = g_monitorChromeSelfTest.runRoot / L"trace.txt";
+    g_monitorChromeSelfTest.resultsPath = g_monitorChromeSelfTest.runRoot / L"results.json";
+    g_monitorChromeSelfTest.perfPath    = g_monitorChromeSelfTest.runRoot / L"perf_metrics.jsonl";
+
+    WriteUtf8TextFile(g_monitorChromeSelfTest.tracePath, {}, false);
+    AppendMonitorChromeSelfTestTrace(std::format(L"Scenario: {}", kMonitorScenarioName));
+    AppendMonitorChromeSelfTestTrace(std::format(L"ArchiveToRepo: {}", g_monitorChromeSelfTest.runRoot.native()));
+
+    Debug::Perf::ConfigureJsonlOutput(
+        g_monitorChromeSelfTest.perfPath, L"MonitorChromeSelfTest", L"Debug", {}, {}, g_monitorChromeSelfTest.machineHash, g_monitorChromeSelfTest.runId);
+
+    return true;
+}
+
 bool RelaunchSelfElevated(HWND owner, std::wstring_view extraArg) noexcept
 {
     wil::unique_cotaskmem_string exePath;
@@ -457,12 +1120,12 @@ bool IsSystemDarkModeEnabled() noexcept
     DWORD appsUseLightTheme = 1;
     DWORD dataSize          = sizeof(appsUseLightTheme);
     const LSTATUS status    = RegGetValueW(HKEY_CURRENT_USER,
-                                        L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-                                        L"AppsUseLightTheme",
-                                        RRF_RT_REG_DWORD,
-                                        nullptr,
-                                        &appsUseLightTheme,
-                                        &dataSize);
+                                           L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+                                           L"AppsUseLightTheme",
+                                           RRF_RT_REG_DWORD,
+                                           nullptr,
+                                           &appsUseLightTheme,
+                                           &dataSize);
     if (status != ERROR_SUCCESS)
     {
         return false;
@@ -495,16 +1158,14 @@ int LegacyFromPreset(Common::Settings::MonitorFilterPreset preset) noexcept
 
 int InferLegacyPresetFromMask(uint32_t mask) noexcept
 {
-    // Mask bit mapping (Active Filter menu):
-    // 0x01=Text, 0x02=Error, 0x04=Warning, 0x08=Info, 0x10=Debug
-    mask &= Debug::InfoParam::Type::All;
+    mask &= kMonitorFilterAllMask;
     switch (mask)
     {
-        case 0x02: return 0; // Errors only
-        case 0x06: return 1; // Errors+Warnings
-        case 0x1F: return 2; // All types
-        case 0x12: return 3; // Errors+Debug
-        default: return -1;  // Custom
+        case kMonitorPresetErrorsOnlyMask: return 0;      // Errors only
+        case kMonitorPresetErrorsWarningsMask: return 1;  // Errors+Warnings
+        case kMonitorFilterAllMask: return 2;             // All types
+        case kMonitorPresetErrorsPerfDebugMask: return 3; // Errors+Perf+Debug
+        default: return -1;                               // Custom
     }
 }
 
@@ -515,6 +1176,17 @@ D2D1_COLOR_F D2DFromArgb(uint32_t argb) noexcept
     const float g = static_cast<float>((argb >> 8) & 0xFFu) / 255.0f;
     const float b = static_cast<float>(argb & 0xFFu) / 255.0f;
     return D2D1::ColorF(r, g, b, a);
+}
+
+[[nodiscard]] D2D1_COLOR_F BlendColor(const D2D1_COLOR_F& a, const D2D1_COLOR_F& b, float t) noexcept
+{
+    const float clamped = (std::clamp)(t, 0.0f, 1.0f);
+    return D2D1::ColorF(a.r + ((b.r - a.r) * clamped), a.g + ((b.g - a.g) * clamped), a.b + ((b.b - a.b) * clamped), a.a + ((b.a - a.a) * clamped));
+}
+
+[[nodiscard]] float ComputeLuminance(const D2D1_COLOR_F& color) noexcept
+{
+    return (0.2126f * color.r) + (0.7152f * color.g) + (0.0722f * color.b);
 }
 
 const Common::Settings::ThemeDefinition* FindThemeById(std::wstring_view id) noexcept
@@ -559,6 +1231,7 @@ void ApplyMonitorThemeOverrides(ColorTextView::Theme& theme, const std::unordere
     apply(L"monitor.textView.metaError", theme.metaError);
     apply(L"monitor.textView.metaWarning", theme.metaWarning);
     apply(L"monitor.textView.metaInfo", theme.metaInfo);
+    apply(L"monitor.textView.metaPerf", theme.metaPerf);
     apply(L"monitor.textView.metaDebug", theme.metaDebug);
 }
 
@@ -583,6 +1256,7 @@ ColorTextView::Theme MakeMonitorThemeHighContrast() noexcept
     t.metaError       = sys(COLOR_HIGHLIGHTTEXT);
     t.metaWarning     = sys(COLOR_HIGHLIGHTTEXT);
     t.metaInfo        = sys(COLOR_HIGHLIGHTTEXT);
+    t.metaPerf        = sys(COLOR_HIGHLIGHTTEXT);
     t.metaDebug       = sys(COLOR_HIGHLIGHTTEXT);
     return t;
 }
@@ -606,15 +1280,29 @@ ColorTextView::Theme MakeMonitorThemeDark() noexcept
     t.metaError       = D2D1::ColorF(D2D1::ColorF::Red);
     t.metaWarning     = D2D1::ColorF(D2D1::ColorF::Orange);
     t.metaInfo        = D2D1::ColorF(D2D1::ColorF::DodgerBlue);
+    t.metaPerf        = D2D1::ColorF(D2D1::ColorF::MediumSeaGreen);
     t.metaDebug       = D2D1::ColorF(D2D1::ColorF::MediumPurple);
     return t;
 }
 
-ColorTextView::Theme ResolveMonitorTheme() noexcept
+MonitorResolvedTheme ResolveMonitorTheme() noexcept
 {
+    MonitorResolvedTheme resolved{};
+    const Common::Settings::UiSettings ui = g_settings.ui.value_or(Common::Settings::UiSettings{});
     if (IsHighContrastEnabled())
     {
-        return MakeMonitorThemeHighContrast();
+        resolved.textView       = MakeMonitorThemeHighContrast();
+        resolved.dark           = false;
+        resolved.highContrast   = true;
+        resolved.compactMode    = ui.compactMode;
+        resolved.windowBackdrop = ui.windowBackdrop;
+        switch (ui.reducedMotion)
+        {
+            case Common::Settings::ReducedMotionMode::On: resolved.reducedMotionOverride = true; break;
+            case Common::Settings::ReducedMotionMode::Off: resolved.reducedMotionOverride = false; break;
+            case Common::Settings::ReducedMotionMode::System: resolved.reducedMotionOverride.reset(); break;
+        }
+        return resolved;
     }
 
     std::wstring_view themeId                       = g_settings.theme.currentThemeId;
@@ -633,41 +1321,158 @@ ColorTextView::Theme ResolveMonitorTheme() noexcept
     }
 
     const bool systemDark = IsSystemDarkModeEnabled();
-    ColorTextView::Theme theme;
+    resolved.highContrast = false;
+    resolved.rainbow      = baseThemeId == L"builtin/rainbow";
 
     if (baseThemeId == L"builtin/highContrast")
     {
-        theme = MakeMonitorThemeHighContrast();
+        resolved.textView     = MakeMonitorThemeHighContrast();
+        resolved.dark         = false;
+        resolved.highContrast = true;
     }
     else if (baseThemeId == L"builtin/dark")
     {
-        theme = MakeMonitorThemeDark();
+        resolved.textView = MakeMonitorThemeDark();
+        resolved.dark     = true;
     }
     else if (baseThemeId == L"builtin/light")
     {
-        theme = MakeMonitorThemeLight();
+        resolved.textView = MakeMonitorThemeLight();
+        resolved.dark     = false;
     }
     else if (baseThemeId == L"builtin/rainbow")
     {
-        theme = systemDark ? MakeMonitorThemeDark() : MakeMonitorThemeLight();
+        resolved.textView = systemDark ? MakeMonitorThemeDark() : MakeMonitorThemeLight();
+        resolved.dark     = systemDark;
     }
     else
     {
-        theme = systemDark ? MakeMonitorThemeDark() : MakeMonitorThemeLight();
+        resolved.textView = systemDark ? MakeMonitorThemeDark() : MakeMonitorThemeLight();
+        resolved.dark     = systemDark;
     }
 
     if (overrides)
     {
-        ApplyMonitorThemeOverrides(theme, *overrides);
+        ApplyMonitorThemeOverrides(resolved.textView, *overrides);
     }
 
-    return theme;
+    resolved.compactMode    = ui.compactMode;
+    resolved.windowBackdrop = ui.windowBackdrop;
+    switch (ui.reducedMotion)
+    {
+        case Common::Settings::ReducedMotionMode::On: resolved.reducedMotionOverride = true; break;
+        case Common::Settings::ReducedMotionMode::Off: resolved.reducedMotionOverride = false; break;
+        case Common::Settings::ReducedMotionMode::System: resolved.reducedMotionOverride.reset(); break;
+    }
+
+    return resolved;
+}
+
+[[nodiscard]] ThemePalette MakeMonitorDxPalette(const MonitorResolvedTheme& theme) noexcept
+{
+    ThemePalette palette          = RedSalamander::DxUi::MakeDefaultThemePalette(theme.dark);
+    palette.dark                  = theme.dark;
+    palette.highContrast          = theme.highContrast;
+    palette.rainbowMode           = theme.rainbow;
+    palette.accent                = D2D1::ColorF(theme.textView.selection.r, theme.textView.selection.g, theme.textView.selection.b, 1.0f);
+    palette.windowBackground      = theme.textView.bg;
+    palette.surfaceBackground     = BlendColor(theme.textView.bg, theme.textView.gutterBg, theme.dark ? 0.28f : 0.40f);
+    palette.cardBackground        = BlendColor(palette.windowBackground, palette.surfaceBackground, theme.dark ? 0.68f : 0.82f);
+    palette.headerBackground      = palette.cardBackground;
+    palette.headerHovered         = BlendColor(palette.cardBackground, palette.accent, theme.dark ? 0.20f : 0.12f);
+    palette.headerPressed         = BlendColor(palette.cardBackground, palette.accent, theme.dark ? 0.28f : 0.18f);
+    palette.border                = BlendColor(theme.textView.bg, theme.textView.fg, theme.dark ? 0.28f : 0.18f);
+    palette.borderDefault         = palette.border;
+    palette.borderStrong          = BlendColor(theme.textView.bg, theme.textView.fg, theme.dark ? 0.42f : 0.28f);
+    palette.gridLine              = BlendColor(palette.windowBackground, palette.borderDefault, theme.dark ? 0.72f : 0.48f);
+    palette.text                  = theme.textView.fg;
+    palette.subduedText           = theme.textView.metaText;
+    palette.disabledText          = BlendColor(theme.textView.bg, theme.textView.metaText, 0.48f);
+    palette.selectionFill         = palette.accent;
+    palette.selectionText         = ComputeLuminance(palette.accent) < 0.56f ? D2D1::ColorF(D2D1::ColorF::White) : D2D1::ColorF(D2D1::ColorF::Black);
+    palette.selectionInactiveFill = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.highContrast ? 1.0f : 0.55f);
+    palette.focusStroke           = theme.textView.metaInfo;
+    palette.hoverFill             = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.dark ? 0.16f : 0.10f);
+    palette.pressedFill           = D2D1::ColorF(palette.accent.r, palette.accent.g, palette.accent.b, theme.dark ? 0.22f : 0.16f);
+    palette.buttonFill            = palette.cardBackground;
+    palette.buttonBorder          = palette.borderDefault;
+    palette.buttonHotFill         = palette.headerHovered;
+    palette.buttonPressedFill     = palette.headerPressed;
+    palette.inputFill             = BlendColor(palette.cardBackground, palette.windowBackground, theme.dark ? 0.70f : 0.78f);
+    palette.inputBorder           = palette.borderDefault;
+    palette.scrollbarTrack        = D2D1::ColorF(theme.textView.fg.r, theme.textView.fg.g, theme.textView.fg.b, theme.dark ? 0.12f : 0.06f);
+    palette.scrollbarThumb        = D2D1::ColorF(theme.textView.fg.r, theme.textView.fg.g, theme.textView.fg.b, theme.dark ? 0.28f : 0.18f);
+    palette.scrollbarThumbHot     = D2D1::ColorF(theme.textView.fg.r, theme.textView.fg.g, theme.textView.fg.b, theme.dark ? 0.40f : 0.28f);
+    palette.infoFill              = BlendColor(theme.textView.bg, theme.textView.metaInfo, theme.dark ? 0.22f : 0.14f);
+    palette.infoText              = theme.textView.metaInfo;
+    palette.warningFill           = BlendColor(theme.textView.bg, theme.textView.metaWarning, theme.dark ? 0.22f : 0.14f);
+    palette.warningText           = theme.textView.metaWarning;
+    palette.errorFill             = BlendColor(theme.textView.bg, theme.textView.metaError, theme.dark ? 0.20f : 0.12f);
+    palette.errorText             = theme.textView.metaError;
+    palette.density               = theme.compactMode ? RedSalamander::DxUi::Density::Compact : RedSalamander::DxUi::Density::Standard;
+    if (theme.reducedMotionOverride.has_value())
+    {
+        palette.reducedMotion = theme.reducedMotionOverride.value();
+    }
+    return palette;
+}
+
+[[nodiscard]] MonitorChromeMetrics ResolveMonitorChromeMetrics(bool compactMode) noexcept
+{
+    if (! compactMode)
+    {
+        return {};
+    }
+
+    return MonitorChromeMetrics{
+        .toolbarHeightDip         = 36.0f,
+        .statusStripHeightDip     = 20.0f,
+        .toolbarPaddingDip        = 6.0f,
+        .toolbarButtonHeightDip   = 28.0f,
+        .toolbarGapDip            = 4.0f,
+        .toolbarSeparatorWidthDip = 10.0f,
+        .toolbarMinButtonWidthDip = 56.0f,
+        .toolbarMinToggleWidthDip = 96.0f,
+        .toolbarLabelCharWidthDip = 7.5f,
+        .toolbarTextPaddingDip    = 20.0f,
+        .toolbarToggleChromeDip   = 46.0f,
+        .statusAutoWidthDip       = 74.0f,
+        .statusFilterWidthDip     = 188.0f,
+        .statusVisibleWidthDip    = 124.0f,
+        .statusTotalWidthDip      = 124.0f,
+    };
 }
 
 void ApplyMonitorTheme() noexcept
 {
-    const ColorTextView::Theme theme = ResolveMonitorTheme();
-    g_colorView.SetTheme(theme);
+    const MonitorResolvedTheme theme = ResolveMonitorTheme();
+    g_colorView.SetTheme(theme.textView);
+
+    const ThemePalette palette = MakeMonitorDxPalette(theme);
+    g_toolbarDxHost.SetTheme(palette);
+    g_statusDxHost.SetTheme(palette);
+    if (g_statusStrip)
+    {
+        const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(theme.compactMode);
+        g_statusStrip->SetSections({
+            StatusStrip::Section{.text = std::wstring(g_statusStrip->GetSectionText(0u)), .widthDip = metrics.statusAutoWidthDip},
+            StatusStrip::Section{.text = std::wstring(g_statusStrip->GetSectionText(1u)), .widthDip = metrics.statusFilterWidthDip},
+            StatusStrip::Section{.text = std::wstring(g_statusStrip->GetSectionText(2u)), .widthDip = metrics.statusVisibleWidthDip},
+            StatusStrip::Section{.text = std::wstring(g_statusStrip->GetSectionText(3u)), .widthDip = metrics.statusTotalWidthDip},
+            StatusStrip::Section{.text = std::wstring(g_statusStrip->GetSectionText(4u)), .widthDip = 0.0f},
+        });
+    }
+    if (g_hMainWindow && IsWindow(g_hMainWindow) != FALSE)
+    {
+        Common::WindowBackdrop::ApplyResolvedWindowBackdrop(g_hMainWindow, theme.windowBackdrop, Common::WindowBackdrop::Target::Primary, theme.highContrast);
+    }
+    SyncToolbarState();
+    UpdateStatusBar();
+    LayoutToolbarControls();
+    if (g_hMainWindow && IsWindow(g_hMainWindow) != FALSE)
+    {
+        AdjustLayout(g_hMainWindow);
+    }
 }
 
 bool TryFindMenuPathToCommand(HMENU menu, UINT commandId, std::vector<HMENU>& path) noexcept
@@ -986,7 +1791,7 @@ void SaveMonitorSettings(HWND hWnd) noexcept
     g_settings.monitor->menu.showIds            = g_showIds;
     g_settings.monitor->menu.autoScroll         = g_colorView.GetAutoScroll();
 
-    g_settings.monitor->filter.mask   = g_filterMask & 31u;
+    g_settings.monitor->filter.mask   = g_filterMask & kMonitorFilterAllMask;
     g_settings.monitor->filter.preset = PresetFromLegacy(g_lastFilterPreset);
 
     const HRESULT saveHr = Common::Settings::SaveSettings(kAppId, g_settings);
@@ -997,160 +1802,279 @@ void SaveMonitorSettings(HWND hWnd) noexcept
     }
 }
 
-// (Re)create the toolbar with DPI-scaled bitmap and button sizes
-void CreateOrRecreateToolbar(HWND hWnd)
+LRESULT CALLBACK DxHostWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
-    if (! hWnd)
-        return;
-
-    // If a toolbar already exists, destroy it before creating a new one
-    if (g_hToolbar)
+    auto* host = reinterpret_cast<WindowHost*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (msg == WM_NCCREATE)
     {
-        g_hToolbar.reset();
-    }
-    if (g_toolbarImageList)
-    {
-        g_toolbarImageList.reset();
-    }
-
-    // Base logical size for icons (in DIPs)
-    constexpr int kIconDip = 24; // 24-DIP toolbar icons
-    const int cxBitmap     = DipsToPx(hWnd, kIconDip);
-    const int cyBitmap     = DipsToPx(hWnd, kIconDip);
-
-    g_hToolbar.reset(CreateWindowExW(0,
-                                     TOOLBARCLASSNAMEW,
-                                     nullptr,
-                                     WS_CHILD | WS_VISIBLE | TBSTYLE_TOOLTIPS | TBSTYLE_FLAT | CCS_TOP | CCS_NODIVIDER,
-                                     0,
-                                     0,
-                                     0,
-                                     0,
-                                     hWnd,
-                                     nullptr,
-                                     g_hInstance,
-                                     nullptr));
-
-    if (! g_hToolbar)
-        return;
-
-    SendMessage(g_hToolbar.get(), TB_BUTTONSTRUCTSIZE, sizeof(TBBUTTON), 0);
-
-    // Configure bitmap and button sizes based on DPI
-    SendMessage(g_hToolbar.get(), TB_SETBITMAPSIZE, 0, MAKELPARAM(cxBitmap, cyBitmap));
-    const int padding = DipsToPx(hWnd, 8);
-    SendMessage(g_hToolbar.get(), TB_SETBUTTONSIZE, 0, MAKELPARAM(cxBitmap + padding, cyBitmap + padding));
-
-    // Build a per-DPI image list from the PNG strip using WIC for high quality scaling
-    // PNG strip layout is 6 icons, each 64x64 with 8 px spacing
-    constexpr int kSrcIcon = 64;
-    constexpr int kSrcGap  = 8;
-    constexpr int kCount   = 6;
-
-    // Ensure COM is initialized for WIC
-    bool coinit   = SUCCEEDED(CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED));
-    auto coUninit = wil::scope_exit([&]() noexcept
-    {
-        if (coinit)
-            CoUninitialize();
-    });
-
-    wil::com_ptr<IWICImagingFactory> factory;
-    if (SUCCEEDED(CoCreateInstance(CLSID_WICImagingFactory, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(factory.addressof()))))
-    {
-        HRSRC hRes = FindResourceW(g_hInstance, MAKEINTRESOURCE(IDB_TOOLBAR_PNG), L"PNG");
-        if (hRes)
+        auto* cs = reinterpret_cast<CREATESTRUCTW*>(lp);
+        host     = reinterpret_cast<WindowHost*>(cs->lpCreateParams);
+        if (! host || ! host->Attach(hwnd))
         {
-            HGLOBAL hData = LoadResource(g_hInstance, hRes);
-            if (hData)
-            {
-                const void* pData  = LockResource(hData);
-                const DWORD cbData = SizeofResource(g_hInstance, hRes);
-
-                wil::com_ptr<IWICStream> stream;
-                if (SUCCEEDED(factory->CreateStream(stream.addressof())) &&
-                    SUCCEEDED(stream->InitializeFromMemory(reinterpret_cast<BYTE*>(const_cast<void*>(pData)), cbData)))
-                {
-                    wil::com_ptr<IWICBitmapDecoder> decoder;
-                    if (SUCCEEDED(factory->CreateDecoderFromStream(stream.get(), nullptr, WICDecodeMetadataCacheOnLoad, decoder.addressof())))
-                    {
-                        wil::com_ptr<IWICBitmapFrameDecode> frame;
-                        if (SUCCEEDED(decoder->GetFrame(0, frame.addressof())))
-                        {
-                            wil::com_ptr<IWICFormatConverter> converter;
-                            if (SUCCEEDED(factory->CreateFormatConverter(converter.addressof())) &&
-                                SUCCEEDED(converter->Initialize(
-                                    frame.get(), GUID_WICPixelFormat32bppPBGRA, WICBitmapDitherTypeNone, nullptr, 0.0f, WICBitmapPaletteTypeCustom)))
-                            {
-                                // Create the image list (32bpp with alpha)
-                                g_toolbarImageList.reset(ImageList_Create(cxBitmap, cyBitmap, ILC_COLOR32, kCount, 1));
-                                if (g_toolbarImageList)
-                                {
-                                    ImageList_SetBkColor(g_toolbarImageList.get(), CLR_NONE);
-
-                                    for (int i = 0; i < kCount; ++i)
-                                    {
-                                        const int x = i * (kSrcIcon + kSrcGap);
-                                        WICRect rc{x, 0, kSrcIcon, kSrcIcon};
-
-                                        wil::com_ptr<IWICBitmapClipper> clip;
-                                        wil::com_ptr<IWICBitmapScaler> scaler;
-
-                                        if (SUCCEEDED(factory->CreateBitmapClipper(clip.addressof())) && SUCCEEDED(clip->Initialize(converter.get(), &rc)) &&
-                                            SUCCEEDED(factory->CreateBitmapScaler(scaler.addressof())) &&
-                                            SUCCEEDED(scaler->Initialize(
-                                                clip.get(), static_cast<UINT>(cxBitmap), static_cast<UINT>(cyBitmap), WICBitmapInterpolationModeFant)))
-                                        {
-                                            const UINT stride  = static_cast<UINT>(cxBitmap) * 4u;
-                                            const UINT bufSize = stride * static_cast<UINT>(cyBitmap);
-                                            std::vector<BYTE> pixels(bufSize);
-                                            if (SUCCEEDED(scaler->CopyPixels(nullptr, stride, bufSize, pixels.data())))
-                                            {
-                                                BITMAPINFO bmi{};
-                                                bmi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
-                                                bmi.bmiHeader.biWidth       = cxBitmap;
-                                                bmi.bmiHeader.biHeight      = -cyBitmap; // top-down DIB
-                                                bmi.bmiHeader.biPlanes      = 1;
-                                                bmi.bmiHeader.biBitCount    = 32;
-                                                bmi.bmiHeader.biCompression = BI_RGB;
-
-                                                void* bits = nullptr;
-                                                wil::unique_hbitmap hbm(CreateDIBSection(nullptr, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0));
-                                                if (hbm && bits)
-                                                {
-                                                    memcpy(bits, pixels.data(), pixels.size());
-                                                    ImageList_Add(g_toolbarImageList.get(), hbm.get(), nullptr);
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // Attach the image list to the toolbar
-                                    SendMessage(g_hToolbar.get(), TB_SETIMAGELIST, 0, reinterpret_cast<LPARAM>(g_toolbarImageList.get()));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
+            return FALSE;
         }
+
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(host));
     }
 
-    // Define buttons referencing image indices in the image list (0-based)
-    TBBUTTON buttons[] = {
-        {0, IDM_FILE_NEW, TBSTATE_ENABLED, TBSTYLE_BUTTON, {0}, 0, 0},
-        {1, IDM_FILE_OPEN, TBSTATE_ENABLED, TBSTYLE_BUTTON, {0}, 0, 0},
-        {2, IDM_FILE_SAVE_AS, TBSTATE_ENABLED, TBSTYLE_BUTTON, {0}, 0, 0},
-        {0, 0, 0, TBSTYLE_SEP, {0}, 0, 0},
-        {3, IDM_EDIT_COPY, TBSTATE_ENABLED, TBSTYLE_BUTTON, {0}, 0, 0},
-        {0, 0, 0, TBSTYLE_SEP, {0}, 0, 0},
-        {4, IDM_OPTION_ID, TBSTATE_ENABLED, TBSTYLE_BUTTON, {0}, 0, 0},
+    if (! host)
+    {
+        return DefWindowProcW(hwnd, msg, wp, lp);
+    }
+
+    bool handled         = false;
+    const LRESULT result = host->HandleMessage(hwnd, msg, wp, lp, handled);
+    if (msg == WM_NCDESTROY)
+    {
+        SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+    }
+
+    return handled ? result : DefWindowProcW(hwnd, msg, wp, lp);
+}
+
+bool RegisterDxHostClass(HINSTANCE instance) noexcept
+{
+    static ATOM atom = 0;
+    if (atom != 0)
+    {
+        return true;
+    }
+
+    WNDCLASSEXW wc{};
+    wc.cbSize        = sizeof(wc);
+    wc.style         = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc   = DxHostWndProcThunk;
+    wc.hInstance     = instance;
+    wc.hCursor       = LoadCursor(nullptr, IDC_ARROW);
+    wc.hbrBackground = nullptr;
+    wc.lpszClassName = kDxHostClassName;
+
+    atom = RegisterClassExW(&wc);
+    return atom != 0;
+}
+
+[[nodiscard]] std::wstring TrimWhitespace(std::wstring_view text)
+{
+    size_t begin = 0u;
+    size_t end   = text.size();
+    while (begin < end && iswspace(text[begin]) != 0)
+    {
+        ++begin;
+    }
+    while (end > begin && iswspace(text[end - 1u]) != 0)
+    {
+        --end;
+    }
+    return std::wstring(text.substr(begin, end - begin));
+}
+
+[[nodiscard]] std::wstring StripMenuDecorations(std::wstring_view rawText)
+{
+    std::wstring cleaned;
+    cleaned.reserve(rawText.size());
+
+    bool skipAmpersand = false;
+    for (const wchar_t ch : rawText)
+    {
+        if (ch == L'\t')
+        {
+            break;
+        }
+
+        if (skipAmpersand)
+        {
+            cleaned.push_back(ch);
+            skipAmpersand = false;
+            continue;
+        }
+
+        if (ch == L'&')
+        {
+            skipAmpersand = true;
+            continue;
+        }
+
+        cleaned.push_back(ch);
+    }
+
+    return TrimWhitespace(cleaned);
+}
+
+[[nodiscard]] std::wstring GetMenuCommandLabel(HWND hWnd, UINT commandId)
+{
+    HMENU mainMenu = GetMenu(hWnd);
+    if (! mainMenu)
+    {
+        return {};
+    }
+
+    std::vector<HMENU> path;
+    if (! TryFindMenuPathToCommand(mainMenu, commandId, path) || path.empty())
+    {
+        return {};
+    }
+
+    wchar_t buffer[256]{};
+    const int copied = GetMenuStringW(path.back(), commandId, buffer, static_cast<int>(std::size(buffer)), MF_BYCOMMAND);
+    if (copied <= 0)
+    {
+        return {};
+    }
+
+    return StripMenuDecorations(std::wstring_view(buffer, static_cast<size_t>(copied)));
+}
+
+[[nodiscard]] float MeasureToolbarTextWidthDip(std::wstring_view text, bool toggle, const MonitorChromeMetrics& metrics) noexcept
+{
+    const float baseWidth = metrics.toolbarTextPaddingDip + (static_cast<float>(text.size()) * metrics.toolbarLabelCharWidthDip);
+    return (std::max)(toggle ? metrics.toolbarMinToggleWidthDip : metrics.toolbarMinButtonWidthDip,
+                      baseWidth + (toggle ? metrics.toolbarToggleChromeDip : 0.0f));
+}
+
+void SyncToolbarState() noexcept
+{
+    if (g_toolbarShowIdsToggle)
+    {
+        g_toolbarShowIdsToggle->SetChecked(g_showIds);
+    }
+}
+
+void LayoutToolbarControls() noexcept
+{
+    if (! g_toolbarRoot || ! g_hToolbar)
+    {
+        return;
+    }
+
+    RECT client{};
+    GetClientRect(g_hToolbar.get(), &client);
+    const float widthDip               = g_toolbarDxHost.PixelsToDip(static_cast<float>((std::max)(0L, client.right - client.left)));
+    const float heightDip              = g_toolbarDxHost.PixelsToDip(static_cast<float>((std::max)(0L, client.bottom - client.top)));
+    const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(g_toolbarDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
+    g_toolbarRoot->SetBounds(D2D1::RectF(0.0f, 0.0f, widthDip, heightDip));
+
+    const float topDip    = (std::max)(0.0f, (heightDip - metrics.toolbarButtonHeightDip) * 0.5f);
+    const float bottomDip = topDip + metrics.toolbarButtonHeightDip;
+    float leftDip         = metrics.toolbarPaddingDip;
+
+    const auto layoutControl = [&](RedSalamander::DxUi::Control* control, const float width) noexcept
+    {
+        if (! control)
+        {
+            return;
+        }
+
+        control->SetBounds(D2D1::RectF(leftDip, topDip, leftDip + width, bottomDip));
+        leftDip += width + metrics.toolbarGapDip;
     };
 
-    SendMessage(g_hToolbar.get(), TB_ADDBUTTONS, static_cast<WPARAM>(sizeof(buttons) / sizeof(buttons[0])), reinterpret_cast<LPARAM>(&buttons[0]));
+    const auto layoutSeparator = [&](Label* separator) noexcept
+    {
+        if (! separator)
+        {
+            return;
+        }
 
-    // Ensure the toolbar sizes itself properly
-    SendMessage(g_hToolbar.get(), TB_AUTOSIZE, 0, 0);
+        separator->SetBounds(D2D1::RectF(leftDip, topDip, leftDip + metrics.toolbarSeparatorWidthDip, bottomDip));
+        leftDip += metrics.toolbarSeparatorWidthDip + metrics.toolbarGapDip;
+    };
+
+    const auto children    = g_toolbarRoot->GetChildren();
+    Label* firstSeparator  = children.size() > 3u ? dynamic_cast<Label*>(children[3u].get()) : nullptr;
+    Label* secondSeparator = children.size() > 5u ? dynamic_cast<Label*>(children[5u].get()) : nullptr;
+
+    layoutControl(g_toolbarNewButton, MeasureToolbarTextWidthDip(g_toolbarNewButton ? g_toolbarNewButton->GetText() : L"", false, metrics));
+    layoutControl(g_toolbarOpenButton, MeasureToolbarTextWidthDip(g_toolbarOpenButton ? g_toolbarOpenButton->GetText() : L"", false, metrics));
+    layoutControl(g_toolbarSaveButton, MeasureToolbarTextWidthDip(g_toolbarSaveButton ? g_toolbarSaveButton->GetText() : L"", false, metrics));
+    layoutSeparator(firstSeparator);
+    layoutControl(g_toolbarCopyButton, MeasureToolbarTextWidthDip(g_toolbarCopyButton ? g_toolbarCopyButton->GetText() : L"", false, metrics));
+    layoutSeparator(secondSeparator);
+    layoutControl(g_toolbarShowIdsToggle, MeasureToolbarTextWidthDip(g_toolbarShowIdsToggle ? g_toolbarShowIdsToggle->GetText() : L"", true, metrics));
+}
+
+void CreateToolbarHost(HWND hWnd)
+{
+    if (! hWnd || g_hToolbar)
+    {
+        return;
+    }
+
+    if (! RegisterDxHostClass(g_hInstance))
+    {
+        return;
+    }
+
+    g_hToolbar.reset(CreateWindowExW(
+        0, kDxHostClassName, L"", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 0, 0, hWnd, nullptr, g_hInstance, &g_toolbarDxHost));
+    if (! g_hToolbar)
+    {
+        return;
+    }
+
+    auto root     = std::make_unique<Toolbar>();
+    g_toolbarRoot = root.get();
+
+    const std::wstring newLabel = GetMenuCommandLabel(hWnd, IDM_FILE_NEW);
+    g_toolbarNewButton          = g_toolbarRoot->AddChild<Button>(newLabel.empty() ? L"New" : newLabel);
+    g_toolbarNewButton->SetOnClick([hWnd] { SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_FILE_NEW, 0), 0); });
+
+    const std::wstring openLabel = GetMenuCommandLabel(hWnd, IDM_FILE_OPEN);
+    g_toolbarOpenButton          = g_toolbarRoot->AddChild<Button>(openLabel.empty() ? L"Open" : openLabel);
+    g_toolbarOpenButton->SetOnClick([hWnd] { SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_FILE_OPEN, 0), 0); });
+
+    const std::wstring saveLabel = GetMenuCommandLabel(hWnd, IDM_FILE_SAVE_AS);
+    g_toolbarSaveButton          = g_toolbarRoot->AddChild<Button>(saveLabel.empty() ? L"Save As..." : saveLabel);
+    g_toolbarSaveButton->SetOnClick([hWnd] { SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_FILE_SAVE_AS, 0), 0); });
+
+    g_toolbarRoot->AddSeparator();
+
+    const std::wstring copyLabel = GetMenuCommandLabel(hWnd, IDM_EDIT_COPY);
+    g_toolbarCopyButton          = g_toolbarRoot->AddChild<Button>(copyLabel.empty() ? L"Copy" : copyLabel);
+    g_toolbarCopyButton->SetOnClick([hWnd] { SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_EDIT_COPY, 0), 0); });
+
+    g_toolbarRoot->AddSeparator();
+
+    const std::wstring showIdsLabel = GetMenuCommandLabel(hWnd, IDM_OPTION_ID);
+    g_toolbarShowIdsToggle          = g_toolbarRoot->AddChild<Toggle>(showIdsLabel.empty() ? L"Show IDs" : showIdsLabel);
+    g_toolbarShowIdsToggle->SetOnToggled([hWnd](bool /*checked*/) { SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_OPTION_ID, 0), 0); });
+    g_toolbarShowIdsToggle->SetChecked(g_showIds);
+
+    g_toolbarDxHost.SetRoot(std::move(root));
+    LayoutToolbarControls();
+    static_cast<void>(g_toolbarDxHost.PrimeForShow());
+}
+
+void CreateStatusStripHost(HWND hWnd)
+{
+    if (! hWnd || g_hStatusBar)
+    {
+        return;
+    }
+
+    if (! RegisterDxHostClass(g_hInstance))
+    {
+        return;
+    }
+
+    g_hStatusBar.reset(CreateWindowExW(
+        0, kDxHostClassName, L"", WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS, 0, 0, 0, 0, hWnd, nullptr, g_hInstance, &g_statusDxHost));
+    if (! g_hStatusBar)
+    {
+        return;
+    }
+
+    auto strip                         = std::make_unique<StatusStrip>();
+    g_statusStrip                      = strip.get();
+    const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(g_statusDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
+    g_statusStrip->SetSections({
+        StatusStrip::Section{.text = {}, .widthDip = metrics.statusAutoWidthDip},
+        StatusStrip::Section{.text = {}, .widthDip = metrics.statusFilterWidthDip},
+        StatusStrip::Section{.text = {}, .widthDip = metrics.statusVisibleWidthDip},
+        StatusStrip::Section{.text = {}, .widthDip = metrics.statusTotalWidthDip},
+        StatusStrip::Section{.text = {}, .widthDip = 0.0f},
+    });
+    g_statusDxHost.SetRoot(std::move(strip));
+    static_cast<void>(g_statusDxHost.PrimeForShow());
 }
 
 std::wstring ReadFileAsTextUTF(const std::wstring& path)
@@ -1251,48 +2175,21 @@ void AdjustLayout(HWND hWnd)
     RECT clientRect{};
     GetClientRect(hWnd, &clientRect);
 
-    int toolbarHeight         = 0;
-    const bool toolbarVisible = g_hToolbar && IsWindowVisible(g_hToolbar.get());
-    if (toolbarVisible)
-    {
-        // Ask toolbar to autosize and then query its ideal size for the current DPI
-        SendMessage(g_hToolbar.get(), TB_AUTOSIZE, 0, 0);
-
-        SIZE maxSize{};
-        if (SendMessage(g_hToolbar.get(), TB_GETMAXSIZE, 0, reinterpret_cast<LPARAM>(&maxSize)))
-        {
-            toolbarHeight = static_cast<int>(maxSize.cy);
-        }
-        else
-        {
-            // Fallback: measure current window rect
-            RECT rcTb{};
-            if (GetWindowRect(g_hToolbar.get(), &rcTb))
-            {
-                ::MapWindowPoints(nullptr, hWnd, reinterpret_cast<LPPOINT>(&rcTb), 2);
-                toolbarHeight = rcTb.bottom - rcTb.top;
-            }
-        }
-    }
-
-    int statusBarHeight = 0;
-    if (g_hStatusBar)
-    {
-        // Status bar auto-sizes itself, just need to get its height
-        SendMessage(g_hStatusBar.get(), WM_SIZE, 0, 0);
-        RECT rcStatus{};
-        if (GetWindowRect(g_hStatusBar.get(), &rcStatus))
-        {
-            statusBarHeight = rcStatus.bottom - rcStatus.top;
-        }
-    }
+    const MonitorChromeMetrics metrics = ResolveMonitorChromeMetrics(g_toolbarDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
+    const int toolbarHeight            = (g_hToolbar && g_toolbarVisible) ? DipsToPx(hWnd, static_cast<int>(std::lround(metrics.toolbarHeightDip))) : 0;
+    const int statusBarHeight          = g_hStatusBar ? DipsToPx(hWnd, static_cast<int>(std::lround(metrics.statusStripHeightDip))) : 0;
+    const bool toolbarWindowVisible    = g_hToolbar && g_toolbarVisible;
 
     const int width  = clientRect.right - clientRect.left;
     const int height = clientRect.bottom - clientRect.top;
 
-    if (toolbarVisible)
+    if (toolbarWindowVisible)
     {
         MoveWindow(g_hToolbar.get(), 0, 0, width, toolbarHeight, TRUE);
+    }
+    else if (g_hToolbar)
+    {
+        MoveWindow(g_hToolbar.get(), 0, 0, width, 0, FALSE);
     }
 
     const int contentHeight = std::max(0, height - toolbarHeight - statusBarHeight);
@@ -1306,44 +2203,19 @@ void AdjustLayout(HWND hWnd)
     {
         MoveWindow(g_hStatusBar.get(), 0, toolbarHeight + contentHeight, width, statusBarHeight, TRUE);
     }
-}
 
-// Create status bar with 5 parts: auto-scroll, filter state, visible lines, total lines, ETW stats
-void CreateStatusBar(HWND hWnd)
-{
-    g_hStatusBar.reset(CreateWindowExW(0, STATUSCLASSNAMEW, nullptr, WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP, 0, 0, 0, 0, hWnd, nullptr, g_hInstance, nullptr));
-    if (g_hStatusBar)
-    {
-        // Define 5 parts: auto-scroll (90px), filter (220px), visible lines (150px), total lines (150px), ETW stats (remaining)
-        constexpr int kAutoWidth    = 90;
-        constexpr int kFilterWidth  = 220;
-        constexpr int kVisibleWidth = 150;
-        constexpr int kTotalWidth   = 150;
-
-        RECT rcClient{};
-        GetClientRect(hWnd, &rcClient);
-
-        const int parts[] = {
-            kAutoWidth,
-            kAutoWidth + kFilterWidth,
-            kAutoWidth + kFilterWidth + kVisibleWidth,
-            kAutoWidth + kFilterWidth + kVisibleWidth + kTotalWidth,
-            -1 // Remaining width
-        };
-
-        SendMessage(g_hStatusBar.get(), SB_SETPARTS, 5, reinterpret_cast<LPARAM>(parts));
-    }
+    LayoutToolbarControls();
 }
 
 // Update status bar with current statistics and synchronize auto-scroll menu state
 void UpdateStatusBar()
 {
-    if (! g_hStatusBar)
+    if (! g_statusStrip)
         return;
 
     // Synchronize auto-scroll menu checkmark with ColorTextView's auto-scroll state
     // ColorTextView manages its own auto-scroll state and we query it here
-    bool isAutoScrollEnabled = g_colorView.GetAutoScroll();
+    const bool isAutoScrollEnabled = g_colorView.GetAutoScroll();
 
     HWND hMainWnd = GetParent(g_hStatusBar.get());
     if (hMainWnd)
@@ -1371,8 +2243,8 @@ void UpdateStatusBar()
 
     // Format status bar text with specific filter names
     std::wstring filterText;
-    const uint32_t filterMask = g_filterMask & Debug::InfoParam::Type::All;
-    if (filterMask == Debug::InfoParam::Type::All)
+    const uint32_t filterMask = g_filterMask & kMonitorFilterAllMask;
+    if (filterMask == kMonitorFilterAllMask)
     {
         filterText = LoadStringResource(g_hInstance, IDS_STATUS_FILTER_ALL);
     }
@@ -1380,16 +2252,14 @@ void UpdateStatusBar()
     {
         // Build filter text showing enabled types
         std::vector<std::wstring> enabledTypeNames;
-        if (filterMask & 0x01)
-            enabledTypeNames.push_back(LoadStringResource(g_hInstance, IDS_FILTER_TYPE_TEXT));
-        if (filterMask & 0x02)
-            enabledTypeNames.push_back(LoadStringResource(g_hInstance, IDS_FILTER_TYPE_ERROR));
-        if (filterMask & 0x04)
-            enabledTypeNames.push_back(LoadStringResource(g_hInstance, IDS_FILTER_TYPE_WARNING));
-        if (filterMask & 0x08)
-            enabledTypeNames.push_back(LoadStringResource(g_hInstance, IDS_FILTER_TYPE_INFO));
-        if (filterMask & 0x10)
-            enabledTypeNames.push_back(LoadStringResource(g_hInstance, IDS_FILTER_TYPE_DEBUG));
+        for (const auto& entry : kMonitorFilterEntries)
+        {
+            const uint32_t bit = Debug::FilterBitForType(entry.type);
+            if ((filterMask & bit) != 0u)
+            {
+                enabledTypeNames.push_back(LoadStringResource(g_hInstance, entry.stringId));
+            }
+        }
 
         if (enabledTypeNames.empty())
         {
@@ -1418,14 +2288,181 @@ void UpdateStatusBar()
     const std::wstring totalText   = FormatStringResource(g_hInstance, IDS_STATUS_TOTAL_FMT, totalLines);
     const std::wstring etwText     = FormatStringResource(g_hInstance, IDS_STATUS_ETW_RECEIVED_FMT, etwReceived);
 
-    SendMessageW(g_hStatusBar.get(), SB_SETTEXTW, 0, reinterpret_cast<LPARAM>(autoText.c_str()));
-    SendMessageW(g_hStatusBar.get(), SB_SETTEXTW, 1, reinterpret_cast<LPARAM>(filterText.c_str()));
-    SendMessageW(g_hStatusBar.get(), SB_SETTEXTW, 2, reinterpret_cast<LPARAM>(visibleText.c_str()));
-    SendMessageW(g_hStatusBar.get(), SB_SETTEXTW, 3, reinterpret_cast<LPARAM>(totalText.c_str()));
-    SendMessageW(g_hStatusBar.get(), SB_SETTEXTW, 4, reinterpret_cast<LPARAM>(etwText.c_str()));
+    g_statusStrip->SetSectionText(0u, autoText);
+    g_statusStrip->SetSectionText(1u, filterText);
+    g_statusStrip->SetSectionText(2u, visibleText);
+    g_statusStrip->SetSectionText(3u, totalText);
+    g_statusStrip->SetSectionText(4u, etwText);
 
     // Track message count for adaptive refresh
     g_lastMessageCount = etwReceived;
+}
+
+[[maybe_unused]] void RedrawMonitorChrome(HWND hWnd)
+{
+    if (g_hToolbar && ::IsWindowVisible(g_hToolbar.get()))
+    {
+        ::RedrawWindow(g_hToolbar.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    }
+    if (g_hStatusBar && ::IsWindowVisible(g_hStatusBar.get()))
+    {
+        ::RedrawWindow(g_hStatusBar.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    }
+    ::RedrawWindow(hWnd, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+}
+
+LRESULT RunMonitorChromeSelfTest(HWND hWnd)
+{
+#if ! defined(ENABLE_TESTS)
+    if (g_monitorChromeSelfTest.enabled)
+    {
+        FinalizeMonitorChromeSelfTest(false, L"Monitor DxUI chrome selftest requires ENABLE_TESTS.");
+        ::DestroyWindow(hWnd);
+    }
+    return 0;
+#else
+    if (! g_monitorChromeSelfTest.enabled)
+    {
+        return 0;
+    }
+
+    const auto require = [&](std::wstring_view name, bool condition, std::wstring_view detail = {}) noexcept
+    {
+        RecordMonitorChromeSelfTestCheck(name, condition, detail);
+        return condition;
+    };
+
+    const auto scenarioStarted = std::chrono::steady_clock::now();
+
+    AdjustLayout(hWnd);
+    SyncToolbarState();
+    UpdateStatusBar();
+    RedrawMonitorChrome(hWnd);
+
+    Debug::Perf::EmitDurationUs(L"monitor.ui.chrome_ready_us",
+                                Debug::Perf::ElapsedUs(scenarioStarted),
+                                g_toolbarDxHost.DebugGetRenderCount(),
+                                g_statusDxHost.DebugGetRenderCount(),
+                                S_OK);
+
+    bool passed = true;
+    passed &= require(L"toolbar host created", g_hToolbar && ::IsWindow(g_hToolbar.get()));
+    passed &= require(L"status host created", g_hStatusBar && ::IsWindow(g_hStatusBar.get()));
+    passed &= require(L"toolbar host visible", g_hToolbar && ::IsWindowVisible(g_hToolbar.get()));
+    passed &= require(L"toolbar root type", dynamic_cast<Toolbar*>(g_toolbarDxHost.GetRoot()) == g_toolbarRoot);
+    passed &= require(L"status root type", dynamic_cast<StatusStrip*>(g_statusDxHost.GetRoot()) == g_statusStrip);
+    passed &= require(L"toolbar rendered", g_toolbarDxHost.DebugGetRenderCount() > 0u);
+    passed &= require(L"status rendered", g_statusDxHost.DebugGetRenderCount() > 0u);
+    passed &= require(L"toolbar present failures", g_toolbarDxHost.DebugGetPresentFailureCount() == 0u);
+    passed &= require(L"status present failures", g_statusDxHost.DebugGetPresentFailureCount() == 0u);
+    passed &= require(L"toolbar new label", g_toolbarNewButton && ! g_toolbarNewButton->GetText().empty());
+    passed &= require(L"toolbar open label", g_toolbarOpenButton && ! g_toolbarOpenButton->GetText().empty());
+    passed &= require(L"toolbar save label", g_toolbarSaveButton && ! g_toolbarSaveButton->GetText().empty());
+    passed &= require(L"toolbar copy label", g_toolbarCopyButton && ! g_toolbarCopyButton->GetText().empty());
+    passed &= require(L"toolbar show ids toggle sync", g_toolbarShowIdsToggle && g_toolbarShowIdsToggle->IsChecked() == g_showIds);
+    passed &= require(L"status section count", g_statusStrip && g_statusStrip->GetSectionCount() == 5u);
+    passed &= require(L"status auto section", g_statusStrip && ! g_statusStrip->GetSectionText(0u).empty());
+    passed &= require(L"status filter section", g_statusStrip && ! g_statusStrip->GetSectionText(1u).empty());
+    passed &= require(L"status visible section", g_statusStrip && ! g_statusStrip->GetSectionText(2u).empty());
+    passed &= require(L"status total section", g_statusStrip && ! g_statusStrip->GetSectionText(3u).empty());
+    passed &= require(L"status etw section", g_statusStrip && ! g_statusStrip->GetSectionText(4u).empty());
+
+    if (passed)
+    {
+        RECT baselineToolbarRect{};
+        RECT baselineStatusRect{};
+        GetClientRect(g_hToolbar.get(), &baselineToolbarRect);
+        GetClientRect(g_hStatusBar.get(), &baselineStatusRect);
+        const float baselineToolbarHeightDip =
+            g_toolbarDxHost.PixelsToDip(static_cast<float>((std::max)(0L, baselineToolbarRect.bottom - baselineToolbarRect.top)));
+        const float baselineStatusHeightDip =
+            g_statusDxHost.PixelsToDip(static_cast<float>((std::max)(0L, baselineStatusRect.bottom - baselineStatusRect.top)));
+
+        const auto compactAppliedStarted       = std::chrono::steady_clock::now();
+        Common::Settings::UiSettings compactUi = g_settings.ui.value_or(Common::Settings::UiSettings{});
+        compactUi.compactMode                  = true;
+        compactUi.reducedMotion                = Common::Settings::ReducedMotionMode::On;
+        compactUi.windowBackdrop               = Common::Settings::WindowBackdropMode::MicaAlt;
+        g_settings.ui                          = compactUi;
+        ApplyMonitorTheme();
+        RedrawMonitorChrome(hWnd);
+
+        RECT compactToolbarRect{};
+        RECT compactStatusRect{};
+        GetClientRect(g_hToolbar.get(), &compactToolbarRect);
+        GetClientRect(g_hStatusBar.get(), &compactStatusRect);
+        const float compactToolbarHeightDip =
+            g_toolbarDxHost.PixelsToDip(static_cast<float>((std::max)(0L, compactToolbarRect.bottom - compactToolbarRect.top)));
+        const float compactStatusHeightDip = g_statusDxHost.PixelsToDip(static_cast<float>((std::max)(0L, compactStatusRect.bottom - compactStatusRect.top)));
+        const auto appliedBackdrop         = Common::WindowBackdrop::TryGetAppliedWindowBackdropKind(hWnd);
+
+        passed &= require(L"toolbar compact density", g_toolbarDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
+        passed &= require(L"status compact density", g_statusDxHost.GetTheme().density == RedSalamander::DxUi::Density::Compact);
+        passed &= require(L"toolbar reduced motion override", g_toolbarDxHost.GetTheme().reducedMotion);
+        passed &= require(L"status reduced motion override", g_statusDxHost.GetTheme().reducedMotion);
+        passed &= require(L"toolbar compact height shrinks",
+                          compactToolbarHeightDip < baselineToolbarHeightDip,
+                          std::format(L"baseline={} compact={}", baselineToolbarHeightDip, compactToolbarHeightDip));
+        passed &= require(L"status compact height shrinks",
+                          compactStatusHeightDip < baselineStatusHeightDip,
+                          std::format(L"baseline={} compact={}", baselineStatusHeightDip, compactStatusHeightDip));
+        passed &= require(L"monitor backdrop applied",
+                          appliedBackdrop.has_value() && appliedBackdrop.value() == Common::WindowBackdrop::Kind::MicaAlt,
+                          appliedBackdrop.has_value() ? std::format(L"kind={}", static_cast<int>(appliedBackdrop.value())) : L"readback unavailable");
+        Debug::Perf::EmitDurationUs(L"monitor.ui.compact_apply_us",
+                                    Debug::Perf::ElapsedUs(compactAppliedStarted),
+                                    static_cast<uint64_t>(std::lround(compactToolbarHeightDip * 100.0f)),
+                                    static_cast<uint64_t>(std::lround(compactStatusHeightDip * 100.0f)),
+                                    S_OK);
+
+        const uint64_t toolbarRenderBefore = g_toolbarDxHost.DebugGetRenderCount();
+        const auto toolbarToggleStarted    = std::chrono::steady_clock::now();
+        ::SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_VIEW_TOOLBAR, 0), 0);
+        passed &= require(L"toolbar hides via command", g_hToolbar && ! ::IsWindowVisible(g_hToolbar.get()));
+        ::SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_VIEW_TOOLBAR, 0), 0);
+        RedrawMonitorChrome(hWnd);
+        passed &= require(L"toolbar re-shows via command", g_hToolbar && ::IsWindowVisible(g_hToolbar.get()));
+        passed &= require(L"toolbar rerenders after re-show", g_toolbarDxHost.DebugGetRenderCount() > toolbarRenderBefore);
+        Debug::Perf::EmitDurationUs(L"monitor.ui.toolbar_toggle_us",
+                                    Debug::Perf::ElapsedUs(toolbarToggleStarted),
+                                    g_toolbarDxHost.DebugGetRenderCount() - toolbarRenderBefore,
+                                    0u,
+                                    S_OK);
+
+        const bool initialShowIds       = g_showIds;
+        const auto showIdsToggleStarted = std::chrono::steady_clock::now();
+        ::SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_OPTION_ID, 0), 0);
+        passed &= require(L"show ids toggled", g_showIds != initialShowIds);
+        passed &= require(L"toolbar toggle tracks show ids", g_toolbarShowIdsToggle && g_toolbarShowIdsToggle->IsChecked() == g_showIds);
+        ::SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_OPTION_ID, 0), 0);
+        passed &= require(L"show ids restored", g_showIds == initialShowIds);
+        Debug::Perf::EmitDurationUs(L"monitor.ui.show_ids_toggle_us", Debug::Perf::ElapsedUs(showIdsToggleStarted), g_showIds ? 1u : 0u, 0u, S_OK);
+
+        const std::wstring initialFilterText = g_statusStrip ? std::wstring(g_statusStrip->GetSectionText(1u)) : std::wstring{};
+        const auto filterSyncStarted         = std::chrono::steady_clock::now();
+        ::SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_FILTER_PRESET_ERRORS_ONLY, 0), 0);
+        const std::wstring errorsOnlyFilterText = g_statusStrip ? std::wstring(g_statusStrip->GetSectionText(1u)) : std::wstring{};
+        passed &= require(L"status filter section changes", ! errorsOnlyFilterText.empty() && errorsOnlyFilterText != initialFilterText);
+        ::SendMessageW(hWnd, WM_COMMAND, MAKEWPARAM(IDM_FILTER_PRESET_ALL, 0), 0);
+        passed &= require(L"status filter section restores", g_statusStrip && std::wstring(g_statusStrip->GetSectionText(1u)) == initialFilterText);
+        Debug::Perf::EmitDurationUs(L"monitor.ui.status_filter_sync_us",
+                                    Debug::Perf::ElapsedUs(filterSyncStarted),
+                                    g_statusStrip ? g_statusStrip->GetSectionCount() : 0u,
+                                    g_filterMask,
+                                    S_OK);
+    }
+
+    Debug::Perf::EmitValue(L"monitor.ui.toolbar_render_count", g_toolbarDxHost.DebugGetRenderCount(), S_OK);
+    Debug::Perf::EmitValue(L"monitor.ui.status_render_count", g_statusDxHost.DebugGetRenderCount(), S_OK);
+    Debug::Perf::EmitValue(L"monitor.ui.toolbar_present_failure_count", g_toolbarDxHost.DebugGetPresentFailureCount(), S_OK);
+    Debug::Perf::EmitValue(L"monitor.ui.status_present_failure_count", g_statusDxHost.DebugGetPresentFailureCount(), S_OK);
+    Debug::Perf::EmitValue(L"monitor.ui.dxhost_attached_count", static_cast<uint64_t>(RedSalamander::DxUi::DebugGetAttachedWindowHostCount()), S_OK);
+
+    FinalizeMonitorChromeSelfTest(passed,
+                                  passed ? L"Monitor DxUI toolbar/status strip selftest passed." : L"Monitor DxUI toolbar/status strip selftest failed.");
+    ::DestroyWindow(hWnd);
+    return 0;
+#endif
 }
 } // namespace
 
@@ -1588,6 +2625,20 @@ static void InitializeDpiAwareness()
 #endif
 }
 
+Localization::LanguagePreference GetLanguagePreferenceFromSettings(const Common::Settings::Settings& settings)
+{
+    Localization::LanguagePreference preference;
+    if (! settings.ui || settings.ui->language.empty() || settings.ui->language == L"system")
+    {
+        preference.kind = Localization::LanguagePreferenceKind::System;
+        return preference;
+    }
+
+    preference.kind    = Localization::LanguagePreferenceKind::Culture;
+    preference.culture = settings.ui->language;
+    return preference;
+}
+
 // Separate function with C++ objects (cannot use __try/__except)
 static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 {
@@ -1597,8 +2648,30 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     constexpr ULONGLONG kWaitInstanceTimeoutMs   = 5000;
     constexpr DWORD kWaitInstancePollMs          = 50;
 
+    if (HasCommandLineArg(L"--help") || HasCommandLineArg(L"-h") || HasCommandLineArg(L"/?"))
+    {
+        WriteMonitorHelpText(hInstance);
+        return 0;
+    }
+
+    if (HasCommandLineArg(L"--etw"))
+    {
+        Debug::detail::SetRuntimeMonitorDiagnosticsEnabled(true);
+        static_cast<void>(::SetEnvironmentVariableW(L"REDSALAMANDER_DIAGNOSTICS_ETW", L"1"));
+    }
+
+    std::wstring perfJsonlPath;
+    const bool customPerfPath = TryGetCommandLineArgValue(L"--perf=", perfJsonlPath);
+    if (customPerfPath || HasCommandLineArg(L"--perf"))
+    {
+        const std::filesystem::path perfPath =
+            (customPerfPath && ! perfJsonlPath.empty()) ? std::filesystem::path(perfJsonlPath) : GetDefaultMonitorPerfJsonlPath();
+        Debug::Perf::ConfigureJsonlOutput(perfPath, L"RedSalamanderMonitor", kMonitorBuildFlavor);
+    }
+
     wil::unique_handle instanceMutex;
-    DWORD mutexCreationError = ERROR_SUCCESS;
+    DWORD mutexCreationError        = ERROR_SUCCESS;
+    g_monitorChromeSelfTest.enabled = HasCommandLineArg(kMonitorChromeSelfTestArg);
 
     const auto tryCreateInstanceMutex = [&]() -> bool
     {
@@ -1612,15 +2685,15 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         const std::wstring caption = LoadStringResource(hInstance, IDS_APP_TITLE);
         const std::wstring message = LoadStringResource(hInstance, IDS_MSG_INSTANCE_GUARD_FAILED);
         ShowModalMessageDialog(hInstance, nullptr, caption.c_str(), message.c_str());
-        return FALSE;
+        return g_monitorChromeSelfTest.enabled ? 1 : FALSE;
     }
 
     if (mutexCreationError == ERROR_ALREADY_EXISTS)
     {
         if (! HasCommandLineArg(kWaitInstanceArg))
         {
-            OutputDebugStringW(L"Red Salamander Monitor is already running.");
-            return FALSE;
+            OutputDebugStringW(L"RedSalamander Monitor is already running.");
+            return g_monitorChromeSelfTest.enabled ? 1 : FALSE;
         }
 
         instanceMutex.reset();
@@ -1635,7 +2708,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
                 const std::wstring caption = LoadStringResource(hInstance, IDS_APP_TITLE);
                 const std::wstring message = LoadStringResource(hInstance, IDS_MSG_INSTANCE_GUARD_FAILED);
                 ShowModalMessageDialog(hInstance, nullptr, caption.c_str(), message.c_str());
-                return FALSE;
+                return g_monitorChromeSelfTest.enabled ? 1 : FALSE;
             }
 
             if (mutexCreationError != ERROR_ALREADY_EXISTS)
@@ -1648,7 +2721,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             if ((::GetTickCount64() - startTick) > kWaitInstanceTimeoutMs)
             {
                 OutputDebugStringW(L"Timed out waiting for previous instance to exit.");
-                return FALSE;
+                return g_monitorChromeSelfTest.enabled ? 1 : FALSE;
             }
         }
     }
@@ -1665,6 +2738,8 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     }
 
     Common::Settings::LoadSettings(kAppId, g_settings);
+    Localization::RegisterResourceOwner(kAppId, hInstance);
+    Localization::ApplyLanguagePreference(GetLanguagePreferenceFromSettings(g_settings));
 
     if (g_settings.monitor)
     {
@@ -1674,7 +2749,7 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         g_showIds            = g_settings.monitor->menu.showIds;
         g_autoScrollEnabled  = g_settings.monitor->menu.autoScroll;
 
-        g_filterMask       = g_settings.monitor->filter.mask & 31u;
+        g_filterMask       = g_settings.monitor->filter.mask & kMonitorFilterAllMask;
         g_lastFilterPreset = LegacyFromPreset(g_settings.monitor->filter.preset);
         if (g_lastFilterPreset == -1)
         {
@@ -1686,13 +2761,24 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
     else
     {
         // Migration/defaults: prefer existing registry values for filter settings if present.
-        g_filterMask       = g_config.filterMask;
+        g_filterMask       = g_config.filterMask & kMonitorFilterAllMask;
         g_lastFilterPreset = g_config.lastFilterPreset;
         if (g_lastFilterPreset == -1)
         {
             const int inferred = InferLegacyPresetFromMask(g_filterMask);
             if (inferred != -1)
                 g_lastFilterPreset = inferred;
+        }
+        else
+        {
+            switch (g_lastFilterPreset)
+            {
+                case 0: g_filterMask = kMonitorPresetErrorsOnlyMask; break;
+                case 1: g_filterMask = kMonitorPresetErrorsWarningsMask; break;
+                case 2: g_filterMask = kMonitorFilterAllMask; break;
+                case 3: g_filterMask = kMonitorPresetErrorsPerfDebugMask; break;
+                default: break;
+            }
         }
 
         Common::Settings::MonitorSettings monitorSettings;
@@ -1701,19 +2787,41 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         monitorSettings.menu.alwaysOnTop        = g_alwaysOnTop;
         monitorSettings.menu.showIds            = g_showIds;
         monitorSettings.menu.autoScroll         = g_autoScrollEnabled;
-        monitorSettings.filter.mask             = g_filterMask & 31u;
+        monitorSettings.filter.mask             = g_filterMask & kMonitorFilterAllMask;
         monitorSettings.filter.preset           = PresetFromLegacy(g_lastFilterPreset);
         g_settings.monitor                      = std::move(monitorSettings);
+    }
+
+    if (g_monitorChromeSelfTest.enabled)
+    {
+        g_toolbarVisible                = true;
+        g_alwaysOnTop                   = false;
+        g_lineNumbersVisible            = true;
+        g_showIds                       = true;
+        g_autoScrollEnabled             = true;
+        g_filterMask                    = Debug::InfoParam::Type::All;
+        g_lastFilterPreset              = 2;
+        g_settings.theme.currentThemeId = L"builtin/light";
+        g_settings.ui                   = Common::Settings::UiSettings{};
+
+        if (! InitializeMonitorChromeSelfTestArtifacts())
+        {
+            return 1;
+        }
     }
 
     // Perform application initialization:
     auto hWnd = InitInstance(hInstance, nCmdShow);
     if (! hWnd)
     {
-        return FALSE;
+        if (g_monitorChromeSelfTest.enabled)
+        {
+            FinalizeMonitorChromeSelfTest(false, L"InitInstance failed before selftest window creation.");
+        }
+        return g_monitorChromeSelfTest.enabled ? 1 : FALSE;
     }
 
-    wil::unique_haccel hAccelTable(LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_REDSALAMANDERMONITOR)));
+    wil::unique_haccel hAccelTable(Localization::LoadAcceleratorsResource(hInstance, MAKEINTRESOURCEW(IDC_REDSALAMANDERMONITOR)));
 
     MSG msg;
 
@@ -1725,6 +2833,11 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
+    }
+
+    if (g_monitorChromeSelfTest.enabled && ! g_monitorChromeSelfTest.completed)
+    {
+        FinalizeMonitorChromeSelfTest(false, L"Monitor selftest ended before completion.");
     }
 
     return static_cast<int>(msg.wParam);
@@ -1802,7 +2915,7 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
     wcex.hIcon         = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_REDSALAMANDERMONITOR));
     wcex.hCursor       = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_WINDOW + 1);
-    wcex.lpszMenuName  = MAKEINTRESOURCEW(IDC_REDSALAMANDERMONITOR);
+    wcex.lpszMenuName  = nullptr;
     wcex.lpszClassName = g_redSalamanderMonitorClassName;
     wcex.hIconSm       = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
@@ -1837,6 +2950,13 @@ std::optional<HWND> InitInstance(HINSTANCE hInstance, int nCmdShow)
 
     // Remove WS_EX_NOACTIVATE after creation
     SetWindowLongPtr(hWnd.get(), GWL_EXSTYLE, GetWindowLongPtr(hWnd.get(), GWL_EXSTYLE) & ~WS_EX_NOACTIVATE);
+    g_hMainWindow = hWnd.get();
+
+    wil::unique_hmenu menu(Localization::LoadMenuResource(hInstance, IDC_REDSALAMANDERMONITOR));
+    if (menu && SetMenu(hWnd.get(), menu.get()) != FALSE)
+    {
+        menu.release();
+    }
 
     int showCmd   = nCmdShow;
     const auto it = g_settings.windows.find(kWindowId);
@@ -1922,13 +3042,16 @@ LRESULT OnCreateMainWindow(HWND hWnd)
         return -1;
     }
 
-    CreateOrRecreateToolbar(hWnd);
-    CreateStatusBar(hWnd);
+    CreateToolbarHost(hWnd);
+    CreateStatusStripHost(hWnd);
 
-    const std::wstring sampleText = LoadStringResource(g_hInstance, IDS_SAMPLE_TEXT);
-    g_colorView.SetText(sampleText);
-    g_colorView.ColorizeWord(L"ColorTextView", D2D1::ColorF(D2D1::ColorF::Blue));
-    g_colorView.ColorizeWord(L"right", D2D1::ColorF(D2D1::ColorF::Green));
+    if (RedSalamanderMonitor::ShouldDisplayInitialMonitorStatus())
+    {
+        const std::wstring sampleText = LoadStringResource(g_hInstance, IDS_SAMPLE_TEXT);
+        g_colorView.SetText(sampleText);
+        g_colorView.ColorizeWord(L"ColorTextView", D2D1::ColorF(D2D1::ColorF::Blue));
+        g_colorView.ColorizeWord(L"right", D2D1::ColorF(D2D1::ColorF::Green));
+    }
 
     g_colorView.EnableShowIds(g_showIds);
     g_colorView.EnableLineNumbers(g_lineNumbersVisible);
@@ -1954,11 +3077,7 @@ LRESULT OnCreateMainWindow(HWND hWnd)
         CheckMenuItem(hMenu, IDM_OPTION_ID, static_cast<UINT>(MF_BYCOMMAND | (g_showIds ? MF_CHECKED : MF_UNCHECKED)));
         CheckMenuItem(hMenu, IDM_VIEW_LINE_NUMBERS, static_cast<UINT>(MF_BYCOMMAND | (g_colorView.IsLineNumbersEnabled() ? MF_CHECKED : MF_UNCHECKED)));
 
-        CheckMenuItem(hMenu, IDM_FILTER_TEXT, static_cast<UINT>(MF_BYCOMMAND | ((g_filterMask & 0x01) ? MF_CHECKED : MF_UNCHECKED)));
-        CheckMenuItem(hMenu, IDM_FILTER_ERROR, static_cast<UINT>(MF_BYCOMMAND | ((g_filterMask & 0x02) ? MF_CHECKED : MF_UNCHECKED)));
-        CheckMenuItem(hMenu, IDM_FILTER_WARNING, static_cast<UINT>(MF_BYCOMMAND | ((g_filterMask & 0x04) ? MF_CHECKED : MF_UNCHECKED)));
-        CheckMenuItem(hMenu, IDM_FILTER_INFO, static_cast<UINT>(MF_BYCOMMAND | ((g_filterMask & 0x08) ? MF_CHECKED : MF_UNCHECKED)));
-        CheckMenuItem(hMenu, IDM_FILTER_DEBUG, static_cast<UINT>(MF_BYCOMMAND | ((g_filterMask & 0x10) ? MF_CHECKED : MF_UNCHECKED)));
+        SyncMonitorFilterMenuChecks(hMenu, g_filterMask);
 
         CheckMenuItem(hMenu, IDM_OPTION_AUTO_SCROLL, static_cast<UINT>(MF_BYCOMMAND | (g_colorView.GetAutoScroll() ? MF_CHECKED : MF_UNCHECKED)));
 
@@ -1969,50 +3088,66 @@ LRESULT OnCreateMainWindow(HWND hWnd)
     AdjustLayout(hWnd);
     UpdateStatusBar();
 
-    g_etwListener         = std::make_unique<EtwListener>();
-    const bool etwStarted = g_etwListener->Start([](const Debug::InfoParam& info, const std::wstring& message)
+    if (! g_monitorChromeSelfTest.enabled)
     {
-        std::wstring normalizedMsg = message;
-        while (! normalizedMsg.empty() && (normalizedMsg.back() == L'\n' || normalizedMsg.back() == L'\r'))
+        g_etwListener                = std::make_unique<EtwListener>();
+        const DWORD monitorProcessId = GetCurrentProcessId();
+        const bool etwStarted        = g_etwListener->Start([monitorProcessId](const Debug::InfoParam& info, const std::wstring& message)
         {
-            normalizedMsg.pop_back();
-        }
-
-        g_colorView.QueueEtwEvent(info, std::move(normalizedMsg));
-    });
-
-    if (! etwStarted)
-    {
-        constexpr std::wstring_view kWaitInstanceArg = L"--wait-instance";
-
-        const ULONG etwErrorCode = g_etwListener ? g_etwListener->GetLastErrorCode() : ERROR_SUCCESS;
-        if (etwErrorCode == ERROR_ACCESS_DENIED && ! IsProcessElevated())
-        {
-            const std::wstring caption = LoadStringResource(g_hInstance, IDS_CAPTION_ETW_WARNING);
-            const std::wstring message = LoadStringResource(g_hInstance, IDS_MSG_ETW_ELEVATE_PROMPT);
-
-            const bool elevateNow = ShowModalConfirmDialog(g_hInstance, hWnd, caption.empty() ? L"" : caption.c_str(), message.c_str());
-            if (elevateNow && RelaunchSelfElevated(hWnd, kWaitInstanceArg))
+            if (! RedSalamanderMonitor::ShouldAcceptEtwEventForDisplay(info, monitorProcessId))
             {
-                return -1;
+                return;
             }
-        }
 
-        std::wstring errorMsg = FormatStringResource(g_hInstance, IDS_FMT_ETW_START_FAILED, g_etwListener->GetLastError());
-        AddLine(errorMsg.c_str());
+            std::wstring normalizedMsg = message;
+            while (! normalizedMsg.empty() && (normalizedMsg.back() == L'\n' || normalizedMsg.back() == L'\r'))
+            {
+                normalizedMsg.pop_back();
+            }
+
+            g_colorView.QueueEtwEvent(info, std::move(normalizedMsg));
+        });
+
+        if (! etwStarted)
+        {
+            constexpr std::wstring_view kWaitInstanceArg = L"--wait-instance";
+
+            const ULONG etwErrorCode = g_etwListener ? g_etwListener->GetLastErrorCode() : ERROR_SUCCESS;
+            if (etwErrorCode == ERROR_ACCESS_DENIED && ! IsProcessElevated())
+            {
+                const std::wstring caption = LoadStringResource(g_hInstance, IDS_CAPTION_ETW_WARNING);
+                const std::wstring message = LoadStringResource(g_hInstance, IDS_MSG_ETW_ELEVATE_PROMPT);
+
+                const bool elevateNow = ShowModalConfirmDialog(g_hInstance, hWnd, caption.empty() ? L"" : caption.c_str(), message.c_str());
+                if (elevateNow && RelaunchSelfElevated(hWnd, kWaitInstanceArg))
+                {
+                    return -1;
+                }
+            }
+
+            std::wstring errorMsg = FormatStringResource(g_hInstance, IDS_FMT_ETW_START_FAILED, g_etwListener->GetLastError());
+            AddLine(errorMsg.c_str());
 
 #ifdef _DEBUG
-        OutputDebugString(errorMsg.c_str());
-        OutputDebugStringA("\n");
+            OutputDebugString(errorMsg.c_str());
+            OutputDebugStringA("\n");
 #endif
-    }
-    else
-    {
-        const std::wstring startedText = LoadStringResource(g_hInstance, IDS_MSG_ETW_STARTED);
-        AddLine(startedText.empty() ? L"" : startedText.c_str());
+        }
+        else
+        {
+            if (RedSalamanderMonitor::ShouldDisplayInitialMonitorStatus())
+            {
+                const std::wstring startedText = LoadStringResource(g_hInstance, IDS_MSG_ETW_STARTED);
+                AddLine(startedText.empty() ? L"" : startedText.c_str());
+            }
+        }
     }
 
     SetTimer(hWnd, kStatusBarTimerId, kStatusBarUpdateIntervalMs, nullptr);
+    if (g_monitorChromeSelfTest.enabled)
+    {
+        PostMessageW(hWnd, kMsgRunMonitorChromeSelfTest, 0, 0);
+    }
     return 0;
 }
 
@@ -2046,10 +3181,14 @@ LRESULT OnSizeMainWindow(HWND hWnd, UINT /*width*/, UINT /*height*/)
 
 LRESULT OnDpiChangedMainWindow(HWND hWnd, [[maybe_unused]] UINT newDpi, const RECT* suggestedRect)
 {
-    CreateOrRecreateToolbar(hWnd);
     if (g_hToolbar)
     {
+        SendMessageW(g_hToolbar.get(), WM_DPICHANGED, static_cast<WPARAM>(static_cast<ULONG>(MAKELONG(newDpi, newDpi))), 0);
         ShowWindow(g_hToolbar.get(), g_toolbarVisible ? SW_SHOW : SW_HIDE);
+    }
+    if (g_hStatusBar)
+    {
+        SendMessageW(g_hStatusBar.get(), WM_DPICHANGED, static_cast<WPARAM>(static_cast<ULONG>(MAKELONG(newDpi, newDpi))), 0);
     }
 
     if (suggestedRect != nullptr)
@@ -2151,6 +3290,7 @@ LRESULT OnCommandMainWindow(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             HMENU hMenu = GetMenu(hWnd);
             CheckMenuItem(hMenu, IDM_OPTION_ID, static_cast<UINT>(MF_BYCOMMAND | (g_showIds ? MF_CHECKED : MF_UNCHECKED)));
             g_colorView.EnableShowIds(g_showIds);
+            SyncToolbarState();
             break;
         }
         case IDM_OPTION_AUTO_SCROLL:
@@ -2173,6 +3313,7 @@ LRESULT OnCommandMainWindow(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
 
             HMENU hMenu = GetMenu(hWnd);
             CheckMenuItem(hMenu, IDM_OPTION_AUTO_SCROLL, static_cast<UINT>(MF_BYCOMMAND | (newState ? MF_CHECKED : MF_UNCHECKED)));
+            UpdateStatusBar();
             break;
         }
         case IDM_VIEW_TOOLBAR:
@@ -2183,7 +3324,6 @@ LRESULT OnCommandMainWindow(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
             if (g_hToolbar)
             {
                 ShowWindow(g_hToolbar.get(), currentlyChecked ? SW_HIDE : SW_SHOW);
-                SendMessageW(g_hToolbar.get(), TB_AUTOSIZE, 0, 0);
             }
             g_toolbarVisible = ! currentlyChecked;
             CheckMenuItem(hMenu, IDM_VIEW_TOOLBAR, static_cast<UINT>(MF_BYCOMMAND | (currentlyChecked ? MF_UNCHECKED : MF_CHECKED)));
@@ -2194,15 +3334,21 @@ LRESULT OnCommandMainWindow(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         case IDM_FILTER_ERROR:
         case IDM_FILTER_WARNING:
         case IDM_FILTER_INFO:
+        case IDM_FILTER_PERF:
         case IDM_FILTER_DEBUG:
         {
-            const int typeIndex    = static_cast<int>(id) - IDM_FILTER_TEXT;
-            const uint32_t bitMask = 1u << static_cast<uint32_t>(typeIndex);
+            const MonitorFilterUiEntry* entry = FindMonitorFilterEntry(id);
+            if (! entry)
+            {
+                break;
+            }
+
+            const uint32_t bitMask = Debug::FilterBitForType(entry->type);
 
             g_filterMask ^= bitMask;
 
             HMENU hMenu = GetMenu(hWnd);
-            CheckMenuItem(hMenu, id, static_cast<UINT>(MF_BYCOMMAND | ((g_filterMask & bitMask) ? MF_CHECKED : MF_UNCHECKED)));
+            SyncMonitorFilterMenuChecks(hMenu, g_filterMask);
 
             g_lastFilterPreset = -1;
 
@@ -2212,15 +3358,11 @@ LRESULT OnCommandMainWindow(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_FILTER_PRESET_ERRORS_ONLY:
         {
-            g_filterMask       = 0x02;
+            g_filterMask       = kMonitorPresetErrorsOnlyMask;
             g_lastFilterPreset = 0;
 
             HMENU hMenu = GetMenu(hWnd);
-            CheckMenuItem(hMenu, IDM_FILTER_TEXT, MF_BYCOMMAND | MF_UNCHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_ERROR, MF_BYCOMMAND | MF_CHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_WARNING, MF_BYCOMMAND | MF_UNCHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_INFO, MF_BYCOMMAND | MF_UNCHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_DEBUG, MF_BYCOMMAND | MF_UNCHECKED);
+            SyncMonitorFilterMenuChecks(hMenu, g_filterMask);
 
             g_colorView.SetFilterMask(g_filterMask);
             UpdateStatusBar();
@@ -2228,15 +3370,11 @@ LRESULT OnCommandMainWindow(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_FILTER_PRESET_ERRORS_WARNINGS:
         {
-            g_filterMask       = 0x06;
+            g_filterMask       = kMonitorPresetErrorsWarningsMask;
             g_lastFilterPreset = 1;
 
             HMENU hMenu = GetMenu(hWnd);
-            CheckMenuItem(hMenu, IDM_FILTER_TEXT, MF_BYCOMMAND | MF_UNCHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_ERROR, MF_BYCOMMAND | MF_CHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_WARNING, MF_BYCOMMAND | MF_CHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_INFO, MF_BYCOMMAND | MF_UNCHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_DEBUG, MF_BYCOMMAND | MF_UNCHECKED);
+            SyncMonitorFilterMenuChecks(hMenu, g_filterMask);
 
             g_colorView.SetFilterMask(g_filterMask);
             UpdateStatusBar();
@@ -2244,15 +3382,11 @@ LRESULT OnCommandMainWindow(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_FILTER_PRESET_ERRORS_DEBUG:
         {
-            g_filterMask       = 0x12;
+            g_filterMask       = kMonitorPresetErrorsPerfDebugMask;
             g_lastFilterPreset = 3;
 
             HMENU hMenu = GetMenu(hWnd);
-            CheckMenuItem(hMenu, IDM_FILTER_TEXT, MF_BYCOMMAND | MF_UNCHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_ERROR, MF_BYCOMMAND | MF_CHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_WARNING, MF_BYCOMMAND | MF_UNCHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_INFO, MF_BYCOMMAND | MF_UNCHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_DEBUG, MF_BYCOMMAND | MF_CHECKED);
+            SyncMonitorFilterMenuChecks(hMenu, g_filterMask);
 
             g_colorView.SetFilterMask(g_filterMask);
             UpdateStatusBar();
@@ -2260,15 +3394,11 @@ LRESULT OnCommandMainWindow(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl)
         }
         case IDM_FILTER_PRESET_ALL:
         {
-            g_filterMask       = Debug::InfoParam::Type::All;
+            g_filterMask       = kMonitorFilterAllMask;
             g_lastFilterPreset = 2;
 
             HMENU hMenu = GetMenu(hWnd);
-            CheckMenuItem(hMenu, IDM_FILTER_TEXT, MF_BYCOMMAND | MF_CHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_ERROR, MF_BYCOMMAND | MF_CHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_WARNING, MF_BYCOMMAND | MF_CHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_INFO, MF_BYCOMMAND | MF_CHECKED);
-            CheckMenuItem(hMenu, IDM_FILTER_DEBUG, MF_BYCOMMAND | MF_CHECKED);
+            SyncMonitorFilterMenuChecks(hMenu, g_filterMask);
 
             g_colorView.SetFilterMask(g_filterMask);
             UpdateStatusBar();
@@ -2300,7 +3430,10 @@ LRESULT OnPaintMainWindow(HWND hWnd)
 
 LRESULT OnDestroyMainWindow(HWND hWnd)
 {
-    SaveMonitorSettings(hWnd);
+    if (! g_monitorChromeSelfTest.enabled)
+    {
+        SaveMonitorSettings(hWnd);
+    }
     KillTimer(hWnd, kStatusBarTimerId);
 
     // IMPORTANT: Shutdown order matters for thread safety.
@@ -2316,14 +3449,25 @@ LRESULT OnDestroyMainWindow(HWND hWnd)
     g_hColorView.reset();
     if (g_hToolbar)
     {
+        g_toolbarDxHost.Detach();
         g_hToolbar.reset();
     }
-    if (g_toolbarImageList)
+    if (g_hStatusBar)
     {
-        g_toolbarImageList.reset();
+        g_statusDxHost.Detach();
+        g_hStatusBar.reset();
     }
 
-    PostQuitMessage(0);
+    g_toolbarRoot          = nullptr;
+    g_toolbarNewButton     = nullptr;
+    g_toolbarOpenButton    = nullptr;
+    g_toolbarSaveButton    = nullptr;
+    g_toolbarCopyButton    = nullptr;
+    g_toolbarShowIdsToggle = nullptr;
+    g_statusStrip          = nullptr;
+    g_hMainWindow          = nullptr;
+
+    PostQuitMessage(g_monitorChromeSelfTest.enabled ? g_monitorChromeSelfTest.exitCode : 0);
     return 0;
 }
 } // namespace
@@ -2341,6 +3485,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_THEMECHANGED:
         case WM_DWMCOLORIZATIONCOLORCHANGED:
         case WM_SYSCOLORCHANGE: return OnSystemThemeChangedMainWindow(hWnd);
+        case kMsgRunMonitorChromeSelfTest: return RunMonitorChromeSelfTest(hWnd);
         case WM_COMMAND: return OnCommandMainWindow(hWnd, LOWORD(wParam), HIWORD(wParam), reinterpret_cast<HWND>(lParam));
         case WM_PAINT: return OnPaintMainWindow(hWnd);
         case WM_DESTROY: return OnDestroyMainWindow(hWnd);
@@ -2353,7 +3498,7 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, [[maybe_unused]] 
 {
     switch (message)
     {
-        case WM_INITDIALOG: return static_cast<INT_PTR>(TRUE);
+        case WM_INITDIALOG: SetDlgItemTextW(hDlg, IDC_ABOUT_VERSION, VERSINFO_VERSION_LABEL); return static_cast<INT_PTR>(TRUE);
 
         case WM_COMMAND:
             if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)

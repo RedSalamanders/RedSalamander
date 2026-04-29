@@ -6,18 +6,20 @@
 
 #include <algorithm>
 #include <array>
+#include <cstdlib>
 #include <cwchar>
 #include <cwctype>
 #include <filesystem>
 #include <format>
 #include <limits>
+#include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
 
-#include <commctrl.h>
 #include <commdlg.h>
 #include <uxtheme.h>
 
@@ -33,14 +35,83 @@
 #include <yyjson.h>
 #pragma warning(pop)
 
+#include "D2DHdcPaint.h"
 #include "Helpers.h"
 #include "HostServices.h"
-#include "ThemedControls.h"
+#include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "resource.h"
 
 namespace
 {
+using RedSalamander::DxUi::Button;
+using RedSalamander::DxUi::ColorSwatch;
+using RedSalamander::DxUi::ComboBox;
+using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::Control;
+using RedSalamander::DxUi::FontRole;
+using RedSalamander::DxUi::Grid;
+using RedSalamander::DxUi::GridCellData;
+using RedSalamander::DxUi::GridCellKind;
+using RedSalamander::DxUi::GridColumnDesc;
+using RedSalamander::DxUi::GridSelectionMode;
+using RedSalamander::DxUi::IDxGridModel;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::TextField;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::WindowHost;
+
+#ifdef ENABLE_TESTS
+enum class DebugThemeBrowseResultKind
+{
+    Path,
+    Cancel,
+};
+
+struct DebugThemeBrowseResult
+{
+    DebugThemeBrowseResultKind kind = DebugThemeBrowseResultKind::Path;
+    std::filesystem::path path{};
+};
+
+std::mutex g_debugThemeBrowseResultMutex;
+std::optional<DebugThemeBrowseResult> g_debugNextThemeBrowseResult;
+#endif
+
+void LogThemesDxState(const wchar_t* reason,
+                      HWND pageHostWindow,
+                      HWND hostWindow,
+                      const WindowHost* host,
+                      const Panel* pageContentRoot,
+                      const void* dxState,
+                      bool rebuildOnShow) noexcept
+{
+    size_t wrapperChildren = 0u;
+    if (pageContentRoot)
+    {
+        wrapperChildren = pageContentRoot->GetChildren().size();
+    }
+
+    Debug::Info(L"Preferences.Themes: reason={} pageHostWindow={:#x} hostWindow={:#x} dxHost={} root={} dxState={} wrapperChildren={} focus={} bridge={} "
+                L"dx={}x{} renderCount={} resizeCount={} resizeFailures={} rebuildOnShow={}",
+                reason ? reason : L"(null)",
+                reinterpret_cast<uintptr_t>(pageHostWindow),
+                reinterpret_cast<uintptr_t>(hostWindow),
+                static_cast<const void*>(host),
+                static_cast<const void*>(pageContentRoot),
+                dxState,
+                wrapperChildren,
+                host ? static_cast<const void*>(host->GetFocusControl()) : nullptr,
+                (host && host->HasActiveTextInputBridge()) ? L"true" : L"false",
+                GetDxHostDebugWidthPx(host),
+                GetDxHostDebugHeightPx(host),
+                GetDxHostDebugRenderCount(host),
+                GetDxHostDebugResizeCount(host),
+                GetDxHostDebugResizeFailureCount(host),
+                rebuildOnShow ? L"true" : L"false");
+}
+
 [[nodiscard]] COLORREF ColorRefFromArgb(uint32_t argb) noexcept
 {
     return RGB((argb >> 16) & 0xFFu, (argb >> 8) & 0xFFu, argb & 0xFFu);
@@ -58,7 +129,7 @@ namespace
     {
         return rgb;
     }
-    return ThemedControls::BlendColor(background, rgb, alpha, 255);
+    return UiMetrics::BlendColor(background, rgb, alpha, 255);
 }
 
 void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, COLORREF background, std::optional<uint32_t> argb, bool enabled) noexcept
@@ -70,11 +141,10 @@ void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, C
 
     const int width  = std::max(0l, rc.right - rc.left);
     const int height = std::max(0l, rc.bottom - rc.top);
-    const int radius = std::max(1, std::min(ThemedControls::ScaleDip(dpi, 4), std::min(width, height) / 2));
+    const int radius = std::max(1, std::min(UiMetrics::ScaleDip(dpi, 4), std::min(width, height) / 2));
 
-    COLORREF border =
-        theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : ThemedControls::BlendColor(background, theme.menu.text, theme.dark ? 70 : 50, 255);
-    COLORREF fill = background;
+    COLORREF border = theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : UiMetrics::BlendColor(background, theme.menu.text, theme.dark ? 70 : 50, 255);
+    COLORREF fill   = background;
     if (argb.has_value())
     {
         fill = CompositeArgbOnBackground(background, argb.value());
@@ -82,20 +152,16 @@ void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, C
 
     if (! enabled && ! theme.highContrast)
     {
-        fill   = ThemedControls::BlendColor(background, fill, theme.dark ? 120 : 95, 255);
-        border = ThemedControls::BlendColor(background, border, theme.dark ? 120 : 95, 255);
+        fill   = UiMetrics::BlendColor(background, fill, theme.dark ? 120 : 95, 255);
+        border = UiMetrics::BlendColor(background, border, theme.dark ? 120 : 95, 255);
     }
 
-    wil::unique_hbrush brush(CreateSolidBrush(fill));
-    wil::unique_hpen pen(CreatePen(PS_SOLID, 1, border));
-    if (! brush || ! pen)
+    D2DHdcPaint::Session paint;
+    if (! paint.Begin(hdc, rc))
     {
         return;
     }
-
-    [[maybe_unused]] auto oldBrush = wil::SelectObject(hdc, brush.get());
-    [[maybe_unused]] auto oldPen   = wil::SelectObject(hdc, pen.get());
-    RoundRect(hdc, rc.left, rc.top, rc.right, rc.bottom, radius, radius);
+    paint.FillRoundedRectangle(rc, static_cast<float>(radius), fill, border);
 }
 
 [[nodiscard]] std::wstring Utf16FromUtf8(std::string_view text) noexcept
@@ -142,6 +208,159 @@ void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, C
     }
     return result;
 }
+
+[[nodiscard]] uint64_t MakeThemesStableRowId(std::wstring_view key) noexcept
+{
+    constexpr uint64_t kFNVOffset = 1469598103934665603ull;
+    constexpr uint64_t kFNVPrime  = 1099511628211ull;
+
+    uint64_t value = kFNVOffset;
+    for (const wchar_t ch : key)
+    {
+        value ^= static_cast<uint64_t>(std::towlower(static_cast<wint_t>(ch)));
+        value *= kFNVPrime;
+    }
+    return value;
+}
+
+void SetThemesNoteText(PreferencesDialogState& state, std::wstring text) noexcept
+{
+    state.themesNoteText = std::move(text);
+}
+
+void SetThemesNameText(PreferencesDialogState& state, std::wstring text) noexcept
+{
+    state.themesNameText = std::move(text);
+}
+
+void SetThemesKeyText(PreferencesDialogState& state, std::wstring text) noexcept
+{
+    state.themesKeyText = std::move(text);
+}
+
+void SetThemesColorText(PreferencesDialogState& state, std::wstring text) noexcept
+{
+    state.themesColorText = std::move(text);
+}
+
+struct ThemesGridRow
+{
+    uint64_t stableId = 0u;
+    std::wstring key;
+    std::wstring value;
+    bool overridden    = false;
+    bool hasColor      = false;
+    uint32_t colorArgb = 0u;
+};
+
+class ThemesGridModel final : public IDxGridModel
+{
+public:
+    ThemesGridModel()
+    {
+        _columns = {
+            {L"key", LoadStringResource(nullptr, IDS_PREFS_THEMES_COL_KEY), 260.0f, 120.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"value", LoadStringResource(nullptr, IDS_PREFS_THEMES_COL_VALUE), 140.0f, 96.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
+            {L"swatch", L"", 44.0f, 36.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false, DWRITE_TEXT_ALIGNMENT_CENTER},
+        };
+    }
+
+    void SetRows(std::vector<ThemesGridRow> rows)
+    {
+        _rows = std::move(rows);
+        _rowIndexByStableId.clear();
+        _rowIndexByStableId.reserve(_rows.size());
+        for (size_t rowIndex = 0u; rowIndex < _rows.size(); ++rowIndex)
+        {
+            _rowIndexByStableId[_rows[rowIndex].stableId] = rowIndex;
+        }
+    }
+
+    [[nodiscard]] const std::vector<ThemesGridRow>& GetRows() const noexcept
+    {
+        return _rows;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowIndexByKey(std::wstring_view key) const noexcept
+    {
+        const auto it = std::find_if(_rows.begin(), _rows.end(), [&](const ThemesGridRow& row) noexcept { return row.key == key; });
+        if (it == _rows.end())
+        {
+            return std::nullopt;
+        }
+        return static_cast<size_t>(std::distance(_rows.begin(), it));
+    }
+
+    [[nodiscard]] size_t GetRowCount() const noexcept override
+    {
+        return _rows.size();
+    }
+
+    [[nodiscard]] size_t GetColumnCount() const noexcept override
+    {
+        return _columns.size();
+    }
+
+    [[nodiscard]] GridColumnDesc GetColumn(size_t columnIndex) const override
+    {
+        return _columns.at(columnIndex);
+    }
+
+    void GetCellData(size_t rowIndex, size_t columnIndex, GridCellData& outCell) const override
+    {
+        outCell = {};
+        if (rowIndex >= _rows.size())
+        {
+            return;
+        }
+
+        const ThemesGridRow& row = _rows[rowIndex];
+        switch (columnIndex)
+        {
+            case 0:
+                outCell.text = row.key;
+                if (row.overridden)
+                {
+                    outCell.badgeText = L"*";
+                    outCell.badgeTone = RedSalamander::DxUi::AdornmentTone::Accent;
+                }
+                break;
+            case 1: outCell.text = row.value; break;
+            case 2:
+                outCell.kind           = GridCellKind::ColorSwatch;
+                outCell.hasSwatchValue = row.hasColor;
+                outCell.swatchArgb     = row.colorArgb;
+                outCell.textAlignment  = DWRITE_TEXT_ALIGNMENT_CENTER;
+                break;
+            default: break;
+        }
+    }
+
+    [[nodiscard]] uint64_t GetStableRowId(size_t rowIndex) const noexcept override
+    {
+        if (rowIndex >= _rows.size())
+        {
+            return 0u;
+        }
+        return _rows[rowIndex].stableId;
+    }
+
+    [[nodiscard]] std::optional<size_t> FindRowByStableId(uint64_t rowId) const noexcept override
+    {
+        const auto it = _rowIndexByStableId.find(rowId);
+        if (it == _rowIndexByStableId.end())
+        {
+            return std::nullopt;
+        }
+
+        return it->second;
+    }
+
+private:
+    std::vector<GridColumnDesc> _columns;
+    std::vector<ThemesGridRow> _rows;
+    std::unordered_map<uint64_t, size_t> _rowIndexByStableId;
+};
 
 struct BuiltinThemeOption
 {
@@ -541,6 +760,24 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
 {
     outPath.clear();
 
+#ifdef ENABLE_TESTS
+    {
+        std::scoped_lock lock(g_debugThemeBrowseResultMutex);
+        if (g_debugNextThemeBrowseResult.has_value())
+        {
+            const DebugThemeBrowseResult result = *g_debugNextThemeBrowseResult;
+            g_debugNextThemeBrowseResult.reset();
+            if (result.kind == DebugThemeBrowseResultKind::Cancel)
+            {
+                return false;
+            }
+
+            outPath = result.path;
+            return ! outPath.empty();
+        }
+    }
+#endif
+
     std::array<wchar_t, 1024> buffer{};
     buffer[0] = L'\0';
     if (saving && ! suggestedFileName.empty())
@@ -579,6 +816,28 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     outPath = std::filesystem::path(buffer.data());
     return ! outPath.empty();
 }
+
+#ifdef ENABLE_TESTS
+bool DebugSetPreferencesThemesNextBrowsePathImpl(const std::wstring_view path) noexcept
+{
+    std::scoped_lock lock(g_debugThemeBrowseResultMutex);
+    if (path.empty())
+    {
+        g_debugNextThemeBrowseResult.reset();
+        return true;
+    }
+
+    g_debugNextThemeBrowseResult = DebugThemeBrowseResult{.kind = DebugThemeBrowseResultKind::Path, .path = std::filesystem::path(path)};
+    return true;
+}
+
+bool DebugCancelPreferencesThemesNextBrowseImpl() noexcept
+{
+    std::scoped_lock lock(g_debugThemeBrowseResultMutex);
+    g_debugNextThemeBrowseResult = DebugThemeBrowseResult{.kind = DebugThemeBrowseResultKind::Cancel};
+    return true;
+}
+#endif
 
 [[nodiscard]] bool ParseThemeDefinitionJson(std::string_view jsonText, Common::Settings::ThemeDefinition& outTheme, std::wstring& outError) noexcept
 {
@@ -801,47 +1060,6 @@ void ShowDialogAlert(HWND dlg, HostAlertSeverity severity, const std::wstring& t
     return ! outJson.empty();
 }
 
-void EnsureThemesBaseComboItems(PreferencesDialogState& state) noexcept
-{
-    if (! state.themesBaseCombo)
-    {
-        return;
-    }
-
-    const LRESULT count = SendMessageW(state.themesBaseCombo.get(), CB_GETCOUNT, 0, 0);
-    if (count != CB_ERR && count > 0)
-    {
-        return;
-    }
-
-    SendMessageW(state.themesBaseCombo.get(), CB_RESETCONTENT, 0, 0);
-    std::wstring noneText = LoadStringResource(nullptr, IDS_PREFS_THEMES_BASE_NONE);
-    if (noneText.empty())
-    {
-        noneText = LoadStringResource(nullptr, IDS_PREFS_PANES_SORT_NONE);
-    }
-
-    const LRESULT noneIdx = SendMessageW(state.themesBaseCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(noneText.empty() ? L"" : noneText.c_str()));
-    if (noneIdx != CB_ERR && noneIdx != CB_ERRSPACE)
-    {
-        SendMessageW(state.themesBaseCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(noneIdx), static_cast<LPARAM>(-1));
-    }
-    for (size_t i = 0; i < kBuiltinThemeOptions.size(); ++i)
-    {
-        const auto& option      = kBuiltinThemeOptions[i];
-        const std::wstring name = LoadStringResource(nullptr, option.nameId);
-        const LRESULT idx =
-            SendMessageW(state.themesBaseCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(name.empty() ? option.id.data() : name.c_str()));
-        if (idx != CB_ERR && idx != CB_ERRSPACE)
-        {
-            SendMessageW(state.themesBaseCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(idx), static_cast<LPARAM>(i));
-        }
-    }
-
-    SendMessageW(state.themesBaseCombo.get(), CB_SETCURSEL, 0, 0);
-    PrefsUi::InvalidateComboBox(state.themesBaseCombo.get());
-}
-
 void EnsureThemeFileThemesLoaded(PreferencesDialogState& state) noexcept
 {
     if (! state.themeFileThemes.empty())
@@ -865,14 +1083,8 @@ void EnsureThemeFileThemesLoaded(PreferencesDialogState& state) noexcept
 
 void PopulateThemesThemeCombo(PreferencesDialogState& state) noexcept
 {
-    if (! state.themesThemeCombo)
-    {
-        return;
-    }
-
     EnsureThemeFileThemesLoaded(state);
 
-    SendMessageW(state.themesThemeCombo.get(), CB_RESETCONTENT, 0, 0);
     state.themeComboItems.clear();
 
     auto addTheme = [&](std::wstring_view id, std::wstring_view name, ThemeSchemaSource source) noexcept
@@ -882,14 +1094,7 @@ void PopulateThemesThemeCombo(PreferencesDialogState& state) noexcept
         item.displayName = name.empty() ? std::wstring(id) : std::wstring(name);
         item.source      = source;
 
-        const LRESULT comboIndex = SendMessageW(state.themesThemeCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(item.displayName.c_str()));
-        if (comboIndex == CB_ERR || comboIndex == CB_ERRSPACE)
-        {
-            return;
-        }
-
         state.themeComboItems.push_back(std::move(item));
-        SendMessageW(state.themesThemeCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(comboIndex), static_cast<LPARAM>(state.themeComboItems.size() - 1u));
     };
 
     for (const auto& builtin : kBuiltinThemeOptions)
@@ -923,56 +1128,28 @@ void PopulateThemesThemeCombo(PreferencesDialogState& state) noexcept
     }
 
     addTheme(kNewThemeComboId, LoadStringResource(nullptr, IDS_PREFS_THEMES_NEW_THEME_ENTRY), ThemeSchemaSource::New);
+}
 
-    const std::wstring_view desiredId = state.workingSettings.theme.currentThemeId;
-    int desiredIndex                  = 0;
-    const LRESULT comboCount          = SendMessageW(state.themesThemeCombo.get(), CB_GETCOUNT, 0, 0);
-    for (int i = 0; i < comboCount; ++i)
+[[nodiscard]] const ThemeComboItem* FindThemeComboItemById(const PreferencesDialogState& state, std::wstring_view id) noexcept
+{
+    if (id.empty())
     {
-        const LRESULT data = SendMessageW(state.themesThemeCombo.get(), CB_GETITEMDATA, static_cast<WPARAM>(i), 0);
-        if (data == CB_ERR)
-        {
-            continue;
-        }
-
-        const size_t itemIndex = static_cast<size_t>(data);
-        if (itemIndex < state.themeComboItems.size() && std::wstring_view(state.themeComboItems[itemIndex].id) == desiredId)
-        {
-            desiredIndex = i;
-            break;
-        }
+        return nullptr;
     }
 
-    SendMessageW(state.themesThemeCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(desiredIndex), 0);
-    PrefsUi::InvalidateComboBox(state.themesThemeCombo.get());
+    const auto it = std::find_if(
+        state.themeComboItems.begin(), state.themeComboItems.end(), [&](const ThemeComboItem& item) noexcept { return std::wstring_view(item.id) == id; });
+    return it != state.themeComboItems.end() ? &(*it) : nullptr;
 }
 
 [[nodiscard]] const ThemeComboItem* TryGetSelectedThemeComboItem(const PreferencesDialogState& state) noexcept
 {
-    if (! state.themesThemeCombo)
+    if (const auto* retained = FindThemeComboItemById(state, state.workingSettings.theme.currentThemeId))
     {
-        return nullptr;
+        return retained;
     }
 
-    const LRESULT sel = SendMessageW(state.themesThemeCombo.get(), CB_GETCURSEL, 0, 0);
-    if (sel == CB_ERR)
-    {
-        return nullptr;
-    }
-
-    const LRESULT data = SendMessageW(state.themesThemeCombo.get(), CB_GETITEMDATA, static_cast<WPARAM>(sel), 0);
-    if (data == CB_ERR)
-    {
-        return nullptr;
-    }
-
-    const size_t index = static_cast<size_t>(data);
-    if (index >= state.themeComboItems.size())
-    {
-        return nullptr;
-    }
-
-    return &state.themeComboItems[index];
+    return nullptr;
 }
 
 [[nodiscard]] std::optional<std::wstring_view> TryGetSelectedThemeId(const PreferencesDialogState& state) noexcept
@@ -1044,6 +1221,7 @@ struct MonitorTextViewTheme
     D2D1::ColorF metaError       = D2D1::ColorF(D2D1::ColorF::Red);
     D2D1::ColorF metaWarning     = D2D1::ColorF(D2D1::ColorF::Orange);
     D2D1::ColorF metaInfo        = D2D1::ColorF(D2D1::ColorF::DodgerBlue);
+    D2D1::ColorF metaPerf        = D2D1::ColorF(D2D1::ColorF::MediumSeaGreen);
     D2D1::ColorF metaDebug       = D2D1::ColorF(D2D1::ColorF::MediumPurple);
 };
 [[nodiscard]] MonitorTextViewTheme ResolveMonitorThemeForDisplay(std::wstring_view baseThemeId,
@@ -1053,47 +1231,93 @@ struct MonitorTextViewTheme
                                                                     const std::unordered_map<std::wstring, uint32_t>* overrides,
                                                                     std::wstring_view key) noexcept;
 
-void EnsureThemesColorsListColumns(HWND list, UINT dpi) noexcept
+constexpr std::array<std::wstring_view, 65> kKnownColorKeys = {{
+    L"app.accent",
+    L"window.background",
+
+    L"menu.background",
+    L"menu.text",
+    L"menu.disabledText",
+    L"menu.selectionBg",
+    L"menu.selectionText",
+    L"menu.separator",
+    L"menu.border",
+
+    L"navigation.background",
+    L"navigation.backgroundHover",
+    L"navigation.backgroundPressed",
+    L"navigation.text",
+    L"navigation.separator",
+    L"navigation.accent",
+    L"navigation.progressOk",
+    L"navigation.progressWarn",
+    L"navigation.progressBackground",
+
+    L"folderView.background",
+    L"folderView.itemBackgroundNormal",
+    L"folderView.itemBackgroundHovered",
+    L"folderView.itemBackgroundSelected",
+    L"folderView.itemBackgroundSelectedInactive",
+    L"folderView.itemBackgroundFocused",
+    L"folderView.textNormal",
+    L"folderView.textSelected",
+    L"folderView.textSelectedInactive",
+    L"folderView.textDisabled",
+    L"folderView.focusBorder",
+    L"folderView.gridLines",
+    L"folderView.errorBackground",
+    L"folderView.errorText",
+    L"folderView.warningBackground",
+    L"folderView.warningText",
+    L"folderView.infoBackground",
+    L"folderView.infoText",
+
+    L"monitor.textView.bg",
+    L"monitor.textView.fg",
+    L"monitor.textView.caret",
+    L"monitor.textView.selection",
+    L"monitor.textView.searchHighlight",
+    L"monitor.textView.gutterBg",
+    L"monitor.textView.gutterFg",
+    L"monitor.textView.metaText",
+    L"monitor.textView.metaError",
+    L"monitor.textView.metaWarning",
+    L"monitor.textView.metaInfo",
+    L"monitor.textView.metaPerf",
+    L"monitor.textView.metaDebug",
+
+    L"fileOps.progressBackground",
+    L"fileOps.progressTotal",
+    L"fileOps.progressItem",
+    L"fileOps.graphBackground",
+    L"fileOps.graphGrid",
+    L"fileOps.graphLimit",
+    L"fileOps.graphLine",
+    L"fileOps.scrollbarTrack",
+    L"fileOps.scrollbarThumb",
+
+    L"viewer.diff.addedBackground",
+    L"viewer.diff.removedBackground",
+    L"viewer.diff.contextBackground",
+    L"viewer.diff.headerBackground",
+    L"viewer.diff.bannerBackground",
+    L"viewer.diff.placeholderBackground",
+    L"viewer.diff.divider",
+}};
+
+[[nodiscard]] std::vector<ThemesGridRow> BuildThemesColorRows(const PreferencesDialogState& state) noexcept
 {
-    if (! list)
+    std::vector<ThemesGridRow> rows;
+
+    const auto themeIdOpt = TryGetSelectedThemeId(state);
+    if (! themeIdOpt.has_value())
     {
-        return;
+        return rows;
     }
 
-    const HWND header  = ListView_GetHeader(list);
-    const int existing = header ? Header_GetItemCount(header) : 0;
-    if (existing > 0)
-    {
-        return;
-    }
-
-    const std::wstring keyText   = LoadStringResource(nullptr, IDS_PREFS_THEMES_COL_KEY);
-    const std::wstring valueText = LoadStringResource(nullptr, IDS_PREFS_THEMES_COL_VALUE);
-
-    LVCOLUMNW col{};
-    col.mask = LVCF_TEXT | LVCF_WIDTH | LVCF_FMT;
-    col.fmt  = LVCFMT_LEFT;
-
-    col.pszText = const_cast<wchar_t*>(keyText.empty() ? L"" : keyText.c_str());
-    col.cx      = std::max(0, ThemedControls::ScaleDip(dpi, 260));
-    ListView_InsertColumn(list, 0, &col);
-
-    col.pszText = const_cast<wchar_t*>(valueText.empty() ? L"" : valueText.c_str());
-    col.cx      = std::max(0, ThemedControls::ScaleDip(dpi, 140));
-    ListView_InsertColumn(list, 1, &col);
-
-    col.pszText = const_cast<wchar_t*>(L"");
-    col.cx      = std::max(0, ThemedControls::ScaleDip(dpi, 44));
-    ListView_InsertColumn(list, 2, &col);
-}
-
-void RefreshThemesColorsList(HWND host, PreferencesDialogState& state, std::wstring_view themeId, const Common::Settings::ThemeDefinition* def) noexcept
-{
-    if (! host || ! state.themesColorsList)
-    {
-        return;
-    }
-
+    const std::wstring_view themeId     = themeIdOpt.value();
+    bool editable                       = false;
+    const auto* def                     = FindThemeDefinitionForDisplay(state, themeId, editable);
     const std::wstring_view baseThemeId = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeId;
     const auto* overrides               = def ? &def->colors : nullptr;
 
@@ -1111,91 +1335,7 @@ void RefreshThemesColorsList(HWND host, PreferencesDialogState& state, std::wstr
     }
     const MonitorTextViewTheme monitorTheme = ResolveMonitorThemeForDisplay(baseThemeId, overrides);
 
-    const UINT dpi = GetDpiForWindow(host);
-    EnsureThemesColorsListColumns(state.themesColorsList.get(), dpi);
-
-    std::wstring filterText;
-    std::wstring_view filter;
-    if (state.themesSearchEdit)
-    {
-        filterText = PrefsUi::GetWindowTextString(state.themesSearchEdit.get());
-        filter     = PrefsUi::TrimWhitespace(filterText);
-    }
-
-    std::wstring selectedKey;
-    if (const int selected = ListView_GetNextItem(state.themesColorsList.get(), -1, LVNI_SELECTED); selected >= 0)
-    {
-        wchar_t buffer[128]{};
-        ListView_GetItemText(state.themesColorsList.get(), selected, 0, buffer, static_cast<int>(std::size(buffer)));
-        selectedKey = buffer;
-    }
-
-    ListView_DeleteAllItems(state.themesColorsList.get());
-
-    static constexpr std::array<std::wstring_view, 57> kKnownKeys = {{
-        L"app.accent",
-        L"window.background",
-
-        L"menu.background",
-        L"menu.text",
-        L"menu.disabledText",
-        L"menu.selectionBg",
-        L"menu.selectionText",
-        L"menu.separator",
-        L"menu.border",
-
-        L"navigation.background",
-        L"navigation.backgroundHover",
-        L"navigation.backgroundPressed",
-        L"navigation.text",
-        L"navigation.separator",
-        L"navigation.accent",
-        L"navigation.progressOk",
-        L"navigation.progressWarn",
-        L"navigation.progressBackground",
-
-        L"folderView.background",
-        L"folderView.itemBackgroundNormal",
-        L"folderView.itemBackgroundHovered",
-        L"folderView.itemBackgroundSelected",
-        L"folderView.itemBackgroundSelectedInactive",
-        L"folderView.itemBackgroundFocused",
-        L"folderView.textNormal",
-        L"folderView.textSelected",
-        L"folderView.textSelectedInactive",
-        L"folderView.textDisabled",
-        L"folderView.focusBorder",
-        L"folderView.gridLines",
-        L"folderView.errorBackground",
-        L"folderView.errorText",
-        L"folderView.warningBackground",
-        L"folderView.warningText",
-        L"folderView.infoBackground",
-        L"folderView.infoText",
-
-        L"monitor.textView.bg",
-        L"monitor.textView.fg",
-        L"monitor.textView.caret",
-        L"monitor.textView.selection",
-        L"monitor.textView.searchHighlight",
-        L"monitor.textView.gutterBg",
-        L"monitor.textView.gutterFg",
-        L"monitor.textView.metaText",
-        L"monitor.textView.metaError",
-        L"monitor.textView.metaWarning",
-        L"monitor.textView.metaInfo",
-        L"monitor.textView.metaDebug",
-
-        L"fileOps.progressBackground",
-        L"fileOps.progressTotal",
-        L"fileOps.progressItem",
-        L"fileOps.graphBackground",
-        L"fileOps.graphGrid",
-        L"fileOps.graphLimit",
-        L"fileOps.graphLine",
-        L"fileOps.scrollbarTrack",
-        L"fileOps.scrollbarThumb",
-    }};
+    const std::wstring_view filter = PrefsUi::TrimWhitespace(state.themesSearchText);
 
     std::vector<std::wstring> extraKeys;
     if (overrides)
@@ -1204,7 +1344,7 @@ void RefreshThemesColorsList(HWND host, PreferencesDialogState& state, std::wstr
         for (const auto& [key, _] : *overrides)
         {
             bool known = false;
-            for (const auto knownKey : kKnownKeys)
+            for (const auto knownKey : kKnownColorKeys)
             {
                 if (knownKey == key)
                 {
@@ -1221,8 +1361,8 @@ void RefreshThemesColorsList(HWND host, PreferencesDialogState& state, std::wstr
     }
 
     std::vector<std::wstring> allKeys;
-    allKeys.reserve(kKnownKeys.size() + extraKeys.size());
-    for (const auto key : kKnownKeys)
+    allKeys.reserve(kKnownColorKeys.size() + extraKeys.size());
+    for (const auto key : kKnownColorKeys)
     {
         allKeys.emplace_back(key);
     }
@@ -1244,98 +1384,17 @@ void RefreshThemesColorsList(HWND host, PreferencesDialogState& state, std::wstr
             continue;
         }
 
-        const std::wstring valueText = Common::Settings::FormatColor(valueOpt.value());
-        std::wstring storedKey;
-        storedKey.assign(key);
-
-        LVITEMW item{};
-        const bool overridden = overrides && overrides->contains(storedKey);
-
-        item.mask       = LVIF_TEXT | LVIF_PARAM;
-        item.iItem      = ListView_GetItemCount(state.themesColorsList.get());
-        item.iSubItem   = 0;
-        item.pszText    = const_cast<wchar_t*>(storedKey.c_str());
-        item.lParam     = static_cast<LPARAM>(overridden ? 1 : 0);
-        const int index = ListView_InsertItem(state.themesColorsList.get(), &item);
-        if (index < 0)
-        {
-            continue;
-        }
-
-        ListView_SetItemText(state.themesColorsList.get(), index, 1, const_cast<wchar_t*>(valueText.c_str()));
-
-        if (! selectedKey.empty() && selectedKey == storedKey)
-        {
-            ListView_SetItemState(state.themesColorsList.get(), index, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-        }
+        ThemesGridRow row{};
+        row.key        = key;
+        row.value      = Common::Settings::FormatColor(valueOpt.value());
+        row.stableId   = MakeThemesStableRowId(row.key);
+        row.overridden = overrides != nullptr && overrides->contains(key);
+        row.hasColor   = true;
+        row.colorArgb  = valueOpt.value();
+        rows.push_back(std::move(row));
     }
 
-    if (ListView_GetNextItem(state.themesColorsList.get(), -1, LVNI_SELECTED) < 0 && ListView_GetItemCount(state.themesColorsList.get()) > 0)
-    {
-        ListView_SetItemState(state.themesColorsList.get(), 0, LVIS_SELECTED | LVIS_FOCUSED, LVIS_SELECTED | LVIS_FOCUSED);
-    }
-}
-
-void UpdateThemesEnabled(PreferencesDialogState& state, bool editable) noexcept
-{
-    const BOOL enable = editable ? TRUE : FALSE;
-
-    if (state.themesNameEdit)
-    {
-        EnableWindow(state.themesNameEdit.get(), enable);
-    }
-    if (state.themesNameLabel)
-    {
-        EnableWindow(state.themesNameLabel.get(), enable);
-    }
-    if (state.themesBaseCombo)
-    {
-        EnableWindow(state.themesBaseCombo.get(), enable);
-    }
-    if (state.themesBaseLabel)
-    {
-        EnableWindow(state.themesBaseLabel.get(), enable);
-    }
-    if (state.themesColorsList)
-    {
-        EnableWindow(state.themesColorsList.get(), editable ? TRUE : TRUE);
-    }
-    if (state.themesKeyEdit)
-    {
-        EnableWindow(state.themesKeyEdit.get(), enable);
-    }
-    if (state.themesKeyLabel)
-    {
-        EnableWindow(state.themesKeyLabel.get(), enable);
-    }
-    if (state.themesColorEdit)
-    {
-        EnableWindow(state.themesColorEdit.get(), enable);
-    }
-    if (state.themesColorLabel)
-    {
-        EnableWindow(state.themesColorLabel.get(), enable);
-    }
-    if (state.themesPickColor)
-    {
-        EnableWindow(state.themesPickColor.get(), enable);
-    }
-    if (state.themesSetOverride)
-    {
-        EnableWindow(state.themesSetOverride.get(), enable);
-    }
-    if (state.themesRemoveOverride)
-    {
-        EnableWindow(state.themesRemoveOverride.get(), enable);
-    }
-    if (state.themesSaveTheme)
-    {
-        EnableWindow(state.themesSaveTheme.get(), enable);
-    }
-    if (state.themesDuplicateTheme)
-    {
-        EnableWindow(state.themesDuplicateTheme.get(), editable ? FALSE : TRUE);
-    }
+    return rows;
 }
 
 void RefreshThemesPage(HWND host, PreferencesDialogState& state) noexcept
@@ -1345,7 +1404,6 @@ void RefreshThemesPage(HWND host, PreferencesDialogState& state) noexcept
         return;
     }
 
-    EnsureThemesBaseComboItems(state);
     PopulateThemesThemeCombo(state);
 
     const auto themeIdOpt = TryGetSelectedThemeId(state);
@@ -1362,61 +1420,32 @@ void RefreshThemesPage(HWND host, PreferencesDialogState& state) noexcept
     state.refreshingThemesPage = true;
     const auto reset           = wil::scope_exit([&] { state.refreshingThemesPage = false; });
 
-    if (state.themesNote)
+    if (editable)
     {
-        if (editable)
-        {
-            SetWindowTextW(state.themesNote.get(), L"");
-        }
-        else if (def)
-        {
-            const std::wstring note = LoadStringResource(nullptr, IDS_PREFS_THEMES_NOTE_DISK_THEME);
-            SetWindowTextW(state.themesNote.get(), note.c_str());
-        }
-        else
-        {
-            const std::wstring note = LoadStringResource(nullptr, IDS_PREFS_THEMES_NOTE_BUILTIN_THEME);
-            SetWindowTextW(state.themesNote.get(), note.c_str());
-        }
+        SetThemesNoteText(state, L"");
+    }
+    else if (def)
+    {
+        SetThemesNoteText(state, LoadStringResource(nullptr, IDS_PREFS_THEMES_NOTE_DISK_THEME));
+    }
+    else
+    {
+        SetThemesNoteText(state, LoadStringResource(nullptr, IDS_PREFS_THEMES_NOTE_BUILTIN_THEME));
     }
 
-    if (state.themesNameEdit)
+    if (def)
     {
-        if (def)
-        {
-            SetWindowTextW(state.themesNameEdit.get(), def->name.c_str());
-        }
-        else
-        {
-            const std::wstring builtinName = GetBuiltinThemeName(themeId);
-            SetWindowTextW(state.themesNameEdit.get(), builtinName.c_str());
-        }
+        SetThemesNameText(state, def->name);
     }
-
-    if (state.themesBaseCombo)
+    else
     {
-        int select = 0;
-        if (def)
-        {
-            for (size_t i = 0; i < kBuiltinThemeOptions.size(); ++i)
-            {
-                if (kBuiltinThemeOptions[i].id == def->baseThemeId)
-                {
-                    select = static_cast<int>(i) + 1;
-                    break;
-                }
-            }
-        }
-        SendMessageW(state.themesBaseCombo.get(), CB_SETCURSEL, static_cast<WPARAM>(select), 0);
-        PrefsUi::InvalidateComboBox(state.themesBaseCombo.get());
+        SetThemesNameText(state, GetBuiltinThemeName(themeId));
     }
-
-    UpdateThemesEnabled(state, editable);
-
-    RefreshThemesColorsList(host, state, themeId, def);
 
     ThemesPane::UpdateEditorFromSelection(host, state);
-    SendMessageW(host, WM_SIZE, 0, 0);
+    RECT rc{};
+    GetClientRect(host, &rc);
+    PostMessageW(host, WM_SIZE, SIZE_RESTORED, MAKELPARAM(std::max(0l, rc.right - rc.left), std::max(0l, rc.bottom - rc.top)));
     InvalidateRect(host, nullptr, TRUE);
 }
 
@@ -1628,6 +1657,14 @@ void ApplyAppThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstri
     applyD2D(L"fileOps.scrollbarTrack", theme.fileOperations.scrollbarTrack);
     applyD2D(L"fileOps.scrollbarThumb", theme.fileOperations.scrollbarThumb);
 
+    applyD2D(L"viewer.diff.addedBackground", theme.viewerDiff.addedBackground);
+    applyD2D(L"viewer.diff.removedBackground", theme.viewerDiff.removedBackground);
+    applyD2D(L"viewer.diff.contextBackground", theme.viewerDiff.contextBackground);
+    applyD2D(L"viewer.diff.headerBackground", theme.viewerDiff.headerBackground);
+    applyD2D(L"viewer.diff.bannerBackground", theme.viewerDiff.bannerBackground);
+    applyD2D(L"viewer.diff.placeholderBackground", theme.viewerDiff.placeholderBackground);
+    applyD2D(L"viewer.diff.divider", theme.viewerDiff.divider);
+
     if (! FindColorOverride(colors, L"folderView.itemBackgroundSelectedInactive"))
     {
         if (const auto argb = FindColorOverride(colors, L"folderView.itemBackgroundSelected"))
@@ -1674,6 +1711,7 @@ void ApplyAppThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstri
         theme.metaError       = D2D1::ColorF(1.00f, 0.35f, 0.35f);
         theme.metaWarning     = D2D1::ColorF(1.00f, 0.70f, 0.25f);
         theme.metaInfo        = D2D1::ColorF(0.40f, 0.70f, 1.00f);
+        theme.metaPerf        = D2D1::ColorF(0.30f, 0.82f, 0.55f);
         theme.metaDebug       = D2D1::ColorF(0.75f, 0.55f, 1.00f);
     }
     else if (mode == ThemeMode::Rainbow)
@@ -1689,6 +1727,7 @@ void ApplyAppThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstri
         theme.metaError       = D2D1::ColorF(1.00f, 0.45f, 0.45f);
         theme.metaWarning     = D2D1::ColorF(1.00f, 0.75f, 0.30f);
         theme.metaInfo        = D2D1::ColorF(0.50f, 0.80f, 1.00f);
+        theme.metaPerf        = D2D1::ColorF(0.40f, 0.90f, 0.62f);
         theme.metaDebug       = D2D1::ColorF(0.80f, 0.60f, 1.00f);
     }
     else if (mode == ThemeMode::HighContrast)
@@ -1707,6 +1746,7 @@ void ApplyAppThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstri
         theme.metaError       = ColorFromCOLORREF(text, 1.0f);
         theme.metaWarning     = ColorFromCOLORREF(text, 1.0f);
         theme.metaInfo        = ColorFromCOLORREF(text, 1.0f);
+        theme.metaPerf        = ColorFromCOLORREF(text, 1.0f);
         theme.metaDebug       = ColorFromCOLORREF(text, 1.0f);
     }
 
@@ -1734,6 +1774,7 @@ void ApplyAppThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstri
         applyOverride(L"monitor.textView.metaError", theme.metaError);
         applyOverride(L"monitor.textView.metaWarning", theme.metaWarning);
         applyOverride(L"monitor.textView.metaInfo", theme.metaInfo);
+        applyOverride(L"monitor.textView.metaPerf", theme.metaPerf);
         applyOverride(L"monitor.textView.metaDebug", theme.metaDebug);
     }
 
@@ -1937,6 +1978,10 @@ void ApplyAppThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstri
     {
         return ArgbFromD2DColorF(monitorTheme.metaInfo);
     }
+    if (key == L"monitor.textView.metaPerf")
+    {
+        return ArgbFromD2DColorF(monitorTheme.metaPerf);
+    }
     if (key == L"monitor.textView.metaDebug")
     {
         return ArgbFromD2DColorF(monitorTheme.metaDebug);
@@ -2030,12 +2075,6 @@ void BeginNewThemeCreation(HWND host, PreferencesDialogState& state) noexcept
 
     SetDirty(dlg, state);
     RefreshThemesPage(host, state);
-
-    if (state.themesNameEdit)
-    {
-        SetFocus(state.themesNameEdit.get());
-        SendMessageW(state.themesNameEdit.get(), EM_SETSEL, 0, -1);
-    }
 }
 
 void DuplicateSelectedTheme(HWND host, PreferencesDialogState& state) noexcept
@@ -2121,12 +2160,6 @@ void DuplicateSelectedTheme(HWND host, PreferencesDialogState& state) noexcept
 
     SetDirty(dlg, state);
     RefreshThemesPage(host, state);
-
-    if (state.themesNameEdit)
-    {
-        SetFocus(state.themesNameEdit.get());
-        SendMessageW(state.themesNameEdit.get(), EM_SETSEL, 0, -1);
-    }
 }
 
 void SyncSelectedUserThemeIdToName(HWND host, PreferencesDialogState& state) noexcept
@@ -2185,9 +2218,9 @@ void ApplyThemeTemporarily(HWND host, PreferencesDialogState& state) noexcept
 
     state.previewApplied = true;
     ApplyThemeToPreferencesDialog(dlg, state, ResolveThemeFromSettingsForDialog(*state.settings));
-    if (state.pageHost)
+    if (state.pageHostWindow)
     {
-        RedrawWindow(state.pageHost, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
+        RedrawWindow(state.pageHostWindow, nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_FRAME | RDW_UPDATENOW);
     }
     RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN | RDW_UPDATENOW);
     if (state.owner && IsWindow(state.owner) != FALSE)
@@ -2199,14 +2232,14 @@ void ApplyThemeTemporarily(HWND host, PreferencesDialogState& state) noexcept
 void PickThemeColorIntoEditor(HWND host, PreferencesDialogState& state) noexcept
 {
     HWND dlg = GetParent(host);
-    if (! dlg || ! state.themesColorEdit)
+    if (! dlg)
     {
         return;
     }
 
     uint32_t currentArgb           = 0xFF000000u;
     uint32_t alpha                 = 0xFFu;
-    const std::wstring currentText = PrefsUi::GetWindowTextString(state.themesColorEdit.get());
+    const std::wstring currentText = state.themesColorText;
     if (! currentText.empty() && Common::Settings::TryParseColor(currentText, currentArgb))
     {
         alpha = (currentArgb >> 24) & 0xFFu;
@@ -2232,19 +2265,15 @@ void PickThemeColorIntoEditor(HWND host, PreferencesDialogState& state) noexcept
         return;
     }
 
-    const uint32_t rgb = (static_cast<uint32_t>(GetRValue(cc.rgbResult)) << 16) | (static_cast<uint32_t>(GetGValue(cc.rgbResult)) << 8) |
-                         static_cast<uint32_t>(GetBValue(cc.rgbResult));
+    const uint32_t rgb  = (static_cast<uint32_t>(GetRValue(cc.rgbResult)) << 16) | (static_cast<uint32_t>(GetGValue(cc.rgbResult)) << 8) |
+                          static_cast<uint32_t>(GetBValue(cc.rgbResult));
     const uint32_t argb = (alpha << 24) | rgb;
 
     std::wstring text;
     text                       = Common::Settings::FormatColor(argb);
     state.refreshingThemesPage = true;
     const auto reset           = wil::scope_exit([&] { state.refreshingThemesPage = false; });
-    SetWindowTextW(state.themesColorEdit.get(), text.c_str());
-    if (state.themesColorSwatch)
-    {
-        InvalidateRect(state.themesColorSwatch.get(), nullptr, TRUE);
-    }
+    SetThemesColorText(state, text);
 }
 
 void SetThemeOverrideFromEditor(HWND host, PreferencesDialogState& state) noexcept
@@ -2269,7 +2298,7 @@ void SetThemeOverrideFromEditor(HWND host, PreferencesDialogState& state) noexce
         return;
     }
 
-    std::wstring key = PrefsUi::GetWindowTextString(state.themesKeyEdit.get());
+    std::wstring key = state.themesKeyText;
     key.erase(key.begin(), std::find_if(key.begin(), key.end(), [](wchar_t ch) noexcept { return ! std::iswspace(ch); }));
     key.erase(std::find_if(key.rbegin(), key.rend(), [](wchar_t ch) noexcept { return ! std::iswspace(ch); }).base(), key.end());
     if (! IsValidThemeColorKey(key))
@@ -2279,7 +2308,7 @@ void SetThemeOverrideFromEditor(HWND host, PreferencesDialogState& state) noexce
         return;
     }
 
-    const std::wstring valueText = PrefsUi::GetWindowTextString(state.themesColorEdit.get());
+    const std::wstring valueText = state.themesColorText;
     uint32_t argb                = 0;
     if (valueText.empty() || ! Common::Settings::TryParseColor(valueText, argb))
     {
@@ -2314,7 +2343,7 @@ void ClearThemeOverrideFromEditor(HWND host, PreferencesDialogState& state) noex
         return;
     }
 
-    std::wstring key = PrefsUi::GetWindowTextString(state.themesKeyEdit.get());
+    std::wstring key = state.themesKeyText;
     key.erase(key.begin(), std::find_if(key.begin(), key.end(), [](wchar_t ch) noexcept { return ! std::iswspace(ch); }));
     key.erase(std::find_if(key.rbegin(), key.rend(), [](wchar_t ch) noexcept { return ! std::iswspace(ch); }).base(), key.end());
     if (key.empty())
@@ -2328,6 +2357,33 @@ void ClearThemeOverrideFromEditor(HWND host, PreferencesDialogState& state) noex
         return;
     }
 
+    SetDirty(dlg, state);
+    RefreshThemesPage(host, state);
+}
+
+void ResetSelectedThemeToDefaults(HWND host, PreferencesDialogState& state) noexcept
+{
+    HWND dlg = GetParent(host);
+    if (! dlg)
+    {
+        return;
+    }
+
+    const auto themeIdOpt = TryGetSelectedThemeId(state);
+    if (! themeIdOpt.has_value())
+    {
+        return;
+    }
+
+    auto* def = FindWorkingThemeDefinition(state, themeIdOpt.value());
+    if (! def)
+    {
+        ShowDialogAlert(
+            dlg, HOST_ALERT_WARNING, LoadStringResource(nullptr, IDS_CAPTION_WARNING), LoadStringResource(nullptr, IDS_PREFS_THEMES_WARNING_SELECT_USER_EDIT));
+        return;
+    }
+
+    def->colors.clear();
     SetDirty(dlg, state);
     RefreshThemesPage(host, state);
 }
@@ -2457,18 +2513,18 @@ void SaveThemeToFile(HWND host, PreferencesDialogState& state) noexcept
 void ApplyThemeToPreferencesDialog(HWND dlg, PreferencesDialogState& state, const AppTheme& theme) noexcept
 {
     state.theme = theme;
-    ApplyTitleBarTheme(dlg, state.theme, GetActiveWindow() == dlg);
+    ApplyWindowChromeTheme(dlg, state.theme, WindowBackdropTarget::Tool, GetActiveWindow() == dlg);
 
     state.backgroundBrush.reset(CreateSolidBrush(state.theme.windowBackground));
-    state.cardBackgroundColor = ThemedControls::GetControlSurfaceColor(state.theme);
+    state.cardBackgroundColor = UiMetrics::GetControlSurfaceColor(state.theme);
     state.inputBrush.reset();
     state.inputFocusedBrush.reset();
     state.inputDisabledBrush.reset();
     state.cardBrush.reset();
 
-    state.inputBackgroundColor         = ThemedControls::BlendColor(state.cardBackgroundColor, state.theme.windowBackground, state.theme.dark ? 50 : 30, 255);
-    state.inputFocusedBackgroundColor  = ThemedControls::BlendColor(state.inputBackgroundColor, state.theme.menu.text, state.theme.dark ? 20 : 16, 255);
-    state.inputDisabledBackgroundColor = ThemedControls::BlendColor(state.theme.windowBackground, state.inputBackgroundColor, state.theme.dark ? 70 : 40, 255);
+    state.inputBackgroundColor         = UiMetrics::BlendColor(state.cardBackgroundColor, state.theme.windowBackground, state.theme.dark ? 50 : 30, 255);
+    state.inputFocusedBackgroundColor  = UiMetrics::BlendColor(state.inputBackgroundColor, state.theme.menu.text, state.theme.dark ? 20 : 16, 255);
+    state.inputDisabledBackgroundColor = UiMetrics::BlendColor(state.theme.windowBackground, state.inputBackgroundColor, state.theme.dark ? 70 : 40, 255);
     if (! state.theme.systemHighContrast)
     {
         state.cardBrush.reset(CreateSolidBrush(state.cardBackgroundColor));
@@ -2477,413 +2533,694 @@ void ApplyThemeToPreferencesDialog(HWND dlg, PreferencesDialogState& state, cons
         state.inputDisabledBrush.reset(CreateSolidBrush(state.inputDisabledBackgroundColor));
     }
 
-    if (state.keyboardScopeCombo)
+    if (state.categoryTreeWindow)
     {
-        ThemedControls::ApplyThemeToComboBox(state.keyboardScopeCombo, state.theme);
+        if (state.categoryTreeUsesDxUi)
+        {
+            InvalidateRect(state.categoryTreeWindow, nullptr, TRUE);
+        }
+        SendMessageW(state.categoryTreeWindow, WM_THEMECHANGED, 0, 0);
+        InvalidateRect(state.categoryTreeWindow, nullptr, TRUE);
     }
-    if (state.panesLeftDisplayCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.panesLeftDisplayCombo, state.theme);
-    }
-    if (state.panesLeftSortByCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.panesLeftSortByCombo, state.theme);
-    }
-    if (state.panesLeftSortDirCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.panesLeftSortDirCombo, state.theme);
-    }
-    if (state.panesRightDisplayCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.panesRightDisplayCombo, state.theme);
-    }
-    if (state.panesRightSortByCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.panesRightSortByCombo, state.theme);
-    }
-    if (state.panesRightSortDirCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.panesRightSortDirCombo, state.theme);
-    }
-    if (state.viewersViewerCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.viewersViewerCombo, state.theme);
-    }
-    if (state.viewersList)
-    {
-        ThemedControls::ApplyThemeToListView(state.viewersList, state.theme);
-    }
-    if (state.keyboardList)
-    {
-        ThemedControls::ApplyThemeToListView(state.keyboardList, state.theme);
-    }
-    if (state.themesThemeCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.themesThemeCombo.get(), state.theme);
-    }
-    if (state.themesBaseCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.themesBaseCombo.get(), state.theme);
-    }
-    if (state.advancedMonitorFilterPresetCombo)
-    {
-        ThemedControls::ApplyThemeToComboBox(state.advancedMonitorFilterPresetCombo, state.theme);
-    }
-    if (state.themesColorsList)
-    {
-        ThemedControls::ApplyThemeToListView(state.themesColorsList.get(), state.theme);
-    }
-    if (state.pluginsList)
-    {
-        ThemedControls::ApplyThemeToListView(state.pluginsList, state.theme);
-    }
-
-    if (state.categoryTree)
+    if (state.pageHostWindow)
     {
         if (state.theme.systemHighContrast)
         {
-            SetWindowTheme(state.categoryTree, L"", nullptr);
-            TreeView_SetBkColor(state.categoryTree, GetSysColor(COLOR_WINDOW));
-            TreeView_SetTextColor(state.categoryTree, GetSysColor(COLOR_WINDOWTEXT));
-        }
-        else
-        {
-            const wchar_t* listTheme = state.theme.dark ? L"DarkMode_Explorer" : L"Explorer";
-            SetWindowTheme(state.categoryTree, listTheme, nullptr);
-            TreeView_SetBkColor(state.categoryTree, state.theme.windowBackground);
-            TreeView_SetTextColor(state.categoryTree, state.theme.menu.text);
-        }
-        SendMessageW(state.categoryTree, WM_THEMECHANGED, 0, 0);
-        InvalidateRect(state.categoryTree, nullptr, TRUE);
-    }
-    if (state.pageHost)
-    {
-        if (state.theme.systemHighContrast)
-        {
-            SetWindowTheme(state.pageHost, L"", nullptr);
+            SetWindowTheme(state.pageHostWindow, L"", nullptr);
         }
         else
         {
             const wchar_t* hostTheme = state.theme.dark ? L"DarkMode_Explorer" : L"Explorer";
-            SetWindowTheme(state.pageHost, hostTheme, nullptr);
+            SetWindowTheme(state.pageHostWindow, hostTheme, nullptr);
         }
-        SendMessageW(state.pageHost, WM_THEMECHANGED, 0, 0);
-        InvalidateRect(state.pageHost, nullptr, TRUE);
+        SendMessageW(state.pageHostWindow, WM_THEMECHANGED, 0, 0);
+        InvalidateRect(state.pageHostWindow, nullptr, TRUE);
     }
 
     RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_FRAME | RDW_ERASE | RDW_ALLCHILDREN);
 }
 
-void UpdateThemesColorsListColumnWidths(HWND list, UINT dpi) noexcept
+struct ThemesDxPage
 {
-    if (! list)
+    ThemesDxPage()                               = default;
+    ThemesDxPage(const ThemesDxPage&)            = delete;
+    ThemesDxPage& operator=(const ThemesDxPage&) = delete;
+    ThemesDxPage(ThemesDxPage&&)                 = delete;
+    ThemesDxPage& operator=(ThemesDxPage&&)      = delete;
+
+    Label* themeLabel        = nullptr;
+    ComboBox* themeCombo     = nullptr;
+    Label* nameLabel         = nullptr;
+    TextField* nameEdit      = nullptr;
+    Label* baseLabel         = nullptr;
+    ComboBox* baseCombo      = nullptr;
+    Button* loadFromFile     = nullptr;
+    Button* duplicateTheme   = nullptr;
+    Button* resetTheme       = nullptr;
+    Button* saveTheme        = nullptr;
+    Button* applyTemporarily = nullptr;
+    Label* note              = nullptr;
+    Label* searchLabel       = nullptr;
+    TextField* searchEdit    = nullptr;
+    Grid* colorsListControl  = nullptr;
+    std::unique_ptr<IDxGridModel> colorsListModelStorage;
+    ThemesGridModel* colorsListModel = nullptr;
+    Label* keyLabel                  = nullptr;
+    TextField* keyEdit               = nullptr;
+    Label* colorLabel                = nullptr;
+    ColorSwatch* colorSwatch         = nullptr;
+    TextField* colorEdit             = nullptr;
+    Button* pickColor                = nullptr;
+    Button* setOverride              = nullptr;
+    Button* removeOverride           = nullptr;
+
+    void Detach() noexcept
+    {
+        themeLabel        = nullptr;
+        themeCombo        = nullptr;
+        nameLabel         = nullptr;
+        nameEdit          = nullptr;
+        baseLabel         = nullptr;
+        baseCombo         = nullptr;
+        loadFromFile      = nullptr;
+        duplicateTheme    = nullptr;
+        resetTheme        = nullptr;
+        saveTheme         = nullptr;
+        applyTemporarily  = nullptr;
+        note              = nullptr;
+        searchLabel       = nullptr;
+        searchEdit        = nullptr;
+        colorsListControl = nullptr;
+        colorsListModel   = nullptr;
+        colorsListModelStorage.reset();
+        keyLabel       = nullptr;
+        keyEdit        = nullptr;
+        colorLabel     = nullptr;
+        colorSwatch    = nullptr;
+        colorEdit      = nullptr;
+        pickColor      = nullptr;
+        setOverride    = nullptr;
+        removeOverride = nullptr;
+    }
+};
+
+struct ThemesPane::DxState
+{
+    DxState()                          = default;
+    DxState(const DxState&)            = delete;
+    DxState& operator=(const DxState&) = delete;
+    DxState(DxState&&)                 = delete;
+    DxState& operator=(DxState&&)      = delete;
+
+    ThemesDxPage page;
+
+    void Detach() noexcept
+    {
+        page.Detach();
+    }
+};
+
+ThemesPane::ThemesPane() = default;
+
+ThemesPane::~ThemesPane()
+{
+    DetachDxHosts();
+}
+
+bool ThemesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexcept
+{
+    _state           = &state;
+    _hostWindow      = parent;
+    _pageHostDx      = state.pageHostDxHost;
+    _pageContentRoot = state.pageHostDxContentRootControl;
+    if (! _pageHostDx || ! _pageContentRoot)
+    {
+        Debug::Error(L"Preferences.Themes: Shared page-host DX surface is unavailable; DxUi controls cannot be created.");
+        return false;
+    }
+
+    if (! _rebuildDxOnNextShow && _dxState && PrefsUi::HasRetainedDxChildren(_pageContentRoot))
+    {
+        ApplyDxTheme(state);
+        SyncDxControlsFromState(state);
+        LogThemesDxState(
+            L"ensure-dxhosts-reuse", _pageHost, _hostWindow, _pageHostDx, dynamic_cast<const Panel*>(_pageContentRoot), _dxState.get(), _rebuildDxOnNextShow);
+        return true;
+    }
+
+    auto dxState = std::make_unique<DxState>();
+    _pageHostDx->ResetInteractionState();
+    _pageContentRoot->ClearChildren();
+    auto* root = _pageContentRoot;
+
+    dxState->page.themeLabel        = root->AddChild<Label>();
+    dxState->page.themeCombo        = root->AddChild<ComboBox>();
+    dxState->page.nameLabel         = root->AddChild<Label>();
+    dxState->page.nameEdit          = root->AddChild<TextField>();
+    dxState->page.baseLabel         = root->AddChild<Label>();
+    dxState->page.baseCombo         = root->AddChild<ComboBox>();
+    dxState->page.loadFromFile      = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_LOAD_FROM_FILE));
+    dxState->page.duplicateTheme    = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_DUPLICATE));
+    dxState->page.resetTheme        = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_RESET_DEFAULTS));
+    dxState->page.saveTheme         = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_SAVE_THEME));
+    dxState->page.applyTemporarily  = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_APPLY_TEMPORARILY));
+    dxState->page.note              = root->AddChild<Label>();
+    dxState->page.searchLabel       = root->AddChild<Label>();
+    dxState->page.searchEdit        = root->AddChild<TextField>();
+    dxState->page.colorsListControl = root->AddChild<Grid>();
+    dxState->page.keyLabel          = root->AddChild<Label>();
+    dxState->page.keyEdit           = root->AddChild<TextField>();
+    dxState->page.colorLabel        = root->AddChild<Label>();
+    dxState->page.colorSwatch       = root->AddChild<ColorSwatch>();
+    dxState->page.colorEdit         = root->AddChild<TextField>();
+    dxState->page.pickColor         = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_PICK));
+    dxState->page.setOverride       = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_SET));
+    dxState->page.removeOverride    = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_CLEAR));
+
+    dxState->page.note->SetFontRole(FontRole::Small);
+    dxState->page.note->SetMultiline(true);
+    dxState->page.themeCombo->SetVariant(ComboBoxVariant::Window);
+    dxState->page.baseCombo->SetVariant(ComboBoxVariant::Window);
+    dxState->page.colorsListControl->SetDelegate(this);
+    dxState->page.colorsListControl->SetSelectionMode(GridSelectionMode::Single);
+    dxState->page.colorsListControl->SetHeaderHeightDip(30.0f);
+    dxState->page.colorsListControl->SetRowHeightDip(30.0f);
+    dxState->page.colorsListControl->SetLineClamp(1u);
+
+    auto model                    = std::make_unique<ThemesGridModel>();
+    dxState->page.colorsListModel = model.get();
+    dxState->page.colorsListControl->SetModel(dxState->page.colorsListModel);
+    dxState->page.colorsListModelStorage = std::move(model);
+
+    dxState->page.themeCombo->SetOnSelectionChanged([this](const size_t selectedIndex) noexcept
+    {
+        if (_syncingDxInputs || ! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE || _state->refreshingThemesPage)
+        {
+            return;
+        }
+
+        if (selectedIndex >= _state->themeComboItems.size())
+        {
+            return;
+        }
+
+        const ThemeComboItem& selected = _state->themeComboItems[selectedIndex];
+        _state->workingSettings.theme.currentThemeId.assign(selected.id);
+        if (selected.source != ThemeSchemaSource::New)
+        {
+            SetDirty(GetParent(_hostWindow), *_state);
+        }
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::ThemesThemeChanged));
+    });
+
+    dxState->page.baseCombo->SetOnSelectionChanged([this](const size_t selectedIndex) noexcept
+    {
+        if (_syncingDxInputs || ! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE || _state->refreshingThemesPage)
+        {
+            return;
+        }
+
+        auto* def = FindWorkingThemeDefinition(*_state, _state->workingSettings.theme.currentThemeId);
+        if (! def)
+        {
+            return;
+        }
+
+        if (selectedIndex == 0u)
+        {
+            def->baseThemeId.assign(L"builtin/system");
+        }
+        else
+        {
+            const size_t optionIndex = selectedIndex - 1u;
+            if (optionIndex >= kBuiltinThemeOptions.size())
+            {
+                return;
+            }
+
+            def->baseThemeId.assign(kBuiltinThemeOptions[optionIndex].id);
+        }
+
+        SetDirty(GetParent(_hostWindow), *_state);
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::ThemesBaseChanged));
+    });
+
+    dxState->page.nameEdit->SetOnTextChanged([this](std::wstring_view text) noexcept
+    {
+        if (_syncingDxInputs || ! _state || _state->refreshingThemesPage)
+        {
+            return;
+        }
+
+        _state->themesNameText.assign(text);
+
+        auto* def = FindWorkingThemeDefinition(*_state, _state->workingSettings.theme.currentThemeId);
+        if (! def || text.empty())
+        {
+            return;
+        }
+
+        def->name.assign(text);
+        if (_hostWindow && IsWindow(_hostWindow) != FALSE)
+        {
+            SetDirty(GetParent(_hostWindow), *_state);
+        }
+    });
+    dxState->page.nameEdit->SetOnBlur([this]() noexcept
+    {
+        if (_syncingDxInputs || ! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+
+        auto* dialogState = PrefsUi::GetDialogState(_hostWindow);
+        if (! dialogState || dialogState->refreshingThemesPage)
+        {
+            return;
+        }
+
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::ThemesNameBlur));
+    });
+
+    dxState->page.searchEdit->SetOnTextChanged([this](std::wstring_view text) noexcept
+    {
+        if (_syncingDxInputs)
+        {
+            return;
+        }
+
+        if (_state)
+        {
+            _state->themesSearchText.assign(text);
+        }
+
+        if (! _state || _state->refreshingThemesPage || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+        {
+            return;
+        }
+
+        static_cast<void>(PrefsUi::PostDeferredAction(_hostWindow, PreferencesDeferredActionKind::ThemesSearchChanged));
+    });
+
+    dxState->page.keyEdit->SetOnTextChanged([this](std::wstring_view text) noexcept
+    {
+        if (_syncingDxInputs || ! _state)
+        {
+            return;
+        }
+
+        _state->themesKeyText.assign(text);
+    });
+
+    dxState->page.colorEdit->SetOnTextChanged([this](std::wstring_view text) noexcept
+    {
+        if (_syncingDxInputs || ! _state)
+        {
+            return;
+        }
+
+        _state->themesColorText.assign(text);
+        if (_dxState)
+        {
+            SyncDxSwatchFromState(*_state);
+        }
+    });
+
+    const auto bindButton = [this](Button* button, const auto& callback) noexcept
+    {
+        if (! button)
+        {
+            return;
+        }
+
+        button->SetOnClick([this, callback]() noexcept
+        {
+            if (! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+            {
+                return;
+            }
+
+            callback(_hostWindow, *_state);
+            if (_dxState)
+            {
+                ApplyDxTheme(*_state);
+                SyncDxControlsFromState(*_state);
+            }
+        });
+    };
+
+    bindButton(dxState->page.pickColor, PickThemeColorIntoEditor);
+    bindButton(dxState->page.setOverride, SetThemeOverrideFromEditor);
+    bindButton(dxState->page.removeOverride, ClearThemeOverrideFromEditor);
+    bindButton(dxState->page.loadFromFile, LoadThemeFromFile);
+    bindButton(dxState->page.duplicateTheme, DuplicateSelectedTheme);
+    bindButton(dxState->page.resetTheme, ResetSelectedThemeToDefaults);
+    bindButton(dxState->page.saveTheme, SaveThemeToFile);
+    bindButton(dxState->page.applyTemporarily, ApplyThemeTemporarily);
+    if (dxState->page.colorSwatch)
+    {
+        dxState->page.colorSwatch->SetOnClick([this]() noexcept
+        {
+            if (! _state || ! _hostWindow || IsWindow(_hostWindow) == FALSE)
+            {
+                return;
+            }
+
+            PickThemeColorIntoEditor(_hostWindow, *_state);
+            if (_dxState)
+            {
+                ApplyDxTheme(*_state);
+                SyncDxControlsFromState(*_state);
+            }
+        });
+    }
+
+    _dxState             = std::move(dxState);
+    _rebuildDxOnNextShow = false;
+    _state               = &state;
+    _hostWindow          = parent;
+    ApplyDxTheme(state);
+    SyncDxControlsFromState(state);
+    LogThemesDxState(
+        L"ensure-dxhosts-create", _pageHost, _hostWindow, _pageHostDx, dynamic_cast<const Panel*>(_pageContentRoot), _dxState.get(), _rebuildDxOnNextShow);
+    return true;
+}
+
+void ThemesPane::DetachDxHosts() noexcept
+{
+    if (_pageContentRoot && _pageHostDx && _pageHost && IsWindow(_pageHost) != FALSE)
+    {
+        _pageHostDx->ResetInteractionState();
+        _pageContentRoot->ClearChildren();
+    }
+    _pageHostDx      = nullptr;
+    _pageContentRoot = nullptr;
+
+    if (_dxState)
+    {
+        _dxState->Detach();
+        _dxState.reset();
+    }
+
+    _syncingDxInputs     = false;
+    _syncingDxSelection  = false;
+    _rebuildDxOnNextShow = false;
+    _state               = nullptr;
+    _hostWindow          = nullptr;
+}
+
+void ThemesPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState || ! _pageHostDx)
     {
         return;
     }
 
-    RECT rc{};
-    GetClientRect(list, &rc);
-    const int totalWidth = std::max(0l, rc.right - rc.left);
-    if (totalWidth <= 0)
+    _pageHostDx->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+}
+
+void ThemesPane::SyncDxControlsFromState(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState)
     {
         return;
     }
 
-    const int swatchWidth = std::min(totalWidth, ThemedControls::ScaleDip(dpi, 44));
-    const int minValueW   = std::min(std::max(0, totalWidth - swatchWidth), ThemedControls::ScaleDip(dpi, 110));
-    const int minKeyW     = std::min(std::max(0, totalWidth - swatchWidth), ThemedControls::ScaleDip(dpi, 180));
+    ThemesDxPage& page = _dxState->page;
+    page.themeLabel->SetText(LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_THEME));
+    page.nameLabel->SetText(LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_NAME));
+    page.baseLabel->SetText(LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_BASE));
+    page.searchLabel->SetText(LoadStringResource(nullptr, IDS_PREFS_COMMON_SEARCH));
+    page.keyLabel->SetText(LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_KEY));
+    page.colorLabel->SetText(LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_COLOR));
+    page.themeLabel->SetMnemonicTarget(page.themeCombo);
+    page.nameLabel->SetMnemonicTarget(page.nameEdit);
+    page.baseLabel->SetMnemonicTarget(page.baseCombo);
+    page.searchLabel->SetMnemonicTarget(page.searchEdit);
+    page.keyLabel->SetMnemonicTarget(page.keyEdit);
+    page.colorLabel->SetMnemonicTarget(page.colorEdit);
+    page.note->SetText(state.themesNoteText);
 
-    int keyW   = std::max(0, totalWidth - swatchWidth - minValueW);
-    int valueW = std::max(0, totalWidth - swatchWidth - keyW);
-    if (keyW < minKeyW)
+    _syncingDxInputs          = true;
+    auto clearSyncingDxInputs = wil::scope_exit([this]() noexcept { _syncingDxInputs = false; });
+
+    const auto syncEdit = [](TextField* dxEdit, std::wstring_view text, const bool enabled) noexcept
     {
-        keyW   = minKeyW;
-        valueW = std::max(0, totalWidth - swatchWidth - keyW);
+        if (! dxEdit)
+        {
+            return;
+        }
+
+        dxEdit->SetText(std::wstring(text));
+        dxEdit->SetEnabled(enabled);
+    };
+
+    const auto syncThemeCombo = [&](ComboBox* dxCombo) noexcept
+    {
+        if (! dxCombo)
+        {
+            return;
+        }
+
+        std::vector<ComboBox::Item> items;
+        items.reserve(state.themeComboItems.size());
+        for (const auto& item : state.themeComboItems)
+        {
+            items.push_back(ComboBox::Item{item.id, item.displayName});
+        }
+
+        dxCombo->SetItems(std::move(items));
+
+        std::optional<size_t> selectedIndex;
+        const std::wstring_view desiredId = state.workingSettings.theme.currentThemeId;
+        for (size_t index = 0; index < state.themeComboItems.size(); ++index)
+        {
+            if (std::wstring_view(state.themeComboItems[index].id) == desiredId)
+            {
+                selectedIndex = index;
+                break;
+            }
+        }
+
+        dxCombo->SetSelectedIndex(selectedIndex);
+        dxCombo->SetEnabled(true);
+    };
+
+    const auto syncBaseCombo = [&](ComboBox* dxCombo) noexcept
+    {
+        if (! dxCombo)
+        {
+            return;
+        }
+
+        std::vector<ComboBox::Item> items;
+        items.reserve(kBuiltinThemeOptions.size() + 1u);
+        items.push_back(ComboBox::Item{L"builtin/system", LoadStringResource(nullptr, IDS_PREFS_THEMES_BASE_NONE)});
+        for (const auto& option : kBuiltinThemeOptions)
+        {
+            const std::wstring name = GetBuiltinThemeName(option.id);
+            items.push_back(ComboBox::Item{std::wstring(option.id), name.empty() ? std::wstring(option.id) : name});
+        }
+
+        dxCombo->SetItems(std::move(items));
+
+        std::optional<size_t> selectedIndex = 0u;
+        if (const auto* def = FindThemeDefinitionById(state.workingSettings.theme.themes, state.workingSettings.theme.currentThemeId))
+        {
+            if (! def->baseThemeId.empty())
+            {
+                for (size_t index = 0; index < kBuiltinThemeOptions.size(); ++index)
+                {
+                    if (kBuiltinThemeOptions[index].id == def->baseThemeId)
+                    {
+                        selectedIndex = index + 1u;
+                        break;
+                    }
+                }
+            }
+        }
+
+        dxCombo->SetSelectedIndex(selectedIndex);
+        dxCombo->SetEnabled(FindThemeDefinitionById(state.workingSettings.theme.themes, state.workingSettings.theme.currentThemeId) != nullptr);
+    };
+
+    syncThemeCombo(page.themeCombo);
+    syncBaseCombo(page.baseCombo);
+    if (page.searchEdit)
+    {
+        page.searchEdit->SetText(state.themesSearchText);
     }
 
-    ListView_SetColumnWidth(list, 0, keyW);
-    ListView_SetColumnWidth(list, 1, valueW);
-    ListView_SetColumnWidth(list, 2, swatchWidth);
+    if (page.colorsListControl && page.colorsListModel)
+    {
+        std::vector<ThemesGridRow> rows = BuildThemesColorRows(state);
+        page.colorsListModel->SetRows(std::move(rows));
+
+        _syncingDxSelection             = true;
+        const std::wstring& selectedKey = state.themesSelectedColorKey;
+        if (! selectedKey.empty())
+        {
+            const auto dxRowIndex = page.colorsListModel->FindRowIndexByKey(selectedKey);
+            if (dxRowIndex.has_value())
+            {
+                page.colorsListControl->GetSelectionModel().SetSingle(page.colorsListModel->GetStableRowId(dxRowIndex.value()));
+            }
+            else
+            {
+                page.colorsListControl->GetSelectionModel().Clear();
+            }
+        }
+        else if (! page.colorsListModel->GetRows().empty())
+        {
+            page.colorsListControl->GetSelectionModel().SetSingle(page.colorsListModel->GetStableRowId(0));
+        }
+        _syncingDxSelection = false;
+
+        page.colorsListControl->SetEnabled(true);
+        page.colorsListControl->NotifyDataChanged();
+    }
+
+    bool editable = false;
+    if (const auto* def = FindThemeDefinitionForDisplay(state, state.workingSettings.theme.currentThemeId, editable))
+    {
+        UNREFERENCED_PARAMETER(def);
+    }
+
+    syncEdit(page.nameEdit, state.themesNameText, editable);
+    syncEdit(page.keyEdit, state.themesKeyText, editable);
+    syncEdit(page.colorEdit, state.themesColorText, editable);
+    SyncDxSwatchFromState(state);
+
+    const auto syncButton = [&](Button* dxButton, const UINT textId, const bool enabled) noexcept
+    {
+        if (! dxButton)
+        {
+            return;
+        }
+
+        dxButton->SetText(LoadStringResource(nullptr, textId));
+        dxButton->SetEnabled(enabled);
+    };
+
+    syncButton(page.pickColor, IDS_PREFS_THEMES_BUTTON_PICK, editable);
+    syncButton(page.setOverride, IDS_PREFS_THEMES_BUTTON_SET, editable);
+    syncButton(page.removeOverride, IDS_PREFS_THEMES_BUTTON_CLEAR, editable);
+    syncButton(page.loadFromFile, IDS_PREFS_THEMES_BUTTON_LOAD_FROM_FILE, true);
+    syncButton(page.duplicateTheme, IDS_PREFS_THEMES_BUTTON_DUPLICATE, ! editable);
+    syncButton(page.resetTheme, IDS_PREFS_KEYBOARD_BUTTON_RESET_DEFAULTS, editable);
+    syncButton(page.saveTheme, IDS_PREFS_THEMES_BUTTON_SAVE_THEME, editable);
+    syncButton(page.applyTemporarily, IDS_PREFS_THEMES_BUTTON_APPLY_TEMPORARILY, true);
+    if (_pageHostDx)
+    {
+        _pageHostDx->Invalidate();
+    }
 }
 
-bool ThemesPane::EnsureCreated(HWND pageHost) noexcept
+void ThemesPane::SyncDxSwatchFromState(const PreferencesDialogState& state) noexcept
 {
-    return PrefsPaneHost::EnsureCreated(pageHost, _hWnd);
-}
-
-void ThemesPane::ResizeToHostClient(HWND pageHost) noexcept
-{
-    PrefsPaneHost::ResizeToHostClient(pageHost, _hWnd.get());
-}
-
-void ThemesPane::Show(bool visible) noexcept
-{
-    PrefsPaneHost::Show(_hWnd.get(), visible);
-}
-
-void ThemesPane::CreateControls(HWND parent, PreferencesDialogState& state) noexcept
-{
-    if (! parent)
+    if (! _dxState || ! _dxState->page.colorSwatch)
     {
         return;
     }
 
-    const std::wstring themeLabelText  = LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_THEME);
-    const std::wstring nameLabelText   = LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_NAME);
-    const std::wstring baseLabelText   = LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_BASE);
-    const std::wstring searchLabelText = LoadStringResource(nullptr, IDS_PREFS_COMMON_SEARCH);
-    const std::wstring keyLabelText    = LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_KEY);
-    const std::wstring colorLabelText  = LoadStringResource(nullptr, IDS_PREFS_THEMES_LABEL_COLOR);
-
-    const std::wstring pickButtonText       = LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_PICK);
-    const std::wstring setButtonText        = LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_SET);
-    const std::wstring clearButtonText      = LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_CLEAR);
-    const std::wstring loadFromFileText     = LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_LOAD_FROM_FILE);
-    const std::wstring duplicateThemeText   = LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_DUPLICATE);
-    const std::wstring saveThemeText        = LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_SAVE_THEME);
-    const std::wstring applyTemporarilyText = LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_APPLY_TEMPORARILY);
-
-    const DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
-    const DWORD wrapStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-    const DWORD listExStyle     = state.theme.systemHighContrast ? WS_EX_CLIENTEDGE : 0;
-
-    state.themesThemeLabel.reset(
-        CreateWindowExW(0, L"Static", themeLabelText.c_str(), baseStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
-    PrefsInput::CreateFramedComboBox(state, parent, state.themesThemeFrame, state.themesThemeCombo, IDC_PREFS_THEMES_THEME_COMBO);
-
-    state.themesNameLabel.reset(
-        CreateWindowExW(0, L"Static", nameLabelText.c_str(), baseStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
-    PrefsInput::CreateFramedEditBox(
-        state, parent, state.themesNameFrame, state.themesNameEdit, IDC_PREFS_THEMES_NAME_EDIT, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.themesNameEdit)
+    std::optional<uint32_t> swatchArgb;
+    const std::wstring colorText = state.themesColorText;
+    uint32_t parsedArgb          = 0u;
+    if (! colorText.empty() && Common::Settings::TryParseColor(colorText, parsedArgb))
     {
-        SendMessageW(state.themesNameEdit.get(), EM_SETLIMITTEXT, 64, 0);
+        swatchArgb = parsedArgb;
     }
 
-    state.themesBaseLabel.reset(
-        CreateWindowExW(0, L"Static", baseLabelText.c_str(), baseStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
-    PrefsInput::CreateFramedComboBox(state, parent, state.themesBaseFrame, state.themesBaseCombo, IDC_PREFS_THEMES_BASE_COMBO);
-
-    state.themesSearchLabel.reset(
-        CreateWindowExW(0, L"Static", searchLabelText.c_str(), baseStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
-    PrefsInput::CreateFramedEditBox(
-        state, parent, state.themesSearchFrame, state.themesSearchEdit, IDC_PREFS_THEMES_SEARCH_EDIT, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.themesSearchEdit)
+    _dxState->page.colorSwatch->SetSwatchValue(swatchArgb);
+    bool editable = false;
+    if (const auto* def = FindThemeDefinitionForDisplay(state, state.workingSettings.theme.currentThemeId, editable))
     {
-        SendMessageW(state.themesSearchEdit.get(), EM_SETLIMITTEXT, 128, 0);
+        UNREFERENCED_PARAMETER(def);
     }
-
-    state.themesColorsList.reset(CreateWindowExW(listExStyle,
-                                                 WC_LISTVIEWW,
-                                                 L"",
-                                                 WS_CHILD | WS_VISIBLE | WS_TABSTOP | LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | LVS_OWNERDRAWFIXED,
-                                                 0,
-                                                 0,
-                                                 10,
-                                                 10,
-                                                 parent,
-                                                 reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_THEMES_COLORS_LIST)),
-                                                 GetModuleHandleW(nullptr),
-                                                 nullptr));
-
-    state.themesKeyLabel.reset(
-        CreateWindowExW(0, L"Static", keyLabelText.c_str(), baseStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
-    PrefsInput::CreateFramedEditBox(
-        state, parent, state.themesKeyFrame, state.themesKeyEdit, IDC_PREFS_THEMES_KEY_EDIT, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.themesKeyEdit)
-    {
-        SendMessageW(state.themesKeyEdit.get(), EM_SETLIMITTEXT, 64, 0);
-    }
-
-    state.themesColorLabel.reset(
-        CreateWindowExW(0, L"Static", colorLabelText.c_str(), baseStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
-    state.themesColorSwatch.reset(CreateWindowExW(0,
-                                                  L"Static",
-                                                  L"",
-                                                  WS_CHILD | WS_VISIBLE | SS_OWNERDRAW,
-                                                  0,
-                                                  0,
-                                                  10,
-                                                  10,
-                                                  parent,
-                                                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_THEMES_COLOR_SWATCH)),
-                                                  GetModuleHandleW(nullptr),
-                                                  nullptr));
-    PrefsInput::CreateFramedEditBox(
-        state, parent, state.themesColorFrame, state.themesColorEdit, IDC_PREFS_THEMES_COLOR_EDIT, WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.themesColorEdit)
-    {
-        SendMessageW(state.themesColorEdit.get(), EM_SETLIMITTEXT, 11, 0); // "#AARRGGBB"
-    }
-
-    const bool customButtons     = ! state.theme.systemHighContrast;
-    const DWORD themeButtonStyle = WS_CHILD | WS_VISIBLE | WS_TABSTOP | (customButtons ? BS_OWNERDRAW : 0U);
-
-    state.themesPickColor.reset(CreateWindowExW(0,
-                                                L"Button",
-                                                pickButtonText.c_str(),
-                                                themeButtonStyle,
-                                                0,
-                                                0,
-                                                10,
-                                                10,
-                                                parent,
-                                                reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_THEMES_PICK_COLOR)),
-                                                GetModuleHandleW(nullptr),
-                                                nullptr));
-    state.themesSetOverride.reset(CreateWindowExW(0,
-                                                  L"Button",
-                                                  setButtonText.c_str(),
-                                                  themeButtonStyle,
-                                                  0,
-                                                  0,
-                                                  10,
-                                                  10,
-                                                  parent,
-                                                  reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_THEMES_SET_OVERRIDE)),
-                                                  GetModuleHandleW(nullptr),
-                                                  nullptr));
-    state.themesRemoveOverride.reset(CreateWindowExW(0,
-                                                     L"Button",
-                                                     clearButtonText.c_str(),
-                                                     themeButtonStyle,
-                                                     0,
-                                                     0,
-                                                     10,
-                                                     10,
-                                                     parent,
-                                                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_THEMES_REMOVE_OVERRIDE)),
-                                                     GetModuleHandleW(nullptr),
-                                                     nullptr));
-    state.themesLoadFromFile.reset(CreateWindowExW(0,
-                                                   L"Button",
-                                                   loadFromFileText.c_str(),
-                                                   themeButtonStyle,
-                                                   0,
-                                                   0,
-                                                   10,
-                                                   10,
-                                                   parent,
-                                                   reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_THEMES_LOAD_FILE)),
-                                                   GetModuleHandleW(nullptr),
-                                                   nullptr));
-    state.themesDuplicateTheme.reset(CreateWindowExW(0,
-                                                     L"Button",
-                                                     duplicateThemeText.c_str(),
-                                                     themeButtonStyle,
-                                                     0,
-                                                     0,
-                                                     10,
-                                                     10,
-                                                     parent,
-                                                     reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_THEMES_DUPLICATE_THEME)),
-                                                     GetModuleHandleW(nullptr),
-                                                     nullptr));
-    state.themesSaveTheme.reset(CreateWindowExW(0,
-                                                L"Button",
-                                                saveThemeText.c_str(),
-                                                themeButtonStyle,
-                                                0,
-                                                0,
-                                                10,
-                                                10,
-                                                parent,
-                                                reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_THEMES_SAVE_THEME)),
-                                                GetModuleHandleW(nullptr),
-                                                nullptr));
-    state.themesApplyTemporarily.reset(CreateWindowExW(0,
-                                                       L"Button",
-                                                       applyTemporarilyText.c_str(),
-                                                       themeButtonStyle,
-                                                       0,
-                                                       0,
-                                                       10,
-                                                       10,
-                                                       parent,
-                                                       reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_PREFS_THEMES_APPLY_TEMP)),
-                                                       GetModuleHandleW(nullptr),
-                                                       nullptr));
-
-    state.themesNote.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, GetModuleHandleW(nullptr), nullptr));
+    _dxState->page.colorSwatch->SetEnabled(editable);
 }
 
-void ThemesPane::LayoutControls(
-    HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, HFONT dialogFont) noexcept
+void ThemesPane::LayoutDxPage(HWND host,
+                              const PreferencesDialogState& state,
+                              int x,
+                              int& y,
+                              int width,
+                              int margin,
+                              int gapY,
+                              int sectionY,
+                              const PreferencesTypographyContext& typography) noexcept
 {
-    if (! host)
+    if (! host || ! _dxState || ! _pageHostDx || ! _pageContentRoot)
     {
         return;
     }
+
+    ApplyDxTheme(state);
+    SyncDxControlsFromState(state);
 
     using namespace PrefsLayoutConstants;
 
-    const UINT dpi = GetDpiForWindow(host);
+    Debug::Perf::Scope layoutPerf(L"preferences.ui.themes_layout_us");
+    layoutPerf.SetValue0(static_cast<uint64_t>(std::max(0, width)));
+    layoutPerf.SetValue1(static_cast<uint64_t>(typography.dpi));
 
-    const int rowHeight   = std::max(1, ThemedControls::ScaleDip(dpi, kRowHeightDip));
-    const int labelHeight = std::max(1, ThemedControls::ScaleDip(dpi, kTitleHeightDip));
-    const int gapX        = ThemedControls::ScaleDip(dpi, kToggleGapXDip);
+    const UINT dpi        = std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI);
+    const auto pxToDip    = [dpi](const int pixels) noexcept { return (static_cast<float>(pixels) * 96.0f) / static_cast<float>(dpi); };
+    const int rowHeight   = std::max(1, UiMetrics::ScaleDip(dpi, kRowHeightDip));
+    const int labelHeight = std::max(1, UiMetrics::ScaleDip(dpi, kTitleHeightDip));
+    const int gapX        = UiMetrics::ScaleDip(dpi, kToggleGapXDip);
 
-    const int themeLabelWidth = std::min(width, ThemedControls::ScaleDip(dpi, 60));
-    const int editWidth       = std::max(0, width - themeLabelWidth - gapX);
+    RECT hostClient{};
+    GetClientRect(host, &hostClient);
+    const int hostBottom        = std::max(0l, hostClient.bottom - hostClient.top);
+    const int hostContentBottom = std::max(0, hostBottom - margin);
 
-    auto placeLabeledControl = [&](HWND label, HWND frame, HWND control, int controlWidth) noexcept
+    ThemesDxPage& page = _dxState->page;
+    int localY         = y;
+
+    const int themeLabelWidth      = std::min(width, UiMetrics::ScaleDip(dpi, 60));
+    const int editWidth            = std::max(0, width - themeLabelWidth - gapX);
+    const auto placeLabeledControl = [&](Label* label, Control* control, int controlWidth) noexcept
     {
-        controlWidth           = std::max(0, std::min(editWidth, controlWidth));
-        const int controlX     = x + themeLabelWidth + gapX;
-        const int framePadding = (frame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-
+        controlWidth       = std::max(0, std::min(editWidth, controlWidth));
+        const int labelX   = x;
+        const int controlX = x + themeLabelWidth + gapX;
         if (label)
         {
-            SetWindowPos(label, nullptr, x, y + (rowHeight - labelHeight) / 2, themeLabelWidth, labelHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(label, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        }
-        if (frame)
-        {
-            SetWindowPos(frame, nullptr, controlX, y, controlWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            label->SetBounds(D2D1::RectF(pxToDip(labelX),
+                                         pxToDip(localY + (rowHeight - labelHeight) / 2),
+                                         pxToDip(labelX + themeLabelWidth),
+                                         pxToDip(localY + (rowHeight - labelHeight) / 2 + labelHeight)));
         }
         if (control)
         {
-            SetWindowPos(control,
-                         nullptr,
-                         controlX + framePadding,
-                         y + framePadding,
-                         std::max(1, controlWidth - 2 * framePadding),
-                         std::max(1, rowHeight - 2 * framePadding),
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(control, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            control->SetBounds(D2D1::RectF(pxToDip(controlX), pxToDip(localY), pxToDip(controlX + controlWidth), pxToDip(localY + rowHeight)));
         }
-        y += rowHeight + gapY;
+        localY += rowHeight + gapY;
     };
 
-    int themeWidth          = state.themesThemeCombo ? ThemedControls::MeasureComboBoxPreferredWidth(state.themesThemeCombo.get(), dpi) : editWidth;
-    const int minThemeWidth = ThemedControls::ScaleDip(dpi, 160);
+    int themeWidth          = UiMetrics::ScaleDip(dpi, 220);
+    const int minThemeWidth = UiMetrics::ScaleDip(dpi, 160);
     const int maxThemeWidth = std::max(minThemeWidth, std::max(0, editWidth));
     themeWidth              = std::clamp(themeWidth, minThemeWidth, maxThemeWidth);
-    themeWidth              = std::min(themeWidth, ThemedControls::ScaleDip(dpi, 320));
-    placeLabeledControl(state.themesThemeLabel.get(), state.themesThemeFrame.get(), state.themesThemeCombo.get(), themeWidth);
-    if (state.themesThemeCombo)
-    {
-        ThemedControls::EnsureComboBoxDroppedWidth(state.themesThemeCombo.get(), dpi);
-    }
+    themeWidth              = std::min(themeWidth, UiMetrics::ScaleDip(dpi, 320));
+    placeLabeledControl(page.themeLabel, page.themeCombo, themeWidth);
 
-    placeLabeledControl(state.themesNameLabel.get(), state.themesNameFrame.get(), state.themesNameEdit.get(), editWidth);
+    placeLabeledControl(page.nameLabel, page.nameEdit, editWidth);
 
-    int baseWidth = state.themesBaseCombo ? ThemedControls::MeasureComboBoxPreferredWidth(state.themesBaseCombo.get(), dpi) : editWidth;
-    baseWidth     = std::max(baseWidth, ThemedControls::ScaleDip(dpi, 100));
-    placeLabeledControl(state.themesBaseLabel.get(), state.themesBaseFrame.get(), state.themesBaseCombo.get(), baseWidth);
-    if (state.themesBaseCombo)
-    {
-        ThemedControls::EnsureComboBoxDroppedWidth(state.themesBaseCombo.get(), dpi);
-    }
+    int baseWidth = UiMetrics::ScaleDip(dpi, 180);
+    baseWidth     = std::max(baseWidth, UiMetrics::ScaleDip(dpi, 100));
+    placeLabeledControl(page.baseLabel, page.baseCombo, baseWidth);
 
     const int buttonHeight   = rowHeight;
-    const int loadWidth      = std::min(width, ThemedControls::ScaleDip(dpi, 140));
-    const int duplicateWidth = std::min(width, ThemedControls::ScaleDip(dpi, 110));
-    const int saveWidth      = std::min(width, ThemedControls::ScaleDip(dpi, 120));
-    const int applyWidth     = std::min(width, ThemedControls::ScaleDip(dpi, 150));
+    const int loadWidth      = std::min(width, UiMetrics::ScaleDip(dpi, 140));
+    const int duplicateWidth = std::min(width, UiMetrics::ScaleDip(dpi, 110));
+    const int resetWidth     = std::min(width, UiMetrics::ScaleDip(dpi, 140));
+    const int saveWidth      = std::min(width, UiMetrics::ScaleDip(dpi, 120));
+    const int applyWidth     = std::min(width, UiMetrics::ScaleDip(dpi, 150));
 
-    int leftGroupWidth      = 0;
-    auto addLeftButtonWidth = [&](HWND button, int buttonWidth) noexcept
+    int leftGroupWidth            = 0;
+    const auto addLeftButtonWidth = [&](Button* button, const int buttonWidth) noexcept
     {
         if (! button)
         {
@@ -2896,413 +3233,318 @@ void ThemesPane::LayoutControls(
         leftGroupWidth += buttonWidth;
     };
 
-    addLeftButtonWidth(state.themesLoadFromFile.get(), loadWidth);
-    addLeftButtonWidth(state.themesDuplicateTheme.get(), duplicateWidth);
-    addLeftButtonWidth(state.themesSaveTheme.get(), saveWidth);
+    addLeftButtonWidth(page.loadFromFile, loadWidth);
+    addLeftButtonWidth(page.duplicateTheme, duplicateWidth);
+    addLeftButtonWidth(page.resetTheme, resetWidth);
+    addLeftButtonWidth(page.saveTheme, saveWidth);
 
-    const bool wrapApply = state.themesApplyTemporarily && leftGroupWidth > 0 && (leftGroupWidth + gapX + applyWidth > width);
-    const int row1Y      = y;
+    const bool wrapApply = page.applyTemporarily && leftGroupWidth > 0 && (leftGroupWidth + gapX + applyWidth > width);
+    const int row1Y      = localY;
     const int row2Y      = row1Y + buttonHeight + gapY;
 
     int leftButtonsX = x;
-    if (state.themesLoadFromFile)
+    if (page.loadFromFile)
     {
-        SetWindowPos(state.themesLoadFromFile.get(), nullptr, leftButtonsX, row1Y, loadWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesLoadFromFile.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.loadFromFile->SetBounds(D2D1::RectF(pxToDip(leftButtonsX), pxToDip(row1Y), pxToDip(leftButtonsX + loadWidth), pxToDip(row1Y + buttonHeight)));
         leftButtonsX += loadWidth + gapX;
     }
-    if (state.themesDuplicateTheme)
+    if (page.duplicateTheme)
     {
-        SetWindowPos(state.themesDuplicateTheme.get(), nullptr, leftButtonsX, row1Y, duplicateWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesDuplicateTheme.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.duplicateTheme->SetBounds(
+            D2D1::RectF(pxToDip(leftButtonsX), pxToDip(row1Y), pxToDip(leftButtonsX + duplicateWidth), pxToDip(row1Y + buttonHeight)));
         leftButtonsX += duplicateWidth + gapX;
     }
-    if (state.themesSaveTheme)
+    if (page.resetTheme)
     {
-        SetWindowPos(state.themesSaveTheme.get(), nullptr, leftButtonsX, row1Y, saveWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesSaveTheme.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.resetTheme->SetBounds(D2D1::RectF(pxToDip(leftButtonsX), pxToDip(row1Y), pxToDip(leftButtonsX + resetWidth), pxToDip(row1Y + buttonHeight)));
+        leftButtonsX += resetWidth + gapX;
     }
-    if (state.themesApplyTemporarily)
+    if (page.saveTheme)
+    {
+        page.saveTheme->SetBounds(D2D1::RectF(pxToDip(leftButtonsX), pxToDip(row1Y), pxToDip(leftButtonsX + saveWidth), pxToDip(row1Y + buttonHeight)));
+    }
+    if (page.applyTemporarily)
     {
         const int applyX = x + width - applyWidth;
         const int applyY = wrapApply ? row2Y : row1Y;
-        SetWindowPos(state.themesApplyTemporarily.get(), nullptr, applyX, applyY, applyWidth, buttonHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesApplyTemporarily.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.applyTemporarily->SetBounds(D2D1::RectF(pxToDip(applyX), pxToDip(applyY), pxToDip(applyX + applyWidth), pxToDip(applyY + buttonHeight)));
     }
 
-    y = wrapApply ? (row2Y + buttonHeight + gapY) : (row1Y + buttonHeight + gapY);
+    localY = wrapApply ? (row2Y + buttonHeight + gapY) : (row1Y + buttonHeight + gapY);
 
-    if (state.themesNote)
+    const std::wstring& noteText = state.themesNoteText;
+    const int noteHeight         = noteText.empty() ? 0 : PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, width, noteText);
+    if (page.note)
     {
-        const HFONT infoFont        = state.italicFont ? state.italicFont.get() : dialogFont;
-        const std::wstring noteText = PrefsUi::GetWindowTextString(state.themesNote.get());
-        const int noteHeight        = noteText.empty() ? 0 : PrefsUi::MeasureStaticTextHeight(host, infoFont, width, noteText);
-        SetWindowPos(state.themesNote.get(), nullptr, x, y, width, std::max(0, noteHeight), SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesNote.get(), WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
-        y += std::max(0, noteHeight) + sectionY;
+        page.note->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(localY), pxToDip(x + width), pxToDip(localY + std::max(0, noteHeight))));
     }
+    localY += std::max(0, noteHeight) + sectionY;
 
-    const int searchLabelWidth   = std::min(width, ThemedControls::ScaleDip(dpi, 52));
-    const int searchEditWidth    = std::max(0, width - searchLabelWidth - gapX);
-    const int searchEditX        = x + searchLabelWidth + gapX;
-    const int searchFramePadding = (state.themesSearchFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-
-    if (state.themesSearchLabel)
+    const int searchLabelWidth = std::min(width, UiMetrics::ScaleDip(dpi, 52));
+    const int searchEditWidth  = std::max(0, width - searchLabelWidth - gapX);
+    if (page.searchLabel)
     {
-        SetWindowPos(
-            state.themesSearchLabel.get(), nullptr, x, y + (rowHeight - labelHeight) / 2, searchLabelWidth, labelHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesSearchLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.searchLabel->SetBounds(D2D1::RectF(pxToDip(x),
+                                                pxToDip(localY + (rowHeight - labelHeight) / 2),
+                                                pxToDip(x + searchLabelWidth),
+                                                pxToDip(localY + (rowHeight - labelHeight) / 2 + labelHeight)));
     }
-    if (state.themesSearchFrame)
+    if (page.searchEdit)
     {
-        SetWindowPos(state.themesSearchFrame.get(), nullptr, searchEditX, y, searchEditWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+        const int searchEditX = x + searchLabelWidth + gapX;
+        page.searchEdit->SetBounds(D2D1::RectF(pxToDip(searchEditX), pxToDip(localY), pxToDip(searchEditX + searchEditWidth), pxToDip(localY + rowHeight)));
     }
-    if (state.themesSearchEdit)
-    {
-        SetWindowPos(state.themesSearchEdit.get(),
-                     nullptr,
-                     searchEditX + searchFramePadding,
-                     y + searchFramePadding,
-                     std::max(1, searchEditWidth - 2 * searchFramePadding),
-                     std::max(1, rowHeight - 2 * searchFramePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesSearchEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-    }
-    y += rowHeight + gapY;
-
-    RECT hostClient{};
-    GetClientRect(host, &hostClient);
-    const int hostBottom        = std::max(0l, hostClient.bottom - hostClient.top);
-    const int hostContentBottom = std::max(0, hostBottom - margin);
+    localY += rowHeight + gapY;
 
     const int editorHeight = rowHeight;
-    const int editorTop    = std::max(y, hostContentBottom - editorHeight);
-    const int listTop      = y;
+    const int editorTop    = std::max(localY, hostContentBottom - editorHeight);
+    const int listTop      = localY;
     const int listBottom   = std::max(listTop, editorTop - gapY);
     const int listHeight   = std::max(0, listBottom - listTop);
-
-    if (state.themesColorsList)
+    if (page.colorsListControl)
     {
-        SetWindowPos(state.themesColorsList.get(), nullptr, x, listTop, width, listHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesColorsList.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        UpdateThemesColorsListColumnWidths(state.themesColorsList.get(), dpi);
+        page.colorsListControl->SetBounds(D2D1::RectF(pxToDip(x), pxToDip(listTop), pxToDip(x + width), pxToDip(listTop + listHeight)));
     }
 
-    const int keyLabelWidth   = std::min(width, ThemedControls::ScaleDip(dpi, 34));
-    const int colorLabelWidth = std::min(width, ThemedControls::ScaleDip(dpi, 44));
-    const int pickWidth       = std::min(width, ThemedControls::ScaleDip(dpi, 70));
-    const int setWidth        = std::min(width, ThemedControls::ScaleDip(dpi, 60));
-    const int clearWidth      = std::min(width, ThemedControls::ScaleDip(dpi, 70));
-    const int swatchWidth     = std::min(width, ThemedControls::ScaleDip(dpi, 22));
-    const int colorEditWidth  = std::min(width, ThemedControls::ScaleDip(dpi, 110));
-
-    const int buttonsWidth = pickWidth + gapX + setWidth + gapX + clearWidth;
+    const int keyLabelWidth   = std::min(width, UiMetrics::ScaleDip(dpi, 34));
+    const int colorLabelWidth = std::min(width, UiMetrics::ScaleDip(dpi, 44));
+    const int pickWidth       = std::min(width, UiMetrics::ScaleDip(dpi, 70));
+    const int setWidth        = std::min(width, UiMetrics::ScaleDip(dpi, 60));
+    const int clearWidth      = std::min(width, UiMetrics::ScaleDip(dpi, 70));
+    const int swatchWidth     = std::min(width, rowHeight);
+    const int colorEditWidth  = std::min(width, UiMetrics::ScaleDip(dpi, 110));
+    const int buttonsWidth    = pickWidth + gapX + setWidth + gapX + clearWidth;
     const int editAreaWidth =
         std::max(0, width - keyLabelWidth - gapX - colorLabelWidth - gapX - swatchWidth - gapX - colorEditWidth - gapX - buttonsWidth - gapX);
 
-    if (state.themesKeyLabel)
+    if (page.keyLabel)
     {
-        SetWindowPos(
-            state.themesKeyLabel.get(), nullptr, x, editorTop + (rowHeight - labelHeight) / 2, keyLabelWidth, labelHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesKeyLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.keyLabel->SetBounds(D2D1::RectF(pxToDip(x),
+                                             pxToDip(editorTop + (rowHeight - labelHeight) / 2),
+                                             pxToDip(x + keyLabelWidth),
+                                             pxToDip(editorTop + (rowHeight - labelHeight) / 2 + labelHeight)));
     }
-    const int keyEditX        = x + keyLabelWidth + gapX;
-    const int keyFramePadding = (state.themesKeyFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-    if (state.themesKeyFrame)
+    const int keyEditX = x + keyLabelWidth + gapX;
+    if (page.keyEdit)
     {
-        SetWindowPos(state.themesKeyFrame.get(), nullptr, keyEditX, editorTop, editAreaWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    if (state.themesKeyEdit)
-    {
-        SetWindowPos(state.themesKeyEdit.get(),
-                     nullptr,
-                     keyEditX + keyFramePadding,
-                     editorTop + keyFramePadding,
-                     std::max(1, editAreaWidth - 2 * keyFramePadding),
-                     std::max(1, rowHeight - 2 * keyFramePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesKeyEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.keyEdit->SetBounds(D2D1::RectF(pxToDip(keyEditX), pxToDip(editorTop), pxToDip(keyEditX + editAreaWidth), pxToDip(editorTop + rowHeight)));
     }
 
-    const int colorLabelX = x + keyLabelWidth + gapX + editAreaWidth + gapX;
-    if (state.themesColorLabel)
+    const int colorLabelX = keyEditX + editAreaWidth + gapX;
+    if (page.colorLabel)
     {
-        SetWindowPos(state.themesColorLabel.get(),
-                     nullptr,
-                     colorLabelX,
-                     editorTop + (rowHeight - labelHeight) / 2,
-                     colorLabelWidth,
-                     labelHeight,
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesColorLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.colorLabel->SetBounds(D2D1::RectF(pxToDip(colorLabelX),
+                                               pxToDip(editorTop + (rowHeight - labelHeight) / 2),
+                                               pxToDip(colorLabelX + colorLabelWidth),
+                                               pxToDip(editorTop + (rowHeight - labelHeight) / 2 + labelHeight)));
     }
 
     const int colorSwatchX = colorLabelX + colorLabelWidth + gapX;
-    if (state.themesColorSwatch)
+    if (page.colorSwatch)
     {
-        SetWindowPos(state.themesColorSwatch.get(), nullptr, colorSwatchX, editorTop, swatchWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+        page.colorSwatch->SetBounds(
+            D2D1::RectF(pxToDip(colorSwatchX), pxToDip(editorTop), pxToDip(colorSwatchX + swatchWidth), pxToDip(editorTop + rowHeight)));
     }
 
-    const int colorEditX        = colorSwatchX + swatchWidth + gapX;
-    const int colorFramePadding = (state.themesColorFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-    if (state.themesColorFrame)
+    const int colorEditX = colorSwatchX + swatchWidth + gapX;
+    if (page.colorEdit)
     {
-        SetWindowPos(state.themesColorFrame.get(), nullptr, colorEditX, editorTop, colorEditWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-    }
-    if (state.themesColorEdit)
-    {
-        SetWindowPos(state.themesColorEdit.get(),
-                     nullptr,
-                     colorEditX + colorFramePadding,
-                     editorTop + colorFramePadding,
-                     std::max(1, colorEditWidth - 2 * colorFramePadding),
-                     std::max(1, rowHeight - 2 * colorFramePadding),
-                     SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesColorEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.colorEdit->SetBounds(D2D1::RectF(pxToDip(colorEditX), pxToDip(editorTop), pxToDip(colorEditX + colorEditWidth), pxToDip(editorTop + rowHeight)));
     }
 
     int buttonX = colorEditX + colorEditWidth + gapX;
-    if (state.themesPickColor)
+    if (page.pickColor)
     {
-        SetWindowPos(state.themesPickColor.get(), nullptr, buttonX, editorTop, pickWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesPickColor.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.pickColor->SetBounds(D2D1::RectF(pxToDip(buttonX), pxToDip(editorTop), pxToDip(buttonX + pickWidth), pxToDip(editorTop + rowHeight)));
         buttonX += pickWidth + gapX;
     }
-    if (state.themesSetOverride)
+    if (page.setOverride)
     {
-        SetWindowPos(state.themesSetOverride.get(), nullptr, buttonX, editorTop, setWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesSetOverride.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.setOverride->SetBounds(D2D1::RectF(pxToDip(buttonX), pxToDip(editorTop), pxToDip(buttonX + setWidth), pxToDip(editorTop + rowHeight)));
         buttonX += setWidth + gapX;
     }
-    if (state.themesRemoveOverride)
+    if (page.removeOverride)
     {
-        SetWindowPos(state.themesRemoveOverride.get(), nullptr, buttonX, editorTop, clearWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.themesRemoveOverride.get(), WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+        page.removeOverride->SetBounds(D2D1::RectF(pxToDip(buttonX), pxToDip(editorTop), pxToDip(buttonX + clearWidth), pxToDip(editorTop + rowHeight)));
     }
+
+    _pageHostDx->Invalidate();
+    y = hostContentBottom;
+}
+
+void ThemesPane::OnVisibilityChanged(bool visible) noexcept
+{
+    if (! visible)
+    {
+        if (_pageHostDx)
+        {
+            _pageHostDx->ResetInteractionState();
+        }
+    }
+}
+
+void ThemesPane::Destroy(PreferencesDialogState& state) noexcept
+{
+    DetachDxHosts();
+    state.themesNoteText.clear();
+    state.themesNameText.clear();
+    state.themesKeyText.clear();
+    state.themesColorText.clear();
+    state.themeComboItems.clear();
+    state.refreshingThemesPage = false;
+    _pageHost                  = nullptr;
+    _pageHostDx                = nullptr;
+    _pageContentRoot           = nullptr;
+}
+
+void ThemesPane::InitializePage(HWND parent, PreferencesDialogState& state) noexcept
+{
+    if (! parent)
+    {
+        return;
+    }
+
+    _pageHost = parent;
+
+    if (state.currentCategory != PrefCategory::Themes)
+    {
+        return;
+    }
+
+    if (! EnsureDxHosts(parent, state))
+    {
+        Debug::Error(L"Preferences.Themes: Failed to initialize DxUi hosts in CreateControls.");
+        DetachDxHosts();
+        return;
+    }
+}
+
+void ThemesPane::LayoutPage(HWND host,
+                            PreferencesDialogState& state,
+                            int x,
+                            int& y,
+                            int width,
+                            int margin,
+                            int gapY,
+                            int sectionY,
+                            const PreferencesTypographyContext& typography) noexcept
+{
+    if (! host)
+    {
+        return;
+    }
+
+    if (EnsureDxHosts(_pageHost ? _pageHost : host, state))
+    {
+        LayoutDxPage(host, state, x, y, width, margin, gapY, sectionY, typography);
+        return;
+    }
+
+    Debug::Error(L"Preferences.Themes: DxUi surface initialization failed in LayoutControls; page will not render correctly.");
 }
 
 void ThemesPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
 {
+    _hostWindow = host;
+    _state      = &state;
     RefreshThemesPage(host, state);
+
+    if (EnsureDxHosts(_pageHost ? _pageHost : host, state))
+    {
+        ApplyDxTheme(state);
+        SyncDxControlsFromState(state);
+        LogThemesDxState(
+            L"refresh-complete", _pageHost, _hostWindow, _pageHostDx, dynamic_cast<const Panel*>(_pageContentRoot), _dxState.get(), _rebuildDxOnNextShow);
+    }
+    else
+    {
+        Debug::Error(L"Preferences.Themes: Failed to ensure DxUi hosts during Refresh.");
+    }
 }
 
-bool ThemesPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT commandId, UINT notifyCode, HWND /*hwndCtl*/) noexcept
+bool ThemesPane::HandleDeferredAction(HWND host, PreferencesDialogState& state, PreferencesDeferredActionKind action) noexcept
 {
-    switch (commandId)
+    _hostWindow = host;
+    _state      = &state;
+
+    if (! _dxState)
     {
-        case IDC_PREFS_THEMES_SEARCH_EDIT:
-            if (notifyCode == EN_CHANGE)
-            {
-                const auto themeIdOpt = TryGetSelectedThemeId(state);
-                if (! themeIdOpt.has_value())
-                {
-                    return true;
-                }
-
-                bool editable   = false;
-                const auto* def = FindThemeDefinitionForDisplay(state, themeIdOpt.value(), editable);
-                RefreshThemesColorsList(host, state, themeIdOpt.value(), def);
-                ThemesPane::UpdateEditorFromSelection(host, state);
-                if (state.themesColorsList)
-                {
-                    InvalidateRect(state.themesColorsList.get(), nullptr, FALSE);
-                }
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_THEME_COMBO:
-            if (notifyCode == CBN_SELCHANGE)
-            {
-                if (state.refreshingThemesPage)
-                {
-                    return true;
-                }
-
-                const ThemeComboItem* selected = TryGetSelectedThemeComboItem(state);
-                if (! selected)
-                {
-                    return true;
-                }
-
-                if (selected->source == ThemeSchemaSource::New)
-                {
-                    BeginNewThemeCreation(host, state);
-                    return true;
-                }
-
-                state.workingSettings.theme.currentThemeId.assign(selected->id);
-                SetDirty(GetParent(host), state);
-                RefreshThemesPage(host, state);
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_BASE_COMBO:
-            if (notifyCode == CBN_SELCHANGE)
-            {
-                if (state.refreshingThemesPage)
-                {
-                    return true;
-                }
-
-                const auto themeIdOpt = TryGetSelectedThemeId(state);
-                if (! themeIdOpt.has_value())
-                {
-                    return true;
-                }
-
-                auto* def = FindWorkingThemeDefinition(state, themeIdOpt.value());
-                if (! def)
-                {
-                    return true;
-                }
-
-                const LRESULT sel = SendMessageW(state.themesBaseCombo.get(), CB_GETCURSEL, 0, 0);
-                if (sel == CB_ERR)
-                {
-                    return true;
-                }
-
-                const LRESULT data = SendMessageW(state.themesBaseCombo.get(), CB_GETITEMDATA, static_cast<WPARAM>(sel), 0);
-                if (data == CB_ERR)
-                {
-                    return true;
-                }
-
-                if (data < 0)
-                {
-                    def->baseThemeId.assign(L"builtin/system");
-                }
-                else
-                {
-                    const size_t optionIndex = static_cast<size_t>(data);
-                    if (optionIndex >= kBuiltinThemeOptions.size())
-                    {
-                        return true;
-                    }
-
-                    def->baseThemeId.assign(kBuiltinThemeOptions[optionIndex].id);
-                }
-
-                SetDirty(GetParent(host), state);
-                RefreshThemesPage(host, state);
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_NAME_EDIT:
-            if (notifyCode == EN_CHANGE)
-            {
-                if (state.refreshingThemesPage)
-                {
-                    return true;
-                }
-
-                const auto themeIdOpt = TryGetSelectedThemeId(state);
-                if (! themeIdOpt.has_value())
-                {
-                    return true;
-                }
-
-                auto* def = FindWorkingThemeDefinition(state, themeIdOpt.value());
-                if (! def)
-                {
-                    return true;
-                }
-
-                const std::wstring name = PrefsUi::GetWindowTextString(state.themesNameEdit.get());
-                if (name.empty())
-                {
-                    return true;
-                }
-
-                def->name = name;
-
-                SetDirty(GetParent(host), state);
-                return true;
-            }
-            if (notifyCode == EN_KILLFOCUS)
-            {
-                if (state.refreshingThemesPage)
-                {
-                    return true;
-                }
-
-                SyncSelectedUserThemeIdToName(host, state);
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_COLOR_EDIT:
-            if (notifyCode == EN_CHANGE)
-            {
-                if (state.themesColorSwatch)
-                {
-                    InvalidateRect(state.themesColorSwatch.get(), nullptr, TRUE);
-                }
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_PICK_COLOR:
-            if (notifyCode == BN_CLICKED)
-            {
-                PickThemeColorIntoEditor(host, state);
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_SET_OVERRIDE:
-            if (notifyCode == BN_CLICKED)
-            {
-                SetThemeOverrideFromEditor(host, state);
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_REMOVE_OVERRIDE:
-            if (notifyCode == BN_CLICKED)
-            {
-                ClearThemeOverrideFromEditor(host, state);
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_LOAD_FILE:
-            if (notifyCode == BN_CLICKED)
-            {
-                LoadThemeFromFile(host, state);
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_DUPLICATE_THEME:
-            if (notifyCode == BN_CLICKED)
-            {
-                DuplicateSelectedTheme(host, state);
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_SAVE_THEME:
-            if (notifyCode == BN_CLICKED)
-            {
-                SaveThemeToFile(host, state);
-                return true;
-            }
-            break;
-
-        case IDC_PREFS_THEMES_APPLY_TEMP:
-            if (notifyCode == BN_CLICKED)
-            {
-                ApplyThemeTemporarily(host, state);
-                return true;
-            }
-            break;
+        return false;
     }
 
-    return false;
+    const auto handled = [&]() noexcept
+    {
+        if (_dxState)
+        {
+            ApplyDxTheme(state);
+            SyncDxControlsFromState(state);
+        }
+        return true;
+    };
+
+#pragma warning(suppress : 4061) // Not all enum values handled explicitly -- intentional; this pane only handles its own actions.
+    switch (action)
+    {
+        case PreferencesDeferredActionKind::ThemesSearchChanged: RefreshThemesPage(host, state); return handled();
+
+        case PreferencesDeferredActionKind::ThemesThemeChanged:
+        {
+            if (state.refreshingThemesPage)
+            {
+                return handled();
+            }
+
+            const ThemeComboItem* selected = TryGetSelectedThemeComboItem(state);
+            if (! selected)
+            {
+                return handled();
+            }
+
+            if (selected->source == ThemeSchemaSource::New)
+            {
+                BeginNewThemeCreation(host, state);
+                return handled();
+            }
+
+            state.workingSettings.theme.currentThemeId.assign(selected->id);
+            SetDirty(GetParent(host), state);
+            RefreshThemesPage(host, state);
+            return handled();
+        }
+
+        case PreferencesDeferredActionKind::ThemesBaseChanged:
+            if (state.refreshingThemesPage)
+            {
+                return handled();
+            }
+
+            RefreshThemesPage(host, state);
+            return handled();
+
+        case PreferencesDeferredActionKind::ThemesNameBlur:
+            if (state.refreshingThemesPage)
+            {
+                return handled();
+            }
+
+            SyncSelectedUserThemeIdToName(host, state);
+            return handled();
+        case PreferencesDeferredActionKind::ViewersSearchChanged:
+        case PreferencesDeferredActionKind::KeyboardSearchChanged:
+        case PreferencesDeferredActionKind::KeyboardScopeChanged:
+        case PreferencesDeferredActionKind::KeyboardAssign:
+        case PreferencesDeferredActionKind::KeyboardRemove:
+        case PreferencesDeferredActionKind::KeyboardReset:
+        case PreferencesDeferredActionKind::KeyboardImport:
+        case PreferencesDeferredActionKind::KeyboardExport:
+        case PreferencesDeferredActionKind::PluginsSearchChanged:
+        case PreferencesDeferredActionKind::PluginsConfigure:
+        case PreferencesDeferredActionKind::PluginsTest:
+        case PreferencesDeferredActionKind::PluginsTestAll:
+        case PreferencesDeferredActionKind::FileOperationsBandwidthPresetChanged:
+        case PreferencesDeferredActionKind::CompareDirectoriesIgnoreToggleChanged: return false;
+        default: return false;
+    }
 }
 
 void ThemesPane::UpdateEditorFromSelection(HWND host, PreferencesDialogState& state) noexcept
@@ -3312,307 +3554,312 @@ void ThemesPane::UpdateEditorFromSelection(HWND host, PreferencesDialogState& st
         return;
     }
 
-    if (! state.themesKeyEdit || ! state.themesColorEdit)
-    {
-        return;
-    }
-
-    if (! state.themesColorsList)
-    {
-        return;
-    }
-
-    const int selected = ListView_GetNextItem(state.themesColorsList.get(), -1, LVNI_SELECTED);
-    if (selected < 0)
+    const std::wstring selectedKey = state.themesSelectedColorKey;
+    if (selectedKey.empty())
     {
         state.refreshingThemesPage = true;
         const auto reset           = wil::scope_exit([&] { state.refreshingThemesPage = false; });
-        SetWindowTextW(state.themesKeyEdit.get(), L"");
-        SetWindowTextW(state.themesColorEdit.get(), L"");
-        if (state.themesColorSwatch)
-        {
-            InvalidateRect(state.themesColorSwatch.get(), nullptr, TRUE);
-        }
+        SetThemesKeyText(state, L"");
+        SetThemesColorText(state, L"");
         return;
     }
 
-    wchar_t keyText[128]{};
-    ListView_GetItemText(state.themesColorsList.get(), selected, 0, keyText, static_cast<int>(std::size(keyText)));
+    std::wstring valueText;
+    const auto themeIdOpt = TryGetSelectedThemeId(state);
+    if (themeIdOpt.has_value())
+    {
+        bool editable                       = false;
+        const auto* def                     = FindThemeDefinitionForDisplay(state, themeIdOpt.value(), editable);
+        const std::wstring_view baseThemeId = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeIdOpt.value();
+        const auto* overrides               = def ? &def->colors : nullptr;
 
-    wchar_t valueText[64]{};
-    ListView_GetItemText(state.themesColorsList.get(), selected, 1, valueText, static_cast<int>(std::size(valueText)));
+        const ThemeMode baseMode = ThemeModeFromThemeId(baseThemeId);
+        std::optional<D2D1::ColorF> accentOverride;
+        if (overrides)
+        {
+            accentOverride = FindAccentOverride(*overrides);
+        }
+
+        AppTheme appTheme = ResolveAppTheme(baseMode, L"RedSalamander", accentOverride);
+        if (overrides)
+        {
+            ApplyAppThemeOverrides(appTheme, *overrides);
+        }
+        const MonitorTextViewTheme monitorTheme = ResolveMonitorThemeForDisplay(baseThemeId, overrides);
+
+        const auto colorOpt = TryGetEffectiveThemeColorArgb(appTheme, monitorTheme, overrides, selectedKey);
+        if (colorOpt.has_value())
+        {
+            valueText = Common::Settings::FormatColor(colorOpt.value());
+        }
+    }
 
     state.refreshingThemesPage = true;
     const auto reset           = wil::scope_exit([&] { state.refreshingThemesPage = false; });
-    SetWindowTextW(state.themesKeyEdit.get(), keyText);
-    SetWindowTextW(state.themesColorEdit.get(), valueText);
-    if (state.themesColorSwatch)
+    SetThemesKeyText(state, selectedKey);
+    SetThemesColorText(state, valueText);
+}
+
+void ThemesPane::OnGridSelectionChanged()
+{
+    if (! _state || ! _dxState || ! _dxState->page.colorsListControl || ! _dxState->page.colorsListModel || _syncingDxSelection)
     {
-        InvalidateRect(state.themesColorSwatch.get(), nullptr, TRUE);
+        return;
+    }
+
+    const auto selectedRowIds = _dxState->page.colorsListControl->GetSelectionModel().GetOrderedSelection();
+    std::wstring selectedKey;
+    if (! selectedRowIds.empty())
+    {
+        const auto& rows = _dxState->page.colorsListModel->GetRows();
+        const auto it    = std::find_if(rows.begin(), rows.end(), [&](const ThemesGridRow& row) noexcept { return row.stableId == selectedRowIds.front(); });
+        if (it != rows.end())
+        {
+            selectedKey = it->key;
+        }
+    }
+
+    _state->themesSelectedColorKey = selectedKey;
+
+    if (_hostWindow)
+    {
+        UpdateEditorFromSelection(_hostWindow, *_state);
+    }
+    if (_dxState)
+    {
+        SyncDxControlsFromState(*_state);
     }
 }
 
-bool ThemesPane::HandleNotify(HWND host, PreferencesDialogState& state, NMHDR* hdr, LRESULT& outResult) noexcept
+#ifdef ENABLE_TESTS
+size_t ThemesPane::DebugListRowCount() const noexcept
 {
-    if (! hdr || ! state.themesColorsList || hdr->hwndFrom != state.themesColorsList.get())
+    if (! _dxState || ! _dxState->page.colorsListModel)
+    {
+        return 0u;
+    }
+
+    return _dxState->page.colorsListModel->GetRowCount();
+}
+
+RedSalamander::DxUi::GridVisibleWorkMetrics ThemesPane::DebugListVisibleWorkMetrics() const noexcept
+{
+    if (! _dxState || ! _dxState->page.colorsListControl)
+    {
+        return {};
+    }
+
+    return _dxState->page.colorsListControl->GetVisibleWorkMetrics();
+}
+
+uint64_t ThemesPane::DebugListRenderCount() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return 0u;
+    }
+
+#ifdef ENABLE_TESTS
+    return _pageHostDx->DebugGetRenderCount();
+#else
+    return 0u;
+#endif
+}
+
+uint64_t ThemesPane::DebugListResizeCount() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return 0u;
+    }
+
+#ifdef ENABLE_TESTS
+    return _pageHostDx->DebugGetResizeCount();
+#else
+    return 0u;
+#endif
+}
+
+uint64_t ThemesPane::DebugListResizeFailureCount() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return 0u;
+    }
+
+#ifdef ENABLE_TESTS
+    return _pageHostDx->DebugGetResizeFailureCount();
+#else
+    return 0u;
+#endif
+}
+
+PreferencesThemesDebugFocusTarget ThemesPane::DebugGetFocusTarget() const noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return PreferencesThemesDebugFocusTarget::None;
+    }
+
+    RedSalamander::DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
+    if (! focusedControl)
+    {
+        return PreferencesThemesDebugFocusTarget::None;
+    }
+
+    const auto& page = _dxState->page;
+    if (focusedControl == page.themeCombo)
+        return PreferencesThemesDebugFocusTarget::ThemeCombo;
+    if (focusedControl == page.nameEdit)
+        return PreferencesThemesDebugFocusTarget::NameField;
+    if (focusedControl == page.baseCombo)
+        return PreferencesThemesDebugFocusTarget::BaseCombo;
+    if (focusedControl == page.loadFromFile)
+        return PreferencesThemesDebugFocusTarget::LoadFromFileButton;
+    if (focusedControl == page.duplicateTheme)
+        return PreferencesThemesDebugFocusTarget::DuplicateButton;
+    if (focusedControl == page.resetTheme)
+        return PreferencesThemesDebugFocusTarget::ResetButton;
+    if (focusedControl == page.saveTheme)
+        return PreferencesThemesDebugFocusTarget::SaveButton;
+    if (focusedControl == page.applyTemporarily)
+        return PreferencesThemesDebugFocusTarget::ApplyTemporarilyButton;
+    if (focusedControl == page.searchEdit)
+        return PreferencesThemesDebugFocusTarget::SearchField;
+    if (focusedControl == page.colorsListControl)
+        return PreferencesThemesDebugFocusTarget::ColorsGrid;
+    if (focusedControl == page.keyEdit)
+        return PreferencesThemesDebugFocusTarget::KeyField;
+    if (focusedControl == page.colorEdit)
+        return PreferencesThemesDebugFocusTarget::ColorField;
+    if (focusedControl == page.pickColor)
+        return PreferencesThemesDebugFocusTarget::PickButton;
+    if (focusedControl == page.setOverride)
+        return PreferencesThemesDebugFocusTarget::SetButton;
+    if (focusedControl == page.removeOverride)
+        return PreferencesThemesDebugFocusTarget::ClearButton;
+
+    return PreferencesThemesDebugFocusTarget::None;
+}
+
+bool ThemesPane::DebugGetListRowClientRect(const size_t rowIndex, RECT& outRect) const noexcept
+{
+    if (! _dxState || ! _dxState->page.colorsListControl || ! _pageHostDx)
     {
         return false;
     }
 
-    switch (hdr->code)
+    const auto rowRect = _dxState->page.colorsListControl->GetVisibleRowRect(rowIndex);
+    if (! rowRect.has_value())
     {
-        case NM_CUSTOMDRAW: outResult = CDRF_DODEFAULT; return true;
-        case NM_SETFOCUS:
-            PrefsPaneHost::EnsureControlVisible(host, state, state.themesColorsList.get());
-            InvalidateRect(state.themesColorsList.get(), nullptr, FALSE);
-            outResult = 0;
-            return true;
-        case NM_KILLFOCUS:
-            InvalidateRect(state.themesColorsList.get(), nullptr, FALSE);
-            outResult = 0;
-            return true;
-        case LVN_ITEMCHANGED:
-            ThemesPane::UpdateEditorFromSelection(host, state);
-            outResult = 0;
-            return true;
+        return false;
     }
 
-    return false;
+    outRect.left   = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->left)));
+    outRect.top    = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->top)));
+    outRect.right  = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->right)));
+    outRect.bottom = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(rowRect->bottom)));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
 }
 
-LRESULT ThemesPane::OnMeasureColorsList(MEASUREITEMSTRUCT* mis, PreferencesDialogState& state) noexcept
+bool ThemesPane::DebugGetListHeaderClientRect(const size_t columnIndex, RECT& outRect) const noexcept
 {
-    if (! mis || mis->CtlType != ODT_LISTVIEW || mis->CtlID != static_cast<UINT>(IDC_PREFS_THEMES_COLORS_LIST))
+    if (! _dxState || ! _dxState->page.colorsListControl || ! _dxState->page.colorsListModel || ! _pageHostDx ||
+        columnIndex >= _dxState->page.colorsListModel->GetColumnCount())
     {
-        return 0;
+        return false;
     }
 
-    if (! state.themesColorsList)
+    const auto headerRect = _dxState->page.colorsListControl->GetVisibleColumnHeaderRect(columnIndex);
+    if (! headerRect.has_value())
     {
-        return 0;
+        return false;
     }
 
-    wil::unique_hdc_window hdc(GetDC(state.themesColorsList.get()));
-    if (! hdc)
-    {
-        mis->itemHeight = 26u;
-        return 1;
-    }
-
-    const HFONT font = reinterpret_cast<HFONT>(SendMessageW(state.themesColorsList.get(), WM_GETFONT, 0, 0));
-    if (font)
-    {
-        [[maybe_unused]] auto oldFont = wil::SelectObject(hdc.get(), font);
-        mis->itemHeight               = static_cast<UINT>(std::max(1, PrefsListView::GetSingleLineRowHeightPx(state.themesColorsList.get(), hdc.get())));
-        return 1;
-    }
-
-    mis->itemHeight = 26u;
-    return 1;
+    outRect.left   = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->left)));
+    outRect.top    = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->top)));
+    outRect.right  = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->right)));
+    outRect.bottom = static_cast<LONG>(std::lround(_pageHostDx->DipsToPixels(headerRect->bottom)));
+    return outRect.right > outRect.left && outRect.bottom > outRect.top;
 }
 
-LRESULT ThemesPane::OnDrawColorsList(DRAWITEMSTRUCT* dis, PreferencesDialogState& state) noexcept
+bool ThemesPane::DebugSelectListRow(const size_t rowIndex) noexcept
 {
-    if (! dis || dis->CtlType != ODT_LISTVIEW || dis->CtlID != static_cast<UINT>(IDC_PREFS_THEMES_COLORS_LIST))
+    if (! _dxState || ! _dxState->page.colorsListControl || ! _dxState->page.colorsListModel)
     {
-        return 0;
+        return false;
     }
 
-    if (! state.themesColorsList || ! dis->hDC)
+    const auto& rows = _dxState->page.colorsListModel->GetRows();
+    if (rowIndex >= rows.size())
     {
-        return 1;
+        return false;
     }
 
-    const int itemIndex = static_cast<int>(dis->itemID);
-    if (itemIndex < 0)
+    _dxState->page.colorsListControl->GetSelectionModel().SetSingle(rows[rowIndex].stableId);
+    OnGridSelectionChanged();
+    if (_pageHostDx)
     {
-        return 1;
+        _pageHostDx->Invalidate();
     }
-
-    RECT rc = dis->rcItem;
-    if (rc.right <= rc.left || rc.bottom <= rc.top)
-    {
-        return 1;
-    }
-
-    wchar_t seedText[256]{};
-    ListView_GetItemText(state.themesColorsList.get(), itemIndex, 0, seedText, static_cast<int>(std::size(seedText)));
-    const std::wstring_view seed = std::wstring_view(seedText, std::wcslen(seedText));
-
-    const bool selected    = (dis->itemState & ODS_SELECTED) != 0;
-    const bool focused     = (dis->itemState & ODS_FOCUS) != 0;
-    const bool listFocused = GetFocus() == state.themesColorsList.get();
-
-    const HWND root         = GetAncestor(state.themesColorsList.get(), GA_ROOT);
-    const bool windowActive = root && GetActiveWindow() == root;
-
-    COLORREF bg        = state.theme.systemHighContrast ? GetSysColor(COLOR_WINDOW) : state.theme.windowBackground;
-    COLORREF textColor = state.theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : state.theme.menu.text;
-
-    if (selected)
-    {
-        COLORREF selBg = state.theme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : state.theme.menu.selectionBg;
-        if (! state.theme.highContrast && state.theme.menu.rainbowMode && ! seed.empty())
-        {
-            selBg = RainbowMenuSelectionColor(seed, state.theme.menu.darkBase);
-        }
-
-        COLORREF selText = state.theme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHTTEXT) : state.theme.menu.selectionText;
-        if (! state.theme.highContrast && state.theme.menu.rainbowMode)
-        {
-            selText = ChooseContrastingTextColor(selBg);
-        }
-
-        if (windowActive && listFocused)
-        {
-            bg        = selBg;
-            textColor = selText;
-        }
-        else if (! state.theme.highContrast)
-        {
-            const int denom = state.theme.menu.darkBase ? 2 : 3;
-            bg              = ThemedControls::BlendColor(state.theme.windowBackground, selBg, 1, denom);
-            textColor       = ChooseContrastingTextColor(bg);
-        }
-        else
-        {
-            bg        = selBg;
-            textColor = selText;
-        }
-    }
-    else if (! state.theme.highContrast && ((itemIndex % 2) == 1))
-    {
-        const COLORREF tint =
-            (state.theme.menu.rainbowMode && ! seed.empty()) ? RainbowMenuSelectionColor(seed, state.theme.menu.darkBase) : state.theme.menu.selectionBg;
-        const int denom = state.theme.menu.darkBase ? 6 : 8;
-        bg              = ThemedControls::BlendColor(bg, tint, 1, denom);
-    }
-
-    wil::unique_hbrush bgBrush(CreateSolidBrush(bg));
-    if (bgBrush)
-    {
-        FillRect(dis->hDC, &rc, bgBrush.get());
-    }
-
-    if (! state.theme.highContrast && textColor == bg)
-    {
-        textColor = ChooseContrastingTextColor(bg);
-    }
-
-    const UINT dpi     = GetDpiForWindow(state.themesColorsList.get());
-    const int paddingX = ThemedControls::ScaleDip(dpi, 8);
-
-    const int col0W = std::max(0, ListView_GetColumnWidth(state.themesColorsList.get(), 0));
-    const int col1W = std::max(0, ListView_GetColumnWidth(state.themesColorsList.get(), 1));
-    const int col2W = std::max(0, ListView_GetColumnWidth(state.themesColorsList.get(), 2));
-
-    RECT col0Rect  = rc;
-    col0Rect.right = std::min(rc.right, rc.left + col0W);
-
-    RECT col1Rect  = rc;
-    col1Rect.left  = col0Rect.right;
-    col1Rect.right = (col1W > 0) ? std::min(rc.right, col1Rect.left + col1W) : rc.right;
-
-    RECT col2Rect  = rc;
-    col2Rect.left  = col1Rect.right;
-    col2Rect.right = (col2W > 0) ? std::min(rc.right, col2Rect.left + col2W) : rc.right;
-
-    wchar_t text0[256]{};
-    ListView_GetItemText(state.themesColorsList.get(), itemIndex, 0, text0, static_cast<int>(std::size(text0)));
-    wchar_t text1[512]{};
-    ListView_GetItemText(state.themesColorsList.get(), itemIndex, 1, text1, static_cast<int>(std::size(text1)));
-
-    bool overridden = false;
-    LVITEMW paramItem{};
-    paramItem.mask     = LVIF_PARAM;
-    paramItem.iItem    = itemIndex;
-    paramItem.iSubItem = 0;
-    if (ListView_GetItem(state.themesColorsList.get(), &paramItem))
-    {
-        overridden = paramItem.lParam != 0;
-    }
-
-    HFONT normalFont = reinterpret_cast<HFONT>(SendMessageW(state.themesColorsList.get(), WM_GETFONT, 0, 0));
-    if (! normalFont)
-    {
-        normalFont = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-    }
-    const HFONT boldFont          = (overridden && state.boldFont) ? state.boldFont.get() : normalFont;
-    [[maybe_unused]] auto oldFont = wil::SelectObject(dis->hDC, normalFont);
-
-    SetBkMode(dis->hDC, TRANSPARENT);
-    SetTextColor(dis->hDC, textColor);
-
-    RECT textRect0  = col0Rect;
-    textRect0.left  = std::min(textRect0.right, textRect0.left + paddingX);
-    textRect0.right = std::max(textRect0.left, textRect0.right - paddingX);
-
-    if (overridden && boldFont && boldFont != normalFont)
-    {
-        [[maybe_unused]] auto oldKeyFont = wil::SelectObject(dis->hDC, boldFont);
-        DrawTextW(dis->hDC, text0, static_cast<int>(std::wcslen(text0)), &textRect0, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
-    }
-    else
-    {
-        DrawTextW(dis->hDC, text0, static_cast<int>(std::wcslen(text0)), &textRect0, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
-    }
-
-    RECT textRect1  = col1Rect;
-    textRect1.left  = std::min(textRect1.right, textRect1.left + paddingX);
-    textRect1.right = std::max(textRect1.left, textRect1.right - paddingX);
-
-    DrawTextW(dis->hDC, text1, static_cast<int>(std::wcslen(text1)), &textRect1, DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX);
-
-    std::optional<uint32_t> argb;
-    const std::wstring_view valueText = std::wstring_view(text1, std::wcslen(text1));
-    uint32_t parsed                   = 0;
-    if (! valueText.empty() && Common::Settings::TryParseColor(valueText, parsed))
-    {
-        argb = parsed;
-    }
-
-    RECT swatchRect         = col2Rect;
-    const int swatchPadding = ThemedControls::ScaleDip(dpi, 4);
-    InflateRect(&swatchRect, -swatchPadding, -swatchPadding);
-    const int swatchW    = std::max(0l, swatchRect.right - swatchRect.left);
-    const int swatchH    = std::max(0l, swatchRect.bottom - swatchRect.top);
-    const int swatchSize = std::min(swatchW, swatchH);
-    if (swatchSize > 0)
-    {
-        swatchRect.left += (swatchW - swatchSize) / 2;
-        swatchRect.top += (swatchH - swatchSize) / 2;
-        swatchRect.right  = swatchRect.left + swatchSize;
-        swatchRect.bottom = swatchRect.top + swatchSize;
-        DrawRoundedColorSwatch(dis->hDC, swatchRect, dpi, state.theme, bg, argb, true);
-    }
-
-    if (focused)
-    {
-        RECT focusRc = rc;
-        InflateRect(&focusRc,
-                    -ThemedControls::ScaleDip(dpi, PrefsLayoutConstants::kFramePaddingDip),
-                    -ThemedControls::ScaleDip(dpi, PrefsLayoutConstants::kFramePaddingDip));
-
-        COLORREF focusTint = state.theme.menu.selectionBg;
-        if (! state.theme.highContrast && state.theme.menu.rainbowMode && ! seed.empty())
-        {
-            focusTint = RainbowMenuSelectionColor(seed, state.theme.menu.darkBase);
-        }
-
-        const int weight          = (windowActive && listFocused) ? (state.theme.dark ? 70 : 55) : (state.theme.dark ? 55 : 40);
-        const COLORREF focusColor = state.theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : ThemedControls::BlendColor(bg, focusTint, weight, 255);
-
-        wil::unique_hpen focusPen(CreatePen(PS_SOLID, 1, focusColor));
-        if (focusPen)
-        {
-            [[maybe_unused]] auto oldBrush2 = wil::SelectObject(dis->hDC, GetStockObject(NULL_BRUSH));
-            [[maybe_unused]] auto oldPen2   = wil::SelectObject(dis->hDC, focusPen.get());
-            Rectangle(dis->hDC, focusRc.left, focusRc.top, focusRc.right, focusRc.bottom);
-        }
-    }
-
-    return 1;
+    return true;
 }
+
+bool ThemesPane::DebugSetSearchText(std::wstring_view text) noexcept
+{
+    if (! _state)
+    {
+        return false;
+    }
+
+    _state->themesSearchText.assign(text);
+    if (_dxState && _dxState->page.searchEdit)
+    {
+        _dxState->page.searchEdit->SetText(std::wstring(text));
+    }
+
+    // TextField::SetText does not fire the OnTextChanged callback, so the
+    // normal callback → Refresh chain is not triggered.
+    // Manually refresh to re-filter the grid with the new search text.
+    if (_hostWindow && _state)
+    {
+        Refresh(_hostWindow, *_state);
+    }
+
+    return _dxState && _dxState->page.searchEdit;
+}
+
+bool ThemesPane::DebugFocusSearchField() noexcept
+{
+    if (! _dxState || ! _dxState->page.searchEdit || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(_dxState->page.searchEdit);
+    return true;
+}
+
+bool ThemesPane::DebugScrollListByWheelDetents(const int detents) noexcept
+{
+    if (detents == 0 || ! _dxState || ! _dxState->page.colorsListControl || ! _pageHostDx)
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(_dxState->page.colorsListControl);
+
+    const int direction = detents < 0 ? -1 : 1;
+    const int steps     = std::abs(detents);
+    for (int index = 0; index < steps; ++index)
+    {
+        const float wheelDelta = static_cast<float>(direction * WHEEL_DELTA);
+        _dxState->page.colorsListControl->OnMouseWheel(*_pageHostDx, D2D1::Point2F(0.0f, 0.0f), wheelDelta, 0u);
+    }
+
+    return true;
+}
+#endif
 
 LRESULT ThemesPane::OnDrawColorSwatch(DRAWITEMSTRUCT* dis, PreferencesDialogState& state) noexcept
 {
@@ -3642,20 +3889,30 @@ LRESULT ThemesPane::OnDrawColorSwatch(DRAWITEMSTRUCT* dis, PreferencesDialogStat
     }
 
     std::optional<uint32_t> argb;
-    if (state.themesColorEdit)
+    uint32_t parsed = 0;
+    if (! state.themesColorText.empty() && Common::Settings::TryParseColor(state.themesColorText, parsed))
     {
-        const std::wstring valueText = PrefsUi::GetWindowTextString(state.themesColorEdit.get());
-        uint32_t parsed              = 0;
-        if (! valueText.empty() && Common::Settings::TryParseColor(valueText, parsed))
-        {
-            argb = parsed;
-        }
+        argb = parsed;
     }
 
     RECT swatch = dis->rcItem;
-    InflateRect(&swatch,
-                -ThemedControls::ScaleDip(dpi, PrefsLayoutConstants::kFramePaddingDip),
-                -ThemedControls::ScaleDip(dpi, PrefsLayoutConstants::kFramePaddingDip));
+    InflateRect(&swatch, -UiMetrics::ScaleDip(dpi, PrefsLayoutConstants::kFramePaddingDip), -UiMetrics::ScaleDip(dpi, PrefsLayoutConstants::kFramePaddingDip));
     DrawRoundedColorSwatch(dis->hDC, swatch, dpi, state.theme, bg, argb, IsWindowEnabled(dis->hwndItem) != FALSE);
     return 1;
 }
+
+#ifdef ENABLE_TESTS
+bool DebugSetPreferencesThemesNextBrowsePath(const std::wstring_view path) noexcept
+{
+    return DebugSetPreferencesThemesNextBrowsePathImpl(path);
+}
+
+bool DebugCancelPreferencesThemesNextBrowse() noexcept
+{
+#ifdef ENABLE_TESTS
+    return DebugCancelPreferencesThemesNextBrowseImpl();
+#else
+    return false;
+#endif
+}
+#endif

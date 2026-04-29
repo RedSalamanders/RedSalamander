@@ -2,6 +2,14 @@
 
 #include "FileSystemS3.h"
 
+// Windows headers define ERROR as a macro; AWS Outcome.h declares an ERROR typedef.
+#pragma warning(push)
+#pragma warning(disable : 4574) // Intentional probe of Win32's zero-valued ERROR macro before undefining it.
+#ifdef ERROR
+#undef ERROR
+#endif
+#pragma warning(pop)
+
 #include "Helpers.h"
 
 #include <algorithm>
@@ -68,6 +76,20 @@ struct S3Location
     std::string bucket;
     std::string keyOrPrefix; // no leading '/'
     bool isRoot = false;     // true when listing buckets
+};
+
+struct S3MultipartUploadedPart
+{
+    int partNumber = 0;
+    std::string eTag;
+};
+
+struct S3MultipartUploadSession
+{
+    ResolvedAwsContext ctx;
+    std::string bucket;
+    std::string key;
+    std::string uploadId;
 };
 
 struct AwsSdkLifetime
@@ -229,6 +251,12 @@ inline void LogAwsFailure(std::wstring_view prefix,
 
 [[nodiscard]] std::vector<std::wstring_view> SplitPathSegments(std::wstring_view path) noexcept;
 
+inline constexpr uint64_t kMultipartMinPartSizeBytes = 64ull * 1024ull * 1024ull;
+
+[[nodiscard]] uint64_t ComputeMultipartPartSize(uint64_t sizeBytes) noexcept;
+[[nodiscard]] bool IsSameAwsContextIdentity(const ResolvedAwsContext& left, const ResolvedAwsContext& right) noexcept;
+[[nodiscard]] std::string UrlEncodeS3CopySource(std::string_view bucket, std::string_view key) noexcept;
+
 [[nodiscard]] HRESULT ParseS3LocationForDirectory(std::wstring_view canonicalPath, S3Location& out) noexcept;
 [[nodiscard]] HRESULT ListS3Buckets(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept;
 [[nodiscard]] HRESULT ListS3BucketsForConnection(FileSystemS3& fs, const ResolvedAwsContext& ctx, std::vector<FilesInformationS3::Entry>& out) noexcept;
@@ -242,6 +270,23 @@ inline void LogAwsFailure(std::wstring_view prefix,
                                                 ResolvedAwsContext& out) noexcept;
 [[nodiscard]] HRESULT DownloadS3ObjectToTempFile(
     FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, wil::unique_hfile& outFile) noexcept;
+[[nodiscard]] HRESULT PutS3ObjectFromMemory(
+    FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, const void* data, size_t sizeBytes) noexcept;
+[[nodiscard]] HRESULT BeginS3MultipartUpload(
+    FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, S3MultipartUploadSession& outSession) noexcept;
+[[nodiscard]] HRESULT UploadS3MultipartPartFromMemory(
+    FileSystemS3& fs, const S3MultipartUploadSession& session, int partNumber, const void* data, size_t sizeBytes, std::string& outETag) noexcept;
+[[nodiscard]] HRESULT CompleteS3MultipartUpload(FileSystemS3& fs,
+                                                const S3MultipartUploadSession& session,
+                                                const std::vector<S3MultipartUploadedPart>& parts) noexcept;
+[[nodiscard]] HRESULT AbortS3MultipartUpload(FileSystemS3& fs, const S3MultipartUploadSession& session) noexcept;
+[[nodiscard]] HRESULT CopyS3ObjectServerSide(FileSystemS3& fs,
+                                             const ResolvedAwsContext& destinationCtx,
+                                             std::string_view sourceBucket,
+                                             std::string_view sourceKey,
+                                             std::string_view destinationBucket,
+                                             std::string_view destinationKey,
+                                             uint64_t sourceSizeBytes) noexcept;
 [[nodiscard]] HRESULT UploadS3ObjectFromFile(
     FileSystemS3& fs, const ResolvedAwsContext& ctx, std::string_view bucket, std::string_view key, HANDLE file, uint64_t sizeBytes) noexcept;
 

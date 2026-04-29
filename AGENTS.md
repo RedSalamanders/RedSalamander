@@ -1,8 +1,8 @@
-# Red Salamander C++ Development Guidelines
+# RedSalamander C++ Development Guidelines
 
 ## Project Overview
 
-**Red Salamander** is a Windows-based C++ application featuring:
+**RedSalamander** is a Windows-based C++ application featuring:
 - Advanced text visualization components (ColorTextView with D2D/DirectWrite rendering)
 - Real-time debugging and monitoring capabilities
 - High-performance graphics rendering using Direct2D, DirectWrite, and DXGI
@@ -12,7 +12,7 @@
 ## Project Requirements
 
 - **Platform**: Windows development (Windows 10/11 minimum)
-- **Language Standard**: C++23
+- **Language Standard**: `stdcpplatest` (latest MSVC mode)
 - **Character Encoding**: Unicode UTF-16
 - **Build System**: Visual Studio 2026 with MSBuild
 - **Package Manager**: vcpkg
@@ -26,6 +26,7 @@ Detailed patterns and guidelines are available as Agent Skills in `.github/skill
 |-------|-------------|
 | [cpp-build](.github/skills/cpp-build/SKILL.md) | Build system, `build.ps1` usage, project structure |
 | [cpp-modern-style](.github/skills/cpp-modern-style/SKILL.md) | C++23 patterns, naming conventions, STL usage |
+| [perf-validation](.github/skills/perf-validation/SKILL.md) | Mandatory perf-first workflow: instrumentation, selftests, archived runs, and before/after evidence for new features and optimizations |
 | [wil-raii](.github/skills/wil-raii/SKILL.md) | WIL RAII wrappers for Windows resources |
 | [direct2d-rendering](.github/skills/direct2d-rendering/SKILL.md) | Direct2D/DirectWrite graphics patterns |
 | [icon-cache](.github/skills/icon-cache/SKILL.md) | Shell icon management via IconCache |
@@ -33,7 +34,7 @@ Detailed patterns and guidelines are available as Agent Skills in `.github/skill
 | [plugin-callbacks](.github/skills/plugin-callbacks/SKILL.md) | Plugin callback pattern with cookie |
 | [localization](.github/skills/localization/SKILL.md) | RC resources, STRINGTABLE, menus |
 | [theming](.github/skills/theming/SKILL.md) | Theme color keys and JSON5 themes |
-| [compiler-warnings](.github/skills/compiler-warnings/SKILL.md) | MSVC /W4 warning policy |
+| [compiler-warnings](.github/skills/compiler-warnings/SKILL.md) | MSVC `/Wall` warning policy with documented PoC exceptions |
 | [async-threading](.github/skills/async-threading/SKILL.md) | Threading model and async patterns |
 | [error-handling](.github/skills/error-handling/SKILL.md) | Error handling, HRESULT, Debug logging |
 | [yyjson](.github/skills/yyjson/SKILL.md) | yyjson parsing/serialization patterns, ownership, and cleanup |
@@ -43,6 +44,18 @@ Detailed patterns and guidelines are available as Agent Skills in `.github/skill
 ### RAII is Mandatory
 All Windows resources MUST use WIL RAII wrappers. Manual cleanup (`DestroyIcon`, `DeleteObject`, `EndPaint`, etc.) is **PROHIBITED**. See [wil-raii skill](.github/skills/wil-raii/SKILL.md).
 
+### Performance Validation is Mandatory
+Any new feature, hot-path change, or optimization that can affect responsiveness, throughput, queueing, rendering, startup, search, Compare Directories, File Operations, plugin I/O, or memory retention MUST integrate:
+- scenario definition,
+- instrumentation,
+- deterministic selftest coverage,
+- archived perf evidence under `Specs/TestRuns/`
+
+from the beginning. Do not defer perf validation to a later cleanup pass. See [perf-validation skill](.github/skills/perf-validation/SKILL.md) and `Specs/Testing/Testing_PerformanceValidation.md`.
+
+### Spec Closeout is Mandatory
+Completed WIP plans MUST be moved to `Specs/Plans/Done/`. Any durable behavior, UI contract, validation rule, or workflow requirement discovered during implementation MUST be merged into the authoritative domain spec under `Specs/<Domain>/` (or repo-level guidance such as `AGENTS.md` / `Specs/Testing/*` when appropriate) before the work is considered closed. Do not leave normative requirements stranded only in `Specs/Plans/WIP/` or `Specs/Plans/Done/`.
+
 ### Regression Guards (Common Violations)
 - **Ban `sprintf_s` / `swprintf_s`** in non-PoC code:
   - Diagnostics: `std::format` / `std::format_to_n` + `OutputDebugStringA/W`
@@ -51,7 +64,7 @@ All Windows resources MUST use WIL RAII wrappers. Manual cleanup (`DestroyIcon`,
 - **COM ownership:** never store owning raw COM interface pointers (no manual `Release()`); use `wil::com_ptr<T>` for members and locals.
 - **COM ref-counting:** never do `obj->AddRef(); ptr.attach(obj);` (two-step hazard); prefer `ptr = obj;` / `wil::com_ptr<T> ptr = obj;`.
 - **`wil::unique_hwnd` ownership:** never call `DestroyWindow(_hWnd.get())` on a `wil::unique_hwnd` owner; use `_hWnd.reset()` (or `.release()` only when transferring ownership explicitly).
-- **Cross-thread `PostMessageW` payloads:** use `PostMessagePayload(...)` + `TakeMessagePayload<T>(lParam)`; never `PostMessageW(...payload.release())` or raw `new` payload posts. For windows that receive payload messages, call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`) and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY` to prevent leak-on-destroy.
+- **Cross-thread `PostMessageW` payloads:** use `PostMessagePayload(...)` + `TakeMessagePayload<T>(lParam)`; never `PostMessageW(...payload.release())` or raw `new` payload posts. For windows that receive payload messages, call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`) and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY` to prevent leak-on-destroy. Every UI-host cross-thread change must review: payload ownership, UI-thread boundary, cancellation path, teardown drain, and a focused teardown stress/selftest when the touched host can queue payloads.
 - **IconCache COM contract:** `IconCache::Initialize(...)` stays UI-thread/STA responsibility; any worker thread calling `IconCache::ExtractSystemIcon()` must initialize COM as MTA (`wil::CoInitializeEx(COINIT_MULTITHREADED)`).
 - **yyjson mutable builders:** never pass temporary/stack strings to non-copy APIs (`yyjson_mut_obj_add_str`, `yyjson_mut_str`); for dynamic keys use `yyjson_mut_strncpy` + `yyjson_mut_obj_add`, and for string values prefer `*_strcpy`/`*_strncpy` (see `.github/skills/yyjson/SKILL.md`).
 - **Thread-safety:** never read/write shared non-atomic state without a lock (or use `std::atomic` with correct memory ordering).
@@ -127,6 +140,8 @@ Use `build.ps1` for command-line builds. See [cpp-build skill](.github/skills/cp
 When working with this codebase:
 - Always use WIL RAII wrappers for Windows resources
 - Prioritize performance and responsiveness
+- Treat performance validation as part of the feature contract: add or reuse metrics, add deterministic selftests, and archive runs when the scenario is perf-sensitive
+- When finishing a plan, move it to `Specs/Plans/Done/` and update the authoritative spec or repo guidance so the lasting contract does not live only in the plan
 - Consider DPI awareness in UI components
 - Respect the Windows-specific architecture
 - Suggest modern C++ patterns

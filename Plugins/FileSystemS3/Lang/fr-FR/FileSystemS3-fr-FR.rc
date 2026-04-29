@@ -1,0 +1,13 @@
+#pragma code_page(65001)
+#include "../../FileSystemS3Resources.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+STRINGTABLE
+BEGIN
+    IDS_FILESYSTEMS3_NAME "S3"
+    IDS_FILESYSTEMS3_DESCRIPTION "Système de fichiers virtuel Amazon S3."
+    IDS_FILESYSTEMS3TABLE_NAME "S3 Table"
+    IDS_FILESYSTEMS3TABLE_DESCRIPTION "Système de fichiers virtuel Amazon S3 Tables."
+END

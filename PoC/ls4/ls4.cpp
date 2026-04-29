@@ -23,7 +23,7 @@
 #include "PlugInterfaces/Factory.h"
 #include "PlugInterfaces/FileSystem.h"
 
-using CreateFactoryFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, void**);
+using CreateFactoryFunc = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
 
 namespace
 {
@@ -326,7 +326,7 @@ int wmain(int argc, wchar_t** argv)
     options.debugLevel = DEBUG_LEVEL_NONE;
 
     wil::com_ptr_nothrow<IFileSystem> fileSystem;
-    HRESULT hr = createFactory(__uuidof(IFileSystem), &options, nullptr, fileSystem.put_void());
+    HRESULT hr = createFactory(__uuidof(IFileSystem), &options, nullptr, L"builtin/file-system", fileSystem.put_void());
     if (FAILED(hr))
     {
         ReportError(L"RedSalamanderCreate(FileSystem)", hr);

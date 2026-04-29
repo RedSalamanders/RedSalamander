@@ -2,9 +2,25 @@
 
 ## Overview
 
-RedSalamander builds with **`/Wall`** (`<WarningLevel>EnableAllWarnings</WarningLevel>`) to keep a high bar for code quality.
+RedSalamander first-party builds default to **`/Wall`** (`<WarningLevel>EnableAllWarnings</WarningLevel>`) through `Directory.Build.props` to keep a high bar for code quality.
+
+RedSalamander first-party VC++ builds also inject **`/FS`** through `Directory.Build.props`. That keeps shared compiler PDB access stable under repo-wide `/MP` and solution-graph builds, instead of relying on ad-hoc per-project fixes.
+
+Proof-of-concept projects inherit the deliberate exception through `PoC/Directory.Build.props`: they default to `Level3` plus the shared `C4710/C4711` suppression so experiments are still consistent without weakening the repo-wide default. Any extra warning deviations beyond that shared PoC baseline should stay local to the specific PoC project file.
 
 Some MSVC warnings are **optimizer/inlining heuristics** that become extremely noisy under `/Wall` (especially in template-heavy code paths) and do not represent correctness issues. This spec documents which ones we suppress and why.
+
+`PerformanceTests2` is a documented local exception: it imports Windows SDK-, WIL-, STL-, and product-source-heavy translation units into a `/Wall` native unit-test harness, so only those imported source files carry a local suppression list for expected header/inlining noise (`C4061`, `C4100`, `C4191`, `C4263`, `C4264`, `C4355`, `C4365`, `C4464`, `C4619`, `C4625`, `C4626`, `C4668`, `C4710`, `C4711`, `C4820`, `C4865`, `C5026`, `C5027`, `C5039`, `C5045`, `C5204`, `C5220`, `C5246`). The project’s own test files remain under the repo-wide `/Wall` default.
+
+## Suppression Review Routine
+
+Every non-shared warning suppression MUST stay local to the narrowest project, file, or pragma scope that needs it. Each suppression MUST document:
+
+- rationale: why the warning is not currently actionable,
+- owner: the project/component that owns the exception,
+- expiry/review task: the condition or follow-up that should remove or narrow it.
+
+Production/runtime projects MUST prefer fixing root causes over adding project-wide suppressions. Test projects MAY carry broader suppressions only when they intentionally aggregate SDK, WIL, STL, or product-source-heavy translation units, and the project file documents the rationale/owner/expiry. `C5039` is especially sensitive: production callback exception-spec warnings must be fixed or suppressed at the exact callback boundary with a local rationale, not hidden at project scope.
 
 ## Suppressed Warnings
 
@@ -43,4 +59,5 @@ All C++ projects keep `/Wall` enabled and disable these warnings via MSBuild:
 Notes:
 - We keep `%(DisableSpecificWarnings)` to preserve any existing warning suppressions from imported property sheets.
 - `/external:*` and `ExternalWarningLevel` are not sufficient for C4710/C4711 because these warnings are produced during optimization of our translation units even when the file/line points into a header.
+- Any suppression beyond this shared optimizer-noise baseline must follow the suppression review routine above.
 

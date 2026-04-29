@@ -32,6 +32,8 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "DxUi/DxUi.Typography.h"
+
 namespace RedSalamander::Ui
 {
 enum class AlertSeverity : uint8_t
@@ -588,37 +590,23 @@ private:
         constexpr float kButtonSizeDip = 13.0f;
         constexpr float kIconSizeDip   = 56.0f;
 
-        static_cast<void>(dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_SEMI_BOLD, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, kTitleSizeDip, L"", _titleFormat.put()));
-        static_cast<void>(dwriteFactory->CreateTextFormat(
-            L"Segoe UI", nullptr, DWRITE_FONT_WEIGHT_NORMAL, DWRITE_FONT_STYLE_NORMAL, DWRITE_FONT_STRETCH_NORMAL, kBodySizeDip, L"", _bodyFormat.put()));
-        static_cast<void>(dwriteFactory->CreateTextFormat(L"Segoe UI",
-                                                          nullptr,
-                                                          DWRITE_FONT_WEIGHT_SEMI_BOLD,
-                                                          DWRITE_FONT_STYLE_NORMAL,
-                                                          DWRITE_FONT_STRETCH_NORMAL,
-                                                          kButtonSizeDip,
-                                                          L"",
-                                                          _buttonFormat.put()));
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(kTitleSizeDip, DWRITE_FONT_WEIGHT_SEMI_BOLD), _titleFormat.put(), L""));
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(kBodySizeDip), _bodyFormat.put(), L""));
+        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+            dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(kButtonSizeDip, DWRITE_FONT_WEIGHT_SEMI_BOLD), _buttonFormat.put(), L""));
 
-        if (FAILED(dwriteFactory->CreateTextFormat(L"Segoe Fluent Icons",
-                                                   nullptr,
-                                                   DWRITE_FONT_WEIGHT_NORMAL,
-                                                   DWRITE_FONT_STYLE_NORMAL,
-                                                   DWRITE_FONT_STRETCH_NORMAL,
-                                                   kIconSizeDip,
-                                                   L"",
-                                                   _iconFormat.put())))
+        if (FAILED(RedSalamander::DxUi::Typography::CreateTextFormat(
+                dwriteFactory, RedSalamander::DxUi::Typography::MakeUiIconSpec(kIconSizeDip), _iconFormat.put(), L"")))
         {
             _iconFormat.reset();
-            static_cast<void>(dwriteFactory->CreateTextFormat(L"Segoe MDL2 Assets",
-                                                              nullptr,
-                                                              DWRITE_FONT_WEIGHT_NORMAL,
-                                                              DWRITE_FONT_STYLE_NORMAL,
-                                                              DWRITE_FONT_STRETCH_NORMAL,
-                                                              kIconSizeDip,
-                                                              L"",
-                                                              _iconFormat.put()));
+            static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
+                dwriteFactory,
+                RedSalamander::DxUi::Typography::TypographySpec{
+                    .familyName = RedSalamander::DxUi::Typography::kSegoeMdl2AssetsFamily, .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = kIconSizeDip},
+                _iconFormat.put(),
+                L""));
         }
 
         if (_iconFormat)

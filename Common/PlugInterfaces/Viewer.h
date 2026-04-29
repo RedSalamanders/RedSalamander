@@ -57,7 +57,7 @@ struct ViewerOpenContext
 struct ViewerTheme
 {
     // ABI version for forward compatibility.
-    // Current version: 2
+    // Current version: 4
     uint32_t version;
 
     // DPI of the host window at the time of notification.
@@ -83,6 +83,15 @@ struct ViewerTheme
     BOOL highContrast;
     BOOL rainbowMode;
     BOOL darkBase;
+
+    // Diff semantic colors (ARGB 0xAARRGGBB). Used by parsed diff-capable viewers.
+    uint32_t diffAddedBackgroundArgb;
+    uint32_t diffRemovedBackgroundArgb;
+    uint32_t diffContextBackgroundArgb;
+    uint32_t diffHeaderBackgroundArgb;
+    uint32_t diffBannerBackgroundArgb;
+    uint32_t diffPlaceholderBackgroundArgb;
+    uint32_t diffDividerArgb;
 };
 #pragma warning(pop)
 
@@ -90,6 +99,10 @@ struct ViewerTheme
 // Notes:
 // - This is NOT a COM interface (no IUnknown inheritance); lifetime is managed by the host.
 // - The host must call IViewer::SetCallback(nullptr, nullptr) before releasing/unloading the plugin.
+// - SetCallback(nullptr, nullptr) is the synchronous drain point for registration-style callbacks:
+//   after it returns, the plugin MUST NOT invoke the previously registered callback again.
+// - Plugins with queued or background work MUST either let that work complete before SetCallback(nullptr, nullptr)
+//   returns or self-drop stale work before invoking the callback.
 // - The cookie is provided by the host at registration time and must be passed back verbatim by the plugin.
 interface __declspec(novtable) IViewerCallback
 {
@@ -108,5 +121,10 @@ interface __declspec(uuid("d1da10b7-0d0d-4d5c-9b3c-30c386c9d3c7")) __declspec(no
     // Applies the current theme. Plugins MUST accept being called before or after Open().
     virtual HRESULT STDMETHODCALLTYPE SetTheme(const ViewerTheme* theme) noexcept = 0;
 
+    // Registration-style callback contract:
+    // - SetCallback(callback, cookie) registers or replaces the current host callback.
+    // - SetCallback(nullptr, nullptr) clears the registration and synchronously drains callback delivery.
+    // - Clearing the callback is idempotent.
+    // - Plugins MUST NOT hold locks across the drain wait if callback delivery can take those same locks.
     virtual HRESULT STDMETHODCALLTYPE SetCallback(IViewerCallback * callback, void* cookie) noexcept = 0;
 };

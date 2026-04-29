@@ -9,6 +9,9 @@ namespace
 {
 constexpr HRESULT kFileTooLargeHr = HRESULT_FROM_WIN32(ERROR_FILE_TOO_LARGE);
 
+// Maximum decoded text length for regex matching to bound worst-case execution time.
+constexpr size_t kMaxRegexContentCharacters = 5u * 1024u * 1024u;
+
 [[nodiscard]] std::wstring FoldWideText(std::wstring_view text) noexcept
 {
     std::wstring result(text);
@@ -186,15 +189,10 @@ bool TryDecodeSearchableText(std::span<const std::byte> bytes, UINT fallbackCode
         }
     }
 
-    if (bytes.size() >= 3u &&
-        std::to_integer<uint8_t>(bytes[0]) == 0xEFu &&
-        std::to_integer<uint8_t>(bytes[1]) == 0xBBu &&
+    if (bytes.size() >= 3u && std::to_integer<uint8_t>(bytes[0]) == 0xEFu && std::to_integer<uint8_t>(bytes[1]) == 0xBBu &&
         std::to_integer<uint8_t>(bytes[2]) == 0xBFu)
     {
-        result.text = DecodeMultiByte(CP_UTF8,
-                                      MB_ERR_INVALID_CHARS,
-                                      reinterpret_cast<const char*>(bytes.data() + 3u),
-                                      bytes.size() - 3u);
+        result.text          = DecodeMultiByte(CP_UTF8, MB_ERR_INVALID_CHARS, reinterpret_cast<const char*>(bytes.data() + 3u), bytes.size() - 3u);
         result.encoding      = DecodedTextEncoding::Utf8;
         result.utf8Validated = ! result.text.empty() || bytes.size() == 3u;
         return true;
@@ -215,7 +213,7 @@ bool TryDecodeSearchableText(std::span<const std::byte> bytes, UINT fallbackCode
     }
 
     const UINT resolvedFallback = fallbackCodePage != 0u ? fallbackCodePage : CP_ACP;
-    result.text = DecodeMultiByte(resolvedFallback, 0u, reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    result.text                 = DecodeMultiByte(resolvedFallback, 0u, reinterpret_cast<const char*>(bytes.data()), bytes.size());
     if (! result.text.empty())
     {
         result.encoding             = DecodedTextEncoding::Ansi;
@@ -256,11 +254,7 @@ std::wstring BuildSnippet(std::wstring_view text, size_t matchPosition, size_t m
     return snippet;
 }
 
-bool FindLiteralWithChunkOverlap(std::wstring_view haystack,
-                                 std::wstring_view needle,
-                                 bool caseSensitive,
-                                 size_t chunkCharacters,
-                                 size_t& outPosition) noexcept
+bool FindLiteralWithChunkOverlap(std::wstring_view haystack, std::wstring_view needle, bool caseSensitive, size_t chunkCharacters, size_t& outPosition) noexcept
 {
     outPosition = std::wstring_view::npos;
 
@@ -280,13 +274,13 @@ bool FindLiteralWithChunkOverlap(std::wstring_view haystack,
         chunkCharacters = haystack.size();
     }
 
-    const size_t chunkSize = (std::max)(chunkCharacters, static_cast<size_t>(1u));
-    const size_t overlap   = needle.size() > 1u ? needle.size() - 1u : 0u;
+    const size_t chunkSize          = (std::max)(chunkCharacters, static_cast<size_t>(1u));
+    const size_t overlap            = needle.size() > 1u ? needle.size() - 1u : 0u;
     const std::wstring foldedNeedle = caseSensitive ? std::wstring() : FoldWideText(needle);
 
     for (size_t start = 0u; start < haystack.size();)
     {
-        const size_t windowLength = (std::min)(haystack.size() - start, chunkSize + overlap);
+        const size_t windowLength      = (std::min)(haystack.size() - start, chunkSize + overlap);
         const std::wstring_view window = haystack.substr(start, windowLength);
 
         size_t localPos = std::wstring_view::npos;
@@ -317,13 +311,10 @@ bool FindLiteralWithChunkOverlap(std::wstring_view haystack,
     return false;
 }
 
-bool MatchDecodedText(const DecodedTextResult& decoded,
-                      const TextSearchPattern& pattern,
-                      uint32_t maxSnippetCharacters,
-                      bool wantSnippets,
-                      TextSearchResult& result) noexcept
+bool MatchDecodedText(
+    const DecodedTextResult& decoded, const TextSearchPattern& pattern, uint32_t maxSnippetCharacters, bool wantSnippets, TextSearchResult& result) noexcept
 {
-    result = {};
+    result                      = {};
     result.encoding             = decoded.encoding;
     result.usedFallbackCodePage = decoded.usedFallbackCodePage;
     result.binarySkipped        = decoded.binary;
@@ -333,14 +324,11 @@ bool MatchDecodedText(const DecodedTextResult& decoded,
 
     switch (pattern.mode)
     {
-        case FILESYSTEM_SEARCH_CONTENT_DISABLED:
-            result.matched = true;
-            return true;
+        case FILESYSTEM_SEARCH_CONTENT_DISABLED: result.matched = true; return true;
 
         case FILESYSTEM_SEARCH_CONTENT_TEXT_LITERAL:
-            result.matched = FindLiteralWithChunkOverlap(
-                decoded.text, pattern.pattern, pattern.caseSensitive, pattern.literalChunkCharacters, matchPosition);
-            matchLength = pattern.pattern.size();
+            result.matched = FindLiteralWithChunkOverlap(decoded.text, pattern.pattern, pattern.caseSensitive, pattern.literalChunkCharacters, matchPosition);
+            matchLength    = pattern.pattern.size();
             break;
 
         case FILESYSTEM_SEARCH_CONTENT_TEXT_REGEX:
@@ -350,12 +338,26 @@ bool MatchDecodedText(const DecodedTextResult& decoded,
                 return false;
             }
 
-            std::wsmatch match;
-            result.matched = std::regex_search(decoded.text, match, *pattern.compiledRegex);
-            if (result.matched)
+            if (decoded.text.size() > kMaxRegexContentCharacters)
             {
-                matchPosition = static_cast<size_t>(match.position());
-                matchLength   = static_cast<size_t>(match.length());
+                return false;
+            }
+
+            // noexcept boundary: std::regex_search may throw regex_error on
+            // implementation-defined complexity/stack limits.
+            try
+            {
+                std::wsmatch match;
+                result.matched = std::regex_search(decoded.text, match, *pattern.compiledRegex);
+                if (result.matched)
+                {
+                    matchPosition = static_cast<size_t>(match.position());
+                    matchLength   = static_cast<size_t>(match.length());
+                }
+            }
+            catch (const std::regex_error&)
+            {
+                result.matched = false;
             }
             break;
         }
@@ -369,9 +371,8 @@ bool MatchDecodedText(const DecodedTextResult& decoded,
     if (matchPosition != std::wstring_view::npos)
     {
         result.matchOffset = static_cast<uint64_t>(matchPosition);
-        result.matchLength = matchLength > static_cast<size_t>((std::numeric_limits<uint32_t>::max)())
-                                 ? (std::numeric_limits<uint32_t>::max)()
-                                 : static_cast<uint32_t>(matchLength);
+        result.matchLength = matchLength > static_cast<size_t>((std::numeric_limits<uint32_t>::max)()) ? (std::numeric_limits<uint32_t>::max)()
+                                                                                                       : static_cast<uint32_t>(matchLength);
         if (wantSnippets)
         {
             result.previewText = BuildSnippet(decoded.text, matchPosition, matchLength, maxSnippetCharacters);
@@ -381,12 +382,8 @@ bool MatchDecodedText(const DecodedTextResult& decoded,
     return true;
 }
 
-HRESULT ReadReaderBytes(IFileReader* reader,
-                        uint64_t maxBytes,
-                        CancelCheck cancelCheck,
-                        void* cancelCookie,
-                        size_t chunkBytes,
-                        std::vector<std::byte>& bytes) noexcept
+HRESULT ReadReaderBytes(
+    IFileReader* reader, uint64_t maxBytes, CancelCheck cancelCheck, void* cancelCookie, size_t chunkBytes, std::vector<std::byte>& bytes) noexcept
 {
     if (reader == nullptr)
     {

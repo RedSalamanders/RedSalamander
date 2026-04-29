@@ -101,8 +101,37 @@ When an operation starts, RedSalamander creates a **task** and shows it in the F
 - Tasks can be **Paused** and **Canceled**.
 - Execution mode can be:
   - **Wait** (sequential queue)
-  - **Parallel** (multiple tasks run concurrently)
+- **Parallel** (multiple tasks run concurrently)
 - Copy/Move tasks support a per-task **Speed Limit**.
+
+## Defaults and settings
+
+### Preferences -> File Operations
+
+This page owns host-wide defaults that apply to newly created tasks:
+
+- **Enable pre-calculation scan**: turns the preflight tree walk on or off for new copy/move tasks.
+- **Pre-calculation workers**: chooses the host worker budget (`1` to `8`) used by that preflight scan.
+- **Default speed limit**: seeds new copy/move tasks with **Unlimited**, a preset (`1 MiB/s` through `1 GiB/s`), or a **Custom** throughput value such as `128KB`, `5MB`, or `1GB`.
+- **Cross-FS bridge buffer (KB)**: sets the per-buffer size (`512` to `16384`) used by the host bridge when copying between different file systems. Two buffers are allocated per active bridged transfer.
+
+The page also includes a reminder that plugin-owned settings stay under **Preferences -> Plugins -> File System**.
+
+### Preferences -> Plugins -> File System
+
+These plugin-owned settings control how the FileSystem plugin executes work:
+
+- **Concurrency mode**: `Manual` uses the configured copy/move and delete budgets, while `Auto` resolves a budget from the source/destination storage characteristics at task start.
+- **Copy/move max concurrency**: plugin default worker budget for copy/move tasks.
+- **Delete max concurrency** and **Recycle Bin delete concurrency**: plugin default worker budgets for delete paths.
+- **Recycle Bin batch size**: cap used when batching recycle-bin deletes through `IFileOperation::DeleteItems()`.
+- **Search max directory walkers**: worker budget used by recursive name-only search directory walking.
+
+### Per-connection and per-task overrides
+
+- A non-zero **per-connection** copy/move override takes precedence over the FileSystem plugin default for tasks created through that connection.
+- A **per-task** speed limit chosen in the File Operations popup overrides the global default for that task only.
+- Global File Operations preferences affect newly created tasks; they do not retune already-running operations.
 
 ## Diagnostics (logs and issue reports)
 

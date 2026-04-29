@@ -5,10 +5,15 @@
 #include "Preferences.CompareDirectories.h"
 
 #include <algorithm>
+#include <array>
+#include <cmath>
+#include <span>
 #include <string>
+#include <vector>
 
+#include "DxUi/DxUi.h"
 #include "Helpers.h"
-#include "ThemedControls.h"
+#include "UiMetrics.h"
 #include "resource.h"
 
 // Local convenience aliases for frequently-used shared utilities
@@ -17,732 +22,1134 @@ namespace
 using PrefsCompareDirectories::EnsureWorkingCompareDirectoriesSettings;
 using PrefsCompareDirectories::GetCompareDirectoriesSettingsOrDefault;
 using PrefsCompareDirectories::MaybeResetWorkingCompareDirectoriesSettingsIfEmpty;
+
+using RedSalamander::DxUi::CardPanel;
+using RedSalamander::DxUi::ComboBox;
+using RedSalamander::DxUi::ComboBoxVariant;
+using RedSalamander::DxUi::FontRole;
+using RedSalamander::DxUi::Label;
+using RedSalamander::DxUi::Panel;
+using RedSalamander::DxUi::TextField;
+using RedSalamander::DxUi::ThemePalette;
+using RedSalamander::DxUi::Toggle;
+constexpr std::array<UINT, 5> kCompareHeaderStringIds = {{
+    IDS_PREFS_ADV_HEADER_COMPARE_DIRECTORIES,
+    IDS_COMPARE_OPTIONS_SECTION_SUBDIRS,
+    IDS_COMPARE_OPTIONS_SECTION_COMPARE,
+    IDS_COMPARE_OPTIONS_SECTION_ADVANCED,
+    IDS_COMPARE_OPTIONS_SECTION_IGNORE,
+}};
+
+constexpr std::array<UINT, 11> kCompareToggleLabelStringIds = {{
+    IDS_COMPARE_OPTIONS_SUBDIRS_TITLE,
+    IDS_COMPARE_OPTIONS_SIZE_TITLE,
+    IDS_COMPARE_OPTIONS_DATETIME_TITLE,
+    IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE,
+    IDS_COMPARE_OPTIONS_CONTENT_TITLE,
+    IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE,
+    IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE,
+    IDS_PREFS_COMPARE_KEEP_IDENTICAL_TITLE,
+    IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE,
+    IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE,
+    IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE,
+}};
+
+constexpr std::array<UINT, 11> kCompareToggleDescriptionStringIds = {{
+    IDS_COMPARE_OPTIONS_SUBDIRS_DESC,
+    IDS_COMPARE_OPTIONS_SIZE_DESC,
+    IDS_COMPARE_OPTIONS_DATETIME_DESC,
+    IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC,
+    IDS_COMPARE_OPTIONS_CONTENT_DESC,
+    IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC,
+    IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC,
+    IDS_PREFS_COMPARE_KEEP_IDENTICAL_DESC,
+    IDS_PREFS_COMPARE_SHOW_IDENTICAL_DESC,
+    IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC,
+    IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC,
+}};
+
+constexpr std::array<UINT, 11> kCompareToggleCommandIds = {{
+    IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_KEEP_IDENTICAL_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE,
+    IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE,
+}};
+
+constexpr size_t kCompareIgnoreFilesIndex       = 9u;
+constexpr size_t kCompareIgnoreDirectoriesIndex = 10u;
+
+void ReorderPanelChildren(Panel* root, std::span<RedSalamander::DxUi::Control* const> orderedControls)
+{
+    if (! root)
+    {
+        return;
+    }
+
+    auto children = root->GetChildren();
+    if (children.empty())
+    {
+        return;
+    }
+
+    std::vector<std::unique_ptr<RedSalamander::DxUi::Control>> reordered;
+    reordered.reserve(children.size());
+
+    auto moveChild = [&](RedSalamander::DxUi::Control* wanted) noexcept
+    {
+        if (! wanted)
+        {
+            return;
+        }
+
+        for (auto& child : children)
+        {
+            if (child && child.get() == wanted)
+            {
+                reordered.push_back(std::move(child));
+                return;
+            }
+        }
+    };
+
+    for (RedSalamander::DxUi::Control* const control : orderedControls)
+    {
+        moveChild(control);
+    }
+
+    for (auto& child : children)
+    {
+        if (child)
+        {
+            reordered.push_back(std::move(child));
+        }
+    }
+
+    if (reordered.size() != children.size())
+    {
+        return;
+    }
+
+    for (size_t index = 0; index < children.size(); ++index)
+    {
+        children[index] = std::move(reordered[index]);
+    }
+}
+
 } // namespace
 
-bool CompareDirectoriesPane::EnsureCreated(HWND pageHost) noexcept
+struct CompareToggleCardPageDx
 {
-    return PrefsPaneHost::EnsureCreated(pageHost, _hWnd);
+    CardPanel* card    = nullptr;
+    Label* title       = nullptr;
+    Label* description = nullptr;
+    Toggle* toggle     = nullptr;
+    TextField* edit    = nullptr;
+};
+
+struct CompareComboCardPageDx
+{
+    CardPanel* card    = nullptr;
+    Label* title       = nullptr;
+    Label* description = nullptr;
+    ComboBox* combo    = nullptr;
+};
+
+struct CompareDxPage
+{
+    CompareDxPage()                                = default;
+    CompareDxPage(const CompareDxPage&)            = delete;
+    CompareDxPage& operator=(const CompareDxPage&) = delete;
+    CompareDxPage(CompareDxPage&&)                 = delete;
+    CompareDxPage& operator=(CompareDxPage&&)      = delete;
+
+    std::array<Label*, kCompareHeaderStringIds.size()> headers{};
+    std::array<CompareToggleCardPageDx, kCompareToggleLabelStringIds.size()> toggleCards{};
+    CompareComboCardPageDx contentWorkers;
+
+    void Detach() noexcept
+    {
+        headers.fill(nullptr);
+        for (auto& card : toggleCards)
+        {
+            card = {};
+        }
+        contentWorkers = {};
+    }
+};
+
+struct CompareDirectoriesPane::DxState
+{
+    DxState()                          = default;
+    DxState(const DxState&)            = delete;
+    DxState& operator=(const DxState&) = delete;
+    DxState(DxState&&)                 = delete;
+    DxState& operator=(DxState&&)      = delete;
+
+    CompareDxPage page;
+
+    void Detach() noexcept
+    {
+        page.Detach();
+    }
+};
+
+CompareDirectoriesPane::CompareDirectoriesPane() = default;
+
+CompareDirectoriesPane::~CompareDirectoriesPane()
+{
+    DetachDxHosts();
 }
 
-void CompareDirectoriesPane::ResizeToHostClient(HWND pageHost) noexcept
+void CompareDirectoriesPane::OnVisibilityChanged(bool visible) noexcept
 {
-    PrefsPaneHost::ResizeToHostClient(pageHost, _hWnd.get());
+    static_cast<void>(visible);
 }
 
-void CompareDirectoriesPane::Show(bool visible) noexcept
+void CompareDirectoriesPane::Destroy(PreferencesDialogState& state) noexcept
 {
-    PrefsPaneHost::Show(_hWnd.get(), visible);
+    static_cast<void>(state);
+    DetachDxHosts();
+    _state    = nullptr;
+    _pageHost = nullptr;
 }
 
-void CompareDirectoriesPane::CreateControls(HWND parent, PreferencesDialogState& state) noexcept
+bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexcept
+{
+    _pageHostDx      = state.pageHostDxHost;
+    _pageContentRoot = state.pageHostDxContentRootControl;
+    if (! _pageHostDx || ! _pageContentRoot)
+    {
+        return false;
+    }
+
+    if (_dxState && PrefsUi::HasRetainedDxChildren(_pageContentRoot))
+    {
+        ApplyDxTheme(state);
+        SyncDxControlsFromState(state);
+        return true;
+    }
+
+    auto dxState = std::make_unique<DxState>();
+    _pageHostDx->ResetInteractionState();
+    _pageContentRoot->ClearChildren();
+
+    auto* root = _pageContentRoot;
+
+    for (Label*& header : dxState->page.headers)
+    {
+        header = root->AddChild<Label>();
+        header->SetFontRole(FontRole::Header);
+    }
+
+    for (size_t i = 0; i < dxState->page.toggleCards.size(); ++i)
+    {
+        CompareToggleCardPageDx& card = dxState->page.toggleCards[i];
+        const UINT commandId          = kCompareToggleCommandIds[i];
+
+        card.card  = root->AddChild<CardPanel>();
+        card.title = root->AddChild<Label>();
+        card.title->SetFontRole(FontRole::Body);
+        card.description = root->AddChild<Label>();
+        card.description->SetFontRole(FontRole::Small);
+        card.description->SetMultiline(true);
+        card.toggle = root->AddChild<Toggle>();
+        card.toggle->SetStateLabels(LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF), LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
+        card.toggle->SetOnToggled([this, host = parent, commandId](bool checked) noexcept
+        {
+            if (! host || IsWindow(host) == FALSE)
+            {
+                return;
+            }
+
+            auto* dialogState = PrefsUi::GetDialogState(host);
+            if (! dialogState)
+            {
+                return;
+            }
+
+            auto* compare = EnsureWorkingCompareDirectoriesSettings(dialogState->workingSettings);
+            if (! compare)
+            {
+                return;
+            }
+
+            switch (commandId)
+            {
+                case IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE: compare->compareSize = checked; break;
+                case IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE: compare->compareDateTime = checked; break;
+                case IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE: compare->compareAttributes = checked; break;
+                case IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE: compare->compareContent = checked; break;
+                case IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE: compare->compareSubdirectories = checked; break;
+                case IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE: compare->compareSubdirectoryAttributes = checked; break;
+                case IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE: compare->selectSubdirsOnlyInOnePane = checked; break;
+                case IDC_PREFS_ADV_COMPARE_KEEP_IDENTICAL_TOGGLE:
+                    compare->keepIdenticalItems = checked;
+                    if (! checked)
+                    {
+                        compare->showIdenticalItems = false;
+                    }
+                    break;
+                case IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE:
+                    compare->showIdenticalItems = checked;
+                    if (checked)
+                    {
+                        compare->keepIdenticalItems = true;
+                    }
+                    break;
+                case IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE: compare->ignoreFiles = checked; break;
+                case IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE: compare->ignoreDirectories = checked; break;
+                default: return;
+            }
+
+            MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(dialogState->workingSettings);
+            SetDirty(GetParent(host), *dialogState);
+            Refresh(host, *dialogState);
+
+            if (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE)
+            {
+                // Post a deferred relayout so LayoutPreferencesPageHost shows/hides the
+                // pattern edit field.  SendMessageW(host, WM_SIZE) does NOT work: the
+                // DxUi host intercepts WM_SIZE before LayoutPreferencesPageHost is reached.
+                static_cast<void>(PrefsUi::PostDeferredAction(host, PreferencesDeferredActionKind::CompareDirectoriesIgnoreToggleChanged));
+            }
+        });
+
+        if (i == kCompareIgnoreFilesIndex || i == kCompareIgnoreDirectoriesIndex)
+        {
+            TextField* edit = root->AddChild<TextField>();
+            card.edit       = edit;
+
+            bool* syncFlag = (i == kCompareIgnoreFilesIndex) ? &_syncingDxIgnoreFilesEdit : &_syncingDxIgnoreDirectoriesEdit;
+
+            edit->SetOnTextChanged([this, host = parent, syncFlag, isFiles = (i == kCompareIgnoreFilesIndex)](std::wstring_view text) noexcept
+            {
+                if (! syncFlag || *syncFlag || ! _state)
+                {
+                    return;
+                }
+
+                auto* compare = EnsureWorkingCompareDirectoriesSettings(_state->workingSettings);
+                if (! compare)
+                {
+                    return;
+                }
+
+                const std::wstring newValue(text);
+                bool changed = false;
+                if (isFiles)
+                {
+                    if (compare->ignoreFilesPatterns != newValue)
+                    {
+                        compare->ignoreFilesPatterns = newValue;
+                        changed                      = true;
+                    }
+                }
+                else
+                {
+                    if (compare->ignoreDirectoriesPatterns != newValue)
+                    {
+                        compare->ignoreDirectoriesPatterns = newValue;
+                        changed                            = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(_state->workingSettings);
+                    SetDirty(GetParent(host), *_state);
+                }
+            });
+            edit->SetOnBlur([this, host = parent]() noexcept
+            {
+                if (! _state)
+                {
+                    return;
+                }
+                Refresh(host, *_state);
+            });
+        }
+    }
+
+    dxState->page.contentWorkers.card  = root->AddChild<CardPanel>();
+    dxState->page.contentWorkers.title = root->AddChild<Label>();
+    dxState->page.contentWorkers.title->SetFontRole(FontRole::Body);
+    dxState->page.contentWorkers.description = root->AddChild<Label>();
+    dxState->page.contentWorkers.description->SetFontRole(FontRole::Small);
+    dxState->page.contentWorkers.description->SetMultiline(true);
+    dxState->page.contentWorkers.combo = root->AddChild<ComboBox>();
+    dxState->page.contentWorkers.combo->SetVariant(ComboBoxVariant::Window);
+
+    {
+        std::vector<ComboBox::Item> items;
+        items.push_back({L"0", LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_AUTO)});
+        for (uint32_t i = 1; i <= 4; ++i)
+        {
+            auto label = std::to_wstring(i);
+            items.push_back({label, label});
+        }
+        dxState->page.contentWorkers.combo->SetItems(std::move(items));
+    }
+
+    dxState->page.contentWorkers.combo->SetOnSelectionChanged([this, host = parent](size_t itemIndex) noexcept
+    {
+        if (_syncingDxContentWorkersCombo || ! _state)
+        {
+            return;
+        }
+
+        const uint32_t newValue = std::clamp(static_cast<uint32_t>(itemIndex), 0u, 4u);
+
+        auto* compare = EnsureWorkingCompareDirectoriesSettings(_state->workingSettings);
+        if (! compare)
+        {
+            return;
+        }
+
+        if (compare->contentCompareWorkerCount != newValue)
+        {
+            compare->contentCompareWorkerCount = newValue;
+            MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(_state->workingSettings);
+            SetDirty(GetParent(host), *_state);
+            Refresh(host, *_state);
+        }
+    });
+
+    {
+        CompareDxPage& page = dxState->page;
+        std::vector<RedSalamander::DxUi::Control*> orderedChildren;
+        orderedChildren.reserve(_pageContentRoot->DebugChildCount());
+
+        const auto appendHeader = [&](const size_t index) noexcept { orderedChildren.push_back(page.headers[index]); };
+
+        const auto appendToggleCard = [&](const size_t index, const bool includeEdit) noexcept
+        {
+            orderedChildren.push_back(page.toggleCards[index].card);
+            orderedChildren.push_back(page.toggleCards[index].title);
+            orderedChildren.push_back(page.toggleCards[index].description);
+            orderedChildren.push_back(page.toggleCards[index].toggle);
+            if (includeEdit)
+            {
+                orderedChildren.push_back(page.toggleCards[index].edit);
+            }
+        };
+
+        const auto appendComboCard = [&]() noexcept
+        {
+            orderedChildren.push_back(page.contentWorkers.card);
+            orderedChildren.push_back(page.contentWorkers.title);
+            orderedChildren.push_back(page.contentWorkers.description);
+            orderedChildren.push_back(page.contentWorkers.combo);
+        };
+
+        appendHeader(0u);
+        appendToggleCard(0u, false);
+
+        appendHeader(1u);
+        appendToggleCard(1u, false);
+        appendToggleCard(2u, false);
+        appendToggleCard(3u, false);
+        appendToggleCard(4u, false);
+        appendComboCard();
+
+        appendHeader(2u);
+        appendToggleCard(5u, false);
+        appendToggleCard(6u, false);
+        appendToggleCard(7u, false);
+        appendToggleCard(8u, false);
+
+        appendHeader(4u);
+        appendToggleCard(9u, true);
+        appendToggleCard(10u, true);
+
+        appendHeader(3u);
+
+        ReorderPanelChildren(_pageContentRoot, orderedChildren);
+    }
+
+    _dxState = std::move(dxState);
+    ApplyDxTheme(state);
+    SyncDxControlsFromState(state);
+    return true;
+}
+
+void CompareDirectoriesPane::DetachDxHosts() noexcept
+{
+    if (_pageContentRoot && _pageHostDx && _pageHost && IsWindow(_pageHost) != FALSE)
+    {
+        _pageHostDx->ResetInteractionState();
+        _pageContentRoot->ClearChildren();
+    }
+    _pageHostDx      = nullptr;
+    _pageContentRoot = nullptr;
+
+    if (_dxState)
+    {
+        _dxState->Detach();
+        _dxState.reset();
+    }
+}
+
+void CompareDirectoriesPane::ApplyDxTheme(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState || ! _pageHostDx)
+    {
+        return;
+    }
+
+    _pageHostDx->SetTheme(PrefsUi::MakeDxPalette(state.theme));
+}
+
+void CompareDirectoriesPane::SyncDxControlsFromState(const PreferencesDialogState& state) noexcept
+{
+    if (! _dxState)
+    {
+        return;
+    }
+
+    const auto& compare = GetCompareDirectoriesSettingsOrDefault(state.workingSettings);
+    CompareDxPage& page = _dxState->page;
+
+    for (size_t i = 0; i < kCompareHeaderStringIds.size(); ++i)
+    {
+        Label* header = page.headers[i];
+        if (! header)
+        {
+            continue;
+        }
+
+        header->SetText(LoadStringResource(nullptr, kCompareHeaderStringIds[i]));
+        header->SetEnabled(true);
+    }
+
+    for (size_t i = 0; i < page.toggleCards.size(); ++i)
+    {
+        CompareToggleCardPageDx& card = page.toggleCards[i];
+        if (card.title)
+        {
+            card.title->SetText(LoadStringResource(nullptr, kCompareToggleLabelStringIds[i]));
+        }
+        if (card.description)
+        {
+            card.description->SetText(LoadStringResource(nullptr, kCompareToggleDescriptionStringIds[i]));
+        }
+        if (card.toggle)
+        {
+            bool checked = false;
+            bool enabled = true;
+            switch (kCompareToggleCommandIds[i])
+            {
+                case IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE: checked = compare.compareSubdirectories; break;
+                case IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE: checked = compare.compareSize; break;
+                case IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE: checked = compare.compareDateTime; break;
+                case IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE: checked = compare.compareAttributes; break;
+                case IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE: checked = compare.compareContent; break;
+                case IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE: checked = compare.compareSubdirectoryAttributes; break;
+                case IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE: checked = compare.selectSubdirsOnlyInOnePane; break;
+                case IDC_PREFS_ADV_COMPARE_KEEP_IDENTICAL_TOGGLE: checked = compare.keepIdenticalItems; break;
+                case IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE:
+                    checked = compare.keepIdenticalItems && compare.showIdenticalItems;
+                    enabled = compare.keepIdenticalItems;
+                    break;
+                case IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE: checked = compare.ignoreFiles; break;
+                case IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE: checked = compare.ignoreDirectories; break;
+                default: break;
+            }
+            card.toggle->SetChecked(checked);
+            card.toggle->SetEnabled(enabled);
+        }
+
+        if (card.edit)
+        {
+            bool* syncFlag = nullptr;
+            std::wstring text;
+
+            if (i == kCompareIgnoreFilesIndex)
+            {
+                syncFlag = &_syncingDxIgnoreFilesEdit;
+                text     = compare.ignoreFilesPatterns;
+            }
+            else if (i == kCompareIgnoreDirectoriesIndex)
+            {
+                syncFlag = &_syncingDxIgnoreDirectoriesEdit;
+                text     = compare.ignoreDirectoriesPatterns;
+            }
+
+            if (syncFlag)
+            {
+                *syncFlag = true;
+                card.edit->SetText(std::move(text));
+                const bool enabled = (i == kCompareIgnoreFilesIndex) ? compare.ignoreFiles : compare.ignoreDirectories;
+                card.edit->SetEnabled(enabled);
+                *syncFlag = false;
+            }
+        }
+    }
+
+    if (page.contentWorkers.title)
+    {
+        page.contentWorkers.title->SetText(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_TITLE));
+        page.contentWorkers.title->SetEnabled(true);
+    }
+    if (page.contentWorkers.description)
+    {
+        page.contentWorkers.description->SetText(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_DESC));
+        page.contentWorkers.description->SetEnabled(true);
+    }
+    if (page.contentWorkers.combo)
+    {
+        _syncingDxContentWorkersCombo = true;
+        const size_t selectedIndex    = std::min(static_cast<size_t>(compare.contentCompareWorkerCount), size_t{4});
+        page.contentWorkers.combo->SetSelectedIndex(selectedIndex);
+        page.contentWorkers.combo->SetEnabled(true);
+        _syncingDxContentWorkersCombo = false;
+    }
+
+    if (_pageHostDx)
+    {
+        _pageHostDx->Invalidate();
+    }
+}
+
+void CompareDirectoriesPane::InitializePage(HWND parent, PreferencesDialogState& state) noexcept
 {
     if (! parent)
     {
         return;
     }
 
-    const DWORD baseStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX;
-    const DWORD wrapStaticStyle = WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL;
-    const bool customButtons    = ! state.theme.systemHighContrast;
+    _pageHost = parent;
+    _state    = &state;
 
-    const DWORD toggleStyle = customButtons ? (WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_OWNERDRAW) : (WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_AUTOCHECKBOX);
-
-    const HINSTANCE instance = GetModuleHandleW(nullptr);
-
-    const auto createToggle = [&](wil::unique_hwnd& out, UINT id, UINT labelResourceId) noexcept
+    if (state.currentCategory == PrefCategory::CompareDirectories)
     {
-        const std::wstring label = customButtons ? std::wstring{} : LoadStringResource(nullptr, labelResourceId);
-        out.reset(CreateWindowExW(
-            0, L"Button", label.c_str(), toggleStyle, 0, 0, 10, 10, parent, reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)), instance, nullptr));
-        PrefsInput::EnableMouseWheelForwarding(out);
-    };
-
-    createToggle(state.advancedCompareSizeToggle, IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE, IDS_COMPARE_OPTIONS_SIZE_TITLE);
-    createToggle(state.advancedCompareDateTimeToggle, IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE, IDS_COMPARE_OPTIONS_DATETIME_TITLE);
-    createToggle(state.advancedCompareAttributesToggle, IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE);
-    createToggle(state.advancedCompareContentToggle, IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE, IDS_COMPARE_OPTIONS_CONTENT_TITLE);
-
-    createToggle(state.advancedCompareSubdirectoriesToggle, IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE);
-    createToggle(
-        state.advancedCompareSubdirectoryAttributesToggle, IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE);
-    createToggle(
-        state.advancedCompareSelectSubdirsOnlyInOnePaneToggle, IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE);
-
-    createToggle(state.advancedCompareKeepIdenticalToggle, IDC_PREFS_ADV_COMPARE_KEEP_IDENTICAL_TOGGLE, IDS_PREFS_COMPARE_KEEP_IDENTICAL_TITLE);
-    createToggle(state.advancedCompareShowIdenticalToggle, IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE, IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE);
-
-    createToggle(state.advancedCompareIgnoreFilesToggle, IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE);
-    createToggle(state.advancedCompareIgnoreDirectoriesToggle, IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE);
-
-    state.advancedCompareDirectoriesHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareSectionSubdirsHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareSectionCompareHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareSectionAdditionalHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareSectionMoreHeader.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareSizeLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareSizeDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareDateTimeLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareDateTimeDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareAttributesLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareAttributesDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareContentLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareContentDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareContentWorkersLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    PrefsInput::CreateFramedComboBox(
-        state, parent, state.advancedCompareContentWorkersFrame, state.advancedCompareContentWorkersCombo, IDC_PREFS_ADV_COMPARE_CONTENT_WORKERS_COMBO);
-    state.advancedCompareContentWorkersDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareSubdirectoriesLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareSubdirectoriesDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareSubdirectoryAttributesLabel.reset(
-        CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareSubdirectoryAttributesDescription.reset(
-        CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareSelectSubdirsOnlyInOnePaneLabel.reset(
-        CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareSelectSubdirsOnlyInOnePaneDescription.reset(
-        CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareKeepIdenticalLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareKeepIdenticalDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareShowIdenticalLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareShowIdenticalDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-
-    state.advancedCompareIgnoreFilesLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareIgnoreFilesDescription.reset(CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareIgnoreFilesPatternsLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    PrefsInput::CreateFramedEditBox(state,
-                                    parent,
-                                    state.advancedCompareIgnoreFilesPatternsFrame,
-                                    state.advancedCompareIgnoreFilesPatternsEdit,
-                                    IDC_PREFS_ADV_COMPARE_IGNORE_FILES_PATTERNS_EDIT,
-                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.advancedCompareIgnoreFilesPatternsEdit)
-    {
-        SendMessageW(state.advancedCompareIgnoreFilesPatternsEdit.get(), EM_SETLIMITTEXT, 4096, 0);
-    }
-
-    state.advancedCompareIgnoreDirectoriesLabel.reset(CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareIgnoreDirectoriesDescription.reset(
-        CreateWindowExW(0, L"Static", L"", wrapStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    state.advancedCompareIgnoreDirectoriesPatternsLabel.reset(
-        CreateWindowExW(0, L"Static", L"", baseStaticStyle, 0, 0, 10, 10, parent, nullptr, instance, nullptr));
-    PrefsInput::CreateFramedEditBox(state,
-                                    parent,
-                                    state.advancedCompareIgnoreDirectoriesPatternsFrame,
-                                    state.advancedCompareIgnoreDirectoriesPatternsEdit,
-                                    IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_PATTERNS_EDIT,
-                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL);
-    if (state.advancedCompareIgnoreDirectoriesPatternsEdit)
-    {
-        SendMessageW(state.advancedCompareIgnoreDirectoriesPatternsEdit.get(), EM_SETLIMITTEXT, 4096, 0);
-    }
-
-    if (state.advancedCompareContentWorkersCombo)
-    {
-        SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_RESETCONTENT, 0, 0);
-
-        const std::wstring autoLabel = LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_AUTO);
-        const LRESULT autoIndex = SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(autoLabel.c_str()));
-        if (autoIndex != CB_ERR && autoIndex != CB_ERRSPACE)
+        if (! EnsureDxHosts(parent, state))
         {
-            SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(autoIndex), static_cast<LPARAM>(0));
+            Debug::Error(L"Preferences.CompareDirectories: DxUi surface initialization failed; page will not render correctly.");
+            DetachDxHosts();
         }
-
-        for (uint32_t i = 1; i <= 4; ++i)
-        {
-            const std::wstring label = std::to_wstring(i);
-            const LRESULT index      = SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_ADDSTRING, 0, reinterpret_cast<LPARAM>(label.c_str()));
-            if (index != CB_ERR && index != CB_ERRSPACE)
-            {
-                SendMessageW(state.advancedCompareContentWorkersCombo.get(), CB_SETITEMDATA, static_cast<WPARAM>(index), static_cast<LPARAM>(i));
-            }
-        }
-
-        ThemedControls::ApplyThemeToComboBox(state.advancedCompareContentWorkersCombo, state.theme);
     }
 
     Refresh(parent, state);
 }
 
-void CompareDirectoriesPane::Refresh(HWND /*host*/, PreferencesDialogState& state) noexcept
+void CompareDirectoriesPane::Refresh(HWND host, PreferencesDialogState& state) noexcept
 {
-    const auto& compare = GetCompareDirectoriesSettingsOrDefault(state.workingSettings);
-
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareSizeToggle, state.theme.systemHighContrast, compare.compareSize);
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareDateTimeToggle, state.theme.systemHighContrast, compare.compareDateTime);
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareAttributesToggle, state.theme.systemHighContrast, compare.compareAttributes);
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareContentToggle, state.theme.systemHighContrast, compare.compareContent);
-
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareSubdirectoriesToggle, state.theme.systemHighContrast, compare.compareSubdirectories);
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareSubdirectoryAttributesToggle, state.theme.systemHighContrast, compare.compareSubdirectoryAttributes);
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareSelectSubdirsOnlyInOnePaneToggle, state.theme.systemHighContrast, compare.selectSubdirsOnlyInOnePane);
-
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareKeepIdenticalToggle, state.theme.systemHighContrast, compare.keepIdenticalItems);
-
-    const bool showIdenticalEnabled = compare.keepIdenticalItems;
-    PrefsUi::SetTwoStateToggleState(
-        state.advancedCompareShowIdenticalToggle, state.theme.systemHighContrast, showIdenticalEnabled && compare.showIdenticalItems);
-
-    const BOOL enableShowIdenticalUi = showIdenticalEnabled ? TRUE : FALSE;
-    if (state.advancedCompareShowIdenticalLabel)
+    if (state.currentCategory == PrefCategory::CompareDirectories && ! _dxState)
     {
-        EnableWindow(state.advancedCompareShowIdenticalLabel.get(), enableShowIdenticalUi);
-    }
-    if (state.advancedCompareShowIdenticalToggle)
-    {
-        EnableWindow(state.advancedCompareShowIdenticalToggle.get(), enableShowIdenticalUi);
-    }
-    if (state.advancedCompareShowIdenticalDescription)
-    {
-        EnableWindow(state.advancedCompareShowIdenticalDescription.get(), enableShowIdenticalUi);
+        const HWND parent = _pageHost;
+        if (parent)
+        {
+            static_cast<void>(EnsureDxHosts(parent, state));
+        }
     }
 
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareIgnoreFilesToggle, state.theme.systemHighContrast, compare.ignoreFiles);
-    PrefsUi::SetTwoStateToggleState(state.advancedCompareIgnoreDirectoriesToggle, state.theme.systemHighContrast, compare.ignoreDirectories);
-
-    PrefsUi::SelectComboItemByData(state.advancedCompareContentWorkersCombo, static_cast<LPARAM>(compare.contentCompareWorkerCount));
-
-    if (state.advancedCompareIgnoreFilesPatternsEdit)
+    ApplyDxTheme(state);
+    SyncDxControlsFromState(state);
+    if (host)
     {
-        SetWindowTextW(state.advancedCompareIgnoreFilesPatternsEdit.get(), compare.ignoreFilesPatterns.c_str());
-    }
-    if (state.advancedCompareIgnoreDirectoriesPatternsEdit)
-    {
-        SetWindowTextW(state.advancedCompareIgnoreDirectoriesPatternsEdit.get(), compare.ignoreDirectoriesPatterns.c_str());
+        InvalidateRect(host, nullptr, FALSE);
     }
 }
 
-void CompareDirectoriesPane::LayoutControls(HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, HFONT dialogFont) noexcept
+void CompareDirectoriesPane::LayoutDxPage(
+    HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, const PreferencesTypographyContext& typography) noexcept
 {
     using namespace PrefsLayoutConstants;
 
+    static_cast<void>(host);
     static_cast<void>(margin);
 
-    if (! host)
+    Debug::Perf::Scope layoutPerf(L"preferences.ui.compare_directories_layout_us");
+    layoutPerf.SetValue0(static_cast<uint64_t>(std::max(0, width)));
+    layoutPerf.SetValue1(static_cast<uint64_t>(std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI)));
+
+    const UINT dpi = std::max<UINT>(typography.dpi, USER_DEFAULT_SCREEN_DPI);
+
+    const int rowHeight   = std::max(1, UiMetrics::ScaleDip(dpi, kRowHeightDip));
+    const int titleHeight = std::max(1, UiMetrics::ScaleDip(dpi, kTitleHeightDip));
+
+    const int cardPaddingX = UiMetrics::ScaleDip(dpi, kCardPaddingXDip);
+    const int cardPaddingY = UiMetrics::ScaleDip(dpi, kCardPaddingYDip);
+    const int cardGapY     = UiMetrics::ScaleDip(dpi, kCardGapYDip);
+    const int cardGapX     = UiMetrics::ScaleDip(dpi, kCardGapXDip);
+    const int cardSpacingY = UiMetrics::ScaleDip(dpi, kCardSpacingYDip);
+
+    const int minToggleWidth    = UiMetrics::ScaleDip(dpi, kMinToggleWidthDip);
+    const std::wstring onLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
+    const std::wstring offLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
+
+    const int onWidth  = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, onLabel);
+    const int offWidth = PrefsUi::MeasureSingleLineTextWidthPx(typography, typography.strong, offLabel);
+
+    const int paddingX       = UiMetrics::ScaleDip(dpi, kTogglePaddingXDip);
+    const int gapX           = UiMetrics::ScaleDip(dpi, kToggleGapXDip);
+    const int trackWidth     = UiMetrics::ScaleDip(dpi, kToggleTrackWidthDip);
+    const int stateTextWidth = std::max(onWidth, offWidth);
+
+    const int measuredToggleWidth = std::max(minToggleWidth, (2 * paddingX) + stateTextWidth + gapX + trackWidth);
+    const int toggleWidth =
+        static_cast<int>(std::lround(RedSalamander::DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(minToggleWidth),
+                                                                                    .preferredExtent = static_cast<float>(measuredToggleWidth),
+                                                                                    .maxExtent       = static_cast<float>(measuredToggleWidth)},
+                                                                                   static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
+
+    if (! _dxState || ! _pageHostDx || ! _pageContentRoot)
     {
         return;
     }
 
-    const UINT dpi = GetDpiForWindow(host);
+    const auto& compare   = GetCompareDirectoriesSettingsOrDefault(state.workingSettings);
+    CompareDxPage& dxPage = _dxState->page;
+    const auto pxToDip    = [dpi](const int px) noexcept { return static_cast<float>(px) * 96.0f / static_cast<float>(std::max<UINT>(1u, dpi)); };
 
-    const int rowHeight   = std::max(1, ThemedControls::ScaleDip(dpi, kRowHeightDip));
-    const int titleHeight = std::max(1, ThemedControls::ScaleDip(dpi, kTitleHeightDip));
-
-    const int cardPaddingX = ThemedControls::ScaleDip(dpi, kCardPaddingXDip);
-    const int cardPaddingY = ThemedControls::ScaleDip(dpi, kCardPaddingYDip);
-    const int cardGapY     = ThemedControls::ScaleDip(dpi, kCardGapYDip);
-    const int cardGapX     = ThemedControls::ScaleDip(dpi, kCardGapXDip);
-    const int cardSpacingY = ThemedControls::ScaleDip(dpi, kCardSpacingYDip);
-
-    const HFONT headerFont = state.boldFont ? state.boldFont.get() : dialogFont;
-    const HFONT infoFont   = state.italicFont ? state.italicFont.get() : dialogFont;
-    const int headerHeight = std::max(1, ThemedControls::ScaleDip(dpi, kHeaderHeightDip));
-
-    const int minToggleWidth    = ThemedControls::ScaleDip(dpi, kMinToggleWidthDip);
-    const std::wstring onLabel  = LoadStringResource(nullptr, IDS_PREFS_COMMON_ON);
-    const std::wstring offLabel = LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF);
-
-    const HFONT toggleMeasureFont = state.boldFont ? state.boldFont.get() : dialogFont;
-    const int onWidth             = ThemedControls::MeasureTextWidth(host, toggleMeasureFont, onLabel);
-    const int offWidth            = ThemedControls::MeasureTextWidth(host, toggleMeasureFont, offLabel);
-
-    const int paddingX       = ThemedControls::ScaleDip(dpi, kTogglePaddingXDip);
-    const int gapX           = ThemedControls::ScaleDip(dpi, kToggleGapXDip);
-    const int trackWidth     = ThemedControls::ScaleDip(dpi, kToggleTrackWidthDip);
-    const int stateTextWidth = std::max(onWidth, offWidth);
-
-    const int measuredToggleWidth = std::max(minToggleWidth, (2 * paddingX) + stateTextWidth + gapX + trackWidth);
-    const int toggleWidth         = std::min(std::max(0, width - 2 * cardPaddingX), measuredToggleWidth);
-
-    const auto& compare = GetCompareDirectoriesSettingsOrDefault(state.workingSettings);
+    for (Label* header : dxPage.headers)
+    {
+        if (header)
+        {
+            header->SetVisible(false);
+        }
+    }
+    for (CompareToggleCardPageDx& card : dxPage.toggleCards)
+    {
+        if (card.card)
+        {
+            card.card->SetVisible(false);
+        }
+        if (card.title)
+        {
+            card.title->SetVisible(false);
+        }
+        if (card.description)
+        {
+            card.description->SetVisible(false);
+        }
+        if (card.toggle)
+        {
+            card.toggle->SetVisible(false);
+        }
+        if (card.edit)
+        {
+            card.edit->SetVisible(false);
+        }
+    }
+    if (dxPage.contentWorkers.card)
+    {
+        dxPage.contentWorkers.card->SetVisible(false);
+    }
+    if (dxPage.contentWorkers.title)
+    {
+        dxPage.contentWorkers.title->SetVisible(false);
+    }
+    if (dxPage.contentWorkers.description)
+    {
+        dxPage.contentWorkers.description->SetVisible(false);
+    }
+    if (dxPage.contentWorkers.combo)
+    {
+        dxPage.contentWorkers.combo->SetVisible(false);
+    }
 
     auto pushCard = [&](const RECT& card) noexcept { state.pageSettingCards.push_back(card); };
 
-    auto layoutToggleCard = [&](HWND label, std::wstring_view labelText, HWND toggle, HWND descLabel, std::wstring_view descText) noexcept
+    auto layoutToggleCard = [&](std::wstring_view labelText, std::wstring_view descText, const size_t index) noexcept
     {
         const int textWidth  = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleWidth);
-        const int descHeight = descLabel ? PrefsUi::MeasureStaticTextHeight(host, infoFont, textWidth, descText) : 0;
-
-        const int contentHeight = std::max(0, titleHeight + cardGapY + descHeight);
-        const int cardHeight    = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
-
-        RECT card{};
-        card.left   = x;
-        card.top    = y;
-        card.right  = x + width;
-        card.bottom = y + cardHeight;
+        const int descHeight = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
+        const int cardHeight = std::max(rowHeight + 2 * cardPaddingY, titleHeight + cardGapY + descHeight + 2 * cardPaddingY);
+        const RECT card{x, y, x + width, y + cardHeight};
         pushCard(card);
 
-        if (label)
+        if (index < dxPage.toggleCards.size())
         {
-            SetWindowTextW(label, labelText.data());
-            SetWindowPos(label, nullptr, card.left + cardPaddingX, card.top + cardPaddingY, textWidth, titleHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(label, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        }
-
-        if (descLabel)
-        {
-            SetWindowTextW(descLabel, descText.data());
-            SetWindowPos(descLabel,
-                         nullptr,
-                         card.left + cardPaddingX,
-                         card.top + cardPaddingY + titleHeight + cardGapY,
-                         textWidth,
-                         std::max(0, descHeight),
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(descLabel, WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
-        }
-
-        if (toggle)
-        {
-            SetWindowPos(toggle,
-                         nullptr,
-                         card.right - cardPaddingX - toggleWidth,
-                         card.top + (cardHeight - rowHeight) / 2,
-                         toggleWidth,
-                         rowHeight,
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(toggle, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            CompareToggleCardPageDx& dxCard = dxPage.toggleCards[index];
+            if (dxCard.card)
+            {
+                dxCard.card->SetVisible(true);
+                dxCard.card->SetBounds(D2D1::RectF(pxToDip(card.left), pxToDip(card.top), pxToDip(card.right), pxToDip(card.bottom)));
+            }
+            if (dxCard.title)
+            {
+                dxCard.title->SetVisible(true);
+                dxCard.title->SetText(std::wstring(labelText));
+                dxCard.title->SetMnemonicTarget(dxCard.toggle);
+                dxCard.title->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                                    pxToDip(card.top + cardPaddingY),
+                                                    pxToDip(card.left + cardPaddingX + textWidth),
+                                                    pxToDip(card.top + cardPaddingY + titleHeight)));
+            }
+            if (dxCard.description)
+            {
+                dxCard.description->SetVisible(true);
+                dxCard.description->SetText(std::wstring(descText));
+                dxCard.description->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                                          pxToDip(card.top + cardPaddingY + titleHeight + cardGapY),
+                                                          pxToDip(card.left + cardPaddingX + textWidth),
+                                                          pxToDip(card.top + cardPaddingY + titleHeight + cardGapY + descHeight)));
+            }
+            if (dxCard.toggle)
+            {
+                dxCard.toggle->SetVisible(true);
+                dxCard.toggle->SetBounds(D2D1::RectF(pxToDip(card.right - cardPaddingX - toggleWidth),
+                                                     pxToDip(card.top + (cardHeight - rowHeight) / 2),
+                                                     pxToDip(card.right - cardPaddingX),
+                                                     pxToDip(card.top + (cardHeight - rowHeight) / 2 + rowHeight)));
+            }
+            if (dxCard.edit)
+            {
+                dxCard.edit->SetVisible(false);
+            }
         }
 
         y += cardHeight + cardSpacingY;
     };
 
-    auto layoutFramedComboCard = [&](HWND label, std::wstring_view labelText, HWND frame, HWND combo, HWND descLabel, std::wstring_view descText) noexcept
+    auto layoutComboCard = [&](std::wstring_view labelText, std::wstring_view descText) noexcept
     {
-        int desiredWidth          = combo ? ThemedControls::MeasureComboBoxPreferredWidth(combo, dpi) : 0;
-        desiredWidth              = std::max(desiredWidth, ThemedControls::ScaleDip(dpi, kMinEditWidthDip));
-        const int maxControlWidth = std::max(0, width - 2 * cardPaddingX);
-        desiredWidth              = std::min(desiredWidth, std::min(maxControlWidth, ThemedControls::ScaleDip(dpi, kMaxEditWidthDip)));
-
+        const int desiredWidth = static_cast<int>(
+            std::lround(RedSalamander::DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
+                                                                       .preferredExtent = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
+                                                                       .maxExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMaxEditWidthDip))},
+                                                                      static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
         const int textWidth  = std::max(0, width - 2 * cardPaddingX - cardGapX - desiredWidth);
-        const int descHeight = descLabel ? PrefsUi::MeasureStaticTextHeight(host, infoFont, textWidth, descText) : 0;
-
-        const int contentHeight = std::max(0, titleHeight + cardGapY + descHeight);
-        const int cardHeight    = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
-
-        RECT card{};
-        card.left   = x;
-        card.top    = y;
-        card.right  = x + width;
-        card.bottom = y + cardHeight;
+        const int descHeight = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
+        const int cardHeight = std::max(rowHeight + 2 * cardPaddingY, titleHeight + cardGapY + descHeight + 2 * cardPaddingY);
+        const RECT card{x, y, x + width, y + cardHeight};
         pushCard(card);
 
-        if (label)
+        CompareComboCardPageDx& dxCard = dxPage.contentWorkers;
+        if (dxCard.card)
         {
-            SetWindowTextW(label, labelText.data());
-            SetWindowPos(label, nullptr, card.left + cardPaddingX, card.top + cardPaddingY, textWidth, titleHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(label, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+            dxCard.card->SetVisible(true);
+            dxCard.card->SetBounds(D2D1::RectF(pxToDip(card.left), pxToDip(card.top), pxToDip(card.right), pxToDip(card.bottom)));
         }
-
-        if (descLabel)
+        if (dxCard.title)
         {
-            SetWindowTextW(descLabel, descText.data());
-            SetWindowPos(descLabel,
-                         nullptr,
-                         card.left + cardPaddingX,
-                         card.top + cardPaddingY + titleHeight + cardGapY,
-                         textWidth,
-                         std::max(0, descHeight),
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(descLabel, WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
+            dxCard.title->SetVisible(true);
+            dxCard.title->SetText(std::wstring(labelText));
+            dxCard.title->SetMnemonicTarget(dxCard.combo);
+            dxCard.title->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                                pxToDip(card.top + cardPaddingY),
+                                                pxToDip(card.left + cardPaddingX + textWidth),
+                                                pxToDip(card.top + cardPaddingY + titleHeight)));
         }
-
-        const int inputX       = card.right - cardPaddingX - desiredWidth;
-        const int inputY       = card.top + (cardHeight - rowHeight) / 2;
-        const int framePadding = (frame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-
-        if (frame)
+        if (dxCard.description)
         {
-            SetWindowPos(frame, nullptr, inputX, inputY, desiredWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+            dxCard.description->SetVisible(true);
+            dxCard.description->SetText(std::wstring(descText));
+            dxCard.description->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                                      pxToDip(card.top + cardPaddingY + titleHeight + cardGapY),
+                                                      pxToDip(card.left + cardPaddingX + textWidth),
+                                                      pxToDip(card.top + cardPaddingY + titleHeight + cardGapY + descHeight)));
         }
-        if (combo)
+        if (dxCard.combo)
         {
-            SetWindowPos(combo,
-                         nullptr,
-                         inputX + framePadding,
-                         inputY + framePadding,
-                         std::max(1, desiredWidth - 2 * framePadding),
-                         std::max(1, rowHeight - 2 * framePadding),
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(combo, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-            ThemedControls::EnsureComboBoxDroppedWidth(combo, dpi);
+            dxCard.combo->SetVisible(true);
+            dxCard.combo->SetBounds(D2D1::RectF(pxToDip(card.right - cardPaddingX - desiredWidth),
+                                                pxToDip(card.top + (cardHeight - rowHeight) / 2),
+                                                pxToDip(card.right - cardPaddingX),
+                                                pxToDip(card.top + (cardHeight - rowHeight) / 2 + rowHeight)));
         }
 
         y += cardHeight + cardSpacingY;
     };
 
-    auto layoutIgnoreCard = [&](HWND label,
-                                std::wstring_view labelText,
-                                HWND toggle,
-                                HWND descLabel,
-                                std::wstring_view descText,
-                                HWND patternsLabel,
-                                HWND patternsFrame,
-                                HWND patternsEdit,
-                                bool showEdit) noexcept
+    auto layoutIgnoreCard = [&](std::wstring_view labelText, std::wstring_view descText, const bool showEdit, const size_t index) noexcept
     {
         const int textWidth  = std::max(0, width - 2 * cardPaddingX - cardGapX - toggleWidth);
-        const int descHeight = descLabel ? PrefsUi::MeasureStaticTextHeight(host, infoFont, textWidth, descText) : 0;
-
-        int contentHeight = std::max(0, titleHeight + cardGapY + descHeight);
+        const int descHeight = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
+        int contentHeight    = titleHeight + cardGapY + descHeight;
         if (showEdit)
         {
             contentHeight += cardGapY + rowHeight;
         }
         const int cardHeight = std::max(rowHeight + 2 * cardPaddingY, contentHeight + 2 * cardPaddingY);
-
-        RECT card{};
-        card.left   = x;
-        card.top    = y;
-        card.right  = x + width;
-        card.bottom = y + cardHeight;
+        const RECT card{x, y, x + width, y + cardHeight};
         pushCard(card);
 
-        if (label)
+        if (index < dxPage.toggleCards.size())
         {
-            SetWindowTextW(label, labelText.data());
-            SetWindowPos(label, nullptr, card.left + cardPaddingX, card.top + cardPaddingY, textWidth, titleHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(label, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        }
-
-        if (descLabel)
-        {
-            SetWindowTextW(descLabel, descText.data());
-            SetWindowPos(descLabel,
-                         nullptr,
-                         card.left + cardPaddingX,
-                         card.top + cardPaddingY + titleHeight + cardGapY,
-                         textWidth,
-                         std::max(0, descHeight),
-                         SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(descLabel, WM_SETFONT, reinterpret_cast<WPARAM>(infoFont), TRUE);
-        }
-
-        if (toggle)
-        {
-            // Keep the toggle aligned with the title row even when the card expands to show the pattern field.
-            SetWindowPos(
-                toggle, nullptr, card.right - cardPaddingX - toggleWidth, card.top + cardPaddingY, toggleWidth, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-            SendMessageW(toggle, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
-        }
-
-        if (patternsLabel)
-        {
-            ShowWindow(patternsLabel, SW_HIDE);
-        }
-
-        if (patternsFrame)
-        {
-            ShowWindow(patternsFrame, showEdit ? SW_SHOW : SW_HIDE);
-            EnableWindow(patternsFrame, showEdit ? TRUE : FALSE);
-            InvalidateRect(patternsFrame, nullptr, TRUE);
-        }
-        if (patternsEdit)
-        {
-            ShowWindow(patternsEdit, showEdit ? SW_SHOW : SW_HIDE);
-            EnableWindow(patternsEdit, showEdit ? TRUE : FALSE);
-            InvalidateRect(patternsEdit, nullptr, TRUE);
-        }
-
-        if (showEdit && patternsEdit)
-        {
-            const int editX = card.left + cardPaddingX;
-            const int editW = std::max(0, width - 2 * cardPaddingX);
-
-            const int contentTop    = card.top + cardPaddingY;
-            const int contentBottom = contentTop + titleHeight + cardGapY + descHeight;
-            const int editTop       = contentBottom + cardGapY;
-
-            const int framePadding = (patternsFrame && ! state.theme.systemHighContrast) ? ThemedControls::ScaleDip(dpi, kFramePaddingDip) : 0;
-
-            if (patternsFrame)
+            CompareToggleCardPageDx& dxCard = dxPage.toggleCards[index];
+            const int editX                 = card.left + cardPaddingX;
+            const int editW                 = std::max(0, width - 2 * cardPaddingX);
+            const int editTop               = card.top + cardPaddingY + titleHeight + cardGapY + descHeight + cardGapY;
+            if (dxCard.card)
             {
-                SetWindowPos(patternsFrame, nullptr, editX, editTop, editW, rowHeight, SWP_NOZORDER | SWP_NOACTIVATE);
+                dxCard.card->SetVisible(true);
+                dxCard.card->SetBounds(D2D1::RectF(pxToDip(card.left), pxToDip(card.top), pxToDip(card.right), pxToDip(card.bottom)));
             }
-            if (patternsEdit)
+            if (dxCard.title)
             {
-                const int innerW = std::max(1, editW - 2 * framePadding);
-                const int innerH = std::max(1, rowHeight - 2 * framePadding);
-                SetWindowPos(patternsEdit, nullptr, editX + framePadding, editTop + framePadding, innerW, innerH, SWP_NOZORDER | SWP_NOACTIVATE);
-                SendMessageW(patternsEdit, WM_SETFONT, reinterpret_cast<WPARAM>(dialogFont), TRUE);
+                dxCard.title->SetVisible(true);
+                dxCard.title->SetText(std::wstring(labelText));
+                dxCard.title->SetMnemonicTarget(showEdit ? static_cast<RedSalamander::DxUi::Control*>(dxCard.edit)
+                                                         : static_cast<RedSalamander::DxUi::Control*>(dxCard.toggle));
+                dxCard.title->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                                    pxToDip(card.top + cardPaddingY),
+                                                    pxToDip(card.left + cardPaddingX + textWidth),
+                                                    pxToDip(card.top + cardPaddingY + titleHeight)));
+            }
+            if (dxCard.description)
+            {
+                dxCard.description->SetVisible(true);
+                dxCard.description->SetText(std::wstring(descText));
+                dxCard.description->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
+                                                          pxToDip(card.top + cardPaddingY + titleHeight + cardGapY),
+                                                          pxToDip(card.left + cardPaddingX + textWidth),
+                                                          pxToDip(card.top + cardPaddingY + titleHeight + cardGapY + descHeight)));
+            }
+            if (dxCard.toggle)
+            {
+                dxCard.toggle->SetVisible(true);
+                dxCard.toggle->SetBounds(D2D1::RectF(pxToDip(card.right - cardPaddingX - toggleWidth),
+                                                     pxToDip(card.top + cardPaddingY),
+                                                     pxToDip(card.right - cardPaddingX),
+                                                     pxToDip(card.top + cardPaddingY + rowHeight)));
+            }
+            if (dxCard.edit)
+            {
+                dxCard.edit->SetVisible(showEdit);
+                if (showEdit)
+                {
+                    dxCard.edit->SetBounds(D2D1::RectF(pxToDip(editX), pxToDip(editTop), pxToDip(editX + editW), pxToDip(editTop + rowHeight)));
+                }
             }
         }
 
         y += cardHeight + cardSpacingY;
     };
 
-    if (state.advancedCompareDirectoriesHeader)
-    {
-        SetWindowTextW(state.advancedCompareDirectoriesHeader.get(), LoadStringResource(nullptr, IDS_PREFS_ADV_HEADER_COMPARE_DIRECTORIES).c_str());
-        SetWindowPos(state.advancedCompareDirectoriesHeader.get(), nullptr, x, y, width, headerHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(state.advancedCompareDirectoriesHeader.get(), WM_SETFONT, reinterpret_cast<WPARAM>(headerFont), TRUE);
-        y += headerHeight + gapY;
-    }
-
-    const auto layoutSectionHeader = [&](const wil::unique_hwnd& header, UINT textId) noexcept
-    {
-        if (! header)
-        {
-            return;
-        }
-
-        SetWindowTextW(header.get(), LoadStringResource(nullptr, textId).c_str());
-        SetWindowPos(header.get(), nullptr, x, y, width, headerHeight, SWP_NOZORDER | SWP_NOACTIVATE);
-        SendMessageW(header.get(), WM_SETFONT, reinterpret_cast<WPARAM>(headerFont), TRUE);
-        y += headerHeight + gapY;
-    };
-
-    // 1) Subdirectories options
-    layoutSectionHeader(state.advancedCompareSectionSubdirsHeader, IDS_COMPARE_OPTIONS_SECTION_SUBDIRS);
-    layoutToggleCard(state.advancedCompareSubdirectoriesLabel.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE),
-                     state.advancedCompareSubdirectoriesToggle.get(),
-                     state.advancedCompareSubdirectoriesDescription.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_DESC));
+    layoutToggleCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIRS_DESC), 0u);
     y += gapY;
 
-    // 2) Compare files with same name by
-    layoutSectionHeader(state.advancedCompareSectionCompareHeader, IDS_COMPARE_OPTIONS_SECTION_COMPARE);
-    layoutToggleCard(state.advancedCompareSizeLabel.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_TITLE),
-                     state.advancedCompareSizeToggle.get(),
-                     state.advancedCompareSizeDescription.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC));
-    layoutToggleCard(state.advancedCompareDateTimeLabel.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_TITLE),
-                     state.advancedCompareDateTimeToggle.get(),
-                     state.advancedCompareDateTimeDescription.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC));
-    layoutToggleCard(state.advancedCompareAttributesLabel.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE),
-                     state.advancedCompareAttributesToggle.get(),
-                     state.advancedCompareAttributesDescription.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC));
-    layoutToggleCard(state.advancedCompareContentLabel.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_TITLE),
-                     state.advancedCompareContentToggle.get(),
-                     state.advancedCompareContentDescription.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_DESC));
-    layoutFramedComboCard(state.advancedCompareContentWorkersLabel.get(),
-                          LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_TITLE),
-                          state.advancedCompareContentWorkersFrame.get(),
-                          state.advancedCompareContentWorkersCombo.get(),
-                          state.advancedCompareContentWorkersDescription.get(),
-                          LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_DESC));
+    layoutToggleCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SIZE_DESC), 1u);
+    layoutToggleCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_DATETIME_DESC), 2u);
+    layoutToggleCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_ATTRIBUTES_DESC), 3u);
+    layoutToggleCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_DESC), 4u);
+    layoutComboCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_TITLE),
+                    LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_CONTENT_WORKERS_DESC));
     y += gapY;
 
-    // 3) Additional options
-    layoutSectionHeader(state.advancedCompareSectionAdditionalHeader, IDS_COMPARE_OPTIONS_SECTION_ADVANCED);
-    layoutToggleCard(state.advancedCompareSubdirectoryAttributesLabel.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE),
-                     state.advancedCompareSubdirectoryAttributesToggle.get(),
-                     state.advancedCompareSubdirectoryAttributesDescription.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC));
-    layoutToggleCard(state.advancedCompareSelectSubdirsOnlyInOnePaneLabel.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE),
-                     state.advancedCompareSelectSubdirsOnlyInOnePaneToggle.get(),
-                     state.advancedCompareSelectSubdirsOnlyInOnePaneDescription.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC));
-    layoutToggleCard(state.advancedCompareKeepIdenticalLabel.get(),
-                     LoadStringResource(nullptr, IDS_PREFS_COMPARE_KEEP_IDENTICAL_TITLE),
-                     state.advancedCompareKeepIdenticalToggle.get(),
-                     state.advancedCompareKeepIdenticalDescription.get(),
-                     LoadStringResource(nullptr, IDS_PREFS_COMPARE_KEEP_IDENTICAL_DESC));
-    layoutToggleCard(state.advancedCompareShowIdenticalLabel.get(),
-                     LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE),
-                     state.advancedCompareShowIdenticalToggle.get(),
-                     state.advancedCompareShowIdenticalDescription.get(),
-                     LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_DESC));
+    layoutToggleCard(
+        LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SUBDIR_ATTRIBUTES_DESC), 5u);
+    layoutToggleCard(
+        LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_TITLE), LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_SELECT_SUBDIRS_DESC), 6u);
+    layoutToggleCard(
+        LoadStringResource(nullptr, IDS_PREFS_COMPARE_KEEP_IDENTICAL_TITLE), LoadStringResource(nullptr, IDS_PREFS_COMPARE_KEEP_IDENTICAL_DESC), 7u);
+    layoutToggleCard(
+        LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_TITLE), LoadStringResource(nullptr, IDS_PREFS_COMPARE_SHOW_IDENTICAL_DESC), 8u);
     y += gapY;
 
-    // 4) More options
-    layoutSectionHeader(state.advancedCompareSectionMoreHeader, IDS_COMPARE_OPTIONS_SECTION_IGNORE);
-    layoutIgnoreCard(state.advancedCompareIgnoreFilesLabel.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE),
-                     state.advancedCompareIgnoreFilesToggle.get(),
-                     state.advancedCompareIgnoreFilesDescription.get(),
+    layoutIgnoreCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_TITLE),
                      LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_FILES_DESC),
-                     state.advancedCompareIgnoreFilesPatternsLabel.get(),
-                     state.advancedCompareIgnoreFilesPatternsFrame.get(),
-                     state.advancedCompareIgnoreFilesPatternsEdit.get(),
-                     compare.ignoreFiles);
-    layoutIgnoreCard(state.advancedCompareIgnoreDirectoriesLabel.get(),
-                     LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE),
-                     state.advancedCompareIgnoreDirectoriesToggle.get(),
-                     state.advancedCompareIgnoreDirectoriesDescription.get(),
+                     compare.ignoreFiles,
+                     kCompareIgnoreFilesIndex);
+    layoutIgnoreCard(LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_TITLE),
                      LoadStringResource(nullptr, IDS_COMPARE_OPTIONS_IGNORE_DIRECTORIES_DESC),
-                     state.advancedCompareIgnoreDirectoriesPatternsLabel.get(),
-                     state.advancedCompareIgnoreDirectoriesPatternsFrame.get(),
-                     state.advancedCompareIgnoreDirectoriesPatternsEdit.get(),
-                     compare.ignoreDirectories);
+                     compare.ignoreDirectories,
+                     kCompareIgnoreDirectoriesIndex);
+
+    SyncDxControlsFromState(state);
+    _pageHostDx->Invalidate();
 }
 
-bool CompareDirectoriesPane::HandleCommand(HWND host, PreferencesDialogState& state, UINT commandId, UINT notifyCode, HWND hwndCtl) noexcept
+void CompareDirectoriesPane::LayoutPage(
+    HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, const PreferencesTypographyContext& typography) noexcept
 {
-    if (commandId == IDC_PREFS_ADV_COMPARE_CONTENT_WORKERS_COMBO && notifyCode == CBN_SELCHANGE)
+    if (! host)
     {
-        const auto dataOpt = PrefsUi::TryGetSelectedComboItemData(state.advancedCompareContentWorkersCombo);
-        if (! dataOpt.has_value())
-        {
-            return true;
-        }
-
-        const uint32_t newValue = std::clamp(static_cast<uint32_t>(dataOpt.value()), 0u, 4u);
-
-        auto* compare = EnsureWorkingCompareDirectoriesSettings(state.workingSettings);
-        if (! compare)
-        {
-            return true;
-        }
-
-        if (compare->contentCompareWorkerCount != newValue)
-        {
-            compare->contentCompareWorkerCount = newValue;
-            MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(state.workingSettings);
-            SetDirty(GetParent(host), state);
-            Refresh(host, state);
-        }
-
-        return true;
+        return;
     }
 
-    const bool isComparePatternEdit =
-        (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_PATTERNS_EDIT || commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_PATTERNS_EDIT);
-    if (isComparePatternEdit)
+    if (EnsureDxHosts(_pageHost ? _pageHost : host, state))
     {
-        if (notifyCode == EN_CHANGE || notifyCode == EN_KILLFOCUS)
-        {
-            HWND edit               = hwndCtl ? hwndCtl : GetDlgItem(host, static_cast<int>(commandId));
-            const std::wstring text = PrefsUi::GetWindowTextString(edit);
-            const bool commit       = (notifyCode == EN_KILLFOCUS);
+        LayoutDxPage(host, state, x, y, width, margin, gapY, typography);
+        return;
+    }
 
-            const std::wstring_view trimmed = commit ? PrefsUi::TrimWhitespace(text) : std::wstring_view(text);
-            const std::wstring newValue(trimmed);
+    Debug::Error(L"Preferences.CompareDirectories: DxUi surface initialization failed; page will not render correctly.");
+}
 
-            auto* compare = EnsureWorkingCompareDirectoriesSettings(state.workingSettings);
-            if (! compare)
-            {
-                return true;
-            }
-
-            bool changed = false;
-            if (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_PATTERNS_EDIT)
-            {
-                if (compare->ignoreFilesPatterns != newValue)
-                {
-                    compare->ignoreFilesPatterns = newValue;
-                    changed                      = true;
-                }
-            }
-            else
-            {
-                if (compare->ignoreDirectoriesPatterns != newValue)
-                {
-                    compare->ignoreDirectoriesPatterns = newValue;
-                    changed                            = true;
-                }
-            }
-
-            if (changed)
-            {
-                MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(state.workingSettings);
-                SetDirty(GetParent(host), state);
-            }
-
-            if (commit)
-            {
-                Refresh(host, state);
-            }
-
-            return true;
-        }
-
+bool CompareDirectoriesPane::HandleDeferredAction(HWND host, PreferencesDialogState& /*state*/, PreferencesDeferredActionKind action) noexcept
+{
+    if (action != PreferencesDeferredActionKind::CompareDirectoriesIgnoreToggleChanged)
+    {
         return false;
     }
 
-    if (notifyCode == BN_CLICKED)
+    if (! host)
     {
-        const bool isCompareToggle = (commandId == IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE ||
-                                      commandId == IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE ||
-                                      commandId == IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE ||
-                                      commandId == IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE ||
-                                      commandId == IDC_PREFS_ADV_COMPARE_KEEP_IDENTICAL_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE ||
-                                      commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE);
-        if (isCompareToggle)
-        {
-            if (hwndCtl)
-            {
-                const bool ownerDraw = (GetWindowLongPtrW(hwndCtl, GWL_STYLE) & BS_TYPEMASK) == BS_OWNERDRAW;
-                if (ownerDraw)
-                {
-                    const bool current = PrefsUi::GetTwoStateToggleState(hwndCtl, false);
-                    PrefsUi::SetTwoStateToggleState(hwndCtl, false, ! current);
-                }
-            }
+        return false;
+    }
 
-            const bool toggledOn = PrefsUi::GetTwoStateToggleState(hwndCtl, state.theme.systemHighContrast);
+    // Relayout is performed by the caller (HandleDeferredPaneAction) via
+    // LayoutPreferencesPageHost so scroll, background cards, and DxUi are all
+    // updated through the proper channel.
+    return true;
+}
 
-            auto* compare = EnsureWorkingCompareDirectoriesSettings(state.workingSettings);
-            if (! compare)
-            {
-                return true;
-            }
+#ifdef ENABLE_TESTS
+PreferencesCompareDirectoriesDebugFocusTarget CompareDirectoriesPane::DebugGetFocusTarget() const noexcept
+{
+    if (! _pageHostDx || ! _dxState)
+    {
+        return PreferencesCompareDirectoriesDebugFocusTarget::None;
+    }
 
-            switch (commandId)
-            {
-                case IDC_PREFS_ADV_COMPARE_SIZE_TOGGLE: compare->compareSize = toggledOn; break;
-                case IDC_PREFS_ADV_COMPARE_DATETIME_TOGGLE: compare->compareDateTime = toggledOn; break;
-                case IDC_PREFS_ADV_COMPARE_ATTRIBUTES_TOGGLE: compare->compareAttributes = toggledOn; break;
-                case IDC_PREFS_ADV_COMPARE_CONTENT_TOGGLE: compare->compareContent = toggledOn; break;
-                case IDC_PREFS_ADV_COMPARE_SUBDIRS_TOGGLE: compare->compareSubdirectories = toggledOn; break;
-                case IDC_PREFS_ADV_COMPARE_SUBDIR_ATTRIBUTES_TOGGLE: compare->compareSubdirectoryAttributes = toggledOn; break;
-                case IDC_PREFS_ADV_COMPARE_SELECT_SUBDIRS_ONE_PANE_TOGGLE: compare->selectSubdirsOnlyInOnePane = toggledOn; break;
-                case IDC_PREFS_ADV_COMPARE_KEEP_IDENTICAL_TOGGLE:
-                    compare->keepIdenticalItems = toggledOn;
-                    if (! toggledOn)
-                    {
-                        compare->showIdenticalItems = false;
-                    }
-                    break;
-                case IDC_PREFS_ADV_COMPARE_SHOW_IDENTICAL_TOGGLE:
-                    compare->showIdenticalItems = toggledOn;
-                    if (toggledOn)
-                    {
-                        compare->keepIdenticalItems = true;
-                    }
-                    break;
-                case IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE: compare->ignoreFiles = toggledOn; break;
-                case IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE: compare->ignoreDirectories = toggledOn; break;
-                default: break;
-            }
+    const auto* focused = _pageHostDx->GetFocusControl();
+    if (! focused)
+    {
+        return PreferencesCompareDirectoriesDebugFocusTarget::None;
+    }
 
-            MaybeResetWorkingCompareDirectoriesSettingsIfEmpty(state.workingSettings);
-            SetDirty(GetParent(host), state);
-            Refresh(host, state);
+    const auto& page = _dxState->page;
+    if (page.toggleCards[0].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::CompareSubdirectoriesToggle;
+    if (page.toggleCards[1].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::CompareSizeToggle;
+    if (page.toggleCards[2].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::CompareDateTimeToggle;
+    if (page.toggleCards[3].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::CompareAttributesToggle;
+    if (page.toggleCards[4].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::CompareContentToggle;
+    if (page.contentWorkers.combo == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::ContentWorkersCombo;
+    if (page.toggleCards[5].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::CompareSubdirAttributesToggle;
+    if (page.toggleCards[6].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::SelectSubdirsOnlyInOnePaneToggle;
+    if (page.toggleCards[7].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::KeepIdenticalItemsToggle;
+    if (page.toggleCards[8].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::ShowIdenticalItemsToggle;
+    if (page.toggleCards[9].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::IgnoreFilesToggle;
+    if (page.toggleCards[9].edit == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::IgnoreFilesEdit;
+    if (page.toggleCards[10].toggle == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::IgnoreDirectoriesToggle;
+    if (page.toggleCards[10].edit == focused)
+        return PreferencesCompareDirectoriesDebugFocusTarget::IgnoreDirectoriesEdit;
+    return PreferencesCompareDirectoriesDebugFocusTarget::None;
+}
 
-            if (host && (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE || commandId == IDC_PREFS_ADV_COMPARE_IGNORE_DIRECTORIES_TOGGLE))
-            {
-                RECT rc{};
-                if (GetClientRect(host, &rc))
-                {
-                    const int cx = std::max(0l, rc.right - rc.left);
-                    const int cy = std::max(0l, rc.bottom - rc.top);
-                    SendMessageW(host, WM_SIZE, SIZE_RESTORED, MAKELPARAM(cx, cy));
-                }
-            }
+bool CompareDirectoriesPane::DebugFocusCompareSubdirectoriesToggle() noexcept
+{
+    if (! _pageHostDx || ! _dxState)
+    {
+        return false;
+    }
+
+    auto* const toggle = _dxState->page.toggleCards[0].toggle;
+    if (! toggle || ! toggle->IsVisible() || ! toggle->IsEnabled())
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(toggle);
+    return _pageHostDx->GetFocusControl() == toggle;
+}
+
+bool CompareDirectoriesPane::DebugFocusTarget(const PreferencesCompareDirectoriesDebugFocusTarget target) noexcept
+{
+    if (! _pageHostDx || ! _dxState)
+    {
+        return false;
+    }
+
+    RedSalamander::DxUi::Control* focusControl = nullptr;
+    auto& page                                 = _dxState->page;
+    switch (target)
+    {
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareSubdirectoriesToggle: focusControl = page.toggleCards[0].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareSizeToggle: focusControl = page.toggleCards[1].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareDateTimeToggle: focusControl = page.toggleCards[2].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareAttributesToggle: focusControl = page.toggleCards[3].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareContentToggle: focusControl = page.toggleCards[4].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::ContentWorkersCombo: focusControl = page.contentWorkers.combo; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareSubdirAttributesToggle: focusControl = page.toggleCards[5].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::SelectSubdirsOnlyInOnePaneToggle: focusControl = page.toggleCards[6].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::KeepIdenticalItemsToggle: focusControl = page.toggleCards[7].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::ShowIdenticalItemsToggle: focusControl = page.toggleCards[8].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::IgnoreFilesToggle: focusControl = page.toggleCards[9].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::IgnoreFilesEdit: focusControl = page.toggleCards[9].edit; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::IgnoreDirectoriesToggle: focusControl = page.toggleCards[10].toggle; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::IgnoreDirectoriesEdit: focusControl = page.toggleCards[10].edit; break;
+        case PreferencesCompareDirectoriesDebugFocusTarget::None: return false;
+    }
+
+    if (! focusControl || ! focusControl->IsVisible() || ! focusControl->IsEnabled())
+    {
+        return false;
+    }
+
+    _pageHostDx->SetFocusControl(focusControl);
+    return _pageHostDx->GetFocusControl() == focusControl;
+}
+
+bool CompareDirectoriesPane::DebugGetToggleChecked(const PreferencesCompareDirectoriesDebugFocusTarget target, bool& outChecked) const noexcept
+{
+    if (! _state)
+    {
+        return false;
+    }
+
+    const auto compare = _state->workingSettings.compareDirectories.value_or(Common::Settings::CompareDirectoriesSettings{});
+    switch (target)
+    {
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareSubdirectoriesToggle: outChecked = compare.compareSubdirectories; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareSizeToggle: outChecked = compare.compareSize; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareDateTimeToggle: outChecked = compare.compareDateTime; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareAttributesToggle: outChecked = compare.compareAttributes; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareContentToggle: outChecked = compare.compareContent; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::CompareSubdirAttributesToggle: outChecked = compare.compareSubdirectoryAttributes; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::SelectSubdirsOnlyInOnePaneToggle: outChecked = compare.selectSubdirsOnlyInOnePane; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::KeepIdenticalItemsToggle: outChecked = compare.keepIdenticalItems; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::ShowIdenticalItemsToggle:
+            outChecked = compare.keepIdenticalItems && compare.showIdenticalItems;
             return true;
-        }
+        case PreferencesCompareDirectoriesDebugFocusTarget::IgnoreFilesToggle: outChecked = compare.ignoreFiles; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::IgnoreDirectoriesToggle: outChecked = compare.ignoreDirectories; return true;
+        case PreferencesCompareDirectoriesDebugFocusTarget::ContentWorkersCombo:
+        case PreferencesCompareDirectoriesDebugFocusTarget::IgnoreFilesEdit:
+        case PreferencesCompareDirectoriesDebugFocusTarget::IgnoreDirectoriesEdit:
+        case PreferencesCompareDirectoriesDebugFocusTarget::None: return false;
     }
 
     return false;
 }
+
+bool CompareDirectoriesPane::DebugSelectContentWorkersByText(std::wstring_view displayText) noexcept
+{
+    if (! _pageHostDx || ! _dxState)
+    {
+        return false;
+    }
+
+    auto* const combo = _dxState->page.contentWorkers.combo;
+    if (! combo || ! combo->IsVisible() || ! combo->IsEnabled())
+    {
+        return false;
+    }
+
+    const auto items = combo->GetItems();
+    const auto it    = std::find_if(items.begin(), items.end(), [displayText](const ComboBox::Item& item) noexcept { return item.display == displayText; });
+    if (it == items.end())
+    {
+        return false;
+    }
+
+    const size_t itemIndex = static_cast<size_t>(std::distance(items.begin(), it));
+    _pageHostDx->SetFocusControl(combo);
+    combo->SetSelectedIndex(itemIndex);
+    _pageHostDx->Invalidate();
+    return combo->GetSelectedIndex().has_value() && combo->GetSelectedIndex().value() == itemIndex && combo->GetDisplayedText() == displayText;
+}
+#endif

@@ -17,6 +17,7 @@
 #include <wil/win32_helpers.h>
 #pragma warning(pop)
 
+#include "Helpers.h"
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
@@ -26,6 +27,8 @@ struct ID2D1Factory;
 struct ID2D1HwndRenderTarget;
 struct IDWriteFactory;
 struct IDWriteTextFormat;
+
+[[nodiscard]] const char* GetViewerVlcStaticConfigurationSchema() noexcept;
 
 class ViewerVLC final : public IViewer, public IInformations
 {
@@ -271,6 +274,5 @@ private:
 
     std::filesystem::path _currentPath;
 
-    IViewerCallback* _callback = nullptr;
-    void* _callbackCookie      = nullptr;
+    RegistrationCallbackState<IViewerCallback> _callbackState;
 };

@@ -1,7 +1,7 @@
 <Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
   <Package
-    Name="Red Salamander Symbols"
-    Manufacturer="Red Salamander"
+    Name="RedSalamander Symbols"
+    Manufacturer="RedSalamander"
     Language="1033"
     Version="$(var.ProductVersion)"
     UpgradeCode="{3792C0D9-85FA-4363-8265-ABD1B8906E90}"
@@ -37,4 +37,3 @@
     </ComponentGroup>
   </Fragment>
 </Wix>
-

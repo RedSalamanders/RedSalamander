@@ -1,5 +1,8 @@
 #include "FolderViewInternal.h"
 #include "StartupMetrics.h"
+#ifdef ENABLE_TESTS
+#include "SelfTestCommon.h"
+#endif
 
 namespace
 {
@@ -435,7 +438,7 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
 
                     const DWORD fileAttributes = entry->FileAttributes;
                     bool include               = (showHiddenFiles || (fileAttributes & FILE_ATTRIBUTE_HIDDEN) == 0) &&
-                                   (showSystemFiles || (fileAttributes & FILE_ATTRIBUTE_SYSTEM) == 0);
+                                                 (showSystemFiles || (fileAttributes & FILE_ATTRIBUTE_SYSTEM) == 0);
 
                     std::wstring_view displayName;
                     if (include)
@@ -759,24 +762,21 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
 
                 TRACER_CTX(L"FolderView : Parallel per - file query");
 
-                // Thread-safe result storage
-                std::mutex perFileResultsMutex;
-                std::unordered_map<size_t, int> perFileResults;
-
                 struct PerFileWork
                 {
-                    size_t itemIndex;
+                    std::vector<size_t> itemIndices;
                     std::wstring fullPath;
-                    std::mutex* resultsMutex                 = nullptr;
-                    std::unordered_map<size_t, int>* results = nullptr;
                     std::atomic<bool>* stopRequested         = nullptr;
                     std::atomic<uint64_t>* generationCounter = nullptr;
                     uint64_t generation                      = 0;
+                    int resolvedIconIndex                    = -1;
                 };
 
                 std::atomic<bool> perFileStopRequested{false};
                 std::vector<std::unique_ptr<PerFileWork>> perFileWorks;
                 perFileWorks.reserve(perFileIconIndices.size());
+                std::unordered_map<std::wstring, size_t> perFileWorkIndexByPath;
+                perFileWorkIndexByPath.reserve(perFileIconIndices.size());
 
                 uint64_t perFilePathChars = 0;
                 {
@@ -786,19 +786,26 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
 
                     for (size_t idx : perFileIconIndices)
                     {
-                        auto work       = std::make_unique<PerFileWork>();
-                        work->itemIndex = idx;
-                        work->fullPath  = (folder / payload->items[idx].displayName).wstring();
-                        perFilePathChars += static_cast<uint64_t>(work->fullPath.size());
-                        work->resultsMutex      = &perFileResultsMutex;
-                        work->results           = &perFileResults;
+                        std::wstring fullPath = (folder / payload->items[idx].displayName).wstring();
+                        perFilePathChars += static_cast<uint64_t>(fullPath.size());
+
+                        const auto [it, inserted] = perFileWorkIndexByPath.emplace(fullPath, perFileWorks.size());
+                        if (! inserted)
+                        {
+                            perFileWorks[it->second]->itemIndices.push_back(idx);
+                            continue;
+                        }
+
+                        auto work = std::make_unique<PerFileWork>();
+                        work->itemIndices.push_back(idx);
+                        work->fullPath          = std::move(fullPath);
                         work->stopRequested     = &perFileStopRequested;
                         work->generationCounter = &_enumerationGeneration;
                         work->generation        = generation;
                         perFileWorks.push_back(std::move(work));
                     }
 
-                    perFilePathsPerf.SetValue1(perFilePathChars);
+                    perFilePathsPerf.SetValue1(perFileWorks.size());
                 }
 
                 std::vector<UniqueThreadpoolWork> perFileWorkItems;
@@ -816,10 +823,8 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
                             return;
                         }
 
-                        const auto iconIndex = IconCache::GetInstance().QuerySysIconIndexForPath(work->fullPath.c_str(), 0, false);
-
-                        std::lock_guard<std::mutex> lock(*work->resultsMutex);
-                        (*work->results)[work->itemIndex] = iconIndex.value_or(-1);
+                        const auto iconIndex    = IconCache::GetInstance().QuerySysIconIndexForPath(work->fullPath.c_str(), 0, false);
+                        work->resolvedIconIndex = iconIndex.value_or(-1);
                     },
                         work.get(),
                         nullptr));
@@ -849,13 +854,17 @@ std::unique_ptr<FolderView::EnumerationPayload> FolderView::ExecuteEnumeration(c
 
                 // Apply results to items
                 uint64_t perFileFailures = 0;
-                for (const auto& [idx, iconIndex] : perFileResults)
+                for (const auto& work : perFileWorks)
                 {
-                    if (iconIndex < 0)
+                    if (work->resolvedIconIndex < 0)
                     {
-                        ++perFileFailures;
+                        perFileFailures += static_cast<uint64_t>(work->itemIndices.size());
                     }
-                    payload->items[idx].iconIndex = iconIndex;
+
+                    for (const size_t idx : work->itemIndices)
+                    {
+                        payload->items[idx].iconIndex = work->resolvedIconIndex;
+                    }
                 }
 
                 perFileQueryPerf.SetValue1(perFileFailures);
@@ -1016,7 +1025,36 @@ void FolderView::OnDirectoryImpact(std::unique_ptr<DirectoryInfoCache::Directory
 
     switch (impact->kind)
     {
-        case DirectoryInfoCache::DirectoryImpact::Kind::RefreshCurrentFolder: OnDirectoryCacheDirty(); return;
+        case DirectoryInfoCache::DirectoryImpact::Kind::RefreshCurrentFolder:
+            if (! impact->renamedFromDisplayName.empty() && ! impact->renamedToDisplayName.empty())
+            {
+                bool fromWasSelected = false;
+                for (const auto& item : _items)
+                {
+                    if (item.selected && WStringViewEq{}(item.displayName, impact->renamedFromDisplayName))
+                    {
+                        fromWasSelected = true;
+                        break;
+                    }
+                }
+
+                if (! fromWasSelected)
+                {
+                    for (const auto& rename : _pendingRefreshSelectionRenames)
+                    {
+                        if (rename.fromWasSelected && WStringViewEq{}(rename.toDisplayName, impact->renamedFromDisplayName))
+                        {
+                            fromWasSelected = true;
+                            break;
+                        }
+                    }
+                }
+
+                _pendingRefreshSelectionRenames.push_back(
+                    {.fromDisplayName = impact->renamedFromDisplayName, .toDisplayName = impact->renamedToDisplayName, .fromWasSelected = fromWasSelected});
+            }
+            OnDirectoryCacheDirty();
+            return;
         case DirectoryInfoCache::DirectoryImpact::Kind::RelocateCurrentFolder:
         case DirectoryInfoCache::DirectoryImpact::Kind::RetargetInstanceContext:
         case DirectoryInfoCache::DirectoryImpact::Kind::ExitInstanceContext:
@@ -1042,11 +1080,17 @@ void FolderView::RequestRefreshFromCache()
 {
     if (! _currentFolder || ! _hWnd)
     {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"FolderView::RequestRefreshFromCache: skipped (no current folder or hwnd)");
+#endif
         return;
     }
 
     EnsureEnumerationThread();
     const uint64_t generation = _enumerationGeneration.fetch_add(1, std::memory_order_release) + 1;
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::RequestRefreshFromCache: generation={} folder='{}'", generation, _currentFolder->native()));
+#endif
     if (_pendingExternalCommandAfterEnumeration && _currentFolder)
     {
         const std::wstring currentKey = NormalizeFocusMemoryFolderKey(_currentFolder.value());
@@ -1079,9 +1123,20 @@ void FolderView::ApplyCurrentSort(std::wstring_view preferredFocusedPath, size_t
 
     if (_items.empty())
     {
-        _focusedIndex = invalidIndex;
-        _anchorIndex  = invalidIndex;
-        _hoveredIndex = invalidIndex;
+        const bool focusChanged     = _focusedIndex != invalidIndex;
+        const bool selectionChanged = _selectionStats.selectedFolders != 0u || _selectionStats.selectedFiles != 0u || _selectionStats.singleItem.has_value();
+        _focusedIndex               = invalidIndex;
+        _anchorIndex                = invalidIndex;
+        _hoveredIndex               = invalidIndex;
+        _selectionStats             = {};
+        if (selectionChanged)
+        {
+            NotifySelectionChanged();
+        }
+        if (focusChanged)
+        {
+            NotifyFocusedItemChanged();
+        }
         return;
     }
 
@@ -1388,10 +1443,20 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     TRACER;
     if (! payload)
     {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: null payload");
+#endif
         return;
     }
 
     const uint64_t currentGeneration = _enumerationGeneration.load(std::memory_order_acquire);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::ProcessEnumerationResult: payload generation={} current={} status=0x{:08X} itemCount={}",
+                                              payload->generation,
+                                              currentGeneration,
+                                              static_cast<unsigned>(payload->status),
+                                              payload->items.size()));
+#endif
     if (payload->generation != currentGeneration)
     {
         if (_pendingExternalCommandAfterEnumeration && _pendingExternalCommandAfterEnumeration->generation == payload->generation)
@@ -1405,6 +1470,9 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
 
     if (FAILED(payload->status))
     {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: failed payload status");
+#endif
         if (_pendingExternalCommandAfterEnumeration && _pendingExternalCommandAfterEnumeration->generation == payload->generation)
         {
             _pendingExternalCommandAfterEnumeration.reset();
@@ -1460,12 +1528,19 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
         fallbackFocusIndex = invalidIndex;
     }
 
+    std::vector<PendingRefreshSelectionRename> refreshSelectionRenames;
+    if (isRefresh)
+    {
+        refreshSelectionRenames = std::move(_pendingRefreshSelectionRenames);
+    }
+    _pendingRefreshSelectionRenames.clear();
+
     // Incremental refresh: preserve rendering state for unchanged items
     size_t itemsPreserved = 0;
     if (isRefresh && ! _items.empty())
     {
         // Build lookup map of old items by path for O(1) access
-        std::unordered_map<std::wstring_view, size_t> oldItemsByPath;
+        std::unordered_map<std::wstring_view, size_t, WStringViewHash, WStringViewEq> oldItemsByPath;
         oldItemsByPath.reserve(_items.size());
         for (size_t i = 0; i < _items.size(); ++i)
         {
@@ -1482,6 +1557,7 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
             }
 
             const auto& oldItem = _items[it->second];
+            newItem.selected    = oldItem.selected;
 
             // Check if item data is unchanged (same size, time, attributes)
             const bool dataUnchanged = (oldItem.sizeBytes == newItem.sizeBytes && oldItem.lastWriteTime == newItem.lastWriteTime &&
@@ -1506,10 +1582,52 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
                 newItem.icon = oldItem.icon;
             }
 
-            // Preserve selection state
-            newItem.selected = oldItem.selected;
-
             ++itemsPreserved;
+        }
+
+        if (! refreshSelectionRenames.empty())
+        {
+            std::unordered_map<std::wstring_view, std::vector<const PendingRefreshSelectionRename*>, WStringViewHash, WStringViewEq> renamesByTarget;
+            renamesByTarget.reserve(refreshSelectionRenames.size());
+            for (const auto& rename : refreshSelectionRenames)
+            {
+                renamesByTarget[rename.toDisplayName].push_back(&rename);
+            }
+
+            for (auto& newItem : payload->items)
+            {
+                if (newItem.selected)
+                {
+                    continue;
+                }
+
+                const auto targetIt = renamesByTarget.find(newItem.displayName);
+                if (targetIt == renamesByTarget.end())
+                {
+                    continue;
+                }
+
+                for (const auto* rename : targetIt->second)
+                {
+                    if (! rename)
+                    {
+                        continue;
+                    }
+
+                    bool renameSourceSelected = rename->fromWasSelected;
+                    if (! renameSourceSelected)
+                    {
+                        const auto oldIt     = oldItemsByPath.find(rename->fromDisplayName);
+                        renameSourceSelected = oldIt != oldItemsByPath.end() && _items[oldIt->second].selected;
+                    }
+
+                    if (renameSourceSelected)
+                    {
+                        newItem.selected = true;
+                        break;
+                    }
+                }
+            }
         }
 
         if (itemsPreserved > 0)
@@ -1521,6 +1639,9 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     _items            = std::move(payload->items);
     _itemsArenaBuffer = std::move(payload->arenaBuffer); // Keep arena alive for string_views
     _itemsFolder      = std::move(payload->folder);      // For computing full paths
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::ProcessEnumerationResult: assigned items count={}", _items.size()));
+#endif
     for (size_t i = 0; i < _items.size(); ++i)
     {
         _items[i].unsortedOrder = i;
@@ -1530,6 +1651,11 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     _anchorIndex     = invalidIndex;
     _hoveredIndex    = invalidIndex;
     ApplyCurrentSort(preferredFocusPath, fallbackFocusIndex);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(std::format(L"FolderView::ProcessEnumerationResult: after sort focusedIndex={} displayedFolder='{}'",
+                                              _focusedIndex,
+                                              _displayedFolder.has_value() ? _displayedFolder->native() : std::wstring(L"<none>")));
+#endif
 
     // Only reset scroll position on folder navigation, not on refresh
     if (! isRefresh)
@@ -1582,15 +1708,27 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     // Items already have iconIndex populated from ExecuteEnumeration background thread
     // Now queue icon loading to convert HICON to D2D bitmaps on UI thread
     LayoutItems();
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: after LayoutItems");
+#endif
     UpdateScrollMetrics();
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: after UpdateScrollMetrics");
+#endif
     if (_focusedIndex != invalidIndex && _focusedIndex < _items.size())
     {
         EnsureVisible(_focusedIndex);
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: after EnsureVisible");
+#endif
     }
 
     // Queue icon loading after layout - only for items without D2D bitmaps
     Debug::Info(L"FolderView: About to queue icons for {} items", _items.size());
     QueueIconLoading();
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: after QueueIconLoading");
+#endif
 
     const auto resetEmptyFolderLayouts = [&]() noexcept
     {
@@ -1683,23 +1821,41 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     }
 
     UpdateCompareNoDifferencesState();
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: after UpdateCompareNoDifferencesState");
+#endif
 
     // Schedule idle-time layout pre-creation for off-screen items
     // This creates layouts gradually during UI idle periods for smoother scrolling
     ScheduleIdleLayoutCreation();
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: after ScheduleIdleLayoutCreation");
+#endif
 
     if (_hWnd)
     {
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: after InvalidateRect");
+#endif
     }
 
     if (_enumerationCompletedCallback)
     {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: before enumeration callback");
+#endif
         _enumerationCompletedCallback(_itemsFolder);
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: after enumeration callback");
+#endif
     }
 
     if (_pendingExternalCommandAfterEnumeration && _pendingExternalCommandAfterEnumeration->generation == payload->generation)
     {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: entering pending external command block");
+#endif
         PendingExternalCommand pending = std::move(_pendingExternalCommandAfterEnumeration.value());
         _pendingExternalCommandAfterEnumeration.reset();
 
@@ -1716,7 +1872,13 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
 
         if (focusMatches && pending.commandId != 0u && _hWnd)
         {
+#ifdef ENABLE_TESTS
+            SelfTest::AppendSelfTestTrace(std::format(L"FolderView::ProcessEnumerationResult: dispatching pending command id={}", pending.commandId));
+#endif
             PostMessageW(_hWnd.get(), WM_COMMAND, MAKEWPARAM(pending.commandId, 0), 0);
         }
     }
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: end");
+#endif
 }

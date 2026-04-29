@@ -1,8 +1,18 @@
 #include "AlertOverlayWindow.h"
 #include "AnimationDispatcher.h"
+#include "Win32CallbackHelpers.h"
 
+#include <UIAutomation.h>
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <cwctype>
+#include <format>
+#include <new>
+#include <oleauto.h>
+#include <vector>
+
+#pragma comment(lib, "uiautomationcore.lib")
 
 namespace RedSalamander::Ui
 {
@@ -12,6 +22,12 @@ constexpr wchar_t kAlertOverlayWindowClassName[] = L"RedSalamander.AlertOverlayW
 constexpr uint64_t kShowAnimationMs              = 220;
 constexpr BYTE kModelessLayerAlpha               = 245; // Slight transparency so the app remains visible below.
 constexpr BYTE kModalLayerAlpha                  = 230; // More transparency for modal scrim effect.
+constexpr wchar_t kParentOriginalWndProcProp[]   = L"RedSalamander.AlertOverlay.ParentOriginalWndProc";
+constexpr wchar_t kParentStateProp[]             = L"RedSalamander.AlertOverlay.ParentState";
+constexpr wchar_t kAnchorOriginalWndProcProp[]   = L"RedSalamander.AlertOverlay.AnchorOriginalWndProc";
+constexpr wchar_t kAnchorStateProp[]             = L"RedSalamander.AlertOverlay.AnchorState";
+constexpr UINT kUiaInvokeButtonMessage           = WM_APP + 0x72;
+constexpr UINT kUiaInvokeDismissMessage          = WM_APP + 0x73;
 
 POINT PointFromLParam(LPARAM lp) noexcept
 {
@@ -21,25 +37,602 @@ POINT PointFromLParam(LPARAM lp) noexcept
     return pt;
 }
 
-[[nodiscard]] bool SetWindowSubclassNoThrow(HWND hwnd, SUBCLASSPROC proc, UINT_PTR id, DWORD_PTR refData) noexcept
+[[maybe_unused]] [[nodiscard]] WNDPROC GetStoredWndProc(HWND hwnd, const wchar_t* propName) noexcept
 {
-#pragma warning(push)
-    // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-#pragma warning(disable : 5039)
-    const BOOL ok = SetWindowSubclass(hwnd, proc, id, refData);
-#pragma warning(pop)
-    return ok != 0;
+    return Win32Callback::GetStoredWndProc(hwnd, propName);
 }
 
-void RemoveWindowSubclassNoThrow(HWND hwnd, SUBCLASSPROC proc, UINT_PTR id) noexcept
+[[nodiscard]] bool InstallWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, WNDPROC wndProc) noexcept
 {
-#pragma warning(push)
-    // C5039: pointer or reference to potentially throwing function passed to 'extern "C"' function
-#pragma warning(disable : 5039)
-    static_cast<void>(RemoveWindowSubclass(hwnd, proc, id));
-#pragma warning(pop)
+    return Win32Callback::InstallWndProcHook(hwnd, originalWndProcProp, wndProc);
+}
+
+void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wchar_t* stateProp) noexcept
+{
+    if (! hwnd)
+    {
+        return;
+    }
+
+    Win32Callback::RestoreWndProcHook(hwnd, originalWndProcProp);
+
+    RemovePropW(hwnd, originalWndProcProp);
+    RemovePropW(hwnd, stateProp);
+}
+
+LRESULT CallStoredWndProc(HWND hwnd, const wchar_t* originalWndProcProp, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    return Win32Callback::CallStoredWndProc(hwnd, originalWndProcProp, msg, wp, lp);
 }
 } // namespace
+
+class AlertOverlayUiaProvider final : public IRawElementProviderSimple,
+                                      public IRawElementProviderFragment,
+                                      public IRawElementProviderFragmentRoot,
+                                      public IInvokeProvider
+{
+public:
+    enum class ElementKind : uint8_t
+    {
+        Root,
+        Text,
+        CloseButton,
+        Button,
+    };
+
+    struct ElementId
+    {
+        ElementKind kind = ElementKind::Root;
+        size_t index     = 0u;
+    };
+
+    AlertOverlayUiaProvider(HWND hwnd, ElementId id) noexcept : _hwnd(hwnd), _id(id)
+    {
+    }
+
+    AlertOverlayUiaProvider(const AlertOverlayUiaProvider&)            = delete;
+    AlertOverlayUiaProvider& operator=(const AlertOverlayUiaProvider&) = delete;
+    AlertOverlayUiaProvider(AlertOverlayUiaProvider&&)                 = delete;
+    AlertOverlayUiaProvider& operator=(AlertOverlayUiaProvider&&)      = delete;
+
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** object) noexcept override
+    {
+        if (! object)
+        {
+            return E_POINTER;
+        }
+
+        *object = nullptr;
+        if (riid == __uuidof(IUnknown) || riid == __uuidof(IRawElementProviderSimple))
+        {
+            *object = static_cast<IRawElementProviderSimple*>(this);
+        }
+        else if (riid == __uuidof(IRawElementProviderFragment))
+        {
+            *object = static_cast<IRawElementProviderFragment*>(this);
+        }
+        else if (_id.kind == ElementKind::Root && riid == __uuidof(IRawElementProviderFragmentRoot))
+        {
+            *object = static_cast<IRawElementProviderFragmentRoot*>(this);
+        }
+        else if (IsButtonLike() && riid == __uuidof(IInvokeProvider))
+        {
+            *object = static_cast<IInvokeProvider*>(this);
+        }
+        else
+        {
+            return E_NOINTERFACE;
+        }
+
+        AddRef();
+        return S_OK;
+    }
+
+    ULONG STDMETHODCALLTYPE AddRef() noexcept override
+    {
+        return _refCount.fetch_add(1u, std::memory_order_relaxed) + 1u;
+    }
+
+    ULONG STDMETHODCALLTYPE Release() noexcept override
+    {
+        const ULONG remaining = _refCount.fetch_sub(1u, std::memory_order_acq_rel) - 1u;
+        if (remaining == 0u)
+        {
+            delete this;
+        }
+        return remaining;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_ProviderOptions(ProviderOptions* options) noexcept override
+    {
+        if (! options)
+        {
+            return E_POINTER;
+        }
+
+        *options = ProviderOptions_ServerSideProvider;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetPatternProvider(PATTERNID patternId, IUnknown** provider) noexcept override
+    {
+        if (! provider)
+        {
+            return E_POINTER;
+        }
+
+        *provider = nullptr;
+        if (patternId == UIA_InvokePatternId && IsButtonLike())
+        {
+            *provider = static_cast<IInvokeProvider*>(this);
+            AddRef();
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetPropertyValue(PROPERTYID propertyId, VARIANT* value) noexcept override
+    {
+        if (! value)
+        {
+            return E_POINTER;
+        }
+
+        VariantInit(value);
+        AlertOverlayWindow* window = ResolveWindow();
+        if (! window)
+        {
+            if (propertyId == UIA_IsOffscreenPropertyId)
+            {
+                return SetBool(value, true);
+            }
+            return S_OK;
+        }
+
+        switch (propertyId)
+        {
+            case UIA_ControlTypePropertyId: return SetI4(value, ControlType());
+            case UIA_NamePropertyId: return SetBstr(value, Name(*window));
+            case UIA_AutomationIdPropertyId: return SetBstr(value, AutomationId(*window));
+            case UIA_ClassNamePropertyId: return SetBstr(value, kAlertOverlayWindowClassName);
+            case UIA_FrameworkIdPropertyId: return SetBstr(value, L"RedSalamander");
+            case UIA_IsControlElementPropertyId: return SetBool(value, true);
+            case UIA_IsContentElementPropertyId: return SetBool(value, _id.kind != ElementKind::Root);
+            case UIA_IsEnabledPropertyId: return SetBool(value, true);
+            case UIA_IsKeyboardFocusablePropertyId: return SetBool(value, IsButtonLike() || _id.kind == ElementKind::Root);
+            case UIA_HasKeyboardFocusPropertyId: return SetBool(value, ::GetFocus() == _hwnd);
+            case UIA_IsOffscreenPropertyId: return SetBool(value, IsWindowVisible(_hwnd) == FALSE);
+            case UIA_NativeWindowHandlePropertyId:
+                if (_id.kind == ElementKind::Root)
+                {
+                    return SetI4(value, static_cast<int>(reinterpret_cast<ULONG_PTR>(_hwnd) & 0x7FFFFFFFu));
+                }
+                return S_OK;
+            default: return S_OK;
+        }
+    }
+
+    HRESULT STDMETHODCALLTYPE get_HostRawElementProvider(IRawElementProviderSimple** provider) noexcept override
+    {
+        if (! provider)
+        {
+            return E_POINTER;
+        }
+
+        *provider = nullptr;
+        if (_id.kind != ElementKind::Root)
+        {
+            return S_OK;
+        }
+
+        return UiaHostProviderFromHwnd(_hwnd, provider);
+    }
+
+    HRESULT STDMETHODCALLTYPE Navigate(NavigateDirection direction, IRawElementProviderFragment** provider) noexcept override
+    {
+        if (! provider)
+        {
+            return E_POINTER;
+        }
+
+        *provider                  = nullptr;
+        AlertOverlayWindow* window = ResolveWindow();
+        if (! window)
+        {
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        const std::vector<ElementId> children = Children(*window);
+        switch (direction)
+        {
+            case NavigateDirection_FirstChild:
+                if (_id.kind == ElementKind::Root && ! children.empty())
+                {
+                    return CreateFragment(_hwnd, children.front(), provider);
+                }
+                return S_OK;
+            case NavigateDirection_LastChild:
+                if (_id.kind == ElementKind::Root && ! children.empty())
+                {
+                    return CreateFragment(_hwnd, children.back(), provider);
+                }
+                return S_OK;
+            case NavigateDirection_Parent:
+                if (_id.kind != ElementKind::Root)
+                {
+                    return CreateFragment(_hwnd, ElementId{}, provider);
+                }
+                return S_OK;
+            case NavigateDirection_NextSibling:
+            case NavigateDirection_PreviousSibling:
+                if (_id.kind == ElementKind::Root)
+                {
+                    return S_OK;
+                }
+                return NavigateSibling(children, direction, provider);
+            default: return S_OK;
+        }
+    }
+
+    HRESULT STDMETHODCALLTYPE GetRuntimeId(SAFEARRAY** runtimeId) noexcept override
+    {
+        if (! runtimeId)
+        {
+            return E_POINTER;
+        }
+
+        *runtimeId       = nullptr;
+        SAFEARRAY* array = SafeArrayCreateVector(VT_I4, 0, 5u);
+        if (! array)
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        const ULONG_PTR hwndValue = reinterpret_cast<ULONG_PTR>(_hwnd);
+        const LONG values[5]      = {UiaAppendRuntimeId,
+                                     static_cast<LONG>(hwndValue & 0x7FFFFFFFu),
+                                     static_cast<LONG>((hwndValue >> 32u) & 0x7FFFFFFFu),
+                                     static_cast<LONG>(static_cast<int>(_id.kind)),
+                                     static_cast<LONG>(_id.index & 0x7FFFFFFFu)};
+
+        for (LONG i = 0; i < 5; ++i)
+        {
+            LONG item        = values[i];
+            const HRESULT hr = SafeArrayPutElement(array, &i, &item);
+            if (FAILED(hr))
+            {
+                SafeArrayDestroy(array);
+                return hr;
+            }
+        }
+
+        *runtimeId = array;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_BoundingRectangle(UiaRect* rect) noexcept override
+    {
+        if (! rect)
+        {
+            return E_POINTER;
+        }
+
+        RECT windowRect{};
+        if (! _hwnd || GetWindowRect(_hwnd, &windowRect) == FALSE)
+        {
+            *rect = {};
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        rect->left   = static_cast<double>(windowRect.left);
+        rect->top    = static_cast<double>(windowRect.top);
+        rect->width  = static_cast<double>(std::max<LONG>(0, windowRect.right - windowRect.left));
+        rect->height = static_cast<double>(std::max<LONG>(0, windowRect.bottom - windowRect.top));
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetEmbeddedFragmentRoots(SAFEARRAY** roots) noexcept override
+    {
+        if (! roots)
+        {
+            return E_POINTER;
+        }
+
+        *roots = nullptr;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE SetFocus() noexcept override
+    {
+        if (! _hwnd || IsWindow(_hwnd) == FALSE)
+        {
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        ::SetFocus(_hwnd);
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE get_FragmentRoot(IRawElementProviderFragmentRoot** root) noexcept override
+    {
+        if (! root)
+        {
+            return E_POINTER;
+        }
+
+        *root = nullptr;
+        return CreateRoot(_hwnd, root);
+    }
+
+    HRESULT STDMETHODCALLTYPE ElementProviderFromPoint(double /*x*/, double /*y*/, IRawElementProviderFragment** provider) noexcept override
+    {
+        if (! provider)
+        {
+            return E_POINTER;
+        }
+
+        *provider = nullptr;
+        return CreateFragment(_hwnd, ElementId{}, provider);
+    }
+
+    HRESULT STDMETHODCALLTYPE GetFocus(IRawElementProviderFragment** provider) noexcept override
+    {
+        if (! provider)
+        {
+            return E_POINTER;
+        }
+
+        *provider                  = nullptr;
+        AlertOverlayWindow* window = ResolveWindow();
+        if (! window)
+        {
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        if (const std::optional<uint32_t> focusedButtonId = window->_overlay.GetFocusedButtonId(); focusedButtonId.has_value())
+        {
+            const auto& buttons = window->_overlay.GetModel().buttons;
+            for (size_t index = 0; index < buttons.size(); ++index)
+            {
+                if (buttons[index].id == focusedButtonId.value())
+                {
+                    return CreateFragment(_hwnd, ElementId{ElementKind::Button, index}, provider);
+                }
+            }
+        }
+
+        return CreateFragment(_hwnd, ElementId{}, provider);
+    }
+
+    HRESULT STDMETHODCALLTYPE Invoke() noexcept override
+    {
+        AlertOverlayWindow* window = ResolveWindow();
+        if (! window || ! IsButtonLike())
+        {
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        if (_id.kind == ElementKind::CloseButton)
+        {
+            return PostInvokeMessage(_hwnd, kUiaInvokeDismissMessage, 0);
+        }
+
+        const auto& buttons = window->_overlay.GetModel().buttons;
+        if (_id.index >= buttons.size())
+        {
+            return UIA_E_ELEMENTNOTAVAILABLE;
+        }
+
+        return PostInvokeMessage(_hwnd, kUiaInvokeButtonMessage, static_cast<WPARAM>(buttons[_id.index].id));
+    }
+
+private:
+    static HRESULT PostInvokeMessage(HWND hwnd, UINT message, WPARAM wParam) noexcept
+    {
+        if (PostMessageW(hwnd, message, wParam, 0) != FALSE)
+        {
+            return S_OK;
+        }
+
+        const DWORD lastError = GetLastError();
+        return HRESULT_FROM_WIN32(lastError == ERROR_SUCCESS ? ERROR_INVALID_HANDLE : lastError);
+    }
+
+    static HRESULT SetBool(VARIANT* value, bool data) noexcept
+    {
+        value->vt      = VT_BOOL;
+        value->boolVal = data ? VARIANT_TRUE : VARIANT_FALSE;
+        return S_OK;
+    }
+
+    static HRESULT SetI4(VARIANT* value, int data) noexcept
+    {
+        value->vt   = VT_I4;
+        value->lVal = data;
+        return S_OK;
+    }
+
+    static HRESULT SetBstr(VARIANT* value, std::wstring_view text) noexcept
+    {
+        BSTR bstr = SysAllocStringLen(text.data(), static_cast<UINT>(text.size()));
+        if (! bstr && ! text.empty())
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        value->vt      = VT_BSTR;
+        value->bstrVal = bstr;
+        return S_OK;
+    }
+
+    [[nodiscard]] bool IsButtonLike() const noexcept
+    {
+        return _id.kind == ElementKind::Button || _id.kind == ElementKind::CloseButton;
+    }
+
+    [[nodiscard]] AlertOverlayWindow* ResolveWindow() const noexcept
+    {
+        if (! _hwnd || IsWindow(_hwnd) == FALSE)
+        {
+            return nullptr;
+        }
+
+        auto* window = reinterpret_cast<AlertOverlayWindow*>(GetWindowLongPtrW(_hwnd, GWLP_USERDATA));
+        if (! window || window->_hwnd.get() != _hwnd || ! window->_visible)
+        {
+            return nullptr;
+        }
+
+        return window;
+    }
+
+    [[nodiscard]] CONTROLTYPEID ControlType() const noexcept
+    {
+        switch (_id.kind)
+        {
+            case ElementKind::Root: return UIA_PaneControlTypeId;
+            case ElementKind::Text: return UIA_TextControlTypeId;
+            case ElementKind::CloseButton:
+            case ElementKind::Button: return UIA_ButtonControlTypeId;
+            default: return UIA_CustomControlTypeId;
+        }
+    }
+
+    [[nodiscard]] std::wstring Name(const AlertOverlayWindow& window) const
+    {
+        const AlertModel& model = window._overlay.GetModel();
+        switch (_id.kind)
+        {
+            case ElementKind::Root: return ! model.title.empty() ? model.title : L"Alert";
+            case ElementKind::Text:
+            {
+                if (model.title.empty())
+                {
+                    return model.message;
+                }
+                if (model.message.empty())
+                {
+                    return model.title;
+                }
+                return std::format(L"{}\n{}", model.title, model.message);
+            }
+            case ElementKind::CloseButton: return L"Close";
+            case ElementKind::Button:
+                if (_id.index < model.buttons.size())
+                {
+                    return model.buttons[_id.index].label;
+                }
+                return {};
+            default: return {};
+        }
+    }
+
+    [[nodiscard]] std::wstring AutomationId(const AlertOverlayWindow& window) const
+    {
+        switch (_id.kind)
+        {
+            case ElementKind::Root: return L"AlertOverlay";
+            case ElementKind::Text: return L"AlertOverlay.Text";
+            case ElementKind::CloseButton: return L"AlertOverlay.Close";
+            case ElementKind::Button:
+            {
+                const auto& buttons = window._overlay.GetModel().buttons;
+                const uint32_t id   = _id.index < buttons.size() ? buttons[_id.index].id : 0u;
+                return std::format(L"AlertOverlay.Button.{}", id);
+            }
+            default: return {};
+        }
+    }
+
+    [[nodiscard]] static std::vector<ElementId> Children(const AlertOverlayWindow& window)
+    {
+        std::vector<ElementId> children;
+        const AlertModel& model = window._overlay.GetModel();
+        children.reserve(model.buttons.size() + 2u);
+        if (! model.title.empty() || ! model.message.empty())
+        {
+            children.push_back(ElementId{ElementKind::Text, 0u});
+        }
+        if (model.closable)
+        {
+            children.push_back(ElementId{ElementKind::CloseButton, 0u});
+        }
+        for (size_t index = 0u; index < model.buttons.size(); ++index)
+        {
+            children.push_back(ElementId{ElementKind::Button, index});
+        }
+        return children;
+    }
+
+    [[nodiscard]] static bool SameElement(ElementId lhs, ElementId rhs) noexcept
+    {
+        return lhs.kind == rhs.kind && lhs.index == rhs.index;
+    }
+
+    static HRESULT CreateFragment(HWND hwnd, ElementId id, IRawElementProviderFragment** provider) noexcept
+    {
+        auto* created = new (std::nothrow) AlertOverlayUiaProvider(hwnd, id);
+        if (! created)
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        *provider = static_cast<IRawElementProviderFragment*>(created);
+        return S_OK;
+    }
+
+    static HRESULT CreateRoot(HWND hwnd, IRawElementProviderFragmentRoot** root) noexcept
+    {
+        auto* created = new (std::nothrow) AlertOverlayUiaProvider(hwnd, ElementId{});
+        if (! created)
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        *root = static_cast<IRawElementProviderFragmentRoot*>(created);
+        return S_OK;
+    }
+
+    HRESULT NavigateSibling(const std::vector<ElementId>& children, NavigateDirection direction, IRawElementProviderFragment** provider) noexcept
+    {
+        for (size_t index = 0u; index < children.size(); ++index)
+        {
+            if (! SameElement(children[index], _id))
+            {
+                continue;
+            }
+
+            if (direction == NavigateDirection_NextSibling && index + 1u < children.size())
+            {
+                return CreateFragment(_hwnd, children[index + 1u], provider);
+            }
+            if (direction == NavigateDirection_PreviousSibling && index > 0u)
+            {
+                return CreateFragment(_hwnd, children[index - 1u], provider);
+            }
+            return S_OK;
+        }
+
+        return S_OK;
+    }
+
+private:
+    std::atomic<ULONG> _refCount{1u};
+    HWND _hwnd = nullptr;
+    ElementId _id{};
+};
+
+[[nodiscard]] LRESULT ReturnAlertOverlayUiaProvider(HWND hwnd, WPARAM wp, LPARAM lp) noexcept
+{
+    auto* provider = new (std::nothrow) AlertOverlayUiaProvider(hwnd, AlertOverlayUiaProvider::ElementId{});
+    if (! provider)
+    {
+        return 0;
+    }
+
+    const LRESULT result = UiaReturnRawElementProvider(hwnd, wp, lp, static_cast<IRawElementProviderSimple*>(provider));
+    static_cast<void>(provider->Release());
+    return result;
+}
 
 AlertOverlayWindow::~AlertOverlayWindow()
 {
@@ -118,12 +711,36 @@ LRESULT AlertOverlayWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) n
     switch (msg)
     {
         case WM_ERASEBKGND: return 1;
+        case WM_GETOBJECT:
+            if (lp == static_cast<LPARAM>(UiaRootObjectId))
+            {
+                return ReturnAlertOverlayUiaProvider(hwnd, wp, lp);
+            }
+            break;
+        case kUiaInvokeButtonMessage: InvokeButton(static_cast<uint32_t>(wp)); return 0;
+        case kUiaInvokeDismissMessage: InvokeDismiss(); return 0;
         case WM_PAINT: OnPaint(); return 0;
+        case WM_DPICHANGED_AFTERPARENT:
+            _dpi = GetDpiForWindow(hwnd);
+            if (_target)
+            {
+                _target->SetDpi(static_cast<float>(_dpi), static_cast<float>(_dpi));
+            }
+            _panelRegionPx.reset();
+            UpdatePlacement();
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
         case WM_MOUSEMOVE: OnMouseMove(PointFromLParam(lp)); return 0;
         case WM_MOUSELEAVE: OnMouseLeave(); return 0;
         case WM_LBUTTONDOWN: OnLButtonDown(PointFromLParam(lp)); return 0;
         case WM_KEYDOWN: OnKeyDown(wp); return 0;
+        case WM_SYSCHAR:
+            if (OnSysChar(wp))
+            {
+                return 0;
+            }
+            break;
         case WM_SETCURSOR: return OnSetCursor(reinterpret_cast<HWND>(wp), LOWORD(lp), HIWORD(lp));
         case WM_NCDESTROY:
         {
@@ -322,6 +939,47 @@ void AlertOverlayWindow::OnKeyDown(WPARAM key) noexcept
         }
         return;
     }
+}
+
+bool AlertOverlayWindow::OnSysChar(WPARAM key) noexcept
+{
+    if (! _visible || ! _hwnd)
+    {
+        return false;
+    }
+
+    const wchar_t mnemonic = static_cast<wchar_t>(key);
+    if (mnemonic == L'\0')
+    {
+        return false;
+    }
+
+    const auto normalize = [](wchar_t ch) noexcept -> wchar_t { return static_cast<wchar_t>(std::towupper(static_cast<wint_t>(ch))); };
+
+    for (const auto& button : _overlay.GetModel().buttons)
+    {
+        for (const wchar_t ch : button.label)
+        {
+            if (ch == L'&')
+            {
+                continue;
+            }
+
+            if (std::iswspace(static_cast<wint_t>(ch)))
+            {
+                continue;
+            }
+
+            if (normalize(ch) == normalize(mnemonic))
+            {
+                InvokeButton(button.id);
+                return true;
+            }
+            break;
+        }
+    }
+
+    return false;
 }
 
 LRESULT AlertOverlayWindow::OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mouseMsg) noexcept
@@ -644,15 +1302,14 @@ void AlertOverlayWindow::ApplyAttachmentState(HWND hostParent, HWND anchor, bool
         return;
     }
 
-    const UINT_PTR subclassId = _subclassId;
     if (_hostParentSubclassed && _hostParent && IsWindow(_hostParent))
     {
-        RemoveWindowSubclassNoThrow(_hostParent, &AlertOverlayWindow::ParentSubclassProc, subclassId);
+        RestoreWndProcHook(_hostParent, kParentOriginalWndProcProp, kParentStateProp);
     }
 
     if (_anchorSubclassed && _anchor && IsWindow(_anchor))
     {
-        RemoveWindowSubclassNoThrow(_anchor, &AlertOverlayWindow::AnchorSubclassProc, subclassId);
+        RestoreWndProcHook(_anchor, kAnchorOriginalWndProcProp, kAnchorStateProp);
     }
 
     _hostParentSubclassed = false;
@@ -660,21 +1317,30 @@ void AlertOverlayWindow::ApplyAttachmentState(HWND hostParent, HWND anchor, bool
 
     _hostParent = hostParent;
     _anchor     = anchor;
-    _subclassId = reinterpret_cast<UINT_PTR>(this);
-
     if (trackHostParent && _hostParent && IsWindow(_hostParent))
     {
-        if (SetWindowSubclassNoThrow(_hostParent, &AlertOverlayWindow::ParentSubclassProc, _subclassId, reinterpret_cast<DWORD_PTR>(this)))
+        if (SetPropW(_hostParent, kParentStateProp, this) != 0 &&
+            InstallWndProcHook(_hostParent, kParentOriginalWndProcProp, &AlertOverlayWindow::ParentWndProc))
         {
             _hostParentSubclassed = true;
+        }
+        else
+        {
+            RemovePropW(_hostParent, kParentStateProp);
+            RemovePropW(_hostParent, kParentOriginalWndProcProp);
         }
     }
 
     if (trackAnchor && _anchor && IsWindow(_anchor))
     {
-        if (SetWindowSubclassNoThrow(_anchor, &AlertOverlayWindow::AnchorSubclassProc, _subclassId, reinterpret_cast<DWORD_PTR>(this)))
+        if (SetPropW(_anchor, kAnchorStateProp, this) != 0 && InstallWndProcHook(_anchor, kAnchorOriginalWndProcProp, &AlertOverlayWindow::AnchorWndProc))
         {
             _anchorSubclassed = true;
+        }
+        else
+        {
+            RemovePropW(_anchor, kAnchorStateProp);
+            RemovePropW(_anchor, kAnchorOriginalWndProcProp);
         }
     }
 }
@@ -730,12 +1396,12 @@ void AlertOverlayWindow::UpdatePlacement() noexcept
     SetWindowPos(_hwnd.get(), HWND_TOP, rc.left, rc.top, width, height, flags);
 }
 
-LRESULT CALLBACK AlertOverlayWindow::ParentSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR refData) noexcept
+LRESULT CALLBACK AlertOverlayWindow::ParentWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    auto* self = reinterpret_cast<AlertOverlayWindow*>(refData);
+    auto* self = reinterpret_cast<AlertOverlayWindow*>(GetPropW(hwnd, kParentStateProp));
     if (! self)
     {
-        return DefSubclassProc(hwnd, msg, wp, lp);
+        return CallStoredWndProc(hwnd, kParentOriginalWndProcProp, msg, wp, lp);
     }
 
     if (msg == WM_SIZE || msg == WM_WINDOWPOSCHANGED)
@@ -745,20 +1411,34 @@ LRESULT CALLBACK AlertOverlayWindow::ParentSubclassProc(HWND hwnd, UINT msg, WPA
 
     if (msg == WM_NCDESTROY)
     {
-        static_cast<void>(id);
+        if (self->_hostParent == hwnd)
+        {
+            self->_hostParent           = nullptr;
+            self->_hostParentSubclassed = false;
+        }
+
+        if (self->_anchor == hwnd)
+        {
+            self->_anchor           = nullptr;
+            self->_anchorSubclassed = false;
+        }
+
         self->Destroy();
-        return DefSubclassProc(hwnd, msg, wp, lp);
+        const LRESULT result = CallStoredWndProc(hwnd, kParentOriginalWndProcProp, msg, wp, lp);
+        RemovePropW(hwnd, kParentStateProp);
+        RemovePropW(hwnd, kParentOriginalWndProcProp);
+        return result;
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return CallStoredWndProc(hwnd, kParentOriginalWndProcProp, msg, wp, lp);
 }
 
-LRESULT CALLBACK AlertOverlayWindow::AnchorSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR refData) noexcept
+LRESULT CALLBACK AlertOverlayWindow::AnchorWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
-    auto* self = reinterpret_cast<AlertOverlayWindow*>(refData);
+    auto* self = reinterpret_cast<AlertOverlayWindow*>(GetPropW(hwnd, kAnchorStateProp));
     if (! self)
     {
-        return DefSubclassProc(hwnd, msg, wp, lp);
+        return CallStoredWndProc(hwnd, kAnchorOriginalWndProcProp, msg, wp, lp);
     }
 
     if (msg == WM_SIZE || msg == WM_WINDOWPOSCHANGED)
@@ -768,7 +1448,12 @@ LRESULT CALLBACK AlertOverlayWindow::AnchorSubclassProc(HWND hwnd, UINT msg, WPA
 
     if (msg == WM_NCDESTROY)
     {
-        static_cast<void>(id);
+        if (self->_anchor == hwnd)
+        {
+            self->_anchor           = nullptr;
+            self->_anchorSubclassed = false;
+        }
+
         self->Hide();
 
         HWND hostParent = self->_hostParent;
@@ -778,10 +1463,13 @@ LRESULT CALLBACK AlertOverlayWindow::AnchorSubclassProc(HWND hwnd, UINT msg, WPA
         }
 
         self->ApplyAttachmentState(hostParent, nullptr, false, false);
-        return DefSubclassProc(hwnd, msg, wp, lp);
+        const LRESULT result = CallStoredWndProc(hwnd, kAnchorOriginalWndProcProp, msg, wp, lp);
+        RemovePropW(hwnd, kAnchorStateProp);
+        RemovePropW(hwnd, kAnchorOriginalWndProcProp);
+        return result;
     }
 
-    return DefSubclassProc(hwnd, msg, wp, lp);
+    return CallStoredWndProc(hwnd, kAnchorOriginalWndProcProp, msg, wp, lp);
 }
 
 void AlertOverlayWindow::EnsureD2DResources() noexcept

@@ -74,5 +74,14 @@
     "monitor.textView.metaWarning": "#FFD166",
     "monitor.textView.metaInfo": "#00FF7F",
     "monitor.textView.metaDebug": "#00AA55",
+
+    // Viewer diff
+    "viewer.diff.addedBackground": "#3300FF7F",
+    "viewer.diff.removedBackground": "#33FF4D4D",
+    "viewer.diff.contextBackground": "#1000FF7F",
+    "viewer.diff.headerBackground": "#1400FF7F",
+    "viewer.diff.bannerBackground": "#2200FF7F",
+    "viewer.diff.placeholderBackground": "#1C00AA55",
+    "viewer.diff.divider": "#B800331A",
   },
 }

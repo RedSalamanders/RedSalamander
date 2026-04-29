@@ -15,6 +15,12 @@ interface IFileSystem;
 #pragma warning(push)
 #pragma warning(disable : 4820) // padding in data structure
 
+// ABI evolution policy for host/plugin interfaces in this file:
+// - A same-GUID COM interface has a fixed vtable layout. Do not insert, remove, reorder, or change existing virtual slots.
+// - Append-only same-GUID changes are allowed only when old-plugin/new-host compatibility is explicitly covered by a test fixture.
+// - If compatibility is not proven, define a new interface IID/name (for example IHostConnections2) and expose it via QueryInterface.
+// - New-plugin/old-host compatibility must use QueryInterface for the newer IID instead of assuming appended slots exist on an older host.
+
 // Root host services object (extensible via QueryInterface).
 // UUID: {c7191bad-276e-4f7b-91ec-4803315413a7}
 interface __declspec(uuid("c7191bad-276e-4f7b-91ec-4803315413a7")) __declspec(novtable) IHost : public IUnknown{};
@@ -157,6 +163,7 @@ struct HostConnectionManagerResult
     uint32_t reserved[8];
 };
 
+// Vtable slot order is part of the IHostConnections ABI. Same-GUID edits must follow the ABI evolution policy above.
 // UUID: {018b09cf-dd4e-47ac-b013-baef06220cff}
 interface __declspec(uuid("018b09cf-dd4e-47ac-b013-baef06220cff")) __declspec(novtable) IHostConnections : public IUnknown
 {

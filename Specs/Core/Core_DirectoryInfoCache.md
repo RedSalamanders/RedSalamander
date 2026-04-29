@@ -115,6 +115,7 @@ The router emits one of four payloads:
 Rules:
 
 - if the visible folder's direct children changed, refresh that folder
+- if a same-folder rename is observed as an adjacent old/new pair, the refresh impact carries the old and new display names so `FolderView` can transfer selection from the old item to the renamed item
 - if the current folder was deleted or moved away, relocate to the nearest surviving ancestor
 - if a mounted backing path was renamed or moved, retarget the instance context
 - if a mounted backing path was deleted, exit the mount to local file space
@@ -156,6 +157,8 @@ If a plugin does not expose a watch interface, the cache still stays correct thr
 `overflow = TRUE` means incremental events are not trustworthy. The cache marks the watched folder dirty and posts a refresh impact so the visible pane performs a full re-enumeration.
 
 Malformed rename batches are handled conservatively: an unmatched trailing `RENAMED_OLD_NAME` is treated as delete, while unmatched `RENAMED_NEW_NAME` falls back to parent-folder refresh.
+
+Refresh coalescing MUST NOT drop same-folder rename hints. If a plain refresh is already queued and a later rename-aware refresh impact arrives before enumeration runs, the rename-aware impact is still posted so selection preservation can follow the explicit old-name/new-name relationship.
 
 ## Mounted Backing-Path Dependencies
 

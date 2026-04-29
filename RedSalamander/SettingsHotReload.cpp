@@ -19,6 +19,7 @@
 #include "HostServices.h"
 #include "SettingsSave.h"
 #include "SettingsSchemaExport.h"
+#include "WindowBackdropPolicy.h"
 #include "WindowMessages.h"
 #include "resource.h"
 
@@ -40,11 +41,11 @@ struct HotReloadState
     std::optional<Common::Settings::SettingsFileStamp> lastRejectedStamp;
     bool invalidAlertVisible = false;
 
-    HotReloadState() = default;
-    HotReloadState(const HotReloadState&) = delete;
+    HotReloadState()                                 = default;
+    HotReloadState(const HotReloadState&)            = delete;
     HotReloadState& operator=(const HotReloadState&) = delete;
-    HotReloadState(HotReloadState&&) = delete;
-    HotReloadState& operator=(HotReloadState&&) = delete;
+    HotReloadState(HotReloadState&&)                 = delete;
+    HotReloadState& operator=(HotReloadState&&)      = delete;
 };
 
 HotReloadState g_state;
@@ -205,6 +206,40 @@ void WatchSettingsDirectoryThread(HWND targetWindow, HANDLE stopEventHandle, std
     return ThemeMode::System;
 }
 
+[[nodiscard]] Common::Settings::UiSettings GetUiSettingsOrDefault(const Common::Settings::Settings& settings) noexcept
+{
+    if (settings.ui.has_value())
+    {
+        return settings.ui.value();
+    }
+    return {};
+}
+
+[[nodiscard]] AppBackdropType ToAppBackdropType(Common::WindowBackdrop::Kind kind) noexcept
+{
+    switch (kind)
+    {
+        case Common::WindowBackdrop::Kind::Mica: return AppBackdropType::Mica;
+        case Common::WindowBackdrop::Kind::Acrylic: return AppBackdropType::Acrylic;
+        case Common::WindowBackdrop::Kind::MicaAlt: return AppBackdropType::MicaAlt;
+        case Common::WindowBackdrop::Kind::None:
+        default: return AppBackdropType::None;
+    }
+}
+
+void ApplyResolvedWindowBackdrop(Common::Settings::WindowBackdropMode mode, AppTheme& theme) noexcept
+{
+    theme.primaryWindowBackdrop = ToAppBackdropType(Common::WindowBackdrop::Resolve(mode, Common::WindowBackdrop::Target::Primary, false));
+    theme.toolWindowBackdrop    = ToAppBackdropType(Common::WindowBackdrop::Resolve(mode, Common::WindowBackdrop::Target::Tool, false));
+
+    if (! theme.highContrast && (theme.primaryWindowBackdrop != AppBackdropType::None || theme.toolWindowBackdrop != AppBackdropType::None))
+    {
+        theme.titleBar.captionColor.reset();
+        theme.titleBar.borderColor.reset();
+        theme.titleBar.textColor.reset();
+    }
+}
+
 [[nodiscard]] COLORREF ColorRefFromArgb(uint32_t argb) noexcept
 {
     const uint8_t r = static_cast<uint8_t>((argb >> 16) & 0xFFu);
@@ -329,6 +364,14 @@ void ApplyThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstring,
     applyD2D(L"fileOps.scrollbarTrack", theme.fileOperations.scrollbarTrack);
     applyD2D(L"fileOps.scrollbarThumb", theme.fileOperations.scrollbarThumb);
 
+    applyD2D(L"viewer.diff.addedBackground", theme.viewerDiff.addedBackground);
+    applyD2D(L"viewer.diff.removedBackground", theme.viewerDiff.removedBackground);
+    applyD2D(L"viewer.diff.contextBackground", theme.viewerDiff.contextBackground);
+    applyD2D(L"viewer.diff.headerBackground", theme.viewerDiff.headerBackground);
+    applyD2D(L"viewer.diff.bannerBackground", theme.viewerDiff.bannerBackground);
+    applyD2D(L"viewer.diff.placeholderBackground", theme.viewerDiff.placeholderBackground);
+    applyD2D(L"viewer.diff.divider", theme.viewerDiff.divider);
+
     if (! FindColorOverride(colors, L"folderView.itemBackgroundSelectedInactive"))
     {
         if (const auto argb = FindColorOverride(colors, L"folderView.itemBackgroundSelected"))
@@ -346,9 +389,9 @@ void ApplyThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstring,
         const D2D1::ColorF background = theme.folderView.backgroundColor;
         const D2D1::ColorF overlay    = theme.folderView.itemBackgroundSelectedInactive;
         const D2D1::ColorF composite  = D2D1::ColorF(overlay.r * alpha + background.r * (1.0f - alpha),
-                                                    overlay.g * alpha + background.g * (1.0f - alpha),
-                                                    overlay.b * alpha + background.b * (1.0f - alpha),
-                                                    1.0f);
+                                                     overlay.g * alpha + background.g * (1.0f - alpha),
+                                                     overlay.b * alpha + background.b * (1.0f - alpha),
+                                                     1.0f);
 
         const COLORREF contrastText           = ChooseContrastingTextColor(ColorToCOLORREF(composite));
         theme.folderView.textSelectedInactive = ColorFromCOLORREF(contrastText);
@@ -368,8 +411,7 @@ void ApplyThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstring,
 
 [[nodiscard]] bool IsRetryableSettingsLoadFailure(HRESULT hr) noexcept
 {
-    return hr == HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) || hr == HRESULT_FROM_WIN32(ERROR_LOCK_VIOLATION) ||
-           hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+    return hr == HRESULT_FROM_WIN32(ERROR_SHARING_VIOLATION) || hr == HRESULT_FROM_WIN32(ERROR_LOCK_VIOLATION) || hr == HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
 }
 
 [[nodiscard]] bool IsInvalidSettingsLoadFailure(HRESULT hr) noexcept
@@ -380,6 +422,21 @@ void ApplyThemeOverrides(AppTheme& theme, const std::unordered_map<std::wstring,
 
 namespace SettingsHotReload
 {
+void ApplyUiPreferencesToTheme(const Common::Settings::Settings& settings, AppTheme& theme) noexcept
+{
+    const Common::Settings::UiSettings ui = GetUiSettingsOrDefault(settings);
+    theme.compactMode                     = ui.compactMode;
+
+    switch (ui.reducedMotion)
+    {
+        case Common::Settings::ReducedMotionMode::On: theme.reducedMotionOverride = true; break;
+        case Common::Settings::ReducedMotionMode::Off: theme.reducedMotionOverride = false; break;
+        case Common::Settings::ReducedMotionMode::System: theme.reducedMotionOverride.reset(); break;
+    }
+
+    ApplyResolvedWindowBackdrop(ui.windowBackdrop, theme);
+}
+
 HRESULT Start(HWND targetWindow, std::wstring_view appId) noexcept
 {
     Stop();
@@ -784,6 +841,8 @@ AppTheme ResolveDialogThemeFromSettings(const Common::Settings::Settings& settin
     {
         ApplyThemeOverrides(theme, *overrides);
     }
+
+    ApplyUiPreferencesToTheme(settings, theme);
 
     return theme;
 }

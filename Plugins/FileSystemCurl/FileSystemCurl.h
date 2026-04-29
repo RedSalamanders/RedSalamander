@@ -111,6 +111,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetConfiguration(const char* configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetConfiguration(const char** configurationJsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE SomethingToSave(BOOL* pSomethingToSave) noexcept override;
+    [[nodiscard]] static const char* StaticConfigurationSchema(FileSystemCurlProtocol protocol) noexcept;
 
     // INavigationMenu
     HRESULT STDMETHODCALLTYPE GetMenuItems(const NavigationMenuItem** items, unsigned int* count) noexcept override;
@@ -183,6 +184,11 @@ public:
                                           void* cookie                     = nullptr) noexcept override;
 
     HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,
+                                               FileSystemOperation operationType,
+                                               FileSystemTransferEndpoint endpoint,
+                                               FileSystemTransferHints* hints) noexcept override;
+    HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
 
     // IFileSystemIO
     HRESULT STDMETHODCALLTYPE GetAttributes(const wchar_t* path, unsigned long* fileAttributes) noexcept override;
@@ -216,8 +222,8 @@ private:
     static constexpr wchar_t kPluginShortIdScp[]  = L"scp";
     static constexpr wchar_t kPluginShortIdImap[] = L"imap";
 
-    static constexpr wchar_t kPluginAuthor[]          = L"RedSalamander";
-    static constexpr wchar_t kPluginVersion[]         = L"0.3";
+    static constexpr wchar_t kPluginAuthor[]  = L"RedSalamander";
+    static constexpr wchar_t kPluginVersion[] = VERSINFO_PLUGIN_VERSION;
 
     static constexpr char kCapabilitiesJsonFtp[] = R"json(
 {
@@ -783,3 +789,5 @@ private:
     std::mutex _propertiesMutex;
     std::string _lastPropertiesJson;
 };
+
+[[nodiscard]] const char* GetFileSystemCurlStaticConfigurationSchema(FileSystemCurlProtocol protocol) noexcept;

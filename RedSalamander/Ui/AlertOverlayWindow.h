@@ -13,6 +13,8 @@
 
 namespace RedSalamander::Ui
 {
+class AlertOverlayUiaProvider;
+
 struct AlertOverlayWindowCallbacks
 {
     void* context                                               = nullptr;
@@ -22,6 +24,8 @@ struct AlertOverlayWindowCallbacks
 
 class AlertOverlayWindow final
 {
+    friend class AlertOverlayUiaProvider;
+
 public:
     AlertOverlayWindow() noexcept = default;
 
@@ -57,6 +61,7 @@ private:
     void OnMouseLeave() noexcept;
     void OnLButtonDown(POINT pt) noexcept;
     void OnKeyDown(WPARAM key) noexcept;
+    [[nodiscard]] bool OnSysChar(WPARAM key) noexcept;
     LRESULT OnSetCursor(HWND cursorWindow, UINT hitTest, UINT mouseMsg) noexcept;
 
     void InvokeButton(uint32_t buttonId) noexcept;
@@ -77,8 +82,8 @@ private:
 
     void UpdatePlacement() noexcept;
 
-    static LRESULT CALLBACK ParentSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR refData) noexcept;
-    static LRESULT CALLBACK AnchorSubclassProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, UINT_PTR id, DWORD_PTR refData) noexcept;
+    static LRESULT CALLBACK ParentWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+    static LRESULT CALLBACK AnchorWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
     void EnsureD2DResources() noexcept;
     void DiscardD2DResources() noexcept;
@@ -103,10 +108,8 @@ private:
 
     uint64_t _animationSubscriptionId = 0;
 
-    bool _hostParentSubclassed = false;
-    bool _anchorSubclassed     = false;
-    UINT_PTR _subclassId       = 0;
-
+    bool _hostParentSubclassed   = false;
+    bool _anchorSubclassed       = false;
     uint64_t _animateUntilTickMs = 0;
     uint64_t _startTickMs        = 0;
 

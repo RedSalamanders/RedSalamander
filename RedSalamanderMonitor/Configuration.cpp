@@ -34,7 +34,7 @@ bool Configuration::Load()
     if (hRes == S_OK)
     {
         // Load filter settings
-        DWORD filterMaskValue = 0x1F;
+        DWORD filterMaskValue = 0x3F;
         hRes                  = wil::reg::get_value_nothrow<DWORD>(hKey.get(), L"FilterMask", &filterMaskValue);
         if (hRes == S_OK)
         {
@@ -53,7 +53,7 @@ bool Configuration::Load()
     }
 
     // If the key does not exist, initialize with default values
-    filterMask       = 0x1F;
+    filterMask       = 0x3F;
     lastFilterPreset = -1;
     return false;
 }

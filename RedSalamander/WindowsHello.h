@@ -15,7 +15,7 @@ namespace RedSalamander::Security
 // - other failures as HRESULT
 HRESULT VerifyWindowsHelloForWindow(HWND ownerWindow, std::wstring_view message) noexcept;
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 using WindowsHelloTestVerifier = HRESULT (*)(HWND ownerWindow, std::wstring_view message) noexcept;
 // Sets a test hook for Windows Hello verification. Returns the previously installed verifier (if any).
 // When installed, the verifier is called instead of the real Windows Hello flow.

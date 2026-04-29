@@ -1,5 +1,5 @@
 #include "FolderWindow.FileOperationsInternal.h"
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 #include "FolderWindow.FileOperations.SelfTest.h"
 #endif
 #include "HostServices.h"
@@ -373,7 +373,7 @@ HRESULT FolderWindow::StartFileOperationFromFolderView(Pane pane, FolderView::Fi
 
             const bool contextSame = CompareStringOrdinal(sourceState.pluginId.c_str(), -1, destinationState.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
                                      NavigationLocation::EqualsNoCase(sourceState.instanceContext, destinationState.instanceContext);
-            destinationFileSystem = contextSame ? nullptr : destinationState.fileSystem;
+            destinationFileSystem  = contextSame ? nullptr : destinationState.fileSystem;
         }
     }
 
@@ -427,7 +427,7 @@ bool FolderWindow::IsFileOperationsIssuesPaneVisible() noexcept
     return _fileOperations->IsIssuesPaneVisible();
 }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
 FolderWindow::FileOperationState* FolderWindow::DebugGetFileOperationState() noexcept
 {
     EnsureFileOperations();
@@ -590,7 +590,7 @@ bool FolderWindow::SanityCheckBothPanes(FolderWindow::PaneState& src, FolderWind
     {
         const bool contextSame = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
                                  NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
-        contextsDiffer = ! contextSame;
+        contextsDiffer         = ! contextSame;
 
         const auto srcFolder = src.folderView.GetFolderPath();
         const auto dstFolder = dest.folderView.GetFolderPath();
@@ -652,9 +652,9 @@ void FolderWindow::CommandCopyToOtherPane(Pane sourcePane)
 
     const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
 
-    const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
-    const bool contextSame   = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
-                             NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
+    const bool waitForOthers                        = _fileOperations->ShouldQueueNewTask();
+    const bool contextSame                          = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
+                                                      NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
     wil::com_ptr<IFileSystem> destinationFileSystem = contextSame ? nullptr : dest.fileSystem;
     static_cast<void>(_fileOperations->StartOperation(FILESYSTEM_COPY,
                                                       sourcePane,
@@ -693,9 +693,9 @@ void FolderWindow::CommandMoveToOtherPane(Pane sourcePane)
 
     const FileSystemFlags flags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
 
-    const bool waitForOthers = _fileOperations->ShouldQueueNewTask();
-    const bool contextSame   = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
-                             NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
+    const bool waitForOthers                        = _fileOperations->ShouldQueueNewTask();
+    const bool contextSame                          = CompareStringOrdinal(src.pluginId.c_str(), -1, dest.pluginId.c_str(), -1, TRUE) == CSTR_EQUAL &&
+                                                      NavigationLocation::EqualsNoCase(src.instanceContext, dest.instanceContext);
     wil::com_ptr<IFileSystem> destinationFileSystem = contextSame ? nullptr : dest.fileSystem;
     static_cast<void>(_fileOperations->StartOperation(FILESYSTEM_MOVE,
                                                       sourcePane,
@@ -724,7 +724,7 @@ LRESULT FolderWindow::OnFileOperationCompleted(LPARAM lp) noexcept
         return 0;
     }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     if (FileOperationsSelfTest::IsRunning())
     {
         FileOperationsSelfTest::NotifyTaskCompleted(payload->taskId, payload->hr);

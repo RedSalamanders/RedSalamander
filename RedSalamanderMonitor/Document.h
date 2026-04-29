@@ -203,7 +203,7 @@ private:
     size_t _dirtyRangeLast  = 0;
 
     // Filter state
-    uint32_t _filterMask = 0x1F; // All 5 types enabled by default (bits 0-4)
+    uint32_t _filterMask = Debug::InfoParam::Type::All; // All 6 visible types enabled by default (bits 0-5)
 };
 
 #pragma warning(pop)

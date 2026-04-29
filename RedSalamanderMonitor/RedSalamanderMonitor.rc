@@ -10,6 +10,7 @@
 //
 #ifndef APSTUDIO_INVOKED
 #include "targetver.h"
+#include "Version.h"
 #endif
 #define APSTUDIO_HIDDEN_SYMBOLS
 #include "windows.h"
@@ -94,11 +95,12 @@ BEGIN
             MENUITEM "Show &Errors",            IDM_FILTER_ERROR, CHECKED
             MENUITEM "Show &Warnings",          IDM_FILTER_WARNING, CHECKED
             MENUITEM "Show &Info",              IDM_FILTER_INFO, CHECKED
+            MENUITEM "Show &Perf",              IDM_FILTER_PERF, CHECKED
             MENUITEM "Show &Debug",             IDM_FILTER_DEBUG, CHECKED
             MENUITEM SEPARATOR
             MENUITEM "Preset: Errors Only",     IDM_FILTER_PRESET_ERRORS_ONLY
             MENUITEM "Preset: Errors+Warnings", IDM_FILTER_PRESET_ERRORS_WARNINGS
-            MENUITEM "Preset: Errors+Debug",    IDM_FILTER_PRESET_ERRORS_DEBUG
+            MENUITEM "Preset: Errors+Perf+Debug", IDM_FILTER_PRESET_ERRORS_DEBUG
             MENUITEM "Preset: All Types",       IDM_FILTER_PRESET_ALL
         END
     END
@@ -140,15 +142,16 @@ END
 // Dialog
 //
 
-IDD_ABOUTBOX DIALOGEX 0, 0, 170, 62
+IDD_ABOUTBOX DIALOGEX 0, 0, 260, 78
 STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
 CAPTION "About RedSalamanderMonitor"
 FONT 8, "MS Shell Dlg", 0, 0, 0x1
 BEGIN
     ICON            IDI_REDSALAMANDERMONITOR,IDC_STATIC,14,14,21,20
-    LTEXT           "RedSalamanderMonitor, Version 1.0",IDC_STATIC,42,14,114,8,SS_NOPREFIX
-    LTEXT           "Copyright (c) 2025",IDC_STATIC,42,26,114,8
-    DEFPUSHBUTTON   "OK",IDOK,113,41,50,14,WS_GROUP
+    LTEXT           "RedSalamanderMonitor",IDC_STATIC,42,14,180,8,SS_NOPREFIX
+    LTEXT           "",IDC_ABOUT_VERSION,42,27,205,18,SS_NOPREFIX
+    LTEXT           VERSINFO_COPYRIGHT,IDC_STATIC,42,47,205,8
+    DEFPUSHBUTTON   "OK",IDOK,203,57,50,14,WS_GROUP
 END
 
 IDD_MODAL_MESSAGE DIALOGEX 0, 0, 360, 160
@@ -182,9 +185,9 @@ BEGIN
     IDD_ABOUTBOX, DIALOG
     BEGIN
         LEFTMARGIN, 7
-        RIGHTMARGIN, 163
+        RIGHTMARGIN, 253
         TOPMARGIN, 7
-        BOTTOMMARGIN, 55
+        BOTTOMMARGIN, 71
     END
 END
 #endif    // APSTUDIO_INVOKED
@@ -244,7 +247,7 @@ IDB_TOOLBAR_PNG         PNG                     "res\\toolbar.png"
 
 STRINGTABLE
 BEGIN
-    IDS_APP_TITLE           "Red Salamander Monitor"
+    IDS_APP_TITLE           "RedSalamander Monitor"
     IDS_NOT_RUNNING         "RedSalamander Bug Reporter (RedSalamanderMonitor.exe) is not running. RedSalamander will not be able to handle potential crashes. Please restart RedSalamander."
     IDS_CAPTION_ERROR "Error"
     IDS_CAPTION_OPEN "Open"
@@ -260,12 +263,12 @@ BEGIN
     IDS_FIND_FROM_BOTTOM "Bottom"
     IDS_MSG_OPEN_FAILED_READ "Failed to read file or file is empty."
     IDS_MSG_CREATE_COLORTEXTVIEW_FAILED "Failed to create ColorTextView."
-    IDS_MSG_INSTANCE_GUARD_FAILED "Unable to create the Red Salamander Monitor instance guard."
+    IDS_MSG_INSTANCE_GUARD_FAILED "Unable to create the RedSalamander Monitor instance guard."
     IDS_MSG_PRINT_NOT_IMPLEMENTED "Printing is not implemented yet."
     IDS_MSG_ETW_STARTED "ETW Listener started successfully - real-time event monitoring active"
     IDS_FMT_ETW_START_FAILED "ETW Listener failed to start: {}"
-    IDS_MSG_ETW_ELEVATE_PROMPT "Red Salamander Monitor could not start its ETW listener with the current privileges.\n\nRestart as Administrator now?\n\n(Select No to continue without real-time ETW monitoring. To avoid UAC prompts, add your user to the Performance Log Users group and sign out/in.)"
-    IDS_FATAL_ERROR_CAPTION "Red Salamander Monitor - Fatal Error"
+    IDS_MSG_ETW_ELEVATE_PROMPT "RedSalamander Monitor could not start its ETW listener with the current privileges.\n\nRestart as Administrator now?\n\n(Select No to continue without real-time ETW monitoring. To avoid UAC prompts, add your user to the Performance Log Users group and sign out/in.)"
+    IDS_FATAL_ERROR_CAPTION "RedSalamander Monitor - Fatal Error"
     IDS_FATAL_EXCEPTION_FMT "Fatal Exception in RedSalamanderMonitor\n\nException: {0} (0x{1:08X})\n\nThe application will now terminate."
     IDS_FILE_FILTER_OPEN "Text Files (*.txt;*.log)\0*.txt;*.log\0All Files (*.*)\0*.*\0\0"
     IDS_FILE_FILTER_SAVE "Text Files (*.txt)\0*.txt\0All Files (*.*)\0*.*\0\0"
@@ -274,6 +277,7 @@ BEGIN
     IDS_FILTER_TYPE_ERROR "Error"
     IDS_FILTER_TYPE_WARNING "Warning"
     IDS_FILTER_TYPE_INFO "Info"
+    IDS_FILTER_TYPE_PERF "Perf"
     IDS_FILTER_TYPE_DEBUG "Debug"
     IDS_STATUS_FILTER_ALL "Filter: All"
     IDS_STATUS_FILTER_NONE "Filter: None"

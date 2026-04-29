@@ -1,6 +1,6 @@
 # File Operations Specification
 
-Last updated: 2026-02-19
+Last updated: 2026-04-29
 
 Normative sections use RFC-2119 keywords (MUST/SHOULD/MAY). Appendices are informative.
 
@@ -21,6 +21,29 @@ It also defines the **speed limit** behavior (host-provided bandwidth cap) and t
 - Users MUST be able to run operations in **Wait** (sequential) or **Parallel** mode.
 - Copy/Move operations MUST support a per-task **Speed Limit**.
 - The popup MUST follow the active `AppTheme` (light/dark/high contrast) and support `menu.rainbowMode`.
+- Standalone captioned File Operations windows MUST follow the shared app-owned tool-window chrome contract, including the persisted `ui.windowBackdrop` preference.
+
+## Performance Validation Contract
+
+File Operations is a performance-sensitive subsystem. Any new feature or optimization that can affect pre-calculation, queueing, progress updates, pause/cancel responsiveness, popup refresh churn, cross-filesystem bridging, throughput, or lock hold time MUST:
+
+- identify the protected scenario before implementation is considered complete,
+- add or reuse measurable instrumentation,
+- add deterministic `--fileops-selftest` coverage or another deterministic harness,
+- archive validation runs under `Specs/TestRuns/`,
+- support any claimed improvement with archived before/after evidence.
+
+This requirement is mandatory from the first landing of the feature or optimization, including baseline-only instrumentation work.
+
+File Operations work SHOULD prefer the existing `FileOps.*` metric families when they already cover the scenario; otherwise the change MUST add the missing metrics with the feature.
+
+Progress-display investigations MUST keep UI cadence and operation cadence separable:
+
+- `FileOps.Progress.FirstCallbackDelayMs` records delay from task start to the first progress callback.
+- `FileOps.Progress.MaxCallbackGapMs` / `FileOps.Progress.CallbackGapMs` record aggregate progress-callback gaps.
+- `FileOps.Progress.MaxCallbackGapBytes` / `FileOps.Progress.CallbackGapBytes` record current-item bytes associated with the largest gap and aggregate gaps, so a run can distinguish "no copy progress" from "progress arrived in large callback bursts".
+- `FileOps.Progress.Stream.*` records the same callback-gap and byte-gap measurements per `(cookie, progressStreamId)`.
+- `FileOps.Popup.Rate.UpdateUs`, `FileOps.Popup.Rate.MaxCallbackSilenceMs`, and `FileOps.Popup.Rate.MaxDisplayGapMs` record popup-side rate-update work, callback silence observed by the popup, and display-timer gaps.
 
 ## Terminology
 
@@ -52,6 +75,81 @@ It also defines the **speed limit** behavior (host-provided bandwidth cap) and t
 - Plugin operation and callback contracts: `Specs/Plugins/Plugins_VirtualFileSystem.md`
 - Theme key list (including file ops keys): `Specs/Core/Core_SettingsStore.md`
 
+## Settings And Ownership (Normative)
+
+File Operations settings are split between host-owned global defaults and plugin-owned behavior knobs.
+
+### Host-owned global settings
+
+The host-wide `fileOperations.*` settings live in `SettingsStore` and in `Preferences -> File Operations`.
+
+- `fileOperations.preCalcEnabled`
+- `fileOperations.preCalcMaxWorkers`
+- `fileOperations.crossFsBridgeBufferSizeKB`
+- `fileOperations.defaultBandwidthLimitBytesPerSecond`
+
+These settings:
+
+- MUST apply to newly created tasks only.
+- MUST be snapshotted at task creation time.
+- MUST NOT retune already-running tasks when the user changes Preferences.
+
+### Plugin-owned settings
+
+Plugin-specific file-operation knobs live in `Preferences -> Plugins -> [plugin]`.
+
+For the built-in FileSystem plugin, the current settings include:
+
+- `concurrencyMode` (`auto` / `manual`)
+- `copyMoveMaxConcurrency` (`1..16`, default `4`)
+- `deleteMaxConcurrency` (`1..64`, default `8`)
+- `deleteRecycleBinMaxConcurrency` (`1..16`, default `2`)
+- `recycleBinBatchSize` (`1..1000`, default `500`)
+- `searchMaxDirectoryWalkers` (`1..8`, default `4`)
+
+The File Operations host pane MUST NOT duplicate those plugin-owned controls. It MAY show explanatory text directing the user to the plugin page.
+
+For the built-in local FileSystem plugin, `copyMoveMaxConcurrency` is an operation-level worker/transfer budget for Copy/Move work, not only a selected-root count. A recursive directory Copy/Move with one selected folder SHOULD still use the configured worker budget when there is independent file or child-directory work inside that folder. A batch Copy/Move with multiple selected folders SHOULD keep selected roots progressing concurrently while lending spare budget to recursive subtrees; uneven folder trees MUST NOT force the dominant subtree to remain serial when `copyMoveMaxConcurrency` has spare capacity.
+
+### Settings precedence
+
+For plugin-owned concurrency:
+
+1. Per-task override (when the operation surface exposes one)
+2. Per-connection override (`Connection Manager -> extra`, when non-zero)
+3. Plugin-wide default (`Preferences -> Plugins -> File System`)
+4. Plugin hardcoded default
+
+For host-owned bandwidth defaults:
+
+1. Per-task speed-limit override in the progress popup
+2. Global default `fileOperations.defaultBandwidthLimitBytesPerSecond`
+3. Hardcoded default (`0` = unlimited)
+
+## Issues Pane Contract
+
+The file-operations subsystem also exposes a dedicated top-level Issues pane for warnings and errors collected from active and completed tasks.
+
+- The Issues pane MUST open as an independent top-level window.
+- The visible body MUST use the shared DX grid path.
+- The pane MUST show issue rows built from file-operation issue state, including at least time, task, operation, severity, HRESULT, status, category, message, source path, and destination path when present.
+- The pane MUST preserve stable-row selection when the selected issue is still present after a refresh.
+- A no-change refresh MUST NOT rebuild or disturb the applied grid state.
+- Sorting, wheel scrolling, and persisted window placement MUST remain part of the pane contract.
+- The pane follows the shared `DxUi` accessibility and bounded-work validation rules from `Specs/UI/UI_DxUiSharedGrid.md`.
+
+## Window Backdrop Contract
+
+The standalone captioned File Operations HWNDs are:
+
+- the progress popup (`FileOperationsPopup`),
+- the Issues pane (`FileOperationsIssuesPane`),
+- the speed-limit prompt (`FileOperationsSpeedLimitPromptWindow`).
+
+These windows MUST apply the persisted `ui.windowBackdrop` setting through the shared window chrome/backdrop helper path with tool-window target semantics. They MUST gracefully resolve to no system backdrop when the OS or high-contrast accessibility mode requires it. Activation handling MUST update title-bar active/inactive state without reapplying DWM backdrop work on every activation message.
+
+Backdrop regression coverage belongs in `--commands-selftest` cases for the Issues pane and speed-limit prompt/progress popup. Performance validation for backdrop-related changes SHOULD reuse existing File Operations popup metrics such as `FileOps.InfoTask.EnsurePopupVisible.*`, `FileOps.Popup.WmPaintUs`, and `FileOps.Popup.Render.TotalUs`.
+
 ## Execution Model (Normative)
 
 ### Threading
@@ -59,11 +157,30 @@ It also defines the **speed limit** behavior (host-provided bandwidth cap) and t
 - The host MUST execute each Task (including pre-calc and `IFileSystem::*`) on a background worker thread (one per task).
 - When a Task uses per-item execution with per-item concurrency (`maxConcurrency > 1`), the host SHOULD schedule per-item work using a **shared worker pool** across all active Tasks (especially in Parallel mode) so the total worker thread count stays bounded and workers can be reassigned between Tasks after each item.
 - When a file-system plugin uses internal parallelism (e.g. plugin max concurrency knobs for Copy/Move/Delete), the plugin SHOULD schedule that work using a **shared bounded worker pool** across all in-flight operations (rather than spawning per-operation thread pools) so worker threads can be reused/reassigned between operations as items finish.
+- The built-in local FileSystem plugin MUST use the same recursive copy engine for `CopyItem(...)`, `CopyItems(...)`, and the copy/delete fallback used by cross-volume `MoveItem(...)` / `MoveItems(...)`.
+- `CopyItems(..., count == 1, ...)` MUST NOT bypass recursive directory parallelism when the selected item is a recursive, non-reparse directory and the effective `copyMoveMaxConcurrency` is greater than `1`.
+- Recursive copy workers SHOULD enumerate nested directories progressively and enqueue discovered file/directory work under the same operation budget so deep or uneven folder trees can keep available workers busy.
+- Batch Copy/Move MUST bound actual file transfers by the operation's effective `copyMoveMaxConcurrency` even when several selected roots each start recursive worker jobs. Recursive worker jobs MAY expose a larger per-root worker allowance to improve queue fairness, but file-transfer admission MUST remain gated by the shared operation state.
+- Cross-volume Move copy-delete fallback MUST use the same recursive copy engine and operation-level transfer budget as Copy. Debug selftests MAY force the `ERROR_NOT_SAME_DEVICE` fallback path on a same-volume move, but production Release behavior MUST only take that path after the OS reports the cross-device move error.
+- Serial copy fallback is still intentional for max concurrency `1`, non-recursive directory operations, root reparse points that are not followed, non-directory sources, scheduler unavailability, cancellation/error convergence, and operations where parallel setup is not useful.
 - The host MUST drive progress via `IFileSystemCallback` and forward updates to the UI thread.
 - The host MAY surface background work as Informational Tasks. Informational Tasks:
   - MUST NOT participate in Wait/Parallel queueing rules.
   - MUST NOT block or pause file-operation Tasks.
   - MUST be read-only in the UI (no conflict prompts; no overwrite/replace-readonly decisions).
+
+### Built-in Local FileSystem Quiet Points
+
+The built-in local FileSystem plugin has worker paths that can outlive the initiating UI stack (file operations, search workers, and directory watching). Those paths MUST:
+
+- pin module lifetime or provide an equivalent quiet point before work can outlive the caller;
+- stop producers and request cancellation before callback pointers or cookies are released;
+- join or drain worker/threadpool callbacks before returning from teardown APIs;
+- invoke host callbacks serially for a single logical operation/search/watch delivery unless the ABI explicitly allows concurrency.
+
+`IFileSystemDirectoryWatch::UnwatchDirectory(...)` MUST cancel outstanding directory-change I/O, drain threadpool I/O/work callbacks, and return only after no further callbacks for that watch can run. Rename/delete/recreate churn under a watched directory is validated by `--fileops-selftest` Phase 7 and must keep the overflow/resync contract intact.
+
+Focused teardown coverage is split across `--fileops-selftest --selftest-case=Phase14_PopupHostLifetimeGuard`, `--fileops-selftest --selftest-case=Phase7_WatcherChurn`, and `--commands-selftest --selftest-case=filesystem_local_watch_unwatch_drains_inflight_callback`.
 
 ### Preconditions (cross-pane Copy/Move)
 
@@ -178,6 +295,9 @@ When Copy/Move must execute across different filesystem contexts, the host MAY p
   - Destination: directory creation + file writing (`IFileSystemDirectoryOperations::CreateDirectory`, `IFileSystemIO::CreateFileWriter`).
 - The host SHOULD prefer in-memory streaming using `IFileReader` → `IFileWriter` (no temp files).
 - If streaming is not possible for a given plugin pair, the host MAY fall back to a temp-folder materialization strategy (implementation-defined), but MUST preserve cancel/pause responsiveness and MUST not block the UI thread.
+- The host MUST snapshot `fileOperations.crossFsBridgeBufferSizeKB` at task creation and allocate the bridge buffers from that frozen value.
+- The host MAY adapt the active bridge buffer size from that default using `IFileSystem::GetTransferHints(...)` on the source and destination endpoints.
+- When both endpoints return transfer hints, the host SHOULD use the larger hinted buffer size that still satisfies host-side bounds.
 
 **Single top-level directory copy** under the bridge:
 
@@ -262,7 +382,11 @@ Delete operations also run pre-calc:
   - If declined: keep the popup open and do not cancel tasks.
 - The window MUST be independent and minimize/restore independently of the main application window; restoring it while the main window is minimized MUST NOT change the main window.
 - The client area is rendered using Direct2D/DirectWrite.
+- Task status glyphs in the client area and the popup caption status glyph MUST render through Direct2D/DirectWrite text paths. They MUST NOT create/select native fonts or use GDI text drawing as a glyph fallback.
 - The UI updates on a timer (~100ms) by reading the latest progress snapshot collected via callbacks.
+- Displayed speed, ETA, and graph history MUST be timer-driven display estimates, not raw callback-cadence visualizations.
+- Callback bursts or brief callback silence SHOULD be smoothed so speed/ETA text and graph samples feel fluid; short silence MAY hold the previous smoothed rate, then decay it when silence continues.
+- The graph MUST append samples at popup-display cadence and MUST NOT backfill a long callback interval as a visible trough when progress bytes arrive later in a burst.
 - The operations list is vertically scrollable using the standard window scrollbar (`WS_VSCROLL`) and MUST be themed consistently with `FolderView`.
 - **Auto-sizing**:
   - The window height MUST automatically adjust to fit the content when tasks are added or removed.
@@ -303,13 +427,15 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
   - The counts MUST be monotonic.
   - When classification is complete for all top-level items, the host SHOULD keep the breakdown consistent with `completedItems` (`completedFiles + completedFolders == completedItems`).
   - Throughput:
-  - Copy/Move: bytes/sec
-  - Delete: items/sec
+    - Copy/Move: smoothed bytes/sec
+    - Delete: smoothed items/sec
 - ETA (Copy/Move):
-  - Shown only when total bytes are known and current speed is > 0.
+  - Shown only when total bytes are known and the smoothed display speed is > 0.
+  - ETA SHOULD be smoothed separately from raw instantaneous rate changes to avoid jitter.
 - Paths:
   - Copy/Move: `From:` and `To:` lines
     - Before a Copy/Move task starts, the UI MAY offer a destination selector menu (other panel + history) on the `To:` line.
+    - The destination selector menu MUST use the shared DxUI popup-menu contract rather than a native `TrackPopupMenu` surface.
   - Delete: `Deleting:` line
   - During pre-calc, the host SHOULD display the current directory being scanned (from `IFileSystemDirectorySizeCallback::DirectorySizeProgress.currentPath`) when available; otherwise it SHOULD display the first planned source path.
   - Parallel Copy/Move (multi-file in-flight):
@@ -325,6 +451,7 @@ Each task card MUST support collapse/expand and MUST adapt to task state:
   - Delete: overall item bar; MAY additionally show size progress when pre-calc data is available
 - Bandwidth graph (Copy/Move):
   - Shows recent throughput history.
+  - Samples represent the smoothed display throughput at popup timer cadence.
   - When speed limit is active, shows a horizontal line at the effective limit.
   - Y-axis MUST auto-scale with headroom so the graph remains readable.
   - Overlay text MUST have a drop shadow for visibility against colored graph backgrounds.
@@ -363,10 +490,14 @@ When paths do not fit, the UI MUST truncate using a **middle ellipsis** (`…`) 
 - The per-task speed limit applies to Copy/Move via `FileSystemOptions::bandwidthLimitBytesPerSecond`.
 - When passing `FileSystemOptions` across the host↔plugin boundary (including via callbacks), the creator MUST set `FileSystemOptions::sizeBytes = sizeof(FileSystemOptions)` and the consumer MUST validate it (treat mismatch as `E_INVALIDARG` in this in-repo ABI sweep).
 - `0` means unlimited.
+- New copy/move tasks MUST seed their initial desired speed limit from `fileOperations.defaultBandwidthLimitBytesPerSecond` when the caller did not provide an explicit task value.
 - Plugins MAY clamp the host-provided limit and report an effective applied limit by writing back to `FileSystemOptions::bandwidthLimitBytesPerSecond` before progress callbacks.
 - Presets (bytes/sec):
   - 1 MiB/s, 5 MiB/s, 10 MiB/s, 50 MiB/s, 100 MiB/s, 1 GiB/s
-- `Custom...` opens an input dialog.
+- The speed-limit preset menu MUST use the shared DxUI popup-menu contract rather than a native `TrackPopupMenu` surface.
+- `Custom...` opens an owned DirectX prompt surface. It MUST NOT regress to a visible native dialog template or visible child-control fallback.
+- The custom speed-limit prompt is task-scoped: it MUST target the selected live/unfinished Copy/Move task, be owned by the file-operations popup, and preserve the surrounding navigation shell focus/ownership when it is opened, canceled, accepted, or reopened.
+- Command selftests for this prompt MUST keep the target task observable until the prompt cycle completes so broad all-Commands sweeps exercise the same task-scoped path without racing against an already-completed dummy operation.
 
 ### Throughput text parsing (host UI)
 
@@ -385,6 +516,12 @@ The host parses user-entered speed limits using a whitespace-tolerant, case-inse
 - Rounding: the result is rounded to the nearest integer bytes/sec.
 - Clamping: values larger than `std::numeric_limits<uint64_t>::max()` are clamped.
 - Empty input or `0` is treated as unlimited.
+- The custom speed-limit prompt MUST expose:
+  - a DX label describing the field
+  - a DX editable value field
+  - DX validation text for invalid custom values
+  - DX `OK` / `Cancel` command buttons
+- The custom speed-limit prompt MUST reject invalid throughput text without closing, keep the validation visible until corrected input is provided, and apply the accepted limit immediately to the target task once the prompt closes successfully.
 
 ### FileSystemDummy virtual speed
 
@@ -528,13 +665,16 @@ This plan is explicitly tied to the existing specs and current codebase state (a
 - Batch file ops:
   - `Plugins/FileSystem/FileSystem.FileOps.cpp` runs `CopyItems/MoveItems` with bounded internal parallelism across top-level items:
     - default max concurrency: 4
-    - configurable via `copyMoveMaxConcurrency` (max 8)
+    - configurable via `copyMoveMaxConcurrency` (max 16)
+    - resolved through `concurrencyMode`: manual uses the configured cap directly; auto resolves from `IFileSystem::GetStorageCharacteristics(...)`
   - `DeleteItems` parallelizes delete with ordering safety across overlapping inputs (children before parents) and supports Recycle Bin deletes with bounded concurrency:
     - default max concurrency: 8
     - default max concurrency (Recycle Bin): 2
     - configurable via `deleteMaxConcurrency` / `deleteRecycleBinMaxConcurrency`
+  - Recycle Bin delete batching is supported via `recycleBinBatchSize` (default `500`, configurable `1..1000`), using grouped `IFileOperation::DeleteItems()` batches with single-item fallback for unsupported/error cases.
   - `CopyProgressRoutine` enforces a task-global bandwidth cap across workers (best-effort) and serializes callback delivery (host never sees concurrent callback calls).
   - Delete populates `completedBytes` best-effort using deleted file sizes (to support size progress when pre-calc totals exist).
+  - Recursive name-only scan search uses `searchMaxDirectoryWalkers` (default `4`, configurable `1..8`) for the bounded parallel directory walk.
 
 ### Cross-Layer Contract Decisions (resolve before parallel ops)
 
@@ -712,6 +852,7 @@ Tasks:
 - [x] Ensure per-file source text never renders underneath the right-side mini progress indicator (reserve width + clip).
 - [x] Clamp per-file in-flight `completedBytes <= totalBytes` in popup snapshots (avoid “empty” mini bars on overshoot/races).
 - [x] Align rainbow bandwidth graph sample colors with progress-bar colors (use the stored per-sample hue + theme value; treat empty path as accent).
+- [x] Keep popup rate display fluid by smoothing speed/ETA and sampling graph history on the popup timer instead of raw progress-callback cadence (covered by `--fileops-selftest` Phase 6 smoothing checks).
 - [ ] Validate popup rendering expectations under parallel ops:
   - smoke coverage: `--fileops-selftest` Phase 6 (resize + pause while copy is running)
   - graph scaling remains readable
@@ -725,6 +866,7 @@ Tasks:
     - Resize the popup narrower; verify path truncation uses middle ellipsis and never renders under the mini progress indicator.
 - [x] If delete bytes are implemented, validate the delete card’s “size progress” line is meaningful (covered by `--fileops-selftest` Phase 6).
 - [x] Wire up the destination selector UX (click the destination chevron next to `To:` before task start to open `ShowDestinationMenu(...)`).
+- [x] Replace the native custom speed-limit dialog with an owned DX prompt surface and remove the `IDD_FILEOP_SPEED_LIMIT_CUSTOM` dialog template.
 
 Acceptance:
 
@@ -745,11 +887,15 @@ Stress scenarios:
   - baseline covered by `--fileops-selftest` Phase 7
   - knob coverage: set FileSystem `enumerationSoftMaxBufferMiB` / `enumerationHardMaxBufferMiB` lower/higher and verify behavior (no long-lived huge buffers; expected `ERROR_INSUFFICIENT_BUFFER` only when hard cap is hit).
 - [ ] Parallel copy/move:
-  - baseline knob coverage covered by `--fileops-selftest` Phase 7 (`copyMoveMaxConcurrency` 1/4/8 + speed limit toggle + MRU in-flight lines)
+  - baseline knob coverage covered by `--fileops-selftest` Phase 7 (`copyMoveMaxConcurrency` 1/4/16 + speed limit toggle + DX custom speed-limit prompt validation + MRU in-flight lines)
+  - recursive single-folder coverage: `Phase7_CopyItemsSingleFolderRecursiveParallelism` verifies `CopyItems(count == 1)` and direct `CopyItem(...)` each fan a selected folder with one child directory across multiple progress streams
+  - recursive multi-root coverage: `Phase7_CopyItemsMultiRootUnevenRecursiveParallelism` verifies three selected folders with one dominant nested subtree lend spare recursive budget to that dominant subtree while keeping the operation-level transfer limit in force
+  - recursive matrix coverage: `Phase7_CopyRecursiveParallelismMatrix` verifies many shallow files, several child directories with one dominant subtree, mixed folder/file selections, copied reparse work items under `CopyReparse`, the spare-budget-zero `nestedConcurrency == 1` edge, forced `ERROR_NOT_SAME_DEVICE` move fallback, an optional real cross-volume move when a second writable fixed volume is available, `continueOnError` partial-copy behavior, and cancellation while workers are active
   - many small files and several large files
-  - knob coverage: set FileSystem `copyMoveMaxConcurrency` to `1`, `4`, `8` and verify:
+  - knob coverage: set FileSystem `copyMoveMaxConcurrency` to `1`, `4`, `16` and verify:
     - throughput scales on many-small-file workloads
     - popup shows multiple in-flight file lines (MRU; up to the configured concurrency / host UI max)
+  - slower/virtual provider and bounded-queue coverage: `Phase7_CopyMoveConcurrency16Perf`, `Phase7_SharedPerItemScheduler`, and `Phase11_BridgePipelineDummyToDummyPerf`; future real-device tuning must open a new plan with same-machine `Specs/TestRuns/` evidence before making user-facing performance claims
   - speed limit set/unset mid-flight
   - pause/resume repeatedly
 - [ ] Parallel delete:
@@ -765,6 +911,7 @@ Instrumentation (recommended, debug-only):
 
 - [x] Watcher: queue depth, overflow count, callback latency (`FileSystem.Watch`).
 - [x] File ops: cancel latency, limiter target vs achieved throughput, progress callback frequency (`FileOps.PreCalc`, `FileOps.Operation`, `FileOps.CancelLatency`).
+- [x] Recursive Copy/Move: queued files/directories/reparse points, selected-root nested budget, focused single-folder stream count, multi-root dominant-subtree stream count, recursive matrix shape timings/stream counts including copied reparse items and nested concurrency 1, optional real cross-volume move coverage, and debug-forced move fallback counter (`FileOps.CopyRecursiveParallel.*`, `FileOps.CopyItems.NestedConcurrencyBudget`, `FileOps.MoveItems.NestedConcurrencyBudget`, `FileOps.Move.DebugForceCopyFallback`, `FileOps.SelfTest.CopyItemsSingleFolder*`, `FileOps.SelfTest.CopyItemSingleFolder*`, `FileOps.SelfTest.CopyItemsMultiRoot*`, `FileOps.SelfTest.CopyRecursiveMatrix*`).
 - [x] Enumeration: peak buffer size, fallback usage, trim events (`FileSystem.DirectoryOps.Enumerate`, `FileSystem.DirectoryOps.TrimBuffer`).
 - [x] Debug-only end-to-end self-test runner:
   - run: `.\.build\x64\Debug\RedSalamander.exe --fileops-selftest` (or `--selftest`)

@@ -2,6 +2,48 @@
 
 #include "FluentIcons.h"
 #include "NavigationLocation.h"
+#ifdef ENABLE_TESTS
+#include "SelfTestCommon.h"
+#endif
+
+#ifdef ENABLE_TESTS
+HWND GetFolderViewRenamePromptHandle() noexcept
+{
+    const HWND hwnd = FindWindowW(kFolderViewRenamePromptClassName, nullptr);
+    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
+}
+
+bool DebugGetFolderViewRenamePromptSnapshot(FolderViewRenamePromptDebugSnapshot& out) noexcept
+{
+    const HWND hwnd = GetFolderViewRenamePromptHandle();
+    return hwnd && SendMessageW(hwnd,
+                                WndMsg::kFolderViewRenamePromptDebug,
+                                static_cast<WPARAM>(FolderViewRenamePromptDebugCommand::GetSnapshot),
+                                reinterpret_cast<LPARAM>(&out)) != FALSE;
+}
+
+bool DebugSetFolderViewRenamePromptText(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetFolderViewRenamePromptHandle();
+    const std::wstring payload(text);
+    return hwnd && SendMessageW(hwnd,
+                                WndMsg::kFolderViewRenamePromptDebug,
+                                static_cast<WPARAM>(FolderViewRenamePromptDebugCommand::SetText),
+                                reinterpret_cast<LPARAM>(&payload)) != FALSE;
+}
+
+bool DebugConfirmFolderViewRenamePrompt() noexcept
+{
+    const HWND hwnd = GetFolderViewRenamePromptHandle();
+    return hwnd && SendMessageW(hwnd, WndMsg::kFolderViewRenamePromptDebug, static_cast<WPARAM>(FolderViewRenamePromptDebugCommand::Confirm), 0) != FALSE;
+}
+
+bool DebugCancelFolderViewRenamePrompt() noexcept
+{
+    const HWND hwnd = GetFolderViewRenamePromptHandle();
+    return hwnd && SendMessageW(hwnd, WndMsg::kFolderViewRenamePromptDebug, static_cast<WPARAM>(FolderViewRenamePromptDebugCommand::Cancel), 0) != FALSE;
+}
+#endif
 
 void FolderView::SetPaneFocused(bool focused) noexcept
 {
@@ -176,7 +218,7 @@ void FolderView::SetFolderPath(const std::optional<std::filesystem::path>& folde
 
 void FolderView::ForceRefresh()
 {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     ++_debugForceRefreshCount;
 #endif
 
@@ -360,19 +402,7 @@ void FolderView::OnDpiChanged(float newDpi)
 {
     if (newDpi <= 0.0f)
         return;
-    _dpi               = newDpi;
-    _menuFont          = CreateMenuFontForDpi(static_cast<UINT>(_dpi));
-    _menuIconFont      = FluentIcons::CreateFontForDpi(static_cast<UINT>(_dpi), FluentIcons::kDefaultSizeDip);
-    _menuIconFontDpi   = static_cast<UINT>(_dpi);
-    _menuIconFontValid = false;
-    if (_menuIconFont && _hWnd)
-    {
-        auto hdc = wil::GetDC(_hWnd.get());
-        if (hdc)
-        {
-            _menuIconFontValid = FluentIcons::FontHasGlyph(hdc.get(), _menuIconFont.get(), FluentIcons::kChevronRightSmall);
-        }
-    }
+    _dpi                   = newDpi;
     _itemMetricsCached     = false;
     _estimatedMetricsValid = false; // Recompute estimated metrics from font at new DPI
     if (_d2dContext)
@@ -503,6 +533,7 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WndMsg::kFolderViewDirectoryCacheDirty: OnDirectoryCacheDirty(); return 0;
         case WM_DESTROY: OnDestroy(); return 0;
         case WM_NCDESTROY: static_cast<void>(DrainPostedPayloadsForWindow(hwnd)); break;
+        case WM_DPICHANGED_AFTERPARENT: OnDpiChanged(static_cast<float>(GetDpiForWindow(hwnd))); return 0;
         case WM_SIZE: OnSize(LOWORD(lParam), HIWORD(lParam)); return 0;
         case WM_ERASEBKGND: return 1;
         case WM_PAINT: OnPaint(); return 0;
@@ -533,8 +564,6 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
         case WM_GETDLGCODE: return DLGC_WANTTAB | DLGC_WANTARROWS | DLGC_WANTCHARS;
         case WM_CONTEXTMENU: OnContextMenuMessage(hwnd, lParam); return 0;
         case WM_HSCROLL: OnHScrollMessage(LOWORD(wParam)); return 0;
-        case WM_MEASUREITEM: OnMeasureItem(reinterpret_cast<MEASUREITEMSTRUCT*>(lParam)); return TRUE;
-        case WM_DRAWITEM: OnDrawItem(reinterpret_cast<DRAWITEMSTRUCT*>(lParam)); return TRUE;
         case WM_COMMAND: OnCommandMessage(LOWORD(wParam)); return 0;
     }
     return DefWindowProcW(hwnd, message, wParam, lParam);
@@ -547,19 +576,6 @@ void FolderView::OnCreate()
     {
         _dpi = static_cast<float>(windowDpi);
     }
-    _menuFont          = CreateMenuFontForDpi(static_cast<UINT>(_dpi));
-    _menuIconFont      = FluentIcons::CreateFontForDpi(static_cast<UINT>(_dpi), FluentIcons::kDefaultSizeDip);
-    _menuIconFontDpi   = static_cast<UINT>(_dpi);
-    _menuIconFontValid = false;
-    if (_menuIconFont && _hWnd)
-    {
-        auto hdc = wil::GetDC(_hWnd.get());
-        if (hdc)
-        {
-            _menuIconFontValid = FluentIcons::FontHasGlyph(hdc.get(), _menuIconFont.get(), FluentIcons::kChevronRightSmall);
-        }
-    }
-
     HRESULT hr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     if (SUCCEEDED(hr))
     {
@@ -590,6 +606,9 @@ void FolderView::OnCreate()
 
 void FolderView::OnDeferredInit()
 {
+#ifdef ENABLE_TESTS
+    ++_debugDeferredInitCallCount;
+#endif
     Debug::Perf::Scope perf(L"FolderView.DeferredInit");
 
     const auto computeMissingMask = [&]() noexcept -> uint32_t
@@ -647,21 +666,19 @@ void FolderView::OnDeferredInit()
     // Mark message as consumed only after attempting initialization so we don't re-post while running.
     _deferredInitPosted = false;
 
+    // Icon extraction/conversion only needs the D2D device context. Do not block it behind
+    // swap-chain resize completion, or fast startup can leave items stuck on placeholders.
+    if (_d2dContext)
+    {
+        IconCache::GetInstance().Initialize(_d2dContext.get(), _dpi);
+        QueueIconLoading();
+    }
+
     if (missingAfter != 0)
     {
         // Still not ready (often due to 0x0 size or during active resize). Avoid invalidation loops.
         return;
     }
-
-    // Initialize application-wide icon cache
-    if (_d2dContext)
-    {
-        IconCache::GetInstance().Initialize(_d2dContext.get(), _dpi);
-    }
-
-    // Icon loading can be queued before D2D resources exist (during early enumeration).
-    // Re-queue now that we can actually convert icons to bitmaps.
-    QueueIconLoading();
 
     if (_hWnd)
     {
@@ -791,8 +808,80 @@ void FolderView::OnPaint()
 
 void FolderView::SetAppTheme(const AppTheme& theme)
 {
-    _appTheme = theme;
+    const bool compactModeChanged = _appTheme.compactMode != theme.compactMode;
+    _appTheme                     = theme;
+    if (compactModeChanged)
+    {
+        LayoutItems();
+        UpdateScrollMetrics();
+    }
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
 }
+
+#ifdef ENABLE_TESTS
+bool FolderView::DebugWarmRenderingForSelfTest() noexcept
+{
+    const auto startedAt = std::chrono::steady_clock::now();
+    ++_debugWarmRenderingCallCount;
+
+    if (! _hWnd || IsWindow(_hWnd.get()) == FALSE)
+    {
+        return false;
+    }
+
+    RECT rc{};
+    GetClientRect(_hWnd.get(), &rc);
+    _clientSize.cx = std::max<LONG>(0L, rc.right - rc.left);
+    _clientSize.cy = std::max<LONG>(0L, rc.bottom - rc.top);
+    if (_clientSize.cx <= 0 || _clientSize.cy <= 0)
+    {
+        return false;
+    }
+
+    _swapChainResizePending = true;
+    _pendingSwapChainWidth  = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cx));
+    _pendingSwapChainHeight = static_cast<UINT>(std::max<LONG>(1L, _clientSize.cy));
+
+    OnDeferredInit();
+    const bool ready = _d2dContext && (_swapChain || _swapChainLegacy) && _d2dTarget;
+    if (! ready)
+    {
+        Debug::Perf::Emit(L"folder.selftest.render_warmup_us", L"not-ready", Debug::Perf::ElapsedUs(startedAt), 0u, 0u, S_FALSE);
+        return false;
+    }
+
+    RECT fullRect{};
+    fullRect.right  = _clientSize.cx;
+    fullRect.bottom = _clientSize.cy;
+
+    Render(fullRect);
+
+    QueueIconLoading();
+    if (_iconLoadingActive.load(std::memory_order_acquire))
+    {
+        ProcessIconLoadQueue();
+    }
+
+    uint64_t drainedMessages = 0;
+    MSG msg{};
+    while (PeekMessageW(&msg, _hWnd.get(), 0, 0, PM_REMOVE) != FALSE)
+    {
+        ++drainedMessages;
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
+    }
+
+    OnBatchIconUpdate();
+    Render(fullRect);
+
+    Debug::Perf::Emit(L"folder.selftest.render_warmup_us", L"", Debug::Perf::ElapsedUs(startedAt), drainedMessages, _items.size(), S_OK);
+    return true;
+}
+#endif
 
 void FolderView::SetTheme(const FolderViewTheme& theme)
 {
@@ -916,6 +1005,10 @@ bool FolderView::GetShowSystemFiles() const noexcept
 void FolderView::SetNameFilterState(const NameFilterState& state, bool refresh)
 {
     const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(state.text);
+#ifdef ENABLE_TESTS
+    SelfTest::AppendSelfTestTrace(
+        std::format(L"FolderView::SetNameFilterState: enabled={} trimmed='{}' refresh={}", state.enabled ? 1 : 0, trimmed, refresh ? 1 : 0));
+#endif
 
     if (! state.enabled && trimmed.empty())
     {
@@ -926,6 +1019,9 @@ void FolderView::SetNameFilterState(const NameFilterState& state, bool refresh)
         }
         if (refresh)
         {
+#ifdef ENABLE_TESTS
+            SelfTest::AppendSelfTestTrace(L"FolderView::SetNameFilterState: clearing filter and requesting refresh");
+#endif
             RequestRefreshFromCache();
         }
         return;
@@ -947,6 +1043,9 @@ void FolderView::SetNameFilterState(const NameFilterState& state, bool refresh)
 
     if (refresh)
     {
+#ifdef ENABLE_TESTS
+        SelfTest::AppendSelfTestTrace(L"FolderView::SetNameFilterState: stored compiled filter and requesting refresh");
+#endif
         RequestRefreshFromCache();
     }
 }

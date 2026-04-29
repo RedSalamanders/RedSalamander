@@ -1,0 +1,46 @@
+#pragma code_page(65001)
+#include "../../resource.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+IDR_VIEWERPE_MENU MENU
+BEGIN
+    POPUP "&Fichier"
+    BEGIN
+        MENUITEM "Exporter en &texte...\tCtrl+S", IDM_VIEWERPE_FILE_EXPORT_TEXT
+        MENUITEM "Exporter en &Markdown...\tCtrl+Shift+S", IDM_VIEWERPE_FILE_EXPORT_MARKDOWN
+        MENUITEM "&Actualiser\tF5", IDM_VIEWERPE_FILE_REFRESH
+        POPUP "Autres &fichiers"
+        BEGIN
+            MENUITEM "&Suivant\tSpace, Ctrl+Down", IDM_VIEWERPE_OTHER_NEXT
+            MENUITEM "&Précédent\tBackspace, Ctrl+Up", IDM_VIEWERPE_OTHER_PREVIOUS
+            MENUITEM "&Premier\tCtrl+Home", IDM_VIEWERPE_OTHER_FIRST
+            MENUITEM "&Dernier\tCtrl+End", IDM_VIEWERPE_OTHER_LAST
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Quitter\tEsc", IDM_VIEWERPE_FILE_EXIT
+    END
+    POPUP "&Affichage"
+    BEGIN
+        MENUITEM "Aller en &haut\tHome", IDM_VIEWERPE_VIEW_GOTO_TOP
+        MENUITEM "Aller en &bas\tEnd", IDM_VIEWERPE_VIEW_GOTO_BOTTOM
+    END
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERPE_NAME "Visionneuse PE"
+    IDS_VIEWERPE_DESCRIPTION "Visionneuse des en-têtes et sections Portable Executable (PE)."
+    IDS_VIEWERPE_STATUS_LOADING "Chargement..."
+    IDS_VIEWERPE_ERROR_NO_FILEIO "Ce système de fichiers ne prend pas en charge la lecture de fichiers pour cette visionneuse."
+    IDS_VIEWERPE_ERROR_OPEN_FAILED "Impossible d’ouvrir le fichier."
+    IDS_VIEWERPE_ERROR_TOO_LARGE "Le fichier est trop volumineux pour être analysé comme fichier PE."
+    IDS_VIEWERPE_ERROR_READ_FAILED "Impossible de lire le fichier."
+    IDS_VIEWERPE_ERROR_PARSE_FAILED "Impossible d’analyser le fichier PE."
+    IDS_VIEWERPE_EXPORT_DIALOG_TITLE "Exporter le rapport PE"
+    IDS_VIEWERPE_EXPORT_FILTER_TEXT "Fichiers texte (*.txt)"
+    IDS_VIEWERPE_EXPORT_FILTER_MARKDOWN "Fichiers Markdown (*.md)"
+    IDS_VIEWERPE_EXPORT_ERROR_NO_REPORT "Aucun rapport n’est encore disponible pour l’exportation."
+    IDS_VIEWERPE_EXPORT_ERROR_FAILED "Impossible d’exporter le rapport."
+END

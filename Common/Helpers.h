@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <cstdint>
 #include <cstring>
 #include <cwctype>
@@ -22,6 +23,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
+#include "Win32CallbackHelpers.h"
 #include <windows.h>
 
 #include <evntrace.h>
@@ -43,11 +45,22 @@ struct ForceWilTemplateInstantiations_Helpers
     wil::unique_hdc_paint hdcPaint;
     wil::unique_hlocal_string localString;
     wil::unique_hmodule module;
+    wil::unique_hrgn region;
 };
 } // namespace WilWarningSilenceDetail
 #pragma warning(pop)
 
+// DLL export/import macro for Common.dll. COMMON_EXPORTS is defined by the Common project.
+#ifndef COMMON_API
+#ifdef COMMON_EXPORTS
+#define COMMON_API __declspec(dllexport)
+#else
+#define COMMON_API __declspec(dllimport)
+#endif
+#endif
+
 #include <Helpers.h>
+#include <LocalizationManager.h>
 
 #ifdef min
 #undef min
@@ -158,6 +171,45 @@ inline bool LessNoCase(std::wstring_view a, std::wstring_view b) noexcept
     }
 
     return false;
+}
+
+[[nodiscard]] inline std::wstring FoldCaseInvariant(std::wstring_view text) noexcept
+{
+    if (text.empty())
+    {
+        return {};
+    }
+
+    std::wstring fallback(text);
+    if (text.size() > static_cast<size_t>(std::numeric_limits<int>::max()))
+    {
+        static_cast<void>(::CharLowerBuffW(fallback.data(), static_cast<DWORD>(fallback.size())));
+        return fallback;
+    }
+
+    const int sourceLength   = static_cast<int>(text.size());
+    const int requiredLength = ::LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_LOWERCASE, text.data(), sourceLength, nullptr, 0, nullptr, nullptr, 0);
+    if (requiredLength <= 0)
+    {
+        static_cast<void>(::CharLowerBuffW(fallback.data(), static_cast<DWORD>(fallback.size())));
+        return fallback;
+    }
+
+    std::wstring folded(static_cast<size_t>(requiredLength), L'\0');
+    const int written = ::LCMapStringEx(LOCALE_NAME_INVARIANT, LCMAP_LOWERCASE, text.data(), sourceLength, folded.data(), requiredLength, nullptr, nullptr, 0);
+    if (written <= 0)
+    {
+        static_cast<void>(::CharLowerBuffW(fallback.data(), static_cast<DWORD>(fallback.size())));
+        return fallback;
+    }
+
+    folded.resize(static_cast<size_t>(written));
+    if (! folded.empty() && folded.back() == L'\0')
+    {
+        folded.pop_back();
+    }
+
+    return folded;
 }
 } // namespace OrdinalString
 
@@ -401,7 +453,9 @@ int LoadStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, string_type&
 {
     static_assert(stackBufferLength <= INT_MAX, "stackBufferLength must fit in int");
     const HINSTANCE instance = hInstance ? hInstance : GetModuleHandleW(nullptr);
-
+#if defined(COMMON_EXPORTS) || defined(REDSAL_USE_COMMON_LOCALIZATION)
+    return Localization::LoadString(instance, uID, result);
+#else
     // LoadStringW supports returning a pointer directly to the resource string when cchBufferMax == 0.
     // This avoids guessing the required buffer size and supports embedded NULs (e.g. file dialog filters).
     PCWSTR ptr       = nullptr;
@@ -414,6 +468,7 @@ int LoadStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, string_type&
 
     result.assign(ptr, static_cast<size_t>(length));
     return length;
+#endif
 }
 
 // Convenience overload returning std::wstring.
@@ -663,20 +718,14 @@ inline LRESULT CALLBACK ThemedMessageBoxWndProc(HWND hwnd, UINT msg, WPARAM wp, 
     {
         WNDPROC original = g_msgBoxWndProc;
         g_msgBoxWndProc  = nullptr;
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        SetWindowLongPtrW(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(original));
-        const LRESULT result = CallWindowProcW(original, hwnd, msg, wp, lp);
-#pragma warning(pop)
+        static_cast<void>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(hwnd, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(original)));
+        const LRESULT result = RedSalamander::Win32Callback::CallWindowProcNoThrow(original, hwnd, msg, wp, lp);
         return result;
     }
 
     if (g_msgBoxWndProc)
     {
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        const LRESULT result = CallWindowProcW(g_msgBoxWndProc, hwnd, msg, wp, lp);
-#pragma warning(pop)
+        const LRESULT result = RedSalamander::Win32Callback::CallWindowProcNoThrow(g_msgBoxWndProc, hwnd, msg, wp, lp);
         return result;
     }
 
@@ -705,8 +754,8 @@ inline LRESULT CALLBACK CenteringHookProc(int nCode, WPARAM wParam, LPARAM lPara
 
             if (! g_msgBoxWndProc)
             {
-                g_msgBoxWndProc = reinterpret_cast<WNDPROC>(
-                    SetWindowLongPtrW(msgBox, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(MessageBoxCenteringDetail::ThemedMessageBoxWndProc)));
+                g_msgBoxWndProc = reinterpret_cast<WNDPROC>(RedSalamander::Win32Callback::SetWindowLongPtrNoThrow(
+                    msgBox, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(MessageBoxCenteringDetail::ThemedMessageBoxWndProc)));
             }
         }
 
@@ -823,8 +872,8 @@ inline int MessageBoxCenteredText(_In_opt_ HWND owner, const std::wstring& text,
     return MessageBoxThemedImpl(owner, text.c_str(), caption.c_str(), type, true);
 }
 
-// class name for the Red Salamander Monitor window
-constexpr auto g_redSalamanderMonitor          = L"Red Salamander Monitor";
+// class name for the RedSalamander Monitor window
+constexpr auto g_redSalamanderMonitor          = L"RedSalamander Monitor";
 constexpr auto g_redSalamanderMonitorClassName = L"RedSalamanderMonitor Window";
 
 //////////////////////////////////////////////////////////////////////////////////
@@ -845,8 +894,9 @@ struct InfoParam // the real data/string will be after this structure
         Error   = 0x1,
         Warning = 0x2,
         Info    = 0x4,
-        Debug   = 0x8,
-        All     = 0x1F // Bitmask for all types enabled (bits 0-4)
+        Perf    = 0x8,
+        Debug   = 0x10,
+        All     = 0x3F // Bitmask for all visible message types (bits 0-5)
     };
     FILETIME time; // More efficient: 8 bytes vs 16 bytes for SYSTEMTIME
     DWORD processID;
@@ -872,6 +922,30 @@ struct InfoParam // the real data/string will be after this structure
         return std::format(L"{:02d}:{:02d}:{:02d}.{:03d}", st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
     }
 };
+
+inline constexpr std::array<InfoParam::Type, 6> kFilterableInfoTypes{{
+    InfoParam::Type::Text,
+    InfoParam::Type::Error,
+    InfoParam::Type::Warning,
+    InfoParam::Type::Info,
+    InfoParam::Type::Perf,
+    InfoParam::Type::Debug,
+}};
+
+[[nodiscard]] inline constexpr uint32_t FilterBitForType(InfoParam::Type type) noexcept
+{
+    switch (type)
+    {
+        case InfoParam::Type::Text: return 0x01u;
+        case InfoParam::Type::Error: return 0x02u;
+        case InfoParam::Type::Warning: return 0x04u;
+        case InfoParam::Type::Info: return 0x08u;
+        case InfoParam::Type::Perf: return 0x10u;
+        case InfoParam::Type::Debug: return 0x20u;
+        case InfoParam::Type::All:
+        default: return InfoParam::Type::All;
+    }
+}
 
 // TraceLogging provider declaration
 // Each module (EXE/DLL) must define its own provider instance using the same GUID
@@ -1027,6 +1101,62 @@ inline bool IsEtwRegistered() noexcept
 constexpr ULONGLONG kDebugKeyword = 0x0000000000000001ull;
 constexpr ULONGLONG kPerfKeyword  = 0x0000000000000002ull;
 
+[[nodiscard]] inline constexpr bool IsMonitorDiagnosticsBuild() noexcept
+{
+#if defined(RS_DIAGNOSTICS_RUNTIME_OPT_IN)
+    return false;
+#elif defined(_DEBUG) || defined(RS_ASAN_DEBUG_BUILD)
+    return true;
+#else
+    return false;
+#endif
+}
+
+inline std::atomic<bool> g_runtimeMonitorDiagnosticsEnabled{false};
+
+inline void SetRuntimeMonitorDiagnosticsEnabled(bool enabled) noexcept
+{
+    g_runtimeMonitorDiagnosticsEnabled.store(enabled, std::memory_order_release);
+}
+
+[[nodiscard]] inline bool IsRuntimeMonitorDiagnosticsEnabled() noexcept
+{
+    if (g_runtimeMonitorDiagnosticsEnabled.load(std::memory_order_acquire))
+    {
+        return true;
+    }
+
+    wchar_t value[8]{};
+    const DWORD chars = ::GetEnvironmentVariableW(L"REDSALAMANDER_DIAGNOSTICS_ETW", value, static_cast<DWORD>(_countof(value)));
+    return chars > 0 && value[0] != L'\0' && value[0] != L'0';
+}
+
+[[nodiscard]] inline constexpr bool ShouldEmitMonitorDiagnosticMessageTypeByDefault(InfoParam::Type type) noexcept
+{
+    if (IsMonitorDiagnosticsBuild())
+    {
+        return true;
+    }
+
+    switch (type)
+    {
+        case InfoParam::Type::Error:
+        case InfoParam::Type::Warning: return true;
+
+        case InfoParam::Type::Text:
+        case InfoParam::Type::Info:
+        case InfoParam::Type::Perf:
+        case InfoParam::Type::Debug:
+        case InfoParam::Type::All:
+        default: return false;
+    }
+}
+
+[[nodiscard]] inline bool ShouldEmitMonitorDiagnosticMessageType(InfoParam::Type type) noexcept
+{
+    return ShouldEmitMonitorDiagnosticMessageTypeByDefault(type) || IsRuntimeMonitorDiagnosticsEnabled();
+}
+
 inline bool IsEtwEnabled(ULONGLONG keyword) noexcept
 {
     if (! EnsureTraceLoggingRegistered())
@@ -1097,6 +1227,11 @@ inline void PublishString(std::wstring_view payload) noexcept
     const InfoParam dbg = BuildInfoParam(InfoParam::Type::Text);
     EmitEtwEvent(dbg, payload);
 }
+
+// Perf JSONL sink -- implementation lives in Common.dll (PerfJsonl.cpp).
+COMMON_API void WritePerfJsonl(std::wstring_view metric, std::wstring_view detail, uint64_t durationUs, uint64_t value0, uint64_t value1, HRESULT hr) noexcept;
+
+COMMON_API bool HasPerfJsonlOutput() noexcept;
 } // namespace detail
 
 inline TransportStats GetTransportStats() noexcept
@@ -1111,11 +1246,29 @@ namespace Perf
 {
 inline bool IsEnabled() noexcept
 {
-    return detail::IsEtwEnabled(detail::kPerfKeyword);
+    return (detail::IsMonitorDiagnosticsBuild() || detail::IsRuntimeMonitorDiagnosticsEnabled()) && detail::IsEtwEnabled(detail::kPerfKeyword);
+}
+
+inline bool HasJsonlOutput() noexcept
+{
+    return detail::HasPerfJsonlOutput();
+}
+
+inline bool IsCaptureEnabled() noexcept
+{
+    return IsEnabled() || HasJsonlOutput();
+}
+
+[[nodiscard]] inline uint64_t ElapsedUs(std::chrono::steady_clock::time_point startedAt) noexcept
+{
+    const auto elapsed = std::chrono::steady_clock::now() - startedAt;
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
 }
 
 inline void Emit(std::wstring_view name, std::wstring_view detail, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
 {
+    detail::WritePerfJsonl(name, detail, durationUs, value0, value1, hr);
+
     if (! IsEnabled())
     {
         return;
@@ -1136,13 +1289,39 @@ inline void Emit(std::wstring_view name, std::wstring_view detail, uint64_t dura
                       TraceLoggingUInt32(static_cast<uint32_t>(hr), "Hr"));
 }
 
+inline void EmitCounter(std::wstring_view name, uint64_t value = 1, HRESULT hr = S_OK) noexcept
+{
+    Emit(name, L"counter", 0, value, 0, hr);
+}
+
+inline void EmitValue(std::wstring_view name, uint64_t value, HRESULT hr = S_OK) noexcept
+{
+    Emit(name, L"value", 0, value, 0, hr);
+}
+
+inline void EmitDurationUs(std::wstring_view name, uint64_t durationUs, uint64_t value0 = 0, uint64_t value1 = 0, HRESULT hr = S_OK) noexcept
+{
+    Emit(name, L"duration", durationUs, value0, value1, hr);
+}
+
+COMMON_API void ConfigureJsonlOutput(const std::filesystem::path& path,
+                                     std::wstring_view scenario    = {},
+                                     std::wstring_view build       = {},
+                                     std::wstring_view branch      = {},
+                                     std::wstring_view commit      = {},
+                                     std::wstring_view machineHash = {},
+                                     std::wstring_view runId       = {}) noexcept;
+
+COMMON_API void ClearJsonlOutput() noexcept;
+
 class Scope final
 {
 public:
     explicit Scope(std::wstring_view name) noexcept
-        : _enabled(IsEnabled()),
+        : _etwEnabled(IsEnabled()),
+          _jsonlEnabled(HasJsonlOutput()),
           _name(name),
-          _start(_enabled ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{})
+          _start((_etwEnabled || _jsonlEnabled) ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{})
     {
     }
 
@@ -1153,13 +1332,23 @@ public:
 
     ~Scope() noexcept
     {
-        if (! _enabled)
+        if (! _etwEnabled && ! _jsonlEnabled)
         {
             return;
         }
 
         const auto elapsed        = std::chrono::steady_clock::now() - _start;
         const uint64_t durationUs = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
+
+        if (_jsonlEnabled)
+        {
+            detail::WritePerfJsonl(_name, _detail, durationUs, _value0, _value1, static_cast<HRESULT>(_hr));
+        }
+
+        if (! _etwEnabled)
+        {
+            return;
+        }
 
         const USHORT nameLen     = static_cast<USHORT>(std::min<size_t>(_name.size(), std::numeric_limits<USHORT>::max()));
         const USHORT detailLen   = static_cast<USHORT>(std::min<size_t>(_detail.size(), std::numeric_limits<USHORT>::max()));
@@ -1199,7 +1388,8 @@ public:
     }
 
 private:
-    bool _enabled = false;
+    bool _etwEnabled   = false;
+    bool _jsonlEnabled = false;
     std::wstring_view _name;
     std::wstring_view _detail;
     std::chrono::steady_clock::time_point _start;
@@ -1212,6 +1402,11 @@ private:
 inline void Out(PCWSTR p) noexcept
 {
     if (! p)
+    {
+        return;
+    }
+
+    if (! detail::ShouldEmitMonitorDiagnosticMessageType(InfoParam::Type::Text))
     {
         return;
     }
@@ -1235,6 +1430,11 @@ inline void Out(PCWSTR p) noexcept
 
 template <typename... Args> inline void Out(InfoParam::Type type, std::wformat_string<Args...> format, Args&&... args) noexcept
 {
+    if (! detail::ShouldEmitMonitorDiagnosticMessageType(type))
+    {
+        return;
+    }
+
     if (! detail::IsDebugEtwEnabled())
     {
         return;
@@ -1278,6 +1478,11 @@ template <typename... Args> inline void Out(InfoParam::Type type, std::wformat_s
 template <typename... Args> inline DWORD LastError(InfoParam::Type type, std::wformat_string<Args...> format, Args&&... args) noexcept
 {
     const DWORD lastError = ::GetLastError();
+
+    if (! detail::ShouldEmitMonitorDiagnosticMessageType(type))
+    {
+        return lastError;
+    }
 
     if (! detail::IsDebugEtwEnabled())
     {
@@ -1381,6 +1586,179 @@ inline DWORD ErrorWithLastError(const std::wstring& message) noexcept
 }
 
 } // namespace Debug
+
+// ============================================================================
+// HRESULT / system-message helpers
+// ============================================================================
+[[nodiscard]] inline std::wstring TrimTrailingSystemMessageWhitespace(std::wstring text) noexcept
+{
+    while (! text.empty())
+    {
+        const wchar_t ch = text.back();
+        if (ch != L'\r' && ch != L'\n' && ch != L' ' && ch != L'\t')
+        {
+            break;
+        }
+        text.pop_back();
+    }
+
+    return text;
+}
+
+[[nodiscard]] inline DWORD GetSystemMessageIdFromHResult(HRESULT hr) noexcept
+{
+    DWORD messageId = static_cast<DWORD>(hr);
+    if (HRESULT_FACILITY(hr) == FACILITY_WIN32)
+    {
+        const DWORD code = HRESULT_CODE(messageId);
+        if (code != 0)
+        {
+            messageId = code;
+        }
+    }
+
+    return messageId;
+}
+
+[[nodiscard]] inline std::wstring TryFormatSystemMessage(DWORD messageId) noexcept
+{
+    wil::unique_hlocal_string message;
+    const DWORD written = ::FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS,
+                                           nullptr,
+                                           messageId,
+                                           MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+                                           reinterpret_cast<LPWSTR>(message.addressof()),
+                                           0,
+                                           nullptr);
+    if (written == 0 || message.get() == nullptr)
+    {
+        return {};
+    }
+
+    return TrimTrailingSystemMessageWhitespace(std::wstring(message.get(), written));
+}
+
+[[nodiscard]] inline std::wstring FormatHResultMessage(HRESULT hr) noexcept
+{
+    std::wstring text = TryFormatSystemMessage(GetSystemMessageIdFromHResult(hr));
+    if (! text.empty())
+    {
+        return text;
+    }
+
+    return std::format(L"HRESULT 0x{:08X}", static_cast<unsigned long>(hr));
+}
+
+[[nodiscard]] inline std::wstring FormatHResultMessageWithCode(HRESULT hr) noexcept
+{
+    std::wstring text = TryFormatSystemMessage(GetSystemMessageIdFromHResult(hr));
+    if (! text.empty())
+    {
+        return std::format(L"0x{:08X}: {}", static_cast<unsigned long>(hr), text);
+    }
+
+    return std::format(L"0x{:08X}", static_cast<unsigned long>(hr));
+}
+
+template <typename TCallback> class RegistrationCallbackState
+{
+public:
+    RegistrationCallbackState()                                            = default;
+    RegistrationCallbackState(const RegistrationCallbackState&)            = delete;
+    RegistrationCallbackState(RegistrationCallbackState&&)                 = delete;
+    RegistrationCallbackState& operator=(const RegistrationCallbackState&) = delete;
+    RegistrationCallbackState& operator=(RegistrationCallbackState&&)      = delete;
+    ~RegistrationCallbackState()                                           = default;
+
+    struct Snapshot
+    {
+        TCallback* callback = nullptr;
+        void* cookie        = nullptr;
+        uint64_t generation = 0;
+    };
+
+    void Set(TCallback* callback, void* cookie) noexcept
+    {
+        std::unique_lock lock(_mutex);
+        ++_generation;
+        _callback = callback;
+        _cookie   = callback ? cookie : nullptr;
+        if (! callback)
+        {
+            _drainCv.wait(lock, [this]() noexcept { return _inFlight == 0; });
+        }
+    }
+
+    [[nodiscard]] bool TryCapture(Snapshot& snapshot) noexcept
+    {
+        std::scoped_lock lock(_mutex);
+        if (! _callback)
+        {
+            snapshot = {};
+            return false;
+        }
+
+        snapshot.callback   = _callback;
+        snapshot.cookie     = _cookie;
+        snapshot.generation = _generation;
+        return true;
+    }
+
+    [[nodiscard]] bool TryEnter(const Snapshot& snapshot, TCallback*& callback, void*& cookie) noexcept
+    {
+        std::unique_lock lock(_mutex);
+        if (_generation != snapshot.generation || _callback != snapshot.callback)
+        {
+            callback = nullptr;
+            cookie   = nullptr;
+            return false;
+        }
+
+        ++_inFlight;
+        callback = snapshot.callback;
+        cookie   = snapshot.cookie;
+        return true;
+    }
+
+    void FinishInvoke() noexcept
+    {
+        {
+            std::scoped_lock lock(_mutex);
+            if (_inFlight > 0)
+            {
+                --_inFlight;
+            }
+        }
+
+        _drainCv.notify_all();
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _drainCv;
+    TCallback* _callback = nullptr;
+    void* _cookie        = nullptr;
+    uint64_t _generation = 0;
+    size_t _inFlight     = 0;
+};
+
+template <typename T> [[nodiscard]] inline bool TrySubmitUniqueToThreadpool(std::unique_ptr<T>& payload) noexcept
+{
+    if (! payload)
+    {
+        return true;
+    }
+
+    const BOOL queued = TrySubmitThreadpoolCallback(
+        [](PTP_CALLBACK_INSTANCE /*instance*/, void* context) noexcept { std::unique_ptr<T> owned(static_cast<T*>(context)); }, payload.get(), nullptr);
+    if (queued == 0)
+    {
+        return false;
+    }
+
+    static_cast<void>(payload.release());
+    return true;
+}
 
 // ============================================================================
 // Module Lifetime Helpers

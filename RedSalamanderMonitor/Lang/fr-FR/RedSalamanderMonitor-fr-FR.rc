@@ -1,0 +1,147 @@
+#pragma code_page(65001)
+#include "../../Resource.h"
+#include "../../../Common/Version.h"
+#include <winres.h>
+
+LANGUAGE LANG_FRENCH, SUBLANG_FRENCH
+
+IDC_REDSALAMANDERMONITOR MENU
+BEGIN
+    POPUP "&Fichier"
+    BEGIN
+        MENUITEM "&Nouveau\tCtrl+N",                IDM_FILE_NEW
+        MENUITEM "&Ouvrir...\tCtrl+O",            IDM_FILE_OPEN
+        MENUITEM "Enregistrer &sous...",                 IDM_FILE_SAVE_AS
+        MENUITEM SEPARATOR
+        MENUITEM "&Quitter",                       IDM_EXIT
+    END
+    POPUP "&Édition"
+    BEGIN
+        MENUITEM "&Copier\tCtrl+C",               IDM_EDIT_COPY
+        MENUITEM SEPARATOR
+        MENUITEM "&Rechercher...\tCtrl+F",            IDM_EDIT_FIND
+        MENUITEM "Rechercher &suivant\tF3",              IDM_EDIT_FIND_NEXT
+        MENUITEM "Rechercher &précédent\tShift+F3",    IDM_EDIT_FIND_PREV
+    END
+    POPUP "&Affichage"
+    BEGIN
+        MENUITEM "Barre d’&outils",                    IDM_VIEW_TOOLBAR
+        MENUITEM "&Numéros de ligne",               IDM_VIEW_LINE_NUMBERS
+        MENUITEM SEPARATOR
+        POPUP "&Thème"
+        BEGIN
+            MENUITEM "&Contraste élevé (système)",     IDM_VIEW_THEME_HIGH_CONTRAST, GRAYED
+            MENUITEM SEPARATOR
+            MENUITEM "&Système",                     IDM_VIEW_THEME_SYSTEM
+            MENUITEM "&Clair",                      IDM_VIEW_THEME_LIGHT
+            MENUITEM "&Sombre",                       IDM_VIEW_THEME_DARK
+            MENUITEM "&Arc-en-ciel",                    IDM_VIEW_THEME_RAINBOW
+            MENUITEM "Contraste &élevé (application)",        IDM_VIEW_THEME_HIGH_CONTRAST_APP
+        END
+    END
+    POPUP "&Options"
+    BEGIN
+        MENUITEM "&Toujours au premier plan",              IDM_OPTION_TOP
+        MENUITEM "&Défilement automatique\tEnd",           IDM_OPTION_AUTO_SCROLL
+        MENUITEM SEPARATOR
+        MENUITEM "Afficher l’ID de &processus/thread",  IDM_OPTION_ID
+        MENUITEM SEPARATOR
+        POPUP "&Filtre actif"
+        BEGIN
+            MENUITEM "Afficher le &texte",              IDM_FILTER_TEXT, CHECKED
+            MENUITEM "Afficher les &erreurs",            IDM_FILTER_ERROR, CHECKED
+            MENUITEM "Afficher les &avertissements",          IDM_FILTER_WARNING, CHECKED
+            MENUITEM "Afficher les &infos",              IDM_FILTER_INFO, CHECKED
+            MENUITEM "Afficher la &perf",              IDM_FILTER_PERF, CHECKED
+            MENUITEM "Afficher le &debug",             IDM_FILTER_DEBUG, CHECKED
+            MENUITEM SEPARATOR
+            MENUITEM "Préréglage : erreurs seulement",     IDM_FILTER_PRESET_ERRORS_ONLY
+            MENUITEM "Préréglage : erreurs + avertissements", IDM_FILTER_PRESET_ERRORS_WARNINGS
+            MENUITEM "Préréglage : erreurs + perf + debug", IDM_FILTER_PRESET_ERRORS_DEBUG
+            MENUITEM "Préréglage : tous les types",       IDM_FILTER_PRESET_ALL
+        END
+    END
+    POPUP "&Aide"
+    BEGIN
+        MENUITEM "À &propos...",                  IDM_ABOUT
+    END
+END
+
+IDD_ABOUTBOX DIALOGEX 0, 0, 260, 78
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "À propos de RedSalamanderMonitor"
+FONT 8, "MS Shell Dlg", 0, 0, 0x1
+BEGIN
+    ICON            IDI_REDSALAMANDERMONITOR,IDC_STATIC,14,14,21,20
+    LTEXT           "RedSalamanderMonitor",IDC_STATIC,42,14,180,8,SS_NOPREFIX
+    LTEXT           "",IDC_ABOUT_VERSION,42,27,205,18,SS_NOPREFIX
+    LTEXT           VERSINFO_COPYRIGHT,IDC_STATIC,42,47,205,8
+    DEFPUSHBUTTON   "OK",IDOK,203,57,50,14,WS_GROUP
+END
+
+IDD_MODAL_MESSAGE DIALOGEX 0, 0, 360, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION ""
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_MODAL_MESSAGE_TEXT,"Edit",WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,7,7,346,128
+    DEFPUSHBUTTON   "",IDOK,303,142,50,14,WS_GROUP
+END
+
+IDD_MODAL_CONFIRM DIALOGEX 0, 0, 360, 160
+STYLE DS_SETFONT | DS_MODALFRAME | DS_FIXEDSYS | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION ""
+FONT 8, "MS Shell Dlg", 400, 0, 0x1
+BEGIN
+    CONTROL         "",IDC_MODAL_MESSAGE_TEXT,"Edit",WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY,7,7,346,128
+    DEFPUSHBUTTON   "",IDYES,247,142,50,14,WS_GROUP
+    PUSHBUTTON      "",IDNO,303,142,50,14
+END
+
+STRINGTABLE
+BEGIN
+    IDS_APP_TITLE           "Moniteur RedSalamander"
+    IDS_NOT_RUNNING         "RedSalamander Bug Reporter (RedSalamanderMonitor.exe) n’est pas en cours d’exécution. RedSalamander ne pourra pas gérer les crashs éventuels. Veuillez redémarrer RedSalamander."
+    IDS_CAPTION_ERROR "Erreur"
+    IDS_CAPTION_OPEN "Ouvrir"
+    IDS_CAPTION_PRINT "Imprimer"
+    IDS_CAPTION_ETW_WARNING "Avertissement de l’écouteur ETW"
+    IDS_BTN_OK              "OK"
+    IDS_BTN_YES             "Oui"
+    IDS_BTN_NO              "Non"
+    IDS_FIND_LABEL "Rechercher :"
+    IDS_FIND_CASE_LABEL "Aa"
+    IDS_FIND_FROM_CURRENT_POSITION "Position actuelle"
+    IDS_FIND_FROM_TOP "Début"
+    IDS_FIND_FROM_BOTTOM "Fin"
+    IDS_MSG_OPEN_FAILED_READ "Impossible de lire le fichier ou le fichier est vide."
+    IDS_MSG_CREATE_COLORTEXTVIEW_FAILED "Impossible de créer ColorTextView."
+    IDS_MSG_INSTANCE_GUARD_FAILED "Impossible de créer le verrou d’instance du moniteur RedSalamander."
+    IDS_MSG_PRINT_NOT_IMPLEMENTED "L’impression n’est pas encore implémentée."
+    IDS_MSG_ETW_STARTED "Écouteur ETW démarré : surveillance en temps réel active"
+    IDS_FMT_ETW_START_FAILED "Impossible de démarrer l’écouteur ETW : {}"
+    IDS_MSG_ETW_ELEVATE_PROMPT "RedSalamander Monitor n’a pas pu démarrer son écouteur ETW avec les privilèges actuels.\n\nRedémarrer en tant qu’administrateur maintenant ?\n\n(Sélectionnez Non pour continuer sans surveillance ETW en temps réel. Pour éviter les invites UAC, ajoutez votre utilisateur au groupe Utilisateurs du journal de performances puis déconnectez-vous/reconnectez-vous.)"
+    IDS_FATAL_ERROR_CAPTION "RedSalamander Monitor - Erreur fatale"
+    IDS_FATAL_EXCEPTION_FMT "Exception fatale dans RedSalamanderMonitor\n\nException : {0} (0x{1:08X})\n\nL’application va maintenant se fermer."
+    IDS_FILE_FILTER_OPEN "Fichiers texte (*.txt;*.log)\0*.txt;*.log\0Tous les fichiers (*.*)\0*.*\0\0"
+    IDS_FILE_FILTER_SAVE "Fichiers texte (*.txt)\0*.txt\0Tous les fichiers (*.*)\0*.*\0\0"
+    IDS_FILE_DEFAULT_EXT_TXT "txt"
+    IDS_FILTER_TYPE_TEXT "Texte"
+    IDS_FILTER_TYPE_ERROR "Erreur"
+    IDS_FILTER_TYPE_WARNING "Avertissement"
+    IDS_FILTER_TYPE_INFO "Info"
+    IDS_FILTER_TYPE_PERF "Perf"
+    IDS_FILTER_TYPE_DEBUG "Debug"
+    IDS_STATUS_FILTER_ALL "Filtre : tous"
+    IDS_STATUS_FILTER_NONE "Filtre : aucun"
+    IDS_STATUS_FILTER_ONE_FMT "Filtre : {}"
+    IDS_STATUS_FILTER_MULTI_PREFIX "Filtre : "
+    IDS_STATUS_VISIBLE_FMT "Visibles : {:L}"
+    IDS_STATUS_TOTAL_FMT "Total : {:L}"
+    IDS_STATUS_ETW_RECEIVED_FMT "ETW reçus : {:L}"
+    IDS_STATUS_FILTER_MULTI_JOINER "+"
+    IDS_STATUS_AUTOSCROLL_ON "Auto : activé"
+    IDS_STATUS_AUTOSCROLL_OFF "Auto : désactivé"
+    IDS_SAMPLE_TEXT "ColorTextView initialisé correctement !\nVoici le panneau de droite.\n"
+    IDC_REDSALAMANDERMONITOR "REDSALAMANDERMONITOR"
+END

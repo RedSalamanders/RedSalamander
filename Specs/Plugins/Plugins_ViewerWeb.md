@@ -17,7 +17,7 @@ ViewerWeb is invoked via the standard viewer association mechanism:
 
 Deployment:
 - The host loads the optional DLL from `<exeDir>\\Plugins\\ViewerWeb.dll` when present.
-- ViewerWeb.dll uses the optional multi-plugin exports (`RedSalamanderEnumeratePlugins`, `RedSalamanderCreateEx`) to expose the three viewer IDs.
+- ViewerWeb.dll uses `RedSalamanderEnumeratePlugins` together with `RedSalamanderCreate(pluginId)` to expose the three viewer IDs.
 - ViewerWeb.dll depends on the WebView2 loader (`WebView2Loader.dll`) which must be deployed next to the executable/plugin (non-static loader).
   - This project deploys it from vcpkg into the plugin output folder as part of the build.
   - Alternative: use the WebView2 **static loader** approach described by Microsoft (not used by default in this repo).
@@ -54,13 +54,16 @@ Notes:
 Layout:
 - **Header**: filename dropdown (combo box) listing `otherFiles` when `otherFileCount > 1` (ViewerText-style).
 - **Content**: WebView2 surface.
+- Header status text is a DirectWrite/Direct2D-only render path. If the DX path cannot draw the status message, ViewerWeb deliberately shows no fallback GDI status text and logs one error so the failure is visible in diagnostics.
 - Internal HTML pages (`json`, `jsonl`, `markdown`) theme their own scrollbars from the current viewer colors, including nested code-block scrollers.
 - Generated `json`, `jsonl`, and `markdown` pages are delivered to WebView2 through an in-memory `WebResourceRequested` response on a private viewer URL, so large rendered documents do not rely on `NavigateToString()` or a temp `.html` file.
 
-Menu (themed/owner-drawn):
+Menu (DxUi-hosted from the hidden native menu model):
 - File: Save As, Refresh, Exit, Other Files navigation (Next/Previous/First/Last)
 - Search: Find, Find Next, Find Previous
 - View: Zoom In/Out/Reset, Toggle DevTools
+
+The window detaches its live native `HMENU` after opening and renders the visible top menu bar through the shared `RedSalamander.DxNativeMenuBar` host. `Alt`, `F10`, and menu mnemonics continue to route through that DxUi menu bar.
 - Tools: Copy URL, Open in Browser, JSON Expand/Collapse, Toggle Markdown Source
 
 JSON viewer modes:

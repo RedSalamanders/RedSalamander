@@ -1,5 +1,7 @@
 #include "FolderWindowInternal.h"
 
+#include "D2DHdcPaint.h"
+
 namespace
 {
 [[nodiscard]] COLORREF SplitterGripColor(const AppTheme& theme) noexcept
@@ -23,7 +25,49 @@ namespace
 
     return RGB(static_cast<BYTE>(r), static_cast<BYTE>(g), static_cast<BYTE>(b));
 }
+
+[[nodiscard]] COLORREF SplitterArrowHoverColor(const AppTheme& theme) noexcept
+{
+    if (theme.highContrast)
+    {
+        return theme.menu.selectionBg;
+    }
+
+    constexpr int kTowardSelectionWeight = 1;
+    constexpr int kDenom                 = 3;
+    static_assert(kTowardSelectionWeight > 0 && kTowardSelectionWeight < kDenom);
+
+    const int baseWeight             = kDenom - kTowardSelectionWeight;
+    const COLORREF baseColor         = theme.menu.separator;
+    const COLORREF towardSelectColor = theme.menu.selectionBg;
+    const int r = (static_cast<int>(GetRValue(baseColor)) * baseWeight + static_cast<int>(GetRValue(towardSelectColor)) * kTowardSelectionWeight) / kDenom;
+    const int g = (static_cast<int>(GetGValue(baseColor)) * baseWeight + static_cast<int>(GetGValue(towardSelectColor)) * kTowardSelectionWeight) / kDenom;
+    const int b = (static_cast<int>(GetBValue(baseColor)) * baseWeight + static_cast<int>(GetBValue(towardSelectColor)) * kTowardSelectionWeight) / kDenom;
+    return RGB(static_cast<BYTE>(r), static_cast<BYTE>(g), static_cast<BYTE>(b));
+}
 } // namespace
+
+COLORREF FolderWindow::GetSplitterGripColor() const noexcept
+{
+    return SplitterGripColor(_theme);
+}
+
+COLORREF FolderWindow::GetSplitterArrowColor() const noexcept
+{
+    return GetSplitterGripColor();
+}
+
+int FolderWindow::GetSplitterGripDotSizePx() const noexcept
+{
+    const int dpi = std::max(1, static_cast<int>(_dpi));
+    return std::max(1, MulDiv(kSplitterGripDotSizeDip, dpi, USER_DEFAULT_SCREEN_DPI));
+}
+
+int FolderWindow::GetSplitterArrowChevronSizePx() const noexcept
+{
+    const int dpi = std::max(1, static_cast<int>(_dpi));
+    return std::max(3, MulDiv(kSplitterArrowChevronSizeDip, dpi, USER_DEFAULT_SCREEN_DPI));
+}
 
 void FolderWindow::OnSize(UINT width, UINT height)
 {
@@ -51,10 +95,68 @@ void FolderWindow::OnPaint()
         {
             FillRect(hdc.get(), &intersect, _splitterBrush.get());
 
+            auto drawArrowZone = [&](SplitterArrowZone zone) noexcept
+            {
+                const RECT arrowRect = GetSplitterArrowRect(zone);
+                RECT arrowPaint{};
+                if (arrowRect.right <= arrowRect.left || arrowRect.bottom <= arrowRect.top || ! IntersectRect(&arrowPaint, &arrowRect, &paint))
+                {
+                    return;
+                }
+
+                if (_hoveredSplitterArrowZone == zone && _splitterArrowHoverBrush)
+                {
+                    FillRect(hdc.get(), &arrowPaint, _splitterArrowHoverBrush.get());
+                }
+
+                const int width   = arrowRect.right - arrowRect.left;
+                const int height  = arrowRect.bottom - arrowRect.top;
+                const int maxSize = std::min(width - 2, height - 2);
+                if (maxSize < 2)
+                {
+                    return;
+                }
+
+                const int chevronSize = std::min(GetSplitterArrowChevronSizePx(), maxSize);
+                const int halfSize    = std::max(1, chevronSize / 2);
+                const int centerX     = arrowRect.left + (width / 2);
+                const int centerY     = arrowRect.top + (height / 2);
+
+                const bool pointsLeft = GetSplitterArrowTargetPane(zone) == Pane::Right;
+                const POINT apex{centerX + (pointsLeft ? -halfSize : halfSize), centerY};
+                const POINT upper{centerX + (pointsLeft ? halfSize : -halfSize), centerY - halfSize};
+                const POINT lower{upper.x, centerY + halfSize};
+
+                const int dpi         = std::max(1, static_cast<int>(_dpi));
+                const int strokeWidth = std::max(1, MulDiv(kSplitterArrowStrokeWidthDip, dpi, USER_DEFAULT_SCREEN_DPI));
+                RECT client{};
+                GetClientRect(_hWnd.get(), &client);
+                D2DHdcPaint::Session chevronPaint;
+                if (chevronPaint.Begin(hdc.get(), client))
+                {
+                    const COLORREF color = GetSplitterArrowColor();
+                    chevronPaint.DrawLine(static_cast<float>(upper.x),
+                                          static_cast<float>(upper.y),
+                                          static_cast<float>(apex.x),
+                                          static_cast<float>(apex.y),
+                                          color,
+                                          static_cast<float>(strokeWidth));
+                    chevronPaint.DrawLine(static_cast<float>(apex.x),
+                                          static_cast<float>(apex.y),
+                                          static_cast<float>(lower.x),
+                                          static_cast<float>(lower.y),
+                                          color,
+                                          static_cast<float>(strokeWidth));
+                }
+            };
+
+            drawArrowZone(SplitterArrowZone::Left);
+            drawArrowZone(SplitterArrowZone::Right);
+
             if (_splitterGripBrush)
             {
                 const int dpi            = static_cast<int>(_dpi);
-                const int dotSize        = std::max(1, MulDiv(kSplitterGripDotSizeDip, dpi, USER_DEFAULT_SCREEN_DPI));
+                const int dotSize        = GetSplitterGripDotSizePx();
                 const int dotGap         = std::max(1, MulDiv(kSplitterGripDotGapDip, dpi, USER_DEFAULT_SCREEN_DPI));
                 const int gripHeight     = (dotSize * kSplitterGripDotCount) + (dotGap * (kSplitterGripDotCount - 1));
                 const int splitterWidth  = splitter.right - splitter.left;
@@ -98,6 +200,7 @@ void FolderWindow::ApplyTheme(const AppTheme& theme)
     _backgroundBrush.reset(CreateSolidBrush(_theme.windowBackground));
     _splitterBrush.reset(CreateSolidBrush(_theme.menu.separator));
     _splitterGripBrush.reset(CreateSolidBrush(SplitterGripColor(_theme)));
+    _splitterArrowHoverBrush.reset(CreateSolidBrush(SplitterArrowHoverColor(_theme)));
 
     auto applyToPane = [&](PaneState& pane)
     {
@@ -478,6 +581,7 @@ void FolderWindow::ToggleZoomPanel(Pane pane)
 
 void FolderWindow::OnDpiChanged(float newDpi)
 {
+    Debug::Perf::Scope perf(L"folderwindow.ui.dpi_change_us");
     _dpi = static_cast<UINT>(newDpi);
 
     CalculateLayout();

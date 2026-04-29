@@ -10,6 +10,24 @@ permissions:
   contents: write
 
 jobs:
+  migration-guards:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify migrated code no longer uses comctl subclass manager
+        shell: pwsh
+        run: .\Tools\Verify-NoSubclassManager.ps1
+
+      - name: Verify comctl report-surface audit
+        shell: pwsh
+        run: .\Tools\Audit-ComctlReportSurfaces.ps1
+
+      - name: Verify visible native surface audit
+        shell: pwsh
+        run: .\Tools\Audit-VisibleNativeSurfaces.ps1
+
   format:
     runs-on: windows-latest
     steps:
@@ -84,6 +102,23 @@ jobs:
         working-directory: .build/x64/Debug
         run: .\RedSalamander.exe --compare-selftest --fileops-selftest --selftest-timeout-multiplier=2.0
         timeout-minutes: 40
+
+      - name: Run Viewer PETests
+        shell: pwsh
+        working-directory: .build/x64/Debug
+        run: |
+          .\ViewerPETests.exe
+          .\ViewerPETests.exe TestViewerTextFindPromptUsesDxUiHostAndClosesCleanly
+          .\ViewerPETests.exe TestViewerTextGotoPromptUsesDxUiHostAndClosesCleanly
+        timeout-minutes: 20
+
+      - name: Run DxUi And ViewerSqlite Tests
+        shell: pwsh
+        working-directory: .build/x64/Debug
+        run: |
+          .\DxUiTests.exe
+          .\ViewerSqliteTests.exe
+        timeout-minutes: 25
 
       - name: Export LOCALAPPDATA
         if: always()

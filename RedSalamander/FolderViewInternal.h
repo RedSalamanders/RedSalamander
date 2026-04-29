@@ -54,12 +54,16 @@
 #include "PlugInterfaces/Informations.h"
 #include "Ui/AlertOverlay.h"
 
+#include "DxUi/DxUi.h"
+#include "DxUiThemePalette.h"
 #include "FolderView.h"
+#include "FolderViewEmptyStateLayout.h"
+#include "FolderViewVisualState.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "IconCache.h"
-#include "ThemedControls.h"
 #include "ThemedInputFrames.h"
+#include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "resource.h"
 
@@ -98,11 +102,14 @@ constexpr float kLabelHorizontalPaddingDip            = 12.0f;
 constexpr float kLabelVerticalPaddingDip              = 4.0f;
 constexpr float kFocusStrokeThicknessDip              = 2.0f;
 constexpr float kFocusStrokeThicknessUnfocusedDip     = 1.0f;
-constexpr float kFocusBorderOpacityUnfocused          = 0.60f;
+constexpr float kFocusBorderOpacityUnfocused          = FolderViewVisualState::kFocusBorderOpacityUnfocused;
+constexpr float kUnfocusedPaneTextOpacity             = FolderViewVisualState::kUnfocusedPaneTextOpacity;
+constexpr float kUnfocusedPaneIconOpacity             = FolderViewVisualState::kUnfocusedPaneIconOpacity;
 constexpr float kSelectionCornerRadiusDip             = 2.0f;
 constexpr float kIconTextGapDip                       = 12.0f;
 constexpr float kColumnSpacingDip                     = 18.0f;
 constexpr float kRowSpacingDip                        = 4.0f;
+constexpr float kCompactRowSpacingDip                 = 0.0f;
 constexpr float kDetailsGapDip                        = 2.0f;
 constexpr float kDetailsTextAlpha                     = 0.75f;
 constexpr float kMetadataTextAlpha                    = 0.55f;
@@ -111,6 +118,11 @@ constexpr UINT_PTR kOverlayTimerId                    = 1;
 constexpr uint64_t kBusyOverlayDelayMs                = 300;
 constexpr uint64_t kOperationInfoOverlayAutoDismissMs = 1800;
 constexpr uint64_t kOverlayTimerRetryMs               = 120;
+
+[[nodiscard]] constexpr float GetFolderViewRowSpacingDip(const AppTheme& appTheme) noexcept
+{
+    return appTheme.compactMode ? kCompactRowSpacingDip : kRowSpacingDip;
+}
 
 bool ConfirmNonRevertableFileOperation(HWND owner,
                                        [[maybe_unused]] IFileSystem* fileSystem,
@@ -290,74 +302,9 @@ enum FolderCommands : UINT
     CmdOverlaySampleBusyWithCancel      = IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_BUSY_WITH_CANCEL,
 };
 
-struct RenameDialogState
-{
-    RenameDialogState()                                    = default;
-    RenameDialogState(const RenameDialogState&)            = delete;
-    RenameDialogState& operator=(const RenameDialogState&) = delete;
-    RenameDialogState(RenameDialogState&&)                 = delete;
-    RenameDialogState& operator=(RenameDialogState&&)      = delete;
-    ~RenameDialogState()                                   = default;
-
-    HWND centerOnWindow = nullptr;
-
-    std::wstring currentName;
-    std::wstring newName;
-    bool isDirectory = false;
-
-    AppTheme theme{};
-    wil::unique_hbrush backgroundBrush;
-
-    COLORREF inputBackgroundColor         = RGB(255, 255, 255);
-    COLORREF inputFocusedBackgroundColor  = RGB(255, 255, 255);
-    COLORREF inputDisabledBackgroundColor = RGB(255, 255, 255);
-    wil::unique_hbrush inputBrush;
-    wil::unique_hbrush inputFocusedBrush;
-    wil::unique_hbrush inputDisabledBrush;
-
-    ThemedInputFrames::FrameStyle inputFrameStyle{};
-    wil::unique_hwnd editFrame;
-};
-
 std::wstring FormatHResult(HRESULT hr)
 {
-    DWORD messageId = static_cast<DWORD>(hr);
-    if (HRESULT_FACILITY(hr) == FACILITY_WIN32)
-    {
-        const DWORD code = HRESULT_CODE(messageId);
-        if (code != 0)
-        {
-            messageId = code;
-        }
-    }
-
-    wil::unique_hlocal_string message;
-    const DWORD written = ::FormatMessageW(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS,
-                                           nullptr,
-                                           messageId,
-                                           MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
-                                           reinterpret_cast<LPWSTR>(message.addressof()),
-                                           0,
-                                           nullptr);
-    if (written != 0 && message.get() != nullptr)
-    {
-        std::wstring text(message.get(), written);
-        while (! text.empty())
-        {
-            const wchar_t ch = text.back();
-            if (ch != L'\r' && ch != L'\n' && ch != L' ' && ch != L'\t')
-            {
-                break;
-            }
-            text.pop_back();
-        }
-        if (! text.empty())
-        {
-            return text;
-        }
-    }
-
-    return std::format(L"HRESULT 0x{:08X}", static_cast<unsigned long>(hr));
+    return FormatHResultMessage(hr);
 }
 
 HRESULT HrFromErrorCode(const std::error_code& ec)
@@ -491,481 +438,542 @@ std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t last
     return std::format(L"{} • {} • {}", timeText, sizeField, attrsText);
 }
 
-constexpr UINT_PTR kRenameEditSubclassId = 1;
-
-void CenterMultilineEditTextVertically(HWND edit) noexcept
+[[nodiscard]] HWND NormalizeOwnerWindow(HWND owner) noexcept
 {
-    ThemedControls::CenterEditTextVertically(edit);
-}
-
-void PrepareFlatEditControl(HWND control) noexcept
-{
-    if (! control)
+    if (! owner || IsWindow(owner) == FALSE)
     {
-        return;
+        return nullptr;
     }
 
-    const LONG_PTR exStyle    = GetWindowLongPtrW(control, GWL_EXSTYLE);
-    const LONG_PTR style      = GetWindowLongPtrW(control, GWL_STYLE);
-    const LONG_PTR newExStyle = exStyle & ~static_cast<LONG_PTR>(WS_EX_CLIENTEDGE);
-    const LONG_PTR newStyle   = style & ~static_cast<LONG_PTR>(WS_BORDER);
-
-    if (newExStyle != exStyle)
+    if (const HWND rootOwner = GetAncestor(owner, GA_ROOT); rootOwner && IsWindow(rootOwner) != FALSE)
     {
-        SetWindowLongPtrW(control, GWL_EXSTYLE, newExStyle);
-    }
-    if (newStyle != style)
-    {
-        SetWindowLongPtrW(control, GWL_STYLE, newStyle);
+        return rootOwner;
     }
 
-    SetWindowPos(control, nullptr, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
-    InvalidateRect(control, nullptr, TRUE);
-}
-
-void PrepareEditMargins(HWND edit) noexcept
-{
-    if (! edit)
-    {
-        return;
-    }
-
-    const UINT dpi       = GetDpiForWindow(edit);
-    const int textMargin = ThemedControls::ScaleDip(dpi, 6);
-    SendMessageW(edit, EM_SETMARGINS, EC_LEFTMARGIN | EC_RIGHTMARGIN, MAKELPARAM(textMargin, textMargin));
+    return owner;
 }
 
 void CenterWindowOnOwner(HWND window, HWND owner) noexcept
 {
-    if (! window || ! owner)
+    if (! window || IsWindow(window) == FALSE || ! owner || IsWindow(owner) == FALSE)
     {
         return;
     }
 
-    RECT ownerRc{};
-    RECT windowRc{};
-    if (! GetWindowRect(owner, &ownerRc) || ! GetWindowRect(window, &windowRc))
+    RECT ownerRect{};
+    RECT windowRect{};
+    if (GetWindowRect(owner, &ownerRect) == FALSE || GetWindowRect(window, &windowRect) == FALSE)
     {
         return;
     }
 
-    const int ownerW  = ownerRc.right - ownerRc.left;
-    const int ownerH  = ownerRc.bottom - ownerRc.top;
-    const int windowW = windowRc.right - windowRc.left;
-    const int windowH = windowRc.bottom - windowRc.top;
-
-    const int x = ownerRc.left + (ownerW - windowW) / 2;
-    const int y = ownerRc.top + (ownerH - windowH) / 2;
+    const int x = ownerRect.left + (((ownerRect.right - ownerRect.left) - (windowRect.right - windowRect.left)) / 2);
+    const int y = ownerRect.top + (((ownerRect.bottom - ownerRect.top) - (windowRect.bottom - windowRect.top)) / 2);
     SetWindowPos(window, nullptr, x, y, 0, 0, SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE);
 }
 
-LRESULT OnRenameEditPaste(HWND hwnd, WPARAM wParam, LPARAM lParam)
+[[nodiscard]] int ScaleForDpi(const UINT dpi, const int dip) noexcept
 {
-    const LRESULT result = DefSubclassProc(hwnd, WM_PASTE, wParam, lParam);
-
-    const int length = GetWindowTextLengthW(hwnd);
-    if (length <= 0)
-    {
-        return result;
-    }
-
-    std::wstring buffer;
-    buffer.resize(static_cast<size_t>(length) + 1u);
-    GetWindowTextW(hwnd, buffer.data(), length + 1);
-    buffer.resize(static_cast<size_t>(length));
-
-    buffer.erase(std::remove(buffer.begin(), buffer.end(), L'\r'), buffer.end());
-    buffer.erase(std::remove(buffer.begin(), buffer.end(), L'\n'), buffer.end());
-    buffer.erase(std::remove(buffer.begin(), buffer.end(), L'\t'), buffer.end());
-
-    SetWindowTextW(hwnd, buffer.c_str());
-    return result;
+    return MulDiv(dip, static_cast<int>(dpi == 0u ? 96u : dpi), 96);
 }
 
-LRESULT CALLBACK RenameEditSubclassProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam, UINT_PTR /*uIdSubclass*/, DWORD_PTR /*dwRefData*/)
+[[nodiscard]] std::wstring TrimRenameText(std::wstring text) noexcept
 {
-    switch (msg)
-    {
-        case WM_KEYDOWN:
-            if (ThemedControls::HandleEditCtrlBackspaceKeyDown(hwnd, wParam))
-            {
-                return 0;
-            }
-            if (wParam == VK_RETURN)
-            {
-                SendMessageW(GetParent(hwnd), WM_COMMAND, IDOK, 0);
-                return 0;
-            }
-            break;
-        case WM_CHAR:
-            if (ThemedControls::HandleEditCtrlBackspaceChar(hwnd, wParam))
-            {
-                return 0;
-            }
-            if (wParam == L'\r' || wParam == L'\n')
-            {
-                return 0;
-            }
-            break;
-        case WM_PASTE: return OnRenameEditPaste(hwnd, wParam, lParam);
-    }
-
-    return DefSubclassProc(hwnd, msg, wParam, lParam);
+    text.erase(text.begin(), std::find_if(text.begin(), text.end(), [](wchar_t ch) { return ! iswspace(ch); }));
+    text.erase(std::find_if(text.rbegin(), text.rend(), [](wchar_t ch) { return ! iswspace(ch); }).base(), text.end());
+    return text;
 }
 
-INT_PTR OnRenameDialogCtlColorDialog(RenameDialogState* state) noexcept
+constexpr wchar_t kFolderViewRenamePromptClassName[] = L"RedSalamander.FolderView.RenamePrompt";
+
+#ifdef ENABLE_TESTS
+enum class FolderViewRenamePromptDebugCommand : uintptr_t
 {
-    if (! state || ! state->backgroundBrush)
-    {
-        return FALSE;
-    }
+    GetSnapshot = 1u,
+    SetText,
+    Confirm,
+    Cancel,
+};
+#endif
 
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
-}
-
-INT_PTR OnRenameDialogCtlColorStatic(RenameDialogState* state, HDC hdc, HWND control) noexcept
+class FolderViewRenamePromptWindow final
 {
-    if (! state || ! state->backgroundBrush || ! hdc)
+public:
+    FolderViewRenamePromptWindow(const FolderViewRenamePromptWindow&)            = delete;
+    FolderViewRenamePromptWindow& operator=(const FolderViewRenamePromptWindow&) = delete;
+    FolderViewRenamePromptWindow(FolderViewRenamePromptWindow&&)                 = delete;
+    FolderViewRenamePromptWindow& operator=(FolderViewRenamePromptWindow&&)      = delete;
+
+    FolderViewRenamePromptWindow(HWND ownerWindow, std::wstring initialText, bool isDirectory, const AppTheme& theme) noexcept
+        : _ownerWindow(NormalizeOwnerWindow(ownerWindow)),
+          _restoreFocusWindow(ownerWindow && IsWindow(ownerWindow) != FALSE ? ownerWindow : nullptr),
+          _initialText(std::move(initialText)),
+          _isDirectory(isDirectory),
+          _captionText(LoadStringResource(nullptr, IDS_FOLDERVIEW_RENAME_CAPTION)),
+          _theme(theme)
     {
-        return FALSE;
-    }
-
-    const bool enabled = ! control || IsWindowEnabled(control) != FALSE;
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
-    return reinterpret_cast<INT_PTR>(state->backgroundBrush.get());
-}
-
-INT_PTR OnRenameDialogCtlColorEdit(RenameDialogState* state, HDC hdc, HWND control) noexcept
-{
-    if (! state || ! hdc)
-    {
-        return FALSE;
-    }
-
-    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
-    const bool enabled      = ! control || IsWindowEnabled(control) != FALSE;
-    const bool focused      = enabled && control && GetFocus() == control;
-
-    const COLORREF bg = enabled ? (focused ? state->inputFocusedBackgroundColor : state->inputBackgroundColor) : state->inputDisabledBackgroundColor;
-
-    SetBkColor(hdc, bg);
-    SetTextColor(hdc, enabled ? state->theme.menu.text : state->theme.menu.disabledText);
-
-    if (highContrast)
-    {
-        return state->backgroundBrush ? reinterpret_cast<INT_PTR>(state->backgroundBrush.get()) : FALSE;
-    }
-
-    HBRUSH brush = nullptr;
-    if (! enabled)
-    {
-        brush = state->inputDisabledBrush.get();
-    }
-    else
-    {
-        brush = (focused && state->inputFocusedBrush) ? state->inputFocusedBrush.get() : state->inputBrush.get();
-    }
-
-    if (brush)
-    {
-        return reinterpret_cast<INT_PTR>(brush);
-    }
-
-    return state->backgroundBrush ? reinterpret_cast<INT_PTR>(state->backgroundBrush.get()) : FALSE;
-}
-
-void EnsureRenameDialogEditFrame(HWND dlg, RenameDialogState* state, HWND edit) noexcept
-{
-    if (! dlg || ! state || ! edit)
-    {
-        return;
-    }
-
-    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
-    if (highContrast)
-    {
-        return;
-    }
-
-    RECT frameRc{};
-    if (state->editFrame && GetWindowRect(state->editFrame.get(), &frameRc))
-    {
-        MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&frameRc), 2);
-    }
-    else
-    {
-        if (! GetWindowRect(edit, &frameRc))
+        if (_ownerWindow && IsWindow(_ownerWindow) != FALSE)
         {
-            return;
-        }
-        MapWindowPoints(nullptr, dlg, reinterpret_cast<POINT*>(&frameRc), 2);
-    }
-
-    const int frameW = std::max(0l, frameRc.right - frameRc.left);
-    const int frameH = std::max(0l, frameRc.bottom - frameRc.top);
-    if (frameW <= 0 || frameH <= 0)
-    {
-        return;
-    }
-
-    const UINT dpi         = GetDpiForWindow(dlg);
-    const int framePadding = std::max(1, ThemedControls::ScaleDip(dpi, 2));
-
-    const int editW = std::max(1, frameW - 2 * framePadding);
-    const int editH = std::max(1, frameH - 2 * framePadding);
-
-    SetWindowPos(edit, nullptr, frameRc.left + framePadding, frameRc.top + framePadding, editW, editH, SWP_NOZORDER | SWP_NOACTIVATE);
-
-    if (! state->editFrame)
-    {
-        state->editFrame.reset(CreateWindowExW(0,
-                                               L"Static",
-                                               L"",
-                                               WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
-                                               frameRc.left,
-                                               frameRc.top,
-                                               frameW,
-                                               frameH,
-                                               dlg,
-                                               nullptr,
-                                               GetModuleHandleW(nullptr),
-                                               nullptr));
-        if (! state->editFrame)
-        {
-            return;
-        }
-
-        SetWindowPos(state->editFrame.get(), edit, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-        ThemedInputFrames::InstallFrame(state->editFrame.get(), edit, &state->inputFrameStyle);
-        return;
-    }
-
-    SetWindowPos(state->editFrame.get(), edit, frameRc.left, frameRc.top, frameW, frameH, SWP_NOACTIVATE);
-}
-
-INT_PTR OnRenameDialogInit(HWND dlg, RenameDialogState* state)
-{
-    if (! state)
-    {
-        return FALSE;
-    }
-
-    SetWindowLongPtrW(dlg, DWLP_USER, reinterpret_cast<LONG_PTR>(state));
-
-    ApplyTitleBarTheme(dlg, state->theme, GetActiveWindow() == dlg);
-    state->backgroundBrush.reset(CreateSolidBrush(state->theme.windowBackground));
-
-    const bool highContrast = state->theme.highContrast || state->theme.systemHighContrast;
-    if (! highContrast)
-    {
-        ThemedControls::EnableOwnerDrawButton(dlg, IDOK);
-        ThemedControls::EnableOwnerDrawButton(dlg, IDCANCEL);
-    }
-
-    const COLORREF surface             = ThemedControls::GetControlSurfaceColor(state->theme);
-    state->inputBackgroundColor        = ThemedControls::BlendColor(surface, state->theme.windowBackground, state->theme.dark ? 50 : 30, 255);
-    state->inputFocusedBackgroundColor = ThemedControls::BlendColor(state->inputBackgroundColor, state->theme.menu.text, state->theme.dark ? 20 : 16, 255);
-    state->inputDisabledBackgroundColor =
-        ThemedControls::BlendColor(state->theme.windowBackground, state->inputBackgroundColor, state->theme.dark ? 70 : 40, 255);
-
-    state->inputBrush.reset();
-    state->inputFocusedBrush.reset();
-    state->inputDisabledBrush.reset();
-    if (! highContrast)
-    {
-        state->inputBrush.reset(CreateSolidBrush(state->inputBackgroundColor));
-        state->inputFocusedBrush.reset(CreateSolidBrush(state->inputFocusedBackgroundColor));
-        state->inputDisabledBrush.reset(CreateSolidBrush(state->inputDisabledBackgroundColor));
-    }
-
-    state->inputFrameStyle.theme                        = &state->theme;
-    state->inputFrameStyle.backdropBrush                = state->backgroundBrush.get();
-    state->inputFrameStyle.inputBackgroundColor         = state->inputBackgroundColor;
-    state->inputFrameStyle.inputFocusedBackgroundColor  = state->inputFocusedBackgroundColor;
-    state->inputFrameStyle.inputDisabledBackgroundColor = state->inputDisabledBackgroundColor;
-
-    SetDlgItemTextW(dlg, IDOK, LoadStringResource(nullptr, IDS_BTN_OK).c_str());
-    SetDlgItemTextW(dlg, IDCANCEL, LoadStringResource(nullptr, IDS_BTN_CANCEL).c_str());
-
-    const HWND edit = GetDlgItem(dlg, IDC_FOLDERVIEW_RENAME_EDIT);
-    if (edit)
-    {
-        if (! highContrast)
-        {
-            const bool darkBackground = ChooseContrastingTextColor(state->theme.windowBackground) == RGB(255, 255, 255);
-            SetWindowTheme(edit, darkBackground ? L"DarkMode_Explorer" : L"Explorer", nullptr);
-            SendMessageW(edit, WM_THEMECHANGED, 0, 0);
-
-            PrepareFlatEditControl(edit);
-            PrepareEditMargins(edit);
-            EnsureRenameDialogEditFrame(dlg, state, edit);
-        }
-
-        SetWindowTextW(edit, state->currentName.c_str());
-        CenterMultilineEditTextVertically(edit);
-
-#pragma warning(push)
-#pragma warning(disable : 5039) // C5039: passing potentially-throwing callback to extern "C" Win32 API under -EHc
-        SetWindowSubclass(edit, RenameEditSubclassProc, kRenameEditSubclassId, 0);
-#pragma warning(pop)
-
-        int selectionEnd = -1;
-        if (! state->isDirectory)
-        {
-            const std::wstring_view nameView(state->currentName);
-            const size_t dotPos = nameView.find_last_of(L'.');
-            if (dotPos != std::wstring_view::npos && dotPos > 0 && dotPos + 1 < nameView.size())
+            const HWND focused = GetFocus();
+            if (focused && IsWindow(focused) != FALSE && (focused == _ownerWindow || IsChild(_ownerWindow, focused) != FALSE))
             {
-                if (dotPos <= static_cast<size_t>(std::numeric_limits<int>::max()))
-                {
-                    selectionEnd = static_cast<int>(dotPos);
-                }
+                _restoreFocusWindow = focused;
+            }
+            else if (! _restoreFocusWindow || IsWindow(_restoreFocusWindow) == FALSE ||
+                     (_restoreFocusWindow != _ownerWindow && IsChild(_ownerWindow, _restoreFocusWindow) == FALSE))
+            {
+                _restoreFocusWindow = _ownerWindow;
             }
         }
-
-        if (state->centerOnWindow)
+        else if (! _restoreFocusWindow || IsWindow(_restoreFocusWindow) == FALSE)
         {
-            CenterWindowOnOwner(dlg, state->centerOnWindow);
+            _restoreFocusWindow = nullptr;
+        }
+    }
+
+    [[nodiscard]] std::optional<std::wstring> ShowModal() noexcept
+    {
+        const HRESULT classHr = EnsureWindowClass();
+        if (FAILED(classHr))
+        {
+            return std::nullopt;
         }
 
-        SetFocus(edit);
-        SendMessageW(edit, EM_SETSEL, 0, static_cast<LPARAM>(selectionEnd));
-        return FALSE;
-    }
+        const DWORD style        = WS_CAPTION | WS_SYSMENU | WS_POPUP | WS_CLIPCHILDREN | WS_CLIPSIBLINGS;
+        const DWORD exStyle      = WS_EX_DLGMODALFRAME;
+        const UINT dpi           = _ownerWindow && IsWindow(_ownerWindow) != FALSE ? GetDpiForWindow(_ownerWindow) : GetDpiForSystem();
+        const int clientWidthPx  = ScaleForDpi(dpi, 420);
+        const int clientHeightPx = ScaleForDpi(dpi, 164);
 
-    if (state->centerOnWindow)
-    {
-        CenterWindowOnOwner(dlg, state->centerOnWindow);
-    }
-
-    return TRUE;
-}
-
-INT_PTR OnRenameDialogCommand(HWND dlg, RenameDialogState* state, UINT commandId)
-{
-    if (commandId == IDCANCEL)
-    {
-        EndDialog(dlg, IDCANCEL);
-        return TRUE;
-    }
-
-    if (commandId != IDOK)
-    {
-        return FALSE;
-    }
-
-    if (! state)
-    {
-        return FALSE;
-    }
-
-    wchar_t buffer[MAX_PATH] = {};
-    GetDlgItemTextW(dlg, IDC_FOLDERVIEW_RENAME_EDIT, buffer, static_cast<int>(std::size(buffer)));
-
-    std::wstring trimmed(buffer);
-    trimmed.erase(trimmed.begin(), std::find_if(trimmed.begin(), trimmed.end(), [](wchar_t ch) { return ! iswspace(ch); }));
-    trimmed.erase(std::find_if(trimmed.rbegin(), trimmed.rend(), [](wchar_t ch) { return ! iswspace(ch); }).base(), trimmed.end());
-
-    if (trimmed.empty())
-    {
-        MessageBeep(MB_ICONWARNING);
-        return TRUE;
-    }
-
-    state->newName = std::move(trimmed);
-    EndDialog(dlg, IDOK);
-    return TRUE;
-}
-
-INT_PTR CALLBACK RenameDialogProc(HWND dlg, UINT msg, WPARAM wParam, LPARAM lParam)
-{
-    auto* state = reinterpret_cast<RenameDialogState*>(GetWindowLongPtrW(dlg, DWLP_USER));
-
-    switch (msg)
-    {
-        case WM_INITDIALOG: return OnRenameDialogInit(dlg, reinterpret_cast<RenameDialogState*>(lParam));
-        case WM_CTLCOLORDLG: return OnRenameDialogCtlColorDialog(state);
-        case WM_CTLCOLORSTATIC: return OnRenameDialogCtlColorStatic(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
-        case WM_CTLCOLOREDIT: return OnRenameDialogCtlColorEdit(state, reinterpret_cast<HDC>(wParam), reinterpret_cast<HWND>(lParam));
-        case WM_NCACTIVATE:
-            if (state)
-            {
-                ApplyTitleBarTheme(dlg, state->theme, wParam != FALSE);
-            }
-            return FALSE;
-        case WM_DPICHANGED:
-            if (state)
-            {
-                const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
-                if (suggested)
-                {
-                    const int w = std::max(1l, suggested->right - suggested->left);
-                    const int h = std::max(1l, suggested->bottom - suggested->top);
-                    SetWindowPos(dlg, nullptr, suggested->left, suggested->top, w, h, SWP_NOZORDER | SWP_NOACTIVATE);
-                }
-
-                if (HWND edit = GetDlgItem(dlg, IDC_FOLDERVIEW_RENAME_EDIT))
-                {
-                    PrepareEditMargins(edit);
-                    EnsureRenameDialogEditFrame(dlg, state, edit);
-                    CenterMultilineEditTextVertically(edit);
-                }
-
-                if (state->centerOnWindow)
-                {
-                    CenterWindowOnOwner(dlg, state->centerOnWindow);
-                }
-
-                RedrawWindow(dlg, nullptr, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_FRAME | RDW_ALLCHILDREN);
-                return TRUE;
-            }
-            break;
-        case WM_DRAWITEM:
+        RECT bounds{0, 0, clientWidthPx, clientHeightPx};
+        if (AdjustWindowRectExForDpi(&bounds, style, FALSE, exStyle, dpi) == FALSE)
         {
-            if (! state || state->theme.highContrast || state->theme.systemHighContrast)
+            return std::nullopt;
+        }
+
+        const HWND hwnd = CreateWindowExW(exStyle,
+                                          kFolderViewRenamePromptClassName,
+                                          _captionText.c_str(),
+                                          style,
+                                          CW_USEDEFAULT,
+                                          CW_USEDEFAULT,
+                                          bounds.right - bounds.left,
+                                          bounds.bottom - bounds.top,
+                                          _ownerWindow,
+                                          nullptr,
+                                          GetModuleHandleW(nullptr),
+                                          this);
+        if (! hwnd)
+        {
+            return std::nullopt;
+        }
+        if (! _hWnd)
+        {
+            _hWnd.reset(hwnd);
+        }
+
+        CenterWindowOnOwner(_hWnd.get(), _ownerWindow);
+        static_cast<void>(_dxHost.PrimeForShow());
+        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+        UpdateWindow(_hWnd.get());
+        SetForegroundWindow(_hWnd.get());
+
+        MSG msg{};
+        while (! _done)
+        {
+            const BOOL getMessageResult = GetMessageW(&msg, nullptr, 0, 0);
+            if (getMessageResult == -1)
             {
+                return std::nullopt;
+            }
+            if (getMessageResult == 0)
+            {
+                _done = true;
                 break;
             }
 
-            auto* dis = reinterpret_cast<DRAWITEMSTRUCT*>(lParam);
-            if (! dis || dis->CtlType != ODT_BUTTON)
+            TranslateMessage(&msg);
+            DispatchMessageW(&msg);
+        }
+
+        return _acceptedText;
+    }
+
+    static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept
+    {
+        if (message == WM_NCCREATE)
+        {
+            auto* cs   = reinterpret_cast<CREATESTRUCTW*>(lParam);
+            auto* self = static_cast<FolderViewRenamePromptWindow*>(cs ? cs->lpCreateParams : nullptr);
+            if (! self)
             {
-                break;
+                return FALSE;
             }
 
-            ThemedControls::DrawThemedPushButton(*dis, state->theme);
+            SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(self));
+            if (! self->_hWnd)
+            {
+                self->_hWnd.reset(hwnd);
+            }
             return TRUE;
         }
-        case WM_COMMAND: return OnRenameDialogCommand(dlg, state, LOWORD(wParam));
+
+        auto* self = reinterpret_cast<FolderViewRenamePromptWindow*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+        if (! self)
+        {
+            return DefWindowProcW(hwnd, message, wParam, lParam);
+        }
+
+        bool handled     = false;
+        LRESULT dxResult = 0;
+        if (message != WM_CREATE)
+        {
+            dxResult = self->_dxHost.HandleMessage(hwnd, message, wParam, lParam, handled);
+        }
+        if (handled)
+        {
+            if (message == WM_SIZE || message == WM_DPICHANGED)
+            {
+                self->Layout();
+            }
+            return dxResult;
+        }
+
+        switch (message)
+        {
+            case WM_CREATE: return self->OnCreate(hwnd) ? 0 : -1;
+#ifdef ENABLE_TESTS
+            case WndMsg::kFolderViewRenamePromptDebug: return self->OnDebugCommand(static_cast<FolderViewRenamePromptDebugCommand>(wParam), lParam);
+#endif
+            case WM_SIZE: self->Layout(); return 0;
+            case WM_DPICHANGED:
+            {
+                const auto* suggested = reinterpret_cast<const RECT*>(lParam);
+                if (suggested)
+                {
+                    SetWindowPos(hwnd,
+                                 nullptr,
+                                 suggested->left,
+                                 suggested->top,
+                                 suggested->right - suggested->left,
+                                 suggested->bottom - suggested->top,
+                                 SWP_NOZORDER | SWP_NOACTIVATE);
+                }
+                self->Layout();
+                return 0;
+            }
+            case WM_ERASEBKGND: return 1;
+            case WM_NCACTIVATE: ApplyTitleBarTheme(hwnd, self->_theme, wParam != FALSE); return DefWindowProcW(hwnd, message, wParam, lParam);
+            case WM_CLOSE: self->Cancel(); return 0;
+            case WM_NCDESTROY:
+                if (self->_ownerWindow && IsWindow(self->_ownerWindow) != FALSE)
+                {
+                    static_cast<void>(SetActiveWindow(self->_ownerWindow));
+
+                    const HWND restoreFocus =
+                        (self->_restoreFocusWindow && IsWindow(self->_restoreFocusWindow) != FALSE &&
+                         (self->_restoreFocusWindow == self->_ownerWindow || IsChild(self->_ownerWindow, self->_restoreFocusWindow) != FALSE))
+                            ? self->_restoreFocusWindow
+                            : self->_ownerWindow;
+                    static_cast<void>(SetFocus(restoreFocus));
+                }
+                self->_dxHost.Detach();
+                if (self->_hWnd.get() == hwnd)
+                {
+                    self->_hWnd.release();
+                }
+                SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+                self->_done = true;
+                break;
+        }
+
+        return DefWindowProcW(hwnd, message, wParam, lParam);
     }
-    return FALSE;
-}
+
+private:
+    [[nodiscard]] static HRESULT EnsureWindowClass() noexcept
+    {
+        static ATOM atom = 0;
+        if (atom != 0)
+        {
+            return S_OK;
+        }
+
+        WNDCLASSEXW wc{};
+        wc.cbSize        = sizeof(wc);
+        wc.lpfnWndProc   = FolderViewRenamePromptWindow::WndProc;
+        wc.hInstance     = GetModuleHandleW(nullptr);
+        wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
+        wc.lpszClassName = kFolderViewRenamePromptClassName;
+        wc.style         = CS_DBLCLKS;
+
+        atom = RegisterClassExW(&wc);
+        return atom != 0 ? S_OK : HRESULT_FROM_WIN32(GetLastError());
+    }
+
+    [[nodiscard]] bool OnCreate(HWND hwnd) noexcept
+    {
+        if (! _dxHost.Attach(hwnd))
+        {
+            return false;
+        }
+
+        BuildUi();
+        if (! _captionText.empty())
+        {
+            SetWindowTextW(hwnd, _captionText.c_str());
+        }
+        ApplyTheme();
+        Layout();
+        if (_field)
+        {
+            _field->SetSelectionRange(0u, ResolveInitialSelectionEnd());
+        }
+        _dxHost.SetFocusControl(_field);
+        _dxHost.SetDefaultButton(_okButton);
+        _dxHost.SetCancelButton(_cancelButton);
+        return true;
+    }
+
+    void BuildUi() noexcept
+    {
+        if (_root != nullptr)
+        {
+            return;
+        }
+
+        using namespace RedSalamander::DxUi;
+
+        _rootStorage = std::make_unique<Panel>();
+        _root        = _rootStorage.get();
+
+        _label = _root->AddChild<Label>(LoadStringResource(nullptr, IDS_FOLDERVIEW_RENAME_LABEL));
+        _label->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+        _field = _root->AddChild<TextField>(_initialText);
+        _field->SetMultiline(false);
+        _field->SetAccessibleName(LoadStringResource(nullptr, IDS_FOLDERVIEW_RENAME_LABEL));
+
+        _okButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_OK));
+        _okButton->SetPrimary(true);
+        _okButton->SetOnClick([this] { Confirm(); });
+
+        _cancelButton = _root->AddChild<Button>(LoadStringResource(nullptr, IDS_BTN_CANCEL));
+        _cancelButton->SetOnClick([this] { Cancel(); });
+
+        _dxHost.SetRoot(std::move(_rootStorage));
+    }
+
+    void ApplyTheme() noexcept
+    {
+        _palette = MakeAppThemeDxPalette(_theme, _theme.windowBackground);
+        _dxHost.SetTheme(_palette);
+        if (_hWnd)
+        {
+            if (! _captionText.empty())
+            {
+                SetWindowTextW(_hWnd.get(), _captionText.c_str());
+            }
+            ApplyWindowChromeTheme(_hWnd.get(), _theme, WindowBackdropTarget::Tool, GetActiveWindow() == _hWnd.get());
+            static_cast<void>(RedrawWindow(_hWnd.get(), nullptr, nullptr, RDW_FRAME | RDW_INVALIDATE | RDW_UPDATENOW));
+        }
+    }
+
+    [[nodiscard]] size_t ResolveInitialSelectionEnd() const noexcept
+    {
+        if (_isDirectory)
+        {
+            return _initialText.size();
+        }
+
+        const size_t dot = _initialText.find_last_of(L'.');
+        if (dot == std::wstring::npos || dot == 0u)
+        {
+            return _initialText.size();
+        }
+
+        return dot;
+    }
+
+    void Layout() noexcept
+    {
+        if (! _root)
+        {
+            return;
+        }
+
+        const D2D1_RECT_F client = _dxHost.GetClientBoundsDip();
+        _root->SetBounds(client);
+
+        constexpr float kMarginDip       = 16.0f;
+        constexpr float kLabelHeightDip  = 22.0f;
+        constexpr float kFieldHeightDip  = 32.0f;
+        constexpr float kButtonHeightDip = 34.0f;
+        constexpr float kButtonWidthDip  = 96.0f;
+        constexpr float kGapDip          = 8.0f;
+
+        const float left  = client.left + kMarginDip;
+        const float right = std::max(left, client.right - kMarginDip);
+        float y           = client.top + kMarginDip;
+
+        if (_label)
+        {
+            _label->SetBounds(D2D1::RectF(left, y, right, y + kLabelHeightDip));
+        }
+        y += kLabelHeightDip + kGapDip;
+
+        if (_field)
+        {
+            _field->SetBounds(D2D1::RectF(left, y, right, y + kFieldHeightDip));
+        }
+
+        const float buttonsTop = std::max(y + kFieldHeightDip + kGapDip, client.bottom - kMarginDip - kButtonHeightDip);
+        const float cancelLeft = std::max(left, right - kButtonWidthDip);
+        const float okLeft     = std::max(left, cancelLeft - kGapDip - kButtonWidthDip);
+
+        if (_okButton)
+        {
+            _okButton->SetBounds(D2D1::RectF(okLeft, buttonsTop, okLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+        }
+        if (_cancelButton)
+        {
+            _cancelButton->SetBounds(D2D1::RectF(cancelLeft, buttonsTop, cancelLeft + kButtonWidthDip, buttonsTop + kButtonHeightDip));
+        }
+    }
+
+    void Confirm() noexcept
+    {
+        std::wstring text = _field ? std::wstring(_field->GetText()) : std::wstring{};
+        text              = TrimRenameText(std::move(text));
+        if (text.empty())
+        {
+            MessageBeep(MB_ICONWARNING);
+            if (_field)
+            {
+                _dxHost.SetFocusControl(_field);
+            }
+            return;
+        }
+
+        _acceptedText = std::move(text);
+        _done         = true;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            _hWnd.reset();
+        }
+    }
+
+    void Cancel() noexcept
+    {
+        _acceptedText.reset();
+        _done = true;
+        if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+        {
+            _hWnd.reset();
+        }
+    }
+
+#ifdef ENABLE_TESTS
+    LRESULT OnDebugCommand(FolderViewRenamePromptDebugCommand command, LPARAM lParam) noexcept
+    {
+        switch (command)
+        {
+            case FolderViewRenamePromptDebugCommand::GetSnapshot:
+            {
+                auto* snapshot = reinterpret_cast<FolderViewRenamePromptDebugSnapshot*>(lParam);
+                if (! snapshot)
+                {
+                    return FALSE;
+                }
+
+                snapshot->usesDxUiHost            = _dxHost.GetRoot() != nullptr;
+                snapshot->visibleChildWindowCount = 0u;
+                if (_hWnd && IsWindow(_hWnd.get()) != FALSE)
+                {
+                    EnumChildWindows(_hWnd.get(),
+                                     [](HWND child, LPARAM cookie) noexcept -> BOOL
+                    {
+                        if (IsWindowVisible(child) == FALSE)
+                        {
+                            return TRUE;
+                        }
+                        auto* count = reinterpret_cast<size_t*>(cookie);
+                        if (count)
+                        {
+                            *count += 1u;
+                        }
+                        return TRUE;
+                    },
+                                     reinterpret_cast<LPARAM>(&snapshot->visibleChildWindowCount));
+                }
+                snapshot->text = _field ? std::wstring(_field->GetText()) : std::wstring{};
+                if (_field)
+                {
+                    if (const auto selection = _field->GetSelectionRange(); selection.has_value())
+                    {
+                        snapshot->selectionStart = selection->first;
+                        snapshot->selectionEnd   = selection->second;
+                    }
+                    else
+                    {
+                        snapshot->selectionStart = snapshot->text.size();
+                        snapshot->selectionEnd   = snapshot->text.size();
+                    }
+
+                    RedSalamander::DxUi::TextFieldDebugSingleLinePaintState paintState{};
+                    if (_field->DebugGetSingleLinePaintState(_dxHost, paintState))
+                    {
+                        snapshot->textRect              = paintState.textRect;
+                        snapshot->selectionPaintRect    = paintState.selectionPaintRect;
+                        snapshot->horizontalScrollDip   = paintState.horizontalScrollDip;
+                        snapshot->hasSelectionPaintRect = paintState.hasSelectionPaintRect;
+                    }
+                }
+                return TRUE;
+            }
+            case FolderViewRenamePromptDebugCommand::SetText:
+            {
+                const auto* text = reinterpret_cast<const std::wstring*>(lParam);
+                if (! text || ! _field)
+                {
+                    return FALSE;
+                }
+
+                _field->SetTextAndNotify(*text);
+                _dxHost.SetFocusControl(_field);
+                return TRUE;
+            }
+            case FolderViewRenamePromptDebugCommand::Confirm: Confirm(); return TRUE;
+            case FolderViewRenamePromptDebugCommand::Cancel: Cancel(); return TRUE;
+        }
+
+        return FALSE;
+    }
+#endif
+
+    HWND _ownerWindow        = nullptr;
+    HWND _restoreFocusWindow = nullptr;
+    std::wstring _initialText;
+    bool _isDirectory = false;
+    std::wstring _captionText;
+    AppTheme _theme{};
+    RedSalamander::DxUi::ThemePalette _palette{};
+    wil::unique_hwnd _hWnd;
+    RedSalamander::DxUi::WindowHost _dxHost;
+    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
+    RedSalamander::DxUi::Panel* _root          = nullptr;
+    RedSalamander::DxUi::Label* _label         = nullptr;
+    RedSalamander::DxUi::TextField* _field     = nullptr;
+    RedSalamander::DxUi::Button* _okButton     = nullptr;
+    RedSalamander::DxUi::Button* _cancelButton = nullptr;
+    bool _done                                 = false;
+    std::optional<std::wstring> _acceptedText;
+};
 
 std::optional<std::wstring> PromptForRename(HWND owner, const std::wstring& currentName, bool isDirectory, const AppTheme& theme)
 {
-    RenameDialogState state{};
-    state.currentName = currentName;
-    state.isDirectory = isDirectory;
-    state.theme       = theme;
-
-    HWND rootOwner = owner ? GetAncestor(owner, GA_ROOT) : nullptr;
-    if (! rootOwner)
-    {
-        rootOwner = owner;
-    }
-    state.centerOnWindow = rootOwner;
-#pragma warning(push)
-// pointer or reference to potentially throwing function passed to 'extern "C"' function
-#pragma warning(disable : 5039)
-    INT_PTR result =
-        DialogBoxParamW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDD_FOLDERVIEW_RENAME), rootOwner, RenameDialogProc, reinterpret_cast<LPARAM>(&state));
-#pragma warning(pop)
-    if (result == IDOK && ! state.newName.empty())
-    {
-        return state.newName;
-    }
-    return std::nullopt;
+    FolderViewRenamePromptWindow prompt(owner, currentName, isDirectory, theme);
+    return prompt.ShowModal();
 }
 
 void AppendMultiSz(std::wstring& buffer, const std::wstring& path)

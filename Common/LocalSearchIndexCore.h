@@ -15,9 +15,18 @@ namespace LocalSearchIndexCore
 {
 struct VolumeIndex;
 
+enum class PersistentStoreKind : uint32_t
+{
+    SnapshotBinary = 1,
+    Sqlite         = 2,
+};
+
 struct RepositoryOptions final
 {
     std::wstring snapshotRootDirectory;
+    PersistentStoreKind persistentStoreKind = PersistentStoreKind::SnapshotBinary;
+    std::wstring sqliteDatabasePath;
+    bool sqliteAuthoritative = false;
 };
 
 enum class FileSystemKind : uint32_t
@@ -27,6 +36,45 @@ enum class FileSystemKind : uint32_t
     Refs        = 2,
 };
 
+enum class StoreState : uint32_t
+{
+    Unknown     = 0,
+    Ready       = 1,
+    Syncing     = 2,
+    Recovering  = 3,
+    Invalid     = 4,
+    Maintenance = 5,
+};
+
+enum class SyncPhase : uint32_t
+{
+    Idle        = 0,
+    Discovering = 1,
+    Loading     = 2,
+    Replaying   = 3,
+    Mirroring   = 4,
+    Watching    = 5,
+};
+
+enum class QueryExecutionMode : uint32_t
+{
+    Unknown          = 0,
+    Sqlite           = 1,
+    InMemoryIndex    = 2,
+    LiveScanFallback = 3,
+};
+
+enum class FallbackReason : uint32_t
+{
+    None           = 0,
+    StoreMissing   = 1,
+    StoreInvalid   = 2,
+    StoreStale     = 3,
+    CutoverBlocked = 4,
+    WarmupRunning  = 5,
+    SqliteFailure  = 6,
+};
+
 struct SupportInfo final
 {
     FileSystemKind fileSystemKind = FileSystemKind::Unsupported;
@@ -34,17 +82,59 @@ struct SupportInfo final
     std::wstring normalizedRootPath;
 };
 
+struct PersistentStoreInfo final
+{
+    PersistentStoreKind kind = PersistentStoreKind::SnapshotBinary;
+    std::wstring rootDirectory;
+    std::wstring primaryPath;
+    uint64_t primaryBytes = 0u;
+    std::wstring writeAheadLogPath;
+    uint64_t writeAheadLogBytes = 0u;
+    uint64_t pageCount          = 0u;
+    uint64_t freelistPageCount  = 0u;
+    std::wstring lastCheckpointUtc;
+    std::wstring lastCompactionUtc;
+    bool inspectionSucceeded                    = false;
+    bool readyForQueryCutover                   = false;
+    uint64_t indexedVolumeCount                 = 0u;
+    uint64_t indexedEntryCount                  = 0u;
+    uint64_t legacyImportVolumeCount            = 0u;
+    bool autoCheckpointEnabled                  = false;
+    uint64_t autoCheckpointTargetBytes          = 0u;
+    bool autoCompactionEnabled                  = false;
+    uint32_t autoCompactionFragmentationPercent = 0u;
+    uint64_t autoCompactionMinBytes             = 0u;
+};
+
+struct SqliteMaintenancePolicy final
+{
+    uint64_t autoCheckpointTargetBytes          = 0u;
+    uint32_t autoCompactionFragmentationPercent = 0u;
+    uint64_t autoCompactionMinBytes             = 0u;
+};
+
 struct QueryPlan final
 {
     std::wstring rootPath;
     std::wstring namePattern;
-    FileSystemSearchNameMode nameMode   = FILESYSTEM_SEARCH_NAME_DISABLED;
+    FileSystemSearchNameMode nameMode    = FILESYSTEM_SEARCH_NAME_DISABLED;
     const std::wregex* compiledNameRegex = nullptr;
-    bool matchCaseName                  = false;
-    bool recursive                      = false;
-    bool includeFiles                   = false;
-    bool includeDirectories             = false;
-    uint64_t maxResults                 = 0u;
+    bool matchCaseName                   = false;
+    bool recursive                       = false;
+    bool includeFiles                    = false;
+    bool includeDirectories              = false;
+    uint64_t maxResults                  = 0u;
+};
+
+enum CandidateMetadataFlags : uint32_t
+{
+    CANDIDATE_METADATA_NONE             = 0u,
+    CANDIDATE_METADATA_END_OF_FILE      = 0x1u,
+    CANDIDATE_METADATA_LAST_WRITE_TIME  = 0x2u,
+    CANDIDATE_METADATA_CREATION_TIME    = 0x4u,
+    CANDIDATE_METADATA_LAST_ACCESS_TIME = 0x8u,
+    CANDIDATE_METADATA_CHANGE_TIME      = 0x10u,
+    CANDIDATE_METADATA_ALLOCATION_SIZE  = 0x20u,
 };
 
 struct Candidate final
@@ -52,70 +142,176 @@ struct Candidate final
     std::wstring fullPath;
     std::wstring displayName;
     unsigned long fileAttributes = 0u;
+    uint32_t metadataFlags       = CANDIDATE_METADATA_NONE;
+    int64_t creationTime100ns    = 0;
+    int64_t lastAccessTime100ns  = 0;
+    int64_t endOfFile            = 0;
+    int64_t lastWriteTime100ns   = 0;
+    int64_t changeTime100ns      = 0;
+    int64_t allocationSize       = 0;
 };
 
 struct QueryStats final
 {
-    FileSystemKind fileSystemKind = FileSystemKind::Unsupported;
-    bool snapshotLoaded           = false;
-    bool snapshotSaved            = false;
-    bool journalAvailable         = false;
-    bool journalReplayApplied     = false;
-    bool rebuiltJournalIdMismatch = false;
-    bool rebuiltJournalRangeInvalid = false;
-    bool rebuiltSnapshotCorruption  = false;
-    bool usedNtfsEnumeration        = false;
-    bool usedTraversalSeed          = false;
-    uint64_t entryCount             = 0u;
-    uint64_t fileCount              = 0u;
-    uint64_t directoryCount         = 0u;
-    uint64_t candidateCount         = 0u;
-    uint64_t nextUsn                = 0u;
-    uint64_t journalId              = 0u;
-    uint64_t snapshotFileBytes      = 0u;
-    uint64_t estimatedMemoryBytes   = 0u;
-    uint32_t ensureReadyDurationMs  = 0u;
-    uint32_t executeQueryDurationMs = 0u;
+    FileSystemKind fileSystemKind         = FileSystemKind::Unsupported;
+    bool snapshotLoaded                   = false;
+    bool snapshotSaved                    = false;
+    bool usedSqliteStore                  = false;
+    bool sqliteReadOnlyQuery              = false;
+    bool usedLiveScanFallback             = false;
+    bool usedNamePrefilter                = false;
+    bool sqliteCutoverBlocked             = false;
+    bool journalAvailable                 = false;
+    bool journalReplayApplied             = false;
+    bool rebuiltJournalIdMismatch         = false;
+    bool rebuiltJournalRangeInvalid       = false;
+    bool rebuiltSnapshotCorruption        = false;
+    bool usedNtfsEnumeration              = false;
+    bool usedTraversalSeed                = false;
+    uint64_t entryCount                   = 0u;
+    uint64_t fileCount                    = 0u;
+    uint64_t directoryCount               = 0u;
+    uint64_t candidateCount               = 0u;
+    uint64_t nextUsn                      = 0u;
+    uint64_t journalId                    = 0u;
+    uint64_t snapshotFileBytes            = 0u;
+    uint64_t estimatedMemoryBytes         = 0u;
+    uint32_t ensureReadyDurationMs        = 0u;
+    uint32_t executeQueryDurationMs       = 0u;
+    QueryExecutionMode queryExecutionMode = QueryExecutionMode::Unknown;
+    FallbackReason fallbackReason         = FallbackReason::None;
     std::wstring snapshotPath;
 };
 
-using CancelCheckFn = HRESULT(STDMETHODCALLTYPE*)(void* cookie) noexcept;
+using CancelCheckFn       = HRESULT(STDMETHODCALLTYPE*)(void* cookie) noexcept;
+using CandidateCallbackFn = HRESULT(STDMETHODCALLTYPE*)(Candidate* candidate, void* cookie) noexcept;
 
-#ifdef _DEBUG
+struct ProgressUpdate final
+{
+    FileSystemSearchPhase phase           = FILESYSTEM_SEARCH_PHASE_INITIALIZING;
+    uint32_t warningFlags                 = FILESYSTEM_SEARCH_WARNING_NONE;
+    HRESULT statusHint                    = S_OK;
+    uint64_t scannedDirectories           = 0u;
+    uint64_t scannedFiles                 = 0u;
+    uint64_t candidateFiles               = 0u;
+    uint64_t matchedEntries               = 0u;
+    StoreState storeState                 = StoreState::Unknown;
+    SyncPhase syncPhase                   = SyncPhase::Idle;
+    QueryExecutionMode queryExecutionMode = QueryExecutionMode::Unknown;
+    FallbackReason fallbackReason         = FallbackReason::None;
+    uint64_t completedRoots               = 0u;
+    uint64_t totalRoots                   = 0u;
+    std::wstring activeRoot;
+    std::wstring currentPath;
+};
+
+using ProgressCallbackFn = HRESULT(STDMETHODCALLTYPE*)(const ProgressUpdate* progress, void* cookie) noexcept;
+
+struct RepositoryStatus final
+{
+    StoreState storeState                 = StoreState::Unknown;
+    SyncPhase syncPhase                   = SyncPhase::Idle;
+    QueryExecutionMode queryExecutionMode = QueryExecutionMode::Unknown;
+    FallbackReason fallbackReason         = FallbackReason::None;
+    uint64_t completedRoots               = 0u;
+    uint64_t totalRoots                   = 0u;
+    std::wstring activeRoot;
+};
+
+[[nodiscard]] std::wstring_view GetPersistentStoreKindText(PersistentStoreKind kind) noexcept;
+[[nodiscard]] std::wstring_view GetStoreStateText(StoreState state) noexcept;
+[[nodiscard]] std::wstring_view GetSyncPhaseText(SyncPhase phase) noexcept;
+[[nodiscard]] std::wstring_view GetQueryExecutionModeText(QueryExecutionMode mode) noexcept;
+[[nodiscard]] std::wstring_view GetFallbackReasonText(FallbackReason reason) noexcept;
+[[nodiscard]] SqliteMaintenancePolicy GetDefaultSqliteMaintenancePolicy() noexcept;
+[[nodiscard]] PersistentStoreInfo GetPersistentStoreInfo(const RepositoryOptions& options) noexcept;
+[[nodiscard]] std::vector<std::wstring> DiscoverFixedLocalRoots() noexcept;
+
+#ifdef ENABLE_TESTS
 enum class SnapshotCorruptionMode : uint32_t
 {
     InvalidMagic,
     JournalIdMismatch,
     NextUsnPastEnd,
 };
+
+struct DirectSqliteFreshnessProbe final
+{
+    bool storedVolumeReady       = false;
+    bool currentJournalKnown     = false;
+    bool currentJournalAvailable = false;
+    uint64_t storedJournalId     = 0u;
+    uint64_t storedNextUsn       = 0u;
+    uint64_t currentJournalId    = 0u;
+    uint64_t currentFirstUsn     = 0u;
+    uint64_t currentNextUsn      = 0u;
+};
+
+[[nodiscard]] bool ShouldAllowDirectSqliteQueryForTests(const DirectSqliteFreshnessProbe& probe) noexcept;
 #endif
 
 class Repository final
 {
 public:
     explicit Repository(RepositoryOptions options = {}) noexcept;
-    ~Repository()                           = default;
-    Repository(const Repository&)           = delete;
-    Repository(Repository&&)                = delete;
+    ~Repository()                            = default;
+    Repository(const Repository&)            = delete;
+    Repository(Repository&&)                 = delete;
     Repository& operator=(const Repository&) = delete;
-    Repository& operator=(Repository&&)     = delete;
+    Repository& operator=(Repository&&)      = delete;
 
     HRESULT ProbePath(std::wstring_view rootPath, SupportInfo& outSupport) noexcept;
     HRESULT Query(const QueryPlan& plan,
                   CancelCheckFn cancelCheck,
                   void* cancelCookie,
                   std::vector<Candidate>& outCandidates,
-                  QueryStats* outStats) noexcept;
+                  QueryStats* outStats,
+                  ProgressCallbackFn progressCallback = nullptr,
+                  void* progressCookie                = nullptr) noexcept;
+    HRESULT Enumerate(const QueryPlan& plan,
+                      CancelCheckFn cancelCheck,
+                      void* cancelCookie,
+                      CandidateCallbackFn candidateCallback,
+                      void* candidateCookie,
+                      QueryStats* outStats,
+                      ProgressCallbackFn progressCallback = nullptr,
+                      void* progressCookie                = nullptr) noexcept;
+    HRESULT EnumerateNoWait(const QueryPlan& plan,
+                            CancelCheckFn cancelCheck,
+                            void* cancelCookie,
+                            CandidateCallbackFn candidateCallback,
+                            void* candidateCookie,
+                            QueryStats* outStats,
+                            ProgressCallbackFn progressCallback = nullptr,
+                            void* progressCookie                = nullptr) noexcept;
+    HRESULT PrimeRoot(std::wstring_view rootPath) noexcept;
+    void CollectCachedRoots(std::vector<std::wstring>& outRoots) noexcept;
+    void GetStatus(RepositoryStatus& outStatus) noexcept;
+    HRESULT EnsureReadyForRoot(std::wstring_view rootPath,
+                               CancelCheckFn cancelCheck,
+                               void* cancelCookie,
+                               QueryStats* outStats,
+                               ProgressCallbackFn progressCallback = nullptr,
+                               void* progressCookie                = nullptr) noexcept;
     HRESULT InvalidateRoot(std::wstring_view rootPath, bool deleteSnapshot) noexcept;
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     HRESULT DropCachedVolumeForTests(std::wstring_view rootPath) noexcept;
     HRESULT CorruptSnapshotForTests(std::wstring_view rootPath, SnapshotCorruptionMode mode) noexcept;
 #endif
 
 private:
+    HRESULT AcquireOrCreateVolume(const SupportInfo& support, std::shared_ptr<VolumeIndex>& outVolume) noexcept;
+    PersistentStoreInfo GetCachedPersistentStoreInfo() noexcept;
+    void RefreshCachedPersistentStoreInfo() noexcept;
+    void InvalidateCachedPersistentStoreInfo() noexcept;
+
     RepositoryOptions _options;
     std::mutex _mutex;
     std::unordered_map<std::wstring, std::shared_ptr<VolumeIndex>> _volumes;
+    PersistentStoreInfo _cachedPersistentStoreInfo;
+    bool _cachedPersistentStoreInfoValid = false;
+    std::mutex _statusMutex;
+    RepositoryStatus _runtimeStatus;
 };
 } // namespace LocalSearchIndexCore
