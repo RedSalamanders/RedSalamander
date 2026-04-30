@@ -2,8 +2,7 @@ name: Squad Insider Release
 # dotnet project — configure build, test, and insider release commands below
 
 on:
-  push:
-    branches: [insider]
+  workflow_dispatch: # disabled — not yet adapted for this project
 
 permissions:
   contents: write
