@@ -258,15 +258,15 @@ jobs:
           $buildScript = Join-Path $env:GITHUB_WORKSPACE "build.ps1"
           if (-not (Test-Path $buildScript)) { throw "build.ps1 not found at: $buildScript" }
 
-          $buildArgs = @(
-            "-Configuration", "${{ inputs.configuration }}",
-            "-Platform", "${{ inputs.platform }}"
-          )
+          $buildArgs = @{
+            Configuration = "${{ inputs.configuration }}"
+            Platform      = "${{ inputs.platform }}"
+          }
           if ("${{ inputs.build_number }}" -ne "") {
-            $buildArgs += @("-BuildNumber", "${{ inputs.build_number }}")
+            $buildArgs["BuildNumber"] = "${{ inputs.build_number }}"
           }
           if ("${{ inputs.official_release }}" -eq "true") {
-            $buildArgs += "-OfficialRelease"
+            $buildArgs["OfficialRelease"] = $true
           }
 
           & $buildScript @buildArgs
