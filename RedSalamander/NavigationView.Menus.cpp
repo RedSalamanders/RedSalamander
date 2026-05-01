@@ -1141,6 +1141,63 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp)
         return true;
     };
 
+    const auto tryAppendCommonFoldersMenu = [&]() noexcept
+    {
+        if (isFilePluginShortId || nextId > ID_NAV_MENU_MAX)
+        {
+            return;
+        }
+
+        const std::wstring label = LoadStringResource(nullptr, IDS_MENU_COMMON_FOLDERS);
+        if (label.empty())
+        {
+            return;
+        }
+
+        const std::optional<NavigationMenuSnapshot> fileMenuOpt = TryGetFileSystemNavigationMenuItems();
+        if (! fileMenuOpt.has_value())
+        {
+            return;
+        }
+
+        const size_t actionCountBefore = _navigationMenuActions.size();
+        const UINT nextIdBefore        = nextId;
+        std::vector<RedSalamander::DxUi::MenuFlyoutItem> commonFolderChildren;
+        commonFolderChildren.reserve(std::min<unsigned int>(fileMenuOpt.value().count, 8u));
+
+        const unsigned int fileCount = fileMenuOpt.value().count;
+        for (unsigned int i = 0; i < fileCount; ++i)
+        {
+            const NavigationMenuItem& item = fileMenuOpt.value().items[i];
+            if ((item.flags & NAV_MENU_ITEM_FLAG_SEPARATOR) != 0)
+            {
+                break;
+            }
+
+            if ((item.flags & NAV_MENU_ITEM_FLAG_HEADER) != 0 || item.path == nullptr || item.path[0] == L'\0')
+            {
+                continue;
+            }
+
+            if (! appendNavigationItem(commonFolderChildren, item, ID_NAV_MENU_MAX, L"Common folders submenu"))
+            {
+                break;
+            }
+        }
+
+        if (commonFolderChildren.empty())
+        {
+            _navigationMenuActions.resize(actionCountBefore);
+            nextId = nextIdBefore;
+            return;
+        }
+
+        RedSalamander::DxUi::MenuFlyoutItem submenu{};
+        submenu.text     = label;
+        submenu.children = std::move(commonFolderChildren);
+        popupItems.push_back(std::move(submenu));
+    };
+
     for (unsigned int i = 0; i < count; ++i)
     {
         const NavigationMenuItem& item = items[i];
@@ -1201,6 +1258,8 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp)
     }
     else
     {
+        tryAppendCommonFoldersMenu();
+
         if (! goToItemAdded)
         {
             tryAppendGoToMenu(ID_NAV_MENU_MAX);

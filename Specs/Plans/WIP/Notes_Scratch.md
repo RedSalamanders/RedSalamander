@@ -8,12 +8,10 @@ LET IT ALONE THERE (HUMAN MANAGED)
 
 
 ------------------------------------------------------------------------------------------------------
-## Acrylic for all windows
-- Title bar, menu, context menu, dialog box, etc ... all windows should have acrylic/Mica/Mica Alt effect when the setting is activated
-- File Operation window should have acrylic background effect when the setting is activated
-- Preferences Settings window should have acrylic background effect when the setting is activated
-- Connection window should have acrylic background effect when the setting is activated
-
+## IMAP 
+- display received date time as file time
+- display email size as file size
+- display email subject as file name
 
 
 ------------------------------------------------------------------------------------------------------
@@ -627,6 +625,12 @@ for (const auto& source : sources)
 # DONE
 
 
+------------------------------------------------------------------------------------------------------
+## DONE Acrylic for all windows
+- Title bar, menu, context menu, dialog box, etc ... all windows should have acrylic/Mica/Mica Alt effect when the setting is activated
+- File Operation window should have acrylic background effect when the setting is activated
+- Preferences Settings window should have acrylic background effect when the setting is activated
+- Connection window should have acrylic background effect when the setting is activated
 
 ------------------------------------------------------------------------------------------------------
 ## DONE Rename dialog

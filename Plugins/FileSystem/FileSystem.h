@@ -117,6 +117,7 @@ private:
 class FileSystem final : public IFileSystem,
                          public IFileSystemSearch,
                          public IFileSystemIO,
+                         public IFileSystemItemStreams,
                          public IFileSystemDirectoryOperations,
                          public IFileSystemDirectoryWatch,
                          public IInformations,
@@ -223,6 +224,7 @@ public:
     HRESULT STDMETHODCALLTYPE SetFileBasicInformation(const wchar_t* path, const FileSystemBasicInformation* info) noexcept override;
 
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE DeleteItemStream(const wchar_t* path, const wchar_t* streamName) noexcept override;
 
     HRESULT STDMETHODCALLTYPE GetCapabilities(const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE GetTransferHints(const wchar_t* path,

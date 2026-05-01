@@ -3,6 +3,7 @@
 
 #include <chrono>
 #include <fcntl.h>
+#include <format>
 #include <io.h>
 #include <iomanip>
 #include <iostream>
@@ -382,14 +383,15 @@ int main(int argc, char** argv)
         const DWORD exceptionCode    = GetExceptionCode();
         const wchar_t* exceptionName = exception::GetExceptionName(exceptionCode);
 
-        wchar_t errorMsg[512];
-        swprintf_s(errorMsg,
-                   512,
-                   L"Fatal Exception in MonitorTest\n\n"
-                   L"Exception: %s (0x%08X)\n\n"
-                   L"The application will now terminate.",
-                   exceptionName,
-                   static_cast<unsigned>(exceptionCode));
+        wchar_t errorMsg[512]{};
+        const auto formatted = std::format_to_n(errorMsg,
+                                                _countof(errorMsg) - 1u,
+                                                L"Fatal Exception in MonitorTest\n\n"
+                                                L"Exception: {} (0x{:08X})\n\n"
+                                                L"The application will now terminate.",
+                                                exceptionName,
+                                                static_cast<unsigned>(exceptionCode));
+        *formatted.out       = L'\0';
 
         // Try to output to both console and debug output
         std::wcerr << errorMsg << L"\n";

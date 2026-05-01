@@ -94,6 +94,20 @@ FolderWindow is responsible for routing user-action errors to the most relevant 
 - **Window/app modal dialogs**: confirmations and startup/fatal errors remain blocking dialogs (scoped to the appropriate owner window).
 - **Inline validation in modal dialogs**: input validation errors are displayed within the active dialog/control (no secondary message box).
 
+## Item Properties Dialog
+
+- `Alt+Enter` / Properties opens a themed DxUi dialog for the focused pane item when the active filesystem supports `IFileSystemIO::GetItemProperties`.
+- Property content is presented as card sections with the section name above, not inside, the card. Each regular section uses two-column rows (`key` / `value`) with a larger section title, so values are scannable without relying on a plain multiline text dump.
+- Compact sections such as Timestamps and Attributes are laid out side by side when the dialog is wide enough, and stack vertically on narrow widths.
+- Long values, especially item names and paths, wrap within the value column and grow the containing row/card instead of clipping or drawing past the card edge.
+- The built-in local filesystem General section avoids duplicate rows for parent path, root, and extension; it shows name, full path, type, and file size when applicable.
+- Built-in local filesystem file sizes use the same compact units as the folder view and include the exact byte count in parentheses for sizes of 1 KB and larger.
+- The dialog footer uses a compact Close button; Enter and Escape route to Close.
+- When named streams are present, the dialog includes a Streams card. It lists every named stream surfaced by the filesystem with stream name and size. The unnamed default data stream is not shown.
+- If no named streams are present, the dialog omits the Streams section rather than showing an empty card.
+- If the active filesystem implements `IFileSystemItemStreams` and a stream row has `canRemove=true`, the row exposes an enabled Remove button. Remove deletes that stream via the filesystem interface, refreshes properties in place, and removes the row from the card.
+- If stream deletion fails, the dialog keeps the row visible and shows an error message with the failing HRESULT.
+
 ### Drive connect/disconnect
 
 - FolderWindow refreshes affected panes on `WM_DEVICECHANGE` volume events (USB removal, mapped-drive removal) to force a background re-enumeration and surface the FolderView “Disconnected” in-pane overlay when the location is no longer available.

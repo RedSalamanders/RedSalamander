@@ -31,6 +31,7 @@
 #include "FluentIcons.h"
 #include "Helpers.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 extern HINSTANCE g_hInstance;
@@ -1881,6 +1882,12 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_DESTROY: OnDestroy(); return 0;
         case WM_SIZE: OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp))); return 0;
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 520, 360);
+            }
+            return 0;
         case WM_PAINT: OnPaint(); return 0;
         case WM_ERASEBKGND: return _allowEraseBkgnd ? DefWindowProcW(hwnd, msg, wp, lp) : 1;
         case WM_CLOSE: static_cast<void>(Close()); return 0;

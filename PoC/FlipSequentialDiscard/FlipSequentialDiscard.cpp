@@ -29,6 +29,8 @@
 #include <windows.h>
 #include <windowsx.h>
 
+#include "../../Common/WindowSizing.h"
+
 #pragma warning(push)
 // WRL: C4625 (copy ctor deleted), C4626 (copy assign deleted), C5026 (move ctor deleted), C5027 (move assign deleted)
 #pragma warning(disable : 4625 4626 5026 5027)
@@ -1085,6 +1087,12 @@ LRESULT CALLBACK WndProc(HWND h, UINT m, WPARAM w, LPARAM l)
     switch (m)
     {
         case WM_SIZE: return OnMainWindowSize(LOWORD(l), HIWORD(l));
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(l))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(h, *info, 640, 360);
+            }
+            return 0;
         case WM_TIMER: return OnMainWindowTimer();
         case WM_VSCROLL: return OnMainWindowVScroll(LOWORD(w), HIWORD(w));
         case WM_MOUSEWHEEL: return OnMainWindowMouseWheel(GET_WHEEL_DELTA_WPARAM(w));

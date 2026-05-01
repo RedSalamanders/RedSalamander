@@ -29,8 +29,8 @@ jobs:
           } else {
             $version = "${{ github.event.release.tag_name }}".TrimStart('v')
           }
-          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Host "Version: $version"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "Version: $version"
 
       - name: Download release assets
         shell: pwsh

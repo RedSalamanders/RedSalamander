@@ -119,6 +119,16 @@ Security note:
 - For a **single** top-level directory copy/move or delete, contained file work SHOULD still parallelize (within-folder parallelism) subject to the effective concurrency limits.
 - SCP has protocol limitations; directory listing and command-style operations require the server to support SFTP over SSH.
 
+## Properties Metadata
+
+- `GetItemProperties` returns structured sections for general item data, remote/display paths, connection metadata, and any available protocol-specific metadata.
+- FTP, SFTP, and SCP directory-listing timestamps are best-effort:
+  - Unix-style and DOS-style listing timestamps populate `lastWriteTime` when parseable.
+  - The plugin MUST NOT synthesize creation, access, or change timestamps when the remote listing does not provide them.
+  - Unavailable timestamp fields MUST be omitted from the properties JSON instead of emitted as `0`.
+- SCP uses the SFTP command/listing path for directory metadata, so the same timestamp rules apply to SCP directory entries.
+- IMAP-specific property rules are documented in `Specs/FileSystem/FileSystem_Imap.md`.
+
 ## Connection Manager Integration
 
 All four protocols support host-reserved navigation:

@@ -68,7 +68,7 @@ The Commands suite is split into logical `.cpp` family files included from the m
 - `SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp` — Shortcuts window (31 cases)
 - `SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp` — View commands, selection, sort, pane, tabs (28 cases)
 - `SelfTest\Commands\Commands.SelfTest.FileOps.cpp` — File operations issues pane, speed limit prompt (21 cases)
-- `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` — Navigation location, GoTo, navigation/drive menu shell stability, Escape focus reclaim to the active FolderView, navigation-menu `Go to >` placement before drive rows, and directory-impact selection preservation
+- `SelfTest\Commands\Commands.SelfTest.Navigation.cpp` — Navigation location, GoTo, navigation/drive menu shell stability, Escape focus reclaim to the active FolderView, navigation-menu `Go to >` placement before drive rows, nonstandard file-system `Common Folders` submenu coverage, and directory-impact selection preservation
 - `SelfTest\Commands\Commands.SelfTest.Dialogs.cpp` — About, fatal error, splash, change case, filter, rename, including long initial rename-selection clipping, etc. (48 cases)
 
 The suitetests UI automation, dialog interactions, preferences, shortcuts,
@@ -197,7 +197,7 @@ Connection Manager closeout requires:
 | `cmd_connection_credential_prompt_pointer_click_toggles_secret_visibility` | Secret visibility toggle |
 | `cmd_connection_credential_prompt_theme_cycle_keeps_surface_legible` | Theme cycle surface legibility and shared tool-window backdrop application |
 
-### 1.6 Pane Commands (16 cases)
+### 1.6 Pane Commands (17 cases)
 
 | Case Name | Coverage Area |
 |-----------|---------------|
@@ -210,6 +210,7 @@ Connection Manager closeout requires:
 | `cmd_pane_navigationView_region_tab_traversal` | Navigation region tab order |
 | `cmd_pane_navigation_ambient_escape_returns_focus_to_active_folder_view` | Escape from main-window chrome restores active pane FolderView focus without clearing selection |
 | `cmd_pane_navigation_menu_escape_returns_focus_to_active_folder_view` | Escape from the keyboard-owned pane menu restores active pane FolderView focus without clearing selection |
+| `cmd_pane_navigation_nonstandard_menu_common_folders` | Nonstandard file-system NavigationView menus expose a `Common Folders` submenu with local known-folder rows and stock icons |
 | `cmd_pane_navigation_status_bar_keeps_navigation_shell_stable` | Status bar focused-item detail updates, typography fit/no-clipping guard, and inactive-pane dimming |
 | `cmd_pane_statusBar_uses_owned_window_and_sort_click_opens_menu` | Owned pane status-bar surface, no retained native font assignment, DxUI sort popup opening, readable popup debug state, and above-status-bar popup placement |
 | `cmd_pane_navigation_directory_impact_preserves_selection` | Directory-impact refresh preserves surviving selection, drops deleted names, follows same-folder rename chains of depth 3+, and keeps renamed unselected originals unselected |
@@ -686,7 +687,7 @@ These cases skip when connection profiles or secrets are absent.
 | **DxUi Framework** | ✅ | — | — | — | ✅ |
 | **Preferences** | ✅ ~100 | — | — | — | — |
 | **Shortcuts** | ✅ 30 | — | — | — | — |
-| **Navigation** | ✅ 14 | — | — | — | — |
+| **Navigation** | ✅ 15 | — | — | — | — |
 | **Find/Search UI** | ✅ 46 | — | — | — | — |
 | **Compare Engine** | — | ✅ 35+ | — | — | — |
 | **Search Backends** | — | ✅ 50+ | — | — | — |

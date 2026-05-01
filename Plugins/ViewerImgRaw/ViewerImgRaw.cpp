@@ -51,6 +51,7 @@
 #include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 using RedSalamander::DxUi::ComboBox;
@@ -999,6 +1000,12 @@ LRESULT ViewerImgRaw::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
 #endif
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_SIZE: OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp))); return 0;
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 520, 360);
+            }
+            return 0;
         case WM_COMMAND: OnCommand(hwnd, static_cast<UINT>(LOWORD(wp)), static_cast<UINT>(HIWORD(wp)), reinterpret_cast<HWND>(lp)); return 0;
         case WM_LBUTTONDOWN: OnLButtonDown(hwnd, static_cast<int>(static_cast<short>(LOWORD(lp))), static_cast<int>(static_cast<short>(HIWORD(lp)))); return 0;
         case WM_LBUTTONDBLCLK:

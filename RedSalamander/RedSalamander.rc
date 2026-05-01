@@ -36,7 +36,7 @@ IDI_REDSALAMANDER       ICON                    "res\\logo_debug.ico"
 
 IDI_SMALL               ICON                    "res\\logo_debug.ico"
 
-IDI_SPLASH_LOGO_ICON    ICON                    "res\\logo_big.ico"
+IDI_SPLASH_LOGO_ICON    ICON                    "res\\logo_big_debug.ico"
 #else
 IDI_REDSALAMANDER       ICON                    "res\\logo.ico"
 
@@ -1033,6 +1033,7 @@ BEGIN
     IDS_MENU_CHANGE_DRIVE   "Change &Drive"
     IDS_MENU_CONNECTIONS "Connections"
     IDS_MENU_CONNECTIONS_ELLIPSIS "Connections Manager..."
+    IDS_MENU_COMMON_FOLDERS "Common Folders"
     IDS_MENU_GO_TO         "Go to"
     IDS_MENU_GO_TO_BACK    "Back"
     IDS_MENU_GO_TO_FORWARD "Forward"
@@ -1170,6 +1171,15 @@ BEGIN
     IDS_PROPERTIES_COL_KEY                               "Property"
     IDS_PROPERTIES_COL_VALUE                             "Value"
     IDS_PROPERTIES_BTN_CLOSE                             "Close"
+    IDS_PROPERTIES_STREAMS_TITLE                         "Streams"
+    IDS_PROPERTIES_STREAMS_EMPTY                         "No alternate data streams"
+    IDS_PROPERTIES_STREAM_REMOVE                         "Remove"
+    IDS_PROPERTIES_LOADING                               "Loading properties..."
+    IDS_FMT_PROPERTIES_STREAM_REMOVE_FAILED              "Could not remove stream ""{0}"".\r\n\r\nError: 0x{1:08X}"
+    IDS_PROPERTIES_STREAM_VIEW                           "View"
+    IDS_FMT_PROPERTIES_STREAM_VIEW_FAILED                "Could not open stream ""{0}"" in ViewerText.\r\n\r\nError: 0x{1:08X}"
+    IDS_FMT_PROPERTIES_LOAD_FAILED                       "Could not load properties.\r\n\r\nError: 0x{0:08X}"
+    IDS_PROPERTIES_COPY_HINT                             "Press Ctrl+C to copy all information."
     IDS_CAPTION_CREATE_DIR                               "Create Folder"
     IDS_LABEL_CREATE_DIR_IN                              "Create in:"
     IDS_LABEL_CREATE_DIR_NAME                            "Folder name:"

@@ -3,12 +3,20 @@
 #include <windows.h>
 
 #include "../../Common/WindowMessages.h"
+#include "../../Common/WindowSizing.h"
 
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Security.Credentials.UI.h>
 #include <winrt/base.h>
 
 #include <userconsentverifierinterop.h> // IUserConsentVerifierInterop
+
+#include <exception>
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626 5026 5027 4514 28182)
+#include <wil/resource.h>
+#pragma warning(pop)
 
 #pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "RuntimeObject.lib")
@@ -40,17 +48,35 @@ static bool SaveGenericCredential(const std::wstring& targetName, const std::wst
 
 static bool LoadGenericCredential(const std::wstring& targetName, std::wstring& userNameOut, std::wstring& secretOut)
 {
-    PCREDENTIALW pcred = nullptr;
-    if (! CredReadW(targetName.c_str(), CRED_TYPE_GENERIC, 0, &pcred))
-        return false;
+    userNameOut.clear();
+    secretOut.clear();
 
-    userNameOut = pcred->UserName ? pcred->UserName : L"";
+    PCREDENTIALW rawCredential = nullptr;
+    if (! CredReadW(targetName.c_str(), CRED_TYPE_GENERIC, 0, &rawCredential))
+    {
+        return false;
+    }
+
+    wil::unique_any<PCREDENTIALW, decltype(&::CredFree), ::CredFree> credential(rawCredential);
+
+    userNameOut = credential.get()->UserName ? credential.get()->UserName : L"";
 
     // We stored UTF-16 chars (wchar_t) in CredentialBlob.
-    const wchar_t* blob = reinterpret_cast<const wchar_t*>(pcred->CredentialBlob);
-    secretOut           = blob ? blob : L"";
+    const BYTE* blobBytes = credential.get()->CredentialBlob;
+    const DWORD byteCount = credential.get()->CredentialBlobSize;
+    if (! blobBytes || byteCount < sizeof(wchar_t) || (byteCount % sizeof(wchar_t)) != 0)
+    {
+        return false;
+    }
 
-    CredFree(pcred);
+    const size_t charCount = static_cast<size_t>(byteCount / sizeof(wchar_t));
+    const wchar_t* blob    = reinterpret_cast<const wchar_t*>(blobBytes);
+    if (blob[charCount - 1u] != L'\0')
+    {
+        return false;
+    }
+
+    secretOut.assign(blob, charCount - 1u);
     return true;
 }
 
@@ -158,7 +184,16 @@ static void BeginHelloVerification(HWND hwnd)
         {
             avail = op.GetResults();
         }
-        catch (...)
+        catch (const winrt::hresult_error&)
+        {
+            PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::DeviceNotPresent, 0);
+            return;
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::exception&)
         {
             PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::DeviceNotPresent, 0);
             return;
@@ -197,7 +232,15 @@ static void BeginHelloVerification(HWND hwnd)
                     {
                         res = vop.GetResults();
                     }
-                    catch (...)
+                    catch (const winrt::hresult_error&)
+                    {
+                        res = UserConsentVerificationResult::Canceled;
+                    }
+                    catch (const std::bad_alloc&)
+                    {
+                        std::terminate();
+                    }
+                    catch (const std::exception&)
                     {
                         res = UserConsentVerificationResult::Canceled;
                     }
@@ -205,7 +248,15 @@ static void BeginHelloVerification(HWND hwnd)
                 PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)res, 0);
             });
         }
-        catch (...)
+        catch (const winrt::hresult_error&)
+        {
+            PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::Canceled, 0);
+        }
+        catch (const std::bad_alloc&)
+        {
+            std::terminate();
+        }
+        catch (const std::exception&)
         {
             PostMessageW(hwnd, WndMsg::kWin32HelloCredHelloResult, (WPARAM)UserConsentVerificationResult::Canceled, 0);
         }
@@ -373,6 +424,12 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
     {
         case WM_CREATE: return OnCreateMainWindow(hwnd);
         case WM_SIZE: LayoutControls(hwnd); return 0;
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lParam))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 520, 240);
+            }
+            return 0;
         case WM_COMMAND: return OnCommandMainWindow(hwnd, LOWORD(wParam));
         case WndMsg::kWin32HelloCredHelloResult: return OnHelloResultMainWindow(hwnd, static_cast<UserConsentVerificationResult>(wParam));
         case WM_DESTROY: PostQuitMessage(0); return 0;

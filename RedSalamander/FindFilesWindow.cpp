@@ -41,6 +41,7 @@
 #include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 extern FolderWindow g_folderWindow;
@@ -4384,6 +4385,12 @@ LRESULT FindFilesWindow::WindowProc(UINT message, WPARAM wParam, LPARAM lParam) 
     {
         case WM_CREATE: return OnCreate(_hWnd.get()) ? 0 : -1;
         case WM_SIZE: Layout(); return 0;
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lParam))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(_hWnd.get(), *info, 760, 480);
+            }
+            return 0;
         case WM_TIMER:
             if (wParam == kStatusRefreshTimerId)
             {

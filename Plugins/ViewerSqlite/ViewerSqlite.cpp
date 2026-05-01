@@ -19,6 +19,7 @@
 
 #include "Helpers.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 extern HINSTANCE g_hInstance;
@@ -826,6 +827,12 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_SIZE: OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp))); return 0;
         case WM_DPICHANGED: OnDpiChanged(hwnd, static_cast<UINT>(HIWORD(wp)), reinterpret_cast<const RECT*>(lp)); return 0;
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 720, 420);
+            }
+            return 0;
         case WM_NCACTIVATE: ApplyTitleBarTheme(wp != FALSE); return DefWindowProcW(hwnd, msg, wp, lp);
         case WM_CLOSE: static_cast<void>(Close()); return 0;
         case kAsyncOpenCompleteMessage: OnAsyncOpenComplete(TakeMessagePayload<AsyncOpenResult>(lp), static_cast<uint64_t>(wp)); return 0;

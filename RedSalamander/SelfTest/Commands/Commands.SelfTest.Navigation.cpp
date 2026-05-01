@@ -3414,6 +3414,329 @@ struct OwnedMenuSessionEscapeResult
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestNonstandardFileSystemMenuShowsCommonFolders(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || ! IsWindow(mainWindow))
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    g_folderWindow.DebugResetPaneVisibilityState(FolderWindow::Pane::Left);
+    g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system-dummy")),
+                  L"Failed to set dummy file-system plugin for nonstandard menu validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, std::filesystem::path(L"/"));
+
+    const HWND navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
+    state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
+                  L"Navigation view handle unavailable for nonstandard file-system menu validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    NavigationViewDebugSnapshot baselineSnapshot{};
+    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                [&](const NavigationViewDebugSnapshot& value) noexcept
+    {
+        return ! value.editMode && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
+               ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.showMenuSection &&
+               value.currentPathText.starts_with(L"fk:");
+    },
+                                                SelfTest::Scale(3000ms),
+                                                &baselineSnapshot),
+                  std::format(L"Failed to capture baseline dummy NavigationView state; currentPath='{}', showMenu={}, plugin='{}', shortId='{}'.",
+                              baselineSnapshot.currentPathText,
+                              baselineSnapshot.showMenuSection ? L"yes" : L"no",
+                              std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left)),
+                              std::wstring(g_folderWindow.GetFileSystemPluginShortId(FolderWindow::Pane::Left))));
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    RedrawWindow(navigationView, nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+    PumpPendingMessages();
+
+    const DWORD uiThreadId = GetWindowThreadProcessId(mainWindow, nullptr);
+    state.Require(uiThreadId != 0, L"Failed to resolve UI thread for nonstandard file-system menu validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    struct CommonFoldersMenuInspectionResult
+    {
+        bool workerStarted               = true;
+        bool sessionObserved             = false;
+        bool popupOwnerValid             = true;
+        bool commonFoldersPresent        = false;
+        bool commonFoldersHasSubmenu     = false;
+        bool submenuObserved             = false;
+        size_t commonFolderChildRowCount = 0u;
+        size_t commonFolderBitmapCount   = 0u;
+        bool sessionClosed               = false;
+        std::wstring observedRootOrder;
+        std::wstring observedSubmenuOrder;
+    } menuResult;
+
+    const std::wstring commonFoldersLabel = LoadStringResource(nullptr, IDS_MENU_COMMON_FOLDERS);
+    const std::array<std::wstring, 7> commonFolderLabels = {
+        LoadStringResource(nullptr, IDS_MENU_NAV_DESKTOP),
+        LoadStringResource(nullptr, IDS_MENU_NAV_DOCUMENTS),
+        LoadStringResource(nullptr, IDS_MENU_NAV_DOWNLOADS),
+        LoadStringResource(nullptr, IDS_MENU_NAV_PICTURES),
+        LoadStringResource(nullptr, IDS_MENU_NAV_MUSIC),
+        LoadStringResource(nullptr, IDS_MENU_NAV_VIDEOS),
+        LoadStringResource(nullptr, IDS_MENU_NAV_ONEDRIVE),
+    };
+
+    state.Require(! commonFoldersLabel.empty(), L"Common Folders resource string should be available for nonstandard menu validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto appendObservedMenuText = [](std::wstring& target, size_t itemIndex, std::wstring_view itemText) noexcept
+    {
+        if (itemText.empty())
+        {
+            return;
+        }
+
+        if (! target.empty())
+        {
+            target.append(L" | ");
+        }
+        target.append(std::format(L"{}:{}", itemIndex, itemText));
+    };
+
+    const HWND rootOwner = GetAncestor(navigationView, GA_ROOT);
+    const auto popupHasExpectedOwner = [&](HWND popup) noexcept
+    {
+        const HWND popupOwner = GetWindow(popup, GW_OWNER);
+        return popupOwner == navigationView || popupOwner == rootOwner;
+    };
+
+    try
+    {
+        std::jthread closer([&](std::stop_token stopToken) noexcept
+        {
+            const auto inspectCommonFoldersSubmenu = [&](HWND submenu) noexcept -> bool
+            {
+                if (submenu == nullptr || IsWindowVisible(submenu) == FALSE || ! popupHasExpectedOwner(submenu))
+                {
+                    return false;
+                }
+
+                size_t nextExpectedLabelIndex = 0u;
+                size_t matchedRows            = 0u;
+                size_t bitmapRows             = 0u;
+                std::wstring observedOrder;
+                for (size_t itemIndex = 0u; itemIndex < 16u; ++itemIndex)
+                {
+                    std::wstring itemText;
+                    if (! RedSalamander::DxUi::DebugGetContextMenuPopupItemText(submenu, itemIndex, itemText))
+                    {
+                        break;
+                    }
+
+                    appendObservedMenuText(observedOrder, itemIndex, itemText);
+                    for (; nextExpectedLabelIndex < commonFolderLabels.size(); ++nextExpectedLabelIndex)
+                    {
+                        if (commonFolderLabels[nextExpectedLabelIndex].empty())
+                        {
+                            continue;
+                        }
+
+                        if (itemText == commonFolderLabels[nextExpectedLabelIndex])
+                        {
+                            ++matchedRows;
+                            ++nextExpectedLabelIndex;
+                            RedSalamander::DxUi::ContextMenuPopupItemLayoutDebugState itemLayout{};
+                            if (RedSalamander::DxUi::DebugGetContextMenuPopupItemLayout(submenu, itemIndex, itemLayout) && itemLayout.hasBitmapIcon)
+                            {
+                                ++bitmapRows;
+                            }
+                            break;
+                        }
+                    }
+                }
+
+                if (matchedRows >= 4u)
+                {
+                    menuResult.submenuObserved             = true;
+                    menuResult.commonFolderChildRowCount   = matchedRows;
+                    menuResult.commonFolderBitmapCount     = bitmapRows;
+                    menuResult.observedSubmenuOrder        = std::move(observedOrder);
+                    return true;
+                }
+
+                if (menuResult.observedSubmenuOrder.empty())
+                {
+                    menuResult.observedSubmenuOrder = std::move(observedOrder);
+                }
+                return false;
+            };
+
+            const auto openDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+            while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < openDeadline)
+            {
+                GUITHREADINFO gti{};
+                gti.cbSize            = sizeof(gti);
+                const bool hasGuiInfo = GetGUIThreadInfo(uiThreadId, &gti) != FALSE;
+                const bool inMenuMode = hasGuiInfo && ((gti.flags & (GUI_INMENUMODE | GUI_POPUPMENUMODE)) != 0);
+                const HWND popup      = FindVisibleOwnedNavigationDxUiContextMenuWindow(navigationView);
+                if (popup != nullptr || inMenuMode)
+                {
+                    menuResult.sessionObserved = true;
+                    if (popup != nullptr)
+                    {
+                        menuResult.popupOwnerValid = popupHasExpectedOwner(popup);
+                        std::optional<size_t> commonFoldersIndex;
+                        for (size_t itemIndex = 0u; itemIndex < 32u; ++itemIndex)
+                        {
+                            std::wstring itemText;
+                            if (! RedSalamander::DxUi::DebugGetContextMenuPopupItemText(popup, itemIndex, itemText))
+                            {
+                                break;
+                            }
+
+                            appendObservedMenuText(menuResult.observedRootOrder, itemIndex, itemText);
+                            if (itemText == commonFoldersLabel)
+                            {
+                                commonFoldersIndex = itemIndex;
+                            }
+                        }
+
+                        menuResult.commonFoldersPresent = commonFoldersIndex.has_value();
+                        if (commonFoldersIndex.has_value())
+                        {
+                            RedSalamander::DxUi::ContextMenuPopupItemLayoutDebugState itemLayout{};
+                            menuResult.commonFoldersHasSubmenu =
+                                RedSalamander::DxUi::DebugGetContextMenuPopupItemLayout(popup, commonFoldersIndex.value(), itemLayout) &&
+                                itemLayout.chevronRectDip.right > itemLayout.chevronRectDip.left;
+
+                            RedSalamander::DxUi::ContextMenuPopupDebugState popupState{};
+                            if (menuResult.commonFoldersHasSubmenu && RedSalamander::DxUi::DebugGetContextMenuPopupState(popup, popupState))
+                            {
+                                const float scale       = static_cast<float>(popupState.dpi) / 96.0f;
+                                const float centerXDip  = (itemLayout.itemRectDip.left + itemLayout.itemRectDip.right) * 0.5f;
+                                const float centerYDip  = (itemLayout.itemRectDip.top + itemLayout.itemRectDip.bottom) * 0.5f;
+                                const auto clientXPx    = static_cast<int>(centerXDip * scale + 0.5f);
+                                const auto clientYPx    = static_cast<int>(centerYDip * scale + 0.5f);
+                                const LPARAM mousePoint = MAKELPARAM(clientXPx, clientYPx);
+                                PostMessageW(popup, WM_MOUSEMOVE, 0, mousePoint);
+
+                                const auto submenuDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(1500ms);
+                                while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < submenuDeadline)
+                                {
+                                    for (HWND candidate = FindWindowW(L"DxUi_ContextMenu", nullptr); candidate != nullptr;
+                                         candidate = FindWindowExW(nullptr, candidate, L"DxUi_ContextMenu", nullptr))
+                                    {
+                                        if (candidate != popup && inspectCommonFoldersSubmenu(candidate))
+                                        {
+                                            break;
+                                        }
+                                    }
+
+                                    if (menuResult.submenuObserved)
+                                    {
+                                        break;
+                                    }
+
+                                    std::this_thread::sleep_for(20ms);
+                                }
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                std::this_thread::sleep_for(10ms);
+            }
+
+            if (! menuResult.sessionObserved)
+            {
+                return;
+            }
+
+            const auto closeDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(2000ms);
+            while (! stopToken.stop_requested() && std::chrono::steady_clock::now() < closeDeadline)
+            {
+                GUITHREADINFO gti{};
+                gti.cbSize            = sizeof(gti);
+                const bool hasGuiInfo = GetGUIThreadInfo(uiThreadId, &gti) != FALSE;
+                const bool inMenuMode = hasGuiInfo && ((gti.flags & (GUI_INMENUMODE | GUI_POPUPMENUMODE)) != 0);
+                const HWND popup      = FindVisibleOwnedNavigationDxUiContextMenuWindow(navigationView);
+                if (! inMenuMode && popup == nullptr)
+                {
+                    menuResult.sessionClosed = true;
+                    return;
+                }
+
+                const HWND dismissTarget = popup != nullptr ? popup : (hasGuiInfo && gti.hwndMenuOwner ? gti.hwndMenuOwner : navigationView);
+                if (dismissTarget != nullptr)
+                {
+                    PostMessageW(dismissTarget, WM_KEYDOWN, VK_ESCAPE, 0);
+                    PostMessageW(dismissTarget, WM_KEYUP, VK_ESCAPE, 0);
+                }
+
+                std::this_thread::sleep_for(30ms);
+            }
+
+            GUITHREADINFO gti{};
+            gti.cbSize               = sizeof(gti);
+            const bool hasGuiInfo    = GetGUIThreadInfo(uiThreadId, &gti) != FALSE;
+            const bool inMenuMode    = hasGuiInfo && ((gti.flags & (GUI_INMENUMODE | GUI_POPUPMENUMODE)) != 0);
+            menuResult.sessionClosed = ! inMenuMode && FindVisibleOwnedNavigationDxUiContextMenuWindow(navigationView) == nullptr;
+        });
+
+        SendMessageW(navigationView, WndMsg::kNavigationViewShowMenuDropdown, 0, 0);
+        PumpPendingMessages();
+        closer.join();
+    }
+    catch (const std::system_error&)
+    {
+        // Self-test entrypoints are noexcept; report thread startup failure as case data.
+        menuResult.workerStarted = false;
+    }
+
+    state.Require(menuResult.workerStarted, L"Failed to start the nonstandard menu closer thread.");
+    state.Require(menuResult.sessionObserved, L"Nonstandard file-system menu did not open a live DxUI popup or enter menu mode.");
+    state.Require(menuResult.popupOwnerValid, L"Nonstandard file-system menu popup should stay owned by the active pane window hierarchy.");
+    state.Require(menuResult.commonFoldersPresent,
+                  std::format(L"Nonstandard file-system menu should expose a Common Folders submenu. Observed root: {}", menuResult.observedRootOrder));
+    state.Require(menuResult.commonFoldersHasSubmenu, L"Common Folders menu entry should expose a submenu chevron.");
+    state.Require(menuResult.submenuObserved,
+                  std::format(L"Common Folders submenu should expose the local common-folder entries. Observed submenu: {}",
+                              menuResult.observedSubmenuOrder));
+    state.Require(menuResult.commonFolderChildRowCount >= 4u, L"Common Folders submenu should expose the standard common-folder rows.");
+    state.Require(menuResult.commonFolderBitmapCount == menuResult.commonFolderChildRowCount,
+                  L"Common Folders submenu rows should preserve their stock bitmap icons.");
+    state.Require(menuResult.sessionClosed, L"Nonstandard file-system menu did not close after Escape dismissal.");
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestPaneMenuKeepsNavigationShellStable(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -6644,8 +6967,8 @@ struct OwnedMenuSessionEscapeResult
 
     const HWND properties = WaitForWindow([] noexcept { return GetItemPropertiesWindowHandle(); }, SelfTest::Scale(5000ms));
     state.Require(properties != nullptr && IsWindow(properties) != FALSE, L"Item Properties command did not open the window.");
-    state.Require(properties == nullptr || IsOwnedBy(properties, mainWindow),
-                  L"Item Properties window should remain owned by the main window during shell-stability validation.");
+    state.Require(properties == nullptr || ! IsOwnedBy(properties, mainWindow),
+                  L"Item Properties window should not stay owned above the main window during shell-stability validation.");
     if (! properties || IsWindow(properties) == FALSE || ! state.failure.empty())
     {
         return false;
@@ -8581,6 +8904,9 @@ void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTes
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_open_drive_menu_keeps_navigation_shell_stable", [=](CaseState& state) noexcept {
         return TestOpenDriveMenuKeepsNavigationShellStable(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_navigation_nonstandard_menu_common_folders", [=](CaseState& state) noexcept {
+        return TestNonstandardFileSystemMenuShowsCommonFolders(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_navigation_menu_keeps_navigation_shell_stable", [=](CaseState& state) noexcept {
         return TestPaneMenuKeepsNavigationShellStable(mainWindow, state);

@@ -2839,6 +2839,262 @@ void SecureClear(std::wstring& text) noexcept
     return S_OK;
 }
 
+[[nodiscard]] std::string FormatItemPropertiesSize(uint64_t sizeBytes)
+{
+    const std::wstring exactBytes = std::format(L"{} bytes", sizeBytes);
+    if (sizeBytes < 1024ull)
+    {
+        return Utf8FromUtf16(exactBytes);
+    }
+
+    return Utf8FromUtf16(std::format(L"{} ({})", FormatBytesCompact(sizeBytes), exactBytes));
+}
+
+[[nodiscard]] std::string FormatFileTimeLocal(__int64 fileTimeValue) noexcept
+{
+    if (fileTimeValue <= 0)
+    {
+        return {};
+    }
+
+    ULARGE_INTEGER ull{};
+    ull.QuadPart = static_cast<ULONGLONG>(fileTimeValue);
+
+    FILETIME fileTime{};
+    fileTime.dwLowDateTime  = ull.LowPart;
+    fileTime.dwHighDateTime = ull.HighPart;
+
+    FILETIME localFileTime{};
+    if (FileTimeToLocalFileTime(&fileTime, &localFileTime) == 0)
+    {
+        return {};
+    }
+
+    SYSTEMTIME localSystemTime{};
+    if (FileTimeToSystemTime(&localFileTime, &localSystemTime) == 0)
+    {
+        return {};
+    }
+
+    return Utf8FromUtf16(std::format(L"{:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                                     localSystemTime.wYear,
+                                     localSystemTime.wMonth,
+                                     localSystemTime.wDay,
+                                     localSystemTime.wHour,
+                                     localSystemTime.wMinute,
+                                     localSystemTime.wSecond));
+}
+
+[[nodiscard]] std::string JsonScalarToStringUtf8(yyjson_val* value)
+{
+    if (! value)
+    {
+        return {};
+    }
+
+    if (yyjson_is_str(value))
+    {
+        const char* text = yyjson_get_str(value);
+        return text ? std::string(text, yyjson_get_len(value)) : std::string();
+    }
+    if (yyjson_is_bool(value))
+    {
+        return yyjson_get_bool(value) != 0 ? "true" : "false";
+    }
+    if (yyjson_is_null(value))
+    {
+        return "null";
+    }
+    if (yyjson_is_uint(value))
+    {
+        return std::format("{}", yyjson_get_uint(value));
+    }
+    if (yyjson_is_sint(value))
+    {
+        return std::format("{}", yyjson_get_sint(value));
+    }
+    if (yyjson_is_real(value))
+    {
+        return std::format("{}", yyjson_get_real(value));
+    }
+
+    return {};
+}
+
+void AddPropertiesField(yyjson_mut_doc* doc, yyjson_mut_val* fields, std::string_view key, std::string_view value) noexcept
+{
+    if (! doc || ! fields || key.empty() || value.empty())
+    {
+        return;
+    }
+
+    yyjson_mut_val* field = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_strncpy(doc, field, "key", key.data(), key.size());
+    yyjson_mut_obj_add_strncpy(doc, field, "value", value.data(), value.size());
+    yyjson_mut_arr_add_val(fields, field);
+}
+
+void AddPropertiesFieldWide(yyjson_mut_doc* doc, yyjson_mut_val* fields, std::string_view key, std::wstring_view value) noexcept
+{
+    if (value.empty())
+    {
+        return;
+    }
+
+    AddPropertiesField(doc, fields, key, Utf8FromUtf16(value));
+}
+
+[[nodiscard]] yyjson_mut_val* AddPropertiesSection(yyjson_mut_doc* doc, yyjson_mut_val* sections, const char* title) noexcept
+{
+    yyjson_mut_val* section = yyjson_mut_obj(doc);
+    yyjson_mut_obj_add_strcpy(doc, section, "title", title);
+
+    yyjson_mut_val* fields = yyjson_mut_arr(doc);
+    yyjson_mut_obj_add_val(doc, section, "fields", fields);
+    yyjson_mut_arr_add_val(sections, section);
+    return fields;
+}
+
+void AddJsonScalarFields(yyjson_mut_doc* doc,
+                         yyjson_mut_val* fields,
+                         yyjson_val* value,
+                         std::string_view prefix,
+                         size_t depth) noexcept
+{
+    if (! doc || ! fields || ! value || depth > 3u)
+    {
+        return;
+    }
+
+    if (yyjson_is_obj(value))
+    {
+        size_t index       = 0u;
+        size_t max         = 0u;
+        yyjson_val* keyVal = nullptr;
+        yyjson_val* val    = nullptr;
+        yyjson_obj_foreach(value, index, max, keyVal, val)
+        {
+            const char* keyText = yyjson_get_str(keyVal);
+            if (! keyText)
+            {
+                continue;
+            }
+
+            const std::string key(keyText, yyjson_get_len(keyVal));
+            if (key == "@microsoft.graph.downloadUrl")
+            {
+                continue;
+            }
+
+            std::string displayKey(prefix);
+            if (! displayKey.empty())
+            {
+                displayKey.push_back('.');
+            }
+            displayKey.append(key);
+
+            AddJsonScalarFields(doc, fields, val, displayKey, depth + 1u);
+        }
+        return;
+    }
+
+    if (yyjson_is_arr(value))
+    {
+        AddPropertiesField(doc, fields, std::string(prefix) + ".count", std::format("{}", yyjson_arr_size(value)));
+        return;
+    }
+
+    AddPropertiesField(doc, fields, prefix, JsonScalarToStringUtf8(value));
+}
+
+[[nodiscard]] HRESULT BuildItemPropertiesJson(const DriveContext& context, const ItemMetadata& item, std::string& jsonUtf8Out) noexcept
+{
+    yyjson_doc* rawDoc = nullptr;
+    if (! item.rawJson.empty())
+    {
+        rawDoc = yyjson_read(item.rawJson.data(), item.rawJson.size(), YYJSON_READ_ALLOW_BOM);
+    }
+    auto freeRawDoc = wil::scope_exit([&]
+    {
+        if (rawDoc)
+        {
+            yyjson_doc_free(rawDoc);
+        }
+    });
+
+    yyjson_val* rawRoot = rawDoc ? yyjson_doc_get_root(rawDoc) : nullptr;
+    if (rawRoot && ! yyjson_is_obj(rawRoot))
+    {
+        rawRoot = nullptr;
+    }
+
+    yyjson_mut_doc* doc = yyjson_mut_doc_new(nullptr);
+    if (! doc)
+    {
+        return E_OUTOFMEMORY;
+    }
+    auto freeDoc = wil::scope_exit([&] { yyjson_mut_doc_free(doc); });
+
+    yyjson_mut_val* root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
+    yyjson_mut_obj_add_int(doc, root, "version", 1);
+    yyjson_mut_obj_add_strcpy(doc, root, "title", "properties");
+
+    yyjson_mut_val* sections = yyjson_mut_arr(doc);
+    yyjson_mut_obj_add_val(doc, root, "sections", sections);
+
+    const std::wstring normalizedPath = NormalizePluginPath(context.drivePath);
+    const bool isDirectory            = item.isFolder || (item.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0;
+
+    yyjson_mut_val* general = AddPropertiesSection(doc, sections, "General");
+    AddPropertiesFieldWide(doc, general, "Name", item.name.empty() ? std::wstring_view(normalizedPath) : std::wstring_view(item.name));
+    AddPropertiesFieldWide(doc, general, "Path", normalizedPath);
+    AddPropertiesField(doc, general, "Type", isDirectory ? "Directory" : "File");
+    if (! isDirectory || item.sizeBytes != 0u)
+    {
+        AddPropertiesField(doc, general, "Size", FormatItemPropertiesSize(item.sizeBytes));
+    }
+
+    yyjson_mut_val* remote = AddPropertiesSection(doc, sections, "Remote");
+    AddPropertiesFieldWide(doc, remote, "Item ID", item.id);
+    AddPropertiesFieldWide(doc, remote, "Drive path", normalizedPath);
+    if (rawRoot)
+    {
+        AddPropertiesFieldWide(doc, remote, "Web URL", TryGetJsonString(rawRoot, "webUrl").value_or(L""));
+        AddPropertiesFieldWide(doc, remote, "ETag", TryGetJsonString(rawRoot, "eTag").value_or(L""));
+        AddPropertiesFieldWide(doc, remote, "CTag", TryGetJsonString(rawRoot, "cTag").value_or(L""));
+    }
+    AddPropertiesField(doc, remote, "Download URL available", item.downloadUrl.empty() ? "false" : "true");
+
+    yyjson_mut_val* drive = AddPropertiesSection(doc, sections, "Drive");
+    AddPropertiesFieldWide(doc, drive, "Drive ID", context.driveId);
+    AddPropertiesFieldWide(doc, drive, "Site ID", context.siteId);
+    AddPropertiesFieldWide(doc, drive, "Drive name", context.driveDisplayName);
+    AddPropertiesFieldWide(doc, drive, "Volume label", context.driveVolumeLabel);
+    AddPropertiesFieldWide(doc, drive, "Drive web URL", context.driveWebUrl);
+
+    yyjson_mut_val* connection = AddPropertiesSection(doc, sections, "Connection");
+    AddPropertiesFieldWide(doc, connection, "Connection name", context.connectionName);
+    AddPropertiesFieldWide(doc, connection, "User", context.profile.userName);
+    AddPropertiesFieldWide(doc, connection, "Authentication", context.profile.authMode);
+    AddPropertiesField(doc, connection, "Save password", context.profile.savePassword ? "true" : "false");
+    AddPropertiesFieldWide(doc, connection, "Authority", context.authority);
+
+    yyjson_mut_val* timestamps = AddPropertiesSection(doc, sections, "Timestamps");
+    AddPropertiesField(doc, timestamps, "Created", FormatFileTimeLocal(item.creationTime));
+    AddPropertiesField(doc, timestamps, "Modified", FormatFileTimeLocal(item.lastWriteTime));
+    AddPropertiesField(doc, timestamps, "Accessed", FormatFileTimeLocal(item.lastAccessTime));
+    AddPropertiesField(doc, timestamps, "Changed", FormatFileTimeLocal(item.changeTime));
+
+    if (rawRoot)
+    {
+        yyjson_mut_val* graph = AddPropertiesSection(doc, sections, "Graph");
+        AddJsonScalarFields(doc, graph, rawRoot, "", 0u);
+    }
+
+    return WriteMutableJsonDocument(doc, jsonUtf8Out);
+}
+
 [[nodiscard]] HRESULT BuildJsonBodyForDirectory(std::wstring_view name, std::string& jsonUtf8Out) noexcept
 {
     const std::string nameUtf8 = Utf8FromUtf16(name);
@@ -5094,7 +5350,14 @@ HRESULT STDMETHODCALLTYPE FileSystemMicrosoftDrive::GetItemProperties(const wcha
         return hr;
     }
 
-    hr = SetPropertiesJson(std::move(item.rawJson));
+    std::string propertiesJson;
+    hr = BuildItemPropertiesJson(context, item, propertiesJson);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+
+    hr = SetPropertiesJson(std::move(propertiesJson));
     if (FAILED(hr))
     {
         return hr;

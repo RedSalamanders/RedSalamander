@@ -33,7 +33,12 @@ RedSalamander opens as a **dual-pane** window:
 - `F7`: Create folder
 - `F8` or `Del`: Delete (to Recycle Bin when supported)
 - `Shift+Del`: Permanent Delete (with confirmation)
+- `Alt+Enter`: Properties
+- `Alt+F10`: Calculate Occupied Space
+- `Ctrl+Shift+F10`: Calculate Directory Sizes
 - `Ctrl+F10`: Compare Directories (compare the two panes)
+- `Ctrl+J`: File Operations Failed Items
+- `Alt+F12`: Show Folders History
 - `F11`: Connect network drive
 - `F12`: Disconnect network drive
 

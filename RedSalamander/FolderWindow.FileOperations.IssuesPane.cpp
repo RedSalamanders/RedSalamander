@@ -4,6 +4,7 @@
 #include "FolderWindow.FileOperationsInternal.h"
 #include "Helpers.h"
 #include "WindowMaximizeBehavior.h"
+#include "WindowSizing.h"
 
 #include <algorithm>
 #include <format>
@@ -961,6 +962,7 @@ LRESULT FileOperationsIssuesPaneState::WndProc(HWND hwnd, UINT msg, WPARAM wp, L
             auto* info = reinterpret_cast<MINMAXINFO*>(lp);
             if (info)
             {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 520, 320);
                 static_cast<void>(WindowMaximizeBehavior::ApplyVerticalMaximize(hwnd, *info));
             }
             return 0;

@@ -7166,6 +7166,8 @@ void AutomateChangeCasePrompt(
     return state.failure.empty();
 }
 
+[[nodiscard]] bool WaitForItemPropertiesLoadedSnapshot(ItemPropertiesWindowDebugSnapshot& outSnapshot, std::chrono::milliseconds timeout) noexcept;
+
 [[nodiscard]] bool TestPaneItemPropertiesUsesDxUiSurface(HWND mainWindow, CaseState& state) noexcept
 {
     using namespace std::chrono_literals;
@@ -7185,11 +7187,13 @@ void AutomateChangeCasePrompt(
 
     const std::filesystem::path root     = suiteRoot / L"work" / (L"item_properties_" + NewGuidText());
     const std::filesystem::path filePath = root / L"alpha.txt";
+    constexpr uint64_t kFileSizeBytes    = 1536u;
+    const std::string filePayload(static_cast<size_t>(kFileSizeBytes), 'x');
 
     std::error_code ec;
     std::filesystem::remove_all(root, ec);
     state.Require(SelfTest::EnsureDirectory(root), L"Failed to create item-properties test root.");
-    state.Require(SelfTest::WriteTextFile(filePath, "hello from dxui item properties"), L"Failed to create item-properties test file.");
+    state.Require(SelfTest::WriteTextFile(filePath, filePayload), L"Failed to create item-properties test file.");
     if (! state.failure.empty())
     {
         return false;
@@ -7239,7 +7243,8 @@ void AutomateChangeCasePrompt(
         state.Require(properties != nullptr && IsWindow(properties) != FALSE, std::format(L"Item Properties window did not open during {}.", context));
         if (properties && IsWindow(properties) != FALSE)
         {
-            state.Require(IsOwnedBy(properties, mainWindow), std::format(L"Item Properties window should be owned by the main window during {}.", context));
+            state.Require(! IsOwnedBy(properties, mainWindow),
+                          std::format(L"Item Properties window should not stay owned above the main window during {}.", context));
             state.Require(WaitForWindowExposesUiaProvider(properties, SelfTest::Scale(3000ms)),
                           std::format(L"Item Properties window should answer WM_GETOBJECT during {}.", context));
         }
@@ -7249,21 +7254,37 @@ void AutomateChangeCasePrompt(
     const auto validatePropertiesWindow = [&](const HWND properties, std::wstring_view context) noexcept
     {
         ItemPropertiesWindowDebugSnapshot snapshot{};
-        state.Require(DebugGetItemPropertiesWindowSnapshot(snapshot), std::format(L"Failed to capture Item Properties snapshot during {}.", context));
+        state.Require(WaitForItemPropertiesLoadedSnapshot(snapshot, SelfTest::Scale(5000ms)),
+                      std::format(L"Failed to capture loaded Item Properties snapshot during {}.", context));
         if (! state.failure.empty())
         {
             return false;
         }
 
+        state.Require(! snapshot.loadFailed, std::format(L"Item Properties load should not fail during {}.", context));
         state.Require(snapshot.usesDxUiHost, std::format(L"Item Properties window should use the shared DxUi host during {}.", context));
         state.Require(snapshot.visibleChildWindowCount <= 1u,
                       std::format(L"Item Properties window should expose at most the shared DX text-bridge child during {}; saw {}.",
                                   context,
                                   snapshot.visibleChildWindowCount));
+        state.Require(snapshot.layoutOverflowRightDip <= 1.0f,
+                      std::format(L"Item Properties layout should fit the initial viewport during {}; right overflow={:.1f} DIP.",
+                                  context,
+                                  snapshot.layoutOverflowRightDip));
         state.Require(snapshot.sectionCount > 0u, std::format(L"Item Properties window should expose at least one parsed section during {}.", context));
         state.Require(snapshot.fieldCount > 0u, std::format(L"Item Properties window should expose at least one parsed field during {}.", context));
         state.Require(snapshot.contentText.find(L"alpha.txt") != std::wstring::npos,
                       std::format(L"Item Properties window text should include the selected file name during {}.", context));
+        const std::wstring exactSizeText = std::format(L"{} bytes", kFileSizeBytes);
+        const std::wstring expectedSizeText = std::format(L"{} ({})", FormatBytesCompact(kFileSizeBytes), exactSizeText);
+        state.Require(snapshot.contentText.find(expectedSizeText) != std::wstring::npos,
+                      std::format(L"Item Properties window should include compact and exact file size '{}' during {}.", expectedSizeText, context));
+        state.Require(snapshot.contentText.find(L"Parent: ") == std::wstring::npos,
+                      std::format(L"Item Properties window should omit duplicate Parent row during {}.", context));
+        state.Require(snapshot.contentText.find(L"Root: ") == std::wstring::npos,
+                      std::format(L"Item Properties window should omit duplicate Root row during {}.", context));
+        state.Require(snapshot.contentText.find(L"Extension: ") == std::wstring::npos,
+                      std::format(L"Item Properties window should omit duplicate Extension row during {}.", context));
 
         const auto uiaPatternStats = CollectVisibleUiaDescendantPatternStats(properties);
         state.Require(uiaPatternStats.has_value(), std::format(L"Failed to collect live UI Automation stats for Item Properties window during {}.", context));
@@ -7271,26 +7292,17 @@ void AutomateChangeCasePrompt(
         {
             state.Require(uiaPatternStats->visibleElementCount > 0u,
                           std::format(L"Item Properties window should expose visible UI Automation descendants during {}.", context));
-            state.Require(uiaPatternStats->editControlCount > 0u,
-                          std::format(L"Item Properties window should expose a visible read-only edit descendant during {}.", context));
-            state.Require(uiaPatternStats->valuePatternCount > 0u || uiaPatternStats->textPatternCount > 0u,
-                          std::format(L"Item Properties window should expose a readable text pattern for the read-only content surface during {}.", context));
+            state.Require(uiaPatternStats->textControlCount > 0u,
+                          std::format(L"Item Properties window should expose visible text descendants for the card rows during {}.", context));
             state.Require(uiaPatternStats->buttonControlCount > 0u,
                           std::format(L"Item Properties window should expose a visible command button during {}.", context));
             state.Require(uiaPatternStats->invokePatternCount > 0u,
                           std::format(L"Item Properties window should expose InvokePattern for the close button during {}.", context));
         }
 
-        const auto valueState = CollectVisibleDescendantReadableTextState(properties, UIA_EditControlTypeId);
-        state.Require(valueState.has_value(),
-                      std::format(L"Failed to collect readable UI Automation text state for Item Properties content during {}.", context));
-        if (valueState.has_value())
-        {
-            state.Require(! valueState->readOnlyKnown || valueState->isReadOnly,
-                          std::format(L"Item Properties content surface should remain read-only during {}.", context));
-            state.Require(valueState->value.find(L"alpha.txt") != std::wstring::npos,
-                          std::format(L"Item Properties readable text should include the selected file name during {}; saw '{}'.", context, valueState->value));
-        }
+        wil::com_ptr<IUIAutomationElement> fileNameElement;
+        state.Require(FindMatchingVisibleDescendantElement(properties, UIA_TextControlTypeId, L"alpha.txt", fileNameElement.put()) && fileNameElement,
+                      std::format(L"Item Properties visible card rows should include the selected file name during {}.", context));
         return state.failure.empty();
     };
 
@@ -7333,6 +7345,449 @@ void AutomateChangeCasePrompt(
     }
 
     state.Require(closePropertiesWindow(reopenedProperties, L"reopened baseline surface probe"), L"Reopened Item Properties baseline close validation failed.");
+    return state.failure.empty();
+}
+
+[[nodiscard]] HRESULT WriteAlternateStreamForItemPropertiesTest(const std::filesystem::path& path,
+                                                                std::wstring_view streamName,
+                                                                std::string_view payload) noexcept
+{
+    if (path.empty() || streamName.empty())
+    {
+        return E_INVALIDARG;
+    }
+
+    std::wstring streamPath = path.wstring();
+    streamPath.push_back(L':');
+    streamPath.append(streamName);
+
+    wil::unique_handle stream(CreateFileW(streamPath.c_str(),
+                                          GENERIC_WRITE,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                          nullptr,
+                                          CREATE_ALWAYS,
+                                          FILE_ATTRIBUTE_NORMAL,
+                                          nullptr));
+    if (! stream)
+    {
+        const DWORD lastError = GetLastError();
+        return HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_GEN_FAILURE);
+    }
+
+    if (payload.empty())
+    {
+        return S_OK;
+    }
+    if (payload.size() > static_cast<size_t>((std::numeric_limits<DWORD>::max)()))
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+
+    DWORD written = 0u;
+    const DWORD bytesToWrite = static_cast<DWORD>(payload.size());
+    if (WriteFile(stream.get(), payload.data(), bytesToWrite, &written, nullptr) == 0 || written != bytesToWrite)
+    {
+        const DWORD lastError = GetLastError();
+        return HRESULT_FROM_WIN32(lastError != 0u ? lastError : ERROR_WRITE_FAULT);
+    }
+
+    return S_OK;
+}
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626) // WIL unique_hfind has deleted copy operations by design.
+[[nodiscard]] std::optional<uint64_t> FindAlternateStreamSizeForItemPropertiesTest(const std::filesystem::path& path,
+                                                                                  std::wstring_view streamName) noexcept
+{
+    if (path.empty() || streamName.empty())
+    {
+        return std::nullopt;
+    }
+
+    std::wstring expected;
+    expected.reserve(streamName.size() + 7u);
+    expected.push_back(L':');
+    expected.append(streamName);
+    expected.append(L":$DATA");
+
+    WIN32_FIND_STREAM_DATA streamData{};
+    wil::unique_hfind findHandle(FindFirstStreamW(path.c_str(), FindStreamInfoStandard, &streamData, 0));
+    if (! findHandle)
+    {
+        return std::nullopt;
+    }
+
+    for (;;)
+    {
+        if (expected == streamData.cStreamName && streamData.StreamSize.QuadPart >= 0)
+        {
+            return static_cast<uint64_t>(streamData.StreamSize.QuadPart);
+        }
+
+        streamData = {};
+        if (FindNextStreamW(findHandle.get(), &streamData) == 0)
+        {
+            return std::nullopt;
+        }
+    }
+}
+#pragma warning(pop)
+
+[[nodiscard]] bool WaitForItemPropertiesLoadedSnapshot(ItemPropertiesWindowDebugSnapshot& outSnapshot, std::chrono::milliseconds timeout) noexcept
+{
+    using namespace std::chrono_literals;
+
+    const auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline)
+    {
+        PumpPendingMessages();
+        if (DebugGetItemPropertiesWindowSnapshot(outSnapshot) && ! outSnapshot.loading)
+        {
+            return true;
+        }
+        std::this_thread::sleep_for(20ms);
+    }
+
+    PumpPendingMessages();
+    return DebugGetItemPropertiesWindowSnapshot(outSnapshot) && ! outSnapshot.loading;
+}
+
+[[nodiscard]] bool TestPaneItemPropertiesTimestampsFollowGeneral([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+{
+    constexpr std::string_view kOutOfOrderPropertiesJson =
+        R"({"version":1,"title":"properties","sections":[{"title":"general","fields":[{"key":"name","value":"remote-item.txt"},{"key":"type","value":"file"}]},{"title":"remote","fields":[{"key":"remotePath","value":"/home/test/remote-item.txt"}]},{"title":"timestamps","fields":[{"key":"modified","value":"133455072000000000"}]},{"title":"connection","fields":[{"key":"protocol","value":"FTP"}]}]})";
+
+    const std::wstring content = DebugBuildItemPropertiesContentTextFromJson(kOutOfOrderPropertiesJson);
+    state.Require(! content.empty(), L"Item Properties parser should build content text for an out-of-order properties document.");
+
+    const size_t generalPos    = content.find(L"General\r\n");
+    const size_t timestampsPos = content.find(L"Timestamps\r\n");
+    const size_t remotePos     = content.find(L"Remote\r\n");
+    const size_t connectionPos = content.find(L"Connection\r\n");
+
+    state.Require(generalPos != std::wstring::npos, L"Item Properties content should include a normalized General section.");
+    state.Require(timestampsPos != std::wstring::npos, L"Item Properties content should include a normalized Timestamps section.");
+    state.Require(remotePos != std::wstring::npos, L"Item Properties content should include a normalized Remote section.");
+    state.Require(connectionPos != std::wstring::npos, L"Item Properties content should include a normalized Connection section.");
+    state.Require(generalPos < timestampsPos && timestampsPos < remotePos && remotePos < connectionPos,
+                  L"Item Properties should place Timestamps immediately after General before later provider-specific sections.");
+
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneItemPropertiesShowsLoadingWhilePropertiesLoad(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root     = suiteRoot / L"work" / (L"item_properties_loading_" + NewGuidText());
+    const std::filesystem::path filePath = root / L"alpha.txt";
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create item-properties loading test root.");
+    state.Require(SelfTest::WriteTextFile(filePath, "hello from async item properties loading validation"),
+                  L"Failed to create item-properties loading test file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    const auto closeWindow = []() noexcept
+    {
+        if (const HWND properties = GetItemPropertiesWindowHandle(); properties && IsWindow(properties) != FALSE)
+        {
+            PostMessageW(properties, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(properties, SelfTest::Scale(3000ms)));
+        }
+    };
+    const auto cleanupWindow = wil::scope_exit([&]() noexcept { closeWindow(); });
+
+    closeWindow();
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for item-properties loading test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for item-properties loading test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for item-properties loading test.");
+    state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.txt"),
+                  L"Failed to focus alpha.txt for item-properties loading test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    DebugSetNextItemPropertiesLoadDelayMs(450u);
+    const auto clearLoadDelay = wil::scope_exit([]() noexcept { DebugSetNextItemPropertiesLoadDelayMs(0u); });
+    FocusFolderViewPane(FolderWindow::Pane::Left);
+    state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/openProperties"),
+                  L"Shortcut dispatch failed for cmd/pane/openProperties during loading validation.");
+
+    const HWND properties = WaitForWindow([]() noexcept { return GetItemPropertiesWindowHandle(); }, SelfTest::Scale(5000ms));
+    state.Require(properties != nullptr && IsWindow(properties) != FALSE, L"Item Properties window did not open during loading validation.");
+    if (! properties || IsWindow(properties) == FALSE)
+    {
+        return false;
+    }
+
+    ItemPropertiesWindowDebugSnapshot loadingSnapshot{};
+    state.Require(DebugGetItemPropertiesWindowSnapshot(loadingSnapshot), L"Failed to capture Item Properties loading snapshot.");
+    state.Require(loadingSnapshot.loading, L"Item Properties should expose a loading state while the properties provider is still running.");
+    state.Require(loadingSnapshot.contentText.find(LoadStringResource(nullptr, IDS_PROPERTIES_LOADING)) != std::wstring::npos,
+                  L"Item Properties loading state should expose the loading message in copy text.");
+
+    const UINT dpi                = GetDpiForWindow(properties);
+    const LPARAM loadingHoverSpot = MAKELPARAM(MulDiv(40, static_cast<int>(dpi), 96), MulDiv(90, static_cast<int>(dpi), 96));
+    SendMessageW(properties, WM_MOUSEMOVE, 0, loadingHoverSpot);
+    PumpPendingMessages();
+
+    ItemPropertiesWindowDebugSnapshot loadedSnapshot{};
+    state.Require(WaitForItemPropertiesLoadedSnapshot(loadedSnapshot, SelfTest::Scale(5000ms)),
+                  L"Item Properties window did not complete the delayed load.");
+    SendMessageW(properties, WM_MOUSEMOVE, 0, loadingHoverSpot);
+    PumpPendingMessages();
+    state.Require(! loadedSnapshot.loadFailed, L"Item Properties delayed load should complete successfully.");
+    state.Require(loadedSnapshot.contentText.find(L"alpha.txt") != std::wstring::npos,
+                  L"Item Properties loaded content should include the selected file after the async load.");
+
+    closeWindow();
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestPaneItemPropertiesStreamsCanRemove(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+
+    if (! mainWindow || IsWindow(mainWindow) == FALSE)
+    {
+        state.Require(false, L"Main window handle invalid.");
+        return false;
+    }
+
+    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable.");
+    if (suiteRoot.empty())
+    {
+        return false;
+    }
+
+    const std::filesystem::path root     = suiteRoot / L"work" / (L"item_properties_streams_" + NewGuidText());
+    const std::filesystem::path filePath = root / L"alpha.txt";
+    const std::filesystem::path dirPath  = root / L"beta";
+
+    std::error_code ec;
+    std::filesystem::remove_all(root, ec);
+    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create item-properties streams test root.");
+    state.Require(SelfTest::EnsureDirectory(dirPath), L"Failed to create item-properties stream directory.");
+    state.Require(SelfTest::WriteTextFile(filePath, "base file for stream properties validation"), L"Failed to create item-properties stream file.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const HRESULT hrFileZone   = WriteAlternateStreamForItemPropertiesTest(filePath, L"Zone.Identifier", "zone-id");
+    const HRESULT hrFileNotes  = WriteAlternateStreamForItemPropertiesTest(filePath, L"notes", "stream-notes");
+    const HRESULT hrFolderNote = WriteAlternateStreamForItemPropertiesTest(dirPath, L"folder-note", "folder-stream");
+    if (FAILED(hrFileZone) || FAILED(hrFileNotes) || FAILED(hrFolderNote))
+    {
+        if (hrFileZone == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrFileZone == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ||
+            hrFileNotes == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrFileNotes == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) ||
+            hrFolderNote == HRESULT_FROM_WIN32(ERROR_INVALID_NAME) || hrFolderNote == HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+        {
+            return state.Skip(L"Alternate data streams are not supported by the temporary filesystem.");
+        }
+
+        state.Require(false,
+                      std::format(L"Failed to create alternate streams for item-properties validation (fileZone=0x{0:08X}, fileNotes=0x{1:08X}, "
+                                  L"folderNote=0x{2:08X}).",
+                                  static_cast<unsigned long>(hrFileZone),
+                                  static_cast<unsigned long>(hrFileNotes),
+                                  static_cast<unsigned long>(hrFolderNote)));
+        return false;
+    }
+
+    state.Require(FindAlternateStreamSizeForItemPropertiesTest(filePath, L"Zone.Identifier").value_or(0u) == 7u,
+                  L"Zone.Identifier stream should exist with the expected size before properties removal.");
+    state.Require(FindAlternateStreamSizeForItemPropertiesTest(filePath, L"notes").value_or(0u) == 12u,
+                  L"notes stream should exist with the expected size before properties removal.");
+    state.Require(FindAlternateStreamSizeForItemPropertiesTest(dirPath, L"folder-note").value_or(0u) == 13u,
+                  L"folder stream should exist with the expected size before properties removal.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+    const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+    const auto restorePane                                = wil::scope_exit([&]
+    {
+        static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+        if (leftBefore.has_value())
+        {
+            g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+        }
+    });
+
+    const auto closeWindow = []() noexcept
+    {
+        if (const HWND properties = GetItemPropertiesWindowHandle(); properties && IsWindow(properties) != FALSE)
+        {
+            PostMessageW(properties, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(properties, SelfTest::Scale(3000ms)));
+        }
+    };
+    const auto cleanupWindow = wil::scope_exit([&]() noexcept { closeWindow(); });
+
+    closeWindow();
+
+    state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                  L"Failed to set local file-system plugin for item-properties streams test.");
+    g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+    state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)), L"Failed to set left pane path for stream properties test.");
+    state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta"}, SelfTest::Scale(3000ms)),
+                  L"Pane contents not ready for stream properties test.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const auto openPropertiesForItem = [&](std::wstring_view displayName) noexcept -> HWND
+    {
+        closeWindow();
+        state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, displayName),
+                      std::format(L"Failed to focus '{}' for stream properties test.", displayName));
+        FocusFolderViewPane(FolderWindow::Pane::Left);
+        state.Require(DebugDispatchShortcutCommand(mainWindow, L"cmd/pane/openProperties"),
+                      std::format(L"Shortcut dispatch failed for cmd/pane/openProperties on '{}'.", displayName));
+        const HWND properties = WaitForWindow([]() noexcept { return GetItemPropertiesWindowHandle(); }, SelfTest::Scale(5000ms));
+        state.Require(properties != nullptr && IsWindow(properties) != FALSE,
+                      std::format(L"Item Properties window did not open for stream item '{}'.", displayName));
+        return properties;
+    };
+
+    const auto waitForStreamCount = [&](const size_t expectedStreamCount, ItemPropertiesWindowDebugSnapshot& outSnapshot) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            PumpPendingMessages();
+            if (DebugGetItemPropertiesWindowSnapshot(outSnapshot) && ! outSnapshot.loading && outSnapshot.streamCount == expectedStreamCount)
+            {
+                return true;
+            }
+            std::this_thread::sleep_for(20ms);
+        }
+
+        PumpPendingMessages();
+        return DebugGetItemPropertiesWindowSnapshot(outSnapshot) && ! outSnapshot.loading && outSnapshot.streamCount == expectedStreamCount;
+    };
+
+    HWND properties = openPropertiesForItem(L"alpha.txt");
+    if (! properties || IsWindow(properties) == FALSE || ! state.failure.empty())
+    {
+        return false;
+    }
+
+    ItemPropertiesWindowDebugSnapshot snapshot{};
+    state.Require(waitForStreamCount(2u, snapshot), L"Failed to capture loaded file stream properties snapshot.");
+    state.Require(snapshot.streamCount == 2u, std::format(L"File properties should list two streams; saw {}.", snapshot.streamCount));
+    state.Require(snapshot.removableStreamCount == 2u,
+                  std::format(L"File properties should expose two removable streams; saw {}.", snapshot.removableStreamCount));
+    state.Require(snapshot.viewableStreamCount == 2u,
+                  std::format(L"File properties should expose two viewable streams; saw {}.", snapshot.viewableStreamCount));
+    state.Require(snapshot.contentText.find(L"Zone.Identifier: 7 bytes") != std::wstring::npos,
+                  L"File properties should include Zone.Identifier stream name and size.");
+    state.Require(snapshot.contentText.find(L"notes: 12 bytes") != std::wstring::npos, L"File properties should include notes stream name and size.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    g_folderWindow.CloseAllViewers();
+    const auto closeViewers = wil::scope_exit([&]() noexcept { g_folderWindow.CloseAllViewers(); });
+    const size_t baselineViewerCount = g_folderWindow.DebugGetViewerInstanceCount();
+    state.Require(SUCCEEDED(DebugOpenItemPropertiesStream(L"notes")), L"Failed to open alternate stream from Item Properties in ViewerText.");
+    const auto viewerDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(5000ms);
+    while (std::chrono::steady_clock::now() < viewerDeadline &&
+           !(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u && g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text")))
+    {
+        PumpPendingMessages();
+        std::this_thread::sleep_for(20ms);
+    }
+    state.Require(g_folderWindow.DebugGetViewerInstanceCount() == baselineViewerCount + 1u,
+                  L"Opening an alternate stream from Item Properties should create a ViewerText instance.");
+    state.Require(g_folderWindow.DebugHasViewerPluginId(L"builtin/viewer-text"),
+                  L"Opening an alternate stream from Item Properties should use ViewerText.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(SUCCEEDED(DebugRemoveItemPropertiesStream(L"Zone.Identifier")), L"Failed to remove Zone.Identifier stream from file properties.");
+    state.Require(FindAlternateStreamSizeForItemPropertiesTest(filePath, L"Zone.Identifier") == std::nullopt,
+                  L"Zone.Identifier stream should be gone after properties removal.");
+    state.Require(waitForStreamCount(1u, snapshot), L"Failed to capture file stream properties snapshot after stream removal.");
+    state.Require(snapshot.streamCount == 1u, std::format(L"File properties should refresh to one stream after removal; saw {}.", snapshot.streamCount));
+    state.Require(snapshot.contentText.find(L"Zone.Identifier") == std::wstring::npos,
+                  L"Removed stream should no longer be present in refreshed file properties.");
+    state.Require(snapshot.contentText.find(L"notes: 12 bytes") != std::wstring::npos,
+                  L"Remaining stream should still be present in refreshed file properties.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    closeWindow();
+    properties = openPropertiesForItem(L"beta");
+    if (! properties || IsWindow(properties) == FALSE || ! state.failure.empty())
+    {
+        return false;
+    }
+
+    state.Require(waitForStreamCount(1u, snapshot), L"Failed to capture loaded folder stream properties snapshot.");
+    state.Require(snapshot.streamCount == 1u, std::format(L"Folder properties should list one stream; saw {}.", snapshot.streamCount));
+    state.Require(snapshot.removableStreamCount == 1u,
+                  std::format(L"Folder properties should expose one removable stream; saw {}.", snapshot.removableStreamCount));
+    state.Require(snapshot.viewableStreamCount == 1u,
+                  std::format(L"Folder properties should expose one viewable stream; saw {}.", snapshot.viewableStreamCount));
+    state.Require(snapshot.contentText.find(L"folder-note: 13 bytes") != std::wstring::npos,
+                  L"Folder properties should include folder stream name and size.");
+    state.Require(InvokeVisibleDescendantByName(properties, UIA_ButtonControlTypeId, LoadStringResource(nullptr, IDS_PROPERTIES_STREAM_REMOVE)),
+                  L"Failed to invoke the visible stream Remove button from properties.");
+    state.Require(waitForStreamCount(0u, snapshot), L"Folder properties did not refresh to zero streams after invoking the Remove button.");
+    state.Require(FindAlternateStreamSizeForItemPropertiesTest(dirPath, L"folder-note") == std::nullopt,
+                  L"Folder stream should be gone after properties removal.");
+    state.Require(snapshot.streamCount == 0u, std::format(L"Folder properties should refresh to zero streams after removal; saw {}.", snapshot.streamCount));
+    state.Require(snapshot.contentText.find(L"folder-note") == std::wstring::npos,
+                  L"Removed folder stream should no longer be present in refreshed properties.");
+    state.Require(snapshot.contentText.find(LoadStringResource(nullptr, IDS_PROPERTIES_STREAMS_TITLE)) == std::wstring::npos,
+                  L"Properties text should omit the Streams section after the last stream is removed.");
+
+    closeWindow();
     return state.failure.empty();
 }
 
@@ -7412,7 +7867,8 @@ void AutomateChangeCasePrompt(
         state.Require(properties != nullptr && IsWindow(properties) != FALSE, std::format(L"Item Properties window did not open for {}.", context));
         if (properties && IsWindow(properties) != FALSE)
         {
-            state.Require(IsOwnedBy(properties, mainWindow), std::format(L"Item Properties window should be owned by the main window during {}.", context));
+            state.Require(! IsOwnedBy(properties, mainWindow),
+                          std::format(L"Item Properties window should not stay owned above the main window during {}.", context));
             state.Require(WaitForWindowExposesUiaProvider(properties, SelfTest::Scale(3000ms)),
                           std::format(L"Item Properties window should answer WM_GETOBJECT during {}.", context));
         }
@@ -7422,12 +7878,18 @@ void AutomateChangeCasePrompt(
     const auto validatePropertiesWindow = [&](const HWND properties, std::wstring_view context) noexcept
     {
         ItemPropertiesWindowDebugSnapshot snapshot{};
-        state.Require(DebugGetItemPropertiesWindowSnapshot(snapshot), std::format(L"Failed to capture Item Properties snapshot during {}.", context));
+        state.Require(WaitForItemPropertiesLoadedSnapshot(snapshot, SelfTest::Scale(5000ms)),
+                      std::format(L"Failed to capture loaded Item Properties snapshot during {}.", context));
+        state.Require(! snapshot.loadFailed, std::format(L"Item Properties load should not fail during {}.", context));
         state.Require(snapshot.usesDxUiHost, std::format(L"Item Properties window should use the shared DxUi host during {}.", context));
         state.Require(snapshot.visibleChildWindowCount <= 1u,
                       std::format(L"Item Properties window should expose at most the shared DX text-bridge child during {}; saw {}.",
                                   context,
                                   snapshot.visibleChildWindowCount));
+        state.Require(snapshot.layoutOverflowRightDip <= 1.0f,
+                      std::format(L"Item Properties layout should fit the initial viewport during {}; right overflow={:.1f} DIP.",
+                                  context,
+                                  snapshot.layoutOverflowRightDip));
         state.Require(snapshot.contentText.find(L"alpha.txt") != std::wstring::npos,
                       std::format(L"Item Properties window text should include the selected file name during {}.", context));
         if (! state.failure.empty())
@@ -7439,24 +7901,16 @@ void AutomateChangeCasePrompt(
         state.Require(uiaPatternStats.has_value(), std::format(L"Failed to collect live UI Automation stats for Item Properties during {}.", context));
         if (uiaPatternStats.has_value())
         {
-            state.Require(uiaPatternStats->editControlCount > 0u,
-                          std::format(L"Item Properties window should expose a visible read-only edit descendant during {}.", context));
-            state.Require(uiaPatternStats->valuePatternCount > 0u || uiaPatternStats->textPatternCount > 0u,
-                          std::format(L"Item Properties window should expose a readable text pattern during {}.", context));
+            state.Require(uiaPatternStats->textControlCount > 0u,
+                          std::format(L"Item Properties window should expose visible text descendants during {}.", context));
             state.Require(uiaPatternStats->buttonControlCount > 0u,
                           std::format(L"Item Properties window should expose a visible close button during {}.", context));
             state.Require(uiaPatternStats->invokePatternCount > 0u, std::format(L"Item Properties window should expose InvokePattern during {}.", context));
         }
 
-        const auto valueState = CollectVisibleDescendantReadableTextState(properties, UIA_EditControlTypeId);
-        state.Require(valueState.has_value(), std::format(L"Failed to collect Item Properties readable text state during {}.", context));
-        if (valueState.has_value())
-        {
-            state.Require(! valueState->readOnlyKnown || valueState->isReadOnly,
-                          std::format(L"Item Properties content surface should remain read-only during {}.", context));
-            state.Require(valueState->value.find(L"alpha.txt") != std::wstring::npos,
-                          std::format(L"Item Properties readable text should include the selected file name during {}; saw '{}'.", context, valueState->value));
-        }
+        wil::com_ptr<IUIAutomationElement> fileNameElement;
+        state.Require(FindMatchingVisibleDescendantElement(properties, UIA_TextControlTypeId, L"alpha.txt", fileNameElement.put()) && fileNameElement,
+                      std::format(L"Item Properties visible card rows should include the selected file name during {}.", context));
         return state.failure.empty();
     };
 
@@ -7587,12 +8041,18 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    state.Require(IsOwnedBy(properties, mainWindow), L"Item Properties window should be owned by the main window during copy validation.");
+    state.Require(! IsOwnedBy(properties, mainWindow), L"Item Properties window should not stay owned above the main window during copy validation.");
     state.Require(WaitForWindowExposesUiaProvider(properties, SelfTest::Scale(3000ms)),
                   L"Item Properties window should answer WM_GETOBJECT during copy validation.");
+    wil::com_ptr<IUIAutomationElement> copyHintElement;
+    state.Require(FindMatchingVisibleDescendantElement(
+                      properties, UIA_TextControlTypeId, LoadStringResource(nullptr, IDS_PROPERTIES_COPY_HINT), copyHintElement.put()) &&
+                      copyHintElement,
+                  L"Item Properties window should show the discrete Ctrl+C copy hint at the bottom.");
 
     ItemPropertiesWindowDebugSnapshot snapshot{};
-    state.Require(DebugGetItemPropertiesWindowSnapshot(snapshot), L"Failed to capture Item Properties snapshot before copy validation.");
+    state.Require(WaitForItemPropertiesLoadedSnapshot(snapshot, SelfTest::Scale(5000ms)),
+                  L"Failed to capture loaded Item Properties snapshot before copy validation.");
     state.Require(snapshot.usesDxUiHost, L"Item Properties window should use the shared DxUi host during copy validation.");
     state.Require(snapshot.visibleChildWindowCount <= 1u,
                   std::format(L"Item Properties window should expose at most the shared DX text-bridge child during copy validation; saw {}.",
@@ -7603,42 +8063,11 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    wil::com_ptr<IUIAutomationElement> editElement;
-    state.Require(FindMatchingVisibleDescendantElement(properties, UIA_EditControlTypeId, {}, editElement.put()) && editElement,
-                  L"Item Properties copy validation should locate the visible read-only DX body surface.");
-    if (! editElement || ! state.failure.empty())
-    {
-        return false;
-    }
-
-    state.Require(SUCCEEDED(editElement->SetFocus()), L"Item Properties read-only body should accept focus before copy validation.");
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
+    SetFocus(properties);
     PumpPendingMessages();
     std::this_thread::sleep_for(20ms);
 
-    const auto valueState = CollectVisibleDescendantReadableTextState(properties, UIA_EditControlTypeId);
-    state.Require(valueState.has_value(), L"Failed to collect Item Properties readable text state before copy validation.");
-    if (valueState.has_value())
-    {
-        state.Require(! valueState->readOnlyKnown || valueState->isReadOnly,
-                      L"Item Properties content surface should remain read-only during copy validation.");
-        state.Require(NormalizeComparisonNewlines(valueState->value) == NormalizeComparisonNewlines(snapshot.contentText),
-                      L"Item Properties readable text should stay aligned with the exported debug snapshot before copy validation.");
-    }
-    if (! state.failure.empty())
-    {
-        return false;
-    }
-
     ClearClipboardContents(properties);
-    SendMessageW(properties, WM_KEYDOWN, VK_CONTROL, 0);
-    SendMessageW(properties, WM_KEYDOWN, static_cast<WPARAM>(L'A'), 0);
-    SendMessageW(properties, WM_KEYUP, static_cast<WPARAM>(L'A'), 0);
-    SendMessageW(properties, WM_KEYUP, VK_CONTROL, 0);
     SendMessageW(properties, WM_KEYDOWN, VK_CONTROL, 0);
     SendMessageW(properties, WM_KEYDOWN, static_cast<WPARAM>(L'C'), 0);
     SendMessageW(properties, WM_KEYUP, static_cast<WPARAM>(L'C'), 0);
@@ -7655,9 +8084,9 @@ void AutomateChangeCasePrompt(
         }
     }
 
-    state.Require(! copiedText.empty(), L"Item Properties Ctrl+A/Ctrl+C should copy the full read-only DX body text to the clipboard.");
+    state.Require(! copiedText.empty(), L"Item Properties Ctrl+C should copy the full read-only DX body text to the clipboard.");
     state.Require(NormalizeComparisonNewlines(copiedText) == NormalizeComparisonNewlines(snapshot.contentText),
-                  L"Item Properties clipboard export should match the full read-only DX body text after Ctrl+A/Ctrl+C.");
+                  L"Item Properties clipboard export should match the full read-only DX body text after Ctrl+C.");
 
     ItemPropertiesWindowDebugSnapshot postCopySnapshot{};
     state.Require(DebugGetItemPropertiesWindowSnapshot(postCopySnapshot), L"Failed to capture Item Properties snapshot after copy validation.");
@@ -7800,9 +8229,46 @@ void AutomateChangeCasePrompt(
         const int heightPx = (std::max)(1, static_cast<int>(currentRect.bottom - currentRect.top));
         return widthPx == expectedWidthPx && heightPx == expectedHeightPx;
     };
+    struct WindowSizePx
+    {
+        int width  = 0;
+        int height = 0;
+    };
+    const auto waitForWindowSizeChangedFrom = [&](const int previousWidthPx, const int previousHeightPx, WindowSizePx& outSize) noexcept
+    {
+        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        while (std::chrono::steady_clock::now() < deadline)
+        {
+            RECT currentRect{};
+            if (GetWindowRect(properties, &currentRect) != FALSE)
+            {
+                const int widthPx  = (std::max)(1, static_cast<int>(currentRect.right - currentRect.left));
+                const int heightPx = (std::max)(1, static_cast<int>(currentRect.bottom - currentRect.top));
+                if (widthPx != previousWidthPx || heightPx != previousHeightPx)
+                {
+                    outSize = WindowSizePx{.width = widthPx, .height = heightPx};
+                    return true;
+                }
+            }
+
+            PumpPendingMessages();
+            std::this_thread::sleep_for(20ms);
+        }
+
+        RECT currentRect{};
+        if (GetWindowRect(properties, &currentRect) == FALSE)
+        {
+            return false;
+        }
+
+        const int widthPx  = (std::max)(1, static_cast<int>(currentRect.right - currentRect.left));
+        const int heightPx = (std::max)(1, static_cast<int>(currentRect.bottom - currentRect.top));
+        outSize            = WindowSizePx{.width = widthPx, .height = heightPx};
+        return widthPx != previousWidthPx || heightPx != previousHeightPx;
+    };
 
     ItemPropertiesWindowDebugSnapshot snapshot{};
-    state.Require(DebugGetItemPropertiesWindowSnapshot(snapshot), L"Failed to capture initial Item Properties snapshot.");
+    state.Require(WaitForItemPropertiesLoadedSnapshot(snapshot, SelfTest::Scale(5000ms)), L"Failed to capture initial loaded Item Properties snapshot.");
     if (! state.failure.empty())
     {
         return false;
@@ -7838,19 +8304,30 @@ void AutomateChangeCasePrompt(
     const int narrowHeightPx = MulDiv(110, static_cast<int>(dpi), 96);
     state.Require(SetWindowPos(properties, nullptr, 0, 0, narrowWidthPx, narrowHeightPx, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE) != FALSE,
                   L"Failed to narrow Item Properties window for long-run scrolling validation.");
-    state.Require(waitForWindowSize(narrowWidthPx, narrowHeightPx),
-                  L"Item Properties window did not apply the narrow-width resize for long-run scrolling validation.");
+    WindowSizePx appliedNarrowSize{};
+    state.Require(waitForWindowSizeChangedFrom(expandedWidthPx, expandedHeightPx, appliedNarrowSize),
+                  L"Item Properties window did not apply any narrower resize for long-run scrolling validation.");
+    state.Require(appliedNarrowSize.width <= expandedWidthPx && appliedNarrowSize.height <= expandedHeightPx,
+                  std::format(L"Item Properties window narrow resize grew unexpectedly; applied={}x{}, expanded={}x{}, requested={}x{}.",
+                              appliedNarrowSize.width,
+                              appliedNarrowSize.height,
+                              expandedWidthPx,
+                              expandedHeightPx,
+                              narrowWidthPx,
+                              narrowHeightPx));
     PumpPendingMessages();
     std::this_thread::sleep_for(50ms);
     state.Require(DebugGetItemPropertiesWindowSnapshot(snapshot), L"Failed to capture Item Properties snapshot after narrow-width scrolling validation.");
     state.Require(
         snapshot.bodyVisibleLineCount > 0u && snapshot.bodyTotalLineCount > 0u,
-        std::format(L"Item Properties window did not expose a readable DX read-only surface after narrow-width validation; current={}x{}, target={}x{}, "
+        std::format(L"Item Properties window did not expose a readable DX read-only surface after narrow-width validation; current={}x{}, requested={}x{}, applied={}x{}, "
                     L"visibleLines={}, totalLines={}, firstVisibleLine={}, canScroll={}, resizeCount={}, renderCount={}, textLength={}.",
                     currentWidthPx,
                     currentHeightPx,
                     narrowWidthPx,
                     narrowHeightPx,
+                    appliedNarrowSize.width,
+                    appliedNarrowSize.height,
                     snapshot.bodyVisibleLineCount,
                     snapshot.bodyTotalLineCount,
                     snapshot.bodyFirstVisibleLine,
@@ -7935,15 +8412,8 @@ void AutomateChangeCasePrompt(
     state.Require(waitForSnapshot([&](const ItemPropertiesWindowDebugSnapshot& value) noexcept { return value.renderCount > baselineRenderCount; }, snapshot),
                   L"Item Properties window should repaint while the DX read-only surface scrolls.");
 
-    const auto scrolledValueState = CollectVisibleDescendantReadableTextState(properties, UIA_EditControlTypeId);
-    state.Require(scrolledValueState.has_value(), L"Failed to collect Item Properties readable text state after scroll churn.");
-    if (scrolledValueState.has_value())
-    {
-        state.Require(! scrolledValueState->readOnlyKnown || scrolledValueState->isReadOnly,
-                      L"Item Properties content surface should remain read-only after scroll churn.");
-        state.Require(scrolledValueState->value.find(filePath.filename().wstring()) != std::wstring::npos,
-                      L"Item Properties readable text should still expose the selected file name after scroll churn.");
-    }
+    state.Require(snapshot.contentText.find(filePath.filename().wstring()) != std::wstring::npos,
+                  L"Item Properties exported content text should still include the selected file name after scroll churn.");
 
     for (size_t chunk = 0u; chunk < 8u && previousFirstVisibleLine > 0u; ++chunk)
     {
@@ -8052,13 +8522,14 @@ void AutomateChangeCasePrompt(
             return false;
         }
 
-        state.Require(IsOwnedBy(properties, mainWindow),
-                      std::format(L"Item Properties window should be owned by the main window during cycle {}.", cycle + 1u));
+        state.Require(! IsOwnedBy(properties, mainWindow),
+                      std::format(L"Item Properties window should not stay owned above the main window during cycle {}.", cycle + 1u));
         state.Require(WaitForWindowExposesUiaProvider(properties, SelfTest::Scale(3000ms)),
                       std::format(L"Item Properties window should answer WM_GETOBJECT during cycle {}.", cycle + 1u));
 
         ItemPropertiesWindowDebugSnapshot snapshot{};
-        state.Require(DebugGetItemPropertiesWindowSnapshot(snapshot), std::format(L"Failed to capture Item Properties snapshot during cycle {}.", cycle + 1u));
+        state.Require(WaitForItemPropertiesLoadedSnapshot(snapshot, SelfTest::Scale(5000ms)),
+                      std::format(L"Failed to capture loaded Item Properties snapshot during cycle {}.", cycle + 1u));
         if (! state.failure.empty())
         {
             closeWindow();
@@ -8070,6 +8541,10 @@ void AutomateChangeCasePrompt(
                       std::format(L"Item Properties window should keep visible child windows bounded to the shared DX text bridge during cycle {}; saw {}.",
                                   cycle + 1u,
                                   snapshot.visibleChildWindowCount));
+        state.Require(snapshot.layoutOverflowRightDip <= 1.0f,
+                      std::format(L"Item Properties layout should fit the viewport during cycle {}; right overflow={:.1f} DIP.",
+                                  cycle + 1u,
+                                  snapshot.layoutOverflowRightDip));
         state.Require(snapshot.sectionCount > 0u, std::format(L"Item Properties window should expose parsed sections during cycle {}.", cycle + 1u));
         state.Require(snapshot.fieldCount > 0u, std::format(L"Item Properties window should expose parsed fields during cycle {}.", cycle + 1u));
         state.Require(snapshot.contentText.find(L"alpha.txt") != std::wstring::npos,
@@ -8081,28 +8556,17 @@ void AutomateChangeCasePrompt(
         {
             state.Require(uiaPatternStats->visibleElementCount > 0u,
                           std::format(L"Item Properties window should expose visible UI Automation descendants during cycle {}.", cycle + 1u));
-            state.Require(uiaPatternStats->editControlCount > 0u,
-                          std::format(L"Item Properties window should expose a visible read-only edit descendant during cycle {}.", cycle + 1u));
-            state.Require(uiaPatternStats->valuePatternCount > 0u || uiaPatternStats->textPatternCount > 0u,
-                          std::format(L"Item Properties window should expose a readable text pattern during cycle {}.", cycle + 1u));
+            state.Require(uiaPatternStats->textControlCount > 0u,
+                          std::format(L"Item Properties window should expose visible text descendants during cycle {}.", cycle + 1u));
             state.Require(uiaPatternStats->buttonControlCount > 0u,
                           std::format(L"Item Properties window should expose a visible command button during cycle {}.", cycle + 1u));
             state.Require(uiaPatternStats->invokePatternCount > 0u,
                           std::format(L"Item Properties window should expose InvokePattern during cycle {}.", cycle + 1u));
         }
 
-        const auto valueState = CollectVisibleDescendantReadableTextState(properties, UIA_EditControlTypeId);
-        state.Require(valueState.has_value(), std::format(L"Failed to collect Item Properties readable text state during cycle {}.", cycle + 1u));
-        if (valueState.has_value())
-        {
-            state.Require(! valueState->readOnlyKnown || valueState->isReadOnly,
-                          std::format(L"Item Properties content surface should remain read-only during cycle {}.", cycle + 1u));
-            state.Require(! valueState->name.empty(),
-                          std::format(L"Item Properties content surface should expose a stable accessible name during cycle {}.", cycle + 1u));
-            state.Require(
-                valueState->value.find(L"alpha.txt") != std::wstring::npos,
-                std::format(L"Item Properties readable text should include the selected file name during cycle {}; saw '{}'.", cycle + 1u, valueState->value));
-        }
+        wil::com_ptr<IUIAutomationElement> fileNameElement;
+        state.Require(FindMatchingVisibleDescendantElement(properties, UIA_TextControlTypeId, L"alpha.txt", fileNameElement.put()) && fileNameElement,
+                      std::format(L"Item Properties visible card rows should include the selected file name during cycle {}.", cycle + 1u));
 
         const auto buttonState = CollectVisibleDescendantNamedElementState(properties, UIA_ButtonControlTypeId);
         state.Require(buttonState.has_value(), std::format(L"Failed to collect Item Properties visible DX command-button state during cycle {}.", cycle + 1u));
@@ -8200,7 +8664,8 @@ void AutomateChangeCasePrompt(
         return false;
     }
 
-    state.Require(IsOwnedBy(properties, mainWindow), L"Item Properties window should be owned by the main window during access-key validation.");
+    state.Require(! IsOwnedBy(properties, mainWindow),
+                  L"Item Properties window should not stay owned above the main window during access-key validation.");
     const size_t accessKeyVisibleChildren = CountVisibleChildWindows(properties);
     state.Require(accessKeyVisibleChildren <= 1u,
                   std::format(L"Item Properties window should expose at most the shared DX text-bridge child during access-key validation; saw {}.",
@@ -8292,7 +8757,8 @@ void AutomateChangeCasePrompt(
         state.Require(properties != nullptr && IsWindow(properties) != FALSE, std::format(L"Item Properties window did not open for {}.", context));
         if (properties && IsWindow(properties) != FALSE)
         {
-            state.Require(IsOwnedBy(properties, mainWindow), std::format(L"Item Properties window should be owned by the main window during {}.", context));
+            state.Require(! IsOwnedBy(properties, mainWindow),
+                          std::format(L"Item Properties window should not stay owned above the main window during {}.", context));
             const size_t visibleChildCount = CountVisibleChildWindows(properties);
             state.Require(
                 visibleChildCount <= 1u,
@@ -8455,8 +8921,17 @@ void RunDialogsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOp
     SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_uses_dxui_surface", [=](CaseState& state) noexcept {
         return TestPaneItemPropertiesUsesDxUiSurface(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_shows_loading", [=](CaseState& state) noexcept {
+        return TestPaneItemPropertiesShowsLoadingWhilePropertiesLoad(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_timestamps_follow_general", [=](CaseState& state) noexcept {
+        return TestPaneItemPropertiesTimestampsFollowGeneral(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_live_dx_interaction", [=](CaseState& state) noexcept {
         return TestPaneItemPropertiesLiveDxInteraction(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_streams_can_remove", [=](CaseState& state) noexcept {
+        return TestPaneItemPropertiesStreamsCanRemove(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text", [=](CaseState& state) noexcept {
         return TestPaneItemPropertiesCtrlAAndCopyExportsFullText(mainWindow, state);

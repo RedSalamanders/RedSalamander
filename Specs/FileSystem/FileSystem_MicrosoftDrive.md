@@ -123,6 +123,7 @@ Behavior notes:
 
 - Directory listings use Graph `children` paging with `$top=pageSize` and `@odata.nextLink`.
 - Metadata requests use Graph item lookup with a small `$select` set.
+- `GetItemProperties` returns structured properties for both files and folders using all Microsoft Graph item metadata the plugin has available, including general identity/path/type data, drive/remote identifiers, timestamps, facets, hashes, and size for files. Missing Graph fields are omitted rather than reported as placeholder values.
 - File reads resolve `@microsoft.graph.downloadUrl` and then use ranged HTTP reads against that download URL.
 - Writes stage data into a local temporary file first.
   - Up to 250 MiB: simple upload (`/content`)

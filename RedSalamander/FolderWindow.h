@@ -34,10 +34,16 @@ struct ItemPropertiesWindowDebugSnapshot
     size_t visibleChildWindowCount = 0u;
     size_t sectionCount            = 0u;
     size_t fieldCount              = 0u;
+    size_t streamCount             = 0u;
+    size_t removableStreamCount    = 0u;
+    size_t viewableStreamCount     = 0u;
     size_t bodyFirstVisibleLine    = 0u;
     size_t bodyVisibleLineCount    = 0u;
     size_t bodyTotalLineCount      = 0u;
     bool bodyCanScrollVertically   = false;
+    bool loading                   = false;
+    bool loadFailed                = false;
+    float layoutOverflowRightDip   = 0.0f;
     uint64_t renderCount           = 0u;
     uint64_t resizeCount           = 0u;
     uint64_t resizeFailureCount    = 0u;
@@ -47,6 +53,10 @@ struct ItemPropertiesWindowDebugSnapshot
 [[nodiscard]] HWND GetItemPropertiesWindowHandle() noexcept;
 [[nodiscard]] bool DebugGetItemPropertiesWindowSnapshot(ItemPropertiesWindowDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugScrollItemPropertiesWindowByWheelDetents(int detents) noexcept;
+[[nodiscard]] HRESULT DebugRemoveItemPropertiesStream(std::wstring_view streamName) noexcept;
+[[nodiscard]] HRESULT DebugOpenItemPropertiesStream(std::wstring_view streamName) noexcept;
+[[nodiscard]] std::wstring DebugBuildItemPropertiesContentTextFromJson(std::string_view jsonUtf8) noexcept;
+void DebugSetNextItemPropertiesLoadDelayMs(uint32_t delayMs) noexcept;
 
 struct FolderViewPaneFilterPromptDebugSnapshot
 {

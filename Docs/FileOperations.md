@@ -150,6 +150,14 @@ When operations encounter errors, they can be reviewed in the issues UI:
 
 ![File operations issues pane](res/file-operations-issues.png)
 
+## Properties
+
+Open item properties with **Files -> Properties** or `Alt+Enter`.
+
+![File properties dialog](res/file-properties.png)
+
+Properties work through the active file-system plugin. Local files show general identity, path, type, size, timestamps, attributes, and named streams when present. Remote/cloud plugins can expose their own metadata through the same dialog. `Ctrl+C` copies the full property text; `Esc` closes the dialog.
+
 ## Clipboard copy/paste (Windows Explorer format)
 
 Folder view supports a basic Explorer-style clipboard for **Windows paths**:
@@ -169,7 +177,6 @@ Limitations:
 ## Not implemented yet
 
 - Pack / Unpack
-- Find files
 - Additional "copy path as text" helpers beyond **Copy Path and File Name**
 - Some same-name selection helpers
 

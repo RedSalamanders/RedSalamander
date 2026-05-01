@@ -50,6 +50,7 @@
 #include "Helpers.h"
 #include "LocalizationManager.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 
 #include "resource.h"
 
@@ -2511,6 +2512,12 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 #endif
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_SIZE: OnSize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp))); return 0;
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 520, 320);
+            }
+            return 0;
         case WM_COMMAND: OnCommand(hwnd, static_cast<UINT>(LOWORD(wp)), static_cast<UINT>(HIWORD(wp)), reinterpret_cast<HWND>(lp)); return 0;
         case WM_KEYDOWN: OnKeyDown(hwnd, static_cast<UINT>(wp)); return 0;
         case WM_SYSKEYDOWN:
