@@ -78,6 +78,7 @@
 #include "ViewerPluginManager.h"
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
+#include "WindowSizing.h"
 
 #ifdef ENABLE_TESTS
 #include "CommandDispatch.Debug.h"
@@ -8913,6 +8914,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WndMsg::kAppStartupInputReady: return OnMainWindowStartupInputReady(hWnd);
         case WM_SIZE: return OnMainWindowSize(hWnd, LOWORD(lParam), HIWORD(lParam));
         case WM_DPICHANGED: return OnMainWindowDpiChanged(hWnd, static_cast<UINT>(HIWORD(wParam)), reinterpret_cast<const RECT*>(lParam));
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lParam))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hWnd, *info, 760, 480);
+            }
+            return 0;
         case WM_ERASEBKGND: return 1;
         case WM_DEVICECHANGE:
         {

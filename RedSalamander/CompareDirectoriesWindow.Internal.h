@@ -47,6 +47,7 @@
 #include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 namespace CompareDirectoriesWindowInternal

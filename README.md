@@ -10,7 +10,7 @@ RedSalamander is a Windows dual-pane file manager with:
 
 ![RedSalamander main window](Docs/res/main-window.png)
 
-[User Documentation](Docs/README.md)
+[Complete User Documentation](Docs/UserGuide.md)
 
 ## Why another file manager?
 
@@ -385,7 +385,7 @@ Normal Release builds keep Info/Perf/debug-style ETW diagnostics quiet, and RedS
 
 ## Additional Documentation
 
-- **Docs/**: User documentation (start at `Docs/README.md`)
+- **Docs/**: User documentation (start at `Docs/UserGuide.md`)
 - `Docs/RemoteFileSystems.md`: Remote file systems (FTP/SFTP/SCP/IMAP)
 - **AGENTS.md**: Comprehensive development guidelines for AI assistants and developers
 - **.github/copilot-instructions.md**: GitHub Copilot specific guidelines

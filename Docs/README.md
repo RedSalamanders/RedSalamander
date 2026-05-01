@@ -4,13 +4,14 @@ RedSalamander is a Windows dual-pane file manager with:
 
 - A fast DirectX-based folder view
 - Virtual file systems (archives, FTP/SFTP/SCP/IMAP, S3, …)
-- Viewer plugins (Text/Hex, Images/RAW, WebView2-based viewers, …)
+- Viewer plugins (Text/Hex, SQLite, Images/RAW, WebView2-based viewers, …)
 - A themed Preferences experience (themes, plugins, shortcuts, associations)
 
 ![RedSalamander main window](res/main-window.png)
 
 ## Start here
 
+- [Complete User Guide](UserGuide.md)
 - [Getting Started](GettingStarted.md)
 - [Main Window & Panes](MainWindow.md)
 - [Find Files and Directories](FindFiles.md)

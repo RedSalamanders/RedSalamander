@@ -74,10 +74,27 @@ Common built-in viewer IDs:
 - `builtin/viewer-imgraw`
 - `builtin/viewer-space`
 - `builtin/viewer-pe`
+- `builtin/viewer-sqlite`
 - `builtin/viewer-vlc`
 - `builtin/viewer-web`
 - `builtin/viewer-json`
 - `builtin/viewer-markdown`
+
+Common built-in file-system IDs:
+
+- `builtin/file-system`
+- `builtin/file-system-7z`
+- `builtin/file-system-ftp`
+- `builtin/file-system-sftp`
+- `builtin/file-system-scp`
+- `builtin/file-system-imap`
+- `builtin/file-system-gdrive`
+- `builtin/file-system-onedrive-personal`
+- `builtin/file-system-onedrive-business`
+- `builtin/file-system-sharepoint`
+- `builtin/file-system-s3`
+- `builtin/file-system-s3table`
+- `builtin/file-system-dummy`
 
 ### Tune file-operations defaults
 

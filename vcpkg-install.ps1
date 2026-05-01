@@ -12,29 +12,23 @@
     This matches the MSBuild/CI layout (see Directory.Build.props) so builds never create
     a top-level `vcpkg_installed\` folder.
 
-    By default (no parameters), installs the normal/non-ASan triplets:
+    By default (no parameters), installs both supported triplets:
       - x64-windows
       - arm64-windows
 
-    When -Asan is combined with the default/all-platform selection, ASan provisioning is
-    additive: normal triplets are installed first, then ASan triplets. This keeps normal
-    Debug/Release dependencies available even if an ASan triplet later fails to build.
+    The ASan Debug build configuration links against these same triplets and uses
+    _DISABLE_VECTOR_ANNOTATION / _DISABLE_STRING_ANNOTATION to avoid MSVC STL
+    annotation mismatches, so no separate ASan-instrumented vcpkg triplet is needed.
 
     Automatically discovers vcpkg from: explicit -VcpkgExe parameter, repo-local vcpkg\,
     VCPKG_ROOT environment variable, PATH, Visual Studio bundled vcpkg, Chocolatey,
     Scoop, and common installation directories.
 
 .PARAMETER Platform
-    Target platform (x64, ARM64, or All). Default is "All" which installs both normal platforms.
-    When set to x64 or ARM64, installs only the specified platform (asan variant per -Asan switch).
-
-.PARAMETER Asan
-    Install AddressSanitizer-enabled triplet variant. With -Platform x64 or ARM64, selects
-    that platform's ASan triplet. With -Platform All/default, installs normal triplets first,
-    then the ASan triplets.
+    Target platform (x64, ARM64, or All). Default is "All" which installs both platforms.
 
 .PARAMETER Triplet
-    Optional explicit vcpkg triplet (overrides -Platform and -Asan). Use this to install
+    Optional explicit vcpkg triplet (overrides -Platform). Use this to install
     a specific triplet like "x64-windows-static" or any custom triplet.
 
 .PARAMETER Clean
@@ -51,29 +45,12 @@
 
 .EXAMPLE
     .\vcpkg-install.ps1
-    Installs the two normal/non-ASan triplets (default behavior):
+    Installs both supported triplets (default behavior):
     x64-windows, arm64-windows
 
 .EXAMPLE
     .\vcpkg-install.ps1 -Platform x64
-    Installs only x64-windows (non-asan).
-
-.EXAMPLE
-    .\vcpkg-install.ps1 -Platform ARM64 -Asan
-    Installs only arm64-windows-asan.
-
-.EXAMPLE
-    .\vcpkg-install.ps1 -Platform All -Asan
-    Installs normal triplets first, then ASan triplets:
-    x64-windows, arm64-windows, x64-windows-asan, arm64-windows-asan
-
-.EXAMPLE
-    .\vcpkg-install.ps1 -Asan
-    Same as -Platform All -Asan: installs normal triplets first, then ASan triplets.
-
-.EXAMPLE
-    .\vcpkg-install.ps1 -Platform All -Asan:$false
-    Installs only the two non-asan triplets: x64-windows + arm64-windows
+    Installs only x64-windows.
 
 .EXAMPLE
     .\vcpkg-install.ps1 -Triplet x64-windows -Clean
@@ -81,7 +58,7 @@
 
 .EXAMPLE
     .\vcpkg-install.ps1 -VcpkgExe C:\tools\vcpkg\vcpkg.exe
-    Uses specific vcpkg.exe and installs the default non-ASan triplets.
+    Uses specific vcpkg.exe and installs the default triplets.
 
 .EXAMPLE
     .\vcpkg-install.ps1 -Help
@@ -98,13 +75,10 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(HelpMessage = "Target platform (x64, ARM64, or All). Default is All, normal/non-ASan only.")]
+    [Parameter(HelpMessage = "Target platform (x64, ARM64, or All). Default is All.")]
     [string]$Platform = "All",
 
-    [Parameter(HelpMessage = "Install AddressSanitizer-enabled triplet variant; with -Platform All installs normal first, then ASan")]
-    [switch]$Asan,
-
-    [Parameter(HelpMessage = "Optional explicit vcpkg triplet (overrides -Platform and -Asan)")]
+    [Parameter(HelpMessage = "Optional explicit vcpkg triplet (overrides -Platform)")]
     [string]$Triplet = $null,
 
     [Parameter(HelpMessage = "Delete .build\\vcpkg_installed and .build\\vcpkg_install_staging before installing")]
@@ -148,15 +122,10 @@ $tripletsToInstall = @()
 if ($Triplet) {
     $tripletsToInstall = @($Triplet)
 } elseif ($Platform -eq "All") {
-    if ($Asan) {
-        $tripletsToInstall = @("x64-windows", "arm64-windows", "x64-windows-asan", "arm64-windows-asan")
-    } else {
-        $tripletsToInstall = @("x64-windows", "arm64-windows")
-    }
+    $tripletsToInstall = @("x64-windows", "arm64-windows")
 } else {
     $arch = if ($Platform -eq "ARM64") { "arm64" } else { "x64" }
-    $suffix = if ($Asan) { "-asan" } else { "" }
-    $tripletsToInstall = @("$arch-windows$suffix")
+    $tripletsToInstall = @("$arch-windows")
 }
 
 $tripletsToInstall = @($tripletsToInstall | ForEach-Object { Assert-RSVcpkgTripletLeafName -Triplet $_ })

@@ -23,6 +23,7 @@
 
 #include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
+#include "WindowSizing.h"
 
 #include "resource.h"
 
@@ -1524,6 +1525,12 @@ LRESULT ViewerVLC::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
     {
         case WM_CREATE: OnCreate(hwnd); return 0;
         case WM_SIZE: OnSize(LOWORD(lp), HIWORD(lp)); return 0;
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 360, 240);
+            }
+            return 0;
         case WM_SETFOCUS:
             if (_hVideo)
             {

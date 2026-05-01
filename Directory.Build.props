@@ -37,16 +37,13 @@
     <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(RSVcpkgTriplet)'==''">x64-windows</RSVcpkgTriplet>
 
     <!--
-      ASan Debug needs vcpkg dependencies built with /fsanitize=address so the MSVC STL
-      emits matching annotate_optional/annotate_string/annotate_vector tokens. The
-      x64-windows-asan / arm64-windows-asan overlay triplets under
-      vcpkg-overlay-triplets/ provide that. Override RSVcpkgTriplet (used for
-      ExternalIncludePath) and VcpkgTriplet (read by vcpkg's MSBuild integration).
+      ASan Debug links against the standard non-ASan vcpkg triplets. To prevent
+      LNK2038 from MSVC STL container annotations (annotate_vector / annotate_string),
+      the ASan Debug configuration defines _DISABLE_VECTOR_ANNOTATION and
+      _DISABLE_STRING_ANNOTATION (see ItemDefinitionGroup below). This trades the
+      ASan container-overflow detector for the ability to use a single set of vcpkg
+      packages for all configurations.
     -->
-    <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='ASan Debug' and '$(Platform)'=='x64'">x64-windows-asan</RSVcpkgTriplet>
-    <RSVcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='ASan Debug' and '$(Platform)'=='ARM64'">arm64-windows-asan</RSVcpkgTriplet>
-    <VcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='ASan Debug' and '$(Platform)'=='x64'">x64-windows-asan</VcpkgTriplet>
-    <VcpkgTriplet Condition="'$(RSIsFirstPartyProject)'=='true' and '$(Configuration)'=='ASan Debug' and '$(Platform)'=='ARM64'">arm64-windows-asan</VcpkgTriplet>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -134,7 +131,15 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(Configuration)'=='ASan Debug'">
     <ClCompile>
-      <PreprocessorDefinitions>RS_ASAN_DEBUG_BUILD;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <!--
+        _DISABLE_STL_ANNOTATION suppresses every MSVC STL container-overflow
+        annotation (vector, string, optional, ...) so first-party ASan-instrumented
+        code can link against vcpkg dependencies built without /fsanitize=address.
+        Without it, mismatched annotate_* tokens cause LNK2038. ASan still detects
+        heap, stack, global, and use-after-free errors in our code; we only lose
+        the STL container-overflow detector.
+      -->
+      <PreprocessorDefinitions>RS_ASAN_DEBUG_BUILD;_DISABLE_STL_ANNOTATION;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <ResourceCompile>
       <PreprocessorDefinitions>RS_ASAN_DEBUG_BUILD;%(PreprocessorDefinitions)</PreprocessorDefinitions>

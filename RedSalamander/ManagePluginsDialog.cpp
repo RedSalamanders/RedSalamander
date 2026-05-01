@@ -26,6 +26,7 @@
 #include "UiMetrics.h"
 #include "ViewerPluginManager.h"
 #include "WindowMessages.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 #pragma warning(push)
@@ -4493,6 +4494,14 @@ INT_PTR CALLBACK PluginConfigDialogProc(HWND dlg, UINT msg, WPARAM wp, LPARAM lp
 
             return TRUE;
         }
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+            {
+                const LONG minWidth = state ? static_cast<LONG>(state->fixedWindowWidthPx) : 0L;
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(dlg, *info, 380, 260);
+                Common::WindowSizing::ApplyMinimumTrackSize(*info, minWidth, 0L);
+            }
+            return TRUE;
         case WM_SIZE:
         {
             if (state)

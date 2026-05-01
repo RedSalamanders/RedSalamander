@@ -444,6 +444,12 @@ LRESULT CompareDirectoriesWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
         case WM_NCDESTROY: OnNcDestroy(); return 0;
         case WM_SIZE: OnSize(); return 0;
         case WM_DPICHANGED: OnDpiChanged(HIWORD(wp), reinterpret_cast<RECT*>(lp)); return 0;
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hwnd, *info, 760, 480);
+            }
+            return 0;
         case WM_COMMAND: OnCommand(LOWORD(wp)); return 0;
         case WndMsg::kFunctionBarInvoke: return OnFunctionBarInvoke(wp, lp);
         case WM_PAINT: OnPaint(); return 0;

@@ -772,25 +772,47 @@ public:
 
         constexpr int kRefreshIterations = 400;
 
-        uint64_t checksum = 0;
+        constexpr uint64_t kFnvOffset = 1469598103934665603ull;
+        constexpr uint64_t kFnvPrime  = 1099511628211ull;
+        uint64_t checksum             = kFnvOffset;
+        size_t expectedItemCount      = 0u;
+        bool sawItems                 = false;
         for (int iteration = 0; iteration < kRefreshIterations; ++iteration)
         {
             IconCache::GetInstance().Clear();
 
-            auto payload = view.ExecuteEnumeration(s_root, static_cast<uint64_t>(iteration + 1), {});
+            const uint64_t generation = static_cast<uint64_t>(iteration + 1);
+            view._enumerationGeneration.store(generation, std::memory_order_release);
+            auto payload = view.ExecuteEnumeration(s_root, generation, {});
             if (! payload || payload->status != S_OK)
             {
-                checksum = 0;
+                checksum = kFnvOffset;
+                sawItems = false;
+                break;
+            }
+
+            if (iteration == 0)
+            {
+                expectedItemCount = payload->items.size();
+            }
+            else if (payload->items.size() != expectedItemCount)
+            {
+                checksum = kFnvOffset;
+                sawItems = false;
                 break;
             }
 
             for (const auto& item : payload->items)
             {
                 checksum ^= static_cast<uint64_t>(item.iconIndex + 1);
+                checksum *= kFnvPrime;
+                checksum ^= static_cast<uint64_t>(item.stableHash32);
+                checksum *= kFnvPrime;
+                sawItems = true;
             }
         }
 
-        Assert::IsTrue(checksum != 0, L"FolderView refresh produced an unexpected checksum.");
+        Assert::IsTrue(sawItems && checksum != kFnvOffset, L"FolderView refresh produced an unexpected checksum.");
     }
 
     TEST_METHOD(FolderViewCompactMode_SetAppThemeCollapsesRowGapAndUpdatesHitTest)

@@ -1,6 +1,6 @@
 # Themes
 
-RedSalamander is fully theme-aware (menus, panes, file operations UI, and viewers).
+RedSalamander is theme-aware across the main chrome, panes, navigation bars, file operations UI, dialogs, and viewers.
 
 ![Themes in Preferences](res/preferences-themes.png)
 
@@ -17,6 +17,18 @@ Use **View → Theme**:
 Note:
 
 - **High Contrast (System)** is shown as an indicator when Windows high-contrast is enabled.
+
+## Theme examples
+
+The following screenshots were captured from the running application using different built-in themes.
+
+![Light theme](res/theme-light.png)
+
+![Dark theme](res/theme-dark.png)
+
+![Rainbow theme](res/theme-rainbow.png)
+
+![High Contrast App theme](res/theme-high-contrast-app.png)
 
 ## Theme sources
 

@@ -61,6 +61,7 @@
 #include "SettingsStore.h"
 #include "Version.h"
 #include "WindowBackdropPolicy.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 // Global Variables:
@@ -3481,6 +3482,12 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WM_TIMER: return OnTimerMainWindow(hWnd, static_cast<UINT_PTR>(wParam));
         case WM_SIZE: return OnSizeMainWindow(hWnd, LOWORD(lParam), HIWORD(lParam));
         case WM_DPICHANGED: return OnDpiChangedMainWindow(hWnd, static_cast<UINT>(HIWORD(wParam)), reinterpret_cast<const RECT*>(lParam));
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lParam))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(hWnd, *info, 640, 360);
+            }
+            return 0;
         case WM_SETTINGCHANGE:
         case WM_THEMECHANGED:
         case WM_DWMCOLORIZATIONCOLORCHANGED:

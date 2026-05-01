@@ -84,6 +84,12 @@ The IMAP plugin populates `FileInfo` fields for message entries as follows:
   - `0x04000000` when the message is **unread** (does not have `\\Seen`).
   - `0x08000000` when the message has `\\Deleted`.
 
+#### Properties metadata
+
+- `GetItemProperties` exposes general item data, remote/display paths, connection metadata, and IMAP message metadata when available.
+- Mailbox directories commonly do not have meaningful filesystem timestamps; unavailable timestamp fields MUST be omitted rather than shown as `0`.
+- Message properties may include sent time, received/internal time, flags, UID, sender, subject, and size. Standard timestamp fields are included only when non-zero.
+
 ## Operations
 
 ### Browse

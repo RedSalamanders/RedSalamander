@@ -2,6 +2,7 @@
 
 #include <cwctype>
 #include <limits>
+#include <optional>
 
 #include <yyjson.h>
 
@@ -62,6 +63,17 @@ namespace
                                      localSystemTime.wSecond));
 }
 
+[[nodiscard]] std::string FormatItemPropertiesSize(uint64_t sizeBytes)
+{
+    const std::wstring exactBytes = std::format(L"{} bytes", sizeBytes);
+    if (sizeBytes < 1024ull)
+    {
+        return Utf8FromUtf16(exactBytes);
+    }
+
+    return Utf8FromUtf16(std::format(L"{} ({})", FormatBytesCompact(sizeBytes), exactBytes));
+}
+
 [[nodiscard]] std::string FormatFileAttributeFlags(DWORD attributes) noexcept
 {
     std::wstring text;
@@ -98,6 +110,99 @@ namespace
     }
 
     return Utf8FromUtf16(text);
+}
+
+struct NamedStreamInfo
+{
+    std::wstring name;
+    uint64_t sizeBytes = 0;
+};
+
+[[nodiscard]] std::optional<std::wstring> TryExtractNamedStreamName(std::wstring_view win32StreamName)
+{
+    constexpr std::wstring_view kPrefix = L":";
+    constexpr std::wstring_view kSuffix = L":$DATA";
+    constexpr std::wstring_view kDefaultDataStream = L"::$DATA";
+
+    if (win32StreamName == kDefaultDataStream || ! win32StreamName.starts_with(kPrefix) || ! win32StreamName.ends_with(kSuffix) ||
+        win32StreamName.size() <= kPrefix.size() + kSuffix.size())
+    {
+        return std::nullopt;
+    }
+
+    std::wstring name(win32StreamName.substr(kPrefix.size(), win32StreamName.size() - kPrefix.size() - kSuffix.size()));
+    if (name.empty())
+    {
+        return std::nullopt;
+    }
+
+    return name;
+}
+
+[[nodiscard]] bool IsSafeLogicalStreamName(std::wstring_view streamName) noexcept
+{
+    if (streamName.empty())
+    {
+        return false;
+    }
+
+    return std::ranges::none_of(streamName,
+                                [](wchar_t ch) noexcept
+    {
+        return ch == L':' || ch == L'\\' || ch == L'/' || ch == L'\0';
+    });
+}
+
+HRESULT EnumerateNamedStreams(const wchar_t* path, std::vector<NamedStreamInfo>& streams) noexcept
+{
+    streams.clear();
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    const std::wstring extendedPath = FileSystemInternal::ToExtendedPath(path);
+
+    WIN32_FIND_STREAM_DATA streamData{};
+    wil::unique_hfind findHandle(::FindFirstStreamW(extendedPath.c_str(), FindStreamInfoStandard, &streamData, 0));
+    if (! findHandle)
+    {
+        const DWORD lastError = ::GetLastError();
+        switch (lastError)
+        {
+            case ERROR_HANDLE_EOF:
+            case ERROR_INVALID_PARAMETER:
+            case ERROR_NOT_SUPPORTED: return S_OK;
+            default: return HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_GEN_FAILURE);
+        }
+    }
+
+    for (;;)
+    {
+        if (streamData.StreamSize.QuadPart >= 0)
+        {
+            std::optional<std::wstring> name = TryExtractNamedStreamName(streamData.cStreamName);
+            if (name.has_value() && IsSafeLogicalStreamName(name.value()))
+            {
+                streams.push_back(NamedStreamInfo{.name = std::move(name.value()), .sizeBytes = static_cast<uint64_t>(streamData.StreamSize.QuadPart)});
+            }
+        }
+
+        streamData = {};
+        if (::FindNextStreamW(findHandle.get(), &streamData) == 0)
+        {
+            const DWORD lastError = ::GetLastError();
+            return (lastError == ERROR_HANDLE_EOF) ? S_OK : HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_GEN_FAILURE);
+        }
+    }
+}
+
+[[nodiscard]] std::wstring BuildAlternateStreamPath(const wchar_t* path, std::wstring_view streamName)
+{
+    std::wstring streamPath = FileSystemInternal::ToExtendedPath(path);
+    streamPath.push_back(L':');
+    streamPath.append(streamName);
+    return streamPath;
 }
 
 [[nodiscard]] FileSystemReparsePointPolicy ParseReparsePointPolicy(std::string_view policy) noexcept
@@ -598,6 +703,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObje
         return S_OK;
     }
 
+    if (riid == __uuidof(IFileSystemItemStreams))
+    {
+        *ppvObject = static_cast<IFileSystemItemStreams*>(this);
+        AddRef();
+        return S_OK;
+    }
+
     if (riid == __uuidof(IFileSystemDirectoryOperations))
     {
         *ppvObject = static_cast<IFileSystemDirectoryOperations*>(this);
@@ -966,9 +1078,6 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetItemProperties(const wchar_t* path, con
     const std::wstring fullPath(path);
     const std::filesystem::path fullPathFs(fullPath);
     const std::wstring name       = fullPathFs.filename().wstring();
-    const std::wstring extension  = ! isDirectory ? fullPathFs.extension().wstring() : std::wstring{};
-    const std::wstring parentPath = fullPathFs.parent_path().wstring();
-    const std::wstring rootPath   = fullPathFs.root_path().wstring();
 
     auto addField = [&](yyjson_mut_val* sectionFields, const char* key, const std::string& value) noexcept
     {
@@ -986,16 +1095,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetItemProperties(const wchar_t* path, con
     yyjson_mut_val* generalFields = addSection("General");
     addField(generalFields, "Name", Utf8FromUtf16(name.empty() ? std::wstring_view(fullPath) : std::wstring_view(name)));
     addField(generalFields, "Path", Utf8FromUtf16(fullPath));
-    addField(generalFields, "Parent", Utf8FromUtf16(parentPath));
-    addField(generalFields, "Root", Utf8FromUtf16(rootPath));
     addField(generalFields, "Type", isDirectory ? std::string("Directory") : std::string("File"));
-    if (! extension.empty())
-    {
-        addField(generalFields, "Extension", Utf8FromUtf16(extension));
-    }
     if (! isDirectory)
     {
-        addField(generalFields, "Size", std::format("{} bytes", sizeBytes));
+        addField(generalFields, "Size", FormatItemPropertiesSize(sizeBytes));
     }
 
     yyjson_mut_val* timestampFields = addSection("Timestamps");
@@ -1006,6 +1109,31 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetItemProperties(const wchar_t* path, con
     yyjson_mut_val* attributeFields = addSection("Attributes");
     addField(attributeFields, "Raw", std::format("0x{:08X}", data.dwFileAttributes));
     addField(attributeFields, "Flags", FormatFileAttributeFlags(data.dwFileAttributes));
+
+    yyjson_mut_val* streams = yyjson_mut_arr(doc);
+    yyjson_mut_obj_add_val(doc, root, "streams", streams);
+
+    std::vector<NamedStreamInfo> namedStreams;
+    if (SUCCEEDED(EnumerateNamedStreams(path, namedStreams)))
+    {
+        for (const NamedStreamInfo& stream : namedStreams)
+        {
+            const std::string streamNameUtf8 = Utf8FromUtf16(stream.name);
+            if (streamNameUtf8.empty())
+            {
+                continue;
+            }
+
+            yyjson_mut_val* streamObj = yyjson_mut_obj(doc);
+            yyjson_mut_obj_add_strncpy(doc, streamObj, "name", streamNameUtf8.data(), streamNameUtf8.size());
+            yyjson_mut_obj_add_uint(doc, streamObj, "sizeBytes", stream.sizeBytes);
+
+            const std::string displaySize = FormatItemPropertiesSize(stream.sizeBytes);
+            yyjson_mut_obj_add_strncpy(doc, streamObj, "displaySize", displaySize.data(), displaySize.size());
+            yyjson_mut_obj_add_bool(doc, streamObj, "canRemove", true);
+            yyjson_mut_arr_add_val(streams, streamObj);
+        }
+    }
 
     const char* written = yyjson_mut_write(doc, YYJSON_WRITE_NOFLAG, nullptr);
     if (! written)
@@ -1018,6 +1146,28 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetItemProperties(const wchar_t* path, con
         std::scoped_lock lock(_propertiesMutex);
         _lastPropertiesJson.assign(written);
         *jsonUtf8 = _lastPropertiesJson.c_str();
+    }
+
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::DeleteItemStream(const wchar_t* path, const wchar_t* streamName) noexcept
+{
+    if (path == nullptr || path[0] == L'\0' || streamName == nullptr || streamName[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    if (! IsSafeLogicalStreamName(streamName))
+    {
+        return E_INVALIDARG;
+    }
+
+    const std::wstring streamPath = BuildAlternateStreamPath(path, streamName);
+    if (::DeleteFileW(streamPath.c_str()) == 0)
+    {
+        const DWORD lastError = ::GetLastError();
+        return HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_GEN_FAILURE);
     }
 
     return S_OK;

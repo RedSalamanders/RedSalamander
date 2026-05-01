@@ -1,87 +1,302 @@
 # Viewers (F3)
 
-Press `F3` to open the focused file in a dedicated **viewer window**.
+Viewers open the focused file in a dedicated window. Select a file in a pane and press `F3`; RedSalamander chooses the viewer from the extension mapping in **Preferences -> Viewers**.
 
-Viewer selection is controlled by Preferences → **Viewers** (extension → viewer plugin).
-That page lets you search mappings, add/update/remove overrides, and reset everything back to the defaults.
+If the mapped viewer is missing, disabled, or cannot handle the file, RedSalamander falls back to the Text viewer when possible. Folder disk usage is the exception: the Space viewer opens from **Commands -> Calculate Occupied Space** (`Alt+F10`) or the folder context menu.
 
-If there is no mapping (or the mapped plugin is missing/disabled), RedSalamander falls back to the **Text viewer**.
+The examples below use generated documentation samples, not personal files.
 
-![Viewer examples](res/viewer-text.png)
+## Default Viewer Associations
 
-## Default viewer associations
+The default mapping includes:
 
-The default mapping includes (non-exhaustive):
+| File type | Default viewer |
+|-----------|----------------|
+| `.txt`, `.log`, `.xml`, `.ini`, `.cfg`, `.csv` | Text viewer |
+| `.md` | Markdown viewer, with Text fallback if ViewerWeb is unavailable |
+| `.json`, `.json5` | JSON viewer, with Text fallback if ViewerWeb is unavailable |
+| `.html`, `.htm`, `.pdf` | Web viewer, with Text fallback if ViewerWeb is unavailable |
+| Common WIC image formats and many camera RAW formats | Image/RAW viewer |
+| Common audio/video formats | VLC viewer |
+| SQLite database files | SQLite viewer |
+| `.exe`, `.dll`, `.sys`, and other PE files | PE viewer |
 
-- Text: `.txt`, `.log`, `.xml`, `.ini`, `.cfg`, `.csv` → **Text viewer**
-- Markdown: `.md` → **Markdown viewer** (falls back to Text if ViewerWeb is unavailable)
-- JSON: `.json`, `.json5` → **JSON viewer** (falls back to Text if ViewerWeb is unavailable)
-- Web/PDF: `.html`, `.htm`, `.pdf` → **Web viewer** (falls back to Text if ViewerWeb is unavailable)
-- Images: common WIC formats + many RAW camera formats → **ImgRaw viewer**
-- Media: common audio/video formats → **VLC viewer**
-- PE files: `.exe`, `.dll`, `.sys`, … → **PE viewer**
+You can add, update, remove, search, and reset mappings in **Preferences -> Viewers**.
 
-You can change these in Preferences at any time.
+## Text / Hex / Diff Viewer (`builtin/viewer-text`)
 
-## Text viewer (`builtin/viewer-text`)
+![Text viewer showing a generated log file](res/viewer-text.png)
 
-Key features:
-
-- Toggle **Text / Hex** view
-- Find (`Ctrl+F`, then `F3` / `Shift+F3`)
-- Encoding menu with quick next/previous (`F8` / `Shift+F8`)
-- Wrap and line numbers
-- “Other Files” navigation within the same folder
-
-![Text viewer](res/viewer-text.png)
-
-## Space viewer (`builtin/viewer-space`)
-
-Shows a treemap of folder disk usage (“occupied space”).
-
-Open it via:
-
-- **Commands → Calculate Occupied Space** (default `Alt+F10`), or
-- Folder view context menu: **View Space**
+Use the Text viewer for logs, source-like files, configuration files, CSV/XML content, unknown files, and any file you want to inspect as text or bytes.
 
 Behavior:
 
-- If exactly one folder is selected, it scans that folder.
-- Otherwise it scans the current folder.
+- Text mode with encoding detection and selectable code pages.
+- Hex mode with offset, byte, and decoded-text columns.
+- Diff modes for `.diff`, `.patch`, and `.rej` files, including side-by-side, inline, unchanged-lines toggle, and hunk navigation.
+- Optional line numbers, wrapping, and hex byte coloring.
+- Save As with optional encoding conversion.
+- Peer-file navigation within the same folder.
 
-![ViewerSpace](res/viewer-space.png)
+Shortcuts:
 
-## Image/RAW viewer (`builtin/viewer-imgraw`)
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+O` | Open a file from the viewer. |
+| `Ctrl+S` | Save As. |
+| `F5` | Refresh/reload. |
+| `Ctrl+F` | Find. |
+| `F3` / `Shift+F3` | Next/previous match. |
+| `Home` / `End` | Top/bottom. |
+| `Ctrl+G` | Go to offset. |
+| `F7` / `Shift+F7` | Next/previous diff hunk. |
+| `F8` / `Shift+F8` | Next/previous encoding. |
+| `Space` / `Ctrl+Down` | Next peer file. |
+| `Backspace` / `Ctrl+Up` | Previous peer file. |
+| `Ctrl+Home` / `Ctrl+End` | First/last peer file. |
+| `Esc` | Close. |
 
-Displays common images and many camera RAW formats with smooth zoom/pan.
+## Image / RAW Viewer (`builtin/viewer-imgraw`)
 
-- Zoom: the keys next to `Backspace` and `0` (typically `+` / `-`), and `0` to reset.
-- Mouse wheel zoom and drag-to-pan are supported.
+![Image/RAW viewer showing a generated sample image](res/viewer-imgraw.png)
 
-![ViewerImgRaw](res/viewer-imgraw.png)
+Use the Image/RAW viewer for common images and camera RAW files.
 
-## PE viewer (`builtin/viewer-pe`)
+Behavior:
 
-Shows parsed Portable Executable metadata and supports export.
+- Fit-to-window and actual-size viewing.
+- Smooth zoom and pan.
+- Rotate, flip, and reset orientation.
+- Export the displayed image.
+- Brightness, contrast, gamma, grayscale, and negative adjustments.
+- RAW/thumbnail source switching where the file provides both.
+- Exif overlay and neighbor prefetch for fast next/previous browsing.
 
-![ViewerPE](res/viewer-pe.png)
+Shortcuts:
 
-## VLC viewer (`builtin/viewer-vlc`)
+| Shortcut | Action |
+|----------|--------|
+| `F5` | Refresh/reload. |
+| `Ctrl+S` | Export. |
+| `Right` / `PgDn` / `Space` | Next image. |
+| `Left` / `PgUp` / `Backspace` | Previous image. |
+| `Home` / `End` | First/last image. |
+| `Ctrl+F` or double click | Fit to window. |
+| `F` | Toggle fit/100%. |
+| `1` | Actual size. |
+| `+` / `-` / `0` | Zoom in/out/reset. |
+| `R` | Rotate clockwise. |
+| `Ctrl+R` / `Shift+R` | Rotate counterclockwise. |
+| `H` / `V` | Flip horizontal/vertical. |
+| `O` | Reset orientation. |
+| `G` / `N` | Grayscale/negative. |
+| `I` | Exif overlay. |
+| `Ctrl+Alt+Arrow`, `Ctrl+Alt+PgUp/PgDn` | Adjustment shortcuts. |
 
-Plays audio/video formats via libVLC.
+Mouse wheel zooms, and dragging pans when the image is zoomed.
+
+## Space Viewer (`builtin/viewer-space`)
+
+![Space viewer showing a generated folder treemap](res/viewer-space.png)
+
+Use the Space viewer to understand which folders or files consume the most disk space.
+
+Open it with:
+
+- **Commands -> Calculate Occupied Space** (`Alt+F10`), or
+- Folder context menu -> **View Space**.
+
+Behavior:
+
+- If exactly one folder is selected, the viewer scans that folder.
+- Otherwise it scans the current pane folder.
+- The treemap area is proportional to item size.
+- You can navigate upward and rescan after files change.
+
+Shortcuts:
+
+| Shortcut | Action |
+|----------|--------|
+| `F5` | Refresh/rescan. |
+| `Backspace` | Go up. |
+| `Esc` | Close. |
+
+## PE Viewer (`builtin/viewer-pe`)
+
+![PE viewer showing parsed metadata for a sample executable](res/viewer-pe.png)
+
+Use the PE viewer for Windows Portable Executable files such as `.exe`, `.dll`, `.sys`, and related binary formats.
+
+Behavior:
+
+- Parses the selected PE file and shows structured metadata.
+- Shows headers, sections, import/export-related information, and other parseable PE details.
+- Supports export to text or Markdown.
+- Supports peer-file navigation across other PE files in the same folder.
+
+Shortcuts:
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+S` | Export as text. |
+| `Ctrl+Shift+S` | Export as Markdown. |
+| `F5` | Refresh. |
+| `Home` / `End` | Top/bottom. |
+| `Space` / `Ctrl+Down` | Next peer file. |
+| `Backspace` / `Ctrl+Up` | Previous peer file. |
+| `Ctrl+Home` / `Ctrl+End` | First/last peer file. |
+| `Esc` | Close. |
+
+## SQLite Viewer (`builtin/viewer-sqlite`)
+
+![SQLite viewer showing a generated sample database table](res/viewer-sqlite.png)
+
+Use the SQLite viewer to inspect database files without editing them.
+
+Behavior:
+
+- Opens SQLite databases read-only.
+- Provides a table selector and paged preview grid.
+- Provides previous/next page navigation.
+- Provides a read-only custom SQL query field.
+- Supports **Run Query** and **Table Preview** commands.
+- Settings control preview page size, custom-query row cap, and direct-open behavior for local files.
+- Status text reports loading, empty tables, row ranges, query counts, and truncated-result states.
+
+Shortcuts:
+
+| Shortcut | Action |
+|----------|--------|
+| `F3` | Open the selected database from the pane. |
+| `Tab` / `Shift+Tab` | Move through viewer controls. |
+| `Arrow keys` | Move inside focused controls and grids. |
+| `Enter` / `Space` | Activate the focused button, selector, or command. |
+
+## VLC Viewer (`builtin/viewer-vlc`)
+
+![VLC viewer playing a generated audio sample](res/viewer-vlc.png)
+
+Use the VLC viewer for audio and video playback through VLC/libVLC.
 
 Requirements:
 
-- VLC media player installed, or a VLC installation folder configured in Preferences → Plugins → VLC Viewer.
+- VLC media player must be installed, or
+- a VLC installation folder must be configured in **Preferences -> Plugins -> VLC Viewer**.
 
-![ViewerVLC](res/viewer-vlc.png)
+Behavior:
 
-## Web / JSON / Markdown viewers (`ViewerWeb.dll`)
+- Opens media files mapped to the VLC viewer.
+- Provides play, pause, stop, timeline/seek, time display, volume, and snapshot controls.
+- Uses plugin settings for VLC path, plugin path, caching, hardware acceleration, output, visualizer, and extra VLC arguments.
+- If VLC is unavailable, the viewer shows the missing-VLC state with configuration guidance.
 
-These viewers use Microsoft Edge WebView2.
+Shortcuts:
+
+| Shortcut | Action |
+|----------|--------|
+| `F3` | Open the selected media file from the pane. |
+| `Tab` / `Shift+Tab` | Move through visible playback controls. |
+| `Enter` / `Space` | Activate the focused control. |
+
+No separate viewer menu accelerator table is currently defined for VLC; use the visible playback controls.
+
+## Web Viewer (`builtin/viewer-web`)
+
+![Web viewer rendering a generated HTML sample](res/viewer-web.png)
+
+Use the Web viewer for HTML, PDF, and browser-rendered content.
 
 Requirements:
 
-- WebView2 Runtime installed on the machine.
+- Microsoft Edge WebView2 Runtime.
 
-![ViewerWeb](res/viewer-web.png)
+Behavior:
+
+- Renders local HTML/PDF-style content through WebView2.
+- Supports find, zoom, refresh, save, URL copy, and opening in the system browser.
+- Falls back to Text viewer when ViewerWeb is unavailable and the host can safely do so.
+
+Shortcuts:
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+S` | Save As. |
+| `F5` | Refresh. |
+| `Ctrl+F` | Find. |
+| `F3` / `Shift+F3` | Find next/previous. |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in/out/reset. |
+| `F12` | Toggle DevTools when enabled. |
+| `Ctrl+L` | Copy URL. |
+| `Ctrl+Enter` | Open in browser. |
+| `Space` / `Ctrl+Down` | Next peer file. |
+| `Backspace` / `Ctrl+Up` | Previous peer file. |
+| `Esc` | Close. |
+
+## JSON Viewer (`builtin/viewer-json`)
+
+![JSON viewer showing a generated structured sample](res/viewer-json.png)
+
+Use the JSON viewer for `.json`, `.json5`, and JSONL-style inspection.
+
+Requirements:
+
+- Microsoft Edge WebView2 Runtime.
+
+Behavior:
+
+- Formats JSON into a structured, syntax-highlighted view.
+- Supports pretty, tree, and JSONL/card-style modes where available.
+- Provides expand/collapse commands for structured JSON views.
+- Oversized documents can be handed off to Text viewer.
+
+Shortcuts:
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+S` | Save As. |
+| `F5` | Refresh. |
+| `Ctrl+F` | Find. |
+| `F3` / `Shift+F3` | Find next/previous. |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in/out/reset. |
+| `F12` | Toggle DevTools when enabled. |
+| `Ctrl+L` | Copy URL. |
+| `Ctrl+Enter` | Open in browser. |
+| `Space` / `Ctrl+Down` | Next peer file. |
+| `Backspace` / `Ctrl+Up` | Previous peer file. |
+| `Esc` | Close. |
+
+## Markdown Viewer (`builtin/viewer-markdown`)
+
+![Markdown viewer rendering a generated Markdown sample](res/viewer-markdown.png)
+
+Use the Markdown viewer for `.md` documentation and notes.
+
+Requirements:
+
+- Microsoft Edge WebView2 Runtime.
+
+Behavior:
+
+- Renders headings, lists, emphasis, and code blocks.
+- Supports source toggling for inspection.
+- Uses WebView2 for display and Text viewer fallback when ViewerWeb is unavailable.
+- Oversized documents can be handed off to Text viewer.
+
+Shortcuts:
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+S` | Save As. |
+| `F5` | Refresh. |
+| `Ctrl+F` | Find. |
+| `F3` / `Shift+F3` | Find next/previous. |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in/out/reset. |
+| `F12` | Toggle DevTools when enabled. |
+| `Ctrl+L` | Copy URL. |
+| `Ctrl+Enter` | Open in browser. |
+| `Ctrl+Backtick` | Toggle Markdown source. |
+| `Space` / `Ctrl+Down` | Next peer file. |
+| `Backspace` / `Ctrl+Up` | Previous peer file. |
+| `Esc` | Close. |
+
+See also: [Plugins](Plugins.md), [Preferences](Preferences.md), and [Settings File & Advanced Configuration](SettingsFile.md).

@@ -1136,7 +1136,7 @@ public:
         return raw;
     }
 
-    void ClearChildren() noexcept;
+    virtual void ClearChildren() noexcept;
     [[nodiscard]] size_t DebugChildCount() const noexcept
     {
         return _children.size();
@@ -2077,6 +2077,8 @@ class ScrollPanel : public Panel
 {
 public:
     ScrollPanel() = default;
+
+    void ClearChildren() noexcept override;
 
     void SetContentHeight(float heightDip) noexcept;
     [[nodiscard]] float GetContentHeight() const noexcept;

@@ -3,7 +3,6 @@
 **Compare Directories** opens a dedicated window that compares two folder trees (Left vs Right) and highlights differences.
 
 ![Compare Directories window](res/compare-directories.png)
-<!-- TODO(screenshot): replace placeholder with a real screenshot -->
 
 ## Open
 

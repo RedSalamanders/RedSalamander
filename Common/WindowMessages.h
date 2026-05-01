@@ -111,6 +111,10 @@ inline constexpr UINT kDxUiTextInputBridgeBlur              = WM_APP + 0x535;
 inline constexpr UINT kPluginConfigurationDialogApplyTheme  = WM_APP + 0x536;
 inline constexpr UINT kConnectionCredentialPromptApplyTheme = WM_APP + 0x537;
 
+// Item Properties
+inline constexpr UINT kItemPropertiesLoadComplete = WM_APP + 0x540;
+inline constexpr UINT kItemPropertiesRemoveStream = WM_APP + 0x541;
+
 // Splash screen
 inline constexpr UINT kSplashScreenSetText  = WM_APP + 0x6F0;
 inline constexpr UINT kSplashScreenRecenter = WM_APP + 0x6F1;

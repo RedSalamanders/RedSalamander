@@ -1855,6 +1855,54 @@ const auto runRemoteFtpPartialContinue = [&](std::wstring_view caseName) noexcep
             return false;
         }
 
+        const std::wstring copyGoodPluginPath = ToPluginPathText(copyGood);
+        const char* copyGoodPropertiesJson    = nullptr;
+        const HRESULT copyGoodPropertiesHr    = io->GetItemProperties(copyGoodPluginPath.c_str(), &copyGoodPropertiesJson);
+        state.Require(SUCCEEDED(copyGoodPropertiesHr) && copyGoodPropertiesJson != nullptr && copyGoodPropertiesJson[0] != '\0',
+                      std::format(L"Remote FTP partial: GetItemProperties failed for timestamp validation. hr=0x{:08X}",
+                                  static_cast<unsigned long>(copyGoodPropertiesHr)));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        const std::string_view copyGoodProperties(copyGoodPropertiesJson);
+        const auto findPropertyValue = [&](std::string_view key) noexcept -> std::optional<std::string_view>
+        {
+            const std::string needle = std::format("\"key\":\"{}\"", key);
+            const size_t keyPos      = copyGoodProperties.find(needle);
+            if (keyPos == std::string_view::npos)
+            {
+                return std::nullopt;
+            }
+
+            const size_t valuePos = copyGoodProperties.find("\"value\":\"", keyPos + needle.size());
+            if (valuePos == std::string_view::npos)
+            {
+                return std::nullopt;
+            }
+
+            const size_t begin = valuePos + std::string_view("\"value\":\"").size();
+            const size_t end   = copyGoodProperties.find('"', begin);
+            if (end == std::string_view::npos || end < begin)
+            {
+                return std::nullopt;
+            }
+
+            return copyGoodProperties.substr(begin, end - begin);
+        };
+
+        const std::optional<std::string_view> ftpModifiedTime = findPropertyValue("lastWriteTime");
+        state.Require(ftpModifiedTime.has_value() && ftpModifiedTime.value() != "0",
+                      L"Remote FTP partial: item properties should expose a non-zero modified timestamp.");
+        state.Require(! findPropertyValue("creationTime").has_value(), L"Remote FTP partial: item properties should not expose an unavailable zero creation time.");
+        state.Require(! findPropertyValue("lastAccessTime").has_value(), L"Remote FTP partial: item properties should not expose an unavailable zero access time.");
+        state.Require(! findPropertyValue("changeTime").has_value(), L"Remote FTP partial: item properties should not expose an unavailable zero change time.");
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
         const std::wstring copyGoodText = ToPluginPathText(copyGood);
         const std::wstring copyMissText = ToPluginPathText(copyMiss);
         const std::wstring copyDstText  = ToPluginPathText(copyDst);

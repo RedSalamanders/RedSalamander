@@ -553,6 +553,19 @@ interface __declspec(uuid("2c7c32b3-8a0f-4e25-8d3a-6a5f1d0a1e2c")) __declspec(no
     virtual HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept = 0;
 };
 
+// Optional item stream operations interface for filesystem plugins.
+// Notes:
+// - The host obtains this interface via QueryInterface on the active IFileSystem instance.
+// - Implementations MUST interpret `path` as a filesystem-internal path.
+// - `streamName` is the logical stream name surfaced by GetItemProperties JSON (for example "Zone.Identifier"),
+//   not the full Win32 ":name:$DATA" stream spec.
+// - Implementations SHOULD return HRESULT_FROM_WIN32(ERROR_NOT_FOUND) when the named stream does not exist.
+// - Implementations SHOULD return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) for backends that can list but not delete streams.
+interface __declspec(uuid("9435eb43-828f-43d3-a9a9-8d9c7f7ebe36")) __declspec(novtable) IFileSystemItemStreams : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE DeleteItemStream(const wchar_t* path, const wchar_t* streamName) noexcept = 0;
+};
+
 // Result structure for directory size computation.
 struct FileSystemDirectorySizeResult
 {

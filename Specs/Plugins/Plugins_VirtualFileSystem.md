@@ -412,6 +412,7 @@ interface __declspec(novtable) INavigationMenuCallback
 - If both `path` and `commandId` are provided, navigation takes precedence.
 - If `path` is empty and `commandId != 0`, the host calls `ExecuteMenuCommand(commandId)`.
 - The host assigns temporary Win32 menu item IDs for actionable rows (a reserved internal range in `NavigationView`); `commandId` is plugin-defined and is not treated as a Win32 `WM_COMMAND` identifier.
+- When the active file system is not the built-in `file` plugin, the host adds a `Common Folders` submenu to the main NavigationView menu. Its children mirror the built-in `file` plugin's leading known-folder entries (Desktop, Documents, Downloads, Pictures, Music, Videos, OneDrive when available), preserve the same stock icons, and navigate by Windows absolute path so the pane switches to `file`.
 - Plugins SHOULD keep `commandId` values stable and unique within the returned list for predictable command routing/debugging.
 - If `iconPath` is provided, the host uses `IconCache::QuerySysIconIndexForPath(iconPath, ...)`.
   If `iconPath` is empty and `path` is provided, the host uses `path` to resolve the icon.
@@ -890,12 +891,54 @@ Properties JSON (version 1) (minimal shape):
       "fields": [
         { "key": "name", "value": "file.txt" },
         { "key": "path", "value": "/folder/file.txt" },
-        { "key": "sizeBytes", "value": "12345" }
+        { "key": "size", "value": "12.1 KB (12345 bytes)" }
       ]
+    }
+  ],
+  "streams": [
+    {
+      "name": "Zone.Identifier",
+      "sizeBytes": 128,
+      "displaySize": "128 bytes",
+      "canRemove": true
     }
   ]
 }
 ```
+
+The host treats field values as display text, not typed values; plugins should format sizes for users rather than exposing raw byte counts as the only text. Long field values may wrap in the themed dialog.
+
+`streams` is optional and lists named streams for the item. The default unnamed data stream is not listed. `name` is the logical stream name without Win32 `:` delimiters or `:$DATA` suffix. `sizeBytes` is the stream size as an unsigned integer; `displaySize` is the plugin-provided localized/display string; `canRemove` only means the stream is semantically removable if the active filesystem also implements `IFileSystemItemStreams`.
+
+### 4f. Item stream operations (`IFileSystemItemStreams`) (optional)
+
+**UUID:** `{9435eb43-828f-43d3-a9a9-8d9c7f7ebe36}`
+
+Optional mutation interface for per-item named streams surfaced by `IFileSystemIO::GetItemProperties`.
+
+The host obtains this interface via `QueryInterface` on the active `IFileSystem` instance. Plugins that do not support stream deletion omit this interface; the Properties dialog must still show stream metadata from JSON, but removal buttons are disabled.
+
+```cpp
+interface __declspec(uuid("9435eb43-828f-43d3-a9a9-8d9c7f7ebe36"))
+         __declspec(novtable)
+         IFileSystemItemStreams : public IUnknown
+{
+    // `path` is a filesystem-internal path.
+    // `streamName` is the logical name from GetItemProperties JSON, for example "Zone.Identifier",
+    // not the Win32 ":name:$DATA" spelling.
+    virtual HRESULT STDMETHODCALLTYPE DeleteItemStream(
+        const wchar_t* path,
+        const wchar_t* streamName
+    ) noexcept = 0;
+};
+```
+
+Return values:
+
+- `S_OK`: stream removed.
+- `E_POINTER` / `E_INVALIDARG`: invalid parameters.
+- `HRESULT_FROM_WIN32(ERROR_NOT_FOUND)` or equivalent: the named stream does not exist.
+- `HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)`: backend can list streams but cannot remove them.
 
 #### CreateDirectory
 

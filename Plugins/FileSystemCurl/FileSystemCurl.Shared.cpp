@@ -591,6 +591,219 @@ namespace FileSystemCurlInternal
     return std::string(text);
 }
 
+[[nodiscard]] char ToLowerAscii(char ch) noexcept
+{
+    if (ch >= 'A' && ch <= 'Z')
+    {
+        return static_cast<char>(ch - 'A' + 'a');
+    }
+    return ch;
+}
+
+[[nodiscard]] bool EqualsAsciiIgnoreCase(std::string_view left, std::string_view right) noexcept
+{
+    if (left.size() != right.size())
+    {
+        return false;
+    }
+
+    for (size_t index = 0; index < left.size(); ++index)
+    {
+        if (ToLowerAscii(left[index]) != ToLowerAscii(right[index]))
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool TryParseUnsignedInRange(std::string_view token, unsigned int minimum, unsigned int maximum, unsigned int& value) noexcept
+{
+    if (token.empty())
+    {
+        return false;
+    }
+
+    unsigned int parsed     = 0;
+    const auto [ptr, error] = std::from_chars(token.data(), token.data() + token.size(), parsed);
+    if (error != std::errc{} || ptr != token.data() + token.size() || parsed < minimum || parsed > maximum)
+    {
+        return false;
+    }
+
+    value = parsed;
+    return true;
+}
+
+[[nodiscard]] bool TryParseMonthToken(std::string_view token, unsigned int& month) noexcept
+{
+    static constexpr std::array<std::string_view, 12> kMonths = {{
+        "jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"}};
+
+    for (size_t index = 0; index < kMonths.size(); ++index)
+    {
+        if (EqualsAsciiIgnoreCase(token, kMonths[index]))
+        {
+            month = static_cast<unsigned int>(index + 1);
+            return true;
+        }
+    }
+
+    return false;
+}
+
+[[nodiscard]] bool TryLocalSystemTimeToFileTime(const SYSTEMTIME& localTime, __int64& fileTime) noexcept
+{
+    SYSTEMTIME utcTime{};
+    if (! TzSpecificLocalTimeToSystemTime(nullptr, &localTime, &utcTime))
+    {
+        return false;
+    }
+
+    FILETIME rawFileTime{};
+    if (! SystemTimeToFileTime(&utcTime, &rawFileTime))
+    {
+        return false;
+    }
+
+    ULARGE_INTEGER value{};
+    value.LowPart  = rawFileTime.dwLowDateTime;
+    value.HighPart = rawFileTime.dwHighDateTime;
+    fileTime       = static_cast<__int64>(value.QuadPart);
+    return true;
+}
+
+[[nodiscard]] __int64 CurrentSystemFileTime() noexcept
+{
+    FILETIME rawFileTime{};
+    GetSystemTimeAsFileTime(&rawFileTime);
+
+    ULARGE_INTEGER value{};
+    value.LowPart  = rawFileTime.dwLowDateTime;
+    value.HighPart = rawFileTime.dwHighDateTime;
+    return static_cast<__int64>(value.QuadPart);
+}
+
+[[nodiscard]] bool TryParseUnixListTimestamp(std::string_view monthToken,
+                                             std::string_view dayToken,
+                                             std::string_view timeOrYearToken,
+                                             __int64& fileTime) noexcept
+{
+    unsigned int month = 0;
+    unsigned int day   = 0;
+    if (! TryParseMonthToken(monthToken, month) || ! TryParseUnsignedInRange(dayToken, 1, 31, day))
+    {
+        return false;
+    }
+
+    SYSTEMTIME localTime{};
+    localTime.wMonth = static_cast<WORD>(month);
+    localTime.wDay   = static_cast<WORD>(day);
+
+    const size_t colon = timeOrYearToken.find(':');
+    if (colon == std::string_view::npos)
+    {
+        unsigned int year = 0;
+        if (! TryParseUnsignedInRange(timeOrYearToken, 1601, 9999, year))
+        {
+            return false;
+        }
+        localTime.wYear = static_cast<WORD>(year);
+        return TryLocalSystemTimeToFileTime(localTime, fileTime);
+    }
+
+    unsigned int hour   = 0;
+    unsigned int minute = 0;
+    if (! TryParseUnsignedInRange(timeOrYearToken.substr(0, colon), 0, 23, hour) ||
+        ! TryParseUnsignedInRange(timeOrYearToken.substr(colon + 1), 0, 59, minute))
+    {
+        return false;
+    }
+
+    SYSTEMTIME currentLocalTime{};
+    GetLocalTime(&currentLocalTime);
+
+    localTime.wYear   = currentLocalTime.wYear;
+    localTime.wHour   = static_cast<WORD>(hour);
+    localTime.wMinute = static_cast<WORD>(minute);
+
+    if (! TryLocalSystemTimeToFileTime(localTime, fileTime))
+    {
+        return false;
+    }
+
+    constexpr __int64 kFileTimeTicksPerDay = 24LL * 60LL * 60LL * 10000000LL;
+    const __int64 latestReasonableTime     = CurrentSystemFileTime() + kFileTimeTicksPerDay;
+    if (fileTime > latestReasonableTime && localTime.wYear > 1601)
+    {
+        --localTime.wYear;
+        return TryLocalSystemTimeToFileTime(localTime, fileTime);
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool TryParseDosListTimestamp(std::string_view dateToken, std::string_view timeToken, __int64& fileTime) noexcept
+{
+    if (dateToken.size() != 8 || (dateToken[2] != '-' && dateToken[2] != '/') || dateToken[5] != dateToken[2] || timeToken.size() < 6)
+    {
+        return false;
+    }
+
+    unsigned int month     = 0;
+    unsigned int day       = 0;
+    unsigned int shortYear = 0;
+    if (! TryParseUnsignedInRange(dateToken.substr(0, 2), 1, 12, month) ||
+        ! TryParseUnsignedInRange(dateToken.substr(3, 2), 1, 31, day) ||
+        ! TryParseUnsignedInRange(dateToken.substr(6, 2), 0, 99, shortYear))
+    {
+        return false;
+    }
+
+    const std::string_view meridiem = timeToken.substr(timeToken.size() - 2);
+    const bool isAm                 = EqualsAsciiIgnoreCase(meridiem, "AM");
+    const bool isPm                 = EqualsAsciiIgnoreCase(meridiem, "PM");
+    if (! isAm && ! isPm)
+    {
+        return false;
+    }
+
+    const std::string_view clock = timeToken.substr(0, timeToken.size() - 2);
+    const size_t colon          = clock.find(':');
+    if (colon == std::string_view::npos)
+    {
+        return false;
+    }
+
+    unsigned int hour   = 0;
+    unsigned int minute = 0;
+    if (! TryParseUnsignedInRange(clock.substr(0, colon), 1, 12, hour) || ! TryParseUnsignedInRange(clock.substr(colon + 1), 0, 59, minute))
+    {
+        return false;
+    }
+
+    if (isPm && hour != 12)
+    {
+        hour += 12;
+    }
+    else if (isAm && hour == 12)
+    {
+        hour = 0;
+    }
+
+    const unsigned int fullYear = shortYear >= 70 ? 1900 + shortYear : 2000 + shortYear;
+
+    SYSTEMTIME localTime{};
+    localTime.wYear   = static_cast<WORD>(fullYear);
+    localTime.wMonth  = static_cast<WORD>(month);
+    localTime.wDay    = static_cast<WORD>(day);
+    localTime.wHour   = static_cast<WORD>(hour);
+    localTime.wMinute = static_cast<WORD>(minute);
+
+    return TryLocalSystemTimeToFileTime(localTime, fileTime);
+}
+
 [[nodiscard]] bool TryParseUnixListLine(std::string_view line, FilesInformationCurl::Entry& out) noexcept
 {
     if (line.size() < 2)
@@ -641,11 +854,11 @@ namespace FileSystemCurlInternal
     static_cast<void>(nextToken(pos)); // owner
     static_cast<void>(nextToken(pos)); // group
     const auto sizeTok = nextToken(pos);
-    static_cast<void>(nextToken(pos)); // month
-    static_cast<void>(nextToken(pos)); // day
-    static_cast<void>(nextToken(pos)); // time/year
+    const auto monthTok      = nextToken(pos);
+    const auto dayTok        = nextToken(pos);
+    const auto timeOrYearTok = nextToken(pos);
 
-    if (! sizeTok.has_value())
+    if (! sizeTok.has_value() || ! monthTok.has_value() || ! dayTok.has_value() || ! timeOrYearTok.has_value())
     {
         return false;
     }
@@ -678,6 +891,11 @@ namespace FileSystemCurlInternal
     out.attributes = (type == 'd') ? FILE_ATTRIBUTE_DIRECTORY : FILE_ATTRIBUTE_NORMAL;
     out.sizeBytes  = sizeBytes;
     out.name       = Utf16FromUtf8(namePart);
+    __int64 modifiedTime = 0;
+    if (TryParseUnixListTimestamp(monthTok.value(), dayTok.value(), timeOrYearTok.value(), modifiedTime))
+    {
+        out.lastWriteTime = modifiedTime;
+    }
     return ! out.name.empty();
 }
 
@@ -711,11 +929,9 @@ namespace FileSystemCurlInternal
     };
 
     size_t pos = 0;
-    if (! nextToken(pos).has_value())
-    {
-        return false;
-    }
-    if (! nextToken(pos).has_value())
+    const auto dateTok = nextToken(pos);
+    const auto timeTok = nextToken(pos);
+    if (! dateTok.has_value() || ! timeTok.has_value())
     {
         return false;
     }
@@ -738,7 +954,7 @@ namespace FileSystemCurlInternal
     }
 
     out = {};
-    if (sizeOrDir.value() == "<DIR>")
+    if (EqualsAsciiIgnoreCase(sizeOrDir.value(), "<DIR>"))
     {
         out.attributes = FILE_ATTRIBUTE_DIRECTORY;
         out.sizeBytes  = 0;
@@ -757,6 +973,11 @@ namespace FileSystemCurlInternal
     }
 
     out.name = Utf16FromUtf8(namePart);
+    __int64 modifiedTime = 0;
+    if (TryParseDosListTimestamp(dateTok.value(), timeTok.value(), modifiedTime))
+    {
+        out.lastWriteTime = modifiedTime;
+    }
     return ! out.name.empty();
 }
 

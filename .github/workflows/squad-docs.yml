@@ -2,7 +2,12 @@ name: Squad Docs — Build & Deploy
 # dotnet project — configure documentation build commands below
 
 on:
-  workflow_dispatch: # disabled — not yet adapted for this project
+  workflow_dispatch:
+  push:
+    branches: [preview]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/squad-docs.yml'
 
 permissions:
   contents: read

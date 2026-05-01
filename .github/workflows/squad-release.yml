@@ -2,7 +2,8 @@ name: Squad Release
 # dotnet project — configure build, test, and release commands below
 
 on:
-  workflow_dispatch: # disabled — not yet adapted for this project
+  push:
+    branches: [main]
 
 permissions:
   contents: write

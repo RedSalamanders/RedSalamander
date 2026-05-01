@@ -1,6 +1,6 @@
 # File Operations Specification
 
-Last updated: 2026-04-29
+Last updated: 2026-05-01
 
 Normative sections use RFC-2119 keywords (MUST/SHOULD/MAY). Appendices are informative.
 
@@ -966,6 +966,16 @@ Tasks:
 - [x] Properties UX:
   - Replace/extend the `Alt+Enter` / Properties command so non-Win32 filesystem plugins can surface properties via `IFileSystemIO::GetItemProperties`.
   - Display properties in a themed dialog; include richer per-bucket/unknown text for errors where possible.
+  - The properties dialog follows the same ownership/z-order behavior as other application popups; it is not permanently topmost over the main window.
+  - `Esc` closes the dialog. `Ctrl+C` copies the full property text for the dialog, and the dialog footer contains a short, unobtrusive hint for that shortcut.
+  - Long property values MUST wrap within the value column and grow their row/card so long names and paths remain readable after open and resize.
+  - `Alt+Enter` / Properties MUST open the Properties window immediately. If `IFileSystemIO::GetItemProperties` is slow, the dialog shows a loading state with an animated indicator and localized loading text until the provider returns or fails.
+  - Common property keys from different plugins MUST be normalized to the same display labels when they carry the same meaning (`name`, `path`, `type`, `sizeBytes`, and standard timestamp keys).
+  - When a properties payload contains both `General` and `Timestamps`, the host MUST display `Timestamps` immediately after `General`, regardless of the order supplied by the plugin.
+  - Properties views MUST omit unavailable optional metadata instead of displaying placeholder zero values. In particular, timestamp fields whose value is `0` are not shown.
+  - The built-in local filesystem General section SHOULD stay focused on name, full path, type, and file size; parent/root/extension rows are omitted because they duplicate those values.
+  - Built-in local filesystem file sizes SHOULD use folder-view compact units and include the exact byte count in parentheses for sizes of 1 KB and larger.
+  - The dialog MUST show an item-stream section only when `GetItemProperties` JSON contains named streams. The stream section lists stream name and size. Each stream row has a View action that opens that stream in ViewerText, where the user can inspect it in text or hex mode. When the active filesystem also exposes `IFileSystemItemStreams`, each removable stream gets an enabled Remove action that deletes the stream and refreshes the dialog; if the refreshed item has no remaining streams, the stream section disappears. Stream Remove actions do not need a tooltip when the visible command text already says `Remove`.
 
 - [x] Self-test coverage:
   - Add `--fileops-selftest` steps that exercise cross-filesystem Copy/Move on a small tree:

@@ -4521,6 +4521,15 @@ void StackPanel::ApplyLayout()
 
 // --- ScrollPanel ---
 
+void ScrollPanel::ClearChildren() noexcept
+{
+    _innerHoveredChild  = nullptr;
+    _scrollbarHotPart   = HotPart::None;
+    _dragThumb          = false;
+    _dragThumbOffsetDip = 0.0f;
+    Panel::ClearChildren();
+}
+
 void ScrollPanel::SetContentHeight(float heightDip) noexcept
 {
     _contentHeightDip = (std::max)(0.0f, heightDip);

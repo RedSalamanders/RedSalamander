@@ -4003,7 +4003,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
         yyjson_mut_doc_set_root(doc, root);
 
         yyjson_mut_obj_add_int(doc, root, "version", 1);
-        yyjson_mut_obj_add_str(doc, root, "title", "properties");
+        yyjson_mut_obj_add_strcpy(doc, root, "title", "properties");
 
         yyjson_mut_val* sections = yyjson_mut_arr(doc);
         yyjson_mut_obj_add_val(doc, root, "sections", sections);
@@ -4011,7 +4011,7 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
         auto addSection = [&](const char* title) -> yyjson_mut_val*
         {
             yyjson_mut_val* section = yyjson_mut_obj(doc);
-            yyjson_mut_obj_add_str(doc, section, "title", title);
+            yyjson_mut_obj_add_strcpy(doc, section, "title", title);
 
             yyjson_mut_val* fields = yyjson_mut_arr(doc);
             yyjson_mut_obj_add_val(doc, section, "fields", fields);
@@ -4026,6 +4026,14 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
             yyjson_mut_obj_add_strcpy(doc, field, "key", key);
             yyjson_mut_obj_add_strncpy(doc, field, "value", value.data(), value.size());
             yyjson_mut_arr_add_val(fields, field);
+        };
+
+        auto addTimestampField = [&](yyjson_mut_val* fields, const char* key, __int64 value)
+        {
+            if (value != 0)
+            {
+                addField(fields, key, std::format("{}", value));
+            }
         };
 
         const std::wstring normalizedPath = FileSystemCurlInternal::NormalizePluginPath(resolved.remotePath);
@@ -4071,11 +4079,14 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
             addField(connection, "port", std::format("{}", resolved.connection.port.value()));
         }
 
-        yyjson_mut_val* timestamps = addSection("timestamps");
-        addField(timestamps, "creationTime", std::format("{}", entry.creationTime));
-        addField(timestamps, "lastAccessTime", std::format("{}", entry.lastAccessTime));
-        addField(timestamps, "lastWriteTime", std::format("{}", entry.lastWriteTime));
-        addField(timestamps, "changeTime", std::format("{}", entry.changeTime));
+        if (entry.creationTime != 0 || entry.lastAccessTime != 0 || entry.lastWriteTime != 0 || entry.changeTime != 0)
+        {
+            yyjson_mut_val* timestamps = addSection("timestamps");
+            addTimestampField(timestamps, "creationTime", entry.creationTime);
+            addTimestampField(timestamps, "lastAccessTime", entry.lastAccessTime);
+            addTimestampField(timestamps, "lastWriteTime", entry.lastWriteTime);
+            addTimestampField(timestamps, "changeTime", entry.changeTime);
+        }
 
         if (resolved.connection.protocol == FileSystemCurlInternal::Protocol::Imap && (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
         {

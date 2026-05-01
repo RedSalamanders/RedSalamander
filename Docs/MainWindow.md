@@ -31,6 +31,8 @@ The Navigation bar is the strip above the Folder view:
 
 ![Navigation bar](res/navigation-view.png)
 
+Disk actions are exposed by the active file-system plugin. For local `file:` drives, the disk area can provide Windows drive actions such as **Disk Properties** and **Disk Cleanup**.
+
 ## Folder view (per pane)
 
 Folder view shows items in a grid with icons.
@@ -53,6 +55,14 @@ Display and sort (defaults):
 - `Ctrl+F3..F6`: Sort by Name/Ext/Time/Size
 
 ![Folder view](res/folder-view.png)
+
+### File properties
+
+Open item properties with `Alt+Enter` or **Files -> Properties**.
+
+![File properties](res/file-properties.png)
+
+The properties dialog can show local or plugin-provided fields: general identity, path, type, size, timestamps, attributes, and named streams when exposed by the active file system. `Ctrl+C` copies all visible property text; `Esc` closes the dialog.
 
 ### Selection helpers
 

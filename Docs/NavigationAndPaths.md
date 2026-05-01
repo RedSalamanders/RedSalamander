@@ -21,7 +21,6 @@
 - Filter current folder: `Ctrl+F12`
 
 ![Drive/menu dropdown](res/drive-menu.png)
-<!-- TODO(screenshot): replace placeholder with a real screenshot -->
 
 ### Hot Paths details
 
@@ -121,6 +120,10 @@ When browsing a local drive (the `file` file system), the disk info section can 
 
 - **Disk Properties**
 - **Disk Cleanup**
+
+The disk info text and usage bar are also visible in the navigation bar:
+
+![Navigation bar disk info](res/navigation-view.png)
 
 ## Not implemented yet
 

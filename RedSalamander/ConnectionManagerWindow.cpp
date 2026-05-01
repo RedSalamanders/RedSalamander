@@ -36,6 +36,7 @@
 #include "WindowMaximizeBehavior.h"
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
+#include "WindowSizing.h"
 #include "resource.h"
 
 // Single-canvas DxUi Connection Manager window.
@@ -3172,6 +3173,13 @@ LRESULT WindowImpl::WindowProc(UINT msg, WPARAM wp, LPARAM lp) noexcept
         case WM_CREATE: return OnCreate() ? 0 : -1;
         case WM_SIZE: OnSize(); return 0;
         case WM_DPICHANGED: OnDpiChanged(reinterpret_cast<const RECT*>(lp)); return 0;
+        case WM_GETMINMAXINFO:
+            if (auto* info = reinterpret_cast<MINMAXINFO*>(lp))
+            {
+                Common::WindowSizing::ApplyMinimumClientTrackSizeForDips(messageHwnd, *info, 720, 460);
+                static_cast<void>(WindowMaximizeBehavior::ApplyVerticalMaximize(messageHwnd, *info));
+            }
+            return 0;
         case WM_NCACTIVATE: OnNcActivate(wp != FALSE); return DefWindowProcW(messageHwnd, msg, wp, lp);
         case WM_COMMAND:
             if (OnCommand(LOWORD(wp)))

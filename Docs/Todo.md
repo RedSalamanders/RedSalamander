@@ -29,7 +29,6 @@ This page is a user-facing summary of what is planned.
 
 ## Commands
 
-- [ ] Find files and directories
 - [ ] Make file list
 - [ ] Go to shortcut/link target
 - [ ] List of opened files

@@ -24,7 +24,7 @@ function Assert-ThrowsTerminatingError {
 Describe 'Vcpkg install safety helper' {
     It 'accepts vcpkg triplet leaf names' {
         Assert-RSVcpkgTripletLeafName -Triplet 'x64-windows' | Should Be 'x64-windows'
-        Assert-RSVcpkgTripletLeafName -Triplet 'arm64-windows-asan' | Should Be 'arm64-windows-asan'
+        Assert-RSVcpkgTripletLeafName -Triplet 'arm64-windows' | Should Be 'arm64-windows'
         Assert-RSVcpkgTripletLeafName -Triplet 'x64-windows-static-md' | Should Be 'x64-windows-static-md'
     }
 
