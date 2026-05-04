@@ -33,6 +33,12 @@ Embedded preview-capable:
 - Mouse wheel over any visible VLC viewer surface seeks the current media instead of doing nothing, including the main viewer window, the video area, the HUD, overlays, and libVLC-owned child video windows. Positive wheel seeks forward and negative wheel seeks backward. The step sizes are: no modifier = 10 seconds, Shift = 3 seconds, Ctrl = 60 seconds, Shift+Ctrl = 300 seconds. Seeks clamp to the media start/end.
 - Snapshot export MUST request a concrete output size from libVLC using the current visible video surface dimensions. It must not call `libvlc_video_take_snapshot` with a 0x0 size when the video surface has a valid client rectangle.
 - Embedded preview mode follows the general embedded-viewer focus rule: opening or updating VLC preview content must not steal keyboard focus from the source pane. When focus moves between two files that resolve to `builtin/viewer-vlc`, the preview host reuses the existing embedded VLC viewer instance and asks it to open the new file instead of destroying and recreating the plugin window.
+- Background VLC load work MUST keep the viewer instance alive until the queued load either posts its result or drops as stale. Stale generation/window checks must prevent old async results from mutating a closed or superseded viewer.
+
+Persisted configuration for `builtin/viewer-vlc` lives in `plugins.configurationByPluginId["builtin/viewer-vlc"]` and currently includes:
+- `lastVolumePercent` (integer 0-100): last HUD volume.
+- `muted` (bool): last HUD mute state.
+- `audioVisualization` (string): VLC audio visualization mode. Fresh configurations default to `visual`; existing values such as `goom` remain valid.
 
 Optional embedded preview-capable plugins (loaded from `<exeDir>\\Plugins` when present):
 - `builtin/viewer-web`: WebView2-based HTML/PDF viewer (see `Specs/Plugins/Plugins_ViewerWeb.md`).
@@ -184,6 +190,7 @@ Key responsibilities:
 - Close the viewer window on `Close()` (also triggered by Esc)
 - Apply theme changes via `SetTheme()`
 - Notify the host when the viewer window closes via `SetCallback()`
+- Standalone viewer windows MUST be created with a localized, non-empty initial window title, normally the viewer/plugin name from `IInformations`; they may update the title to include the opened item after loading starts. Embedded child viewer windows may remain untitled because the preview host owns the visible caption.
 
 ### 2. IViewerCallback (host callback, non-COM)
 

@@ -86,6 +86,17 @@ For command selftests that validate NavigationView address-bar edit mode or full
 - tests must not enumerate descendant native `Edit` / `RICHEDIT50W` windows to prove edit mode, because NavigationView no longer exposes a visible native edit child and the hidden bridge is an implementation detail behind the DxUi host.
 - address-bar edit clipboard coverage must verify the focused DxUi host remains active and pane-level Select All, Copy, and Paste commands mutate/copy the edit text instead of falling through to FolderView command handling.
 
+## Preview Pane and ViewerVLC Validation
+
+For command selftests that validate embedded preview behavior:
+- `FolderWindow::PreviewPaneDebugSnapshot` is the authoritative contract for preview activity, source/host panes, selected Folder/Preview tab, hosted plugin ID, content HWND, and embedded viewer instance identity.
+- Preview tests must verify that embedded viewers do not take keyboard focus from the source pane, that focus changes reuse the current embedded viewer instance when the resolved plugin is unchanged, and that preview close/replacement persists changed plugin configuration.
+- When saved viewer associations are empty or resolve only the default text viewer, preview tests must cover the built-in embedded viewer defaults before `builtin/viewer-text` fallback.
+
+For command selftests that validate `builtin/viewer-vlc`:
+- `WndMsg::ViewerVlcDebugGetSnapshot` is the authoritative contract for HUD state, volume/mute state, snapshot dimensions, Fluent icon glyph usage, and filled-button HUD styling.
+- Wheel-seek coverage must exercise both normal viewer surfaces and libVLC-owned child video windows so embedded preview and standalone playback keep the same wheel behavior.
+
 ## Search-Specific Coverage
 
 Search coverage follows the same contract:

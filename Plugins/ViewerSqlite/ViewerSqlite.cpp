@@ -952,8 +952,10 @@ HRESULT STDMETHODCALLTYPE ViewerSqlite::Open(const ViewerOpenContext* context) n
         }
 
         const DWORD style = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS) : WS_OVERLAPPEDWINDOW;
+        const std::wstring initialTitle = embeddedMode ? std::wstring{}
+                                                       : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERSQLITE_NAME) : _metaName);
         HWND window =
-            CreateWindowExW(0, GetWindowClassName().c_str(), embeddedMode ? L"" : _metaName.c_str(), style, x, y, w, h, embeddedParent, nullptr, g_hInstance, this);
+            CreateWindowExW(0, GetWindowClassName().c_str(), initialTitle.c_str(), style, x, y, w, h, embeddedParent, nullptr, g_hInstance, this);
         if (! window)
         {
             const DWORD lastError = Debug::ErrorWithLastError(L"ViewerSqlite: CreateWindowExW failed.");

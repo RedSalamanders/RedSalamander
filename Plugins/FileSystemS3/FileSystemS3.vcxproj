@@ -109,7 +109,7 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-mqtt.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-s3.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|ARM64'">
@@ -135,7 +135,7 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-mqtt.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-s3.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|x64'">
@@ -161,7 +161,7 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-mqtt.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-s3.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='ASan Debug|ARM64'">
@@ -187,7 +187,7 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-mqtt.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-s3.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zlibd1.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\debug\bin\zd.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -215,7 +215,7 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-mqtt.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-s3.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\zlib1.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
@@ -243,7 +243,7 @@ if exist "$(OutDir)aws-cpp-sdk-s3.dll" del /Q "$(OutDir)aws-cpp-sdk-s3.dll"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-mqtt.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-s3.dll" "$(OutDir)"
  xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\aws-c-sdkutils.dll" "$(OutDir)"
- xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\zlib1.dll" "$(OutDir)"</Command>
+ xcopy /Y /D "$(VcpkgInstalledDir)$(RSVcpkgTriplet)\bin\z.dll" "$(OutDir)"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>

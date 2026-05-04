@@ -3679,9 +3679,11 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
             embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERRAW_MENU));
         const DWORD style = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_HSCROLL | WS_VSCROLL)
                                          : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_HSCROLL | WS_VSCROLL);
+        const std::wstring initialTitle = embeddedMode ? std::wstring{}
+                                                       : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERRAW_NAME) : _metaName);
         HWND window = CreateWindowExW(0,
                                       kClassName,
-                                      embeddedMode ? L"" : (_metaName.empty() ? L"" : _metaName.c_str()),
+                                      initialTitle.c_str(),
                                       style,
                                       x,
                                       y,

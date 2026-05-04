@@ -16,6 +16,8 @@ All user-facing UI text must be localizable. Static UI structure (menus, context
   - `LoadStringResource()`
   - `FormatStringResource()`
   - `MessageBoxResource()`
+- Formatted resource strings use `std::format` syntax and MUST use positional placeholders such as `{0}` and `{1:08X}` so translators can reorder arguments. Bare `{}` and unindexed format specs such as `{:08X}` are forbidden in `.rc` resources.
+- If a formatted resource string has invalid `std::format` syntax, the helper returns an empty fallback string and logs the failing resource ID plus the format error detail once through diagnostics. `std::bad_alloc` remains fatal and must not be swallowed by the formatting fallback.
 - Command labels have two localized forms:
   - Full display names (`IDS_CMD_*`) for menus, Preferences, and shortcut lists.
   - Short display names (`IDS_CMD_SHORT_BASE + IDS_CMD_*`) for compact surfaces such as the function bar; every command must provide one.

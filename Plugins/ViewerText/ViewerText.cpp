@@ -9454,6 +9454,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
 
         _embeddedMode = embeddedMode;
         HWND ownerWindow = context->ownerWindow;
+        const std::wstring initialTitle = embeddedMode ? std::wstring{} : (_metaName.empty() ? LoadStringResource(g_hInstance, IDS_VIEWERTEXT_NAME) : _metaName);
 
         RECT ownerRect{};
         if (embeddedMode)
@@ -9493,7 +9494,7 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
             wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERTEXT_MENU));
             HWND window = CreateWindowExW(0,
                                           kClassName,
-                                          L"",
+                                          initialTitle.c_str(),
                                           WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
                                           ownerRect.left,
                                           ownerRect.top,
@@ -9540,8 +9541,18 @@ HRESULT STDMETHODCALLTYPE ViewerText::Open(const ViewerOpenContext* context) noe
         else
         {
             wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERTEXT_MENU));
-            HWND window = CreateWindowExW(
-                0, kClassName, L"", WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN, CW_USEDEFAULT, CW_USEDEFAULT, 900, 700, nullptr, menu.get(), g_hInstance, this);
+            HWND window = CreateWindowExW(0,
+                                          kClassName,
+                                          initialTitle.c_str(),
+                                          WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN,
+                                          CW_USEDEFAULT,
+                                          CW_USEDEFAULT,
+                                          900,
+                                          700,
+                                          nullptr,
+                                          menu.get(),
+                                          g_hInstance,
+                                          this);
             if (! window)
             {
                 const DWORD lastError = Debug::ErrorWithLastError(L"ViewerText: CreateWindowExW failed.");

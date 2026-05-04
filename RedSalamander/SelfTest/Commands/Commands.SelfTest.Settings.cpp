@@ -900,6 +900,197 @@ void ScanResourceLineForFormatFields(const std::filesystem::path& path,
     return state.failure.empty();
 }
 
+struct LocalizedWindowTitleFinding
+{
+    std::filesystem::path path;
+    size_t lineNumber = 0;
+    std::wstring message;
+};
+
+[[nodiscard]] std::string ReadAuditTextFile(const std::filesystem::path& path)
+{
+    std::ifstream input(path, std::ios::binary);
+    if (! input)
+    {
+        return {};
+    }
+
+    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
+}
+
+[[nodiscard]] std::string CompactAsciiForAudit(std::string_view value)
+{
+    std::string result;
+    result.reserve(value.size());
+    for (const char ch : value)
+    {
+        if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n')
+        {
+            result.push_back(ch);
+        }
+    }
+
+    return result;
+}
+
+[[nodiscard]] bool IsResourceDialogDefinitionLine(std::string_view line) noexcept
+{
+    const size_t first = line.find_first_not_of(" \t");
+    if (first == std::string_view::npos)
+    {
+        return false;
+    }
+
+    if (first + 1 < line.size() && line[first] == '/' && line[first + 1] == '/')
+    {
+        return false;
+    }
+
+    const size_t idEnd = line.find_first_of(" \t", first);
+    if (idEnd == std::string_view::npos)
+    {
+        return false;
+    }
+
+    const size_t typeStart = line.find_first_not_of(" \t", idEnd);
+    if (typeStart == std::string_view::npos)
+    {
+        return false;
+    }
+
+    return line.compare(typeStart, 6, "DIALOG") == 0;
+}
+
+void ScanResourceDialogCaptions(const std::filesystem::path& path, std::vector<LocalizedWindowTitleFinding>& findings)
+{
+    std::ifstream input(path, std::ios::binary);
+    std::string line;
+    std::string dialogId;
+    size_t lineNumber       = 0;
+    bool inDialog           = false;
+
+    while (std::getline(input, line))
+    {
+        ++lineNumber;
+        const std::string compact = CompactAsciiForAudit(line);
+        if (IsResourceDialogDefinitionLine(line))
+        {
+            const size_t firstSpace = line.find_first_of(" \t");
+            dialogId               = firstSpace == std::string::npos ? line : line.substr(0, firstSpace);
+            inDialog               = true;
+            continue;
+        }
+
+        if (! inDialog)
+        {
+            continue;
+        }
+
+        if (compact == "CAPTION\"\"")
+        {
+            findings.push_back({path, lineNumber, std::format(L"{} has an empty dialog caption.", WidenAscii(dialogId))});
+        }
+        else if (compact == "END")
+        {
+            inDialog = false;
+            dialogId.clear();
+        }
+    }
+}
+
+void ScanStandaloneViewerWindowTitles(const std::filesystem::path& repoRoot, std::vector<LocalizedWindowTitleFinding>& findings)
+{
+    struct Target
+    {
+        std::wstring_view relativePath;
+        std::string_view forbiddenPattern;
+        std::wstring_view message;
+    };
+
+    static constexpr std::array<Target, 6> kTargets{{
+        {L"Plugins/ViewerImgRaw/ViewerImgRaw.cpp",
+         "CreateWindowExW(0,kClassName,embeddedMode?L\"\":(_metaName.empty()?L\"\":_metaName.c_str()),style,",
+         L"ViewerImgRaw creates a standalone viewer window with an empty initial title fallback."},
+        {L"Plugins/ViewerPE/ViewerPE.cpp",
+         "CreateWindowExW(0,kClassName,L\"\",style,",
+         L"ViewerPE creates a standalone viewer window with an empty initial title."},
+        {L"Plugins/ViewerSpace/ViewerSpace.cpp",
+         "CreateWindowExW(0,kClassName,embeddedMode?L\"\":(_metaName.empty()?L\"\":_metaName.c_str()),style,",
+         L"ViewerSpace creates a standalone viewer window with an empty initial title fallback."},
+        {L"Plugins/ViewerSqlite/ViewerSqlite.cpp",
+         "CreateWindowExW(0,GetWindowClassName().c_str(),embeddedMode?L\"\":_metaName.c_str(),style,",
+         L"ViewerSqlite creates a standalone viewer window with an empty initial title fallback."},
+        {L"Plugins/ViewerWeb/ViewerWeb.cpp",
+         "CreateWindowExW(0,kClassName,L\"\",style,",
+         L"ViewerWeb creates a standalone viewer window with an empty initial title."},
+        {L"Plugins/ViewerText/ViewerText.cpp",
+         "CreateWindowExW(0,kClassName,L\"\",WS_OVERLAPPEDWINDOW",
+         L"ViewerText creates a standalone viewer window with an empty initial title."},
+    }};
+
+    for (const Target& target : kTargets)
+    {
+        const std::filesystem::path path = repoRoot / std::filesystem::path(std::wstring(target.relativePath));
+        const std::string compact        = CompactAsciiForAudit(ReadAuditTextFile(path));
+        if (! compact.empty() && compact.find(target.forbiddenPattern) != std::string::npos)
+        {
+            findings.push_back({path, 0, std::wstring(target.message)});
+        }
+    }
+}
+
+[[nodiscard]] bool TestPopupAndDialogTitlesAreLocalized(CaseState& state) noexcept
+{
+    const std::filesystem::path repoRoot = TryFindResourceAuditRepoRoot();
+    state.Require(! repoRoot.empty(), L"Repository root unavailable for popup/dialog title audit.");
+    if (repoRoot.empty())
+    {
+        return false;
+    }
+
+    static constexpr std::array<std::wstring_view, 4> kResourceRoots{{L"Common", L"Plugins", L"RedSalamander", L"RedSalamanderMonitor"}};
+    std::vector<LocalizedWindowTitleFinding> findings;
+    std::error_code ec;
+
+    for (const std::wstring_view resourceRoot : kResourceRoots)
+    {
+        const std::filesystem::path root = repoRoot / resourceRoot;
+        if (! std::filesystem::exists(root, ec) || ec)
+        {
+            ec.clear();
+            continue;
+        }
+
+        std::filesystem::recursive_directory_iterator it(root, std::filesystem::directory_options::skip_permission_denied, ec);
+        const std::filesystem::recursive_directory_iterator end;
+        while (! ec && it != end)
+        {
+            const std::filesystem::directory_entry entry = *it;
+            if (entry.is_regular_file(ec) && ! ec && entry.path().extension() == L".rc")
+            {
+                ScanResourceDialogCaptions(entry.path(), findings);
+            }
+
+            it.increment(ec);
+        }
+        ec.clear();
+    }
+
+    ScanStandaloneViewerWindowTitles(repoRoot, findings);
+
+    if (! findings.empty())
+    {
+        const LocalizedWindowTitleFinding& first = findings.front();
+        state.Require(false,
+                      std::format(L"Popup and dialog titles must be localized and non-empty. First offender: {}:{} {}",
+                                  first.path.wstring(),
+                                  first.lineNumber,
+                                  first.message));
+    }
+
+    return state.failure.empty();
+}
+
 [[nodiscard]] bool TestSettingsStoreFileActionsV16RejectsMalformedDefinitions(CaseState& state) noexcept
 {
     struct MalformedCase
@@ -10010,6 +10201,9 @@ void RunSettingsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestO
     });
     SelfTest::RunCase(options, suite, L"resource_format_placeholders_are_positional", [](CaseState& state) noexcept {
         return TestResourceFormatPlaceholdersArePositional(state);
+    });
+    SelfTest::RunCase(options, suite, L"popup_dialog_titles_are_localized", [](CaseState& state) noexcept {
+        return TestPopupAndDialogTitlesAreLocalized(state);
     });
     SelfTest::RunCase(options, suite, L"settings_store_file_actions_v16_rejects_malformed_definitions", [](CaseState& state) noexcept {
         return TestSettingsStoreFileActionsV16RejectsMalformedDefinitions(state);
