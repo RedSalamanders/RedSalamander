@@ -19,6 +19,17 @@ void AddBinding(std::vector<Common::Settings::ShortcutBinding>& dest, uint32_t v
     dest.push_back(std::move(binding));
 }
 
+void MigrateDeprecatedShortcutCommandIds(std::vector<Common::Settings::ShortcutBinding>& bindings) noexcept
+{
+    for (Common::Settings::ShortcutBinding& binding : bindings)
+    {
+        if (binding.commandId == L"cmd/pane/permanentDeleteWithValidation")
+        {
+            binding.commandId = L"cmd/pane/permanentDelete";
+        }
+    }
+}
+
 using NormalizedBinding = std::tuple<uint32_t, uint32_t, std::wstring>;
 
 [[nodiscard]] uint32_t VkFromScanCode(uint32_t scanCode) noexcept
@@ -120,7 +131,7 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.functionBar, VK_F4, ShortcutManager::kModCtrl, L"cmd/pane/sort/extension");
     AddBinding(shortcuts.functionBar, VK_F4, ShortcutManager::kModAlt, L"cmd/app/exit");
     AddBinding(shortcuts.functionBar, VK_F4, ShortcutManager::kModShift, L"cmd/pane/editNew");
-    AddBinding(shortcuts.functionBar, VK_F4, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/editWidth");
+    AddBinding(shortcuts.functionBar, VK_F4, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/alternateEdit");
 
     AddBinding(shortcuts.functionBar, VK_F5, 0, L"cmd/pane/copyToOtherPane");
     AddBinding(shortcuts.functionBar, VK_F5, ShortcutManager::kModCtrl, L"cmd/pane/sort/time");
@@ -151,17 +162,18 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.functionBar, VK_F10, ShortcutManager::kModCtrl, L"cmd/app/compare");
     AddBinding(shortcuts.functionBar, VK_F10, ShortcutManager::kModAlt, L"cmd/pane/viewSpace");
     AddBinding(shortcuts.functionBar, VK_F10, ShortcutManager::kModShift, L"cmd/pane/contextMenu");
-    AddBinding(shortcuts.functionBar, VK_F10, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/calculateDirectorySizes");
     AddBinding(shortcuts.functionBar, VK_F10, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/pane/contextMenuCurrentDirectory");
 
     AddBinding(shortcuts.functionBar, VK_F11, 0, L"cmd/pane/connect");
     AddBinding(shortcuts.functionBar, VK_F11, ShortcutManager::kModCtrl, L"cmd/pane/zoomPanel");
     AddBinding(shortcuts.functionBar, VK_F11, ShortcutManager::kModAlt, L"cmd/pane/listOpenedFiles");
+    AddBinding(shortcuts.functionBar, VK_F11, ShortcutManager::kModShift, L"cmd/app/theme/selectPrev");
     AddBinding(shortcuts.functionBar, VK_F11, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/app/fullScreen");
 
     AddBinding(shortcuts.functionBar, VK_F12, 0, L"cmd/pane/disconnect");
     AddBinding(shortcuts.functionBar, VK_F12, ShortcutManager::kModCtrl, L"cmd/pane/filter");
     AddBinding(shortcuts.functionBar, VK_F12, ShortcutManager::kModAlt, L"cmd/pane/showFoldersHistory");
+    AddBinding(shortcuts.functionBar, VK_F12, ShortcutManager::kModShift, L"cmd/app/theme/selectNext");
 
     // FolderView bindings (non-function-bar).
     AddBinding(shortcuts.folderView, VK_BACK, 0, L"cmd/pane/upOneDirectory");
@@ -172,6 +184,8 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('2'), ShortcutManager::kModAlt, L"cmd/pane/display/brief");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('3'), ShortcutManager::kModAlt, L"cmd/pane/display/detailed");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('4'), ShortcutManager::kModAlt, L"cmd/pane/display/extraDetailed");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('5'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/toggleThumbnails");
+    AddBinding(shortcuts.folderView, static_cast<uint32_t>('6'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/togglePreviewPane");
     AddBinding(shortcuts.folderView, static_cast<uint32_t>('A'), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectAll");
     AddBinding(shortcuts.folderView, VK_ESCAPE, 0, L"cmd/pane/selection/unselectAll");
     AddBinding(shortcuts.folderView, DefaultSelectDialogVk(), ShortcutManager::kModCtrl, L"cmd/pane/selection/selectDialog");
@@ -230,8 +244,8 @@ Common::Settings::ShortcutsSettings ShortcutDefaults::CreateDefaultShortcuts()
     AddBinding(shortcuts.folderView, VK_INSERT, ShortcutManager::kModAlt | ShortcutManager::kModShift, L"cmd/pane/copyNameAsText");
 
     AddBinding(shortcuts.folderView, VK_DELETE, 0, L"cmd/pane/moveToRecycleBin");
-    AddBinding(shortcuts.folderView, VK_DELETE, ShortcutManager::kModShift, L"cmd/pane/permanentDeleteWithValidation");
-    AddBinding(shortcuts.folderView, VK_DELETE, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/permanentDeleteWithValidation");
+    AddBinding(shortcuts.folderView, VK_DELETE, ShortcutManager::kModShift, L"cmd/pane/permanentDelete");
+    AddBinding(shortcuts.folderView, VK_DELETE, ShortcutManager::kModCtrl | ShortcutManager::kModShift, L"cmd/pane/permanentDelete");
 
     return shortcuts;
 }
@@ -255,6 +269,8 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
     }
 
     Common::Settings::ShortcutsSettings& shortcuts = settings.shortcuts.value();
+    MigrateDeprecatedShortcutCommandIds(shortcuts.functionBar);
+    MigrateDeprecatedShortcutCommandIds(shortcuts.folderView);
 
     auto findFunctionBarBinding = [&](uint32_t vk, uint32_t modifiers) noexcept -> Common::Settings::ShortcutBinding*
     {
@@ -323,6 +339,16 @@ void ShortcutDefaults::EnsureShortcutsInitialized(Common::Settings::Settings& se
     if (! findFolderViewBinding(static_cast<uint32_t>('4'), ShortcutManager::kModAlt))
     {
         AddBinding(shortcuts.folderView, static_cast<uint32_t>('4'), ShortcutManager::kModAlt, L"cmd/pane/display/extraDetailed");
+    }
+
+    if (! findFolderViewBinding(static_cast<uint32_t>('5'), ShortcutManager::kModAlt))
+    {
+        AddBinding(shortcuts.folderView, static_cast<uint32_t>('5'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/toggleThumbnails");
+    }
+
+    if (! findFolderViewBinding(static_cast<uint32_t>('6'), ShortcutManager::kModAlt))
+    {
+        AddBinding(shortcuts.folderView, static_cast<uint32_t>('6'), ShortcutManager::kModAlt, L"cmd/pane/viewOptions/togglePreviewPane");
     }
 
     if (! findFolderViewBinding(static_cast<uint32_t>('A'), ShortcutManager::kModCtrl))

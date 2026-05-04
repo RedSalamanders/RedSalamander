@@ -18,6 +18,11 @@ bool ShowPreferencesDialogHotPaths(HWND owner, std::wstring_view appId, Common::
     return PreferencesDialog::Show(owner, appId, settings, theme, PrefCategory::HotPaths);
 }
 
+bool ShowPreferencesDialogUserMenu(HWND owner, std::wstring_view appId, Common::Settings::Settings& settings, const AppTheme& theme)
+{
+    return PreferencesDialog::Show(owner, appId, settings, theme, PrefCategory::UserMenu);
+}
+
 HWND GetPreferencesDialogHandle() noexcept
 {
     return PreferencesDialog::GetHandle();
@@ -203,6 +208,21 @@ bool DebugSetPreferencesPluginsSearchText(std::wstring_view text) noexcept
 bool DebugSetPreferencesViewersSearchText(std::wstring_view text) noexcept
 {
     return PreferencesDialog::DebugSetViewersSearchText(text);
+}
+
+bool DebugSelectPreferencesViewersDefaultAction(const bool alternate, std::wstring_view actionId) noexcept
+{
+    return PreferencesDialog::DebugSelectViewersDefaultAction(alternate, actionId);
+}
+
+bool DebugSelectPreferencesEditorsDefaultAction(const bool alternate, std::wstring_view actionId) noexcept
+{
+    return PreferencesDialog::DebugSelectEditorsDefaultAction(alternate, actionId);
+}
+
+bool DebugSelectPreferencesEditorsDefaultEditNewAction(std::wstring_view actionId) noexcept
+{
+    return PreferencesDialog::DebugSelectEditorsDefaultEditNewAction(actionId);
 }
 
 bool DebugSetPreferencesKeyboardSearchText(std::wstring_view text) noexcept

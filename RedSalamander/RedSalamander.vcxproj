@@ -254,6 +254,8 @@
     <ClInclude Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.h" />
     <ClInclude Include="FolderWindowInternal.h" />
     <ClInclude Include="FolderWatcher.h" />
+    <ClInclude Include="FileActionLauncher.h" />
+    <ClInclude Include="FileActionResolver.h" />
     <ClInclude Include="HostServices.h" />
     <ClInclude Include="IconCache.h" />
     <ClInclude Include="Ui\\AlertOverlay.h" />
@@ -277,8 +279,10 @@
     <ClInclude Include="Preferences.Advanced.h" />
     <ClInclude Include="Preferences.CompareDirectories.h" />
     <ClInclude Include="Preferences.FileOperations.h" />
+    <ClInclude Include="Preferences.FileActions.h" />
     <ClInclude Include="Preferences.HotPaths.h" />
     <ClInclude Include="Preferences.Editors.h" />
+    <ClInclude Include="Preferences.UserMenu.h" />
     <ClInclude Include="Preferences.General.h" />
     <ClInclude Include="Preferences.Mouse.h" />
     <ClInclude Include="Preferences.Panes.h" />
@@ -354,6 +358,8 @@
     <ClCompile Include="FolderWindow.StatusBar.cpp" />
     <ClCompile Include="FolderWindow.Viewers.cpp" />
     <ClCompile Include="FolderWatcher.cpp" />
+    <ClCompile Include="FileActionLauncher.cpp" />
+    <ClCompile Include="FileActionResolver.cpp" />
     <ClCompile Include="ConnectionSecrets.cpp" />
     <ClCompile Include="ConnectionManagerWindow.cpp" />
     <ClCompile Include="ConnectionCredentialPromptDialog.cpp" />
@@ -386,8 +392,10 @@
     <ClCompile Include="Preferences.Advanced.cpp" />
     <ClCompile Include="Preferences.CompareDirectories.cpp" />
     <ClCompile Include="Preferences.FileOperations.cpp" />
+    <ClCompile Include="Preferences.FileActions.cpp" />
     <ClCompile Include="Preferences.HotPaths.cpp" />
     <ClCompile Include="Preferences.Editors.cpp" />
+    <ClCompile Include="Preferences.UserMenu.cpp" />
     <ClCompile Include="Preferences.General.cpp" />
     <ClCompile Include="Preferences.Mouse.cpp" />
     <ClCompile Include="Preferences.Panes.cpp" />
@@ -433,6 +441,7 @@
     <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Preferences.Dispatch.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Search.cpp" />
+    <None Include="SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Settings.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp" />
     <None Include="SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp" />

@@ -52,21 +52,45 @@ This stops archive/container extensions from opening as virtual file systems aut
 }
 ```
 
-### Change viewer mappings
+### Configure viewer and editor actions
 
-Map file extensions to viewer plugin IDs. Extensions should be lowercase and include the leading dot:
+Viewer and editor launch behavior lives under `fileActions`. Actions describe what can be launched; associations describe which action is used for a file match and command:
 
 ```json
 {
-  "extensions": {
-    "openWithViewerByExtension": {
-      ".log": "builtin/viewer-text",
-      ".md": "builtin/viewer-text",
-      ".json": "builtin/viewer-json"
+  "fileActions": {
+    "viewers": {
+      "actions": [
+        {
+          "id": "viewer-text",
+          "displayName": "Text Viewer",
+          "enabled": true,
+          "kind": "viewerPlugin",
+          "pluginId": "builtin/viewer-text",
+          "appliesTo": {
+            "matches": [{ "kind": "default" }],
+            "computerNames": []
+          }
+        }
+      ],
+      "associations": [
+        {
+          "match": { "kind": "extension", "value": ".log" },
+          "viewActionId": "viewer-text",
+          "alternateViewActionId": ""
+        },
+        {
+          "match": { "kind": "default" },
+          "viewActionId": "viewer-text",
+          "alternateViewActionId": ""
+        }
+      ]
     }
   }
 }
 ```
+
+Editor actions use the same action shape under `fileActions.editors`; editor associations use `editActionId`, `alternateEditActionId`, and `editNewActionId`.
 
 Common built-in viewer IDs:
 
@@ -95,6 +119,74 @@ Common built-in file-system IDs:
 - `builtin/file-system-s3`
 - `builtin/file-system-s3table`
 - `builtin/file-system-dummy`
+
+### Configure pane view options
+
+Per-pane view options live in `folders.items[].view`. The most common fields are:
+
+- `display`: `"brief"` or `"detailed"`
+- `sortBy`: `"none"`, `"name"`, `"extension"`, `"time"`, `"size"`, or `"attributes"`
+- `sortDirection`: `"ascending"` or `"descending"`
+- `fileExtensionsVisible`: show file extensions in the pane's displayed labels
+- `thumbnailsVisible`: show thumbnail-sized visuals in the pane, using shell thumbnails when available and icon fallback otherwise
+- `navigationBarVisible`: show the pane navigation/address bar
+- `filterBarVisible`: show the pane persistent filter bar
+- `statusBarVisible`: show the pane status bar
+
+### Configure User Menu commands
+
+The `userMenu` section stores external commands shown by `F9` and **Commands -> User Menu**. Entries use the same macro fields as viewer/editor external actions:
+
+```json
+{
+  "userMenu": {
+    "actions": [
+      {
+        "id": "open-log-tool",
+        "displayName": "Open in Log Tool",
+        "enabled": true,
+        "kind": "externalProgram",
+        "executablePath": "C:\\Tools\\LogTool\\LogTool.exe",
+        "arguments": "{PathAndFilename}",
+        "workingDirectory": "{Path}",
+        "appliesTo": {
+          "matches": [{ "kind": "extension", "value": ".log" }],
+          "computerNames": []
+        }
+      }
+    ]
+  }
+}
+```
+
+Useful macros include `{Path}`, `{FullPath}`, `{PathAndFilename}`, `{Filename}`, `{SelectedPathsFile}`, `{OppositePanePath}`, and `{ComputerName}`.
+
+After editing `fileActions`, User Menu, plugin, or file-system extension association settings outside the app, use **Commands -> Reread Associations** to reload those sections without restarting. The command preserves the current pane folders, rebuilds dynamic action menus, refreshes both panes, and leaves the previous valid runtime settings in place if the file is invalid.
+
+### Configure Make File List defaults
+
+The `makeFileList` section stores the last options selected in **Commands -> Make File List**:
+
+```json
+{
+  "makeFileList": {
+    "sourceMode": "currentFolder",
+    "recursive": true,
+    "format": "csv",
+    "outputTarget": "file",
+    "outputFile": "C:\\Reports\\files.csv",
+    "textMacro": "{filename}|{size}|{attributes}",
+    "includeName": true,
+    "includeFullPath": true,
+    "includeSize": true,
+    "includeModified": true,
+    "includeAttributes": false,
+    "includeDirectories": true
+  }
+}
+```
+
+`sourceMode` is `"selection"` or `"currentFolder"`. `format` is `"text"`, `"csv"`, or `"json"`. `outputTarget` is `"clipboard"` or `"file"`. Text output expands `{filename}`, `{name}`, `{fullPath}`, `{path}`, `{size}`, `{modified}`, `{attributes}`, and `{isDirectory}` for each generated row.
 
 ### Tune file-operations defaults
 
@@ -127,7 +219,7 @@ If you also want to reset the dialog window position, remove `windows.FindFilesW
 ## When manual editing is useful
 
 - Disabling archive auto-mount globally
-- Bulk-changing viewer associations
+- Bulk-changing file-action associations
 - Inspecting or resetting advanced values not exposed in the UI
 
 For basic reset instructions, see: [Troubleshooting / Reset](Troubleshooting.md)

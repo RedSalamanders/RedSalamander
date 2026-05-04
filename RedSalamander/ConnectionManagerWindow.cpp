@@ -814,6 +814,8 @@ public:
     [[nodiscard]] bool DebugClickListRow(size_t rowIndex) noexcept;
     [[nodiscard]] bool DebugScrollListByWheelDetents(int detents) noexcept;
     [[nodiscard]] bool DebugFocusFirstInput() noexcept;
+    [[nodiscard]] bool DebugFocusUserInput() noexcept;
+    [[nodiscard]] bool DebugFocusSecretInput() noexcept;
     [[nodiscard]] bool DebugFocusList() noexcept;
     [[nodiscard]] bool DebugRouteMnemonic(wchar_t mnemonic) noexcept;
     [[nodiscard]] bool DebugRouteCommandKey(WPARAM virtualKey) noexcept;
@@ -821,6 +823,29 @@ public:
     [[nodiscard]] bool DebugSetProtocolPluginId(std::wstring_view pluginId) noexcept;
     [[nodiscard]] bool DebugGetAlternateProtocolPluginId(std::wstring_view baselinePluginId, std::wstring& outPluginId) const noexcept;
     [[nodiscard]] bool DebugGetControlClientRect(const Control* control, RECT& outRect) const noexcept;
+    [[nodiscard]] bool DebugFocusTextField(TextField* edit) noexcept;
+    [[nodiscard]] bool DebugSetTextFieldText(TextField* edit, std::wstring_view text) noexcept;
+    [[nodiscard]] bool DebugGetTextFieldText(const TextField* edit, std::wstring& outText) const noexcept;
+    [[nodiscard]] bool DebugSetUserText(std::wstring_view text) noexcept
+    {
+        return DebugSetTextFieldText(_editUser, text);
+    }
+    [[nodiscard]] bool DebugSetSecretText(std::wstring_view text) noexcept
+    {
+        return DebugSetTextFieldText(_editSecret, text);
+    }
+    [[nodiscard]] bool DebugGetUserText(std::wstring& outText) const noexcept
+    {
+        return DebugGetTextFieldText(_editUser, outText);
+    }
+    [[nodiscard]] bool DebugGetSecretText(std::wstring& outText) const noexcept
+    {
+        return DebugGetTextFieldText(_editSecret, outText);
+    }
+    [[nodiscard]] HWND DebugGetTextInputBridgeHandle() const noexcept
+    {
+        return _dxHost.GetTextInputBridgeHwnd();
+    }
     [[nodiscard]] Button* DebugGetCommandButton(UINT commandId) noexcept;
     [[nodiscard]] Toggle* DebugGetSavePasswordToggle() noexcept
     {
@@ -852,7 +877,7 @@ private:
     void MarkConnectionsDirty() noexcept;
     void LoadConnections() noexcept;
     void ReloadConnectionsFromSettingsPreservingSelection() noexcept;
-    void RebuildList() noexcept;
+    void RebuildList(bool refreshEditor = true) noexcept;
     [[nodiscard]] std::optional<size_t> GetSelectedModelIndex() const noexcept;
     void SelectConnectionModelIndex(size_t modelIndex) noexcept;
     void RefreshEditorFromSelection() noexcept;
@@ -879,6 +904,7 @@ private:
     void OnSettingsReloadedFromDisk() noexcept;
     [[nodiscard]] bool ResolveStaleSettingsBeforeSave() noexcept;
     [[nodiscard]] bool SaveConnectionsSettings() noexcept;
+    [[nodiscard]] bool ConfirmDiscardUnsavedChanges() noexcept;
     [[nodiscard]] bool NotifyOwnerToConnectSelectedProfile() noexcept;
     void OnConnectClicked() noexcept;
     void OnCloseClicked() noexcept;
@@ -1012,7 +1038,7 @@ bool WindowImpl::Create() noexcept
     {
         WNDCLASSEXW wc{};
         wc.cbSize        = sizeof(wc);
-        wc.style         = CS_HREDRAW | CS_VREDRAW;
+        wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
         wc.lpfnWndProc   = &WindowImpl::WndProcThunk;
         wc.hInstance     = instance;
         wc.hCursor       = LoadCursorW(nullptr, IDC_ARROW);
@@ -1853,6 +1879,7 @@ void WindowImpl::OnEditorFieldChanged() noexcept
     if (_editName)
     {
         profile.name = std::wstring(_editName->GetText());
+        _selectedConnectionName = profile.name;
     }
     if (_editHost)
     {
@@ -1936,7 +1963,7 @@ void WindowImpl::OnEditorFieldChanged() noexcept
     }
 
     // Update the list row text if the name changed and refresh the visible list.
-    RebuildList();
+    RebuildList(false);
     // Visibility may need to flip when authMode changes (e.g. Anonymous toggle).
     ApplyEditorVisibility(ComputeEditorVisibility());
     Layout();
@@ -2417,6 +2444,49 @@ bool WindowImpl::SaveConnectionsSettings() noexcept
     return true;
 }
 
+bool WindowImpl::ConfirmDiscardUnsavedChanges() noexcept
+{
+    if (! _dirtySinceLastSettingsLoad)
+    {
+        return true;
+    }
+
+    std::wstring title = LoadStringResource(nullptr, IDS_CAPTION_CONNECTIONS);
+    if (title.empty())
+    {
+        title = L"Connections";
+    }
+
+    const std::wstring message = LoadStringResource(nullptr, IDS_CONNECTIONS_CONFIRM_DISCARD_MESSAGE);
+    if (message.empty())
+    {
+        Debug::Warning(L"ConnectionManagerWindow: discard confirmation string is missing; keeping the window open.");
+        return false;
+    }
+
+    HostPromptRequest request{};
+    request.version       = 1;
+    request.sizeBytes     = sizeof(request);
+    request.scope         = HOST_ALERT_SCOPE_WINDOW;
+    request.severity      = HOST_ALERT_WARNING;
+    request.buttons       = HOST_PROMPT_BUTTONS_OK_CANCEL;
+    request.title         = title.c_str();
+    request.message       = message.c_str();
+    request.targetWindow  = _hwnd.get();
+    request.defaultResult = HOST_PROMPT_RESULT_CANCEL;
+
+    HostPromptResult result = HOST_PROMPT_RESULT_NONE;
+    const HRESULT promptHr  = HostShowPrompt(request, nullptr, &result);
+    if (FAILED(promptHr))
+    {
+        Debug::Warning(L"ConnectionManagerWindow: failed to prompt before discarding unsaved changes (hr=0x{:08X})",
+                       static_cast<unsigned long>(promptHr));
+        return false;
+    }
+
+    return result == HOST_PROMPT_RESULT_OK;
+}
+
 bool WindowImpl::NotifyOwnerToConnectSelectedProfile() noexcept
 {
     if (_notifyOwner == nullptr || IsWindow(_notifyOwner) == FALSE)
@@ -2466,6 +2536,11 @@ void WindowImpl::OnNcActivate(bool active) noexcept
 
 void WindowImpl::OnClose() noexcept
 {
+    if (! ConfirmDiscardUnsavedChanges())
+    {
+        return;
+    }
+
     OnCancelClicked();
 }
 
@@ -2621,7 +2696,7 @@ void WindowImpl::ReloadConnectionsFromSettingsPreservingSelection() noexcept
     }
 }
 
-void WindowImpl::RebuildList() noexcept
+void WindowImpl::RebuildList(bool refreshEditor) noexcept
 {
     const std::optional<size_t> previousModelIndex = GetSelectedModelIndex();
     const std::wstring previousSelectedName        = _selectedConnectionName;
@@ -2715,7 +2790,10 @@ void WindowImpl::RebuildList() noexcept
         }
         _list->NotifyDataChanged();
     }
-    RefreshEditorFromSelection();
+    if (refreshEditor)
+    {
+        RefreshEditorFromSelection();
+    }
 }
 
 void WindowImpl::OnGridSortRequested(const RedSalamander::DxUi::GridSortSpec& sortSpec)
@@ -3699,12 +3777,17 @@ bool WindowImpl::DebugScrollListByWheelDetents(int detents) noexcept
 
 bool WindowImpl::DebugFocusFirstInput() noexcept
 {
-    if (! _editName)
-    {
-        return false;
-    }
-    _dxHost.SetFocusControl(_editName);
-    return _dxHost.GetFocusControl() == _editName;
+    return DebugFocusTextField(_editName);
+}
+
+bool WindowImpl::DebugFocusUserInput() noexcept
+{
+    return DebugFocusTextField(_editUser);
+}
+
+bool WindowImpl::DebugFocusSecretInput() noexcept
+{
+    return DebugFocusTextField(_editSecret);
 }
 
 bool WindowImpl::DebugFocusList() noexcept
@@ -3815,6 +3898,46 @@ bool WindowImpl::DebugGetControlClientRect(const Control* control, RECT& outRect
     return true;
 }
 
+bool WindowImpl::DebugFocusTextField(TextField* edit) noexcept
+{
+    if (! edit || ! edit->IsVisible() || ! edit->IsEnabled())
+    {
+        return false;
+    }
+
+    _dxHost.SetFocusControl(edit);
+    _dxHost.SyncTextInputBridge(edit);
+    return _dxHost.GetFocusControl() == edit;
+}
+
+bool WindowImpl::DebugSetTextFieldText(TextField* edit, std::wstring_view text) noexcept
+{
+    if (! edit)
+    {
+        return false;
+    }
+
+    edit->SetTextAndNotify(std::wstring(text));
+    edit->SetSelectionRange(text.size(), text.size());
+    if (_dxHost.GetFocusControl() == edit)
+    {
+        _dxHost.SyncTextInputBridge(edit);
+    }
+    return true;
+}
+
+bool WindowImpl::DebugGetTextFieldText(const TextField* edit, std::wstring& outText) const noexcept
+{
+    outText.clear();
+    if (! edit)
+    {
+        return false;
+    }
+
+    outText.assign(edit->GetText());
+    return true;
+}
+
 Button* WindowImpl::DebugGetCommandButton(UINT commandId) noexcept
 {
     switch (commandId)
@@ -3861,6 +3984,28 @@ bool DebugFocusFirstInput() noexcept
     }
     auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     return impl && impl->DebugFocusFirstInput();
+}
+
+bool DebugFocusUserInput() noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugFocusUserInput();
+}
+
+bool DebugFocusSecretInput() noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugFocusSecretInput();
 }
 
 bool DebugFocusList() noexcept
@@ -3928,6 +4073,69 @@ bool DebugGetAlternateProtocolPluginId(std::wstring_view baselinePluginId, std::
     }
     auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     return impl && impl->DebugGetAlternateProtocolPluginId(baselinePluginId, outPluginId);
+}
+
+bool DebugSetUserText(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugSetUserText(text);
+}
+
+bool DebugSetSecretText(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugSetSecretText(text);
+}
+
+bool DebugGetUserText(std::wstring& outText) noexcept
+{
+    outText.clear();
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugGetUserText(outText);
+}
+
+bool DebugGetSecretText(std::wstring& outText) noexcept
+{
+    outText.clear();
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    return impl && impl->DebugGetSecretText(outText);
+}
+
+bool DebugGetTextInputBridgeHandle(HWND& outBridge) noexcept
+{
+    outBridge       = nullptr;
+    const HWND hwnd = GetWindowHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+    auto* impl = reinterpret_cast<WindowImpl*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (! impl)
+    {
+        return false;
+    }
+    outBridge = impl->DebugGetTextInputBridgeHandle();
+    return outBridge != nullptr;
 }
 
 bool DebugGetListHostHandle(HWND& outHost) noexcept
@@ -4143,6 +4351,16 @@ bool DebugFocusConnectionManagerFirstInput() noexcept
     return RedSalamander::ConnectionManager::SingleCanvas::DebugFocusFirstInput();
 }
 
+bool DebugFocusConnectionManagerUserInput() noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugFocusUserInput();
+}
+
+bool DebugFocusConnectionManagerSecretInput() noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugFocusSecretInput();
+}
+
 bool DebugFocusConnectionManagerList() noexcept
 {
     return RedSalamander::ConnectionManager::SingleCanvas::DebugFocusList();
@@ -4171,6 +4389,31 @@ bool DebugSetConnectionManagerProtocolPluginId(std::wstring_view pluginId) noexc
 bool DebugGetConnectionManagerAlternateProtocolPluginId(std::wstring_view baselinePluginId, std::wstring& outPluginId) noexcept
 {
     return RedSalamander::ConnectionManager::SingleCanvas::DebugGetAlternateProtocolPluginId(baselinePluginId, outPluginId);
+}
+
+bool DebugSetConnectionManagerUserText(std::wstring_view text) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugSetUserText(text);
+}
+
+bool DebugSetConnectionManagerSecretText(std::wstring_view text) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugSetSecretText(text);
+}
+
+bool DebugGetConnectionManagerUserText(std::wstring& outText) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugGetUserText(outText);
+}
+
+bool DebugGetConnectionManagerSecretText(std::wstring& outText) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugGetSecretText(outText);
+}
+
+bool DebugGetConnectionManagerTextInputBridgeHandle(HWND& outBridge) noexcept
+{
+    return RedSalamander::ConnectionManager::SingleCanvas::DebugGetTextInputBridgeHandle(outBridge);
 }
 
 bool DebugGetConnectionManagerListHostHandle(HWND& outHost) noexcept

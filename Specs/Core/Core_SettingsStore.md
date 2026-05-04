@@ -95,6 +95,7 @@ For the normal startup / explicit recovery path (`LoadSettings(...)`):
 - If loading fails (missing file, unreadable file, invalid JSON, or invalid types), start with defaults.
 - If a file existed but was invalid, rename it to a backup for diagnostics:
   - `<SettingsFileName>.bad.<UTC timestamp>`
+- Startup callers that need to explain recovery to the user call `LoadSettingsWithRecoveryInfo(...)`. When a previous settings file is backed up and defaults are restored, the app MUST show a localized warning that includes the original settings path, the backup path, and explains that the current run is using default settings. The warning should tell the user to close the app, compare the backup with the new settings file at the original path, and copy back only the settings they still need.
 
 For the non-destructive hot-reload path (`TryLoadSettingsNoRecovery(...)`):
 - Missing file returns `S_FALSE`.
@@ -139,6 +140,7 @@ namespace Common::Settings
     std::string_view GetSettingsStoreSchemaJsonUtf8() noexcept;
 
     HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept;
+    HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, SettingsLoadRecoveryInfo* recovery) noexcept;
     HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexcept;
     HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept;
     HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept;
@@ -147,6 +149,8 @@ namespace Common::Settings
     HRESULT SaveSettingsSchema(std::wstring_view appId, std::string_view schemaJsonUtf8) noexcept;
 }
 ```
+
+`SettingsLoadRecoveryInfo` reports whether the startup recovery path used defaults, whether an existing file was moved to a backup, the original settings path, the backup path, the recovery reason, and the unsupported schema version when that was the failure. `LoadSettings(...)` is the compatibility wrapper for callers that do not need this detail.
 
 ### File-stamp helper
 
@@ -198,12 +202,19 @@ Invalid external file behavior:
 - Show a single modeless localized warning in the app.
 - Do **not** rename/back up the file during the live reload failure path.
 
-## Settings Data Model (v11)
+Manual association reload:
+- `cmd/app/rereadAssociations` uses the same non-destructive `TryLoadSettingsNoRecovery(...)` path so manual reloads never rename or back up an invalid settings file.
+- A successful manual reload applies persisted viewer/editor/User Menu action settings, extension associations, plugin settings, shortcuts, and other disk-authored sections while preserving already-open window placement and current pane navigation state.
+- After applying the merged settings, the app rebuilds dynamic View With, Edit With, User Menu, ShellNew, and file-system-plugin menus; clears normal and association icon caches; refreshes both panes; preserves the active pane; updates the applied settings stamp when available; and notifies settings-reload participants.
+- A failed manual reload keeps the previous runtime settings and reports through the same localized invalid-reload alert used by the external watcher.
+
+## Settings Data Model (v16)
 
 ### Root object
 
 The root JSON object may contain (depending on the application):
-- `schemaVersion` (integer): format version (current: v11 = `11`); unsupported versions are treated as invalid (file is backed up and defaults are used, no migration).
+- `schemaVersion` (integer): format version (current: v16 = `16`); unsupported versions are treated as invalid (file is backed up and defaults are used, no migration).
+- Startup recovery for an unsupported version uses the same `.bad.<UTC timestamp>` backup path and user-facing warning as other destructive recoveries. v15 files are intentionally not migrated to v16.
 - `windows` (object): per-window placement records
 - `theme` (object): current theme + custom themes
 - `plugins` (object): plugin discovery + per-plugin configuration
@@ -215,6 +226,9 @@ The root JSON object may contain (depending on the application):
 - `monitor` (object): RedSalamanderMonitor UI state (menu toggles, filter state)
 - `shortcuts` (object): shortcut key bindings
 - `extensions` (object, optional): extension-based behaviors (e.g., open archives as virtual file systems)
+- `fileActions` (object, optional): viewer/editor actions and command associations for View, Alternate View, Edit, Alternate Edit, View With, Edit With, and Edit New
+- `userMenu` (object, optional): settings-driven external commands for `Commands -> User Menu`, `F9`, and `cmd/pane/userMenu/<itemId>`
+- `makeFileList` (object, optional): last selected options for `Commands -> Make File List`
 
 ## Plugins (v11)
 
@@ -259,19 +273,118 @@ Extension settings live under:
 
 Keys:
 - `openWithFileSystemByExtension` (object): maps a file extension (lowercase, leading dot like `".zip"`) to a file system plugin ID (example: `"builtin/file-system-7z"`).
-- `openWithViewerByExtension` (object): maps a file extension (lowercase, leading dot like `".txt"`) to a viewer plugin ID (example: `"builtin/viewer-text"`).
 
 Notes:
 - The host uses this map when activating a file while browsing the `file` plugin: a matching entry opens the file as a virtual file system instead of `ShellExecute`.
 - Default mappings include `.7z`, `.zip`, and `.rar` → `builtin/file-system-7z`.
 - To disable auto-mount behavior, set `openWithFileSystemByExtension` to `{}`.
-- The host uses `openWithViewerByExtension` when pressing `F3` (View): a matching entry opens the file in the associated viewer plugin window.
-- If no association is found (or the mapped plugin is missing/disabled), the host falls back to `builtin/viewer-text` (Text/Hex auto-detection).
-- Default mappings include `.txt`, `.log`, `.xml`, `.ini`, `.cfg`, `.csv`, `.diff`, `.patch`, `.rej` → `builtin/viewer-text`.
-- Default mappings include `.md` → `builtin/viewer-markdown`, `.json`/`.json5`/`.jsonl`/`.ndjson` → `builtin/viewer-json`, `.html`/`.htm`/`.pdf` → `builtin/viewer-web` (with fallback to `builtin/viewer-text` when the plugin is missing/disabled).
-- Default mappings include common image formats supported by baseline WIC codecs (e.g. `.png`, `.jpg`, `.gif`, `.tif`, `.bmp`, `.jxr`) → `builtin/viewer-imgraw`.
-- Default mappings include common RAW photo extensions (e.g. `.cr2`, `.cr3`, `.nef`, `.arw`, `.dng`, `.raf`, `.rw2`, `.orf`, `.pef`, `.sr2`, `.srw`, `.x3f`) → `builtin/viewer-imgraw`.
-- To remove a custom viewer association, remove it from the map (or set the whole map to `{}`) and the host will fall back to `builtin/viewer-text`.
+- Viewer extension routing is no longer stored in `extensions`. Schema v16 moved viewer/editor launch configuration into `fileActions`.
+- Settings files that still contain root `viewers`, root `editors`, or `extensions.openWithViewerByExtension` are invalid v15-era shapes and are rejected by v16 loading.
+
+## File Actions (v16)
+
+File action settings live under:
+- `fileActions.viewers`
+- `fileActions.editors`
+
+User Menu action settings live under:
+- `userMenu.actions`
+
+The model separates two concepts:
+- **Actions** are named things RedSalamander can launch.
+- **Associations** are command rules that choose an action for a file match and optional computer name.
+
+Viewer action settings:
+- `fileActions.viewers.actions` (array): viewer actions shown by `View With` and referenced by viewer associations.
+- `fileActions.viewers.associations` (array): ordered association rules for `F3 View` and `Alt+F3 Alternate View`.
+
+Editor action settings:
+- `fileActions.editors.actions` (array): external-program editor actions shown by `Edit With`, `Edit New`, and referenced by editor associations. Editor actions MUST use `kind: "externalProgram"`; `viewerPlugin` actions are valid only in `fileActions.viewers.actions`.
+- `fileActions.editors.associations` (array): ordered association rules for `F4 Edit`, `Ctrl+Shift+F4 Alternate Edit`, and `Shift+F4 Edit New`.
+
+User Menu settings:
+- `userMenu.actions` (array): ordered external actions shown by `cmd/pane/userMenu` and launched by `cmd/pane/userMenu/<itemId>`.
+
+Each action definition:
+- `id` (string): stable action ID used by settings and command payloads. IDs are case-sensitive, must start with an ASCII letter or digit, may contain ASCII letters, digits, `_`, `.`, `-`, and `/`, and must be unique within the containing action array.
+- `displayName` (string, optional): localized/user-facing label shown in pickers and preferences.
+- `enabled` (bool, optional): default `true`; disabled actions remain configured but cannot be launched.
+- `kind` (string): required; `viewerPlugin` for an internal viewer plugin, or `externalProgram` for an external process. Unknown kinds are invalid.
+- `pluginId` (string, required when `kind` is `viewerPlugin`): viewer plugin ID.
+- `executablePath` (string, required when `kind` is `externalProgram`): process path, which may contain launch macros.
+- `arguments` (string, optional): process arguments, which may contain launch macros.
+- `workingDirectory` (string, optional): process working directory, which may contain launch macros.
+- `appliesTo.matches` (array, optional): file matches the action can handle; empty means no file-match filter.
+- `appliesTo.computerNames` (string[], optional): unique non-empty computer-name filters; empty means any computer.
+
+Each file match:
+- `kind: "default"` means the catch-all `*` match; `value` must be omitted or empty.
+- `kind: "extension"` stores an extension with a leading dot, such as `".txt"` or `".EXE"`, using ASCII letters, digits, `_`, `.`, and `-`.
+- `kind: "pattern"` stores a non-empty case-insensitive filename glob, such as `"*.test.log"`, with a maximum length of 512 characters.
+
+Each viewer association rule:
+- `match` (object): default, extension, or pattern match.
+- `computerName` (string, optional): exact computer name. Empty means any computer.
+- `viewActionId` (string, required): action for `F3 View`.
+- `alternateViewActionId` (string, optional): action for `Alt+F3 Alternate View`; empty means no configured alternate viewer.
+
+Each editor association rule:
+- `match` (object): default, extension, or pattern match.
+- `computerName` (string, optional): exact computer name. Empty means any computer.
+- `editActionId` (string, required): action for `F4 Edit`.
+- `alternateEditActionId` (string, optional): action for `Ctrl+Shift+F4 Alternate Edit`; empty means no configured alternate editor.
+- `editNewActionId` (string, optional): action for `Shift+F4 Edit New`; empty means create the file without launching an editor when no applicable edit-new action is chosen.
+
+Pattern and extension association rows share the same specificity bucket. If multiple rows in the same priority bucket match, the first row in persisted order wins.
+
+Association action IDs must reference an action in the same `viewers.actions` or `editors.actions` array. The reader rejects duplicate association keys with the same `match` plus `computerName`, duplicate action IDs, malformed matches, unknown action kinds, editor actions that are not `externalProgram`, `viewerPlugin` actions without `pluginId`, and `externalProgram` actions without `executablePath`. Normal `LoadSettings` backs up malformed settings and starts from defaults; no-recovery loads return a failure.
+
+Launch macro strings are interpreted by the command layer, not by the settings store. Supported macros are `{Path}`, `{FullPath}`, `{PathAndFilename}`, `{Filename}`, `{SelectedPathsFile}`, `{OppositePanePath}`, and `{ComputerName}`. `executablePath` and `workingDirectory` expand macros as raw text. `arguments` expands each macro as a Windows command-line argument by quoting and escaping the macro value; when a macro is already wrapped in literal quotes in the template, the macro content is escaped without adding another quote pair.
+
+Omitting `fileActions` uses the built-in viewer/editor defaults. Explicit empty `fileActions.viewers` or `fileActions.editors` sections mean the user cleared that action family and must round-trip as empty instead of being repopulated from defaults.
+
+Preferences contract:
+- `Preferences -> Viewers` uses `Associations` and `Actions` tabs. The Associations table columns are Match, Computer, F3 View, Alt+F3 Alternate View, and Status.
+- `Preferences -> Editors` uses `Associations` and `Actions` tabs. The Associations table columns are Match, Computer, F4 Edit, Ctrl+Shift+F4 Alternate Edit, Shift+F4 Edit New, and Status.
+- Both pages show a resolved-action preview for a test file path using the same resolver priority as the command layer.
+- `Preferences -> User Menu` lists configured user-menu external commands and persists ordering, command fields, enabled state, match filters, and computer-name filters.
+- These pages MUST mark the dialog dirty when editable action settings change, and `Apply` / `OK` MUST persist the updated `fileActions` or `userMenu` section without dropping unrelated settings.
+- Action combo boxes list `(none)` plus configured actions from the matching action family. Selecting `(none)` clears the stored action id.
+
+User Menu runtime contract:
+- `cmd/pane/userMenu` opens the dynamic User Menu for the focused pane.
+- `cmd/pane/userMenu/<itemId>` launches the exact configured item when it is enabled and applicable.
+- User Menu entries are filtered by enabled state, `appliesTo.matches`, and `appliesTo.computerNames`. Missing external executables are shown disabled in the popup and report a localized unavailable message when launched directly.
+- External-program execution uses the shared macro engine and selected-paths-file lifecycle used by viewer/editor actions.
+
+Action resolution precedence for `View`, `Alternate View`, `Edit`, `Alternate Edit`, and `Edit New`:
+1. Computer + extension or pattern association.
+2. Global extension or pattern association.
+3. Computer default association.
+4. Global default association.
+
+The resolver returns a structured reason such as `ComputerSpecificMatch`, `GlobalMatch`, `ComputerDefault`, `GlobalDefault`, `NoAssociation`, `MissingAction`, `DisabledAction`, `ActionDoesNotApply`, or `UnsupportedActionKind`. If the resolved action is missing, disabled, filtered out by match/computer, unsupported, or cannot resolve required macro inputs, the command layer must report localized pane feedback instead of silently doing nothing.
+
+## Make File List Settings (v16)
+
+Make File List settings live under:
+- `makeFileList`
+
+This section stores the last selected `cmd/pane/makeFileList` dialog options. The writer omits the section when all values are default. When the section is present, the writer omits individual default-valued fields and the reader supplies defaults for missing fields.
+
+Fields:
+- `sourceMode` (string): `"selection"` (default) or `"currentFolder"`.
+- `recursive` (bool): default `false`.
+- `format` (string): `"text"` (default), `"csv"`, or `"json"`.
+- `outputTarget` (string): `"clipboard"` (default) or `"file"`.
+- `textMacro` (string): default `{fullPath}\t{size}\t{modified}`. Supported row macros are `{filename}`, `{name}`, `{fullPath}`, `{path}`, `{size}`, `{modified}`, `{attributes}`, and `{isDirectory}`.
+- `outputFile` (string): optional destination path used when `outputTarget` is `"file"`.
+- `includeName` (bool): default `true`.
+- `includeFullPath` (bool): default `true`.
+- `includeSize` (bool): default `true`.
+- `includeModified` (bool): default `true`.
+- `includeAttributes` (bool): default `false`.
+- `includeDirectories` (bool): default `true`.
 
 ## Shortcuts (v11)
 
@@ -570,15 +683,19 @@ Folder state is stored as an array to support multiple panes (e.g., Left/Right) 
 - `folders.items[]`: per-pane state objects:
   - `slot`: pane identifier / position (string, recommended: `"left"` / `"right"`).
   - `current`: current location as a string (either a Windows path or a plugin-qualified path: `<pluginShortId>:<pluginPath>`).
-  - `view.display`: `"brief"` or `"detailed"` (default: `"brief"`).
+  - `view.display`: `"brief" | "detailed" | "extraDetailed" | "thumbnails"` (default: `"brief"`). Thumbnails is an exclusive display mode, not a flag layered on top of another display mode.
   - `view.sortBy`: `"none" | "name" | "extension" | "time" | "size" | "attributes"` (default: `"name"`).
   - `view.sortDirection`: `"ascending" | "descending"` (default: `"ascending"`; Time/Size typically select `"descending"`).
+  - `view.fileExtensionsVisible`: whether file extensions are shown in that pane's display labels (bool, default: `true`).
+  - `view.thumbnailsVisible`: deprecated compatibility flag. Readers treat `true` as `view.display: "thumbnails"`; writers persist thumbnail mode through `view.display` and omit this flag.
+  - `view.navigationBarVisible`: navigation/address bar visibility for that pane (bool, default: `true`).
+  - `view.filterBarVisible`: persistent filter bar visibility for that pane (bool, default: `false`).
   - `view.statusBarVisible`: status bar visibility for that pane (bool, default: `true`).
 
 ### UI behavior (v1)
 
 - FolderWindow stores the splitter position in `folders.layout.splitRatio` while dragging; the splitter can be moved all the way to either edge (no minimum pane width); double-clicking the splitter resets it to `0.5`.
-- Per-pane `view.*` values reflect the pane’s **Sort by** / **Display as** selections.
+- Per-pane `view.*` values reflect the pane’s **Sort by** / **Display as** selections and pane view options for file-extension labels, thumbnails, navigation bars, filter bars, and status bars.
 
 **History rules (normative):**
 - Folder history is global (shared across panes) and stored in `folders.history`.
@@ -747,7 +864,7 @@ These settings persist the state of checkable menu items and filter state.
 
 ```json
 {
-  "schemaVersion": 11,
+  "schemaVersion": 16,
   "windows": {
     "MainWindow": {
       "state": "maximized",
@@ -784,7 +901,7 @@ These settings persist the state of checkable menu items and filter state.
       {
         "slot": "right",
         "current": "C:\\\\",
-        "view": { "display": "detailed", "sortBy": "time" }
+        "view": { "display": "thumbnails", "sortBy": "time" }
       }
     ]
   }
@@ -795,7 +912,7 @@ These settings persist the state of checkable menu items and filter state.
 
 ```json
 {
-  "schemaVersion": 10,
+  "schemaVersion": 16,
   "windows": {
     "MonitorWindow": {
       "state": "normal",

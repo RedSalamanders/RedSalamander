@@ -332,12 +332,15 @@ bool FolderView::CanShowEmptyFolderState() const noexcept
 
 void FolderView::RefreshDetailsText()
 {
-    if (_displayMode == DisplayMode::Brief)
+    const bool includeDetailsLine  = _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed ||
+                                    _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    if (! includeDetailsLine)
     {
         return;
     }
 
-    if (! _detailsTextProvider && ! (_displayMode == DisplayMode::ExtraDetailed && _metadataTextProvider))
+    if (! _detailsTextProvider && ! (includeMetadataLine && _metadataTextProvider))
     {
         return;
     }
@@ -368,7 +371,7 @@ void FolderView::RefreshDetailsText()
             }
         }
 
-        if (_displayMode == DisplayMode::ExtraDetailed && _metadataTextProvider)
+        if (includeMetadataLine && _metadataTextProvider)
         {
             std::wstring metadata =
                 _metadataTextProvider(_itemsFolder, item.displayName, item.isDirectory, item.sizeBytes, item.lastWriteTime, item.fileAttributes);
@@ -524,6 +527,12 @@ LRESULT FolderView::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPara
             OnCreateIconBitmap(std::move(request));
             return 0;
         }
+        case WndMsg::kFolderViewCreateThumbnailBitmap:
+        {
+            auto request = TakeMessagePayload<ThumbnailBitmapRequest>(lParam);
+            OnCreateThumbnailBitmap(std::move(request));
+            return 0;
+        }
         case WndMsg::kFolderViewDirectoryImpact:
         {
             auto impact = TakeMessagePayload<DirectoryInfoCache::DirectoryImpact>(lParam);
@@ -672,6 +681,10 @@ void FolderView::OnDeferredInit()
     {
         IconCache::GetInstance().Initialize(_d2dContext.get(), _dpi);
         QueueIconLoading();
+        if (_thumbnailsVisible)
+        {
+            QueueThumbnailLoading();
+        }
     }
 
     if (missingAfter != 0)
@@ -861,9 +874,17 @@ bool FolderView::DebugWarmRenderingForSelfTest() noexcept
     Render(fullRect);
 
     QueueIconLoading();
+    if (_thumbnailsVisible)
+    {
+        QueueThumbnailLoading();
+    }
     if (_iconLoadingActive.load(std::memory_order_acquire))
     {
         ProcessIconLoadQueue();
+    }
+    if (_thumbnailLoadingActive.load(std::memory_order_acquire))
+    {
+        ProcessThumbnailLoadQueue();
     }
 
     uint64_t drainedMessages = 0;
@@ -906,12 +927,15 @@ void FolderView::SetShortcutManager(const ShortcutManager* shortcuts) noexcept
 
 void FolderView::SetDisplayMode(DisplayMode mode)
 {
-    if (_displayMode == mode)
+    const bool thumbnailsVisible = mode == DisplayMode::Thumbnails;
+    if (_displayMode == mode && _thumbnailsVisible == thumbnailsVisible)
     {
         return;
     }
 
+    const bool thumbnailsChanged = _thumbnailsVisible != thumbnailsVisible;
     _displayMode            = mode;
+    _thumbnailsVisible      = thumbnailsVisible;
     _itemMetricsCached      = false;
     _cachedMaxLabelWidth    = 0.0f;
     _cachedMaxLabelHeight   = 0.0f;
@@ -920,7 +944,23 @@ void FolderView::SetDisplayMode(DisplayMode mode)
     _detailsSizeSlotChars   = 0;
     _lastLayoutWidth        = 0.0f;
 
-    if (_displayMode == DisplayMode::Brief)
+    if (thumbnailsChanged)
+    {
+        CancelThumbnailLoading();
+        _iconSizeDip = thumbnailsVisible ? kFolderViewThumbnailIconSizeDip : kFolderViewListIconSizeDip;
+        for (auto& item : _items)
+        {
+            item.icon.reset();
+            item.thumbnail.reset();
+            item.labelLayout.reset();
+            item.labelMetrics = {};
+            item.detailsLayout.reset();
+            item.detailsMetrics = {};
+            item.metadataLayout.reset();
+            item.metadataMetrics = {};
+        }
+    }
+    else if (_displayMode == DisplayMode::Brief)
     {
         for (auto& item : _items)
         {
@@ -942,10 +982,56 @@ void FolderView::SetDisplayMode(DisplayMode mode)
     LayoutItems();
     UpdateScrollMetrics();
     QueueIconLoading();
+    if (_thumbnailsVisible)
+    {
+        QueueThumbnailLoading();
+    }
 
     if (_hWnd)
     {
         InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+}
+
+void FolderView::SetFileExtensionsVisible(bool visible)
+{
+    if (_fileExtensionsVisible == visible)
+    {
+        return;
+    }
+
+    _fileExtensionsVisible = visible;
+    _itemMetricsCached      = false;
+    _cachedMaxLabelWidth    = 0.0f;
+    _cachedMaxLabelHeight   = 0.0f;
+    _lastLayoutWidth        = 0.0f;
+
+    for (auto& item : _items)
+    {
+        item.labelLayout.reset();
+        item.labelMetrics = {};
+    }
+
+    LayoutItems();
+    UpdateScrollMetrics();
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+}
+
+void FolderView::SetThumbnailsVisible(bool visible)
+{
+    if (visible)
+    {
+        SetDisplayMode(DisplayMode::Thumbnails);
+        return;
+    }
+
+    if (_displayMode == DisplayMode::Thumbnails || _thumbnailsVisible)
+    {
+        SetDisplayMode(DisplayMode::Brief);
     }
 }
 
@@ -963,6 +1049,10 @@ void FolderView::SetSort(SortBy sortBy, SortDirection direction)
     LayoutItems();
     UpdateScrollMetrics();
     QueueIconLoading();
+    if (_thumbnailsVisible)
+    {
+        QueueThumbnailLoading();
+    }
 
     if (_hWnd)
     {

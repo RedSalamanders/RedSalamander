@@ -10,10 +10,33 @@ namespace
 constexpr unsigned int kCommandShortDisplayNameStringIdOffset = IDS_CMD_SHORT_BASE;
 constexpr unsigned int kCommandShortDisplayNameStringIdMax    = IDS_CMD_SHORT_BASE + 1999u;
 
-constexpr std::array<CommandInfo, 124> kCommands = {
+struct ParameterizedCommandPrefix
+{
+    std::wstring_view prefix;
+    std::wstring_view canonicalId;
+};
+
+constexpr std::array<ParameterizedCommandPrefix, 13> kParameterizedCommandPrefixes = {
+    ParameterizedCommandPrefix{L"cmd/app/openFileExplorerKnownFolder/", L"cmd/app/openFileExplorerKnownFolder"},
+    ParameterizedCommandPrefix{L"cmd/app/plugins/configure/", L"cmd/app/plugins/configure"},
+    ParameterizedCommandPrefix{L"cmd/app/plugins/toggleEnabled/", L"cmd/app/plugins/toggleEnabled"},
+    ParameterizedCommandPrefix{L"cmd/app/theme/select/", L"cmd/app/theme/select"},
+    ParameterizedCommandPrefix{L"cmd/pane/editWith/", L"cmd/pane/editWith"},
+    ParameterizedCommandPrefix{L"cmd/pane/goDriveRoot/", L"cmd/pane/goDriveRoot"},
+    ParameterizedCommandPrefix{L"cmd/pane/hotPath/", L"cmd/pane/hotPath"},
+    ParameterizedCommandPrefix{L"cmd/pane/navigatePath/", L"cmd/pane/navigatePath"},
+    ParameterizedCommandPrefix{L"cmd/pane/newFromShellTemplate/", L"cmd/pane/newFromShellTemplate"},
+    ParameterizedCommandPrefix{L"cmd/pane/selectFileSystemPlugin/", L"cmd/pane/selectFileSystemPlugin"},
+    ParameterizedCommandPrefix{L"cmd/pane/setHotPath/", L"cmd/pane/setHotPath"},
+    ParameterizedCommandPrefix{L"cmd/pane/userMenu/", L"cmd/pane/userMenu"},
+    ParameterizedCommandPrefix{L"cmd/pane/viewWith/", L"cmd/pane/viewWith"},
+};
+
+constexpr std::array<CommandInfo, 125> kCommands = {
     CommandInfo{L"cmd/app/about", IDS_CMD_ABOUT, IDS_CMD_DESC_ABOUT, IDM_ABOUT},
     CommandInfo{L"cmd/app/compare", IDS_CMD_COMPARE, IDS_CMD_DESC_COMPARE, IDM_APP_COMPARE},
     CommandInfo{L"cmd/app/exit", IDS_CMD_EXIT, IDS_CMD_DESC_EXIT, IDM_EXIT},
+    CommandInfo{L"cmd/app/externalHelp", IDS_CMD_EXTERNAL_HELP, IDS_CMD_DESC_EXTERNAL_HELP, IDM_APP_EXTERNAL_HELP},
     CommandInfo{L"cmd/app/fullScreen", IDS_CMD_FULL_SCREEN, IDS_CMD_DESC_FULL_SCREEN, IDM_APP_FULL_SCREEN},
     CommandInfo{L"cmd/app/openFileExplorerKnownFolder", IDS_CMD_OPEN_FILE_EXPLORER_KNOWN_FOLDER, IDS_CMD_DESC_OPEN_FILE_EXPLORER_KNOWN_FOLDER, 0},
     CommandInfo{L"cmd/app/openLeftDriveMenu", IDS_CMD_OPEN_LEFT_DRIVE_MENU, IDS_CMD_DESC_OPEN_LEFT_DRIVE_MENU, IDM_LEFT_CHANGE_DRIVE},
@@ -26,6 +49,8 @@ constexpr std::array<CommandInfo, 124> kCommands = {
     CommandInfo{L"cmd/app/showShortcuts", IDS_CMD_SHORTCUTS, IDS_CMD_DESC_SHORTCUTS, IDM_APP_SHOW_SHORTCUTS},
     CommandInfo{L"cmd/app/swapPanes", IDS_CMD_SWAP_PANES, IDS_CMD_DESC_SWAP_PANES, IDM_APP_SWAP_PANES},
     CommandInfo{L"cmd/app/theme/select", IDS_CMD_THEME_SELECT, IDS_CMD_DESC_THEME_SELECT, 0},
+    CommandInfo{L"cmd/app/theme/selectNext", IDS_CMD_THEME_SELECT_NEXT, IDS_CMD_DESC_THEME_SELECT_NEXT, IDM_VIEW_THEME_NEXT},
+    CommandInfo{L"cmd/app/theme/selectPrev", IDS_CMD_THEME_SELECT_PREV, IDS_CMD_DESC_THEME_SELECT_PREV, IDM_VIEW_THEME_PREV},
     CommandInfo{
         L"cmd/app/theme/systemHighContrastIndicator", IDS_CMD_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR, IDS_CMD_DESC_THEME_SYSTEM_HIGH_CONTRAST_INDICATOR, 0},
     CommandInfo{L"cmd/app/toggleFileOperationsFailedItems",
@@ -35,6 +60,7 @@ constexpr std::array<CommandInfo, 124> kCommands = {
     CommandInfo{L"cmd/app/toggleFunctionBar", IDS_CMD_TOGGLE_FUNCTION_BAR, IDS_CMD_DESC_TOGGLE_FUNCTION_BAR, IDM_VIEW_FUNCTIONBAR},
     CommandInfo{L"cmd/app/toggleMenuBar", IDS_CMD_TOGGLE_MENU_BAR, IDS_CMD_DESC_TOGGLE_MENU_BAR, IDM_VIEW_MENUBAR},
     CommandInfo{L"cmd/app/viewWidth", IDS_CMD_VIEW_WIDTH, IDS_CMD_DESC_VIEW_WIDTH, IDM_APP_VIEW_WIDTH},
+    CommandInfo{L"cmd/pane/alternateEdit", IDS_CMD_ALTERNATE_EDIT, IDS_CMD_DESC_ALTERNATE_EDIT, IDM_PANE_ALTERNATE_EDIT},
     CommandInfo{L"cmd/pane/alternateView", IDS_CMD_ALTERNATE_VIEW, IDS_CMD_DESC_ALTERNATE_VIEW, IDM_PANE_ALTERNATE_VIEW},
     CommandInfo{L"cmd/pane/bringCurrentDirToCommandLine",
                 IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE,
@@ -44,8 +70,6 @@ constexpr std::array<CommandInfo, 124> kCommands = {
                 IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE,
                 IDS_CMD_DESC_BRING_FILENAME_TO_COMMAND_LINE,
                 IDM_PANE_BRING_FILENAME_TO_COMMAND_LINE},
-    CommandInfo{
-        L"cmd/pane/calculateDirectorySizes", IDS_CMD_CALCULATE_DIRECTORY_SIZES, IDS_CMD_DESC_CALCULATE_DIRECTORY_SIZES, IDM_PANE_CALCULATE_DIRECTORY_SIZES},
     CommandInfo{L"cmd/pane/changeAttributes", IDS_CMD_CHANGE_ATTRIBUTES, IDS_CMD_DESC_CHANGE_ATTRIBUTES, IDM_PANE_CHANGE_ATTRIBUTES},
     CommandInfo{L"cmd/pane/changeCase", IDS_CMD_CHANGE_CASE, IDS_CMD_DESC_CHANGE_CASE, IDM_PANE_CHANGE_CASE},
     CommandInfo{L"cmd/pane/changeDirectory", IDS_CMD_CHANGE_DIRECTORY, IDS_CMD_DESC_CHANGE_DIRECTORY, IDM_PANE_CHANGE_DIRECTORY},
@@ -74,7 +98,6 @@ constexpr std::array<CommandInfo, 124> kCommands = {
     CommandInfo{L"cmd/pane/display/extraDetailed", IDS_CMD_DISPLAY_EXTRA_DETAILED, IDS_CMD_DESC_DISPLAY_EXTRA_DETAILED, IDM_PANE_DISPLAY_EXTRA_DETAILED},
     CommandInfo{L"cmd/pane/edit", IDS_CMD_EDIT, IDS_CMD_DESC_EDIT, IDM_PANE_EDIT},
     CommandInfo{L"cmd/pane/editNew", IDS_CMD_EDIT_NEW, IDS_CMD_DESC_EDIT_NEW, IDM_PANE_EDIT_NEW},
-    CommandInfo{L"cmd/pane/editWidth", IDS_CMD_EDIT_WIDTH, IDS_CMD_DESC_EDIT_WIDTH, IDM_PANE_EDIT_WIDTH},
     CommandInfo{L"cmd/pane/editWith", IDS_CMD_EDIT_WITH, IDS_CMD_DESC_EDIT_WITH, 0},
     CommandInfo{L"cmd/pane/executeOpen", IDS_CMD_EXECUTE_OPEN, IDS_CMD_DESC_EXECUTE_OPEN, IDM_PANE_EXECUTE_OPEN},
     CommandInfo{L"cmd/pane/filter", IDS_CMD_FILTER, IDS_CMD_DESC_FILTER, 0},
@@ -103,10 +126,6 @@ constexpr std::array<CommandInfo, 124> kCommands = {
     CommandInfo{L"cmd/pane/openSecurity", IDS_CMD_OPEN_SECURITY, IDS_CMD_DESC_OPEN_SECURITY, IDM_PANE_OPEN_SECURITY},
     CommandInfo{L"cmd/pane/pack", IDS_CMD_PACK, IDS_CMD_DESC_PACK, IDM_PANE_PACK},
     CommandInfo{L"cmd/pane/permanentDelete", IDS_CMD_PERMANENT_DELETE, IDS_CMD_DESC_PERMANENT_DELETE, IDM_PANE_PERMANENT_DELETE},
-    CommandInfo{L"cmd/pane/permanentDeleteWithValidation",
-                IDS_CMD_PERMANENT_DELETE_WITH_VALIDATION,
-                IDS_CMD_DESC_PERMANENT_DELETE_WITH_VALIDATION,
-                IDM_PANE_PERMANENT_DELETE_WITH_VALIDATION},
     CommandInfo{L"cmd/pane/quickSearch", IDS_CMD_QUICK_SEARCH, IDS_CMD_DESC_QUICK_SEARCH, IDM_PANE_QUICK_SEARCH},
     CommandInfo{L"cmd/pane/refresh", IDS_CMD_REFRESH, IDS_CMD_DESC_REFRESH, 0},
     CommandInfo{L"cmd/pane/rename", IDS_CMD_RENAME, IDS_CMD_DESC_RENAME, IDM_PANE_RENAME},
@@ -214,26 +233,39 @@ static_assert(
     return true;
 }(),
     "kCommands must be sorted by id.");
+
+static_assert(
+    []() consteval
+{
+    for (const ParameterizedCommandPrefix& prefix : kParameterizedCommandPrefixes)
+    {
+        bool found = false;
+        for (const CommandInfo& command : kCommands)
+        {
+            if (command.id == prefix.canonicalId)
+            {
+                found = true;
+                break;
+            }
+        }
+        if (! found)
+        {
+            return false;
+        }
+    }
+    return true;
+}(),
+    "Every parameterized command prefix must map to a registered command.");
 } // namespace
 
 std::wstring_view CanonicalizeCommandId(std::wstring_view commandId) noexcept
 {
-    constexpr std::wstring_view kGoDriveRootPrefix = L"cmd/pane/goDriveRoot/";
-    if (commandId.starts_with(kGoDriveRootPrefix))
+    for (const ParameterizedCommandPrefix& entry : kParameterizedCommandPrefixes)
     {
-        return L"cmd/pane/goDriveRoot";
-    }
-
-    constexpr std::wstring_view kHotPathPrefix = L"cmd/pane/hotPath/";
-    if (commandId.starts_with(kHotPathPrefix))
-    {
-        return L"cmd/pane/hotPath";
-    }
-
-    constexpr std::wstring_view kSetHotPathPrefix = L"cmd/pane/setHotPath/";
-    if (commandId.starts_with(kSetHotPathPrefix))
-    {
-        return L"cmd/pane/setHotPath";
+        if (commandId.starts_with(entry.prefix))
+        {
+            return entry.canonicalId;
+        }
     }
 
     return commandId;

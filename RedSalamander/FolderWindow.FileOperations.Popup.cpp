@@ -193,6 +193,59 @@ float Clamp01(float v) noexcept
     return std::clamp(v, 0.0f, 1.0f);
 }
 
+float ComputeFileOperationsTaskCompleteFractionForDisplay(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
+{
+    if (task.finished && SUCCEEDED(task.resultHr))
+    {
+        return 1.0f;
+    }
+
+    if (task.operation == FILESYSTEM_DELETE)
+    {
+        if (task.totalBytes > 0 && task.completedBytes > 0)
+        {
+            return Clamp01(static_cast<float>(static_cast<double>(task.completedBytes) / static_cast<double>(task.totalBytes)));
+        }
+        if (task.totalItems > 0)
+        {
+            return Clamp01(static_cast<float>(static_cast<double>(task.completedItems) / static_cast<double>(task.totalItems)));
+        }
+        return 0.0f;
+    }
+
+    if (task.totalBytes > 0)
+    {
+        return Clamp01(static_cast<float>(static_cast<double>(task.completedBytes) / static_cast<double>(task.totalBytes)));
+    }
+    if (task.totalItems > 0)
+    {
+        return Clamp01(static_cast<float>(static_cast<double>(task.completedItems) / static_cast<double>(task.totalItems)));
+    }
+
+    return 0.0f;
+}
+
+void NormalizeCompletedTaskSnapshotForDisplay(FileOperationsPopupInternal::TaskSnapshot& task) noexcept
+{
+    if (! task.finished || FAILED(task.resultHr))
+    {
+        return;
+    }
+
+    if (task.totalItems > 0)
+    {
+        task.completedItems = task.totalItems;
+    }
+    if (task.totalBytes > 0)
+    {
+        task.completedBytes = task.totalBytes;
+    }
+    if (task.itemTotalBytes > 0)
+    {
+        task.itemCompletedBytes = task.itemTotalBytes;
+    }
+}
+
 D2D1_RECT_F ComputeIndeterminateBarFill(const D2D1_RECT_F& bar, ULONGLONG tick) noexcept
 {
     const float width = bar.right - bar.left;
@@ -1950,6 +2003,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         {
             snap.itemCompletedBytes = std::min(snap.itemCompletedBytes, snap.itemTotalBytes);
         }
+        NormalizeCompletedTaskSnapshotForDisplay(snap);
 
         result.push_back(std::move(snap));
     }
@@ -1997,6 +2051,7 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         {
             snap.completedBytes = std::min(snap.completedBytes, snap.totalBytes);
         }
+        NormalizeCompletedTaskSnapshotForDisplay(snap);
 
         result.push_back(std::move(snap));
     }
@@ -3462,6 +3517,57 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                             }
                         }
                     }
+                    else if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeAttributes)
+                    {
+                        if (! info.changeAttributesCurrentPath.empty())
+                        {
+                            drawLabeledPathLine(IDS_FILEOPS_LABEL_FROM, info.changeAttributesCurrentPath);
+                        }
+
+                        if (_smallFormat && _textBrush &&
+                            (info.changeAttributesEnumerating || info.changeAttributesScannedFolders > 0 ||
+                             info.changeAttributesScannedEntries > 0))
+                        {
+                            const std::wstring scanPath =
+                                info.changeAttributesCurrentPath.empty() ? std::wstring(L".") : info.changeAttributesCurrentPath.native();
+                            const std::wstring scanText = FormatStringResource(
+                                nullptr, IDS_FMT_COMPARE_SCAN_STATUS, scanPath, info.changeAttributesScannedFolders, info.changeAttributesScannedEntries);
+                            const D2D1_RECT_F scanRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                            _target->DrawTextW(scanText.data(),
+                                               static_cast<UINT32>(scanText.size()),
+                                               _smallFormat.get(),
+                                               scanRc,
+                                               _textBrush.get(),
+                                               D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                            textY += lineH;
+                        }
+
+                        if (_smallFormat && _subTextBrush &&
+                            (info.changeAttributesApplying || info.changeAttributesPlannedItems > 0 ||
+                             info.changeAttributesCompletedItems > 0))
+                        {
+                            if (textY + lineH <= cardRect.bottom)
+                            {
+                                const std::wstring countsText =
+                                    info.changeAttributesPlannedItems > 0
+                                        ? FormatStringResource(nullptr,
+                                                               IDS_FMT_FILEOPS_OP_COUNTS,
+                                                               info.title,
+                                                               info.changeAttributesCompletedItems,
+                                                               info.changeAttributesPlannedItems)
+                                        : FormatStringResource(
+                                              nullptr, IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL, info.title, info.changeAttributesCompletedItems);
+                                const D2D1_RECT_F countsRc = D2D1::RectF(textX, textY, contentRight, textY + lineH);
+                                _target->DrawTextW(countsText.data(),
+                                                   static_cast<UINT32>(countsText.size()),
+                                                   _smallFormat.get(),
+                                                   countsRc,
+                                                   _subTextBrush.get(),
+                                                   D2D1_DRAW_TEXT_OPTIONS_CLIP);
+                                textY += lineH;
+                            }
+                        }
+                    }
 
                     if (_smallFormat && _textBrush && info.contentActive)
                     {
@@ -3663,7 +3769,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     const bool showProgressBar =
                         ! info.finished &&
                         ((info.kind == FolderWindow::InformationalTaskUpdate::Kind::CompareDirectories && (info.scanActive || info.contentActive)) ||
-                         (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase && (info.changeCaseEnumerating || info.changeCaseRenaming)));
+                         (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeCase && (info.changeCaseEnumerating || info.changeCaseRenaming)) ||
+                         (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeAttributes &&
+                          (info.changeAttributesEnumerating || info.changeAttributesApplying)));
                     if (showProgressBar)
                     {
                         const float barH        = DipsToPixels(8.0f, _dpi);
@@ -3694,6 +3802,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 hasTotal = info.changeCasePlannedRenames > 0 && info.changeCaseCompletedRenames <= info.changeCasePlannedRenames;
                                 frac     = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.changeCaseCompletedRenames) /
                                                                                  static_cast<double>(info.changeCasePlannedRenames)))
+                                                    : 0.0f;
+                            }
+                            else if (info.kind == FolderWindow::InformationalTaskUpdate::Kind::ChangeAttributes)
+                            {
+                                hasTotal = info.changeAttributesPlannedItems > 0 &&
+                                           info.changeAttributesCompletedItems <= info.changeAttributesPlannedItems;
+                                frac     = hasTotal ? Clamp01(static_cast<float>(static_cast<double>(info.changeAttributesCompletedItems) /
+                                                                                 static_cast<double>(info.changeAttributesPlannedItems)))
                                                     : 0.0f;
                             }
 
@@ -4018,37 +4134,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         _target->FillRoundedRectangle(D2D1::RoundedRect(progressRc, radius, radius), _progressBgBrush.get());
                     }
 
-                    float completeFraction = 0.0f;
-                    if (task.operation == FILESYSTEM_DELETE)
-                    {
-                        if (task.totalBytes > 0 && task.completedBytes > 0)
-                        {
-                            completeFraction = Clamp01(static_cast<float>(static_cast<double>(task.completedBytes) / static_cast<double>(task.totalBytes)));
-                        }
-                        else if (task.totalItems > 0)
-                        {
-                            completeFraction = Clamp01(static_cast<float>(static_cast<double>(task.completedItems) / static_cast<double>(task.totalItems)));
-                        }
-                        else
-                        {
-                            completeFraction = SUCCEEDED(task.resultHr) ? 1.0f : 0.0f;
-                        }
-                    }
-                    else
-                    {
-                        if (task.totalBytes > 0)
-                        {
-                            completeFraction = Clamp01(static_cast<float>(static_cast<double>(task.completedBytes) / static_cast<double>(task.totalBytes)));
-                        }
-                        else if (task.totalItems > 0)
-                        {
-                            completeFraction = Clamp01(static_cast<float>(static_cast<double>(task.completedItems) / static_cast<double>(task.totalItems)));
-                        }
-                        else
-                        {
-                            completeFraction = SUCCEEDED(task.resultHr) ? 1.0f : 0.0f;
-                        }
-                    }
+                    const float completeFraction = ComputeFileOperationsTaskCompleteFractionForDisplay(task);
 
                     if (_progressGlobalBrush)
                     {
@@ -6543,6 +6629,11 @@ bool DebugGetFileOperationsPopupCaptionGlyphSnapshot(HWND popup, FileOperationsP
         out = snapshot;
     }
     return ok;
+}
+
+float DebugComputeFileOperationsTaskCompleteFraction(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
+{
+    return ComputeFileOperationsTaskCompleteFractionForDisplay(task);
 }
 
 double DebugSmoothRateForDisplay(double previousRate, double sampleRate, ULONGLONG elapsedMs) noexcept

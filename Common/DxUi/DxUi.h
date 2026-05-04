@@ -2097,6 +2097,7 @@ public:
     Control* HitTest(D2D1_POINT_2F point) override;
     const Control* HitTest(D2D1_POINT_2F point) const override;
     bool OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
+    bool OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifiers) override;
     bool OnMouseUp(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers) override;
     bool OnMouseWheel(WindowHost& host, D2D1_POINT_2F point, float wheelDelta, UINT modifiers) override;

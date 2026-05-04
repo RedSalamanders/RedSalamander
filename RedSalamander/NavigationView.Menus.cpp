@@ -723,6 +723,8 @@ bool NavigationView::ExecuteNavigationMenuAction(UINT menuId)
             continue;
         }
 
+        RequestOwnerPaneFocus();
+
         if (action.type == MenuActionType::NavigatePath)
         {
             RequestPathChange(std::filesystem::path(action.path));
@@ -773,6 +775,8 @@ bool NavigationView::ExecuteDriveMenuAction(UINT menuId)
         {
             continue;
         }
+
+        RequestOwnerPaneFocus();
 
         if (action.type == MenuActionType::NavigatePath)
         {

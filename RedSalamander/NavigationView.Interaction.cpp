@@ -23,6 +23,7 @@ void NavigationView::OnLButtonDown(POINT pt)
     // Check Section 1 (menu button) click
     if (_showMenuSection && PtInRect(&_sectionDriveRect, pt))
     {
+        RequestOwnerPaneFocus();
         _focusedRegion = FocusRegion::Menu;
         ShowMenuDropdown(true);
         return;
@@ -31,6 +32,7 @@ void NavigationView::OnLButtonDown(POINT pt)
     // Check history button click (Section 2 area)
     if (PtInRect(&_sectionHistoryRect, pt))
     {
+        RequestOwnerPaneFocus();
         _focusedRegion = FocusRegion::History;
         ShowHistoryDropdown(true);
         return;
@@ -39,6 +41,7 @@ void NavigationView::OnLButtonDown(POINT pt)
     // Check Section 3 (disk info) click
     if (_showDiskInfoSection && PtInRect(&_sectionDiskInfoRect, pt))
     {
+        RequestOwnerPaneFocus();
         _focusedRegion = FocusRegion::DiskInfo;
         ShowDiskInfoDropdown(true);
         return;
@@ -62,6 +65,7 @@ void NavigationView::OnLButtonDown(POINT pt)
 
         if (segment.bounds.left <= clickPt.x && clickPt.x <= segment.bounds.right && segment.bounds.top <= clickPt.y && clickPt.y <= segment.bounds.bottom)
         {
+            RequestOwnerPaneFocus();
             if (segment.isEllipsis)
             {
                 RequestFullPathPopup(segment.bounds);
@@ -82,6 +86,7 @@ void NavigationView::OnLButtonDown(POINT pt)
 
         if (bounds.left <= clickPt.x && clickPt.x <= bounds.right && bounds.top <= clickPt.y && clickPt.y <= bounds.bottom)
         {
+            RequestOwnerPaneFocus();
             const bool adjacentToEllipsis = (separator.leftSegmentIndex < _segments.size() && _segments[separator.leftSegmentIndex].isEllipsis) ||
                                             (separator.rightSegmentIndex < _segments.size() && _segments[separator.rightSegmentIndex].isEllipsis);
             if (adjacentToEllipsis)

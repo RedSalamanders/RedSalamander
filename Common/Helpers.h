@@ -75,6 +75,8 @@ struct ForceWilTemplateInstantiations_Helpers
 namespace Debug
 {
 // predefine a TraceLogging provider for use in other modules
+template <typename... Args> inline void Error(std::wformat_string<Args...> format, Args&&... args) noexcept;
+inline void Error(const std::wstring& message) noexcept;
 template <typename... Args> inline DWORD ErrorWithLastError(std::wformat_string<Args...> format, Args&&... args) noexcept;
 inline DWORD ErrorWithLastError(const std::wstring& message) noexcept;
 }; // namespace Debug
@@ -481,17 +483,45 @@ inline std::wstring LoadStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT u
 
 // Loads a resource string and formats it using std::format-style placeholders.
 // Uses std::vformat since resource strings are runtime values (not compile-time format strings).
-template <typename... Args> std::wstring FormatStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, Args... args)
+template <typename... Args> std::wstring FormatLoadedStringResource(_In_ UINT uID, std::wstring_view fmt, Args... args)
 {
-    std::wstring fmt;
-    LoadStringResource(hInstance, uID, fmt);
     if (fmt.empty())
     {
         return {};
     }
 
-    // std::make_wformat_args requires non-const lvalue references; take args by value so we can safely pass lvalues.
-    return std::vformat(LocaleFormatting::GetFormatLocale(), std::wstring_view(fmt), std::make_wformat_args(args...));
+    try
+    {
+        // std::make_wformat_args requires non-const lvalue references; take args by value so we can safely pass lvalues.
+        return std::vformat(LocaleFormatting::GetFormatLocale(), fmt, std::make_wformat_args(args...));
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::format_error& e)
+    {
+        std::wstring detail;
+        const std::string_view what(e.what());
+        detail.reserve(what.size());
+        for (const char ch : what)
+        {
+            const auto byte = static_cast<unsigned char>(ch);
+            detail.push_back(byte < 0x80u ? static_cast<wchar_t>(byte) : L'?');
+        }
+
+        Debug::Error(L"FormatLoadedStringResource: invalid format string for IDS={} ({}); using fallback text.",
+                     static_cast<unsigned int>(uID),
+                     detail);
+        return {};
+    }
+}
+
+template <typename... Args> std::wstring FormatStringResource(_In_opt_ HINSTANCE hInstance, _In_ UINT uID, Args... args)
+{
+    std::wstring fmt;
+    LoadStringResource(hInstance, uID, fmt);
+    return FormatLoadedStringResource(uID, std::wstring_view(fmt), args...);
 }
 
 namespace LocaleFormatting

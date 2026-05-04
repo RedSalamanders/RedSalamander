@@ -6,6 +6,8 @@
 
 #include <UIAutomation.h>
 #include <shellapi.h>
+#include <shobjidl.h>
+#include <winioctl.h>
 
 #include <algorithm>
 #include <array>
@@ -19,8 +21,11 @@
 #include <format>
 #include <fstream>
 #include <initializer_list>
+#include <iterator>
+#include <limits>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 #include <thread>
 #include <tuple>
@@ -31,6 +36,14 @@
 // WIL headers: deleted copy/move and unused inline Helpers
 #pragma warning(disable : 4625 4626 5026 5027 4514 28182)
 #include <wil/resource.h>
+namespace CommandsSelfTestWilWarningSilence
+{
+struct ForceWilTemplateInstantiations
+{
+    wil::unique_hfile file;
+    wil::unique_hlocal_ptr<wchar_t*> argv;
+};
+} // namespace CommandsSelfTestWilWarningSilence
 #pragma warning(pop)
 
 #pragma warning(push)
@@ -46,6 +59,8 @@
 #include "ConnectionManagerWindow.h"
 #include "DxUi/DxUi.Typography.h"
 #include "DxUiThemePalette.h"
+#include "FileActionLauncher.h"
+#include "FileActionResolver.h"
 #include "FileSystemPluginManager.h"
 #include "FindFilesWindow.h"
 #include "FolderViewEmptyStateLayout.h"
@@ -91,6 +106,7 @@ constexpr PrefCategory kPrefCategoryMouse              = static_cast<PrefCategor
 constexpr PrefCategory kPrefCategoryThemes             = static_cast<PrefCategory>(6);
 constexpr PrefCategory kPrefCategoryPlugins            = static_cast<PrefCategory>(7);
 constexpr PrefCategory kPrefCategoryFileOperations     = static_cast<PrefCategory>(11);
+constexpr PrefCategory kPrefCategoryUserMenu           = static_cast<PrefCategory>(12);
 constexpr PrefCategory kPrefCategoryCompareDirectories = static_cast<PrefCategory>(9);
 constexpr PrefCategory kPrefCategoryHotPaths           = static_cast<PrefCategory>(10);
 constexpr PrefCategory kPrefCategoryAdvanced           = static_cast<PrefCategory>(8);
@@ -407,6 +423,7 @@ template <typename WorkerFunc> void RunChangeCasePromptModalCycle(HWND mainWindo
 #include "Commands.SelfTest.PluginConfig.cpp"
 #include "Commands.SelfTest.Preferences.cpp"
 #include "Commands.SelfTest.Search.cpp"
+#include "Commands.SelfTest.ShellCommands.cpp"
 #include "Commands.SelfTest.Shortcuts.cpp"
 #include "Commands.SelfTest.ViewCommands.cpp"
 
@@ -431,6 +448,7 @@ bool CommandsSelfTest::Run(HWND mainWindow, const SelfTest::SelfTestOptions& opt
     RunConnectionsCommandsSelfTestCases(mainWindow, options, suite);
     RunPreferencesCommandsSelfTestCases(mainWindow, options, suite);
     RunSearchCommandsSelfTestCases(mainWindow, options, suite);
+    RunShellCommandsSelfTestCases(mainWindow, options, suite);
     RunShortcutsCommandsSelfTestCases(mainWindow, options, suite);
     RunCompareOptionsCommandsSelfTestCases(mainWindow, options, suite);
     RunFileOpsCommandsSelfTestCases(mainWindow, options, suite);

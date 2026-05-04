@@ -3,6 +3,7 @@
 #include <array>
 #include <cstdint>
 #include <filesystem>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -73,6 +74,8 @@ enum class FolderDisplayMode : uint8_t
 {
     Brief,
     Detailed,
+    ExtraDetailed,
+    Thumbnails,
 };
 
 enum class FolderSortBy : uint8_t
@@ -96,6 +99,10 @@ struct FolderViewSettings
     FolderDisplayMode display         = FolderDisplayMode::Brief;
     FolderSortBy sortBy               = FolderSortBy::Name;
     FolderSortDirection sortDirection = FolderSortDirection::Ascending;
+    bool fileExtensionsVisible        = true;
+    bool thumbnailsVisible            = false;
+    bool navigationBarVisible         = true;
+    bool filterBarVisible             = false;
     bool statusBarVisible             = true;
 };
 
@@ -410,6 +417,246 @@ struct SearchDialogSettings
     std::vector<GridColumnLayoutEntry> resultsGridLayout;
 };
 
+enum class FileActionKind : uint8_t
+{
+    ViewerPlugin,
+    ExternalProgram,
+};
+
+enum class FileActionMatchKind : uint8_t
+{
+    Default,
+    Extension,
+    Pattern,
+};
+
+struct FileActionMatch
+{
+    FileActionMatchKind kind = FileActionMatchKind::Default;
+    std::wstring value;
+
+    bool operator==(const FileActionMatch&) const = default;
+};
+
+struct FileActionDefinition
+{
+    std::wstring id;
+    std::wstring displayName;
+    bool enabled = true;
+    FileActionKind kind = FileActionKind::ExternalProgram;
+    std::wstring pluginId;
+    std::wstring executablePath;
+    std::wstring arguments;
+    std::wstring workingDirectory;
+    struct Applicability
+    {
+        std::vector<FileActionMatch> matches;
+        std::vector<std::wstring> computerNames;
+
+        bool operator==(const Applicability&) const = default;
+    } appliesTo;
+
+    bool operator==(const FileActionDefinition&) const = default;
+};
+
+struct ViewerAssociationRule
+{
+    FileActionMatch match;
+    std::wstring computerName;
+    std::wstring viewActionId;
+    std::wstring alternateViewActionId;
+
+    bool operator==(const ViewerAssociationRule&) const = default;
+};
+
+struct EditorAssociationRule
+{
+    FileActionMatch match;
+    std::wstring computerName;
+    std::wstring editActionId;
+    std::wstring alternateEditActionId;
+    std::wstring editNewActionId;
+
+    bool operator==(const EditorAssociationRule&) const = default;
+};
+
+struct ViewerFileActionsSettings
+{
+    std::vector<FileActionDefinition> actions;
+    std::vector<ViewerAssociationRule> associations;
+
+    bool operator==(const ViewerFileActionsSettings&) const = default;
+};
+
+struct EditorFileActionsSettings
+{
+    std::vector<FileActionDefinition> actions;
+    std::vector<EditorAssociationRule> associations;
+
+    bool operator==(const EditorFileActionsSettings&) const = default;
+};
+
+struct FileActionsSettings
+{
+    ViewerFileActionsSettings viewers;
+    EditorFileActionsSettings editors;
+
+    bool operator==(const FileActionsSettings&) const = default;
+};
+
+struct UserMenuSettings
+{
+    std::vector<FileActionDefinition> actions;
+
+    bool operator==(const UserMenuSettings&) const = default;
+};
+
+inline FileActionDefinition MakeViewerPluginAction(std::wstring id,
+                                                   std::wstring displayName,
+                                                   std::initializer_list<const wchar_t*> extensions,
+                                                   bool defaultMatch = false)
+{
+    FileActionDefinition action{};
+    action.id          = std::move(id);
+    action.displayName = std::move(displayName);
+    action.enabled     = true;
+    action.kind        = FileActionKind::ViewerPlugin;
+    action.pluginId    = action.id;
+    if (defaultMatch)
+    {
+        action.appliesTo.matches.push_back(FileActionMatch{.kind = FileActionMatchKind::Default});
+    }
+    action.appliesTo.matches.reserve(action.appliesTo.matches.size() + extensions.size());
+    for (const wchar_t* extension : extensions)
+    {
+        if (extension && extension[0] != L'\0')
+        {
+            action.appliesTo.matches.push_back(FileActionMatch{.kind = FileActionMatchKind::Extension, .value = extension});
+        }
+    }
+    return action;
+}
+
+inline void AddViewerAssociationExtensions(ViewerFileActionsSettings& settings,
+                                           std::wstring_view actionId,
+                                           std::initializer_list<const wchar_t*> extensions)
+{
+    for (const wchar_t* extension : extensions)
+    {
+        if (! extension || extension[0] == L'\0')
+        {
+            continue;
+        }
+
+        ViewerAssociationRule rule{};
+        rule.match.kind   = FileActionMatchKind::Extension;
+        rule.match.value  = extension;
+        rule.viewActionId = std::wstring(actionId);
+        settings.associations.push_back(std::move(rule));
+    }
+}
+
+inline ViewerFileActionsSettings DefaultViewerFileActionsSettings()
+{
+    ViewerFileActionsSettings settings{};
+
+    const std::initializer_list<const wchar_t*> kTextExtensions{
+        L".txt", L".log", L".xml", L".ini", L".cfg", L".csv", L".diff", L".patch", L".rej"};
+    const std::initializer_list<const wchar_t*> kMarkdownExtensions{L".md"};
+    const std::initializer_list<const wchar_t*> kJsonExtensions{L".json", L".json5", L".jsonl", L".ndjson"};
+    const std::initializer_list<const wchar_t*> kWebExtensions{L".html", L".htm", L".pdf"};
+    const std::initializer_list<const wchar_t*> kSqliteExtensions{L".db", L".db3", L".s3db", L".sqlite", L".sqlite3"};
+    const std::initializer_list<const wchar_t*> kImageExtensions{
+        L".bmp", L".dib", L".gif", L".ico", L".jpe", L".jpeg", L".jpg", L".png", L".tif", L".tiff", L".hdp", L".jxr", L".wdp",
+        L".3fr", L".ari", L".arw", L".bay", L".braw", L".cap", L".cr2", L".cr3", L".crw", L".data", L".dcr", L".dcs", L".dng",
+        L".drf", L".eip", L".erf", L".fff", L".gpr", L".iiq", L".k25", L".kdc", L".mdc", L".mef", L".mos", L".mrw", L".nef",
+        L".nrw", L".obm", L".orf", L".pef", L".ptx", L".pxn", L".r3d", L".raf", L".raw", L".rwl", L".rw2", L".rwz", L".sr2",
+        L".srf", L".srw", L".x3f"};
+    const std::initializer_list<const wchar_t*> kVideoExtensions{
+        L".avi", L".mp4", L".mkv", L".mka", L".mov", L".wmv", L".flv", L".mpg", L".mpeg", L".m4v", L".webm", L".3gp", L".ts",
+        L".m2ts", L".mts", L".vob", L".ogv", L".m4a", L".mp3", L".aac", L".flac", L".wav", L".ogg", L".opus", L".wma", L".aif",
+        L".aiff"};
+    const std::initializer_list<const wchar_t*> kPeExtensions{L".cpl", L".dll", L".drv", L".exe", L".ocx", L".scr", L".spl", L".sys"};
+
+    settings.actions.reserve(8u);
+    settings.actions.push_back(MakeViewerPluginAction(L"builtin/viewer-text", L"Text Viewer", kTextExtensions, true));
+    settings.actions.push_back(MakeViewerPluginAction(L"builtin/viewer-markdown", L"Markdown Viewer", kMarkdownExtensions));
+    settings.actions.push_back(MakeViewerPluginAction(L"builtin/viewer-json", L"JSON Viewer", kJsonExtensions));
+    settings.actions.push_back(MakeViewerPluginAction(L"builtin/viewer-web", L"Web Viewer", kWebExtensions));
+    settings.actions.push_back(MakeViewerPluginAction(L"builtin/viewer-sqlite", L"SQLite Viewer", kSqliteExtensions));
+    settings.actions.push_back(MakeViewerPluginAction(L"builtin/viewer-imgraw", L"Image Viewer", kImageExtensions));
+    settings.actions.push_back(MakeViewerPluginAction(L"builtin/viewer-vlc", L"Media Viewer", kVideoExtensions));
+    settings.actions.push_back(MakeViewerPluginAction(L"builtin/viewer-pe", L"PE Viewer", kPeExtensions));
+
+    settings.associations.reserve(1u + kTextExtensions.size() + kMarkdownExtensions.size() + kJsonExtensions.size() + kWebExtensions.size() +
+                                  kSqliteExtensions.size() + kImageExtensions.size() + kVideoExtensions.size() + kPeExtensions.size());
+    ViewerAssociationRule defaultRule{};
+    defaultRule.match.kind   = FileActionMatchKind::Default;
+    defaultRule.viewActionId = L"builtin/viewer-text";
+    settings.associations.push_back(std::move(defaultRule));
+
+    AddViewerAssociationExtensions(settings, L"builtin/viewer-text", kTextExtensions);
+    AddViewerAssociationExtensions(settings, L"builtin/viewer-markdown", kMarkdownExtensions);
+    AddViewerAssociationExtensions(settings, L"builtin/viewer-json", kJsonExtensions);
+    AddViewerAssociationExtensions(settings, L"builtin/viewer-web", kWebExtensions);
+    AddViewerAssociationExtensions(settings, L"builtin/viewer-sqlite", kSqliteExtensions);
+    AddViewerAssociationExtensions(settings, L"builtin/viewer-imgraw", kImageExtensions);
+    AddViewerAssociationExtensions(settings, L"builtin/viewer-vlc", kVideoExtensions);
+    AddViewerAssociationExtensions(settings, L"builtin/viewer-pe", kPeExtensions);
+
+    return settings;
+}
+
+inline EditorFileActionsSettings DefaultEditorFileActionsSettings()
+{
+    return {};
+}
+
+inline FileActionsSettings DefaultFileActionsSettings()
+{
+    FileActionsSettings settings{};
+    settings.viewers = DefaultViewerFileActionsSettings();
+    settings.editors = DefaultEditorFileActionsSettings();
+    return settings;
+}
+
+enum class MakeFileListSourceMode : uint8_t
+{
+    Selection,
+    CurrentFolder,
+};
+
+enum class MakeFileListFormat : uint8_t
+{
+    Text,
+    Csv,
+    Json,
+};
+
+enum class MakeFileListOutputTarget : uint8_t
+{
+    Clipboard,
+    File,
+};
+
+struct MakeFileListSettings
+{
+    MakeFileListSourceMode sourceMode   = MakeFileListSourceMode::Selection;
+    bool recursive                      = false;
+    MakeFileListFormat format           = MakeFileListFormat::Text;
+    MakeFileListOutputTarget outputTarget = MakeFileListOutputTarget::Clipboard;
+    std::wstring textMacro              = L"{fullPath}\t{size}\t{modified}";
+    std::filesystem::path outputFile;
+    bool includeName        = true;
+    bool includeFullPath    = true;
+    bool includeSize        = true;
+    bool includeModified    = true;
+    bool includeAttributes  = false;
+    bool includeDirectories = true;
+
+    bool operator==(const MakeFileListSettings&) const = default;
+};
+
 struct ExtensionsSettings
 {
     // Map a file extension (lowercase, with leading dot like ".7z") to a file system plugin ID.
@@ -460,130 +707,6 @@ struct ExtensionsSettings
         {L".z", L"builtin/file-system-7z"},
     };
 
-    // Map a file extension (lowercase, with leading dot like ".txt") to a viewer plugin ID.
-    // Used by the host to open matching files in a viewer window on F3.
-    std::unordered_map<std::wstring, std::wstring> openWithViewerByExtension{
-        {L".txt", L"builtin/viewer-text"},
-        {L".log", L"builtin/viewer-text"},
-        {L".md", L"builtin/viewer-markdown"},
-        {L".json", L"builtin/viewer-json"},
-        {L".json5", L"builtin/viewer-json"},
-        {L".jsonl", L"builtin/viewer-json"},
-        {L".ndjson", L"builtin/viewer-json"},
-        {L".html", L"builtin/viewer-web"},
-        {L".htm", L"builtin/viewer-web"},
-        {L".pdf", L"builtin/viewer-web"},
-        {L".xml", L"builtin/viewer-text"},
-        {L".ini", L"builtin/viewer-text"},
-        {L".cfg", L"builtin/viewer-text"},
-        {L".csv", L"builtin/viewer-text"},
-        {L".diff", L"builtin/viewer-text"},
-        {L".patch", L"builtin/viewer-text"},
-        {L".rej", L"builtin/viewer-text"},
-        {L".db", L"builtin/viewer-sqlite"},
-        {L".db3", L"builtin/viewer-sqlite"},
-        {L".s3db", L"builtin/viewer-sqlite"},
-        {L".sqlite", L"builtin/viewer-sqlite"},
-        {L".sqlite3", L"builtin/viewer-sqlite"},
-
-        // Default image formats (built-in WIC codecs)
-        {L".bmp", L"builtin/viewer-imgraw"},
-        {L".dib", L"builtin/viewer-imgraw"},
-        {L".gif", L"builtin/viewer-imgraw"},
-        {L".ico", L"builtin/viewer-imgraw"},
-        {L".jpe", L"builtin/viewer-imgraw"},
-        {L".jpeg", L"builtin/viewer-imgraw"},
-        {L".jpg", L"builtin/viewer-imgraw"},
-        {L".png", L"builtin/viewer-imgraw"},
-        {L".tif", L"builtin/viewer-imgraw"},
-        {L".tiff", L"builtin/viewer-imgraw"},
-        {L".hdp", L"builtin/viewer-imgraw"},
-        {L".jxr", L"builtin/viewer-imgraw"},
-        {L".wdp", L"builtin/viewer-imgraw"},
-
-        // Default video formats (VLC / libVLC)
-        {L".avi", L"builtin/viewer-vlc"},
-        {L".mp4", L"builtin/viewer-vlc"},
-        {L".mkv", L"builtin/viewer-vlc"},
-        {L".mka", L"builtin/viewer-vlc"},
-        {L".mov", L"builtin/viewer-vlc"},
-        {L".wmv", L"builtin/viewer-vlc"},
-        {L".flv", L"builtin/viewer-vlc"},
-        {L".mpg", L"builtin/viewer-vlc"},
-        {L".mpeg", L"builtin/viewer-vlc"},
-        {L".m4v", L"builtin/viewer-vlc"},
-        {L".webm", L"builtin/viewer-vlc"},
-        {L".3gp", L"builtin/viewer-vlc"},
-        {L".ts", L"builtin/viewer-vlc"},
-        {L".m2ts", L"builtin/viewer-vlc"},
-        {L".mts", L"builtin/viewer-vlc"},
-        {L".vob", L"builtin/viewer-vlc"},
-        {L".ogv", L"builtin/viewer-vlc"},
-        {L".m4a", L"builtin/viewer-vlc"},
-        {L".mp3", L"builtin/viewer-vlc"},
-        {L".aac", L"builtin/viewer-vlc"},
-        {L".flac", L"builtin/viewer-vlc"},
-        {L".wav", L"builtin/viewer-vlc"},
-        {L".ogg", L"builtin/viewer-vlc"},
-        {L".opus", L"builtin/viewer-vlc"},
-        {L".wma", L"builtin/viewer-vlc"},
-        {L".aif", L"builtin/viewer-vlc"},
-        {L".aiff", L"builtin/viewer-vlc"},
-
-        // Portable Executable formats (PE)
-        {L".cpl", L"builtin/viewer-pe"},
-        {L".dll", L"builtin/viewer-pe"},
-        {L".drv", L"builtin/viewer-pe"},
-        {L".exe", L"builtin/viewer-pe"},
-        {L".ocx", L"builtin/viewer-pe"},
-        {L".scr", L"builtin/viewer-pe"},
-        {L".spl", L"builtin/viewer-pe"},
-        {L".sys", L"builtin/viewer-pe"},
-
-        // RAW camera formats (LibRaw)
-        {L".3fr", L"builtin/viewer-imgraw"},
-        {L".ari", L"builtin/viewer-imgraw"},
-        {L".arw", L"builtin/viewer-imgraw"},
-        {L".bay", L"builtin/viewer-imgraw"},
-        {L".braw", L"builtin/viewer-imgraw"},
-        {L".cap", L"builtin/viewer-imgraw"},
-        {L".cr2", L"builtin/viewer-imgraw"},
-        {L".cr3", L"builtin/viewer-imgraw"},
-        {L".crw", L"builtin/viewer-imgraw"},
-        {L".data", L"builtin/viewer-imgraw"},
-        {L".dcr", L"builtin/viewer-imgraw"},
-        {L".dcs", L"builtin/viewer-imgraw"},
-        {L".dng", L"builtin/viewer-imgraw"},
-        {L".drf", L"builtin/viewer-imgraw"},
-        {L".eip", L"builtin/viewer-imgraw"},
-        {L".erf", L"builtin/viewer-imgraw"},
-        {L".fff", L"builtin/viewer-imgraw"},
-        {L".gpr", L"builtin/viewer-imgraw"},
-        {L".iiq", L"builtin/viewer-imgraw"},
-        {L".k25", L"builtin/viewer-imgraw"},
-        {L".kdc", L"builtin/viewer-imgraw"},
-        {L".mdc", L"builtin/viewer-imgraw"},
-        {L".mef", L"builtin/viewer-imgraw"},
-        {L".mos", L"builtin/viewer-imgraw"},
-        {L".mrw", L"builtin/viewer-imgraw"},
-        {L".nef", L"builtin/viewer-imgraw"},
-        {L".nrw", L"builtin/viewer-imgraw"},
-        {L".obm", L"builtin/viewer-imgraw"},
-        {L".orf", L"builtin/viewer-imgraw"},
-        {L".pef", L"builtin/viewer-imgraw"},
-        {L".ptx", L"builtin/viewer-imgraw"},
-        {L".pxn", L"builtin/viewer-imgraw"},
-        {L".r3d", L"builtin/viewer-imgraw"},
-        {L".raf", L"builtin/viewer-imgraw"},
-        {L".raw", L"builtin/viewer-imgraw"},
-        {L".rwl", L"builtin/viewer-imgraw"},
-        {L".rw2", L"builtin/viewer-imgraw"},
-        {L".rwz", L"builtin/viewer-imgraw"},
-        {L".sr2", L"builtin/viewer-imgraw"},
-        {L".srf", L"builtin/viewer-imgraw"},
-        {L".srw", L"builtin/viewer-imgraw"},
-        {L".x3f", L"builtin/viewer-imgraw"},
-    };
 };
 
 struct ShortcutBinding
@@ -606,10 +729,13 @@ struct ShortcutsSettings
 
 struct Settings
 {
-    uint32_t schemaVersion = 11;
+    uint32_t schemaVersion = 16;
     std::unordered_map<std::wstring, WindowPlacement> windows;
     ThemeSettings theme;
     PluginsSettings plugins;
+    FileActionsSettings fileActions = DefaultFileActionsSettings();
+    UserMenuSettings userMenu;
+    std::optional<MakeFileListSettings> makeFileList;
     ExtensionsSettings extensions;
     std::optional<ShortcutsSettings> shortcuts;
     std::optional<MainMenuState> mainMenu;
@@ -637,6 +763,32 @@ struct SettingsFileStamp
     bool operator==(const SettingsFileStamp&) const noexcept = default;
 };
 
+enum class SettingsLoadRecoveryReason : uint8_t
+{
+    None,
+    SettingsFileMissing,
+    ReadFailed,
+    InvalidJson,
+    InvalidRoot,
+    MissingSchemaVersion,
+    UnsupportedSchemaVersion,
+    LegacyShape,
+    FileActionsInvalid,
+    UserMenuInvalid,
+    ShortcutsInvalid,
+};
+
+struct SettingsLoadRecoveryInfo
+{
+    SettingsLoadRecoveryReason reason = SettingsLoadRecoveryReason::None;
+    HRESULT hr                        = S_OK;
+    std::filesystem::path settingsPath;
+    std::filesystem::path backupPath;
+    int64_t unsupportedSchemaVersion = 0;
+    bool usedDefaults                = false;
+    bool backedUp                    = false;
+};
+
 COMMON_API std::filesystem::path GetSettingsPath(std::wstring_view appId) noexcept;
 COMMON_API std::filesystem::path GetSettingsSchemaPath(std::wstring_view appId) noexcept;
 
@@ -647,6 +799,10 @@ COMMON_API std::string_view GetSettingsStoreSchemaJsonUtf8() noexcept;
 // - S_OK: loaded successfully
 // - S_FALSE: defaults used (missing/invalid/unreadable)
 COMMON_API HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept;
+
+// Same recovery behavior as LoadSettings(...), but reports when an existing
+// settings file was backed up and defaults were restored.
+COMMON_API HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, SettingsLoadRecoveryInfo* recovery) noexcept;
 
 // Returns:
 // - S_OK: loaded successfully

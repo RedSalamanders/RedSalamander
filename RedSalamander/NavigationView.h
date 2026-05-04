@@ -199,6 +199,7 @@ private:
     static constexpr int kHistoryButtonWidth           = 24; // History dropdown
 
     void RequestPathChange(const std::filesystem::path& path);
+    void RequestOwnerPaneFocus() const noexcept;
     std::filesystem::path ToPluginPath(const std::filesystem::path& displayPath) const;
 
     enum class RenderMode : uint8_t

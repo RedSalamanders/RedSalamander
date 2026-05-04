@@ -30,6 +30,7 @@
 [[nodiscard]] bool DebugNormalizeIconBitmapAlphaForD2D(std::span<BYTE> pixels) noexcept;
 [[nodiscard]] bool DebugNormalizeIconBitmapAlphaForD2DWithMask(std::span<BYTE> pixels, HBITMAP maskBitmap, int width, int height, HDC hdc) noexcept;
 [[nodiscard]] int DebugSelectIconCacheImageListSize(float targetDipSize, float dpi) noexcept;
+[[nodiscard]] size_t DebugGetAssociationIconCacheSize() noexcept;
 #endif
 
 // Forward declarations
@@ -141,6 +142,10 @@ public:
 
     // Clear all cached bitmaps (call on device loss or when releasing resources).
     void Clear();
+
+    // Clear Shell association query results used for extension-to-system-icon resolution.
+    // Call when file associations or external association settings are reloaded.
+    void ClearAssociationCache() noexcept;
 
     // Clear cached bitmaps for a specific D2D device (call when discarding that device).
     // This prevents stale device caches from keeping old ID2D1Device instances alive.

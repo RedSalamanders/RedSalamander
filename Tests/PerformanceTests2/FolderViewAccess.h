@@ -217,6 +217,7 @@ public:
         Brief,
         Detailed,
         ExtraDetailed,
+        Thumbnails,
     };
 
     enum class SortBy : uint8_t

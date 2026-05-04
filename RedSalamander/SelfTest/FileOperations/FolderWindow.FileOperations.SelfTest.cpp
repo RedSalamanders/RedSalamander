@@ -200,7 +200,7 @@ struct SelfTestState
         Phase9_ConflictPrompt_RetryCap,
         Phase9_ConflictPrompt_SkipContinuesDirectoryCopy,
         Phase9_PerItemConcurrency,
-        Phase10_PermanentDeleteWithValidation,
+        Phase10_PermanentDelete,
         Phase11_CrossFileSystemBridge,
         Phase11_BridgeSingleFolderParallelCopyInFlightLines,
         Phase11_BridgeMultiFolderParallelCopyInFlightLines,
@@ -482,7 +482,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase9_ConflictPrompt_RetryCap: return L"Phase9_ConflictPrompt_RetryCap";
         case SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy: return L"Phase9_ConflictPrompt_SkipContinuesDirectoryCopy";
         case SelfTestState::Step::Phase9_PerItemConcurrency: return L"Phase9_PerItemConcurrency";
-        case SelfTestState::Step::Phase10_PermanentDeleteWithValidation: return L"Phase10_PermanentDeleteWithValidation";
+        case SelfTestState::Step::Phase10_PermanentDelete: return L"Phase10_PermanentDelete";
         case SelfTestState::Step::Phase11_CrossFileSystemBridge: return L"Phase11_CrossFileSystemBridge";
         case SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines: return L"Phase11_BridgeSingleFolderParallelCopyInFlightLines";
         case SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines: return L"Phase11_BridgeMultiFolderParallelCopyInFlightLines";
@@ -565,7 +565,7 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::Phase9_ConflictPrompt_RetryCap,                      // Phase 9 â€” retry cap in conflict prompt
     SelfTestState::Step::Phase9_ConflictPrompt_SkipContinuesDirectoryCopy,    // Phase 9 â€” skip continues directory copy
     SelfTestState::Step::Phase9_PerItemConcurrency,                           // Phase 9 â€” per-item mode with concurrent operations
-    SelfTestState::Step::Phase10_PermanentDeleteWithValidation,               // Phase 10 â€” permanent delete with post-delete validation
+    SelfTestState::Step::Phase10_PermanentDelete,                             // Phase 10 â€” confirmed permanent delete
     SelfTestState::Step::Phase11_CrossFileSystemBridge,                       // Phase 11 â€” copy/move across different file-system plugins
     SelfTestState::Step::Phase11_BridgeSingleFolderParallelCopyInFlightLines, // Phase 11 â€” bridge: single-folder copy uses within-folder parallelism
     SelfTestState::Step::Phase11_BridgeMultiFolderParallelCopyInFlightLines,  // Phase 11 â€” bridge: multi-folder copy still uses within-folder parallelism
@@ -657,7 +657,7 @@ constexpr std::array<SelfTestState::Step, 7> kFileOpsFamilyPhase09{{
 }};
 
 constexpr std::array<SelfTestState::Step, 1> kFileOpsFamilyPhase10{{
-    SelfTestState::Step::Phase10_PermanentDeleteWithValidation,
+    SelfTestState::Step::Phase10_PermanentDelete,
 }};
 
 constexpr std::array<SelfTestState::Step, 7> kFileOpsFamilyPhase11{{

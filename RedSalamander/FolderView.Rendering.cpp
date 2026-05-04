@@ -659,6 +659,7 @@ void FolderView::DiscardDeviceResources()
     for (auto& item : _items)
     {
         item.icon.reset();
+        item.thumbnail.reset();
     }
 
     wil::com_ptr<ID2D1Device> oldD2DDevice;
@@ -2078,7 +2079,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
 
     if (perfStats)
     {
-        if (item.icon)
+        if (item.icon || (_thumbnailsVisible && item.thumbnail))
         {
             ++perfStats->itemHasIcon;
         }
@@ -2225,6 +2226,9 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     const float contentTop    = bounds.top + kLabelVerticalPaddingDip;
     const float contentBottom = bounds.bottom - kLabelVerticalPaddingDip;
     const float contentHeight = std::max(0.0f, contentBottom - contentTop);
+    const bool includeDetailsLine =
+        _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
 
     const float iconLeft = bounds.left + kLabelHorizontalPaddingDip;
     const float iconTop  = _displayMode == DisplayMode::Brief ? contentTop + std::max(0.0f, (contentHeight - _iconSizeDip) * 0.5f) : contentTop;
@@ -2234,7 +2238,8 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     {
         iconOpacity = FolderViewVisualState::ResolveNormalIconOpacity(iconOpacity, _paneFocused);
     }
-    if (item.icon)
+    ID2D1Bitmap1* bitmap = (_thumbnailsVisible && item.thumbnail) ? item.thumbnail.get() : item.icon.get();
+    if (bitmap)
     {
 #ifdef ENABLE_TESTS
         if (IsNameFilterActive())
@@ -2242,8 +2247,8 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
             SelfTest::AppendSelfTestTrace(std::format(L"FolderView::DrawItem: before DrawBitmap name='{}'", item.displayName));
         }
 #endif
-        const D2D1_INTERPOLATION_MODE interpolationMode = ResolveFolderViewIconBitmapInterpolation(item.icon->GetPixelSize(), _iconSizeDip, _dpi);
-        _d2dContext->DrawBitmap(item.icon.get(), iconRect, iconOpacity, interpolationMode);
+        const D2D1_INTERPOLATION_MODE interpolationMode = ResolveFolderViewIconBitmapInterpolation(bitmap->GetPixelSize(), _iconSizeDip, _dpi);
+        _d2dContext->DrawBitmap(bitmap, iconRect, iconOpacity, interpolationMode);
 
         // Render shortcut overlay if applicable
         if (item.isShortcut && _shortcutOverlayIcon)
@@ -2274,6 +2279,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     const float labelLeft      = iconRect.right + kIconTextGapDip;
     const float labelRight     = bounds.right - kLabelHorizontalPaddingDip;
     const float availableWidth = std::max(0.0f, labelRight - labelLeft);
+    const std::wstring_view visualDisplayName = GetVisualDisplayName(item);
 
     // Select text brush based on selection state
     ID2D1SolidColorBrush* textBrush = (! _paneFocused && _textUnfocusedBrush) ? _textUnfocusedBrush.get() : _textBrush.get();
@@ -2312,12 +2318,12 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
             return;
         }
 
-        if (item.displayName.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+        if (visualDisplayName.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
         {
             return;
         }
 
-        const UINT32 textLength = static_cast<UINT32>(item.displayName.size());
+        const UINT32 textLength = static_cast<UINT32>(visualDisplayName.size());
         if (highlightRange.startPosition >= textLength)
         {
             return;
@@ -2407,9 +2413,9 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     std::optional<DWRITE_TEXT_RANGE> incrementalSearchRange;
     if (item.labelLayout)
     {
-        if (item.displayName.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+        if (visualDisplayName.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
         {
-            const UINT32 textLength = static_cast<UINT32>(item.displayName.size());
+            const UINT32 textLength = static_cast<UINT32>(visualDisplayName.size());
             if (textLength > 0)
             {
                 DWRITE_TEXT_RANGE clearRange{};
@@ -2422,7 +2428,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
                 static_cast<void>(item.labelLayout->SetDrawingEffect(nullptr, clearRange));
             }
 
-            const std::optional<UINT32> matchOffset = FindIncrementalSearchMatchOffset(item.displayName);
+            const std::optional<UINT32> matchOffset = FindIncrementalSearchMatchOffset(visualDisplayName);
             if (matchOffset.has_value() && _incrementalSearch.query.size() <= static_cast<size_t>(std::numeric_limits<UINT32>::max()))
             {
                 DWRITE_TEXT_RANGE range{};
@@ -2454,7 +2460,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
 
     if (item.labelLayout)
     {
-        if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
+        if (includeDetailsLine)
         {
             constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
             const float nameHeight = item.labelMetrics.height > 0.0f ? item.labelMetrics.height : std::max(0.0f, contentHeight * 0.5f);
@@ -2491,7 +2497,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
                     item.detailsText.c_str(), static_cast<UINT32>(item.detailsText.length()), _detailsFormat.get(), detailsRect, detailsBrush, options);
             }
 
-            if (_displayMode == DisplayMode::ExtraDetailed)
+            if (includeMetadataLine)
             {
                 const bool hasDetails = item.detailsLayout || (! item.detailsText.empty());
                 const float detailsHeight =
@@ -2538,16 +2544,17 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
     }
     else
     {
-        if (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed)
+        if (includeDetailsLine)
         {
             const float detailsHeight  = _detailsLineHeightDip > 0.0f ? _detailsLineHeightDip : 12.0f;
-            const float metadataHeight = (_displayMode == DisplayMode::ExtraDetailed && _metadataLineHeightDip > 0.0f) ? _metadataLineHeightDip : 0.0f;
+            const float metadataHeight = (includeMetadataLine && _metadataLineHeightDip > 0.0f) ? _metadataLineHeightDip : 0.0f;
             const float nameBottom =
                 std::max(contentTop, contentBottom - detailsHeight - kDetailsGapDip - (metadataHeight > 0.0f ? (metadataHeight + kDetailsGapDip) : 0.0f));
 
             D2D1_RECT_F labelRect  = D2D1::RectF(labelLeft, contentTop, labelLeft + availableWidth, nameBottom);
             constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-            _d2dContext->DrawTextW(item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
+            _d2dContext->DrawTextW(
+                visualDisplayName.data(), static_cast<UINT32>(visualDisplayName.length()), _labelFormat.get(), labelRect, textBrush, options);
 
             ID2D1SolidColorBrush* detailsBrush =
                 item.selected ? textBrush
@@ -2561,7 +2568,7 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
                     item.detailsText.c_str(), static_cast<UINT32>(item.detailsText.length()), _detailsFormat.get(), detailsRect, detailsBrush, options);
             }
 
-            if (_displayMode == DisplayMode::ExtraDetailed && ! item.metadataText.empty() && _detailsFormat)
+            if (includeMetadataLine && ! item.metadataText.empty() && _detailsFormat)
             {
                 const bool hasDetails     = ! item.detailsText.empty();
                 const float detailsBottom = nameBottom + kDetailsGapDip + (hasDetails ? detailsHeight : 0.0f);
@@ -2579,7 +2586,8 @@ void FolderView::DrawItem(FolderItem& item, DrawItemPerfStats* perfStats)
         {
             D2D1_RECT_F labelRect  = D2D1::RectF(labelLeft, contentTop, labelLeft + availableWidth, contentBottom);
             constexpr auto options = static_cast<D2D1_DRAW_TEXT_OPTIONS>(D2D1_DRAW_TEXT_OPTIONS_CLIP | D2D1_DRAW_TEXT_OPTIONS_ENABLE_COLOR_FONT);
-            _d2dContext->DrawTextW(item.displayName.data(), static_cast<UINT32>(item.displayName.length()), _labelFormat.get(), labelRect, textBrush, options);
+            _d2dContext->DrawTextW(
+                visualDisplayName.data(), static_cast<UINT32>(visualDisplayName.length()), _labelFormat.get(), labelRect, textBrush, options);
         }
     }
 #ifdef ENABLE_TESTS

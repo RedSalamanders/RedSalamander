@@ -155,12 +155,19 @@ public:
 
     void CommandRename();
     void CommandView();
+    [[nodiscard]] bool CommandAlternateView();
+    [[nodiscard]] bool CommandViewWith(std::wstring_view actionId);
     void CommandDelete();
     HRESULT CopySelectedItemsToFolder(const std::filesystem::path& destinationFolder);
     HRESULT MoveSelectedItemsToFolder(const std::filesystem::path& destinationFolder);
+    std::vector<std::filesystem::path> GetSelectedPaths() const;
     std::vector<std::filesystem::path> GetSelectedDirectoryPaths() const;
+    [[nodiscard]] std::optional<std::filesystem::path> GetFocusedPath() const;
     std::vector<std::filesystem::path> GetSelectedOrFocusedPaths() const;
     std::vector<std::wstring> GetSelectedOrFocusedDisplayNames() const;
+    [[nodiscard]] bool CutSelectionToClipboard();
+    [[nodiscard]] bool PasteShortcutFromClipboard();
+    void ActivateIncrementalSearch();
 
     struct PathAttributes
     {
@@ -230,6 +237,7 @@ public:
     }
 
     [[nodiscard]] std::wstring_view DebugGetFocusedDisplayName() const noexcept;
+    [[nodiscard]] std::wstring DebugGetFocusedVisualDisplayName() const;
     [[nodiscard]] bool DebugHasItemDisplayName(std::wstring_view displayName) const noexcept;
     [[nodiscard]] size_t DebugGetItemCount() const noexcept;
     [[nodiscard]] size_t DebugGetBitmapIconCount() const noexcept;
@@ -263,6 +271,7 @@ public:
         Brief,
         Detailed,
         ExtraDetailed,
+        Thumbnails,
     };
 
     enum class SortBy : uint8_t
@@ -296,10 +305,59 @@ public:
         Busy,
     };
 
+#ifdef ENABLE_TESTS
+    enum class DebugThumbnailProviderMode : uint8_t
+    {
+        Shell,
+        ForceFallback,
+        ForceSyntheticSuccess,
+    };
+
+    struct AlertOverlayDebugSnapshot
+    {
+        bool visible            = false;
+        ErrorOverlayKind kind    = ErrorOverlayKind::Operation;
+        OverlaySeverity severity = OverlaySeverity::Error;
+        std::wstring title;
+        std::wstring message;
+        HRESULT hr         = S_OK;
+        bool closable      = true;
+        bool blocksInput   = true;
+    };
+
+    struct ThumbnailDebugSnapshot
+    {
+        bool visible                 = false;
+        float targetDip              = 16.0f;
+        uint64_t queuedCount         = 0;
+        uint64_t completedCount      = 0;
+        uint64_t fallbackCount       = 0;
+        uint64_t staleDropCount      = 0;
+        uint64_t pendingCount        = 0;
+        uint64_t cacheHitCount       = 0;
+    };
+
+    [[nodiscard]] bool DebugGetAlertOverlaySnapshot(AlertOverlayDebugSnapshot& out) const noexcept;
+    [[nodiscard]] ThumbnailDebugSnapshot DebugGetThumbnailSnapshot() const noexcept;
+    void DebugSetThumbnailProviderMode(DebugThumbnailProviderMode mode) noexcept;
+#endif
+
     void SetDisplayMode(DisplayMode mode);
     [[maybe_unused]] DisplayMode GetDisplayMode() const noexcept
     {
         return _displayMode;
+    }
+
+    void SetFileExtensionsVisible(bool visible);
+    [[nodiscard]] bool GetFileExtensionsVisible() const noexcept
+    {
+        return _fileExtensionsVisible;
+    }
+
+    void SetThumbnailsVisible(bool visible);
+    [[nodiscard]] bool GetThumbnailsVisible() const noexcept
+    {
+        return _thumbnailsVisible;
     }
 
     void SetSort(SortBy sortBy, SortDirection direction);
@@ -381,8 +439,16 @@ public:
         _openFileRequestCallback = std::move(callback);
     }
 
+    enum class ViewFileRole : uint8_t
+    {
+        Primary,
+        Alternate,
+    };
+
     struct ViewFileRequest
     {
+        ViewFileRole role = ViewFileRole::Primary;
+        std::wstring actionId;
         std::filesystem::path focusedPath;
         std::vector<std::filesystem::path> selectionPaths;
         std::vector<std::filesystem::path> displayedFilePaths;
@@ -437,6 +503,25 @@ public:
     {
         return _incrementalSearch.query;
     }
+
+#ifdef ENABLE_TESTS
+    struct IncrementalSearchDebugMatch
+    {
+        std::wstring displayName;
+        DWRITE_TEXT_RANGE range{};
+        bool startsWith = false;
+    };
+
+    struct IncrementalSearchDebugSnapshot
+    {
+        bool active = false;
+        std::wstring query;
+        std::wstring focusedDisplayName;
+        std::vector<IncrementalSearchDebugMatch> matches;
+    };
+
+    [[nodiscard]] bool DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapshot& out) const noexcept;
+#endif
 
     using SelectionSizeComputationRequestedCallback = std::function<void()>;
     void SetSelectionSizeComputationRequestedCallback(SelectionSizeComputationRequestedCallback callback)
@@ -515,6 +600,8 @@ private:
     class DropTarget;
     struct EnumerationPayload;
 
+    [[nodiscard]] bool RequestViewFocusedItem(ViewFileRole role, bool activateFallback, std::wstring_view actionId = {});
+
 #pragma warning(push)
 // (C4625) copy constructor was implicitly defined as deleted / (C4626) assignment operator was implicitly defined as deleted
 #pragma warning(disable : 4625 4626)
@@ -527,6 +614,17 @@ private:
         std::chrono::steady_clock::time_point postedAt{};
         std::vector<size_t> itemIndices;
         wil::unique_hicon hIcon = nullptr;
+    };
+
+    struct ThumbnailBitmapRequest
+    {
+        uint64_t thumbnailLoadBatchId  = 0;
+        uint64_t enumerationGeneration = 0;
+        size_t itemIndex               = static_cast<size_t>(-1);
+        std::chrono::steady_clock::time_point postedAt{};
+        wil::unique_hbitmap hBitmap = nullptr;
+        HRESULT hr                  = S_OK;
+        bool usedFallback           = false;
     };
 
     struct FolderItem
@@ -548,6 +646,7 @@ private:
         // Rendering state
         D2D1_RECT_F bounds{};
         wil::com_ptr<ID2D1Bitmap1> icon;
+        wil::com_ptr<ID2D1Bitmap1> thumbnail;
         int iconIndex = -1; // System image list icon index from SHGetFileInfo
         int column    = 0;
         int row       = 0;
@@ -913,6 +1012,8 @@ private:
     DisplayMode _displayMode     = DisplayMode::Brief;
     SortBy _sortBy               = SortBy::Name;
     SortDirection _sortDirection = SortDirection::Ascending;
+    bool _fileExtensionsVisible  = true;
+    bool _thumbnailsVisible      = false;
 
     // Callback for path changes
     std::function<void(const std::optional<std::filesystem::path>&)> _pathChangedCallback;
@@ -1035,9 +1136,9 @@ private:
     void MoveSelectedItems();
     void EnsureDropTarget();
     void BeginDragDrop();
-    std::vector<std::filesystem::path> GetSelectedPaths() const;
     void UpdateItemTextLayouts(float labelWidth);
     void EnsureItemTextLayout(FolderItem& item, float labelWidth);
+    [[nodiscard]] std::wstring_view GetVisualDisplayName(const FolderItem& item) const noexcept;
     std::pair<size_t, size_t> GetVisibleItemRange() const;
     void ReleaseDistantRenderingState(); // Release layouts/icons for items far from visible range
     void ScheduleIdleLayoutCreation();
@@ -1052,6 +1153,9 @@ private:
     bool CheckHR(HRESULT hr, const wchar_t* context) const;
     void QueueIconLoading();
     void ProcessIconLoadQueue();
+    void QueueThumbnailLoading();
+    void CancelThumbnailLoading() noexcept;
+    void ProcessThumbnailLoadQueue();
 
     void OnIconLoaded(size_t itemIndex);
     void OnBatchIconUpdate();
@@ -1130,6 +1234,19 @@ private:
     std::deque<IconLoadRequest> _iconLoadQueue;
     std::atomic<bool> _iconLoadingActive{false};
 
+    struct ThumbnailLoadRequest
+    {
+        uint64_t enumerationGeneration = 0;
+        size_t itemIndex               = static_cast<size_t>(-1);
+        std::filesystem::path fullPath;
+        uint32_t targetPx       = 0;
+        bool hasVisibleItem     = false;
+        unsigned int retryCount = 0;
+        std::chrono::steady_clock::time_point enqueuedAt{};
+    };
+    std::deque<ThumbnailLoadRequest> _thumbnailLoadQueue;
+    std::atomic<bool> _thumbnailLoadingActive{false};
+
     // Icon loading performance telemetry
     struct IconLoadStats
     {
@@ -1159,10 +1276,33 @@ private:
         IconLoadStats& operator=(IconLoadStats&&)      = delete;
     };
     IconLoadStats _iconLoadStats;
+
+    struct ThumbnailLoadStats
+    {
+        std::atomic<uint64_t> queued{0};
+        std::atomic<uint64_t> completed{0};
+        std::atomic<uint64_t> fallback{0};
+        std::atomic<uint64_t> staleDrops{0};
+        std::atomic<uint64_t> pendingBitmapCreates{0};
+        std::atomic<uint64_t> cacheHits{0};
+        std::atomic<uint64_t> batchId{0};
+        std::atomic<uint64_t> targetDipX100{1600};
+
+        ThumbnailLoadStats() noexcept                            = default;
+        ThumbnailLoadStats(const ThumbnailLoadStats&)            = delete;
+        ThumbnailLoadStats& operator=(const ThumbnailLoadStats&) = delete;
+        ThumbnailLoadStats(ThumbnailLoadStats&&)                 = delete;
+        ThumbnailLoadStats& operator=(ThumbnailLoadStats&&)      = delete;
+    };
+    ThumbnailLoadStats _thumbnailLoadStats;
+#ifdef ENABLE_TESTS
+    std::atomic<DebugThumbnailProviderMode> _debugThumbnailProviderMode{DebugThumbnailProviderMode::Shell};
+#endif
     std::jthread _enumerationThread;
 
     // Helper methods for UI thread bitmap creation
     void OnCreateIconBitmap(std::unique_ptr<IconBitmapRequest> request);
+    void OnCreateThumbnailBitmap(std::unique_ptr<ThumbnailBitmapRequest> request);
     void MaybeEmitIconBitmapSummary(uint64_t batchId) noexcept;
     void BoostIconLoadingForVisibleRange();
 };

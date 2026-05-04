@@ -294,14 +294,16 @@ std::filesystem::path MakeBackupPath(const std::filesystem::path& settingsPath) 
     return candidate;
 }
 
-void BackupBadSettingsFile(const std::filesystem::path& path) noexcept
+std::optional<std::filesystem::path> BackupBadSettingsFile(const std::filesystem::path& path) noexcept
 {
     const std::filesystem::path backup = MakeBackupPath(path);
     BOOL res                           = MoveFileExW(path.c_str(), backup.c_str(), MOVEFILE_COPY_ALLOWED);
     if (! res)
     {
         Debug::ErrorWithLastError(L"Failed to back up bad settings file from '{}' to '{}'", path.c_str(), backup.c_str());
+        return std::nullopt;
     }
+    return backup;
 }
 
 HRESULT ReadFileBytes(const std::filesystem::path& path, std::string& out) noexcept
@@ -1459,7 +1461,837 @@ void ParseExtensions(yyjson_val* root, Common::Settings::Settings& out)
     };
 
     parseExtMap("openWithFileSystemByExtension", out.extensions.openWithFileSystemByExtension);
-    parseExtMap("openWithViewerByExtension", out.extensions.openWithViewerByExtension);
+}
+
+[[nodiscard]] HRESULT InvalidFileActionSettings(std::wstring_view reason) noexcept
+{
+    Debug::Error(L"Invalid Settings Store file-action data: {}", reason);
+    return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+}
+
+[[nodiscard]] std::optional<std::string_view> TryReadOptionalString(yyjson_val* obj, const char* key, HRESULT& outHr) noexcept
+{
+    yyjson_val* value = yyjson_obj_get(obj, key);
+    if (! value)
+    {
+        return std::nullopt;
+    }
+
+    if (! yyjson_is_str(value))
+    {
+        outHr = InvalidFileActionSettings(std::format(L"expected string value for '{}'", Utf16FromUtf8(key)));
+        return std::nullopt;
+    }
+
+    const char* text = yyjson_get_str(value);
+    if (! text)
+    {
+        outHr = InvalidFileActionSettings(std::format(L"expected string value for '{}'", Utf16FromUtf8(key)));
+        return std::nullopt;
+    }
+
+    return std::string_view(text, yyjson_get_len(value));
+}
+
+[[nodiscard]] HRESULT ReadOptionalWideString(yyjson_val* obj, const char* key, std::wstring& out, bool* wasPresent = nullptr) noexcept
+{
+    out.clear();
+    if (wasPresent != nullptr)
+    {
+        *wasPresent = false;
+    }
+
+    HRESULT hr = S_OK;
+    const std::optional<std::string_view> text = TryReadOptionalString(obj, key, hr);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (! text.has_value())
+    {
+        return S_OK;
+    }
+
+    out = Utf16FromUtf8(text.value());
+    if (wasPresent != nullptr)
+    {
+        *wasPresent = true;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ReadRequiredWideString(yyjson_val* obj, const char* key, std::wstring& out) noexcept
+{
+    bool wasPresent = false;
+    if (const HRESULT hr = ReadOptionalWideString(obj, key, out, &wasPresent); FAILED(hr))
+    {
+        return hr;
+    }
+    if (! wasPresent)
+    {
+        return InvalidFileActionSettings(std::format(L"missing required string '{}'", Utf16FromUtf8(key)));
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ReadRequiredUtf8String(yyjson_val* obj, const char* key, std::string_view& out) noexcept
+{
+    HRESULT hr = S_OK;
+    const std::optional<std::string_view> text = TryReadOptionalString(obj, key, hr);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (! text.has_value())
+    {
+        return InvalidFileActionSettings(std::format(L"missing required string '{}'", Utf16FromUtf8(key)));
+    }
+    out = text.value();
+    return S_OK;
+}
+
+[[nodiscard]] bool IsAsciiAlnum(wchar_t ch) noexcept
+{
+    return (ch >= L'0' && ch <= L'9') || (ch >= L'A' && ch <= L'Z') || (ch >= L'a' && ch <= L'z');
+}
+
+[[nodiscard]] bool IsValidFileActionId(std::wstring_view id) noexcept
+{
+    if (id.empty() || id.size() > 64u || ! IsAsciiAlnum(id.front()))
+    {
+        return false;
+    }
+
+    for (const wchar_t ch : id)
+    {
+        if (! IsAsciiAlnum(ch) && ch != L'_' && ch != L'.' && ch != L'-' && ch != L'/')
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] bool IsValidFileActionExtension(std::wstring_view extension) noexcept
+{
+    if (extension.size() < 2u || extension.size() > 33u || extension.front() != L'.' || ! IsAsciiAlnum(extension[1]))
+    {
+        return false;
+    }
+
+    for (size_t index = 2u; index < extension.size(); ++index)
+    {
+        const wchar_t ch = extension[index];
+        if (! IsAsciiAlnum(ch) && ch != L'_' && ch != L'.' && ch != L'-')
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] std::optional<Common::Settings::FileActionKind> ParseFileActionKind(std::string_view kind) noexcept
+{
+    if (kind == "viewerPlugin")
+    {
+        return Common::Settings::FileActionKind::ViewerPlugin;
+    }
+    if (kind == "externalProgram")
+    {
+        return Common::Settings::FileActionKind::ExternalProgram;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] const char* FileActionKindToString(Common::Settings::FileActionKind kind) noexcept
+{
+    switch (kind)
+    {
+        case Common::Settings::FileActionKind::ViewerPlugin: return "viewerPlugin";
+        case Common::Settings::FileActionKind::ExternalProgram: return "externalProgram";
+    }
+    return "externalProgram";
+}
+
+[[nodiscard]] std::optional<Common::Settings::FileActionMatchKind> ParseFileActionMatchKind(std::string_view kind) noexcept
+{
+    if (kind == "default")
+    {
+        return Common::Settings::FileActionMatchKind::Default;
+    }
+    if (kind == "extension")
+    {
+        return Common::Settings::FileActionMatchKind::Extension;
+    }
+    if (kind == "pattern")
+    {
+        return Common::Settings::FileActionMatchKind::Pattern;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] const char* FileActionMatchKindToString(Common::Settings::FileActionMatchKind kind) noexcept
+{
+    switch (kind)
+    {
+        case Common::Settings::FileActionMatchKind::Default: return "default";
+        case Common::Settings::FileActionMatchKind::Extension: return "extension";
+        case Common::Settings::FileActionMatchKind::Pattern: return "pattern";
+    }
+    return "default";
+}
+
+[[nodiscard]] HRESULT ParseStringArray(yyjson_val* obj, const char* key, std::vector<std::wstring>& out) noexcept
+{
+    yyjson_val* arr = yyjson_obj_get(obj, key);
+    if (! arr)
+    {
+        return S_OK;
+    }
+    if (! yyjson_is_arr(arr))
+    {
+        return InvalidFileActionSettings(std::format(L"expected array value for '{}'", Utf16FromUtf8(key)));
+    }
+
+    out.clear();
+    out.reserve(yyjson_arr_size(arr));
+
+    std::unordered_set<std::wstring> seen;
+    size_t index     = 0;
+    size_t max       = 0;
+    yyjson_val* item = nullptr;
+    yyjson_arr_foreach(arr, index, max, item)
+    {
+        if (! item || ! yyjson_is_str(item))
+        {
+            return InvalidFileActionSettings(std::format(L"expected string item in '{}'", Utf16FromUtf8(key)));
+        }
+        const char* text = yyjson_get_str(item);
+        if (! text)
+        {
+            return InvalidFileActionSettings(std::format(L"expected string item in '{}'", Utf16FromUtf8(key)));
+        }
+        std::wstring wide = Utf16FromUtf8(std::string_view(text, yyjson_get_len(item)));
+        if (wide.empty())
+        {
+            return InvalidFileActionSettings(std::format(L"empty string item in '{}'", Utf16FromUtf8(key)));
+        }
+        if (! seen.insert(wide).second)
+        {
+            return InvalidFileActionSettings(std::format(L"duplicate string item in '{}'", Utf16FromUtf8(key)));
+        }
+        out.push_back(std::move(wide));
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ParseFileActionMatch(yyjson_val* item, Common::Settings::FileActionMatch& match) noexcept
+{
+    match = Common::Settings::FileActionMatch{};
+    if (! item || ! yyjson_is_obj(item))
+    {
+        return InvalidFileActionSettings(L"expected object file-action match");
+    }
+
+    std::string_view kindText;
+    if (const HRESULT hr = ReadRequiredUtf8String(item, "kind", kindText); FAILED(hr))
+    {
+        return hr;
+    }
+    const std::optional<Common::Settings::FileActionMatchKind> kind = ParseFileActionMatchKind(kindText);
+    if (! kind.has_value())
+    {
+        return InvalidFileActionSettings(std::format(L"unknown file-action match kind '{}'", Utf16FromUtf8(kindText)));
+    }
+    match.kind = kind.value();
+
+    if (const HRESULT hr = ReadOptionalWideString(item, "value", match.value); FAILED(hr))
+    {
+        return hr;
+    }
+
+    switch (match.kind)
+    {
+        case Common::Settings::FileActionMatchKind::Default:
+            if (! match.value.empty())
+            {
+                return InvalidFileActionSettings(L"default file-action matches must not specify a value");
+            }
+            break;
+        case Common::Settings::FileActionMatchKind::Extension:
+            if (! IsValidFileActionExtension(match.value))
+            {
+                return InvalidFileActionSettings(std::format(L"invalid file-action extension '{}'", match.value));
+            }
+            break;
+        case Common::Settings::FileActionMatchKind::Pattern:
+            if (match.value.empty())
+            {
+                return InvalidFileActionSettings(L"pattern file-action matches must specify a value");
+            }
+            if (match.value.size() > 512u)
+            {
+                return InvalidFileActionSettings(L"pattern file-action matches must not exceed 512 characters");
+            }
+            break;
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ParseFileActionMatches(yyjson_val* obj, const char* key, std::vector<Common::Settings::FileActionMatch>& out) noexcept
+{
+    yyjson_val* arr = yyjson_obj_get(obj, key);
+    if (! arr)
+    {
+        return S_OK;
+    }
+    if (! yyjson_is_arr(arr))
+    {
+        return InvalidFileActionSettings(std::format(L"expected array value for '{}'", Utf16FromUtf8(key)));
+    }
+
+    out.clear();
+    out.reserve(yyjson_arr_size(arr));
+    size_t index     = 0;
+    size_t max       = 0;
+    yyjson_val* item = nullptr;
+    yyjson_arr_foreach(arr, index, max, item)
+    {
+        Common::Settings::FileActionMatch match{};
+        if (const HRESULT hr = ParseFileActionMatch(item, match); FAILED(hr))
+        {
+            return hr;
+        }
+        out.push_back(std::move(match));
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ParseFileActionApplicability(yyjson_val* item, Common::Settings::FileActionDefinition& action) noexcept
+{
+    yyjson_val* appliesTo = yyjson_obj_get(item, "appliesTo");
+    if (! appliesTo)
+    {
+        return S_OK;
+    }
+    if (! yyjson_is_obj(appliesTo))
+    {
+        return InvalidFileActionSettings(L"expected object value for file-action appliesTo");
+    }
+
+    if (const HRESULT hr = ParseFileActionMatches(appliesTo, "matches", action.appliesTo.matches); FAILED(hr))
+    {
+        return hr;
+    }
+    return ParseStringArray(appliesTo, "computerNames", action.appliesTo.computerNames);
+}
+
+[[nodiscard]] HRESULT ValidateFileActionDefinition(const Common::Settings::FileActionDefinition& action) noexcept
+{
+    if (! IsValidFileActionId(action.id))
+    {
+        return InvalidFileActionSettings(std::format(L"invalid file-action id '{}'", action.id));
+    }
+
+    switch (action.kind)
+    {
+        case Common::Settings::FileActionKind::ViewerPlugin:
+            if (action.pluginId.empty())
+            {
+                return InvalidFileActionSettings(std::format(L"viewerPlugin file action '{}' is missing pluginId", action.id));
+            }
+            break;
+        case Common::Settings::FileActionKind::ExternalProgram:
+            if (action.executablePath.empty())
+            {
+                return InvalidFileActionSettings(std::format(L"externalProgram file action '{}' is missing executablePath", action.id));
+            }
+            break;
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ParseFileActionDefinitions(yyjson_val* section, std::vector<Common::Settings::FileActionDefinition>& out) noexcept
+{
+    yyjson_val* actions = yyjson_obj_get(section, "actions");
+    if (! actions)
+    {
+        return S_OK;
+    }
+    if (! yyjson_is_arr(actions))
+    {
+        return InvalidFileActionSettings(L"expected array value for file-action actions");
+    }
+
+    out.clear();
+    out.reserve(yyjson_arr_size(actions));
+    std::unordered_set<std::wstring> actionIds;
+
+    size_t index     = 0;
+    size_t max       = 0;
+    yyjson_val* item = nullptr;
+    yyjson_arr_foreach(actions, index, max, item)
+    {
+        if (! item || ! yyjson_is_obj(item))
+        {
+            return InvalidFileActionSettings(L"expected object item in file-action actions");
+        }
+
+        Common::Settings::FileActionDefinition action{};
+        if (const HRESULT hr = ReadRequiredWideString(item, "id", action.id); FAILED(hr))
+        {
+            return hr;
+        }
+        if (! IsValidFileActionId(action.id))
+        {
+            return InvalidFileActionSettings(std::format(L"invalid file-action id '{}'", action.id));
+        }
+        if (! actionIds.insert(action.id).second)
+        {
+            return InvalidFileActionSettings(std::format(L"duplicate file-action id '{}'", action.id));
+        }
+
+        bool displayNamePresent = false;
+        if (const HRESULT hr = ReadOptionalWideString(item, "displayName", action.displayName, &displayNamePresent); FAILED(hr))
+        {
+            return hr;
+        }
+        if (displayNamePresent && action.displayName.empty())
+        {
+            return InvalidFileActionSettings(std::format(L"file action '{}' has an empty displayName", action.id));
+        }
+
+        std::string_view kindText;
+        if (const HRESULT hr = ReadRequiredUtf8String(item, "kind", kindText); FAILED(hr))
+        {
+            return hr;
+        }
+        const std::optional<Common::Settings::FileActionKind> kind = ParseFileActionKind(kindText);
+        if (! kind.has_value())
+        {
+            return InvalidFileActionSettings(std::format(L"unknown file-action kind '{}'", Utf16FromUtf8(kindText)));
+        }
+        action.kind = kind.value();
+
+        if (const HRESULT hr = ReadOptionalWideString(item, "pluginId", action.pluginId); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ReadOptionalWideString(item, "executablePath", action.executablePath); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ReadOptionalWideString(item, "arguments", action.arguments); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ReadOptionalWideString(item, "workingDirectory", action.workingDirectory); FAILED(hr))
+        {
+            return hr;
+        }
+        if (yyjson_obj_get(item, "enabled"))
+        {
+            if (! GetBool(item, "enabled", action.enabled))
+            {
+                return InvalidFileActionSettings(std::format(L"file action '{}' has invalid enabled value", action.id));
+            }
+        }
+        if (const HRESULT hr = ParseFileActionApplicability(item, action); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ValidateFileActionDefinition(action); FAILED(hr))
+        {
+            return hr;
+        }
+
+        out.push_back(std::move(action));
+    }
+
+    return S_OK;
+}
+
+template <typename Rule>
+[[nodiscard]] HRESULT ParseAssociationRuleBase(yyjson_val* item, Rule& rule) noexcept
+{
+    if (! item || ! yyjson_is_obj(item))
+    {
+        return InvalidFileActionSettings(L"expected object item in file-action associations");
+    }
+
+    yyjson_val* match = yyjson_obj_get(item, "match");
+    if (! match)
+    {
+        return InvalidFileActionSettings(L"missing required file-action association match");
+    }
+    if (const HRESULT hr = ParseFileActionMatch(match, rule.match); FAILED(hr))
+    {
+        return hr;
+    }
+    if (const HRESULT hr = ReadOptionalWideString(item, "computerName", rule.computerName); FAILED(hr))
+    {
+        return hr;
+    }
+    if (rule.computerName.size() > 63u)
+    {
+        return InvalidFileActionSettings(L"file-action association computerName is too long");
+    }
+    return S_OK;
+}
+
+[[nodiscard]] std::unordered_set<std::wstring> MakeFileActionIdSet(const std::vector<Common::Settings::FileActionDefinition>& actions)
+{
+    std::unordered_set<std::wstring> ids;
+    ids.reserve(actions.size());
+    for (const Common::Settings::FileActionDefinition& action : actions)
+    {
+        ids.insert(action.id);
+    }
+    return ids;
+}
+
+[[nodiscard]] HRESULT ValidateActionReference(const std::unordered_set<std::wstring>& actionIds,
+                                              const std::wstring& actionId,
+                                              std::wstring_view fieldName,
+                                              bool required) noexcept
+{
+    if (actionId.empty())
+    {
+        return required ? InvalidFileActionSettings(std::format(L"missing required file-action reference '{}'", fieldName)) : S_OK;
+    }
+    if (! IsValidFileActionId(actionId))
+    {
+        return InvalidFileActionSettings(std::format(L"invalid file-action reference '{}' in '{}'", actionId, fieldName));
+    }
+    if (actionIds.find(actionId) == actionIds.end())
+    {
+        return InvalidFileActionSettings(std::format(L"file-action reference '{}' in '{}' does not match an action id", actionId, fieldName));
+    }
+    return S_OK;
+}
+
+[[nodiscard]] std::wstring MakeAssociationKey(const Common::Settings::FileActionMatch& match, const std::wstring& computerName)
+{
+    std::wstring key;
+    key.push_back(static_cast<wchar_t>(L'0' + static_cast<int>(match.kind)));
+    key.push_back(L'\x1f');
+    key.append(match.value);
+    key.push_back(L'\x1f');
+    key.append(computerName);
+    return key;
+}
+
+[[nodiscard]] HRESULT ParseViewerFileActions(yyjson_val* section, Common::Settings::ViewerFileActionsSettings& out) noexcept
+{
+    out = Common::Settings::ViewerFileActionsSettings{};
+    if (const HRESULT hr = ParseFileActionDefinitions(section, out.actions); FAILED(hr))
+    {
+        return hr;
+    }
+    yyjson_val* associations = yyjson_obj_get(section, "associations");
+    if (! associations)
+    {
+        return S_OK;
+    }
+    if (! yyjson_is_arr(associations))
+    {
+        return InvalidFileActionSettings(L"expected array value for viewer file-action associations");
+    }
+
+    const std::unordered_set<std::wstring> actionIds = MakeFileActionIdSet(out.actions);
+    std::unordered_set<std::wstring> associationKeys;
+    out.associations.reserve(yyjson_arr_size(associations));
+    size_t index     = 0;
+    size_t max       = 0;
+    yyjson_val* item = nullptr;
+    yyjson_arr_foreach(associations, index, max, item)
+    {
+        Common::Settings::ViewerAssociationRule rule{};
+        if (const HRESULT hr = ParseAssociationRuleBase(item, rule); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ReadRequiredWideString(item, "viewActionId", rule.viewActionId); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ReadOptionalWideString(item, "alternateViewActionId", rule.alternateViewActionId); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ValidateActionReference(actionIds, rule.viewActionId, L"viewActionId", true); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ValidateActionReference(actionIds, rule.alternateViewActionId, L"alternateViewActionId", false); FAILED(hr))
+        {
+            return hr;
+        }
+
+        const std::wstring key = MakeAssociationKey(rule.match, rule.computerName);
+        if (! associationKeys.insert(key).second)
+        {
+            return InvalidFileActionSettings(L"duplicate viewer file-action association match and computerName");
+        }
+        out.associations.push_back(std::move(rule));
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ParseEditorFileActions(yyjson_val* section, Common::Settings::EditorFileActionsSettings& out) noexcept
+{
+    out = Common::Settings::EditorFileActionsSettings{};
+    if (const HRESULT hr = ParseFileActionDefinitions(section, out.actions); FAILED(hr))
+    {
+        return hr;
+    }
+    for (const Common::Settings::FileActionDefinition& action : out.actions)
+    {
+        if (action.kind != Common::Settings::FileActionKind::ExternalProgram)
+        {
+            return InvalidFileActionSettings(std::format(L"editor file action '{}' must be externalProgram", action.id));
+        }
+    }
+
+    yyjson_val* associations = yyjson_obj_get(section, "associations");
+    if (! associations)
+    {
+        return S_OK;
+    }
+    if (! yyjson_is_arr(associations))
+    {
+        return InvalidFileActionSettings(L"expected array value for editor file-action associations");
+    }
+
+    const std::unordered_set<std::wstring> actionIds = MakeFileActionIdSet(out.actions);
+    std::unordered_set<std::wstring> associationKeys;
+    out.associations.reserve(yyjson_arr_size(associations));
+    size_t index     = 0;
+    size_t max       = 0;
+    yyjson_val* item = nullptr;
+    yyjson_arr_foreach(associations, index, max, item)
+    {
+        Common::Settings::EditorAssociationRule rule{};
+        if (const HRESULT hr = ParseAssociationRuleBase(item, rule); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ReadRequiredWideString(item, "editActionId", rule.editActionId); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ReadOptionalWideString(item, "alternateEditActionId", rule.alternateEditActionId); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ReadOptionalWideString(item, "editNewActionId", rule.editNewActionId); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ValidateActionReference(actionIds, rule.editActionId, L"editActionId", true); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ValidateActionReference(actionIds, rule.alternateEditActionId, L"alternateEditActionId", false); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = ValidateActionReference(actionIds, rule.editNewActionId, L"editNewActionId", false); FAILED(hr))
+        {
+            return hr;
+        }
+
+        const std::wstring key = MakeAssociationKey(rule.match, rule.computerName);
+        if (! associationKeys.insert(key).second)
+        {
+            return InvalidFileActionSettings(L"duplicate editor file-action association match and computerName");
+        }
+        out.associations.push_back(std::move(rule));
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ParseFileActions(yyjson_val* root, Common::Settings::Settings& out) noexcept
+{
+    yyjson_val* fileActions = yyjson_obj_get(root, "fileActions");
+    if (! fileActions)
+    {
+        return S_OK;
+    }
+    if (! yyjson_is_obj(fileActions))
+    {
+        return InvalidFileActionSettings(L"expected object value for fileActions");
+    }
+
+    if (yyjson_val* viewers = yyjson_obj_get(fileActions, "viewers"))
+    {
+        if (! yyjson_is_obj(viewers))
+        {
+            return InvalidFileActionSettings(L"expected object value for fileActions.viewers");
+        }
+        if (const HRESULT hr = ParseViewerFileActions(viewers, out.fileActions.viewers); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+    if (yyjson_val* editors = yyjson_obj_get(fileActions, "editors"))
+    {
+        if (! yyjson_is_obj(editors))
+        {
+            return InvalidFileActionSettings(L"expected object value for fileActions.editors");
+        }
+        if (const HRESULT hr = ParseEditorFileActions(editors, out.fileActions.editors); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT ParseUserMenuSettings(yyjson_val* root, Common::Settings::UserMenuSettings& out) noexcept
+{
+    yyjson_val* section = yyjson_obj_get(root, "userMenu");
+    if (! section)
+    {
+        return S_OK;
+    }
+    if (! yyjson_is_obj(section))
+    {
+        return InvalidFileActionSettings(L"expected object value for userMenu");
+    }
+
+    out = Common::Settings::UserMenuSettings{};
+    return ParseFileActionDefinitions(section, out.actions);
+}
+
+[[nodiscard]] Common::Settings::MakeFileListSourceMode ParseMakeFileListSourceMode(std::string_view mode) noexcept
+{
+    if (mode == "currentFolder")
+    {
+        return Common::Settings::MakeFileListSourceMode::CurrentFolder;
+    }
+    return Common::Settings::MakeFileListSourceMode::Selection;
+}
+
+[[nodiscard]] const char* MakeFileListSourceModeToString(Common::Settings::MakeFileListSourceMode mode) noexcept
+{
+    switch (mode)
+    {
+        case Common::Settings::MakeFileListSourceMode::CurrentFolder: return "currentFolder";
+        case Common::Settings::MakeFileListSourceMode::Selection: return "selection";
+    }
+    return "selection";
+}
+
+[[nodiscard]] Common::Settings::MakeFileListFormat ParseMakeFileListFormat(std::string_view format) noexcept
+{
+    if (format == "csv")
+    {
+        return Common::Settings::MakeFileListFormat::Csv;
+    }
+    if (format == "json")
+    {
+        return Common::Settings::MakeFileListFormat::Json;
+    }
+    return Common::Settings::MakeFileListFormat::Text;
+}
+
+[[nodiscard]] const char* MakeFileListFormatToString(Common::Settings::MakeFileListFormat format) noexcept
+{
+    switch (format)
+    {
+        case Common::Settings::MakeFileListFormat::Csv: return "csv";
+        case Common::Settings::MakeFileListFormat::Json: return "json";
+        case Common::Settings::MakeFileListFormat::Text: return "text";
+    }
+    return "text";
+}
+
+[[nodiscard]] Common::Settings::MakeFileListOutputTarget ParseMakeFileListOutputTarget(std::string_view target) noexcept
+{
+    if (target == "file")
+    {
+        return Common::Settings::MakeFileListOutputTarget::File;
+    }
+    return Common::Settings::MakeFileListOutputTarget::Clipboard;
+}
+
+[[nodiscard]] const char* MakeFileListOutputTargetToString(Common::Settings::MakeFileListOutputTarget target) noexcept
+{
+    switch (target)
+    {
+        case Common::Settings::MakeFileListOutputTarget::File: return "file";
+        case Common::Settings::MakeFileListOutputTarget::Clipboard: return "clipboard";
+    }
+    return "clipboard";
+}
+
+void ParseMakeFileListSettings(yyjson_val* root, Common::Settings::Settings& out)
+{
+    yyjson_val* section = GetObj(root, "makeFileList");
+    if (! section)
+    {
+        return;
+    }
+
+    Common::Settings::MakeFileListSettings settings{};
+    if (const auto sourceMode = GetString(section, "sourceMode"); sourceMode.has_value())
+    {
+        settings.sourceMode = ParseMakeFileListSourceMode(sourceMode.value());
+    }
+    if (yyjson_obj_get(section, "recursive"))
+    {
+        GetBool(section, "recursive", settings.recursive);
+    }
+    if (const auto format = GetString(section, "format"); format.has_value())
+    {
+        settings.format = ParseMakeFileListFormat(format.value());
+    }
+    if (const auto outputTarget = GetString(section, "outputTarget"); outputTarget.has_value())
+    {
+        settings.outputTarget = ParseMakeFileListOutputTarget(outputTarget.value());
+    }
+    if (const auto textMacro = GetString(section, "textMacro"); textMacro.has_value())
+    {
+        settings.textMacro = Utf16FromUtf8(textMacro.value());
+    }
+    if (const auto outputFile = GetString(section, "outputFile"); outputFile.has_value())
+    {
+        settings.outputFile = std::filesystem::path(Utf16FromUtf8(outputFile.value()));
+    }
+    if (yyjson_obj_get(section, "includeName"))
+    {
+        GetBool(section, "includeName", settings.includeName);
+    }
+    if (yyjson_obj_get(section, "includeFullPath"))
+    {
+        GetBool(section, "includeFullPath", settings.includeFullPath);
+    }
+    if (yyjson_obj_get(section, "includeSize"))
+    {
+        GetBool(section, "includeSize", settings.includeSize);
+    }
+    if (yyjson_obj_get(section, "includeModified"))
+    {
+        GetBool(section, "includeModified", settings.includeModified);
+    }
+    if (yyjson_obj_get(section, "includeAttributes"))
+    {
+        GetBool(section, "includeAttributes", settings.includeAttributes);
+    }
+    if (yyjson_obj_get(section, "includeDirectories"))
+    {
+        GetBool(section, "includeDirectories", settings.includeDirectories);
+    }
+
+    out.makeFileList = std::move(settings);
 }
 
 void NormalizeHistory(std::vector<std::filesystem::path>& history, size_t maxItems)
@@ -1494,6 +2326,14 @@ Common::Settings::FolderDisplayMode ParseFolderDisplayMode(std::string_view disp
     {
         return Common::Settings::FolderDisplayMode::Detailed;
     }
+    if (display == "extraDetailed")
+    {
+        return Common::Settings::FolderDisplayMode::ExtraDetailed;
+    }
+    if (display == "thumbnails")
+    {
+        return Common::Settings::FolderDisplayMode::Thumbnails;
+    }
     return Common::Settings::FolderDisplayMode::Brief;
 }
 
@@ -1503,6 +2343,8 @@ const char* FolderDisplayModeToString(Common::Settings::FolderDisplayMode displa
     {
         case Common::Settings::FolderDisplayMode::Brief: return "brief";
         case Common::Settings::FolderDisplayMode::Detailed: return "detailed";
+        case Common::Settings::FolderDisplayMode::ExtraDetailed: return "extraDetailed";
+        case Common::Settings::FolderDisplayMode::Thumbnails: return "thumbnails";
     }
     return "brief";
 }
@@ -1829,6 +2671,35 @@ void ParseFolders(yyjson_val* root, Common::Settings::Settings& out)
             if (! sawSortDirection)
             {
                 pane.view.sortDirection = DefaultFolderSortDirection(pane.view.sortBy);
+            }
+
+            yyjson_val* fileExtensionsVisible = yyjson_obj_get(view, "fileExtensionsVisible");
+            if (fileExtensionsVisible && yyjson_is_bool(fileExtensionsVisible))
+            {
+                pane.view.fileExtensionsVisible = yyjson_get_bool(fileExtensionsVisible);
+            }
+
+            yyjson_val* thumbnailsVisible = yyjson_obj_get(view, "thumbnailsVisible");
+            if (thumbnailsVisible && yyjson_is_bool(thumbnailsVisible))
+            {
+                pane.view.thumbnailsVisible = yyjson_get_bool(thumbnailsVisible);
+                if (pane.view.thumbnailsVisible)
+                {
+                    pane.view.display = Common::Settings::FolderDisplayMode::Thumbnails;
+                    pane.view.thumbnailsVisible = false;
+                }
+            }
+
+            yyjson_val* navigationBarVisible = yyjson_obj_get(view, "navigationBarVisible");
+            if (navigationBarVisible && yyjson_is_bool(navigationBarVisible))
+            {
+                pane.view.navigationBarVisible = yyjson_get_bool(navigationBarVisible);
+            }
+
+            yyjson_val* filterBarVisible = yyjson_obj_get(view, "filterBarVisible");
+            if (filterBarVisible && yyjson_is_bool(filterBarVisible))
+            {
+                pane.view.filterBarVisible = yyjson_get_bool(filterBarVisible);
             }
 
             yyjson_val* statusBarVisible = yyjson_obj_get(view, "statusBarVisible");
@@ -3083,6 +3954,529 @@ yyjson_mut_val* NewString(yyjson_mut_doc* doc, const std::wstring& value)
     return S_OK;
 }
 
+[[nodiscard]] HRESULT AddStringArrayObjectMember(yyjson_mut_doc* doc,
+                                                 yyjson_mut_val* object,
+                                                 const char* key,
+                                                 const std::vector<std::wstring>& values) noexcept
+{
+    if (values.empty())
+    {
+        return S_OK;
+    }
+
+    yyjson_mut_val* array = yyjson_mut_arr(doc);
+    if (! array)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, object, key, array))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    for (const std::wstring& value : values)
+    {
+        if (value.empty())
+        {
+            continue;
+        }
+        if (const HRESULT hr = AppendStringArrayValue(doc, array, value); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AddFileActionMatchObject(yyjson_mut_doc* doc, yyjson_mut_val* array, const Common::Settings::FileActionMatch& match) noexcept
+{
+    yyjson_mut_val* matchObj = yyjson_mut_obj(doc);
+    if (! matchObj)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_str(doc, matchObj, "kind", FileActionMatchKindToString(match.kind)))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! match.value.empty())
+    {
+        if (const HRESULT hr = AddStringObjectMember(doc, matchObj, "value", match.value); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+    if (! yyjson_mut_arr_add_val(array, matchObj))
+    {
+        return E_OUTOFMEMORY;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AddFileActionMatchesObjectMember(yyjson_mut_doc* doc,
+                                                       yyjson_mut_val* object,
+                                                       const char* key,
+                                                       const std::vector<Common::Settings::FileActionMatch>& matches) noexcept
+{
+    if (matches.empty())
+    {
+        return S_OK;
+    }
+
+    yyjson_mut_val* arr = yyjson_mut_arr(doc);
+    if (! arr)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, object, key, arr))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    for (const Common::Settings::FileActionMatch& match : matches)
+    {
+        if (const HRESULT hr = AddFileActionMatchObject(doc, arr, match); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AddFileActionApplicabilityObjectMember(yyjson_mut_doc* doc,
+                                                             yyjson_mut_val* actionObj,
+                                                             const Common::Settings::FileActionDefinition& action) noexcept
+{
+    if (action.appliesTo.matches.empty() && action.appliesTo.computerNames.empty())
+    {
+        return S_OK;
+    }
+
+    yyjson_mut_val* appliesTo = yyjson_mut_obj(doc);
+    if (! appliesTo)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, actionObj, "appliesTo", appliesTo))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (const HRESULT hr = AddFileActionMatchesObjectMember(doc, appliesTo, "matches", action.appliesTo.matches); FAILED(hr))
+    {
+        return hr;
+    }
+    if (const HRESULT hr = AddStringArrayObjectMember(doc, appliesTo, "computerNames", action.appliesTo.computerNames); FAILED(hr))
+    {
+        return hr;
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AddFileActionDefinitionsObjectMember(yyjson_mut_doc* doc,
+                                                           yyjson_mut_val* section,
+                                                           const std::vector<Common::Settings::FileActionDefinition>& definitions) noexcept
+{
+    if (definitions.empty())
+    {
+        return S_OK;
+    }
+
+    yyjson_mut_val* actions = yyjson_mut_arr(doc);
+    if (! actions)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, section, "actions", actions))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    for (const Common::Settings::FileActionDefinition& action : definitions)
+    {
+        if (action.id.empty())
+        {
+            continue;
+        }
+
+        yyjson_mut_val* actionObj = yyjson_mut_obj(doc);
+        if (! actionObj)
+        {
+            return E_OUTOFMEMORY;
+        }
+
+        if (const HRESULT hr = AddStringObjectMember(doc, actionObj, "id", action.id); FAILED(hr))
+        {
+            return hr;
+        }
+        if (! action.displayName.empty())
+        {
+            if (const HRESULT hr = AddStringObjectMember(doc, actionObj, "displayName", action.displayName); FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        if (! yyjson_mut_obj_add_str(doc, actionObj, "kind", FileActionKindToString(action.kind)))
+        {
+            return E_OUTOFMEMORY;
+        }
+        if (! action.enabled)
+        {
+            if (! yyjson_mut_obj_add_bool(doc, actionObj, "enabled", false))
+            {
+                return E_OUTOFMEMORY;
+            }
+        }
+        if (! action.pluginId.empty())
+        {
+            if (const HRESULT hr = AddStringObjectMember(doc, actionObj, "pluginId", action.pluginId); FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        if (! action.executablePath.empty())
+        {
+            if (const HRESULT hr = AddStringObjectMember(doc, actionObj, "executablePath", action.executablePath); FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        if (! action.arguments.empty())
+        {
+            if (const HRESULT hr = AddStringObjectMember(doc, actionObj, "arguments", action.arguments); FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        if (! action.workingDirectory.empty())
+        {
+            if (const HRESULT hr = AddStringObjectMember(doc, actionObj, "workingDirectory", action.workingDirectory); FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        if (const HRESULT hr = AddFileActionApplicabilityObjectMember(doc, actionObj, action); FAILED(hr))
+        {
+            return hr;
+        }
+
+        if (! yyjson_mut_arr_add_val(actions, actionObj))
+        {
+            return E_OUTOFMEMORY;
+        }
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AddAssociationRuleBase(yyjson_mut_doc* doc,
+                                             yyjson_mut_val* ruleObj,
+                                             const Common::Settings::FileActionMatch& match,
+                                             const std::wstring& computerName) noexcept
+{
+    yyjson_mut_val* matchObj = yyjson_mut_obj(doc);
+    if (! matchObj)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, ruleObj, "match", matchObj))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_str(doc, matchObj, "kind", FileActionMatchKindToString(match.kind)))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! match.value.empty())
+    {
+        if (const HRESULT hr = AddStringObjectMember(doc, matchObj, "value", match.value); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+    if (! computerName.empty())
+    {
+        if (const HRESULT hr = AddStringObjectMember(doc, ruleObj, "computerName", computerName); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AddViewerAssociationsObjectMember(yyjson_mut_doc* doc,
+                                                        yyjson_mut_val* section,
+                                                        const std::vector<Common::Settings::ViewerAssociationRule>& associations) noexcept
+{
+    if (associations.empty())
+    {
+        return S_OK;
+    }
+
+    yyjson_mut_val* arr = yyjson_mut_arr(doc);
+    if (! arr)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, section, "associations", arr))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    for (const Common::Settings::ViewerAssociationRule& rule : associations)
+    {
+        yyjson_mut_val* ruleObj = yyjson_mut_obj(doc);
+        if (! ruleObj)
+        {
+            return E_OUTOFMEMORY;
+        }
+        if (const HRESULT hr = AddAssociationRuleBase(doc, ruleObj, rule.match, rule.computerName); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = AddStringObjectMember(doc, ruleObj, "viewActionId", rule.viewActionId); FAILED(hr))
+        {
+            return hr;
+        }
+        if (! rule.alternateViewActionId.empty())
+        {
+            if (const HRESULT hr = AddStringObjectMember(doc, ruleObj, "alternateViewActionId", rule.alternateViewActionId); FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        if (! yyjson_mut_arr_add_val(arr, ruleObj))
+        {
+            return E_OUTOFMEMORY;
+        }
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AddEditorAssociationsObjectMember(yyjson_mut_doc* doc,
+                                                        yyjson_mut_val* section,
+                                                        const std::vector<Common::Settings::EditorAssociationRule>& associations) noexcept
+{
+    if (associations.empty())
+    {
+        return S_OK;
+    }
+
+    yyjson_mut_val* arr = yyjson_mut_arr(doc);
+    if (! arr)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, section, "associations", arr))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    for (const Common::Settings::EditorAssociationRule& rule : associations)
+    {
+        yyjson_mut_val* ruleObj = yyjson_mut_obj(doc);
+        if (! ruleObj)
+        {
+            return E_OUTOFMEMORY;
+        }
+        if (const HRESULT hr = AddAssociationRuleBase(doc, ruleObj, rule.match, rule.computerName); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = AddStringObjectMember(doc, ruleObj, "editActionId", rule.editActionId); FAILED(hr))
+        {
+            return hr;
+        }
+        if (! rule.alternateEditActionId.empty())
+        {
+            if (const HRESULT hr = AddStringObjectMember(doc, ruleObj, "alternateEditActionId", rule.alternateEditActionId); FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        if (! rule.editNewActionId.empty())
+        {
+            if (const HRESULT hr = AddStringObjectMember(doc, ruleObj, "editNewActionId", rule.editNewActionId); FAILED(hr))
+            {
+                return hr;
+            }
+        }
+        if (! yyjson_mut_arr_add_val(arr, ruleObj))
+        {
+            return E_OUTOFMEMORY;
+        }
+    }
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AddFileActionsObjectMember(yyjson_mut_doc* doc,
+                                                 yyjson_mut_val* root,
+                                                 const Common::Settings::FileActionsSettings& settings) noexcept
+{
+    const Common::Settings::FileActionsSettings defaults = Common::Settings::DefaultFileActionsSettings();
+    if (settings == defaults)
+    {
+        return S_OK;
+    }
+
+    yyjson_mut_val* fileActions = yyjson_mut_obj(doc);
+    if (! fileActions)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, root, "fileActions", fileActions))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    if (settings.viewers != Common::Settings::DefaultViewerFileActionsSettings())
+    {
+        yyjson_mut_val* viewers = yyjson_mut_obj(doc);
+        if (! viewers)
+        {
+            return E_OUTOFMEMORY;
+        }
+        if (! yyjson_mut_obj_add_val(doc, fileActions, "viewers", viewers))
+        {
+            return E_OUTOFMEMORY;
+        }
+        if (const HRESULT hr = AddFileActionDefinitionsObjectMember(doc, viewers, settings.viewers.actions); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = AddViewerAssociationsObjectMember(doc, viewers, settings.viewers.associations); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    if (settings.editors != Common::Settings::DefaultEditorFileActionsSettings())
+    {
+        yyjson_mut_val* editors = yyjson_mut_obj(doc);
+        if (! editors)
+        {
+            return E_OUTOFMEMORY;
+        }
+        if (! yyjson_mut_obj_add_val(doc, fileActions, "editors", editors))
+        {
+            return E_OUTOFMEMORY;
+        }
+        if (const HRESULT hr = AddFileActionDefinitionsObjectMember(doc, editors, settings.editors.actions); FAILED(hr))
+        {
+            return hr;
+        }
+        if (const HRESULT hr = AddEditorAssociationsObjectMember(doc, editors, settings.editors.associations); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
+    return S_OK;
+}
+
+[[nodiscard]] HRESULT AddUserMenuObjectMember(yyjson_mut_doc* doc,
+                                              yyjson_mut_val* root,
+                                              const Common::Settings::UserMenuSettings& settings) noexcept
+{
+    const Common::Settings::UserMenuSettings defaults{};
+    if (settings == defaults)
+    {
+        return S_OK;
+    }
+
+    yyjson_mut_val* section = yyjson_mut_obj(doc);
+    if (! section)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, root, "userMenu", section))
+    {
+        return E_OUTOFMEMORY;
+    }
+    return AddFileActionDefinitionsObjectMember(doc, section, settings.actions);
+}
+
+[[nodiscard]] HRESULT AddMakeFileListObjectMember(yyjson_mut_doc* doc,
+                                                  yyjson_mut_val* root,
+                                                  const Common::Settings::MakeFileListSettings& settings) noexcept
+{
+    const Common::Settings::MakeFileListSettings defaults{};
+    if (settings == defaults)
+    {
+        return S_OK;
+    }
+
+    yyjson_mut_val* section = yyjson_mut_obj(doc);
+    if (! section)
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (! yyjson_mut_obj_add_val(doc, root, "makeFileList", section))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    if (settings.sourceMode != defaults.sourceMode &&
+        ! yyjson_mut_obj_add_str(doc, section, "sourceMode", MakeFileListSourceModeToString(settings.sourceMode)))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (settings.recursive != defaults.recursive && ! yyjson_mut_obj_add_bool(doc, section, "recursive", settings.recursive))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (settings.format != defaults.format && ! yyjson_mut_obj_add_str(doc, section, "format", MakeFileListFormatToString(settings.format)))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (settings.outputTarget != defaults.outputTarget &&
+        ! yyjson_mut_obj_add_str(doc, section, "outputTarget", MakeFileListOutputTargetToString(settings.outputTarget)))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (settings.textMacro != defaults.textMacro)
+    {
+        if (const HRESULT hr = AddStringObjectMember(doc, section, "textMacro", settings.textMacro); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+    if (! settings.outputFile.empty())
+    {
+        if (const HRESULT hr = AddStringObjectMember(doc, section, "outputFile", settings.outputFile.wstring()); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+    if (settings.includeName != defaults.includeName && ! yyjson_mut_obj_add_bool(doc, section, "includeName", settings.includeName))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (settings.includeFullPath != defaults.includeFullPath && ! yyjson_mut_obj_add_bool(doc, section, "includeFullPath", settings.includeFullPath))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (settings.includeSize != defaults.includeSize && ! yyjson_mut_obj_add_bool(doc, section, "includeSize", settings.includeSize))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (settings.includeModified != defaults.includeModified && ! yyjson_mut_obj_add_bool(doc, section, "includeModified", settings.includeModified))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (settings.includeAttributes != defaults.includeAttributes && ! yyjson_mut_obj_add_bool(doc, section, "includeAttributes", settings.includeAttributes))
+    {
+        return E_OUTOFMEMORY;
+    }
+    if (settings.includeDirectories != defaults.includeDirectories && ! yyjson_mut_obj_add_bool(doc, section, "includeDirectories", settings.includeDirectories))
+    {
+        return E_OUTOFMEMORY;
+    }
+
+    return S_OK;
+}
+
 } // namespace
 
 namespace Common::Settings
@@ -3309,13 +4703,66 @@ namespace
     return outPath.empty() ? S_FALSE : S_OK;
 }
 
-[[nodiscard]] HRESULT LoadSettingsFromResolvedPath(const std::filesystem::path& path, Settings& out, bool backupBadFile, bool fallbackToDefaults) noexcept
+void ResetSettingsLoadRecoveryInfo(SettingsLoadRecoveryInfo* recovery) noexcept
+{
+    if (recovery)
+    {
+        *recovery = SettingsLoadRecoveryInfo{};
+    }
+}
+
+[[nodiscard]] HRESULT RecoverSettingsLoadFailure(const std::filesystem::path& path,
+                                                 Settings& out,
+                                                 SettingsLoadRecoveryReason reason,
+                                                 HRESULT hr,
+                                                 bool backupBadFile,
+                                                 bool fallbackToDefaults,
+                                                 SettingsLoadRecoveryInfo* recovery,
+                                                 int64_t unsupportedSchemaVersion = 0) noexcept
+{
+    if (recovery)
+    {
+        recovery->reason                   = reason;
+        recovery->hr                       = hr;
+        recovery->settingsPath             = path;
+        recovery->unsupportedSchemaVersion = unsupportedSchemaVersion;
+    }
+
+    if (! fallbackToDefaults)
+    {
+        return hr;
+    }
+
+    out = Settings{};
+    if (recovery)
+    {
+        recovery->usedDefaults = true;
+    }
+
+    if (backupBadFile)
+    {
+        const std::optional<std::filesystem::path> backupPath = BackupBadSettingsFile(path);
+        if (backupPath.has_value() && recovery)
+        {
+            recovery->backupPath = backupPath.value();
+            recovery->backedUp   = true;
+        }
+    }
+
+    return S_FALSE;
+}
+
+[[nodiscard]] HRESULT LoadSettingsFromResolvedPath(const std::filesystem::path& path,
+                                                   Settings& out,
+                                                   bool backupBadFile,
+                                                   bool fallbackToDefaults,
+                                                   SettingsLoadRecoveryInfo* recovery) noexcept
 {
     std::string bytes;
     const HRESULT readHr = ReadFileBytes(path, bytes);
     if (FAILED(readHr))
     {
-        return fallbackToDefaults ? S_FALSE : readHr;
+        return RecoverSettingsLoadFailure(path, out, SettingsLoadRecoveryReason::ReadFailed, readHr, false, fallbackToDefaults, recovery);
     }
 
     yyjson_read_err err{};
@@ -3323,12 +4770,13 @@ namespace
     if (! doc)
     {
         LogJsonParseError(L"settings file", path, err);
-        if (backupBadFile)
-        {
-            BackupBadSettingsFile(path);
-            return S_FALSE;
-        }
-        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        return RecoverSettingsLoadFailure(path,
+                                          out,
+                                          SettingsLoadRecoveryReason::InvalidJson,
+                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                                          backupBadFile,
+                                          fallbackToDefaults,
+                                          recovery);
     }
 
     auto freeDoc = wil::scope_exit([&] { yyjson_doc_free(doc); });
@@ -3337,39 +4785,57 @@ namespace
     if (! root || ! yyjson_is_obj(root))
     {
         Debug::Error(L"Failed to parse settings file '{}': expected object at root", path.c_str());
-        if (backupBadFile)
-        {
-            BackupBadSettingsFile(path);
-            return S_FALSE;
-        }
-        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        return RecoverSettingsLoadFailure(path,
+                                          out,
+                                          SettingsLoadRecoveryReason::InvalidRoot,
+                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                                          backupBadFile,
+                                          fallbackToDefaults,
+                                          recovery);
     }
 
     yyjson_val* schema = yyjson_obj_get(root, "schemaVersion");
     if (! schema || ! yyjson_is_int(schema))
     {
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
-        if (backupBadFile)
-        {
-            BackupBadSettingsFile(path);
-            return S_FALSE;
-        }
-        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        return RecoverSettingsLoadFailure(path,
+                                          out,
+                                          SettingsLoadRecoveryReason::MissingSchemaVersion,
+                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                                          backupBadFile,
+                                          fallbackToDefaults,
+                                          recovery);
     }
 
     const int64_t schemaVersion = yyjson_get_int(schema);
-    if (schemaVersion != 6 && schemaVersion != 7 && schemaVersion != 8 && schemaVersion != 9 && schemaVersion != 10 && schemaVersion != 11)
+    if (schemaVersion != 16)
     {
         Debug::Error(L"Unsupported schema version in settings file '{}'", path.c_str());
-        if (backupBadFile)
-        {
-            BackupBadSettingsFile(path);
-            return S_FALSE;
-        }
-        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+        return RecoverSettingsLoadFailure(path,
+                                          out,
+                                          SettingsLoadRecoveryReason::UnsupportedSchemaVersion,
+                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                                          backupBadFile,
+                                          fallbackToDefaults,
+                                          recovery,
+                                          schemaVersion);
     }
 
     out.schemaVersion = static_cast<uint32_t>(schemaVersion);
+
+    yyjson_val* extensions = GetObj(root, "extensions");
+    if (yyjson_obj_get(root, "viewers") || yyjson_obj_get(root, "editors") ||
+        (extensions && yyjson_obj_get(extensions, "openWithViewerByExtension")))
+    {
+        Debug::Error(L"Settings v16 contains legacy viewer/editor action shape in '{}'", path.c_str());
+        return RecoverSettingsLoadFailure(path,
+                                          out,
+                                          SettingsLoadRecoveryReason::LegacyShape,
+                                          HRESULT_FROM_WIN32(ERROR_INVALID_DATA),
+                                          backupBadFile,
+                                          fallbackToDefaults,
+                                          recovery);
+    }
 
     ParseWindows(root, out);
     ParseTheme(root, out);
@@ -3378,15 +4844,22 @@ namespace
         ParsePlugins(root, out);
     }
     ParseExtensions(root, out);
+    const HRESULT fileActionsHr = ParseFileActions(root, out);
+    if (FAILED(fileActionsHr))
+    {
+        return RecoverSettingsLoadFailure(
+            path, out, SettingsLoadRecoveryReason::FileActionsInvalid, fileActionsHr, backupBadFile, fallbackToDefaults, recovery);
+    }
+    const HRESULT userMenuHr = ParseUserMenuSettings(root, out.userMenu);
+    if (FAILED(userMenuHr))
+    {
+        return RecoverSettingsLoadFailure(path, out, SettingsLoadRecoveryReason::UserMenuInvalid, userMenuHr, backupBadFile, fallbackToDefaults, recovery);
+    }
+    ParseMakeFileListSettings(root, out);
     const HRESULT shortcutsHr = ParseShortcuts(root, out);
     if (FAILED(shortcutsHr))
     {
-        if (backupBadFile)
-        {
-            BackupBadSettingsFile(path);
-            return S_FALSE;
-        }
-        return shortcutsHr;
+        return RecoverSettingsLoadFailure(path, out, SettingsLoadRecoveryReason::ShortcutsInvalid, shortcutsHr, backupBadFile, fallbackToDefaults, recovery);
     }
     ParseCache(root, out);
     ParseFolders(root, out);
@@ -3401,7 +4874,12 @@ namespace
     ParseSelectionMasks(root, out);
     ParseSearchSettings(root, out);
 
-    out.schemaVersion = 11;
+    out.schemaVersion = 16;
+    if (recovery)
+    {
+        recovery->hr           = S_OK;
+        recovery->settingsPath = path;
+    }
     return S_OK;
 }
 
@@ -3454,16 +4932,32 @@ namespace
 
 HRESULT LoadSettings(std::wstring_view appId, Settings& out) noexcept
 {
+    return LoadSettingsWithRecoveryInfo(appId, out, nullptr);
+}
+
+HRESULT LoadSettingsWithRecoveryInfo(std::wstring_view appId, Settings& out, SettingsLoadRecoveryInfo* recovery) noexcept
+{
+    ResetSettingsLoadRecoveryInfo(recovery);
     out = Settings{};
 
     std::filesystem::path path;
     const HRESULT resolveHr = ResolveSettingsLoadPath(appId, path);
     if (resolveHr != S_OK)
     {
+        if (recovery)
+        {
+            recovery->hr           = resolveHr;
+            recovery->settingsPath = path;
+            if (resolveHr == S_FALSE)
+            {
+                recovery->reason       = SettingsLoadRecoveryReason::SettingsFileMissing;
+                recovery->usedDefaults = true;
+            }
+        }
         return resolveHr;
     }
 
-    return LoadSettingsFromResolvedPath(path, out, true, true);
+    return LoadSettingsFromResolvedPath(path, out, true, true, recovery);
 }
 
 HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexcept
@@ -3477,7 +4971,7 @@ HRESULT TryLoadSettingsNoRecovery(std::wstring_view appId, Settings& out) noexce
         return resolveHr;
     }
 
-    return LoadSettingsFromResolvedPath(path, out, false, false);
+    return LoadSettingsFromResolvedPath(path, out, false, false, nullptr);
 }
 
 HRESULT TryGetSettingsFileStamp(std::wstring_view appId, SettingsFileStamp& out) noexcept
@@ -3554,7 +5048,7 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
         return hr;
     }
 
-    yyjson_mut_obj_add_int(doc, root, "schemaVersion", 11);
+    yyjson_mut_obj_add_int(doc, root, "schemaVersion", 16);
 
     yyjson_mut_val* windows = nullptr;
     {
@@ -3880,12 +5374,29 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
         }
     }
 
+    if (const HRESULT hr = AddFileActionsObjectMember(doc, root, settings.fileActions); FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (const HRESULT hr = AddUserMenuObjectMember(doc, root, settings.userMenu); FAILED(hr))
+    {
+        return hr;
+    }
+
+    if (settings.makeFileList.has_value())
+    {
+        if (const HRESULT hr = AddMakeFileListObjectMember(doc, root, settings.makeFileList.value()); FAILED(hr))
+        {
+            return hr;
+        }
+    }
+
     {
         const ExtensionsSettings defaults{};
         const bool writeFileSystems = (settings.extensions.openWithFileSystemByExtension != defaults.openWithFileSystemByExtension);
-        const bool writeViewers     = (settings.extensions.openWithViewerByExtension != defaults.openWithViewerByExtension);
 
-        if (writeFileSystems || writeViewers)
+        if (writeFileSystems)
         {
             yyjson_mut_val* extensions = yyjson_mut_obj(doc);
             if (! extensions)
@@ -3959,14 +5470,6 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 }
             }
 
-            if (writeViewers)
-            {
-                HRESULT hr = writeExtMap("openWithViewerByExtension", settings.extensions.openWithViewerByExtension);
-                if (FAILED(hr))
-                {
-                    return hr;
-                }
-            }
         }
     }
 
@@ -4517,6 +6020,24 @@ HRESULT SaveSettings(std::wstring_view appId, const Settings& settings) noexcept
                 if (pane->view.sortDirection != defaultDirection)
                 {
                     yyjson_mut_obj_add_str(doc, view, "sortDirection", FolderSortDirectionToString(pane->view.sortDirection));
+                    wroteView = true;
+                }
+
+                if (pane->view.fileExtensionsVisible != viewDefaults.fileExtensionsVisible)
+                {
+                    yyjson_mut_obj_add_bool(doc, view, "fileExtensionsVisible", pane->view.fileExtensionsVisible);
+                    wroteView = true;
+                }
+
+                if (pane->view.navigationBarVisible != viewDefaults.navigationBarVisible)
+                {
+                    yyjson_mut_obj_add_bool(doc, view, "navigationBarVisible", pane->view.navigationBarVisible);
+                    wroteView = true;
+                }
+
+                if (pane->view.filterBarVisible != viewDefaults.filterBarVisible)
+                {
+                    yyjson_mut_obj_add_bool(doc, view, "filterBarVisible", pane->view.filterBarVisible);
                     wroteView = true;
                 }
 

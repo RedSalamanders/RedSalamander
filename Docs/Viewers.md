@@ -1,8 +1,10 @@
 # Viewers (F3)
 
-Viewers open the focused file in a dedicated window. Select a file in a pane and press `F3`; RedSalamander chooses the viewer from the extension mapping in **Preferences -> Viewers**.
+Viewers open the focused file in a dedicated window. Select a file in a pane and press `F3`; RedSalamander resolves the `F3 View` association in **Preferences -> Viewers** for the file extension or pattern and the current computer.
 
-If the mapped viewer is missing, disabled, or cannot handle the file, RedSalamander falls back to the Text viewer when possible. Folder disk usage is the exception: the Space viewer opens from **Commands -> Calculate Occupied Space** (`Alt+F10`) or the folder context menu.
+`Alt+F3` uses the configured alternate viewer action. **View With** lists the configured viewer actions that apply to the focused file. Disabled, missing, or broken actions show an in-pane alert instead of silently doing nothing.
+
+If no specific association matches, the default `*` association normally opens the Text viewer. Folder disk usage is the exception: the Space viewer opens from **Commands -> Calculate Occupied Space** (`Alt+F10`) or the folder context menu.
 
 The examples below use generated documentation samples, not personal files.
 
@@ -21,7 +23,11 @@ The default mapping includes:
 | SQLite database files | SQLite viewer |
 | `.exe`, `.dll`, `.sys`, and other PE files | PE viewer |
 
-You can add, update, remove, search, and reset mappings in **Preferences -> Viewers**.
+Configure this in **Preferences -> Viewers**:
+
+- **Associations** choose the `F3 View` and `Alt+F3 Alternate View` actions for an extension, pattern, default `*` row, or computer-specific override.
+- **Actions** define internal viewer-plugin actions and external viewer programs.
+- The page can test a sample file path and show the resolved action plus the rule that chose it.
 
 ## Text / Hex / Diff Viewer (`builtin/viewer-text`)
 

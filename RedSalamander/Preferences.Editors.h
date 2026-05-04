@@ -1,19 +1,18 @@
 #pragma once
 
-#include "DxUi/DxUi.h"
-#include "Preferences.Internal.h"
+#include "Preferences.FileActions.h"
 
 class EditorsPane final
 {
 public:
-    EditorsPane()                              = default;
+    EditorsPane() noexcept;
     EditorsPane(const EditorsPane&)            = delete;
     EditorsPane& operator=(const EditorsPane&) = delete;
 
     void OnVisibilityChanged(bool visible) noexcept;
     void Destroy(PreferencesDialogState& state) noexcept;
-
     void InitializePage(HWND parent, PreferencesDialogState& state) noexcept;
+    void Refresh(HWND host, PreferencesDialogState& state) noexcept;
     void LayoutPage(HWND host,
                     PreferencesDialogState& state,
                     int x,
@@ -24,5 +23,15 @@ public:
                     int sectionY,
                     const PreferencesTypographyContext& typography) noexcept;
 
+#ifdef ENABLE_TESTS
+    [[nodiscard]] bool DebugSelectDefaultAction(bool alternate, std::wstring_view actionId) noexcept;
+    [[nodiscard]] bool DebugSelectDefaultEditNewAction(std::wstring_view actionId) noexcept;
+    [[nodiscard]] size_t DebugAssociationRowCount() const noexcept;
+    [[nodiscard]] size_t DebugActionRowCount() const noexcept;
+    [[nodiscard]] std::wstring DebugPreviewActionId() const;
+    [[nodiscard]] std::wstring DebugPreviewReason() const;
+#endif
+
 private:
+    FileActionPreferencesPage _page;
 };

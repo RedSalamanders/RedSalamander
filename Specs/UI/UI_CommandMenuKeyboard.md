@@ -17,7 +17,7 @@ This document defines the canonical **command catalog** (`cmd/*`), the RedSalama
 - **Target pane**: the pane a `cmd/pane/*` command is applied to for this invocation (resolved from focused/active pane rules or from an explicit Left/Right menu origin).
 - **Current item**: the item with the caret in a `FolderView` (the one that moves with Arrow keys).
 - **Selected items**: the multi-selection set.
-- **Incremental search mode**: a transient mode within `FolderView` entered by typing printable characters.
+- **Incremental search mode**: a transient mode within `FolderView` entered by the Quick Search command or by typing printable characters.
 - **Shortcut chord**: a key + modifier set (Ctrl/Alt/Shift) bound to a command ID (e.g. `cmd/...`).
 
 ## Key Routing Model (Normative)
@@ -69,6 +69,144 @@ Within the DxUi menu loop, keyboard-owned top-level and cascading popups MUST fo
 - If a shortcut is bound to a command that is not implemented at runtime, invoking it MUST show a localized message box stating it is not yet implemented and MUST do nothing else.
 - Some commands/menu entries are **parameterized** (drive roots, hot paths, history paths, plugin/theme entries). For shortcuts the parameter is encoded in the command ID (e.g. `cmd/pane/goDriveRoot/C`, `cmd/pane/hotPath/1`) and is canonicalized for display/lookup; for menus the parameter is carried by dynamic menu-item ranges/payloads (or encoded in a command ID suffix for shortcut-like commands).
 
+### Shortcut And Link Target Navigation
+
+`cmd/pane/goToShortcutOrLinkTarget` operates on the target pane's current item. It is implemented for the built-in local file system when the current item is a `.lnk`, a `.url` whose URL resolves to a local path, a junction, a mount point, or a directory symbolic link.
+
+- A target directory opens directly in the same pane.
+- A target file opens its parent folder and restores focus to the target file when it is visible.
+- Broken links, missing targets, non-local `.url` targets, unsupported reparse tags, and unsupported file-system plugins keep the pane in place and show localized pane feedback.
+- The command records `shell.go_to_shortcut_target_us` in command selftests so shortcut resolution and navigation cost stay visible.
+
+### Shell New Templates
+
+`cmd/pane/newFromShellTemplate` is the stable command family for entries under **Files -> New** after **Folder**. The menu is populated at popup time from the Windows ShellNew registry view for local built-in file-system folders. The dynamic menu item carries the same template id that can be used by shortcuts as `cmd/pane/newFromShellTemplate/<templateId>`.
+
+- Template ids are stable, sanitized ids derived from the extension and ShellNew template kind.
+- The implementation supports ShellNew `NullFile`, `Data`, and `FileName` templates. ShellNew `Command` entries are intentionally not invoked by this safe implementation.
+- Choosing a template prompts for the new file name in the current folder, prefilled with the template default name. The same filename validation rules used by Edit New apply.
+- On success, the command creates the file, refreshes the pane, and focuses the created item when it is visible.
+- If no local folder is active, no templates are available, a direct template id is stale, or creation fails, the pane remains in place and shows localized feedback.
+- The command records `shellnew.enumerate_us`, `shellnew.menu_populate_us`, `shellnew.create_us`, and `shellnew.feedback_us` in command selftests.
+
+### Clipboard File Commands
+
+`cmd/pane/clipboardCopy`, `cmd/pane/clipboardCut`, `cmd/pane/clipboardPaste`, and `cmd/pane/clipboardPasteShortcut` share the standard Windows file-drop clipboard contract for local built-in file-system paths.
+
+- Text edit controls keep ownership of ordinary text clipboard commands. When a navigation edit owns focus, `Ctrl+C`, `Ctrl+X`, and `Ctrl+V` MUST copy, cut, and paste text in that edit control before pane file commands are considered.
+- `cmd/pane/clipboardCopy` writes selected or focused local file-system items as `CF_HDROP` with Preferred DropEffect `DROPEFFECT_COPY`.
+- `cmd/pane/clipboardCut` writes selected or focused local file-system items as `CF_HDROP` with Preferred DropEffect `DROPEFFECT_MOVE`. It does not delete or move files immediately.
+- `cmd/pane/clipboardPaste` copies clipboard file-drop paths into the current local folder using the file-operation copy path.
+- `cmd/pane/clipboardPasteShortcut` reads clipboard file-drop paths and creates `.lnk` shortcuts in the current local folder. Shortcut names MUST be unique in the destination folder, the pane MUST refresh after creation, and the last created shortcut SHOULD become the focused item when visible.
+- Unsupported providers, empty selections, clipboard contents without file paths, and shortcut creation failures keep the pane in place and show localized pane feedback instead of falling through to a generic not-implemented command.
+- Command selftests MUST keep correctness and responsiveness visible with `clipboard.cut_us`, `clipboard.paste_shortcut_us`, and `clipboard.feedback_us` metrics.
+
+### Quick Search
+
+`cmd/pane/quickSearch` activates the target pane's integrated incremental search mode. It is not the persistent filter bar and it is separate from the command-line input commands.
+
+- Invoking the command focuses the target pane's `FolderView`, enters search mode, clears any previous quick-search query, and shows the transient search indicator.
+- Printable typing appends to the query. Matching is case-insensitive.
+- The initial focused item prefers the first item whose name starts with the query. If no prefix match exists, the first item containing the query is focused.
+- Rendering highlights the matching range for every visible item whose name contains the query.
+- `Up`/`Left` and `Down`/`Right` navigate through all matching items in folder order while search mode is active.
+- `Escape` exits search mode and clears the query. `Enter` exits search mode and activates the current focused item.
+- No-match state remains non-modal: the query stays visible in the transient indicator and focus remains in the folder view.
+- Command selftests MUST keep responsiveness visible with `quicksearch.activate_us`, `quicksearch.update_us`, `quicksearch.navigate_us`, and `render.incremental_search_effect_updates` metrics.
+
+### Pane View Options
+
+Pane view option commands target the focused pane, or the active pane when focus is outside both panes, unless a left/right menu item names a pane explicitly.
+
+- `cmd/pane/viewOptions/toggleFileExtensions` toggles extension display in the target pane only. This is display-only: file operations, command-line insertion, clipboard actions, and plugin calls continue to use real item names and full paths.
+- `cmd/pane/viewOptions/toggleThumbnails` is a legacy command id that selects the exclusive Thumbnails display mode in the target pane. The pane switches away from Brief/Detailed/Extra Detailed, uses larger DPI-aware item visuals, schedules bounded asynchronous thumbnail work for visible items, uses shell thumbnails when available, and renders the normal file/folder icon as fallback without blocking navigation. Repeating the command leaves the pane in Thumbnails; selecting another display mode leaves thumbnail mode and cancels stale work.
+- `cmd/pane/viewOptions/togglePreviewPane` toggles preview mode for the active source pane and hosts the preview in the opposite pane. Opening preview shows themed DxUi Folder/Preview tabs at the top of the host pane, selects Preview, hides that pane's folder view while Preview is selected, and updates the embedded viewer preview when the source pane focus or selection changes. Preview resolves the configured viewer plugin for the focused item and uses it when the plugin supports embedded hosting; when saved viewer associations are missing or only resolve the default text viewer, preview uses the built-in embedded viewer defaults before falling back to the embedded text viewer or localized placeholder. Embedded preview viewers MUST NOT take keyboard focus from the source pane. Switching back to Folder keeps preview mode open with the host folder view visible. Closing preview removes the tabs and restores the host pane. The preview area extends to the function bar, or to the bottom of the window when the function bar is hidden.
+- `cmd/pane/viewOptions/toggleFilterBar` toggles a persistent themed DxUi filter bar for the target pane. The bar reflects the current `cmd/pane/filter` state, follows restored per-history filters, and never replaces Quick Search.
+- `cmd/pane/viewOptions/toggleNavigationBar` toggles the target pane navigation/address bar. Left/right menu entries target their named pane; shortcut routing targets the active pane. Commands that focus the address bar MUST show the bar first, then focus the address edit.
+- `cmd/pane/viewOptions/toggleStatusBar` routes shortcut invocation to the active pane and shares the existing left/right `Show` menu status-bar implementation.
+- These visibility states are persisted per pane through `folders.items[].view.*` settings and MUST keep menu check marks synchronized with the current pane state.
+- Command selftests MUST keep correctness and responsiveness visible for setting round-trip, menu labels, active/explicit pane routing, focus fallback, restored filters, and pane-view-option toggle latency.
+
+### Command-Line Input
+
+`cmd/pane/bringCurrentDirToCommandLine` and `cmd/pane/bringFilenameToCommandLine` open a pane-scoped command-line input that is separate from Quick Search and the navigation address edit.
+
+- The command-line input appears above the function bar and below the pane area, receives keyboard focus, and is associated with the pane that invoked it.
+- `cmd/pane/bringCurrentDirToCommandLine` appends the active local folder path using command-line quoting.
+- `cmd/pane/bringFilenameToCommandLine` appends the focused item display name when no explicit selection exists. When one or more items are selected, it appends full local item paths; if the focused item is part of the selection, that focused path is first and the rest stay in pane order.
+- Insertions happen at the current caret/selection and add a single separating space when adjacent text would otherwise touch.
+- Pressing `Enter` executes the current text through the system command processor with the pane's current local folder as working directory, then clears and hides the input after a successful launch.
+- Pressing `Escape` hides the input and restores folder-view focus without changing pane selection.
+- Unsupported providers, missing local folders, and empty item scope keep the pane in place and show localized pane feedback.
+- Command selftests MUST keep responsiveness visible with `commandline.focus_to_visible_us`, `commandline.insert_current_dir_us`, `commandline.insert_filename_us`, `commandline.launch_us`, and `commandline.feedback_us` when an error path is exercised.
+
+### Reread Associations
+
+`cmd/app/rereadAssociations` reloads settings-backed associations and action menus on demand without restarting the application.
+
+- The command is application-scoped and is available from **Commands -> Reread Associations**.
+- It reads the current settings file through the non-destructive hot-reload path. Invalid JSON, unsupported schema, or unreadable settings keep the current runtime settings in place and show the localized invalid-reload alert.
+- Disk settings are authoritative for `fileActions` viewer/editor actions and associations, User Menu actions, file-system extension mappings, plugin settings, shortcuts, and other persisted preference sections, but current pane folders and already-open window placement are preserved.
+- After a successful reload, the app rebuilds dynamic View With, Edit With, User Menu, ShellNew, and file-system-plugin menus, clears normal and association icon caches, refreshes both panes, preserves the active pane, and notifies settings-reload participants.
+- Stale dynamic menu ids from before the reload MUST NOT launch old actions after the menus are rebuilt.
+- Command selftests MUST keep correctness and responsiveness visible with `rereadAssociations.total_us`, menu-rebuild assertions, pane-refresh assertions, icon-association cache clearing, and preserved live pane paths.
+
+### Make File List
+
+`cmd/pane/makeFileList` opens a pane-scoped options dialog that generates a list from the focused pane.
+
+- The command is available for local file-system folders. Unsupported providers keep the pane in place and show localized pane feedback.
+- Source options are selected/focused items or the current folder. When no item is selected, the focused item is used. Current-folder mode enumerates the active folder contents.
+- The recursive option descends into folders. `includeDirectories` controls whether directory rows appear in the generated list.
+- Output formats are JSON, CSV, and text. JSON and CSV use the selected field flags (`includeName`, `includeFullPath`, `includeSize`, `includeModified`, and `includeAttributes`). Text uses `textMacro`.
+- Text macros are case-insensitive and include `{filename}`, `{name}`, `{fullPath}`, `{path}`, `{size}`, `{modified}`, `{attributes}`, and `{isDirectory}`. `{{` and `}}` emit literal braces.
+- Output targets are the clipboard or a UTF-8 file. File output requires a non-empty output path.
+- Generated entries are deterministic and sorted by full path. CSV quotes commas, quotes, and newlines. JSON includes `format`, `count`, and `entries`.
+- The last selected options are persisted in `settings.makeFileList`.
+- Command selftests MUST keep correctness and responsiveness visible with `makeFileList.collect_us`, `makeFileList.generate_us`, `makeFileList.output_us`, `makeFileList.total_us`, and an archived JSON/CSV/text output artifact set.
+
+### List Opened Files
+
+`cmd/pane/listOpenedFiles` opens a modeless application dialog listing files RedSalamander currently has open.
+
+- The command is available from **Commands -> List of Opened Files** and defaults to `Alt+F11`.
+- Rows include internal viewer windows, external viewer/editor launches started by View/Edit/User Menu action plumbing, and the active Preview pane item.
+- Each row shows the display file name, source (`Viewer`, `Editor`, or `Preview Pane`), opener/action name when known, and the full path.
+- External process rows with captured handles are pruned once the process exits. Viewer rows are removed when their viewer window closes. Preview rows follow the current preview item and disappear when Preview is closed.
+- When no rows exist, the dialog remains visible and shows a localized empty state.
+- Double-click and **Focus Item** navigate the owning pane to the row path when the item is still reachable, then focus/select it in the folder view.
+- The dialog MUST be a modeless DxUi-hosted app window, inherit the active app theme and themed window chrome, and avoid visible native dialog-template controls in DxUi mode.
+- Command selftests MUST keep correctness and responsiveness visible with themed DxUi-host coverage, viewer/editor/preview source coverage, closed-process pruning, focus navigation, `listOpenedFiles.open_us`, and an archived `list_opened_files_metrics.json` artifact.
+
+### Shared Directories
+
+`cmd/pane/shares` opens a modeless application dialog listing local Windows disk shares from the focused pane context.
+
+- The command is available from **Commands -> Shared Directories** and defaults to `Ctrl+Shift+F9`.
+- Rows are sorted by share name and show share name, local path, share type, and remark.
+- Only disk-tree shares are listed. Reachable local paths enable **Open Path**; unreachable paths stay visible but cannot be opened.
+- **Open Path** switches the target pane to the built-in local file-system provider if needed, then navigates to the selected share's local path.
+- **Manage** launches the Windows Shared Folders management console. Launch failure shows localized nonfatal pane feedback.
+- Access denied while enumerating shares keeps the dialog open, clears stale rows, and shows a localized access-denied empty/error state.
+- Command selftests MUST keep correctness and responsiveness visible with synthetic provider rows, sorted display, open-path navigation, access-denied state coverage, `sharedDirectories.open_us`, and an archived `shared_directories_metrics.json` artifact.
+
+### Archive Pack And Unpack
+
+`cmd/pane/pack` creates an archive from the active pane selection. `cmd/pane/unpack` extracts selected or focused ZIP archives to a destination selected in the app-owned Unpack prompt.
+
+- Both commands are available only from local file-system folders. Unsupported providers keep the pane in place and show localized pane feedback.
+- Pack uses selected items, or the focused item when nothing is selected. The built-in `ZIP (Plugin)` packer writes a deterministic stored ZIP archive. Directory entries use `/` separators, selected empty directories are preserved, and entries are sorted by archive path.
+- In interactive use, Pack MUST use the app-owned DxUi Pack prompt rather than the stock save-file dialog. The prompt MUST suggest a non-conflicting archive path in the current folder, MUST list ZIP plus update-capable formats discovered from the bundled `7zip.dll`, and MUST update the suggested archive extension when the selected packer changes.
+- When a 7-Zip packer is selected, Pack creates the archive through `IOutArchive::UpdateItems`. The delete-after-packing option MUST be off by default and MUST remove selected local sources only after archive creation succeeds.
+- Test/debug automation may supply a ZIP path and overwrite policy directly.
+- Unpack supports stored ZIP entries through the built-in reader and delegates compressed ZIP entries, 7-Zip archives, and other formats supported by the bundled `7zip.dll` to the 7-Zip extraction path while preserving the same destination, overwrite, mask, and safe-entry-path contract. Unsupported/encrypted methods fail with localized pane feedback.
+- In interactive use, Unpack MUST use the app-owned DxUi Unpack prompt rather than the stock pick-folder dialog. The prompt MUST suggest a non-conflicting destination folder derived from the focused archive name, MUST expose the currently supported `ZIP (Plugin)` unpacker, MUST default the file mask to `*.*`, MUST show mask syntax help from the shared wildcard-mask contract, and MUST leave delete-after-unpacking off by default.
+- The Unpack file mask uses the same wildcard syntax as Select/Unselect and pane Filter. `*.*`, `*`, or an empty mask extracts all safe entries. Other masks match either the archive entry path or the entry filename; unmatched files and empty directory entries are skipped.
+- When enabled, delete-after-unpacking MUST remove the selected archive files only after extraction succeeds.
+- Test/debug automation may supply the destination and overwrite policy directly.
+- Existing archive outputs or extracted files are preserved when overwrite is disabled. Failures report the relevant HRESULT and do not fall through to the generic "not implemented" message.
+- Command selftests MUST keep correctness and responsiveness visible with Pack prompt coverage, Unpack prompt/mask/delete-after coverage, 7z creation coverage, stored-ZIP round-trip coverage, compressed-ZIP extraction coverage, overwrite validation, invalid destination/path validation, unsupported-provider feedback, `archive.pack_us`, `archive.unpack_us`, `archive.feedback_us`, and an archived `archive_commands_metrics.json` artifact.
+
 ### Canonical Command IDs
 
 This section is the single source of truth for the command ID catalog.
@@ -76,6 +214,7 @@ This section is the single source of truth for the command ID catalog.
 **Application commands (`cmd/app/*`)**
 - `cmd/app/about`
 - `cmd/app/exit`
+- `cmd/app/externalHelp`
 - `cmd/app/openLeftDriveMenu`
 - `cmd/app/openRightDriveMenu`
 - `cmd/app/compare`
@@ -87,9 +226,11 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/app/toggleFunctionBar`
 - `cmd/app/toggleMenuBar`
 - `cmd/app/viewWidth`
-- `cmd/app/rereadAssociations` *(planned)*
-- `cmd/app/theme/select` *(planned, parameterized: themeId)*
-- `cmd/app/theme/systemHighContrastIndicator` *(planned)*
+- `cmd/app/rereadAssociations`
+- `cmd/app/theme/select` *(parameterized: themeId)*
+- `cmd/app/theme/selectNext`
+- `cmd/app/theme/selectPrev`
+- `cmd/app/theme/systemHighContrastIndicator`
 - `cmd/app/plugins/manage`
 - `cmd/app/plugins/toggleEnabled` *(planned, parameterized: pluginId)*
 - `cmd/app/plugins/configure` *(planned, parameterized: pluginId)*
@@ -103,13 +244,13 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/goRootDirectory`
 - `cmd/pane/setPathFromOtherPane`
 - `cmd/pane/navigatePath` *(planned, parameterized: path)*
-- `cmd/pane/selectFileSystemPlugin` *(planned, parameterized: pluginId)*
+- `cmd/pane/selectFileSystemPlugin` *(parameterized: pluginId)*
 - `cmd/pane/bringCurrentDirToCommandLine`
 - `cmd/pane/bringFilenameToCommandLine`
-- `cmd/pane/clipboardCut` *(planned)*
+- `cmd/pane/clipboardCut`
 - `cmd/pane/clipboardCopy`
 - `cmd/pane/clipboardPaste`
-- `cmd/pane/clipboardPasteShortcut` *(planned)*
+- `cmd/pane/clipboardPasteShortcut`
 - `cmd/pane/copyNameAsText`
 - `cmd/pane/copyUncPathAndNameAsText`
 - `cmd/pane/copyPathAndNameAsText`
@@ -118,8 +259,7 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/moveToRecycleBin`
 - `cmd/pane/openCurrentFolder`
 - `cmd/pane/openProperties`
-- `cmd/pane/openSecurity` *(planned)*
-- `cmd/pane/permanentDeleteWithValidation`
+- `cmd/pane/openSecurity`
 - `cmd/pane/quickSearch`
 - `cmd/pane/selectCalculateDirectorySizeNext`
 - `cmd/pane/selectNext`
@@ -127,7 +267,6 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/upOneDirectory`
 - `cmd/pane/windowMenu`
 - `cmd/pane/alternateView`
-- `cmd/pane/calculateDirectorySizes`
 - `cmd/pane/changeAttributes`
 - `cmd/pane/changeCase`
 - `cmd/pane/changeDirectory`
@@ -136,9 +275,9 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/contextMenuCurrentDirectory`
 - `cmd/pane/disconnect`
 - `cmd/pane/edit`
-- `cmd/pane/editWith` *(planned, parameterized: editorId)*
+- `cmd/pane/editWith` *(parameterized: editorId)*
 - `cmd/pane/editNew`
-- `cmd/pane/editWidth`
+- `cmd/pane/alternateEdit`
 - `cmd/pane/filter`
 - `cmd/pane/find`
 - `cmd/pane/hotPaths`
@@ -146,7 +285,7 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/setHotPath` *(parameterized: digit `1..9` and `0`)*
 - `cmd/pane/listOpenedFiles`
 - `cmd/pane/showFoldersHistory`
-- `cmd/pane/makeFileList` *(planned)*
+- `cmd/pane/makeFileList`
 - `cmd/pane/menu`
 - `cmd/pane/pack`
 - `cmd/pane/permanentDelete`
@@ -164,15 +303,15 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/moveToOtherPane`
 - `cmd/pane/rename`
 - `cmd/pane/sort/none`
-- `cmd/pane/sort/attributes` *(planned)*
+- `cmd/pane/sort/attributes`
 - `cmd/pane/sort/extension`
 - `cmd/pane/sort/name`
 - `cmd/pane/sort/size`
 - `cmd/pane/sort/time`
 - `cmd/pane/view`
-- `cmd/pane/viewWith` *(planned, parameterized: viewerId)*
+- `cmd/pane/viewWith` *(parameterized: viewerId)*
 - `cmd/pane/viewSpace`
-- `cmd/pane/newFromShellTemplate` *(planned, parameterized: templateId)*
+- `cmd/pane/newFromShellTemplate` *(parameterized: templateId)*
 - `cmd/pane/selection/selectDialog`
 - `cmd/pane/selection/unselectDialog`
 - `cmd/pane/selection/invert`
@@ -182,23 +321,23 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/selection/save`
 - `cmd/pane/selection/selectSameExtension`
 - `cmd/pane/selection/unselectSameExtension`
-- `cmd/pane/selection/selectSameName` *(planned)*
-- `cmd/pane/selection/unselectSameName` *(planned)*
+- `cmd/pane/selection/selectSameName`
+- `cmd/pane/selection/unselectSameName`
 - `cmd/pane/selection/hideSelectedNames`
 - `cmd/pane/selection/hideUnselectedNames`
 - `cmd/pane/selection/showHiddenNames`
 - `cmd/pane/selection/goToPreviousSelectedName`
 - `cmd/pane/selection/goToNextSelectedName`
-- `cmd/pane/goToShortcutOrLinkTarget` *(planned)*
+- `cmd/pane/goToShortcutOrLinkTarget`
 - `cmd/pane/openCommandShell`
 - `cmd/pane/viewOptions/toggleHiddenFiles`
 - `cmd/pane/viewOptions/toggleSystemFiles`
-- `cmd/pane/viewOptions/toggleFileExtensions` *(planned)*
-- `cmd/pane/viewOptions/toggleThumbnails` *(planned)*
-- `cmd/pane/viewOptions/togglePreviewPane` *(planned)*
-- `cmd/pane/viewOptions/toggleFilterBar` *(planned)*
-- `cmd/pane/viewOptions/toggleNavigationBar` *(planned)*
-- `cmd/pane/viewOptions/toggleStatusBar` *(planned)*
+- `cmd/pane/viewOptions/toggleFileExtensions`
+- `cmd/pane/viewOptions/toggleThumbnails`
+- `cmd/pane/viewOptions/togglePreviewPane`
+- `cmd/pane/viewOptions/toggleFilterBar`
+- `cmd/pane/viewOptions/toggleNavigationBar`
+- `cmd/pane/viewOptions/toggleStatusBar`
 
 ## Main Menu Bar (Target)
 
@@ -260,6 +399,8 @@ Notation:
 - Brief (`Alt+2`) `[cmd/pane/display/brief]`
 - Detailed (`Alt+3`) `[cmd/pane/display/detailed]`
 - Extra Detailed (`Alt+4`) `[cmd/pane/display/extraDetailed]`
+- Thumbnails (`Alt+5`; radio display mode, targets Left pane) `[cmd/pane/viewOptions/toggleThumbnails]`
+- Preview Pane (`Alt+6`; checkable, source is Left pane, preview host is Right pane) `[cmd/pane/viewOptions/togglePreviewPane]`
 - ---
 - Sort By >
   - None (`Ctrl+F2`) `[cmd/pane/sort/none]`
@@ -268,12 +409,20 @@ Notation:
   - Time (`Ctrl+F5`) `[cmd/pane/sort/time]`
   - Size (`Ctrl+F6`) `[cmd/pane/sort/size]`
   - Attributes (`⊘`) `[cmd/pane/sort/attributes]`
+- Show >
+  - Hidden Files (`⊘`; checkable, global visibility setting) `[cmd/pane/viewOptions/toggleHiddenFiles]`
+  - System Files (`⊘`; checkable, global visibility setting) `[cmd/pane/viewOptions/toggleSystemFiles]`
+  - File Extensions (`⊘`; checkable, targets Left pane) `[cmd/pane/viewOptions/toggleFileExtensions]`
+  - ---
+  - Filter Bar (`⊘`; checkable, targets Left pane) `[cmd/pane/viewOptions/toggleFilterBar]`
+  - Navigation Bar (`⊘`; checkable, targets Left pane) `[cmd/pane/viewOptions/toggleNavigationBar]`
+  - Status Bar (`⊘`; checkable, targets Left pane) `[cmd/pane/viewOptions/toggleStatusBar]`
 - ---
 - Maximize/Restore Pane (`Ctrl+F11`) *(toggle: move splitter to edge; restore only if splitter wasn't dragged while maximized; state persisted in settings)* `[cmd/pane/zoomPanel]`
 - Swap Panes (`Ctrl+U`) *(swap Left/Right pane file system + current folder; view options stay with the pane; global history unaffected)* `[cmd/app/swapPanes]`
-- ---
-- Filter… (`Ctrl+F12`) *(open pane filter dialog; wildcard mask syntax shared with Select/Unselect; history saved; active filter shows a subtle background watermark; filter state restored when navigating to a path from history)* `[cmd/pane/filter]`
+- Path from Other Panel (`Ctrl+.`) `[cmd/pane/setPathFromOtherPane]`
 - Refresh (`Ctrl+F9`) *(invalidate directory cache + re-enumerate current folder)* `[cmd/pane/refresh]`
+- Filter… (`Ctrl+F12`) *(open pane filter dialog; wildcard mask syntax shared with Select/Unselect; history saved; active filter shows a subtle background watermark; filter state restored when navigating to a path from history)* `[cmd/pane/filter]`
 
 #### Files (targets Focused pane unless explicitly stated)
 
@@ -281,46 +430,45 @@ Notation:
 - Open / Execute (`Enter`) `[cmd/pane/executeOpen]`
 - View (`F3`) `[cmd/pane/view]`
 - View Width… (`Ctrl+Shift+F3`) `[cmd/app/viewWidth]`
-- Alternate View [td] (`Alt+F3`) `[cmd/pane/alternateView]`
-- View With > [td]
+- Alternate View (`Alt+F3`) `[cmd/pane/alternateView]`
+- View With >
   - *(Viewer list, dynamic)*
-    - `<Viewer Name>` [td] (`⊘`; parameterized: viewerId) `[cmd/pane/viewWith]`
-- Edit [td] (`F4`) `[cmd/pane/edit]`
-- Edit Width… [td] (`Ctrl+Shift+F4`) `[cmd/pane/editWidth]`
-- Edit With > [td]
+    - `<Viewer Name>` (`⊘`; parameterized: viewerId) `[cmd/pane/viewWith]`
+- Edit (`F4`) `[cmd/pane/edit]`
+- Alternate Edit (`Ctrl+Shift+F4`) `[cmd/pane/alternateEdit]`
+- Edit With >
   - *(Editor list, dynamic)*
-    - `<Editor Name>` [td] (`⊘`; parameterized: editorId) `[cmd/pane/editWith]`
-- Edit New File… [td] (`Shift+F4`) `[cmd/pane/editNew]`
+    - `<Editor Name>` (`⊘`; parameterized: editorId) `[cmd/pane/editWith]`
+- Edit New File… (`Shift+F4`) `[cmd/pane/editNew]`
 - Copy… (`F5`) `[cmd/pane/copyToOtherPane]`
 - Move/Rename… (`F6`) `[cmd/pane/moveToOtherPane]`
 - Delete >
   - Delete (`F8`) `[cmd/pane/delete]`
   - Move to Recycle Bin (`Del`) `[cmd/pane/moveToRecycleBin]`
-- Permanent Delete [td] (`Shift+F8`) `[cmd/pane/permanentDelete]`
-- Permanent Delete (With Validation) [td] (`Shift+Del`) `[cmd/pane/permanentDeleteWithValidation]`
+- Permanent Delete (`Shift+F8` / `Shift+Del`) `[cmd/pane/permanentDelete]`
 - Properties (`Alt+Enter`) `[cmd/pane/openProperties]`
 - Context Menu (`Shift+F10`) `[cmd/pane/contextMenu]`
-- Context Menu (Current Directory) [td] (`Alt+Shift+F10`) `[cmd/pane/contextMenuCurrentDirectory]`
-- Security… [td] (`⊘`) `[cmd/pane/openSecurity]`
+- Context Menu (Current Directory) (`Alt+Shift+F10`) `[cmd/pane/contextMenuCurrentDirectory]`
+- Security… (`⊘`) `[cmd/pane/openSecurity]`
 - ---
-- Change Attributes… [td] (`Ctrl+F8`) `[cmd/pane/changeAttributes]`
+- Change Attributes… (`Ctrl+F8`) `[cmd/pane/changeAttributes]`
 - Change Case… (`Ctrl+F7`) `[cmd/pane/changeCase]`
-- Pack… [td] (`Alt+F5`) `[cmd/pane/pack]`
-- Unpack… [td] (`Alt+F6`) `[cmd/pane/unpack]`
+- Pack… (`Alt+F5`) `[cmd/pane/pack]`
+- Unpack… (`Alt+F6`) `[cmd/pane/unpack]`
 - New >
   - Folder… (`F7`) `[cmd/pane/createDirectory]`
   - ---
   - *(Shell “New” templates, dynamic)*
-    - `<Template Name>` [td] (`⊘`; parameterized: templateId) `[cmd/pane/newFromShellTemplate]`
+    - `<Template Name>` (`⊘`; parameterized: templateId) `[cmd/pane/newFromShellTemplate]`
 - ---
 - Exit (`Alt+F4`) `[cmd/app/exit]`
 
 #### Edit (targets Focused pane unless explicitly stated)
 
-- Cut [td] (`Ctrl+X`) `[cmd/pane/clipboardCut]`
+- Cut (`Ctrl+X`) `[cmd/pane/clipboardCut]`
 - Copy (`Ctrl+C` target; also `Ctrl+Insert` default binding) `[cmd/pane/clipboardCopy]`
 - Paste (`Ctrl+V` target; also `Shift+Insert` default binding) `[cmd/pane/clipboardPaste]`
-- Paste Shortcut [td] (`⊘`) `[cmd/pane/clipboardPasteShortcut]`
+- Paste Shortcut (`⊘`) `[cmd/pane/clipboardPasteShortcut]`
 - ---
 - Copy Path + Name as Text (`Alt+Insert`) `[cmd/pane/copyPathAndNameAsText]`
 - Copy Name as Text (`Alt+Shift+Insert`) `[cmd/pane/copyNameAsText]`
@@ -344,8 +492,8 @@ Notation:
   - Select Same Extensions (`Ctrl+Shift+<key left of Backspace>`) `[cmd/pane/selection/selectSameExtension]`
   - Unselect Same Extensions (`Ctrl+Shift+<key right of 0>`) `[cmd/pane/selection/unselectSameExtension]`
   - ---
-  - Select Same Names [td] (`⊘`) `[cmd/pane/selection/selectSameName]`
-  - Unselect Same Names [td] (`⊘`) `[cmd/pane/selection/unselectSameName]`
+  - Select Same Names (`⊘`) `[cmd/pane/selection/selectSameName]`
+  - Unselect Same Names (`⊘`) `[cmd/pane/selection/unselectSameName]`
   - ---
   - Hide Selected Names (`⊘`) `[cmd/pane/selection/hideSelectedNames]`
   - Hide Unselected Names (`⊘`) `[cmd/pane/selection/hideUnselectedNames]`
@@ -360,28 +508,27 @@ Notation:
 - Change Directory… (`Shift+F7`) `[cmd/pane/changeDirectory]` *(opens NavigationView address edit; mounted: `<instanceContext>|/path`)*
 - Compare Directories… (`Ctrl+F10`) `[cmd/app/compare]`
 - Calculate Occupied Space (`Alt+F10`) `[cmd/pane/viewSpace]`
-- Calculate Directory Sizes (`Ctrl+Shift+F10`) `[cmd/pane/calculateDirectorySizes]`
 - Find Files and Directories… (`Alt+F7`) `[cmd/pane/find]`
-- Make File List… [td] (`⊘`) `[cmd/pane/makeFileList]`
-- Go to Shortcut or Link Target [td] (`⊘`) `[cmd/pane/goToShortcutOrLinkTarget]`
+- Make File List… (`⊘`) `[cmd/pane/makeFileList]`
+- Go to Shortcut or Link Target (`⊘`) `[cmd/pane/goToShortcutOrLinkTarget]`
 - ---
-- List of Opened Files [td] (`Alt+F11`) `[cmd/pane/listOpenedFiles]`
+- List of Opened Files (`Alt+F11`) `[cmd/pane/listOpenedFiles]`
 - Show Folders History (`Alt+F12`) `[cmd/pane/showFoldersHistory]` *(opens NavigationView history dropdown)*
 - ---
 - Connect Network Drive… (`F11`) `[cmd/pane/connect]` *(opens the Windows dialog; remote path is editable; when focused pane is File System browsing an UNC path (`\\\\...`), prefill remote name with the current path; otherwise open with no prefill; on success, if a new logical drive appears, navigate the focused pane to the new drive root)*
 - Disconnect… (`F12`) `[cmd/pane/disconnect]` *(opens the Windows dialog; before opening, cancel any pending enumeration and clear DirectoryInfoCache (stops folder watchers) for the focused pane; if focused pane is a mapped network drive, preselect it; if the focused pane drive is removed, navigate to the default file system root)*
-- Shared Directories… [td] (`Ctrl+Shift+F9`) `[cmd/pane/shares]`
+- Shared Directories… (`Ctrl+Shift+F9`) `[cmd/pane/shares]`
 - ---
 - Command Shell (`⊘`) `[cmd/pane/openCommandShell]` *(opens system shell at focused pane path; mounted: opens at mount backing folder)*
-- Quick Search / Command Line Input [td] (`Shift+Space`) `[cmd/pane/quickSearch]`
-- Bring Current Directory to Command Line [td] (`Ctrl+Space`) `[cmd/pane/bringCurrentDirToCommandLine]`
-- Bring Filename to Command Line [td] (`Ctrl+Enter`) `[cmd/pane/bringFilenameToCommandLine]`
+- Quick Search (`Shift+Space`) `[cmd/pane/quickSearch]`
+- Bring Current Directory to Command Line (`Ctrl+Space`) `[cmd/pane/bringCurrentDirToCommandLine]`
+- Bring Filename to Command Line (`Ctrl+Enter`) `[cmd/pane/bringFilenameToCommandLine]`
 - Pane Menu (`F10`) `[cmd/pane/menu]`
-- Reread Associations [td] (`⊘`) `[cmd/app/rereadAssociations]`
+- Reread Associations (`⊘`) `[cmd/app/rereadAssociations]`
 - ---
-- User Menu > [td]
+- User Menu >
   - *(User menu items, dynamic)*
-    - `<User Menu Item>` [td] (`F9` opens the user menu root) `[cmd/pane/userMenu]`
+    - `<User Menu Item>` (`F9` opens the user menu root) `[cmd/pane/userMenu]`
 - Open File Explorer >
   - Current Folder (`Shift+F3`) `[cmd/pane/openCurrentFolder]`
   - *(Known folders, fixed list; menu labels + icons come from Shell (localized display names + system icons))*
@@ -395,46 +542,36 @@ Notation:
 
 #### Plugins
 
-- Plugin Manager… [td] (`⊘`) `[cmd/app/plugins/manage]`
+- Plugin Manager… (`⊘`) `[cmd/app/plugins/manage]`
 - ---
 - *(Installed plugins, dynamic)*
-  - `<File System Plugin Name>` [td] (`⊘`; parameterized: pluginId) `[cmd/pane/selectFileSystemPlugin]`
+  - `<File System Plugin Name>` (`⊘`; parameterized: pluginId) `[cmd/pane/selectFileSystemPlugin]`
   - Enable/Disable `<Plugin>` [td] (`⊘`; parameterized: pluginId) `[cmd/app/plugins/toggleEnabled]`
   - Configure `<Plugin>`… [td] (`⊘`; parameterized: pluginId) `[cmd/app/plugins/configure]`
 
 #### View
 
-- Theme > [td]
+- Theme >
   - *(System high contrast indicator, dynamic system state)*
-    - High Contrast (System) [td] (`⊘`; disabled when not active) `[cmd/app/theme/systemHighContrastIndicator]`
+    - High Contrast (System) (`⊘`; read-only indicator) `[cmd/app/theme/systemHighContrastIndicator]`
   - ---
-  - System [td] (`⊘`; parameterized: `builtin/system`) `[cmd/app/theme/select]`
-  - Light [td] (`⊘`; parameterized: `builtin/light`) `[cmd/app/theme/select]`
-  - Dark [td] (`⊘`; parameterized: `builtin/dark`) `[cmd/app/theme/select]`
-  - Rainbow [td] (`⊘`; parameterized: `builtin/rainbow`) `[cmd/app/theme/select]`
-  - High Contrast (App) [td] (`⊘`; parameterized: `builtin/highContrast`) `[cmd/app/theme/select]`
+  - System (`⊘`; parameterized: `builtin/system`) `[cmd/app/theme/select]`
+  - Light (`⊘`; parameterized: `builtin/light`) `[cmd/app/theme/select]`
+  - Dark (`⊘`; parameterized: `builtin/dark`) `[cmd/app/theme/select]`
+  - Rainbow (`⊘`; parameterized: `builtin/rainbow`) `[cmd/app/theme/select]`
+  - High Contrast (App) (`⊘`; parameterized: `builtin/highContrast`) `[cmd/app/theme/select]`
   - ---
   - *(Theme files and user themes, dynamic)*
-    - `<Theme Name>` [td] (`⊘`; parameterized: themeId) `[cmd/app/theme/select]`
+    - `<Theme Name>` (`⊘`; parameterized: themeId) `[cmd/app/theme/select]`
+  - ---
+  - Previous Theme (`Shift+F11`) `[cmd/app/theme/selectPrev]`
+  - Next Theme (`Shift+F12`) `[cmd/app/theme/selectNext]`
 - ---
 - Toggle Fullscreen (`Ctrl+Shift+F11`) `[cmd/app/fullScreen]`
-- Window Menu [td] (`Alt+Space`) `[cmd/pane/windowMenu]`
+- Window Menu (`Alt+Space`) `[cmd/pane/windowMenu]`
 - Switch Pane Focus (`Tab`) `[cmd/pane/switchPaneFocus]`
-- Pane > [td]
-  - Show Hidden Files (`⊘`; checkable) `[cmd/pane/viewOptions/toggleHiddenFiles]`
-  - Show System Files (`⊘`; checkable) `[cmd/pane/viewOptions/toggleSystemFiles]`
-  - Show File Extensions [td] (`⊘`; checkable) `[cmd/pane/viewOptions/toggleFileExtensions]`
-  - Show Thumbnails [td] (`⊘`; checkable) `[cmd/pane/viewOptions/toggleThumbnails]`
-  - Show Preview Pane [td] (`⊘`; checkable) `[cmd/pane/viewOptions/togglePreviewPane]`
-  - Show Filter Bar [td] (`⊘`; checkable) `[cmd/pane/viewOptions/toggleFilterBar]`
-  - ---
-  - Show Navigation Bar (Left) [td] (`⊘`; checkable, targets Left pane) `[cmd/pane/viewOptions/toggleNavigationBar]`
-  - Show Navigation Bar (Right) [td] (`⊘`; checkable, targets Right pane) `[cmd/pane/viewOptions/toggleNavigationBar]`
-  - ---
-  - Show Status Bar (Left) [td] (`⊘`; checkable, targets Left pane) `[cmd/pane/viewOptions/toggleStatusBar]`
-  - Show Status Bar (Right) [td] (`⊘`; checkable, targets Right pane) `[cmd/pane/viewOptions/toggleStatusBar]`
-- Show Function Bar [td] (`⊘`; checkable) `[cmd/app/toggleFunctionBar]`
-- Show Menu [td] (`⊘`; checkable) `[cmd/app/toggleMenuBar]`
+- Show Function Bar (`⊘`; checkable) `[cmd/app/toggleFunctionBar]`
+- Show Menu (`⊘`; checkable) `[cmd/app/toggleMenuBar]`
 - ---
 - Preferences… (`⊘`) `[cmd/app/preferences]`
 
@@ -447,6 +584,7 @@ Right menu is identical to Left menu, except:
 #### Help (right-justified)
 
 - Display Shortcuts… (`F1`) `[cmd/app/showShortcuts]`
+- External Help (`⊘`) `[cmd/app/externalHelp]`
 - ---
 - About… (`Alt+?`) `[cmd/app/about]`
 
@@ -455,6 +593,12 @@ Right menu is identical to Left menu, except:
 - The window includes a **Search** edit at the top.
 - Search is **case-insensitive** and filters rows by **command name**, **description**, or **shortcut text**.
 - Matching substrings are highlighted in the list.
+
+##### External Help (`cmd/app/externalHelp`)
+
+- Invoking the command MUST open the external RedSalamander documentation URL in the default browser:
+  `https://github.com/RedSalamanders/RedSalamander/tree/main/Docs#readme`
+- The command has no default keyboard shortcut.
 
 ### Command details (Implemented)
 
@@ -476,11 +620,51 @@ Right menu is identical to Left menu, except:
 - Invoking the command MUST toggle `folders.showSystemFiles` (see `Specs/Core/Core_SettingsStore.md`).
 - Default is `true` (shown).
 
+#### Toggle Status Bar (`cmd/pane/viewOptions/toggleStatusBar`)
+
+- Invoking the generic command MUST toggle the active pane's status bar.
+- Explicit `Left` and `Right` menu entries MUST target their named pane.
+- Menu checks MUST refresh after the command changes visibility.
+
 #### Toggle Fullscreen (`cmd/app/fullScreen`)
 
 - Invoking the command MUST toggle borderless fullscreen for the main window (hide title bar, cover the current monitor including taskbar).
 - While fullscreen is active, pressing `Esc` MUST exit fullscreen.
 - Invoking the command again MUST exit fullscreen.
+
+#### Theme Selection (`cmd/app/theme/select`, `cmd/app/theme/selectNext`, `cmd/app/theme/selectPrev`)
+
+- `cmd/app/theme/select` MUST apply the requested built-in, file, or user theme and update the checked item in the Theme menu.
+- `cmd/app/theme/selectNext` and `cmd/app/theme/selectPrev` MUST cycle through selectable themes in the same order shown by the Theme menu.
+- The cycle order MUST be: System, Light, Dark, Rainbow, High Contrast (App), theme files sorted by name/id, then user settings themes sorted by name/id.
+- Cycling MUST wrap at either end and MUST skip the High Contrast (System) read-only indicator.
+
+#### External Action Macros
+
+Settings-driven external viewer/editor/user-menu launch strings MUST support these macro tokens:
+
+| Macro | Expands to |
+| --- | --- |
+| `{Path}` | Current item parent path, or the explicitly supplied current directory. |
+| `{FullPath}` | Current item full path, including filename. |
+| `{PathAndFilename}` | Alias for `{FullPath}`. |
+| `{Filename}` | Current item filename only. |
+| `{SelectedPathsFile}` | Temporary file containing selected item paths, when supplied by the command. |
+| `{OppositePanePath}` | Opposite pane current path. |
+| `{ComputerName}` | Current computer name used for settings filters. |
+
+- Literal braces MUST be escaped as `{{` and `}}`.
+- Unknown macros, unclosed macros, and required macros with missing context MUST fail validation before any process is launched.
+- The launch-plan builder MUST be deterministic and testable without starting a process.
+
+#### Viewer and Editor Commands
+
+- `cmd/pane/view` and `cmd/pane/edit` MUST target the focused item in the active pane and resolve the primary action from `fileActions.viewers.associations` or `fileActions.editors.associations`.
+- `cmd/pane/alternateView` and `cmd/pane/alternateEdit` MUST resolve the alternate action from `fileActions`. If no applicable alternate action exists, the command MUST show a localized pane alert instead of opening the primary action or doing nothing.
+- `cmd/pane/viewWith` and `cmd/pane/editWith` MUST populate their dynamic menus from applicable configured actions for the focused item. Parameterized forms (`cmd/pane/viewWith/<viewerId>` and `cmd/pane/editWith/<editorId>`) MUST launch the matching configured action directly.
+- External viewer/editor actions MUST use the macro contract above, including creating and later cleaning up `{SelectedPathsFile}` only when the launch string requests it.
+- Disabled, filtered, missing, invalid-id, macro-validation, and process-launch failures MUST report precise localized feedback with enough context for the user to fix the action.
+- `cmd/pane/editNew` MUST create a new file in the active pane's current directory after validating the requested filename. Its Editor combo MUST be filtered from `editNewActionId` associations by extension/pattern/default row, current computer, action applicability, and executable availability; creating the file is allowed even when no applicable editor is available.
 
 #### View Width (`cmd/app/viewWidth`)
 
@@ -491,11 +675,32 @@ Right menu is identical to Left menu, except:
   - `Esc` MUST cancel and restore the splitter ratio captured when the mode started.
 - Invoking the command again while active MUST commit (same as `Enter`).
 
-#### Calculate Directory Sizes (`cmd/pane/calculateDirectorySizes`)
+#### Windows Shell Actions
 
-- Invoking the command MUST open Space Viewer for the target pane’s **current folder**.
-- The selected/current item MUST NOT change the target; the current folder is always used.
-- If Space Viewer cannot be opened, the command MUST show a localized error and MUST do nothing else.
+- `cmd/pane/contextMenuCurrentDirectory` MUST open the Windows shell context menu for the active pane's current local folder.
+- `cmd/pane/openSecurity` MUST open the Windows Security property page for the active pane's focused local item.
+- These commands MUST only run against the built-in Windows file-system provider. If the active pane is a remote/plugin provider, or if the required local folder/item cannot be resolved, the command MUST show localized pane feedback and MUST NOT fall through to the generic "not implemented" message.
+- Shell COM and menu resources MUST be owned by RAII wrappers. The context-menu command MUST treat a canceled popup as normal control flow.
+- Deterministic command selftests MUST cover command routing with a shell-action probe and archive `shell.context_menu_current_directory_us` / `shell.open_security_us` timing metrics.
+
+#### Change Attributes (`cmd/pane/changeAttributes`)
+
+- The command MUST target the selected items in the active pane, or the focused item when no selection is present.
+- It MUST show a tri-state dialog for read-only, hidden, system, and archive attributes. Checked sets an attribute, clear removes it, and mixed leaves it unchanged. Repeated keyboard or pointer activation MUST cycle each editable attribute through set, clear, and leave-unchanged so the user can return to "no changes" without closing the dialog.
+- It MUST include a Change Date and Time section with opt-in rows for Modified, Created, and Accessed timestamps. Editing a row's date or time MUST automatically enable that row; unchecked rows MUST leave the corresponding timestamp unchanged. Invalid enabled date/time input MUST keep the dialog open.
+- It MUST include an Include subdirectories option. The option MUST be visible but disabled when the selection contains no folders, and enabled when at least one selected/focused target is a folder.
+- It MUST include an option to remove alternate data streams from the targeted selection when the active file-system provider exposes removable named streams.
+- It MUST apply attribute changes, timestamp changes, and stream removal per item, refresh the pane when anything changed, and show a localized operation report with processed items, changed attribute count, changed date/time count, removed stream count, failure count, and first failure HRESULT when failures occur.
+- When Include subdirectories is enabled, the command MUST run as a File Operations informational task. The task MUST show enumeration/apply status, including the current path and item counts, and MUST finish with the same localized summary shown by the pane feedback overlay.
+- Recursive Change Attributes MUST include each selected folder itself and its descendants. It MUST enumerate descendants through the active provider's directory API and MUST NOT follow child directories marked as reparse points, so mount points and other link-like folders are changed only as selected items and are not traversed.
+- Unsupported providers, empty selections, canceled dialogs, and no-op dialogs MUST report or return without falling through to the generic "not implemented" message.
+- Deterministic command selftests MUST cover selected-item scope, attribute set/clear/leave-unchanged cycling, date/time rows, Include subdirectories enablement, recursive date/time application with File Operations progress, alternate data stream removal, report contents, and archived `fileattrs.*` timing metrics.
+
+#### Calculate Occupied Space (`cmd/pane/viewSpace`)
+
+- Invoking the command MUST open Space Viewer for the target pane.
+- If exactly one selected item is a directory, that directory is the Space Viewer target.
+- Otherwise, the target pane’s current folder is the Space Viewer target.
 
 #### Find Files and Directories (`cmd/pane/find`)
 
@@ -648,15 +853,15 @@ All Function Bar bindings MUST be configurable in settings.
 | F1   | Shortcuts       | ⊘                        | Open Left Drive Menu        | ⊘                    | ⊘                                | ⊘                                         |
 | F2   | Rename          | Sort None                | Open Right Drive Menu       | ⊘                    | ⊘                                | ⊘                                         |
 | F3   | View            | Sort by Name             | Alternate View              | Open Current Folder  | View Width                       | ⊘                                         |
-| F4   | Edit            | Sort by Extension        | Exit                        | Edit New             | Edit Width                       | ⊘                                         |
+| F4   | Edit            | Sort by Extension        | Exit                        | Edit New             | Alternate Edit                   | ⊘                                         |
 | F5   | Copy            | Sort by Time             | Pack                        | ⊘                    | Save Selection                   | ⊘                                         |
 | F6   | Move            | Sort by Size             | Unpack                      | ⊘                    | Restore Selection                | ⊘                                         |
 | F7   | Make Directory  | Change Case              | Find                        | Change Directory     | ⊘                                | ⊘                                         |
 | F8   | Delete          | Change Attributes        | ⊘                           | Permanent Delete     | ⊘                                | ⊘                                         |
 | F9   | User Menu       | Refresh                  | Unpack                      | Hot Paths            | Shares                           | ⊘                                         |
-| F10  | Menu            | Compare                  | Space View                  | Context Menu         | Calculate Directory Sizes        | Context Menu (Current Directory)          |
-| F11  | Connect         | Zoom Panel               | List of Opened Files        | ⊘                    | Full Screen                      | ⊘                                         |
-| F12  | Disconnect      | Filter                   | Show Folders History        | ⊘                    | ⊘                                | ⊘                                         |
+| F10  | Menu            | Compare                  | Space View                  | Context Menu         | ⊘                                | Context Menu (Current Directory)          |
+| F11  | Connect         | Zoom Panel               | List of Opened Files        | Previous Theme       | Full Screen                      | ⊘                                         |
+| F12  | Disconnect      | Filter                   | Show Folders History        | Next Theme           | ⊘                                | ⊘                                         |
 
 ### FolderView Configurable Shortcuts (Non-Function Bar)
 
@@ -691,12 +896,13 @@ This means any key listed as a valid `vk` in `Specs/Core/Core_SettingsStore.md` 
 | 2         | ⊘                                  | ⊘                                | Display as Brief         | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | 3         | ⊘                                  | ⊘                                | Display as Detailed      | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | 4         | ⊘                                  | ⊘                                | Display as Extra Detailed | ⊘                                 | ⊘                                 | ⊘                 | ⊘                     |
+| 5         | ⊘                                  | ⊘                                | Display as Thumbnails    | ⊘                                  | ⊘                                 | ⊘                 | ⊘                     |
 | 0..9      | ⊘                                  | Go to Hot Path (`Ctrl+<digit>`)  | ⊘                        | ⊘                                  | Set Hot Path (`Ctrl+Shift+<digit>`) | ⊘               | ⊘                     |
 | A..Z      | ⊘                                  | ⊘                                | ⊘                        | Go to Drive Root (`<drive>:\\`)    | ⊘                                 | ⊘                 | ⊘                     |
 | Enter     | Execute / Open                     | Bring Filename to Command Line   | Open Properties          | ⊘                                  | Bring Filename to Command Line    | ⊘                 | ⊘                     |
-| Space     | Select + Calc Dir Size + Next      | Bring Current Dir to Command Line | Window Menu              | Quick Search / Command Line Input  | Bring Current Dir to Command Line | ⊘                 | ⊘                     |
+| Space     | Select + Calc Dir Size + Next      | Bring Current Dir to Command Line | Window Menu              | Quick Search                       | Bring Current Dir to Command Line | ⊘                 | ⊘                     |
 | Insert    | Select + Next                      | Clipboard Copy                   | Copy Path + Name as Text | Clipboard Paste                    | Copy UNC Path + Name as Text      | Copy Path as Text | Copy Name as Text     |
-| Delete    | Move to Recycle Bin                | ⊘                                | ⊘                        | Permanent Delete (With Validation) | Permanent Delete (With Validation) | ⊘                 | ⊘                     |
+| Delete    | Move to Recycle Bin                | ⊘                                | ⊘                        | Permanent Delete                    | Permanent Delete                    | ⊘                 | ⊘                     |
 
 Notes:
 - Unmodified digit keys (`0`-`9`) and unmodified letter keys are unbound by default so they can be used for incremental search typing; Hot Paths use `Ctrl+<digit>` / `Ctrl+Shift+<digit>` and do not interfere with typing.
@@ -740,7 +946,7 @@ Notes:
 - `Enter`: open `Current item`
 - `Backspace`: go to parent folder. When you are on a mount file system root, go to the parent folder of the mount point.
 - `Delete`: delete `Selected items` (or `Current item` when selection is empty)
-- `Shift + Delete`: do a permanent delete `Selected items` (or `Current item` when selection is empty) without going to recycle bin(user confirmation needed)
+- `Shift + Delete`: ask for confirmation, then permanently delete `Selected items` (or `Current item` when selection is empty) without using the Recycle Bin.
 - `F2`: rename `Current item`
 - `Tab` / `Shift+Tab`: move focus   between Pane `FolderView`s (no longer enters NavigationView)
 - `Alt+D` / `Ctrl+L`: focus NavigationView address edit

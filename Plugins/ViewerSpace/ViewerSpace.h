@@ -269,6 +269,7 @@ private:
     ViewerTheme _theme{};
     bool _hasTheme        = false;
     bool _allowEraseBkgnd = true;
+    bool _embeddedMode    = false;
 
     wil::unique_hwnd _hWnd;
     wil::unique_hmenu _menuHandle;

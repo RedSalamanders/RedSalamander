@@ -313,11 +313,11 @@ STRINGTABLE
 BEGIN
     IDS_VIEWERTEXT_NAME "Text Viewer"
     IDS_VIEWERTEXT_DESCRIPTION "Built-in viewer for text files (with hex mode)."
-    IDS_VIEWERTEXT_TITLE_FORMAT "{} - Viewer"
-    IDS_VIEWERTEXT_STATUS_FORMAT "Encoding: {}    Size: {}"
-    IDS_VIEWERTEXT_STATUS_TEXT_FORMAT "FS: {}    Detected: {}    Active: {}    Size: {}    Lines: {:L}-{:L} of {}"
-    IDS_VIEWERTEXT_STATUS_HEX_FORMAT "FS: {}    Detected: {}    Active: {}    Size: {}    Offsets: {}-{}"
-    IDS_VIEWERTEXT_STATUS_WITH_MESSAGE_FORMAT "{}    {}"
+    IDS_VIEWERTEXT_TITLE_FORMAT "{0} - Viewer"
+    IDS_VIEWERTEXT_STATUS_FORMAT "Encoding: {0}    Size: {1}"
+    IDS_VIEWERTEXT_STATUS_TEXT_FORMAT "FS: {0}    Detected: {1}    Active: {2}    Size: {3}    Lines: {4:L}-{5:L} of {6}"
+    IDS_VIEWERTEXT_STATUS_HEX_FORMAT "FS: {0}    Detected: {1}    Active: {2}    Size: {3}    Offsets: {4}-{5}"
+    IDS_VIEWERTEXT_STATUS_WITH_MESSAGE_FORMAT "{0}    {1}"
     IDS_VIEWERTEXT_UNKNOWN "unknown"
 
     IDS_VIEWERTEXT_CAPTION_ERROR "Viewer"
@@ -361,7 +361,7 @@ IDS_VIEWERTEXT_MODE_RAW "RAW"
     IDS_VIEWERTEXT_ENCODING_UTF32BE "UTF-32 BE"
     IDS_VIEWERTEXT_ENCODING_UNKNOWN "Unknown"
 
-    IDS_VIEWERTEXT_CODEPAGE_FORMAT "CP{}"
+    IDS_VIEWERTEXT_CODEPAGE_FORMAT "CP{0}"
     IDS_VIEWERTEXT_DETECTED_SUFFIX_BOM " (BOM)"
     IDS_VIEWERTEXT_DETECTED_SUFFIX_GUESS " (guess)"
 

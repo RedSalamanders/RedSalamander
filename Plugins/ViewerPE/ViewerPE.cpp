@@ -935,7 +935,10 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
             _currentPath = _otherFiles[_otherIndex];
             StartAsyncParse(hwnd, _fileSystem, _currentPath);
             UpdateMenuState(hwnd);
-            SetFocus(hwnd);
+            if (! _embeddedMode)
+            {
+                SetFocus(hwnd);
+            }
         });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
@@ -952,7 +955,10 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
         static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
-    ApplyTitleBarTheme(true);
+    if (! _embeddedMode)
+    {
+        ApplyTitleBarTheme(true);
+    }
     RefreshFileCombo(hwnd);
     Layout(hwnd);
 }
@@ -1406,7 +1412,10 @@ void ViewerPE::CommandRefresh(HWND hwnd) noexcept
 
     StartAsyncParse(hwnd, _fileSystem, _currentPath);
     UpdateMenuState(hwnd);
-    SetFocus(hwnd);
+    if (! _embeddedMode)
+    {
+        SetFocus(hwnd);
+    }
 }
 
 void ViewerPE::CommandOtherNext(HWND hwnd) noexcept
@@ -1422,7 +1431,10 @@ void ViewerPE::CommandOtherNext(HWND hwnd) noexcept
     SyncFileComboSelection();
     StartAsyncParse(hwnd, _fileSystem, _currentPath);
     UpdateMenuState(hwnd);
-    SetFocus(hwnd);
+    if (! _embeddedMode)
+    {
+        SetFocus(hwnd);
+    }
 }
 
 void ViewerPE::CommandOtherPrevious(HWND hwnd) noexcept
@@ -1446,7 +1458,10 @@ void ViewerPE::CommandOtherPrevious(HWND hwnd) noexcept
     SyncFileComboSelection();
     StartAsyncParse(hwnd, _fileSystem, _currentPath);
     UpdateMenuState(hwnd);
-    SetFocus(hwnd);
+    if (! _embeddedMode)
+    {
+        SetFocus(hwnd);
+    }
 }
 
 void ViewerPE::CommandOtherFirst(HWND hwnd) noexcept
@@ -1462,7 +1477,10 @@ void ViewerPE::CommandOtherFirst(HWND hwnd) noexcept
     SyncFileComboSelection();
     StartAsyncParse(hwnd, _fileSystem, _currentPath);
     UpdateMenuState(hwnd);
-    SetFocus(hwnd);
+    if (! _embeddedMode)
+    {
+        SetFocus(hwnd);
+    }
 }
 
 void ViewerPE::CommandOtherLast(HWND hwnd) noexcept
@@ -1478,7 +1496,10 @@ void ViewerPE::CommandOtherLast(HWND hwnd) noexcept
     SyncFileComboSelection();
     StartAsyncParse(hwnd, _fileSystem, _currentPath);
     UpdateMenuState(hwnd);
-    SetFocus(hwnd);
+    if (! _embeddedMode)
+    {
+        SetFocus(hwnd);
+    }
 }
 
 void ViewerPE::CommandExportText(HWND hwnd) noexcept
@@ -2736,71 +2757,99 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexc
     const std::filesystem::path focused(context->focusedPath);
     const std::wstring fileName = focused.filename().wstring();
 
+    const bool embeddedMode =
+        (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) == static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED);
+    HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
+    {
+        Debug::Error(L"ViewerPE: embedded Open requires a valid ownerWindow parent.");
+        return E_INVALIDARG;
+    }
+    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    {
+        static_cast<void>(Close());
+    }
+
     if (! _hWnd)
     {
         RECT ownerRect{};
-        if (context->ownerWindow && GetWindowRect(context->ownerWindow, &ownerRect) != 0)
+        int x = CW_USEDEFAULT;
+        int y = CW_USEDEFAULT;
+        int w = 900;
+        int h = 700;
+        if (embeddedMode)
         {
-            const int w = std::max(1, static_cast<int>(ownerRect.right - ownerRect.left));
-            const int h = std::max(1, static_cast<int>(ownerRect.bottom - ownerRect.top));
-
-            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERPE_MENU));
-            HWND window = CreateWindowExW(0,
-                                          kClassName,
-                                          L"",
-                                          WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_VSCROLL,
-                                          ownerRect.left,
-                                          ownerRect.top,
-                                          w,
-                                          h,
-                                          nullptr,
-                                          menu.get(),
-                                          g_hInstance,
-                                          this);
-            if (! window)
+            RECT client{};
+            if (GetClientRect(embeddedParent, &client) == 0)
             {
-                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerPE: CreateWindowExW failed.");
+                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerPE: GetClientRect failed for embedded preview parent.");
                 return HRESULT_FROM_WIN32(lastError);
             }
-
-            menu.release();
-            _hWnd.reset(window);
+            x = 0;
+            y = 0;
+            w = std::max(1L, client.right - client.left);
+            h = std::max(1L, client.bottom - client.top);
         }
-        else
+        else if (context->ownerWindow && GetWindowRect(context->ownerWindow, &ownerRect) != 0)
         {
-            wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERPE_MENU));
-            HWND window = CreateWindowExW(0,
-                                          kClassName,
-                                          L"",
-                                          WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_VSCROLL,
-                                          CW_USEDEFAULT,
-                                          CW_USEDEFAULT,
-                                          900,
-                                          700,
-                                          nullptr,
-                                          menu.get(),
-                                          g_hInstance,
-                                          this);
-            if (! window)
-            {
-                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerPE: CreateWindowExW failed.");
-                return HRESULT_FROM_WIN32(lastError);
-            }
-
-            menu.release();
-            _hWnd.reset(window);
+            x = static_cast<int>(ownerRect.left);
+            y = static_cast<int>(ownerRect.top);
+            w = std::max(1, static_cast<int>(ownerRect.right - ownerRect.left));
+            h = std::max(1, static_cast<int>(ownerRect.bottom - ownerRect.top));
         }
 
-        ApplyTitleBarTheme(true);
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(
+            embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERPE_MENU));
+        const DWORD style =
+            embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_VSCROLL) : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_VSCROLL);
+        HWND window = CreateWindowExW(0, kClassName, L"", style, x, y, w, h, embeddedMode ? embeddedParent : nullptr, menu.get(), g_hInstance, this);
+        if (! window)
+        {
+            const DWORD lastError = Debug::ErrorWithLastError(L"ViewerPE: CreateWindowExW failed.");
+            return HRESULT_FROM_WIN32(lastError);
+        }
+
+        if (! embeddedMode)
+        {
+            menu.release();
+        }
+        _hWnd.reset(window);
+        _embeddedMode = embeddedMode;
+
+        if (! embeddedMode)
+        {
+            ApplyTitleBarTheme(true);
+        }
 
         AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
+        if (! embeddedMode)
+        {
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
     else
     {
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        if (_embeddedMode)
+        {
+            RECT client{};
+            if (embeddedParent != nullptr && GetClientRect(embeddedParent, &client) != 0)
+            {
+                SetWindowPos(_hWnd.get(),
+                             nullptr,
+                             0,
+                             0,
+                             std::max(1L, client.right - client.left),
+                             std::max(1L, client.bottom - client.top),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            ShowWindow(_hWnd.get(), SW_SHOWNA);
+        }
+        else
+        {
+            ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
 
     _fileSystem = context->fileSystem;
@@ -2861,6 +2910,7 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Close() noexcept
     AddRef();
     const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
+    _embeddedMode = false;
     return S_OK;
 }
 

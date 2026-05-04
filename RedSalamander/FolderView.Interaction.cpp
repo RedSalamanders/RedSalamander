@@ -5,6 +5,20 @@
 #include <cwctype>
 #include <limits>
 
+namespace
+{
+[[nodiscard]] uint64_t QuickSearchPerfElapsedUs(const std::chrono::steady_clock::time_point& start) noexcept
+{
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(elapsed).count());
+}
+
+void EmitQuickSearchDuration(std::wstring_view name, const std::chrono::steady_clock::time_point& start, uint64_t value0 = 0, uint64_t value1 = 0) noexcept
+{
+    Debug::Perf::Emit(name, L"", QuickSearchPerfElapsedUs(start), value0, value1, S_OK);
+}
+} // namespace
+
 void FolderView::OnMouseWheelMessage(UINT keyState, int delta)
 {
     const bool horizontal = (keyState & MK_SHIFT) != 0;
@@ -929,6 +943,13 @@ void FolderView::OnCharMessage(wchar_t character)
         return;
     }
 
+    const auto quickSearchStart = std::chrono::steady_clock::now();
+    auto emitQuickSearchPerf    = wil::scope_exit([&]() noexcept
+    {
+        EmitQuickSearchDuration(
+            L"quicksearch.update_us", quickSearchStart, static_cast<uint64_t>(_items.size()), static_cast<uint64_t>(_incrementalSearch.query.size()));
+    });
+
     if (! _incrementalSearch.active)
     {
         _incrementalSearch.active = true;
@@ -1074,6 +1095,13 @@ void FolderView::HandleIncrementalSearchBackspace()
         return;
     }
 
+    const auto quickSearchStart = std::chrono::steady_clock::now();
+    auto emitQuickSearchPerf    = wil::scope_exit([&]() noexcept
+    {
+        EmitQuickSearchDuration(
+            L"quicksearch.update_us", quickSearchStart, static_cast<uint64_t>(_items.size()), static_cast<uint64_t>(_incrementalSearch.query.size()));
+    });
+
     if (! _incrementalSearch.query.empty())
     {
         _incrementalSearch.query.pop_back();
@@ -1134,6 +1162,10 @@ void FolderView::HandleIncrementalSearchNavigate(bool forward)
         return;
     }
 
+    const auto quickSearchStart = std::chrono::steady_clock::now();
+    auto emitQuickSearchPerf    = wil::scope_exit([&]() noexcept
+    { EmitQuickSearchDuration(L"quicksearch.navigate_us", quickSearchStart, static_cast<uint64_t>(_items.size()), forward ? 1u : 0u); });
+
     const auto invalidIndex = static_cast<size_t>(-1);
     const bool hasFocus     = _focusedIndex != invalidIndex && _focusedIndex < _items.size();
 
@@ -1149,14 +1181,6 @@ void FolderView::HandleIncrementalSearchNavigate(bool forward)
     else
     {
         startIndex = (_focusedIndex + _items.size() - 1) % _items.size();
-    }
-
-    const std::optional<size_t> prefixMatchIndex = FindNextIncrementalSearchPrefixMatch(startIndex, forward);
-    if (prefixMatchIndex.has_value())
-    {
-        FocusItem(prefixMatchIndex.value(), true);
-        _anchorIndex = prefixMatchIndex.value();
-        return;
     }
 
     const size_t itemCount = _items.size();
@@ -1181,6 +1205,23 @@ void FolderView::HandleIncrementalSearchNavigate(bool forward)
         _anchorIndex = index;
         return;
     }
+}
+
+void FolderView::ActivateIncrementalSearch()
+{
+    const auto quickSearchStart = std::chrono::steady_clock::now();
+
+    _incrementalSearch.active = true;
+    _incrementalSearch.query.clear();
+    ClearIncrementalSearchHighlight();
+    NotifyIncrementalSearchChanged();
+    UpdateIncrementalSearchIndicatorState(GetTickCount64(), true, _incrementalSearch.query);
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+
+    EmitQuickSearchDuration(L"quicksearch.activate_us", quickSearchStart, static_cast<uint64_t>(_items.size()));
 }
 
 void FolderView::UpdateIncrementalSearchHighlightForFocusedItem()
@@ -1372,3 +1413,58 @@ std::optional<size_t> FolderView::FindNextIncrementalSearchPrefixMatch(size_t st
 
     return FolderViewIncrementalSearch::FindNextPrefixMatchIndex(_items.size(), startIndex, forward, displayNameAt, _incrementalSearch.query);
 }
+
+#ifdef ENABLE_TESTS
+bool FolderView::DebugGetIncrementalSearchSnapshot(IncrementalSearchDebugSnapshot& out) const noexcept
+{
+    out = {};
+    out.active = _incrementalSearch.active;
+    out.query  = _incrementalSearch.query;
+
+    const auto invalidIndex = static_cast<size_t>(-1);
+    if (_focusedIndex != invalidIndex && _focusedIndex < _items.size())
+    {
+        out.focusedDisplayName.assign(_items[_focusedIndex].displayName);
+    }
+
+    if (! _incrementalSearch.active || _incrementalSearch.query.empty())
+    {
+        return true;
+    }
+
+    if (_incrementalSearch.query.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+    {
+        return true;
+    }
+
+    const UINT32 queryLength = static_cast<UINT32>(_incrementalSearch.query.size());
+    for (const FolderItem& item : _items)
+    {
+        const std::optional<UINT32> matchOffset = FindIncrementalSearchMatchOffset(item.displayName);
+        if (! matchOffset.has_value())
+        {
+            continue;
+        }
+
+        if (item.displayName.size() > static_cast<size_t>(std::numeric_limits<UINT32>::max()))
+        {
+            continue;
+        }
+
+        const UINT32 textLength = static_cast<UINT32>(item.displayName.size());
+        if (matchOffset.value() >= textLength)
+        {
+            continue;
+        }
+
+        IncrementalSearchDebugMatch match{};
+        match.displayName.assign(item.displayName);
+        match.range.startPosition = matchOffset.value();
+        match.range.length        = std::min(queryLength, textLength - match.range.startPosition);
+        match.startsWith          = FolderViewIncrementalSearch::StartsWithNoCase(item.displayName, _incrementalSearch.query);
+        out.matches.push_back(std::move(match));
+    }
+
+    return true;
+}
+#endif

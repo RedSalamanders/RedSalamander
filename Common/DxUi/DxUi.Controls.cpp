@@ -4800,6 +4800,26 @@ bool ScrollPanel::OnMouseDown(WindowHost& host, D2D1_POINT_2F point, bool rightB
     return false;
 }
 
+bool ScrollPanel::OnMouseDoubleClick(WindowHost& host, D2D1_POINT_2F point, bool rightButton, UINT modifiers)
+{
+    if (rightButton)
+    {
+        return false;
+    }
+
+    const D2D1_RECT_F viewport = GetViewportRect();
+    if (PointInRect(viewport, point))
+    {
+        const D2D1_POINT_2F contentPoint = ToContentSpace(point);
+        if (Control* child = FindChildAtContent(contentPoint))
+        {
+            return child->OnMouseDoubleClick(host, contentPoint, rightButton, modifiers);
+        }
+    }
+
+    return false;
+}
+
 bool ScrollPanel::OnMouseMove(WindowHost& host, D2D1_POINT_2F point, UINT modifiers)
 {
     if (_dragThumb)

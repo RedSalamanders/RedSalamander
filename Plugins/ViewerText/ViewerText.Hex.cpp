@@ -2711,7 +2711,10 @@ void ViewerText::OnHexMouseDown(HWND hwnd, int x, int y) noexcept
             CycleHexTextMode();
         }
 
-        SetFocus(hwnd);
+        if (! _embeddedMode)
+        {
+            SetFocus(hwnd);
+        }
         return;
     }
 
@@ -2775,7 +2778,10 @@ void ViewerText::OnHexMouseDown(HWND hwnd, int x, int y) noexcept
     _hexSelecting      = true;
     SetCapture(hwnd);
 
-    SetFocus(hwnd);
+    if (! _embeddedMode)
+    {
+        SetFocus(hwnd);
+    }
     InvalidateRect(hwnd, nullptr, TRUE);
     if (_hWnd)
     {

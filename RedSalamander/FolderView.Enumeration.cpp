@@ -236,7 +236,9 @@ void FolderView::StopEnumerationThread() noexcept
         std::lock_guard guard(_enumerationMutex);
         _pendingEnumerationPath.reset();
         _iconLoadQueue.clear();
+        _thumbnailLoadQueue.clear();
         _iconLoadingActive.store(false, std::memory_order_release);
+        _thumbnailLoadingActive.store(false, std::memory_order_release);
     }
     _enumerationCv.notify_all();
     _enumerationThread        = std::jthread{};
@@ -265,7 +267,8 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
         {
             std::unique_lock lock(_enumerationMutex);
             _enumerationCv.wait(lock, [&]() {
-                return stopToken.stop_requested() || _pendingEnumerationPath.has_value() || _iconLoadingActive.load(std::memory_order_acquire);
+                return stopToken.stop_requested() || _pendingEnumerationPath.has_value() || _iconLoadingActive.load(std::memory_order_acquire) ||
+                       _thumbnailLoadingActive.load(std::memory_order_acquire);
             });
 
             if (stopToken.stop_requested())
@@ -301,6 +304,12 @@ void FolderView::EnumerationWorker(std::stop_token stopToken)
         if (iconActive)
         {
             ProcessIconLoadQueue();
+        }
+
+        const bool thumbnailActive = _thumbnailLoadingActive.load(std::memory_order_acquire);
+        if (thumbnailActive)
+        {
+            ProcessThumbnailLoadQueue();
         }
     }
 }
@@ -892,7 +901,9 @@ void FolderView::CancelPendingEnumeration()
         std::lock_guard guard(_enumerationMutex);
         _pendingEnumerationPath.reset();
         _iconLoadQueue.clear();
+        _thumbnailLoadQueue.clear();
         _iconLoadingActive.store(false, std::memory_order_release);
+        _thumbnailLoadingActive.store(false, std::memory_order_release);
     }
     _enumerationCv.notify_one();
 
@@ -1665,7 +1676,10 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     }
     _itemMetricsCached = false;
 
-    if (_detailsTextProvider && (_displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed))
+    const bool includeDetailsLine  = _displayMode == DisplayMode::Detailed || _displayMode == DisplayMode::ExtraDetailed ||
+                                    _displayMode == DisplayMode::Thumbnails;
+    const bool includeMetadataLine = _displayMode == DisplayMode::ExtraDetailed || _displayMode == DisplayMode::Thumbnails;
+    if (_detailsTextProvider && includeDetailsLine)
     {
         for (auto& item : _items)
         {
@@ -1685,7 +1699,7 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
         }
     }
 
-    if (_metadataTextProvider && _displayMode == DisplayMode::ExtraDetailed)
+    if (_metadataTextProvider && includeMetadataLine)
     {
         for (auto& item : _items)
         {
@@ -1726,6 +1740,10 @@ void FolderView::ProcessEnumerationResult(std::unique_ptr<EnumerationPayload> pa
     // Queue icon loading after layout - only for items without D2D bitmaps
     Debug::Info(L"FolderView: About to queue icons for {} items", _items.size());
     QueueIconLoading();
+    if (_thumbnailsVisible)
+    {
+        QueueThumbnailLoading();
+    }
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(L"FolderView::ProcessEnumerationResult: after QueueIconLoading");
 #endif

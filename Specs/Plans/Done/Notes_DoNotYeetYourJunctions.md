@@ -245,7 +245,7 @@ Self-test additions in `RedSalamander/FolderWindow.FileOperations.SelfTest.cpp`:
     - Bridge copy (`copyReparse`) test verifies unsupported flow reaches conflict prompt, classifies into `UnsupportedReparse`, and can be skipped to partial.
     - Delete test verifies deleting tree containing junction removes link but preserves junction target.
   - `RedSalamander/FolderWindow.FileOperations.SelfTest.cpp`: `Phase9_ConflictPrompt_OverwriteAutoCap` validates overwrite retry cap behavior.
-  - `RedSalamander/FolderWindow.FileOperations.SelfTest.cpp`: `Phase10_PermanentDeleteWithValidation` now additionally validates:
+  - `RedSalamander/FolderWindow.FileOperations.SelfTest.cpp`: `Phase10_PermanentDelete` now additionally validates:
     - local + dummy file-root `GetDirectorySize` return `S_OK` with correct file-root counters,
     - recycle-bin locked-file delete fails with a specific non-generic HRESULT.
   - `RedSalamander/FolderWindow.FileOperations.SelfTest.cpp`: `Phase11_CrossFileSystemBridge` now validates timestamp metadata preservation on bridge copy.

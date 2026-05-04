@@ -4,9 +4,14 @@
 #include <limits>
 #include <optional>
 
+#include <shlwapi.h>
+#include <shobjidl.h>
+#include <winioctl.h>
+
 #include <yyjson.h>
 
 #pragma comment(lib, "Shell32.lib")
+#pragma comment(lib, "Shlwapi.lib")
 #pragma comment(lib, "Netapi32.lib")
 
 namespace
@@ -195,6 +200,361 @@ HRESULT EnumerateNamedStreams(const wchar_t* path, std::vector<NamedStreamInfo>&
             return (lastError == ERROR_HANDLE_EOF) ? S_OK : HRESULT_FROM_WIN32(lastError != 0 ? lastError : ERROR_GEN_FAILURE);
         }
     }
+}
+
+struct ItemPropertiesLinkTargetInfo final
+{
+    const char* sectionTitle = nullptr;
+    std::string kind;
+    std::wstring url;
+    std::wstring target;
+};
+
+struct MountPointReparseDataBufferForProperties final
+{
+    ULONG ReparseTag = IO_REPARSE_TAG_MOUNT_POINT;
+    USHORT ReparseDataLength = 0;
+    USHORT Reserved = 0;
+    USHORT SubstituteNameOffset = 0;
+    USHORT SubstituteNameLength = 0;
+    USHORT PrintNameOffset = 0;
+    USHORT PrintNameLength = 0;
+    wchar_t PathBuffer[1]{};
+};
+
+struct SymbolicLinkReparseDataBufferForProperties final
+{
+    ULONG ReparseTag = IO_REPARSE_TAG_SYMLINK;
+    USHORT ReparseDataLength = 0;
+    USHORT Reserved = 0;
+    USHORT SubstituteNameOffset = 0;
+    USHORT SubstituteNameLength = 0;
+    USHORT PrintNameOffset = 0;
+    USHORT PrintNameLength = 0;
+    ULONG Flags = 0;
+    wchar_t PathBuffer[1]{};
+};
+
+[[nodiscard]] std::wstring TrimShortcutValueForProperties(std::wstring_view value)
+{
+    while (! value.empty() && (value.front() == L' ' || value.front() == L'\t' || value.front() == L'\r' || value.front() == L'\n'))
+    {
+        value.remove_prefix(1);
+    }
+    while (! value.empty() && (value.back() == L' ' || value.back() == L'\t' || value.back() == L'\r' || value.back() == L'\n'))
+    {
+        value.remove_suffix(1);
+    }
+    return std::wstring(value);
+}
+
+[[nodiscard]] bool IsWindowsAbsolutePathTextForProperties(std::wstring_view text) noexcept
+{
+    if (text.size() >= 3 && std::iswalpha(static_cast<wint_t>(text[0])) != 0 && text[1] == L':' && (text[2] == L'\\' || text[2] == L'/'))
+    {
+        return true;
+    }
+
+    return text.size() >= 2 && ((text[0] == L'\\' && text[1] == L'\\') || (text[0] == L'/' && text[1] == L'/'));
+}
+
+[[nodiscard]] std::optional<std::wstring> ConvertFileUrlToLocalPathForProperties(std::wstring_view url) noexcept
+{
+    std::wstring urlText(url);
+    std::wstring pathText(32768, L'\0');
+    DWORD pathCharCount = static_cast<DWORD>(pathText.size());
+    const HRESULT hr    = PathCreateFromUrlW(urlText.c_str(), pathText.data(), &pathCharCount, 0);
+    if (FAILED(hr))
+    {
+        return std::nullopt;
+    }
+
+    const size_t terminator = pathText.find(L'\0');
+    if (terminator != std::wstring::npos)
+    {
+        pathText.resize(terminator);
+    }
+    else
+    {
+        pathText.resize(std::min<size_t>(pathCharCount, pathText.size()));
+    }
+
+    if (pathText.empty())
+    {
+        return std::nullopt;
+    }
+
+    return pathText;
+}
+
+[[nodiscard]] bool TryReadInternetShortcutUrlForProperties(const wchar_t* shortcutPath, std::wstring& outUrl) noexcept
+{
+    outUrl.clear();
+
+    std::wstring value(32768, L'\0');
+    const DWORD copied = GetPrivateProfileStringW(L"InternetShortcut", L"URL", L"", value.data(), static_cast<DWORD>(value.size()), shortcutPath);
+    if (copied == 0 || copied >= (value.size() - 1u))
+    {
+        return false;
+    }
+
+    value.resize(copied);
+    outUrl = TrimShortcutValueForProperties(value);
+    return ! outUrl.empty();
+}
+
+[[nodiscard]] std::optional<std::wstring> ResolveShellLinkTargetForProperties(const wchar_t* shortcutPath) noexcept
+{
+    const HRESULT coHr = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
+    const bool uninitialize = SUCCEEDED(coHr);
+    const auto coCleanup    = wil::scope_exit([&]
+    {
+        if (uninitialize)
+        {
+            CoUninitialize();
+        }
+    });
+    if (FAILED(coHr) && coHr != RPC_E_CHANGED_MODE)
+    {
+        return std::nullopt;
+    }
+
+    wil::com_ptr<IShellLinkW> shellLink;
+    HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(shellLink.put()));
+    if (FAILED(hr) || ! shellLink)
+    {
+        return std::nullopt;
+    }
+
+    wil::com_ptr<IPersistFile> persistFile;
+    hr = shellLink->QueryInterface(IID_PPV_ARGS(persistFile.put()));
+    if (FAILED(hr) || ! persistFile)
+    {
+        return std::nullopt;
+    }
+
+    hr = persistFile->Load(shortcutPath, STGM_READ);
+    if (FAILED(hr))
+    {
+        return std::nullopt;
+    }
+
+    WIN32_FIND_DATAW findData{};
+    std::wstring targetText(32768, L'\0');
+    hr = shellLink->GetPath(targetText.data(), static_cast<int>(targetText.size()), &findData, SLGP_UNCPRIORITY);
+    if (FAILED(hr))
+    {
+        return std::nullopt;
+    }
+
+    const size_t terminator = targetText.find(L'\0');
+    if (terminator != std::wstring::npos)
+    {
+        targetText.resize(terminator);
+    }
+
+    if (targetText.empty())
+    {
+        return std::nullopt;
+    }
+
+    return targetText;
+}
+
+[[nodiscard]] std::optional<std::wstring> ExtractReparsePathBufferStringForProperties(const wchar_t* pathBuffer,
+                                                                                      USHORT substituteNameOffset,
+                                                                                      USHORT substituteNameLength,
+                                                                                      size_t pathBufferBytes)
+{
+    if ((substituteNameOffset % sizeof(wchar_t)) != 0 || (substituteNameLength % sizeof(wchar_t)) != 0)
+    {
+        return std::nullopt;
+    }
+    if (static_cast<size_t>(substituteNameOffset) + static_cast<size_t>(substituteNameLength) > pathBufferBytes)
+    {
+        return std::nullopt;
+    }
+
+    const size_t charOffset = substituteNameOffset / sizeof(wchar_t);
+    const size_t charLength = substituteNameLength / sizeof(wchar_t);
+    if (charLength == 0)
+    {
+        return std::nullopt;
+    }
+
+    return std::wstring(pathBuffer + charOffset, charLength);
+}
+
+[[nodiscard]] std::wstring NormalizeReparseSubstituteNameForProperties(std::wstring_view substituteName)
+{
+    constexpr std::wstring_view kNtDosPrefix = L"\\??\\";
+    if (OrdinalString::StartsWithNoCase(substituteName, kNtDosPrefix))
+    {
+        const std::wstring_view tail = substituteName.substr(kNtDosPrefix.size());
+        if (OrdinalString::StartsWithNoCase(tail, L"UNC\\"))
+        {
+            return std::wstring(L"\\\\") + std::wstring(tail.substr(4));
+        }
+        if (OrdinalString::StartsWithNoCase(tail, L"Volume{"))
+        {
+            return std::wstring(L"\\\\?\\") + std::wstring(tail);
+        }
+        return std::wstring(tail);
+    }
+
+    constexpr std::wstring_view kMupPrefix = L"\\Device\\Mup\\";
+    if (OrdinalString::StartsWithNoCase(substituteName, kMupPrefix))
+    {
+        return std::wstring(L"\\\\") + std::wstring(substituteName.substr(kMupPrefix.size()));
+    }
+
+    return std::wstring(substituteName);
+}
+
+[[nodiscard]] std::optional<ItemPropertiesLinkTargetInfo> ResolveReparseTargetForProperties(const wchar_t* path) noexcept
+{
+    constexpr DWORD kReparseBufferSize = 16u * 1024u;
+    std::vector<std::byte> reparseBuffer(kReparseBufferSize);
+
+#pragma warning(push)
+#pragma warning(disable : 4625 4626) // WIL unique_hfile copy operations are intentionally deleted.
+    wil::unique_hfile reparseHandle(CreateFileW(path,
+                                                FILE_READ_ATTRIBUTES,
+                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                nullptr,
+                                                OPEN_EXISTING,
+                                                FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                                nullptr));
+#pragma warning(pop)
+    if (! reparseHandle)
+    {
+        return std::nullopt;
+    }
+
+    DWORD bytesReturned = 0;
+    if (DeviceIoControl(reparseHandle.get(),
+                        FSCTL_GET_REPARSE_POINT,
+                        nullptr,
+                        0,
+                        reparseBuffer.data(),
+                        static_cast<DWORD>(reparseBuffer.size()),
+                        &bytesReturned,
+                        nullptr) == FALSE)
+    {
+        return std::nullopt;
+    }
+
+    if (bytesReturned < offsetof(MountPointReparseDataBufferForProperties, PathBuffer))
+    {
+        return std::nullopt;
+    }
+
+    const auto* header = reinterpret_cast<const MountPointReparseDataBufferForProperties*>(reparseBuffer.data());
+    std::optional<std::wstring> substituteName;
+    ItemPropertiesLinkTargetInfo info{.sectionTitle = "Reparse Point"};
+
+    if (header->ReparseTag == IO_REPARSE_TAG_MOUNT_POINT)
+    {
+        const auto* mountPoint = reinterpret_cast<const MountPointReparseDataBufferForProperties*>(reparseBuffer.data());
+        const size_t pathBufferBytes =
+            mountPoint->ReparseDataLength >= (4u * sizeof(USHORT)) ? mountPoint->ReparseDataLength - (4u * sizeof(USHORT)) : 0u;
+        substituteName = ExtractReparsePathBufferStringForProperties(
+            mountPoint->PathBuffer, mountPoint->SubstituteNameOffset, mountPoint->SubstituteNameLength, pathBufferBytes);
+        info.kind = "Mount point";
+    }
+    else if (header->ReparseTag == IO_REPARSE_TAG_SYMLINK)
+    {
+        if (bytesReturned < offsetof(SymbolicLinkReparseDataBufferForProperties, PathBuffer))
+        {
+            return std::nullopt;
+        }
+
+        const auto* symlink = reinterpret_cast<const SymbolicLinkReparseDataBufferForProperties*>(reparseBuffer.data());
+        const size_t pathBufferBytes =
+            symlink->ReparseDataLength >= ((4u * sizeof(USHORT)) + sizeof(ULONG))
+                ? symlink->ReparseDataLength - ((4u * sizeof(USHORT)) + sizeof(ULONG))
+                : 0u;
+        substituteName =
+            ExtractReparsePathBufferStringForProperties(symlink->PathBuffer, symlink->SubstituteNameOffset, symlink->SubstituteNameLength, pathBufferBytes);
+        info.kind = "Symbolic link";
+    }
+    else
+    {
+        return std::nullopt;
+    }
+
+    if (! substituteName.has_value() || substituteName.value().empty())
+    {
+        return std::nullopt;
+    }
+
+    info.target = NormalizeReparseSubstituteNameForProperties(substituteName.value());
+    if (info.target.empty())
+    {
+        return std::nullopt;
+    }
+
+    return info;
+}
+
+[[nodiscard]] std::optional<ItemPropertiesLinkTargetInfo> TryBuildLinkTargetInfoForProperties(const wchar_t* path, DWORD attributes) noexcept
+{
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return std::nullopt;
+    }
+
+    const std::filesystem::path fsPath(path);
+    const std::wstring extension = fsPath.extension().wstring();
+    if (OrdinalString::EqualsNoCase(extension, L".lnk"))
+    {
+        Debug::Perf::Scope perf(L"itemprops.link_target_us");
+        perf.SetDetail(L"shortcut");
+
+        std::optional<std::wstring> target = ResolveShellLinkTargetForProperties(path);
+        if (! target.has_value())
+        {
+            return std::nullopt;
+        }
+
+        return ItemPropertiesLinkTargetInfo{.sectionTitle = "Shortcut", .target = std::move(target.value())};
+    }
+
+    if (OrdinalString::EqualsNoCase(extension, L".url"))
+    {
+        Debug::Perf::Scope perf(L"itemprops.link_target_us");
+        perf.SetDetail(L"internet-shortcut");
+
+        std::wstring url;
+        if (! TryReadInternetShortcutUrlForProperties(path, url))
+        {
+            return std::nullopt;
+        }
+
+        ItemPropertiesLinkTargetInfo info{.sectionTitle = "Internet Shortcut", .url = url};
+        if (OrdinalString::StartsWithNoCase(url, L"file:"))
+        {
+            if (std::optional<std::wstring> target = ConvertFileUrlToLocalPathForProperties(url); target.has_value())
+            {
+                info.target = std::move(target.value());
+            }
+        }
+        else if (IsWindowsAbsolutePathTextForProperties(url))
+        {
+            info.target = url;
+        }
+
+        return info;
+    }
+
+    if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+    {
+        Debug::Perf::Scope perf(L"itemprops.link_target_us");
+        perf.SetDetail(L"reparse");
+        return ResolveReparseTargetForProperties(path);
+    }
+
+    return std::nullopt;
 }
 
 [[nodiscard]] std::wstring BuildAlternateStreamPath(const wchar_t* path, std::wstring_view streamName)
@@ -1109,6 +1469,24 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetItemProperties(const wchar_t* path, con
     yyjson_mut_val* attributeFields = addSection("Attributes");
     addField(attributeFields, "Raw", std::format("0x{:08X}", data.dwFileAttributes));
     addField(attributeFields, "Flags", FormatFileAttributeFlags(data.dwFileAttributes));
+
+    if (std::optional<ItemPropertiesLinkTargetInfo> targetInfo = TryBuildLinkTargetInfoForProperties(path, data.dwFileAttributes);
+        targetInfo.has_value() && targetInfo->sectionTitle != nullptr)
+    {
+        yyjson_mut_val* targetFields = addSection(targetInfo->sectionTitle);
+        if (! targetInfo->kind.empty())
+        {
+            addField(targetFields, "Kind", targetInfo->kind);
+        }
+        if (! targetInfo->url.empty())
+        {
+            addField(targetFields, "URL", Utf8FromUtf16(targetInfo->url));
+        }
+        if (! targetInfo->target.empty())
+        {
+            addField(targetFields, "Target", Utf8FromUtf16(targetInfo->target));
+        }
+    }
 
     yyjson_mut_val* streams = yyjson_mut_arr(doc);
     yyjson_mut_obj_add_val(doc, root, "streams", streams);

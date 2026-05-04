@@ -1310,6 +1310,22 @@ case SelfTestState::Step::Phase6_DeleteBytesMeaningful:
     const std::filesystem::path deleteTree = state.tempRoot / L"delete-tree";
     if (state.stepState == 0)
     {
+        FileOperationsPopupInternal::TaskSnapshot completedDelete{};
+        completedDelete.operation      = FILESYSTEM_DELETE;
+        completedDelete.finished       = true;
+        completedDelete.resultHr       = S_OK;
+        completedDelete.totalItems     = 4;
+        completedDelete.completedItems = 2;
+        completedDelete.totalBytes     = 100;
+        completedDelete.completedBytes = 50;
+
+        const float completedFraction = DebugComputeFileOperationsTaskCompleteFraction(completedDelete);
+        if (completedFraction != 1.0f)
+        {
+            Fail(std::format(L"Completed delete popup progress should display 100%; got {:.3f}.", completedFraction));
+            return true;
+        }
+
         if (! std::filesystem::exists(deleteTree))
         {
             Fail(L"Delete-tree folder missing before delete-bytes test.");

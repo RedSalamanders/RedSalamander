@@ -1641,6 +1641,181 @@ template <typename Task> [[nodiscard]] auto RunUiaTaskWithMessagePump(Task&& tas
     return state.failure.empty();
 }
 
+[[nodiscard]] bool TestConnectionManagerWindowTextFieldDoubleClickSelectsWord(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager text-doubleclick: begin");
+
+    const auto originalConnections = g_settings.connections;
+    const auto restoreConnections  = wil::scope_exit([&]() noexcept
+    {
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+        if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
+        {
+            PostMessageW(existing, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)));
+        }
+        HostClearTestPromptResultOverride();
+        g_settings.connections = originalConnections;
+        static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
+    });
+
+    HWND dialog = OpenConnectionManagerForSelfTest(mainWindow, state, L"textfield-doubleclick-selects-word");
+    if (! dialog || IsWindow(dialog) == FALSE)
+    {
+        return false;
+    }
+
+    state.Require((GetClassLongPtrW(dialog, GCL_STYLE) & CS_DBLCLKS) != 0,
+                  L"Connection Manager top-level window class should opt into CS_DBLCLKS for native text-field double-click gestures.");
+
+    ConnectionManagerDebugSnapshot snapshot{};
+    state.Require(WaitForConnectionManagerSnapshot([](const ConnectionManagerDebugSnapshot& value) noexcept
+    { return value.usesDxUiFormInputs && value.visibleDxFormInputHostCount > 0u && value.listRowCount > 0u; },
+                                                   snapshot,
+                                                   SelfTest::Scale(5000ms)),
+                  L"Connection Manager did not settle before text double-click validation.");
+    state.Require(DebugSetConnectionManagerProtocolPluginId(L"builtin/file-system-ftp"),
+                  L"Connection Manager protocol picker does not expose FTP before text double-click validation.");
+    state.Require(WaitForConnectionManagerSnapshot([](const ConnectionManagerDebugSnapshot& value) noexcept
+    { return value.currentPluginId == L"builtin/file-system-ftp" && value.visibleDxFormInputHostCount > 0u; },
+                                                   snapshot,
+                                                   SelfTest::Scale(3000ms)),
+                  L"Connection Manager did not settle on FTP before text double-click validation.");
+
+    const std::wstring userText = L"alpha beta gamma";
+    state.Require(DebugSetConnectionManagerUserText(userText), L"Failed to seed the Connection Manager User text field.");
+    state.Require(DebugFocusConnectionManagerUserInput(), L"Failed to focus the Connection Manager User text field.");
+    state.Require(WaitForConnectionManagerSnapshot(
+                      [](const ConnectionManagerDebugSnapshot& value) noexcept
+    { return value.focusKind == ConnectionManagerDebugFocusKind::Edit && NormalizeDxVisibleLabel(value.focusLabel) == LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_USER); },
+                      snapshot,
+                      SelfTest::Scale(3000ms)),
+                  L"Connection Manager did not move focus to the User text field before double-click validation.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HWND bridgeEdit = nullptr;
+    state.Require(DebugGetConnectionManagerTextInputBridgeHandle(bridgeEdit) && bridgeEdit && IsWindow(bridgeEdit) != FALSE,
+                  L"Connection Manager text input bridge was not active for the User text field.");
+    RECT bridgeClient{};
+    state.Require(GetClientRect(bridgeEdit, &bridgeClient) != FALSE, L"Failed to read the Connection Manager User bridge edit bounds.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    const LRESULT bridgePoint = SendMessageW(bridgeEdit, EM_POSFROMCHAR, 7u, 0);
+    state.Require(bridgePoint != -1, L"Connection Manager User bridge edit could not resolve the test character position.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    POINT clickPoint{
+        static_cast<LONG>(LOWORD(static_cast<DWORD_PTR>(bridgePoint))) + 2,
+        bridgeClient.top + ((bridgeClient.bottom - bridgeClient.top) / 2),
+    };
+    static_cast<void>(MapWindowPoints(bridgeEdit, dialog, &clickPoint, 1));
+    static_cast<void>(SendMessageW(bridgeEdit, EM_SETSEL, 0, 0));
+    const LPARAM hostClick = MAKELPARAM(clickPoint.x, clickPoint.y);
+    SendMessageW(dialog, WM_MOUSEMOVE, 0, hostClick);
+    SendMessageW(dialog, WM_LBUTTONDOWN, MK_LBUTTON, hostClick);
+    SendMessageW(dialog, WM_LBUTTONUP, 0, hostClick);
+    SendMessageW(dialog, WM_LBUTTONDBLCLK, MK_LBUTTON, hostClick);
+    SendMessageW(dialog, WM_LBUTTONUP, 0, hostClick);
+    PumpPendingMessages();
+
+    state.Require(DebugGetConnectionManagerTextInputBridgeHandle(bridgeEdit) && bridgeEdit && IsWindow(bridgeEdit) != FALSE,
+                  L"Connection Manager text input bridge was not active after User field double-click.");
+    DWORD selectionStart = 0;
+    DWORD selectionEnd   = 0;
+    static_cast<void>(SendMessageW(bridgeEdit, EM_GETSEL, reinterpret_cast<WPARAM>(&selectionStart), reinterpret_cast<LPARAM>(&selectionEnd)));
+    state.Require(selectionStart == 6u && selectionEnd == 10u,
+                  std::format(L"Connection Manager User double-click should select 'beta'; got selection [{}..{}].",
+                              static_cast<unsigned long>(selectionStart),
+                              static_cast<unsigned long>(selectionEnd)));
+
+    static_cast<void>(SendMessageW(bridgeEdit, WM_CHAR, static_cast<WPARAM>(L'X'), 0));
+    PumpPendingMessages();
+
+    std::wstring actualText;
+    state.Require(DebugGetConnectionManagerUserText(actualText), L"Failed to read the Connection Manager User text after double-click replacement.");
+    state.Require(actualText == L"alpha X gamma",
+                  std::format(L"Connection Manager User double-click replacement produced '{}'.", actualText));
+
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager text-doubleclick: complete");
+    return state.failure.empty();
+}
+
+[[nodiscard]] bool TestConnectionManagerWindowMaskedSecretAcceptsBridgeChars(HWND mainWindow, CaseState& state) noexcept
+{
+    using namespace std::chrono_literals;
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager masked-secret-bridge: begin");
+
+    const auto originalConnections = g_settings.connections;
+    const auto restoreConnections  = wil::scope_exit([&]() noexcept
+    {
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+        if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
+        {
+            PostMessageW(existing, WM_CLOSE, 0, 0);
+            static_cast<void>(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)));
+        }
+        HostClearTestPromptResultOverride();
+        g_settings.connections = originalConnections;
+        static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
+    });
+
+    HWND dialog = OpenConnectionManagerForSelfTest(mainWindow, state, L"masked-secret-bridge-chars");
+    if (! dialog || IsWindow(dialog) == FALSE)
+    {
+        return false;
+    }
+
+    ConnectionManagerDebugSnapshot snapshot{};
+    state.Require(WaitForConnectionManagerSnapshot([](const ConnectionManagerDebugSnapshot& value) noexcept
+    { return value.usesDxUiFormInputs && value.visibleDxFormInputHostCount > 0u && value.listRowCount > 0u; },
+                                                   snapshot,
+                                                   SelfTest::Scale(5000ms)),
+                  L"Connection Manager did not settle before masked secret bridge validation.");
+    state.Require(DebugSetConnectionManagerProtocolPluginId(L"builtin/file-system-ftp"),
+                  L"Connection Manager protocol picker does not expose FTP before masked secret bridge validation.");
+    state.Require(WaitForConnectionManagerSnapshot([](const ConnectionManagerDebugSnapshot& value) noexcept
+    { return value.currentPluginId == L"builtin/file-system-ftp" && value.visibleDxFormInputHostCount > 0u; },
+                                                   snapshot,
+                                                   SelfTest::Scale(3000ms)),
+                  L"Connection Manager did not settle on FTP before masked secret bridge validation.");
+    state.Require(DebugSetConnectionManagerSecretText(std::wstring_view{}), L"Failed to clear the Connection Manager secret field before bridge typing.");
+    state.Require(DebugFocusConnectionManagerSecretInput(), L"Failed to focus the Connection Manager secret field.");
+    state.Require(WaitForConnectionManagerSnapshot(
+                      [](const ConnectionManagerDebugSnapshot& value) noexcept
+    { return value.focusKind == ConnectionManagerDebugFocusKind::Edit && NormalizeDxVisibleLabel(value.focusLabel) == LoadStringResource(nullptr, IDS_CONNECTIONS_LABEL_PASSWORD); },
+                      snapshot,
+                      SelfTest::Scale(3000ms)),
+                  L"Connection Manager did not move focus to the secret text field before bridge typing.");
+    if (! state.failure.empty())
+    {
+        return false;
+    }
+
+    HWND bridgeEdit = nullptr;
+    state.Require(DebugGetConnectionManagerTextInputBridgeHandle(bridgeEdit) && bridgeEdit && IsWindow(bridgeEdit) != FALSE,
+                  L"Connection Manager text input bridge was not active for the secret field.");
+    static_cast<void>(SendMessageW(bridgeEdit, WM_CHAR, static_cast<WPARAM>(L's'), 0));
+    static_cast<void>(SendMessageW(bridgeEdit, WM_CHAR, static_cast<WPARAM>(L'3'), 0));
+    PumpPendingMessages();
+
+    std::wstring secretText;
+    state.Require(DebugGetConnectionManagerSecretText(secretText), L"Failed to read the Connection Manager secret field after bridge typing.");
+    state.Require(secretText == L"s3", std::format(L"Connection Manager masked secret bridge typing produced {} characters.", secretText.size()));
+
+    SelfTest::AppendSelfTestTrace(L"ConnectionManager masked-secret-bridge: complete");
+    return state.failure.empty();
+}
+
 enum class ConnectionManagerCloseAction
 {
     CloseButton,
@@ -1664,11 +1839,13 @@ enum class ConnectionManagerCloseAction
     const auto originalConnections = g_settings.connections;
     const auto restoreConnections  = wil::scope_exit([&]() noexcept
     {
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
         if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
         {
             PostMessageW(existing, WM_CLOSE, 0, 0);
             static_cast<void>(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)));
         }
+        HostClearTestPromptResultOverride();
         g_settings.connections = originalConnections;
         static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
     });
@@ -1764,7 +1941,24 @@ enum class ConnectionManagerCloseAction
 
     if (useWindowCloseMessage)
     {
+        HostResetTestPromptRequestCount();
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_CANCEL);
         PostMessageW(dialog, WM_CLOSE, 0, 0);
+        state.Require(WaitForHostPromptRequestCountAtLeastForSelfTest(1u, SelfTest::Scale(5000ms)),
+                      L"Connection Manager WM_CLOSE did not prompt before discarding a newly created dirty profile.");
+        state.Require(WaitForWindowStillOpen(dialog, SelfTest::Scale(1000ms)),
+                      L"Connection Manager closed after cancelling the WM_CLOSE discard confirmation.");
+        state.Require(! RuntimeConnectionsContainExactNameForSelfTest(createdConnectionName),
+                      std::format(L"Connection Manager WM_CLOSE cancel unexpectedly persisted the newly created profile '{}'.", createdConnectionName));
+        if (! state.failure.empty())
+        {
+            return false;
+        }
+
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
+        PostMessageW(dialog, WM_CLOSE, 0, 0);
+        state.Require(WaitForHostPromptRequestCountAtLeastForSelfTest(2u, SelfTest::Scale(5000ms)),
+                      L"Connection Manager WM_CLOSE did not prompt before confirmed discard.");
     }
     else
     {
@@ -1819,11 +2013,13 @@ enum class ConnectionManagerCloseAction
     const auto originalConnections = g_settings.connections;
     const auto restoreConnections  = wil::scope_exit([&]() noexcept
     {
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
         if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
         {
             PostMessageW(existing, WM_CLOSE, 0, 0);
             static_cast<void>(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)));
         }
+        HostClearTestPromptResultOverride();
         g_settings.connections = originalConnections;
         static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
     });
@@ -1920,11 +2116,13 @@ enum class ConnectionManagerCloseAction
     const auto originalConnections = g_settings.connections;
     const auto restoreConnections  = wil::scope_exit([&]() noexcept
     {
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
         if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
         {
             PostMessageW(existing, WM_CLOSE, 0, 0);
             static_cast<void>(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)));
         }
+        HostClearTestPromptResultOverride();
         g_settings.connections = originalConnections;
         static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
     });
@@ -2000,11 +2198,13 @@ enum class ConnectionManagerCloseAction
     const auto originalConnections = g_settings.connections;
     const auto restoreConnections  = wil::scope_exit([&]() noexcept
     {
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
         if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
         {
             PostMessageW(existing, WM_CLOSE, 0, 0);
             static_cast<void>(WaitForWindowClosed(existing, SelfTest::Scale(3000ms)));
         }
+        HostClearTestPromptResultOverride();
         g_settings.connections = originalConnections;
         static_cast<void>(SettingsHotReload::SaveSettingsAndSchema(L"RedSalamander", g_settings));
     });
@@ -2058,6 +2258,7 @@ enum class ConnectionManagerCloseAction
     const auto originalConnections = g_settings.connections;
     const auto restoreConnections  = wil::scope_exit([&]() noexcept
     {
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
         if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
         {
             PostMessageW(existing, WM_CLOSE, 0, 0);
@@ -2130,6 +2331,7 @@ enum class ConnectionManagerCloseAction
     const auto originalConnections = g_settings.connections;
     const auto restoreConnections  = wil::scope_exit([&]() noexcept
     {
+        HostSetTestPromptResultOverride(HOST_PROMPT_RESULT_OK);
         if (const HWND existing = GetConnectionManagerDialogHandle(); existing && IsWindow(existing) != FALSE)
         {
             PostMessageW(existing, WM_CLOSE, 0, 0);
@@ -5867,6 +6069,12 @@ void RunConnectionsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     });
     SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_live_dx_interaction", [=](CaseState& state) noexcept {
         return TestConnectionManagerWindowLiveDxInteraction(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_textfield_doubleclick_selects_word", [=](CaseState& state) noexcept {
+        return TestConnectionManagerWindowTextFieldDoubleClickSelectsWord(mainWindow, state);
+    });
+    SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_masked_secret_accepts_bridge_chars", [=](CaseState& state) noexcept {
+        return TestConnectionManagerWindowMaskedSecretAcceptsBridgeChars(mainWindow, state);
     });
     SelfTest::RunCase(options, suite, L"cmd_connection_manager_window_close_persists_new_profile", [=](CaseState& state) noexcept {
         return TestConnectionManagerWindowClosePersistsNewProfile(mainWindow, state);

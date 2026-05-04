@@ -1535,7 +1535,10 @@ void ViewerImgRaw::OnCreate(HWND hwnd)
             _currentSidecarJpegPath = _otherItems[_otherIndex].sidecarJpegPath;
             _currentLabel           = _otherItems[_otherIndex].label;
             StartAsyncOpen(hwnd, _otherItems[_otherIndex].primaryPath, false);
-            SetFocus(hwnd);
+            if (! _embeddedMode)
+            {
+                SetFocus(hwnd);
+            }
         });
         _fileComboHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _fileComboHost.SetRoot(std::move(combo));
@@ -3621,6 +3624,19 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
     _fileSystem     = context->fileSystem;
     _fileSystemName = context->fileSystemName ? context->fileSystemName : L"";
 
+    const bool embeddedMode =
+        (static_cast<uint32_t>(context->flags) & static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED)) == static_cast<uint32_t>(VIEWER_OPEN_FLAG_EMBEDDED);
+    HWND embeddedParent = embeddedMode ? context->ownerWindow : nullptr;
+    if (embeddedMode && (embeddedParent == nullptr || IsWindow(embeddedParent) == FALSE))
+    {
+        Debug::Error(L"ViewerImgRaw: embedded Open requires a valid ownerWindow parent.");
+        return E_INVALIDARG;
+    }
+    if (_hWnd && (_embeddedMode != embeddedMode || (embeddedMode && GetParent(_hWnd.get()) != embeddedParent)))
+    {
+        static_cast<void>(Close());
+    }
+
     if (! _hWnd)
     {
         if (_hasTheme)
@@ -3633,13 +3649,25 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
             return E_FAIL;
         }
 
-        HWND ownerWindow = context->ownerWindow;
         RECT ownerRc{};
         int x = CW_USEDEFAULT;
         int y = CW_USEDEFAULT;
         int w = 1000;
         int h = 700;
-        if (ownerWindow && GetWindowRect(ownerWindow, &ownerRc) != 0)
+        if (embeddedMode)
+        {
+            RECT client{};
+            if (GetClientRect(embeddedParent, &client) == 0)
+            {
+                const DWORD lastError = Debug::ErrorWithLastError(L"ViewerImgRaw: GetClientRect failed for embedded preview parent.");
+                return HRESULT_FROM_WIN32(lastError);
+            }
+            x = 0;
+            y = 0;
+            w = std::max(1L, client.right - client.left);
+            h = std::max(1L, client.bottom - client.top);
+        }
+        else if (context->ownerWindow && GetWindowRect(context->ownerWindow, &ownerRc) != 0)
         {
             x = ownerRc.left;
             y = ownerRc.top;
@@ -3647,16 +3675,19 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
             h = std::max(1L, ownerRc.bottom - ownerRc.top);
         }
 
-        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERRAW_MENU));
+        wil::unique_any<HMENU, decltype(&::DestroyMenu), ::DestroyMenu> menu(
+            embeddedMode ? nullptr : Localization::LoadMenuResource(g_hInstance, IDR_VIEWERRAW_MENU));
+        const DWORD style = embeddedMode ? (WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_CLIPSIBLINGS | WS_HSCROLL | WS_VSCROLL)
+                                         : (WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_HSCROLL | WS_VSCROLL);
         HWND window = CreateWindowExW(0,
                                       kClassName,
-                                      _metaName.empty() ? L"" : _metaName.c_str(),
-                                      WS_OVERLAPPEDWINDOW | WS_CLIPCHILDREN | WS_HSCROLL | WS_VSCROLL,
+                                      embeddedMode ? L"" : (_metaName.empty() ? L"" : _metaName.c_str()),
+                                      style,
                                       x,
                                       y,
                                       w,
                                       h,
-                                      nullptr,
+                                      embeddedMode ? embeddedParent : nullptr,
                                       menu.get(),
                                       g_hInstance,
                                       this);
@@ -3665,18 +3696,43 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Open(const ViewerOpenContext* context) n
             return HRESULT_FROM_WIN32(GetLastError());
         }
 
-        menu.release();
+        if (! embeddedMode)
+        {
+            menu.release();
+        }
         _hWnd.reset(window);
+        _embeddedMode = embeddedMode;
 
         ApplyTheme(_hWnd.get());
         AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
+        if (! embeddedMode)
+        {
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
     else
     {
-        ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
-        static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        if (_embeddedMode)
+        {
+            RECT client{};
+            if (embeddedParent != nullptr && GetClientRect(embeddedParent, &client) != 0)
+            {
+                SetWindowPos(_hWnd.get(),
+                             nullptr,
+                             0,
+                             0,
+                             std::max(1L, client.right - client.left),
+                             std::max(1L, client.bottom - client.top),
+                             SWP_NOZORDER | SWP_NOACTIVATE);
+            }
+            ShowWindow(_hWnd.get(), SW_SHOWNA);
+        }
+        else
+        {
+            ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
+            static_cast<void>(SetForegroundWindow(_hWnd.get()));
+        }
     }
 
     _otherItems.clear();
@@ -3865,6 +3921,7 @@ HRESULT STDMETHODCALLTYPE ViewerImgRaw::Close() noexcept
     AddRef();
     const auto releaseSelf = wil::scope_exit([&]() noexcept { Release(); });
     _hWnd.reset();
+    _embeddedMode = false;
     return S_OK;
 }
 

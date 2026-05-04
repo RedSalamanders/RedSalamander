@@ -311,11 +311,11 @@ STRINGTABLE
 BEGIN
     IDS_VIEWERTEXT_NAME "Visionneuse texte"
     IDS_VIEWERTEXT_DESCRIPTION "Visionneuse intégrée pour les fichiers texte (avec mode hexadécimal)."
-    IDS_VIEWERTEXT_TITLE_FORMAT "{} - Visionneuse"
-    IDS_VIEWERTEXT_STATUS_FORMAT "Encodage : {}    Taille : {}"
-    IDS_VIEWERTEXT_STATUS_TEXT_FORMAT "FS : {}    Détecté : {}    Actif : {}    Taille : {}    Lignes : {:L}-{:L} sur {}"
-    IDS_VIEWERTEXT_STATUS_HEX_FORMAT "FS : {}    Détecté : {}    Actif : {}    Taille : {}    Offsets : {}-{}"
-    IDS_VIEWERTEXT_STATUS_WITH_MESSAGE_FORMAT "{}    {}"
+    IDS_VIEWERTEXT_TITLE_FORMAT "{0} - Visionneuse"
+    IDS_VIEWERTEXT_STATUS_FORMAT "Encodage : {0}    Taille : {1}"
+    IDS_VIEWERTEXT_STATUS_TEXT_FORMAT "FS : {0}    Détecté : {1}    Actif : {2}    Taille : {3}    Lignes : {4:L}-{5:L} sur {6}"
+    IDS_VIEWERTEXT_STATUS_HEX_FORMAT "FS : {0}    Détecté : {1}    Actif : {2}    Taille : {3}    Offsets : {4}-{5}"
+    IDS_VIEWERTEXT_STATUS_WITH_MESSAGE_FORMAT "{0}    {1}"
     IDS_VIEWERTEXT_UNKNOWN "inconnu"
 
     IDS_VIEWERTEXT_CAPTION_ERROR "Visionneuse"
@@ -359,7 +359,7 @@ IDS_VIEWERTEXT_MODE_RAW "RAW"
     IDS_VIEWERTEXT_ENCODING_UTF32BE "UTF-32 BE"
     IDS_VIEWERTEXT_ENCODING_UNKNOWN "Inconnu"
 
-    IDS_VIEWERTEXT_CODEPAGE_FORMAT "CP{}"
+    IDS_VIEWERTEXT_CODEPAGE_FORMAT "CP{0}"
     IDS_VIEWERTEXT_DETECTED_SUFFIX_BOM " (BOM)"
     IDS_VIEWERTEXT_DETECTED_SUFFIX_GUESS " (déduit)"
 

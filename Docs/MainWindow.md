@@ -2,7 +2,7 @@
 
 RedSalamander is a **dual-pane** file manager:
 
-- **Left pane** and **Right pane** each have a Navigation bar + Folder view + optional Status bar.
+- **Left pane** and **Right pane** each have an optional Navigation bar, Folder view, optional Filter bar, and optional Status bar.
 - A splitter between panes controls the width ratio.
 - Most commands apply to the **focused pane** (the one that currently has keyboard focus).
 
@@ -78,8 +78,13 @@ The properties dialog can show local or plugin-provided fields: general identity
 
 ### View options
 
-- **View → Pane → Show Hidden Files**: toggle display of hidden items (hidden items use a dim icon when shown).
-- **View → Pane → Show System Files**: toggle display of system items.
+- **Left/Right → Show → Hidden Files**: toggle display of hidden items (hidden items use a dim icon when shown).
+- **Left/Right → Show → System Files**: toggle display of system items.
+- **Left/Right → Show → File Extensions**: toggle displayed file extensions in the named pane without changing real file names or paths.
+- **Left/Right → Thumbnails**: toggle thumbnail-sized visuals in the named pane. Thumbnails load in the background and fall back to normal file/folder icons when unavailable.
+- **Left/Right → Preview Pane**: preview the named pane's focused item in the opposite pane. The opposite pane shows Folder and Preview tabs; selecting Folder keeps that pane browsable, while selecting Preview shows the current preview. Closing preview removes the tabs and restores the normal pane.
+- **Left/Right → Filter Bar**: show or hide the named pane's persistent filter summary.
+- **Left/Right → Navigation Bar**: show or hide the named pane's navigation bar. Address-bar commands show it automatically before focusing the address edit.
 
 ## Status bar (per pane)
 
@@ -90,7 +95,7 @@ The optional status bar shows:
 
 Toggle:
 
-- **View → Pane → Status Bar (Left/Right)**
+- **Left/Right → Status Bar**
 
 ## Function bar
 
@@ -110,5 +115,8 @@ Toggle:
 
 - **Commands → Connect Network Drive…** (`F11`) / **Disconnect…** (`F12`) *(Win32 `file:` pane only)*
 - **Commands → Find Files and Directories…** (`Alt+F7`) opens the modeless search window for the focused pane. See: [Find Files and Directories](FindFiles.md)
+- **Commands → List of Opened Files** (`Alt+F11`) shows viewer, editor, and Preview pane entries and can focus the source item from the list.
+- **Commands → Shared Directories…** (`Ctrl+Shift+F9`) lists local Windows disk shares, opens reachable share paths in the focused pane, and links to Windows Shared Folders management.
 - **Commands → Command Shell**: opens a shell in the current location when possible
+- **Commands → Bring Current Directory/Filename to Command Line**: opens the pane command-line input and inserts quoted local paths for execution
 - **Commands → Open File Explorer → Current Folder** (`Shift+F3`)

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "AppTheme.h"
+#include "DxUi/DxUi.h"
 #include "FolderView.h"
 #include "Framework.h"
 #include "FunctionBar.h"
@@ -22,8 +23,130 @@
 
 namespace Common::Settings
 {
+struct MakeFileListSettings;
 struct Settings;
 }
+
+LRESULT CALLBACK FolderWindowDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
+
+#ifdef ENABLE_TESTS
+void DebugSetMakeFileListAutomation(const Common::Settings::MakeFileListSettings& options) noexcept;
+void DebugClearMakeFileListAutomation() noexcept;
+
+struct ChangeAttributesOptionsPromptDebugSnapshot
+{
+    bool usesDxUiHost                     = false;
+    size_t visibleChildWindowCount        = 0u;
+    size_t visibleNativeChildControlCount = 0u;
+    std::wstring dialogClassName;
+    uint8_t readOnly                      = 0u;
+    uint8_t hidden                        = 0u;
+    uint8_t system                        = 0u;
+    uint8_t archive                       = 0u;
+    bool dateTimeSectionVisible           = false;
+    bool modifiedTimeVisible              = false;
+    bool createdTimeVisible               = false;
+    bool accessedTimeVisible              = false;
+    bool includeSubdirectoriesVisible     = false;
+    bool includeSubdirectoriesEnabled     = false;
+    bool includeSubdirectoriesChecked     = false;
+    bool removeAlternateDataStreams       = false;
+};
+
+[[nodiscard]] HWND GetChangeAttributesOptionsPromptHandle() noexcept;
+[[nodiscard]] bool DebugGetChangeAttributesOptionsPromptSnapshot(ChangeAttributesOptionsPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetChangeAttributesOptionsPromptState(
+    uint8_t readOnly, uint8_t hidden, uint8_t system, uint8_t archive, bool removeAlternateDataStreams) noexcept;
+[[nodiscard]] bool DebugCycleChangeAttributesOptionsPromptArchive() noexcept;
+[[nodiscard]] bool DebugConfirmChangeAttributesOptionsPrompt() noexcept;
+[[nodiscard]] bool DebugCancelChangeAttributesOptionsPrompt() noexcept;
+
+struct MakeFileListOptionsPromptDebugSnapshot
+{
+    bool usesDxUiHost                     = false;
+    size_t visibleChildWindowCount        = 0u;
+    size_t visibleNativeChildControlCount = 0u;
+    std::wstring dialogClassName;
+    uint8_t sourceMode                    = 0u;
+    bool recursive                        = false;
+    uint8_t format                        = 0u;
+    uint8_t outputTarget                  = 0u;
+    std::wstring textMacro;
+    std::wstring outputFileText;
+    bool includeName              = false;
+    bool includeFullPath          = false;
+    bool includeSize              = false;
+    bool includeModified          = false;
+    bool includeAttributes        = false;
+    bool includeDirectories       = false;
+    bool outputFileFieldEnabled   = false;
+};
+
+[[nodiscard]] HWND GetMakeFileListOptionsPromptHandle() noexcept;
+[[nodiscard]] bool DebugGetMakeFileListOptionsPromptSnapshot(MakeFileListOptionsPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetMakeFileListOptionsPromptState(uint8_t sourceMode,
+                                                          bool recursive,
+                                                          uint8_t format,
+                                                          uint8_t outputTarget,
+                                                          std::wstring_view textMacro,
+                                                          std::wstring_view outputFile,
+                                                          bool includeName,
+                                                          bool includeFullPath,
+                                                          bool includeSize,
+                                                          bool includeModified,
+                                                          bool includeAttributes,
+                                                          bool includeDirectories) noexcept;
+[[nodiscard]] bool DebugConfirmMakeFileListOptionsPrompt() noexcept;
+[[nodiscard]] bool DebugCancelMakeFileListOptionsPrompt() noexcept;
+
+struct ArchivePackPromptDebugSnapshot
+{
+    bool usesDxUiHost                     = false;
+    size_t visibleChildWindowCount        = 0u;
+    size_t visibleNativeChildControlCount = 0u;
+    std::wstring dialogClassName;
+    std::wstring archivePathText;
+    std::wstring packerDisplayName;
+    std::wstring packerExtension;
+    size_t packerCount          = 0u;
+    size_t selectedPackerIndex  = 0u;
+    bool deleteAfterPacking     = false;
+    bool commandButtonsFitInClient = false;
+};
+
+[[nodiscard]] HWND GetArchivePackPromptHandle() noexcept;
+[[nodiscard]] bool DebugGetArchivePackPromptSnapshot(ArchivePackPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetArchivePackPromptPackerIndex(size_t index) noexcept;
+[[nodiscard]] bool DebugSetArchivePackPromptArchivePath(std::wstring_view path) noexcept;
+[[nodiscard]] bool DebugSetArchivePackPromptDeleteAfter(bool deleteAfterPacking) noexcept;
+[[nodiscard]] bool DebugConfirmArchivePackPrompt() noexcept;
+[[nodiscard]] bool DebugCancelArchivePackPrompt() noexcept;
+
+struct ArchiveUnpackPromptDebugSnapshot
+{
+    bool usesDxUiHost                     = false;
+    size_t visibleChildWindowCount        = 0u;
+    size_t visibleNativeChildControlCount = 0u;
+    std::wstring dialogClassName;
+    std::wstring destinationPathText;
+    std::wstring unpackerDisplayName;
+    std::wstring unpackerExtension;
+    size_t unpackerCount          = 0u;
+    size_t selectedUnpackerIndex  = 0u;
+    bool deleteAfterUnpacking     = false;
+    std::wstring maskText;
+    bool maskHelpVisible          = false;
+    bool commandButtonsFitInClient = false;
+};
+
+[[nodiscard]] HWND GetArchiveUnpackPromptHandle() noexcept;
+[[nodiscard]] bool DebugGetArchiveUnpackPromptSnapshot(ArchiveUnpackPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetArchiveUnpackPromptDestinationPath(std::wstring_view path) noexcept;
+[[nodiscard]] bool DebugSetArchiveUnpackPromptMask(std::wstring_view mask) noexcept;
+[[nodiscard]] bool DebugSetArchiveUnpackPromptDeleteAfter(bool deleteAfterUnpacking) noexcept;
+[[nodiscard]] bool DebugConfirmArchiveUnpackPrompt() noexcept;
+[[nodiscard]] bool DebugCancelArchiveUnpackPrompt() noexcept;
+#endif
 
 class ShortcutManager;
 
@@ -63,6 +186,11 @@ struct FolderViewPaneFilterPromptDebugSnapshot
     bool usesDxUiHost              = false;
     size_t visibleChildWindowCount = 0u;
     bool enabled                   = false;
+    bool helpExpanded              = false;
+    bool commandButtonsFitInClient = false;
+    float clientBottomDip          = 0.0f;
+    float okButtonBottomDip        = 0.0f;
+    float cancelButtonBottomDip    = 0.0f;
     std::wstring text;
 };
 
@@ -70,6 +198,8 @@ struct FolderViewPaneFilterPromptDebugSnapshot
 [[nodiscard]] bool DebugGetFolderViewPaneFilterPromptSnapshot(FolderViewPaneFilterPromptDebugSnapshot& out) noexcept;
 [[nodiscard]] bool DebugSetFolderViewPaneFilterPromptEnabled(bool enabled) noexcept;
 [[nodiscard]] bool DebugSetFolderViewPaneFilterPromptText(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugSetFolderViewPaneFilterPromptTextAndNotify(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept;
 [[nodiscard]] bool DebugConfirmFolderViewPaneFilterPrompt() noexcept;
 [[nodiscard]] bool DebugCancelFolderViewPaneFilterPrompt() noexcept;
 
@@ -105,6 +235,29 @@ struct FolderViewCreateDirectoryPromptDebugSnapshot
 [[nodiscard]] bool DebugConfirmFolderViewCreateDirectoryPrompt() noexcept;
 [[nodiscard]] bool DebugCancelFolderViewCreateDirectoryPrompt() noexcept;
 
+struct FolderViewEditNewPromptDebugSnapshot
+{
+    bool usesDxUiHost              = false;
+    size_t visibleChildWindowCount = 0u;
+    std::wstring createInPath;
+    std::wstring fileNameText;
+    std::wstring validationText;
+    bool nameFieldFocused = false;
+    size_t selectionStart = 0u;
+    size_t selectionEnd   = 0u;
+    bool editorComboEnabled = false;
+    std::wstring selectedEditorActionId;
+    std::vector<std::wstring> editorActionIds;
+    std::vector<std::wstring> editorDisplayNames;
+};
+
+[[nodiscard]] HWND GetFolderViewEditNewPromptHandle() noexcept;
+[[nodiscard]] bool DebugGetFolderViewEditNewPromptSnapshot(FolderViewEditNewPromptDebugSnapshot& out) noexcept;
+[[nodiscard]] bool DebugSetFolderViewEditNewPromptText(std::wstring_view text) noexcept;
+[[nodiscard]] bool DebugSelectFolderViewEditNewPromptEditor(std::wstring_view actionId) noexcept;
+[[nodiscard]] bool DebugConfirmFolderViewEditNewPrompt() noexcept;
+[[nodiscard]] bool DebugCancelFolderViewEditNewPrompt() noexcept;
+
 struct FolderViewChangeCasePromptDebugSnapshot
 {
     bool usesDxUiHost              = false;
@@ -113,6 +266,7 @@ struct FolderViewChangeCasePromptDebugSnapshot
     bool includeSubdirsChecked     = false;
     size_t styleIndex              = 0u;
     size_t targetIndex             = 0u;
+    std::wstring exampleText;
 };
 
 [[nodiscard]] HWND GetFolderViewChangeCasePromptHandle() noexcept;
@@ -173,11 +327,15 @@ public:
                                 std::wstring_view focusItemDisplayName,
                                 unsigned int folderViewCommandId,
                                 bool activateWindow) noexcept;
-    HRESULT OpenViewerWithPlugin(std::wstring_view pluginId, const ViewerOpenContext& context) noexcept;
+    HRESULT OpenViewerWithPlugin(std::wstring_view pluginId,
+                                 const ViewerOpenContext& context,
+                                 std::wstring_view openedBy = {},
+                                 Pane pane = Pane::Left) noexcept;
 
     void SetFolderPath(Pane pane, const std::filesystem::path& path);
     std::optional<std::filesystem::path> GetCurrentPath(Pane pane) const;
     std::optional<std::filesystem::path> GetCurrentPluginPath(Pane pane) const;
+    [[nodiscard]] std::optional<std::filesystem::path> GetFocusedItemPath(Pane pane) const;
     std::vector<std::filesystem::path> GetFolderHistory(Pane pane) const;
     void SetFolderHistory(Pane pane, const std::vector<std::filesystem::path>& history);
 
@@ -191,6 +349,17 @@ public:
 
     void SetStatusBarVisible(Pane pane, bool visible);
     bool GetStatusBarVisible(Pane pane) const noexcept;
+    void SetFileExtensionsVisible(Pane pane, bool visible);
+    bool GetFileExtensionsVisible(Pane pane) const noexcept;
+    void SetThumbnailsVisible(Pane pane, bool visible);
+    bool GetThumbnailsVisible(Pane pane) const noexcept;
+    void SetNavigationBarVisible(Pane pane, bool visible);
+    bool GetNavigationBarVisible(Pane pane) const noexcept;
+    void SetFilterBarVisible(Pane pane, bool visible);
+    bool GetFilterBarVisible(Pane pane) const noexcept;
+    void SetNameFilterState(Pane pane, const FolderView::NameFilterState& state, bool refresh = true);
+    void TogglePreviewPane(Pane sourcePane);
+    [[nodiscard]] bool IsPreviewPaneOpenForSource(Pane sourcePane) const noexcept;
 
     void SetShowHiddenFiles(bool show);
     [[nodiscard]] bool GetShowHiddenFiles() const noexcept;
@@ -199,10 +368,68 @@ public:
 
     void CommandRename(Pane pane);
     void CommandView(Pane pane);
+    void CommandAlternateView(Pane pane);
+    void CommandViewWith(Pane pane, std::wstring_view actionId);
+    void CommandEdit(Pane pane);
+    void CommandAlternateEdit(Pane pane);
+    void CommandEditWith(Pane pane, std::wstring_view actionId);
+    void CommandEditNew(Pane pane);
+    struct UserMenuItem final
+    {
+        std::wstring id;
+        std::wstring displayName;
+        bool enabled = false;
+        HRESULT availabilityHr = S_OK;
+    };
+    [[nodiscard]] std::vector<UserMenuItem> CollectUserMenuItems(Pane pane) const;
+    void CommandUserMenu(Pane pane, std::wstring_view actionId);
+    void CommandNewFromShellTemplate(Pane pane, std::wstring_view templateId);
+    void CommandContextMenuCurrentDirectory(Pane pane);
+    void CommandOpenSecurity(Pane pane);
+    void CommandGoToShortcutOrLinkTarget(Pane pane);
+
+    enum class AttributeChangeState : uint8_t
+    {
+        LeaveUnchanged,
+        Set,
+        Clear,
+    };
+
+    struct ChangeAttributesOptions final
+    {
+        struct TimestampOption final
+        {
+            bool enabled  = false;
+            int64_t value = 0;
+        };
+
+        AttributeChangeState readOnly = AttributeChangeState::LeaveUnchanged;
+        AttributeChangeState hidden   = AttributeChangeState::LeaveUnchanged;
+        AttributeChangeState system   = AttributeChangeState::LeaveUnchanged;
+        AttributeChangeState archive  = AttributeChangeState::LeaveUnchanged;
+        TimestampOption modifiedTime;
+        TimestampOption createdTime;
+        TimestampOption accessedTime;
+        bool includeSubdirectories    = false;
+        bool removeAlternateDataStreams = false;
+    };
+
+    struct ChangeAttributesReport final
+    {
+        uint64_t itemsProcessed    = 0u;
+        uint64_t attributesChanged = 0u;
+        uint64_t timesChanged      = 0u;
+        uint64_t streamsRemoved    = 0u;
+        uint64_t failures          = 0u;
+        HRESULT firstFailure       = S_OK;
+        uint64_t progressTaskId    = 0u;
+        std::wstring summary;
+    };
+
+    void CommandChangeAttributes(Pane pane);
     void CommandViewSpace(Pane pane);
     void CommandDelete(Pane pane);
     void CommandPermanentDelete(Pane pane);
-    void CommandPermanentDeleteWithValidation(Pane pane);
     void CommandCopyToOtherPane(Pane sourcePane);
     void CommandMoveToOtherPane(Pane sourcePane);
     void CommandToggleFileOperationsIssuesPane();
@@ -213,6 +440,14 @@ public:
     void CommandFocusAddressBar(Pane pane);
     void CommandOpenDriveMenu(Pane pane);
     void CommandShowFolderHistory(Pane pane);
+    void CommandQuickSearch(Pane pane);
+    void CommandBringCurrentDirToCommandLine(Pane pane);
+    void CommandBringFilenameToCommandLine(Pane pane);
+    void CommandMakeFileList(Pane pane);
+    void CommandPack(Pane pane);
+    void CommandUnpack(Pane pane);
+    void CommandListOpenedFiles(Pane pane);
+    void CommandSharedDirectories(Pane pane);
     void CommandFilter(Pane pane);
     void CommandGoRootDirectory(Pane pane);
     void CommandSetPathFromOtherPane(Pane pane);
@@ -222,7 +457,32 @@ public:
     [[nodiscard]] bool CanHistoryBack(Pane pane) const noexcept;
     [[nodiscard]] bool CanHistoryForward(Pane pane) const noexcept;
     void CommandRefresh(Pane pane);
-    void CommandCalculateDirectorySizes(Pane pane);
+
+    enum class ShellNewTemplateKind : uint8_t
+    {
+        NullFile,
+        Data,
+        FileName,
+    };
+
+    struct ShellNewTemplateDefinition final
+    {
+        std::wstring id;
+        std::wstring displayName;
+        std::wstring extension;
+        std::wstring defaultFileName;
+        ShellNewTemplateKind kind = ShellNewTemplateKind::NullFile;
+        std::vector<std::byte> data;
+        std::filesystem::path templateFilePath;
+    };
+
+    struct ShellNewTemplateMenuItem final
+    {
+        std::wstring id;
+        std::wstring displayName;
+    };
+
+    [[nodiscard]] std::vector<ShellNewTemplateMenuItem> CollectShellNewTemplateMenuItems(Pane pane) const;
     void CommandSelectionSelectDialog(Pane pane);
     void CommandSelectionUnselectDialog(Pane pane);
     void CommandSelectionInvert(Pane pane);
@@ -330,6 +590,7 @@ public:
         {
             CompareDirectories,
             ChangeCase,
+            ChangeAttributes,
         };
 
         Kind kind       = Kind::CompareDirectories;
@@ -377,6 +638,15 @@ public:
         uint64_t changeCaseScannedEntries   = 0;
         uint64_t changeCasePlannedRenames   = 0;
         uint64_t changeCaseCompletedRenames = 0;
+
+        // Change Attributes payload (Kind::ChangeAttributes)
+        bool changeAttributesEnumerating = false;
+        bool changeAttributesApplying    = false;
+        std::filesystem::path changeAttributesCurrentPath;
+        uint64_t changeAttributesScannedFolders  = 0;
+        uint64_t changeAttributesScannedEntries  = 0;
+        uint64_t changeAttributesPlannedItems    = 0;
+        uint64_t changeAttributesCompletedItems  = 0;
 
         bool finished    = false;
         HRESULT resultHr = S_OK;
@@ -456,9 +726,149 @@ public:
         bool rightArrowCursorHand = false;
     };
 
+    struct PaneViewOptionsDebugSnapshot
+    {
+        bool fileExtensionsVisible      = true;
+        bool navigationBarVisible       = true;
+        bool navigationViewWindowVisible = false;
+        bool filterBarVisible           = false;
+        bool filterBarWindowVisible     = false;
+        bool filterBarUsesDxUiHost      = false;
+        bool filterEnabled              = false;
+        bool thumbnailsVisible          = false;
+        float thumbnailTargetDip        = 16.0f;
+        uint64_t thumbnailQueuedCount   = 0;
+        uint64_t thumbnailCompletedCount = 0;
+        uint64_t thumbnailFallbackCount = 0;
+        uint64_t thumbnailStaleDropCount = 0;
+        uint64_t thumbnailPendingCount  = 0;
+        uint64_t thumbnailCacheHitCount = 0;
+        std::wstring filterText;
+        std::wstring filterBarText;
+        std::wstring focusedItemRealDisplayName;
+        std::wstring focusedItemVisualDisplayName;
+    };
+
+    struct PreviewPaneDebugSnapshot
+    {
+        bool active                = false;
+        Pane sourcePane            = Pane::Left;
+        Pane hostPane              = Pane::Right;
+        bool tabsVisible           = false;
+        bool tabsUseDxUiHost       = false;
+        bool previewTabSelected    = false;
+        bool folderTabSelected     = true;
+        bool previewContentVisible = false;
+        bool previewContentUsesDxUiHost = false;
+        bool previewUsesEmbeddedViewer  = false;
+        bool folderViewVisible     = true;
+        HWND previewContentHwnd    = nullptr;
+        uintptr_t previewViewerInstanceId = 0;
+        RECT tabRect{};
+        RECT contentRect{};
+        RECT clientRect{};
+        RECT functionBarRect{};
+        std::filesystem::path previewedPath;
+        std::wstring previewText;
+        std::wstring previewViewerPluginId;
+        uint64_t previewBytes = 0;
+        std::wstring sourceFocusedDisplayName;
+    };
+
+    struct OpenedFilesDebugRow
+    {
+        std::filesystem::path path;
+        std::wstring file;
+        std::wstring source;
+        std::wstring openedBy;
+        Pane pane = Pane::Left;
+        bool focusable = false;
+    };
+
+    struct OpenedFilesDebugSnapshot
+    {
+        bool visible = false;
+        bool usesDxUiHost = false;
+        size_t visibleChildWindowCount = 0u;
+        size_t visibleNativeChildControlCount = 0u;
+        COLORREF themeWindowBackground = CLR_INVALID;
+        COLORREF themeText = CLR_INVALID;
+        std::wstring dialogClassName;
+        bool emptyStateVisible = false;
+        size_t selectedIndex = static_cast<size_t>(-1);
+        std::vector<OpenedFilesDebugRow> rows;
+    };
+
+    struct SharedDirectoryDebugRow
+    {
+        std::wstring name;
+        std::wstring localPath;
+        std::wstring type;
+        std::wstring remark;
+        bool openable = false;
+    };
+
+    struct SharedDirectoriesDebugSnapshot
+    {
+        bool visible = false;
+        bool emptyStateVisible = false;
+        size_t selectedIndex = static_cast<size_t>(-1);
+        HRESULT lastError = S_OK;
+        std::vector<SharedDirectoryDebugRow> rows;
+    };
+
+    struct SharedDirectoriesDebugProviderResult
+    {
+        HRESULT hr = S_OK;
+        std::vector<SharedDirectoryDebugRow> rows;
+    };
+
+    struct ArchiveCommandDebugOptions
+    {
+        std::filesystem::path archivePath;
+        std::filesystem::path destinationPath;
+        bool overwrite = true;
+    };
+
+    struct ArchiveCommandDebugResult
+    {
+        std::wstring operation;
+        HRESULT hr = S_OK;
+        std::filesystem::path archivePath;
+        std::filesystem::path destinationPath;
+        uint64_t entryCount = 0u;
+        uint64_t bytesProcessed = 0u;
+        std::vector<std::wstring> entries;
+    };
+
     // Debug/testing hook: access the file-operations state for automation/self-tests.
     // This will initialize file operations if they are not yet created.
     FileOperationState* DebugGetFileOperationState() noexcept;
+
+    enum class DebugShellActionKind : uint8_t
+    {
+        ContextMenuCurrentDirectory,
+        OpenSecurity,
+    };
+
+    struct DebugShellAction final
+    {
+        DebugShellActionKind kind = DebugShellActionKind::ContextMenuCurrentDirectory;
+        Pane pane                = Pane::Left;
+        std::filesystem::path path;
+        std::wstring propertyPage;
+    };
+
+    using DebugShellActionCallback = std::function<HRESULT(const DebugShellAction&)>;
+    void DebugSetShellActionCallback(DebugShellActionCallback callback);
+    void DebugSetNextChangeAttributesOptions(std::optional<ChangeAttributesOptions> options);
+    [[nodiscard]] std::optional<ChangeAttributesReport> DebugGetLastChangeAttributesReport() const;
+
+    using DebugShellNewTemplateKind       = ShellNewTemplateKind;
+    using DebugShellNewTemplateDefinition = ShellNewTemplateDefinition;
+
+    void DebugSetShellNewTemplatesForTest(std::optional<std::vector<DebugShellNewTemplateDefinition>> templates);
+    void DebugSetNextShellNewFileNameForTest(std::optional<std::wstring> fileName);
 
     [[nodiscard]] size_t DebugGetViewerInstanceCount() const noexcept;
     [[nodiscard]] bool DebugHasViewerPluginId(std::wstring_view viewerPluginId) const noexcept;
@@ -469,6 +879,25 @@ public:
     [[nodiscard]] bool DebugGetSplitterSnapshot(FolderWindowSplitterDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugHoverSplitterArrow(Pane pane) noexcept;
     [[nodiscard]] bool DebugClickSplitterArrow(Pane pane) noexcept;
+    [[nodiscard]] bool DebugGetPaneViewOptionsSnapshot(Pane pane, PaneViewOptionsDebugSnapshot& out) const;
+    void DebugSetThumbnailProviderMode(Pane pane, FolderView::DebugThumbnailProviderMode mode) noexcept;
+    [[nodiscard]] bool DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugSetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept;
+    [[nodiscard]] bool DebugGetOpenedFilesDialogSnapshot(OpenedFilesDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugSelectOpenedFilesDialogRow(size_t rowIndex) noexcept;
+    [[nodiscard]] bool DebugInvokeOpenedFilesDialogFocusItem() noexcept;
+    void DebugCloseOpenedFilesDialogForTest() noexcept;
+    void DebugAddOpenedExternalEditorForTest(const std::filesystem::path& path, std::wstring_view openedBy, Pane pane, bool closed) noexcept;
+    void DebugClearOpenedExternalEditorsForTest() noexcept;
+    [[nodiscard]] bool DebugGetSharedDirectoriesDialogSnapshot(SharedDirectoriesDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugSelectSharedDirectoriesDialogRow(size_t rowIndex) noexcept;
+    [[nodiscard]] bool DebugInvokeSharedDirectoriesDialogOpenPath() noexcept;
+    void DebugCloseSharedDirectoriesDialogForTest() noexcept;
+    void DebugSetSharedDirectoriesProviderResultForTest(SharedDirectoriesDebugProviderResult result) noexcept;
+    void DebugClearSharedDirectoriesProviderForTest() noexcept;
+    void DebugSetNextArchiveCommandOptionsForTest(ArchiveCommandDebugOptions options) noexcept;
+    void DebugClearArchiveCommandOptionsForTest() noexcept;
+    [[nodiscard]] std::optional<ArchiveCommandDebugResult> DebugGetLastArchiveCommandResultForTest() const noexcept;
 
     [[nodiscard]] std::wstring_view DebugGetFocusedItemDisplayName(Pane pane) const noexcept;
     [[nodiscard]] bool DebugHasItemDisplayName(Pane pane, std::wstring_view displayName) const noexcept;
@@ -486,10 +915,25 @@ public:
     [[nodiscard]] bool DebugGetNavigationViewSnapshot(Pane pane, NavigationViewDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugFocusNavigationViewRegion(Pane pane, NavigationView::FocusRegion region) noexcept;
     [[nodiscard]] bool DebugFocusItemByDisplayName(Pane pane, std::wstring_view displayName) noexcept;
+    [[nodiscard]] bool DebugGetIncrementalSearchSnapshot(Pane pane, FolderView::IncrementalSearchDebugSnapshot& out) const noexcept;
+    struct CommandLineDebugSnapshot
+    {
+        bool visible          = false;
+        bool hasKeyboardFocus = false;
+        Pane pane             = Pane::Left;
+        HWND editHwnd         = nullptr;
+        std::wstring text;
+        std::filesystem::path workingDirectory;
+    };
+    using CommandLineLaunchCallback = std::function<HRESULT(std::wstring_view commandLine, const std::filesystem::path& workingDirectory)>;
+    [[nodiscard]] bool DebugGetCommandLineSnapshot(CommandLineDebugSnapshot& out) const noexcept;
+    void DebugSetCommandLineTextForTest(std::wstring_view text);
+    void DebugSetCommandLineLaunchCallback(CommandLineLaunchCallback callback);
     [[nodiscard]] FolderView::NameFilterState DebugGetNameFilterState(Pane pane) const;
     [[nodiscard]] bool DebugIsNameFilterActive(Pane pane) const noexcept;
     void DebugResetPaneVisibilityState(Pane pane) noexcept;
     [[nodiscard]] FolderView::FilterWatermarkVisualMode DebugGetFilterWatermarkVisualMode(Pane pane) const noexcept;
+    [[nodiscard]] bool DebugGetPaneAlertSnapshot(Pane pane, FolderView::AlertOverlayDebugSnapshot& out) const noexcept;
 #endif
 
     void ShowPaneAlertOverlay(Pane pane,
@@ -559,6 +1003,10 @@ private:
     LRESULT OnFileOperationCompleted(LPARAM lp) noexcept;
     LRESULT OnChangeCaseTaskUpdate(LPARAM lp) noexcept;
     LRESULT OnChangeCaseCompleted(LPARAM lp) noexcept;
+    LRESULT OnChangeAttributesTaskUpdate(LPARAM lp) noexcept;
+    LRESULT OnChangeAttributesCompleted(LPARAM lp) noexcept;
+    static LRESULT CALLBACK CommandLineEditWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+    LRESULT CommandLineEditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 
     // File operations (internal implementation in FolderWindow.FileOperations.cpp)
     void EnsureFileOperations();
@@ -571,6 +1019,7 @@ private:
     void CalculateLayout();
     void AdjustChildWindows();
     void UpdatePaneStatusBar(Pane pane);
+    void UpdatePaneFilterBar(Pane pane);
     void UpdatePaneFocusStates() noexcept;
     void FocusPaneFolderView(Pane pane) noexcept;
     void FocusPanePreferredTarget(Pane pane) noexcept;
@@ -585,6 +1034,16 @@ private:
     [[nodiscard]] SplitterArrowZone HitTestSplitterArrow(POINT pt) const noexcept;
     void SetHoveredSplitterArrowZone(SplitterArrowZone zone) noexcept;
     void TrackSplitterMouseLeave() noexcept;
+    [[nodiscard]] bool CreateCommandLineControls(HWND parent) noexcept;
+    void DestroyCommandLineControls() noexcept;
+    void ShowCommandLine(Pane pane, const std::filesystem::path& workingDirectory);
+    void HideCommandLine(bool restoreFocus) noexcept;
+    [[nodiscard]] std::wstring GetCommandLineText() const;
+    void SetCommandLineText(std::wstring_view text);
+    void InsertCommandLineText(std::wstring_view text);
+    [[nodiscard]] std::optional<std::filesystem::path> ResolveCommandLineWorkingDirectory(Pane pane) const;
+    [[nodiscard]] HRESULT LaunchCommandLine(std::wstring_view commandLine, const std::filesystem::path& workingDirectory);
+    void ExecuteCommandLineFromEdit();
     void StartSelectionSizeWorker(Pane pane) noexcept;
     void CancelSelectionSizeComputation(Pane pane) noexcept;
     void RequestSelectionSizeComputation(Pane pane);
@@ -600,11 +1059,58 @@ private:
     HRESULT EnsurePaneFileSystem(Pane pane, std::wstring_view pluginId) noexcept;
     Pane GetPaneFromChild(HWND child) const noexcept;
     bool TryOpenFileAsVirtualFileSystem(Pane pane, const std::filesystem::path& path) noexcept;
+    enum class FileActionFailureKind : uint8_t
+    {
+        LaunchFailed,
+    };
+    struct FileActionFailure final
+    {
+        FileActionFailureKind kind = FileActionFailureKind::LaunchFailed;
+        bool viewerAction         = true;
+        std::wstring actionId;
+        std::filesystem::path targetPath;
+        HRESULT hr = S_OK;
+    };
+    void ClearFileActionFailure() noexcept;
+    void RecordFileActionLaunchFailure(bool viewerAction, std::wstring_view actionId, const std::filesystem::path& targetPath, HRESULT hr) noexcept;
+    [[nodiscard]] std::optional<FileActionFailure> TakeFileActionFailure() noexcept;
+    [[nodiscard]] bool ShowRecordedFileActionFailureOverlay(Pane pane) noexcept;
+    [[nodiscard]] static Pane OppositePane(Pane pane) noexcept
+    {
+        return pane == Pane::Left ? Pane::Right : Pane::Left;
+    }
+    void SetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept;
+    void ClosePreviewPane() noexcept;
+    void RefreshPreviewPane() noexcept;
+    void UpdatePreviewTabSelection(Pane hostPane) noexcept;
+    void ClosePreviewViewer(Pane hostPane) noexcept;
+    void LayoutEmbeddedPreviewViewer(Pane hostPane) noexcept;
+    bool OpenPreviewFocusedPathWithViewer(Pane sourcePane, Pane hostPane) noexcept;
+    void SetPreviewPlaceholder(Pane hostPane, std::wstring text) noexcept;
+    void UpdateFilterBarLayout(Pane pane) noexcept;
+    void UpdatePreviewContentLayout(Pane pane) noexcept;
+    LRESULT HandlePaneDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
+    [[nodiscard]] std::wstring BuildPreviewTextForPath(Pane sourcePane, const std::filesystem::path& path, uint64_t& outBytes) noexcept;
     bool TryViewFileWithViewer(Pane pane, const FolderView::ViewFileRequest& request) noexcept;
+    bool TryEditFocusedFileWithEditor(Pane pane, std::wstring_view actionId, bool alternate) noexcept;
+    bool TryEditFileWithEditor(Pane pane,
+                               const std::filesystem::path& filePath,
+                               const std::vector<std::filesystem::path>& selectedPaths,
+                               std::wstring_view actionId,
+                               bool alternate) noexcept;
     bool TryViewSpaceWithViewer(Pane pane, const std::filesystem::path& folderPath) noexcept;
+    enum class OpenedFileSourceKind : uint8_t
+    {
+        Viewer,
+        Editor,
+        Preview,
+    };
     struct ViewerInstance final
     {
         std::wstring viewerPluginId;
+        std::wstring openedBy;
+        OpenedFileSourceKind source = OpenedFileSourceKind::Viewer;
+        Pane pane = Pane::Left;
         wil::com_ptr<IViewer> viewer;
         ViewerOpenContext openContext{};
         bool hasInitialConfigurationJson = false;
@@ -618,6 +1124,24 @@ private:
         std::vector<const wchar_t*> otherFilePointers;
     };
 
+    HRESULT OpenViewerWithPluginInternal(std::wstring_view pluginId,
+                                          const ViewerOpenContext& context,
+                                          std::wstring_view openedBy,
+                                          Pane pane,
+                                          OpenedFileSourceKind source,
+                                          ViewerInstance** outInstance) noexcept;
+    void UpdateViewerInstanceContext(ViewerInstance& instance,
+                                     const ViewerOpenContext& context,
+                                     std::wstring_view openedBy,
+                                     Pane pane,
+                                     OpenedFileSourceKind source) noexcept;
+    HRESULT ReopenViewerInstance(ViewerInstance& instance,
+                                  const ViewerOpenContext& context,
+                                  std::wstring_view openedBy,
+                                  Pane pane,
+                                  OpenedFileSourceKind source) noexcept;
+    void PersistViewerConfiguration(ViewerInstance& instance) noexcept;
+
     struct ViewerCallbackState final : public IViewerCallback
     {
         FolderWindow* owner = nullptr;
@@ -628,6 +1152,84 @@ private:
     void ApplyViewerTheme() noexcept;
     ViewerTheme BuildViewerTheme() const noexcept;
     HRESULT OnViewerClosed(ViewerInstance* instance) noexcept;
+    struct OpenedFileRow final
+    {
+        std::filesystem::path path;
+        std::wstring file;
+        std::wstring source;
+        std::wstring openedBy;
+        Pane pane = Pane::Left;
+        bool focusable = false;
+    };
+    struct OpenedExternalFileEntry final
+    {
+        OpenedExternalFileEntry() = default;
+        OpenedExternalFileEntry(const OpenedExternalFileEntry&) = delete;
+        OpenedExternalFileEntry& operator=(const OpenedExternalFileEntry&) = delete;
+        OpenedExternalFileEntry(OpenedExternalFileEntry&&) noexcept = default;
+        OpenedExternalFileEntry& operator=(OpenedExternalFileEntry&&) noexcept = default;
+
+        uint64_t id = 0;
+        OpenedFileSourceKind source = OpenedFileSourceKind::Editor;
+        std::filesystem::path path;
+        std::wstring openedBy;
+        Pane pane = Pane::Left;
+        DWORD processId = 0;
+        wil::unique_handle processHandle;
+#ifdef ENABLE_TESTS
+        bool debugClosed = false;
+#endif
+    };
+    struct OpenedFilesDialogState;
+    struct OpenedFilesDialogStateDeleter final
+    {
+        void operator()(OpenedFilesDialogState* state) const noexcept;
+    };
+    void RegisterOpenedExternalFile(OpenedFileSourceKind source,
+                                    const std::filesystem::path& path,
+                                    std::wstring_view openedBy,
+                                    Pane pane,
+                                    wil::unique_handle processHandle,
+                                    DWORD processId) noexcept;
+    void PruneClosedOpenedExternalFiles() noexcept;
+    [[nodiscard]] std::vector<OpenedFileRow> CollectOpenedFileRows() noexcept;
+    [[nodiscard]] std::wstring ResolveOpenedFilesViewerName(const ViewerInstance& instance) const;
+    void RefreshOpenedFilesDialogRows() noexcept;
+    void ApplyOpenedFilesDialogTheme() noexcept;
+    void CloseOpenedFilesDialog() noexcept;
+    [[nodiscard]] bool FocusOpenedFilesDialogSelection() noexcept;
+    [[nodiscard]] bool FocusOpenedFileRow(const OpenedFileRow& row) noexcept;
+
+    struct SharedDirectoryRow final
+    {
+        std::wstring name;
+        std::wstring localPath;
+        std::wstring type;
+        std::wstring remark;
+        bool openable = false;
+    };
+    struct SharedDirectoriesDialogState final
+    {
+        SharedDirectoriesDialogState() = default;
+        SharedDirectoriesDialogState(const SharedDirectoriesDialogState&) = delete;
+        SharedDirectoriesDialogState& operator=(const SharedDirectoriesDialogState&) = delete;
+        SharedDirectoriesDialogState(SharedDirectoriesDialogState&&) noexcept = default;
+        SharedDirectoriesDialogState& operator=(SharedDirectoriesDialogState&&) noexcept = default;
+
+        FolderWindow* owner = nullptr;
+        Pane pane = Pane::Left;
+        wil::unique_hwnd hwnd;
+        std::vector<SharedDirectoryRow> rows;
+        size_t selectedIndex = static_cast<size_t>(-1);
+        HRESULT lastError = S_OK;
+        bool destroyed = false;
+    };
+    [[nodiscard]] std::vector<SharedDirectoryRow> CollectSharedDirectoryRows(HRESULT& outHr) const noexcept;
+    void RefreshSharedDirectoriesDialogRows() noexcept;
+    void CloseSharedDirectoriesDialog() noexcept;
+    [[nodiscard]] bool OpenSharedDirectoriesDialogSelection() noexcept;
+    void OpenSharedDirectoriesManagement() noexcept;
+    static INT_PTR CALLBACK SharedDirectoriesDialogProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) noexcept;
 
 private:
     class NetworkChangeSubscription;
@@ -650,8 +1252,26 @@ private:
         FolderView folderView;
         wil::unique_hwnd hNavigationView;
         wil::unique_hwnd hFolderView;
+        wil::unique_hwnd hFilterBar;
+        RedSalamander::DxUi::WindowHost filterBarHost;
+        RedSalamander::DxUi::Label* filterBarLabel = nullptr;
         wil::unique_hwnd hStatusBar;
+        wil::unique_hwnd hPreviewTabs;
+        RedSalamander::DxUi::WindowHost previewTabsHost;
+        RedSalamander::DxUi::TabControl* previewTabsControl = nullptr;
+        wil::unique_hwnd hPreviewContent;
+        RedSalamander::DxUi::WindowHost previewContentHost;
+        RedSalamander::DxUi::Label* previewContentLabel = nullptr;
+        bool navigationBarVisible = true;
+        bool filterBarVisible     = false;
         bool statusBarVisible = true;
+        bool previewTabsVisible = false;
+        bool previewTabSelected = false;
+        std::filesystem::path previewedPath;
+        std::wstring previewText;
+        std::wstring previewViewerPluginId;
+        ViewerInstance* previewViewerInstance = nullptr;
+        uint64_t previewBytes = 0;
         FolderView::SelectionStats selectionStats{};
         uint64_t selectionSizeGeneration = 0;
         std::jthread selectionSizeThread;
@@ -664,12 +1284,14 @@ private:
         std::shared_ptr<std::stop_source> selectionSizeWorkStopSource;
 
         std::jthread changeCaseThread;
+        std::jthread changeAttributesThread;
         bool selectionFolderBytesPending = false;
         bool selectionFolderBytesValid   = false;
         uint64_t selectionFolderBytes    = 0;
         std::wstring statusSelectionText;
         std::wstring statusSortText;
         std::wstring statusSecurityText;
+        std::wstring filterBarText;
         uint32_t statusFocusHueDegrees = 0;
         bool sortIndicatorHot          = false;
 
@@ -690,6 +1312,7 @@ private:
 
     PaneState _leftPane;
     PaneState _rightPane;
+    std::optional<FileActionFailure> _lastFileActionFailure;
     Pane _activePane           = Pane::Left;
     HWND _lastFocusedPaneChild = nullptr;
     FunctionBar _functionBar;
@@ -702,11 +1325,20 @@ private:
     RECT _rightPaneRect{};
     RECT _splitterRect{};
     RECT _leftNavigationRect{};
+    RECT _leftFilterBarRect{};
     RECT _leftFolderViewRect{};
     RECT _leftStatusBarRect{};
+    RECT _leftPreviewTabsRect{};
+    RECT _leftPreviewContentRect{};
     RECT _rightNavigationRect{};
+    RECT _rightFilterBarRect{};
     RECT _rightFolderViewRect{};
     RECT _rightStatusBarRect{};
+    RECT _rightPreviewTabsRect{};
+    RECT _rightPreviewContentRect{};
+    RECT _commandLineRect{};
+    RECT _commandLineLabelRect{};
+    RECT _commandLineEditRect{};
     RECT _functionBarRect{};
     float _splitRatio                  = 0.5f;
     bool _viewWidthAdjustActive        = false;
@@ -721,6 +1353,11 @@ private:
     wil::unique_hbrush _splitterBrush;
     wil::unique_hbrush _splitterGripBrush;
     wil::unique_hbrush _splitterArrowHoverBrush;
+    wil::unique_hwnd _hCommandLineLabel;
+    wil::unique_hwnd _hCommandLineEdit;
+    bool _commandLineVisible = false;
+    Pane _commandLinePane    = Pane::Left;
+    std::filesystem::path _commandLineWorkingDirectory;
 
     AppTheme _theme;
     uint32_t _statusBarRainbowHueDegrees = 0;
@@ -729,6 +1366,14 @@ private:
     FileOperationCompletedCallback _fileOperationCompletedCallback;
 
     std::unique_ptr<FileOperationState, FileOperationStateDeleter> _fileOperations;
+#ifdef ENABLE_TESTS
+    DebugShellActionCallback _debugShellActionCallback;
+    std::optional<ChangeAttributesOptions> _debugNextChangeAttributesOptions;
+    std::optional<ChangeAttributesReport> _debugLastChangeAttributesReport;
+    std::optional<std::vector<ShellNewTemplateDefinition>> _debugShellNewTemplates;
+    std::optional<std::wstring> _debugNextShellNewFileName;
+    CommandLineLaunchCallback _debugCommandLineLaunchCallback;
+#endif
     Common::Settings::Settings* _settings = nullptr;
     bool _showHiddenFiles                 = true;
     bool _showSystemFiles                 = true;
@@ -745,10 +1390,22 @@ private:
         std::vector<std::wstring> displayNames;
     };
     std::optional<SavedSelection> _savedSelection;
+    std::optional<Pane> _previewSourcePane;
 
     ViewerCallbackState _viewerCallback;
     std::vector<std::unique_ptr<ViewerInstance>> _viewerInstances;
+    std::vector<OpenedExternalFileEntry> _openedExternalFiles;
+    uint64_t _nextOpenedExternalFileId = 1;
+    std::unique_ptr<OpenedFilesDialogState, OpenedFilesDialogStateDeleter> _openedFilesDialog;
+    std::unique_ptr<SharedDirectoriesDialogState> _sharedDirectoriesDialog;
+#ifdef ENABLE_TESTS
+    std::optional<SharedDirectoriesDebugProviderResult> _debugSharedDirectoriesProviderResult;
+    std::optional<ArchiveCommandDebugOptions> _debugNextArchiveCommandOptions;
+    std::optional<ArchiveCommandDebugResult> _debugLastArchiveCommandResult;
+#endif
 
     std::unique_ptr<NetworkChangeSubscription> _networkChangeSubscription;
     uint64_t _lastNetworkConnectivityRefreshTick = 0;
+
+    friend LRESULT CALLBACK FolderWindowDxHostWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept;
 };

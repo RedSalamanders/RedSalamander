@@ -32,4 +32,6 @@ BEGIN
     IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED "libvlc_media_player_new_from_media a échoué."
     IDS_VIEWERVLC_DETAILS_PLAYER_PLAY_FAILED_FMT "libvlc_media_player_play a échoué (code {0})."
     IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "Échec de la capture (code {0})."
+    IDS_VIEWERVLC_LOADING_TITLE "Démarrage de VLC..."
+    IDS_VIEWERVLC_LOADING_BODY "Chargement du moteur VLC. La lecture démarrera automatiquement."
 END

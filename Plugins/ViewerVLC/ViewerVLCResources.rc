@@ -34,4 +34,6 @@ BEGIN
     IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED "libvlc_media_player_new_from_media failed."
     IDS_VIEWERVLC_DETAILS_PLAYER_PLAY_FAILED_FMT "libvlc_media_player_play failed (code {0})."
     IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "Snapshot failed (code {0})."
+    IDS_VIEWERVLC_LOADING_TITLE "Starting VLC..."
+    IDS_VIEWERVLC_LOADING_BODY "Loading the VLC engine. Playback will start automatically."
 END

@@ -6,6 +6,29 @@ LET IT ALONE THERE (HUMAN MANAGED)
 (for human) DON'T FORGET TO DELETE THIS FILE LATER
 
 
+------------------------------------------------------------------------------------------------------
+## video viewer 
+- super long first init need a spinner to wait with a message 
+- need to store last volume used and retore it when reopening the video viewer
+
+------------------------------------------------------------------------------------------------------
+## all messages in ressources must be positional
+{} is forbidden becasue it could be translated in a language with different order and it will be a mess to manage that
+all message must be positional with {0}, {1}, etc ... and the order of the parameter in the code must be the same as the order in the message to avoid confusion and error when translating
+for example instead of
+```text 
+{} is not accessible because {}
+```
+it must be
+```text
+{0} is not accessible because {1}
+```
+Add that in normative specs and Skills and make sure to apply that everywhere in the code and ressources
+
+------------------------------------------------------------------------------------------------------
+## password in connection manager is not wolrking 
+you could type what you want nothing happen
+
 
 ------------------------------------------------------------------------------------------------------
 ## IMAP 
@@ -157,7 +180,7 @@ review all code using IHost to use these new methods instead of doing the same c
 ## cmd/pane/driveInformation
 ## cmd/pane/edit
 ## cmd/pane/editNew
-## cmd/pane/editWidth
+## cmd/pane/alternateEdit
 ## cmd/pane/filter
 ## cmd/pane/find
 
@@ -169,7 +192,6 @@ review all code using IHost to use these new methods instead of doing the same c
 ## cmd/pane/openProperties
 ## cmd/pane/pack
 ## cmd/pane/permanentDelete
-## cmd/pane/permanentDeleteWithValidation
 ## cmd/pane/quickSearch
 ## cmd/pane/saveSelection
 ## cmd/pane/shares
@@ -661,10 +683,6 @@ at the bottom of the setting page there is a toggle to Open this page preference
 
 
 ** cmd/pane **
-## DONE cmd/pane/calculateDirectorySizes
-  if the focused item in the pane is a folder, launch Space Viewer on the current folder in the pane to calculate directory sizes
-  if this is not a folder launch spave viewer on the current folder of the focused item in the pane
-
 ## DONE cmd/pane/refresh
   invalidate the cache and refresh the content of the pane
 
@@ -1848,7 +1866,6 @@ Top level menu are Left, Files, Edit, Commands, Plugins, View, Right, Help (righ
           - Change Directory...
           - Compare Directories...
           - Calculate Occupied Space
-          - Calculate Directory Sizes
           - Drive Information...
           - Find Files and Directories...
           - Make File List...
@@ -2010,7 +2027,7 @@ command bar application window
   - F7  : NONE: Make directory | CONTROL: change case       | ALT: find                         | SHIFT: change directory    | CONTROL+SHIFT: ⊘                        | ALT+SHIFT: ⊘
   - F8  : NONE: Delete         | CONTROL: ⊘                | ALT: ⊘                           | SHIFT: permanent delete    | CONTROL+SHIFT: ⊘                        | ALT+SHIFT: ⊘
   - F9  : NONE: user menu      | CONTROL: refresh           | ALT: unpack                       | SHIFT: hot paths           | CONTROL+SHIFT: shares                    | ALT+SHIFT: ⊘
-  - F10 : NONE: menu           | CONTROL: compare           | ALT: Space View                   | SHIFT: context menu        | CONTROL+SHIFT: calculate directory sizes | ALT+SHIFT: context menu for current directory
+  - F10 : NONE: menu           | CONTROL: compare           | ALT: Space View                   | SHIFT: context menu        | CONTROL+SHIFT: ⊘                         | ALT+SHIFT: context menu for current directory
   - F11 : NONE: Connect        | CONTROL: zoom panel        | ALT: list of opened files         | SHIFT: ⊘                  | CONTROL+SHIFT: full screen                | ALT+SHIFT: ⊘
   - F12 : NONE: Disconnect     | CONTROL: filter            | ALT: list of working directories  | SHIFT: ⊘                  | CONTROL+SHIFT: ⊘                         | ALT+SHIFT: ⊘
   all function are overidable in the settings

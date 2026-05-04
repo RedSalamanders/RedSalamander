@@ -5952,7 +5952,7 @@ case SelfTestState::Step::Phase9_PerItemConcurrency:
             ec.clear();
         }
 
-        NextStep(state, SelfTestState::Step::Phase10_PermanentDeleteWithValidation);
+        NextStep(state, SelfTestState::Step::Phase10_PermanentDelete);
         return false;
     }
 

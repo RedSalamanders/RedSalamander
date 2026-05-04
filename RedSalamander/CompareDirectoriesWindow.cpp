@@ -782,13 +782,13 @@ void CompareDirectoriesWindow::OnCommand(UINT id) noexcept
         }
         case IDM_PANE_RENAME:
         case IDM_PANE_VIEW:
+        case IDM_PANE_ALTERNATE_VIEW:
         case IDM_PANE_VIEW_SPACE:
         case IDM_PANE_COPY_TO_OTHER:
         case IDM_PANE_MOVE_TO_OTHER:
         case IDM_PANE_CREATE_DIR:
         case IDM_PANE_DELETE:
         case IDM_PANE_PERMANENT_DELETE:
-        case IDM_PANE_PERMANENT_DELETE_WITH_VALIDATION:
         {
             if (! _compareStarted)
             {
@@ -802,13 +802,13 @@ void CompareDirectoriesWindow::OnCommand(UINT id) noexcept
             {
                 case IDM_PANE_RENAME: _folderWindow.CommandRename(pane); break;
                 case IDM_PANE_VIEW: _folderWindow.CommandView(pane); break;
+                case IDM_PANE_ALTERNATE_VIEW: _folderWindow.CommandAlternateView(pane); break;
                 case IDM_PANE_VIEW_SPACE: _folderWindow.CommandViewSpace(pane); break;
                 case IDM_PANE_COPY_TO_OTHER: _folderWindow.CommandCopyToOtherPane(pane); break;
                 case IDM_PANE_MOVE_TO_OTHER: _folderWindow.CommandMoveToOtherPane(pane); break;
                 case IDM_PANE_CREATE_DIR: _folderWindow.CommandCreateDirectory(pane); break;
                 case IDM_PANE_DELETE: _folderWindow.CommandDelete(pane); break;
                 case IDM_PANE_PERMANENT_DELETE: _folderWindow.CommandPermanentDelete(pane); break;
-                case IDM_PANE_PERMANENT_DELETE_WITH_VALIDATION: _folderWindow.CommandPermanentDeleteWithValidation(pane); break;
             }
             break;
         }

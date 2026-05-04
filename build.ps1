@@ -524,6 +524,7 @@ function Invoke-MSBuild {
             }
     }
     Write-Host "Captured log: $logPath" -ForegroundColor DarkGray
+    Write-RSMSBuildDiagnosticSummary -LogPath $logPath
     $global:LASTEXITCODE = $exitCode
     return $exitCode
 }

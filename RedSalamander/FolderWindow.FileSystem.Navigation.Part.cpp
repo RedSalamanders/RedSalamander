@@ -1,3 +1,140 @@
+namespace
+{
+[[nodiscard]] std::wstring QuoteCommandLineArgument(std::wstring_view text)
+{
+    std::wstring quoted;
+    quoted.reserve(text.size() + 2u);
+    quoted.push_back(L'"');
+
+    size_t pendingBackslashes = 0u;
+    for (const wchar_t ch : text)
+    {
+        if (ch == L'\\')
+        {
+            ++pendingBackslashes;
+            continue;
+        }
+
+        if (ch == L'"')
+        {
+            quoted.append(pendingBackslashes * 2u + 1u, L'\\');
+            quoted.push_back(L'"');
+            pendingBackslashes = 0u;
+            continue;
+        }
+
+        quoted.append(pendingBackslashes, L'\\');
+        pendingBackslashes = 0u;
+        quoted.push_back(ch);
+    }
+
+    quoted.append(pendingBackslashes * 2u, L'\\');
+    quoted.push_back(L'"');
+    return quoted;
+}
+
+[[nodiscard]] std::wstring JoinQuotedCommandLineArguments(const std::vector<std::wstring>& arguments)
+{
+    std::wstring joined;
+    for (const std::wstring& argument : arguments)
+    {
+        if (! joined.empty())
+        {
+            joined.push_back(L' ');
+        }
+        joined.append(QuoteCommandLineArgument(argument));
+    }
+    return joined;
+}
+
+[[nodiscard]] std::wstring NormalizeShellDirectoryText(const std::filesystem::path& path)
+{
+    std::wstring text = path.wstring();
+    if (text.rfind(L"\\\\?\\UNC\\", 0) == 0 && text.size() > 8u)
+    {
+        return std::wstring(L"\\\\") + text.substr(8u);
+    }
+    if (text.rfind(L"\\\\?\\", 0) == 0 && text.size() > 4u)
+    {
+        return text.substr(4u);
+    }
+    return text;
+}
+
+[[nodiscard]] std::wstring GetCommandProcessorPath()
+{
+    std::wstring comSpec;
+    const DWORD comSpecLen = GetEnvironmentVariableW(L"ComSpec", nullptr, 0);
+    if (comSpecLen > 0)
+    {
+        comSpec.resize(static_cast<size_t>(comSpecLen));
+        const DWORD copied = GetEnvironmentVariableW(L"ComSpec", comSpec.data(), comSpecLen);
+        if (copied > 0)
+        {
+            comSpec.resize(static_cast<size_t>(copied));
+        }
+        else
+        {
+            comSpec.clear();
+        }
+    }
+
+    if (comSpec.empty())
+    {
+        comSpec = L"cmd.exe";
+    }
+    return comSpec;
+}
+
+[[nodiscard]] bool IsCmdExecutable(std::wstring_view path) noexcept
+{
+    return path.size() >= 7u && wil::compare_string_ordinal(path.substr(path.size() - 7u), L"cmd.exe", true) == wistd::weak_ordering::equivalent;
+}
+
+void ShowCommandLineFeedbackOverlay(FolderWindow& window, FolderWindow::Pane pane, UINT titleStringId, UINT messageStringId, HRESULT hr = S_OK) noexcept
+{
+    Debug::Perf::Scope perf(L"commandline.feedback_us");
+    perf.SetHr(hr);
+
+    std::wstring title = LoadStringResource(nullptr, titleStringId);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+    }
+
+    std::wstring message = LoadStringResource(nullptr, messageStringId);
+    if (message.empty())
+    {
+        message = title;
+    }
+
+    window.ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), hr, true, false);
+}
+
+void ShowCommandLineLaunchFailureOverlay(FolderWindow& window, FolderWindow::Pane pane, HRESULT hr) noexcept
+{
+    Debug::Perf::Scope perf(L"commandline.feedback_us");
+    perf.SetDetail(L"launch-failed");
+    perf.SetHr(hr);
+
+    std::wstring title = LoadStringResource(nullptr, IDS_CMD_OPEN_COMMAND_SHELL);
+    if (title.empty())
+    {
+        title = LoadStringResource(nullptr, IDS_CAPTION_WARNING);
+    }
+
+    std::wstring message = FormatStringResource(nullptr, IDS_FMT_COMMAND_LINE_LAUNCH_FAILED, static_cast<unsigned long>(static_cast<uint32_t>(hr)));
+    if (message.empty())
+    {
+        message = title;
+    }
+
+    window.ShowPaneAlertOverlay(
+        pane, FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Warning, std::move(title), std::move(message), hr, true, false);
+}
+} // namespace
+
 void FolderWindow::CommandChangeDirectory(Pane pane)
 {
     SetActivePane(pane);
@@ -35,6 +172,493 @@ void FolderWindow::CommandShowFolderHistory(Pane pane)
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.navigationView.OpenHistoryDropdownFromKeyboard();
 }
+
+void FolderWindow::CommandQuickSearch(Pane pane)
+{
+    SetActivePane(pane);
+    FocusPaneFolderView(pane);
+
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    state.folderView.ActivateIncrementalSearch();
+}
+
+bool FolderWindow::CreateCommandLineControls(HWND parent) noexcept
+{
+    if (_hCommandLineLabel && _hCommandLineEdit)
+    {
+        return true;
+    }
+
+    if (! parent)
+    {
+        return false;
+    }
+
+    const std::wstring labelText = LoadStringResource(nullptr, IDS_COMMAND_LINE_LABEL);
+    const DWORD labelStyle       = WS_CHILD | SS_LEFT | SS_CENTERIMAGE;
+    const DWORD editStyle        = WS_CHILD | WS_TABSTOP | ES_AUTOHSCROLL;
+
+    _hCommandLineLabel.reset(CreateWindowExW(0,
+                                             L"STATIC",
+                                             labelText.empty() ? L"Command:" : labelText.c_str(),
+                                             labelStyle,
+                                             _commandLineLabelRect.left,
+                                             _commandLineLabelRect.top,
+                                             std::max(0L, _commandLineLabelRect.right - _commandLineLabelRect.left),
+                                             std::max(0L, _commandLineLabelRect.bottom - _commandLineLabelRect.top),
+                                             parent,
+                                             reinterpret_cast<HMENU>(kCommandLineLabelId),
+                                             _hInstance,
+                                             nullptr));
+    if (! _hCommandLineLabel)
+    {
+        return false;
+    }
+
+    _hCommandLineEdit.reset(CreateWindowExW(WS_EX_CLIENTEDGE,
+                                            L"EDIT",
+                                            nullptr,
+                                            editStyle,
+                                            _commandLineEditRect.left,
+                                            _commandLineEditRect.top,
+                                            std::max(0L, _commandLineEditRect.right - _commandLineEditRect.left),
+                                            std::max(0L, _commandLineEditRect.bottom - _commandLineEditRect.top),
+                                            parent,
+                                            reinterpret_cast<HMENU>(kCommandLineEditId),
+                                            _hInstance,
+                                            nullptr));
+    if (! _hCommandLineEdit)
+    {
+        _hCommandLineLabel.reset();
+        return false;
+    }
+
+    HFONT font = reinterpret_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+    if (font)
+    {
+        SendMessageW(_hCommandLineLabel.get(), WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+        SendMessageW(_hCommandLineEdit.get(), WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
+    }
+
+    if (! RedSalamander::Win32Callback::SetPropNoThrow(_hCommandLineEdit.get(), kCommandLineEditOwnerProp, reinterpret_cast<HANDLE>(this)) ||
+        ! RedSalamander::Win32Callback::InstallWndProcHook(
+            _hCommandLineEdit.get(), kCommandLineEditOriginalWndProcProp, FolderWindow::CommandLineEditWndProcThunk))
+    {
+        RemovePropW(_hCommandLineEdit.get(), kCommandLineEditOwnerProp);
+        _hCommandLineEdit.reset();
+        _hCommandLineLabel.reset();
+        return false;
+    }
+
+    ShowWindow(_hCommandLineLabel.get(), SW_HIDE);
+    ShowWindow(_hCommandLineEdit.get(), SW_HIDE);
+    return true;
+}
+
+void FolderWindow::DestroyCommandLineControls() noexcept
+{
+    if (_hCommandLineEdit)
+    {
+        RedSalamander::Win32Callback::RestoreWndProcHook(
+            _hCommandLineEdit.get(), kCommandLineEditOriginalWndProcProp, FolderWindow::CommandLineEditWndProcThunk);
+        RemovePropW(_hCommandLineEdit.get(), kCommandLineEditOwnerProp);
+        _hCommandLineEdit.reset();
+    }
+
+    _hCommandLineLabel.reset();
+    _commandLineVisible = false;
+    _commandLineWorkingDirectory.clear();
+}
+
+LRESULT CALLBACK FolderWindow::CommandLineEditWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    auto* self = reinterpret_cast<FolderWindow*>(GetPropW(hwnd, kCommandLineEditOwnerProp));
+    if (self)
+    {
+        return self->CommandLineEditWndProc(hwnd, msg, wp, lp);
+    }
+
+    return RedSalamander::Win32Callback::CallStoredWndProc(hwnd, kCommandLineEditOriginalWndProcProp, msg, wp, lp);
+}
+
+LRESULT FolderWindow::CommandLineEditWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+{
+    switch (msg)
+    {
+        case WM_KEYDOWN:
+            if (wp == VK_RETURN)
+            {
+                ExecuteCommandLineFromEdit();
+                return 0;
+            }
+            if (wp == VK_ESCAPE)
+            {
+                HideCommandLine(true);
+                return 0;
+            }
+            break;
+        case WM_NCDESTROY:
+        {
+            const LRESULT result = RedSalamander::Win32Callback::CallStoredWndProc(hwnd, kCommandLineEditOriginalWndProcProp, msg, wp, lp);
+            RedSalamander::Win32Callback::RestoreWndProcHook(
+                hwnd, kCommandLineEditOriginalWndProcProp, FolderWindow::CommandLineEditWndProcThunk);
+            RemovePropW(hwnd, kCommandLineEditOwnerProp);
+            return result;
+        }
+    }
+
+    return RedSalamander::Win32Callback::CallStoredWndProc(hwnd, kCommandLineEditOriginalWndProcProp, msg, wp, lp);
+}
+
+void FolderWindow::ShowCommandLine(Pane pane, const std::filesystem::path& workingDirectory)
+{
+    Debug::Perf::Scope perf(L"commandline.focus_to_visible_us");
+    perf.SetDetail(pane == Pane::Left ? L"left" : L"right");
+
+    _commandLinePane             = pane;
+    _commandLineWorkingDirectory = workingDirectory;
+    _commandLineVisible          = true;
+    SetActivePane(pane);
+
+    CalculateLayout();
+    AdjustChildWindows();
+
+    if (_hCommandLineLabel)
+    {
+        ShowWindow(_hCommandLineLabel.get(), SW_SHOWNA);
+    }
+    if (_hCommandLineEdit)
+    {
+        ShowWindow(_hCommandLineEdit.get(), SW_SHOW);
+        SetFocus(_hCommandLineEdit.get());
+    }
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+}
+
+void FolderWindow::HideCommandLine(bool restoreFocus) noexcept
+{
+    if (! _commandLineVisible)
+    {
+        return;
+    }
+
+    const Pane pane = _commandLinePane;
+    _commandLineVisible = false;
+
+    if (_hCommandLineLabel)
+    {
+        ShowWindow(_hCommandLineLabel.get(), SW_HIDE);
+    }
+    if (_hCommandLineEdit)
+    {
+        ShowWindow(_hCommandLineEdit.get(), SW_HIDE);
+    }
+
+    CalculateLayout();
+    AdjustChildWindows();
+
+    if (restoreFocus)
+    {
+        FocusPaneFolderView(pane);
+    }
+
+    if (_hWnd)
+    {
+        InvalidateRect(_hWnd.get(), nullptr, FALSE);
+    }
+}
+
+std::wstring FolderWindow::GetCommandLineText() const
+{
+    if (! _hCommandLineEdit)
+    {
+        return {};
+    }
+
+    const int length = GetWindowTextLengthW(_hCommandLineEdit.get());
+    if (length <= 0)
+    {
+        return {};
+    }
+
+    std::vector<wchar_t> buffer(static_cast<size_t>(length) + 1u, L'\0');
+    const int copied = GetWindowTextW(_hCommandLineEdit.get(), buffer.data(), static_cast<int>(buffer.size()));
+    if (copied <= 0)
+    {
+        return {};
+    }
+
+    return std::wstring(buffer.data(), static_cast<size_t>(copied));
+}
+
+void FolderWindow::SetCommandLineText(std::wstring_view text)
+{
+    if (! _hCommandLineEdit)
+    {
+        return;
+    }
+
+    std::wstring owned(text);
+    SetWindowTextW(_hCommandLineEdit.get(), owned.c_str());
+    const auto end = static_cast<WPARAM>(owned.size());
+    SendMessageW(_hCommandLineEdit.get(), EM_SETSEL, end, static_cast<LPARAM>(owned.size()));
+}
+
+void FolderWindow::InsertCommandLineText(std::wstring_view text)
+{
+    if (! _hCommandLineEdit || text.empty())
+    {
+        return;
+    }
+
+    const std::wstring current = GetCommandLineText();
+    DWORD start = 0;
+    DWORD end   = 0;
+    SendMessageW(_hCommandLineEdit.get(), EM_GETSEL, reinterpret_cast<WPARAM>(&start), reinterpret_cast<LPARAM>(&end));
+
+    const DWORD maxIndex = static_cast<DWORD>(std::min<size_t>(current.size(), static_cast<size_t>(std::numeric_limits<DWORD>::max())));
+    start                = std::min(start, maxIndex);
+    end                  = std::min(end, maxIndex);
+    if (start > end)
+    {
+        std::swap(start, end);
+    }
+
+    std::wstring replacement;
+    replacement.reserve(text.size() + 2u);
+    const bool needsLeadingSpace =
+        start > 0 && ! std::iswspace(current[static_cast<size_t>(start) - 1u]) && ! std::iswspace(text.front());
+    const bool needsTrailingSpace =
+        end < maxIndex && ! std::iswspace(current[static_cast<size_t>(end)]) && ! std::iswspace(text.back());
+
+    if (needsLeadingSpace)
+    {
+        replacement.push_back(L' ');
+    }
+    replacement.append(text);
+    if (needsTrailingSpace)
+    {
+        replacement.push_back(L' ');
+    }
+
+    SendMessageW(_hCommandLineEdit.get(), EM_REPLACESEL, TRUE, reinterpret_cast<LPARAM>(replacement.c_str()));
+}
+
+std::optional<std::filesystem::path> FolderWindow::ResolveCommandLineWorkingDirectory(Pane pane) const
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (! IsFilePluginShortId(state.pluginShortId))
+    {
+        return std::nullopt;
+    }
+
+    const std::optional<std::filesystem::path> folderPath = state.folderView.GetFolderPath();
+    if (! folderPath.has_value() || folderPath.value().empty() || ! LooksLikeWindowsAbsolutePath(folderPath.value().wstring()))
+    {
+        return std::nullopt;
+    }
+
+    return folderPath.value();
+}
+
+HRESULT FolderWindow::LaunchCommandLine(std::wstring_view commandLine, const std::filesystem::path& workingDirectory)
+{
+    if (commandLine.empty())
+    {
+        return S_FALSE;
+    }
+
+#ifdef ENABLE_TESTS
+    if (_debugCommandLineLaunchCallback)
+    {
+        return _debugCommandLineLaunchCallback(commandLine, workingDirectory);
+    }
+#endif
+
+    const std::wstring comSpec        = GetCommandProcessorPath();
+    const std::wstring workingDirText = NormalizeShellDirectoryText(workingDirectory);
+
+    std::wstring directory = workingDirText;
+    std::wstring parameters = L"/D /S /C ";
+    if (LooksLikeUncPath(workingDirText) && IsCmdExecutable(comSpec))
+    {
+        directory = GetDefaultFileSystemRoot().wstring();
+        parameters.append(L"pushd ");
+        parameters.append(QuoteCommandLineArgument(workingDirText));
+        parameters.append(L" && ");
+    }
+    parameters.append(commandLine);
+
+    HWND ownerWindow = _hWnd ? GetAncestor(_hWnd.get(), GA_ROOT) : nullptr;
+    if (! ownerWindow)
+    {
+        ownerWindow = _hWnd.get();
+    }
+
+    SHELLEXECUTEINFOW sei{};
+    sei.cbSize       = sizeof(sei);
+    sei.fMask        = SEE_MASK_FLAG_NO_UI | SEE_MASK_NOASYNC;
+    sei.hwnd         = ownerWindow;
+    sei.lpVerb       = L"open";
+    sei.lpFile       = comSpec.c_str();
+    sei.lpParameters = parameters.c_str();
+    sei.lpDirectory  = directory.empty() ? nullptr : directory.c_str();
+    sei.nShow        = SW_SHOWNORMAL;
+
+    if (ShellExecuteExW(&sei) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        return error == ERROR_SUCCESS ? E_FAIL : HRESULT_FROM_WIN32(error);
+    }
+
+    return S_OK;
+}
+
+void FolderWindow::ExecuteCommandLineFromEdit()
+{
+    Debug::Perf::Scope perf(L"commandline.launch_us");
+
+    const std::wstring commandLine = GetCommandLineText();
+    perf.SetValue0(static_cast<uint64_t>(commandLine.size()));
+
+    if (commandLine.empty())
+    {
+        return;
+    }
+
+    HRESULT hr = LaunchCommandLine(commandLine, _commandLineWorkingDirectory);
+    perf.SetHr(hr);
+    if (SUCCEEDED(hr))
+    {
+        SetCommandLineText({});
+        HideCommandLine(true);
+        return;
+    }
+
+    ShowCommandLineLaunchFailureOverlay(*this, _commandLinePane, hr);
+}
+
+void FolderWindow::CommandBringCurrentDirToCommandLine(Pane pane)
+{
+    Debug::Perf::Scope perf(L"commandline.insert_current_dir_us");
+    perf.SetDetail(pane == Pane::Left ? L"left" : L"right");
+
+    SetActivePane(pane);
+    const std::optional<std::filesystem::path> workingDirectory = ResolveCommandLineWorkingDirectory(pane);
+    if (! workingDirectory.has_value())
+    {
+        ShowCommandLineFeedbackOverlay(*this, pane, IDS_CMD_BRING_CURRENT_DIR_TO_COMMAND_LINE, IDS_MSG_COMMAND_LINE_LOCAL_FOLDER_REQUIRED);
+        return;
+    }
+
+    ShowCommandLine(pane, workingDirectory.value());
+    const std::wstring inserted = QuoteCommandLineArgument(workingDirectory.value().wstring());
+    perf.SetValue0(static_cast<uint64_t>(inserted.size()));
+    InsertCommandLineText(inserted);
+}
+
+void FolderWindow::CommandBringFilenameToCommandLine(Pane pane)
+{
+    Debug::Perf::Scope perf(L"commandline.insert_filename_us");
+    perf.SetDetail(pane == Pane::Left ? L"left" : L"right");
+
+    SetActivePane(pane);
+    const std::optional<std::filesystem::path> workingDirectory = ResolveCommandLineWorkingDirectory(pane);
+    if (! workingDirectory.has_value())
+    {
+        ShowCommandLineFeedbackOverlay(*this, pane, IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE, IDS_MSG_COMMAND_LINE_LOCAL_FOLDER_REQUIRED);
+        return;
+    }
+
+    PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    std::vector<std::filesystem::path> selectedPaths = state.folderView.GetSelectedPaths();
+    if (! selectedPaths.empty())
+    {
+        if (const std::optional<std::filesystem::path> focusedPath = state.folderView.GetFocusedPath(); focusedPath.has_value())
+        {
+            const auto focusedIt = std::find_if(selectedPaths.begin(),
+                                                selectedPaths.end(),
+                                                [&](const std::filesystem::path& selected)
+            {
+                return OrdinalString::EqualsNoCasePath(selected, focusedPath.value());
+            });
+            if (focusedIt != selectedPaths.end())
+            {
+                std::vector<std::filesystem::path> ordered;
+                ordered.reserve(selectedPaths.size());
+                ordered.push_back(focusedPath.value());
+                for (const std::filesystem::path& selected : selectedPaths)
+                {
+                    if (! OrdinalString::EqualsNoCasePath(selected, focusedPath.value()))
+                    {
+                        ordered.push_back(selected);
+                    }
+                }
+                selectedPaths = std::move(ordered);
+            }
+        }
+
+        std::vector<std::wstring> arguments;
+        arguments.reserve(selectedPaths.size());
+        for (const std::filesystem::path& path : selectedPaths)
+        {
+            arguments.push_back(path.wstring());
+        }
+
+        ShowCommandLine(pane, workingDirectory.value());
+        const std::wstring inserted = JoinQuotedCommandLineArguments(arguments);
+        perf.SetValue0(static_cast<uint64_t>(arguments.size()));
+        perf.SetValue1(static_cast<uint64_t>(inserted.size()));
+        InsertCommandLineText(inserted);
+        return;
+    }
+
+    const std::vector<std::wstring> displayNames = state.folderView.GetSelectedOrFocusedDisplayNames();
+    if (displayNames.empty())
+    {
+        ShowCommandLineFeedbackOverlay(*this, pane, IDS_CMD_BRING_FILENAME_TO_COMMAND_LINE, IDS_MSG_COMMAND_LINE_ITEM_REQUIRED);
+        return;
+    }
+
+    ShowCommandLine(pane, workingDirectory.value());
+    const std::wstring inserted = JoinQuotedCommandLineArguments(displayNames);
+    perf.SetValue0(static_cast<uint64_t>(displayNames.size()));
+    perf.SetValue1(static_cast<uint64_t>(inserted.size()));
+    InsertCommandLineText(inserted);
+}
+
+#ifdef ENABLE_TESTS
+bool FolderWindow::DebugGetCommandLineSnapshot(CommandLineDebugSnapshot& out) const noexcept
+{
+    out = {};
+    if (! _hCommandLineEdit)
+    {
+        return false;
+    }
+
+    out.visible          = _commandLineVisible;
+    out.hasKeyboardFocus = GetFocus() == _hCommandLineEdit.get();
+    out.pane             = _commandLinePane;
+    out.editHwnd         = _hCommandLineEdit.get();
+    out.text             = GetCommandLineText();
+    out.workingDirectory = _commandLineWorkingDirectory;
+    return true;
+}
+
+void FolderWindow::DebugSetCommandLineTextForTest(std::wstring_view text)
+{
+    SetCommandLineText(text);
+}
+
+void FolderWindow::DebugSetCommandLineLaunchCallback(CommandLineLaunchCallback callback)
+{
+    _debugCommandLineLaunchCallback = std::move(callback);
+}
+#endif
 
 void FolderWindow::CommandFilter(Pane pane)
 {
@@ -87,7 +711,7 @@ void FolderWindow::CommandFilter(Pane pane)
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(L"CommandFilter: before SetNameFilterState");
 #endif
-    state.folderView.SetNameFilterState(result);
+    SetNameFilterState(pane, result);
 #ifdef ENABLE_TESTS
     SelfTest::AppendSelfTestTrace(L"CommandFilter: after SetNameFilterState");
 #endif
@@ -205,6 +829,33 @@ bool DebugSetFolderViewPaneFilterPromptText(std::wstring_view text) noexcept
     return SendMessageW(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::SetText), 0) != FALSE;
 }
 
+bool DebugSetFolderViewPaneFilterPromptTextAndNotify(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    {
+        const std::scoped_lock lock(g_folderViewPaneFilterPromptDebugMutex);
+        g_folderViewPaneFilterPromptDebugText.assign(text);
+    }
+    return SendMessageW(hwnd,
+                        WndMsg::kFolderViewPaneFilterPromptDebug,
+                        static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::SetTextAndNotify),
+                        0) != FALSE;
+}
+
+bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept
+{
+    const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
+    return hwnd && SendMessageW(hwnd,
+                                WndMsg::kFolderViewPaneFilterPromptDebug,
+                                static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::SetHelpExpanded),
+                                expanded ? 1 : 0) != FALSE;
+}
+
 bool DebugConfirmFolderViewPaneFilterPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
@@ -228,6 +879,12 @@ HWND GetFolderViewSelectionMaskPromptHandle() noexcept
 HWND GetFolderViewCreateDirectoryPromptHandle() noexcept
 {
     const HWND hwnd = FindDebugPromptWindowForCurrentProcess(kFolderViewCreateDirectoryPromptClassName);
+    return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
+}
+
+HWND GetFolderViewEditNewPromptHandle() noexcept
+{
+    const HWND hwnd = FindDebugPromptWindowForCurrentProcess(kFolderViewEditNewPromptClassName);
     return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
 }
 
@@ -329,6 +986,70 @@ bool DebugCancelFolderViewCreateDirectoryPrompt() noexcept
     return hwnd &&
            SendMessageW(hwnd, GetFolderViewCreateDirectoryPromptDebugMessage(), static_cast<WPARAM>(FolderViewCreateDirectoryPromptDebugCommand::Cancel), 0) !=
                FALSE;
+}
+
+bool DebugGetFolderViewEditNewPromptSnapshot(FolderViewEditNewPromptDebugSnapshot& out) noexcept
+{
+    const HWND hwnd = GetFolderViewEditNewPromptHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    auto snapshot = std::make_unique<FolderViewEditNewPromptDebugSnapshot>();
+    const bool ok = SendMessageW(hwnd,
+                                 GetFolderViewEditNewPromptDebugMessage(),
+                                 static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::GetSnapshot),
+                                 reinterpret_cast<LPARAM>(snapshot.get())) != FALSE;
+    if (ok)
+    {
+        out = std::move(*snapshot);
+    }
+    return ok;
+}
+
+bool DebugSetFolderViewEditNewPromptText(std::wstring_view text) noexcept
+{
+    const HWND hwnd = GetFolderViewEditNewPromptHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    auto payload = std::make_unique<std::wstring>(text);
+    return SendMessageW(hwnd,
+                        GetFolderViewEditNewPromptDebugMessage(),
+                        static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::SetText),
+                        reinterpret_cast<LPARAM>(payload.get())) != FALSE;
+}
+
+bool DebugSelectFolderViewEditNewPromptEditor(std::wstring_view actionId) noexcept
+{
+    const HWND hwnd = GetFolderViewEditNewPromptHandle();
+    if (! hwnd)
+    {
+        return false;
+    }
+
+    auto payload = std::make_unique<std::wstring>(actionId);
+    return SendMessageW(hwnd,
+                        GetFolderViewEditNewPromptDebugMessage(),
+                        static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::SelectEditor),
+                        reinterpret_cast<LPARAM>(payload.get())) != FALSE;
+}
+
+bool DebugConfirmFolderViewEditNewPrompt() noexcept
+{
+    const HWND hwnd = GetFolderViewEditNewPromptHandle();
+    return hwnd &&
+           SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Confirm), 0) != FALSE;
+}
+
+bool DebugCancelFolderViewEditNewPrompt() noexcept
+{
+    const HWND hwnd = GetFolderViewEditNewPromptHandle();
+    return hwnd &&
+           SendMessageW(hwnd, GetFolderViewEditNewPromptDebugMessage(), static_cast<WPARAM>(FolderViewEditNewPromptDebugCommand::Cancel), 0) != FALSE;
 }
 
 HWND GetFolderViewChangeCasePromptHandle() noexcept
@@ -734,7 +1455,7 @@ void FolderWindow::SwapPanes()
     _rightPane.folderView.SetFileSystemContext(_rightPane.pluginId, _rightPane.instanceContext);
     _rightPane.navigationView.SetFileSystem(_rightPane.fileSystem);
 
-    auto applyPaneState = [&](PaneState& state, const std::optional<std::filesystem::path>& pluginPath)
+    auto applyPaneState = [&](Pane pane, PaneState& state, const std::optional<std::filesystem::path>& pluginPath)
     {
         std::optional<std::filesystem::path> displayPath;
         if (pluginPath.has_value())
@@ -749,6 +1470,7 @@ void FolderWindow::SwapPanes()
             filter                                           = GetFolderHistoryFilterState(folders, displayPath.value());
         }
         state.folderView.SetNameFilterState(filter, false /* refresh */);
+        UpdatePaneFilterBar(pane);
 
         state.updatingPath = true;
         state.currentPath  = displayPath;
@@ -758,8 +1480,8 @@ void FolderWindow::SwapPanes()
         state.updatingPath = false;
     };
 
-    applyPaneState(_leftPane, rightPluginPath);
-    applyPaneState(_rightPane, leftPluginPath);
+    applyPaneState(Pane::Left, _leftPane, rightPluginPath);
+    applyPaneState(Pane::Right, _rightPane, leftPluginPath);
 
     _leftPane.selectionStats  = {};
     _rightPane.selectionStats = {};
@@ -785,6 +1507,7 @@ void FolderWindow::OnNavigationPathChanged(Pane pane, const std::optional<std::f
         state.updatingPath = true;
         state.currentPath.reset();
         state.folderView.SetNameFilterState(FolderView::NameFilterState{}, false /* refresh */);
+        UpdatePaneFilterBar(pane);
         state.folderView.SetFolderPath(std::nullopt);
         state.updatingPath = false;
         if (_panePathChangedCallback)
@@ -836,6 +1559,7 @@ void FolderWindow::OnFolderViewPathChanged(Pane pane, const std::optional<std::f
     const Common::Settings::FoldersSettings* folders = (_settings && _settings->folders.has_value()) ? &_settings->folders.value() : nullptr;
     const FolderView::NameFilterState filter         = GetFolderHistoryFilterState(folders, displayPath);
     state.folderView.SetNameFilterState(filter, false /* refresh */);
+    UpdatePaneFilterBar(pane);
 
     state.updatingPath = true;
     state.currentPath  = displayPath;

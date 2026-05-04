@@ -9,9 +9,10 @@
 - Asynchronous folder enumeration and icon loading
 - Grid layout with dynamic column sizing
 - Sorting (Name / Extension / Time / Size / Attributes) with direction toggle + unsorted state
-- Display modes: **Brief**, **Detailed**, and **Extra Detailed** (multi-line)
+- Display modes: **Brief**, **Detailed**, **Extra Detailed**, and **Thumbnails**
 - Pane filter (wildcard mask) with persisted per-path state and a subtle watermark indicator when active
 - View options for hidden/system files (hidden items display a dim icon when shown)
+- Thumbnail display mode with asynchronous shell thumbnail loading, icon fallback, and per-pane persistence
 - Full drag-and-drop support (COM IDataObject/IDropSource/IDropTarget)
 - Multi-selection with visual feedback
 - Keyboard navigation
@@ -22,6 +23,7 @@
 - **Startup performance**: D3D/D2D device + swap chain initialization is **deferred until after the first paint** (via `WndMsg::kFolderViewDeferredInit`) to keep `WM_CREATE` fast; first paint uses a GDI background fill until Direct2D is ready.
 - **Threading**: Background enumeration thread for non-blocking folder loading
 - **Icon Management**: Async icon loading **grouped by system icon index**; cached bitmaps are stamped immediately and missing icons are extracted once (background) + converted once (UI) then applied to all matching items. Icon bitmap conversion begins once a Direct2D device context is ready (no synchronous icon bitmap pre-warm during startup) and MUST NOT be blocked by pending swap-chain resize completion; otherwise fast startup can leave enumerated items stuck on placeholder icons.
+- **Thumbnail Management**: Thumbnails is an exclusive display mode per pane. It keeps normal icon loading as fallback, queues only bounded visible work, extracts shell thumbnails off the UI thread, converts/attaches Direct2D bitmaps on the UI thread, and drops stale work when navigation, refresh, or display-mode changes make a payload obsolete.
 - **Parent-Child**: Child window of main application, coordinates with NavigationView
 
 ## Typography Contract
@@ -140,6 +142,13 @@ if (mode == Detailed):
   detailsWidth = max(detailsWidth for each item)
   textWidth = max(nameWidth, detailsWidth)
 
+if (mode == ExtraDetailed or mode == Thumbnails):
+  // Ensure all three text lines fit (name + details + metadata).
+  nameWidth = max(nameWidth for each item)
+  detailsWidth = max(detailsWidth for each item)
+  metadataWidth = max(metadataWidth for each item)
+  textWidth = max(nameWidth, detailsWidth, metadataWidth)
+
 columnWidth = max(textWidth + iconWidth + padding, minColumnWidth)
 columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
 ```
@@ -172,6 +181,19 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
 
 ```
 
+**Item Rendering (Thumbnail mode):**
+```text
+┌──────────────────────────────┐
+│  [ 64 DIP thumbnail/icon ]   │
+│  Filename.ext                │
+└──────────────────────────────┘
+```
+
+- Thumbnail mode uses larger DPI-aware visuals for the item bitmap area.
+- For local files, the pane requests shell thumbnails asynchronously for visible items only.
+- Until a thumbnail is ready, or when the shell cannot provide one, the normal folder/file icon is rendered in the same larger visual slot.
+- Navigation, refresh, sorting, and leaving thumbnail display mode cancel or invalidate pending thumbnail work so stale payloads are not applied to the current view.
+
 **Item Rendering (Detailed):**
 ```text
 ┌──────────────────────────────────────────┐
@@ -196,6 +218,7 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
   - a primary “details” line (status/reason text), and
   - a secondary “metadata” line (time/size/attributes, etc.).
 - The metadata line is optional; if no metadata provider is configured (or it returns empty), Extra Detailed behaves like Detailed.
+- Thumbnails is also a three-line layout: name, details line, then metadata line. It uses the larger thumbnail/icon visual slot and may show metadata such as mount-point state, image dimensions, or other provider-specific information.
 
 **Selection States:**
 - **Normal**: Transparent background (theme-defined)
@@ -234,7 +257,7 @@ columnWidth = min(columnWidth, windowWidth)  // Don't exceed window width
     - A fun, friendly message with a large emoji, chosen randomly from a small set of resource strings.
     - Double-click anywhere in the pane navigates **up to the parent folder**.
     - The focused empty-folder placeholder item is drawn as a normal item row at the top of the pane with localized label text **Go to parent**. Its focus/selection cue MUST span the current pane row width and use the current display mode's row height; it MUST NOT expand to the full pane body and MUST NOT shrink to a compact label-sized tile.
-    - Empty-folder placeholder metrics MUST be recomputed from the current client width, DPI, icon size, and display-mode text-line heights. They MUST NOT inherit tile width/height from the previously displayed non-empty folder or from a previous Brief/Detailed/Extra Detailed mode.
+    - Empty-folder placeholder metrics MUST be recomputed from the current client width, DPI, icon size, and display-mode text-line heights. They MUST NOT inherit tile width/height from the previously displayed non-empty folder or from a previous Brief/Detailed/Extra Detailed/Thumbnails mode.
 
 **View options & filtering:**
 - **Hidden/System visibility** is controlled by settings:
@@ -428,6 +451,7 @@ DoDragDrop(dataObj.get(), dropSource.get(),
 - **Alt+2**: Display as **Brief**
 - **Alt+3**: Display as **Detailed**
 - **Alt+4**: Display as **Extra Detailed**
+- **Alt+5**: Display as **Thumbnails**
 - Sort by **Attributes** is currently menu-only (no default shortcut).
 
 **Notes:**
@@ -1070,13 +1094,11 @@ Example: `FolderView::ReportError(L"EnumerateFolder", hr)` logs the failure and 
 
 ## Future Enhancements
 
-1. **Thumbnail View**: Show image previews instead of icons
-2. **List/Details View**: Table view with columns (Name, Size, Modified)
-3. **Grouping**: Group by type, date, size
-4. **Filter Bar**: Always-visible quick filter UI (in addition to the filter dialog)
-5. **Marquee Selection**: Drag rectangle to select multiple items
-6. **Inline Rename**: Rename without dialog
-7. **Quick Look**: Space bar to preview file without opening
-8. **Column Resizing**: Drag column dividers to resize
-9. **Multi-key Sorting**: Primary + secondary key (e.g. Type then Name)
-10. **Pane-to-Pane Operations**: Copy/move between panes
+1. **List/Details View**: Table view with columns (Name, Size, Modified)
+2. **Grouping**: Group by type, date, size
+3. **Marquee Selection**: Drag rectangle to select multiple items
+4. **Inline Rename**: Rename without dialog
+5. **Quick Look**: Space bar to preview file without opening
+6. **Column Resizing**: Drag column dividers to resize
+7. **Multi-key Sorting**: Primary + secondary key (e.g. Type then Name)
+8. **Pane-to-Pane Operations**: Copy/move between panes

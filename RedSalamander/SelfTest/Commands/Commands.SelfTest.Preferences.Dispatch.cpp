@@ -498,6 +498,9 @@ void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTe
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_editors_mouse_tab_skips_note_surface", [=](CaseState& state) noexcept {
         return TestPreferencesDialogEditorsAndMouseTabSkipNoteSurface(mainWindow, state);
     });
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_viewers_editors_file_action_settings_apply", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogViewersEditorsFileActionSettingsApply(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_category_tree_handles_reverse_keyboard_navigation", [=](CaseState& state) noexcept {
         return TestPreferencesDialogCategoryTreeReverseKeyboardNavigation(mainWindow, state);
     });
